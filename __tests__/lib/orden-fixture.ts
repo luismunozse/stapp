@@ -80,3 +80,32 @@ export function buildOrdenFixture() {
     cobros: [{ fecha: new Date(), metodo: "EFECTIVO", referencia: null, monto: 10000 }],
   }
 }
+
+/**
+ * Worst-case content fixture (fix: orden-a4-fijo review, Important #2/#3):
+ * every wrapped/capped field pushed long enough to hit its existing slice
+ * cap (falla declarada 3 lines, observaciones 2 lines, talón "chequeo
+ * rápido" 4 lines, términos 6 lines, ...). Used to check that the
+ * bottom-anchored RECEPCIÓN talón and the bottom-anchored ENTREGA footer
+ * still land at/near the bottom margin instead of drifting off-page when
+ * the MIN_GAP floor (not the normal leftover-space distribution) is what
+ * ends up driving the layout.
+ */
+const LOREM =
+  "Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua ut enim ad minim veniam quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
+
+export function buildMaxContentOrdenFixture() {
+  return {
+    ...buildOrdenFixture(),
+    problemaReportado: LOREM,
+    observaciones: LOREM,
+    accesorios: LOREM,
+    checklistItems: Array.from({ length: 10 }, (_, i) => ({
+      label: `Chequeo de mostrador número ${i + 1} con descripción larga para forzar el wrap`,
+      valor: i % 2 === 0,
+      categoria: "FUNCIONAL",
+    })),
+    checklistNotas: LOREM,
+    recepcionTerminos: Array.from({ length: 10 }, (_, i) => `${i + 1}. ${LOREM}`).join("\n"),
+  }
+}

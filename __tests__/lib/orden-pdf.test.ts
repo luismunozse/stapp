@@ -16,10 +16,16 @@
 import { describe, it, expect } from "vitest"
 import { PDFDocument } from "pdf-lib"
 import { generateOrdenPDF } from "@/lib/pdf"
-import { extractPdfText } from "./pdf-text-helper"
-import { buildOrdenFixture } from "./orden-fixture"
+import { extractPdfText, extractPdfTextPositions } from "./pdf-text-helper"
+import { buildOrdenFixture, buildMaxContentOrdenFixture } from "./orden-fixture"
 import { formatCurrencyValue } from "@/lib/currency"
 import { formatDateValue } from "@/lib/timezone"
+
+// `rxMargin` in lib/pdf.ts's RECEPCIÓN/ENTREGA sheets — not exported, kept
+// here as the same literal the geometry tests below check against. Both
+// sheets anchor their bottom-most drawn block (talón / footer) to this
+// margin from the page's physical bottom edge.
+const RX_MARGIN = 28
 
 describe("generateOrdenPDF", () => {
   it("renders the soloCliente variant with all key sections and no talón", async () => {
@@ -52,6 +58,43 @@ describe("generateOrdenPDF", () => {
     expect(text).not.toContain("RECIBIÓ")
     expect(text).not.toContain("M. GÓMEZ")
     expect(buffer.length).toBeGreaterThan(1000)
+  })
+
+  it("keeps the soloCliente body tightly spaced, without the print-sheet zone-B/C gap distribution leaking in (review Critical #1)", async () => {
+    // Regression pin for review Critical #1: the RECEPCIÓN print sheet's
+    // zone-B/C gap distribution (money band + retiro estimado centered,
+    // QR/firma/términos pushed toward a ✂ cut line) is anchored to
+    // `cutYTarget` — which is derived from the business STUB's height. It
+    // used to run unconditionally, before the `soloCliente` early return,
+    // so the WhatsApp-only variant (which never draws a stub or cut line)
+    // still had its content spread out to make room for a stub it never
+    // renders — dead space with nothing pinning it, since there's no cut
+    // line to anchor to on this variant.
+    //
+    // A plain "cropped page height stays under a ceiling" check does NOT
+    // catch this: soloCliente's content, even maxed out, never gets close
+    // to the crop's own `minPageHeight` floor (=page width, 595pt) — both
+    // the buggy and the fixed layout hit that floor and report the exact
+    // same MediaBox height, verified by hand while building this test. So
+    // this asserts the actual vertical GAP between two adjacent sections
+    // instead: measured on the buggy code, "Accesorios recibidos" ->
+    // money band was ~101pt (inflated) vs ~32pt fixed/expected; retiro ->
+    // QR caption was ~82pt vs ~22pt. The thresholds below sit well between
+    // those two numbers so a regression here fails loudly either way.
+    const buffer = await generateOrdenPDF({ ...buildOrdenFixture(), soloCliente: true })
+    const positions = await extractPdfTextPositions(buffer)
+    const yOf = (needle: string): number => {
+      const hit = positions.find((p) => p.text.includes(needle))
+      if (!hit) throw new Error(`extractPdfTextPositions: text not found: ${needle}`)
+      return hit.y
+    }
+    const accesoriosY = yOf("Cargador, funda, chip claro")
+    const money3Y = yOf("PRESUPUESTO ESTIMADO")
+    expect(accesoriosY - money3Y).toBeLessThan(50)
+
+    const retiroY = yOf("Retiro estimado")
+    const qrCaptionY = yOf("Escaneá el código")
+    expect(retiroY - qrCaptionY).toBeLessThan(40)
   })
 
   it("renders the default (client part + ✂ + talón, one page) variant with all key sections", async () => {
@@ -514,13 +557,26 @@ describe("generateOrdenPDF", () => {
       expect(text).not.toContain("Repuesto de prueba 13")
       expect(text).toContain("+13 ítems más")
       // The tail block (signature row, "ENTREGÓ") must still land on-page —
-      // same MediaBox invariant as fix D5, exercised here with an oversized
-      // trabajos list instead of the default fixture.
+      // and the page stays the exact, uncropped A4 sheet (fix: orden-a4-fijo)
+      // even with this oversized trabajos list.
       expect(text).toContain("ENTREGÓ")
       const doc = await PDFDocument.load(buffer)
       const mediaBox = doc.getPage(0).getMediaBox()
-      expect(mediaBox.y + mediaBox.height).toBe(842)
-      expect(mediaBox.y).toBeGreaterThanOrEqual(0)
+      expect(mediaBox.y).toBe(0)
+      expect(mediaBox.height).toBe(842)
+
+      // Review Important #3: the footer's bottom-margin anchor is a
+      // `Math.max(4, ey - footerTopTarget)` gap with a 4pt floor — it
+      // protects against the footer overlapping the body, but nothing
+      // stops the whole flow from drifting below the bottom margin if the
+      // body itself runs long (like this 25-item, cap-12 trabajos list).
+      // Verify the footer's lowest drawn baseline (a términos line, here)
+      // still clears the bottom margin instead of drawing off-page.
+      // Measured 46pt with this exact fixture — comfortably above the 28pt
+      // margin, asserted with headroom below that measured value.
+      const positions = await extractPdfTextPositions(buffer)
+      const minY = Math.min(...positions.map((p) => p.y))
+      expect(minY).toBeGreaterThanOrEqual(RX_MARGIN)
     })
 
     it("subtracts descuentoCobro from the saldo band, distinct from the no-discount case", async () => {
@@ -561,21 +617,55 @@ describe("generateOrdenPDF", () => {
     })
   })
 
-  describe("MediaBox invariant (fix final-review D5)", () => {
-    // Pins the D5 crop-floor fix: the dynamic-height crop must always anchor
-    // its TOP edge at the real page height (842, A4) and never push its
-    // bottom edge below 0 — a regression here reintroduces the blank-strip-
-    // above-header bug the original Task D5 fix addressed.
+  describe("MediaBox invariant (fix: orden-a4-fijo)", () => {
+    // The two print sheets (RECEPCIÓN full — client part + cut line + talón
+    // — and ENTREGA) no longer crop to content: both the ✂ cut line/talón
+    // and the ENTREGA footer are anchored to the bottom margin instead, so
+    // the page is ALWAYS the full physical A4 sheet. A regression here
+    // (something re-enabling the old dynamic crop) would silently break
+    // that bottom-anchoring on a real printed page.
     it.each([
       ["recepción full (client part + cut line + talón)", buildOrdenFixture()],
-      ["soloCliente (client part only)", { ...buildOrdenFixture(), soloCliente: true }],
       ["entrega (terminal delivery estado)", { ...buildOrdenFixture(), estado: "ENTREGADO" }],
-    ] as const)("keeps a valid, non-negative-origin MediaBox for the %s variant", async (_label, data) => {
+    ] as const)("keeps the exact, uncropped A4 MediaBox for the %s variant", async (_label, data) => {
       const buffer = await generateOrdenPDF(data)
+      const doc = await PDFDocument.load(buffer)
+      const mediaBox = doc.getPage(0).getMediaBox()
+      expect(mediaBox.y).toBe(0)
+      expect(mediaBox.height).toBe(842)
+    })
+
+    // soloCliente (WhatsApp share) is viewed on screen, never printed on a
+    // physical sheet — it keeps the old dynamic crop-to-content behavior
+    // (fix final-review D5): top edge anchored at 842, bottom never negative.
+    it("keeps a valid, non-negative-origin dynamic-crop MediaBox for the soloCliente variant", async () => {
+      const buffer = await generateOrdenPDF({ ...buildOrdenFixture(), soloCliente: true })
       const doc = await PDFDocument.load(buffer)
       const mediaBox = doc.getPage(0).getMediaBox()
       expect(mediaBox.y + mediaBox.height).toBe(842)
       expect(mediaBox.y).toBeGreaterThanOrEqual(0)
+    })
+  })
+
+  describe("bottom-margin floor under worst-case content (review Important #2)", () => {
+    // The RECEPCIÓN talón's bottom anchor and the zone-B/C gap distribution
+    // above it both rely on MIN_GAP floors (8pt) to avoid overlapping zones
+    // when content is too long for the normal leftover-space split — but
+    // nothing stops the WHOLE flow from drifting below the physical bottom
+    // margin when even those floors aren't enough room, since the page is
+    // now fixed A4 with no crop to fall back on. `buildMaxContentOrdenFixture`
+    // pushes every wrapped/capped field (falla declarada, observaciones,
+    // talón chequeo rápido, términos) to its existing slice cap — the
+    // worst case the current UI can actually produce — and this checks the
+    // talón's lowest drawn baseline still clears the bottom margin instead
+    // of drawing off-page. Measured 53pt with this fixture (25pt of
+    // headroom below the 28pt margin); asserted directly against the
+    // margin so any regression that eats into that headroom fails loudly.
+    it("keeps the talón's lowest drawn baseline at or above the bottom margin", async () => {
+      const buffer = await generateOrdenPDF(buildMaxContentOrdenFixture())
+      const positions = await extractPdfTextPositions(buffer)
+      const minY = Math.min(...positions.map((p) => p.y))
+      expect(minY).toBeGreaterThanOrEqual(RX_MARGIN)
     })
   })
 })

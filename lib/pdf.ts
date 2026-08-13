@@ -1092,13 +1092,22 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   type RxCell = { x: number; width: number; label: string; lines: RxCellLine[] }
   const rxCellPadX = 8
   const rxCellPadY = 7
-  const rxDrawGridRow = (cells: RxCell[], topY: number): number => {
+  // Pure height calc, split out from the draw call below (fix: orden-a4-fijo)
+  // so callers can measure a row's height BEFORE anything is drawn — the
+  // RECEPCIÓN client part needs the business stub's total height ahead of
+  // time to anchor the ✂ cut line to the bottom-margin-pinned stub. Both
+  // this and rxDrawGridRow compute the identical number off the same cell
+  // data, so a pre-measured height always matches what actually gets drawn.
+  const rxGridRowHeight = (cells: RxCell[]): number => {
     let maxContentH = 0
     for (const cell of cells) {
       const h = 12 + cell.lines.length * 10
       if (h > maxContentH) maxContentH = h
     }
-    const rowH = maxContentH + rxCellPadY * 2
+    return maxContentH + rxCellPadY * 2
+  }
+  const rxDrawGridRow = (cells: RxCell[], topY: number): number => {
+    const rowH = rxGridRowHeight(cells)
     page.drawRectangle({ x: rxMargin, y: topY - rowH, width: rxContentW, height: rowH, borderColor: MONO.rule, borderWidth: RULE_WIDTH })
     for (let i = 1; i < cells.length; i++) {
       page.drawLine({ start: { x: cells[i].x, y: topY }, end: { x: cells[i].x, y: topY - rowH }, thickness: RULE_WIDTH, color: MONO.rule })
@@ -1598,25 +1607,60 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     }
 
     // ---- Pie: atribución + firmas + QR/seguimiento + términos ----
-    ey -= 4
-    drawRule(page, rxMargin, width - rxMargin, ey, { color: MONO.ink, thickness: 1 })
-    ey -= 12
-
+    // Fixed A4 (fix: orden-a4-fijo) — the footer (rule, atribución, notas de
+    // entrega, QR/firmas, términos) is a fixed-height block once `data` is
+    // known; none of its pieces read `ey`. Building the parts that decide
+    // that height (attrPartsEn, notas de entrega lines, términos lines)
+    // BEFORE drawing lets the whole footer anchor to the bottom margin: the
+    // gap right below, between the garantía box (or the mid split when
+    // there's no garantía) and the footer's own rule, absorbs whatever
+    // vertical space the trimmed-down body left over. The drawing code
+    // further down walks these exact same arrays, so the measured height
+    // can never drift from what actually gets drawn.
     const attrPartsEn: Array<{ label: string; value: string }> = []
     if (recibidoPorNombre) attrPartsEn.push({ label: "Recibió: ", value: recibidoPorNombre })
     if (tecnicoNombre) attrPartsEn.push({ label: "Técnico: ", value: tecnicoNombre })
     const entregadoPorEn = safe(data.entregadoPor)
     if (entregadoPorEn) attrPartsEn.push({ label: "Entregó: ", value: entregadoPorEn })
-    let ax = rxMargin
-    for (const p of attrPartsEn) {
-      ax += rxDrawRun(page, [{ text: p.label, font: archivoRegular, color: MONO.label }, { text: p.value, font: archivoBold, color: MONO.ink }], ax, ey, 8)
-      ax += 16
-    }
     const dateSummaryPartsEn = [
       fechaIngreso ? `Ingreso ${fechaIngreso}` : "",
       data.fechaCompletado ? `Completado ${formatDatePDF(data.fechaCompletado)}` : "",
       data.fechaEntrega ? `Entrega ${formatDatePDF(data.fechaEntrega)}` : "",
     ].filter(Boolean).join(" · ")
+
+    const notasEntregaEn = safe(data.notasEntrega)
+    const notasEntregaLinesEn = notasEntregaEn ? rxWrap(notasEntregaEn, archivoRegular, 7.5, rxContentW).slice(0, 2) : []
+
+    // ---- Términos (mismo criterio que la hoja RECEPCIÓN) — computados acá
+    // (no donde se dibujan, más abajo) porque su alto entra en la medición
+    // del pie que ancla todo el bloque al margen inferior.
+    const terminosListEn = parseRecepcionTerminos(data.recepcionTerminos)
+    const terminosFlatEn: string[] = []
+    for (const raw of terminosListEn) {
+      terminosFlatEn.push(...rxWrap(raw, archivoRegular, 6, rxContentW))
+    }
+    const shownTerminosEn = terminosFlatEn.slice(0, 6)
+
+    // Alto total del pie, de su propia regla superior hasta el margen
+    // inferior de la página — misma cuenta que antes armaba `contentBottomEn`
+    // (12 regla->atribución + 20 fila de atribución + notas + 55 bloque QR/
+    // firmas + términos + 10 de respiro final), solo que ahora fija DÓNDE
+    // debe empezar el pie en vez de recortar la página a su tamaño real.
+    const notasBlockHEn = notasEntregaEn ? (9 + notasEntregaLinesEn.length * 9 + 3) : 0
+    const footerBodyHEn = 12 + 20 + notasBlockHEn + 55 + shownTerminosEn.length * 8 + 10
+    const footerTopTargetEn = rxMargin + footerBodyHEn
+    // El hueco entre la garantía (o el mid split) y la regla del pie es el
+    // que absorbe el espacio sobrante — piso de 4pt (el gap fijo original)
+    // para el caso con contenido largo, donde no sobra nada para repartir.
+    ey -= Math.max(4, ey - footerTopTargetEn)
+    drawRule(page, rxMargin, width - rxMargin, ey, { color: MONO.ink, thickness: 1 })
+    ey -= 12
+
+    let ax = rxMargin
+    for (const p of attrPartsEn) {
+      ax += rxDrawRun(page, [{ text: p.label, font: archivoRegular, color: MONO.label }, { text: p.value, font: archivoBold, color: MONO.ink }], ax, ey, 8)
+      ax += 16
+    }
     if (dateSummaryPartsEn) rxDrawRight(page, dateSummaryPartsEn, width - rxMargin, ey, 7.5, archivoRegular, MONO.label)
     ey -= 20
 
@@ -1624,11 +1668,9 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     // entregada (contenido de cara al cliente, distinto de notas_internas,
     // que NUNCA se dibuja). Antes vivía en la página "COMPROBANTE DE
     // ENTREGA" eliminada; se restaura como línea compacta condicional.
-    const notasEntregaEn = safe(data.notasEntrega)
     if (notasEntregaEn) {
       page.drawText("Notas de entrega:", { x: rxMargin, y: ey, size: 6.5, font: archivoBold, color: MONO.label })
       ey -= 9
-      const notasEntregaLinesEn = rxWrap(notasEntregaEn, archivoRegular, 7.5, rxContentW).slice(0, 2)
       for (const l of notasEntregaLinesEn) {
         page.drawText(l, { x: rxMargin, y: ey, size: 7.5, font: archivoRegular, color: MONO.ink })
         ey -= 9
@@ -1709,41 +1751,90 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     }
     ey = sigRowTopEn - 55
 
-    // ---- Términos (mismo criterio que la hoja RECEPCIÓN) ----
-    const terminosListEn = parseRecepcionTerminos(data.recepcionTerminos)
-    const terminosFlatEn: string[] = []
-    for (const raw of terminosListEn) {
-      terminosFlatEn.push(...rxWrap(raw, archivoRegular, 6, rxContentW))
-    }
-    const shownTerminosEn = terminosFlatEn.slice(0, 6)
+    // Términos — usa el array ya medido más arriba (shownTerminosEn), no
+    // se recalcula acá.
     for (const l of shownTerminosEn) {
       page.drawText(l, { x: rxMargin, y: ey, size: 6, font: archivoRegular, color: MONO.faint })
       ey -= 8
     }
 
-    // ---- Recorte dinámico al contenido real (misma técnica que la hoja RECEPCIÓN) ----
-    // El piso `minPageHeightEn` (Task D5 fix, encontrado rasterizando
-    // after-orden-solocliente.pdf) NO se puede sumar hacia arriba desde
-    // `contentBottomEn`: si el contenido real es más corto que el piso, eso
-    // empuja el borde superior de la caja por ENCIMA de `height` — el
-    // límite real donde termina lo dibujado (todo se dibuja hacia abajo
-    // desde `height`) — y aparece una franja en blanco arriba del header en
-    // vez de recortar solo lo que sobra abajo. El piso se aplica bajando el
-    // borde inferior de la caja en cambio, así el superior queda siempre
-    // anclado en `height`.
-    const contentBottomEn = ey - 10
-    const minPageHeightEn = width
-    const dynamicHeightEn = Math.max(height - contentBottomEn, minPageHeightEn)
-    const boxBottomEn = height - dynamicHeightEn
-    if (dynamicHeightEn < height) {
-      page.setMediaBox(0, boxBottomEn, width, dynamicHeightEn)
-      page.setCropBox(0, boxBottomEn, width, dynamicHeightEn)
-      page.setTrimBox(0, boxBottomEn, width, dynamicHeightEn)
-    }
+    // Fixed A4 (fix: orden-a4-fijo) — sin recorte dinámico. El pie ya quedó
+    // anclado al margen inferior más arriba, así que la hoja se imprime
+    // siempre en el tamaño físico completo (595x842).
   } else {
   // ============================================================
   // PARTE CLIENTE
   // ============================================================
+  // Fixed A4 (fix: orden-a4-fijo) — the business stub below (TALÓN INTERNO)
+  // has a content-driven height (its grid rows size to whatever cliente/
+  // equipo/chequeo/notas text they hold), but its BOTTOM is pinned to the
+  // page's physical bottom margin: on a printed A4 sheet the ✂ cut line and
+  // the stub need to land at a predictable spot, not wherever the (now much
+  // shorter, post-trim) content happens to end. So the stub's cell data and
+  // row heights are built here, BEFORE any drawing starts, purely to work
+  // out where the cut line (`cutYTarget`) has to fall — the actual TALÓN
+  // INTERNO drawing further below reuses these exact same arrays/values,
+  // so the measurement can never drift from what gets drawn.
+  const colGridW = rxContentW / 2
+
+  const stubClienteLines: RxCellLine[] = [
+    { text: `${clienteNombre} · ${clienteTelefono}`.substring(0, 55), font: archivoBold, size: 8, color: MONO.ink },
+  ]
+  if (clienteDni) stubClienteLines.push({ text: `DNI ${clienteDni}`, font: archivoRegular, size: 7.5, color: MONO.label })
+  const stubEquipoLines: RxCellLine[] = [
+    { text: equipoTitle.substring(0, 55), font: archivoBold, size: 8, color: MONO.ink },
+  ]
+  if (imei) stubEquipoLines.push({ text: `${identificadorLabel} ${imei}`, font: plexMonoRegular, size: 7, color: MONO.label })
+  const stubRow1H = rxGridRowHeight([
+    { x: rxMargin, width: colGridW, label: "Cliente", lines: stubClienteLines },
+    { x: rxMargin + colGridW, width: colGridW, label: t(term, "equipo"), lines: stubEquipoLines },
+  ])
+
+  const checklistItemsList = Array.isArray(data.checklistItems) ? data.checklistItems : []
+  const chequeoParts = checklistItemsList.map(it => {
+    const v = it.valor === true ? "OK" : it.valor === false ? "NO" : safe(it.valor)
+    return `${it.label}: ${v}`
+  })
+  if (data.checklistNotas) chequeoParts.push(safe(data.checklistNotas))
+  const chequeoText = chequeoParts.join(" · ") || "Sin chequeo registrado"
+  const chequeoLines = rxWrap(chequeoText, archivoRegular, 7.5, colGridW - rxCellPadX * 2).slice(0, 4)
+  const isPatternCode = !!codigoAccesoDispositivo && /^patr[oó]n:/i.test(codigoAccesoDispositivo)
+  const row2H = Math.max(58, 12 + chequeoLines.length * 10 + rxCellPadY * 2)
+
+  const notasMostrador = [problemaReportado, tecnicoNombre ? `Técnico asignado: ${tecnicoNombre}` : ""].filter(Boolean).join(". ")
+  const notasLines: RxCellLine[] = rxWrap(notasMostrador, archivoRegular, 7.5, rxContentW * 0.5 - rxCellPadX * 2)
+    .slice(0, 3)
+    .map(l => ({ text: l, font: archivoRegular, size: 7.5, color: MONO.ink }))
+  if (data.observaciones) {
+    // Fix final-review D1: talón interno — línea compacta "OBS:", restaurada
+    // del layout viejo (se truncaba a un ancho fijo ahí también).
+    const obsLineText = rxTruncate(`OBS: ${safe(data.observaciones)}`, archivoRegular, 7, rxContentW * 0.5 - rxCellPadX * 2)
+    notasLines.push({ text: obsLineText, font: archivoRegular, size: 7, color: MONO.label })
+  }
+  const presupSenaText = `${presupuesto || formatCurrencyPDF(0)} / ${data.sena ? formatCurrencyPDF(data.sena) : "—"}`
+  const row3H = rxGridRowHeight([
+    { x: rxMargin, width: rxContentW * 0.5, label: "Falla / notas de mostrador", lines: notasLines },
+    { x: rxMargin + rxContentW * 0.5, width: rxContentW * 0.25, label: "Presupuesto / Seña", lines: [{ text: presupSenaText, font: archivoBold, size: 8, color: MONO.ink }] },
+    { x: rxMargin + rxContentW * 0.75, width: rxContentW * 0.25, label: "Prometida", lines: [{ text: fechaPrometida || "—", font: archivoBold, size: 8, color: MONO.ink }] },
+  ])
+
+  // cutY -> "TALÓN INTERNO" title (20) -> title row (14) -> subtext row (12)
+  // -> fila 1 -> fila 2 -> fila 3 -> respiro final (14) = contentBottom,
+  // anclado al margen inferior de la página (mismo valor que `rxMargin`,
+  // simétrico con el margen superior).
+  const stubBlockH = 20 + 14 + 12 + stubRow1H + row2H + row3H + 14
+  const cutYTarget = rxMargin + stubBlockH
+
+  // Términos del pie de la parte cliente — igual que en la hoja ENTREGA,
+  // se calculan acá (no donde se dibujan, más abajo) porque su alto entra
+  // en la cuenta que empuja QR/firma/términos hacia la línea de corte.
+  const terminosList = parseRecepcionTerminos(data.recepcionTerminos)
+  const terminosFlat: string[] = []
+  for (const raw of terminosList) {
+    terminosFlat.push(...rxWrap(raw, archivoRegular, 6, rxContentW))
+  }
+  const shownTerminos = terminosFlat.slice(0, 6)
+
   let ry = height - rxMargin
 
   // ---- Header: logo (si hay) + empresa/sucursal + idbox (#numero, código, estado) ----
@@ -1848,8 +1939,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // mid-flow and doesn't need it repeated on every reception printout.
   // Content below flows up into the reclaimed space — no gap left behind.
 
-  // ---- Grid: Cliente | Equipo ----
-  const colGridW = rxContentW / 2
+  // ---- Grid: Cliente | Equipo ---- (colGridW hoisted above, for the stub pre-measurement)
   const isEmpresa = clienteTipoCliente.toUpperCase() === "EMPRESA" && !!clienteRazonSocial
   const clienteLines: RxCellLine[] = []
   // Fix final-review D9: width-aware truncation (rxTruncate) instead of a
@@ -1917,6 +2007,37 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   ], ry)
   ry -= rowH3 + 8
 
+  // ============================================================
+  // Zona media/baja (fix: orden-a4-fijo): la banda de dinero + retiro
+  // estimado se ubican en el medio del espacio que queda, y el bloque QR +
+  // firma + términos se empuja hacia la línea de corte — que a su vez es un
+  // destino fijo (`cutYTarget`, calculado arriba a partir del alto del
+  // talón). La zona de arriba (header + grillas + accesorios, ya dibujada)
+  // quedó top-anchored sin cambios. Lo que sobra entre acá y el corte se
+  // reparte en dos huecos — antes y después del bloque dinero/retiro — en
+  // vez de quedar pegado al talón como espacio muerto.
+  //
+  // Fix (review Critical #1): soloCliente (compartir por WhatsApp) NUNCA
+  // dibuja el talón ni la línea de corte — anclar esta zona a `cutYTarget`
+  // le metía espacio muerto pegado a un talón que ese variant jamás
+  // renderiza. Solo la hoja impresa (client part + talón) reparte huecos;
+  // soloCliente conserva el flujo pre-diff, ajustado (money3 pegado a
+  // accesorios, retiro con su gap fijo original).
+  // ============================================================
+  const moneyPresent = !!(data.presupuesto || data.sena)
+  const retiroPresent = !!fechaPrometida
+  const isPrintSheet = !data.soloCliente
+  const zoneBContentH = (moneyPresent ? 34 : 0) + (moneyPresent && retiroPresent ? 8 : 0) + (retiroPresent ? 9 : 0)
+  // Alto fijo de la zona QR/firma/términos, de su propio arranque (el hueco
+  // de 4pt previo a la fila QR) hasta la línea de corte (6pt de respiro).
+  const zoneCH = 4 + 55 + shownTerminos.length * 8 + 6
+  const zoneCTopTarget = cutYTarget + zoneCH
+  const MIN_GAP = 8
+  const leftoverGap = isPrintSheet ? Math.max(0, ry - zoneBContentH - zoneCTopTarget - MIN_GAP * 2) : 0
+  const gapTop = isPrintSheet ? MIN_GAP + leftoverGap / 2 : 0
+  const gapBottom = isPrintSheet ? MIN_GAP + leftoverGap / 2 : 0
+  ry -= gapTop
+
   // ---- money3: presupuesto | seña | saldo (última celda ink-fill) ----
   if (data.presupuesto || data.sena) {
     const presupNum = Number(data.presupuesto) || 0
@@ -1940,7 +2061,10 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       page.drawText(rxTruncate(c.label.toUpperCase(), archivoBold, 6, mcW - 12), { x: cx + 8, y: ry - 13, size: 6, font: archivoBold, color: lblColor })
       page.drawText(rxTruncate(c.amt, archivoCondensedBold, 13, mcW - 12), { x: cx + 8, y: ry - 27, size: 13, font: archivoCondensedBold, color: amtColor })
     })
-    ry -= money3H + 8
+    // Gap interno: en la hoja impresa, solo cuando el retiro sigue acá
+    // debajo (si no, el hueco lo pone `gapBottom` más abajo); en soloCliente
+    // el +8 pre-diff es incondicional (no hay `gapBottom` que lo reemplace).
+    ry -= money3H + (isPrintSheet ? (retiroPresent ? 8 : 0) : 8)
   }
 
   // ---- Retiro estimado ----
@@ -1950,8 +2074,14 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       { text: fechaPrometida, font: archivoBold, color: MONO.ink },
       { text: " — te avisamos ante cada cambio de estado.", font: archivoRegular, color: MONO.label },
     ], rxMargin, ry - 9, 9)
-    ry -= 18
+    // Hoja impresa: solo el texto (9pt) — `gapBottom` pone el resto.
+    // soloCliente: gap fijo pre-diff (9 de texto + 9 de respiro = 18).
+    ry -= isPrintSheet ? 9 : 18
   }
+
+  // Segundo hueco distribuido: empuja el bloque QR/firma/términos hacia la
+  // línea de corte, absorbiendo lo que sobre entre el dinero/retiro y ahí.
+  ry -= gapBottom
 
   // ---- QR + caption + firma cliente ----
   // Item 3 (RECEPCIÓN client-part ajustes): se quitó la URL de seguimiento
@@ -2019,13 +2149,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   }
   ry = sigRowTop - sigBlockH
 
-  // ---- Términos (compacto) ----
-  const terminosList = parseRecepcionTerminos(data.recepcionTerminos)
-  const terminosFlat: string[] = []
-  for (const raw of terminosList) {
-    terminosFlat.push(...rxWrap(raw, archivoRegular, 6, rxContentW))
-  }
-  const shownTerminos = terminosFlat.slice(0, 6)
+  // ---- Términos (compacto) — usa `shownTerminos`, ya medido más arriba ----
   if (shownTerminos.length > 0) {
     for (const l of shownTerminos) {
       page.drawText(l, { x: rxMargin, y: ry, size: 6, font: archivoRegular, color: MONO.faint })
@@ -2086,33 +2210,16 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   }
   sy -= 12
 
-  // ---- Fila 1: Cliente | Equipo ----
-  const stubClienteLines: RxCellLine[] = [
-    { text: `${clienteNombre} · ${clienteTelefono}`.substring(0, 55), font: archivoBold, size: 8, color: MONO.ink },
-  ]
-  if (clienteDni) stubClienteLines.push({ text: `DNI ${clienteDni}`, font: archivoRegular, size: 7.5, color: MONO.label })
-  const stubEquipoLines: RxCellLine[] = [
-    { text: equipoTitle.substring(0, 55), font: archivoBold, size: 8, color: MONO.ink },
-  ]
-  if (imei) stubEquipoLines.push({ text: `${identificadorLabel} ${imei}`, font: plexMonoRegular, size: 7, color: MONO.label })
-  const stubRow1H = rxDrawGridRow([
+  // ---- Fila 1: Cliente | Equipo — usa stubClienteLines/stubEquipoLines/
+  // stubRow1H, ya medidos arriba para calcular cutYTarget ----
+  rxDrawGridRow([
     { x: rxMargin, width: colGridW, label: "Cliente", lines: stubClienteLines },
     { x: rxMargin + colGridW, width: colGridW, label: t(term, "equipo"), lines: stubEquipoLines },
   ], sy)
   sy -= stubRow1H
 
-  // ---- Fila 2: Código de acceso (PIN/patrón — SOLO acá) | Chequeo rápido ----
-  const checklistItemsList = Array.isArray(data.checklistItems) ? data.checklistItems : []
-  const chequeoParts = checklistItemsList.map(it => {
-    const v = it.valor === true ? "OK" : it.valor === false ? "NO" : safe(it.valor)
-    return `${it.label}: ${v}`
-  })
-  if (data.checklistNotas) chequeoParts.push(safe(data.checklistNotas))
-  const chequeoText = chequeoParts.join(" · ") || "Sin chequeo registrado"
-  const chequeoLines = rxWrap(chequeoText, archivoRegular, 7.5, colGridW - rxCellPadX * 2).slice(0, 4)
-
-  const isPatternCode = !!codigoAccesoDispositivo && /^patr[oó]n:/i.test(codigoAccesoDispositivo)
-  const row2H = Math.max(58, 12 + chequeoLines.length * 10 + rxCellPadY * 2)
+  // ---- Fila 2: Código de acceso (PIN/patrón — SOLO acá) | Chequeo rápido —
+  // usa checklistItemsList/chequeoLines/isPatternCode/row2H, ya medidos ----
   page.drawRectangle({ x: rxMargin, y: sy - row2H, width: rxContentW, height: row2H, borderColor: MONO.rule, borderWidth: RULE_WIDTH })
   page.drawLine({ start: { x: rxMargin + colGridW, y: sy }, end: { x: rxMargin + colGridW, y: sy - row2H }, thickness: RULE_WIDTH, color: MONO.rule })
   drawSectionLabel(page, archivoBold, "Código de acceso", rxMargin + rxCellPadX, sy - rxCellPadY - 6)
@@ -2153,39 +2260,18 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   }
   sy -= row2H
 
-  // ---- Fila 3: Falla / notas de mostrador (+ técnico) | Presupuesto/Seña | Prometida ----
-  const notasMostrador = [problemaReportado, tecnicoNombre ? `Técnico asignado: ${tecnicoNombre}` : ""].filter(Boolean).join(". ")
-  const notasLines: RxCellLine[] = rxWrap(notasMostrador, archivoRegular, 7.5, rxContentW * 0.5 - rxCellPadX * 2)
-    .slice(0, 3)
-    .map(l => ({ text: l, font: archivoRegular, size: 7.5, color: MONO.ink }))
-  if (data.observaciones) {
-    // Fix final-review D1: talón interno — línea compacta "OBS:", restaurada
-    // del layout viejo (se truncaba a un ancho fijo ahí también).
-    const obsLineText = rxTruncate(`OBS: ${safe(data.observaciones)}`, archivoRegular, 7, rxContentW * 0.5 - rxCellPadX * 2)
-    notasLines.push({ text: obsLineText, font: archivoRegular, size: 7, color: MONO.label })
-  }
-  const presupSenaText = `${presupuesto || formatCurrencyPDF(0)} / ${data.sena ? formatCurrencyPDF(data.sena) : "—"}`
-  const row3H = rxDrawGridRow([
+  // ---- Fila 3: Falla / notas de mostrador (+ técnico) | Presupuesto/Seña |
+  // Prometida — usa notasLines/presupSenaText/row3H, ya medidos arriba ----
+  rxDrawGridRow([
     { x: rxMargin, width: rxContentW * 0.5, label: "Falla / notas de mostrador", lines: notasLines },
     { x: rxMargin + rxContentW * 0.5, width: rxContentW * 0.25, label: "Presupuesto / Seña", lines: [{ text: presupSenaText, font: archivoBold, size: 8, color: MONO.ink }] },
     { x: rxMargin + rxContentW * 0.75, width: rxContentW * 0.25, label: "Prometida", lines: [{ text: fechaPrometida || "—", font: archivoBold, size: 8, color: MONO.ink }] },
   ], sy)
   sy -= row3H
 
-  // ---- Recorte dinámico al contenido real (misma técnica que antes) ----
-  // Mismo fix de piso que las otras dos ocurrencias (Task D5, ver detalle en
-  // la hoja ENTREGA más arriba): bajar el borde inferior en vez de sumar el
-  // piso hacia arriba de `contentBottom`, para no meter una franja en blanco
-  // por encima de `height`.
-  const contentBottom = sy - 14
-  const minPageHeight = width
-  const dynamicHeight = Math.max(height - contentBottom, minPageHeight)
-  const boxBottom = height - dynamicHeight
-  if (dynamicHeight < height) {
-    page.setMediaBox(0, boxBottom, width, dynamicHeight)
-    page.setCropBox(0, boxBottom, width, dynamicHeight)
-    page.setTrimBox(0, boxBottom, width, dynamicHeight)
-  }
+  // Fixed A4 (fix: orden-a4-fijo) — sin recorte dinámico. El talón quedó
+  // anclado al margen inferior más arriba (`cutYTarget`), así que la hoja
+  // se imprime siempre en el tamaño físico completo (595x842).
   }
 
   // Item 6: la PÁGINA DE FOTOS DE INGRESO que se apendaba acá (si
