@@ -30,8 +30,10 @@ describe.runIf(process.env.PDF_SAMPLES === "1")("pdf visual samples", () => {
     const remito = await generateFacturaPDF({
       numeroFactura: "0001-00000007",
       fecha: new Date("2026-08-08"),
+      // Accounting-grade remito: goods moved a few days before emission.
+      fechaOperacion: new Date("2026-08-05"),
       estadoPago: "PAGADO_PARCIAL",
-      cliente: { nombre: "Consumidor Final" },
+      cliente: { nombre: "Consumidor Final", dni: "30.123.456" },
       venta: { numeroVenta: 9 },
       items: [
         { descripcion: "PANTALLA IPHONE 13 OLED", cantidad: 1, precioUnitario: 45000, subtotal: 45000 },
@@ -56,6 +58,17 @@ describe.runIf(process.env.PDF_SAMPLES === "1")("pdf visual samples", () => {
           montoOriginal: 4545.45,
         },
       ],
+      nombreEmpresa: "Servicio Técnico Demo",
+      telefonoEmpresa: "+54 11 4000-1234",
+      direccionEmpresa: "Av. Rivadavia 5000, CABA",
+      // Fiscal emitter identity — accounting-grade remito EMISOR extras.
+      cuitEmpresa: "30-71234567-8",
+      condicionIvaEmpresa: "Responsable Inscripto",
+      domicilioFiscalEmpresa: "Av. Corrientes 3247, CABA",
+      // Payment terms — CONDICIONES DE PAGO section.
+      vencimiento: new Date("2026-08-20"),
+      mediosPago: "Efectivo, transferencia, tarjeta",
+      cbuAlias: "SERVICIO.TECNICO.MP",
     })
     writeFileSync(`${OUT_DIR}/${TAG}-remito.pdf`, remito)
     expect(remito.length).toBeGreaterThan(1000)
@@ -63,12 +76,17 @@ describe.runIf(process.env.PDF_SAMPLES === "1")("pdf visual samples", () => {
     // Long remito: overflows both the items table and the payment history
     // onto continuation pages (Task 7 — pagination replaced the old
     // single-page truncation for these two tables).
+    // Orden-sourced (not venta-sourced, unlike the sample above) so this
+    // document also exercises RECIBÍ CONFORME, which only draws when
+    // data.orden is present — together with the saldo-column pagination
+    // and CONDICIONES DE PAGO, all landing on continuation pages.
     const remitoLargo = await generateFacturaPDF({
       numeroFactura: "0001-00000008",
       fecha: new Date("2026-08-08"),
+      fechaOperacion: new Date("2026-08-06"),
       estadoPago: "PAGADO_PARCIAL",
-      cliente: { nombre: "Consumidor Final" },
-      venta: { numeroVenta: 130 },
+      cliente: { nombre: "Consumidor Final", dni: "27.998.765" },
+      orden: { numeroOrden: 130, codigoOrden: "ORD-0130", dispositivo: "IPHONE 13 PRO MAX 256GB" },
       items: Array.from({ length: 40 }, (_, i) => ({
         descripcion: `REPUESTO DE PRUEBA ${String(i + 1).padStart(3, "0")}`,
         cantidad: 1,
@@ -85,6 +103,15 @@ describe.runIf(process.env.PDF_SAMPLES === "1")("pdf visual samples", () => {
         fecha: new Date("2026-08-08"),
         referencia: `REF-PAGO-${String(i + 1).padStart(3, "0")}`,
       })),
+      nombreEmpresa: "Servicio Técnico Demo",
+      telefonoEmpresa: "+54 11 4000-1234",
+      direccionEmpresa: "Av. Rivadavia 5000, CABA",
+      cuitEmpresa: "30-71234567-8",
+      condicionIvaEmpresa: "Responsable Inscripto",
+      domicilioFiscalEmpresa: "Av. Corrientes 3247, CABA",
+      vencimiento: new Date("2026-08-22"),
+      mediosPago: "Efectivo, transferencia, tarjeta",
+      cbuAlias: "SERVICIO.TECNICO.MP",
     })
     writeFileSync(`${OUT_DIR}/${TAG}-remito-largo.pdf`, remitoLargo)
     expect(remitoLargo.length).toBeGreaterThan(1000)

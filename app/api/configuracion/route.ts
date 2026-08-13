@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { uploadLogo, deleteLogo, dataUrlToBuffer } from "@/lib/storage"
 import { COUNTRIES } from "@/lib/countries"
 import { resolveTerminologia, sanitizeTerminologia } from "@/lib/terminologia"
+import { isMissingColumnError } from "@/lib/db-errors"
 
 // GET - Obtener configuraciÃ³n (solo ADMIN)
 export async function GET() {
@@ -15,9 +16,7 @@ export async function GET() {
     let organization: any = null
     let dbError: any = null
 
-    const result = await supabaseAdmin
-      .from("organizations")
-      .select(`
+    const baseSelect = `
         id,
         logo_url,
         logo_path,
@@ -48,11 +47,33 @@ export async function GET() {
         redondeo_efectivo,
         comision_aplica_sin_reparacion,
         terminologia
-      `)
+      `
+    // Datos fiscales y de cobro (migración 295). Seleccionados aparte del
+    // resto de columnas: si esa migración todavía no corrió en este entorno,
+    // el PGRST204 de estas 6 columnas no debe tumbar el resto de la config
+    // (ver reintento sin ellas más abajo).
+    const fiscalSelect = `${baseSelect}, cuit, condicion_iva, domicilio_fiscal, cbu_alias, medios_pago_texto, plazo_pago_dias`
+
+    let result = await supabaseAdmin
+      .from("organizations")
+      .select(fiscalSelect)
       .eq("id", organizationId!)
       .single()
 
-    if (result.error?.code === "PGRST204") {
+    if (isMissingColumnError(result.error)) {
+      // Migración 295 no aplicada todavía: reintentar sin las columnas fiscales.
+      // Esta es una SELECT pura (sin .update()), así que Postgres devuelve
+      // 42703 ("column ... does not exist"), no PGRST204 — PGRST204 solo
+      // aparece cuando el payload de una escritura nombra una columna
+      // desconocida. isMissingColumnError() cubre ambos casos.
+      result = await supabaseAdmin
+        .from("organizations")
+        .select(baseSelect)
+        .eq("id", organizationId!)
+        .single()
+    }
+
+    if (isMissingColumnError(result.error)) {
       // Column doesn't exist yet, query without it
       const fallback = await supabaseAdmin
         .from("organizations")
@@ -108,6 +129,12 @@ export async function GET() {
       comisionAplicaSinReparacion: organization.comision_aplica_sin_reparacion ?? false,
       terminologia: resolveTerminologia(organization.terminologia),
       terminologiaOverrides: organization.terminologia ?? {},
+      cuit: organization.cuit || "",
+      condicionIva: organization.condicion_iva || "",
+      domicilioFiscal: organization.domicilio_fiscal || "",
+      cbuAlias: organization.cbu_alias || "",
+      mediosPagoTexto: organization.medios_pago_texto || "",
+      plazoPagoDias: organization.plazo_pago_dias ?? null,
     })
   } catch (error) {
     console.error("Error fetching config:", error)
@@ -131,7 +158,7 @@ export async function PUT(request: Request) {
         { status: 413 }
       )
     }
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias } = body
 
     const updateData: Record<string, any> = {}
 
@@ -301,17 +328,69 @@ export async function PUT(request: Request) {
       updateData.terminologia = sanitizeTerminologia(terminologia as Record<string, unknown>)
     }
 
+    // Datos fiscales y de cobro (migración 295) — alimentan el remito.
+    if (cuit !== undefined) {
+      updateData.cuit = cuit || null
+    }
+
+    if (condicionIva !== undefined) {
+      const validCondicionIva = ["Responsable Inscripto", "Monotributo", "Exento", "Consumidor Final"]
+      if (condicionIva === "" || validCondicionIva.includes(condicionIva)) {
+        updateData.condicion_iva = condicionIva || null
+      }
+    }
+
+    if (domicilioFiscal !== undefined) {
+      updateData.domicilio_fiscal = domicilioFiscal || null
+    }
+
+    if (cbuAlias !== undefined) {
+      updateData.cbu_alias = cbuAlias || null
+    }
+
+    if (mediosPagoTexto !== undefined) {
+      updateData.medios_pago_texto = mediosPagoTexto || null
+    }
+
+    if (plazoPagoDias !== undefined) {
+      if (plazoPagoDias === "" || plazoPagoDias === null) {
+        updateData.plazo_pago_dias = null
+      } else {
+        const val = parseInt(plazoPagoDias)
+        if (!isNaN(val) && val >= 0) {
+          updateData.plazo_pago_dias = val
+        }
+      }
+    }
+
     const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda, vendedores_administran_inventario, iva_regimen, iva_tasa, redondeo_efectivo, comision_aplica_sin_reparacion, terminologia"
-    const selectColsFull = selectCols + ", recepcion_terminos, comprobante_terminos"
+    // Pre-295: lo que ya persistÃ­a antes de esta migraciÃ³n. Se usa como
+    // segundo intento (ver PGRST204 abajo) para que un 295 sin aplicar
+    // solo tumbe los 6 campos fiscales nuevos, no recepcion_terminos/
+    // comprobante_terminos ni el resto del update.
+    const selectColsPre295 = selectCols + ", recepcion_terminos, comprobante_terminos"
+    const selectColsFull = selectColsPre295 + ", cuit, condicion_iva, domicilio_fiscal, cbu_alias, medios_pago_texto, plazo_pago_dias"
 
     // Solo actualizar si hay cambios
     if (Object.keys(updateData).length === 0) {
-      // Retornar estado actual
-      const { data } = await supabaseAdmin
+      // Retornar estado actual. Mismo escalonado PGRST204 que el resto del
+      // archivo: PostgREST solo devuelve las columnas pedidas, así que usar
+      // `selectCols` a secas acá (como antes) devolvía recepcion_terminos/
+      // comprobante_terminos/los 6 campos fiscales siempre vacíos aunque
+      // estuvieran cargados en la DB.
+      let { data, error: selectError } = await supabaseAdmin
         .from("organizations")
-        .select(selectCols)
+        .select(selectColsFull)
         .eq("id", organizationId!)
         .single()
+      if (isMissingColumnError(selectError)) {
+        // SELECT pura otra vez (sin .update()): 42703, no PGRST204.
+        ;({ data } = await supabaseAdmin
+          .from("organizations")
+          .select(selectColsPre295)
+          .eq("id", organizationId!)
+          .single())
+      }
       const org = data as any
 
       return NextResponse.json({
@@ -343,6 +422,12 @@ export async function PUT(request: Request) {
         comisionAplicaSinReparacion: org?.comision_aplica_sin_reparacion ?? false,
         terminologia: resolveTerminologia(org?.terminologia),
         terminologiaOverrides: org?.terminologia ?? {},
+        cuit: org?.cuit || "",
+        condicionIva: org?.condicion_iva || "",
+        domicilioFiscal: org?.domicilio_fiscal || "",
+        cbuAlias: org?.cbu_alias || "",
+        mediosPagoTexto: org?.medios_pago_texto || "",
+        plazoPagoDias: org?.plazo_pago_dias ?? null,
       })
     }
 
@@ -354,7 +439,30 @@ export async function PUT(request: Request) {
       .select(selectColsFull)
       .single()
 
-    if (result2.error?.code === "PGRST204") {
+    if (isMissingColumnError(result2.error)) {
+      // Migración 295 no aplicada todavía: reintentar sin los 6 campos
+      // fiscales nuevos. El resto de updateData (recepcion_terminos,
+      // iva_regimen, terminologia, etc.) sigue intacto: esas columnas SÍ
+      // existen hoy, así que deben persistirse igual. Este primer intento sí
+      // suele dar PGRST204 real (updateData nombra columnas fiscales
+      // desconocidas en el payload de escritura), pero isMissingColumnError
+      // también cubre el 42703 que daría un RETURNING con columnas
+      // desconocidas si el body no las incluyera.
+      delete updateData.cuit
+      delete updateData.condicion_iva
+      delete updateData.domicilio_fiscal
+      delete updateData.cbu_alias
+      delete updateData.medios_pago_texto
+      delete updateData.plazo_pago_dias
+      result2 = await supabaseAdmin
+        .from("organizations")
+        .update(updateData)
+        .eq("id", organizationId!)
+        .select(selectColsPre295)
+        .single() as any
+    }
+
+    if (isMissingColumnError(result2.error)) {
       // recepcion_terminos column doesn't exist yet, retry without it
       delete updateData.recepcion_terminos
       hasRecepcionTerminos = false
@@ -414,6 +522,12 @@ export async function PUT(request: Request) {
       comisionAplicaSinReparacion: organization.comision_aplica_sin_reparacion ?? false,
       terminologia: resolveTerminologia(organization.terminologia),
       terminologiaOverrides: organization.terminologia ?? {},
+      cuit: organization.cuit || "",
+      condicionIva: organization.condicion_iva || "",
+      domicilioFiscal: organization.domicilio_fiscal || "",
+      cbuAlias: organization.cbu_alias || "",
+      mediosPagoTexto: organization.medios_pago_texto || "",
+      plazoPagoDias: organization.plazo_pago_dias ?? null,
     })
   } catch (error: any) {
     console.error("Error updating config:", error)

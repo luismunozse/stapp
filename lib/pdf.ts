@@ -2863,12 +2863,17 @@ interface FacturaPago {
 interface FacturaPDFData {
   numeroFactura: string
   fecha: Date | string
+  // Accounting-grade remito: when present, drawn as a second "Operación:"
+  // line below "Emisión:" — the date the goods/service actually moved,
+  // which can differ from the document's emission date.
+  fechaOperacion?: Date | string
   estadoPago: string
   cliente: {
     nombre: string
     telefono?: string | null
     email?: string | null
     direccion?: string | null
+    dni?: string | null
   }
   orden?: {
     numeroOrden: number
@@ -2895,6 +2900,14 @@ interface FacturaPDFData {
   nombreEmpresa?: string
   telefonoEmpresa?: string | null
   direccionEmpresa?: string | null
+  // Fiscal emitter identity — drawn in the EMISOR header block below.
+  cuitEmpresa?: string | null
+  condicionIvaEmpresa?: string | null
+  domicilioFiscalEmpresa?: string | null
+  // Payment terms — drawn in the CONDICIONES DE PAGO block below.
+  vencimiento?: Date | string | null
+  mediosPago?: string | null
+  cbuAlias?: string | null
   logoUrl?: string | null
   moneda?: string
   zonaHoraria?: string
@@ -2935,17 +2948,29 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   const empresaNombre = safe(data.nombreEmpresa) || "Servicio Tecnico"
   const telefonoEmpresa = safe(data.telefonoEmpresa)
   const direccionEmpresa = safe(data.direccionEmpresa)
+  // Fiscal emitter identity — accounting-grade remito header extras, each
+  // line drawn only when present (see EMISOR block below).
+  const cuitEmpresa = safe(data.cuitEmpresa)
+  const condicionIvaEmpresa = safe(data.condicionIvaEmpresa)
+  const domicilioFiscalEmpresa = safe(data.domicilioFiscalEmpresa)
   const numeroFactura = safe(data.numeroFactura)
   const fecha = formatDatePDF(data.fecha)
   const clienteNombre = safe(data.cliente?.nombre) || "Consumidor Final"
   const clienteTelefono = safe(data.cliente?.telefono)
   const clienteEmail = safe(data.cliente?.email)
   const clienteDireccion = safe(data.cliente?.direccion)
+  const clienteDni = safe(data.cliente?.dni)
   const ordenDisplay = data.orden
     ? data.orden.codigoOrden || `#${String(data.orden.numeroOrden).padStart(4, "0")}`
     : ""
   const dispositivo = data.orden ? safe(data.orden.dispositivo) : ""
   const pendiente = data.total - (data.montoAbonado || 0)
+  // Payment terms — accounting-grade remito CONDICIONES DE PAGO section
+  // (see below); the whole section is drawn only when at least one of
+  // these three is present.
+  const vencimientoText = data.vencimiento ? formatDatePDF(data.vencimiento) : ""
+  const mediosPago = safe(data.mediosPago)
+  const cbuAlias = safe(data.cbuAlias)
 
   // Crear documento PDF
   const pdfDoc = await PDFLib.create()
@@ -3012,6 +3037,25 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     page.drawText(direccionEmpresa, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
     y -= 12
   }
+  // Fiscal emitter extras (CUIT / condición IVA / domicilio fiscal) — one
+  // 8pt line each, only when present. Tracked so the separator below can
+  // extend downward and avoid colliding with these lines.
+  let emisorExtraLines = 0
+  if (cuitEmpresa) {
+    page.drawText(`CUIT: ${cuitEmpresa}`, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
+    y -= 12
+    emisorExtraLines++
+  }
+  if (condicionIvaEmpresa) {
+    page.drawText(condicionIvaEmpresa, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
+    y -= 12
+    emisorExtraLines++
+  }
+  if (domicilioFiscalEmpresa) {
+    page.drawText(domicilioFiscalEmpresa, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
+    y -= 12
+    emisorExtraLines++
+  }
 
   // Bloque REMITO (lado derecho, alineado a la derecha)
   const remitoLabel = "REMITO"
@@ -3031,24 +3075,45 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     font: helveticaBold,
     color: MONO.ink,
   })
-  const fechaLabel = `Fecha: ${fecha}`
-  const fechaLabelWidth = helvetica.widthOfTextAtSize(fechaLabel, TYPE.small)
-  page.drawText(fechaLabel, {
-    x: width - margin - fechaLabelWidth,
+  const emisionLabel = `Emisión: ${fecha}`
+  const emisionLabelWidth = helvetica.widthOfTextAtSize(emisionLabel, TYPE.small)
+  page.drawText(emisionLabel, {
+    x: width - margin - emisionLabelWidth,
     y: height - margin - 50,
     size: TYPE.small,
     font: helvetica,
     color: MONO.label,
   })
+  // Accounting-grade remito: the date the goods/service actually moved can
+  // differ from the emission date above — shown only when supplied.
+  if (data.fechaOperacion) {
+    const operacionLabel = `Operación: ${formatDatePDF(data.fechaOperacion)}`
+    const operacionLabelWidth = helvetica.widthOfTextAtSize(operacionLabel, TYPE.small)
+    page.drawText(operacionLabel, {
+      x: width - margin - operacionLabelWidth,
+      y: height - margin - 62,
+      size: TYPE.small,
+      font: helvetica,
+      color: MONO.label,
+    })
+  }
 
-  y = height - margin - 90
+  // Base offset (90) matches the original 2-line company block (name + one
+  // of tel/direccion) with ~40pt clearance above this rule; each emisor
+  // extra line pushes the rule down another 12 so that clearance is
+  // preserved regardless of how many fiscal lines were drawn above.
+  y = height - margin - (90 + 12 * emisorExtraLines)
 
   // Linea separadora (reemplaza el titulo centrado "FACTURA")
   drawRule(page, margin, width - margin, y)
   y -= 30
 
   // === DATOS DEL CLIENTE ===
-  const clientBoxHeight = 60
+  // clientBoxHeight grows by 12 when DNI/CUIT is present (accounting-grade
+  // remito receptor identity) so the dotted rule below keeps the same ~5pt
+  // clearance below the last drawn line — stays at the original 60 when
+  // dni is absent (identical to before this task).
+  const clientBoxHeight = 60 + (clienteDni ? 12 : 0)
   const clientBlockTop = y
   drawSectionLabel(page, helveticaBold, "CLIENTE", margin + 10, clientBlockTop - 5)
   page.drawText(clienteNombre, { x: margin + 10, y: clientBlockTop - 20, size: TYPE.body, font: helvetica, color: MONO.ink })
@@ -3059,6 +3124,10 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   }
   if (clienteEmail) {
     page.drawText(clienteEmail, { x: margin + 10, y: clientY, size: TYPE.small, font: helvetica, color: MONO.label })
+    clientY -= 12
+  }
+  if (clienteDni) {
+    page.drawText(`DNI/CUIT: ${clienteDni}`, { x: margin + 10, y: clientY, size: TYPE.small, font: helvetica, color: MONO.label })
   }
 
   // === DATOS DE LA ORDEN / VENTA ===
@@ -3088,11 +3157,32 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     pg.drawText("PRECIO", { x: margin + 330, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
     pg.drawText("SUBTOTAL", { x: margin + 410, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
   }
+  // Right-aligns text to xRight by measuring its width first — needed for
+  // the HISTORIAL DE PAGOS money columns below, which sit side by side
+  // (MONTO then the running-balance SALDO) and must never collide
+  // regardless of how many digits either amount has.
+  const drawTextRight = (pg: typeof page, text: string, xRight: number, yPos: number, size: number, font: typeof helvetica, color: ReturnType<typeof rgb>) => {
+    pg.drawText(text, { x: xRight - font.widthOfTextAtSize(text, size), y: yPos, size, font, color })
+  }
+
+  // HISTORIAL DE PAGOS column layout. FECHA/MÉTODO/REFERENCIA stay
+  // left-aligned; MONTO and the new running-balance SALDO column are
+  // right-aligned to their own slots so multi-digit amounts never overlap.
+  // Widths were sized against the longest realistic content at 9pt: dates
+  // (~50pt), "Tarjeta Credito" (~75pt), and currency strings up to
+  // "$ 1.234.567,89" (~66pt) — all comfortably inside their slots, with
+  // colMontoR to colSaldoR alone leaving 130pt of breathing room.
+  const colFechaX = margin + 10 // 50
+  const colMetodoX = margin + 90 // 130
+  const colRefX = margin + 175 // 215
+  const colMontoR = margin + 385 // 425 — right edge of the MONTO column
+  const colSaldoR = width - margin // 555 — right edge of the SALDO column, flush with the table's right border
   const drawPagosTableHeader = (pg: typeof page, yPos: number) => {
-    pg.drawText("FECHA", { x: margin + 10, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    pg.drawText("MÉTODO", { x: margin + 140, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    pg.drawText("REFERENCIA", { x: margin + 280, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    pg.drawText("MONTO", { x: width - margin - 90, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    pg.drawText("FECHA", { x: colFechaX, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    pg.drawText("MÉTODO", { x: colMetodoX, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    pg.drawText("REFERENCIA", { x: colRefX, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    drawTextRight(pg, "MONTO", colMontoR, yPos, TYPE.small, helveticaBold, MONO.label)
+    drawTextRight(pg, "SALDO", colSaldoR, yPos, TYPE.small, helveticaBold, MONO.label)
   }
 
   // Starts a fresh A4 page for a table (or block) that ran out of room on
@@ -3152,7 +3242,25 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     (data.iva > 0 ? 1 : 0) +
     (data.descuento && data.descuento > 0 ? 1 : 0) +
     (data.redondeo && data.redondeo !== 0 ? 1 : 0)
-  const totalsBlockH = 141 + 18 * detalleOptionalRows // DETALLE + TOTAL + ESTADO DE PAGO
+  // CONDICIONES DE PAGO joins this kept-together tail block (drawn right
+  // after ESTADO DE PAGO, below) so it never gets split from
+  // DETALLE/SALDO/ESTADO DE PAGO across a page break.
+  const condicionesRows =
+    (vencimientoText ? 1 : 0) +
+    (mediosPago ? 1 : 0) +
+    (cbuAlias ? 1 : 0)
+  const hasCondiciones = condicionesRows > 0
+  // 24 = section label+rule (4 + 20), same cost as the DETALLE/ESTADO DE
+  // PAGO headers below; 12 per present row (Vencimiento/Medios de
+  // pago/CBU-Alias); 10 = trailing gap before HISTORIAL DE PAGOS. Zero when
+  // no payment-terms field is present.
+  const condicionesBlockH = hasCondiciones ? 24 + 12 * condicionesRows + 10 : 0
+  // 177 = DETALLE label+rule (24) + Subtotal row+rule (18) + pre-total rule
+  // (10) + TOTAL row (18) + Pagado a cuenta row (18) + SALDO bar (35) +
+  // ESTADO DE PAGO label+rule (24) + badge/montos row (30), plus 18 for
+  // each optional Subtotal-block row (IVA / Descuento / Redondeo), plus
+  // condicionesBlockH for the optional CONDICIONES DE PAGO section.
+  const totalsBlockH = 177 + 18 * detalleOptionalRows + condicionesBlockH // DETALLE + TOTAL + PAGADO A CUENTA + SALDO + ESTADO DE PAGO + CONDICIONES DE PAGO
   if (y - totalsBlockH < floorY) {
     startContinuationPage()
   }
@@ -3199,10 +3307,27 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   drawRule(page, margin, width - margin, y + 5)
   y -= 5
 
-  // Total
-  page.drawRectangle({ x: margin, y: y - 8, width: contentWidth, height: 28, color: MONO.totalBg })
+  // Total — plain bold row, no fill. The money block's visual weight now
+  // goes to SALDO PENDIENTE below: TOTAL is what was billed, not what's
+  // still owed.
   page.drawText("TOTAL", { x: margin + 10, y, size: TYPE.total, font: helveticaBold, color: MONO.ink })
   page.drawText(formatCurrencyPDF(data.total), { x: width - margin - 100, y, size: TYPE.total, font: helveticaBold, color: MONO.ink })
+  y -= 18
+  drawRule(page, margin, width - margin, y + 10)
+
+  // Pagado a cuenta — always rendered, even when nothing has been paid yet.
+  page.drawText("Pagado a cuenta", { x: margin + 10, y, size: TYPE.body, font: helvetica, color: MONO.label })
+  page.drawText(formatCurrencyPDF(data.montoAbonado), { x: width - margin - 100, y, size: TYPE.body, font: helvetica, color: MONO.ink })
+  y -= 18
+
+  // Saldo pendiente — the MONO.totalBg fill (the only allowed area fill)
+  // moves here from TOTAL: this is the accounting-grade remito's
+  // protagonist figure, what the client still owes.
+  const saldo = Math.max(0, pendiente)
+  const saldoLabel = saldo === 0 ? "SALDO" : "SALDO PENDIENTE"
+  page.drawRectangle({ x: margin, y: y - 8, width: contentWidth, height: 28, color: MONO.totalBg })
+  page.drawText(saldoLabel, { x: margin + 10, y, size: TYPE.total, font: helveticaBold, color: MONO.ink })
+  page.drawText(formatCurrencyPDF(saldo), { x: width - margin - 100, y, size: TYPE.total, font: helveticaBold, color: MONO.ink })
   y -= 35
 
   // === ESTADO DE PAGO ===
@@ -3224,6 +3349,32 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   }
 
   y -= 30
+
+  // === CONDICIONES DE PAGO ===
+  // Accounting-grade remito payment terms — drawn only when at least one
+  // field is present. Its height was already reserved in totalsBlockH
+  // above (condicionesBlockH), so it's kept together with
+  // DETALLE/SALDO/ESTADO DE PAGO across the continuation-page check.
+  if (hasCondiciones) {
+    drawSectionLabel(page, helveticaBold, "Condiciones de pago", margin, y)
+    y -= 4
+    drawRule(page, margin, width - margin, y)
+    y -= 20
+
+    if (vencimientoText) {
+      page.drawText(`Vencimiento: ${vencimientoText}`, { x: margin + 10, y, size: TYPE.small, font: helvetica, color: MONO.ink })
+      y -= 12
+    }
+    if (mediosPago) {
+      page.drawText(`Medios de pago: ${mediosPago}`, { x: margin + 10, y, size: TYPE.small, font: helvetica, color: MONO.ink })
+      y -= 12
+    }
+    if (cbuAlias) {
+      page.drawText(`CBU/Alias: ${cbuAlias}`, { x: margin + 10, y, size: TYPE.small, font: helvetica, color: MONO.ink })
+      y -= 12
+    }
+    y -= 10
+  }
 
   // === HISTORIAL DE PAGOS ===
   if (data.pagos && data.pagos.length > 0) {
@@ -3249,6 +3400,11 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     // Same continuation treatment as the items table above — long payment
     // histories now flow onto extra pages instead of the old `break`
     // truncation.
+    // Running balance for the SALDO column: starts at the document total
+    // and subtracts each pago's monto in the same order the rows are
+    // drawn (data.pagos' own order — this is a display running total, not
+    // a chronological reconciliation).
+    let saldoCorrido = data.total
     for (const pago of data.pagos) {
       if (y - 18 < floorY) {
         startContinuationPage(drawPagosTableHeader)
@@ -3257,16 +3413,58 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
       const pagoFecha = formatDatePDF(pago.fecha)
       const pagoMetodo = metodoPagoFacturaLabels[pago.metodoPago] || pago.metodoPago
       const pagoRef = safe(pago.referencia)
+      saldoCorrido -= pago.monto
 
-      page.drawText(pagoFecha, { x: margin + 10, y, size: TYPE.body, font: helvetica, color: MONO.ink })
-      page.drawText(pagoMetodo, { x: margin + 140, y, size: TYPE.body, font: helvetica, color: MONO.ink })
+      page.drawText(pagoFecha, { x: colFechaX, y, size: TYPE.body, font: helvetica, color: MONO.ink })
+      page.drawText(pagoMetodo, { x: colMetodoX, y, size: TYPE.body, font: helvetica, color: MONO.ink })
       if (pagoRef) {
-        page.drawText(pagoRef.substring(0, 25), { x: margin + 280, y, size: TYPE.body, font: helvetica, color: MONO.label })
+        page.drawText(pagoRef.substring(0, 16), { x: colRefX, y, size: TYPE.body, font: helvetica, color: MONO.label })
       }
-      page.drawText(formatCurrencyPDF(pago.monto), { x: width - margin - 90, y, size: TYPE.body, font: helveticaBold, color: MONO.ink })
+      drawTextRight(page, formatCurrencyPDF(pago.monto), colMontoR, y, TYPE.body, helveticaBold, MONO.ink)
+      drawTextRight(page, formatCurrencyPDF(saldoCorrido), colSaldoR, y, TYPE.body, helveticaBold, MONO.ink)
       y -= 18
       drawRule(page, margin, width - margin, y + 10)
     }
+  }
+
+  // === RECIBÍ CONFORME (orden-sourced only) ===
+  // Physical signature block confirming the client received the repaired
+  // device/service — a venta-sourced remito is a POS sale receipt with no
+  // handoff signature workflow, so this is drawn only when data.orden is
+  // present. Follows the same "kept together" discipline as CONDICIONES DE
+  // PAGO above: its full height is checked against the remaining page
+  // space right before drawing, so it never gets split across a page
+  // break.
+  if (data.orden) {
+    // 24 = section label+rule (4 + 20), same cost as CONDICIONES DE PAGO's
+    // header; 30 = blank space left above each underline for the physical
+    // signature; 10 = gap between the underline and its caption; 12 =
+    // trailing clearance before the footer.
+    const recibiConformeBlockH = 24 + 30 + 10 + 12
+    if (y - recibiConformeBlockH < floorY) {
+      startContinuationPage()
+    }
+
+    drawSectionLabel(page, helveticaBold, "Recibí conforme", margin, y)
+    y -= 4
+    drawRule(page, margin, width - margin, y)
+    y -= 20
+
+    // Two signature columns side by side within contentWidth, symmetric
+    // 10pt padding on both outer edges (matches the 10pt inset used by
+    // CLIENTE/EQUIPO above) with a 20pt gap between them.
+    const sigLineY = y - 30
+    const sigColW = (contentWidth - 40) / 2
+    const sigCol1X = margin + 10
+    const sigCol2X = sigCol1X + sigColW + 20
+
+    drawRule(page, sigCol1X, sigCol1X + sigColW, sigLineY, { color: MONO.ink })
+    page.drawText("Firma", { x: sigCol1X, y: sigLineY - 10, size: TYPE.fine, font: helvetica, color: MONO.label })
+
+    drawRule(page, sigCol2X, sigCol2X + sigColW, sigLineY, { color: MONO.ink })
+    page.drawText("Aclaración", { x: sigCol2X, y: sigLineY - 10, size: TYPE.fine, font: helvetica, color: MONO.label })
+
+    y = sigLineY - 10 - 12
   }
 
   // === FOOTER (drawn on every page, so a multi-page remito never leaves a
