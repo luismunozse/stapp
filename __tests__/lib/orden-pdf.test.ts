@@ -109,6 +109,22 @@ describe("generateOrdenPDF", () => {
     expect(text).toContain("+54 11 4000-1234")
   })
 
+  it("omits the shop email from the ENTREGA sheet header too (Item 3: dropped for consistency with RECEPCIÓN)", async () => {
+    // Review finding (Minor): the ENTREGA header used to append emailEmpresa
+    // to its contact line (the RECEPCIÓN header never did) — dropped when
+    // both headers were redesigned to the same 3-line dirección/ciudad/
+    // teléfono stack. Pin the absence on this sheet too, not just RECEPCIÓN.
+    const buffer = await generateOrdenPDF({
+      ...buildOrdenFixture(),
+      estado: "ENTREGADO",
+      emailEmpresa: "contacto@negocio-demo.com.ar",
+    })
+    const text = await extractPdfText(buffer)
+    expect(text).not.toContain("contacto@negocio-demo.com.ar")
+    expect(text).toContain("Av. Rivadavia 5000, CABA")
+    expect(text).toContain("+54 11 4000-1234")
+  })
+
   it("renders the equipo line marca-first and the ciudad/provincia on its own header line", async () => {
     // Item 1 (marca-first equipo line): was "{dispositivo} · {marca} ·
     // {color}" ("iPhone 13 · Apple · Negro"), now "{marca} {dispositivo} ·
@@ -166,6 +182,23 @@ describe("generateOrdenPDF", () => {
     const phoneOverridesTerminologiaText = await extractPdfText(phoneOverridesTerminologiaBuffer)
     expect(phoneOverridesTerminologiaText).toContain("IMEI 358400123456789")
     expect(phoneOverridesTerminologiaText).not.toContain("N° de chasis")
+
+    // Review finding (Important): the phone match is whole-token, not
+    // substring — "Automóvil" normalizes to the single token "automovil",
+    // which is NOT the token "movil", so it must NOT match even though
+    // "movil" is a substring of it.
+    const automovilBuffer = await generateOrdenPDF({ ...buildOrdenFixture(), tipoDispositivo: "Automóvil" })
+    const automovilText = await extractPdfText(automovilBuffer)
+    expect(automovilText).toContain("Número de serie 358400123456789")
+    expect(automovilText).not.toContain("IMEI 358400123456789")
+
+    // Multi-word tipoDispositivo names still match on a per-token basis —
+    // "Teléfono móvil" splits into the tokens "telefono" and "movil", both
+    // of which are in the phone set individually.
+    const telefonoMovilBuffer = await generateOrdenPDF({ ...buildOrdenFixture(), tipoDispositivo: "Teléfono móvil" })
+    const telefonoMovilText = await extractPdfText(telefonoMovilBuffer)
+    expect(telefonoMovilText).toContain("IMEI 358400123456789")
+    expect(telefonoMovilText).not.toContain("Número de serie 358400123456789")
   })
 
   it("embeds the reception signature image on the client part when firmaRecepcion is present", async () => {

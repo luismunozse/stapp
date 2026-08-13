@@ -941,12 +941,16 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // set of phone-ish tipoDispositivo names — that field is a display name
   // (org-customizable "nombre" from tipos_dispositivo, or a formatted
   // fallback — see lib/device-types.ts:getDeviceTypeLabel), never a fixed
-  // enum, so this checks for the phone tokens as substrings rather than an
-  // exact match.
+  // enum. Matched on WHOLE TOKENS, not substrings: a naive .includes() check
+  // made "Automóvil" match "móvil" (false positive, review finding) —
+  // normalize, split on non-alphanumerics, and compare each token for
+  // equality against the phone set instead, so "Automóvil" (one token,
+  // "automovil") never matches while "Teléfono móvil" (two tokens,
+  // "telefono" + "movil") still does.
   const normalizeForMatch = (s: string): string => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
-  const PHONE_TIPO_TOKENS = ["celular", "telefono", "smartphone", "movil"]
-  const tipoDispositivoNorm = normalizeForMatch(tipoDispositivo)
-  const isTipoDispositivoTelefono = PHONE_TIPO_TOKENS.some((tok) => tipoDispositivoNorm.includes(tok))
+  const PHONE_TIPO_TOKENS = new Set(["celular", "telefono", "smartphone", "movil"])
+  const tipoDispositivoTokens = normalizeForMatch(tipoDispositivo).split(/[^a-z0-9]+/).filter(Boolean)
+  const isTipoDispositivoTelefono = tipoDispositivoTokens.some((tok) => PHONE_TIPO_TOKENS.has(tok))
   const identificadorLabel = isTipoDispositivoTelefono ? "IMEI" : t(term, "serie")
   const accesorios = safe(data.accesorios)
   const codigoAccesoDispositivo = safe(data.codigoAccesoDispositivo)
