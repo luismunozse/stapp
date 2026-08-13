@@ -35,6 +35,13 @@ export function buildOrdenFixture() {
     nombreEmpresa: "Servicio Técnico Demo",
     telefonoEmpresa: "+54 11 4000-1234",
     direccionEmpresa: "Av. Rivadavia 5000, CABA",
+    // ciudad/provincia (Item 3 header redesign): distinct from any other
+    // address string in this fixture on purpose, so a header assertion for
+    // "Rosario, Santa Fe" can't accidentally pass off a match elsewhere
+    // (both cliente.direccion and direccionEmpresa above already contain
+    // "CABA", which would make that a weak choice here).
+    ciudadEmpresa: "Rosario",
+    provinciaEmpresa: "Santa Fe",
     moneda: "ARS",
     zonaHoraria: "America/Argentina/Buenos_Aires",
     estado: "RECIBIDO",
