@@ -40,6 +40,17 @@ describe("generateOrdenPDF", () => {
     expect(text).toContain("El cliente solicita que se lo contacte")
     // client part only: no cut line, no business stub
     expect(text).not.toContain("TALÓN")
+    // RECEPCIÓN ajustes (feedback de la hoja impresa real): el email del
+    // cliente ya no se imprime en la celda CLIENTE.
+    expect(text).not.toContain("juan.perez@example.com")
+    // La URL de seguimiento escrita junto al QR se reemplazó por un caption
+    // corto — nada de URL como texto en la hoja (el link vive solo en el QR).
+    expect(text).toContain("Escaneá el código para seguir tu reparación")
+    expect(text).not.toContain("sample-public-token-1234")
+    // El slot de firma "Recibió — {recibidoPorNombre}" se quitó de la parte
+    // cliente (soloCliente comparte el mismo bloque QR/firma).
+    expect(text).not.toContain("RECIBIÓ")
+    expect(text).not.toContain("M. GÓMEZ")
     expect(buffer.length).toBeGreaterThan(1000)
   })
 
@@ -51,7 +62,6 @@ describe("generateOrdenPDF", () => {
       "DNI 28.456.789",
       "CEL-1042",
       "TALÓN INTERNO", // business stub heading
-      "M. GÓMEZ", // recibidoPorNombre, uppercased in the "Recibió —" signature line
       "PARTE SUPERIOR", // cut line label
       "TALÓN INFERIOR", // cut line label
       "OBSERVACIONES", // fix final-review D1: client-part block
@@ -61,7 +71,30 @@ describe("generateOrdenPDF", () => {
     // fix final-review D1: short "OBS:" line restored on the talón's
     // notas-de-mostrador cell (distinct from the client-part block above).
     expect(text).toContain("OBS: El cliente solicita")
+    // RECEPCIÓN ajustes (feedback de la hoja impresa real): client email,
+    // tracking URL text and the "Recibió — {recibidoPorNombre}" signature
+    // slot are gone from the client part; the QR now carries only a short
+    // caption. `recibidoPorNombre` ("M. Gómez" in the fixture) no longer
+    // surfaces anywhere on this sheet — the business stub never printed it
+    // either (it only shows tecnicoNombre), so this is a hard absence now.
+    expect(text).not.toContain("juan.perez@example.com")
+    expect(text).not.toContain("RECIBIÓ")
+    expect(text).not.toContain("M. GÓMEZ")
+    expect(text).toContain("Escaneá el código para seguir tu reparación")
+    expect(text).not.toContain("sample-public-token-1234")
     expect(buffer.length).toBeGreaterThan(1000)
+  })
+
+  it("omits the shop email from the header contact line but keeps address and phone", async () => {
+    // Default fixture doesn't set emailEmpresa — override it explicitly so
+    // this test actually exercises the removal, not just an absent field.
+    const buffer = await generateOrdenPDF({ ...buildOrdenFixture(), emailEmpresa: "contacto@negocio-demo.com.ar" })
+    const text = await extractPdfText(buffer)
+    expect(text).not.toContain("contacto@negocio-demo.com.ar")
+    // address/phone (shared by sucursal + direccionEmpresa/telefonoEmpresa
+    // fallback in the fixture) still print on the header contact line.
+    expect(text).toContain("Av. Rivadavia 5000, CABA")
+    expect(text).toContain("+54 11 4000-1234")
   })
 
   it("embeds the reception signature image on the client part when firmaRecepcion is present", async () => {

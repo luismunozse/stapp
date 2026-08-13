@@ -1756,7 +1756,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
 
   const bizNameSize = 13
   page.drawText(rxTruncate(empresaNombre, archivoBlack, bizNameSize, bizMaxWidth), { x: bizX, y: headerTopY - 11, size: bizNameSize, font: archivoBlack, color: MONO.ink })
-  const contactLineText = [sucursalNombre, sucursalDireccion || direccionEmpresa, sucursalTelefono || telefonoEmpresa, data.emailEmpresa ? safe(data.emailEmpresa) : ""].filter(Boolean).join(" · ")
+  const contactLineText = [sucursalNombre, sucursalDireccion || direccionEmpresa, sucursalTelefono || telefonoEmpresa].filter(Boolean).join(" · ")
   const contactLines = rxWrap(contactLineText, archivoRegular, 7.5, bizMaxWidth).slice(0, 2)
   let bizY = headerTopY - 11 - 14
   for (const l of contactLines) {
@@ -1835,7 +1835,9 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const telParts = [clienteTelefono]
   if (telefonoContacto && telefonoContacto !== clienteTelefono) telParts.push(`tel. de esta orden: ${telefonoContacto}`)
   clienteLines.push({ text: telParts.join(" · ").substring(0, 65), font: archivoRegular, size: 8, color: MONO.label })
-  if (clienteEmail) clienteLines.push({ text: clienteEmail.substring(0, 50), font: archivoRegular, size: 8, color: MONO.label })
+  // Item 1 (RECEPCIÓN client-part ajustes): el email del cliente ya no se
+  // imprime acá — feedback de la hoja impresa real. `clienteEmail` sigue sin
+  // usarse en este bloque a propósito.
 
   const equipoLines: RxCellLine[] = []
   const equipoTitle = [dispositivo, marca, colorDisp].filter(Boolean).join(" · ")
@@ -1920,7 +1922,15 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     ry -= 18
   }
 
-  // ---- QR + seguimiento + firma cliente + "Recibió — {recibidoPorNombre}" ----
+  // ---- QR + caption + firma cliente ----
+  // Item 3 (RECEPCIÓN client-part ajustes): se quitó la URL de seguimiento
+  // escrita junto al QR — queda solo un caption corto (el link real vive
+  // codificado en el QR, no como texto). Item 4: se quitó el segundo slot
+  // de firma ("Recibió — {recibidoPorNombre}"); ese dato solo importa en la
+  // hoja ENTREGA (ver atribución de quien entregó más arriba), así que la
+  // única firma que queda acá ahora ocupa todo el ancho disponible en vez
+  // de la mitad — mismo patrón que esta fila usa en la hoja ENTREGA
+  // (reparte sigAreaW entre las N firmas que correspondan).
   ry -= 4
   const sigRowTop = ry
   const sigBlockH = 55
@@ -1940,21 +1950,20 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     page.drawImage(qrImg, { x: rxMargin, y: sigRowTop - qrSize, width: qrSize, height: qrSize })
     afterQrX = rxMargin + qrSize + 10
   }
-  let trackW = 0
+  let captionW = 0
   if (hasTracking) {
-    trackW = 130
-    const trackUrlDisplay = `${safe(data.baseUrl).replace(/^https?:\/\//, "")}/seguimiento/${safe(data.publicToken)}`
-    const trackLines = ["Estado en vivo, fotos y", "presupuesto online:", ...rxWrap(trackUrlDisplay, archivoBold, 7, trackW)]
+    captionW = 130
+    const captionLines = rxWrap("Escaneá el código para seguir tu reparación", archivoRegular, 7, captionW)
     let tY = sigRowTop - 9
-    for (const l of trackLines.slice(0, 4)) {
-      page.drawText(l, { x: afterQrX, y: tY, size: 7, font: l.includes("/") ? archivoBold : archivoRegular, color: MONO.label })
+    for (const l of captionLines.slice(0, 4)) {
+      page.drawText(l, { x: afterQrX, y: tY, size: 7, font: archivoRegular, color: MONO.label })
       tY -= 9
     }
   }
-  const sigStartX = afterQrX + trackW + (hasTracking ? 10 : 0)
+  const sigStartX = afterQrX + captionW + (hasTracking ? 10 : 0)
   const sigAreaW = (rxMargin + rxContentW) - sigStartX
   if (sigAreaW > 80) {
-    const sigColW = (sigAreaW - 10) / 2
+    const sigColW = sigAreaW
     const sigLineY = sigRowTop - qrSize + 6
     // Fix final-review D2: embeds the reception signature image when
     // present (mirrors how the ENTREGA sheet embeds firmaClienteEntrega,
@@ -1970,10 +1979,6 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     }
     drawRule(page, sigStartX, sigStartX + sigColW, sigLineY, { color: MONO.ink })
     page.drawText("FIRMA DEL CLIENTE", { x: sigStartX, y: sigLineY - 8, size: 6, font: archivoBold, color: MONO.label })
-    const recibioX = sigStartX + sigColW + 10
-    drawRule(page, recibioX, recibioX + sigColW, sigLineY, { color: MONO.ink })
-    const recibioLabel = recibidoPorNombre ? `RECIBIÓ — ${recibidoPorNombre.toUpperCase()}` : "RECIBIÓ"
-    page.drawText(rxTruncate(recibioLabel, archivoBold, 6, sigColW), { x: recibioX, y: sigLineY - 8, size: 6, font: archivoBold, color: MONO.label })
   }
   ry = sigRowTop - sigBlockH
 
