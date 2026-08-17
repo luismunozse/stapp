@@ -49,31 +49,18 @@ export async function GET() {
         comision_aplica_sin_reparacion,
         terminologia
       `
-    // Datos fiscales y de cobro (migración 295). Seleccionados aparte del
-    // resto de columnas: si esa migración todavía no corrió en este entorno,
-    // el PGRST204 de estas 6 columnas no debe tumbar el resto de la config
+    // Datos fiscales y de cobro (migración 295) + toggle de facturación
+    // electrónica (migración 296). Seleccionados aparte del resto de
+    // columnas: si esas migraciones todavía no corrieron en este entorno,
+    // el PGRST204 de estas columnas no debe tumbar el resto de la config
     // (ver reintento sin ellas más abajo).
-    const fiscalSelect = `${baseSelect}, cuit, condicion_iva, domicilio_fiscal, cbu_alias, medios_pago_texto, plazo_pago_dias`
-    // Toggle de facturación electrónica (migración 296). Va después del
-    // fiscalSelect para poder degradar de forma independiente: un entorno
-    // puede tener 295 aplicada sin tener 296 aplicada todavía.
-    const facturacionSelect = `${fiscalSelect}, facturacion_electronica_habilitada`
+    const fiscalSelect = `${baseSelect}, cuit, condicion_iva, domicilio_fiscal, cbu_alias, medios_pago_texto, plazo_pago_dias, facturacion_electronica_habilitada`
 
     let result = await supabaseAdmin
       .from("organizations")
-      .select(facturacionSelect)
+      .select(fiscalSelect)
       .eq("id", organizationId!)
       .single()
-
-    if (isMissingColumnError(result.error)) {
-      // Migración 296 no aplicada todavía: reintentar sin el toggle de
-      // facturación electrónica.
-      result = await supabaseAdmin
-        .from("organizations")
-        .select(fiscalSelect)
-        .eq("id", organizationId!)
-        .single()
-    }
 
     if (isMissingColumnError(result.error)) {
       // Migración 295 no aplicada todavía: reintentar sin las columnas fiscales.
@@ -394,10 +381,10 @@ export async function PUT(request: Request) {
     // solo tumbe los 6 campos fiscales nuevos, no recepcion_terminos/
     // comprobante_terminos ni el resto del update.
     const selectColsPre295 = selectCols + ", recepcion_terminos, comprobante_terminos"
-    const selectColsFull = selectColsPre295 + ", cuit, condicion_iva, domicilio_fiscal, cbu_alias, medios_pago_texto, plazo_pago_dias"
-    // Pre-296: igual que selectColsFull, pero sin el toggle de facturación
-    // electrónica, para degradar de forma independiente de 295.
-    const selectColsFull296 = selectColsFull + ", facturacion_electronica_habilitada"
+    // Full: campos fiscales (migración 295) + toggle de facturación
+    // electrónica (migración 296) en el mismo tier de degradación — ambas
+    // migraciones se aplican juntas al desplegar esta feature.
+    const selectColsFull = selectColsPre295 + ", cuit, condicion_iva, domicilio_fiscal, cbu_alias, medios_pago_texto, plazo_pago_dias, facturacion_electronica_habilitada"
 
     // Solo actualizar si hay cambios
     if (Object.keys(updateData).length === 0) {
@@ -408,18 +395,9 @@ export async function PUT(request: Request) {
       // estuvieran cargados en la DB.
       let { data, error: selectError } = await supabaseAdmin
         .from("organizations")
-        .select(selectColsFull296)
+        .select(selectColsFull)
         .eq("id", organizationId!)
         .single()
-      if (isMissingColumnError(selectError)) {
-        // Migración 296 no aplicada: reintentar sin el toggle de facturación
-        // electrónica. SELECT pura (sin .update()): 42703, no PGRST204.
-        ;({ data, error: selectError } = await supabaseAdmin
-          .from("organizations")
-          .select(selectColsFull)
-          .eq("id", organizationId!)
-          .single())
-      }
       if (isMissingColumnError(selectError)) {
         // SELECT pura otra vez (sin .update()): 42703, no PGRST204.
         ;({ data } = await supabaseAdmin
@@ -474,36 +452,26 @@ export async function PUT(request: Request) {
       .from("organizations")
       .update(updateData)
       .eq("id", organizationId!)
-      .select(selectColsFull296)
+      .select(selectColsFull)
       .single()
 
     if (isMissingColumnError(result2.error)) {
-      // Migración 296 no aplicada todavía: reintentar sin el toggle de
-      // facturación electrónica.
-      delete updateData.facturacion_electronica_habilitada
-      result2 = await supabaseAdmin
-        .from("organizations")
-        .update(updateData)
-        .eq("id", organizationId!)
-        .select(selectColsFull)
-        .single() as any
-    }
-
-    if (isMissingColumnError(result2.error)) {
-      // Migración 295 no aplicada todavía: reintentar sin los 6 campos
-      // fiscales nuevos. El resto de updateData (recepcion_terminos,
-      // iva_regimen, terminologia, etc.) sigue intacto: esas columnas SÍ
-      // existen hoy, así que deben persistirse igual. Este primer intento sí
-      // suele dar PGRST204 real (updateData nombra columnas fiscales
-      // desconocidas en el payload de escritura), pero isMissingColumnError
-      // también cubre el 42703 que daría un RETURNING con columnas
-      // desconocidas si el body no las incluyera.
+      // Migración 295 y/o 296 no aplicada todavía: reintentar sin los 6
+      // campos fiscales nuevos ni el toggle de facturación electrónica. El
+      // resto de updateData (recepcion_terminos, iva_regimen, terminologia,
+      // etc.) sigue intacto: esas columnas SÍ existen hoy, así que deben
+      // persistirse igual. Este primer intento sí suele dar PGRST204 real
+      // (updateData nombra columnas fiscales desconocidas en el payload de
+      // escritura), pero isMissingColumnError también cubre el 42703 que
+      // daría un RETURNING con columnas desconocidas si el body no las
+      // incluyera.
       delete updateData.cuit
       delete updateData.condicion_iva
       delete updateData.domicilio_fiscal
       delete updateData.cbu_alias
       delete updateData.medios_pago_texto
       delete updateData.plazo_pago_dias
+      delete updateData.facturacion_electronica_habilitada
       result2 = await supabaseAdmin
         .from("organizations")
         .update(updateData)
