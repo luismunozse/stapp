@@ -96,7 +96,7 @@ The three secrets **must never reach the frontend** and must never be added to t
 - Namespacing note: feature endpoints live under `app/api/facturacion-electronica/*`
   because `app/api/facturacion/*` is the SaaS billing surface — do not collide.
 
-### 4. Data — migration `276_facturacion_electronica.sql`
+### 4. Data — migration `296_facturacion_electronica.sql`
 
 - `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS facturacion_electronica_habilitada BOOLEAN NOT NULL DEFAULT false;` + `COMMENT ON COLUMN` (org preference, not plan gating).
 - `CREATE TABLE IF NOT EXISTS facturacion_credenciales (...)` as in §3.
@@ -150,7 +150,7 @@ repeated deliveries.
 0. **Spike (short, non-blocking)**: emit a Factura B and C against the DEV account
    (§ Testing / homologación) and validate `TusFacturasProvider` parsing. TusFacturas is
    confirmed for Slice 1; Afip SDK is not needed.
-1. **PR1 — Foundations (invisible)**: migration 276 + `FacturacionProvider` interface +
+1. **PR1 — Foundations (invisible)**: migration 296 + `FacturacionProvider` interface +
    `TusFacturasProvider` + crypto helper + types + unit tests. Flag defaults false, no UI
    → identical behavior for every org. Safe to deploy before the migration is applied
    because every path fails closed.
@@ -160,7 +160,7 @@ repeated deliveries.
    individual mode) + `comprobantes_fiscales` persistence + PDF link. Webhook is out of
    Slice 1 (see §6).
 
-Deploy order: merge PR1 → apply migration 276 → merge PR2 → merge PR3.
+Deploy order: merge PR1 → apply migration 296 → merge PR2 → merge PR3.
 
 ## Testing
 

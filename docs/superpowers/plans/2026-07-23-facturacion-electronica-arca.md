@@ -12,7 +12,7 @@
 
 - Naming: feature endpoints live under `app/api/facturacion-electronica/*`. NEVER use `app/api/facturacion/*` (that is the SaaS-billing/internal non-fiscal invoice, e.g. `app/api/facturacion/generar`). Tests: `__tests__/api/facturacion-electronica-*.test.ts`.
 - Fiscal table is `comprobantes_fiscales` (NOT `facturas` — that non-fiscal table already exists).
-- Next migration number: `276`. Banner-comment convention (78 `=`), prose in Spanish.
+- Next migration number: `296`. Banner-comment convention (78 `=`), prose in Spanish.
 - Test runner: Vitest (`npx vitest run <file>`). API tests use helpers in `__tests__/api/helpers.ts`: `mockAuthSuccess`, `mockAuthError`, `createChainMock`, `mockSupabaseFrom`, `createGetRequest`, `createPostRequest`, `parseResponse`. `auth()` is globally mocked in `vitest.setup.ts`.
 - Secrets (`apitoken`, `apikey`, `usertoken`) are encrypted at rest and MUST NOT appear in any GET/response body sent to the client. `app/api/configuracion` returns all org columns to the client — credentials must NOT be added there.
 - Fail-closed everywhere: missing gate / toggle off / no credentials → no emission.
@@ -53,16 +53,16 @@ Expected: JSON with `"error":"N"`, an `errores` array, `comprobante_nro`, `compr
 
 ## PR1 — Foundations (invisible; every path fails closed)
 
-### Task 1: Migration 276 — schema
+### Task 1: Migration 296 — schema
 
 **Files:**
-- Create: `supabase/migrations/276_facturacion_electronica.sql`
+- Create: `supabase/migrations/296_facturacion_electronica.sql`
 
 - [ ] **Step 1: Write the migration**
 
 ```sql
 -- ============================================================================
--- 276: facturación electrónica ARCA (Slice 1) — schema base
+-- 296: facturación electrónica ARCA (Slice 1) — schema base
 -- ============================================================================
 -- Toggle opt-in por org (preferencia, NO gating comercial → no va en
 -- plans.feature_flags). Credenciales BYO cifradas (nunca al frontend).
@@ -127,8 +127,8 @@ WHERE slug = 'profesional';
 - [ ] **Step 3: Commit**
 
 ```bash
-git add supabase/migrations/276_facturacion_electronica.sql
-git commit -m "feat(facturacion-electronica): migración 276 (toggle, credenciales, comprobantes_fiscales)"
+git add supabase/migrations/296_facturacion_electronica.sql
+git commit -m "feat(facturacion-electronica): migración 296 (toggle, credenciales, comprobantes_fiscales)"
 ```
 
 ### Task 2: Encryption helper for credentials
@@ -460,7 +460,7 @@ export async function canEmitirFacturaElectronica(organizationId: string): Promi
 - [ ] **Step 4: Run to verify pass** → PASS.
 - [ ] **Step 5: Commit** — `git add lib/facturacion/access.ts __tests__/lib/facturacion-access.test.ts && git commit -m "feat(facturacion-electronica): gate canEmitirFacturaElectronica (fail-closed)"`
 
-**PR1 boundary:** open PR "feat(facturacion-electronica): foundations (migración 276, provider, cifrado, gate)". No UI, flag off → zero behavior change. After merge: apply migration 276 manually to prod, set `FACTURACION_ENCRYPTION_KEY` in env.
+**PR1 boundary:** open PR "feat(facturacion-electronica): foundations (migración 296, provider, cifrado, gate)". No UI, flag off → zero behavior change. After merge: apply migration 296 manually to prod, set `FACTURACION_ENCRYPTION_KEY` in env.
 
 ---
 
@@ -748,7 +748,7 @@ export async function POST(request: Request) {
 - Gating two layers → Task 1 (flag/column), Task 5 (gate), Task 6 (availability), Task 8 (conditional UI). ✔
 - Provider abstraction → Task 3 (interface) + Task 4 (impl). ✔
 - Credentials encrypted/write-only → Task 2, Task 7. ✔
-- Data (migration 276, both tables + flag) → Task 1. ✔
+- Data (migration 296, both tables + flag) → Task 1. ✔
 - Emission POS/manual/B-C/instantáneo → Task 9, 10, 11. ✔
 - Webhook → out of Slice 1 (design §6). No task — intentional. ✔
 - Testing (gate, credentials no-leak, provider, emission, tipo) → covered per task. ✔
