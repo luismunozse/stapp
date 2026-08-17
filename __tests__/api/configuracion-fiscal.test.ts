@@ -2,14 +2,27 @@
 /**
  * Covers GET/PUT of the six fiscal identity + collection fields added by
  * migration 295 (cuit, condicion_iva, domicilio_fiscal, cbu_alias,
- * medios_pago_texto, plazo_pago_dias) — RC Task 6. Follows the same
- * mock pattern as configuracion-terminologia.test.ts.
+ * medios_pago_texto, plazo_pago_dias) — RC Task 6 — and the facturación
+ * electrónica toggle added by migration 296 (facturacion_electronica_habilitada).
+ * Follows the same mock pattern as configuracion-terminologia.test.ts.
  *
- * Also covers graceful degradation: the migration is not applied on every
- * environment yet, so a missing-column error on the new columns must not
- * break the rest of GET/PUT (same defensive tier the route already uses for
- * recepcion_terminos / iva_regimen / etc). The real PostgREST error shape
- * DEPENDS on where the unknown column is referenced:
+ * Also covers graceful degradation: migrations in this project are applied
+ * by hand, one file at a time, strictly in increasing order (294 -> 295 ->
+ * 296 — see the "migraciones se aplican a mano" convention). That ordering
+ * means only three deployment states are actually reachable, and each one
+ * needs its own coverage:
+ *   1. Neither 295 nor 296 applied yet — full degradation down to the base
+ *      columns (both the 6 fiscal fields and the toggle are absent/false).
+ *   2. 295 applied, 296 not yet — the real, guaranteed-to-happen transient
+ *      window while this feature rolls out. The 6 fiscal columns MUST stay
+ *      intact (they're live data other features depend on); only the
+ *      facturación electrónica toggle degrades.
+ *   3. Both applied — no degradation at all.
+ * ("296 applied, 295 not" cannot happen: migration numbers are claimed and
+ * applied strictly in order, so 296 is never live before 295 is.)
+ *
+ * The real PostgREST error shape DEPENDS on where the unknown column is
+ * referenced:
  *   - a pure SELECT (GET, the no-op PUT branch, or a PUT's RETURNING clause
  *     when the write payload itself doesn't touch the unknown column) gets
  *     Postgres' own 42703 ("column ... does not exist") — NOT PGRST204.
@@ -103,7 +116,11 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     expect(body.plazoPagoDias).toBeNull()
   })
 
-  it("GET degrades gracefully when migration 295 hasn't run (42703 on the fiscal select), still returning the rest of the config", async () => {
+  it("GET degrades gracefully when neither migration 295 nor 296 has run, still returning the rest of the config", async () => {
+    // State 1: neither migration applied. The first attempt (fiscal + toggle
+    // columns) fails, the retry without the toggle STILL fails because the
+    // 6 fiscal columns are also missing, so a third attempt without any of
+    // them is required.
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
     const orgData = baseOrgRow()
     const chain = createChainMock()
@@ -112,6 +129,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
       // GET is a pure SELECT (no .update()): a real PostgREST/Postgres
       // missing-column error here is 42703, not PGRST204 — PGRST204 only
       // fires for write payloads naming an unknown column.
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.facturacion_electronica_habilitada does not exist" } })
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.cuit does not exist" } })
       .mockResolvedValueOnce({ data: orgData, error: null })
     mockSupabaseFrom({ organizations: chain })
@@ -124,6 +142,66 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     expect(body.nombreEmpresa).toBe("Test Org")
     expect(body.cuit).toBe("")
     expect(body.plazoPagoDias).toBeNull()
+    expect(body.facturacionElectronicaHabilitada).toBe(false)
+    expect(chain.single).toHaveBeenCalledTimes(3)
+  })
+
+  it("GET degrades gracefully when only migration 296 hasn't run (295 applied) — the six fiscal fields stay intact, only the toggle degrades", async () => {
+    // State 2: the real, guaranteed transient window. Only the first
+    // attempt (which also asks for facturacion_electronica_habilitada)
+    // fails; the retry with just the 295 fiscal columns succeeds, so the
+    // fiscal data must come back exactly as stored.
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const orgData = baseOrgRow({
+      cuit: "30-71234567-8",
+      condicion_iva: "Responsable Inscripto",
+      domicilio_fiscal: "Av. Siempreviva 742",
+      cbu_alias: "taller.alias.mp",
+      medios_pago_texto: "Efectivo, transferencia",
+      plazo_pago_dias: 15,
+      // facturacion_electronica_habilitada intentionally absent: the column
+      // doesn't exist in this environment yet.
+    })
+    const chain = createChainMock()
+    chain.single = vi
+      .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.facturacion_electronica_habilitada does not exist" } })
+      .mockResolvedValueOnce({ data: orgData, error: null })
+    mockSupabaseFrom({ organizations: chain })
+
+    const { GET } = await import("@/app/api/configuracion/route")
+    const res = await GET()
+    const { status, body } = await parseResponse(res as Response)
+
+    expect(status).toBe(200)
+    expect(body.cuit).toBe("30-71234567-8")
+    expect(body.condicionIva).toBe("Responsable Inscripto")
+    expect(body.domicilioFiscal).toBe("Av. Siempreviva 742")
+    expect(body.cbuAlias).toBe("taller.alias.mp")
+    expect(body.mediosPagoTexto).toBe("Efectivo, transferencia")
+    expect(body.plazoPagoDias).toBe(15)
+    expect(body.facturacionElectronicaHabilitada).toBe(false)
+    expect(chain.single).toHaveBeenCalledTimes(2)
+  })
+
+  it("GET returns everything with no degradation when both migration 295 and 296 are applied", async () => {
+    // State 3: both applied, first attempt succeeds outright.
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const orgData = baseOrgRow({
+      cuit: "30-71234567-8",
+      facturacion_electronica_habilitada: true,
+    })
+    const chain = createChainMock(orgData)
+    mockSupabaseFrom({ organizations: chain })
+
+    const { GET } = await import("@/app/api/configuracion/route")
+    const res = await GET()
+    const { status, body } = await parseResponse(res as Response)
+
+    expect(status).toBe(200)
+    expect(body.cuit).toBe("30-71234567-8")
+    expect(body.facturacionElectronicaHabilitada).toBe(true)
+    expect(chain.single).toHaveBeenCalledTimes(1)
   })
 
   it("PUT persists the six fiscal fields", async () => {
@@ -204,7 +282,12 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     )
   })
 
-  it("PUT degrades gracefully when migration 295 hasn't run (PGRST204 on the fiscal columns), still persisting the rest of the update", async () => {
+  it("PUT degrades gracefully when neither migration 295 nor 296 has run (PGRST204 on the fiscal columns), still persisting the rest of the update", async () => {
+    // State 1: neither migration applied. The write payload names `cuit`
+    // (unknown), so PGRST204 fires on the full attempt AND on the
+    // 296-only-stripped retry (cuit is still in the payload at that point —
+    // dropping the toggle alone doesn't fix a 295-shaped rejection). Only
+    // the third attempt, which finally drops the 6 fiscal fields, succeeds.
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
     const chain = createChainMock()
     chain.single = vi
@@ -212,6 +295,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
       // Here the write PAYLOAD itself names cuit (an unknown column), so
       // this one genuinely gets PGRST204 from PostgREST's schema-cache
       // precheck — unlike the SELECT-only sites above/below.
+      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204" } })
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204" } })
       .mockResolvedValueOnce({ data: baseOrgRow({ telefono: "123456" }), error: null })
     mockSupabaseFrom({ organizations: chain })
@@ -227,6 +311,61 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
 
     expect(status).toBe(200)
     expect(body.telefono).toBe("123456")
+    expect(chain.single).toHaveBeenCalledTimes(3)
+  })
+
+  it("PUT degrades gracefully when only migration 296 hasn't run (295 applied) — fiscal fields are still persisted, only the toggle is dropped", async () => {
+    // State 2: the real, guaranteed transient window. The write payload
+    // names facturacionElectronicaHabilitada (unknown), so PGRST204 fires
+    // once; the retry drops only the toggle and succeeds because the 6
+    // fiscal columns DO exist (295 already applied) — cuit must survive.
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const chain = createChainMock()
+    chain.single = vi
+      .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204" } })
+      .mockResolvedValueOnce({ data: baseOrgRow({ cuit: "30-71234567-8" }), error: null })
+    mockSupabaseFrom({ organizations: chain })
+
+    const { PUT } = await import("@/app/api/configuracion/route")
+    const request = new Request("http://localhost:3000/api/configuracion", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cuit: "30-71234567-8", facturacionElectronicaHabilitada: true }),
+    })
+    const res = await PUT(request)
+    const { status, body } = await parseResponse(res as Response)
+
+    expect(status).toBe(200)
+    expect(body.cuit).toBe("30-71234567-8")
+    expect(body.facturacionElectronicaHabilitada).toBe(false)
+    expect(chain.single).toHaveBeenCalledTimes(2)
+  })
+
+  it("PUT persists both the fiscal fields and the toggle with no degradation when both migration 295 and 296 are applied", async () => {
+    // State 3: both applied, first attempt succeeds outright.
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const chain = createChainMock(
+      baseOrgRow({ cuit: "30-71234567-8", facturacion_electronica_habilitada: true })
+    )
+    mockSupabaseFrom({ organizations: chain })
+
+    const { PUT } = await import("@/app/api/configuracion/route")
+    const request = new Request("http://localhost:3000/api/configuracion", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cuit: "30-71234567-8", facturacionElectronicaHabilitada: true }),
+    })
+    const res = await PUT(request)
+    const { status, body } = await parseResponse(res as Response)
+
+    expect(status).toBe(200)
+    expect(body.cuit).toBe("30-71234567-8")
+    expect(body.facturacionElectronicaHabilitada).toBe(true)
+    expect(chain.single).toHaveBeenCalledTimes(1)
+    expect(chain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ cuit: "30-71234567-8", facturacion_electronica_habilitada: true })
+    )
   })
 
   it("PUT degrades on a 42703 RETURNING-only error when the write payload has no fiscal fields at all", async () => {
@@ -288,12 +427,16 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     expect(selectCallArgs.some((s: string) => s.includes("recepcion_terminos"))).toBe(true)
   })
 
-  it("PUT no-op branch degrades to the pre-295 select when migration 295 hasn't run", async () => {
+  it("PUT no-op branch degrades to the pre-295 select when neither migration 295 nor 296 has run", async () => {
+    // State 1: neither migration applied — both the full attempt and the
+    // 296-only-stripped retry still ask for the 6 fiscal columns, so both
+    // fail; only the third attempt (pre-295) succeeds.
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
     const chain = createChainMock()
     chain.single = vi
       .fn()
       // No-op branch is a pure SELECT too (no .update()): real error is 42703.
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.facturacion_electronica_habilitada does not exist" } })
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.cuit does not exist" } })
       .mockResolvedValueOnce({ data: baseOrgRow({ recepcion_terminos: "Ver adjunto" }), error: null })
     mockSupabaseFrom({ organizations: chain })
@@ -310,9 +453,41 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     expect(status).toBe(200)
     expect(body.recepcionTerminos).toBe("Ver adjunto")
     const selectCallArgs = chain.select.mock.calls.map((c: any[]) => c[0])
-    expect(selectCallArgs[0]).toContain("cuit") // first attempt: full fiscal select
-    expect(selectCallArgs[1]).not.toContain("cuit") // retry: pre-295, fiscal columns dropped
-    expect(selectCallArgs[1]).toContain("recepcion_terminos") // but the rest survives
+    expect(selectCallArgs[0]).toContain("cuit") // first attempt: full select (295 + 296)
+    expect(selectCallArgs[0]).toContain("facturacion_electronica_habilitada")
+    expect(selectCallArgs[1]).toContain("cuit") // retry: 296 toggle dropped, fiscal columns kept
+    expect(selectCallArgs[1]).not.toContain("facturacion_electronica_habilitada")
+    expect(selectCallArgs[2]).not.toContain("cuit") // final retry: pre-295, fiscal columns dropped too
+    expect(selectCallArgs[2]).toContain("recepcion_terminos") // but the rest survives
+  })
+
+  it("PUT no-op branch keeps the fiscal columns and only degrades the toggle when only migration 296 hasn't run", async () => {
+    // State 2: 295 applied, 296 not — the retry that drops just the toggle
+    // must succeed and still surface the fiscal data.
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const chain = createChainMock()
+    chain.single = vi
+      .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.facturacion_electronica_habilitada does not exist" } })
+      .mockResolvedValueOnce({ data: baseOrgRow({ cuit: "30-71234567-8", recepcion_terminos: "Ver adjunto" }), error: null })
+    mockSupabaseFrom({ organizations: chain })
+
+    const { PUT } = await import("@/app/api/configuracion/route")
+    const request = new Request("http://localhost:3000/api/configuracion", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    const res = await PUT(request)
+    const { status, body } = await parseResponse(res as Response)
+
+    expect(status).toBe(200)
+    expect(body.cuit).toBe("30-71234567-8")
+    expect(body.recepcionTerminos).toBe("Ver adjunto")
+    expect(body.facturacionElectronicaHabilitada).toBe(false)
+    const selectCallArgs = chain.select.mock.calls.map((c: any[]) => c[0])
+    expect(selectCallArgs[1]).toContain("cuit")
+    expect(selectCallArgs[1]).not.toContain("facturacion_electronica_habilitada")
   })
 
   it("PUT under PGRST204 retains an at-risk existing field (ivaRegimen) while dropping the fiscal field", async () => {
@@ -323,10 +498,16 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     // migration 229) alongside a new fiscal field (migration 295, not
     // applied) and asserts the RETRY payload keeps iva_regimen but drops cuit.
     //
+    // Neither migration is applied here, so the write payload's `cuit` is
+    // still unknown after the 296-only-stripped retry (that retry only
+    // drops facturacion_electronica_habilitada, which was never in the
+    // payload to begin with) — call 0 and call 1 are therefore identical,
+    // and only call 2 (the pre-295 retry) finally drops cuit.
+    //
     // The route mutates `updateData` in place (delete updateData.cuit, etc.)
-    // and passes that same reference to .update() both times, so inspecting
-    // chain.update.mock.calls[0][0] AFTER the route finishes would just show
-    // the final, already-mutated object for BOTH calls (mock.calls stores
+    // and passes that same reference to .update() every time, so inspecting
+    // chain.update.mock.calls[n][0] AFTER the route finishes would just show
+    // the final, already-mutated object for ALL calls (mock.calls stores
     // references, not snapshots). Capturing a shallow copy at call time via
     // a custom mockImplementation sidesteps that.
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
@@ -338,6 +519,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     })
     chain.single = vi
       .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204" } })
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204" } })
       .mockResolvedValueOnce({ data: baseOrgRow({ iva_regimen: "INCLUIDO" }), error: null })
     mockSupabaseFrom({ organizations: chain })
@@ -352,9 +534,44 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     const { status } = await parseResponse(res as Response)
 
     expect(status).toBe(200)
-    expect(updateCalls).toHaveLength(2)
+    expect(updateCalls).toHaveLength(3)
     expect(updateCalls[0]).toEqual(expect.objectContaining({ iva_regimen: "INCLUIDO", cuit: "30-71234567-8" }))
-    expect(updateCalls[1]).toEqual(expect.objectContaining({ iva_regimen: "INCLUIDO" }))
-    expect(updateCalls[1]).not.toHaveProperty("cuit")
+    expect(updateCalls[1]).toEqual(expect.objectContaining({ iva_regimen: "INCLUIDO", cuit: "30-71234567-8" }))
+    expect(updateCalls[2]).toEqual(expect.objectContaining({ iva_regimen: "INCLUIDO" }))
+    expect(updateCalls[2]).not.toHaveProperty("cuit")
+  })
+
+  it("PUT under PGRST204 drops only the toggle (keeps cuit) when just migration 296 hasn't run", async () => {
+    // Mirrors the test above for state 2: 295 applied, so cuit must survive
+    // the single retry that drops facturacion_electronica_habilitada.
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const updateCalls: any[] = []
+    const chain = createChainMock()
+    chain.update = vi.fn((data: any) => {
+      updateCalls.push({ ...data })
+      return chain
+    })
+    chain.single = vi
+      .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204" } })
+      .mockResolvedValueOnce({ data: baseOrgRow({ iva_regimen: "INCLUIDO", cuit: "30-71234567-8" }), error: null })
+    mockSupabaseFrom({ organizations: chain })
+
+    const { PUT } = await import("@/app/api/configuracion/route")
+    const request = new Request("http://localhost:3000/api/configuracion", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ivaRegimen: "INCLUIDO", cuit: "30-71234567-8", facturacionElectronicaHabilitada: true }),
+    })
+    const res = await PUT(request)
+    const { status } = await parseResponse(res as Response)
+
+    expect(status).toBe(200)
+    expect(updateCalls).toHaveLength(2)
+    expect(updateCalls[0]).toEqual(
+      expect.objectContaining({ iva_regimen: "INCLUIDO", cuit: "30-71234567-8", facturacion_electronica_habilitada: true })
+    )
+    expect(updateCalls[1]).toEqual(expect.objectContaining({ iva_regimen: "INCLUIDO", cuit: "30-71234567-8" }))
+    expect(updateCalls[1]).not.toHaveProperty("facturacion_electronica_habilitada")
   })
 })

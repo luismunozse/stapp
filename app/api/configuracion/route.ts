@@ -5,6 +5,7 @@ import { uploadLogo, deleteLogo, dataUrlToBuffer } from "@/lib/storage"
 import { COUNTRIES } from "@/lib/countries"
 import { resolveTerminologia, sanitizeTerminologia } from "@/lib/terminologia"
 import { isMissingColumnError } from "@/lib/db-errors"
+import { hasPlanFeature } from "@/lib/subscriptions"
 
 // GET - Obtener configuraciÃ³n (solo ADMIN)
 export async function GET() {
@@ -53,19 +54,35 @@ export async function GET() {
     // el PGRST204 de estas 6 columnas no debe tumbar el resto de la config
     // (ver reintento sin ellas más abajo).
     const fiscalSelect = `${baseSelect}, cuit, condicion_iva, domicilio_fiscal, cbu_alias, medios_pago_texto, plazo_pago_dias`
+    // Toggle de facturación electrónica (migración 296). Las migraciones se
+    // aplican a mano, una por una, en orden — 295 puede estar aplicada sin
+    // que 296 lo esté todavía (ventana real mientras se despliega esta
+    // feature), así que degrada de forma INDEPENDIENTE: perder 296 no debe
+    // tumbar los 6 campos fiscales de 295 que sí existen.
+    const facturacionSelect = `${fiscalSelect}, facturacion_electronica_habilitada`
 
     let result = await supabaseAdmin
       .from("organizations")
-      .select(fiscalSelect)
+      .select(facturacionSelect)
       .eq("id", organizationId!)
       .single()
 
     if (isMissingColumnError(result.error)) {
-      // Migración 295 no aplicada todavía: reintentar sin las columnas fiscales.
-      // Esta es una SELECT pura (sin .update()), así que Postgres devuelve
-      // 42703 ("column ... does not exist"), no PGRST204 — PGRST204 solo
-      // aparece cuando el payload de una escritura nombra una columna
-      // desconocida. isMissingColumnError() cubre ambos casos.
+      // Migración 296 no aplicada todavía: reintentar sin el toggle de
+      // facturación electrónica, conservando las columnas de 295. SELECT
+      // pura (sin .update()): Postgres devuelve 42703 ("column ... does not
+      // exist"), no PGRST204 — PGRST204 solo aparece cuando el payload de
+      // una escritura nombra una columna desconocida. isMissingColumnError()
+      // cubre ambos casos.
+      result = await supabaseAdmin
+        .from("organizations")
+        .select(fiscalSelect)
+        .eq("id", organizationId!)
+        .single()
+    }
+
+    if (isMissingColumnError(result.error)) {
+      // Migración 295 tampoco aplicada: reintentar sin las columnas fiscales.
       result = await supabaseAdmin
         .from("organizations")
         .select(baseSelect)
@@ -94,6 +111,9 @@ export async function GET() {
     if (dbError || !organization) {
       return NextResponse.json({ error: "OrganizaciÃ³n no encontrada" }, { status: 404 })
     }
+
+    const facturacionElectronicaDisponible =
+      organization.pais === "AR" && (await hasPlanFeature(organizationId!, "facturacion_electronica"))
 
     // Mapear para compatibilidad con frontend
     return NextResponse.json({
@@ -135,6 +155,8 @@ export async function GET() {
       cbuAlias: organization.cbu_alias || "",
       mediosPagoTexto: organization.medios_pago_texto || "",
       plazoPagoDias: organization.plazo_pago_dias ?? null,
+      facturacionElectronicaHabilitada: !!organization.facturacion_electronica_habilitada,
+      facturacionElectronicaDisponible,
     })
   } catch (error) {
     console.error("Error fetching config:", error)
@@ -158,7 +180,7 @@ export async function PUT(request: Request) {
         { status: 413 }
       )
     }
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada } = body
 
     const updateData: Record<string, any> = {}
 
@@ -363,13 +385,26 @@ export async function PUT(request: Request) {
       }
     }
 
+    // Toggle de facturación electrónica (migración 296).
+    if (facturacionElectronicaHabilitada !== undefined) {
+      updateData.facturacion_electronica_habilitada = !!facturacionElectronicaHabilitada
+    }
+
     const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda, vendedores_administran_inventario, iva_regimen, iva_tasa, redondeo_efectivo, comision_aplica_sin_reparacion, terminologia"
     // Pre-295: lo que ya persistÃ­a antes de esta migraciÃ³n. Se usa como
     // segundo intento (ver PGRST204 abajo) para que un 295 sin aplicar
     // solo tumbe los 6 campos fiscales nuevos, no recepcion_terminos/
     // comprobante_terminos ni el resto del update.
     const selectColsPre295 = selectCols + ", recepcion_terminos, comprobante_terminos"
+    // Pre-296: campos fiscales (migración 295), sin el toggle de facturación
+    // electrónica todavía.
     const selectColsFull = selectColsPre295 + ", cuit, condicion_iva, domicilio_fiscal, cbu_alias, medios_pago_texto, plazo_pago_dias"
+    // Full: 295 + toggle de facturación electrónica (migración 296). Las
+    // migraciones se aplican a mano, una por una — 295 puede estar aplicada
+    // sin que 296 lo esté todavía, así que degrada de forma independiente
+    // (ver reintentos abajo) en lugar de tumbar los 6 campos fiscales junto
+    // con el toggle.
+    const selectColsFull296 = selectColsFull + ", facturacion_electronica_habilitada"
 
     // Solo actualizar si hay cambios
     if (Object.keys(updateData).length === 0) {
@@ -380,11 +415,22 @@ export async function PUT(request: Request) {
       // estuvieran cargados en la DB.
       let { data, error: selectError } = await supabaseAdmin
         .from("organizations")
-        .select(selectColsFull)
+        .select(selectColsFull296)
         .eq("id", organizationId!)
         .single()
       if (isMissingColumnError(selectError)) {
-        // SELECT pura otra vez (sin .update()): 42703, no PGRST204.
+        // Migración 296 no aplicada: reintentar sin el toggle de facturación
+        // electrónica, conservando los 6 campos fiscales de 295. SELECT pura
+        // (sin .update()): 42703, no PGRST204.
+        ;({ data, error: selectError } = await supabaseAdmin
+          .from("organizations")
+          .select(selectColsFull)
+          .eq("id", organizationId!)
+          .single())
+      }
+      if (isMissingColumnError(selectError)) {
+        // Migración 295 tampoco aplicada: reintentar sin las columnas
+        // fiscales. SELECT pura otra vez (sin .update()): 42703, no PGRST204.
         ;({ data } = await supabaseAdmin
           .from("organizations")
           .select(selectColsPre295)
@@ -428,6 +474,7 @@ export async function PUT(request: Request) {
         cbuAlias: org?.cbu_alias || "",
         mediosPagoTexto: org?.medios_pago_texto || "",
         plazoPagoDias: org?.plazo_pago_dias ?? null,
+        facturacionElectronicaHabilitada: !!org?.facturacion_electronica_habilitada,
       })
     }
 
@@ -436,18 +483,32 @@ export async function PUT(request: Request) {
       .from("organizations")
       .update(updateData)
       .eq("id", organizationId!)
-      .select(selectColsFull)
+      .select(selectColsFull296)
       .single()
 
     if (isMissingColumnError(result2.error)) {
-      // Migración 295 no aplicada todavía: reintentar sin los 6 campos
+      // Migración 296 no aplicada todavía: reintentar sin el toggle de
+      // facturación electrónica, conservando los 6 campos fiscales de 295 en
+      // updateData (295 puede estar aplicada sin que 296 lo esté). Este
+      // primer intento sí suele dar PGRST204 real si el body trae
+      // facturacionElectronicaHabilitada (updateData nombra una columna
+      // desconocida en el payload de escritura), pero isMissingColumnError
+      // también cubre el 42703 que daría un RETURNING con columnas
+      // desconocidas si el body no la incluyera.
+      delete updateData.facturacion_electronica_habilitada
+      result2 = await supabaseAdmin
+        .from("organizations")
+        .update(updateData)
+        .eq("id", organizationId!)
+        .select(selectColsFull)
+        .single() as any
+    }
+
+    if (isMissingColumnError(result2.error)) {
+      // Migración 295 tampoco aplicada todavía: reintentar sin los 6 campos
       // fiscales nuevos. El resto de updateData (recepcion_terminos,
       // iva_regimen, terminologia, etc.) sigue intacto: esas columnas SÍ
-      // existen hoy, así que deben persistirse igual. Este primer intento sí
-      // suele dar PGRST204 real (updateData nombra columnas fiscales
-      // desconocidas en el payload de escritura), pero isMissingColumnError
-      // también cubre el 42703 que daría un RETURNING con columnas
-      // desconocidas si el body no las incluyera.
+      // existen hoy, así que deben persistirse igual.
       delete updateData.cuit
       delete updateData.condicion_iva
       delete updateData.domicilio_fiscal
@@ -474,6 +535,8 @@ export async function PUT(request: Request) {
       delete updateData.comision_aplica_sin_reparacion
       // Strip vendedor inventory flag (migration 275) in case it doesn't exist yet
       delete updateData.vendedores_administran_inventario
+      // Strip facturacion electronica flag (migration 296) in case it doesn't exist yet
+      delete updateData.facturacion_electronica_habilitada
       const selectColsNoFiscal = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda"
       result2 = await supabaseAdmin
         .from("organizations")
@@ -528,6 +591,7 @@ export async function PUT(request: Request) {
       cbuAlias: organization.cbu_alias || "",
       mediosPagoTexto: organization.medios_pago_texto || "",
       plazoPagoDias: organization.plazo_pago_dias ?? null,
+      facturacionElectronicaHabilitada: !!organization.facturacion_electronica_habilitada,
     })
   } catch (error: any) {
     console.error("Error updating config:", error)
