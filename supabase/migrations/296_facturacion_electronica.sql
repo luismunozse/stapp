@@ -1,5 +1,5 @@
 -- ============================================================================
--- 276: facturación electrónica ARCA (Slice 1) — schema base
+-- 296: facturación electrónica ARCA (Slice 1) — schema base
 -- ============================================================================
 -- Toggle opt-in por org (preferencia, NO gating comercial → no va en
 -- plans.feature_flags). Credenciales BYO cifradas (nunca al frontend).

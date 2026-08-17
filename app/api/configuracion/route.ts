@@ -524,7 +524,7 @@ export async function PUT(request: Request) {
       delete updateData.comision_aplica_sin_reparacion
       // Strip vendedor inventory flag (migration 275) in case it doesn't exist yet
       delete updateData.vendedores_administran_inventario
-      // Strip facturacion electronica flag (migration 276) in case it doesn't exist yet
+      // Strip facturacion electronica flag (migration 296) in case it doesn't exist yet
       delete updateData.facturacion_electronica_habilitada
       const selectColsNoFiscal = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda"
       result2 = await supabaseAdmin
