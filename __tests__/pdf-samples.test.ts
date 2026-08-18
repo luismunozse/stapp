@@ -70,6 +70,11 @@ describe.runIf(process.env.PDF_SAMPLES === "1")("pdf visual samples", () => {
       cuitEmpresa: "30-71234567-8",
       condicionIvaEmpresa: "Responsable Inscripto",
       domicilioFiscalEmpresa: "Av. Corrientes 3247, CABA",
+      // Classic-form header right zone (remito-formato-clasico): shown only
+      // when the org has them configured — exercised here so the sample
+      // covers the full header instead of just cuitEmpresa/condicionIva.
+      ingresosBrutosEmpresa: "902-123456-7",
+      inicioActividadesEmpresa: "03/2015",
       // Payment terms — CONDICIONES DE PAGO section.
       vencimiento: new Date("2026-08-20"),
       mediosPago: "Efectivo, transferencia, tarjeta",

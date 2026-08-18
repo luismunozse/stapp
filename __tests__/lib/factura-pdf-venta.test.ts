@@ -574,6 +574,34 @@ describe("generateFacturaPDF — classic form bands", () => {
   })
 })
 
+describe("generateFacturaPDF — pago cuotas & recargo", () => {
+  it("shows the cuotas count and recargo percentage on a pago that carries them", async () => {
+    const buffer = await generateFacturaPDF({
+      ...baseData,
+      pagos: [
+        { monto: 1000, metodoPago: "TARJETA_CREDITO", fecha: new Date("2026-08-17"), cuotas: 3, recargoPorcentaje: 15 },
+      ],
+    } as any)
+
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("3 cuotas")
+    expect(text).toContain("15% recargo")
+  })
+
+  it("omits the cuotas/recargo note for a single-installment payment with no surcharge", async () => {
+    const buffer = await generateFacturaPDF({
+      ...baseData,
+      pagos: [
+        { monto: 1000, metodoPago: "EFECTIVO", fecha: new Date("2026-08-17"), cuotas: 1, recargoPorcentaje: 0 },
+      ],
+    } as any)
+
+    const text = await extractPdfText(buffer)
+    expect(text).not.toContain("cuotas")
+    expect(text).not.toContain("recargo")
+  })
+})
+
 describe("generateFacturaPDF — classic ruled tables", () => {
   it("items table header reads CANT before DESCRIPCION and money content survives", async () => {
     const buffer = await generateFacturaPDF({

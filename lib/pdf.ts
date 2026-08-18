@@ -3379,6 +3379,10 @@ interface FacturaPago {
   referencia?: string | null
   cuotas?: number | null
   recargoPorcentaje?: number | null
+  // Accepted for parity with the caller's row shape but deliberately never
+  // drawn — see the HISTORIAL DE PAGOS loop in generateFacturaPDF below,
+  // which explains why (same call components/facturacion/pagos-historial.tsx
+  // makes: ambiguous between the venta and cobro paths).
   montoOriginal?: number | null
 }
 
@@ -4065,7 +4069,22 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     // a chronological reconciliation).
     let saldoCorrido = data.total
     for (const pago of data.pagos) {
-      if (y - 18 < floorY) {
+      // Cuotas / recargo note — same gating as components/facturacion/
+      // pagos-historial.tsx's UI list (cuotas > 1, recargoPorcentaje > 0),
+      // drawn as a second, smaller line under the row instead of appended
+      // inline: the MÉTODO column has no width budget left for it (~75pt,
+      // already sized just for a label like "Tarjeta Credito"). montoOriginal
+      // is deliberately NOT rendered here either — the UI component makes the
+      // same call for the same reason: it's ambiguous between the venta and
+      // cobro paths, so a "total con recargo" figure (if ever wanted) should
+      // be derived from monto + recargoPorcentaje instead of trusting it.
+      const pagoNoteParts: string[] = []
+      if (pago.cuotas && pago.cuotas > 1) pagoNoteParts.push(`${pago.cuotas} cuotas`)
+      if (pago.recargoPorcentaje && pago.recargoPorcentaje > 0) pagoNoteParts.push(`${pago.recargoPorcentaje}% recargo`)
+      const pagoNote = pagoNoteParts.join(" · ")
+      const rowH = pagoNote ? 28 : 18
+
+      if (y - rowH < floorY) {
         closeTableFrame(page, pagosTableTop, y - 4, pagosColXs)
         pagosTableTop = startContinuationPage(drawPagosTableHeader)
       }
@@ -4082,7 +4101,10 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
       }
       drawTextRight(page, formatCurrencyPDF(pago.monto), colMontoR, y, TYPE.body, helveticaBold, MONO.ink)
       drawTextRight(page, formatCurrencyPDF(saldoCorrido), colSaldoR, y, TYPE.body, helveticaBold, MONO.ink)
-      y -= 18
+      if (pagoNote) {
+        page.drawText(pagoNote, { x: colFechaX, y: y - 11, size: TYPE.fine, font: helvetica, color: MONO.label })
+      }
+      y -= rowH
       drawRule(page, margin, width - margin, y + 10)
     }
 
