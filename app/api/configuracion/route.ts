@@ -60,12 +60,29 @@ export async function GET() {
     // feature), así que degrada de forma INDEPENDIENTE: perder 296 no debe
     // tumbar los 6 campos fiscales de 295 que sí existen.
     const facturacionSelect = `${fiscalSelect}, facturacion_electronica_habilitada`
+    // Datos del remito formato clásico (migración 297): ingresos brutos +
+    // inicio de actividades del emisor. Igual que el resto, se piden aparte
+    // para poder degradar de forma independiente si 297 todavía no corrió
+    // (puede pasar sin que 296 lo esté, ya que las migraciones se aplican a
+    // mano en orden — ver reintento sin ellas más abajo).
+    const settingsSelect = `${facturacionSelect}, ingresos_brutos, inicio_actividades`
 
     let result = await supabaseAdmin
       .from("organizations")
-      .select(facturacionSelect)
+      .select(settingsSelect)
       .eq("id", organizationId!)
       .single()
+
+    if (isMissingColumnError(result.error)) {
+      // Migración 297 no aplicada todavía: reintentar sin ingresos_brutos /
+      // inicio_actividades, conservando las columnas de 295 y 296. SELECT
+      // pura (sin .update()): 42703, no PGRST204.
+      result = await supabaseAdmin
+        .from("organizations")
+        .select(facturacionSelect)
+        .eq("id", organizationId!)
+        .single()
+    }
 
     if (isMissingColumnError(result.error)) {
       // Migración 296 no aplicada todavía: reintentar sin el toggle de
@@ -152,6 +169,8 @@ export async function GET() {
       cuit: organization.cuit || "",
       condicionIva: organization.condicion_iva || "",
       domicilioFiscal: organization.domicilio_fiscal || "",
+      ingresosBrutos: organization.ingresos_brutos || "",
+      inicioActividades: organization.inicio_actividades || "",
       cbuAlias: organization.cbu_alias || "",
       mediosPagoTexto: organization.medios_pago_texto || "",
       plazoPagoDias: organization.plazo_pago_dias ?? null,
@@ -180,7 +199,7 @@ export async function PUT(request: Request) {
         { status: 413 }
       )
     }
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada, ingresosBrutos, inicioActividades } = body
 
     const updateData: Record<string, any> = {}
 
@@ -366,6 +385,16 @@ export async function PUT(request: Request) {
       updateData.domicilio_fiscal = domicilioFiscal || null
     }
 
+    // Ingresos brutos + inicio de actividades del emisor (migración 297) —
+    // texto libre, se muestran en el encabezado del remito formato clásico.
+    if (ingresosBrutos !== undefined) {
+      updateData.ingresos_brutos = ingresosBrutos || null
+    }
+
+    if (inicioActividades !== undefined) {
+      updateData.inicio_actividades = inicioActividades || null
+    }
+
     if (cbuAlias !== undefined) {
       updateData.cbu_alias = cbuAlias || null
     }
@@ -405,6 +434,12 @@ export async function PUT(request: Request) {
     // (ver reintentos abajo) en lugar de tumbar los 6 campos fiscales junto
     // con el toggle.
     const selectColsFull296 = selectColsFull + ", facturacion_electronica_habilitada"
+    // "Remito formato clásico" (migración 297): ingresos brutos + inicio de
+    // actividades del emisor. Igual que el resto, se piden aparte para poder
+    // degradar de forma independiente si 297 todavía no corrió (puede pasar
+    // sin que 296 lo esté, ya que las migraciones se aplican a mano en
+    // orden — ver reintentos abajo).
+    const selectColsFull297 = selectColsFull296 + ", ingresos_brutos, inicio_actividades"
 
     // Solo actualizar si hay cambios
     if (Object.keys(updateData).length === 0) {
@@ -415,9 +450,19 @@ export async function PUT(request: Request) {
       // estuvieran cargados en la DB.
       let { data, error: selectError } = await supabaseAdmin
         .from("organizations")
-        .select(selectColsFull296)
+        .select(selectColsFull297)
         .eq("id", organizationId!)
         .single()
+      if (isMissingColumnError(selectError)) {
+        // Migración 297 no aplicada: reintentar sin ingresos_brutos /
+        // inicio_actividades, conservando los 6 campos fiscales de 295 y el
+        // toggle de 296. SELECT pura (sin .update()): 42703, no PGRST204.
+        ;({ data, error: selectError } = await supabaseAdmin
+          .from("organizations")
+          .select(selectColsFull296)
+          .eq("id", organizationId!)
+          .single())
+      }
       if (isMissingColumnError(selectError)) {
         // Migración 296 no aplicada: reintentar sin el toggle de facturación
         // electrónica, conservando los 6 campos fiscales de 295. SELECT pura
@@ -471,6 +516,8 @@ export async function PUT(request: Request) {
         cuit: org?.cuit || "",
         condicionIva: org?.condicion_iva || "",
         domicilioFiscal: org?.domicilio_fiscal || "",
+        ingresosBrutos: org?.ingresos_brutos || "",
+        inicioActividades: org?.inicio_actividades || "",
         cbuAlias: org?.cbu_alias || "",
         mediosPagoTexto: org?.medios_pago_texto || "",
         plazoPagoDias: org?.plazo_pago_dias ?? null,
@@ -483,8 +530,23 @@ export async function PUT(request: Request) {
       .from("organizations")
       .update(updateData)
       .eq("id", organizationId!)
-      .select(selectColsFull296)
+      .select(selectColsFull297)
       .single()
+
+    if (isMissingColumnError(result2.error)) {
+      // Migración 297 no aplicada todavía: reintentar sin ingresos_brutos /
+      // inicio_actividades en el payload de escritura ni en el select,
+      // conservando los 6 campos fiscales de 295 y el toggle de 296 en
+      // updateData (297 puede estar ausente sin que 295/296 lo estén).
+      delete updateData.ingresos_brutos
+      delete updateData.inicio_actividades
+      result2 = await supabaseAdmin
+        .from("organizations")
+        .update(updateData)
+        .eq("id", organizationId!)
+        .select(selectColsFull296)
+        .single() as any
+    }
 
     if (isMissingColumnError(result2.error)) {
       // Migración 296 no aplicada todavía: reintentar sin el toggle de
@@ -588,6 +650,8 @@ export async function PUT(request: Request) {
       cuit: organization.cuit || "",
       condicionIva: organization.condicion_iva || "",
       domicilioFiscal: organization.domicilio_fiscal || "",
+      ingresosBrutos: organization.ingresos_brutos || "",
+      inicioActividades: organization.inicio_actividades || "",
       cbuAlias: organization.cbu_alias || "",
       mediosPagoTexto: organization.medios_pago_texto || "",
       plazoPagoDias: organization.plazo_pago_dias ?? null,

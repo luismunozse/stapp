@@ -47,6 +47,10 @@ const configResponse = {
   cuit: "30-71234567-8",
   condicionIva: "Responsable Inscripto",
   domicilioFiscal: "Av. Siempreviva 742, Córdoba",
+  // "Remito formato clásico" fields (migration 297) prefilled from a prior
+  // save — the card must render them, not just accept new input.
+  ingresosBrutos: "902-123456-7",
+  inicioActividades: "01/2020",
   cbuAlias: "taller.alias.mp",
   mediosPagoTexto: "Efectivo, transferencia",
   plazoPagoDias: 15,
@@ -70,6 +74,8 @@ describe("ConfiguracionForm — Datos fiscales y de cobro", () => {
 
     expect(screen.getByLabelText("CUIT")).toHaveValue("30-71234567-8")
     expect(screen.getByLabelText("Domicilio fiscal")).toHaveValue("Av. Siempreviva 742, Córdoba")
+    expect(screen.getByLabelText("Ingresos brutos")).toHaveValue("902-123456-7")
+    expect(screen.getByLabelText("Inicio de actividades")).toHaveValue("01/2020")
     expect(screen.getByLabelText("CBU o alias")).toHaveValue("taller.alias.mp")
     expect(screen.getByLabelText("Medios de pago aceptados")).toHaveValue("Efectivo, transferencia")
     expect(screen.getByLabelText("Plazo de pago (días)")).toHaveValue(15)
@@ -89,6 +95,8 @@ describe("ConfiguracionForm — Datos fiscales y de cobro", () => {
 
     fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "30-99999999-1" } })
     fireEvent.change(screen.getByLabelText("Domicilio fiscal"), { target: { value: "Otra Calle 456" } })
+    fireEvent.change(screen.getByLabelText("Ingresos brutos"), { target: { value: "902-987654-3" } })
+    fireEvent.change(screen.getByLabelText("Inicio de actividades"), { target: { value: "05/2019" } })
     fireEvent.change(screen.getByLabelText("CBU o alias"), { target: { value: "nuevo.alias" } })
     fireEvent.change(screen.getByLabelText("Medios de pago aceptados"), { target: { value: "Efectivo" } })
     fireEvent.change(screen.getByLabelText("Plazo de pago (días)"), { target: { value: "30" } })
@@ -105,6 +113,8 @@ describe("ConfiguracionForm — Datos fiscales y de cobro", () => {
     expect(body.cuit).toBe("30-99999999-1")
     expect(body.condicionIva).toBe("Responsable Inscripto") // unchanged from fetched config
     expect(body.domicilioFiscal).toBe("Otra Calle 456")
+    expect(body.ingresosBrutos).toBe("902-987654-3")
+    expect(body.inicioActividades).toBe("05/2019")
     expect(body.cbuAlias).toBe("nuevo.alias")
     expect(body.mediosPagoTexto).toBe("Efectivo")
     expect(body.plazoPagoDias).toBe("30")
