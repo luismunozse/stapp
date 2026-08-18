@@ -3563,6 +3563,14 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     }
   }
 
+  // === LETTER BOX geometry (classic Argentine comprobante "letra" box) ===
+  // Declared before the left zone so its x position can bound how wide
+  // left-zone text is allowed to run (see clampLeftZoneText below) — the
+  // box itself is drawn further down, after the left zone.
+  const letterBoxWidth = 34
+  const letterBoxHeight = 30
+  const letterBoxX = (width - letterBoxWidth) / 2
+
   // === HEADER: Empresa (left zone) ===
   // Classic form layout: content inset from the frame edge by innerPad,
   // pushed right further by logoWidth when a logo was drawn above. Company
@@ -3570,27 +3578,34 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   // accounting-form scale of the rest of this block. CUIT and condición
   // IVA moved OUT of this zone — see the right zone below, next to the
   // document number, where the rest of the fiscal identity now lives.
-  // Text stays clear of the centered letter-box legend because this
-  // column's content is short (name/tel/dirección/domicilio fiscal, never
-  // wider than ~200pt) and the right zone is right-aligned so it clears
-  // the center from the other side.
+  // Every left-zone line is measured and clamped (ellipsized) so it can
+  // never run into the centered letter box: the budget is derived from
+  // the box's fixed x position minus a small gap, so it shrinks with
+  // logoWidth automatically (~200-220pt when no logo is present).
   const leftX = frameLeft + innerPad + logoWidth
+  const leftZoneMaxWidth = letterBoxX - 10 - leftX
+  const clampLeftZoneText = (text: string, font: typeof helvetica, size: number): string => {
+    if (font.widthOfTextAtSize(text, size) <= leftZoneMaxWidth) return text
+    let t = text
+    while (t.length > 0 && font.widthOfTextAtSize(t + "…", size) > leftZoneMaxWidth) t = t.slice(0, -1)
+    return t + "…"
+  }
   let leftY = frameTop - 16
-  page.drawText(empresaNombre, { x: leftX, y: leftY, size: TYPE.body, font: helveticaBold, color: MONO.ink })
+  page.drawText(clampLeftZoneText(empresaNombre, helveticaBold, TYPE.body), { x: leftX, y: leftY, size: TYPE.body, font: helveticaBold, color: MONO.ink })
   let leftLines = 1
   if (telefonoEmpresa) {
     leftY -= 12
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
+    page.drawText(clampLeftZoneText(`Tel: ${telefonoEmpresa}`, helvetica, TYPE.small), { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
     leftLines++
   }
   if (direccionEmpresa) {
     leftY -= 12
-    page.drawText(direccionEmpresa, { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
+    page.drawText(clampLeftZoneText(direccionEmpresa, helvetica, TYPE.small), { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
     leftLines++
   }
   if (domicilioFiscalEmpresa) {
     leftY -= 12
-    page.drawText(domicilioFiscalEmpresa, { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
+    page.drawText(clampLeftZoneText(domicilioFiscalEmpresa, helvetica, TYPE.small), { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
     leftLines++
   }
 
@@ -3598,9 +3613,6 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   // This remito is never a fiscal document: it always shows the fixed
   // letter X with its own legend below, never a real AFIP letter (A/B/C/R)
   // or a "Cód. 91" comprobante-type code.
-  const letterBoxWidth = 34
-  const letterBoxHeight = 30
-  const letterBoxX = (width - letterBoxWidth) / 2
   page.drawRectangle({
     x: letterBoxX,
     y: frameTop - 15,

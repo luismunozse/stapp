@@ -472,6 +472,38 @@ describe("generateFacturaPDF — classic form header", () => {
     expect(letterX).toBeDefined()
   })
 
+  it("clamps left-zone lines so a long company name never collides with the centered letter box", async () => {
+    // Well over the ~200-220pt left-zone budget at TYPE.body (9pt) bold —
+    // long enough that, unclamped, it would run underneath/into the
+    // letter box (x ~ 280.5-314.5 on the default 595pt-wide A4 page).
+    const longName = "Servicio Técnico Integral de Reparaciones Celulares y Computadoras S.R.L."
+    const buffer = await generateFacturaPDF({ ...baseData, nombreEmpresa: longName } as any)
+
+    const items = await extractPdfTextPositions(buffer)
+    // Left-zone header band: from the company name's line down through the
+    // deepest possible optional left-zone line (name + tel/dirección/
+    // domicilio fiscal @ 12pt each) — same geometry the header uses to
+    // compute headerBottomY. frameTop is 802 on the default A4 page
+    // (height 842 - margin 40).
+    const frameTop = 802
+    const letterBoxLeftX = 280.5 // (595 - 34) / 2, letter box's left edge
+    const leftZoneItems = items.filter(
+      (i) => i.x < letterBoxLeftX && i.y <= frameTop && i.y > frameTop - 16 - 12 * 4
+    )
+    expect(leftZoneItems.length).toBeGreaterThan(0)
+    // None of them may carry the full, untruncated name — a draw call
+    // with that exact text would mean it ran unclamped past the box.
+    for (const item of leftZoneItems) {
+      expect(item.text).not.toBe(longName)
+    }
+
+    const text = await extractPdfText(buffer)
+    expect(text).not.toContain(longName)
+    // A truncated, ellipsized prefix of the name must still render — the
+    // fix must clamp, not drop, the line.
+    expect(text).toContain(longName.slice(0, 15))
+  })
+
   it("shows ingresos brutos, inicio de actividades and IVA condition in caps when set", async () => {
     const buffer = await generateFacturaPDF({
       ...baseData,
