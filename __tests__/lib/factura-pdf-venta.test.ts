@@ -9,7 +9,7 @@ import { describe, it, expect, beforeAll } from "vitest"
 import { PDFDocument } from "pdf-lib"
 import { generateFacturaPDF } from "@/lib/pdf"
 import { formatCurrencyValue } from "@/lib/currency"
-import { extractPdfText } from "./pdf-text-helper"
+import { extractPdfText, extractPdfTextPositions } from "./pdf-text-helper"
 
 // Fixture builder for the pagination tests below: N items + M pagos, each
 // tagged with a distinguishable, zero-padded index so a substring check on
@@ -354,7 +354,10 @@ describe("generateFacturaPDF — fiscal identity & payment conditions", () => {
       cbuAlias: "stapp.taller.mp",
     } as any)
     const text = await extractPdfText(buffer)
-    for (const s of ["CUIT: 30-71234567-8", "Responsable Inscripto", "DNI/CUIT: 28.456.789",
+    // condición IVA now renders in the header's right zone, uppercased (see
+    // "classic form header" describe block below) — content is still
+    // present, just no longer in its original mixed-case form.
+    for (const s of ["CUIT: 30-71234567-8", "RESPONSABLE INSCRIPTO", "DNI/CUIT: 28.456.789",
                      "CONDICIONES DE PAGO", "Vencimiento", "stapp.taller.mp"]) expect(text).toContain(s)
   })
 
@@ -433,5 +436,62 @@ describe("generateFacturaPDF — running balance & recibí conforme", () => {
 
     const text = await extractPdfText(buffer)
     expect(text).not.toContain("RECIBÍ CONFORME")
+  })
+})
+
+describe("generateFacturaPDF — classic form header", () => {
+  const baseData = {
+    numeroFactura: "0001-00000008",
+    fecha: new Date("2026-08-17"),
+    estadoPago: "PAGADO",
+    cliente: { nombre: "Consumidor Final" },
+    venta: { numeroVenta: 22 },
+    subtotal: 3000,
+    iva: 0,
+    total: 3000,
+    montoAbonado: 3000,
+    pagos: [],
+  }
+
+  it("renders the letter box: X legend present, fiscal letter R / cod 91 never rendered", async () => {
+    const buffer = await generateFacturaPDF(baseData as any)
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("Documento no válido como comprobante fiscal")
+    expect(text).not.toContain("Cód. 91")
+    expect(text).not.toContain("COD. 91")
+    // pdf-text-helper's PositionedText only carries {text, x, y} (no font
+    // size — Tf's size operand is parsed and discarded, see its Tf regex),
+    // so instead of asserting on size we assert the "X" draw call sits
+    // inside the letter box's geometry: box is 34x30 centered horizontally
+    // on the default A4 page (595pt wide) at x=(595-34)/2=280.5..314.5,
+    // straddling frameTop (802) from 787 to 817.
+    const items = await extractPdfTextPositions(buffer)
+    const letterX = items.find(
+      (i) => i.text === "X" && i.x > 275 && i.x < 320 && i.y > 785 && i.y < 820
+    )
+    expect(letterX).toBeDefined()
+  })
+
+  it("shows ingresos brutos, inicio de actividades and IVA condition in caps when set", async () => {
+    const buffer = await generateFacturaPDF({
+      ...baseData,
+      cuitEmpresa: "23944498389",
+      condicionIvaEmpresa: "Monotributo",
+      ingresosBrutosEmpresa: "902-123456-7",
+      inicioActividadesEmpresa: "01/2020",
+    } as any)
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("CUIT: 23944498389")
+    expect(text).toContain("Ingresos brutos: 902-123456-7")
+    expect(text).toContain("Inicio actividades: 01/2020")
+    expect(text).toContain("MONOTRIBUTO")
+  })
+
+  it("omits the fiscal header lines when the org has no fiscal data", async () => {
+    const buffer = await generateFacturaPDF(baseData as any)
+    const text = await extractPdfText(buffer)
+    expect(text).not.toContain("Ingresos brutos:")
+    expect(text).not.toContain("Inicio actividades:")
+    expect(text).not.toContain("CUIT:")
   })
 })

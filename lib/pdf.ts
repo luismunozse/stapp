@@ -3477,6 +3477,8 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   const cuitEmpresa = safe(data.cuitEmpresa)
   const condicionIvaEmpresa = safe(data.condicionIvaEmpresa)
   const domicilioFiscalEmpresa = safe(data.domicilioFiscalEmpresa)
+  const ingresosBrutosEmpresa = safe(data.ingresosBrutosEmpresa)
+  const inicioActividadesEmpresa = safe(data.inicioActividadesEmpresa)
   const numeroFactura = safe(data.numeroFactura)
   const fecha = formatDatePDF(data.fecha)
   const clienteNombre = safe(data.cliente?.nombre) || "Consumidor Final"
@@ -3507,7 +3509,18 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   const margin = 40
   const contentWidth = width - (margin * 2)
 
-  let y = height - margin - 20
+  // Classic-form frame geometry. The outer rectangle itself is drawn at the
+  // end of the CONDICIONES DE PAGO band (see Task 5 of the remito-formato-
+  // clasico change) — recorded here so the header, the CLIENTE/CONDICIONES
+  // bands, and the framed items table (Task 6) all share one coordinate
+  // system instead of re-deriving it.
+  const frameTop = height - margin
+  const frameLeft = margin
+  const frameRight = width - margin
+  const innerPad = 10
+  const drawVLine = (pg: typeof page, x: number, y1: number, y2: number) => {
+    pg.drawLine({ start: { x, y: y1 }, end: { x, y: y2 }, thickness: RULE_WIDTH, color: MONO.ink })
+  }
 
   // === LOGO ===
   let logoWidth = 0
@@ -3550,87 +3563,125 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     }
   }
 
-  // === HEADER: Empresa ===
-  page.drawText(empresaNombre, { x: margin + logoWidth, y, size: 16, font: helveticaBold, color: MONO.ink })
-  y -= 16
+  // === HEADER: Empresa (left zone) ===
+  // Classic form layout: content inset from the frame edge by innerPad,
+  // pushed right further by logoWidth when a logo was drawn above. Company
+  // name uses TYPE.body (not a bespoke 16pt) to match the compact,
+  // accounting-form scale of the rest of this block. CUIT and condición
+  // IVA moved OUT of this zone — see the right zone below, next to the
+  // document number, where the rest of the fiscal identity now lives.
+  // Text stays clear of the centered letter-box legend because this
+  // column's content is short (name/tel/dirección/domicilio fiscal, never
+  // wider than ~200pt) and the right zone is right-aligned so it clears
+  // the center from the other side.
+  const leftX = frameLeft + innerPad + logoWidth
+  let leftY = frameTop - 16
+  page.drawText(empresaNombre, { x: leftX, y: leftY, size: TYPE.body, font: helveticaBold, color: MONO.ink })
+  let leftLines = 1
   if (telefonoEmpresa) {
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
+    leftY -= 12
+    page.drawText(`Tel: ${telefonoEmpresa}`, { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
+    leftLines++
   }
   if (direccionEmpresa) {
-    page.drawText(direccionEmpresa, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
-  }
-  // Fiscal emitter extras (CUIT / condición IVA / domicilio fiscal) — one
-  // 8pt line each, only when present. Tracked so the separator below can
-  // extend downward and avoid colliding with these lines.
-  let emisorExtraLines = 0
-  if (cuitEmpresa) {
-    page.drawText(`CUIT: ${cuitEmpresa}`, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
-    emisorExtraLines++
-  }
-  if (condicionIvaEmpresa) {
-    page.drawText(condicionIvaEmpresa, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
-    emisorExtraLines++
+    leftY -= 12
+    page.drawText(direccionEmpresa, { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
+    leftLines++
   }
   if (domicilioFiscalEmpresa) {
-    page.drawText(domicilioFiscalEmpresa, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
-    emisorExtraLines++
+    leftY -= 12
+    page.drawText(domicilioFiscalEmpresa, { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
+    leftLines++
   }
 
-  // Bloque REMITO (lado derecho, alineado a la derecha)
-  const remitoLabel = "REMITO"
-  const remitoLabelWidth = helveticaBold.widthOfTextAtSize(remitoLabel, TYPE.docTitle)
-  page.drawText(remitoLabel, {
-    x: width - margin - remitoLabelWidth,
-    y: height - margin - 12,
-    size: TYPE.docTitle,
+  // === LETTER BOX (classic Argentine comprobante "letra" box) ===
+  // This remito is never a fiscal document: it always shows the fixed
+  // letter X with its own legend below, never a real AFIP letter (A/B/C/R)
+  // or a "Cód. 91" comprobante-type code.
+  const letterBoxWidth = 34
+  const letterBoxHeight = 30
+  const letterBoxX = (width - letterBoxWidth) / 2
+  page.drawRectangle({
+    x: letterBoxX,
+    y: frameTop - 15,
+    width: letterBoxWidth,
+    height: letterBoxHeight,
+    borderColor: MONO.ink,
+    borderWidth: RULE_WIDTH,
+  })
+  const letterSize = 20
+  const letterText = "X"
+  const letterWidth = helveticaBold.widthOfTextAtSize(letterText, letterSize)
+  page.drawText(letterText, {
+    x: letterBoxX + (letterBoxWidth - letterWidth) / 2,
+    y: frameTop - 15 + (letterBoxHeight - letterSize) / 2,
+    size: letterSize,
     font: helveticaBold,
     color: MONO.ink,
   })
-  const numeroWidth = helveticaBold.widthOfTextAtSize(numeroFactura, TYPE.docNumber)
-  page.drawText(numeroFactura, {
-    x: width - margin - numeroWidth,
-    y: height - margin - 34,
-    size: TYPE.docNumber,
-    font: helveticaBold,
-    color: MONO.ink,
-  })
-  const emisionLabel = `Emisión: ${fecha}`
-  const emisionLabelWidth = helvetica.widthOfTextAtSize(emisionLabel, TYPE.small)
-  page.drawText(emisionLabel, {
-    x: width - margin - emisionLabelWidth,
-    y: height - margin - 50,
-    size: TYPE.small,
+  const letterLegend = "Documento no válido como comprobante fiscal"
+  const letterLegendWidth = helvetica.widthOfTextAtSize(letterLegend, TYPE.fine)
+  page.drawText(letterLegend, {
+    x: (width - letterLegendWidth) / 2,
+    y: frameTop - 25,
+    size: TYPE.fine,
     font: helvetica,
     color: MONO.label,
   })
+
+  // === HEADER: REMITO (right zone) ===
+  // Right-aligned to frameRight - innerPad, mirroring the left zone's
+  // inset. CUIT / Ingresos brutos / Inicio actividades / condición IVA now
+  // live here instead of under the company name — each is one small line,
+  // drawn ONLY when present. Condición IVA renders uppercased as its own
+  // line with no invented prefix: the stored value is uppercased verbatim
+  // (e.g. "Monotributo" -> "MONOTRIBUTO"; "IVA Responsable Inscripto" ->
+  // "IVA RESPONSABLE INSCRIPTO" — this code never adds an "IVA" prefix).
+  const rightX = frameRight - innerPad
+  const drawHeaderRight = (text: string, yPos: number, size: number, font: typeof helvetica, color: RGB) => {
+    const w = font.widthOfTextAtSize(text, size)
+    page.drawText(text, { x: rightX - w, y: yPos, size, font, color })
+  }
+  drawHeaderRight("REMITO", frameTop - 12, TYPE.docTitle, helveticaBold, MONO.ink)
+  drawHeaderRight(numeroFactura, frameTop - 34, TYPE.docNumber, helveticaBold, MONO.ink)
+  drawHeaderRight(`Emisión: ${fecha}`, frameTop - 50, TYPE.small, helvetica, MONO.label)
+
+  let rightLines = 3 // REMITO + numeroFactura + Emisión, always drawn above
+  let rightY = frameTop - 50
   // Accounting-grade remito: the date the goods/service actually moved can
   // differ from the emission date above — shown only when supplied.
   if (data.fechaOperacion) {
-    const operacionLabel = `Operación: ${formatDatePDF(data.fechaOperacion)}`
-    const operacionLabelWidth = helvetica.widthOfTextAtSize(operacionLabel, TYPE.small)
-    page.drawText(operacionLabel, {
-      x: width - margin - operacionLabelWidth,
-      y: height - margin - 62,
-      size: TYPE.small,
-      font: helvetica,
-      color: MONO.label,
-    })
+    rightY = frameTop - 62
+    drawHeaderRight(`Operación: ${formatDatePDF(data.fechaOperacion)}`, rightY, TYPE.small, helvetica, MONO.label)
+    rightLines++
+  }
+  if (cuitEmpresa) {
+    rightY -= 12
+    drawHeaderRight(`CUIT: ${cuitEmpresa}`, rightY, TYPE.small, helvetica, MONO.label)
+    rightLines++
+  }
+  if (ingresosBrutosEmpresa) {
+    rightY -= 12
+    drawHeaderRight(`Ingresos brutos: ${ingresosBrutosEmpresa}`, rightY, TYPE.small, helvetica, MONO.label)
+    rightLines++
+  }
+  if (inicioActividadesEmpresa) {
+    rightY -= 12
+    drawHeaderRight(`Inicio actividades: ${inicioActividadesEmpresa}`, rightY, TYPE.small, helvetica, MONO.label)
+    rightLines++
+  }
+  if (condicionIvaEmpresa) {
+    rightY -= 12
+    drawHeaderRight(condicionIvaEmpresa.toUpperCase(), rightY, TYPE.small, helvetica, MONO.label)
+    rightLines++
   }
 
-  // Base offset (90) matches the original 2-line company block (name + one
-  // of tel/direccion) with ~40pt clearance above this rule; each emisor
-  // extra line pushes the rule down another 12 so that clearance is
-  // preserved regardless of how many fiscal lines were drawn above.
-  y = height - margin - (90 + 12 * emisorExtraLines)
-
-  // Linea separadora (reemplaza el titulo centrado "FACTURA")
-  drawRule(page, margin, width - margin, y)
-  y -= 30
+  // headerBottomY clears both zones regardless of how many optional lines
+  // each drew: a symmetric 12pt-per-line step from the left zone's fixed
+  // top (frameTop - 16), max()'d so whichever column grew taller wins.
+  const headerBottomY = frameTop - 16 - 12 * Math.max(leftLines, rightLines) - 8
+  drawRule(page, frameLeft, frameRight, headerBottomY)
+  let y = headerBottomY - 30
 
   // === DATOS DEL CLIENTE ===
   // clientBoxHeight grows by 12 when DNI/CUIT is present (accounting-grade
