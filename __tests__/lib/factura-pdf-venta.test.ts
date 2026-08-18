@@ -731,6 +731,32 @@ describe("generateFacturaPDF — classic ruled tables", () => {
     const text = await extractPdfText(buffer)
     expect(text).toContain("SALDO")
     expect(text).toContain("HISTORIAL DE PAGOS")
+
+    // Right-aligned column content (headers and row values) must clear its
+    // own column-boundary rule, never sit flush against it — see the
+    // COL_TEXT_INSET constant in lib/pdf.ts. extractPdfTextPositions only
+    // carries the glyph run's start x (not its measured width), so this
+    // can't pin the exact 4pt inset without duplicating font metrics here
+    // — it's a smoke check that the text starts (and therefore ends)
+    // strictly before each column boundary, not past or flush on it.
+    const margin = 40
+    const width = 595
+    // precioUnitario === subtotal === 3000 for this single-item fixture, so
+    // both money columns draw the same string on the item row — find the
+    // row by its own description ("acc p", a different y than the
+    // DESCRIPCIÓN header above it) and sort by x to tell PRECIO (smaller
+    // x, left of the middle divider) from SUBTOTAL (larger x, flush toward
+    // the outer border) apart.
+    const itemDescRow = positions.find((i) => i.text === "acc p")
+    expect(itemDescRow).toBeDefined()
+    const amountText = formatCurrencyValue(3000, "ARS")
+    const rowValues = positions
+      .filter((i) => i.text === amountText && i.y === itemDescRow!.y)
+      .sort((a, b) => a.x - b.x)
+    expect(rowValues.length).toBe(2)
+    const [precioValue, subtotalValue] = rowValues
+    expect(precioValue.x).toBeLessThan(margin + 410)
+    expect(subtotalValue.x).toBeLessThan(width - margin)
   })
 
   it("multipage: every page is A4 and continuation redraws title + table header", async () => {
@@ -790,5 +816,66 @@ describe("generateFacturaPDF — classic ruled tables", () => {
     const text = await extractPdfText(buffer)
     expect(text).toContain("continuación")
     expect(text).toContain("REF-080")
+  })
+})
+
+describe("generateFacturaPDF — visual polish (saldo bar overlap, dedupe address)", () => {
+  it("clears the SALDO bar so it never overlaps the Pagado a cuenta row above it", async () => {
+    // Partial payment so montoAbonado > 0 and the label is "SALDO
+    // PENDIENTE" (not the fully-paid "SALDO" — see the saldoLabel ternary).
+    const buffer = await generateFacturaPDF({
+      ...baseData,
+      estadoPago: "PAGADO_PARCIAL",
+      montoAbonado: 400,
+    } as any)
+
+    const items = await extractPdfTextPositions(buffer)
+    const pagado = items.find((i) => i.text === "Pagado a cuenta")
+    const saldo = items.find((i) => i.text === "SALDO PENDIENTE")
+    expect(pagado).toBeDefined()
+    expect(saldo).toBeDefined()
+
+    // Pagado a cuenta's own row reserves 18pt (its "y -= 18"), plus a 5pt
+    // clearance buffer before the SALDO bar below — the same buffer every
+    // other MONO.totalBg bar in this file keeps before its own row (see
+    // e.g. the pre-total rule's "y -= 5" in the presupuesto/cotización
+    // layout). The SALDO bar's rect is 28pt tall with a -8 offset, so it
+    // reaches 20pt ABOVE its own row's baseline — without that 5pt buffer,
+    // the bar's top edge (baseline + 20) lands only 2pt above the Pagado
+    // row's baseline, slicing through the middle of its glyphs. The two
+    // baselines must be exactly 23pt apart (18 + 5) for the bar to clear
+    // this row entirely.
+    expect(pagado!.y - saldo!.y).toBe(23)
+  })
+
+  it("dedupes the address line when domicilioFiscalEmpresa matches direccionEmpresa exactly", async () => {
+    const sameAddress = "Av. Siempre Viva 742"
+    const buffer = await generateFacturaPDF({
+      ...baseData,
+      direccionEmpresa: sameAddress,
+      domicilioFiscalEmpresa: sameAddress,
+    } as any)
+
+    const items = await extractPdfTextPositions(buffer)
+    // Header left-zone band: company name line down through the deepest
+    // possible left-zone line (name + tel/dirección/domicilio fiscal @
+    // 12pt each) — same geometry used by the "classic form header" tests
+    // above. frameTop is 802 on the default A4 page.
+    const frameTop = 802
+    const headerBand = items.filter((i) => i.y <= frameTop && i.y > frameTop - 16 - 12 * 4)
+    const matches = headerBand.filter((i) => i.text === sameAddress)
+    expect(matches.length).toBe(1)
+  })
+
+  it("shows both address lines when dirección and domicilio fiscal differ", async () => {
+    const buffer = await generateFacturaPDF({
+      ...baseData,
+      direccionEmpresa: "Calle Comercial 100",
+      domicilioFiscalEmpresa: "Domicilio Fiscal 200",
+    } as any)
+
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("Calle Comercial 100")
+    expect(text).toContain("Domicilio Fiscal 200")
   })
 })

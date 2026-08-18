@@ -3634,7 +3634,11 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     page.drawText(clampLeftZoneText(direccionEmpresa, helvetica, TYPE.small, leftY), { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
     leftLines++
   }
-  if (domicilioFiscalEmpresa) {
+  // Skip the domicilio fiscal line when it's the same address as
+  // dirección (both already trimmed by safe()) — common for small shops
+  // that only have one address — instead of printing the identical line
+  // twice in the header.
+  if (domicilioFiscalEmpresa && domicilioFiscalEmpresa !== direccionEmpresa) {
     leftY -= 12
     page.drawText(clampLeftZoneText(domicilioFiscalEmpresa, helvetica, TYPE.small, leftY), { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
     leftLines++
@@ -3840,19 +3844,27 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   const drawTextRight = (pg: typeof page, text: string, xRight: number, yPos: number, size: number, font: typeof helvetica, color: ReturnType<typeof rgb>) => {
     pg.drawText(text, { x: xRight - font.widthOfTextAtSize(text, size), y: yPos, size, font, color })
   }
+  // Every call below passes a column-boundary x (an interior rule from
+  // itemColXs/pagosColXs, or the outer frame border) as xRight — inset by
+  // this much so the text's last glyph doesn't land flush against the
+  // vertical rule drawn at that same x. The rule geometry itself
+  // (itemColXs/pagosColXs, closeTableFrame) is untouched — only these text
+  // anchors move.
+  const COL_TEXT_INSET = 4
 
   // Column header row, factored out because it gets re-drawn at the top of
   // every continuation page. Classic form column order: CANT | DESCRIPCIÓN
   // | PRECIO | SUBTOTAL — CANT leads so a scanning eye hits the quantity
   // before the line description, matching printed remito booklets. PRECIO/
-  // SUBTOTAL are right-aligned (via drawTextRight) flush against their own
-  // column's right boundary — itemColXs below — same "flush, no inset"
-  // convention the HISTORIAL DE PAGOS money columns already use.
+  // SUBTOTAL are right-aligned (via drawTextRight) to their own column's
+  // right boundary minus COL_TEXT_INSET — itemColXs below — same
+  // inset-from-the-rule convention the HISTORIAL DE PAGOS money columns
+  // already use.
   const drawItemsTableHeader = (pg: typeof page, yPos: number) => {
     pg.drawText("CANT.", { x: margin + 10, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
     pg.drawText("DESCRIPCIÓN", { x: margin + 55, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    drawTextRight(pg, "PRECIO", margin + 410, yPos, TYPE.small, helveticaBold, MONO.label)
-    drawTextRight(pg, "SUBTOTAL", width - margin, yPos, TYPE.small, helveticaBold, MONO.label)
+    drawTextRight(pg, "PRECIO", margin + 410 - COL_TEXT_INSET, yPos, TYPE.small, helveticaBold, MONO.label)
+    drawTextRight(pg, "SUBTOTAL", width - margin - COL_TEXT_INSET, yPos, TYPE.small, helveticaBold, MONO.label)
   }
   // Vertical rule x-positions between the 4 item columns (CANT 45pt |
   // DESCRIPCIÓN 260pt | PRECIO 105pt | SUBTOTAL 105pt, summing to
@@ -3876,8 +3888,8 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     pg.drawText("FECHA", { x: colFechaX, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
     pg.drawText("MÉTODO", { x: colMetodoX, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
     pg.drawText("REFERENCIA", { x: colRefX, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    drawTextRight(pg, "MONTO", colMontoR, yPos, TYPE.small, helveticaBold, MONO.label)
-    drawTextRight(pg, "SALDO", colSaldoR, yPos, TYPE.small, helveticaBold, MONO.label)
+    drawTextRight(pg, "MONTO", colMontoR - COL_TEXT_INSET, yPos, TYPE.small, helveticaBold, MONO.label)
+    drawTextRight(pg, "SALDO", colSaldoR - COL_TEXT_INSET, yPos, TYPE.small, helveticaBold, MONO.label)
   }
   // Vertical rule x-positions between the 5 pagos columns, derived from the
   // constants above: FECHA/MÉTODO/REFERENCIA dividers sit 10pt before their
@@ -3947,8 +3959,8 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
 
       page.drawText(String(item.cantidad), { x: margin + 10, y, size: TYPE.body, font: helvetica, color: MONO.ink })
       page.drawText(safe(item.descripcion).substring(0, 40), { x: margin + 55, y, size: TYPE.body, font: helvetica, color: MONO.ink })
-      drawTextRight(page, formatCurrencyPDF(item.precioUnitario), margin + 410, y, TYPE.body, helvetica, MONO.ink)
-      drawTextRight(page, formatCurrencyPDF(item.subtotal), width - margin, y, TYPE.body, helvetica, MONO.ink)
+      drawTextRight(page, formatCurrencyPDF(item.precioUnitario), margin + 410 - COL_TEXT_INSET, y, TYPE.body, helvetica, MONO.ink)
+      drawTextRight(page, formatCurrencyPDF(item.subtotal), width - margin - COL_TEXT_INSET, y, TYPE.body, helvetica, MONO.ink)
       y -= 18
       drawRule(page, margin, width - margin, y + 10)
     }
@@ -3969,11 +3981,15 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     (data.iva > 0 ? 1 : 0) +
     (data.descuento && data.descuento > 0 ? 1 : 0) +
     (data.redondeo && data.redondeo !== 0 ? 1 : 0)
-  // 177 = DETALLE label+rule (24) + Subtotal row+rule (18) + pre-total rule
-  // (10) + TOTAL row (18) + Pagado a cuenta row (18) + SALDO bar (35) +
-  // ESTADO DE PAGO label+rule (24) + badge/montos row (30), plus 18 for
-  // each optional Subtotal-block row (IVA / Descuento / Redondeo).
-  const totalsBlockH = 177 + 18 * detalleOptionalRows // DETALLE + TOTAL + PAGADO A CUENTA + SALDO + ESTADO DE PAGO
+  // 182 = DETALLE label+rule (24) + Subtotal row+rule (18) + pre-total rule
+  // (10) + TOTAL row (18) + Pagado a cuenta row (18) + clearance before the
+  // SALDO bar (5) + SALDO bar (35) + ESTADO DE PAGO label+rule (24) +
+  // badge/montos row (30), plus 18 for each optional Subtotal-block row
+  // (IVA / Descuento / Redondeo). The 5pt clearance step (see below, right
+  // before the SALDO bar is drawn) is required — without it the bar's rect
+  // (28pt tall, -8/+20 around its own row) reaches up into the Pagado a
+  // cuenta row above and clips it.
+  const totalsBlockH = 182 + 18 * detalleOptionalRows // DETALLE + TOTAL + PAGADO A CUENTA + SALDO + ESTADO DE PAGO
   if (y - totalsBlockH < floorY) {
     startContinuationPage()
   }
@@ -4032,6 +4048,15 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   page.drawText("Pagado a cuenta", { x: margin + 10, y, size: TYPE.body, font: helvetica, color: MONO.label })
   page.drawText(formatCurrencyPDF(data.montoAbonado), { x: width - margin - 100, y, size: TYPE.body, font: helvetica, color: MONO.ink })
   y -= 18
+
+  // Clearance before the SALDO bar below: its rect spans (y - 8) to
+  // (y + 20) — i.e. it reaches 20pt above its own row's baseline, not just
+  // 8 — so without this buffer its top edge cuts into this row's text
+  // (including "Pagado"'s descender). Same 5pt buffer every other
+  // MONO.totalBg bar in this file keeps before its own row (see e.g. the
+  // "cursor -= 5" right before the presupuesto/cotización layout's TOTAL
+  // bar, elsewhere in this file).
+  y -= 5
 
   // Saldo pendiente — the MONO.totalBg fill (the only allowed area fill)
   // moves here from TOTAL: this is the accounting-grade remito's
@@ -4134,8 +4159,8 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
       if (pagoRef) {
         page.drawText(pagoRef.substring(0, 16), { x: colRefX, y, size: TYPE.body, font: helvetica, color: MONO.label })
       }
-      drawTextRight(page, formatCurrencyPDF(pago.monto), colMontoR, y, TYPE.body, helveticaBold, MONO.ink)
-      drawTextRight(page, formatCurrencyPDF(saldoCorrido), colSaldoR, y, TYPE.body, helveticaBold, MONO.ink)
+      drawTextRight(page, formatCurrencyPDF(pago.monto), colMontoR - COL_TEXT_INSET, y, TYPE.body, helveticaBold, MONO.ink)
+      drawTextRight(page, formatCurrencyPDF(saldoCorrido), colSaldoR - COL_TEXT_INSET, y, TYPE.body, helveticaBold, MONO.ink)
       if (pagoNote) {
         // Starts at colFechaX (same as the FECHA cell above it), so at
         // TYPE.fine this note can run under the FECHA/MÉTODO divider at
