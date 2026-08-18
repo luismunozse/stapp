@@ -3871,16 +3871,18 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   // the current one: draws the "REMITO {numero} — continuación" marker,
   // resets the cursor, and — when given a table header drawer — re-draws
   // that table's column header row so the continued rows stay legible.
-  // The rule drawn right after the title (at height - margin - 24) is the
+  // Returns the y of the rule drawn right after the title — the
   // continuation page's analog of "the rule below the section label" on
-  // the first page — callers that reopen a table frame after this returns
-  // use that same y as the new chunk's tableTop.
-  const startContinuationPage = (drawTableHeader?: (pg: typeof page, yPos: number) => void): void => {
+  // the first page — so callers that reopen a table frame after this
+  // returns can reset their tableTop to it without re-deriving the
+  // geometry themselves.
+  const startContinuationPage = (drawTableHeader?: (pg: typeof page, yPos: number) => void): number => {
     page = pdfDoc.addPage([width, height])
     pages.push(page)
     const contTitle = `REMITO ${numeroFactura} — continuación`
     page.drawText(contTitle, { x: margin, y: height - margin - 12, size: TYPE.docTitle, font: helveticaBold, color: MONO.ink })
-    drawRule(page, margin, width - margin, height - margin - 24)
+    const continuationTableTop = height - margin - 24
+    drawRule(page, margin, width - margin, continuationTableTop)
     y = height - margin - 44
     if (drawTableHeader) {
       drawTableHeader(page, y)
@@ -3888,6 +3890,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
       drawRule(page, margin, width - margin, y)
       y -= 17
     }
+    return continuationTableTop
   }
 
   if (data.items && data.items.length > 0) {
@@ -3910,8 +3913,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     for (const item of data.items) {
       if (y - 18 < floorY) {
         closeTableFrame(page, tableTop, y - 4, itemColXs)
-        startContinuationPage(drawItemsTableHeader)
-        tableTop = height - margin - 24
+        tableTop = startContinuationPage(drawItemsTableHeader)
       }
 
       page.drawText(String(item.cantidad), { x: margin + 10, y, size: TYPE.body, font: helvetica, color: MONO.ink })
@@ -4065,8 +4067,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     for (const pago of data.pagos) {
       if (y - 18 < floorY) {
         closeTableFrame(page, pagosTableTop, y - 4, pagosColXs)
-        startContinuationPage(drawPagosTableHeader)
-        pagosTableTop = height - margin - 24
+        pagosTableTop = startContinuationPage(drawPagosTableHeader)
       }
 
       const pagoFecha = formatDatePDF(pago.fecha)

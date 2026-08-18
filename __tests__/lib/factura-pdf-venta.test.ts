@@ -609,4 +609,45 @@ describe("generateFacturaPDF — classic ruled tables", () => {
     const text = await extractPdfText(buffer)
     expect(text).toContain("continuación")
   })
+
+  it("HISTORIAL DE PAGOS paginates on its own: continuation page redraws the pagos header row and every page stays A4", async () => {
+    // No items at all — isolates the pagos table's own mid-loop pagination
+    // branch (closeTableFrame + startContinuationPage(drawPagosTableHeader)
+    // inside the pagos `for` loop) from the items table's, which the
+    // "multipage" test above already covers. 80 pagos guarantees at least
+    // one continuation page is reached only by that mid-loop branch, not
+    // just the pre-section pagosHeaderH check (which fires at most once).
+    const manyPagos = Array.from({ length: 80 }, (_, i) => ({
+      monto: 10,
+      metodoPago: "EFECTIVO",
+      fecha: new Date("2026-08-17"),
+      referencia: `REF-${String(i + 1).padStart(3, "0")}`,
+    }))
+    const buffer = await generateFacturaPDF({
+      ...baseData,
+      subtotal: 800,
+      total: 800,
+      montoAbonado: 800,
+      pagos: manyPagos,
+    } as any)
+
+    const doc = await PDFDocument.load(buffer)
+    expect(doc.getPageCount()).toBeGreaterThan(2)
+    for (const p of doc.getPages()) {
+      const { height } = p.getSize()
+      expect(p.getMediaBox().y + height).toBe(842)
+    }
+
+    // The pagos header ("FECHA") is drawn once for the table's first chunk
+    // plus once per continuation page reached via the loop's own break —
+    // more than one occurrence proves that branch actually ran, not just
+    // the pre-section pagosHeaderH check (which only ever fires once).
+    const positions = await extractPdfTextPositions(buffer)
+    const fechaHeaders = positions.filter((i) => i.text === "FECHA")
+    expect(fechaHeaders.length).toBeGreaterThan(1)
+
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("continuación")
+    expect(text).toContain("REF-080")
+  })
 })
