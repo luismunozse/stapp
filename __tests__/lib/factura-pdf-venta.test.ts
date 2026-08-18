@@ -600,6 +600,71 @@ describe("generateFacturaPDF — pago cuotas & recargo", () => {
     expect(text).not.toContain("cuotas")
     expect(text).not.toContain("recargo")
   })
+
+  it("keeps exactly one note line per pago when the cuotas/recargo row height (28pt) forces its own page breaks", async () => {
+    // Every pago carries a note (cuotas > 1 AND recargoPorcentaje > 0), unlike
+    // the plain-pagos pagination test above (factura-pdf-venta.test.ts's
+    // "HISTORIAL DE PAGOS paginates on its own"), which never exercises the
+    // rowH=28 branch under page-break pressure at all. 55 rows at 28pt/row
+    // guarantees several continuation pages even though each one holds more
+    // rows than the 18pt case (~613pt of usable height per continuation page
+    // / 28pt per row ≈ 21 rows/page — 55 rows forces at least 2 breaks).
+    const manyPagosConNota = Array.from({ length: 55 }, (_, i) => ({
+      monto: 100,
+      metodoPago: "TARJETA_CREDITO",
+      fecha: new Date("2026-08-17"),
+      referencia: `REF-${String(i + 1).padStart(3, "0")}`,
+      cuotas: 3,
+      recargoPorcentaje: 10,
+    }))
+    const buffer = await generateFacturaPDF({
+      ...baseData,
+      subtotal: 5500,
+      total: 5500,
+      montoAbonado: 5500,
+      pagos: manyPagosConNota,
+    } as any)
+
+    const doc = await PDFDocument.load(buffer)
+    expect(doc.getPageCount()).toBeGreaterThan(1)
+    for (const p of doc.getPages()) {
+      const { height } = p.getSize()
+      expect(p.getMediaBox().y + height).toBe(842)
+    }
+
+    // The note is drawn as a single page.drawText call (one Tj), so one
+    // matching position per pago proves every row's note survived every
+    // page break — none dropped, none doubled, regardless of which page
+    // (first or any continuation) it landed on.
+    const positions = await extractPdfTextPositions(buffer)
+    const noteItems = positions.filter((i) => /cuotas/.test(i.text))
+    expect(noteItems.length).toBe(manyPagosConNota.length)
+
+    // Count alone is not enough: a mutation that packs rows at the old
+    // flat 18pt (ignoring the note's extra 10pt) still draws every note —
+    // drawText has no clipping region, so a wrong page-break threshold
+    // silently overlaps the note onto the next row instead of dropping it,
+    // which the count check above would miss entirely (confirmed by
+    // temporarily hardcoding `rowH = 18` in lib/pdf.ts: the count assertion
+    // still passed). This spacing check is what actually catches that class
+    // of bug: every pair of consecutive same-page rows (falling REFERENCIA
+    // y, i.e. no continuation page in between) must be exactly 28pt apart —
+    // the reserved height for a noted row — never the plain 18pt.
+    const refPositions = positions.filter((i) => /^REF-\d{3}$/.test(i.text))
+    let samePageGapsChecked = 0
+    for (let i = 1; i < refPositions.length; i++) {
+      const prevY = refPositions[i - 1].y
+      const curY = refPositions[i].y
+      if (curY < prevY) {
+        expect(curY, `row ${i} landed ${prevY - curY}pt below the previous one — should be 28pt for a noted row`).toBe(prevY - 28)
+        samePageGapsChecked++
+      }
+    }
+    // Sanity: the fixture must actually produce same-page consecutive rows
+    // for the loop above to have exercised anything (otherwise every pair
+    // would trivially "pass" by never running the assertion).
+    expect(samePageGapsChecked).toBeGreaterThan(0)
+  })
 })
 
 describe("generateFacturaPDF — classic ruled tables", () => {
