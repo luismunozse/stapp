@@ -879,3 +879,41 @@ describe("generateFacturaPDF — visual polish (saldo bar overlap, dedupe addres
     expect(text).toContain("Domicilio Fiscal 200")
   })
 })
+
+describe("generateFacturaPDF — one-page compaction", () => {
+  it("fits a typical remito (3 items, 3 pagos with a cuotas/recargo note, CONDICIONES, full fiscal header, dirección/tel) on one page", async () => {
+    const buffer = await generateFacturaPDF({
+      numeroFactura: "0001-00000099",
+      fecha: new Date("2026-08-17"),
+      estadoPago: "PAGADO_PARCIAL",
+      cliente: { nombre: "Juan Pérez" },
+      orden: { numeroOrden: 99, codigoOrden: "CEL099", dispositivo: "iPhone 13" },
+      telefonoEmpresa: "011-4444-5555",
+      direccionEmpresa: "Av. Siempre Viva 742",
+      cuitEmpresa: "30-71234567-8",
+      ingresosBrutosEmpresa: "901-123456-7",
+      inicioActividadesEmpresa: "01/2015",
+      condicionIvaEmpresa: "Responsable Inscripto",
+      vencimiento: new Date("2026-09-17"),
+      mediosPago: "Efectivo, transferencia, tarjeta",
+      cbuAlias: "stapp.taller.mp",
+      items: [
+        { descripcion: "Cambio de pantalla", cantidad: 1, precioUnitario: 30000, subtotal: 30000 },
+        { descripcion: "Cambio de batería", cantidad: 1, precioUnitario: 15000, subtotal: 15000 },
+        { descripcion: "Mano de obra", cantidad: 1, precioUnitario: 5000, subtotal: 5000 },
+      ],
+      subtotal: 50000,
+      iva: 0,
+      total: 50000,
+      montoAbonado: 30000,
+      pagos: [
+        { monto: 15000, metodoPago: "TARJETA_CREDITO", fecha: new Date("2026-08-17"), referencia: "AUT-001", cuotas: 3, recargoPorcentaje: 10 },
+        { monto: 10000, metodoPago: "EFECTIVO", fecha: new Date("2026-08-17"), referencia: "REC-002" },
+        { monto: 5000, metodoPago: "TRANSFERENCIA", fecha: new Date("2026-08-17"), referencia: "REC-003" },
+      ],
+    } as any)
+
+    const doc = await PDFDocument.load(buffer)
+    expect(doc.getPageCount()).toBe(1)
+  })
+})

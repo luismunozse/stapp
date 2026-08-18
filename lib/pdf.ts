@@ -3726,7 +3726,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   // top (frameTop - 16), max()'d so whichever column grew taller wins.
   const headerBottomY = frameTop - 16 - 12 * Math.max(leftLines, rightLines) - 8
   drawRule(page, frameLeft, frameRight, headerBottomY)
-  let y = headerBottomY - 30
+  let y = headerBottomY - 14
 
   // Payment-terms gating, computed here (moved up from the totals-block
   // math further down) because the CONDICIONES band itself now renders
@@ -3801,11 +3801,11 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   // Medios de pago / CBU-Alias, each drawn only when present.
   let frameBottom = bandBottomY
   if (hasCondiciones) {
-    y = bandBottomY - 20
+    y = bandBottomY - 14
     drawSectionLabel(page, helveticaBold, "Condiciones de pago", frameLeft + innerPad, y)
     y -= 4
     drawRule(page, frameLeft, frameRight, y)
-    y -= 20
+    y -= 14
 
     if (vencimientoText) {
       page.drawText(`Vencimiento: ${vencimientoText}`, { x: frameLeft + innerPad, y, size: TYPE.small, font: helvetica, color: MONO.ink })
@@ -3819,7 +3819,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
       page.drawText(`CBU/Alias: ${cbuAlias}`, { x: frameLeft + innerPad, y, size: TYPE.small, font: helvetica, color: MONO.ink })
       y -= 12
     }
-    y -= 10
+    y -= 6
     frameBottom = y
   }
 
@@ -3829,13 +3829,17 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   // boxes further down (Task 6), so this rectangle only spans down to
   // frameBottom, not the rest of the page.
   page.drawRectangle({ x: frameLeft, y: frameBottom, width: contentWidth, height: frameTop - frameBottom, borderColor: MONO.ink, borderWidth: RULE_WIDTH })
-  y = frameBottom - 24
+  y = frameBottom - 11
 
   // === TABLA DE ITEMS ===
   // Old facturas may have no items_factura rows (pre-dates this table, or the
   // caller didn't fetch them) — skip the table entirely and keep the
   // aggregate-only layout below, exactly as before this section existed.
-  const floorY = margin + 80 // clearance kept above the fixed-position footer
+  // Clearance kept above the fixed-position footer. The footer's highest
+  // element is its rule, drawn at footerY = margin + 50 (see the footer loop
+  // near the end of this function) — floorY sits 10pt above that, the
+  // smallest gap that keeps content from crowding the rule.
+  const floorY = margin + 60
 
   // Right-aligns text to xRight by measuring its width first — needed below
   // for the classic form's money columns (items PRECIO/SUBTOTAL, pagos
@@ -3939,7 +3943,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     y -= 4
     drawRule(page, margin, width - margin, y)
     let tableTop = y // frame's top edge — the rule separating the section label from the header row
-    y -= 20
+    y -= 14
 
     drawItemsTableHeader(page, y)
     y -= 8
@@ -3966,7 +3970,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     }
 
     closeTableFrame(page, tableTop, y - 4, itemColXs)
-    y -= 15
+    y -= 12
   }
 
   // === DETALLE DE MONTOS ===
@@ -3981,15 +3985,18 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     (data.iva > 0 ? 1 : 0) +
     (data.descuento && data.descuento > 0 ? 1 : 0) +
     (data.redondeo && data.redondeo !== 0 ? 1 : 0)
-  // 182 = DETALLE label+rule (24) + Subtotal row+rule (18) + pre-total rule
+  // 162 = DETALLE label+rule (24) + Subtotal row+rule (18) + pre-total rule
   // (10) + TOTAL row (18) + Pagado a cuenta row (18) + clearance before the
-  // SALDO bar (5) + SALDO bar (35) + ESTADO DE PAGO label+rule (24) +
-  // badge/montos row (30), plus 18 for each optional Subtotal-block row
-  // (IVA / Descuento / Redondeo). The 5pt clearance step (see below, right
-  // before the SALDO bar is drawn) is required — without it the bar's rect
-  // (28pt tall, -8/+20 around its own row) reaches up into the Pagado a
-  // cuenta row above and clips it.
-  const totalsBlockH = 182 + 18 * detalleOptionalRows // DETALLE + TOTAL + PAGADO A CUENTA + SALDO + ESTADO DE PAGO
+  // SALDO bar (5) + SALDO bar-to-ESTADO gap (26) + ESTADO DE PAGO label+rule
+  // (21 = 4 rule + 17 internal) + badge/montos row-to-HISTORIAL gap (22),
+  // plus 18 for each optional Subtotal-block row (IVA / Descuento /
+  // Redondeo). The 5pt clearance step (see below, right before the SALDO
+  // bar is drawn) is required — without it the bar's rect (28pt tall,
+  // -8/+20 around its own row) reaches up into the Pagado a cuenta row
+  // above and clips it. Money-block row steps (18pt) and this 5pt
+  // clearance are pinned by a baseline-gap test and are NOT part of the
+  // compaction below (see the vertical-layout compaction change).
+  const totalsBlockH = 162 + 18 * detalleOptionalRows // DETALLE + TOTAL + PAGADO A CUENTA + SALDO + ESTADO DE PAGO
   if (y - totalsBlockH < floorY) {
     startContinuationPage()
   }
@@ -4066,7 +4073,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   page.drawRectangle({ x: margin, y: y - 8, width: contentWidth, height: 28, color: MONO.totalBg })
   page.drawText(saldoLabel, { x: margin + 10, y, size: TYPE.total, font: helveticaBold, color: MONO.ink })
   page.drawText(formatCurrencyPDF(saldo), { x: width - margin - 100, y, size: TYPE.total, font: helveticaBold, color: MONO.ink })
-  y -= 35
+  y -= 26
 
   // === ESTADO DE PAGO ===
   const estadoLabel = estadoPagoLabels[data.estadoPago] || data.estadoPago
@@ -4074,7 +4081,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   drawSectionLabel(page, helveticaBold, "ESTADO DE PAGO", margin, y)
   y -= 4
   drawRule(page, margin, width - margin, y)
-  y -= 20
+  y -= 17
 
   // Badge del estado (contorno, sin relleno — mismo texto que antes)
   const estadoBadge = drawOutlinedBadge(page, helveticaBold, estadoLabel, margin, y + 14)
@@ -4086,7 +4093,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     page.drawText(`Pendiente: ${formatCurrencyPDF(pendiente)}`, { x: montoX + 150, y: y + 3, size: TYPE.body, font: helveticaBold, color: MONO.ink })
   }
 
-  y -= 30
+  y -= 22
 
   // === HISTORIAL DE PAGOS ===
   if (data.pagos && data.pagos.length > 0) {
@@ -4103,7 +4110,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
       (firstPago.cuotas && firstPago.cuotas > 1) ||
       (firstPago.recargoPorcentaje && firstPago.recargoPorcentaje > 0)
     )
-    const pagosHeaderH = 4 + 20 + 8 + 17 + (firstPagoHasNote ? 28 : 18)
+    const pagosHeaderH = 4 + 14 + 8 + 17 + (firstPagoHasNote ? 28 : 18)
     if (y - pagosHeaderH < floorY) {
       startContinuationPage()
     }
@@ -4112,7 +4119,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     y -= 4
     drawRule(page, margin, width - margin, y)
     let pagosTableTop = y // frame's top edge — same convention as the items table's tableTop
-    y -= 20
+    y -= 14
 
     // Header (mismo tratamiento que DETALLE DE ITEMS: sin fill, mayusculas)
     drawPagosTableHeader(page, y)
@@ -4175,6 +4182,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     }
 
     closeTableFrame(page, pagosTableTop, y - 4, pagosColXs)
+    y -= 12
   }
 
   // === RECIBÍ CONFORME (orden-sourced only) ===
@@ -4186,11 +4194,11 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   // space right before drawing, so it never gets split across a page
   // break.
   if (data.orden) {
-    // 24 = section label+rule (4 + 20), same cost as CONDICIONES DE PAGO's
-    // header; 30 = blank space left above each underline for the physical
-    // signature; 10 = gap between the underline and its caption; 12 =
-    // trailing clearance before the footer.
-    const recibiConformeBlockH = 24 + 30 + 10 + 12
+    // 20 = section label+rule (4 + 16), same cost as the other sections'
+    // compacted header above; 30 = blank space left above each underline
+    // for the physical signature; 10 = gap between the underline and its
+    // caption; 8 = trailing clearance before the footer.
+    const recibiConformeBlockH = 20 + 30 + 10 + 8
     if (y - recibiConformeBlockH < floorY) {
       startContinuationPage()
     }
@@ -4198,7 +4206,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     drawSectionLabel(page, helveticaBold, "Recibí conforme", margin, y)
     y -= 4
     drawRule(page, margin, width - margin, y)
-    y -= 20
+    y -= 16
 
     // Two signature columns side by side within contentWidth, symmetric
     // 10pt padding on both outer edges (matches the 10pt inset used by
@@ -4214,7 +4222,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     drawRule(page, sigCol2X, sigCol2X + sigColW, sigLineY, { color: MONO.ink })
     page.drawText("Aclaración", { x: sigCol2X, y: sigLineY - 10, size: TYPE.fine, font: helvetica, color: MONO.label })
 
-    y = sigLineY - 10 - 12
+    y = sigLineY - 10 - 8
   }
 
   // === FOOTER (drawn on every page, so a multi-page remito never leaves a
