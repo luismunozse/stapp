@@ -3804,21 +3804,32 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   // aggregate-only layout below, exactly as before this section existed.
   const floorY = margin + 80 // clearance kept above the fixed-position footer
 
-  // Column header rows, factored out because they get re-drawn at the top
-  // of every continuation page for their respective table.
-  const drawItemsTableHeader = (pg: typeof page, yPos: number) => {
-    pg.drawText("DESCRIPCIÓN", { x: margin + 10, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    pg.drawText("CANT.", { x: margin + 280, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    pg.drawText("PRECIO", { x: margin + 330, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    pg.drawText("SUBTOTAL", { x: margin + 410, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
-  }
-  // Right-aligns text to xRight by measuring its width first — needed for
-  // the HISTORIAL DE PAGOS money columns below, which sit side by side
-  // (MONTO then the running-balance SALDO) and must never collide
-  // regardless of how many digits either amount has.
+  // Right-aligns text to xRight by measuring its width first — needed below
+  // for the classic form's money columns (items PRECIO/SUBTOTAL, pagos
+  // MONTO/SALDO), which must never collide regardless of how many digits
+  // the amount has.
   const drawTextRight = (pg: typeof page, text: string, xRight: number, yPos: number, size: number, font: typeof helvetica, color: ReturnType<typeof rgb>) => {
     pg.drawText(text, { x: xRight - font.widthOfTextAtSize(text, size), y: yPos, size, font, color })
   }
+
+  // Column header row, factored out because it gets re-drawn at the top of
+  // every continuation page. Classic form column order: CANT | DESCRIPCIÓN
+  // | PRECIO | SUBTOTAL — CANT leads so a scanning eye hits the quantity
+  // before the line description, matching printed remito booklets. PRECIO/
+  // SUBTOTAL are right-aligned (via drawTextRight) flush against their own
+  // column's right boundary — itemColXs below — same "flush, no inset"
+  // convention the HISTORIAL DE PAGOS money columns already use.
+  const drawItemsTableHeader = (pg: typeof page, yPos: number) => {
+    pg.drawText("CANT.", { x: margin + 10, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    pg.drawText("DESCRIPCIÓN", { x: margin + 55, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    drawTextRight(pg, "PRECIO", margin + 410, yPos, TYPE.small, helveticaBold, MONO.label)
+    drawTextRight(pg, "SUBTOTAL", width - margin, yPos, TYPE.small, helveticaBold, MONO.label)
+  }
+  // Vertical rule x-positions between the 4 item columns (CANT 45pt |
+  // DESCRIPCIÓN 260pt | PRECIO 105pt | SUBTOTAL 105pt, summing to
+  // contentWidth's 515pt) — the outer left/right edges are drawn by
+  // closeTableFrame's rectangle, so only the 3 interior dividers are listed.
+  const itemColXs = [margin + 45, margin + 305, margin + 410]
 
   // HISTORIAL DE PAGOS column layout. FECHA/MÉTODO/REFERENCIA stay
   // left-aligned; MONTO and the new running-balance SALDO column are
@@ -3839,11 +3850,31 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     drawTextRight(pg, "MONTO", colMontoR, yPos, TYPE.small, helveticaBold, MONO.label)
     drawTextRight(pg, "SALDO", colSaldoR, yPos, TYPE.small, helveticaBold, MONO.label)
   }
+  // Vertical rule x-positions between the 5 pagos columns, derived from the
+  // constants above: FECHA/MÉTODO/REFERENCIA dividers sit 10pt before their
+  // column's text start (same inset colFechaX itself uses from the frame's
+  // left border); the MONTO/SALDO divider sits flush at colMontoR, matching
+  // how colSaldoR already ends flush with the outer frame border (no inset)
+  // for a right-aligned column.
+  const pagosColXs = [colMetodoX - 10, colRefX - 10, margin + 275, colMontoR]
+
+  // Closes one page-chunk of a framed table: a border-only rectangle from
+  // topY down to bottomY, plus a vertical rule at each interior column
+  // boundary. Used for both the items and pagos tables — each continuation
+  // page gets its own independent frame around the rows it holds.
+  const closeTableFrame = (pg: typeof page, topY: number, bottomY: number, colXs: number[]): void => {
+    pg.drawRectangle({ x: margin, y: bottomY, width: contentWidth, height: topY - bottomY, borderColor: MONO.ink, borderWidth: RULE_WIDTH })
+    for (const cx of colXs) drawVLine(pg, cx, topY, bottomY)
+  }
 
   // Starts a fresh A4 page for a table (or block) that ran out of room on
   // the current one: draws the "REMITO {numero} — continuación" marker,
   // resets the cursor, and — when given a table header drawer — re-draws
   // that table's column header row so the continued rows stay legible.
+  // The rule drawn right after the title (at height - margin - 24) is the
+  // continuation page's analog of "the rule below the section label" on
+  // the first page — callers that reopen a table frame after this returns
+  // use that same y as the new chunk's tableTop.
   const startContinuationPage = (drawTableHeader?: (pg: typeof page, yPos: number) => void): void => {
     page = pdfDoc.addPage([width, height])
     pages.push(page)
@@ -3863,6 +3894,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     drawSectionLabel(page, helveticaBold, "DETALLE DE ITEMS", margin, y)
     y -= 4
     drawRule(page, margin, width - margin, y)
+    let tableTop = y // frame's top edge — the rule separating the section label from the header row
     y -= 20
 
     drawItemsTableHeader(page, y)
@@ -3872,20 +3904,25 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
 
     // Filas de items — a row that would land below the footer's clearance
     // line now flows onto a fresh continuation page instead of being
-    // silently dropped (the old `break` truncated long lists here).
+    // silently dropped (the old `break` truncated long lists here). Each
+    // page's chunk of rows gets its own ruled frame: closed just before the
+    // page break, reopened (tableTop reset) right after.
     for (const item of data.items) {
       if (y - 18 < floorY) {
+        closeTableFrame(page, tableTop, y - 4, itemColXs)
         startContinuationPage(drawItemsTableHeader)
+        tableTop = height - margin - 24
       }
 
-      page.drawText(safe(item.descripcion).substring(0, 40), { x: margin + 10, y, size: TYPE.body, font: helvetica, color: MONO.ink })
-      page.drawText(String(item.cantidad), { x: margin + 285, y, size: TYPE.body, font: helvetica, color: MONO.ink })
-      page.drawText(formatCurrencyPDF(item.precioUnitario), { x: margin + 330, y, size: TYPE.body, font: helvetica, color: MONO.ink })
-      page.drawText(formatCurrencyPDF(item.subtotal), { x: margin + 410, y, size: TYPE.body, font: helvetica, color: MONO.ink })
+      page.drawText(String(item.cantidad), { x: margin + 10, y, size: TYPE.body, font: helvetica, color: MONO.ink })
+      page.drawText(safe(item.descripcion).substring(0, 40), { x: margin + 55, y, size: TYPE.body, font: helvetica, color: MONO.ink })
+      drawTextRight(page, formatCurrencyPDF(item.precioUnitario), margin + 410, y, TYPE.body, helvetica, MONO.ink)
+      drawTextRight(page, formatCurrencyPDF(item.subtotal), width - margin, y, TYPE.body, helvetica, MONO.ink)
       y -= 18
       drawRule(page, margin, width - margin, y + 10)
     }
 
+    closeTableFrame(page, tableTop, y - 4, itemColXs)
     y -= 15
   }
 
@@ -4008,6 +4045,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     drawSectionLabel(page, helveticaBold, "HISTORIAL DE PAGOS", margin, y)
     y -= 4
     drawRule(page, margin, width - margin, y)
+    let pagosTableTop = y // frame's top edge — same convention as the items table's tableTop
     y -= 20
 
     // Header (mismo tratamiento que DETALLE DE ITEMS: sin fill, mayusculas)
@@ -4018,7 +4056,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
 
     // Same continuation treatment as the items table above — long payment
     // histories now flow onto extra pages instead of the old `break`
-    // truncation.
+    // truncation, each page's chunk framed independently.
     // Running balance for the SALDO column: starts at the document total
     // and subtracts each pago's monto in the same order the rows are
     // drawn (data.pagos' own order — this is a display running total, not
@@ -4026,7 +4064,9 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     let saldoCorrido = data.total
     for (const pago of data.pagos) {
       if (y - 18 < floorY) {
+        closeTableFrame(page, pagosTableTop, y - 4, pagosColXs)
         startContinuationPage(drawPagosTableHeader)
+        pagosTableTop = height - margin - 24
       }
 
       const pagoFecha = formatDatePDF(pago.fecha)
@@ -4044,6 +4084,8 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
       y -= 18
       drawRule(page, margin, width - margin, y + 10)
     }
+
+    closeTableFrame(page, pagosTableTop, y - 4, pagosColXs)
   }
 
   // === RECIBÍ CONFORME (orden-sourced only) ===

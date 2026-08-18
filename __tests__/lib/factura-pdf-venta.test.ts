@@ -573,3 +573,40 @@ describe("generateFacturaPDF — classic form bands", () => {
     expect(await extractPdfText(without)).not.toContain("CONDICIONES")
   })
 })
+
+describe("generateFacturaPDF — classic ruled tables", () => {
+  it("items table header reads CANT before DESCRIPCION and money content survives", async () => {
+    const buffer = await generateFacturaPDF({
+      ...baseData,
+      items: [{ descripcion: "acc p", cantidad: 1, precioUnitario: 3000, subtotal: 3000 }],
+      pagos: [{ monto: 3000, metodoPago: "EFECTIVO", fecha: new Date("2026-08-17") }],
+    } as any)
+    const positions = await extractPdfTextPositions(buffer)
+    const cant = positions.find((i) => i.text.includes("CANT"))
+    const desc = positions.find((i) => i.text.includes("DESCRIPCIÓN"))
+    expect(cant).toBeDefined()
+    expect(desc).toBeDefined()
+    expect(cant!.x).toBeLessThan(desc!.x)
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("SALDO")
+    expect(text).toContain("HISTORIAL DE PAGOS")
+  })
+
+  it("multipage: every page is A4 and continuation redraws title + table header", async () => {
+    const manyItems = Array.from({ length: 60 }, (_, i) => ({
+      descripcion: `Item ${i + 1}`,
+      cantidad: 1,
+      precioUnitario: 100,
+      subtotal: 100,
+    }))
+    const buffer = await generateFacturaPDF({ ...baseData, items: manyItems, subtotal: 6000, total: 6000, montoAbonado: 0 } as any)
+    const doc = await PDFDocument.load(buffer)
+    expect(doc.getPageCount()).toBeGreaterThan(1)
+    for (const p of doc.getPages()) {
+      const { height } = p.getSize()
+      expect(p.getMediaBox().y + height).toBe(842)
+    }
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("continuación")
+  })
+})
