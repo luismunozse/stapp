@@ -218,8 +218,9 @@ describe("GET /api/facturacion/[id]/pdf — datos fiscales y de cobro", () => {
       ingresos_brutos: "902-123456-7",
       inicio_actividades: "01/2020",
     })
+    const chain = createChainMock(facturaRow)
     mockSupabaseFrom({
-      facturas: createChainMock(facturaRow),
+      facturas: chain,
       items_factura: createChainMock([]),
     })
 
@@ -229,6 +230,14 @@ describe("GET /api/facturacion/[id]/pdf — datos fiscales y de cobro", () => {
     const pdfData = generateFacturaPDF.mock.calls[0][0]
     expect(pdfData.ingresosBrutosEmpresa).toBe("902-123456-7")
     expect(pdfData.inicioActividadesEmpresa).toBe("01/2020")
+
+    // Assert the tier-2 query actually requested the 297 columns — not just
+    // that pdfData ended up with the right values (the mock's data doesn't
+    // depend on what was selected, so this is the only thing that pins the
+    // column list down).
+    const orgSelectCall = chain.select.mock.calls[1][0] as string
+    expect(orgSelectCall).toContain("ingresos_brutos")
+    expect(orgSelectCall).toContain("inicio_actividades")
   })
 
   it("degrades gracefully when migration 297 hasn't run (42703 on ingresos_brutos), keeping the 295 fiscal fields intact", async () => {
@@ -261,6 +270,16 @@ describe("GET /api/facturacion/[id]/pdf — datos fiscales y de cobro", () => {
     expect(pdfData.condicionIvaEmpresa).toBe("Responsable Inscripto")
     expect(pdfData.ingresosBrutosEmpresa).toBeFalsy()
     expect(pdfData.inicioActividadesEmpresa).toBeFalsy()
+
+    // Pin down which columns were actually requested at each tier — without
+    // this, a bug that made the tier-1 retry select ORG_COLS (base, no
+    // fiscal) instead of ORG_COLS_FISCAL would still pass the assertions
+    // above, since this harness's mocked data doesn't depend on what was
+    // selected.
+    expect(chain.select.mock.calls[1][0]).toContain("ingresos_brutos") // tier 2 attempt
+    const tier1SelectCall = chain.select.mock.calls[2][0] as string
+    expect(tier1SelectCall).toContain("cuit")
+    expect(tier1SelectCall).not.toContain("ingresos_brutos")
   })
 
   it("degrades gracefully when migration 295 hasn't run either (42703 on both fiscal tiers), falling back to base org columns", async () => {
@@ -292,5 +311,16 @@ describe("GET /api/facturacion/[id]/pdf — datos fiscales y de cobro", () => {
     const pdfData = generateFacturaPDF.mock.calls[0][0]
     expect(pdfData.cuitEmpresa).toBeFalsy()
     expect(pdfData.ingresosBrutosEmpresa).toBeFalsy()
+
+    // Pin down all three tiers' column lists, same reasoning as the Pre-297
+    // test above — this is the only assertion that would catch tier 0
+    // mistakenly still requesting a fiscal column.
+    expect(chain.select.mock.calls[1][0]).toContain("ingresos_brutos") // tier 2 attempt
+    const tier1SelectCall = chain.select.mock.calls[2][0] as string
+    expect(tier1SelectCall).toContain("cuit")
+    expect(tier1SelectCall).not.toContain("ingresos_brutos")
+    const tier0SelectCall = chain.select.mock.calls[3][0] as string
+    expect(tier0SelectCall).not.toContain("cuit")
+    expect(tier0SelectCall).not.toContain("ingresos_brutos")
   })
 })
