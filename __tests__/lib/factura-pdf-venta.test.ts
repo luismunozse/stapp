@@ -511,6 +511,32 @@ describe("generateFacturaPDF — classic form header", () => {
     expect(text).toContain(longName.slice(0, 15))
   })
 
+  it("clamps left-zone lines so a long dirección doesn't run under the fiscal legend below the letter box", async () => {
+    // No telefonoEmpresa is set, so this dirección becomes left-zone line 2
+    // (baseline frameTop-28), whose glyph band vertically overlaps the
+    // legend's ("Documento no válido como comprobante fiscal", baseline
+    // frameTop-25) — the legend is centered on the full page width, so at
+    // TYPE.fine its left edge (~x225) sits further left than the letter
+    // box's own (~x280.5). This string fits the box-only budget (~220pt at
+    // TYPE.small) but not the legend-aware one (~165pt), so it only gets
+    // clamped once the fix accounts for the legend too.
+    const longDireccion = "Av. Corrientes 1234, Piso 8, Oficina B, CABA, Argentina"
+    const buffer = await generateFacturaPDF({ ...baseData, direccionEmpresa: longDireccion } as any)
+
+    const items = await extractPdfTextPositions(buffer)
+    const drawn = items.find((i) => i.text.startsWith(longDireccion.slice(0, 15)))
+    expect(drawn).toBeDefined()
+    // A draw call carrying the exact, untruncated string means it ran
+    // unclamped past the legend.
+    expect(drawn!.text).not.toBe(longDireccion)
+
+    const text = await extractPdfText(buffer)
+    expect(text).not.toContain(longDireccion)
+    // A truncated, ellipsized prefix must still render — the fix clamps,
+    // it doesn't drop, the line.
+    expect(text).toContain(longDireccion.slice(0, 15))
+  })
+
   it("shows ingresos brutos, inicio de actividades and IVA condition in caps when set", async () => {
     const buffer = await generateFacturaPDF({
       ...baseData,
@@ -555,6 +581,28 @@ describe("generateFacturaPDF — classic form bands", () => {
     } as any)
     const text = await extractPdfText(buffer)
     expect(text).toContain("ORDEN: ORD-0008 — Notebook Lenovo")
+  })
+
+  it("omits the dangling em dash when orden.dispositivo is empty, and falls back to #NNNN when codigoOrden is null", async () => {
+    const noDispositivo = await generateFacturaPDF({
+      ...baseData,
+      venta: undefined,
+      orden: { numeroOrden: 8, codigoOrden: "ORD-0008", dispositivo: "" },
+    } as any)
+    const textNoDispositivo = await extractPdfText(noDispositivo)
+    expect(textNoDispositivo).toContain("ORDEN: ORD-0008")
+    expect(textNoDispositivo).not.toContain("ORDEN: ORD-0008 —")
+
+    // codigoOrden==null fallback (existing ordenDisplay behavior, covered
+    // here too since it's a cheap addition): pads numeroOrden to 4 digits
+    // behind a leading "#".
+    const noCodigo = await generateFacturaPDF({
+      ...baseData,
+      venta: undefined,
+      orden: { numeroOrden: 8, codigoOrden: null, dispositivo: "Notebook Lenovo" },
+    } as any)
+    const textNoCodigo = await extractPdfText(noCodigo)
+    expect(textNoCodigo).toContain("ORDEN: #0008 — Notebook Lenovo")
   })
 
   it("CONDICIONES band renders above the items table when data exists, absent when empty", async () => {

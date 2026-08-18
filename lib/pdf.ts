@@ -3575,6 +3575,28 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   const letterBoxHeight = 30
   const letterBoxX = (width - letterBoxWidth) / 2
 
+  // Legend under the letter box ("Documento no válido...") — measured here
+  // too (it's still drawn later, after the box) because it's centered on
+  // the FULL page width and so, at TYPE.fine, its left edge (~x224) sits
+  // further left than the letter box's own (x280.5). A left-zone line
+  // whose glyph band vertically overlaps the legend's row must clamp to
+  // whichever edge is tighter — see clampLeftZoneText below.
+  const letterLegend = "Documento no válido como comprobante fiscal"
+  const letterLegendWidth = helvetica.widthOfTextAtSize(letterLegend, TYPE.fine)
+  const legendLeftX = (width - letterLegendWidth) / 2
+  const legendY = frameTop - 25
+  const legendSize = TYPE.fine
+  // Rough glyph-band overlap test: approximate ascent/descent as 0.75/0.25
+  // of font size (a safe upper bound for this typeface) and check whether
+  // the two bands overlap vertically.
+  const glyphBandsIntersect = (y1: number, size1: number, y2: number, size2: number): boolean => {
+    const top1 = y1 + size1 * 0.75
+    const bottom1 = y1 - size1 * 0.25
+    const top2 = y2 + size2 * 0.75
+    const bottom2 = y2 - size2 * 0.25
+    return top1 >= bottom2 && top2 >= bottom1
+  }
+
   // === HEADER: Empresa (left zone) ===
   // Classic form layout: content inset from the frame edge by innerPad,
   // pushed right further by logoWidth when a logo was drawn above. Company
@@ -3585,31 +3607,36 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   // Every left-zone line is measured and clamped (ellipsized) so it can
   // never run into the centered letter box: the budget is derived from
   // the box's fixed x position minus a small gap, so it shrinks with
-  // logoWidth automatically (~200-220pt when no logo is present).
+  // logoWidth automatically (~200-220pt when no logo is present). Lines
+  // whose glyph band also overlaps the legend's row (see above) clamp to
+  // the legend's left edge instead, when that's the tighter of the two.
   const leftX = frameLeft + innerPad + logoWidth
   const leftZoneMaxWidth = letterBoxX - 10 - leftX
-  const clampLeftZoneText = (text: string, font: typeof helvetica, size: number): string => {
-    if (font.widthOfTextAtSize(text, size) <= leftZoneMaxWidth) return text
+  const clampLeftZoneText = (text: string, font: typeof helvetica, size: number, y: number): string => {
+    const maxWidth = glyphBandsIntersect(y, size, legendY, legendSize)
+      ? Math.min(letterBoxX, legendLeftX) - 10 - leftX
+      : leftZoneMaxWidth
+    if (font.widthOfTextAtSize(text, size) <= maxWidth) return text
     let t = text
-    while (t.length > 0 && font.widthOfTextAtSize(t + "…", size) > leftZoneMaxWidth) t = t.slice(0, -1)
+    while (t.length > 0 && font.widthOfTextAtSize(t + "…", size) > maxWidth) t = t.slice(0, -1)
     return t + "…"
   }
   let leftY = frameTop - 16
-  page.drawText(clampLeftZoneText(empresaNombre, helveticaBold, TYPE.body), { x: leftX, y: leftY, size: TYPE.body, font: helveticaBold, color: MONO.ink })
+  page.drawText(clampLeftZoneText(empresaNombre, helveticaBold, TYPE.body, leftY), { x: leftX, y: leftY, size: TYPE.body, font: helveticaBold, color: MONO.ink })
   let leftLines = 1
   if (telefonoEmpresa) {
     leftY -= 12
-    page.drawText(clampLeftZoneText(`Tel: ${telefonoEmpresa}`, helvetica, TYPE.small), { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
+    page.drawText(clampLeftZoneText(`Tel: ${telefonoEmpresa}`, helvetica, TYPE.small, leftY), { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
     leftLines++
   }
   if (direccionEmpresa) {
     leftY -= 12
-    page.drawText(clampLeftZoneText(direccionEmpresa, helvetica, TYPE.small), { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
+    page.drawText(clampLeftZoneText(direccionEmpresa, helvetica, TYPE.small, leftY), { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
     leftLines++
   }
   if (domicilioFiscalEmpresa) {
     leftY -= 12
-    page.drawText(clampLeftZoneText(domicilioFiscalEmpresa, helvetica, TYPE.small), { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
+    page.drawText(clampLeftZoneText(domicilioFiscalEmpresa, helvetica, TYPE.small, leftY), { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
     leftLines++
   }
 
@@ -3635,12 +3662,10 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     font: helveticaBold,
     color: MONO.ink,
   })
-  const letterLegend = "Documento no válido como comprobante fiscal"
-  const letterLegendWidth = helvetica.widthOfTextAtSize(letterLegend, TYPE.fine)
   page.drawText(letterLegend, {
-    x: (width - letterLegendWidth) / 2,
-    y: frameTop - 25,
-    size: TYPE.fine,
+    x: legendLeftX,
+    y: legendY,
+    size: legendSize,
     font: helvetica,
     color: MONO.label,
   })
@@ -3755,7 +3780,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   if (data.venta) {
     page.drawText(`VENTA: V${String(data.venta.numeroVenta).padStart(4, "0")}`, { x: clientRightX, y: rightClientY, size: TYPE.body, font: helvetica, color: MONO.ink })
   } else {
-    page.drawText(`ORDEN: ${ordenDisplay} — ${dispositivo}`, { x: clientRightX, y: rightClientY, size: TYPE.body, font: helvetica, color: MONO.ink })
+    page.drawText(`ORDEN: ${ordenDisplay}${dispositivo ? ` — ${dispositivo}` : ""}`, { x: clientRightX, y: rightClientY, size: TYPE.body, font: helvetica, color: MONO.ink })
   }
   rightClientLines++
 
@@ -4042,8 +4067,18 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   if (data.pagos && data.pagos.length > 0) {
     // Keep the section label + column header together: a dangling header
     // with zero rows below it is worse than starting the whole section on
-    // a fresh page.
-    const pagosHeaderH = 4 + 20 + 8 + 17 + 18
+    // a fresh page. The reserved height for that first row must match
+    // whatever the row loop below will actually give it — 28pt instead of
+    // 18pt when the first pago itself carries a cuotas/recargo note —
+    // otherwise the section can pass this check and still open with an
+    // empty framed chunk (the first row immediately overflowing to a
+    // continuation page).
+    const firstPago = data.pagos[0]
+    const firstPagoHasNote = Boolean(
+      (firstPago.cuotas && firstPago.cuotas > 1) ||
+      (firstPago.recargoPorcentaje && firstPago.recargoPorcentaje > 0)
+    )
+    const pagosHeaderH = 4 + 20 + 8 + 17 + (firstPagoHasNote ? 28 : 18)
     if (y - pagosHeaderH < floorY) {
       startContinuationPage()
     }
@@ -4102,6 +4137,12 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
       drawTextRight(page, formatCurrencyPDF(pago.monto), colMontoR, y, TYPE.body, helveticaBold, MONO.ink)
       drawTextRight(page, formatCurrencyPDF(saldoCorrido), colSaldoR, y, TYPE.body, helveticaBold, MONO.ink)
       if (pagoNote) {
+        // Starts at colFechaX (same as the FECHA cell above it), so at
+        // TYPE.fine this note can run under the FECHA/MÉTODO divider at
+        // x=colMetodoX-10 (120) for a long cuotas+recargo combination.
+        // Accepted: reviewed visually, cosmetic-only, and every viable fix
+        // (a narrower note column, moving the note under REFERENCIA
+        // instead) was a bigger layout change than this finding warrants.
         page.drawText(pagoNote, { x: colFechaX, y: y - 11, size: TYPE.fine, font: helvetica, color: MONO.label })
       }
       y -= rowH
