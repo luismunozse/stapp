@@ -3695,40 +3695,108 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   drawRule(page, frameLeft, frameRight, headerBottomY)
   let y = headerBottomY - 30
 
-  // === DATOS DEL CLIENTE ===
-  // clientBoxHeight grows by 12 when DNI/CUIT is present (accounting-grade
-  // remito receptor identity) so the dotted rule below keeps the same ~5pt
-  // clearance below the last drawn line — stays at the original 60 when
-  // dni is absent (identical to before this task).
-  const clientBoxHeight = 60 + (clienteDni ? 12 : 0)
+  // Payment-terms gating, computed here (moved up from the totals-block
+  // math further down) because the CONDICIONES band itself now renders
+  // right after CLIENTE, inside the outer frame — well before DETALLE/
+  // ESTADO DE PAGO. Content and conditions are unchanged: drawn only when
+  // at least one of these three fields is present.
+  const condicionesRows =
+    (vencimientoText ? 1 : 0) +
+    (mediosPago ? 1 : 0) +
+    (cbuAlias ? 1 : 0)
+  const hasCondiciones = condicionesRows > 0
+
+  // === CLIENTE band (left half) + origin reference (right half) ===
+  // Classic form layout: one band split into two columns, closed by a
+  // single rule at bandBottomY — same leftLines/rightLines/Math.max scheme
+  // as the header zone above (see headerBottomY), so the band's height
+  // self-adjusts to however many optional client lines are drawn vs. the
+  // 1-2 line reference column on the right. CUIT/DNI moved here from the
+  // old left column (relabeled CUIT/DNI, was DNI/CUIT); the VENTA/ORDEN
+  // section label plus its old two-line reference were condensed into one
+  // uppercased-label line (see Task 5 of the remito-formato-clasico
+  // change).
   const clientBlockTop = y
-  drawSectionLabel(page, helveticaBold, "CLIENTE", margin + 10, clientBlockTop - 5)
-  page.drawText(clienteNombre, { x: margin + 10, y: clientBlockTop - 20, size: TYPE.body, font: helvetica, color: MONO.ink })
-  let clientY = clientBlockTop - 33
+  const clientLeftX = frameLeft + innerPad
+  const clientRightX = frameLeft + contentWidth / 2 + innerPad
+  drawSectionLabel(page, helveticaBold, "CLIENTE", clientLeftX, clientBlockTop - 5)
+  page.drawText(clienteNombre, { x: clientLeftX, y: clientBlockTop - 20, size: TYPE.body, font: helvetica, color: MONO.ink })
+  let leftClientY = clientBlockTop - 20
+  let leftClientLines = 1
+  if (clienteDireccion) {
+    leftClientY -= 12
+    page.drawText(clienteDireccion.substring(0, 40), { x: clientLeftX, y: leftClientY, size: TYPE.small, font: helvetica, color: MONO.label })
+    leftClientLines++
+  }
   if (clienteTelefono) {
-    page.drawText(`Tel: ${clienteTelefono}`, { x: margin + 10, y: clientY, size: TYPE.small, font: helvetica, color: MONO.label })
-    clientY -= 12
+    leftClientY -= 12
+    page.drawText(`Tel: ${clienteTelefono}`, { x: clientLeftX, y: leftClientY, size: TYPE.small, font: helvetica, color: MONO.label })
+    leftClientLines++
   }
   if (clienteEmail) {
-    page.drawText(clienteEmail, { x: margin + 10, y: clientY, size: TYPE.small, font: helvetica, color: MONO.label })
-    clientY -= 12
+    leftClientY -= 12
+    page.drawText(clienteEmail, { x: clientLeftX, y: leftClientY, size: TYPE.small, font: helvetica, color: MONO.label })
+    leftClientLines++
   }
+
+  // Right half: CUIT/DNI (when present), then the origin reference — one
+  // line each, starting level with the client name row.
+  let rightClientY = clientBlockTop - 20
+  let rightClientLines = 0
   if (clienteDni) {
-    page.drawText(`DNI/CUIT: ${clienteDni}`, { x: margin + 10, y: clientY, size: TYPE.small, font: helvetica, color: MONO.label })
+    page.drawText(`CUIT/DNI: ${clienteDni}`, { x: clientRightX, y: rightClientY, size: TYPE.small, font: helvetica, color: MONO.ink })
+    rightClientLines++
+    rightClientY -= 12
   }
-
-  // === DATOS DE LA ORDEN / VENTA ===
   if (data.venta) {
-    drawSectionLabel(page, helveticaBold, "VENTA", margin + contentWidth / 2 + 20, clientBlockTop - 5)
-    page.drawText(`Venta: V${String(data.venta.numeroVenta).padStart(4, "0")}`, { x: margin + contentWidth / 2 + 20, y: clientBlockTop - 20, size: TYPE.body, font: helvetica, color: MONO.ink })
+    page.drawText(`VENTA: V${String(data.venta.numeroVenta).padStart(4, "0")}`, { x: clientRightX, y: rightClientY, size: TYPE.body, font: helvetica, color: MONO.ink })
   } else {
-    drawSectionLabel(page, helveticaBold, "ORDEN DE SERVICIO", margin + contentWidth / 2 + 20, clientBlockTop - 5)
-    page.drawText(`Orden: ${ordenDisplay}`, { x: margin + contentWidth / 2 + 20, y: clientBlockTop - 20, size: TYPE.body, font: helvetica, color: MONO.ink })
-    page.drawText(`Dispositivo: ${dispositivo}`, { x: margin + contentWidth / 2 + 20, y: clientBlockTop - 33, size: TYPE.small, font: helvetica, color: MONO.label })
+    page.drawText(`ORDEN: ${ordenDisplay} — ${dispositivo}`, { x: clientRightX, y: rightClientY, size: TYPE.body, font: helvetica, color: MONO.ink })
+  }
+  rightClientLines++
+
+  // 20 = label-to-name offset, 12 per additional line, 8 = trailing
+  // clearance below whichever column drew more lines — same constant-gap
+  // scheme headerBottomY uses above.
+  const bandBottomY = clientBlockTop - 20 - 12 * (Math.max(leftClientLines, rightClientLines) - 1) - 8
+  drawRule(page, frameLeft, frameRight, bandBottomY)
+
+  // === CONDICIONES DE PAGO band ===
+  // Moved up from its old position after ESTADO DE PAGO (see Task 5 of the
+  // remito-formato-clasico change) to sit right under CLIENTE, inside the
+  // same outer frame. Content is byte-identical to before: Vencimiento /
+  // Medios de pago / CBU-Alias, each drawn only when present.
+  let frameBottom = bandBottomY
+  if (hasCondiciones) {
+    y = bandBottomY - 20
+    drawSectionLabel(page, helveticaBold, "Condiciones de pago", frameLeft + innerPad, y)
+    y -= 4
+    drawRule(page, frameLeft, frameRight, y)
+    y -= 20
+
+    if (vencimientoText) {
+      page.drawText(`Vencimiento: ${vencimientoText}`, { x: frameLeft + innerPad, y, size: TYPE.small, font: helvetica, color: MONO.ink })
+      y -= 12
+    }
+    if (mediosPago) {
+      page.drawText(`Medios de pago: ${mediosPago}`, { x: frameLeft + innerPad, y, size: TYPE.small, font: helvetica, color: MONO.ink })
+      y -= 12
+    }
+    if (cbuAlias) {
+      page.drawText(`CBU/Alias: ${cbuAlias}`, { x: frameLeft + innerPad, y, size: TYPE.small, font: helvetica, color: MONO.ink })
+      y -= 12
+    }
+    y -= 10
+    frameBottom = y
   }
 
-  drawRule(page, margin, width - margin, clientBlockTop - clientBoxHeight + 10, { dotted: true })
-  y -= clientBoxHeight + 15
+  // === Close the outer frame ===
+  // Wraps the header + CLIENTE + CONDICIONES bands in a single bordered
+  // box, classic-form style. The items/pagos tables get their own framed
+  // boxes further down (Task 6), so this rectangle only spans down to
+  // frameBottom, not the rest of the page.
+  page.drawRectangle({ x: frameLeft, y: frameBottom, width: contentWidth, height: frameTop - frameBottom, borderColor: MONO.ink, borderWidth: RULE_WIDTH })
+  y = frameBottom - 24
 
   // === TABLA DE ITEMS ===
   // Old facturas may have no items_factura rows (pre-dates this table, or the
@@ -3824,30 +3892,20 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   // === DETALLE DE MONTOS ===
   // Kept together with ESTADO DE PAGO below: if the combined block doesn't
   // fit above the footer's clearance line, it moves to a continuation page
-  // as a unit rather than splitting across the page boundary.
+  // as a unit rather than splitting across the page boundary. CONDICIONES
+  // DE PAGO no longer lives in this tail block (it moved up into its own
+  // band right after CLIENTE, inside the outer frame — see Task 5 of the
+  // remito-formato-clasico change), so it no longer contributes to this
+  // math.
   const detalleOptionalRows =
     (data.iva > 0 ? 1 : 0) +
     (data.descuento && data.descuento > 0 ? 1 : 0) +
     (data.redondeo && data.redondeo !== 0 ? 1 : 0)
-  // CONDICIONES DE PAGO joins this kept-together tail block (drawn right
-  // after ESTADO DE PAGO, below) so it never gets split from
-  // DETALLE/SALDO/ESTADO DE PAGO across a page break.
-  const condicionesRows =
-    (vencimientoText ? 1 : 0) +
-    (mediosPago ? 1 : 0) +
-    (cbuAlias ? 1 : 0)
-  const hasCondiciones = condicionesRows > 0
-  // 24 = section label+rule (4 + 20), same cost as the DETALLE/ESTADO DE
-  // PAGO headers below; 12 per present row (Vencimiento/Medios de
-  // pago/CBU-Alias); 10 = trailing gap before HISTORIAL DE PAGOS. Zero when
-  // no payment-terms field is present.
-  const condicionesBlockH = hasCondiciones ? 24 + 12 * condicionesRows + 10 : 0
   // 177 = DETALLE label+rule (24) + Subtotal row+rule (18) + pre-total rule
   // (10) + TOTAL row (18) + Pagado a cuenta row (18) + SALDO bar (35) +
   // ESTADO DE PAGO label+rule (24) + badge/montos row (30), plus 18 for
-  // each optional Subtotal-block row (IVA / Descuento / Redondeo), plus
-  // condicionesBlockH for the optional CONDICIONES DE PAGO section.
-  const totalsBlockH = 177 + 18 * detalleOptionalRows + condicionesBlockH // DETALLE + TOTAL + PAGADO A CUENTA + SALDO + ESTADO DE PAGO + CONDICIONES DE PAGO
+  // each optional Subtotal-block row (IVA / Descuento / Redondeo).
+  const totalsBlockH = 177 + 18 * detalleOptionalRows // DETALLE + TOTAL + PAGADO A CUENTA + SALDO + ESTADO DE PAGO
   if (y - totalsBlockH < floorY) {
     startContinuationPage()
   }
@@ -3936,32 +3994,6 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   }
 
   y -= 30
-
-  // === CONDICIONES DE PAGO ===
-  // Accounting-grade remito payment terms — drawn only when at least one
-  // field is present. Its height was already reserved in totalsBlockH
-  // above (condicionesBlockH), so it's kept together with
-  // DETALLE/SALDO/ESTADO DE PAGO across the continuation-page check.
-  if (hasCondiciones) {
-    drawSectionLabel(page, helveticaBold, "Condiciones de pago", margin, y)
-    y -= 4
-    drawRule(page, margin, width - margin, y)
-    y -= 20
-
-    if (vencimientoText) {
-      page.drawText(`Vencimiento: ${vencimientoText}`, { x: margin + 10, y, size: TYPE.small, font: helvetica, color: MONO.ink })
-      y -= 12
-    }
-    if (mediosPago) {
-      page.drawText(`Medios de pago: ${mediosPago}`, { x: margin + 10, y, size: TYPE.small, font: helvetica, color: MONO.ink })
-      y -= 12
-    }
-    if (cbuAlias) {
-      page.drawText(`CBU/Alias: ${cbuAlias}`, { x: margin + 10, y, size: TYPE.small, font: helvetica, color: MONO.ink })
-      y -= 12
-    }
-    y -= 10
-  }
 
   // === HISTORIAL DE PAGOS ===
   if (data.pagos && data.pagos.length > 0) {

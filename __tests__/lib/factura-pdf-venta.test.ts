@@ -357,7 +357,10 @@ describe("generateFacturaPDF — fiscal identity & payment conditions", () => {
     // condición IVA now renders in the header's right zone, uppercased (see
     // "classic form header" describe block below) — content is still
     // present, just no longer in its original mixed-case form.
-    for (const s of ["CUIT: 30-71234567-8", "RESPONSABLE INSCRIPTO", "DNI/CUIT: 28.456.789",
+    // CUIT/DNI now renders in the CLIENTE band's right half (label order
+    // flipped from the old "DNI/CUIT" — see "classic form bands" describe
+    // block below) — content is still present, just relabeled.
+    for (const s of ["CUIT: 30-71234567-8", "RESPONSABLE INSCRIPTO", "CUIT/DNI: 28.456.789",
                      "CONDICIONES DE PAGO", "Vencimiento", "stapp.taller.mp"]) expect(text).toContain(s)
   })
 
@@ -439,20 +442,24 @@ describe("generateFacturaPDF — running balance & recibí conforme", () => {
   })
 })
 
-describe("generateFacturaPDF — classic form header", () => {
-  const baseData = {
-    numeroFactura: "0001-00000008",
-    fecha: new Date("2026-08-17"),
-    estadoPago: "PAGADO",
-    cliente: { nombre: "Consumidor Final" },
-    venta: { numeroVenta: 22 },
-    subtotal: 3000,
-    iva: 0,
-    total: 3000,
-    montoAbonado: 3000,
-    pagos: [],
-  }
+// Shared fixture for the classic-form describe blocks below (header bands
+// and CLIENTE/CONDICIONES bands) — every optional field (cliente.dni,
+// vencimiento, mediosPago, cbuAlias, items) is absent by default so
+// baseData alone never draws any of the conditional band content.
+const baseData = {
+  numeroFactura: "0001-00000008",
+  fecha: new Date("2026-08-17"),
+  estadoPago: "PAGADO",
+  cliente: { nombre: "Consumidor Final" },
+  venta: { numeroVenta: 22 },
+  subtotal: 3000,
+  iva: 0,
+  total: 3000,
+  montoAbonado: 3000,
+  pagos: [],
+}
 
+describe("generateFacturaPDF — classic form header", () => {
   it("renders the letter box: X legend present, fiscal letter R / cod 91 never rendered", async () => {
     const buffer = await generateFacturaPDF(baseData as any)
     const text = await extractPdfText(buffer)
@@ -525,5 +532,44 @@ describe("generateFacturaPDF — classic form header", () => {
     expect(text).not.toContain("Ingresos brutos:")
     expect(text).not.toContain("Inicio actividades:")
     expect(text).not.toContain("CUIT:")
+  })
+})
+
+describe("generateFacturaPDF — classic form bands", () => {
+  it("CLIENTE band shows CUIT/DNI and the VENTA reference on the right half", async () => {
+    const buffer = await generateFacturaPDF({
+      ...baseData,
+      cliente: { nombre: "Juan Pérez", dni: "30123456" },
+      venta: { numeroVenta: 22 },
+    } as any)
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("CUIT/DNI: 30123456")
+    expect(text).toContain("VENTA: V0022")
+  })
+
+  it("CLIENTE band shows the ORDEN reference with código and dispositivo", async () => {
+    const buffer = await generateFacturaPDF({
+      ...baseData,
+      venta: undefined,
+      orden: { numeroOrden: 8, codigoOrden: "ORD-0008", dispositivo: "Notebook Lenovo" },
+    } as any)
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("ORDEN: ORD-0008 — Notebook Lenovo")
+  })
+
+  it("CONDICIONES band renders above the items table when data exists, absent when empty", async () => {
+    const withCond = await generateFacturaPDF({
+      ...baseData,
+      items: [{ descripcion: "acc p", cantidad: 1, precioUnitario: 3000, subtotal: 3000 }],
+      cbuAlias: "astecnoar",
+    } as any)
+    const positions = await extractPdfTextPositions(withCond)
+    const cond = positions.find((i) => i.text.includes("CONDICIONES"))
+    const detalle = positions.find((i) => i.text.includes("DETALLE DE ITEMS"))
+    expect(cond).toBeDefined()
+    expect(detalle).toBeDefined()
+    expect(cond!.y).toBeGreaterThan(detalle!.y) // CONDICIONES sits above the table
+    const without = await generateFacturaPDF(baseData as any)
+    expect(await extractPdfText(without)).not.toContain("CONDICIONES")
   })
 })
