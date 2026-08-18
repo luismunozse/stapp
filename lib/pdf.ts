@@ -3720,7 +3720,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   const clientLeftX = frameLeft + innerPad
   const clientRightX = frameLeft + contentWidth / 2 + innerPad
   drawSectionLabel(page, helveticaBold, "CLIENTE", clientLeftX, clientBlockTop - 5)
-  page.drawText(clienteNombre, { x: clientLeftX, y: clientBlockTop - 20, size: TYPE.body, font: helvetica, color: MONO.ink })
+  page.drawText(clienteNombre, { x: clientLeftX, y: clientBlockTop - 20, size: TYPE.body, font: helveticaBold, color: MONO.ink })
   let leftClientY = clientBlockTop - 20
   let leftClientLines = 1
   if (clienteDireccion) {
@@ -3744,7 +3744,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   let rightClientY = clientBlockTop - 20
   let rightClientLines = 0
   if (clienteDni) {
-    page.drawText(`CUIT/DNI: ${clienteDni}`, { x: clientRightX, y: rightClientY, size: TYPE.small, font: helvetica, color: MONO.ink })
+    page.drawText(`CUIT/DNI: ${clienteDni}`, { x: clientRightX, y: rightClientY, size: TYPE.small, font: helvetica, color: MONO.label })
     rightClientLines++
     rightClientY -= 12
   }
