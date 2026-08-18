@@ -3379,6 +3379,10 @@ interface FacturaPago {
   referencia?: string | null
   cuotas?: number | null
   recargoPorcentaje?: number | null
+  // Accepted for parity with the caller's row shape but deliberately never
+  // drawn — see the HISTORIAL DE PAGOS loop in generateFacturaPDF below,
+  // which explains why (same call components/facturacion/pagos-historial.tsx
+  // makes: ambiguous between the venta and cobro paths).
   montoOriginal?: number | null
 }
 
@@ -3477,6 +3481,8 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   const cuitEmpresa = safe(data.cuitEmpresa)
   const condicionIvaEmpresa = safe(data.condicionIvaEmpresa)
   const domicilioFiscalEmpresa = safe(data.domicilioFiscalEmpresa)
+  const ingresosBrutosEmpresa = safe(data.ingresosBrutosEmpresa)
+  const inicioActividadesEmpresa = safe(data.inicioActividadesEmpresa)
   const numeroFactura = safe(data.numeroFactura)
   const fecha = formatDatePDF(data.fecha)
   const clienteNombre = safe(data.cliente?.nombre) || "Consumidor Final"
@@ -3507,7 +3513,18 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   const margin = 40
   const contentWidth = width - (margin * 2)
 
-  let y = height - margin - 20
+  // Classic-form frame geometry. The outer rectangle itself is drawn at the
+  // end of the CONDICIONES DE PAGO band (see Task 5 of the remito-formato-
+  // clasico change) — recorded here so the header, the CLIENTE/CONDICIONES
+  // bands, and the framed items table (Task 6) all share one coordinate
+  // system instead of re-deriving it.
+  const frameTop = height - margin
+  const frameLeft = margin
+  const frameRight = width - margin
+  const innerPad = 10
+  const drawVLine = (pg: typeof page, x: number, y1: number, y2: number) => {
+    pg.drawLine({ start: { x, y: y1 }, end: { x, y: y2 }, thickness: RULE_WIDTH, color: MONO.ink })
+  }
 
   // === LOGO ===
   let logoWidth = 0
@@ -3550,122 +3567,265 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     }
   }
 
-  // === HEADER: Empresa ===
-  page.drawText(empresaNombre, { x: margin + logoWidth, y, size: 16, font: helveticaBold, color: MONO.ink })
-  y -= 16
-  if (telefonoEmpresa) {
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
-  }
-  if (direccionEmpresa) {
-    page.drawText(direccionEmpresa, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
-  }
-  // Fiscal emitter extras (CUIT / condición IVA / domicilio fiscal) — one
-  // 8pt line each, only when present. Tracked so the separator below can
-  // extend downward and avoid colliding with these lines.
-  let emisorExtraLines = 0
-  if (cuitEmpresa) {
-    page.drawText(`CUIT: ${cuitEmpresa}`, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
-    emisorExtraLines++
-  }
-  if (condicionIvaEmpresa) {
-    page.drawText(condicionIvaEmpresa, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
-    emisorExtraLines++
-  }
-  if (domicilioFiscalEmpresa) {
-    page.drawText(domicilioFiscalEmpresa, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
-    emisorExtraLines++
+  // === LETTER BOX geometry (classic Argentine comprobante "letra" box) ===
+  // Declared before the left zone so its x position can bound how wide
+  // left-zone text is allowed to run (see clampLeftZoneText below) — the
+  // box itself is drawn further down, after the left zone.
+  const letterBoxWidth = 34
+  const letterBoxHeight = 30
+  const letterBoxX = (width - letterBoxWidth) / 2
+
+  // Legend under the letter box ("Documento no válido...") — measured here
+  // too (it's still drawn later, after the box) because it's centered on
+  // the FULL page width and so, at TYPE.fine, its left edge (~x224) sits
+  // further left than the letter box's own (x280.5). A left-zone line
+  // whose glyph band vertically overlaps the legend's row must clamp to
+  // whichever edge is tighter — see clampLeftZoneText below.
+  const letterLegend = "Documento no válido como comprobante fiscal"
+  const letterLegendWidth = helvetica.widthOfTextAtSize(letterLegend, TYPE.fine)
+  const legendLeftX = (width - letterLegendWidth) / 2
+  const legendY = frameTop - 25
+  const legendSize = TYPE.fine
+  // Rough glyph-band overlap test: approximate ascent/descent as 0.75/0.25
+  // of font size (a safe upper bound for this typeface) and check whether
+  // the two bands overlap vertically.
+  const glyphBandsIntersect = (y1: number, size1: number, y2: number, size2: number): boolean => {
+    const top1 = y1 + size1 * 0.75
+    const bottom1 = y1 - size1 * 0.25
+    const top2 = y2 + size2 * 0.75
+    const bottom2 = y2 - size2 * 0.25
+    return top1 >= bottom2 && top2 >= bottom1
   }
 
-  // Bloque REMITO (lado derecho, alineado a la derecha)
-  const remitoLabel = "REMITO"
-  const remitoLabelWidth = helveticaBold.widthOfTextAtSize(remitoLabel, TYPE.docTitle)
-  page.drawText(remitoLabel, {
-    x: width - margin - remitoLabelWidth,
-    y: height - margin - 12,
-    size: TYPE.docTitle,
+  // === HEADER: Empresa (left zone) ===
+  // Classic form layout: content inset from the frame edge by innerPad,
+  // pushed right further by logoWidth when a logo was drawn above. Company
+  // name uses TYPE.body (not a bespoke 16pt) to match the compact,
+  // accounting-form scale of the rest of this block. CUIT and condición
+  // IVA moved OUT of this zone — see the right zone below, next to the
+  // document number, where the rest of the fiscal identity now lives.
+  // Every left-zone line is measured and clamped (ellipsized) so it can
+  // never run into the centered letter box: the budget is derived from
+  // the box's fixed x position minus a small gap, so it shrinks with
+  // logoWidth automatically (~200-220pt when no logo is present). Lines
+  // whose glyph band also overlaps the legend's row (see above) clamp to
+  // the legend's left edge instead, when that's the tighter of the two.
+  const leftX = frameLeft + innerPad + logoWidth
+  const leftZoneMaxWidth = letterBoxX - 10 - leftX
+  const clampLeftZoneText = (text: string, font: typeof helvetica, size: number, y: number): string => {
+    const maxWidth = glyphBandsIntersect(y, size, legendY, legendSize)
+      ? Math.min(letterBoxX, legendLeftX) - 10 - leftX
+      : leftZoneMaxWidth
+    if (font.widthOfTextAtSize(text, size) <= maxWidth) return text
+    let t = text
+    while (t.length > 0 && font.widthOfTextAtSize(t + "…", size) > maxWidth) t = t.slice(0, -1)
+    return t + "…"
+  }
+  let leftY = frameTop - 16
+  page.drawText(clampLeftZoneText(empresaNombre, helveticaBold, TYPE.body, leftY), { x: leftX, y: leftY, size: TYPE.body, font: helveticaBold, color: MONO.ink })
+  let leftLines = 1
+  if (telefonoEmpresa) {
+    leftY -= 12
+    page.drawText(clampLeftZoneText(`Tel: ${telefonoEmpresa}`, helvetica, TYPE.small, leftY), { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
+    leftLines++
+  }
+  if (direccionEmpresa) {
+    leftY -= 12
+    page.drawText(clampLeftZoneText(direccionEmpresa, helvetica, TYPE.small, leftY), { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
+    leftLines++
+  }
+  if (domicilioFiscalEmpresa) {
+    leftY -= 12
+    page.drawText(clampLeftZoneText(domicilioFiscalEmpresa, helvetica, TYPE.small, leftY), { x: leftX, y: leftY, size: TYPE.small, font: helvetica, color: MONO.label })
+    leftLines++
+  }
+
+  // === LETTER BOX (classic Argentine comprobante "letra" box) ===
+  // This remito is never a fiscal document: it always shows the fixed
+  // letter X with its own legend below, never a real AFIP letter (A/B/C/R)
+  // or a "Cód. 91" comprobante-type code.
+  page.drawRectangle({
+    x: letterBoxX,
+    y: frameTop - 15,
+    width: letterBoxWidth,
+    height: letterBoxHeight,
+    borderColor: MONO.ink,
+    borderWidth: RULE_WIDTH,
+  })
+  const letterSize = 20
+  const letterText = "X"
+  const letterWidth = helveticaBold.widthOfTextAtSize(letterText, letterSize)
+  page.drawText(letterText, {
+    x: letterBoxX + (letterBoxWidth - letterWidth) / 2,
+    y: frameTop - 15 + (letterBoxHeight - letterSize) / 2,
+    size: letterSize,
     font: helveticaBold,
     color: MONO.ink,
   })
-  const numeroWidth = helveticaBold.widthOfTextAtSize(numeroFactura, TYPE.docNumber)
-  page.drawText(numeroFactura, {
-    x: width - margin - numeroWidth,
-    y: height - margin - 34,
-    size: TYPE.docNumber,
-    font: helveticaBold,
-    color: MONO.ink,
-  })
-  const emisionLabel = `Emisión: ${fecha}`
-  const emisionLabelWidth = helvetica.widthOfTextAtSize(emisionLabel, TYPE.small)
-  page.drawText(emisionLabel, {
-    x: width - margin - emisionLabelWidth,
-    y: height - margin - 50,
-    size: TYPE.small,
+  page.drawText(letterLegend, {
+    x: legendLeftX,
+    y: legendY,
+    size: legendSize,
     font: helvetica,
     color: MONO.label,
   })
+
+  // === HEADER: REMITO (right zone) ===
+  // Right-aligned to frameRight - innerPad, mirroring the left zone's
+  // inset. CUIT / Ingresos brutos / Inicio actividades / condición IVA now
+  // live here instead of under the company name — each is one small line,
+  // drawn ONLY when present. Condición IVA renders uppercased as its own
+  // line with no invented prefix: the stored value is uppercased verbatim
+  // (e.g. "Monotributo" -> "MONOTRIBUTO"; "IVA Responsable Inscripto" ->
+  // "IVA RESPONSABLE INSCRIPTO" — this code never adds an "IVA" prefix).
+  const rightX = frameRight - innerPad
+  const drawHeaderRight = (text: string, yPos: number, size: number, font: typeof helvetica, color: RGB) => {
+    const w = font.widthOfTextAtSize(text, size)
+    page.drawText(text, { x: rightX - w, y: yPos, size, font, color })
+  }
+  drawHeaderRight("REMITO", frameTop - 12, TYPE.docTitle, helveticaBold, MONO.ink)
+  drawHeaderRight(numeroFactura, frameTop - 34, TYPE.docNumber, helveticaBold, MONO.ink)
+  drawHeaderRight(`Emisión: ${fecha}`, frameTop - 50, TYPE.small, helvetica, MONO.label)
+
+  let rightLines = 3 // REMITO + numeroFactura + Emisión, always drawn above
+  let rightY = frameTop - 50
   // Accounting-grade remito: the date the goods/service actually moved can
   // differ from the emission date above — shown only when supplied.
   if (data.fechaOperacion) {
-    const operacionLabel = `Operación: ${formatDatePDF(data.fechaOperacion)}`
-    const operacionLabelWidth = helvetica.widthOfTextAtSize(operacionLabel, TYPE.small)
-    page.drawText(operacionLabel, {
-      x: width - margin - operacionLabelWidth,
-      y: height - margin - 62,
-      size: TYPE.small,
-      font: helvetica,
-      color: MONO.label,
-    })
+    rightY = frameTop - 62
+    drawHeaderRight(`Operación: ${formatDatePDF(data.fechaOperacion)}`, rightY, TYPE.small, helvetica, MONO.label)
+    rightLines++
+  }
+  if (cuitEmpresa) {
+    rightY -= 12
+    drawHeaderRight(`CUIT: ${cuitEmpresa}`, rightY, TYPE.small, helvetica, MONO.label)
+    rightLines++
+  }
+  if (ingresosBrutosEmpresa) {
+    rightY -= 12
+    drawHeaderRight(`Ingresos brutos: ${ingresosBrutosEmpresa}`, rightY, TYPE.small, helvetica, MONO.label)
+    rightLines++
+  }
+  if (inicioActividadesEmpresa) {
+    rightY -= 12
+    drawHeaderRight(`Inicio actividades: ${inicioActividadesEmpresa}`, rightY, TYPE.small, helvetica, MONO.label)
+    rightLines++
+  }
+  if (condicionIvaEmpresa) {
+    rightY -= 12
+    drawHeaderRight(condicionIvaEmpresa.toUpperCase(), rightY, TYPE.small, helvetica, MONO.label)
+    rightLines++
   }
 
-  // Base offset (90) matches the original 2-line company block (name + one
-  // of tel/direccion) with ~40pt clearance above this rule; each emisor
-  // extra line pushes the rule down another 12 so that clearance is
-  // preserved regardless of how many fiscal lines were drawn above.
-  y = height - margin - (90 + 12 * emisorExtraLines)
+  // headerBottomY clears both zones regardless of how many optional lines
+  // each drew: a symmetric 12pt-per-line step from the left zone's fixed
+  // top (frameTop - 16), max()'d so whichever column grew taller wins.
+  const headerBottomY = frameTop - 16 - 12 * Math.max(leftLines, rightLines) - 8
+  drawRule(page, frameLeft, frameRight, headerBottomY)
+  let y = headerBottomY - 30
 
-  // Linea separadora (reemplaza el titulo centrado "FACTURA")
-  drawRule(page, margin, width - margin, y)
-  y -= 30
+  // Payment-terms gating, computed here (moved up from the totals-block
+  // math further down) because the CONDICIONES band itself now renders
+  // right after CLIENTE, inside the outer frame — well before DETALLE/
+  // ESTADO DE PAGO. Content and conditions are unchanged: drawn only when
+  // at least one of these three fields is present.
+  const condicionesRows =
+    (vencimientoText ? 1 : 0) +
+    (mediosPago ? 1 : 0) +
+    (cbuAlias ? 1 : 0)
+  const hasCondiciones = condicionesRows > 0
 
-  // === DATOS DEL CLIENTE ===
-  // clientBoxHeight grows by 12 when DNI/CUIT is present (accounting-grade
-  // remito receptor identity) so the dotted rule below keeps the same ~5pt
-  // clearance below the last drawn line — stays at the original 60 when
-  // dni is absent (identical to before this task).
-  const clientBoxHeight = 60 + (clienteDni ? 12 : 0)
+  // === CLIENTE band (left half) + origin reference (right half) ===
+  // Classic form layout: one band split into two columns, closed by a
+  // single rule at bandBottomY — same leftLines/rightLines/Math.max scheme
+  // as the header zone above (see headerBottomY), so the band's height
+  // self-adjusts to however many optional client lines are drawn vs. the
+  // 1-2 line reference column on the right. CUIT/DNI moved here from the
+  // old left column (relabeled CUIT/DNI, was DNI/CUIT); the VENTA/ORDEN
+  // section label plus its old two-line reference were condensed into one
+  // uppercased-label line (see Task 5 of the remito-formato-clasico
+  // change).
   const clientBlockTop = y
-  drawSectionLabel(page, helveticaBold, "CLIENTE", margin + 10, clientBlockTop - 5)
-  page.drawText(clienteNombre, { x: margin + 10, y: clientBlockTop - 20, size: TYPE.body, font: helvetica, color: MONO.ink })
-  let clientY = clientBlockTop - 33
+  const clientLeftX = frameLeft + innerPad
+  const clientRightX = frameLeft + contentWidth / 2 + innerPad
+  drawSectionLabel(page, helveticaBold, "CLIENTE", clientLeftX, clientBlockTop - 5)
+  page.drawText(clienteNombre, { x: clientLeftX, y: clientBlockTop - 20, size: TYPE.body, font: helveticaBold, color: MONO.ink })
+  let leftClientY = clientBlockTop - 20
+  let leftClientLines = 1
+  if (clienteDireccion) {
+    leftClientY -= 12
+    page.drawText(clienteDireccion.substring(0, 40), { x: clientLeftX, y: leftClientY, size: TYPE.small, font: helvetica, color: MONO.label })
+    leftClientLines++
+  }
   if (clienteTelefono) {
-    page.drawText(`Tel: ${clienteTelefono}`, { x: margin + 10, y: clientY, size: TYPE.small, font: helvetica, color: MONO.label })
-    clientY -= 12
+    leftClientY -= 12
+    page.drawText(`Tel: ${clienteTelefono}`, { x: clientLeftX, y: leftClientY, size: TYPE.small, font: helvetica, color: MONO.label })
+    leftClientLines++
   }
   if (clienteEmail) {
-    page.drawText(clienteEmail, { x: margin + 10, y: clientY, size: TYPE.small, font: helvetica, color: MONO.label })
-    clientY -= 12
+    leftClientY -= 12
+    page.drawText(clienteEmail, { x: clientLeftX, y: leftClientY, size: TYPE.small, font: helvetica, color: MONO.label })
+    leftClientLines++
   }
+
+  // Right half: CUIT/DNI (when present), then the origin reference — one
+  // line each, starting level with the client name row.
+  let rightClientY = clientBlockTop - 20
+  let rightClientLines = 0
   if (clienteDni) {
-    page.drawText(`DNI/CUIT: ${clienteDni}`, { x: margin + 10, y: clientY, size: TYPE.small, font: helvetica, color: MONO.label })
+    page.drawText(`CUIT/DNI: ${clienteDni}`, { x: clientRightX, y: rightClientY, size: TYPE.small, font: helvetica, color: MONO.label })
+    rightClientLines++
+    rightClientY -= 12
   }
-
-  // === DATOS DE LA ORDEN / VENTA ===
   if (data.venta) {
-    drawSectionLabel(page, helveticaBold, "VENTA", margin + contentWidth / 2 + 20, clientBlockTop - 5)
-    page.drawText(`Venta: V${String(data.venta.numeroVenta).padStart(4, "0")}`, { x: margin + contentWidth / 2 + 20, y: clientBlockTop - 20, size: TYPE.body, font: helvetica, color: MONO.ink })
+    page.drawText(`VENTA: V${String(data.venta.numeroVenta).padStart(4, "0")}`, { x: clientRightX, y: rightClientY, size: TYPE.body, font: helvetica, color: MONO.ink })
   } else {
-    drawSectionLabel(page, helveticaBold, "ORDEN DE SERVICIO", margin + contentWidth / 2 + 20, clientBlockTop - 5)
-    page.drawText(`Orden: ${ordenDisplay}`, { x: margin + contentWidth / 2 + 20, y: clientBlockTop - 20, size: TYPE.body, font: helvetica, color: MONO.ink })
-    page.drawText(`Dispositivo: ${dispositivo}`, { x: margin + contentWidth / 2 + 20, y: clientBlockTop - 33, size: TYPE.small, font: helvetica, color: MONO.label })
+    page.drawText(`ORDEN: ${ordenDisplay}${dispositivo ? ` — ${dispositivo}` : ""}`, { x: clientRightX, y: rightClientY, size: TYPE.body, font: helvetica, color: MONO.ink })
+  }
+  rightClientLines++
+
+  // 20 = label-to-name offset, 12 per additional line, 8 = trailing
+  // clearance below whichever column drew more lines — same constant-gap
+  // scheme headerBottomY uses above.
+  const bandBottomY = clientBlockTop - 20 - 12 * (Math.max(leftClientLines, rightClientLines) - 1) - 8
+  drawRule(page, frameLeft, frameRight, bandBottomY)
+
+  // === CONDICIONES DE PAGO band ===
+  // Moved up from its old position after ESTADO DE PAGO (see Task 5 of the
+  // remito-formato-clasico change) to sit right under CLIENTE, inside the
+  // same outer frame. Content is byte-identical to before: Vencimiento /
+  // Medios de pago / CBU-Alias, each drawn only when present.
+  let frameBottom = bandBottomY
+  if (hasCondiciones) {
+    y = bandBottomY - 20
+    drawSectionLabel(page, helveticaBold, "Condiciones de pago", frameLeft + innerPad, y)
+    y -= 4
+    drawRule(page, frameLeft, frameRight, y)
+    y -= 20
+
+    if (vencimientoText) {
+      page.drawText(`Vencimiento: ${vencimientoText}`, { x: frameLeft + innerPad, y, size: TYPE.small, font: helvetica, color: MONO.ink })
+      y -= 12
+    }
+    if (mediosPago) {
+      page.drawText(`Medios de pago: ${mediosPago}`, { x: frameLeft + innerPad, y, size: TYPE.small, font: helvetica, color: MONO.ink })
+      y -= 12
+    }
+    if (cbuAlias) {
+      page.drawText(`CBU/Alias: ${cbuAlias}`, { x: frameLeft + innerPad, y, size: TYPE.small, font: helvetica, color: MONO.ink })
+      y -= 12
+    }
+    y -= 10
+    frameBottom = y
   }
 
-  drawRule(page, margin, width - margin, clientBlockTop - clientBoxHeight + 10, { dotted: true })
-  y -= clientBoxHeight + 15
+  // === Close the outer frame ===
+  // Wraps the header + CLIENTE + CONDICIONES bands in a single bordered
+  // box, classic-form style. The items/pagos tables get their own framed
+  // boxes further down (Task 6), so this rectangle only spans down to
+  // frameBottom, not the rest of the page.
+  page.drawRectangle({ x: frameLeft, y: frameBottom, width: contentWidth, height: frameTop - frameBottom, borderColor: MONO.ink, borderWidth: RULE_WIDTH })
+  y = frameBottom - 24
 
   // === TABLA DE ITEMS ===
   // Old facturas may have no items_factura rows (pre-dates this table, or the
@@ -3673,21 +3833,32 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   // aggregate-only layout below, exactly as before this section existed.
   const floorY = margin + 80 // clearance kept above the fixed-position footer
 
-  // Column header rows, factored out because they get re-drawn at the top
-  // of every continuation page for their respective table.
-  const drawItemsTableHeader = (pg: typeof page, yPos: number) => {
-    pg.drawText("DESCRIPCIÓN", { x: margin + 10, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    pg.drawText("CANT.", { x: margin + 280, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    pg.drawText("PRECIO", { x: margin + 330, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    pg.drawText("SUBTOTAL", { x: margin + 410, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
-  }
-  // Right-aligns text to xRight by measuring its width first — needed for
-  // the HISTORIAL DE PAGOS money columns below, which sit side by side
-  // (MONTO then the running-balance SALDO) and must never collide
-  // regardless of how many digits either amount has.
+  // Right-aligns text to xRight by measuring its width first — needed below
+  // for the classic form's money columns (items PRECIO/SUBTOTAL, pagos
+  // MONTO/SALDO), which must never collide regardless of how many digits
+  // the amount has.
   const drawTextRight = (pg: typeof page, text: string, xRight: number, yPos: number, size: number, font: typeof helvetica, color: ReturnType<typeof rgb>) => {
     pg.drawText(text, { x: xRight - font.widthOfTextAtSize(text, size), y: yPos, size, font, color })
   }
+
+  // Column header row, factored out because it gets re-drawn at the top of
+  // every continuation page. Classic form column order: CANT | DESCRIPCIÓN
+  // | PRECIO | SUBTOTAL — CANT leads so a scanning eye hits the quantity
+  // before the line description, matching printed remito booklets. PRECIO/
+  // SUBTOTAL are right-aligned (via drawTextRight) flush against their own
+  // column's right boundary — itemColXs below — same "flush, no inset"
+  // convention the HISTORIAL DE PAGOS money columns already use.
+  const drawItemsTableHeader = (pg: typeof page, yPos: number) => {
+    pg.drawText("CANT.", { x: margin + 10, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    pg.drawText("DESCRIPCIÓN", { x: margin + 55, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    drawTextRight(pg, "PRECIO", margin + 410, yPos, TYPE.small, helveticaBold, MONO.label)
+    drawTextRight(pg, "SUBTOTAL", width - margin, yPos, TYPE.small, helveticaBold, MONO.label)
+  }
+  // Vertical rule x-positions between the 4 item columns (CANT 45pt |
+  // DESCRIPCIÓN 260pt | PRECIO 105pt | SUBTOTAL 105pt, summing to
+  // contentWidth's 515pt) — the outer left/right edges are drawn by
+  // closeTableFrame's rectangle, so only the 3 interior dividers are listed.
+  const itemColXs = [margin + 45, margin + 305, margin + 410]
 
   // HISTORIAL DE PAGOS column layout. FECHA/MÉTODO/REFERENCIA stay
   // left-aligned; MONTO and the new running-balance SALDO column are
@@ -3708,17 +3879,39 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     drawTextRight(pg, "MONTO", colMontoR, yPos, TYPE.small, helveticaBold, MONO.label)
     drawTextRight(pg, "SALDO", colSaldoR, yPos, TYPE.small, helveticaBold, MONO.label)
   }
+  // Vertical rule x-positions between the 5 pagos columns, derived from the
+  // constants above: FECHA/MÉTODO/REFERENCIA dividers sit 10pt before their
+  // column's text start (same inset colFechaX itself uses from the frame's
+  // left border); the MONTO/SALDO divider sits flush at colMontoR, matching
+  // how colSaldoR already ends flush with the outer frame border (no inset)
+  // for a right-aligned column.
+  const pagosColXs = [colMetodoX - 10, colRefX - 10, margin + 275, colMontoR]
+
+  // Closes one page-chunk of a framed table: a border-only rectangle from
+  // topY down to bottomY, plus a vertical rule at each interior column
+  // boundary. Used for both the items and pagos tables — each continuation
+  // page gets its own independent frame around the rows it holds.
+  const closeTableFrame = (pg: typeof page, topY: number, bottomY: number, colXs: number[]): void => {
+    pg.drawRectangle({ x: margin, y: bottomY, width: contentWidth, height: topY - bottomY, borderColor: MONO.ink, borderWidth: RULE_WIDTH })
+    for (const cx of colXs) drawVLine(pg, cx, topY, bottomY)
+  }
 
   // Starts a fresh A4 page for a table (or block) that ran out of room on
   // the current one: draws the "REMITO {numero} — continuación" marker,
   // resets the cursor, and — when given a table header drawer — re-draws
   // that table's column header row so the continued rows stay legible.
-  const startContinuationPage = (drawTableHeader?: (pg: typeof page, yPos: number) => void): void => {
+  // Returns the y of the rule drawn right after the title — the
+  // continuation page's analog of "the rule below the section label" on
+  // the first page — so callers that reopen a table frame after this
+  // returns can reset their tableTop to it without re-deriving the
+  // geometry themselves.
+  const startContinuationPage = (drawTableHeader?: (pg: typeof page, yPos: number) => void): number => {
     page = pdfDoc.addPage([width, height])
     pages.push(page)
     const contTitle = `REMITO ${numeroFactura} — continuación`
     page.drawText(contTitle, { x: margin, y: height - margin - 12, size: TYPE.docTitle, font: helveticaBold, color: MONO.ink })
-    drawRule(page, margin, width - margin, height - margin - 24)
+    const continuationTableTop = height - margin - 24
+    drawRule(page, margin, width - margin, continuationTableTop)
     y = height - margin - 44
     if (drawTableHeader) {
       drawTableHeader(page, y)
@@ -3726,12 +3919,14 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
       drawRule(page, margin, width - margin, y)
       y -= 17
     }
+    return continuationTableTop
   }
 
   if (data.items && data.items.length > 0) {
     drawSectionLabel(page, helveticaBold, "DETALLE DE ITEMS", margin, y)
     y -= 4
     drawRule(page, margin, width - margin, y)
+    let tableTop = y // frame's top edge — the rule separating the section label from the header row
     y -= 20
 
     drawItemsTableHeader(page, y)
@@ -3741,50 +3936,44 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
 
     // Filas de items — a row that would land below the footer's clearance
     // line now flows onto a fresh continuation page instead of being
-    // silently dropped (the old `break` truncated long lists here).
+    // silently dropped (the old `break` truncated long lists here). Each
+    // page's chunk of rows gets its own ruled frame: closed just before the
+    // page break, reopened (tableTop reset) right after.
     for (const item of data.items) {
       if (y - 18 < floorY) {
-        startContinuationPage(drawItemsTableHeader)
+        closeTableFrame(page, tableTop, y - 4, itemColXs)
+        tableTop = startContinuationPage(drawItemsTableHeader)
       }
 
-      page.drawText(safe(item.descripcion).substring(0, 40), { x: margin + 10, y, size: TYPE.body, font: helvetica, color: MONO.ink })
-      page.drawText(String(item.cantidad), { x: margin + 285, y, size: TYPE.body, font: helvetica, color: MONO.ink })
-      page.drawText(formatCurrencyPDF(item.precioUnitario), { x: margin + 330, y, size: TYPE.body, font: helvetica, color: MONO.ink })
-      page.drawText(formatCurrencyPDF(item.subtotal), { x: margin + 410, y, size: TYPE.body, font: helvetica, color: MONO.ink })
+      page.drawText(String(item.cantidad), { x: margin + 10, y, size: TYPE.body, font: helvetica, color: MONO.ink })
+      page.drawText(safe(item.descripcion).substring(0, 40), { x: margin + 55, y, size: TYPE.body, font: helvetica, color: MONO.ink })
+      drawTextRight(page, formatCurrencyPDF(item.precioUnitario), margin + 410, y, TYPE.body, helvetica, MONO.ink)
+      drawTextRight(page, formatCurrencyPDF(item.subtotal), width - margin, y, TYPE.body, helvetica, MONO.ink)
       y -= 18
       drawRule(page, margin, width - margin, y + 10)
     }
 
+    closeTableFrame(page, tableTop, y - 4, itemColXs)
     y -= 15
   }
 
   // === DETALLE DE MONTOS ===
   // Kept together with ESTADO DE PAGO below: if the combined block doesn't
   // fit above the footer's clearance line, it moves to a continuation page
-  // as a unit rather than splitting across the page boundary.
+  // as a unit rather than splitting across the page boundary. CONDICIONES
+  // DE PAGO no longer lives in this tail block (it moved up into its own
+  // band right after CLIENTE, inside the outer frame — see Task 5 of the
+  // remito-formato-clasico change), so it no longer contributes to this
+  // math.
   const detalleOptionalRows =
     (data.iva > 0 ? 1 : 0) +
     (data.descuento && data.descuento > 0 ? 1 : 0) +
     (data.redondeo && data.redondeo !== 0 ? 1 : 0)
-  // CONDICIONES DE PAGO joins this kept-together tail block (drawn right
-  // after ESTADO DE PAGO, below) so it never gets split from
-  // DETALLE/SALDO/ESTADO DE PAGO across a page break.
-  const condicionesRows =
-    (vencimientoText ? 1 : 0) +
-    (mediosPago ? 1 : 0) +
-    (cbuAlias ? 1 : 0)
-  const hasCondiciones = condicionesRows > 0
-  // 24 = section label+rule (4 + 20), same cost as the DETALLE/ESTADO DE
-  // PAGO headers below; 12 per present row (Vencimiento/Medios de
-  // pago/CBU-Alias); 10 = trailing gap before HISTORIAL DE PAGOS. Zero when
-  // no payment-terms field is present.
-  const condicionesBlockH = hasCondiciones ? 24 + 12 * condicionesRows + 10 : 0
   // 177 = DETALLE label+rule (24) + Subtotal row+rule (18) + pre-total rule
   // (10) + TOTAL row (18) + Pagado a cuenta row (18) + SALDO bar (35) +
   // ESTADO DE PAGO label+rule (24) + badge/montos row (30), plus 18 for
-  // each optional Subtotal-block row (IVA / Descuento / Redondeo), plus
-  // condicionesBlockH for the optional CONDICIONES DE PAGO section.
-  const totalsBlockH = 177 + 18 * detalleOptionalRows + condicionesBlockH // DETALLE + TOTAL + PAGADO A CUENTA + SALDO + ESTADO DE PAGO + CONDICIONES DE PAGO
+  // each optional Subtotal-block row (IVA / Descuento / Redondeo).
+  const totalsBlockH = 177 + 18 * detalleOptionalRows // DETALLE + TOTAL + PAGADO A CUENTA + SALDO + ESTADO DE PAGO
   if (y - totalsBlockH < floorY) {
     startContinuationPage()
   }
@@ -3874,38 +4063,22 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
 
   y -= 30
 
-  // === CONDICIONES DE PAGO ===
-  // Accounting-grade remito payment terms — drawn only when at least one
-  // field is present. Its height was already reserved in totalsBlockH
-  // above (condicionesBlockH), so it's kept together with
-  // DETALLE/SALDO/ESTADO DE PAGO across the continuation-page check.
-  if (hasCondiciones) {
-    drawSectionLabel(page, helveticaBold, "Condiciones de pago", margin, y)
-    y -= 4
-    drawRule(page, margin, width - margin, y)
-    y -= 20
-
-    if (vencimientoText) {
-      page.drawText(`Vencimiento: ${vencimientoText}`, { x: margin + 10, y, size: TYPE.small, font: helvetica, color: MONO.ink })
-      y -= 12
-    }
-    if (mediosPago) {
-      page.drawText(`Medios de pago: ${mediosPago}`, { x: margin + 10, y, size: TYPE.small, font: helvetica, color: MONO.ink })
-      y -= 12
-    }
-    if (cbuAlias) {
-      page.drawText(`CBU/Alias: ${cbuAlias}`, { x: margin + 10, y, size: TYPE.small, font: helvetica, color: MONO.ink })
-      y -= 12
-    }
-    y -= 10
-  }
-
   // === HISTORIAL DE PAGOS ===
   if (data.pagos && data.pagos.length > 0) {
     // Keep the section label + column header together: a dangling header
     // with zero rows below it is worse than starting the whole section on
-    // a fresh page.
-    const pagosHeaderH = 4 + 20 + 8 + 17 + 18
+    // a fresh page. The reserved height for that first row must match
+    // whatever the row loop below will actually give it — 28pt instead of
+    // 18pt when the first pago itself carries a cuotas/recargo note —
+    // otherwise the section can pass this check and still open with an
+    // empty framed chunk (the first row immediately overflowing to a
+    // continuation page).
+    const firstPago = data.pagos[0]
+    const firstPagoHasNote = Boolean(
+      (firstPago.cuotas && firstPago.cuotas > 1) ||
+      (firstPago.recargoPorcentaje && firstPago.recargoPorcentaje > 0)
+    )
+    const pagosHeaderH = 4 + 20 + 8 + 17 + (firstPagoHasNote ? 28 : 18)
     if (y - pagosHeaderH < floorY) {
       startContinuationPage()
     }
@@ -3913,6 +4086,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     drawSectionLabel(page, helveticaBold, "HISTORIAL DE PAGOS", margin, y)
     y -= 4
     drawRule(page, margin, width - margin, y)
+    let pagosTableTop = y // frame's top edge — same convention as the items table's tableTop
     y -= 20
 
     // Header (mismo tratamiento que DETALLE DE ITEMS: sin fill, mayusculas)
@@ -3923,15 +4097,31 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
 
     // Same continuation treatment as the items table above — long payment
     // histories now flow onto extra pages instead of the old `break`
-    // truncation.
+    // truncation, each page's chunk framed independently.
     // Running balance for the SALDO column: starts at the document total
     // and subtracts each pago's monto in the same order the rows are
     // drawn (data.pagos' own order — this is a display running total, not
     // a chronological reconciliation).
     let saldoCorrido = data.total
     for (const pago of data.pagos) {
-      if (y - 18 < floorY) {
-        startContinuationPage(drawPagosTableHeader)
+      // Cuotas / recargo note — same gating as components/facturacion/
+      // pagos-historial.tsx's UI list (cuotas > 1, recargoPorcentaje > 0),
+      // drawn as a second, smaller line under the row instead of appended
+      // inline: the MÉTODO column has no width budget left for it (~75pt,
+      // already sized just for a label like "Tarjeta Credito"). montoOriginal
+      // is deliberately NOT rendered here either — the UI component makes the
+      // same call for the same reason: it's ambiguous between the venta and
+      // cobro paths, so a "total con recargo" figure (if ever wanted) should
+      // be derived from monto + recargoPorcentaje instead of trusting it.
+      const pagoNoteParts: string[] = []
+      if (pago.cuotas && pago.cuotas > 1) pagoNoteParts.push(`${pago.cuotas} cuotas`)
+      if (pago.recargoPorcentaje && pago.recargoPorcentaje > 0) pagoNoteParts.push(`${pago.recargoPorcentaje}% recargo`)
+      const pagoNote = pagoNoteParts.join(" · ")
+      const rowH = pagoNote ? 28 : 18
+
+      if (y - rowH < floorY) {
+        closeTableFrame(page, pagosTableTop, y - 4, pagosColXs)
+        pagosTableTop = startContinuationPage(drawPagosTableHeader)
       }
 
       const pagoFecha = formatDatePDF(pago.fecha)
@@ -3946,9 +4136,20 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
       }
       drawTextRight(page, formatCurrencyPDF(pago.monto), colMontoR, y, TYPE.body, helveticaBold, MONO.ink)
       drawTextRight(page, formatCurrencyPDF(saldoCorrido), colSaldoR, y, TYPE.body, helveticaBold, MONO.ink)
-      y -= 18
+      if (pagoNote) {
+        // Starts at colFechaX (same as the FECHA cell above it), so at
+        // TYPE.fine this note can run under the FECHA/MÉTODO divider at
+        // x=colMetodoX-10 (120) for a long cuotas+recargo combination.
+        // Accepted: reviewed visually, cosmetic-only, and every viable fix
+        // (a narrower note column, moving the note under REFERENCIA
+        // instead) was a bigger layout change than this finding warrants.
+        page.drawText(pagoNote, { x: colFechaX, y: y - 11, size: TYPE.fine, font: helvetica, color: MONO.label })
+      }
+      y -= rowH
       drawRule(page, margin, width - margin, y + 10)
     }
+
+    closeTableFrame(page, pagosTableTop, y - 4, pagosColXs)
   }
 
   // === RECIBÍ CONFORME (orden-sourced only) ===
