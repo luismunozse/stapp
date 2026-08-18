@@ -74,6 +74,8 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [cuit, setCuit] = useState("")
   const [condicionIva, setCondicionIva] = useState("")
   const [domicilioFiscal, setDomicilioFiscal] = useState("")
+  const [ingresosBrutos, setIngresosBrutos] = useState("")
+  const [inicioActividades, setInicioActividades] = useState("")
   const [cbuAlias, setCbuAlias] = useState("")
   const [mediosPagoTexto, setMediosPagoTexto] = useState("")
   const [plazoPagoDias, setPlazoPagoDias] = useState("")
@@ -127,6 +129,8 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setCuit(data.cuit || "")
         setCondicionIva(data.condicionIva || "")
         setDomicilioFiscal(data.domicilioFiscal || "")
+        setIngresosBrutos(data.ingresosBrutos || "")
+        setInicioActividades(data.inicioActividades || "")
         setCbuAlias(data.cbuAlias || "")
         setMediosPagoTexto(data.mediosPagoTexto || "")
         setPlazoPagoDias(data.plazoPagoDias != null ? String(data.plazoPagoDias) : "")
@@ -271,7 +275,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada: facturacionHabilitada }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada: facturacionHabilitada }),
       })
 
       if (res.ok) {
@@ -878,6 +882,26 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
               value={domicilioFiscal}
               onChange={(e) => setDomicilioFiscal(e.target.value)}
               placeholder="Av. Principal 123, Córdoba"
+              disabled={!allowEdit}
+            />
+          </div>
+          <div>
+            <Label htmlFor="ingresosBrutos" className="text-sm">Ingresos brutos</Label>
+            <Input
+              id="ingresosBrutos"
+              value={ingresosBrutos}
+              onChange={(e) => setIngresosBrutos(e.target.value)}
+              placeholder="902-123456-7"
+              disabled={!allowEdit}
+            />
+          </div>
+          <div>
+            <Label htmlFor="inicioActividades" className="text-sm">Inicio de actividades</Label>
+            <Input
+              id="inicioActividades"
+              value={inicioActividades}
+              onChange={(e) => setInicioActividades(e.target.value)}
+              placeholder="01/2020"
               disabled={!allowEdit}
             />
           </div>
