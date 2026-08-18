@@ -55,6 +55,8 @@ function baseFacturaOrdenRow(orgOverrides: Record<string, any> = {}) {
         cbu_alias: null,
         medios_pago_texto: null,
         plazo_pago_dias: null,
+        ingresos_brutos: null,
+        inicio_actividades: null,
         ...orgOverrides,
       },
     },
@@ -96,6 +98,8 @@ function baseFacturaVentaRow(orgOverrides: Record<string, any> = {}) {
         cbu_alias: null,
         medios_pago_texto: null,
         plazo_pago_dias: null,
+        ingresos_brutos: null,
+        inicio_actividades: null,
         ...orgOverrides,
       },
     },
@@ -205,5 +209,88 @@ describe("GET /api/facturacion/[id]/pdf — datos fiscales y de cobro", () => {
     expect(generateFacturaPDF).toHaveBeenCalledTimes(1)
     const pdfData = generateFacturaPDF.mock.calls[0][0]
     expect(pdfData.numeroFactura).toBe("0001-00000001")
+  })
+
+  it("maps ingresos brutos and inicio actividades (migration 297 applied)", async () => {
+    const facturaRow = baseFacturaOrdenRow({
+      cuit: "30-71234567-8",
+      condicion_iva: "Responsable Inscripto",
+      ingresos_brutos: "902-123456-7",
+      inicio_actividades: "01/2020",
+    })
+    mockSupabaseFrom({
+      facturas: createChainMock(facturaRow),
+      items_factura: createChainMock([]),
+    })
+
+    const { GET } = await import("@/app/api/facturacion/[id]/pdf/route")
+    await GET(createGetRequest(), { params: Promise.resolve({ id: "f1" }) })
+
+    const pdfData = generateFacturaPDF.mock.calls[0][0]
+    expect(pdfData.ingresosBrutosEmpresa).toBe("902-123456-7")
+    expect(pdfData.inicioActividadesEmpresa).toBe("01/2020")
+  })
+
+  it("degrades gracefully when migration 297 hasn't run (42703 on ingresos_brutos), keeping the 295 fiscal fields intact", async () => {
+    const baseRow = { id: "f1", orden_id: "orden-1", venta_id: null }
+    const tier1Row = baseFacturaOrdenRow({
+      cuit: "30-71234567-8",
+      condicion_iva: "Responsable Inscripto",
+    })
+    const chain = createChainMock()
+    chain.single = vi
+      .fn()
+      .mockResolvedValueOnce({ data: baseRow, error: null }) // base lookup (id, orden_id, venta_id)
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: "42703", message: "column organizations.ingresos_brutos does not exist" },
+      }) // tier 2 (295 + 297 cols) fails
+      .mockResolvedValueOnce({ data: tier1Row, error: null }) // tier 1 (295-only cols) succeeds
+    mockSupabaseFrom({
+      facturas: chain,
+      items_factura: createChainMock([]),
+    })
+
+    const { GET } = await import("@/app/api/facturacion/[id]/pdf/route")
+    const res = await GET(createGetRequest(), { params: Promise.resolve({ id: "f1" }) })
+
+    expect(res.status).toBe(200)
+    expect(generateFacturaPDF).toHaveBeenCalledTimes(1)
+    const pdfData = generateFacturaPDF.mock.calls[0][0]
+    expect(pdfData.cuitEmpresa).toBe("30-71234567-8")
+    expect(pdfData.condicionIvaEmpresa).toBe("Responsable Inscripto")
+    expect(pdfData.ingresosBrutosEmpresa).toBeFalsy()
+    expect(pdfData.inicioActividadesEmpresa).toBeFalsy()
+  })
+
+  it("degrades gracefully when migration 295 hasn't run either (42703 on both fiscal tiers), falling back to base org columns", async () => {
+    const baseRow = { id: "f1", orden_id: "orden-1", venta_id: null }
+    const tier0Row = baseFacturaOrdenRow()
+    const chain = createChainMock()
+    chain.single = vi
+      .fn()
+      .mockResolvedValueOnce({ data: baseRow, error: null }) // base lookup (id, orden_id, venta_id)
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: "42703", message: "column organizations.ingresos_brutos does not exist" },
+      }) // tier 2 (295 + 297 cols) fails
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: "42703", message: "column organizations.cuit does not exist" },
+      }) // tier 1 (295-only cols) fails too
+      .mockResolvedValueOnce({ data: tier0Row, error: null }) // tier 0 (base cols) succeeds
+    mockSupabaseFrom({
+      facturas: chain,
+      items_factura: createChainMock([]),
+    })
+
+    const { GET } = await import("@/app/api/facturacion/[id]/pdf/route")
+    const res = await GET(createGetRequest(), { params: Promise.resolve({ id: "f1" }) })
+
+    expect(res.status).toBe(200)
+    expect(generateFacturaPDF).toHaveBeenCalledTimes(1)
+    const pdfData = generateFacturaPDF.mock.calls[0][0]
+    expect(pdfData.cuitEmpresa).toBeFalsy()
+    expect(pdfData.ingresosBrutosEmpresa).toBeFalsy()
   })
 })

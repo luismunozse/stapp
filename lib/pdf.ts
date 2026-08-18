@@ -3426,6 +3426,8 @@ interface FacturaPDFData {
   cuitEmpresa?: string | null
   condicionIvaEmpresa?: string | null
   domicilioFiscalEmpresa?: string | null
+  ingresosBrutosEmpresa?: string | null
+  inicioActividadesEmpresa?: string | null
   // Payment terms — drawn in the CONDICIONES DE PAGO block below.
   vencimiento?: Date | string | null
   mediosPago?: string | null

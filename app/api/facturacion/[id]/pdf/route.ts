@@ -6,22 +6,27 @@ import { generateFacturaPDF } from "@/lib/pdf"
 import { addDaysInTimeZone } from "@/lib/timezone"
 import { isMissingColumnError } from "@/lib/db-errors"
 
-// Org columns for the emisor block, with and without the fiscal identity /
-// collection fields added by migration 295 (cuit, condicion_iva,
-// domicilio_fiscal, cbu_alias, medios_pago_texto, plazo_pago_dias). Split so
-// a PGRST204 on those 6 new columns (migration not applied yet on this DB)
-// only drops the fiscal block from the remito instead of breaking PDF
-// generation entirely — see the retry in each branch of GET below.
+// Org columns for the emisor block, in three tiers of decreasing fiscal
+// detail, added by migrations 295 (cuit, condicion_iva, domicilio_fiscal,
+// cbu_alias, medios_pago_texto, plazo_pago_dias) and 297 (ingresos_brutos,
+// inicio_actividades). Split so a missing-column error on either migration's
+// columns only drops that part of the fiscal block from the remito instead
+// of breaking PDF generation entirely — see the chained retry in each
+// branch of GET below.
 const ORG_COLS = "nombre, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria"
 const ORG_COLS_FISCAL = `${ORG_COLS}, cuit, condicion_iva, domicilio_fiscal, cbu_alias, medios_pago_texto, plazo_pago_dias`
+const ORG_COLS_FISCAL_V2 = `${ORG_COLS_FISCAL}, ingresos_brutos, inicio_actividades`
 
+// fiscalTier: 2 = migrations 295 + 297 applied, 1 = only 295 applied,
+// 0 = neither applied (base columns only).
 function fetchFacturaOrden(
   id: string,
   organizationId: string,
   sid: string | null,
   verTodas: boolean,
-  withFiscal: boolean
+  fiscalTier: 2 | 1 | 0
 ) {
+  const orgCols = fiscalTier === 2 ? ORG_COLS_FISCAL_V2 : fiscalTier === 1 ? ORG_COLS_FISCAL : ORG_COLS
   let query = supabaseAdmin
     .from("facturas")
     .select(`
@@ -29,7 +34,7 @@ function fetchFacturaOrden(
       ordenes_servicio!inner (
         id, numero_orden, codigo_orden, dispositivo, organization_id, sucursal_id, fecha_ingreso,
         clientes (nombre, telefono, email, direccion, dni),
-        organizations (${withFiscal ? ORG_COLS_FISCAL : ORG_COLS})
+        organizations (${orgCols})
       ),
       pagos_parciales (*)
     `)
@@ -44,15 +49,16 @@ function fetchFacturaVenta(
   organizationId: string,
   sid: string | null,
   verTodas: boolean,
-  withFiscal: boolean
+  fiscalTier: 2 | 1 | 0
 ) {
+  const orgCols = fiscalTier === 2 ? ORG_COLS_FISCAL_V2 : fiscalTier === 1 ? ORG_COLS_FISCAL : ORG_COLS
   let query = supabaseAdmin
     .from("facturas")
     .select(`
       *,
       ventas!inner (
         id, numero_venta, cliente_nombre, descuento, redondeo_monto, organization_id, sucursal_id, created_at,
-        organizations (${withFiscal ? ORG_COLS_FISCAL : ORG_COLS})
+        organizations (${orgCols})
       ),
       pagos_parciales (*)
     `)
@@ -126,11 +132,17 @@ export async function GET(
     let pdfData: Record<string, any>
 
     if (base.orden_id) {
-      let { data: factura, error: dbError } = await fetchFacturaOrden(id, organizationId!, sid, verTodas, true)
+      let { data: factura, error: dbError } = await fetchFacturaOrden(id, organizationId!, sid, verTodas, 2)
       if (isMissingColumnError(dbError)) {
-        // Migración 295 (datos fiscales) no aplicada todavía en este entorno.
-        // SELECT pura (sin .update()): Postgres devuelve 42703, no PGRST204.
-        ;({ data: factura, error: dbError } = await fetchFacturaOrden(id, organizationId!, sid, verTodas, false))
+        // Migration 297 (ingresos_brutos, inicio_actividades) not applied yet
+        // on this DB. This is a SELECT (no .update()), so Postgres raises
+        // 42703, not PGRST204 — retry dropping just the 297 columns.
+        ;({ data: factura, error: dbError } = await fetchFacturaOrden(id, organizationId!, sid, verTodas, 1))
+        if (isMissingColumnError(dbError)) {
+          // Migration 295 (fiscal identity / collection fields) not applied
+          // either — retry with the base org columns only.
+          ;({ data: factura, error: dbError } = await fetchFacturaOrden(id, organizationId!, sid, verTodas, 0))
+        }
       }
       if (dbError || !factura) {
         return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
@@ -187,16 +199,24 @@ export async function GET(
         cuitEmpresa: org?.cuit,
         condicionIvaEmpresa: org?.condicion_iva,
         domicilioFiscalEmpresa: org?.domicilio_fiscal,
+        ingresosBrutosEmpresa: org?.ingresos_brutos,
+        inicioActividadesEmpresa: org?.inicio_actividades,
         cbuAlias: org?.cbu_alias,
         mediosPago: org?.medios_pago_texto,
         vencimiento: calcularVencimiento(factura.fecha, org?.plazo_pago_dias, zonaHoraria),
       }
     } else {
-      let { data: factura, error: dbError } = await fetchFacturaVenta(id, organizationId!, sid, verTodas, true)
+      let { data: factura, error: dbError } = await fetchFacturaVenta(id, organizationId!, sid, verTodas, 2)
       if (isMissingColumnError(dbError)) {
-        // Migración 295 (datos fiscales) no aplicada todavía en este entorno.
-        // SELECT pura (sin .update()): Postgres devuelve 42703, no PGRST204.
-        ;({ data: factura, error: dbError } = await fetchFacturaVenta(id, organizationId!, sid, verTodas, false))
+        // Migration 297 (ingresos_brutos, inicio_actividades) not applied yet
+        // on this DB. This is a SELECT (no .update()), so Postgres raises
+        // 42703, not PGRST204 — retry dropping just the 297 columns.
+        ;({ data: factura, error: dbError } = await fetchFacturaVenta(id, organizationId!, sid, verTodas, 1))
+        if (isMissingColumnError(dbError)) {
+          // Migration 295 (fiscal identity / collection fields) not applied
+          // either — retry with the base org columns only.
+          ;({ data: factura, error: dbError } = await fetchFacturaVenta(id, organizationId!, sid, verTodas, 0))
+        }
       }
       if (dbError || !factura) {
         return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
@@ -233,6 +253,8 @@ export async function GET(
         cuitEmpresa: org?.cuit,
         condicionIvaEmpresa: org?.condicion_iva,
         domicilioFiscalEmpresa: org?.domicilio_fiscal,
+        ingresosBrutosEmpresa: org?.ingresos_brutos,
+        inicioActividadesEmpresa: org?.inicio_actividades,
         cbuAlias: org?.cbu_alias,
         mediosPago: org?.medios_pago_texto,
         vencimiento: calcularVencimiento(factura.fecha, org?.plazo_pago_dias, zonaHoraria),
