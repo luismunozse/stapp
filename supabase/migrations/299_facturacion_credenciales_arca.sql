@@ -8,10 +8,20 @@
 -- credenciales legibles (design ADR-04; spec "Organization Fiscal Identity":
 -- "no column is dropped").
 --
--- `provider` default 'arca': toda fila escrita desde este cambio en adelante
--- es ARCA. facturacion_credenciales está efectivamente vacía en producción
--- (ninguna org llegó a ver la tarjeta de facturación electrónica todavía),
--- así que no hace falta backfill de filas existentes.
+-- `provider` default 'arca': toda fila NUEVA escrita desde este cambio en
+-- adelante es ARCA. CORRECCIÓN (review PR2, 2026-08-19): la premisa original
+-- de esta migración — "facturacion_credenciales está efectivamente vacía en
+-- producción" — es FALSA. La migración 296 activó
+-- feature_flags.facturacion_electronica=true para el plan Profesional en
+-- producción, y la tarjeta de TusFacturas en Configuración es alcanzable
+-- hoy por cualquier org Profesional + pais='AR'; puede existir una fila real
+-- con tokens de TusFacturas cargados. Por eso este archivo hace el backfill
+-- defensivo que ADR-04 ya anticipaba como contingencia («if the probe finds
+-- rows, add UPDATE … SET provider='tusfacturas' WHERE apitoken_enc IS NOT
+-- NULL before the CHECK») ANTES de agregar el CHECK de completitud de abajo:
+-- sin el backfill, una fila real de TusFacturas heredaría el default
+-- 'arca' de la columna nueva y haría fallar la migración entera contra
+-- `facturacion_credenciales_arca_completa` (cert/key/cuit NULL en esa fila).
 -- ============================================================================
 
 ALTER TABLE facturacion_credenciales
@@ -44,6 +54,12 @@ ALTER TABLE facturacion_credenciales ADD  CONSTRAINT facturacion_credenciales_es
 
 ALTER TABLE facturacion_credenciales ADD CONSTRAINT facturacion_credenciales_provider_check
   CHECK (provider IN ('arca', 'tusfacturas'));
+
+-- Backfill defensivo (ver comentario del encabezado): cualquier fila con un
+-- token legacy cargado es, por definición, una fila de TusFacturas real —
+-- nunca puede quedar taggeada 'arca' por el default de la columna. Corre
+-- ANTES del CHECK de completitud de abajo a propósito.
+UPDATE facturacion_credenciales SET provider = 'tusfacturas' WHERE apitoken_enc IS NOT NULL;
 
 -- Una fila 'arca' recién creada nunca queda a medio configurar: cert, key y
 -- CUIT viajan juntos en el mismo PUT (endpoint write-only, ver route.ts).
