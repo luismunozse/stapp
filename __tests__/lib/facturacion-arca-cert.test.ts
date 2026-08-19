@@ -1,6 +1,15 @@
 import { describe, it, expect } from "vitest"
 import { validateCertKeyPair, CertValidationError } from "@/lib/facturacion/arca/cert"
-import { CERT_A, KEY_A, CERT_B, KEY_B, CUIT_A, CUIT_B } from "./facturacion-arca-cert-fixture"
+import {
+  CERT_A,
+  KEY_A,
+  CERT_B,
+  KEY_B,
+  CUIT_A,
+  CUIT_B,
+  CERT_NOCUIT,
+  KEY_NOCUIT,
+} from "./facturacion-arca-cert-fixture"
 
 describe("validateCertKeyPair", () => {
   it("returns parsed metadata for a matching cert/key pair with the declared CUIT", () => {
@@ -46,4 +55,13 @@ describe("validateCertKeyPair", () => {
     }
   })
 
+  it("rejects a valid cert/key pair whose subject has no serialNumber=CUIT", () => {
+    try {
+      validateCertKeyPair({ certPem: CERT_NOCUIT, keyPem: KEY_NOCUIT, declaredCuit: CUIT_A })
+      expect.unreachable()
+    } catch (e) {
+      expect(e).toBeInstanceOf(CertValidationError)
+      expect((e as CertValidationError).code).toBe("CUIT_NOT_FOUND")
+    }
+  })
 })
