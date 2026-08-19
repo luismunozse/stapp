@@ -23,11 +23,11 @@ describe("canEmitirFacturaElectronica", () => {
     ;(hasPlanFeature as any).mockResolvedValue(false)
     expect(await canEmitirFacturaElectronica("o1")).toBe(false)
   })
-  it("true when all conditions hold", async () => {
+  it("true when provider='tusfacturas' and all conditions hold", async () => {
     ;(hasPlanFeature as any).mockResolvedValue(true)
     ;(supabaseAdmin.from as any)
       .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
-      .mockReturnValueOnce(credRow({ organization_id: "o1" }))
+      .mockReturnValueOnce(credRow({ organization_id: "o1", provider: "tusfacturas" }))
     expect(await canEmitirFacturaElectronica("o1")).toBe(true)
   })
   it("false when pais != AR", async () => {
@@ -52,45 +52,51 @@ describe("canEmitirFacturaElectronica", () => {
     expect(await canEmitirFacturaElectronica("o1")).toBe(false)
   })
 
-  // cert_vencido gate (migration 299, design "Resolved open questions" #4:
-  // blocks at the gate — an expired cert costs a WSAA round-trip for a
-  // cryptic SOAP fault otherwise).
-  it("false when a stored arca cert is already expired", async () => {
+  // P1a regression (review PR2, engram #1125): emission is only implemented
+  // for the tusfacturas provider until Phase 4 ships ArcaDirectProvider. An
+  // `arca`-provider row has NULL legacy token columns (migration 299 made
+  // them nullable specifically for arca-only rows) — if this function
+  // returned true for it, app/api/facturacion-electronica/emitir/route.ts
+  // would reach `decryptSecret(cred.apitoken_enc)` with `apitoken_enc: null`
+  // and throw an unhandled TypeError. This is the ONLY thing standing
+  // between an admin saving arca credentials and that crash: emitir/route.ts
+  // is not touched, it just trusts this gate.
+  it("false when provider='arca' (emission not wired for arca until Phase 4 — prevents the decryptSecret(null) crash)", async () => {
     ;(hasPlanFeature as any).mockResolvedValue(true)
     ;(supabaseAdmin.from as any)
       .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
       .mockReturnValueOnce(
-        credRow({ organization_id: "o1", provider: "arca", cert_not_after: "2020-01-01T00:00:00Z" })
+        credRow({
+          organization_id: "o1",
+          provider: "arca",
+          apitoken_enc: null,
+          apikey_enc: null,
+          usertoken_enc: null,
+        })
       )
     expect(await canEmitirFacturaElectronica("o1")).toBe(false)
   })
 
-  it("true when a stored arca cert has not expired yet", async () => {
+  it("false when provider='arca' even with a certificate that has not expired (provider gate wins, not a cert check)", async () => {
     ;(hasPlanFeature as any).mockResolvedValue(true)
     ;(supabaseAdmin.from as any)
       .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
       .mockReturnValueOnce(
         credRow({ organization_id: "o1", provider: "arca", cert_not_after: "2099-01-01T00:00:00Z" })
       )
-    expect(await canEmitirFacturaElectronica("o1")).toBe(true)
-  })
-
-  it("true for a legacy tusfacturas row with no cert_not_after (no gate applies)", async () => {
-    ;(hasPlanFeature as any).mockResolvedValue(true)
-    ;(supabaseAdmin.from as any)
-      .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
-      .mockReturnValueOnce(credRow({ organization_id: "o1", provider: "tusfacturas", cert_not_after: null }))
-    expect(await canEmitirFacturaElectronica("o1")).toBe(true)
+    expect(await canEmitirFacturaElectronica("o1")).toBe(false)
   })
 
   // Tier-A degradation (design ADR-13): migration 299 not applied yet ->
-  // fall back to the pre-299 existence-only check, no cert gate.
-  it("degrades tier-A when migration 299 hasn't landed (42703 on cert_not_after)", async () => {
+  // fall back to the pre-299 existence-only check. Every row on that schema
+  // is implicitly tusfacturas (arca didn't exist before 299), so this stays
+  // an existence check, not a provider check.
+  it("degrades tier-A when migration 299 hasn't landed (42703 on provider) — existence-only, matches pre-299 behavior", async () => {
     ;(hasPlanFeature as any).mockResolvedValue(true)
     ;(supabaseAdmin.from as any)
       .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
       .mockReturnValueOnce(
-        credRowError({ code: "42703", message: "column facturacion_credenciales.cert_not_after does not exist" })
+        credRowError({ code: "42703", message: "column facturacion_credenciales.provider does not exist" })
       )
       .mockReturnValueOnce(credRow({ organization_id: "o1" }))
     expect(await canEmitirFacturaElectronica("o1")).toBe(true)
