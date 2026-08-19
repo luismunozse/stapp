@@ -17,20 +17,28 @@
 -- service_role puede leerla, nunca se expone a un usuario de la org.
 -- ============================================================================
 
+-- token_enc/sign_enc son NULLABLE (no NOT NULL): necesitamos poder crear una
+-- fila de "intento de login" ANTES de tener un ticket real, para que el piso
+-- anti-tight-loop de 60s (ultimo_login_intento_at) tenga dónde persistir en
+-- el primer login de una credencial que todavía nunca tuvo éxito — si no,
+-- el piso nunca protege esos reintentos secuenciales (review PR1, hallazgo
+-- P1). El CHECK obliga a que ambos secretos estén presentes o ausentes
+-- juntos: "ambos NULL" es la fila-de-intento-sin-ticket, nunca uno solo.
 CREATE TABLE IF NOT EXISTS wsaa_tickets (
   id                      TEXT PRIMARY KEY DEFAULT generate_cuid(),
   organization_id         TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   cuit                    TEXT NOT NULL,
   service                 TEXT NOT NULL DEFAULT 'wsfe',
   production              BOOLEAN NOT NULL,
-  token_enc               TEXT NOT NULL,
-  sign_enc                TEXT NOT NULL,
+  token_enc               TEXT,
+  sign_enc                TEXT,
   generated_at            TIMESTAMPTZ,
   expires_at              TIMESTAMPTZ NOT NULL,
   ultimo_login_intento_at TIMESTAMPTZ,
   created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT uq_wsaa_ticket UNIQUE (organization_id, cuit, service, production)
+  CONSTRAINT uq_wsaa_ticket UNIQUE (organization_id, cuit, service, production),
+  CONSTRAINT wsaa_tickets_secretos_conjuntos CHECK ((token_enc IS NULL) = (sign_enc IS NULL))
 );
 
 ALTER TABLE wsaa_tickets ENABLE ROW LEVEL SECURITY;
@@ -112,7 +120,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-REVOKE ALL ON FUNCTION facturacion_lease_acquire(TEXT, TEXT, TEXT, INTEGER) FROM anon, authenticated;
-REVOKE ALL ON FUNCTION facturacion_lease_release(TEXT, TEXT) FROM anon, authenticated;
+-- RPCs sensibles — REVOKE de PUBLIC/anon/authenticated. Postgres otorga
+-- EXECUTE a PUBLIC por default en toda función nueva; sin este REVOKE
+-- explícito, los revokes por rol de abajo no alcanzan (PUBLIC sigue
+-- concediendo el privilegio a cualquier rol que no lo tenga revocado
+-- explícitamente). Convención de la casa (ver migraciones 267/273).
+REVOKE EXECUTE ON FUNCTION facturacion_lease_acquire(TEXT, TEXT, TEXT, INTEGER) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION facturacion_lease_acquire(TEXT, TEXT, TEXT, INTEGER) FROM anon;
+REVOKE EXECUTE ON FUNCTION facturacion_lease_acquire(TEXT, TEXT, TEXT, INTEGER) FROM authenticated;
 GRANT EXECUTE ON FUNCTION facturacion_lease_acquire(TEXT, TEXT, TEXT, INTEGER) TO service_role;
+
+REVOKE EXECUTE ON FUNCTION facturacion_lease_release(TEXT, TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION facturacion_lease_release(TEXT, TEXT) FROM anon;
+REVOKE EXECUTE ON FUNCTION facturacion_lease_release(TEXT, TEXT) FROM authenticated;
 GRANT EXECUTE ON FUNCTION facturacion_lease_release(TEXT, TEXT) TO service_role;

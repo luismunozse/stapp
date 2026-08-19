@@ -37,19 +37,33 @@ function upsertChain(capture: { payload?: any; options?: any }, result: { error:
   }
 }
 
-function updateChain(capture: { payload?: any }, result: { error: any } = { error: null }) {
-  const chain: any = {}
-  chain.update = vi.fn((payload: any) => {
-    capture.payload = payload
-    return chain
-  })
-  chain.eq = vi.fn(() => chain)
-  chain.then = (resolve: any) => Promise.resolve(result).then(resolve)
-  return chain
-}
-
 function noopSleep(): Promise<void> {
   return Promise.resolve()
+}
+
+/**
+ * Fake `wsaa_tickets` con una sola fila en memoria, compartida entre
+ * llamadas sucesivas a `.from()`. A diferencia de `selectChain`/`upsertChain`
+ * (que responden con un resultado fijo por llamada), este fake persiste el
+ * efecto de cada upsert para que dos invocaciones SEPARADAS y SECUENCIALES
+ * de `renewWsaaTicket` vean el estado que dejó la anterior — necesario para
+ * probar el piso de 60s entre reintentos (no una sola llamada con retries
+ * internos, que ya cubre `withLease`).
+ */
+function createFakeWsaaTable() {
+  let row: Record<string, any> | null = null
+  const chain: any = {}
+  chain.select = vi.fn(() => chain)
+  chain.eq = vi.fn(() => chain)
+  chain.maybeSingle = vi.fn(async () => ({ data: row, error: null }))
+  chain.upsert = vi.fn(async (payload: any) => {
+    row = { ...(row ?? {}), ...payload }
+    return { error: null }
+  })
+  return {
+    from: vi.fn(() => chain),
+    getRow: () => row,
+  }
 }
 
 function mockRpc(handlers: Record<string, (args: any) => { data: any; error: any }>) {
@@ -61,7 +75,10 @@ function mockRpc(handlers: Record<string, (args: any) => { data: any; error: any
 }
 
 describe("readWsaaTicket", () => {
-  beforeEach(() => vi.clearAllMocks())
+  // resetAllMocks (no solo clearAllMocks): un test usa mockImplementation
+  // persistente (fake con estado) que clearAllMocks NO revierte, y eso
+  // filtraba filas falsas al siguiente test en el mismo describe.
+  beforeEach(() => vi.resetAllMocks())
 
   it("returns null when no row exists", async () => {
     ;(supabaseAdmin.from as any).mockReturnValueOnce(selectChain({ data: null, error: null }))
@@ -105,10 +122,25 @@ describe("readWsaaTicket", () => {
     ;(supabaseAdmin.from as any).mockReturnValueOnce(selectChain({ data: null, error: { message: "db down" } }))
     await expect(readWsaaTicket(key)).rejects.toThrow(/db down/)
   })
+
+  it("treats a bare login-attempt row (null secrets) as no valid ticket, even with a future expires_at", async () => {
+    // token_enc/sign_enc son NULLABLE desde la migración 298 enmendada: una
+    // fila que solo registra el intento de login (piso de 60s) no tiene
+    // ticket todavía. El guard explícito no depende de que expires_at
+    // también quede "viejo" — se verifica por separado.
+    const far = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+    ;(supabaseAdmin.from as any).mockReturnValueOnce(
+      selectChain({ data: { token_enc: null, sign_enc: null, expires_at: far, generated_at: null }, error: null })
+    )
+    expect(await readWsaaTicket(key)).toBeNull()
+  })
 })
 
 describe("writeWsaaTicket", () => {
-  beforeEach(() => vi.clearAllMocks())
+  // resetAllMocks (no solo clearAllMocks): un test usa mockImplementation
+  // persistente (fake con estado) que clearAllMocks NO revierte, y eso
+  // filtraba filas falsas al siguiente test en el mismo describe.
+  beforeEach(() => vi.resetAllMocks())
 
   it("encrypts token/sign and upserts on the composite key", async () => {
     const capture: any = {}
@@ -124,6 +156,11 @@ describe("writeWsaaTicket", () => {
     expect(capture.payload.expires_at).toBe(expiresAt)
     expect(decryptSecret(capture.payload.token_enc)).toBe("tok")
     expect(decryptSecret(capture.payload.sign_enc)).toBe("sig")
+    // El piso anti-tight-loop viaja en el mismo upsert: si writeWsaaTicket
+    // se llama sin un stampLoginAttempt previo (p.ej. una fila nueva), el
+    // piso igual queda persistido en la MISMA escritura, en vez de en null
+    // hasta el próximo ciclo (review PR1, hallazgo P1).
+    expect(capture.payload.ultimo_login_intento_at).toBeTruthy()
     expect(capture.options).toEqual(expect.objectContaining({ onConflict: "organization_id,cuit,service,production" }))
   })
 
@@ -136,7 +173,10 @@ describe("writeWsaaTicket", () => {
 })
 
 describe("renewWsaaTicket (double-checked locking, design ADR-05)", () => {
-  beforeEach(() => vi.clearAllMocks())
+  // resetAllMocks (no solo clearAllMocks): un test usa mockImplementation
+  // persistente (fake con estado) que clearAllMocks NO revierte, y eso
+  // filtraba filas falsas al siguiente test en el mismo describe.
+  beforeEach(() => vi.resetAllMocks())
 
   it("returns the cached ticket without acquiring a lease when still valid", async () => {
     const later = new Date(Date.now() + 30 * 60 * 1000).toISOString()
@@ -159,7 +199,7 @@ describe("renewWsaaTicket (double-checked locking, design ADR-05)", () => {
       .mockReturnValueOnce(selectChain({ data: null, error: null })) // 1. initial read: miss
       .mockReturnValueOnce(selectChain({ data: null, error: null })) // 3. re-read after lease: still miss
       .mockReturnValueOnce(selectChain({ data: null, error: null })) // 4. floor check: no row yet
-      .mockReturnValueOnce(updateChain(stampCapture)) // stamp ultimo_login_intento_at
+      .mockReturnValueOnce(upsertChain(stampCapture)) // stamp ultimo_login_intento_at (bare attempt row)
       .mockReturnValueOnce(upsertChain(upsertCapture)) // persist new ticket
 
     mockRpc({
@@ -176,6 +216,76 @@ describe("renewWsaaTicket (double-checked locking, design ADR-05)", () => {
     expect(ticket.token).toBe("new-tok")
     expect(decryptSecret(upsertCapture.payload.token_enc)).toBe("new-tok")
     expect(stampCapture.payload.ultimo_login_intento_at).toBeTruthy()
+  })
+
+  it("stamps a bare login-attempt row via upsert, never sending token_enc/sign_enc alone (keeps wsaa_tickets_secretos_conjuntos satisfied)", async () => {
+    const stampCapture: any = {}
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(selectChain({ data: null, error: null })) // initial read: miss
+      .mockReturnValueOnce(selectChain({ data: null, error: null })) // re-read: still miss
+      .mockReturnValueOnce(selectChain({ data: null, error: null })) // floor check: no row yet
+      .mockReturnValueOnce(upsertChain(stampCapture)) // stamp
+      .mockReturnValueOnce(upsertChain({})) // persist ticket
+
+    mockRpc({
+      facturacion_lease_acquire: () => ({ data: true, error: null }),
+      facturacion_lease_release: () => ({ data: true, error: null }),
+    })
+
+    const login = vi.fn().mockResolvedValue({ token: "t", sign: "s", expiresAt: new Date().toISOString() })
+    await renewWsaaTicket({ key, login, sleep: noopSleep })
+
+    // Ni token_enc ni sign_enc viajan en el upsert de la fila-de-intento: al
+    // omitir AMBOS (nunca uno solo), la fila queda con ambos NULL en el
+    // INSERT branch, satisfaciendo el CHECK (token_enc IS NULL) = (sign_enc
+    // IS NULL). Si alguna vez se mandara uno sin el otro, este assert lo
+    // detecta antes de que la RPC real lo rechace.
+    expect(stampCapture.payload).not.toHaveProperty("token_enc")
+    expect(stampCapture.payload).not.toHaveProperty("sign_enc")
+    expect(stampCapture.options).toEqual(expect.objectContaining({ onConflict: "organization_id,cuit,service,production" }))
+  })
+
+  it("sequential first-login retries against a never-successful credential respect the 60s floor", async () => {
+    // Reproduce el escenario real del hallazgo P1: una credencial que TODAVÍA
+    // nunca tuvo un login exitoso (troubleshooting de certificado/onboarding),
+    // con reintentos SEPARADOS y SECUENCIALES (no reintentos internos de
+    // withLease dentro de una sola llamada). Usa el fake con estado para que
+    // la segunda llamada vea lo que dejó la primera.
+    const fake = createFakeWsaaTable()
+    ;(supabaseAdmin.from as any).mockImplementation(fake.from)
+    mockRpc({
+      facturacion_lease_acquire: () => ({ data: true, error: null }),
+      facturacion_lease_release: () => ({ data: true, error: null }),
+    })
+
+    const t0 = new Date("2026-01-01T00:00:00.000Z")
+    const failingLogin = vi.fn().mockRejectedValue(new Error("AFIP homologación no disponible"))
+
+    // Intento 1: sin fila previa, el piso no aplica, el login se ejecuta y falla.
+    await expect(
+      renewWsaaTicket({ key, login: failingLogin, sleep: noopSleep, now: () => t0 })
+    ).rejects.toThrow("AFIP homologación no disponible")
+    expect(failingLogin).toHaveBeenCalledTimes(1)
+    expect(fake.getRow()?.ultimo_login_intento_at).toBe(t0.toISOString())
+    expect(fake.getRow()?.token_enc ?? null).toBeNull()
+
+    // Intento 2, 5s después (< piso de 60s): debe bloquear SIN reintentar el login.
+    const t1 = new Date(t0.getTime() + 5000)
+    await expect(
+      renewWsaaTicket({ key, login: failingLogin, sleep: noopSleep, now: () => t1 })
+    ).rejects.toThrow(WsaaLoginRateLimitedError)
+    expect(failingLogin).toHaveBeenCalledTimes(1) // sigue en 1: no se volvió a intentar
+
+    // Intento 3, 61s después del primero: el piso ya liberó, login se ejecuta y esta vez tiene éxito.
+    const t2 = new Date(t0.getTime() + 61_000)
+    const okLogin = vi.fn().mockResolvedValue({
+      token: "tok-ok",
+      sign: "sig-ok",
+      expiresAt: new Date(t2.getTime() + 3600_000).toISOString(),
+    })
+    const ticket = await renewWsaaTicket({ key, login: okLogin, sleep: noopSleep, now: () => t2 })
+    expect(okLogin).toHaveBeenCalledTimes(1)
+    expect(ticket.token).toBe("tok-ok")
   })
 
   it("throws WsaaLoginRateLimitedError and never calls login() when inside the 60s floor", async () => {
@@ -244,7 +354,7 @@ describe("renewWsaaTicket (double-checked locking, design ADR-05)", () => {
       .mockReturnValueOnce(selectChain({ data: null, error: null }))
       .mockReturnValueOnce(selectChain({ data: null, error: null }))
       .mockReturnValueOnce(selectChain({ data: null, error: null }))
-      .mockReturnValueOnce(updateChain({}))
+      .mockReturnValueOnce(upsertChain({}))
 
     mockRpc({
       facturacion_lease_acquire: () => ({ data: true, error: null }),

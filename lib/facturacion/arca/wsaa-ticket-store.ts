@@ -59,8 +59,8 @@ export class WsaaLoginUnavailableError extends Error {
 }
 
 interface RawRow {
-  token_enc: string
-  sign_enc: string
+  token_enc: string | null
+  sign_enc: string | null
   expires_at: string
   generated_at: string | null
   ultimo_login_intento_at?: string | null
@@ -86,10 +86,16 @@ async function selectRow(key: WsaaTicketKey): Promise<RawRow | null> {
  * Lee el ticket cacheado. El margen de 10 minutos vive ACÁ (no en el SDK):
  * un ticket todavía técnicamente vigente pero dentro del margen se reporta
  * como miss para forzar la renovación antes de que AFIP lo rechace.
+ *
+ * Una fila con secretos NULL (creada por `stampLoginAttempt` para registrar
+ * un intento de login sin ticket propio todavía) siempre se trata como "sin
+ * ticket válido", sin importar qué diga `expires_at` — no depende de que ese
+ * campo también "parezca viejo" (review PR1, hallazgo P1).
  */
 export async function readWsaaTicket(key: WsaaTicketKey): Promise<WsaaTicket | null> {
   const row = await selectRow(key)
   if (!row) return null
+  if (!row.token_enc || !row.sign_enc) return null
   if (new Date(row.expires_at).getTime() - Date.now() <= WSAA_MARGIN_MS) return null
   return {
     token: decryptSecret(row.token_enc),
@@ -101,6 +107,7 @@ export async function readWsaaTicket(key: WsaaTicketKey): Promise<WsaaTicket | n
 
 /** Persiste (upsert) un ticket renovado, cifrado at-rest. */
 export async function writeWsaaTicket(key: WsaaTicketKey, ticket: WsaaTicket): Promise<void> {
+  const generatedAt = ticket.generatedAt ?? new Date().toISOString()
   const { error } = await supabaseAdmin.from("wsaa_tickets").upsert(
     {
       organization_id: key.organizationId,
@@ -110,7 +117,13 @@ export async function writeWsaaTicket(key: WsaaTicketKey, ticket: WsaaTicket): P
       token_enc: encryptSecret(ticket.token),
       sign_enc: encryptSecret(ticket.sign),
       expires_at: ticket.expiresAt,
-      generated_at: ticket.generatedAt ?? new Date().toISOString(),
+      generated_at: generatedAt,
+      // Va en el MISMO upsert que el ticket: si writeWsaaTicket se llama sin
+      // un stampLoginAttempt previo (p.ej. fila nueva), el piso anti-tight-
+      // loop queda persistido de una — no en NULL hasta el próximo ciclo de
+      // renovación (review PR1, hallazgo P1: PostgREST deja en NULL, en el
+      // INSERT branch de un upsert, cualquier columna ausente del payload).
+      ultimo_login_intento_at: generatedAt,
     },
     { onConflict: "organization_id,cuit,service,production" }
   )
@@ -120,17 +133,36 @@ export async function writeWsaaTicket(key: WsaaTicketKey, ticket: WsaaTicket): P
   }
 }
 
+/**
+ * Registra (upsert) el intento de login ANTES de llamar a AFIP, para que el
+ * piso de 60s tenga dónde persistir incluso si es el primer login de una
+ * credencial que todavía nunca tuvo éxito (review PR1, hallazgo P1: antes
+ * era un UPDATE-only, que es un no-op sin fila previa — cero protección de
+ * piso en los reintentos secuenciales del onboarding/troubleshooting).
+ *
+ * NUNCA manda token_enc/sign_enc: al omitir ambos (nunca uno solo), la fila
+ * queda con los dos en NULL en el INSERT branch, satisfaciendo el CHECK
+ * `wsaa_tickets_secretos_conjuntos`. Sobre una fila EXISTENTE con ticket
+ * real, el UPDATE branch de un upsert solo toca las columnas presentes en
+ * el payload — token_enc/sign_enc quedan intactos.
+ *
+ * `expires_at` sí viaja (requerido: NOT NULL sin default) — clavarlo a
+ * "ahora" en una fila existente es inofensivo acá: solo se llega a este
+ * punto después de que la doble lectura (ADR-05) ya determinó que el ticket
+ * vigente, si lo hay, está stale/dentro del margen.
+ */
 async function stampLoginAttempt(key: WsaaTicketKey, when: Date): Promise<void> {
-  // UPDATE sin fila existente no es un error (0 filas afectadas): para un
-  // cuit/servicio que nunca logueó, no hay nada que estampar todavía y el
-  // piso de 60s es inaplicable — el primer login siempre procede.
-  const { error } = await supabaseAdmin
-    .from("wsaa_tickets")
-    .update({ ultimo_login_intento_at: when.toISOString() })
-    .eq("organization_id", key.organizationId)
-    .eq("cuit", key.cuit)
-    .eq("service", key.service)
-    .eq("production", key.production)
+  const { error } = await supabaseAdmin.from("wsaa_tickets").upsert(
+    {
+      organization_id: key.organizationId,
+      cuit: key.cuit,
+      service: key.service,
+      production: key.production,
+      ultimo_login_intento_at: when.toISOString(),
+      expires_at: when.toISOString(),
+    },
+    { onConflict: "organization_id,cuit,service,production" }
+  )
 
   if (error) {
     throw new Error(`Error registrando intento de login WSAA: ${error.message}`)
