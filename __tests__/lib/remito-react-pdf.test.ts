@@ -594,3 +594,93 @@ describe("left-zone truncation clamp", () => {
     expect(textWithLogo).toContain("…")
   })
 })
+
+// ============================================================================
+// Task 5 — pagination acceptance. Structural tests only (never content
+// parity, which is fully covered above): one-page acceptance for a typical
+// remito, multipage A4 invariant + repeated headers, pago-note integrity
+// across pagos-table pagination, and footer page numbering.
+// ============================================================================
+
+// Acceptance fixture copied from the legacy suite's one-page compaction test
+// (__tests__/lib/factura-pdf-venta.test.ts, "generateFacturaPDF — one-page
+// compaction" > "fits a typical remito..."): 3 items + 3 pagos (first with a
+// cuotas/recargo note) + CONDICIONES (vencimiento/mediosPago/cbuAlias, 3
+// lines) + full fiscal header (CUIT, ingresos brutos, inicio actividades,
+// condición IVA) + dirección/tel.
+const typicalRemito = {
+  numeroFactura: "0001-00000099",
+  fecha: new Date("2026-08-17"),
+  estadoPago: "PAGADO_PARCIAL",
+  cliente: { nombre: "Juan Pérez" },
+  orden: { numeroOrden: 99, codigoOrden: "CEL099", dispositivo: "iPhone 13" },
+  telefonoEmpresa: "011-4444-5555",
+  direccionEmpresa: "Av. Siempre Viva 742",
+  cuitEmpresa: "30-71234567-8",
+  ingresosBrutosEmpresa: "901-123456-7",
+  inicioActividadesEmpresa: "01/2015",
+  condicionIvaEmpresa: "Responsable Inscripto",
+  vencimiento: new Date("2026-09-17"),
+  mediosPago: "Efectivo, transferencia, tarjeta",
+  cbuAlias: "stapp.taller.mp",
+  items: [
+    { descripcion: "Cambio de pantalla", cantidad: 1, precioUnitario: 30000, subtotal: 30000 },
+    { descripcion: "Cambio de batería", cantidad: 1, precioUnitario: 15000, subtotal: 15000 },
+    { descripcion: "Mano de obra", cantidad: 1, precioUnitario: 5000, subtotal: 5000 },
+  ],
+  subtotal: 50000,
+  iva: 0,
+  total: 50000,
+  montoAbonado: 30000,
+  pagos: [
+    { monto: 15000, metodoPago: "TARJETA_CREDITO", fecha: new Date("2026-08-17"), referencia: "AUT-001", cuotas: 3, recargoPorcentaje: 10 },
+    { monto: 10000, metodoPago: "EFECTIVO", fecha: new Date("2026-08-17"), referencia: "REC-002" },
+    { monto: 5000, metodoPago: "TRANSFERENCIA", fecha: new Date("2026-08-17"), referencia: "REC-003" },
+  ],
+}
+
+const manyItems = Array.from({ length: 60 }, (_, i) => ({
+  descripcion: `Item ${i + 1}`,
+  cantidad: 1,
+  precioUnitario: 100,
+  subtotal: 100,
+}))
+
+describe("pagination acceptance", () => {
+  it("fits the typical remito on exactly one page", async () => {
+    const buffer = await generateFacturaPDFReact(typicalRemito as any)
+    const doc = await PDFDocument.load(buffer)
+    expect(doc.getPageCount()).toBe(1)
+  })
+
+  it("paginates a 60-item remito with A4 invariant and repeated headers", async () => {
+    const buffer = await generateFacturaPDFReact({ ...baseData, items: manyItems, subtotal: 6000, total: 6000, montoAbonado: 0 } as any)
+    const doc = await PDFDocument.load(buffer)
+    expect(doc.getPageCount()).toBeGreaterThan(1)
+    for (const p of doc.getPages()) expect(Math.round(p.getSize().height)).toBe(842)
+    const items = await extractReactPdfTextPositions(buffer)
+    const cantHeaders = items.filter((i) => i.text.includes("CANT"))
+    expect(new Set(cantHeaders.map((i) => i.page)).size).toBeGreaterThan(1) // header repeats across pages
+    expect(await extractReactPdfText(buffer)).toContain("continuación")
+  })
+
+  it("keeps one note line per pago across pagos-table pagination", async () => {
+    const pagos = Array.from({ length: 55 }, (_, i) => ({
+      monto: 100,
+      metodoPago: "TARJETA_CREDITO",
+      fecha: new Date("2026-08-17"),
+      referencia: `REF-${String(i + 1).padStart(3, "0")}`,
+      cuotas: 3,
+      recargoPorcentaje: 10,
+    }))
+    const buffer = await generateFacturaPDFReact({ ...baseData, pagos, montoAbonado: 5500 } as any)
+    const items = await extractReactPdfTextPositions(buffer)
+    expect(items.filter((i) => i.text.includes("cuotas")).length).toBe(55)
+  })
+
+  it("numbers every page in the footer", async () => {
+    const buffer = await generateFacturaPDFReact({ ...baseData, items: manyItems } as any)
+    const text = await extractReactPdfText(buffer)
+    expect(text).toMatch(/Página 1 de \d+/)
+  })
+})
