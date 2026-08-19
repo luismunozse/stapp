@@ -680,7 +680,39 @@ describe("pagination acceptance", () => {
 
   it("numbers every page in the footer", async () => {
     const buffer = await generateFacturaPDFReact({ ...baseData, items: manyItems } as any)
+    const doc = await PDFDocument.load(buffer)
+    const pageCount = doc.getPageCount()
+    expect(pageCount).toBeGreaterThan(1)
+    const items = await extractReactPdfTextPositions(buffer)
+    for (let p = 1; p <= pageCount; p++) {
+      const pageNums = items.filter((i) => i.page === p && new RegExp(`^Página ${p} de ${pageCount}$`).test(i.text))
+      expect(pageNums.length, `page ${p} is missing its "Página ${p} de ${pageCount}" footer text`).toBe(1)
+    }
+  })
+})
+
+describe("left-zone legend-band clamp", () => {
+  // "Av. Presidente Roque Sáenz Peña 1178, 5to Piso" @ TYPE.small(8)/Helvetica
+  // regular measures ~175.15pt wide (verified via pdf-lib widthOfTextAtSize
+  // before writing this test) — narrower than the letter-box-only budget
+  // (~220.64pt = LETTER_BOX_X - LETTER_BOX_GAP - leftZoneX, no logo) so the
+  // OLD clamp let it through untruncated, but wider than the legend-aware
+  // budget (~170.17pt = legendStartX - LETTER_BOX_GAP - leftZoneX) the
+  // legend's own row demands. dirección is row 2 here (no telefonoEmpresa
+  // set, so dirección is the first of the three conditional left-zone
+  // lines) — the row whose glyph band sits closest to the legend's, per the
+  // geometry documented on LEGEND_TEXT in lib/remito-react-pdf.tsx.
+  const longDireccion = "Av. Presidente Roque Sáenz Peña 1178, 5to Piso"
+
+  it("clamps a left-zone line that fits the letter-box budget but overlaps the legend's own row", async () => {
+    const buffer = await generateFacturaPDFReact({
+      ...baseData,
+      nombreEmpresa: "Taller Central",
+      direccionEmpresa: longDireccion,
+    } as any)
     const text = await extractReactPdfText(buffer)
-    expect(text).toMatch(/Página 1 de \d+/)
+    expect(text).not.toContain(longDireccion)
+    expect(text).toContain("…")
+    expect(text).toContain(longDireccion.slice(0, 15)) // truncated prefix survives
   })
 })

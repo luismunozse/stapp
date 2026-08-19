@@ -144,6 +144,34 @@ const LEFT_ZONE_X = 40 + 10
 const LETTER_BOX_X = PAGE_WIDTH_A4 / 2 - 34 / 2
 const LETTER_BOX_GAP = 10
 
+// Legend under the letter box ("Documento no válido..."), centered on the
+// FULL page width via styles.legendWrap below — mirrors legacy's own
+// legend-aware clamp (lib/pdf.ts's clampLeftZoneText + glyphBandsIntersect).
+// At TYPE.fine (6.5), this string measures ~135pt wide, so its own left edge
+// (~230pt, page-center minus half its width) sits FURTHER LEFT than the
+// letter-box-only budget's boundary (~270-280pt, depending on logo) — a
+// left-zone line that clears the letter box can still run into the legend
+// if the two sit in the same page row.
+//
+// Row geometry (measured via extractReactPdfTextPositions against this
+// component's actual render, task-5 fix — react-pdf computes line height
+// from the font's own metrics, not a simple multiplier, so this isn't a
+// closed-form derivation like legacy's fixed "12pt per row" pdf-lib
+// stepping, but the empirical result is the same shape): row 1 (company
+// name, TYPE.body bold) sits clear above the legend's row by ~4pt — never
+// truncate it tighter. Row 2 — whichever of Tel/dirección/domicilio is the
+// FIRST one present, since the other two are conditionally omitted and the
+// remaining ones shift up to fill the gap — lands only ~2pt from the
+// legend's own baseline, well within both lines' glyph heights: it visibly
+// overlaps. Row 3+ clears the legend again by a full row-step (~11pt).
+// Because which field ends up in row 2 depends on which optional org
+// fields are set, the tighter legend-aware budget below is applied
+// uniformly to all three conditional left-zone lines (never to the company
+// name, which never reaches the legend) rather than tracked per row
+// position — always safe, since the legend is wider than the letter box so
+// its left edge is always the tighter of the two constraints.
+const LEGEND_TEXT = "Documento no válido como comprobante fiscal"
+
 // === Styles ===
 // PAINT POINT #1 (letter-box straddle): the classic remito's letter box (X)
 // straddles the outer frame's top border — half above, half below. In
@@ -316,15 +344,24 @@ export function RemitoDocument({
   const leftZoneX = LEFT_ZONE_X + (logo ? LOGO_BOX_WIDTH + LOGO_GAP : 0)
   const leftZoneMaxWidth = LETTER_BOX_X - LETTER_BOX_GAP - leftZoneX
   const empresaNombreDisplay = truncateToWidth(metrics.bold, empresaNombre, TYPE.body, leftZoneMaxWidth)
+
+  // Legend-aware clamp (Task 5 fix) — see the LEGEND_TEXT comment above for
+  // the geometry/derivation. legendAwareMaxWidth is always <= leftZoneMaxWidth
+  // (the legend, being wider than the 34pt letter box, always starts further
+  // left), so applying it to all three conditional left-zone lines is always
+  // at least as safe as the letter-box-only budget, never less.
+  const legendWidth = metrics.regular.widthOfTextAtSize(LEGEND_TEXT, TYPE.fine)
+  const legendStartX = PAGE_WIDTH_A4 / 2 - legendWidth / 2
+  const legendAwareMaxWidth = Math.min(leftZoneMaxWidth, legendStartX - LETTER_BOX_GAP - leftZoneX)
   const telefonoDisplay = telefonoEmpresa
-    ? truncateToWidth(metrics.regular, `Tel: ${telefonoEmpresa}`, TYPE.small, leftZoneMaxWidth)
+    ? truncateToWidth(metrics.regular, `Tel: ${telefonoEmpresa}`, TYPE.small, legendAwareMaxWidth)
     : ""
   const direccionDisplay = direccionEmpresa
-    ? truncateToWidth(metrics.regular, direccionEmpresa, TYPE.small, leftZoneMaxWidth)
+    ? truncateToWidth(metrics.regular, direccionEmpresa, TYPE.small, legendAwareMaxWidth)
     : ""
   const domicilioDisplay =
     domicilioFiscalEmpresa && domicilioFiscalEmpresa !== direccionEmpresa
-      ? truncateToWidth(metrics.regular, domicilioFiscalEmpresa, TYPE.small, leftZoneMaxWidth)
+      ? truncateToWidth(metrics.regular, domicilioFiscalEmpresa, TYPE.small, legendAwareMaxWidth)
       : ""
 
   // Running saldo for the HISTORIAL DE PAGOS column — plain data prep, same
@@ -419,7 +456,7 @@ export function RemitoDocument({
             </View>
           </View>
           <View style={styles.legendWrap}>
-            <Text style={styles.legendText}>Documento no válido como comprobante fiscal</Text>
+            <Text style={styles.legendText}>{LEGEND_TEXT}</Text>
           </View>
         </View>
 
