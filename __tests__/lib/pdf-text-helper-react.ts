@@ -17,19 +17,25 @@ export async function extractReactPdfTextPositions(buffer: Buffer): Promise<Reac
   // reading node_modules/pdfjs-dist/legacy/build/pdf.mjs directly: the
   // `PDFDocumentProxy` class has no `destroy` member at all.
   const loadingTask = getDocument({ data: new Uint8Array(buffer), useSystemFonts: true })
-  const doc = await loadingTask.promise
-  const out: ReactPdfTextItem[] = []
-  for (let p = 1; p <= doc.numPages; p++) {
-    const page = await doc.getPage(p)
-    const content = await page.getTextContent()
-    for (const item of content.items) {
-      if ("str" in item && item.str.trim()) {
-        out.push({ text: item.str, x: item.transform[4], y: item.transform[5], page: p })
+  try {
+    const doc = await loadingTask.promise
+    const out: ReactPdfTextItem[] = []
+    for (let p = 1; p <= doc.numPages; p++) {
+      const page = await doc.getPage(p)
+      const content = await page.getTextContent()
+      for (const item of content.items) {
+        if ("str" in item && item.str.trim()) {
+          out.push({ text: item.str, x: item.transform[4], y: item.transform[5], page: p })
+        }
       }
     }
+    return out
+  } finally {
+    // Runs even if getPage/getTextContent throws partway through (e.g. a
+    // malformed fixture from Tasks 3-5) — otherwise the pdfjs transport
+    // leaks instead of being cleaned up.
+    await loadingTask.destroy()
   }
-  await loadingTask.destroy()
-  return out
 }
 
 export async function extractReactPdfText(buffer: Buffer): Promise<string> {
