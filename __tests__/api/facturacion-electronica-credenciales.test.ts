@@ -154,6 +154,32 @@ describe("facturacion-electronica/credenciales", () => {
       expect(status).toBe(403)
     })
 
+    // Dual-accept routing (review PR2, engram #1125, P1b): the credentials
+    // table has a real, reachable TusFacturas row in production
+    // (facturacion_electronica has been live for plan Profesional since
+    // migration 296) — the old apitoken/apikey/usertoken shape must keep
+    // working exactly as before, side by side with the new certPem/keyPem
+    // shape.
+    describe("shape routing", () => {
+      it("400 ambiguous when the payload mixes certPem with apitoken", async () => {
+        mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+        const { status, body } = await parseResponse(
+          await PUT(createPostRequest({ certPem: "x", keyPem: "y", cuit: "20123456789", apitoken: "a" }))
+        )
+        expect(status).toBe(400)
+        expect(body.error).toBeDefined()
+        expect(validateCertKeyPair).not.toHaveBeenCalled()
+      })
+
+      it("400 on an invalid JSON body", async () => {
+        mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+        const { status } = await parseResponse(
+          await PUT(new Request("http://localhost/x", { method: "PUT", body: "not json" }))
+        )
+        expect(status).toBe(400)
+      })
+    })
+
     it("400 when certPem, keyPem or cuit is missing", async () => {
       mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
       const { status, body } = await parseResponse(await PUT(putBody({ keyPem: undefined })))
@@ -243,6 +269,129 @@ describe("facturacion-electronica/credenciales", () => {
       const { status, body } = await parseResponse(await PUT(putBody()))
       expect(status).toBe(503)
       expect(body.error).toBeDefined()
+    })
+
+    // P3s (review PR2, engram #1125): reject oversized PEM input before
+    // doing any crypto work on it. 64KB is generous — a real X.509 cert/key
+    // PEM is a few KB at most.
+    it("400 when certPem exceeds the 64KB size guard", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+      const huge = "x".repeat(64 * 1024 + 1)
+      const { status, body } = await parseResponse(await PUT(putBody({ certPem: huge })))
+      expect(status).toBe(400)
+      expect(body.error).toMatch(/tama|size|64/i)
+      expect(validateCertKeyPair).not.toHaveBeenCalled()
+    })
+
+    it("400 when keyPem exceeds the 64KB size guard", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+      const huge = "x".repeat(64 * 1024 + 1)
+      const { status, body } = await parseResponse(await PUT(putBody({ keyPem: huge })))
+      expect(status).toBe(400)
+      expect(body.error).toMatch(/tama|size|64/i)
+      expect(validateCertKeyPair).not.toHaveBeenCalled()
+    })
+  })
+
+  // Restored TusFacturas-shape coverage (review PR2, engram #1125, P1b):
+  // this is the pre-PR2 contract, now routed through the dual-accept PUT.
+  // Response shape must match exactly what components/configuracion/
+  // configuracion-form.tsx (live, unmodified) reads: conectado, puntoVenta,
+  // condicionFiscal.
+  describe("PUT — tusfacturas shape (legacy, dual-accept)", () => {
+    function legacyBody(overrides: any = {}) {
+      return createPostRequest({
+        apitoken: "a",
+        apikey: "k",
+        usertoken: "u",
+        puntoVenta: 1,
+        condicionFiscal: "MONOTRIBUTO",
+        ...overrides,
+      })
+    }
+
+    it("403 for non-ADMIN", async () => {
+      mockAuthSuccess({ role: "VENDEDOR" })
+      const { status } = await parseResponse(await PUT(legacyBody()))
+      expect(status).toBe(403)
+    })
+
+    it("400 when a required secret is missing", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+      const { status, body } = await parseResponse(await PUT(legacyBody({ usertoken: undefined })))
+      expect(status).toBe(400)
+      expect(body.error).toBeDefined()
+    })
+
+    it("400 when puntoVenta is not a positive integer", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+      const upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null })
+      mockSupabaseFrom({ facturacion_credenciales: { upsert: upsertSpy } as any })
+
+      const { status, body } = await parseResponse(await PUT(legacyBody({ puntoVenta: -5 })))
+
+      expect(status).toBe(400)
+      expect(body.error).toBe("Punto de venta inválido")
+      expect(upsertSpy).not.toHaveBeenCalled()
+    })
+
+    it("encrypts secrets, tags provider=tusfacturas, and the response never includes them (exact pre-PR2 contract)", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+      const upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null })
+      mockSupabaseFrom({ facturacion_credenciales: { upsert: upsertSpy } as any })
+
+      const { status, body } = await parseResponse(
+        await PUT(legacyBody({ puntoVenta: 3, condicionFiscal: "RESPONSABLE_INSCRIPTO" }))
+      )
+
+      expect(status).toBe(200)
+      expect(upsertSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organization_id: "o1",
+          provider: "tusfacturas",
+          apitoken_enc: "enc(a)",
+          apikey_enc: "enc(k)",
+          usertoken_enc: "enc(u)",
+          punto_venta: 3,
+          condicion_fiscal: "RESPONSABLE_INSCRIPTO",
+        })
+      )
+      // Contrato de respuesta EXACTO al de antes de PR2 — sin `provider`, sin
+      // metadata de certificado: components/configuracion/configuracion-form.tsx
+      // solo lee conectado/puntoVenta/condicionFiscal.
+      expect(body).toEqual({ conectado: true, puntoVenta: 3, condicionFiscal: "RESPONSABLE_INSCRIPTO" })
+      expect(JSON.stringify(body)).not.toContain("enc(")
+    })
+
+    it("500 'cifrado no configurado' when FACTURACION_ENCRYPTION_KEY is unset", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+      ;(encryptSecret as any).mockImplementation(() => {
+        throw new Error("FACTURACION_ENCRYPTION_KEY no configurada")
+      })
+
+      const { status, body } = await parseResponse(await PUT(legacyBody()))
+      expect(status).toBe(500)
+      expect(body.error).toMatch(/cifrado/i)
+    })
+
+    it("degrades tier-A: retries the upsert without `provider` when migration 299 hasn't landed, and still succeeds", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+      const upsertSpy = vi
+        .fn()
+        .mockResolvedValueOnce({
+          data: null,
+          error: { code: "PGRST204", message: "Could not find the 'provider' column" },
+        })
+        .mockResolvedValueOnce({ data: null, error: null })
+      mockSupabaseFrom({ facturacion_credenciales: { upsert: upsertSpy } as any })
+
+      const { status, body } = await parseResponse(await PUT(legacyBody({ puntoVenta: 3 })))
+
+      expect(status).toBe(200)
+      expect(body).toEqual({ conectado: true, puntoVenta: 3, condicionFiscal: "MONOTRIBUTO" })
+      expect(upsertSpy).toHaveBeenCalledTimes(2)
+      expect(upsertSpy.mock.calls[0][0]).toHaveProperty("provider", "tusfacturas")
+      expect(upsertSpy.mock.calls[1][0]).not.toHaveProperty("provider")
     })
   })
 })

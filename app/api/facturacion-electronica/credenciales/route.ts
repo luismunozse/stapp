@@ -92,15 +92,55 @@ export async function GET() {
 
 const CUIT_FORMAT = /^\d{11}$/
 
+// Generoso para cualquier PEM real (un cert/key X.509 típico pesa unos
+// pocos KB) — solo evita hacer trabajo de crypto sobre un payload absurdo
+// (P3s, review PR2, engram #1125).
+const MAX_PEM_LENGTH = 64 * 1024
+
+/**
+ * PUT acepta DOS formas durante la transición (review PR2, engram #1125,
+ * P1b): la tabla de credenciales tiene una fila real y alcanzable de
+ * TusFacturas en producción (facturacion_electronica está viva para el plan
+ * Profesional desde la migración 296) — el shape viejo
+ * {apitoken,apikey,usertoken} sigue funcionando exactamente igual que antes
+ * de este cambio, al lado del shape nuevo {certPem,keyPem,cuit}. Un payload
+ * que mezcla campos de ambos shapes es ambiguo y se rechaza sin tocar la DB.
+ */
 export async function PUT(request: Request) {
   const { error, organizationId } = await requireAdmin()
   if (error) return error
 
   const body = await request.json().catch(() => null)
-  const { certPem, keyPem, cuit, condicionFiscal } = body || {}
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 })
+  }
+
+  const hasArcaShape = "certPem" in body || "keyPem" in body
+  const hasLegacyShape = "apitoken" in body || "apikey" in body || "usertoken" in body
+
+  if (hasArcaShape && hasLegacyShape) {
+    return NextResponse.json(
+      { error: "Payload ambiguo: no se puede combinar certPem/keyPem con apitoken/apikey/usertoken" },
+      { status: 400 }
+    )
+  }
+
+  if (hasLegacyShape) {
+    return putTusFacturas(organizationId!, body)
+  }
+
+  return putArca(organizationId!, body)
+}
+
+async function putArca(organizationId: string, body: any) {
+  const { certPem, keyPem, cuit, condicionFiscal } = body
 
   if (!certPem || !keyPem || !cuit) {
     return NextResponse.json({ error: "Faltan certPem, keyPem o cuit" }, { status: 400 })
+  }
+
+  if (String(certPem).length > MAX_PEM_LENGTH || String(keyPem).length > MAX_PEM_LENGTH) {
+    return NextResponse.json({ error: "certPem o keyPem excede el tamaño máximo permitido (64KB)" }, { status: 400 })
   }
 
   const cuitNormalizado = String(cuit).replace(/\D/g, "")
@@ -133,7 +173,7 @@ export async function PUT(request: Request) {
   }
 
   const { error: dbError } = await supabaseAdmin.from("facturacion_credenciales").upsert({
-    organization_id: organizationId!,
+    organization_id: organizationId,
     provider: "arca",
     cert_pem_enc: certPemEnc,
     key_pem_enc: keyPemEnc,
@@ -165,6 +205,76 @@ export async function PUT(request: Request) {
     certNotBefore: validated.notBefore,
     certNotAfter: validated.notAfter,
     certFingerprint: validated.fingerprint,
+    condicionFiscal: cond,
+  })
+}
+
+/**
+ * Shape legacy de TusFacturas, preservada byte a byte (validación y
+ * contrato de respuesta) respecto de la versión anterior a este cambio —
+ * components/configuracion/configuracion-form.tsx (sin modificar, vivo en
+ * producción) depende de este contrato exacto.
+ */
+async function putTusFacturas(organizationId: string, body: any) {
+  const { apitoken, apikey, usertoken, puntoVenta, condicionFiscal } = body
+
+  if (!apitoken || !apikey || !usertoken) {
+    return NextResponse.json({ error: "Faltan credenciales" }, { status: 400 })
+  }
+
+  let puntoVentaValidado = 1
+  if (puntoVenta !== undefined) {
+    const n = Number(puntoVenta)
+    if (!Number.isInteger(n) || n <= 0) {
+      return NextResponse.json({ error: "Punto de venta inválido" }, { status: 400 })
+    }
+    puntoVentaValidado = n
+  }
+
+  const cond = condicionFiscal === "RESPONSABLE_INSCRIPTO" ? "RESPONSABLE_INSCRIPTO" : "MONOTRIBUTO"
+
+  let apitokenEnc: string
+  let apikeyEnc: string
+  let usertokenEnc: string
+  try {
+    apitokenEnc = encryptSecret(String(apitoken))
+    apikeyEnc = encryptSecret(String(apikey))
+    usertokenEnc = encryptSecret(String(usertoken))
+  } catch {
+    return NextResponse.json({ error: "Cifrado no configurado" }, { status: 500 })
+  }
+
+  const payload = {
+    organization_id: organizationId,
+    provider: "tusfacturas",
+    apitoken_enc: apitokenEnc,
+    apikey_enc: apikeyEnc,
+    usertoken_enc: usertokenEnc,
+    punto_venta: puntoVentaValidado,
+    condicion_fiscal: cond,
+    estado: "conectado",
+    updated_at: new Date().toISOString(),
+  }
+
+  let { error: dbError } = await supabaseAdmin.from("facturacion_credenciales").upsert(payload)
+
+  if (isMissingColumnError(dbError)) {
+    // Migración 299 no aplicada todavía: `provider` no existe como columna
+    // en este esquema. Reintentar sin ella preserva el comportamiento
+    // exacto previo a este cambio — tier A (design ADR-13). Toda fila en
+    // ese esquema es implícitamente 'tusfacturas', así que no hace falta
+    // taggearla explícitamente.
+    const { provider: _provider, ...legacyPayload } = payload
+    ;({ error: dbError } = await supabaseAdmin.from("facturacion_credenciales").upsert(legacyPayload))
+  }
+
+  if (dbError) {
+    return NextResponse.json({ error: "No se pudo guardar" }, { status: 500 })
+  }
+
+  return NextResponse.json({
+    conectado: true,
+    puntoVenta: puntoVentaValidado,
     condicionFiscal: cond,
   })
 }
