@@ -498,3 +498,99 @@ describe("content parity — classic ruled tables & dedupe address", () => {
     expect(text).toContain("Domicilio Fiscal 200")
   })
 })
+
+// ============================================================================
+// Task 4 — logo rendering (header left zone) + truncation clamp against the
+// letter box. Ported/derived from generateFacturaPDFLegacy's LOGO block and
+// clampLeftZoneText (lib/pdf.ts).
+// ============================================================================
+
+// A minimal valid 1x1 PNG, base64-encoded as a data: URI — avoids any real
+// network fetch in these tests. generateFacturaPDFReact fetches data.logoUrl
+// itself (mirroring generateFacturaPDFLegacy's fetch behavior), and Node's
+// built-in fetch resolves data: URIs locally without touching the network
+// (verified empirically), so this stays fully offline.
+const tinyPngDataUri =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+
+describe("logo rendering (header left zone)", () => {
+  it("renders without throwing and keeps the company name readable when logoUrl is present", async () => {
+    // A pixel-level assertion (does the logo bitmap actually paint) is not
+    // reachable through text extraction — this only proves the render
+    // pipeline accepts a logo source and the left-zone text around it
+    // survives.
+    const buffer = await generateFacturaPDFReact({
+      ...baseData,
+      logoUrl: tinyPngDataUri,
+      nombreEmpresa: "Taller Central",
+    } as any)
+    const doc = await PDFDocument.load(buffer)
+    expect(doc.getPageCount()).toBeGreaterThanOrEqual(1)
+    const text = await extractReactPdfText(buffer)
+    expect(text).toContain("Taller Central")
+  })
+
+  it("offsets the left-zone text to the right of the reserved logo box, vs. no offset when absent", async () => {
+    const noLogo = await generateFacturaPDFReact({ ...baseData, nombreEmpresa: "Taller Central" } as any)
+    const withLogo = await generateFacturaPDFReact({
+      ...baseData,
+      logoUrl: tinyPngDataUri,
+      nombreEmpresa: "Taller Central",
+    } as any)
+    const noLogoItems = await extractReactPdfTextPositions(noLogo)
+    const withLogoItems = await extractReactPdfTextPositions(withLogo)
+    const noLogoName = noLogoItems.find((i) => i.text.includes("Taller Central"))
+    const withLogoName = withLogoItems.find((i) => i.text.includes("Taller Central"))
+    expect(noLogoName).toBeDefined()
+    expect(withLogoName).toBeDefined()
+    expect(withLogoName!.x).toBeGreaterThan(noLogoName!.x)
+  })
+
+  it("does not crash the remito when the logo fetch fails (mirrors legacy's guarded try/catch)", async () => {
+    // A malformed URL makes Node's fetch() reject immediately (no DNS/
+    // network round-trip — verified empirically) with "Failed to parse
+    // URL", which must degrade to "no logo" rather than reject
+    // generateFacturaPDFReact — same contract as generateFacturaPDFLegacy's
+    // try/catch around fetch().
+    const buffer = await generateFacturaPDFReact({
+      ...baseData,
+      logoUrl: "not-a-valid-url",
+      nombreEmpresa: "Taller Central",
+    } as any)
+    const text = await extractReactPdfText(buffer)
+    expect(text).toContain("Taller Central")
+  })
+})
+
+describe("left-zone truncation clamp", () => {
+  it("clamps long left-zone lines so they never reach the letter box", async () => {
+    const longName = "Servicio Técnico Integral de Reparaciones y Mantenimiento S.R.L."
+    const buffer = await generateFacturaPDFReact({ ...baseData, nombreEmpresa: longName } as any)
+    const text = await extractReactPdfText(buffer)
+    expect(text).not.toContain(longName)
+    expect(text).toContain("…")
+    expect(text).toContain(longName.slice(0, 15)) // truncated prefix survives
+  })
+
+  it("shrinks the truncation budget when a logo is present, so a name that fits without a logo truncates with one", async () => {
+    // Bold @ TYPE.body(9): ~157.16pt wide — fits the no-logo left-zone
+    // budget (~220.64pt: letterBoxX 280.64 - 10pt gap - leftX 50) but
+    // overflows the with-logo budget (~125.64pt: same, with leftX pushed to
+    // 145 by the reserved logo box + gap). Numbers derived and verified via
+    // pdf-lib HelveticaBold widthOfTextAtSize before writing this test.
+    const boundaryName = "Reparaciones El Sol Servicios S.R.L."
+
+    const withoutLogo = await generateFacturaPDFReact({ ...baseData, nombreEmpresa: boundaryName } as any)
+    const textWithoutLogo = await extractReactPdfText(withoutLogo)
+    expect(textWithoutLogo).toContain(boundaryName)
+
+    const withLogo = await generateFacturaPDFReact({
+      ...baseData,
+      nombreEmpresa: boundaryName,
+      logoUrl: tinyPngDataUri,
+    } as any)
+    const textWithLogo = await extractReactPdfText(withLogo)
+    expect(textWithLogo).not.toContain(boundaryName)
+    expect(textWithLogo).toContain("…")
+  })
+})

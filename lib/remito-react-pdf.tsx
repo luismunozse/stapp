@@ -5,7 +5,8 @@
 // implementation stays available as generateFacturaPDFLegacy behind
 // REMITO_PDF_ENGINE=pdflib.
 import * as React from "react"
-import { Document, Page, View, Text, StyleSheet, renderToBuffer } from "@react-pdf/renderer"
+import { Document, Page, View, Text, Image, StyleSheet, renderToBuffer } from "@react-pdf/renderer"
+import { PDFDocument, StandardFonts, type PDFFont } from "pdf-lib"
 import { formatCurrencyValue, DEFAULT_CURRENCY, type CurrencyCode } from "./currency"
 import { formatDateValue, formatDateTimeValue, DEFAULT_TIMEZONE } from "./timezone"
 import type { FacturaPDFData } from "./pdf"
@@ -54,6 +55,95 @@ const safe = (val: unknown): string => {
   return ""
 }
 
+// === LOGO ===
+// Ported from generateFacturaPDFLegacy's LOGO block (lib/pdf.ts): fetch
+// data.logoUrl, sniff the format from content-type (falling back to the
+// URL's extension), embed the bytes. The fetch is guarded exactly like
+// legacy's try/catch — a failed fetch (network error, non-OK response,
+// unrecognized format) degrades to "no logo" and never rejects, so a broken
+// logoUrl can never kill remito generation. Unlike legacy, we do NOT decode
+// pixel dimensions here: the component reserves a FIXED box
+// (LOGO_BOX_WIDTH x LOGO_BOX_HEIGHT below) and lets react-pdf's own
+// objectFit:"contain" preserve the image's aspect ratio inside it, so the
+// left-zone offset the clamp budget depends on is a known constant instead
+// of varying per image.
+export type RemitoLogo = { data: Buffer; format: "png" | "jpg" }
+
+async function fetchLogo(logoUrl: string | null | undefined): Promise<RemitoLogo | null> {
+  if (!logoUrl) return null
+  try {
+    const res = await fetch(logoUrl)
+    if (!res.ok) return null
+    const bytes = Buffer.from(await res.arrayBuffer())
+    const contentType = res.headers.get("content-type") || ""
+    const lowerUrl = logoUrl.toLowerCase()
+    if (contentType.includes("png") || lowerUrl.includes(".png")) return { data: bytes, format: "png" }
+    if (contentType.includes("jpeg") || contentType.includes("jpg") || lowerUrl.includes(".jpg") || lowerUrl.includes(".jpeg")) {
+      return { data: bytes, format: "jpg" }
+    }
+    return null
+  } catch (logoError) {
+    console.error("Error loading logo:", logoError)
+    return null
+  }
+}
+
+// === Left-zone truncation clamp (letter box vs. header text) ===
+// Ported from generateFacturaPDFLegacy's clampLeftZoneText (lib/pdf.ts).
+// pdf-lib's StandardFonts give us the same Helvetica/Helvetica-Bold glyph
+// metrics react-pdf itself renders with, so widths measured here match the
+// actual rendered text.
+let helvCache: { regular: PDFFont; bold: PDFFont } | null = null
+async function helveticaMetrics() {
+  if (!helvCache) {
+    const doc = await PDFDocument.create()
+    helvCache = {
+      regular: await doc.embedFont(StandardFonts.Helvetica),
+      bold: await doc.embedFont(StandardFonts.HelveticaBold),
+    }
+  }
+  return helvCache
+}
+
+function truncateToWidth(font: PDFFont, text: string, size: number, maxWidth: number): string {
+  if (font.widthOfTextAtSize(text, size) <= maxWidth) return text
+  let t = text
+  while (t.length > 0 && font.widthOfTextAtSize(`${t}…`, size) > maxWidth) t = t.slice(0, -1)
+  return `${t}…`
+}
+
+// Logo box — matches legacy's max ~50pt tall / ~80pt wide proportions
+// (generateFacturaPDFLegacy's `maxLogoHeight`/`maxLogoWidth`), fixed rather
+// than scaled per-image (see the LOGO comment above). LOGO_GAP mirrors
+// legacy's "+15" gap between the logo and the company text
+// (`logoWidth = scaledWidth + 15`).
+const LOGO_BOX_WIDTH = 80
+const LOGO_BOX_HEIGHT = 50
+const LOGO_GAP = 15
+
+// Left-zone x-origin and truncation budget. Mirrors legacy's
+// `leftX = frameLeft + innerPad + logoWidth` and
+// `leftZoneMaxWidth = letterBoxX - 10 - leftX` (lib/pdf.ts), but derived
+// from THIS component's own layout instead of legacy's pdf-lib coordinates:
+//   - LEFT_ZONE_X: styles.page.paddingLeft (40) + styles.frameInner.padding
+//     (10) — the left zone's content starts right after the frame's own
+//     padding, same as legacy's frameLeft(=margin) + innerPad.
+//   - LETTER_BOX_X: the letter box (styles.letterBox, width 34) is centered
+//     on the full A4 page width (595.28pt — @react-pdf/layout's
+//     PAGE_SIZES.A4[0]) via letterBoxWrap's alignItems:'center' over a
+//     left:0/right:0 span — same value as legacy's
+//     `(width - letterBoxWidth) / 2` because both frames sit on symmetric
+//     40pt page margins.
+//   - LETTER_BOX_GAP: the 10pt clearance legacy's clampLeftZoneText leaves
+//     before the letter box.
+// Budget shrinks by LOGO_BOX_WIDTH + LOGO_GAP when a logo is present,
+// because the left zone's text column is pushed right by that much (see
+// styles.leftZoneLogo below).
+const PAGE_WIDTH_A4 = 595.28
+const LEFT_ZONE_X = 40 + 10
+const LETTER_BOX_X = PAGE_WIDTH_A4 / 2 - 34 / 2
+const LETTER_BOX_GAP = 10
+
 // === Styles ===
 // PAINT POINT #1 (letter-box straddle): the classic remito's letter box (X)
 // straddles the outer frame's top border — half above, half below. In
@@ -84,7 +174,12 @@ const styles = StyleSheet.create({
   },
   frameInner: { padding: 10 },
   headerRow: { flexDirection: "row", justifyContent: "space-between" },
-  leftZone: { flex: 1, paddingRight: 4 },
+  leftZone: { flex: 1, paddingRight: 4, flexDirection: "row", alignItems: "flex-start" },
+  // Fixed reservation (Task 4 LOGO_BOX_WIDTH/HEIGHT/GAP) — objectFit
+  // "contain" keeps the actual image's own aspect ratio inside this box
+  // without react needing to know its pixel dimensions up front.
+  leftZoneLogo: { width: LOGO_BOX_WIDTH, height: LOGO_BOX_HEIGHT, marginRight: LOGO_GAP, objectFit: "contain" },
+  leftZoneText: { flexDirection: "column" },
   centerGutter: { width: 180 }, // reserves room under the letter box/legend
   rightZone: { alignItems: "flex-end" },
   companyName: { fontFamily: "Helvetica-Bold", fontSize: TYPE.body },
@@ -173,7 +268,15 @@ const styles = StyleSheet.create({
   footerPageNum: { fontSize: TYPE.small, color: MONO.faint },
 })
 
-export function RemitoDocument({ data }: { data: FacturaPDFData }) {
+export function RemitoDocument({
+  data,
+  logo = null,
+  metrics,
+}: {
+  data: FacturaPDFData
+  logo?: RemitoLogo | null
+  metrics: { regular: PDFFont; bold: PDFFont }
+}) {
   const currency = (data.moneda as CurrencyCode) || DEFAULT_CURRENCY
   const tz = data.zonaHoraria || DEFAULT_TIMEZONE
   const fmt = (n: number | null | undefined) => formatCurrencyValue(n, currency)
@@ -206,6 +309,24 @@ export function RemitoDocument({ data }: { data: FacturaPDFData }) {
   const estadoLabel = estadoPagoLabels[data.estadoPago] || data.estadoPago
   const fechaImpresion = formatDateTimeValue(new Date(), tz)
 
+  // Left-zone truncation clamp (Task 4) — see the LEFT_ZONE_X/LETTER_BOX_X/
+  // LOGO_* constants above for the budget derivation. Company name uses
+  // bold metrics (matches styles.companyName's Helvetica-Bold), the
+  // tel/dirección/domicilio lines use regular metrics (styles.smallLabel).
+  const leftZoneX = LEFT_ZONE_X + (logo ? LOGO_BOX_WIDTH + LOGO_GAP : 0)
+  const leftZoneMaxWidth = LETTER_BOX_X - LETTER_BOX_GAP - leftZoneX
+  const empresaNombreDisplay = truncateToWidth(metrics.bold, empresaNombre, TYPE.body, leftZoneMaxWidth)
+  const telefonoDisplay = telefonoEmpresa
+    ? truncateToWidth(metrics.regular, `Tel: ${telefonoEmpresa}`, TYPE.small, leftZoneMaxWidth)
+    : ""
+  const direccionDisplay = direccionEmpresa
+    ? truncateToWidth(metrics.regular, direccionEmpresa, TYPE.small, leftZoneMaxWidth)
+    : ""
+  const domicilioDisplay =
+    domicilioFiscalEmpresa && domicilioFiscalEmpresa !== direccionEmpresa
+      ? truncateToWidth(metrics.regular, domicilioFiscalEmpresa, TYPE.small, leftZoneMaxWidth)
+      : ""
+
   // Running saldo for the HISTORIAL DE PAGOS column — plain data prep, same
   // cost in either engine (not a layout concern).
   let saldoCorrido = data.total
@@ -234,12 +355,15 @@ export function RemitoDocument({ data }: { data: FacturaPDFData }) {
           <View style={styles.frameInner}>
             <View style={styles.headerRow}>
               <View style={styles.leftZone}>
-                <Text style={styles.companyName}>{empresaNombre}</Text>
-                {telefonoEmpresa ? <Text style={styles.smallLabel}>Tel: {telefonoEmpresa}</Text> : null}
-                {direccionEmpresa ? <Text style={styles.smallLabel}>{direccionEmpresa}</Text> : null}
-                {domicilioFiscalEmpresa && domicilioFiscalEmpresa !== direccionEmpresa ? (
-                  <Text style={styles.smallLabel}>{domicilioFiscalEmpresa}</Text>
+                {logo ? (
+                  <Image style={styles.leftZoneLogo} src={{ data: logo.data, format: logo.format }} />
                 ) : null}
+                <View style={styles.leftZoneText}>
+                  <Text style={styles.companyName}>{empresaNombreDisplay}</Text>
+                  {telefonoDisplay ? <Text style={styles.smallLabel}>{telefonoDisplay}</Text> : null}
+                  {direccionDisplay ? <Text style={styles.smallLabel}>{direccionDisplay}</Text> : null}
+                  {domicilioDisplay ? <Text style={styles.smallLabel}>{domicilioDisplay}</Text> : null}
+                </View>
               </View>
               <View style={styles.centerGutter} />
               <View style={styles.rightZone}>
@@ -457,5 +581,6 @@ export function RemitoDocument({ data }: { data: FacturaPDFData }) {
 }
 
 export async function generateFacturaPDFReact(data: FacturaPDFData): Promise<Buffer> {
-  return renderToBuffer(<RemitoDocument data={data} />)
+  const [metrics, logo] = await Promise.all([helveticaMetrics(), fetchLogo(data.logoUrl)])
+  return renderToBuffer(<RemitoDocument data={data} logo={logo} metrics={metrics} />)
 }
