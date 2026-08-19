@@ -3380,8 +3380,8 @@ interface FacturaPago {
   cuotas?: number | null
   recargoPorcentaje?: number | null
   // Accepted for parity with the caller's row shape but deliberately never
-  // drawn — see the HISTORIAL DE PAGOS loop in generateFacturaPDF below,
-  // which explains why (same call components/facturacion/pagos-historial.tsx
+  // drawn — see the HISTORIAL DE PAGOS loop in generateFacturaPDFLegacy
+  // below, which explains why (same call components/facturacion/pagos-historial.tsx
   // makes: ambiguous between the venta and cobro paths).
   montoOriginal?: number | null
 }
@@ -3457,7 +3457,22 @@ const metodoPagoFacturaLabels: Record<string, string> = {
   OTRO: "Otro",
 }
 
+// Dispatcher: the remito's rendering engine is react-pdf by default
+// (lib/remito-react-pdf.tsx). The pdf-lib implementation below stays as
+// generateFacturaPDFLegacy — the escape hatch on a business-critical
+// collections document while the new engine is proven in production;
+// removal is a later cleanup. Dynamic import so orden/venta/etc. callers
+// of the other generators in this file never pull react-pdf into their
+// bundle.
 export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> {
+  if (process.env.REMITO_PDF_ENGINE === "pdflib") {
+    return generateFacturaPDFLegacy(data)
+  }
+  const { generateFacturaPDFReact } = await import("./remito-react-pdf")
+  return generateFacturaPDFReact(data)
+}
+
+export async function generateFacturaPDFLegacy(data: FacturaPDFData): Promise<Buffer> {
   const safe = (val: unknown): string => {
     if (val === null || val === undefined) return ""
     if (typeof val === "string") return val.replace(/[\r\n]+/g, " ").trim()

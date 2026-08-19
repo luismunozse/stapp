@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, beforeAll } from "vitest"
 import { PDFDocument } from "pdf-lib"
-import { generateFacturaPDF } from "@/lib/pdf"
+import { generateFacturaPDFLegacy as generateFacturaPDF } from "@/lib/pdf"
 import { formatCurrencyValue } from "@/lib/currency"
 import { extractPdfText, extractPdfTextPositions } from "./pdf-text-helper"
 
