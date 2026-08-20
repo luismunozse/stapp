@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
 import { getCookieSucursalId, resolveSucursalLectura, getDepositoDeSucursal } from "@/lib/sucursal"
@@ -13,6 +13,14 @@ export async function GET(request: Request) {
   try {
     const { error, organizationId, role, session } = await requireAuth()
     if (error) return error
+
+    // Purchase cost (precioCompra) follows the same rule as the rest of the
+    // inventario endpoints: hasInventarioAccess (ADMIN always, VENDEDOR only
+    // if the org opted in via vendedores_administran_inventario, TECNICO never).
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
 
     const { searchParams } = new URL(request.url)
     const q = searchParams.get("q") || ""
@@ -64,10 +72,7 @@ export async function GET(request: Request) {
         stock: item.stock,
         stockReservado: item.stock_reservado ?? 0,
         precioVenta: item.precio_venta,
-        // Cost data hidden from TECNICO (cotización item search leaks margin
-        // otherwise). VENDEDOR/ADMIN unchanged — this endpoint is also used by
-        // POS, which is out of scope for this gate.
-        precioCompra: role === "TECNICO" ? null : (item.precio_compra ?? 0),
+        precioCompra: canViewCost ? (item.precio_compra ?? 0) : null,
         trackeaSeries: item.trackea_series ?? false,
         diasGarantiaDefault: (item as any).dias_garantia_default ?? null,
       }))
@@ -122,7 +127,7 @@ export async function GET(request: Request) {
         stock,
         stockReservado,
         precioVenta: item.precio_venta,
-        precioCompra: role === "TECNICO" ? null : (item.precio_compra ?? 0),
+        precioCompra: canViewCost ? (item.precio_compra ?? 0) : null,
         trackeaSeries: item.trackea_series ?? false,
         diasGarantiaDefault: item.dias_garantia_default ?? null,
       }

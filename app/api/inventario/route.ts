@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireInventarioAccess } from "@/lib/auth-utils"
+import { requireAuth, requireInventarioAccess, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
 import { createAuditLogger } from "@/lib/audit"
@@ -29,8 +29,16 @@ const inventarioSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
+
+    // Purchase cost (precioCompra) follows hasInventarioAccess: ADMIN always,
+    // VENDEDOR only if the org opted in (vendedores_administran_inventario),
+    // TECNICO never.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search") || ""
@@ -148,8 +156,13 @@ export async function GET(request: Request) {
       count = fallback.count
     }
 
+    const data = inventario?.map((item) => {
+      const formatted = formatInventario(item)
+      return canViewCost || !formatted ? formatted : { ...formatted, precioCompra: null }
+    })
+
     return NextResponse.json({
-      data: inventario?.map(formatInventario),
+      data,
       total: count || 0,
       page,
       limit,

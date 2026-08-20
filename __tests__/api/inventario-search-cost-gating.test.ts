@@ -5,7 +5,6 @@ import { supabaseAdmin } from "@/lib/supabase"
 import {
   mockAuthSuccess,
   createChainMock,
-  mockSupabaseFrom,
   createGetRequest,
   parseResponse,
 } from "./helpers"
@@ -36,23 +35,45 @@ function makeDepositosChain(depositoId: string | null) {
   return chain
 }
 
-describe("GET /api/inventario/search — cost visibility by role", () => {
+function mockVendedor(sucursalId = "suc-1") {
+  vi.mocked(auth).mockResolvedValue({
+    user: {
+      id: "vendedor-1",
+      organizationId: "org-1",
+      role: "VENDEDOR",
+      sucursalId,
+      email: "v@v.com",
+    },
+    expires: new Date(Date.now() + 86400000).toISOString(),
+  } as any)
+}
+
+function mockTecnico(sucursalId = "suc-1") {
+  vi.mocked(auth).mockResolvedValue({
+    user: {
+      id: "tecnico-1",
+      organizationId: "org-1",
+      role: "TECNICO",
+      sucursalId,
+      email: "t@t.com",
+    },
+    expires: new Date(Date.now() + 86400000).toISOString(),
+  } as any)
+}
+
+// organizations chain used by resolveVendedoresHabilitados()
+function orgChain(vendedoresAdministranInventario: boolean) {
+  return createChainMock({ vendedores_administran_inventario: vendedoresAdministranInventario })
+}
+
+describe("GET /api/inventario/search — cost visibility gated by hasInventarioAccess", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockNoCookie()
   })
 
-  it("strips precioCompra (null) for TECNICO (sucursal-scoped path)", async () => {
-    vi.mocked(auth).mockResolvedValue({
-      user: {
-        id: "tecnico-1",
-        organizationId: "org-1",
-        role: "TECNICO",
-        sucursalId: "suc-1",
-        email: "t@t.com",
-      },
-      expires: new Date(Date.now() + 86400000).toISOString(),
-    } as any)
+  it("strips precioCompra (null) for TECNICO — never gets inventario cost access", async () => {
+    mockTecnico()
 
     const depositosChain = makeDepositosChain("dep-1")
     const invChain = createChainMock([
@@ -73,11 +94,11 @@ describe("GET /api/inventario/search — cost visibility by role", () => {
 
     expect(status).toBe(200)
     expect(body[0].precioCompra).toBeNull()
-    // Venta price stays visible — only cost is gated.
+    // Sale price stays visible — only cost is gated.
     expect(body[0].precioVenta).toBe(100)
   })
 
-  it("keeps precioCompra for ADMIN (verTodas / aggregate path) — no behavior change", async () => {
+  it("keeps precioCompra for ADMIN (aggregate / verTodas path) — no behavior change", async () => {
     mockAuthSuccess({ role: "ADMIN" })
 
     const invChain = createChainMock([
@@ -92,7 +113,7 @@ describe("GET /api/inventario/search — cost visibility by role", () => {
         trackea_series: false,
       },
     ])
-    mockSupabaseFrom({ inventario: invChain })
+    mockFromPerTable({ inventario: invChain })
 
     const res = await GET(createGetRequest("http://localhost:3000/api/inventario/search?q=cable"))
     const { status, body } = await parseResponse(res)
@@ -101,17 +122,8 @@ describe("GET /api/inventario/search — cost visibility by role", () => {
     expect(body[0].precioCompra).toBe(20)
   })
 
-  it("keeps precioCompra for VENDEDOR (POS product search is out of scope for this change)", async () => {
-    vi.mocked(auth).mockResolvedValue({
-      user: {
-        id: "vendedor-1",
-        organizationId: "org-1",
-        role: "VENDEDOR",
-        sucursalId: "suc-1",
-        email: "v@v.com",
-      },
-      expires: new Date(Date.now() + 86400000).toISOString(),
-    } as any)
+  it("strips precioCompra for VENDEDOR when the org has NOT opted in (vendedores_administran_inventario=false)", async () => {
+    mockVendedor()
 
     const depositosChain = makeDepositosChain("dep-1")
     const invChain = createChainMock([
@@ -125,7 +137,31 @@ describe("GET /api/inventario/search — cost visibility by role", () => {
         inventario_depositos: [{ stock: 5, stock_reservado: 1, deposito_id: "dep-1" }],
       },
     ])
-    mockFromPerTable({ depositos: depositosChain, inventario: invChain })
+    mockFromPerTable({ depositos: depositosChain, inventario: invChain, organizations: orgChain(false) })
+
+    const res = await GET(createGetRequest("http://localhost:3000/api/inventario/search?q=funda"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(body[0].precioCompra).toBeNull()
+  })
+
+  it("keeps precioCompra for VENDEDOR when the org opted in (vendedores_administran_inventario=true)", async () => {
+    mockVendedor()
+
+    const depositosChain = makeDepositosChain("dep-1")
+    const invChain = createChainMock([
+      {
+        id: "i4",
+        codigo: "C4",
+        nombre: "Funda",
+        precio_venta: 200,
+        precio_compra: 80,
+        trackea_series: false,
+        inventario_depositos: [{ stock: 5, stock_reservado: 1, deposito_id: "dep-1" }],
+      },
+    ])
+    mockFromPerTable({ depositos: depositosChain, inventario: invChain, organizations: orgChain(true) })
 
     const res = await GET(createGetRequest("http://localhost:3000/api/inventario/search?q=funda"))
     const { status, body } = await parseResponse(res)
