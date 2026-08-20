@@ -20,11 +20,28 @@ interface ManualProduct {
   costo?: number
 }
 
+/** The sucursal a POS sale will actually draw stock from — resolved server-side. */
+export interface VentaSucursalInfo {
+  id: string | null
+  nombre: string | null
+}
+
 interface PosProductSearchProps {
   onAddProduct: (product: InventarioResult) => void
   onAddManualProduct: (product: ManualProduct) => void
   onOpenScanner?: () => void
   scanSuccess?: { nombre: string } | null
+  /** Reports the sale's resolved sucursal once, from the initial products load. */
+  onVentaSucursal?: (info: VentaSucursalInfo) => void
+}
+
+/** Reads the X-Venta-Sucursal-* headers set by search/route.ts under scope=venta. */
+function readVentaSucursalHeaders(res: Response): VentaSucursalInfo {
+  const nombreRaw = res.headers?.get("X-Venta-Sucursal-Nombre")
+  return {
+    id: res.headers?.get("X-Venta-Sucursal-Id") || null,
+    nombre: nombreRaw ? decodeURIComponent(nombreRaw) : null,
+  }
 }
 
 export interface PosProductSearchRef {
@@ -143,7 +160,7 @@ function StockOtrasSucursales({ inventarioId, productName }: StockOtrasSucursale
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearchProps>(
-  function PosProductSearch({ onAddProduct, onAddManualProduct, onOpenScanner, scanSuccess }, ref) {
+  function PosProductSearch({ onAddProduct, onAddManualProduct, onOpenScanner, scanSuccess, onVentaSucursal }, ref) {
     const { formatPrice } = useCurrency()
     const inputRef = useRef<HTMLInputElement>(null)
     const manualNameRef = useRef<HTMLInputElement>(null)
@@ -167,15 +184,19 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
       },
     }))
 
-    // Load initial/popular products
+    // Load initial/popular products. scope=venta keeps stock consistent with what
+    // a sale can actually decrement (see app/api/inventario/search/route.ts); the
+    // response headers also carry the resolved sucursal for the "selling from"
+    // indicator, reported once here since this fetch always runs on mount.
     useEffect(() => {
       const loadInitial = async () => {
         try {
-          const res = await fetch("/api/inventario/search?q=&limit=20")
+          const res = await fetch("/api/inventario/search?q=&limit=20&scope=venta")
           const data = await res.json()
           if (Array.isArray(data)) {
             setRecentProducts(data)
           }
+          onVentaSucursal?.(readVentaSucursalHeaders(res))
         } catch {
           // ignore
         } finally {
@@ -183,6 +204,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
         }
       }
       loadInitial()
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     // Debounced search
@@ -195,7 +217,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
       const timer = setTimeout(async () => {
         setLoading(true)
         try {
-          const res = await fetch(`/api/inventario/search?q=${encodeURIComponent(query)}&limit=20`)
+          const res = await fetch(`/api/inventario/search?q=${encodeURIComponent(query)}&limit=20&scope=venta`)
           const data = await res.json()
           setResults(Array.isArray(data) ? data : [])
         } catch {

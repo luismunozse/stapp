@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -20,6 +21,7 @@ import {
   Shield,
   WifiOff,
   Pencil,
+  Store,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
@@ -52,6 +54,8 @@ interface PosCartProps {
   onSetDescuentoMotivo: (m: string) => void
   onSetPrecio: (lineId: string, precio: number) => void
   fiscal?: FiscalConfig | null
+  /** Sucursal the sale will actually draw stock from, when resolved (see pos-terminal.tsx). */
+  ventaSucursalNombre?: string | null
 }
 
 interface ClienteResult {
@@ -83,8 +87,22 @@ export function PosCart({
   onSetDescuentoMotivo,
   onSetPrecio,
   fiscal,
+  ventaSucursalNombre = null,
 }: PosCartProps) {
   const { formatPrice } = useCurrency()
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "ADMIN"
+  // Mirror of the sucursal selector (see sucursal-switcher.tsx — the real cookie is
+  // httpOnly). Computed once at mount: switching branches reloads the page, so this
+  // never goes stale during the session.
+  const [selectorTodas] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true
+    const mirror = window.localStorage.getItem("sucursal-activa-ui")
+    return !mirror || mirror === "todas"
+  })
+  // Only surface the indicator when it disambiguates something: an ADMIN viewing
+  // "todas las sucursales" can't otherwise tell which branch a sale will draw from.
+  const showVentaSucursal = isAdmin && selectorTodas && !!ventaSucursalNombre
   const [clienteQuery, setClienteQuery] = useState("")
   const [clienteResults, setClienteResults] = useState<ClienteResult[]>([])
   const [clienteLoading, setClienteLoading] = useState(false)
@@ -195,6 +213,14 @@ export function PosCart({
             )}
           </div>
         </div>
+
+        {/* Selling-from indicator — only when "todas las sucursales" would otherwise hide it */}
+        {showVentaSucursal && (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Store className="h-3.5 w-3.5 shrink-0" />
+            Vendiendo desde: <span className="font-medium text-foreground">{ventaSucursalNombre}</span>
+          </p>
+        )}
 
         {/* Cliente */}
         <div className="flex items-center gap-2">
