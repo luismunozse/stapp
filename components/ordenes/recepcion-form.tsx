@@ -11,12 +11,14 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FormActionBar } from "@/components/ui/form-action-bar"
+import { DraftRestoredNotice } from "@/components/ui/draft-restored-notice"
 import { Plus } from "lucide-react"
 import { ClienteSelector } from "@/components/cotizaciones/cliente-selector"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { compressImage } from "@/lib/image-compression"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { useIsMobileViewport } from "@/hooks/use-is-mobile-viewport"
+import { useFormDraft } from "@/hooks/use-form-draft"
 import { useTerminologia } from "@/contexts/currency-context"
 import { useOffline } from "@/contexts/offline-context"
 import { useModal } from "@/contexts/modal-context"
@@ -50,6 +52,19 @@ const equipoSideStateVacio = (): EquipoSideState => ({
   camposExtraValues: {},
   fotos: [],
 })
+
+/** Snapshot de EquipoSideState sin `fotos`: los File/preview base64 no son
+ *  serializables de forma segura para localStorage (ver useFormDraft). Las
+ *  fotos adjuntas nunca se restauran desde un borrador. */
+type EquipoSideStateDraft = Omit<EquipoSideState, "fotos">
+
+/** Forma persistida por useFormDraft para este formulario. La firma del
+ *  cliente tampoco se incluye (mismo motivo que las fotos: dato binario). */
+interface RecepcionDraftValue {
+  form: RecepcionFormData
+  sideState: EquipoSideStateDraft[]
+  terminosAceptados: boolean
+}
 
 const equipoVacio = (): EquipoFormValues => ({
   dispositivo: "",
@@ -218,6 +233,7 @@ export function RecepcionForm() {
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<RecepcionFormData>({
     resolver: zodResolver(recepcionFormSchema),
@@ -238,6 +254,50 @@ export function RecepcionForm() {
   ])
 
   const clienteId = watch("clienteId")
+
+  // --- Borrador local (useFormDraft) ----------------------------------------
+  // Siempre "new record" (esta pantalla no tiene modo edicion), asi que no
+  // hace falta recordId. La firma y las fotos de cada equipo quedan afuera
+  // del snapshot: son datos binarios, no formularios recuperables.
+  const [draftNoticeVisible, setDraftNoticeVisible] = useState(false)
+  const draftAppliedRef = useRef(false)
+  const { draft, ready: draftReady, clearDraft } = useFormDraft<RecepcionDraftValue>({
+    feature: "recepcion-form",
+    value: {
+      form: watch(),
+      sideState: sideState.map(({ fotos: _fotos, ...rest }) => rest),
+      terminosAceptados,
+    },
+  })
+
+  useEffect(() => {
+    if (!draftReady || draftAppliedRef.current) return
+    draftAppliedRef.current = true
+    if (!draft) return
+    reset(draft.form)
+    setSideState(
+      draft.form.equipos.map((_, i) => ({
+        ...equipoSideStateVacio(),
+        ...draft.sideState[i],
+      }))
+    )
+    setTerminosAceptados(draft.terminosAceptados)
+    setDraftNoticeVisible(true)
+  }, [draftReady, draft, reset])
+
+  const discardDraft = () => {
+    clearDraft()
+    setDraftNoticeVisible(false)
+    reset({
+      clienteId: "",
+      telefonoContacto: "",
+      observaciones: "",
+      equipos: [equipoVacio(), equipoVacio()],
+    })
+    setSideState([equipoSideStateVacio(), equipoSideStateVacio()])
+    setTerminosAceptados(false)
+    setSelectedCliente(null)
+  }
 
   // --- Mantener fields (react-hook-form) y sideState sincronizados ---------
   // Un desalineado aca manda, por ejemplo, las fotos del equipo 2 a la orden
@@ -415,6 +475,7 @@ export function RecepcionForm() {
         // Encolado offline: el body sintetico ({ _offline, tempId, message })
         // no tiene la forma de RecepcionCreadaResultado, asi que no hay nada
         // que mostrarle al modal de exito todavia (se sincroniza solo).
+        clearDraft()
         await showInfo("Recepcion guardada offline. Se sincronizara automaticamente cuando vuelva la conexion.")
         return
       }
@@ -425,6 +486,7 @@ export function RecepcionForm() {
         return
       }
 
+      clearDraft()
       const creada: RecepcionCreadaResultado = await res.json()
       // Snapshot de lo enviado: problemaReportado/tipoDispositivo/marca/
       // accesorios no vuelven en la respuesta del endpoint (a diferencia de
@@ -456,6 +518,10 @@ export function RecepcionForm() {
     <Card>
       <CardContent className="pt-6 space-y-4">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {draftNoticeVisible && (
+            <DraftRestoredNotice onDiscard={discardDraft} />
+          )}
+
           <div>
             <ClienteSelector
               value={clienteId || null}

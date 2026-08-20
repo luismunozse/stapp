@@ -23,6 +23,10 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({ data: null }),
+}))
+
 vi.mock("@/hooks/use-tipos-dispositivo", () => ({
   useTiposDispositivo: () => ({
     tipos: [
