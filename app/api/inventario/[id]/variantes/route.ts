@@ -189,7 +189,9 @@ export async function POST(
     return NextResponse.json({
       success: true,
       count: result.count,
-      data: (rows || []).map(formatVariante),
+      // Wrapped on purpose: passing `formatVariante` bare to `.map` feeds the
+      // array index into `includeCost`, which strips the cost off index 0.
+      data: (rows || []).map((r) => formatVariante(r)),
     }, { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {
