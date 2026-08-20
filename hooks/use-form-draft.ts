@@ -156,7 +156,6 @@ export function useFormDraft<T>({
     // `ready` is intentionally included: it flips true right after the load
     // effect resolves `keyRef.current`, guaranteeing a save effect run (with
     // the now-known key) even when `value`'s identity hasn't changed since.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, enabled, debounceMs, ready])
 
   const clearDraft = useCallback(() => {
