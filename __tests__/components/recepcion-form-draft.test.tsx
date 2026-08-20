@@ -219,4 +219,71 @@ describe("RecepcionForm — borrador local", () => {
 
     expect(screen.getByPlaceholderText("1155667788")).toBeInTheDocument()
   })
+
+  it("mantiene fields y sideState alineados al quitar un equipo de un borrador restaurado", async () => {
+    // recepcion-form-equipo-sync.test.tsx cubre el mismo riesgo sobre un
+    // formulario en blanco. El restore es el otro camino que puede desalinear
+    // los dos arrays: rehidrata react-hook-form con reset() y sideState con un
+    // setState aparte, y de ahi en mas agregar/quitar tiene que seguir tocando
+    // los dos en el mismo indice.
+    const equipo = (dispositivo: string) => ({
+      dispositivo,
+      tipoDispositivo: "",
+      marca: "",
+      color: "",
+      imei: "",
+      problemaReportado: "",
+      codigoAccesoDispositivo: "",
+    })
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        version: 1,
+        savedAt: Date.now(),
+        data: {
+          form: {
+            clienteId: "",
+            telefonoContacto: "",
+            observaciones: "",
+            equipos: [equipo("Equipo A"), equipo("Equipo B"), equipo("Equipo C")],
+          },
+          sideState: [
+            { accesoriosSeleccionados: [], otroAccesorio: "Acc A", camposExtraValues: {} },
+            { accesoriosSeleccionados: [], otroAccesorio: "Acc B", camposExtraValues: {} },
+            { accesoriosSeleccionados: [], otroAccesorio: "Acc C", camposExtraValues: {} },
+          ],
+          terminosAceptados: false,
+          selectedCliente: null,
+        },
+      }),
+    )
+
+    await renderForm()
+
+    const dispositivos = () => screen.getAllByPlaceholderText("Ej: iPhone 13")
+    // El input de "otro accesorio" es el que refleja sideState directamente:
+    // useFieldArray ya reindexa sus propios campos por si solo.
+    const accesorios = () => screen.getAllByPlaceholderText("Otro accesorio...")
+
+    expect(dispositivos()).toHaveLength(3)
+    expect(accesorios()[2]).toHaveValue("Acc C")
+
+    fireEvent.click(screen.getByRole("button", { name: /Agregar otro equipo/i }))
+    expect(dispositivos()).toHaveLength(4)
+    fireEvent.change(dispositivos()[3], { target: { value: "Equipo D" } })
+    fireEvent.change(accesorios()[3], { target: { value: "Acc D" } })
+
+    fireEvent.click(screen.getByRole("button", { name: "Quitar equipo 1" }))
+
+    expect(dispositivos().map((i) => (i as HTMLInputElement).value)).toEqual([
+      "Equipo B",
+      "Equipo C",
+      "Equipo D",
+    ])
+    expect(accesorios().map((i) => (i as HTMLInputElement).value)).toEqual([
+      "Acc B",
+      "Acc C",
+      "Acc D",
+    ])
+  })
 })
