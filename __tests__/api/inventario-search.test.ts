@@ -317,4 +317,36 @@ describe("GET /api/inventario/search — scope=venta (POS opt-in)", () => {
     expect(body[0].stock).toBe(7)
     expect(invChain.gt).toHaveBeenCalledWith("stock", 0)
   })
+
+  it("scope=venta con VENDEDOR sin sucursal asignada: sigue fail-closed (catalogo vacio, sin indicador)", async () => {
+    vi.mocked(auth).mockResolvedValue({
+      user: {
+        id: "vendedor-sin-sucursal",
+        organizationId: "org-1",
+        role: "VENDEDOR",
+        sucursalId: null,
+        email: "v@v.com",
+      },
+      expires: new Date(Date.now() + 86400000).toISOString(),
+    } as any)
+    mockNoCookie()
+
+    const sucursalesChain = makeSucursalesChain("suc-principal", "Casa Central")
+    const depositosChain = makeDepositosChain("dep-principal")
+    const invChain = createChainMock([
+      { id: "i1", codigo: "C1", nombre: "Notebook", stock: 5, stock_reservado: 0,
+        precio_venta: 100, precio_compra: 60, trackea_series: false },
+    ])
+    mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain, inventario: invChain })
+
+    const res = await GET(createGetRequest("http://localhost:3000/api/inventario/search?q=note&scope=venta"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    // The write path falls back to the principal sucursal, but a non-ADMIN with
+    // no assigned sucursal must keep seeing nothing (SUCURSAL_NINGUNA behavior).
+    expect(body).toEqual([])
+    expect(invChain.select).not.toHaveBeenCalled()
+    expect(res.headers.get("X-Venta-Sucursal-Id")).toBe("")
+  })
 })

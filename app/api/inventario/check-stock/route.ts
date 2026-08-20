@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getCookieSucursalId, resolveSucursalLectura, getDepositoDeSucursal, resolverDestinoVenta } from "@/lib/sucursal"
+import {
+  getCookieSucursalId,
+  resolveSucursalLectura,
+  getDepositoDeSucursal,
+  resolverDestinoVenta,
+  derivarLecturaVenta,
+} from "@/lib/sucursal"
 
 // POST /api/inventario/check-stock?scope=venta  body: { ids: string[] }
 // Returns the CURRENT available stock per inventory id, scoped to the caller's
@@ -39,13 +45,10 @@ export async function POST(request: Request) {
 
     if (scopeVenta) {
       const destino = await resolverDestinoVenta({ role, organizationId: organizationId!, userSucursalId })
-      sucursalId = destino.sucursalId
-      depositoIdPrefetched = destino.depositoId
-      // No concrete deposito (org without principal sucursal, or sucursal
-      // without principal deposito): the write path passes p_deposito_id = null
-      // and drains org-wide, so the read must mirror that org-wide aggregate
-      // instead of reporting 0 for stock the sale could actually decrement.
-      verTodas = !destino.depositoId
+      const lectura = derivarLecturaVenta(destino)
+      sucursalId = lectura.sucursalId
+      depositoIdPrefetched = lectura.depositoId
+      verTodas = lectura.verTodas
     } else {
       const resolved = resolveSucursalLectura({ role, userSucursalId, cookieSucursalId })
       sucursalId = resolved.sucursalId

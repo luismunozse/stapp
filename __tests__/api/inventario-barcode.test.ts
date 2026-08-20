@@ -215,4 +215,41 @@ describe("GET /api/inventario/barcode", () => {
     // the scan with stock 0 would block a sale the RPC would have accepted.
     expect(body.item.stock).toBe(10)
   })
+
+  it("scope=venta con VENDEDOR sin sucursal asignada: sigue fail-closed (stock 0)", async () => {
+    vi.mocked(auth).mockResolvedValue({
+      user: {
+        id: "vendedor-sin-sucursal",
+        organizationId: "org-1",
+        role: "VENDEDOR",
+        sucursalId: null,
+        email: "v@v.com",
+      },
+      expires: new Date(Date.now() + 86400000).toISOString(),
+    } as any)
+    mockNoCookie()
+
+    const invChain = makeInventarioChain([ITEM_ROW]) // ITEM_ROW.stock === 10 (aggregate)
+    const sucursalesChain: any = {}
+    for (const m of ["select", "eq", "is"]) sucursalesChain[m] = vi.fn().mockReturnValue(sucursalesChain)
+    sucursalesChain.single = vi.fn().mockResolvedValue({ data: { id: "suc-principal" }, error: null })
+    const depositosChain = makeDepositosChain("dep-principal")
+    const depStockChain = makeDepStockChain(3)
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "sucursales") return sucursalesChain as any
+      if (table === "depositos") return depositosChain as any
+      if (table === "inventario_depositos") return depStockChain as any
+      if (table === "inventario") return invChain as any
+      return { then: (r: any) => r({ data: null, error: { message: `No mock for: ${table}` } }) } as any
+    })
+
+    const res = await GET(createGetRequest("http://localhost:3000/api/inventario/barcode?code=7890001234567&scope=venta"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(body.found).toBe(true)
+    // Neither the aggregate (10) nor the principal sucursal's deposito (3).
+    expect(body.item.stock).toBe(0)
+  })
 })

@@ -2,7 +2,13 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
-import { getCookieSucursalId, resolveSucursalLectura, getDepositoDeSucursal, resolverDestinoVenta } from "@/lib/sucursal"
+import {
+  getCookieSucursalId,
+  resolveSucursalLectura,
+  getDepositoDeSucursal,
+  resolverDestinoVenta,
+  derivarLecturaVenta,
+} from "@/lib/sucursal"
 
 // GET /api/inventario/barcode?code=123456
 // Search inventory by barcode
@@ -36,13 +42,10 @@ export async function GET(request: Request) {
 
     if (scopeVenta) {
       const destino = await resolverDestinoVenta({ role, organizationId: organizationId!, userSucursalId })
-      sucursalId = destino.sucursalId
-      depositoIdPrefetched = destino.depositoId
-      // No concrete deposito (org without principal sucursal, or sucursal
-      // without principal deposito): the write path passes p_deposito_id = null
-      // and drains org-wide, so the scan must report the org-wide aggregate
-      // instead of a 0 that would refuse a sale the RPC would accept.
-      verTodas = !destino.depositoId
+      const lectura = derivarLecturaVenta(destino)
+      sucursalId = lectura.sucursalId
+      depositoIdPrefetched = lectura.depositoId
+      verTodas = lectura.verTodas
     } else {
       const resolved = resolveSucursalLectura({ role, userSucursalId, cookieSucursalId })
       sucursalId = resolved.sucursalId

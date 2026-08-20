@@ -18,6 +18,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import {
   resolveSucursalLectura,
   resolverDestinoVenta,
+  derivarLecturaVenta,
   getNombreSucursal,
   SUCURSAL_NINGUNA,
 } from "@/lib/sucursal"
@@ -131,7 +132,11 @@ describe("resolverDestinoVenta", () => {
       userSucursalId: null,
     })
 
-    expect(result).toEqual({ sucursalId: "suc-principal", depositoId: "dep-principal" })
+    expect(result).toEqual({
+      sucursalId: "suc-principal",
+      depositoId: "dep-principal",
+      unassignedSucursal: false,
+    })
   })
 
   it('DV-2 — ADMIN con cookie "todas": igual resuelve la principal (mismo comportamiento que sucursalParaEscritura)', async () => {
@@ -169,7 +174,11 @@ describe("resolverDestinoVenta", () => {
       userSucursalId: null,
     })
 
-    expect(result).toEqual({ sucursalId: "suc-principal", depositoId: null })
+    expect(result).toEqual({
+      sucursalId: "suc-principal",
+      depositoId: null,
+      unassignedSucursal: false,
+    })
   })
 
   it("DV-5 — org sin sucursal principal: sucursalId y depositoId null", async () => {
@@ -181,7 +190,88 @@ describe("resolverDestinoVenta", () => {
       userSucursalId: null,
     })
 
-    expect(result).toEqual({ sucursalId: null, depositoId: null })
+    expect(result).toEqual({ sucursalId: null, depositoId: null, unassignedSucursal: false })
+  })
+
+  it("DV-6 — no-ADMIN sin sucursal asignada: marca unassignedSucursal, pero la escritura sigue cayendo a la principal", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    const result = await resolverDestinoVenta({
+      role: "VENDEDOR",
+      organizationId: "org-1",
+      userSucursalId: null,
+    })
+
+    expect(result.unassignedSucursal).toBe(true)
+    // The write path keeps its principal fallback — only reads go fail-closed.
+    expect(result.sucursalId).toBe("suc-principal")
+  })
+
+  it("DV-7 — no-ADMIN con sucursal asignada: unassignedSucursal false", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-B" })
+
+    const result = await resolverDestinoVenta({
+      role: "VENDEDOR",
+      organizationId: "org-1",
+      userSucursalId: "suc-B",
+    })
+
+    expect(result).toEqual({ sucursalId: "suc-B", depositoId: "dep-B", unassignedSucursal: false })
+  })
+
+  it("DV-8 — ADMIN sin sucursal asignada: NO es unassigned (asimetria ADMIN / no-ADMIN)", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    const result = await resolverDestinoVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      userSucursalId: null,
+    })
+
+    expect(result.unassignedSucursal).toBe(false)
+  })
+})
+
+describe("derivarLecturaVenta", () => {
+  it("LV-1 — no-ADMIN sin sucursal asignada: fail-closed (sentinel, sin deposito, sin agregado)", () => {
+    const lectura = derivarLecturaVenta({
+      sucursalId: "suc-principal",
+      depositoId: "dep-principal",
+      unassignedSucursal: true,
+    })
+
+    expect(lectura).toEqual({
+      sucursalId: SUCURSAL_NINGUNA,
+      depositoId: null,
+      verTodas: false,
+      ventaSucursalId: null,
+    })
+  })
+
+  it("LV-2 — destino con deposito concreto: lectura escopeada a ese deposito", () => {
+    const lectura = derivarLecturaVenta({
+      sucursalId: "suc-A",
+      depositoId: "dep-A",
+      unassignedSucursal: false,
+    })
+
+    expect(lectura).toEqual({
+      sucursalId: "suc-A",
+      depositoId: "dep-A",
+      verTodas: false,
+      ventaSucursalId: "suc-A",
+    })
+  })
+
+  it("LV-3 — destino sin deposito (modo drenaje): lectura agregada org-wide", () => {
+    const lectura = derivarLecturaVenta({
+      sucursalId: "suc-A",
+      depositoId: null,
+      unassignedSucursal: false,
+    })
+
+    expect(lectura.verTodas).toBe(true)
+    expect(lectura.ventaSucursalId).toBe("suc-A")
   })
 })
 

@@ -143,6 +143,13 @@ export interface DestinoVenta {
   sucursalId: string | null
   /** Concrete deposito a POS sale will draw stock from, null if the sucursal has no principal deposito (drain-mode fallback). */
   depositoId: string | null
+  /**
+   * True when a non-ADMIN caller has no assigned sucursal, i.e. `sucursalId`
+   * above is only the write path's principal fallback and does NOT reflect a
+   * branch this user belongs to. Reads must go fail-closed in that state
+   * (see `derivarLecturaVenta`); writes keep the fallback.
+   */
+  unassignedSucursal: boolean
 }
 
 /**
@@ -152,15 +159,24 @@ export interface DestinoVenta {
  * single helper so the ventas write route and the POS read endpoints
  * (search/barcode/check-stock, via their opt-in `scope=venta` query param)
  * can never drift apart on which sucursal/deposito a sale actually uses.
+ *
+ * ADMIN vs non-ADMIN asymmetry, deliberate: for an ADMIN the "no sucursal
+ * selected" state means "all branches", so falling back to the principal
+ * sucursal is the correct sale target. For a TECNICO/VENDEDOR a null
+ * `sucursal_id` is an invalid state, not a wider scope — the write path still
+ * falls back to the principal sucursal (unchanged, pre-existing behavior),
+ * but reads must stay fail-closed exactly like `resolveSucursalLectura`'s
+ * SUCURSAL_NINGUNA sentinel, so `unassignedSucursal` flags it for callers.
  */
 export async function resolverDestinoVenta(params: {
   role: string | null
   organizationId: string
   userSucursalId: string | null
 }): Promise<DestinoVenta> {
+  const unassignedSucursal = params.role !== "ADMIN" && !params.userSucursalId
   const sucursalId = await sucursalParaEscritura(params)
   if (!sucursalId) {
-    return { sucursalId: null, depositoId: null }
+    return { sucursalId: null, depositoId: null, unassignedSucursal }
   }
 
   const depositoId = await getDepositoDeSucursal(params.organizationId, sucursalId)
@@ -170,7 +186,47 @@ export async function resolverDestinoVenta(params: {
     )
   }
 
-  return { sucursalId, depositoId }
+  return { sucursalId, depositoId, unassignedSucursal }
+}
+
+export interface LecturaVenta {
+  /** Sucursal the read is scoped to; SUCURSAL_NINGUNA when fail-closed. */
+  sucursalId: string | null
+  /** Concrete deposito to read stock from, null when reading the aggregate or fail-closed. */
+  depositoId: string | null
+  /** True => read the org-wide aggregate, mirroring the write path's drain mode. */
+  verTodas: boolean
+  /** Sucursal to name in the POS "selling from" indicator; null when the caller cannot sell. */
+  ventaSucursalId: string | null
+}
+
+/**
+ * Derives the read scope the POS endpoints must apply for a resolved sale
+ * destination. Shared by search/barcode/check-stock so the three cannot drift:
+ *
+ *  - No assigned sucursal (non-ADMIN): fail-closed — sentinel sucursal, no
+ *    deposito and no aggregate, so the caller sees nothing.
+ *  - No concrete deposito: the write path passes p_deposito_id = null and
+ *    drains org-wide, so the read must show the org-wide aggregate rather
+ *    than hiding stock a sale could actually decrement.
+ *  - Otherwise: scope the read to that deposito.
+ */
+export function derivarLecturaVenta(destino: DestinoVenta): LecturaVenta {
+  if (destino.unassignedSucursal) {
+    return {
+      sucursalId: SUCURSAL_NINGUNA,
+      depositoId: null,
+      verTodas: false,
+      ventaSucursalId: null,
+    }
+  }
+
+  return {
+    sucursalId: destino.sucursalId,
+    depositoId: destino.depositoId,
+    verTodas: !destino.depositoId,
+    ventaSucursalId: destino.sucursalId,
+  }
 }
 
 /**

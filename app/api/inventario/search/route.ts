@@ -7,6 +7,7 @@ import {
   resolveSucursalLectura,
   getDepositoDeSucursal,
   resolverDestinoVenta,
+  derivarLecturaVenta,
   getNombreSucursal,
 } from "@/lib/sucursal"
 
@@ -45,16 +46,13 @@ export async function GET(request: Request) {
 
     if (scopeVenta) {
       const destino = await resolverDestinoVenta({ role, organizationId: organizationId!, userSucursalId })
-      ventaSucursalId = destino.sucursalId
-      sucursalId = destino.sucursalId
-      depositoIdPrefetched = destino.depositoId
-      // No concrete deposito (org without principal sucursal, or sucursal
-      // without principal deposito): the write path passes p_deposito_id = null
-      // and drains org-wide, so the catalog must mirror that org-wide aggregate
-      // instead of going empty for stock the sale could actually decrement.
-      verTodas = !destino.depositoId
-      if (destino.sucursalId) {
-        ventaSucursalNombre = await getNombreSucursal(organizationId!, destino.sucursalId)
+      const lectura = derivarLecturaVenta(destino)
+      ventaSucursalId = lectura.ventaSucursalId
+      sucursalId = lectura.sucursalId
+      depositoIdPrefetched = lectura.depositoId
+      verTodas = lectura.verTodas
+      if (lectura.ventaSucursalId) {
+        ventaSucursalNombre = await getNombreSucursal(organizationId!, lectura.ventaSucursalId)
       }
     } else {
       const resolved = resolveSucursalLectura({ role, userSucursalId, cookieSucursalId })
