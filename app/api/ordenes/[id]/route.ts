@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados, canViewCotizacionCosts } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
@@ -135,6 +135,39 @@ export async function GET(
       .maybeSingle()
 
     const formatted = formatOrden(orden)
+
+    // The repuestos_orden/cotizaciones embeds carry a live inventario join
+    // (repuestos_orden -> inventario, items_cotizacion -> inventario) with
+    // its purchase cost (precio_compra). That is inventario cost data, not
+    // orden pricing (orden.costoFinal/orden.presupuesto stay visible to
+    // everyone), so it follows the two independent cost gates:
+    //  - inventario purchase cost -> hasInventarioAccess (ADMIN always,
+    //    VENDEDOR only if the org opted in, TECNICO never)
+    //  - cotización item cost -> canViewCotizacionCosts (ADMIN only,
+    //    uniformly — VENDEDOR included, since they have no cotizaciones nav
+    //    access today; that loss is deliberate, not an oversight)
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewInventarioCost = hasInventarioAccess(role, vendedoresHabilitados)
+    const canViewCotizacionCost = canViewCotizacionCosts(role)
+
+    if (!canViewInventarioCost && Array.isArray(formatted.repuestos)) {
+      formatted.repuestos = formatted.repuestos.map((r: any) =>
+        r?.inventario ? { ...r, inventario: { ...r.inventario, precioCompra: null } } : r
+      )
+    }
+    if (!canViewCotizacionCost && Array.isArray(formatted.cotizaciones)) {
+      formatted.cotizaciones = formatted.cotizaciones.map((c: any) => ({
+        ...c,
+        items_cotizacion: Array.isArray(c.items_cotizacion)
+          ? c.items_cotizacion.map((it: any) =>
+              it?.inventario ? { ...it, inventario: { ...it.inventario, precio_compra: null } } : it
+            )
+          : c.items_cotizacion,
+      }))
+    }
+
     const org = (orden as any).organizations
     return NextResponse.json({
       ...formatted,
