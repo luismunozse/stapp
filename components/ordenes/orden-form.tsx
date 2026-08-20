@@ -56,13 +56,41 @@ const ordenSchema = z.object({
 
 type OrdenFormData = z.infer<typeof ordenSchema>
 
+/** Valores base del formulario. Vive afuera del componente (sin dependencias
+ *  de hooks) para que useForm(defaultValues) y el discard del borrador usen
+ *  la MISMA lista: cuando se duplicaba a mano, los campos que faltaban en la
+ *  copia (register() sin control) se quedaban con el texto del borrador
+ *  descartado y se enviaban igual en el submit. */
+function ordenFormDefaults(): OrdenFormData {
+  return {
+    clienteId: "",
+    dispositivo: "",
+    tipoDispositivo: "",
+    marca: "",
+    color: "",
+    imei: "",
+    problemaReportado: "",
+    accesorios: "",
+    codigoAccesoDispositivo: "",
+    telefonoContacto: "",
+    presupuesto: undefined,
+    fechaPrometida: "",
+    observaciones: "",
+    notasInternas: "",
+  }
+}
+
 /** Snapshot persistido por useFormDraft (hooks/use-form-draft.ts). Deja
  *  afuera fotos, firma del checklist (binarios) y todo lo que se re-obtiene
  *  solo con fetch (listas de tecnicos/operadores/sectores, template del
- *  checklist, el objeto Cliente completo -- ClienteSelector re-hidrata su
- *  display a partir del `clienteId` restaurado, ver cliente-selector.tsx). */
+ *  checklist). El objeto Cliente SI se guarda: ClienteSelector re-hidrata su
+ *  propio display a partir del id, pero nunca llama a onChange (ver
+ *  cliente-selector.tsx), asi que sin esto el selector de Sector/Area de
+ *  empresas no aparece y el modal de orden creada sale sin nombre ni
+ *  telefono del cliente. */
 interface OrdenDraftValue {
   form: OrdenFormData
+  selectedClienteObj: Cliente | null
   accesoriosSeleccionados: string[]
   otroAccesorio: string
   camposExtraValues: Record<string, any>
@@ -171,36 +199,39 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     formState: { errors },
     setValue,
     watch,
+    getValues,
     trigger,
     clearErrors,
     setError,
     reset,
   } = useForm<OrdenFormData>({
     resolver: zodResolver(ordenSchema),
-    defaultValues: {
-      clienteId: "",
-      dispositivo: "",
-      tipoDispositivo: "",
-      marca: "",
-      color: "",
-      imei: "",
-      problemaReportado: "",
-      accesorios: "",
-      codigoAccesoDispositivo: "",
-      fechaPrometida: "",
-    },
+    defaultValues: ordenFormDefaults(),
   })
 
   const tipoDispositivo = watch("tipoDispositivo")
 
   // --- Borrador local (useFormDraft) ----------------------------------------
   // Siempre "new record": esta pantalla solo crea ordenes, nunca las edita.
+  // El `scope` separa los borradores por origen: una orden abandonada desde un
+  // turno (o desde un deep-link ?clienteId=) no tiene por que reaparecer en el
+  // alta de mostrador siguiente, que es otra orden distinta.
   const [draftNoticeVisible, setDraftNoticeVisible] = useState(false)
   const draftAppliedRef = useRef(false)
-  const { draft, ready: draftReady, clearDraft } = useFormDraft<OrdenDraftValue>({
+  const draftRestoredRef = useRef(false)
+  const { draft, ready: draftReady, clearDraft, notifyChange } = useFormDraft<OrdenDraftValue>({
     feature: "orden-form",
-    value: {
-      form: watch(),
+    scope: fromTurnoId
+      ? `turno:${fromTurnoId}`
+      : initialClienteId
+        ? `cliente:${initialClienteId}`
+        : null,
+    // `getValues()` en vez de `watch()`: leer el form entero en render
+    // suscribe este componente (1500 lineas, 3 pasos) a cada tecla. El
+    // borrador no necesita re-render, solo el valor al momento de grabar.
+    getValue: () => ({
+      form: getValues(),
+      selectedClienteObj,
       accesoriosSeleccionados,
       otroAccesorio,
       camposExtraValues,
@@ -213,14 +244,23 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       checklistValores,
       checklistNotas,
       currentStep,
-    },
+    }),
   })
+
+  // Los cambios de react-hook-form ya no re-renderizan el formulario, asi que
+  // hay que avisarle al borrador por suscripcion.
+  useEffect(() => {
+    const subscription = watch(() => notifyChange())
+    return () => subscription.unsubscribe()
+  }, [watch, notifyChange])
 
   useEffect(() => {
     if (!draftReady || draftAppliedRef.current) return
     draftAppliedRef.current = true
     if (!draft) return
+    draftRestoredRef.current = true
     reset(draft.form)
+    setSelectedClienteObj(draft.selectedClienteObj ?? null)
     setAccesoriosSeleccionados(draft.accesoriosSeleccionados)
     setOtroAccesorio(draft.otroAccesorio)
     setCamposExtraValues(draft.camposExtraValues)
@@ -239,18 +279,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   const discardDraft = () => {
     clearDraft()
     setDraftNoticeVisible(false)
-    reset({
-      clienteId: "",
-      dispositivo: "",
-      tipoDispositivo: "",
-      marca: "",
-      color: "",
-      imei: "",
-      problemaReportado: "",
-      accesorios: "",
-      codigoAccesoDispositivo: "",
-      fechaPrometida: "",
-    })
+    draftRestoredRef.current = false
+    reset(ordenFormDefaults())
     setAccesoriosSeleccionados([])
     setOtroAccesorio("")
     setCamposExtraValues({})
@@ -266,9 +296,16 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     setSelectedClienteObj(null)
   }
 
-  // Prefill desde turno (si la orden nace de una visita agendada)
+  // Prefill desde turno (si la orden nace de una visita agendada).
+  //
+  // Espera a que el borrador se haya resuelto (draftReady) en vez de correr
+  // en paralelo: los dos escriben los mismos campos y quien ganaba dependia
+  // de cuando respondia el fetch. Precedencia definida: si hay borrador de
+  // ESTE turno, lo que el usuario ya escribio gana y el prefill queda solo
+  // para el aviso de "crear cliente".
   useEffect(() => {
-    if (!fromTurnoId) return
+    if (!fromTurnoId || !draftReady) return
+    const soloAviso = draftRestoredRef.current
     let cancelled = false
     fetch(`/api/turnos/${fromTurnoId}/prefill-orden`, { cache: "no-store" })
       .then(async (r) => {
@@ -284,6 +321,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           requiereCrearCliente: !!d.requiereCrearCliente,
           clienteSnapshot: d.clienteSnapshot || null,
         })
+        if (soloAviso) return
         if (d.cliente) {
           setSelectedClienteObj(d.cliente)
           setValue("clienteId", d.cliente.id, { shouldValidate: true })
@@ -304,11 +342,14 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       })
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromTurnoId])
+  }, [fromTurnoId, draftReady])
 
-  // Preselección de cliente vía deep-link (?clienteId=) — no aplica si viene de turno
+  // Preselección de cliente vía deep-link (?clienteId=) — no aplica si viene
+  // de turno. Misma precedencia que el prefill de turno: el borrador de este
+  // mismo deep-link (la key lo incluye) gana sobre el re-prefill.
   useEffect(() => {
-    if (!initialClienteId || fromTurnoId) return
+    if (!initialClienteId || fromTurnoId || !draftReady) return
+    if (draftRestoredRef.current) return
     let cancelled = false
     setValue("clienteId", initialClienteId, { shouldValidate: true })
     fetch(`/api/clientes/${initialClienteId}`, { cache: "no-store" })
@@ -320,7 +361,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       .catch(() => {})
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialClienteId])
+  }, [initialClienteId, draftReady])
 
   // Get the selected tipo object (used below for the checklist template fetch by id)
   const tipoSeleccionado = useMemo(
@@ -372,6 +413,16 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     if (nuevoTipo) clearErrors("tipoDispositivo")
     setAccesoriosSeleccionados([])
     setCamposExtraValues({})
+    // Las respuestas del checklist pertenecen al template del tipo anterior.
+    // Se limpian ACA (accion explicita del usuario) y no en el efecto que
+    // trae el template: ese efecto tambien corre al montar y cuando la lista
+    // de tipos resuelve tarde, y ahi borraba un checklist recien restaurado
+    // de un borrador — con el agravante de que el submit solo guarda el
+    // checklist si tiene valores, asi que se perdia sin ningun aviso.
+    setChecklistValores({})
+    setChecklistNotas("")
+    setChecklistFirma(null)
+    setChecklistFirmaMime(null)
     // If new type has a usarComoDispositivo field, clear dispositivo so it gets set by the field
     const nuevoTipoObj = tiposDispositivo.find((t) => t.codigo === nuevoTipo)
     const nuevoConfig = nuevoTipoObj?.config
@@ -392,11 +443,9 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         const res = await fetch(url)
         if (res.ok) {
           const data = await res.json()
+          // Solo el template: las respuestas se limpian en handleTipoChange
+          // (ver el comentario ahi). Este efecto tambien corre al montar.
           setChecklistTemplate(data.template)
-          setChecklistValores({})
-          setChecklistNotas("")
-          setChecklistFirma(null)
-          setChecklistFirmaMime(null)
         }
       } catch (error) {
         console.error("Error fetching checklist template:", error)
@@ -458,8 +507,18 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     }
   }, [session?.user?.id, session?.user?.role])
 
+  // Sector elegido y lista de sectores del cliente. El sector se limpia solo
+  // cuando el cliente CAMBIA de verdad: este efecto tambien corre al montar y
+  // cuando `esClienteEmpresa` pasa a true (el objeto Cliente llega despues),
+  // y ahi borraba el sector que acababa de restaurar un borrador.
+  const sectoresClienteIdRef = useRef<string | null>(null)
   useEffect(() => {
-    setSelectedSectorId("")
+    const clienteActual = clienteId || null
+    const clienteAnterior = sectoresClienteIdRef.current
+    sectoresClienteIdRef.current = clienteActual
+    if (clienteAnterior !== null && clienteAnterior !== clienteActual) {
+      setSelectedSectorId("")
+    }
     setSectoresCliente([])
     if (!clienteId || !esClienteEmpresa) return
 

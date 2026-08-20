@@ -59,11 +59,15 @@ const equipoSideStateVacio = (): EquipoSideState => ({
 type EquipoSideStateDraft = Omit<EquipoSideState, "fotos">
 
 /** Forma persistida por useFormDraft para este formulario. La firma del
- *  cliente tampoco se incluye (mismo motivo que las fotos: dato binario). */
+ *  cliente tampoco se incluye (mismo motivo que las fotos: dato binario).
+ *  `selectedCliente` SI se incluye: ClienteSelector re-hidrata su propio
+ *  display a partir del id, pero nunca llama a onChange, asi que sin esto el
+ *  modal de exito muestra el nombre del cliente en blanco. */
 interface RecepcionDraftValue {
   form: RecepcionFormData
   sideState: EquipoSideStateDraft[]
   terminosAceptados: boolean
+  selectedCliente: Cliente | null
 }
 
 const equipoVacio = (): EquipoFormValues => ({
@@ -232,6 +236,7 @@ export function RecepcionForm() {
     register,
     handleSubmit,
     watch,
+    getValues,
     setValue,
     reset,
     formState: { errors },
@@ -261,14 +266,25 @@ export function RecepcionForm() {
   // del snapshot: son datos binarios, no formularios recuperables.
   const [draftNoticeVisible, setDraftNoticeVisible] = useState(false)
   const draftAppliedRef = useRef(false)
-  const { draft, ready: draftReady, clearDraft } = useFormDraft<RecepcionDraftValue>({
+  const { draft, ready: draftReady, clearDraft, notifyChange } = useFormDraft<RecepcionDraftValue>({
     feature: "recepcion-form",
-    value: {
-      form: watch(),
+    // `getValues()` en vez de `watch()`: leer el form entero en render
+    // suscribe el componente a cada tecla de cada equipo. El borrador no
+    // necesita re-render, solo el valor al momento de grabar.
+    getValue: () => ({
+      form: getValues(),
       sideState: sideState.map(({ fotos: _fotos, ...rest }) => rest),
       terminosAceptados,
-    },
+      selectedCliente,
+    }),
   })
+
+  // Los cambios de react-hook-form ya no re-renderizan el formulario, asi que
+  // hay que avisarle al borrador por suscripcion.
+  useEffect(() => {
+    const subscription = watch(() => notifyChange())
+    return () => subscription.unsubscribe()
+  }, [watch, notifyChange])
 
   useEffect(() => {
     if (!draftReady || draftAppliedRef.current) return
@@ -282,6 +298,7 @@ export function RecepcionForm() {
       }))
     )
     setTerminosAceptados(draft.terminosAceptados)
+    setSelectedCliente(draft.selectedCliente ?? null)
     setDraftNoticeVisible(true)
   }, [draftReady, draft, reset])
 

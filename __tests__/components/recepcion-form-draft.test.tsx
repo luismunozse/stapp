@@ -167,4 +167,56 @@ describe("RecepcionForm — borrador local", () => {
     await renderForm()
     expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
   })
+
+  it("restaura el cliente elegido, no solo su id", async () => {
+    // ClienteSelector re-hidrata su propio display a partir del id pero nunca
+    // llama a onChange, asi que sin el objeto en el borrador el comprobante de
+    // la recepcion creada sale con el nombre del cliente en blanco. El
+    // placeholder del telefono de contacto es la unica parte del formulario
+    // que refleja ese objeto sin llegar a enviar la recepcion.
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        version: 1,
+        savedAt: Date.now(),
+        data: {
+          form: {
+            clienteId: "cli-1",
+            telefonoContacto: "",
+            observaciones: "",
+            equipos: [
+              {
+                dispositivo: "iPhone 13",
+                tipoDispositivo: "",
+                marca: "",
+                color: "",
+                imei: "",
+                problemaReportado: "",
+                codigoAccesoDispositivo: "",
+              },
+              {
+                dispositivo: "",
+                tipoDispositivo: "",
+                marca: "",
+                color: "",
+                imei: "",
+                problemaReportado: "",
+                codigoAccesoDispositivo: "",
+              },
+            ],
+          },
+          sideState: [
+            { accesoriosSeleccionados: [], otroAccesorio: "", camposExtraValues: {} },
+            { accesoriosSeleccionados: [], otroAccesorio: "", camposExtraValues: {} },
+          ],
+          terminosAceptados: false,
+          selectedCliente: { id: "cli-1", nombre: "Acme SA", telefono: "1155667788" },
+        },
+      }),
+    )
+
+    await renderForm()
+
+    expect(screen.getByPlaceholderText("1155667788")).toBeInTheDocument()
+  })
 })
