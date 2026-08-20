@@ -188,4 +188,31 @@ describe("GET /api/inventario/barcode", () => {
     // Scoped stock (3), NOT the aggregate value (10) that "todas" would otherwise return
     expect(body.item.stock).toBe(3)
   })
+
+  it("scope=venta en modo drenaje (sucursal sin depósito principal): devuelve el stock agregado, no 0", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockNoCookie()
+
+    const invChain = makeInventarioChain([ITEM_ROW]) // ITEM_ROW.stock === 10 (aggregate)
+    const sucursalesChain: any = {}
+    for (const m of ["select", "eq", "is"]) sucursalesChain[m] = vi.fn().mockReturnValue(sucursalesChain)
+    sucursalesChain.single = vi.fn().mockResolvedValue({ data: { id: "suc-principal" }, error: null })
+    const depositosChain = makeDepositosChain(null)
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "sucursales") return sucursalesChain as any
+      if (table === "depositos") return depositosChain as any
+      if (table === "inventario") return invChain as any
+      return { then: (r: any) => r({ data: null, error: { message: `No mock for: ${table}` } }) } as any
+    })
+
+    const res = await GET(createGetRequest("http://localhost:3000/api/inventario/barcode?code=7890001234567&scope=venta"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(body.found).toBe(true)
+    // The write path drains org-wide when there is no deposito, so refusing
+    // the scan with stock 0 would block a sale the RPC would have accepted.
+    expect(body.item.stock).toBe(10)
+  })
 })

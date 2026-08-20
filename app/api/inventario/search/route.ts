@@ -48,9 +48,11 @@ export async function GET(request: Request) {
       ventaSucursalId = destino.sucursalId
       sucursalId = destino.sucursalId
       depositoIdPrefetched = destino.depositoId
-      // Org has no principal sucursal at all (misconfiguration): mirror the
-      // write path's org-wide drain fallback instead of returning nothing.
-      verTodas = !destino.sucursalId
+      // No concrete deposito (org without principal sucursal, or sucursal
+      // without principal deposito): the write path passes p_deposito_id = null
+      // and drains org-wide, so the catalog must mirror that org-wide aggregate
+      // instead of going empty for stock the sale could actually decrement.
+      verTodas = !destino.depositoId
       if (destino.sucursalId) {
         ventaSucursalNombre = await getNombreSucursal(organizationId!, destino.sucursalId)
       }

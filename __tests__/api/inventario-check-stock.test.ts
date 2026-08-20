@@ -71,4 +71,26 @@ describe("POST /api/inventario/check-stock", () => {
     // Scoped stock (2), not the aggregate value that verTodas:true would otherwise return
     expect(body.stock).toEqual({ a: 2, b: 0 })
   })
+
+  it("scope=venta en modo drenaje (sucursal sin depósito): reporta el stock agregado, no 0", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    // Sucursal resolved but no principal deposito: the write path passes
+    // p_deposito_id = null and drains org-wide, so the sale WOULD succeed.
+    vi.mocked(resolverDestinoVenta).mockResolvedValue({ sucursalId: "suc-1", depositoId: null })
+    mockSupabaseFrom({
+      inventario: createChainMock([{ id: "a", stock: 4 }]),
+    })
+
+    const res = await POST(
+      new Request("http://localhost:3000/api/inventario/check-stock?scope=venta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: ["a", "b"] }),
+      })
+    )
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(body.stock).toEqual({ a: 4, b: 0 })
+  })
 })

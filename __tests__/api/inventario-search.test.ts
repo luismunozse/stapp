@@ -295,18 +295,26 @@ describe("GET /api/inventario/search — scope=venta (POS opt-in)", () => {
     expect(res.headers.get("X-Venta-Sucursal-Id")).toBeNull()
   })
 
-  it("scope=venta y sucursal sin depósito principal: devuelve lista vacía (no explota)", async () => {
+  it("scope=venta en modo drenaje (sucursal sin depósito principal): cae al stock agregado, no a catálogo vacío", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     mockNoCookie()
 
     const sucursalesChain = makeSucursalesChain("suc-principal", "Casa Central")
     const depositosChain = makeDepositosChain(null)
-    mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain })
+    const invChain = createChainMock([
+      { id: "i9", codigo: "C9", nombre: "Teclado", stock: 7, stock_reservado: 0,
+        precio_venta: 30, precio_compra: 10, trackea_series: false },
+    ])
+    mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain, inventario: invChain })
 
-    const res = await GET(createGetRequest("http://localhost:3000/api/inventario/search?q=test&scope=venta"))
+    const res = await GET(createGetRequest("http://localhost:3000/api/inventario/search?q=teclado&scope=venta"))
     const { status, body } = await parseResponse(res)
 
     expect(status).toBe(200)
-    expect(body).toEqual([])
+    // The write path passes p_deposito_id = null and drains org-wide in this
+    // state, so the sale WOULD succeed — the read must not hide the catalog.
+    expect(body).toHaveLength(1)
+    expect(body[0].stock).toBe(7)
+    expect(invChain.gt).toHaveBeenCalledWith("stock", 0)
   })
 })

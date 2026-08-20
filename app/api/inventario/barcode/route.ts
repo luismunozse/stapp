@@ -38,9 +38,11 @@ export async function GET(request: Request) {
       const destino = await resolverDestinoVenta({ role, organizationId: organizationId!, userSucursalId })
       sucursalId = destino.sucursalId
       depositoIdPrefetched = destino.depositoId
-      // Org has no principal sucursal at all: mirror the write path's
-      // org-wide drain fallback instead of forcing stock to 0.
-      verTodas = !destino.sucursalId
+      // No concrete deposito (org without principal sucursal, or sucursal
+      // without principal deposito): the write path passes p_deposito_id = null
+      // and drains org-wide, so the scan must report the org-wide aggregate
+      // instead of a 0 that would refuse a sale the RPC would accept.
+      verTodas = !destino.depositoId
     } else {
       const resolved = resolveSucursalLectura({ role, userSucursalId, cookieSucursalId })
       sucursalId = resolved.sucursalId
