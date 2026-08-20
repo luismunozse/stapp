@@ -137,3 +137,56 @@ export async function getDepositoDeSucursal(
     .maybeSingle()
   return data?.id ?? null
 }
+
+export interface DestinoVenta {
+  /** Concrete sucursal a POS sale will be attributed to, null if the org has no principal sucursal. */
+  sucursalId: string | null
+  /** Concrete deposito a POS sale will draw stock from, null if the sucursal has no principal deposito (drain-mode fallback). */
+  depositoId: string | null
+}
+
+/**
+ * Resolves the concrete sucursal + deposito a POS sale will draw stock from
+ * for the current request — the exact same resolution as the ventas write
+ * path (`sucursalParaEscritura` + `getDepositoDeSucursal`). Exposed as a
+ * single helper so the ventas write route and the POS read endpoints
+ * (search/barcode/check-stock, via their opt-in `scope=venta` query param)
+ * can never drift apart on which sucursal/deposito a sale actually uses.
+ */
+export async function resolverDestinoVenta(params: {
+  role: string | null
+  organizationId: string
+  userSucursalId: string | null
+}): Promise<DestinoVenta> {
+  const sucursalId = await sucursalParaEscritura(params)
+  if (!sucursalId) {
+    return { sucursalId: null, depositoId: null }
+  }
+
+  const depositoId = await getDepositoDeSucursal(params.organizationId, sucursalId)
+  if (!depositoId) {
+    console.warn(
+      `[ventas] Sucursal ${sucursalId} has no principal deposito — falling back to drain mode`
+    )
+  }
+
+  return { sucursalId, depositoId }
+}
+
+/**
+ * Reads the display name of a sucursal. Used to name the sucursal in the
+ * POS "selling from" indicator and in stock-insufficient error messages,
+ * without duplicating the sucursal/deposito resolution logic itself.
+ */
+export async function getNombreSucursal(
+  organizationId: string,
+  sucursalId: string
+): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from("sucursales")
+    .select("nombre")
+    .eq("id", sucursalId)
+    .eq("organization_id", organizationId)
+    .single()
+  return data?.nombre ?? null
+}
