@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { FormActionBar } from "@/components/ui/form-action-bar"
+import { DraftRestoredNotice } from "@/components/ui/draft-restored-notice"
 import { User, Building2 } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { Switch } from "@/components/ui/switch"
@@ -22,6 +23,7 @@ import type { Cliente } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { useOffline } from "@/contexts/offline-context"
+import { useFormDraft } from "@/hooks/use-form-draft"
 import { STORES } from "@/lib/offline/constants"
 import { getCountryConfig } from "@/lib/countries"
 
@@ -47,6 +49,40 @@ const clienteSchema = z.object({
 
 type ClienteFormData = z.infer<typeof clienteSchema>
 
+/** Valores base para el form: prefill de edicion o blanco para alta. Vive
+ *  afuera del componente (sin dependencias de hooks) para poder reusarla en
+ *  useForm(defaultValues), el efecto de prefill y el discard del borrador
+ *  sin triplicar el mismo objeto literal. */
+function clienteFormDefaults(cliente?: Cliente | null): ClienteFormData {
+  return cliente
+    ? {
+        tipoCliente: cliente.tipoCliente || "INDIVIDUAL",
+        nombre: cliente.nombre,
+        telefono: cliente.telefono,
+        email: cliente.email || "",
+        direccion: cliente.direccion || "",
+        dni: cliente.dni || "",
+        razonSocial: cliente.razonSocial || "",
+        cuit: cliente.cuit || "",
+        aceptaWhatsapp: cliente.aceptaWhatsapp ?? true,
+        tipoPrecio: cliente.tipoPrecio || "MINORISTA",
+        descuentoPct: cliente.descuentoPct ?? undefined,
+      }
+    : {
+        tipoCliente: "INDIVIDUAL",
+        nombre: "",
+        telefono: "",
+        email: "",
+        direccion: "",
+        dni: "",
+        razonSocial: "",
+        cuit: "",
+        aceptaWhatsapp: true,
+        tipoPrecio: "MINORISTA",
+        descuentoPct: undefined,
+      }
+}
+
 interface ClienteFormProps {
   cliente?: Cliente | null
   open: boolean
@@ -71,33 +107,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
     setValue,
   } = useForm<ClienteFormData>({
     resolver: zodResolver(clienteSchema),
-    defaultValues: cliente
-      ? {
-          tipoCliente: cliente.tipoCliente || "INDIVIDUAL",
-          nombre: cliente.nombre,
-          telefono: cliente.telefono,
-          email: cliente.email || "",
-          direccion: cliente.direccion || "",
-          dni: cliente.dni || "",
-          razonSocial: cliente.razonSocial || "",
-          cuit: cliente.cuit || "",
-          aceptaWhatsapp: cliente.aceptaWhatsapp ?? true,
-          tipoPrecio: cliente.tipoPrecio || "MINORISTA",
-          descuentoPct: cliente.descuentoPct ?? undefined,
-        }
-      : {
-          tipoCliente: "INDIVIDUAL",
-          nombre: "",
-          telefono: "",
-          email: "",
-          direccion: "",
-          dni: "",
-          razonSocial: "",
-          cuit: "",
-          aceptaWhatsapp: true,
-          tipoPrecio: "MINORISTA",
-          descuentoPct: undefined,
-        },
+    defaultValues: clienteFormDefaults(cliente),
   })
 
   const tipoCliente = watch("tipoCliente")
@@ -105,36 +115,45 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
 
   useEffect(() => {
     if (open) {
-      reset(cliente
-        ? {
-            tipoCliente: cliente.tipoCliente || "INDIVIDUAL",
-            nombre: cliente.nombre,
-            telefono: cliente.telefono,
-            email: cliente.email || "",
-            direccion: cliente.direccion || "",
-            dni: cliente.dni || "",
-            razonSocial: cliente.razonSocial || "",
-            cuit: cliente.cuit || "",
-            aceptaWhatsapp: cliente.aceptaWhatsapp ?? true,
-            tipoPrecio: cliente.tipoPrecio || "MINORISTA",
-            descuentoPct: cliente.descuentoPct ?? undefined,
-          }
-        : {
-            tipoCliente: "INDIVIDUAL",
-            nombre: "",
-            telefono: "",
-            email: "",
-            direccion: "",
-            dni: "",
-            razonSocial: "",
-            cuit: "",
-            aceptaWhatsapp: true,
-            tipoPrecio: "MINORISTA",
-            descuentoPct: undefined,
-          }
-      )
+      reset(clienteFormDefaults(cliente))
     }
   }, [open, cliente, reset])
+
+  // --- Borrador local (useFormDraft) ----------------------------------------
+  // recordId por cliente.id: nunca mezcla un borrador de alta con uno de
+  // edicion, ni el de un cliente con el de otro. Solo activo mientras el
+  // dialog esta abierto (el componente queda montado con `open=false` entre
+  // usos) para no seguir grabando ni restaurando en segundo plano.
+  const recordId = cliente?.id ?? null
+  const [draftNoticeVisible, setDraftNoticeVisible] = useState(false)
+  const draftAppliedForRef = useRef<string | null>(null)
+  const { draft, ready: draftReady, clearDraft } = useFormDraft<ClienteFormData>({
+    feature: "cliente-form",
+    recordId,
+    value: watch(),
+    enabled: open,
+  })
+
+  useEffect(() => {
+    if (!open) {
+      draftAppliedForRef.current = null
+      setDraftNoticeVisible(false)
+      return
+    }
+    const scopeKey = recordId ?? "new"
+    if (!draftReady || draftAppliedForRef.current === scopeKey) return
+    draftAppliedForRef.current = scopeKey
+    if (draft) {
+      reset(draft)
+      setDraftNoticeVisible(true)
+    }
+  }, [open, recordId, draftReady, draft, reset])
+
+  const discardDraft = () => {
+    clearDraft()
+    setDraftNoticeVisible(false)
+    reset(clienteFormDefaults(cliente))
+  }
 
   const onSubmit = async (data: ClienteFormData) => {
     setLoading(true)
@@ -178,6 +197,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
           }))
 
       if (res.status === 202) {
+        clearDraft()
         await showInfo("Cliente guardado offline. Se sincronizará automáticamente cuando vuelva la conexión. No podrá asignarse a la operación actual hasta entonces.")
         onSuccess(undefined, { queuedOffline: true })
         return
@@ -195,6 +215,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
       } catch {
         createdCliente = undefined
       }
+      clearDraft()
       onSuccess(createdCliente)
     } catch (error) {
       console.error("Error saving cliente:", error)
@@ -211,6 +232,10 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
           <DialogTitle>{cliente ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {draftNoticeVisible && (
+            <DraftRestoredNotice onDiscard={discardDraft} />
+          )}
+
           {/* Tipo de cliente */}
           <div>
             <Label>Tipo de cliente</Label>
