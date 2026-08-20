@@ -141,3 +141,93 @@ describe("GET /api/ordenes/[id] — inventario purchase cost visibility", () => 
     expect(body.cotizaciones[0].items_cotizacion[0].inventario.precio_compra).toBeNull()
   })
 })
+
+// repuestos_orden.precio_unitario is the purchase cost frozen when the part was
+// loaded onto the order — the same number as inventario.precio_compra, just
+// stored on a different row. Nulling only the live embed left the frozen copy
+// readable by every role.
+describe("GET /api/ordenes/[id] — repuesto frozen purchase cost (precioUnitario)", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("ADMIN sees precioUnitario (no behavior change)", async () => {
+    mockRole("ADMIN")
+    wireSupabase()
+
+    const { status, body } = await parseResponse(await GET(createGetRequest(), ctx()))
+
+    expect(status).toBe(200)
+    expect(body.repuestos[0].precioUnitario).toBe(50)
+  })
+
+  it("TECNICO (assigned) — precioUnitario stripped, non-cost fields and sale price kept", async () => {
+    mockRole("TECNICO", { userId: "tec-1" })
+    wireSupabase()
+
+    const { status, body } = await parseResponse(await GET(createGetRequest(), ctx()))
+
+    expect(status).toBe(200)
+    expect(body.repuestos[0].precioUnitario).toBeNull()
+    // What a gated role legitimately needs stays available.
+    expect(body.repuestos[0].cantidad).toBe(2)
+    expect(body.repuestos[0].precioVentaUnitario).toBe(120)
+    expect(body.repuestos[0].inventario.nombre).toBe("Pantalla")
+  })
+
+  it("VENDEDOR without inventario opt-in — precioUnitario stripped", async () => {
+    mockRole("VENDEDOR")
+    wireSupabase(false)
+
+    const { status, body } = await parseResponse(await GET(createGetRequest(), ctx()))
+
+    expect(status).toBe(200)
+    expect(body.repuestos[0].precioUnitario).toBeNull()
+  })
+
+  it("VENDEDOR with inventario opt-in — precioUnitario visible (same predicate as the embed)", async () => {
+    mockRole("VENDEDOR")
+    wireSupabase(true)
+
+    const { status, body } = await parseResponse(await GET(createGetRequest(), ctx()))
+
+    expect(status).toBe(200)
+    expect(body.repuestos[0].precioUnitario).toBe(50)
+  })
+})
+
+// costoRepuestosCotizaciones is derived from items_cotizacion[].inventario
+// .precio_compra INSIDE formatOrden, before the route nulls those fields. For a
+// single-item cotización it is precio_compra × cantidad — the exact number the
+// rest of the branch hides.
+describe("GET /api/ordenes/[id] — costoRepuestosCotizaciones aggregate", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("ADMIN sees the aggregate (no behavior change)", async () => {
+    mockRole("ADMIN")
+    wireSupabase()
+
+    const { status, body } = await parseResponse(await GET(createGetRequest(), ctx()))
+
+    expect(status).toBe(200)
+    expect(body.costoRepuestosCotizaciones).toBe(300)
+  })
+
+  it("TECNICO — aggregate is not returned as a number", async () => {
+    mockRole("TECNICO", { userId: "tec-1" })
+    wireSupabase()
+
+    const { status, body } = await parseResponse(await GET(createGetRequest(), ctx()))
+
+    expect(status).toBe(200)
+    expect(body.costoRepuestosCotizaciones).toBeNull()
+  })
+
+  it("VENDEDOR with inventario opt-in — aggregate still gated (cotización costs are ADMIN-only)", async () => {
+    mockRole("VENDEDOR")
+    wireSupabase(true)
+
+    const { status, body } = await parseResponse(await GET(createGetRequest(), ctx()))
+
+    expect(status).toBe(200)
+    expect(body.costoRepuestosCotizaciones).toBeNull()
+  })
+})

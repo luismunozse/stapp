@@ -13,6 +13,8 @@ import {
   formatProveedorAdjunto,
   formatProveedorCatalogoItem,
   formatVenta,
+  formatRepuesto,
+  precioVentaRepuesto,
 } from '../db-utils'
 
 function ventaBase(over: Partial<any> = {}) {
@@ -341,6 +343,58 @@ describe('formatOrden', () => {
 
   it('retorna null para input null', () => {
     expect(formatOrden(null)).toBe(null)
+  })
+
+  it('oculta el costo de los repuestos y el agregado de cotizaciones cuando se lo pide', () => {
+    const input = {
+      id: 'ord-3',
+      repuestos_orden: [
+        { id: 'r-1', cantidad: 2, precio_unitario: 50, precio_venta_unitario: 120 },
+      ],
+      cotizaciones: [
+        {
+          estado: 'ACEPTADA',
+          deleted_at: null,
+          items_cotizacion: [{ cantidad: 2, inventario: { precio_compra: 150 } }],
+        },
+      ],
+    }
+
+    const visible = formatOrden(input)
+    expect(visible?.repuestos?.[0]?.precioUnitario).toBe(50)
+    expect(visible?.costoRepuestosCotizaciones).toBe(300)
+
+    const oculto = formatOrden(input, {
+      includeInventarioCost: false,
+      includeCotizacionCost: false,
+    })
+    expect(oculto?.repuestos?.[0]?.precioUnitario).toBeNull()
+    expect(oculto?.costoRepuestosCotizaciones).toBeNull()
+    // Lo que el rol sí necesita sigue disponible.
+    expect(oculto?.repuestos?.[0]?.cantidad).toBe(2)
+    expect(oculto?.repuestos?.[0]?.precioVentaUnitario).toBe(120)
+  })
+})
+
+describe('formatRepuesto / precioVentaRepuesto', () => {
+  it('formatRepuesto oculta el costo con includeCost en false', () => {
+    const row = { id: 'r-1', cantidad: 1, precio_unitario: 80, precio_venta_unitario: 200 }
+    expect(formatRepuesto(row)?.precioUnitario).toBe(80)
+    expect(formatRepuesto(row, false)?.precioUnitario).toBeNull()
+    expect(formatRepuesto(row, false)?.precioVentaUnitario).toBe(200)
+  })
+
+  it('usa el precio de venta cuando existe', () => {
+    expect(precioVentaRepuesto({ precioVentaUnitario: 200, precioUnitario: 80 })).toBe(200)
+  })
+
+  it('cae al costo en filas anteriores a la migracion 286', () => {
+    expect(precioVentaRepuesto({ precioVentaUnitario: null, precioUnitario: 80 })).toBe(80)
+  })
+
+  it('devuelve null cuando no queda ningun precio (fila vieja + costo oculto)', () => {
+    expect(precioVentaRepuesto({ precioVentaUnitario: null, precioUnitario: null })).toBeNull()
+    expect(precioVentaRepuesto({})).toBeNull()
   })
 })
 

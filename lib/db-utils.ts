@@ -49,25 +49,45 @@ export function toArray<T>(value: T | T[] | null | undefined): T[] {
   return Array.isArray(value) ? value : value ? [value] : []
 }
 
+export interface FormatOrdenOptions {
+  /** Purchase cost the order carries over from inventario: every repuesto's
+   *  `precioUnitario` is the `precio_compra` frozen when the part was loaded.
+   *  Gate it with `hasInventarioAccess`. Defaults to true so existing callers
+   *  that never expose the repuestos embed keep their behavior. */
+  includeInventarioCost?: boolean
+  /** Cost aggregate derived from the linked cotización items' `precio_compra`
+   *  (`costoRepuestosCotizaciones`). Gate it with `canViewCotizacionCosts`. */
+  includeCotizacionCost?: boolean
+}
+
 // Mapeo específico para órdenes (incluye relaciones)
-export function formatOrden(orden: any) {
+export function formatOrden(orden: any, options: FormatOrdenOptions = {}) {
   if (!orden) return null
+
+  const { includeInventarioCost = true, includeCotizacionCost = true } = options
 
   // Costo de repuestos provenientes de cotizaciones ACEPTADAS linkeadas a inventario.
   // Se suma como prop separada para que la card de comisión lo agregue al costo
   // que ya calcula desde repuestos_orden. El admin es responsable de no duplicar
   // (usar tab Repuestos O cotización aceptada, no ambos para el mismo ítem).
+  //
+  // Este agregado se deriva de items_cotizacion[].inventario.precio_compra, así
+  // que es costo: con un solo ítem equivale a precio_compra × cantidad. Va
+  // detrás del mismo permiso que los campos de los que sale, no se devuelve
+  // como 0 (un cero sería indistinguible de "no hay cotización aceptada").
   const cotizacionesActivas = (orden.cotizaciones || []).filter(
     (c: any) => !c.deleted_at && c.estado === "ACEPTADA"
   )
-  const costoRepuestosCotizaciones = cotizacionesActivas.reduce((sum: number, c: any) => {
-    const itemsCosto = (c.items_cotizacion || []).reduce((acc: number, it: any) => {
-      const precioCompra = Number(it.inventario?.precio_compra) || 0
-      const cantidad = Number(it.cantidad) || 0
-      return acc + precioCompra * cantidad
-    }, 0)
-    return sum + itemsCosto
-  }, 0)
+  const costoRepuestosCotizaciones = includeCotizacionCost
+    ? cotizacionesActivas.reduce((sum: number, c: any) => {
+        const itemsCosto = (c.items_cotizacion || []).reduce((acc: number, it: any) => {
+          const precioCompra = Number(it.inventario?.precio_compra) || 0
+          const cantidad = Number(it.cantidad) || 0
+          return acc + precioCompra * cantidad
+        }, 0)
+        return sum + itemsCosto
+      }, 0)
+    : null
 
   return {
     costoRepuestosCotizaciones,
@@ -120,7 +140,7 @@ export function formatOrden(orden: any) {
       nombre: orden.recibido.nombre,
     } : null,
     fotos: orden.fotos_orden?.map(formatFoto),
-    repuestos: orden.repuestos_orden?.map(formatRepuesto),
+    repuestos: orden.repuestos_orden?.map((r: any) => formatRepuesto(r, includeInventarioCost)),
     facturas: orden.facturas,
     cotizaciones: orden.cotizaciones,
     garantia: orden.garantias,
@@ -184,7 +204,10 @@ export function formatFoto(foto: any) {
   }
 }
 
-export function formatRepuesto(repuesto: any) {
+/** `includeCost` defaults to true so callers that do not expose the repuesto to
+ *  a gated role keep their behavior. Pass `hasInventarioAccess(...)` on any
+ *  route whose response reaches a non-inventario role. */
+export function formatRepuesto(repuesto: any, includeCost = true) {
   if (!repuesto) return null
 
   return {
@@ -196,21 +219,28 @@ export function formatRepuesto(repuesto: any) {
     // precioUnitario es el COSTO (precio_compra congelado al cargar el
     // repuesto); precioVentaUnitario es lo que se le cobra al cliente.
     // Este último es NULL en filas anteriores a la migración 286.
-    precioUnitario: repuesto.precio_unitario,
+    precioUnitario: includeCost ? repuesto.precio_unitario : null,
     precioVentaUnitario: repuesto.precio_venta_unitario ?? null,
     inventario: repuesto.inventario ? formatInventario(repuesto.inventario) : undefined,
   }
 }
 
 /** Lo que se le cobra al cliente por un repuesto. Cae al costo cuando la fila
- *  es anterior a la migración 286 y no tiene precio de venta registrado. */
+ *  es anterior a la migración 286 y no tiene precio de venta registrado.
+ *
+ *  Devuelve null cuando no queda ningún precio utilizable: pasa en una fila
+ *  vieja (sin precio de venta) leída por un rol al que se le ocultó el costo.
+ *  La UI tiene que mostrar "sin precio", nunca $0: un cero ahí se lee como
+ *  "gratis" y encima se sumaría a los totales. */
 export function precioVentaRepuesto(repuesto: {
   precioVentaUnitario?: number | string | null
   precioUnitario?: number | string | null
-}) {
+}): number | null {
   const venta = repuesto.precioVentaUnitario
   if (venta !== null && venta !== undefined && venta !== "") return Number(venta)
-  return Number(repuesto.precioUnitario ?? 0)
+  const costo = repuesto.precioUnitario
+  if (costo !== null && costo !== undefined && costo !== "") return Number(costo)
+  return null
 }
 
 export function formatInventario(item: any) {

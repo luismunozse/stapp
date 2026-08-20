@@ -245,8 +245,11 @@ export async function GET(request: Request) {
       throw dbError
     }
 
-    // Transformar datos usando formatOrden unificado
-    const ordenesFormatted = ordenes?.map(formatOrden)
+    // Transformar datos usando formatOrden unificado. Wrapped on purpose:
+    // passing formatOrden bare to .map would feed the array index into its
+    // options argument. This select carries no repuestos/cotizaciones embed,
+    // so there is no purchase cost to gate here.
+    const ordenesFormatted = ordenes?.map((o: any) => formatOrden(o))
 
     // Retornar con información de paginación y cache headers
     return NextResponse.json({

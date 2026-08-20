@@ -134,8 +134,6 @@ export async function GET(
       .limit(1)
       .maybeSingle()
 
-    const formatted = formatOrden(orden)
-
     // The repuestos_orden/cotizaciones embeds carry a live inventario join
     // (repuestos_orden -> inventario, items_cotizacion -> inventario) with
     // its purchase cost (precio_compra). That is inventario cost data, not
@@ -146,11 +144,26 @@ export async function GET(
     //  - cotización item cost -> canViewCotizacionCosts (ADMIN only,
     //    uniformly — VENDEDOR included, since they have no cotizaciones nav
     //    access today; that loss is deliberate, not an oversight)
+    //
+    // Both gates have to reach formatOrden itself, not just its output: the
+    // frozen cost copy (repuesto.precioUnitario) and the cotización cost
+    // aggregate (costoRepuestosCotizaciones) are produced inside it.
     const vendedoresHabilitados = role === "VENDEDOR"
       ? await resolveVendedoresHabilitados(organizationId!)
       : false
     const canViewInventarioCost = hasInventarioAccess(role, vendedoresHabilitados)
     const canViewCotizacionCost = canViewCotizacionCosts(role)
+
+    const formatted = formatOrden(orden, {
+      includeInventarioCost: canViewInventarioCost,
+      includeCotizacionCost: canViewCotizacionCost,
+    })
+
+    // formatOrden only returns null for a falsy orden, already handled above;
+    // the guard is here so the gating below type-checks under `strict`.
+    if (!formatted) {
+      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
+    }
 
     if (!canViewInventarioCost && Array.isArray(formatted.repuestos)) {
       formatted.repuestos = formatted.repuestos.map((r: any) =>
