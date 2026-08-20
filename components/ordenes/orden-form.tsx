@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DatePicker } from "@/components/ui/date-picker"
 import { FormActionBar } from "@/components/ui/form-action-bar"
+import { DraftRestoredNotice } from "@/components/ui/draft-restored-notice"
 import { X, Plus, Loader2, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp } from "lucide-react"
 import { PatternLock } from "@/components/ui/pattern-lock"
 import { ClienteSelector } from "@/components/cotizaciones/cliente-selector"
@@ -22,6 +23,7 @@ import { usePlanLimitError } from "@/lib/hooks/use-plan-limit-error"
 import { compressImage } from "@/lib/image-compression"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { useTipoDispositivoConfig } from "@/hooks/use-tipo-dispositivo-config"
+import { useFormDraft } from "@/hooks/use-form-draft"
 import { useTerminologia } from "@/contexts/currency-context"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { useOffline } from "@/contexts/offline-context"
@@ -53,6 +55,27 @@ const ordenSchema = z.object({
 })
 
 type OrdenFormData = z.infer<typeof ordenSchema>
+
+/** Snapshot persistido por useFormDraft (hooks/use-form-draft.ts). Deja
+ *  afuera fotos, firma del checklist (binarios) y todo lo que se re-obtiene
+ *  solo con fetch (listas de tecnicos/operadores/sectores, template del
+ *  checklist, el objeto Cliente completo -- ClienteSelector re-hidrata su
+ *  display a partir del `clienteId` restaurado, ver cliente-selector.tsx). */
+interface OrdenDraftValue {
+  form: OrdenFormData
+  accesoriosSeleccionados: string[]
+  otroAccesorio: string
+  camposExtraValues: Record<string, any>
+  presupuestoAceptado: boolean
+  sena: string
+  metodoPagoSena: string
+  selectedSectorId: string
+  selectedTecnicoId: string
+  selectedRecibidoPorId: string
+  checklistValores: Record<string, boolean | string | null>
+  checklistNotas: string
+  currentStep: number
+}
 
 interface OrdenFormProps {
   onClose: () => void
@@ -151,6 +174,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     trigger,
     clearErrors,
     setError,
+    reset,
   } = useForm<OrdenFormData>({
     resolver: zodResolver(ordenSchema),
     defaultValues: {
@@ -168,6 +192,79 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   })
 
   const tipoDispositivo = watch("tipoDispositivo")
+
+  // --- Borrador local (useFormDraft) ----------------------------------------
+  // Siempre "new record": esta pantalla solo crea ordenes, nunca las edita.
+  const [draftNoticeVisible, setDraftNoticeVisible] = useState(false)
+  const draftAppliedRef = useRef(false)
+  const { draft, ready: draftReady, clearDraft } = useFormDraft<OrdenDraftValue>({
+    feature: "orden-form",
+    value: {
+      form: watch(),
+      accesoriosSeleccionados,
+      otroAccesorio,
+      camposExtraValues,
+      presupuestoAceptado,
+      sena,
+      metodoPagoSena,
+      selectedSectorId,
+      selectedTecnicoId,
+      selectedRecibidoPorId,
+      checklistValores,
+      checklistNotas,
+      currentStep,
+    },
+  })
+
+  useEffect(() => {
+    if (!draftReady || draftAppliedRef.current) return
+    draftAppliedRef.current = true
+    if (!draft) return
+    reset(draft.form)
+    setAccesoriosSeleccionados(draft.accesoriosSeleccionados)
+    setOtroAccesorio(draft.otroAccesorio)
+    setCamposExtraValues(draft.camposExtraValues)
+    setPresupuestoAceptado(draft.presupuestoAceptado)
+    setSena(draft.sena)
+    setMetodoPagoSena(draft.metodoPagoSena)
+    setSelectedSectorId(draft.selectedSectorId)
+    setSelectedTecnicoId(draft.selectedTecnicoId)
+    setSelectedRecibidoPorId(draft.selectedRecibidoPorId)
+    setChecklistValores(draft.checklistValores)
+    setChecklistNotas(draft.checklistNotas)
+    setCurrentStep(draft.currentStep)
+    setDraftNoticeVisible(true)
+  }, [draftReady, draft, reset])
+
+  const discardDraft = () => {
+    clearDraft()
+    setDraftNoticeVisible(false)
+    reset({
+      clienteId: "",
+      dispositivo: "",
+      tipoDispositivo: "",
+      marca: "",
+      color: "",
+      imei: "",
+      problemaReportado: "",
+      accesorios: "",
+      codigoAccesoDispositivo: "",
+      fechaPrometida: "",
+    })
+    setAccesoriosSeleccionados([])
+    setOtroAccesorio("")
+    setCamposExtraValues({})
+    setPresupuestoAceptado(false)
+    setSena("")
+    setMetodoPagoSena("EFECTIVO")
+    setSelectedSectorId("")
+    setSelectedTecnicoId("")
+    setSelectedRecibidoPorId("")
+    setChecklistValores({})
+    setChecklistNotas("")
+    setCurrentStep(1)
+    setSelectedClienteObj(null)
+  }
 
   // Prefill desde turno (si la orden nace de una visita agendada)
   useEffect(() => {
@@ -552,6 +649,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
       if (res.status === 202) {
         // Queued offline
+        clearDraft()
         await showInfo("Orden guardada offline. Se sincronizará automáticamente cuando vuelva la conexión.")
         onSuccess?.()
         onClose()
@@ -572,6 +670,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       }
 
       const nuevaOrden = await res.json()
+      clearDraft()
 
       // Guardar checklist si hay template y valores completados
       if (checklistTemplate && Object.keys(checklistValores).length > 0) {
@@ -696,6 +795,10 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             handleNextStep()
           }
         }} className="space-y-4">
+          {draftNoticeVisible && (
+            <DraftRestoredNotice onDiscard={discardDraft} />
+          )}
+
           {/* Step indicator */}
           {(() => {
             const stepsForLabel = [
