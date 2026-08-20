@@ -81,11 +81,18 @@ const refetchedCotizacionRow = {
  *  - cotizaciones: 1st .single() -> existing row, 2nd .single() -> refetched
  *    row (for the response); .update() -> a separate ok chain.
  *  - items_cotizacion: plain-await .select() (existing items, non-admin only)
- *    -> existingItemRows; .delete() -> ok; .insert() captured.
- *  - inventario: plain-await .select().eq().in() -> invRows.
+ *    -> existingItemRows (or existingItemsError); .delete() -> tracked;
+ *    .insert() -> captured + tracked.
+ *  - inventario: plain-await .select().eq().in() -> invRows (or invError).
  */
-function wireSupabase(opts: { existingItemRows?: any[]; invRows?: any[] } = {}) {
+function wireSupabase(opts: {
+  existingItemRows?: any[]
+  existingItemsError?: any
+  invRows?: any[]
+  invError?: any
+} = {}) {
   const insertedItemsCapture: { payload: any[] | null } = { payload: null }
+  const mutationCalls = { deleteCalled: false, insertCalled: false }
 
   const cotizacionesChain: any = createChainMock(existingCotizacionRow)
   cotizacionesChain.single = vi.fn()
@@ -94,13 +101,24 @@ function wireSupabase(opts: { existingItemRows?: any[]; invRows?: any[] } = {}) 
   const cotizUpdateChain = createChainMock(null)
   cotizacionesChain.update = vi.fn().mockReturnValue(cotizUpdateChain)
 
-  const itemsChain: any = createChainMock(opts.existingItemRows ?? [])
+  const itemsChain: any = createChainMock(
+    opts.existingItemsError ? null : (opts.existingItemRows ?? []),
+    opts.existingItemsError ?? null
+  )
+  itemsChain.delete = vi.fn().mockImplementation(() => {
+    mutationCalls.deleteCalled = true
+    return itemsChain
+  })
   itemsChain.insert = vi.fn().mockImplementation((payload: any[]) => {
+    mutationCalls.insertCalled = true
     insertedItemsCapture.payload = payload
     return Promise.resolve({ data: null, error: null })
   })
 
-  const inventarioChain = createChainMock(opts.invRows ?? [])
+  const inventarioChain = createChainMock(
+    opts.invError ? null : (opts.invRows ?? []),
+    opts.invError ?? null
+  )
 
   mockSupabaseFrom({
     cotizaciones: cotizacionesChain,
@@ -108,7 +126,7 @@ function wireSupabase(opts: { existingItemRows?: any[]; invRows?: any[] } = {}) 
     inventario: inventarioChain,
   })
 
-  return { insertedItemsCapture, itemsChain, inventarioChain }
+  return { insertedItemsCapture, mutationCalls, itemsChain, inventarioChain }
 }
 
 describe("PUT /api/cotizaciones/[id] — cost preservation on non-ADMIN edits", () => {
@@ -207,5 +225,99 @@ describe("PUT /api/cotizaciones/[id] — cost preservation on non-ADMIN edits", 
 
     expect(status).toBe(200)
     expect(insertedItemsCapture.payload![0].costo_unitario).toBeNull()
+  })
+
+  it("TECNICO: relinking an existing item to a DIFFERENT inventario product re-derives cost from the NEW product (does not keep the old preserved cost)", async () => {
+    mockAuthSuccess({ role: "TECNICO", userId: "user-1" })
+    const { insertedItemsCapture } = wireSupabase({
+      existingItemRows: [{ id: "item-1", costo_unitario: 300, inventario_id: "inv-OLD" }],
+      invRows: [{ id: "inv-NEW", precio_compra: 777 }],
+    })
+
+    const body = {
+      items: [
+        {
+          id: "item-1",
+          descripcion: "Batería (cambiada)",
+          cantidad: 1,
+          precioUnitario: 900,
+          inventarioId: "inv-NEW",
+          unidad: "Unidad",
+        },
+      ],
+    }
+    const res = await PUT(createPutRequest(body), createParams("cot-1"))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(insertedItemsCapture.payload![0].costo_unitario).toBe(777)
+  })
+
+  it("TECNICO: unlinking an existing item from inventario clears the cost instead of carrying over the old linked cost", async () => {
+    mockAuthSuccess({ role: "TECNICO", userId: "user-1" })
+    const { insertedItemsCapture } = wireSupabase({
+      existingItemRows: [{ id: "item-1", costo_unitario: 300, inventario_id: "inv-1" }],
+    })
+
+    const body = {
+      items: [
+        {
+          id: "item-1",
+          descripcion: "Pantalla (desvinculada)",
+          cantidad: 1,
+          precioUnitario: 500,
+          inventarioId: null,
+          unidad: "Unidad",
+        },
+      ],
+    }
+    const res = await PUT(createPutRequest(body), createParams("cot-1"))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(insertedItemsCapture.payload![0].costo_unitario).toBeNull()
+  })
+})
+
+describe("PUT /api/cotizaciones/[id] — query error handling on the new cost-resolution selects", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("existing-items lookup failure returns 500 and does not touch items_cotizacion", async () => {
+    mockAuthSuccess({ role: "TECNICO", userId: "user-1" })
+    const { mutationCalls } = wireSupabase({
+      existingItemsError: { message: "db unavailable" },
+    })
+
+    const body = {
+      items: [
+        { id: "item-1", descripcion: "Pantalla", cantidad: 1, precioUnitario: 500, unidad: "Unidad" },
+      ],
+    }
+    const res = await PUT(createPutRequest(body), createParams("cot-1"))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(500)
+    expect(mutationCalls.deleteCalled).toBe(false)
+    expect(mutationCalls.insertCalled).toBe(false)
+  })
+
+  it("inventario cost lookup failure returns 500 and does not touch items_cotizacion", async () => {
+    mockAuthSuccess({ role: "TECNICO", userId: "user-1" })
+    const { mutationCalls } = wireSupabase({
+      existingItemRows: [],
+      invError: { message: "db unavailable" },
+    })
+
+    const body = {
+      items: [
+        { descripcion: "Batería", cantidad: 1, precioUnitario: 900, inventarioId: "inv-2", unidad: "Unidad" },
+      ],
+    }
+    const res = await PUT(createPutRequest(body), createParams("cot-1"))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(500)
+    expect(mutationCalls.deleteCalled).toBe(false)
+    expect(mutationCalls.insertCalled).toBe(false)
   })
 })

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, canViewCotizacionCosts } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { transicionarOrden } from "@/lib/orden-transicion"
@@ -257,7 +257,7 @@ export async function GET(
       )
     }
 
-    return NextResponse.json(formatCotizacion(cotizacion, role === "ADMIN"))
+    return NextResponse.json(formatCotizacion(cotizacion, canViewCotizacionCosts(role)))
   } catch (error) {
     console.error("Error fetching cotizacion:", error)
     return NextResponse.json(
@@ -400,37 +400,53 @@ export async function PUT(
       const descGlobalTipo = data.descuentoGlobalTipo ?? "porcentaje"
       const descGlobalValor = data.descuentoGlobalValor ?? 0
 
-      // Cost/margin data is ADMIN-only. Non-admin actors (e.g. TECNICO) never
-      // see costoUnitario in GET responses, so their edit payload can't carry
-      // trustworthy values — resolve costs server-side instead:
-      //  - existing item (matched by id): preserve the DB's current costo_unitario,
-      //    ignoring whatever the client sent (blocks spoofing and prevents an
-      //    edit from silently wiping out cost data an admin entered earlier).
+      // Cost/margin data is ADMIN-only, uniformly (VENDEDOR included — they
+      // have no cotizaciones nav access today, so losing cost entry here is
+      // deliberate, not an oversight; see canViewCotizacionCosts). Non-admin
+      // actors never see costoUnitario in GET responses, so their edit
+      // payload can't carry trustworthy values — resolve costs server-side
+      // instead:
+      //  - existing item (matched by id) with an UNCHANGED inventario link:
+      //    preserve the DB's current costo_unitario, ignoring whatever the
+      //    client sent (blocks spoofing and prevents an edit from silently
+      //    wiping out cost data an admin entered earlier).
+      //  - existing item whose inventario link CHANGED (relinked to another
+      //    product, or unlinked): the old cost no longer applies — re-derive
+      //    from the new inventario.precio_compra, or null if unlinked.
       //  - new item linked to inventario: derive from inventario.precio_compra.
       //  - new free-text item: costo_unitario stays null.
-      const isAdmin = role === "ADMIN"
-      const existingCostoById = new Map<string, number | null>()
+      const canViewCosts = canViewCotizacionCosts(role)
+      const existingItemsById = new Map<string, { costoUnitario: number | null; inventarioId: string | null }>()
       const inventarioCostoById = new Map<string, number | null>()
-      if (!isAdmin) {
-        const { data: existingItemRows } = await supabaseAdmin
+      if (!canViewCosts) {
+        const { data: existingItemRows, error: existingItemsError } = await supabaseAdmin
           .from("items_cotizacion")
-          .select("id, costo_unitario")
+          .select("id, costo_unitario, inventario_id")
           .eq("cotizacion_id", id)
+        if (existingItemsError) throw existingItemsError
         for (const row of existingItemRows || []) {
-          existingCostoById.set(row.id, row.costo_unitario != null ? Number(row.costo_unitario) : null)
+          existingItemsById.set(row.id, {
+            costoUnitario: row.costo_unitario != null ? Number(row.costo_unitario) : null,
+            inventarioId: row.inventario_id ?? null,
+          })
         }
 
-        const newInventarioIds = Array.from(new Set(
+        const inventarioIdsNeedingLookup = Array.from(new Set(
           data.items
-            .filter((item) => !(item.id && existingCostoById.has(item.id)) && item.inventarioId)
+            .filter((item) => {
+              const existing = item.id ? existingItemsById.get(item.id) : undefined
+              const linkChanged = existing ? existing.inventarioId !== (item.inventarioId ?? null) : true
+              return linkChanged && !!item.inventarioId
+            })
             .map((item) => item.inventarioId as string)
         ))
-        if (newInventarioIds.length > 0) {
-          const { data: invRows } = await supabaseAdmin
+        if (inventarioIdsNeedingLookup.length > 0) {
+          const { data: invRows, error: invError } = await supabaseAdmin
             .from("inventario")
             .select("id, precio_compra")
             .eq("organization_id", organizationId!)
-            .in("id", newInventarioIds)
+            .in("id", inventarioIdsNeedingLookup)
+          if (invError) throw invError
           for (const row of invRows || []) {
             inventarioCostoById.set(row.id, row.precio_compra != null ? Number(row.precio_compra) : null)
           }
@@ -438,8 +454,11 @@ export async function PUT(
       }
 
       const resolveCostoUnitario = (item: (typeof data.items)[number]): number | null => {
-        if (isAdmin) return item.costoUnitario ?? null
-        if (item.id && existingCostoById.has(item.id)) return existingCostoById.get(item.id)!
+        if (canViewCosts) return item.costoUnitario ?? null
+        const existing = item.id ? existingItemsById.get(item.id) : undefined
+        if (existing && existing.inventarioId === (item.inventarioId ?? null)) {
+          return existing.costoUnitario
+        }
         if (item.inventarioId) return inventarioCostoById.get(item.inventarioId) ?? null
         return null
       }
@@ -447,7 +466,7 @@ export async function PUT(
       const items = data.items.map((item) => ({
         ...item,
         subtotal: calcItemNeto(item),
-        resolvedCostoUnitario: resolveCostoUnitario(item),
+        costoUnitario: resolveCostoUnitario(item),
       }))
       const subtotalNeto = items.reduce((sum, item) => sum + item.subtotal, 0)
 
@@ -480,7 +499,7 @@ export async function PUT(
             descripcion: item.descripcion,
             cantidad: item.cantidad,
             precio_unitario: item.precioUnitario,
-            costo_unitario: item.resolvedCostoUnitario,
+            costo_unitario: item.costoUnitario,
             subtotal: item.subtotal,
             unidad: item.unidad || "Unidad",
             descuento_tipo: item.descuentoTipo || "porcentaje",
@@ -599,7 +618,7 @@ export async function PUT(
       total: cotizacion?.total,
     })
 
-    return NextResponse.json(formatCotizacion(cotizacion, role === "ADMIN"))
+    return NextResponse.json(formatCotizacion(cotizacion, canViewCotizacionCosts(role)))
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

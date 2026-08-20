@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, canViewCotizacionCosts } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextQuoteNumber } from "@/lib/counters"
 import { parsePagination } from "@/lib/api-utils"
@@ -182,7 +182,7 @@ export async function GET(request: Request) {
       const { data: cotizaciones, error: dbError } = await query
       if (dbError) throw dbError
 
-      const includeCosts = role === "ADMIN"
+      const includeCosts = canViewCotizacionCosts(role)
       return NextResponse.json(cotizaciones?.map((c) => formatCotizacion(c, includeCosts)) || [])
     }
 
@@ -235,7 +235,7 @@ export async function GET(request: Request) {
     if (dbError) throw dbError
 
     const total = count || 0
-    const includeCosts = role === "ADMIN"
+    const includeCosts = canViewCotizacionCosts(role)
     const result = cotizaciones?.map((c) => formatCotizacion(c, includeCosts)) || []
 
     return NextResponse.json({
@@ -359,23 +359,26 @@ export async function POST(request: Request) {
       }
     }
 
-    // Cost/margin data is ADMIN-only. Non-admin creators (e.g. TECNICO) never
-    // see costoUnitario, so their client can't submit a trustworthy value:
-    // derive it server-side from the linked inventario record instead, and
-    // ignore whatever costoUnitario the client sent. Free-text (non-linked)
-    // items from non-admin creators get null cost.
-    const isAdmin = role === "ADMIN"
+    // Cost/margin data is ADMIN-only, uniformly (VENDEDOR included — they
+    // have no cotizaciones nav access today, so losing cost entry here is
+    // deliberate, not an oversight; see canViewCotizacionCosts). Non-admin
+    // creators never see costoUnitario, so their client can't submit a
+    // trustworthy value: derive it server-side from the linked inventario
+    // record instead, and ignore whatever costoUnitario the client sent.
+    // Free-text (non-linked) items from non-admin creators get null cost.
+    const canViewCosts = canViewCotizacionCosts(role)
     const inventarioCostoById = new Map<string, number | null>()
-    if (!isAdmin) {
+    if (!canViewCosts) {
       const inventarioIds = Array.from(new Set(
         data.items.filter((item) => item.inventarioId).map((item) => item.inventarioId as string)
       ))
       if (inventarioIds.length > 0) {
-        const { data: invRows } = await supabaseAdmin
+        const { data: invRows, error: invError } = await supabaseAdmin
           .from("inventario")
           .select("id, precio_compra")
           .eq("organization_id", organizationId!)
           .in("id", inventarioIds)
+        if (invError) throw invError
         for (const row of invRows || []) {
           inventarioCostoById.set(row.id, row.precio_compra != null ? Number(row.precio_compra) : null)
         }
@@ -390,7 +393,7 @@ export async function POST(request: Request) {
     const items = data.items.map((item) => ({
       ...item,
       subtotal: calcItemNeto(item),
-      resolvedCostoUnitario: isAdmin
+      costoUnitario: canViewCosts
         ? (item.costoUnitario ?? null)
         : (item.inventarioId ? (inventarioCostoById.get(item.inventarioId) ?? null) : null),
     }))
@@ -454,7 +457,7 @@ export async function POST(request: Request) {
           descripcion: item.descripcion,
           cantidad: item.cantidad,
           precio_unitario: item.precioUnitario,
-          costo_unitario: item.resolvedCostoUnitario,
+          costo_unitario: item.costoUnitario,
           subtotal: item.subtotal,
           unidad: item.unidad || "Unidad",
           descuento_tipo: item.descuentoTipo || "porcentaje",
@@ -509,7 +512,7 @@ export async function POST(request: Request) {
       items_count: items.length,
     })
 
-    return NextResponse.json(formatCotizacion(cotizacionCompleta, role === "ADMIN"), { status: 201 })
+    return NextResponse.json(formatCotizacion(cotizacionCompleta, canViewCotizacionCosts(role)), { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

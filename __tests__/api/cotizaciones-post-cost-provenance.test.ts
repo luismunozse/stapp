@@ -62,8 +62,9 @@ const cotizacionCompletaRow = {
  *  - items_cotizacion: .insert() -> captured via insertedItemsCapture
  *  - inventario: .select().eq().in() -> invRows (plain await, no .single())
  */
-function wireSupabase(opts: { invRows?: any[] } = {}) {
+function wireSupabase(opts: { invRows?: any[]; invError?: any } = {}) {
   const insertedItemsCapture: { payload: any[] | null } = { payload: null }
+  const cotizacionCreated = { called: false }
 
   const clientesChain = createChainMock(clienteRow)
 
@@ -71,6 +72,11 @@ function wireSupabase(opts: { invRows?: any[] } = {}) {
   cotizacionesChain.single = vi.fn()
     .mockResolvedValueOnce({ data: cotizacionRow, error: null }) // insert().select().single()
     .mockResolvedValueOnce({ data: cotizacionCompletaRow, error: null }) // final refetch
+  const originalInsert = cotizacionesChain.insert
+  cotizacionesChain.insert = vi.fn().mockImplementation((...args: any[]) => {
+    cotizacionCreated.called = true
+    return originalInsert(...args)
+  })
 
   const itemsChain: any = createChainMock(null)
   itemsChain.insert = vi.fn().mockImplementation((payload: any[]) => {
@@ -78,7 +84,10 @@ function wireSupabase(opts: { invRows?: any[] } = {}) {
     return Promise.resolve({ data: null, error: null })
   })
 
-  const inventarioChain = createChainMock(opts.invRows ?? [])
+  const inventarioChain = createChainMock(
+    opts.invError ? null : (opts.invRows ?? []),
+    opts.invError ?? null
+  )
 
   mockSupabaseFrom({
     clientes: clientesChain,
@@ -87,7 +96,7 @@ function wireSupabase(opts: { invRows?: any[] } = {}) {
     inventario: inventarioChain,
   })
 
-  return { insertedItemsCapture, inventarioChain }
+  return { insertedItemsCapture, inventarioChain, cotizacionCreated }
 }
 
 function basePayload(overrides: Record<string, any> = {}) {
@@ -168,5 +177,47 @@ describe("POST /api/cotizaciones — cost provenance by role", () => {
 
     expect(status).toBe(201)
     expect(insertedItemsCapture.payload![0].costo_unitario).toBeNull()
+  })
+
+  it("VENDEDOR: cost is also derived server-side (deliberately excluded like TECNICO, uniform ADMIN-only rule)", async () => {
+    mockAuthSuccess({ role: "VENDEDOR" })
+    const { insertedItemsCapture } = wireSupabase({
+      invRows: [{ id: "inv-1", precio_compra: 300 }],
+    })
+
+    const payload = basePayload({
+      items: [
+        { descripcion: "Pantalla", cantidad: 1, precioUnitario: 500, costoUnitario: 1, inventarioId: "inv-1", unidad: "Unidad" },
+      ],
+    })
+
+    const res = await POST(createPostRequest(payload))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    expect(insertedItemsCapture.payload![0].costo_unitario).toBe(300)
+  })
+})
+
+describe("POST /api/cotizaciones — query error handling on the cost-derivation select", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("inventario cost lookup failure returns 500 and does not create the cotización", async () => {
+    mockAuthSuccess({ role: "TECNICO" })
+    const { cotizacionCreated } = wireSupabase({
+      invError: { message: "db unavailable" },
+    })
+
+    const payload = basePayload({
+      items: [
+        { descripcion: "Pantalla", cantidad: 1, precioUnitario: 500, inventarioId: "inv-1", unidad: "Unidad" },
+      ],
+    })
+
+    const res = await POST(createPostRequest(payload))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(500)
+    expect(cotizacionCreated.called).toBe(false)
   })
 })
