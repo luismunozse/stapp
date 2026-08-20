@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 // GET /api/inventario/check-duplicate?nombre=...&tipo=...&categoria=...&excludeId=...
@@ -51,8 +51,13 @@ function similarity(queryTokens: string[], candTokens: string[]): number {
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
+
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
 
     const { searchParams } = new URL(request.url)
     const nombre = searchParams.get("nombre")?.trim() || ""
@@ -101,7 +106,7 @@ export async function GET(request: Request) {
       categoria: row.categoria,
       tipoDispositivo: row.tipo_dispositivo,
       stock: row.stock,
-      precioCompra: row.precio_compra,
+      precioCompra: canViewCost ? row.precio_compra : null,
       precioVenta: row.precio_venta,
       proveedor: (row.proveedores as { nombre?: string } | null)?.nombre || null,
       score: Math.round(score * 100) / 100,

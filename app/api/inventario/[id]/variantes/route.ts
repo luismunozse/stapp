@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireInventarioAccess } from "@/lib/auth-utils"
+import { requireAuth, requireInventarioAccess, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 
@@ -11,7 +11,9 @@ import { z } from "zod"
 //        Si array, se enruta vía RPC crear_variantes_bulk (atómico).
 // ============================================================
 
-function formatVariante(row: any) {
+// includeCost defaults true: POST calls this only after requireInventarioAccess
+// already granted cost access, so it doesn't need to pass the flag explicitly.
+function formatVariante(row: any, includeCost = true) {
   return {
     id: row.id,
     inventarioId: row.inventario_id,
@@ -22,7 +24,7 @@ function formatVariante(row: any) {
     stock: row.stock,
     stockReservado: row.stock_reservado,
     stockDisponible: Math.max(0, (row.stock ?? 0) - (row.stock_reservado ?? 0)),
-    precioCompra: row.precio_compra !== null && row.precio_compra !== undefined
+    precioCompra: includeCost && row.precio_compra !== null && row.precio_compra !== undefined
       ? Number(row.precio_compra)
       : null,
     precioVenta: row.precio_venta !== null && row.precio_venta !== undefined
@@ -59,7 +61,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     const { id } = await params
@@ -94,7 +96,12 @@ export async function GET(
       return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
     }
 
-    const variantes = (data || []).map(formatVariante)
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
+    const variantes = (data || []).map((v) => formatVariante(v, canViewCost))
     const sumStock = variantes.reduce((s, v) => s + v.stock, 0)
     const sumReservado = variantes.reduce((s, v) => s + v.stockReservado, 0)
 
@@ -106,7 +113,7 @@ export async function GET(
         stock: parent.stock,
         stockReservado: parent.stock_reservado,
         tieneVariantes: parent.tiene_variantes,
-        precioCompra: parent.precio_compra !== null && parent.precio_compra !== undefined
+        precioCompra: canViewCost && parent.precio_compra !== null && parent.precio_compra !== undefined
           ? Number(parent.precio_compra)
           : null,
         precioVenta: parent.precio_venta !== null && parent.precio_venta !== undefined

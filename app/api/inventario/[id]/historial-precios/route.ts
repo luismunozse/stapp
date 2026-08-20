@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 export async function GET(
@@ -7,8 +7,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
+
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
 
     const { id } = await params
     const { searchParams } = new URL(request.url)
@@ -44,8 +49,8 @@ export async function GET(
     const formatted = (historial || []).map((h: any) => ({
       id: h.id,
       inventarioId: h.inventario_id,
-      precioCompraAnterior: h.precio_compra_anterior ? parseFloat(h.precio_compra_anterior) : null,
-      precioCompraNuevo: h.precio_compra_nuevo ? parseFloat(h.precio_compra_nuevo) : null,
+      precioCompraAnterior: canViewCost && h.precio_compra_anterior ? parseFloat(h.precio_compra_anterior) : null,
+      precioCompraNuevo: canViewCost && h.precio_compra_nuevo ? parseFloat(h.precio_compra_nuevo) : null,
       precioVentaAnterior: h.precio_venta_anterior ? parseFloat(h.precio_venta_anterior) : null,
       precioVentaNuevo: h.precio_venta_nuevo ? parseFloat(h.precio_venta_nuevo) : null,
       motivo: h.motivo,

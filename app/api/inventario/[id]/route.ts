@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
-import { requireAuth, requireInventarioAccess } from "@/lib/auth-utils"
+import { requireAuth, requireInventarioAccess, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
@@ -64,7 +64,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     const { id } = await params
@@ -84,7 +84,12 @@ export async function GET(
       )
     }
 
-    return NextResponse.json(formatInventario(item))
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+    const formatted = formatInventario(item)
+    return NextResponse.json(canViewCost || !formatted ? formatted : { ...formatted, precioCompra: null })
   } catch (error) {
     console.error("Error fetching inventario:", error)
     return NextResponse.json(
