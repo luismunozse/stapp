@@ -236,3 +236,77 @@ describe("GET /api/inventario/search — scoped por sucursal", () => {
     expect(invChain.eq).toHaveBeenCalledWith("inventario_depositos.deposito_id", "dep-A")
   })
 })
+
+describe("GET /api/inventario/search — scope=venta (POS opt-in)", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  function makeSucursalesChain(sucursalId: string | null, nombre?: string) {
+    const chain: any = {}
+    for (const m of ["select", "eq", "is"]) chain[m] = vi.fn().mockReturnValue(chain)
+    chain.single = vi.fn().mockResolvedValue({
+      data: sucursalId ? { id: sucursalId, nombre: nombre ?? "Sucursal Test" } : null,
+      error: null,
+    })
+    return chain
+  }
+
+  it("ADMIN en 'todas' con scope=venta: ignora el selector y escopea al depósito de la sucursal principal", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockNoCookie() // selector en "todas"
+
+    const sucursalesChain = makeSucursalesChain("suc-principal", "Casa Central")
+    const depositosChain = makeDepositosChain("dep-principal")
+    const invChain = createChainMock([
+      {
+        id: "i1", codigo: "C1", nombre: "Notebook",
+        precio_venta: 100, precio_compra: 60, trackea_series: false,
+        inventario_depositos: [{ stock: 4, stock_reservado: 0, deposito_id: "dep-principal" }],
+      },
+    ])
+
+    mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain, inventario: invChain })
+
+    const res = await GET(createGetRequest("http://localhost:3000/api/inventario/search?q=note&scope=venta"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    // Scoped stock (4), NOT the aggregate value that "todas" would otherwise return
+    expect(body[0].stock).toBe(4)
+    expect(invChain.eq).toHaveBeenCalledWith("inventario_depositos.deposito_id", "dep-principal")
+    expect(res.headers.get("X-Venta-Sucursal-Id")).toBe("suc-principal")
+    expect(decodeURIComponent(res.headers.get("X-Venta-Sucursal-Nombre")!)).toBe("Casa Central")
+  })
+
+  it("sin scope=venta, ADMIN en 'todas' sigue devolviendo stock agregado (comportamiento no tocado)", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockNoCookie()
+
+    const invChain = createChainMock([
+      { id: "i2", codigo: "C2", nombre: "Cable", stock: 10, stock_reservado: 0,
+        precio_venta: 50, precio_compra: 20, trackea_series: false },
+    ])
+    mockSupabaseFrom({ inventario: invChain })
+
+    const res = await GET(createGetRequest("http://localhost:3000/api/inventario/search?q=cable"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(body[0].stock).toBe(10)
+    expect(res.headers.get("X-Venta-Sucursal-Id")).toBeNull()
+  })
+
+  it("scope=venta y sucursal sin depósito principal: devuelve lista vacía (no explota)", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockNoCookie()
+
+    const sucursalesChain = makeSucursalesChain("suc-principal", "Casa Central")
+    const depositosChain = makeDepositosChain(null)
+    mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain })
+
+    const res = await GET(createGetRequest("http://localhost:3000/api/inventario/search?q=test&scope=venta"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(body).toEqual([])
+  })
+})

@@ -5,8 +5,10 @@ vi.mock("@/lib/sucursal", () => ({
   getCookieSucursalId: vi.fn().mockResolvedValue(null),
   resolveSucursalLectura: vi.fn(() => ({ sucursalId: null, verTodas: true })),
   getDepositoDeSucursal: vi.fn().mockResolvedValue(null),
+  resolverDestinoVenta: vi.fn(),
 }))
 
+import { resolverDestinoVenta } from "@/lib/sucursal"
 import { POST } from "@/app/api/inventario/check-stock/route"
 
 function req(body: unknown) {
@@ -47,5 +49,26 @@ describe("POST /api/inventario/check-stock", () => {
     const { status, body } = await parseResponse(res)
     expect(status).toBe(200)
     expect(body.stock).toEqual({ a: 5, b: 0, c: 0 })
+  })
+
+  it("scope=venta: ignora verTodas (mocked true) y usa el depósito resuelto por resolverDestinoVenta", async () => {
+    mockAuthSuccess({ role: "ADMIN" }) // resolveSucursalLectura sigue mockeado en "todas"
+    vi.mocked(resolverDestinoVenta).mockResolvedValue({ sucursalId: "suc-1", depositoId: "dep-1" })
+    mockSupabaseFrom({
+      inventario_depositos: createChainMock([{ inventario_id: "a", stock: 2 }]),
+    })
+
+    const res = await POST(
+      new Request("http://localhost:3000/api/inventario/check-stock?scope=venta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: ["a", "b"] }),
+      })
+    )
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    // Scoped stock (2), not the aggregate value that verTodas:true would otherwise return
+    expect(body.stock).toEqual({ a: 2, b: 0 })
   })
 })

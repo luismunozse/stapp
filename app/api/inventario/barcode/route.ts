@@ -2,13 +2,16 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
-import { getCookieSucursalId, resolveSucursalLectura, getDepositoDeSucursal } from "@/lib/sucursal"
+import { getCookieSucursalId, resolveSucursalLectura, getDepositoDeSucursal, resolverDestinoVenta } from "@/lib/sucursal"
 
 // GET /api/inventario/barcode?code=123456
 // Search inventory by barcode
 // If VENDEDOR (or ADMIN with sucursal cookie): returns stock from that sucursal's
 // principal deposito. If 0 there, stock=0 is returned so the POS rejects it.
 // ADMIN "ver todas" returns the aggregate stock field as before.
+// scope=venta (POS-only opt-in): ignores "ver todas" and always scopes stock to the
+// sucursal/deposito the sale will actually draw from (same resolution as the ventas
+// write path) — see app/api/inventario/search/route.ts for the full rationale.
 export async function GET(request: Request) {
   try {
     const { error, organizationId, role, session } = await requireAuth()
@@ -17,6 +20,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const rawCode = searchParams.get("code")
     const code = (rawCode ?? "").trim()
+    const scopeVenta = searchParams.get("scope") === "venta"
 
     if (!code) {
       return NextResponse.json({ error: "Código requerido" }, { status: 400 })
@@ -25,11 +29,23 @@ export async function GET(request: Request) {
     // Resolve sucursal scope for stock reporting
     const cookieSucursalId = await getCookieSucursalId()
     const userSucursalId = session?.user?.sucursalId ?? null
-    const { sucursalId, verTodas } = resolveSucursalLectura({
-      role,
-      userSucursalId,
-      cookieSucursalId,
-    })
+
+    let sucursalId: string | null
+    let verTodas: boolean
+    let depositoIdPrefetched: string | null = null
+
+    if (scopeVenta) {
+      const destino = await resolverDestinoVenta({ role, organizationId: organizationId!, userSucursalId })
+      sucursalId = destino.sucursalId
+      depositoIdPrefetched = destino.depositoId
+      // Org has no principal sucursal at all: mirror the write path's
+      // org-wide drain fallback instead of forcing stock to 0.
+      verTodas = !destino.sucursalId
+    } else {
+      const resolved = resolveSucursalLectura({ role, userSucursalId, cookieSucursalId })
+      sucursalId = resolved.sucursalId
+      verTodas = resolved.verTodas
+    }
 
     // Search by barcode first, fallback to codigo (products may store EAN in either field).
     // Usamos ILIKE para match case-insensitive: códigos Code 128 alfanuméricos
@@ -76,7 +92,7 @@ export async function GET(request: Request) {
 
     // If scoped to a sucursal, override stock with the per-deposito value
     if (!verTodas && sucursalId) {
-      const depId = await getDepositoDeSucursal(organizationId!, sucursalId)
+      const depId = scopeVenta ? depositoIdPrefetched : await getDepositoDeSucursal(organizationId!, sucursalId)
       if (depId) {
         const { data: depRow } = await supabaseAdmin
           .from("inventario_depositos")

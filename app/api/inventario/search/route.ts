@@ -2,13 +2,24 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
-import { getCookieSucursalId, resolveSucursalLectura, getDepositoDeSucursal } from "@/lib/sucursal"
+import {
+  getCookieSucursalId,
+  resolveSucursalLectura,
+  getDepositoDeSucursal,
+  resolverDestinoVenta,
+  getNombreSucursal,
+} from "@/lib/sucursal"
 
 // GET /api/inventario/search?q=term&limit=10
 // Server-side search for inventory items (used by sale form)
 // Returns minimal payload: id, codigo, nombre, stock, precioVenta
 // If VENDEDOR (or ADMIN with sucursal cookie): filters to items with stock in that
 // sucursal's principal deposito. ADMIN "ver todas" returns aggregate stock (original behavior).
+// scope=venta (POS-only opt-in): ignores the "ver todas" selector and always scopes stock
+// to the sucursal/deposito the sale will actually draw from (same resolution as the ventas
+// write path), so what POS shows always matches what a sale can decrement. The resolved
+// sucursal id/name are echoed back via X-Venta-Sucursal-Id/-Nombre response headers so the
+// POS UI can show a "selling from" indicator without a second round trip.
 export async function GET(request: Request) {
   try {
     const { error, organizationId, role, session } = await requireAuth()
@@ -18,15 +29,47 @@ export async function GET(request: Request) {
     const q = searchParams.get("q") || ""
     const limit = Math.min(parseInt(searchParams.get("limit") || "10"), 50)
     const includeZeroStock = searchParams.get("includeZeroStock") === "true"
+    const scopeVenta = searchParams.get("scope") === "venta"
 
-    // Resolve sucursal scope
+    // Resolve sucursal scope. Under scope=venta, ignore the reader's "ver
+    // todas" cookie state entirely and resolve the concrete sale target
+    // instead — this is what makes POS reads agree with the ventas write path.
     const cookieSucursalId = await getCookieSucursalId()
     const userSucursalId = session?.user?.sucursalId ?? null
-    const { sucursalId, verTodas } = resolveSucursalLectura({
-      role,
-      userSucursalId,
-      cookieSucursalId,
-    })
+
+    let sucursalId: string | null
+    let verTodas: boolean
+    let depositoIdPrefetched: string | null = null
+    let ventaSucursalId: string | null = null
+    let ventaSucursalNombre: string | null = null
+
+    if (scopeVenta) {
+      const destino = await resolverDestinoVenta({ role, organizationId: organizationId!, userSucursalId })
+      ventaSucursalId = destino.sucursalId
+      sucursalId = destino.sucursalId
+      depositoIdPrefetched = destino.depositoId
+      // Org has no principal sucursal at all (misconfiguration): mirror the
+      // write path's org-wide drain fallback instead of returning nothing.
+      verTodas = !destino.sucursalId
+      if (destino.sucursalId) {
+        ventaSucursalNombre = await getNombreSucursal(organizationId!, destino.sucursalId)
+      }
+    } else {
+      const resolved = resolveSucursalLectura({ role, userSucursalId, cookieSucursalId })
+      sucursalId = resolved.sucursalId
+      verTodas = resolved.verTodas
+    }
+
+    const withVentaHeaders = (res: NextResponse) => {
+      if (scopeVenta) {
+        res.headers.set("X-Venta-Sucursal-Id", ventaSucursalId ?? "")
+        res.headers.set(
+          "X-Venta-Sucursal-Nombre",
+          ventaSucursalNombre ? encodeURIComponent(ventaSucursalNombre) : ""
+        )
+      }
+      return res
+    }
 
     // Sanitize query terms for ILIKE filter
     const terms = q
@@ -69,15 +112,16 @@ export async function GET(request: Request) {
         diasGarantiaDefault: (item as any).dias_garantia_default ?? null,
       }))
 
-      return NextResponse.json(formatted)
+      return withVentaHeaders(NextResponse.json(formatted))
     }
 
     // Sucursal-scoped: resolve the principal deposito of this sucursal
-    const depId = await getDepositoDeSucursal(organizationId!, sucursalId)
+    // (already resolved above under scope=venta — avoid a duplicate query).
+    const depId = scopeVenta ? depositoIdPrefetched : await getDepositoDeSucursal(organizationId!, sucursalId)
 
     if (!depId) {
       // No principal deposito configured for this sucursal — return empty
-      return NextResponse.json([])
+      return withVentaHeaders(NextResponse.json([]))
     }
 
     // Query inventario joined with inventario_depositos for this specific deposito.
@@ -125,7 +169,7 @@ export async function GET(request: Request) {
       }
     })
 
-    return NextResponse.json(formatted)
+    return withVentaHeaders(NextResponse.json(formatted))
   } catch (error) {
     console.error("Error searching inventario:", error)
     return NextResponse.json(
