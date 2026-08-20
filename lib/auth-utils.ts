@@ -103,9 +103,10 @@ export async function requireAdminOrVendedor() {
   return result
 }
 
-// Regla pura de acceso a administración de inventario.
-// ADMIN siempre; VENDEDOR solo si la org habilitó el permiso (opt-in,
-// default apagado); TECNICO y cualquier otro rol, nunca.
+// Regla pura de acceso a administración de inventario (incluye costos de
+// compra: precioCompra/precio_compra). ADMIN siempre; VENDEDOR solo si la
+// org habilitó el permiso (opt-in, default apagado); TECNICO y cualquier
+// otro rol, nunca.
 export function hasInventarioAccess(
   role: string | null,
   vendedoresHabilitados: boolean
@@ -113,6 +114,24 @@ export function hasInventarioAccess(
   if (role === "ADMIN") return true
   if (role === "VENDEDOR") return vendedoresHabilitados
   return false
+}
+
+// Resuelve el flag `vendedores_administran_inventario` de la org. Solo hace
+// falta cuando el actor es VENDEDOR (ver hasInventarioAccess); llamarlo para
+// otros roles es un round-trip innecesario. Fail-closed: si la columna no
+// existe o la lectura falla, devuelve false (VENDEDOR queda denegado,
+// idéntico al comportamiento histórico).
+export async function resolveVendedoresHabilitados(organizationId: string): Promise<boolean> {
+  try {
+    const { data } = await supabaseAdmin
+      .from("organizations")
+      .select("vendedores_administran_inventario")
+      .eq("id", organizationId)
+      .single()
+    return data?.vendedores_administran_inventario === true
+  } catch {
+    return false
+  }
 }
 
 // Guard de endpoints de inventario. Mismo contrato que requireAdmin() para
@@ -124,19 +143,9 @@ export async function requireInventarioAccess() {
 
   if (result.role === "ADMIN") return result
 
-  let vendedoresHabilitados = false
-  if (result.role === "VENDEDOR") {
-    try {
-      const { data } = await supabaseAdmin
-        .from("organizations")
-        .select("vendedores_administran_inventario")
-        .eq("id", result.organizationId!)
-        .single()
-      vendedoresHabilitados = data?.vendedores_administran_inventario === true
-    } catch {
-      vendedoresHabilitados = false
-    }
-  }
+  const vendedoresHabilitados = result.role === "VENDEDOR"
+    ? await resolveVendedoresHabilitados(result.organizationId!)
+    : false
 
   if (!hasInventarioAccess(result.role, vendedoresHabilitados)) {
     return {
@@ -148,6 +157,15 @@ export async function requireInventarioAccess() {
     }
   }
   return result
+}
+
+// Regla pura de acceso a costo/margen de cotizaciones (costoUnitario,
+// "Ganancia bruta"). ADMIN unicamente, de forma uniforme — VENDEDOR queda
+// afuera aunque tenga acceso a inventario, porque hoy no tiene navegación a
+// cotizaciones; TECNICO nunca. Distinta de hasInventarioAccess a propósito:
+// costo de cotización y costo de inventario son permisos independientes.
+export function canViewCotizacionCosts(role: string | null): boolean {
+  return role === "ADMIN"
 }
 
 // Verifica si el usuario puede crear órdenes y clientes (ADMIN, VENDEDOR)
