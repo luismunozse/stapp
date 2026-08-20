@@ -185,13 +185,14 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     }))
 
     // Load initial/popular products. scope=venta keeps stock consistent with what
-    // a sale can actually decrement (see app/api/inventario/search/route.ts); the
-    // response headers also carry the resolved sucursal for the "selling from"
-    // indicator, reported once here since this fetch always runs on mount.
+    // a sale can actually decrement (see app/api/inventario/search/route.ts);
+    // ventaInfo=true also resolves the sucursal name for the "selling from"
+    // indicator — asked for only here, since this fetch always runs on mount and
+    // it is the only one whose response headers are read.
     useEffect(() => {
       const loadInitial = async () => {
         try {
-          const res = await fetch("/api/inventario/search?q=&limit=20&scope=venta")
+          const res = await fetch("/api/inventario/search?q=&limit=20&scope=venta&ventaInfo=true")
           const data = await res.json()
           if (Array.isArray(data)) {
             setRecentProducts(data)

@@ -266,7 +266,9 @@ describe("GET /api/inventario/search — scope=venta (POS opt-in)", () => {
 
     mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain, inventario: invChain })
 
-    const res = await GET(createGetRequest("http://localhost:3000/api/inventario/search?q=note&scope=venta"))
+    const res = await GET(
+      createGetRequest("http://localhost:3000/api/inventario/search?q=note&scope=venta&ventaInfo=true")
+    )
     const { status, body } = await parseResponse(res)
 
     expect(status).toBe(200)
@@ -275,6 +277,29 @@ describe("GET /api/inventario/search — scope=venta (POS opt-in)", () => {
     expect(invChain.eq).toHaveBeenCalledWith("inventario_depositos.deposito_id", "dep-principal")
     expect(res.headers.get("X-Venta-Sucursal-Id")).toBe("suc-principal")
     expect(decodeURIComponent(res.headers.get("X-Venta-Sucursal-Nombre")!)).toBe("Casa Central")
+  })
+
+  it("scope=venta sin ventaInfo: no resuelve el nombre (evita una query por tecla)", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockNoCookie()
+
+    const sucursalesChain = makeSucursalesChain("suc-principal", "Casa Central")
+    const depositosChain = makeDepositosChain("dep-principal")
+    const invChain = createChainMock([])
+    mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain, inventario: invChain })
+
+    const res = await GET(createGetRequest("http://localhost:3000/api/inventario/search?q=note&scope=venta"))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    // The id is free (already resolved), only the name costs a query.
+    expect(res.headers.get("X-Venta-Sucursal-Id")).toBe("suc-principal")
+    expect(res.headers.get("X-Venta-Sucursal-Nombre")).toBe("")
+    // Only getPrincipalId reads `sucursales`; getNombreSucursal must not run.
+    const sucursalesReads = vi
+      .mocked(supabaseAdmin.from)
+      .mock.calls.filter((call) => call[0] === "sucursales")
+    expect(sucursalesReads).toHaveLength(1)
   })
 
   it("sin scope=venta, ADMIN en 'todas' sigue devolviendo stock agregado (comportamiento no tocado)", async () => {

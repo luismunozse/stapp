@@ -19,8 +19,9 @@ import {
 // scope=venta (POS-only opt-in): ignores the "ver todas" selector and always scopes stock
 // to the sucursal/deposito the sale will actually draw from (same resolution as the ventas
 // write path), so what POS shows always matches what a sale can decrement. The resolved
-// sucursal id/name are echoed back via X-Venta-Sucursal-Id/-Nombre response headers so the
-// POS UI can show a "selling from" indicator without a second round trip.
+// sucursal id is echoed back via the X-Venta-Sucursal-Id response header so the POS UI can show
+// a "selling from" indicator without a second round trip; ventaInfo=true additionally resolves
+// its name into X-Venta-Sucursal-Nombre (an extra query — only the POS mount fetch asks for it).
 export async function GET(request: Request) {
   try {
     const { error, organizationId, role, session } = await requireAuth()
@@ -31,6 +32,10 @@ export async function GET(request: Request) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "10"), 50)
     const includeZeroStock = searchParams.get("includeZeroStock") === "true"
     const scopeVenta = searchParams.get("scope") === "venta"
+    // Resolving the sucursal NAME costs an extra query, and only the POS mount
+    // fetch consumes the X-Venta-Sucursal-Nombre header — the debounced
+    // per-keystroke search does not. Opt in instead of paying it every time.
+    const ventaInfo = searchParams.get("ventaInfo") === "true"
 
     // Resolve sucursal scope. Under scope=venta, ignore the reader's "ver
     // todas" cookie state entirely and resolve the concrete sale target
@@ -51,7 +56,7 @@ export async function GET(request: Request) {
       sucursalId = lectura.sucursalId
       depositoIdPrefetched = lectura.depositoId
       verTodas = lectura.verTodas
-      if (lectura.ventaSucursalId) {
+      if (ventaInfo && lectura.ventaSucursalId) {
         ventaSucursalNombre = await getNombreSucursal(organizationId!, lectura.ventaSucursalId)
       }
     } else {
