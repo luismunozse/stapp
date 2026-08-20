@@ -160,7 +160,7 @@ function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuent
   return Math.max(0, bruto * (1 - dv / 100))
 }
 
-function formatCotizacion(c: any) {
+function formatCotizacion(c: any, includeCosts: boolean) {
   const orden = c.ordenes_servicio
   const cliente = c.clientes || orden?.clientes
   const sector = c.sectores_cliente
@@ -210,7 +210,8 @@ function formatCotizacion(c: any) {
       descripcion: i.descripcion,
       cantidad: i.cantidad,
       precioUnitario: i.precio_unitario,
-      costoUnitario: i.costo_unitario != null ? Number(i.costo_unitario) : null,
+      // Cost/margin data is ADMIN-only (server-side enforced, not just hidden in UI).
+      costoUnitario: includeCosts && i.costo_unitario != null ? Number(i.costo_unitario) : null,
       subtotal: i.subtotal,
       unidad: i.unidad,
       descuentoTipo: i.descuento_tipo,
@@ -226,7 +227,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     const { id } = await params
@@ -256,7 +257,7 @@ export async function GET(
       )
     }
 
-    return NextResponse.json(formatCotizacion(cotizacion))
+    return NextResponse.json(formatCotizacion(cotizacion, role === "ADMIN"))
   } catch (error) {
     console.error("Error fetching cotizacion:", error)
     return NextResponse.json(
@@ -399,9 +400,54 @@ export async function PUT(
       const descGlobalTipo = data.descuentoGlobalTipo ?? "porcentaje"
       const descGlobalValor = data.descuentoGlobalValor ?? 0
 
+      // Cost/margin data is ADMIN-only. Non-admin actors (e.g. TECNICO) never
+      // see costoUnitario in GET responses, so their edit payload can't carry
+      // trustworthy values — resolve costs server-side instead:
+      //  - existing item (matched by id): preserve the DB's current costo_unitario,
+      //    ignoring whatever the client sent (blocks spoofing and prevents an
+      //    edit from silently wiping out cost data an admin entered earlier).
+      //  - new item linked to inventario: derive from inventario.precio_compra.
+      //  - new free-text item: costo_unitario stays null.
+      const isAdmin = role === "ADMIN"
+      const existingCostoById = new Map<string, number | null>()
+      const inventarioCostoById = new Map<string, number | null>()
+      if (!isAdmin) {
+        const { data: existingItemRows } = await supabaseAdmin
+          .from("items_cotizacion")
+          .select("id, costo_unitario")
+          .eq("cotizacion_id", id)
+        for (const row of existingItemRows || []) {
+          existingCostoById.set(row.id, row.costo_unitario != null ? Number(row.costo_unitario) : null)
+        }
+
+        const newInventarioIds = Array.from(new Set(
+          data.items
+            .filter((item) => !(item.id && existingCostoById.has(item.id)) && item.inventarioId)
+            .map((item) => item.inventarioId as string)
+        ))
+        if (newInventarioIds.length > 0) {
+          const { data: invRows } = await supabaseAdmin
+            .from("inventario")
+            .select("id, precio_compra")
+            .eq("organization_id", organizationId!)
+            .in("id", newInventarioIds)
+          for (const row of invRows || []) {
+            inventarioCostoById.set(row.id, row.precio_compra != null ? Number(row.precio_compra) : null)
+          }
+        }
+      }
+
+      const resolveCostoUnitario = (item: (typeof data.items)[number]): number | null => {
+        if (isAdmin) return item.costoUnitario ?? null
+        if (item.id && existingCostoById.has(item.id)) return existingCostoById.get(item.id)!
+        if (item.inventarioId) return inventarioCostoById.get(item.inventarioId) ?? null
+        return null
+      }
+
       const items = data.items.map((item) => ({
         ...item,
         subtotal: calcItemNeto(item),
+        resolvedCostoUnitario: resolveCostoUnitario(item),
       }))
       const subtotalNeto = items.reduce((sum, item) => sum + item.subtotal, 0)
 
@@ -434,7 +480,7 @@ export async function PUT(
             descripcion: item.descripcion,
             cantidad: item.cantidad,
             precio_unitario: item.precioUnitario,
-            costo_unitario: item.costoUnitario ?? null,
+            costo_unitario: item.resolvedCostoUnitario,
             subtotal: item.subtotal,
             unidad: item.unidad || "Unidad",
             descuento_tipo: item.descuentoTipo || "porcentaje",
@@ -553,7 +599,7 @@ export async function PUT(
       total: cotizacion?.total,
     })
 
-    return NextResponse.json(formatCotizacion(cotizacion))
+    return NextResponse.json(formatCotizacion(cotizacion, role === "ADMIN"))
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

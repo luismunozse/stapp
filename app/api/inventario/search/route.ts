@@ -64,7 +64,10 @@ export async function GET(request: Request) {
         stock: item.stock,
         stockReservado: item.stock_reservado ?? 0,
         precioVenta: item.precio_venta,
-        precioCompra: item.precio_compra ?? 0,
+        // Cost data hidden from TECNICO (cotización item search leaks margin
+        // otherwise). VENDEDOR/ADMIN unchanged — this endpoint is also used by
+        // POS, which is out of scope for this gate.
+        precioCompra: role === "TECNICO" ? null : (item.precio_compra ?? 0),
         trackeaSeries: item.trackea_series ?? false,
         diasGarantiaDefault: (item as any).dias_garantia_default ?? null,
       }))
@@ -119,7 +122,7 @@ export async function GET(request: Request) {
         stock,
         stockReservado,
         precioVenta: item.precio_venta,
-        precioCompra: item.precio_compra ?? 0,
+        precioCompra: role === "TECNICO" ? null : (item.precio_compra ?? 0),
         trackeaSeries: item.trackea_series ?? false,
         diasGarantiaDefault: item.dias_garantia_default ?? null,
       }
