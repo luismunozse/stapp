@@ -288,11 +288,6 @@ export async function POST(request: Request) {
     const sucursalId = destinoVenta.sucursalId
     const resolvedDepositoId = destinoVenta.depositoId
 
-    // Nombre de la sucursal resuelta: ya resuelto acá (no en el path de error)
-    // para nombrar el depósito/sucursal en el mensaje de "stock insuficiente"
-    // sin agregar una query extra específica al camino de error.
-    const sucursalNombre = sucursalId ? await getNombreSucursal(organizationId!, sucursalId) : null
-
     // Resolver vendedor (server-authoritative: valida que pertenezca a la org con rol válido)
     const vendedorId = await resolveOperador(
       organizationId!,
@@ -407,6 +402,9 @@ export async function POST(request: Request) {
 
       // Mapped deposit error codes
       if (rpcError.code === "P0010") {
+        // El nombre solo se necesita acá: resolverlo de forma diferida evita
+        // una query extra en cada venta exitosa.
+        const sucursalNombre = sucursalId ? await getNombreSucursal(organizationId!, sucursalId) : null
         return NextResponse.json(
           {
             error: sucursalNombre

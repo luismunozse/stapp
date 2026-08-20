@@ -499,6 +499,33 @@ describe("POST /api/ventas — depositoId server-resolved (T4)", () => {
     expect(body.error).toBe("Stock insuficiente en el depósito de Sucursal Centro")
   })
 
+  it("camino feliz: no paga la query del nombre de sucursal (solo la del error P0010)", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      sucursales: createChainMock({ id: "suc-p", nombre: "Sucursal Centro" }),
+      depositos: (() => {
+        const c: any = {}
+        for (const m of ["select", "eq", "is"]) c[m] = vi.fn().mockReturnValue(c)
+        c.maybeSingle = vi.fn().mockResolvedValue({ data: { id: "dep-1" }, error: null })
+        return c
+      })(),
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
+      organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+    })
+
+    const res = await POST(createPostRequest(baseBody))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    // Only getPrincipalId hits `sucursales`; getNombreSucursal is lazy and
+    // must stay inside the P0010 branch.
+    const sucursalesReads = vi
+      .mocked(supabaseAdmin.from)
+      .mock.calls.filter((call) => call[0] === "sucursales")
+    expect(sucursalesReads).toHaveLength(1)
+  })
+
   it("mapea P0011 a 400 con mensaje claro", async () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
