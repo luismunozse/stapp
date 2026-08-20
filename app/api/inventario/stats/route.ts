@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 // Stats agregadas para el header de /inventario:
@@ -7,7 +7,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 // Una sola query SQL en la base usando aggregations.
 export async function GET() {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     // Umbral global desde la organización (fallback 5)
@@ -56,17 +56,27 @@ export async function GET() {
       }
     }
 
+    // valorCosto y valorEnRiesgo salen de precio_compra, así que van detrás del
+    // mismo permiso que el costo de cada item. Los conteos y el valor a venta
+    // no son costo y siguen disponibles para todos los roles.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
     return NextResponse.json(
       {
         totalSkus,
-        valorCosto: Math.round(valorCosto * 100) / 100,
+        valorCosto: canViewCost ? Math.round(valorCosto * 100) / 100 : null,
         valorVenta: Math.round(valorVenta * 100) / 100,
         sinStock,
         bajoStock,
-        valorEnRiesgo: Math.round(valorEnRiesgo * 100) / 100,
+        valorEnRiesgo: canViewCost ? Math.round(valorEnRiesgo * 100) / 100 : null,
       },
       {
-        headers: { "Cache-Control": "private, max-age=60" },
+        // La respuesta ahora depende del rol: no se cachea, igual que el resto
+        // de los endpoints con costo detrás de un permiso.
+        headers: { "Cache-Control": "no-store" },
       }
     )
   } catch (error) {

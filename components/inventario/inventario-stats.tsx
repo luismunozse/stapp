@@ -7,11 +7,13 @@ import { useCurrency } from "@/contexts/currency-context"
 
 interface InventarioStatsData {
   totalSkus: number
-  valorCosto: number
+  /** null cuando el rol no puede ver costos de compra (hasInventarioAccess). */
+  valorCosto: number | null
   valorVenta: number
   sinStock: number
   bajoStock: number
-  valorEnRiesgo: number
+  /** null cuando el rol no puede ver costos de compra: es costo de reposición. */
+  valorEnRiesgo: number | null
 }
 
 interface InventarioStatsProps {
@@ -32,6 +34,11 @@ export function InventarioStats({ onFilterSinStock, onFilterBajoStock, refreshKe
     { revalidateOnFocus: false, dedupingInterval: 5000 }
   )
 
+  // El servidor devuelve null en las métricas de costo cuando el rol no puede
+  // verlas. Se ocultan las cards en vez de pintar "$0", que se leería como un
+  // inventario sin valor. Mientras carga todavía no se sabe: se mantienen.
+  const costosOcultos = !!data && data.valorCosto === null
+
   const cards = [
     {
       title: "SKUs activos",
@@ -40,17 +47,17 @@ export function InventarioStats({ onFilterSinStock, onFilterBajoStock, refreshKe
       bgClass: "bg-blue-100 dark:bg-blue-950",
       colorClass: "text-blue-600 dark:text-blue-400",
       description: "Items en catálogo",
-      onClick: undefined,
+      onClick: undefined as (() => void) | undefined,
     },
-    {
+    ...(costosOcultos ? [] : [{
       title: "Valor a costo",
       value: isLoading ? "—" : formatPrice(data?.valorCosto ?? 0),
       icon: DollarSign,
       bgClass: "bg-emerald-100 dark:bg-emerald-950",
       colorClass: "text-emerald-600 dark:text-emerald-400",
       description: "Inversión inmovilizada",
-      onClick: undefined,
-    },
+      onClick: undefined as (() => void) | undefined,
+    }]),
     {
       title: "Valor a venta",
       value: isLoading ? "—" : formatPrice(data?.valorVenta ?? 0),
@@ -58,7 +65,7 @@ export function InventarioStats({ onFilterSinStock, onFilterBajoStock, refreshKe
       bgClass: "bg-violet-100 dark:bg-violet-950",
       colorClass: "text-violet-600 dark:text-violet-400",
       description: "Potencial de venta",
-      onClick: undefined,
+      onClick: undefined as (() => void) | undefined,
     },
     {
       title: "Sin stock",
@@ -78,15 +85,15 @@ export function InventarioStats({ onFilterSinStock, onFilterBajoStock, refreshKe
       description: "Bajo del mínimo",
       onClick: onFilterBajoStock,
     },
-    {
+    ...(costosOcultos ? [] : [{
       title: "Valor en riesgo",
       value: isLoading ? "—" : formatPrice(data?.valorEnRiesgo ?? 0),
       icon: Wallet,
       bgClass: "bg-orange-100 dark:bg-orange-950",
       colorClass: "text-orange-600 dark:text-orange-400",
       description: "Costo de reposición",
-      onClick: undefined,
-    },
+      onClick: undefined as (() => void) | undefined,
+    }]),
   ]
 
   return (

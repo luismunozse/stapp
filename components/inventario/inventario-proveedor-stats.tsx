@@ -8,9 +8,11 @@ import { useCurrency } from "@/contexts/currency-context"
 interface Summary {
   totalArticulos: number
   totalStock: number
-  valorCosto: number
+  /** null cuando el rol no puede ver costos de compra (hasInventarioAccess). */
+  valorCosto: number | null
   valorVenta: number
-  margenEstimado: number
+  /** null junto con valorCosto: el margen lo devolvería por resta. */
+  margenEstimado: number | null
   itemsBajoStock: number
   itemsSinStock: number
   truncated: boolean
@@ -74,11 +76,14 @@ export function InventarioProveedorStats({
       value: data.totalStock.toLocaleString("es-AR"),
       icon: <Layers className="h-4 w-4" />,
     },
-    {
-      label: "Valor a costo",
-      value: formatPrice(data.valorCosto),
-      icon: <DollarSign className="h-4 w-4" />,
-    },
+    // Se omite en vez de mostrar "$0" cuando el rol no puede ver costos.
+    ...(data.valorCosto === null
+      ? []
+      : [{
+          label: "Valor a costo",
+          value: formatPrice(data.valorCosto),
+          icon: <DollarSign className="h-4 w-4" />,
+        }]),
     {
       label: "Valor a venta",
       value: formatPrice(data.valorVenta),

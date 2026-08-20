@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 // GET /api/proveedores/[id]/stats
@@ -11,7 +11,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
     const { id } = await params
 
@@ -79,10 +79,18 @@ export async function GET(
       if (fecha && (!ultimaCompra || fecha > ultimaCompra)) ultimaCompra = fecha
     }
 
+    // valorCostoStock sale de precio_compra. Con un solo producto,
+    // valorCostoStock / stock devuelve el costo exacto de ese item, así que va
+    // detrás del mismo permiso. Los conteos y el valor a venta se mantienen.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
     return NextResponse.json(
       {
         productosCount: invRes.data?.length || 0,
-        valorCostoStock: Math.round(valorCostoStock * 100) / 100,
+        valorCostoStock: canViewCost ? Math.round(valorCostoStock * 100) / 100 : null,
         valorVentaStock: Math.round(valorVentaStock * 100) / 100,
         itemsSinStock,
         itemsBajoStock,

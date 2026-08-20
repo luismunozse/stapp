@@ -94,7 +94,8 @@ function pagoLabel(p?: Proveedor | null): string {
 
 interface Stats {
   productosCount: number
-  valorCostoStock: number
+  /** null cuando el rol no puede ver costos de compra (hasInventarioAccess). */
+  valorCostoStock: number | null
   valorVentaStock: number
   itemsSinStock: number
   itemsBajoStock: number
@@ -492,7 +493,10 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <div className="text-muted-foreground text-xs uppercase tracking-wide">A costo</div>
-                  <div className="font-semibold">{stats ? formatPrice(stats.valorCostoStock) : "—"}</div>
+                  {/* null = el rol no puede ver costos de compra. */}
+                  <div className="font-semibold">
+                    {stats && stats.valorCostoStock !== null ? formatPrice(stats.valorCostoStock) : "—"}
+                  </div>
                 </div>
                 <div>
                   <div className="text-muted-foreground text-xs uppercase tracking-wide">A venta</div>
