@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { formatVenta } from "@/lib/db-utils"
-import { sucursalParaEscritura, sucursalParaLectura, getDepositoDeSucursal } from "@/lib/sucursal"
+import { sucursalParaLectura, resolverDestinoVenta, getNombreSucursal } from "@/lib/sucursal"
 import { getRecargosMetodo, factorRecargo, metodoCondicion } from "@/lib/recargos"
 import { resolveOperador } from "@/lib/operadores"
 import { z } from "zod"
@@ -276,27 +276,22 @@ export async function POST(request: Request) {
       ...(item.costo != null && { costo: item.costo }),
     }))
 
-    // Resolver sucursal concreta para la escritura (no-ADMIN: la suya;
-    // ADMIN: según cookie, fallback a principal).
-    const sucursalId = await sucursalParaEscritura({
+    // Resolver sucursal + deposito concretos para la escritura (no-ADMIN: la
+    // suya; ADMIN: según cookie, fallback a principal). Mismo helper que usan
+    // los endpoints de lectura del POS (scope=venta) para que nunca diverjan
+    // sobre qué depósito descuenta la venta.
+    const destinoVenta = await resolverDestinoVenta({
       role,
       organizationId: organizationId!,
       userSucursalId: session!.user.sucursalId ?? null,
     })
+    const sucursalId = destinoVenta.sucursalId
+    const resolvedDepositoId = destinoVenta.depositoId
 
-    // Resolve the principal deposito of this sucursal to enforce strict deduction
-    // (p_deposito_id explicit → RPC drains only from that deposito, not across all).
-    // If null (sucursal has no principal deposito — misconfiguration), fall back to
-    // null (drain across org) and log a warning.
-    let resolvedDepositoId: string | null = null
-    if (sucursalId) {
-      resolvedDepositoId = await getDepositoDeSucursal(organizationId!, sucursalId)
-      if (!resolvedDepositoId) {
-        console.warn(
-          `[ventas] Sucursal ${sucursalId} has no principal deposito — falling back to drain mode`
-        )
-      }
-    }
+    // Nombre de la sucursal resuelta: ya resuelto acá (no en el path de error)
+    // para nombrar el depósito/sucursal en el mensaje de "stock insuficiente"
+    // sin agregar una query extra específica al camino de error.
+    const sucursalNombre = sucursalId ? await getNombreSucursal(organizationId!, sucursalId) : null
 
     // Resolver vendedor (server-authoritative: valida que pertenezca a la org con rol válido)
     const vendedorId = await resolveOperador(
@@ -413,7 +408,11 @@ export async function POST(request: Request) {
       // Mapped deposit error codes
       if (rpcError.code === "P0010") {
         return NextResponse.json(
-          { error: "Stock insuficiente en el depósito seleccionado" },
+          {
+            error: sucursalNombre
+              ? `Stock insuficiente en el depósito de ${sucursalNombre}`
+              : "Stock insuficiente en el depósito seleccionado",
+          },
           { status: 400 }
         )
       }
