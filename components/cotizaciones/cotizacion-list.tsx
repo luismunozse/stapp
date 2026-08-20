@@ -70,6 +70,8 @@ interface CotizacionListProps {
   clienteEmail?: string | null
   readOnly?: boolean
   repuestos?: RepuestoOrden[]
+  /** Cost/margin data is ADMIN-only. Defaults to hidden (fail-closed). */
+  mostrarCostos?: boolean
   /** Notifica al padre cuando una acción de esta lista puede haber cambiado
    *  el estado de la orden vinculada (compartir, enviar, aprobar, rechazar
    *  o eliminar una cotización), para que refresque su propio `orden`. */
@@ -83,7 +85,7 @@ const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: s
   RECHAZADA: { label: "Rechazada", icon: XCircle, color: "bg-destructive/10 text-destructive" },
 }
 
-export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repuestos = [], onOrdenChanged }: CotizacionListProps) {
+export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repuestos = [], mostrarCostos, onOrdenChanged }: CotizacionListProps) {
   const { formatPrice, formatDate } = useCurrency()
   const [showForm, setShowForm] = useState(false)
   const [prefillFromRepuestos, setPrefillFromRepuestos] = useState(false)
@@ -346,6 +348,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
       {showForm && (
         <CotizacionForm
           ordenId={ordenId}
+          mostrarCostos={mostrarCostos}
           onClose={() => { setShowForm(false); setPrefillFromRepuestos(false) }}
           onSuccess={() => {
             setShowForm(false)
@@ -372,6 +375,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
       {editingCotizacion && (
         <CotizacionForm
           ordenId={ordenId}
+          mostrarCostos={mostrarCostos}
           initialData={{
             id: editingCotizacion.id,
             items: editingCotizacion.items,

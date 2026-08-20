@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -134,6 +135,9 @@ const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 export default function CotizacionesPage() {
   const { formatPrice, formatDate } = useCurrency()
+  const { data: session } = useSession()
+  // Cost/margin data is ADMIN-only (see components/ordenes/orden-detail.tsx's isAdmin gate).
+  const mostrarCostos = session?.user?.role === "ADMIN"
   const [showForm, setShowForm] = useState(false)
   const [showTipoSelector, setShowTipoSelector] = useState(false)
   const [formTipo, setFormTipo] = useState<"ORDEN" | "PRESUPUESTO">("ORDEN")
@@ -634,6 +638,7 @@ export default function CotizacionesPage() {
             key={`new-${formTipo}-${nuevoClienteId ?? ""}`}
             tipo={formTipo}
             initialClienteId={nuevoClienteId || undefined}
+            mostrarCostos={mostrarCostos}
             onClose={() => { setShowForm(false); setNuevoClienteId(null) }}
             onSuccess={() => {
               setShowForm(false)
@@ -648,6 +653,7 @@ export default function CotizacionesPage() {
             key={`edit-${editingCotizacion.id}`}
             tipo={editingCotizacion.tipo || "ORDEN"}
             ordenId={editingCotizacion.ordenId || undefined}
+            mostrarCostos={mostrarCostos}
             initialData={{
               id: editingCotizacion.id,
               items: editingCotizacion.items,

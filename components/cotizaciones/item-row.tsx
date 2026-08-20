@@ -42,6 +42,8 @@ interface ItemRowProps {
   onRemove: (index: number) => void
   disabled?: boolean
   showTipoRepuesto?: boolean
+  /** Cost/margin data is ADMIN-only. Defaults to hidden (fail-closed). */
+  mostrarCostos?: boolean
 }
 
 const TIPO_REPUESTO_OPTIONS = [
@@ -59,7 +61,7 @@ export function calcItemNeto(item: { cantidad: number; precioUnitario: number; d
   return Math.max(0, bruto * (1 - dv / 100))
 }
 
-export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRepuesto }: ItemRowProps) {
+export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRepuesto, mostrarCostos }: ItemRowProps) {
   const { formatPrice } = useCurrency()
   const { confirm } = useModal()
   const bruto = item.cantidad * item.precioUnitario
@@ -149,7 +151,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
   const margenPct = item.precioUnitario > 0 && costoUnit > 0
     ? Math.round(((item.precioUnitario - costoUnit) / item.precioUnitario) * 100)
     : null
-  const showCostInfo = !!item.inventarioId && costoUnit > 0
+  const showCostInfo = !!mostrarCostos && !!item.inventarioId && costoUnit > 0
 
   return (
     <>
@@ -183,7 +185,9 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
                             )}
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5">
-                            Costo: {formatPrice(pc)} · Venta: {formatPrice(pv)}{mPct !== null ? ` · ${mPct}%` : ""}
+                            {mostrarCostos
+                              ? <>Costo: {formatPrice(pc)} · Venta: {formatPrice(pv)}{mPct !== null ? ` · ${mPct}%` : ""}</>
+                              : <>Venta: {formatPrice(pv)}</>}
                           </div>
                         </button>
                       )
@@ -279,7 +283,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
             />
           </div>
         </div>
-        {!item.inventarioId && (
+        {mostrarCostos && !item.inventarioId && (
           <div>
             <label className="text-xs text-muted-foreground">Costo unitario (opcional, para margen)</label>
             <Input
@@ -385,7 +389,9 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      Costo: {formatPrice(pc)} · Venta: {formatPrice(pv)}{mPct !== null ? ` · margen ${mPct}%` : ""}
+                      {mostrarCostos
+                        ? <>Costo: {formatPrice(pc)} · Venta: {formatPrice(pv)}{mPct !== null ? ` · margen ${mPct}%` : ""}</>
+                        : <>Venta: {formatPrice(pv)}</>}
                     </div>
                   </button>
                 )
@@ -398,7 +404,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
               {margenPct !== null && <span className="text-success-600">margen {margenPct}%</span>}
             </div>
           )}
-          {!item.inventarioId && (
+          {mostrarCostos && !item.inventarioId && (
             <div className="mt-1 flex items-center gap-1">
               <span className="text-[11px] text-muted-foreground shrink-0">Costo:</span>
               <Input
