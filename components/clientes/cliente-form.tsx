@@ -104,6 +104,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
     formState: { errors },
     reset,
     watch,
+    getValues,
     setValue,
   } = useForm<ClienteFormData>({
     resolver: zodResolver(clienteSchema),
@@ -127,12 +128,26 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
   const recordId = cliente?.id ?? null
   const [draftNoticeVisible, setDraftNoticeVisible] = useState(false)
   const draftAppliedForRef = useRef<string | null>(null)
-  const { draft, ready: draftReady, clearDraft } = useFormDraft<ClienteFormData>({
+  const { draft, ready: draftReady, clearDraft, notifyChange } = useFormDraft<ClienteFormData>({
     feature: "cliente-form",
     recordId,
-    value: watch(),
+    // `getValues()` en vez de `watch()`: leer el form entero en render
+    // suscribe el componente a cada tecla. El borrador no necesita re-render,
+    // solo el valor al momento de grabar.
+    getValue: () => getValues(),
     enabled: open,
+    // En edicion, si otro usuario guardo el cliente despues de que se escribio
+    // este borrador, restaurarlo pisaria ese guardado (el submit manda el form
+    // entero). El hook lo descarta comparando contra este token.
+    recordUpdatedAt: cliente?.updatedAt ?? null,
   })
+
+  // Los cambios de react-hook-form ya no re-renderizan el formulario, asi que
+  // hay que avisarle al borrador por suscripcion.
+  useEffect(() => {
+    const subscription = watch(() => notifyChange())
+    return () => subscription.unsubscribe()
+  }, [watch, notifyChange])
 
   useEffect(() => {
     if (!open) {

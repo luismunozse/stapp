@@ -14,27 +14,66 @@ import { useSession } from "next-auth/react"
  * whole point.
  *
  * Key scheme: `draft:v{SCHEMA_VERSION}:{feature}:{organizationId}:{userId}:{scope}`
- * where `scope` is `edit:{recordId}` or `new`. Ids come from the NextAuth
- * session (never from caller-supplied strings) so a key can't accidentally
- * leak data across users/orgs sharing a device. `feature` + `recordId` are
- * used instead of a raw caller-built key (a deliberate deviation from a
- * literal `{ key, ... }` API) so every call site gets a correctly namespaced
- * key for free instead of re-deriving the session ids itself.
+ * where `scope` is `edit:{recordId}` or `new`, optionally suffixed with the
+ * caller's `scope` discriminator (`new:turno:{id}`) so two forms of the same
+ * feature that were opened with a different origin never share a draft. Ids
+ * come from the NextAuth session (never from caller-supplied strings) so a
+ * key can't accidentally leak data across users/orgs sharing a device.
  *
- * The stored envelope carries its own schema version and a timestamp: a
- * draft that fails to parse, was written by an older/newer schema, or is
- * older than MAX_AGE_MS is treated as absent and removed. Persistence is
- * best-effort -- SSR-safe (window/localStorage guarded) and quota-safe
- * (write failures are swallowed, never surfaced to the form).
+ * The stored envelope carries its own schema version, a timestamp and -- for
+ * edit-mode forms -- the record's `updatedAt` as it was when the draft was
+ * written. A draft that fails to parse, was written by an older/newer schema,
+ * is older than MAX_AGE_MS, or belongs to a record that someone else has
+ * saved since, is treated as absent and removed. Persistence is best-effort
+ * -- SSR-safe (window/localStorage guarded) and quota-safe (write failures
+ * are swallowed, never surfaced to the form).
+ *
+ * Two things this hook deliberately does NOT do naively:
+ *
+ * 1. Dirty gate. It persists only after a real user interaction AND only
+ *    when the snapshot actually differs from the last pre-interaction one.
+ *    Forms auto-populate on mount (session-derived defaults, deep-link
+ *    prefill, templates that resolve late); persisting those wrote a draft
+ *    of untouched defaults and greeted the user with "se restauró un
+ *    borrador" on every single reopen, which trains people to ignore the
+ *    notice that matters. Interaction is observed at the document level
+ *    instead of asking every call site for a `dirty` flag: form state lives
+ *    partly outside react-hook-form (checklists, accesorios, sector) and
+ *    partly behind portalled Radix menus, so no single per-form signal
+ *    covers it.
+ *
+ * 2. Debounce that cannot starve. The snapshot is read through `getValue()`
+ *    at flush time and the timer is armed at most once per window -- never
+ *    re-armed by a later change. A classic "reset the timer on every change"
+ *    debounce never fires while someone types continuously, i.e. it loses
+ *    exactly the data it exists to save. `getValue` (instead of a `value`
+ *    prop) also keeps call sites from having to re-render the whole form on
+ *    every keystroke just to feed this hook.
  */
 
 const DRAFT_SCHEMA_VERSION = 1
 const DEFAULT_DEBOUNCE_MS = 1000
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
+/** Events that count as "the user is working on this form". Capture phase on
+ *  `document` so portalled UI (Radix selects/dialogs) counts too. */
+const USER_INTERACTION_EVENTS = [
+  "pointerdown",
+  "mousedown",
+  "click",
+  "keydown",
+  "input",
+  "change",
+  "paste",
+] as const
+
 interface DraftEnvelope<T> {
   version: number
   savedAt: number
+  /** `updatedAt` of the edited record when the draft was written, in ms.
+   *  Absent for new-record drafts (and for drafts written before this field
+   *  existed, which fall back to a savedAt comparison). */
+  recordUpdatedAt?: number | null
   data: T
 }
 
@@ -43,38 +82,93 @@ export interface UseFormDraftOptions<T> {
   feature: string
   /** Record id for edit-mode forms; omit/null for a "new record" form. */
   recordId?: string | null
-  /** Current serializable snapshot of the form. Debounced-written to storage. */
-  value: T
+  /** Extra discriminator appended to the scope segment of the key, for forms
+   *  whose "new record" case is not interchangeable (e.g. an order started
+   *  from a turno vs. a walk-in). */
+  scope?: string | null
+  /** Reads the current serializable snapshot of the form. Called at most once
+   *  per debounce window, never during render, so it can read react-hook-form
+   *  through `getValues()` without subscribing the component to every field. */
+  getValue: () => T
   /** Whether persistence is active. Set to false to pause both loading and
    *  saving (e.g. a dialog form while it's closed). Defaults to true. */
   enabled?: boolean
   /** Debounce delay in ms before a changed value is written. Defaults to 1000. */
   debounceMs?: number
+  /** `updatedAt` of the record being edited, as loaded from the server. When
+   *  it is newer than the stored draft, the draft is discarded instead of
+   *  silently overwriting somebody else's save. Ignored for new records. */
+  recordUpdatedAt?: string | number | Date | null
 }
 
 export interface UseFormDraftResult<T> {
   /** Draft found on mount (or when `enabled`/`recordId` changes), already
-   *  version/age-validated. Null when there's nothing to restore. The
-   *  caller decides how to apply it (setValue/reset) and when to dismiss it. */
+   *  version/age/freshness-validated. Null when there's nothing to restore.
+   *  The caller decides how to apply it (setValue/reset) and when to dismiss it. */
   draft: T | null
   /** True once the initial localStorage read for the current key has run. */
   ready: boolean
-  /** Removes the persisted draft. Call on successful submit or explicit
+  /** Removes the persisted draft, cancels any pending write, and stops saving
+   *  until the form is modified again. Call on successful submit or explicit
    *  "Descartar" -- never automatically on logout/expiry. */
   clearDraft: () => void
+  /** Reports a change that did not re-render the component -- i.e. a
+   *  react-hook-form field subscription. Without it, a form that stopped
+   *  re-rendering per keystroke would also stop scheduling saves. */
+  notifyChange: () => void
 }
 
 function buildDraftKey(
   feature: string,
   organizationId: string,
   userId: string,
-  recordId?: string | null
+  recordId?: string | null,
+  scope?: string | null
 ): string {
-  const scope = recordId ? `edit:${recordId}` : "new"
-  return `draft:v${DRAFT_SCHEMA_VERSION}:${feature}:${organizationId}:${userId}:${scope}`
+  const base = recordId ? `edit:${recordId}` : "new"
+  const suffix = scope ? `:${scope}` : ""
+  return `draft:v${DRAFT_SCHEMA_VERSION}:${feature}:${organizationId}:${userId}:${base}${suffix}`
 }
 
-function readDraft<T>(key: string): T | null {
+function toMillis(value?: string | number | Date | null): number | null {
+  if (value === null || value === undefined) return null
+  const ms =
+    value instanceof Date
+      ? value.getTime()
+      : typeof value === "number"
+        ? value
+        : Date.parse(value)
+  return Number.isFinite(ms) ? ms : null
+}
+
+function safeStringify(value: unknown): string | null {
+  try {
+    const serialized = JSON.stringify(value)
+    return typeof serialized === "string" ? serialized : null
+  } catch {
+    // Cyclic structure / non-serializable value -- a draft is best-effort.
+    return null
+  }
+}
+
+/**
+ * True when the record was saved by somebody else after this draft was
+ * written. Preferred check is the token captured at write time (exact: any
+ * change to the record invalidates the draft); the savedAt comparison is the
+ * fallback for envelopes written before the token existed.
+ */
+function isStaleAgainstRecord<T>(
+  envelope: DraftEnvelope<T>,
+  recordUpdatedAtMs: number | null
+): boolean {
+  if (recordUpdatedAtMs === null) return false
+  if (typeof envelope.recordUpdatedAt === "number") {
+    return recordUpdatedAtMs !== envelope.recordUpdatedAt
+  }
+  return recordUpdatedAtMs > envelope.savedAt
+}
+
+function readDraft<T>(key: string, recordUpdatedAtMs: number | null): T | null {
   try {
     const raw = window.localStorage.getItem(key)
     if (!raw) return null
@@ -83,7 +177,8 @@ function readDraft<T>(key: string): T | null {
       !!parsed &&
       parsed.version === DRAFT_SCHEMA_VERSION &&
       typeof parsed.savedAt === "number" &&
-      Date.now() - parsed.savedAt <= MAX_AGE_MS
+      Date.now() - parsed.savedAt <= MAX_AGE_MS &&
+      !isStaleAgainstRecord(parsed, recordUpdatedAtMs)
     if (!isValid) {
       window.localStorage.removeItem(key)
       return null
@@ -104,69 +199,165 @@ function readDraft<T>(key: string): T | null {
 export function useFormDraft<T>({
   feature,
   recordId = null,
-  value,
+  scope = null,
+  getValue,
   enabled = true,
   debounceMs = DEFAULT_DEBOUNCE_MS,
+  recordUpdatedAt = null,
 }: UseFormDraftOptions<T>): UseFormDraftResult<T> {
   const { data: session } = useSession()
   const userId = session?.user?.id
   const organizationId = session?.user?.organizationId
+  const recordUpdatedAtMs = toMillis(recordUpdatedAt)
 
   const [draft, setDraft] = useState<T | null>(null)
   const [ready, setReady] = useState(false)
+
   const keyRef = useRef<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const getValueRef = useRef(getValue)
+  const enabledRef = useRef(enabled)
+  const debounceMsRef = useRef(debounceMs)
+  const recordUpdatedAtRef = useRef(recordUpdatedAtMs)
+  /** Serialized snapshot the form is compared against to decide "did the user
+   *  change anything?". Re-captured while no interaction has happened yet. */
+  const baselineRef = useRef<string | null>(null)
+  const lastSavedRef = useRef<string | null>(null)
+  const interactedRef = useRef(false)
+
+  // Keep the flush-time reads pointing at the latest committed render. This
+  // effect has no dependency array on purpose: it must run after every commit.
+  useEffect(() => {
+    getValueRef.current = getValue
+    enabledRef.current = enabled
+    debounceMsRef.current = debounceMs
+    recordUpdatedAtRef.current = recordUpdatedAtMs
+  })
+
+  // One-shot user-interaction detector -- see the "dirty gate" note above.
+  useEffect(() => {
+    if (typeof document === "undefined") return
+    const onInteraction = () => {
+      interactedRef.current = true
+    }
+    for (const type of USER_INTERACTION_EVENTS) {
+      document.addEventListener(type, onInteraction, { capture: true, passive: true })
+    }
+    return () => {
+      for (const type of USER_INTERACTION_EVENTS) {
+        document.removeEventListener(type, onInteraction, true)
+      }
+    }
+  }, [])
+
+  const flush = useCallback(() => {
+    timerRef.current = null
+    const key = keyRef.current
+    if (typeof window === "undefined" || !key) return
+
+    const serialized = safeStringify(getValueRef.current())
+    if (serialized === null) return
+
+    if (!interactedRef.current) {
+      // Nothing the user did explains this value yet (mount-time prefill,
+      // async defaults, a draft that was just restored). Move the baseline
+      // instead of persisting -- that is what keeps the restore notice
+      // meaningful.
+      baselineRef.current = serialized
+      return
+    }
+    if (serialized === baselineRef.current || serialized === lastSavedRef.current) return
+
+    try {
+      // Built by hand instead of re-serializing the whole snapshot: `serialized`
+      // is already valid JSON and these forms are big enough that stringifying
+      // them twice per write is worth avoiding.
+      const envelope =
+        `{"version":${DRAFT_SCHEMA_VERSION},` +
+        `"savedAt":${Date.now()},` +
+        `"recordUpdatedAt":${recordUpdatedAtRef.current ?? "null"},` +
+        `"data":${serialized}}`
+      window.localStorage.setItem(key, envelope)
+      lastSavedRef.current = serialized
+    } catch {
+      // Quota exceeded / storage disabled -- a draft is best-effort, it must
+      // never break the form.
+    }
+  }, [])
+
+  /** Schedules a write. Never postpones an already-scheduled one: that is the
+   *  starvation bug this hook had to grow out of. */
+  const armSave = useCallback(() => {
+    if (typeof window === "undefined") return
+    if (!enabledRef.current || !keyRef.current) return
+    if (timerRef.current) return
+    timerRef.current = setTimeout(flush, debounceMsRef.current)
+  }, [flush])
+
+  const flushPending = useCallback(() => {
+    if (!timerRef.current) return
+    clearTimeout(timerRef.current)
+    timerRef.current = null
+    flush()
+  }, [flush])
 
   // Resolve the storage key for the current feature/record/user/org and load
   // whatever draft (if any) is already there. Runs again if the session ids
-  // resolve later (session loads async) or the record/enabled flag changes.
+  // resolve later (session loads async) or the record/scope/enabled flag changes.
   useEffect(() => {
     if (typeof window === "undefined" || !enabled || !userId || !organizationId) {
+      // Pausing (dialog closed, session gone) must not drop a write that was
+      // already scheduled under the previous key -- surviving the unmount is
+      // the point of this hook.
+      flushPending()
       keyRef.current = null
       setReady(false)
       return
     }
-    const key = buildDraftKey(feature, organizationId, userId, recordId)
+    const key = buildDraftKey(feature, organizationId, userId, recordId, scope)
+    if (key !== keyRef.current) flushPending()
     keyRef.current = key
-    setDraft(readDraft<T>(key))
+    interactedRef.current = false
+    lastSavedRef.current = null
+    baselineRef.current = safeStringify(getValueRef.current())
+    setDraft(readDraft<T>(key, recordUpdatedAtMs))
     setReady(true)
-  }, [feature, recordId, enabled, userId, organizationId])
+  }, [feature, recordId, scope, enabled, userId, organizationId, recordUpdatedAtMs, flushPending])
 
-  // Debounced save whenever `value` changes while enabled and a key is known.
+  // Schedule a save after every commit. Cheap: `getValue()` only runs when the
+  // timer actually fires, and an already-armed timer is left alone.
   useEffect(() => {
-    if (typeof window === "undefined" || !enabled || !keyRef.current) return
-    const key = keyRef.current
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => {
-      try {
-        const envelope: DraftEnvelope<T> = {
-          version: DRAFT_SCHEMA_VERSION,
-          savedAt: Date.now(),
-          data: value,
-        }
-        window.localStorage.setItem(key, JSON.stringify(envelope))
-      } catch {
-        // Quota exceeded / serialization failure -- a draft is best-effort,
-        // it must never break the form.
-      }
-    }, debounceMs)
+    armSave()
+  })
+
+  // Write whatever is pending on the way out (navigation, session expiry).
+  useEffect(() => {
     return () => {
-      if (timerRef.current) clearTimeout(timerRef.current)
+      flushPending()
     }
-    // `ready` is intentionally included: it flips true right after the load
-    // effect resolves `keyRef.current`, guaranteeing a save effect run (with
-    // the now-known key) even when `value`'s identity hasn't changed since.
-  }, [value, enabled, debounceMs, ready])
+  }, [flushPending])
 
   const clearDraft = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    // After an explicit clear the form usually stays mounted (success modal),
+    // and every later re-render would otherwise re-persist the record that was
+    // just submitted -- a duplicate-submission trap on the next open. Re-arm
+    // the dirty gate: saving resumes only once the form is modified again.
+    interactedRef.current = false
+    lastSavedRef.current = null
+    baselineRef.current = safeStringify(getValueRef.current())
     setDraft(null)
-    if (typeof window === "undefined" || !keyRef.current) return
+    const key = keyRef.current
+    if (typeof window === "undefined" || !key) return
     try {
-      window.localStorage.removeItem(keyRef.current)
+      window.localStorage.removeItem(key)
     } catch {
       // ignore
     }
   }, [])
 
-  return { draft, ready, clearDraft }
+  return { draft, ready, clearDraft, notifyChange: armSave }
 }

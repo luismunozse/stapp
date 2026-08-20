@@ -13,6 +13,32 @@ vi.mock('next-auth/react', () => ({
 const SESSION_A = { user: { id: 'user-1', organizationId: 'org-1' } }
 const SESSION_B = { user: { id: 'user-2', organizationId: 'org-2' } }
 
+/**
+ * The hook only persists a value once a real user interaction has happened
+ * (see the "dirty gate" section of use-form-draft.ts): before that, every
+ * value it sees is mount-time prefill / async defaults / a restored draft,
+ * and persisting those produced a bogus "draft restored" banner on every
+ * reopen. Tests that expect a write must therefore simulate the interaction.
+ */
+function userInteracts() {
+  act(() => {
+    document.dispatchEvent(new Event('keydown', { bubbles: true }))
+  })
+}
+
+/** Renders the hook over a mutable `value` prop, reading it through getValue. */
+function renderDraft<T>(
+  initialValue: T,
+  options: { feature?: string; recordId?: string | null; scope?: string | null; enabled?: boolean; debounceMs?: number; recordUpdatedAt?: string | number | Date | null } = {}
+) {
+  const { feature = 'orden-form', debounceMs = 1000, ...rest } = options
+  return renderHook(
+    ({ value }: { value: T }) =>
+      useFormDraft({ feature, debounceMs, getValue: () => value, ...rest }),
+    { initialProps: { value: initialValue } }
+  )
+}
+
 describe('useFormDraft', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -27,12 +53,11 @@ describe('useFormDraft', () => {
 
   it('does not read or write without a resolved session', () => {
     mockSession = null
-    const { result } = renderHook(() =>
-      useFormDraft({ feature: 'orden-form', value: { a: 1 } })
-    )
+    const { result } = renderDraft({ a: 1 })
     expect(result.current.ready).toBe(false)
     expect(result.current.draft).toBeNull()
 
+    userInteracts()
     act(() => {
       vi.advanceTimersByTime(5000)
     })
@@ -40,20 +65,16 @@ describe('useFormDraft', () => {
   })
 
   it('becomes ready with no draft when storage is empty', () => {
-    const { result } = renderHook(() =>
-      useFormDraft({ feature: 'orden-form', value: { a: 1 } })
-    )
+    const { result } = renderDraft({ a: 1 })
     expect(result.current.ready).toBe(true)
     expect(result.current.draft).toBeNull()
   })
 
   it('debounces the save and writes a versioned envelope after the delay', () => {
-    const { result, rerender } = renderHook(
-      ({ value }) => useFormDraft({ feature: 'orden-form', value, debounceMs: 1000 }),
-      { initialProps: { value: { a: 1 } } }
-    )
+    const { result, rerender } = renderDraft({ a: 1 })
     expect(result.current.ready).toBe(true)
 
+    userInteracts()
     rerender({ value: { a: 2 } })
 
     // Not written yet -- still inside the debounce window.
@@ -77,40 +98,104 @@ describe('useFormDraft', () => {
     expect(typeof stored.savedAt).toBe('number')
   })
 
-  it('restores a previously saved draft on mount', () => {
-    const { result: writer } = renderHook(() =>
-      useFormDraft({ feature: 'cliente-form', value: { nombre: 'Ana' }, debounceMs: 1000 })
+  // --- Dirty gate ----------------------------------------------------------
+
+  it('never persists a form the user has not touched, even when async defaults land', () => {
+    const { rerender } = renderDraft({ recibidoPorId: '', nombre: '' })
+
+    // Mount-time async prefill (session-derived defaults, deep-link fetch,
+    // a template that resolves late): the value changes, the user did not.
+    rerender({ value: { recibidoPorId: 'user-1', nombre: '' } })
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+    expect(window.localStorage.length).toBe(0)
+  })
+
+  it('persists once the user actually modifies the form, keeping the async defaults', () => {
+    const { rerender } = renderDraft({ recibidoPorId: '', nombre: '' })
+    rerender({ value: { recibidoPorId: 'user-1', nombre: '' } })
+    act(() => {
+      vi.advanceTimersByTime(2000)
+    })
+    expect(window.localStorage.length).toBe(0)
+
+    userInteracts()
+    rerender({ value: { recibidoPorId: 'user-1', nombre: 'Ana' } })
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+
+    const key = Object.keys(window.localStorage)[0]
+    expect(JSON.parse(window.localStorage.getItem(key)!).data).toEqual({
+      recibidoPorId: 'user-1',
+      nombre: 'Ana',
+    })
+  })
+
+  // --- Debounce starvation (unstable `value` identity) ----------------------
+
+  it('writes while the user keeps typing instead of postponing the save forever', () => {
+    const { rerender } = renderDraft({ nombre: '' })
+    userInteracts()
+
+    // A keystroke every 300ms for 3s. A debounce that re-arms on every render
+    // (the call sites rebuild `value` on each one) would never fire.
+    for (let i = 1; i <= 10; i++) {
+      rerender({ value: { nombre: 'a'.repeat(i) } })
+      act(() => {
+        vi.advanceTimersByTime(300)
+      })
+    }
+
+    const key = Object.keys(window.localStorage)[0]
+    expect(key).toBeDefined()
+    expect(JSON.parse(window.localStorage.getItem(key)!).data.nombre.length).toBeGreaterThan(0)
+  })
+
+  it('re-arms the save after an out-of-render change reported via notifyChange', () => {
+    let live = { nombre: '' }
+    const { result } = renderHook(() =>
+      useFormDraft({ feature: 'orden-form', debounceMs: 1000, getValue: () => live })
     )
-    expect(writer.current.ready).toBe(true)
+    userInteracts()
+
+    // No re-render happens here on purpose: this is the react-hook-form
+    // subscription path, which writes into a ref instead of state.
+    live = { nombre: 'Ana' }
+    act(() => {
+      result.current.notifyChange()
+      vi.advanceTimersByTime(1000)
+    })
+
+    const key = Object.keys(window.localStorage)[0]
+    expect(JSON.parse(window.localStorage.getItem(key)!).data).toEqual({ nombre: 'Ana' })
+  })
+
+  it('restores a previously saved draft on mount', () => {
+    const { rerender } = renderDraft({ nombre: '' }, { feature: 'cliente-form' })
+    userInteracts()
+    rerender({ value: { nombre: 'Ana' } })
     act(() => {
       vi.advanceTimersByTime(1000)
     })
     expect(window.localStorage.length).toBe(1)
 
-    const { result: reader } = renderHook(() =>
-      useFormDraft({ feature: 'cliente-form', value: { nombre: 'Ana' } })
-    )
+    const { result: reader } = renderDraft({ nombre: '' }, { feature: 'cliente-form' })
     expect(reader.current.ready).toBe(true)
     expect(reader.current.draft).toEqual({ nombre: 'Ana' })
   })
 
   it('discards a draft with an unknown schema version', () => {
-    const { result: writer } = renderHook(() =>
-      useFormDraft({ feature: 'cliente-form', value: { nombre: 'Ana' }, debounceMs: 1000 })
+    const key = 'draft:v1:cliente-form:org-1:user-1:new'
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({ version: 99, savedAt: Date.now(), data: { nombre: 'Ana' } })
     )
-    expect(writer.current.ready).toBe(true)
-    act(() => {
-      vi.advanceTimersByTime(1000)
-    })
-    const key = Object.keys(window.localStorage)[0]
-    const stored = JSON.parse(window.localStorage.getItem(key)!)
-    window.localStorage.setItem(key, JSON.stringify({ ...stored, version: 99 }))
 
-    const { result: reader } = renderHook(() =>
-      useFormDraft({ feature: 'cliente-form', value: { nombre: 'Ana' } })
-    )
-    expect(reader.current.ready).toBe(true)
-    expect(reader.current.draft).toBeNull()
+    const { result } = renderDraft({ nombre: '' }, { feature: 'cliente-form' })
+    expect(result.current.ready).toBe(true)
+    expect(result.current.draft).toBeNull()
     expect(window.localStorage.getItem(key)).toBeNull()
   })
 
@@ -121,9 +206,7 @@ describe('useFormDraft', () => {
       JSON.stringify({ version: 1, savedAt: Date.now() - 8 * 24 * 60 * 60 * 1000, data: { nombre: 'Old' } })
     )
 
-    const { result } = renderHook(() =>
-      useFormDraft({ feature: 'cliente-form', value: { nombre: '' } })
-    )
+    const { result } = renderDraft({ nombre: '' }, { feature: 'cliente-form' })
     expect(result.current.ready).toBe(true)
     expect(result.current.draft).toBeNull()
     expect(window.localStorage.getItem(key)).toBeNull()
@@ -133,9 +216,7 @@ describe('useFormDraft', () => {
     const key = 'draft:v1:cliente-form:org-1:user-1:new'
     window.localStorage.setItem(key, '{not-json')
 
-    const { result } = renderHook(() =>
-      useFormDraft({ feature: 'cliente-form', value: { nombre: '' } })
-    )
+    const { result } = renderDraft({ nombre: '' }, { feature: 'cliente-form' })
     expect(result.current.ready).toBe(true)
     expect(result.current.draft).toBeNull()
     expect(window.localStorage.getItem(key)).toBeNull()
@@ -143,44 +224,114 @@ describe('useFormDraft', () => {
 
   it('scopes drafts by organization so different orgs never collide', () => {
     mockSession = SESSION_A
-    const { result: orgAResult } = renderHook(() =>
-      useFormDraft({ feature: 'cliente-form', value: { nombre: 'A' }, debounceMs: 1000 })
-    )
-    expect(orgAResult.current.ready).toBe(true)
+    const { rerender } = renderDraft({ nombre: '' }, { feature: 'cliente-form' })
+    userInteracts()
+    rerender({ value: { nombre: 'A' } })
     act(() => {
       vi.advanceTimersByTime(1000)
     })
+    expect(window.localStorage.length).toBe(1)
 
     mockSession = SESSION_B
-    const { result: orgBResult } = renderHook(() =>
-      useFormDraft({ feature: 'cliente-form', value: { nombre: '' } })
-    )
+    const { result: orgBResult } = renderDraft({ nombre: '' }, { feature: 'cliente-form' })
     expect(orgBResult.current.ready).toBe(true)
     expect(orgBResult.current.draft).toBeNull()
     expect(window.localStorage.length).toBe(1) // only org-1's draft exists
   })
 
   it('scopes drafts by recordId so edit and new-record drafts never collide', () => {
-    const { result: editResult } = renderHook(() =>
-      useFormDraft({ feature: 'cliente-form', recordId: 'cli-1', value: { nombre: 'Edit' }, debounceMs: 1000 })
-    )
-    expect(editResult.current.ready).toBe(true)
+    const { rerender } = renderDraft({ nombre: '' }, { feature: 'cliente-form', recordId: 'cli-1' })
+    userInteracts()
+    rerender({ value: { nombre: 'Edit' } })
     act(() => {
       vi.advanceTimersByTime(1000)
     })
 
-    const { result: newResult } = renderHook(() =>
-      useFormDraft({ feature: 'cliente-form', recordId: null, value: { nombre: '' } })
-    )
+    const { result: newResult } = renderDraft({ nombre: '' }, { feature: 'cliente-form', recordId: null })
     expect(newResult.current.ready).toBe(true)
     expect(newResult.current.draft).toBeNull()
 
-    const { result: otherEditResult } = renderHook(() =>
-      useFormDraft({ feature: 'cliente-form', recordId: 'cli-2', value: { nombre: '' } })
-    )
+    const { result: otherEditResult } = renderDraft({ nombre: '' }, { feature: 'cliente-form', recordId: 'cli-2' })
     expect(otherEditResult.current.ready).toBe(true)
     expect(otherEditResult.current.draft).toBeNull()
   })
+
+  it('scopes drafts by the extra scope discriminator (deep-link / turno origin)', () => {
+    const { rerender } = renderDraft({ dispositivo: '' }, { feature: 'orden-form', scope: 'turno:t-1' })
+    userInteracts()
+    rerender({ value: { dispositivo: 'Del turno' } })
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(Object.keys(window.localStorage)[0]).toContain('turno:t-1')
+
+    // A walk-in order (no origin) must not inherit the turno draft.
+    const { result: walkIn } = renderDraft({ dispositivo: '' }, { feature: 'orden-form' })
+    expect(walkIn.current.draft).toBeNull()
+
+    // Neither does an order started from a different turno.
+    const { result: otherTurno } = renderDraft({ dispositivo: '' }, { feature: 'orden-form', scope: 'turno:t-2' })
+    expect(otherTurno.current.draft).toBeNull()
+  })
+
+  // --- Freshness token (edit-mode drafts vs a newer server record) ----------
+
+  it('discards an edit draft when the server record changed after the draft was written', () => {
+    const key = 'draft:v1:cliente-form:org-1:user-1:edit:cli-1'
+    const savedAt = Date.now() - 60_000
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({ version: 1, savedAt, recordUpdatedAt: savedAt - 1000, data: { nombre: 'Mi borrador' } })
+    )
+
+    const { result } = renderDraft(
+      { nombre: 'Nombre del server' },
+      { feature: 'cliente-form', recordId: 'cli-1', recordUpdatedAt: new Date(Date.now() - 10_000) }
+    )
+    expect(result.current.ready).toBe(true)
+    expect(result.current.draft).toBeNull()
+    expect(window.localStorage.getItem(key)).toBeNull()
+  })
+
+  it('keeps an edit draft when the server record has not changed since it was written', () => {
+    const key = 'draft:v1:cliente-form:org-1:user-1:edit:cli-1'
+    const recordUpdatedAt = Date.now() - 120_000
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        version: 1,
+        savedAt: Date.now() - 60_000,
+        recordUpdatedAt,
+        data: { nombre: 'Mi borrador' },
+      })
+    )
+
+    const { result } = renderDraft(
+      { nombre: 'Nombre del server' },
+      { feature: 'cliente-form', recordId: 'cli-1', recordUpdatedAt: new Date(recordUpdatedAt) }
+    )
+    expect(result.current.draft).toEqual({ nombre: 'Mi borrador' })
+  })
+
+  it('stores the record freshness token so a later save can be compared against it', () => {
+    const recordUpdatedAt = new Date(Date.now() - 120_000)
+    const { rerender } = renderDraft(
+      { nombre: 'Server' },
+      { feature: 'cliente-form', recordId: 'cli-1', recordUpdatedAt }
+    )
+    userInteracts()
+    rerender({ value: { nombre: 'Editado' } })
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+
+    const stored = JSON.parse(
+      window.localStorage.getItem('draft:v1:cliente-form:org-1:user-1:edit:cli-1')!
+    )
+    expect(stored.recordUpdatedAt).toBe(recordUpdatedAt.getTime())
+  })
+
+  // --- clearDraft ----------------------------------------------------------
 
   it('clearDraft removes the stored entry and resets draft to null', () => {
     const key = 'draft:v1:cliente-form:org-1:user-1:new'
@@ -189,9 +340,7 @@ describe('useFormDraft', () => {
       JSON.stringify({ version: 1, savedAt: Date.now(), data: { nombre: 'Ana' } })
     )
 
-    const { result } = renderHook(() =>
-      useFormDraft({ feature: 'cliente-form', value: { nombre: 'Ana' } })
-    )
+    const { result } = renderDraft({ nombre: 'Ana' }, { feature: 'cliente-form' })
     expect(result.current.draft).toEqual({ nombre: 'Ana' })
 
     act(() => {
@@ -201,6 +350,59 @@ describe('useFormDraft', () => {
     expect(window.localStorage.getItem(key)).toBeNull()
   })
 
+  it('clearDraft cancels a pending write instead of letting it resurrect the draft', () => {
+    const { result, rerender } = renderDraft({ nombre: '' }, { feature: 'orden-form' })
+    userInteracts()
+    rerender({ value: { nombre: 'Orden ya enviada' } })
+
+    // Submit lands mid-debounce: the form stays mounted (success modal).
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+    act(() => {
+      result.current.clearDraft()
+    })
+
+    act(() => {
+      vi.advanceTimersByTime(10_000)
+    })
+    expect(window.localStorage.length).toBe(0)
+  })
+
+  it('stays quiet after clearDraft until the form is dirtied again', () => {
+    const { result, rerender } = renderDraft({ nombre: '' }, { feature: 'orden-form' })
+    userInteracts()
+    rerender({ value: { nombre: 'Orden ya enviada' } })
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(window.localStorage.length).toBe(1)
+
+    act(() => {
+      result.current.clearDraft()
+    })
+
+    // Post-submit re-renders (success modal opening, loading flag flipping)
+    // must not re-write the order that was just created.
+    for (let i = 0; i < 5; i++) {
+      rerender({ value: { nombre: 'Orden ya enviada' } })
+      userInteracts()
+      act(() => {
+        vi.advanceTimersByTime(1000)
+      })
+    }
+    expect(window.localStorage.length).toBe(0)
+
+    // A genuinely new edit starts a new draft again.
+    userInteracts()
+    rerender({ value: { nombre: 'Orden nueva' } })
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    const key = Object.keys(window.localStorage)[0]
+    expect(JSON.parse(window.localStorage.getItem(key)!).data).toEqual({ nombre: 'Orden nueva' })
+  })
+
   it('does not read or write while disabled', () => {
     const key = 'draft:v1:cliente-form:org-1:user-1:new'
     window.localStorage.setItem(
@@ -208,16 +410,16 @@ describe('useFormDraft', () => {
       JSON.stringify({ version: 1, savedAt: Date.now(), data: { nombre: 'Ana' } })
     )
 
-    const { result } = renderHook(() =>
-      useFormDraft({ feature: 'cliente-form', value: { nombre: 'x' }, enabled: false, debounceMs: 1000 })
-    )
+    const { result, rerender } = renderDraft({ nombre: '' }, { feature: 'cliente-form', enabled: false })
+    userInteracts()
+    rerender({ value: { nombre: 'x' } })
     act(() => {
       vi.advanceTimersByTime(2000)
     })
     expect(result.current.ready).toBe(false)
     expect(result.current.draft).toBeNull()
     // Existing draft in storage is left untouched (not read, not deleted).
-    expect(window.localStorage.getItem(key)).not.toBeNull()
+    expect(JSON.parse(window.localStorage.getItem(key)!).data).toEqual({ nombre: 'Ana' })
   })
 
   it('fails silently when localStorage.setItem throws (quota exceeded)', () => {
@@ -227,12 +429,12 @@ describe('useFormDraft', () => {
         throw new Error('QuotaExceededError')
       })
 
-    const { result } = renderHook(() =>
-      useFormDraft({ feature: 'orden-form', value: { a: 1 }, debounceMs: 1000 })
-    )
+    const { result, rerender } = renderDraft({ a: 1 })
     expect(result.current.ready).toBe(true)
+    userInteracts()
 
     expect(() => {
+      rerender({ value: { a: 2 } })
       act(() => {
         vi.advanceTimersByTime(1000)
       })
