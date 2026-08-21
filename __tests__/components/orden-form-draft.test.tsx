@@ -395,6 +395,27 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     expect(storedDraft()?.data.form.dispositivo).toBe("iPhone 13 Restaurado")
   })
 
+  it('"Descartar" repone el "Recibido por" que corresponde por defecto', async () => {
+    // El efecto que preselecciona al operador depende solo de la sesion, y
+    // descartar no la mueve: poner "" a mano dejaba "Sin asignar" para el
+    // resto de la sesion, cuando descartar tiene que dejar el alta como recien
+    // abierta. Se verifica sobre el borrador reescrito porque ese estado vive
+    // fuera de react-hook-form y el selector solo se renderiza cuando hay
+    // operadores cargados.
+    window.localStorage.setItem(DRAFT_KEY, draftEnvelope({ selectedRecibidoPorId: "" }))
+
+    await renderForm()
+    await settle(100)
+    fireEvent.click(screen.getByRole("button", { name: /descartar/i }))
+
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+      target: { value: "Equipo nuevo" },
+    })
+    await settle()
+
+    expect(storedDraft()?.data.selectedRecibidoPorId).toBe("user-1")
+  })
+
   it('"Descartar" limpia tambien los campos del paso 2 (no solo los del paso 1)', async () => {
     window.localStorage.setItem(
       DRAFT_KEY,

@@ -402,6 +402,14 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     }
   }
 
+  /** "Recibido por" que corresponde cuando el alta se abre limpia: el propio
+   *  operador salvo que sea admin (ver el efecto que lo preselecciona). Se
+   *  calcula afuera de ese efecto porque el descarte del borrador tiene que
+   *  poder reponerlo: el efecto depende de la sesion, y descartar no la mueve,
+   *  asi que no vuelve a correr solo. */
+  const recibidoPorPorDefecto =
+    session?.user?.id && session.user.role !== "ADMIN" ? session.user.id : ""
+
   const discardDraft = () => {
     clearDraft()
     setDraftNoticeVisible(false)
@@ -415,7 +423,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     setMetodoPagoSena("EFECTIVO")
     setSelectedSectorId("")
     setSelectedTecnicoId("")
-    setSelectedRecibidoPorId("")
+    setSelectedRecibidoPorId(recibidoPorPorDefecto)
     setChecklistValores({})
     setChecklistNotas("")
     setCurrentStep(1)
@@ -644,10 +652,10 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   // Pre-seleccionar al usuario actual solo si NO es admin. Para un admin se deja
   // "Sin asignar" a propósito: el fallback server-side ya lo registra como receptor.
   useEffect(() => {
-    if (session?.user?.id && session.user.role !== "ADMIN" && !selectedRecibidoPorId) {
-      setSelectedRecibidoPorId(session.user.id)
+    if (recibidoPorPorDefecto && !selectedRecibidoPorId) {
+      setSelectedRecibidoPorId(recibidoPorPorDefecto)
     }
-  }, [session?.user?.id, session?.user?.role])
+  }, [recibidoPorPorDefecto])
 
   // Sector elegido y lista de sectores del cliente. El sector se limpia solo
   // cuando el cliente CAMBIA de verdad: este efecto tambien corre al montar y
