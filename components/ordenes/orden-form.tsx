@@ -1129,8 +1129,19 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       const nuevaOrden = await res.json()
       clearDraft()
 
-      // Guardar checklist si hay template y valores completados
-      if (checklistTemplate && Object.keys(checklistValores).length > 0) {
+      // Guardar checklist si hay template y valores completados.
+      //
+      // `!checklistDelBorrador` es el mismo freno que el efecto de respuestas
+      // huerfanas, que solo las limpia DESPUES de que el template del tipo de
+      // equipo resuelve. Sin el, el submit entraba por la otra puerta: en una
+      // terminal lenta el fetch del montaje sale antes que la lista de tipos y
+      // deja en pantalla el template por defecto de la organizacion, asi que un
+      // "Crear orden" apretado mientras el del tipo sigue en vuelo guardaba las
+      // respuestas del borrador bajo un templateId que no es el suyo -- items
+      // que no existen en ese template, invisibles en la ficha. Mientras el
+      // latch siga puesto no hay contra que validarlas: se retienen y se
+      // conservan en el borrador, que es lo unico que no las corrompe.
+      if (!checklistDelBorrador && checklistTemplate && Object.keys(checklistValores).length > 0) {
         try {
           const checklistBody = {
             templateId: checklistTemplate.id,
