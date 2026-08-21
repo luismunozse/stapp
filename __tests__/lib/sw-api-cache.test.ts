@@ -2,13 +2,15 @@
  * Tests: public/sw.js API caching decisions.
  *
  * The service worker cache is shared by every session in the browser profile
- * and is keyed by URL alone — no cookie, no session, no role. Anything it
- * stores can therefore be replayed to a *different* user of the same terminal,
- * and to the same user after a sucursal switch. These tests pin the two rules
- * that follow from that:
+ * and is keyed by URL alone — no cookie, no session, no role, no org. Anything
+ * it stores can therefore be replayed to a *different* user of the same
+ * terminal, and to the same user after a sucursal switch. These tests pin the
+ * two rules that follow from that:
  *
- *  - role/sucursal-scoped responses (`/api/inventario/*`) are never stored and
- *    never served from the cache;
+ *  - responses that vary by identity (`/api/inventario/*`, `/api/clientes*`)
+ *    are never stored and never served from the cache. Not "cleared later" —
+ *    NOT STORED. Clearing is a race: it has to have finished before anything
+ *    reads, and it cannot prove it ran;
  *  - org-wide responses that are still cached honour API_CACHE_TTL instead of
  *    living forever, while still falling back to a stale copy when offline.
  *
@@ -28,6 +30,13 @@ const API_CACHE_NAME = /const API_CACHE_NAME = '([^']+)'/.exec(SW_SOURCE)![1]
 const CACHED_AT_HEADER = "x-sw-cached-at"
 
 const ORIGIN = "https://app.test"
+
+/**
+ * Ruta de fixture para el comportamiento generico del caché (TTL, offline,
+ * presupuesto). A propósito NO es /api/clientes ni /api/inventario: esas dos
+ * dependen de la identidad y no se cachean — ver los tests que lo fijan.
+ */
+const RUTA_CACHEABLE = "/api/tipos-dispositivo"
 
 type FakeRequest = { url: string; method: string; mode: string }
 
@@ -168,41 +177,45 @@ describe("service worker — API caching", () => {
     sw = loadServiceWorker()
   })
 
-  // Offline product browsing is the reason the POS is a PWA at all. Dropping
-  // /api/inventario made `networkOnlyWithError` synthesize a 503, the client's
-  // `Array.isArray(data)` went false and the operator got an EMPTY catalog —
-  // offline sales collapsed to manual entry. It is cached again, and what keeps
-  // it honest is not the route list but ApiCacheSessionGuard + SucursalSwitcher
-  // dropping the whole cache whenever the identity behind it changes.
-  it("SW-1 — stores /api/inventario responses so the POS can browse offline", async () => {
-    const url = `${ORIGIN}/api/inventario/search?q=&scope=venta`
-    sw.setNetwork(async () => jsonResponse([{ id: "p1", nombre: "Vidrio" }]))
+  // Las dos familias que dependen de la identidad. No se cachean, punto: la
+  // alternativa (cachear y limpiar cuando cambia la sesion) es una carrera por
+  // construccion — tiene que haber TERMINADO antes de que algo lea, y no puede
+  // demostrar que corrio. El costo aceptado es que no hay catalogo offline.
+  it.each([
+    ["/api/inventario/search?q=&scope=venta", "el stock y precioCompra dependen del rol y la sucursal"],
+    ["/api/clientes?page=1", "la lista de clientes es de UNA org"],
+    ["/api/clientes/cli-1/deuda-sucursal", "corre sucursalParaLectura"],
+    ["/api/clientes/cli-1/ordenes-pendientes", "corre sucursalParaLectura"],
+  ])("SW-1 — nunca guarda %s (%s)", async (ruta) => {
+    sw.setNetwork(async () => jsonResponse([{ id: "p1", precioCompra: 100 }]))
 
-    const res = await sw.dispatchFetch("/api/inventario/search?q=&scope=venta")
+    const res = await sw.dispatchFetch(ruta)
 
-    expect(await res!.json()).toEqual([{ id: "p1", nombre: "Vidrio" }])
-    expect(await sw.caches.match(url)).toBeDefined()
+    expect(res!.status).toBe(200)
+    expect(await sw.caches.match(`${ORIGIN}${ruta}`)).toBeUndefined()
   })
 
-  it("SW-2 — offline, an inventario entry is served instead of the 503 that empties the catalog", async () => {
-    const url = `${ORIGIN}/api/inventario/search?q=&scope=venta`
+  it.each([
+    "/api/inventario/search?q=&scope=venta",
+    "/api/clientes?page=1",
+  ])("SW-2 — nunca sirve una entrada guardada de %s a una sesion posterior", async (ruta) => {
+    // Simula lo que dejo el ADMIN de la org 1 (o la sucursal anterior) y que el
+    // VENDEDOR de la org 2 en el mismo mostrador NO puede recibir.
     const store = await sw.caches.open(API_CACHE_NAME)
+    // Recien sellada a proposito: el TTL no puede ser lo que nos salve.
     await store.put(
-      url,
-      jsonResponse([{ id: "p1", nombre: "Vidrio" }], { [CACHED_AT_HEADER]: String(Date.now()) })
+      `${ORIGIN}${ruta}`,
+      jsonResponse([{ id: "filtrado", precioCompra: 100 }], { [CACHED_AT_HEADER]: String(Date.now()) })
     )
-    sw.setNetwork(async () => {
-      throw new Error("offline")
-    })
+    sw.setNetwork(async () => jsonResponse([{ id: "fresco" }]))
 
-    const res = await sw.dispatchFetch("/api/inventario/search?q=&scope=venta")
+    const res = await sw.dispatchFetch(ruta)
 
-    // El cliente hace Array.isArray(data): un 503 sintetico le vacia el catalogo.
-    expect(Array.isArray(await res!.json())).toBe(true)
+    expect(await res!.json()).toEqual([{ id: "fresco" }])
   })
 
   it("SW-3 — org-wide routes keep stale-while-revalidate (offline PWA is deliberate)", async () => {
-    const url = `${ORIGIN}/api/clientes?page=1`
+    const url = `${ORIGIN}${RUTA_CACHEABLE}`
     const store = await sw.caches.open(API_CACHE_NAME)
     await store.put(
       url,
@@ -210,13 +223,13 @@ describe("service worker — API caching", () => {
     )
     sw.setNetwork(async () => jsonResponse({ data: ["network"] }))
 
-    const res = await sw.dispatchFetch("/api/clientes?page=1")
+    const res = await sw.dispatchFetch(RUTA_CACHEABLE)
 
     expect(await res!.json()).toEqual({ data: ["cached"] })
   })
 
   it("SW-4 — a cached entry older than API_CACHE_TTL is not served while online", async () => {
-    const url = `${ORIGIN}/api/clientes?page=1`
+    const url = `${ORIGIN}${RUTA_CACHEABLE}`
     const store = await sw.caches.open(API_CACHE_NAME)
     await store.put(
       url,
@@ -224,13 +237,13 @@ describe("service worker — API caching", () => {
     )
     sw.setNetwork(async () => jsonResponse({ data: ["network"] }))
 
-    const res = await sw.dispatchFetch("/api/clientes?page=1")
+    const res = await sw.dispatchFetch(RUTA_CACHEABLE)
 
     expect(await res!.json()).toEqual({ data: ["network"] })
   })
 
   it("SW-5 — an expired entry is still served when the network is unreachable", async () => {
-    const url = `${ORIGIN}/api/clientes?page=1`
+    const url = `${ORIGIN}${RUTA_CACHEABLE}`
     const store = await sw.caches.open(API_CACHE_NAME)
     await store.put(
       url,
@@ -240,37 +253,9 @@ describe("service worker — API caching", () => {
       throw new Error("offline")
     })
 
-    const res = await sw.dispatchFetch("/api/clientes?page=1")
+    const res = await sw.dispatchFetch(RUTA_CACHEABLE)
 
     expect(await res!.json()).toEqual({ data: ["stale"] })
-  })
-
-  it("SW-7 — never stores the sucursal-scoped routes nested under /api/clientes", async () => {
-    // deuda-sucursal and ordenes-pendientes both run sucursalParaLectura, so
-    // their answer depends on the role and on the active sucursal exactly like
-    // /api/inventario does — they just happen to sit under a cacheable prefix.
-    sw.setNetwork(async () => jsonResponse({ deuda: 5000 }))
-
-    await sw.dispatchFetch("/api/clientes/cli-1/deuda-sucursal")
-    await sw.dispatchFetch("/api/clientes/cli-1/ordenes-pendientes")
-
-    expect(await sw.caches.match(`${ORIGIN}/api/clientes/cli-1/deuda-sucursal`)).toBeUndefined()
-    expect(await sw.caches.match(`${ORIGIN}/api/clientes/cli-1/ordenes-pendientes`)).toBeUndefined()
-  })
-
-  it("SW-8 — never replays a sucursal-scoped clientes response to a later session", async () => {
-    const url = `${ORIGIN}/api/clientes/cli-1/deuda-sucursal`
-    const store = await sw.caches.open(API_CACHE_NAME)
-    // Freshly stamped on purpose: the TTL must not be what saves us here.
-    await store.put(
-      url,
-      jsonResponse({ deuda: 999999, scope: "org-wide" }, { [CACHED_AT_HEADER]: String(Date.now()) })
-    )
-    sw.setNetwork(async () => jsonResponse({ deuda: 5000, scope: "sucursal" }))
-
-    const res = await sw.dispatchFetch("/api/clientes/cli-1/deuda-sucursal")
-
-    expect(await res!.json()).toEqual({ deuda: 5000, scope: "sucursal" })
   })
 
   // A half-connected link — captive portal, dead cell, the normal state of a
@@ -281,7 +266,7 @@ describe("service worker — API caching", () => {
   it("SW-11 — con la red colgada, una entrada vencida se sirve sin esperar el timeout del SO", async () => {
     vi.useFakeTimers()
     try {
-      const url = `${ORIGIN}/api/clientes?page=1`
+      const url = `${ORIGIN}${RUTA_CACHEABLE}`
       const store = await sw.caches.open(API_CACHE_NAME)
       await store.put(
         url,
@@ -290,7 +275,7 @@ describe("service worker — API caching", () => {
       // Ni resuelve ni rechaza: exactamente lo que hace un fetch sin salida.
       sw.setNetwork(() => new Promise<Response>(() => {}))
 
-      const pendiente = sw.dispatchFetch("/api/clientes?page=1")
+      const pendiente = sw.dispatchFetch(RUTA_CACHEABLE)
       await vi.advanceTimersByTimeAsync(30_000)
 
       expect(await (await pendiente)!.json()).toEqual({ data: ["stale"] })
@@ -307,7 +292,7 @@ describe("service worker — API caching", () => {
     // para siempre — justo el caso para el que se agrego el presupuesto.
     vi.useFakeTimers()
     try {
-      const url = `${ORIGIN}/api/clientes?page=1`
+      const url = `${ORIGIN}${RUTA_CACHEABLE}`
       const store = await sw.caches.open(API_CACHE_NAME)
       await store.put(
         url,
@@ -316,7 +301,7 @@ describe("service worker — API caching", () => {
       let responder: ((value: Response) => void) | null = null
       sw.setNetwork(() => new Promise<Response>((resolve) => { responder = resolve }))
 
-      const pendiente = sw.dispatchFetch("/api/clientes?page=1")
+      const pendiente = sw.dispatchFetch(RUTA_CACHEABLE)
       await vi.advanceTimersByTimeAsync(30_000)
       expect(await (await pendiente)!.json()).toEqual({ data: ["stale"] })
 
@@ -339,7 +324,7 @@ describe("service worker — API caching", () => {
       let responder: ((value: Response) => void) | null = null
       sw.setNetwork(() => new Promise<Response>((resolve) => { responder = resolve }))
 
-      const pendiente = sw.dispatchFetch("/api/clientes?page=1")
+      const pendiente = sw.dispatchFetch(RUTA_CACHEABLE)
       await vi.advanceTimersByTimeAsync(30_000)
       // Recien ahora contesta la red: sin copia vencida, el presupuesto no puede
       // degradar el request a un 503 anticipado.
@@ -356,7 +341,7 @@ describe("service worker — API caching", () => {
   // QuotaExceededError, and the two tests below pin that this can only cost the
   // user the *caching*, never the fresh answer they are online to receive.
   it("SW-9 — a failed cache write still returns the fresh network response, not a stale copy", async () => {
-    const url = `${ORIGIN}/api/clientes?page=1`
+    const url = `${ORIGIN}${RUTA_CACHEABLE}`
     const store = await sw.caches.open(API_CACHE_NAME)
     await store.put(
       url,
@@ -365,7 +350,7 @@ describe("service worker — API caching", () => {
     store.failPut = true
     sw.setNetwork(async () => jsonResponse({ data: ["network"] }))
 
-    const res = await sw.dispatchFetch("/api/clientes?page=1")
+    const res = await sw.dispatchFetch(RUTA_CACHEABLE)
 
     expect(await res!.json()).toEqual({ data: ["network"] })
   })
@@ -375,17 +360,17 @@ describe("service worker — API caching", () => {
     store.failPut = true
     sw.setNetwork(async () => jsonResponse({ data: ["network"] }))
 
-    const res = await sw.dispatchFetch("/api/clientes?page=1")
+    const res = await sw.dispatchFetch(RUTA_CACHEABLE)
 
     expect(res!.status).toBe(200)
     expect(await res!.json()).toEqual({ data: ["network"] })
   })
 
-  it("SW-6 — activate drops every previous API cache, so pre-guard entries do not survive the upgrade", async () => {
-    // Entries stored before ApiCacheSessionGuard existed carry no identity
-    // marker, so the guard cannot recognise them as somebody else's: the rename
-    // is what takes them out, once, on upgrade.
-    for (const vieja of ["stapp-api-v2", "stapp-api-v3"]) {
+  it("SW-6 — activate drops every previous API cache, so entries from a permissive rule do not survive", async () => {
+    // Los caches viejos guardaron /api/clientes y /api/inventario cuando la
+    // regla lo permitia. Renombrar es lo unico que los saca de encima al
+    // actualizar: en el equipo del mostrador esas entradas son de otra sesion.
+    for (const vieja of ["stapp-api-v2", "stapp-api-v3", "stapp-api-v4"]) {
       const legacy = await sw.caches.open(vieja)
       await legacy.put(`${ORIGIN}/api/inventario/search`, jsonResponse([{ id: "leaked" }]))
     }
@@ -395,6 +380,7 @@ describe("service worker — API caching", () => {
 
     expect(await sw.caches.keys()).not.toContain("stapp-api-v2")
     expect(await sw.caches.keys()).not.toContain("stapp-api-v3")
+    expect(await sw.caches.keys()).not.toContain("stapp-api-v4")
     expect(await sw.caches.keys()).toContain(API_CACHE_NAME)
   })
 })

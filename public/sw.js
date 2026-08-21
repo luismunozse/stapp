@@ -3,11 +3,12 @@ const CACHE_NAME = 'stapp-v8'
 // v3: el caché de API pasó a llevar sello de tiempo y dejó de guardar
 // /api/inventario. Renombrarlo hace que `activate` borre las entradas viejas
 // (sin sello, y posiblemente con inventario de otro rol o sucursal).
-// v4: lo que escopea este caché pasó a ser ApiCacheSessionGuard, que borra todo
-// cuando cambia la identidad de sesión. Las entradas que ya estaban guardadas
-// son anteriores a esa marca: nadie sabe de quién son y el guard no las va a
-// reconocer como ajenas. Renombrar es lo que las tira una vez, al actualizar.
-const API_CACHE_NAME = 'stapp-api-v4'
+// v4: se intentó escopear el caché limpiándolo al cambiar la identidad.
+// v5: se revirtió — limpiar es una carrera por construcción (ver
+// CACHEABLE_API_ROUTES). Los caches v3/v4 alcanzaron a guardar /api/clientes y
+// /api/inventario bajo la regla permisiva; renombrar es lo que los saca de
+// encima al actualizar, porque en un equipo compartido son de otra sesión.
+const API_CACHE_NAME = 'stapp-api-v5'
 const STATIC_CACHE_NAME = 'stapp-static-v3'
 const DB_NAME = 'stapp-offline'
 const DB_VERSION = 2
@@ -30,41 +31,39 @@ const EXCLUDED_ROUTES = [
 
 // Rutas de API que se pueden cachear temporalmente (lectura).
 //
-// Lo que hay que entender antes de tocar esta lista: este caché es del
-// navegador, no de la sesión. La clave es la URL y nada más — sin cookie, sin
-// usuario, sin rol, sin org. Una respuesta guardada acá NO SABE de quién es, y
-// por sí sola puede devolverse a otra sesión del mismo equipo.
+// LA REGLA: acá NO entra ninguna ruta cuya respuesta dependa de la identidad
+// —usuario, rol, org o sucursal activa—. No "se cachea y después se limpia":
+// NO SE GUARDA.
 //
-// Lo que la escopea no es esta lista: es que el caché entero se tira cuando
-// cambia la identidad detrás de lo guardado.
-//   - ApiCacheSessionGuard (components/pwa/api-cache-session-guard.tsx) manda
-//     CLEAR_CACHE cuando entra otro usuario, otra org, otro rol u otra sucursal
-//     asignada — el caso del mostrador compartido.
-//   - SucursalSwitcher manda CLEAR_CACHE al cambiar de sucursal activa, que
-//     vive en una cookie httpOnly y por eso solo el switcher ve cambiar.
-// Sacar cualquiera de esas dos deja este caché sin ningún escopeo: no son un
-// detalle de rendimiento, son la única identidad que tiene.
+// El motivo es que este caché es del navegador, no de la sesión: la clave es la
+// URL y nada más, sin cookie, sin usuario, sin rol, sin org. Una respuesta
+// guardada acá no sabe de quién es, así que por sí sola puede devolverse a otra
+// sesión del mismo equipo — el mostrador compartido donde el usuario A de la
+// org 1 cierra sesión y entra el usuario B de la org 2.
 //
-// Con eso, el criterio para entrar acá es que la ruta VALGA offline. Por eso
-// /api/inventario está: sin ella `networkOnlyWithError` sintetiza un 503, el
-// `Array.isArray(data)` del cliente da false y el operador se queda con el
-// catálogo vacío — la venta offline se cae a carga manual, que es justamente la
-// capacidad por la que el POS es una PWA.
+// Ya se intentó resolverlo limpiando el caché al cambiar la identidad de sesión
+// (ApiCacheSessionGuard). No alcanza, y no por cómo esté escrito: limpiar es
+// una carrera por construcción. Tiene que haber TERMINADO antes de que algo
+// lea, y la primera pantalla lee en el mismo commit en que monta el guard;
+// además no puede demostrar que corrió (sin `controller` el mensaje se pierde
+// en silencio, y el borrado del worker es asincrónico). El guard sigue vivo
+// como defensa en profundidad, pero lo que garantiza el aislamiento es esta
+// lista.
+//
+// Por eso /api/inventario queda afuera: bajo scope=venta trae el stock de una
+// sucursal concreta (más los headers X-Venta-Sucursal-*) y, para un ADMIN,
+// precioCompra. Y /api/clientes también: la lista es de UNA org, y lo que
+// cuelga abajo (deuda-sucursal, ordenes-pendientes) corre sucursalParaLectura.
+// Dejar el prefijo afuera cubre todo lo anidado sin listas de excepciones.
+//
+// El costo, explícito: el POS no tiene catálogo offline. Recuperarlo sin volver
+// a la carrera pide un caché KEYEADO por identidad (un nombre de caché por
+// sesión, de modo que otra identidad lea otro caché y no haya nada que limpiar
+// ni que llegue tarde) — es otro cambio, no este.
 const CACHEABLE_API_ROUTES = [
-  '/api/clientes',
-  '/api/inventario',
   '/api/servicios',
   '/api/configuracion',
   '/api/tipos-dispositivo',
-]
-
-// Excepciones: rutas que caen bajo un prefijo cacheable y no ganan nada offline.
-// Son lecturas puntuales de un cliente abierto en pantalla, no listados que se
-// repitan, así que guardarlas solo agrega entradas que dependen del rol y de la
-// sucursal activa sin devolver ninguna capacidad a cambio.
-const SUCURSAL_SCOPED_API_PATTERNS = [
-  /^\/api\/clientes\/[^/]+\/deuda-sucursal$/,
-  /^\/api\/clientes\/[^/]+\/ordenes-pendientes$/,
 ]
 
 // Tiempo de vida del caché de API (5 minutos). Se aplica con el sello
@@ -201,9 +200,7 @@ self.addEventListener('fetch', (event) => {
   // Estrategia para API calls
   if (url.pathname.startsWith('/api/')) {
     // Para API que puede cachearse, usar stale-while-revalidate
-    const cacheable =
-      CACHEABLE_API_ROUTES.some(route => url.pathname.startsWith(route)) &&
-      !SUCURSAL_SCOPED_API_PATTERNS.some(pattern => pattern.test(url.pathname))
+    const cacheable = CACHEABLE_API_ROUTES.some(route => url.pathname.startsWith(route))
     if (cacheable && request.method === 'GET') {
       event.respondWith(staleWhileRevalidate(request, API_CACHE_NAME, event))
     } else {

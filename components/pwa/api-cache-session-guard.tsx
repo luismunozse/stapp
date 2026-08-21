@@ -10,17 +10,18 @@ export const SW_API_IDENTITY_KEY = "stapp-sw-api-identity"
 /**
  * Tira el cache de API del service worker cuando cambia la identidad de sesion.
  *
- * El cache del SW lo comparte todo el perfil del navegador y su clave es la URL
- * sola: sin cookie, sin usuario, sin org. En un mostrador compartido el usuario
- * A de la org 1 abre la lista de clientes y cierra sesion; el usuario B de la
- * org 2 entra cinco minutos despues y stale-while-revalidate le sirve los
- * clientes de la org 1. Ninguna lista de rutas arregla eso — el problema no es
- * QUE se cachea sino que lo cacheado no sabe de quien es.
+ * DEFENSA EN PROFUNDIDAD, no la garantia. Lo que aisla las respuestas de una
+ * sesion de las de otra es que las rutas que dependen de la identidad no se
+ * cachean (ver CACHEABLE_API_ROUTES en public/sw.js). Este componente cubre lo
+ * que igual pueda haber quedado guardado: entradas de una version anterior del
+ * SW, o de una ruta que alguien agregue a esa lista sin darse cuenta.
  *
- * Este componente es lo que le da esa noción: recuerda la identidad detras de
- * las respuestas guardadas y, cuando aparece OTRA, borra todo antes de que
- * pueda leerlo. Con eso las rutas de lectura vuelven a poder cachearse, que es
- * lo que le devuelve al POS el catalogo offline.
+ * No sirve como garantia porque limpiar es una carrera por construccion: tiene
+ * que haber TERMINADO antes de que algo lea, y la primera pantalla dispara sus
+ * fetch en el mismo commit en que este efecto corre. Tampoco puede afirmar que
+ * corrio: sin `controller` el mensaje no llega a ningun lado. Por eso la
+ * identidad solo se guarda cuando el worker CONFIRMA el borrado — un guard que
+ * miente sobre haber corrido es peor que no tener guard.
  *
  * Solo mira sesiones autenticadas, a proposito. Cerrar sesion no necesita
  * limpiar: a quien hay que proteger es a quien entra despues, y ese momento ya
