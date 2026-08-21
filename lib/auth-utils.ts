@@ -134,6 +134,34 @@ export async function resolveVendedoresHabilitados(organizationId: string): Prom
   }
 }
 
+// Resolutor perezoso y memoizado de hasInventarioAccess, para rutas calientes.
+//
+// resolveVendedoresHabilitados es un SELECT sin cache. Resolverlo arriba de
+// todo hace pagar ese round-trip incluso cuando la respuesta no lleva ningún
+// costo (query vacía, cero resultados, early return). /api/inventario/search
+// corre por cada tecla del buscador del POS, así que era un round-trip por
+// tecla y por sesión de VENDEDOR.
+//
+// Se llama recién donde el costo se escribiría en la respuesta. La promesa
+// queda memoizada: un request que sí necesita el permiso paga exactamente uno.
+// El gate no se debilita — la misma regla, resuelta más tarde.
+export function lazyInventarioAccess(
+  role: string | null,
+  organizationId: string
+): () => Promise<boolean> {
+  let pending: Promise<boolean> | null = null
+  return () => {
+    if (!pending) {
+      pending = role === "VENDEDOR"
+        ? resolveVendedoresHabilitados(organizationId).then((habilitados) =>
+            hasInventarioAccess(role, habilitados)
+          )
+        : Promise.resolve(hasInventarioAccess(role, false))
+    }
+    return pending
+  }
+}
+
 // Guard de endpoints de inventario. Mismo contrato que requireAdmin() para
 // swap 1:1. Fail-closed: si la columna no existe o la lectura falla,
 // el VENDEDOR queda denegado (idéntico al comportamiento histórico).

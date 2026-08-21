@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
+import { requireAuth, lazyInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 // GET /api/inventario/check-duplicate?nombre=...&tipo=...&categoria=...&excludeId=...
@@ -54,10 +54,10 @@ export async function GET(request: Request) {
     const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
-    const vendedoresHabilitados = role === "VENDEDOR"
-      ? await resolveVendedoresHabilitados(organizationId!)
-      : false
-    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+    // Perezoso: el permiso vive detrás de un SELECT sin cache y esta ruta
+    // retorna temprano con { matches: [] } en cuanto la query viene vacía. Se
+    // resuelve recién si hay matches que efectivamente llevan costo.
+    const canViewCost = lazyInventarioAccess(role, organizationId!)
 
     const { searchParams } = new URL(request.url)
     const nombre = searchParams.get("nombre")?.trim() || ""
@@ -99,6 +99,8 @@ export async function GET(request: Request) {
       .sort((a, b) => b.score - a.score)
       .slice(0, 8)
 
+    const puedeVerCosto = scored.length > 0 ? await canViewCost() : false
+
     const matches = scored.map(({ row, score }) => ({
       id: row.id,
       codigo: row.codigo,
@@ -106,7 +108,7 @@ export async function GET(request: Request) {
       categoria: row.categoria,
       tipoDispositivo: row.tipo_dispositivo,
       stock: row.stock,
-      precioCompra: canViewCost ? row.precio_compra : null,
+      precioCompra: puedeVerCosto ? row.precio_compra : null,
       precioVenta: row.precio_venta,
       proveedor: (row.proveedores as { nombre?: string } | null)?.nombre || null,
       score: Math.round(score * 100) / 100,
