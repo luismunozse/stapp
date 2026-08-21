@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura, type ResultadoLectura } from "@/lib/sucursal"
 import {
@@ -9,7 +9,7 @@ import {
   ORDENES_COLUMNS,
   VENTAS_COLUMNS,
   CLIENTES_COLUMNS,
-  INVENTARIO_COLUMNS,
+  inventarioColumns,
   GARANTIAS_COLUMNS,
 } from "@/lib/csv-export"
 
@@ -74,9 +74,17 @@ export async function GET(
       case "clientes":
         payload = await exportClientes(organizationId!, filters)
         break
-      case "inventario":
-        payload = await exportInventario(organizationId!, filters)
+      case "inventario": {
+        // El costo de compra sigue hasInventarioAccess, igual que los endpoints
+        // de inventario. El round-trip a organizations solo hace falta para
+        // VENDEDOR; los demás roles se resuelven sin consultar.
+        const vendedoresHabilitados = role === "VENDEDOR"
+          ? await resolveVendedoresHabilitados(organizationId!)
+          : false
+        const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+        payload = await exportInventario(organizationId!, filters, canViewCost)
         break
+      }
       case "garantias":
         payload = await exportGarantias(organizationId!, filters)
         break
@@ -197,7 +205,8 @@ async function exportClientes(
 
 async function exportInventario(
   organizationId: string,
-  filters: Record<string, string>
+  filters: Record<string, string>,
+  canViewCost: boolean
 ): Promise<ExportPayload> {
   let query = supabaseAdmin
     .from("inventario")
@@ -220,7 +229,7 @@ async function exportInventario(
 
   const { data, error } = await query
   if (error) throw error
-  return { data: data || [], columns: INVENTARIO_COLUMNS }
+  return { data: data || [], columns: inventarioColumns(canViewCost) }
 }
 
 async function exportGarantias(
