@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import {
+  requireAdminOrVendedor,
+  hasInventarioAccess,
+  resolveVendedoresHabilitados,
+} from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatProveedorCatalogoItem } from "@/lib/db-utils"
 
@@ -20,7 +24,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string; itemId: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId, role } = await requireAdminOrVendedor()
     if (error) return error
     const { id, itemId } = await params
 
@@ -49,7 +53,16 @@ export async function PUT(
     if (dbErr || !updated) {
       return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
     }
-    return NextResponse.json(formatProveedorCatalogoItem(updated))
+
+    // requireAdminOrVendedor deja pasar a un VENDEDOR sin acceso a inventario.
+    // Sin este gate, un PUT que sólo toca el nombre devolvía el
+    // precio_referencia guardado: el mismo dato que el GET oculta.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
+    return NextResponse.json(formatProveedorCatalogoItem(updated, canViewCost))
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: err.errors[0].message }, { status: 400 })

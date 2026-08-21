@@ -516,7 +516,16 @@ export function formatProveedorAdjunto(a: any) {
   }
 }
 
-export function formatProveedorCatalogoItem(i: any) {
+/** `includeCost` es OPT-IN y arranca en false, igual que `formatInventario`:
+ *  `precio_referencia` es el precio de compra al proveedor y el item viaja con
+ *  `inventario_id`, así que se reduce al costo de un item de inventario exacto.
+ *  Va detrás de `hasInventarioAccess`, como sus dos hermanos de la misma
+ *  página (`/proveedores/[id]/stats` y `/proveedores/[id]/comparativa`).
+ *
+ *  Con el default apagado, un caller nuevo que se olvide del gate pierde el
+ *  precio — un bug visible con un ADMIN — en vez de filtrarlo a un rol sin
+ *  permiso, que es un bug silencioso. Son tres call sites, todos gateados. */
+export function formatProveedorCatalogoItem(i: any, includeCost = false) {
   if (!i) return null
   return {
     id: i.id,
@@ -525,7 +534,8 @@ export function formatProveedorCatalogoItem(i: any) {
     codigoProveedor: i.codigo_proveedor ?? null,
     nombre: i.nombre,
     descripcion: i.descripcion ?? null,
-    precioReferencia: i.precio_referencia != null ? Number(i.precio_referencia) : null,
+    precioReferencia:
+      includeCost && i.precio_referencia != null ? Number(i.precio_referencia) : null,
     moneda: i.moneda ?? "ARS",
     unidad: i.unidad ?? null,
     notas: i.notas ?? null,

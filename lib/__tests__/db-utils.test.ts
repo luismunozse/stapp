@@ -638,23 +638,25 @@ describe('formatProveedorCatalogoItem', () => {
     expect(formatProveedorCatalogoItem(null)).toBe(null)
   })
 
+  const itemRow = {
+    id: 'i1',
+    proveedor_id: 'p1',
+    inventario_id: 'inv1',
+    codigo_proveedor: 'SKU-123',
+    nombre: 'Producto X',
+    descripcion: 'desc',
+    precio_referencia: '999.99',
+    moneda: 'ARS',
+    unidad: 'caja',
+    notas: null,
+    precio_actualizado_at: '2026-01-15',
+    inventario: { id: 'inv1', codigo: 'COD-1', nombre: 'Item inv' },
+    created_at: '2026-01-01',
+    updated_at: '2026-01-15',
+  }
+
   it('formatea item con inventario vinculado', () => {
-    const result = formatProveedorCatalogoItem({
-      id: 'i1',
-      proveedor_id: 'p1',
-      inventario_id: 'inv1',
-      codigo_proveedor: 'SKU-123',
-      nombre: 'Producto X',
-      descripcion: 'desc',
-      precio_referencia: '999.99',
-      moneda: 'ARS',
-      unidad: 'caja',
-      notas: null,
-      precio_actualizado_at: '2026-01-15',
-      inventario: { id: 'inv1', codigo: 'COD-1', nombre: 'Item inv' },
-      created_at: '2026-01-01',
-      updated_at: '2026-01-15',
-    })
+    const result = formatProveedorCatalogoItem(itemRow, true)
     expect(result?.id).toBe('i1')
     expect(result?.codigoProveedor).toBe('SKU-123')
     expect(result?.precioReferencia).toBe(999.99)
@@ -668,10 +670,21 @@ describe('formatProveedorCatalogoItem', () => {
   it('moneda default ARS si null', () => {
     const result = formatProveedorCatalogoItem({
       id: 'i1', proveedor_id: 'p1', nombre: 'X',
-    })
+    }, true)
     expect(result?.moneda).toBe('ARS')
     expect(result?.precioReferencia).toBe(null)
     expect(result?.inventario).toBe(null)
+  })
+
+  // includeCost es opt-in: un caller que se olvida del gate pierde el precio,
+  // no lo filtra. Es el mismo default que formatInventario.
+  it('omite precioReferencia por default, sin pedir el costo', () => {
+    const result = formatProveedorCatalogoItem(itemRow)
+    expect(result?.precioReferencia).toBe(null)
+    // El resto del item sigue completo: sólo cae el costo.
+    expect(result?.nombre).toBe('Producto X')
+    expect(result?.codigoProveedor).toBe('SKU-123')
+    expect(result?.inventarioId).toBe('inv1')
   })
 })
 

@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { requireAuth, requireAdminOrVendedor } from "@/lib/auth-utils"
+import {
+  requireAuth,
+  requireAdminOrVendedor,
+  hasInventarioAccess,
+  resolveVendedoresHabilitados,
+} from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatProveedorCatalogoItem } from "@/lib/db-utils"
 
@@ -30,10 +35,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
     const { id } = await params
     const search = new URL(request.url).searchParams.get("q")?.trim().toLowerCase() || ""
+
+    // precioReferencia es el precio de compra al proveedor y el item linkea un
+    // inventario_id, así que es costo por item. Mismo permiso que las otras dos
+    // tabs de esta misma página (stats.valorCostoStock y comparativa.precioCompra).
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
 
     let query = supabaseAdmin
       .from("proveedor_catalogo_items")
@@ -48,7 +61,15 @@ export async function GET(
 
     const { data, error: dbErr } = await query
     if (dbErr) throw dbErr
-    return NextResponse.json((data || []).map(formatProveedorCatalogoItem))
+
+    // canViewCost viaja explícito: precioReferencia es nullable de por sí, así
+    // que una celda en null no distingue "sin precio cargado" de "precio
+    // oculto". Sin el flag, la tab tendría que adivinar y le escondería el
+    // input de precio a un ADMIN cuyo catálogo todavía no tiene precios.
+    return NextResponse.json({
+      items: (data || []).map((item: any) => formatProveedorCatalogoItem(item, canViewCost)),
+      canViewCost,
+    })
   } catch (err) {
     console.error("Error fetching catalogo:", err)
     return NextResponse.json({ error: "Error al obtener catálogo" }, { status: 500 })
@@ -60,7 +81,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId, role } = await requireAdminOrVendedor()
     if (error) return error
     const { id } = await params
 
@@ -89,7 +110,15 @@ export async function POST(
       .single()
 
     if (dbErr) throw dbErr
-    return NextResponse.json(formatProveedorCatalogoItem(created), { status: 201 })
+
+    // requireAdminOrVendedor deja pasar a un VENDEDOR sin acceso a inventario:
+    // el eco del row recién escrito respeta el mismo gate que el GET.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
+    return NextResponse.json(formatProveedorCatalogoItem(created, canViewCost), { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
