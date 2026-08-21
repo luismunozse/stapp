@@ -8,7 +8,7 @@ import {
   getDepositoDeSucursal,
   resolverDestinoVenta,
   derivarLecturaVenta,
-  getNombreSucursal,
+  resolverIndicadorVenta,
 } from "@/lib/sucursal"
 
 // GET /api/inventario/search?q=term&limit=10
@@ -22,6 +22,9 @@ import {
 // sucursal id is echoed back via the X-Venta-Sucursal-Id response header so the POS UI can show
 // a "selling from" indicator without a second round trip; ventaInfo=true additionally resolves
 // its name into X-Venta-Sucursal-Nombre (an extra query — only the POS mount fetch asks for it).
+// That name is only emitted when the indicator is actually meaningful (resolverIndicadorVenta):
+// an empty header means "do not show the indicator", which is a server-side decision because the
+// browser can read neither the httpOnly sucursal cookie nor the org's sucursal count.
 export async function GET(request: Request) {
   try {
     const { error, organizationId, role, session } = await requireAuth()
@@ -56,8 +59,16 @@ export async function GET(request: Request) {
       sucursalId = lectura.sucursalId
       depositoIdPrefetched = lectura.depositoId
       verTodas = lectura.verTodas
-      if (ventaInfo && lectura.ventaSucursalId) {
-        ventaSucursalNombre = await getNombreSucursal(organizationId!, lectura.ventaSucursalId)
+      if (ventaInfo) {
+        // The name doubles as the "should this indicator exist at all" signal:
+        // the client cannot read the httpOnly cookie or count sucursales, so
+        // the whole gate lives in resolverIndicadorVenta (see lib/sucursal.ts).
+        ventaSucursalNombre = await resolverIndicadorVenta({
+          role,
+          organizationId: organizationId!,
+          cookieSucursalId,
+          ventaSucursalId: lectura.ventaSucursalId,
+        })
       }
     } else {
       const resolved = resolveSucursalLectura({ role, userSucursalId, cookieSucursalId })

@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -90,19 +89,11 @@ export function PosCart({
   ventaSucursalNombre = null,
 }: PosCartProps) {
   const { formatPrice } = useCurrency()
-  const { data: session } = useSession()
-  const isAdmin = session?.user?.role === "ADMIN"
-  // Mirror of the sucursal selector (see sucursal-switcher.tsx — the real cookie is
-  // httpOnly). Computed once at mount: switching branches reloads the page, so this
-  // never goes stale during the session.
-  const [selectorTodas] = useState<boolean>(() => {
-    if (typeof window === "undefined") return true
-    const mirror = window.localStorage.getItem("sucursal-activa-ui")
-    return !mirror || mirror === "todas"
-  })
-  // Only surface the indicator when it disambiguates something: an ADMIN viewing
-  // "todas las sucursales" can't otherwise tell which branch a sale will draw from.
-  const showVentaSucursal = isAdmin && selectorTodas && !!ventaSucursalNombre
+  // No gating here on purpose: whether this indicator disambiguates anything
+  // depends on the httpOnly sucursal cookie and the org's sucursal count, neither
+  // of which the browser can see. The server sends a name only when it is worth
+  // showing (resolverIndicadorVenta in lib/sucursal.ts), so a name is the signal.
+  const showVentaSucursal = !!ventaSucursalNombre
   const [clienteQuery, setClienteQuery] = useState("")
   const [clienteResults, setClienteResults] = useState<ClienteResult[]>([])
   const [clienteLoading, setClienteLoading] = useState(false)

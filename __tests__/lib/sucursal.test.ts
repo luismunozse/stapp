@@ -20,6 +20,7 @@ import {
   resolverDestinoVenta,
   derivarLecturaVenta,
   getNombreSucursal,
+  resolverIndicadorVenta,
   SUCURSAL_NINGUNA,
 } from "@/lib/sucursal"
 
@@ -285,6 +286,136 @@ describe("derivarLecturaVenta", () => {
     // seria mentira. El escopeo de la lectura sigue apuntando a la sucursal.
     expect(lectura.ventaSucursalId).toBeNull()
     expect(lectura.sucursalId).toBe("suc-A")
+  })
+})
+
+// ─── resolverIndicadorVenta ───
+//
+// The POS "Vendiendo desde" indicator is gated server-side: the browser cannot
+// read the httpOnly sucursal cookie, and the localStorage mirror only exists
+// once an ADMIN has actively used the switcher — which single-sucursal orgs
+// never can, because SucursalSwitcher renders null for them.
+
+function mockListaSucursales(sucursales: Array<{ id: string; nombre: string }>) {
+  const chain: any = {}
+  for (const m of ["select", "eq", "is"]) chain[m] = vi.fn().mockReturnValue(chain)
+  chain.then = (resolve: any, reject?: any) =>
+    Promise.resolve({ data: sucursales, error: null }).then(resolve, reject)
+
+  vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+    if (table === "sucursales") return chain
+    return createUnusedChain()
+  })
+  return chain
+}
+
+function createUnusedChain(): any {
+  const chain: any = {}
+  for (const m of ["select", "eq", "is"]) chain[m] = vi.fn().mockReturnValue(chain)
+  chain.single = vi.fn().mockResolvedValue({ data: null, error: null })
+  return chain
+}
+
+const DOS_SUCURSALES = [
+  { id: "suc-principal", nombre: "Casa Central" },
+  { id: "suc-B", nombre: "Sucursal Norte" },
+]
+
+describe("resolverIndicadorVenta", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("IV-1 — ADMIN sin cookie en org multi-sucursal: devuelve el nombre", async () => {
+    mockListaSucursales(DOS_SUCURSALES)
+
+    const nombre = await resolverIndicadorVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-principal",
+    })
+
+    expect(nombre).toBe("Casa Central")
+  })
+
+  it('IV-2 — ADMIN con cookie "todas" en org multi-sucursal: devuelve el nombre', async () => {
+    mockListaSucursales(DOS_SUCURSALES)
+
+    const nombre = await resolverIndicadorVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: "todas",
+      ventaSucursalId: "suc-B",
+    })
+
+    expect(nombre).toBe("Sucursal Norte")
+  })
+
+  it("IV-3 — org de UNA sola sucursal: null (el switcher ni se renderiza, no hay nada que desambiguar)", async () => {
+    mockListaSucursales([{ id: "suc-principal", nombre: "Casa Central" }])
+
+    const nombre = await resolverIndicadorVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-principal",
+    })
+
+    expect(nombre).toBeNull()
+  })
+
+  it("IV-4 — ADMIN con una sucursal concreta seleccionada: null (el selector ya la muestra) y sin query", async () => {
+    mockListaSucursales(DOS_SUCURSALES)
+
+    const nombre = await resolverIndicadorVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: "suc-B",
+      ventaSucursalId: "suc-B",
+    })
+
+    expect(nombre).toBeNull()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it("IV-5 — no-ADMIN: null sin query (nunca ve mas de una sucursal a la vez)", async () => {
+    mockListaSucursales(DOS_SUCURSALES)
+
+    const nombre = await resolverIndicadorVenta({
+      role: "VENDEDOR",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-B",
+    })
+
+    expect(nombre).toBeNull()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it("IV-6 — sin ventaSucursalId (drenaje o fail-closed): null sin query", async () => {
+    mockListaSucursales(DOS_SUCURSALES)
+
+    const nombre = await resolverIndicadorVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: null,
+    })
+
+    expect(nombre).toBeNull()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it("IV-7 — la sucursal resuelta no esta en la lista: null en vez de un nombre inventado", async () => {
+    mockListaSucursales(DOS_SUCURSALES)
+
+    const nombre = await resolverIndicadorVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-fantasma",
+    })
+
+    expect(nombre).toBeNull()
   })
 })
 

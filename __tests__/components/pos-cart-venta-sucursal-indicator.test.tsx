@@ -1,31 +1,21 @@
 // __tests__/components/pos-cart-venta-sucursal-indicator.test.tsx
 //
-// The "Vendiendo desde: {sucursal}" indicator in the POS cart header must
-// only appear when it disambiguates something: an ADMIN who has "todas las
-// sucursales" selected can't otherwise tell which branch a sale will draw
-// stock from. It must stay hidden for non-admins and for an ADMIN who has a
-// specific sucursal selected (the selector already shows that).
-import { describe, it, expect, vi, beforeEach } from "vitest"
+// The "Vendiendo desde: {sucursal}" indicator in the POS cart header.
+//
+// Whether the indicator is MEANINGFUL (admin, "todas las sucursales" selected,
+// org with more than one branch, non-drain sale) is decided server-side — see
+// resolverIndicadorVenta in lib/sucursal.ts and its tests. The browser cannot
+// read the httpOnly sucursal cookie, so any client-side reconstruction of that
+// state is a guess. PosCart therefore holds no policy at all: it renders the
+// name when the server sent one and stays quiet otherwise, which also keeps it
+// free of a SessionProvider dependency for every consumer.
+import { describe, it, expect, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { PosCart } from "@/components/pos/pos-cart"
 
-const mockUseSession = vi.fn()
-vi.mock("next-auth/react", () => ({ useSession: () => mockUseSession() }))
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}` }),
 }))
-
-function mockSession(role: string | undefined) {
-  mockUseSession.mockReturnValue({ data: role ? { user: { role } } : null })
-}
-
-function mockSelectorMirror(value: string | null) {
-  if (value === null) {
-    window.localStorage.removeItem("sucursal-activa-ui")
-  } else {
-    window.localStorage.setItem("sucursal-activa-ui", value)
-  }
-}
 
 const noop = () => {}
 
@@ -58,49 +48,22 @@ function renderCart(ventaSucursalNombre: string | null) {
 }
 
 describe("PosCart — indicador 'Vendiendo desde'", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    window.localStorage.clear()
-  })
-
-  it("ADMIN en 'todas' (sin mirror en localStorage) con sucursal resuelta: muestra el indicador", () => {
-    mockSession("ADMIN")
-    mockSelectorMirror(null)
+  it("con sucursal resuelta por el server: muestra el indicador", () => {
     renderCart("Sucursal Centro")
 
     expect(screen.getByText("Vendiendo desde:")).toBeInTheDocument()
     expect(screen.getByText("Sucursal Centro")).toBeInTheDocument()
   })
 
-  it('ADMIN con mirror "todas" explícito: muestra el indicador', () => {
-    mockSession("ADMIN")
-    mockSelectorMirror("todas")
-    renderCart("Sucursal Centro")
-
-    expect(screen.getByText("Vendiendo desde:")).toBeInTheDocument()
-  })
-
-  it("ADMIN con una sucursal específica seleccionada: NO muestra el indicador (el selector ya lo dice)", () => {
-    mockSession("ADMIN")
-    mockSelectorMirror("suc-A")
-    renderCart("Sucursal Centro")
-
-    expect(screen.queryByText("Vendiendo desde:")).not.toBeInTheDocument()
-  })
-
-  it("VENDEDOR (no admin): NO muestra el indicador aunque venga resuelto", () => {
-    mockSession("VENDEDOR")
-    mockSelectorMirror(null)
-    renderCart("Sucursal Centro")
-
-    expect(screen.queryByText("Vendiendo desde:")).not.toBeInTheDocument()
-  })
-
-  it("ADMIN en 'todas' pero sin sucursal resuelta aún (null): NO muestra el indicador", () => {
-    mockSession("ADMIN")
-    mockSelectorMirror(null)
+  it("sin sucursal resuelta (el server decidio no mostrarlo): NO muestra el indicador", () => {
     renderCart(null)
 
     expect(screen.queryByText("Vendiendo desde:")).not.toBeInTheDocument()
+  })
+
+  it("no requiere SessionProvider: monta sin next-auth en el arbol", () => {
+    // Regression guard: PosCart used to call useSession() to gate the
+    // indicator, which threw for every consumer rendered without a provider.
+    expect(() => renderCart(null)).not.toThrow()
   })
 })

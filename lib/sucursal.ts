@@ -246,9 +246,57 @@ export function derivarLecturaVenta(destino: DestinoVenta): LecturaVenta {
 }
 
 /**
- * Reads the display name of a sucursal. Used to name the sucursal in the
- * POS "selling from" indicator and in stock-insufficient error messages,
- * without duplicating the sucursal/deposito resolution logic itself.
+ * Resolves the label for the POS "Vendiendo desde" indicator, or null when the
+ * indicator must not be shown at all.
+ *
+ * This gate lives on the server on purpose. The sucursal cookie is httpOnly, so
+ * the browser can only guess at the selector state from the `sucursal-activa-ui`
+ * localStorage mirror — and that mirror is written exclusively by
+ * `SucursalSwitcher.seleccionar()`. It is therefore absent both for an ADMIN who
+ * has simply never used the switcher AND for every single-sucursal org, where
+ * the switcher renders null and can never write it. No client-side default can
+ * separate those two cases: read a missing mirror as "todas" and single-branch
+ * orgs get a permanent, useless "Vendiendo desde: Casa Central"; read it as "not
+ * todas" and the indicator never appears for the fresh admin sessions it exists
+ * to serve. The server has the real cookie and the sucursal count, so it decides.
+ *
+ * Returns null (indicator hidden) when:
+ *  - there is no sucursal to name — drain mode or fail-closed reads, see
+ *    `derivarLecturaVenta`;
+ *  - the caller is not an ADMIN — other roles are pinned to one branch and
+ *    never see a cross-branch view to disambiguate;
+ *  - a concrete sucursal is selected — the switcher already names it;
+ *  - the org has a single sucursal — nothing to disambiguate, and this is the
+ *    case the switcher itself opts out of.
+ *
+ * Costs at most one query, and only on the request that opts in (`ventaInfo`).
+ */
+export async function resolverIndicadorVenta(params: {
+  role: string | null
+  organizationId: string
+  cookieSucursalId: string | null
+  ventaSucursalId: string | null
+}): Promise<string | null> {
+  if (!params.ventaSucursalId) return null
+  if (params.role !== "ADMIN") return null
+  if (params.cookieSucursalId && params.cookieSucursalId !== TODAS) return null
+
+  const { data } = await supabaseAdmin
+    .from("sucursales")
+    .select("id, nombre")
+    .eq("organization_id", params.organizationId)
+    .is("deleted_at", null)
+
+  const sucursales = (data ?? []) as Array<{ id: string; nombre: string }>
+  if (sucursales.length <= 1) return null
+
+  return sucursales.find((s) => s.id === params.ventaSucursalId)?.nombre ?? null
+}
+
+/**
+ * Reads the display name of a sucursal. Used to name the sucursal in
+ * stock-insufficient error messages, without duplicating the
+ * sucursal/deposito resolution logic itself.
  */
 export async function getNombreSucursal(
   organizationId: string,

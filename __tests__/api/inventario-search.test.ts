@@ -240,13 +240,31 @@ describe("GET /api/inventario/search — scoped por sucursal", () => {
 describe("GET /api/inventario/search — scope=venta (POS opt-in)", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  function makeSucursalesChain(sucursalId: string | null, nombre?: string) {
+  // The `sucursales` table is read two different ways on this path:
+  //  - getPrincipalId  → .single(), the org's principal sucursal
+  //  - resolverIndicadorVenta → awaits the chain, the full list (name + count)
+  // One mock has to serve both.
+  function makeSucursalesChain(
+    sucursalId: string | null,
+    nombre?: string,
+    lista?: Array<{ id: string; nombre: string }>
+  ) {
     const chain: any = {}
     for (const m of ["select", "eq", "is"]) chain[m] = vi.fn().mockReturnValue(chain)
     chain.single = vi.fn().mockResolvedValue({
       data: sucursalId ? { id: sucursalId, nombre: nombre ?? "Sucursal Test" } : null,
       error: null,
     })
+    const rows =
+      lista ??
+      (sucursalId
+        ? [
+            { id: sucursalId, nombre: nombre ?? "Sucursal Test" },
+            { id: "suc-otra", nombre: "Sucursal Norte" },
+          ]
+        : [])
+    chain.then = (resolve: any, reject?: any) =>
+      Promise.resolve({ data: rows, error: null }).then(resolve, reject)
     return chain
   }
 
@@ -346,6 +364,82 @@ describe("GET /api/inventario/search — scope=venta (POS opt-in)", () => {
     // ...but the stock can come from ANY sucursal's deposito, so the indicator
     // must not claim one (see derivarLecturaVenta).
     expect(res.headers.get("X-Venta-Sucursal-Id")).toBe("")
+    expect(res.headers.get("X-Venta-Sucursal-Nombre")).toBe("")
+  })
+
+  it("org de UNA sola sucursal: NO manda nombre para el indicador (el switcher ni existe para ella)", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockNoCookie() // never set: SucursalSwitcher renders null for these orgs
+
+    const sucursalesChain = makeSucursalesChain("suc-unica", "Casa Central", [
+      { id: "suc-unica", nombre: "Casa Central" },
+    ])
+    const depositosChain = makeDepositosChain("dep-unico")
+    const invChain = createChainMock([
+      {
+        id: "i1", codigo: "C1", nombre: "Notebook",
+        precio_venta: 100, precio_compra: 60, trackea_series: false,
+        inventario_depositos: [{ stock: 4, stock_reservado: 0, deposito_id: "dep-unico" }],
+      },
+    ])
+    mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain, inventario: invChain })
+
+    const res = await GET(
+      createGetRequest("http://localhost:3000/api/inventario/search?q=note&scope=venta&ventaInfo=true")
+    )
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    // The scoping still happens (that is the point of scope=venta)...
+    expect(res.headers.get("X-Venta-Sucursal-Id")).toBe("suc-unica")
+    // ...but there is nothing to disambiguate, so no indicator.
+    expect(res.headers.get("X-Venta-Sucursal-Nombre")).toBe("")
+  })
+
+  it("ADMIN con una sucursal concreta seleccionada: NO manda nombre (el selector ya la muestra)", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockCookie("suc-A")
+
+    const sucursalesChain = makeSucursalesChain("suc-principal", "Casa Central")
+    const depositosChain = makeDepositosChain("dep-A")
+    const invChain = createChainMock([])
+    mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain, inventario: invChain })
+
+    const res = await GET(
+      createGetRequest("http://localhost:3000/api/inventario/search?q=note&scope=venta&ventaInfo=true")
+    )
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(res.headers.get("X-Venta-Sucursal-Id")).toBe("suc-A")
+    expect(res.headers.get("X-Venta-Sucursal-Nombre")).toBe("")
+  })
+
+  it("VENDEDOR con sucursal asignada: NO manda nombre (nunca ve mas de una sucursal)", async () => {
+    vi.mocked(auth).mockResolvedValue({
+      user: {
+        id: "vendedor-1",
+        organizationId: "org-1",
+        role: "VENDEDOR",
+        sucursalId: "suc-V",
+        email: "v@v.com",
+      },
+      expires: new Date(Date.now() + 86400000).toISOString(),
+    } as any)
+    mockNoCookie()
+
+    const sucursalesChain = makeSucursalesChain("suc-principal", "Casa Central")
+    const depositosChain = makeDepositosChain("dep-V")
+    const invChain = createChainMock([])
+    mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain, inventario: invChain })
+
+    const res = await GET(
+      createGetRequest("http://localhost:3000/api/inventario/search?q=note&scope=venta&ventaInfo=true")
+    )
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(res.headers.get("X-Venta-Sucursal-Id")).toBe("suc-V")
     expect(res.headers.get("X-Venta-Sucursal-Nombre")).toBe("")
   })
 
