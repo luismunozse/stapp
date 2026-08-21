@@ -1,22 +1,29 @@
 /**
- * Per-item purchase cost is gated on the report endpoints too.
+ * Purchase cost is gated on the report endpoints too.
  *
  * These routes are guarded by requireAdminOrVendedor(), which is a deliberate
  * product tier for org-level financial figures. But a VENDEDOR denied
- * precioCompra on /api/inventario could read the identical per-item number
- * here, which is a hole in that gate rather than a tier.
+ * precioCompra on /api/inventario could read the identical number here, which
+ * is a hole in that gate rather than a tier.
  *
- * The line: an aggregate that can be trivially reduced to a single item's
- * purchase cost is not an aggregate. So per-item cost, any per-item figure the
- * same row lets you divide back into it, and every per-category cost total (a
- * category can hold one SKU) follow hasInventarioAccess. Only the org-wide
- * single totals — one number over the whole inventory — keep the broader
- * requireAdminOrVendedor tier.
+ * The rule: a caller who cannot see per-item purchase cost does not receive
+ * cost-derived figures AT ALL, at any aggregation level.
  *
- * margenPotencial is NOT gated: it is valorVenta - valorCosto, and both
- * operands ship ungated under that tier. A gate one subtraction defeats
- * protects nothing and is worse than none, because the next reader takes it for
- * a guarantee. Honest surface over decorative surface.
+ * An earlier version of this rule spared the org-wide totals, on the theory
+ * that one number over the whole inventory does not reduce to a single item.
+ * That theory is wrong, and it is retired. When totalItems === 1 — a new org,
+ * or one that sells a single SKU — valorCompra / totalUnidades IS the exact
+ * per-unit purchase cost, and the payload shipped both operands side by side.
+ * The routes already stripped the per-category total for precisely that
+ * reason, so the old rule denied the gated role the category number and handed
+ * it the org number that equals it.
+ *
+ * margenPotencial is gated as a consequence, and that is now load-bearing
+ * rather than decorative: its cost operand is no longer visible, so the
+ * subtraction that used to defeat the gate no longer has both terms.
+ *
+ * Non-cost figures — totalItems, totalUnidades, valorVenta, counts — stay
+ * visible: the tier they belong to has not changed.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { auth } from "@/lib/auth"
@@ -141,20 +148,57 @@ describe("GET /api/reportes/analisis-inventario — per-item cost gated", () => 
     expect(body.porCategoria[0].stockTotal).toBe(10)
   })
 
-  // Deliberate tier: one number over the whole inventory does not reduce to a
-  // single item, so it stays behind requireAdminOrVendedor(). margenPotencial
-  // rides along on purpose — it is valorVenta - valorCompra, both of which ship
-  // right here, so gating it would protect nothing while reading as a promise.
-  it("VENDEDOR without opt-in — the org-wide totals and the margin keep the broader tier", async () => {
+  it("ADMIN sees the org-wide cost total and the margin (no behavior change)", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    wire()
+
+    const { body } = await parseResponse(await getAnalisis())
+
+    expect(body.resumen.valorCompra).toBe(1000)
+    expect(body.resumen.margenPotencial).toBe(1000)
+  })
+
+  it("VENDEDOR without opt-in — the org-wide cost total and the margin are stripped", async () => {
     mockRole("VENDEDOR")
     wire(false)
 
     const { body } = await parseResponse(await getAnalisis())
 
-    expect(body.resumen.valorCompra).toBe(1000)
+    expect(body.resumen.valorCompra).toBeNull()
+    expect(body.resumen.margenPotencial).toBeNull()
+  })
+
+  it("VENDEDOR without opt-in — non-cost figures in the summary stay visible", async () => {
+    mockRole("VENDEDOR")
+    wire(false)
+
+    const { body } = await parseResponse(await getAnalisis())
+
+    expect(body.resumen.totalItems).toBe(2)
+    expect(body.resumen.totalUnidades).toBe(10)
     expect(body.resumen.valorVenta).toBe(2000)
-    expect(body.resumen.margenPotencial).toBe(1000)
-    expect(body.resumen.margenPotencial).toBe(body.resumen.valorVenta - body.resumen.valorCompra)
+    expect(body.resumen.itemsSinStock).toBe(1)
+    expect(body.resumen.categorias).toBe(1)
+  })
+
+  // The case that retired the "org-wide totals are safe" rule: with a single
+  // SKU in the org, valorCompra / totalUnidades is the exact per-unit purchase
+  // cost, and the summary used to hand over both operands at once.
+  it("VENDEDOR without opt-in — a single-SKU org cannot divide the org total back into the unit cost", async () => {
+    mockRole("VENDEDOR")
+    mockSupabaseFrom({
+      inventario: createChainMock([items[0]]),
+      organizations: orgChain(false),
+      movimientos_inventario: createChainMock([]),
+    })
+
+    const { body } = await parseResponse(await getAnalisis())
+
+    expect(body.resumen.totalItems).toBe(1)
+    expect(body.resumen.totalUnidades).toBe(10)
+    // 1000 / 10 === 100 === precio_compra. The numerator must not be there.
+    expect(body.resumen.valorCompra).toBeNull()
+    expect(body.resumen.margenPotencial).toBeNull()
   })
 
   it("VENDEDOR with inventario opt-in — per-item and category costs visible", async () => {
@@ -247,21 +291,37 @@ describe("GET /api/reportes/inventario-analytics — per-item cost gated", () =>
     expect(body.porCategoria[0].valorVenta).toBe(1600)
   })
 
-  // Deliberate tier: the org-wide valorization total stays under
-  // requireAdminOrVendedor(), and margenPotencial with it — it is
-  // valorVenta - valorCosto, both of which ship right here.
-  it("VENDEDOR without opt-in — the org-wide totals and the margin keep the broader tier", async () => {
+  it("ADMIN sees the org-wide valorization total and the margin (no behavior change)", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    wire()
+
+    const { body } = await parseResponse(await getAnalytics())
+
+    expect(body.valorizacion.valorCosto).toBe(1000)
+    expect(body.valorizacion.margenPotencial).toBe(600)
+  })
+
+  // Same shape as analisis-inventario: this fixture is a single-SKU org, so
+  // valorCosto / totalUnidades (1000 / 4) is precio_compra exactly.
+  it("VENDEDOR without opt-in — the org-wide valorization total and the margin are stripped", async () => {
     mockRole("VENDEDOR")
     wire(false)
 
     const { body } = await parseResponse(await getAnalytics())
 
-    expect(body.valorizacion.valorCosto).toBe(1000)
+    expect(body.valorizacion.valorCosto).toBeNull()
+    expect(body.valorizacion.margenPotencial).toBeNull()
+  })
+
+  it("VENDEDOR without opt-in — non-cost valorization figures stay visible", async () => {
+    mockRole("VENDEDOR")
+    wire(false)
+
+    const { body } = await parseResponse(await getAnalytics())
+
     expect(body.valorizacion.valorVenta).toBe(1600)
-    expect(body.valorizacion.margenPotencial).toBe(600)
-    expect(body.valorizacion.margenPotencial).toBe(
-      body.valorizacion.valorVenta - body.valorizacion.valorCosto
-    )
+    expect(body.valorizacion.totalItems).toBe(1)
+    expect(body.valorizacion.totalUnidades).toBe(4)
   })
 
   it("VENDEDOR with inventario opt-in — per-item and category costs visible", async () => {

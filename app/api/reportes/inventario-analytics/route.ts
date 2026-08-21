@@ -67,10 +67,13 @@ export async function GET() {
       valorVenta += (item.stock || 0) * (item.precio_venta || 0)
       totalUnidades += item.stock || 0
     })
+    // Las cifras de costo van gateadas como el resto (ver el bloque de abajo):
+    // totalItems y totalUnidades viajan al lado, así que un valorCosto visible
+    // se divide de vuelta al costo unitario.
     const valorizacion = {
-      valorCosto,
+      valorCosto: canViewCost ? valorCosto : null,
       valorVenta,
-      margenPotencial: valorVenta - valorCosto,
+      margenPotencial: canViewCost ? valorVenta - valorCosto : null,
       totalItems: items.length,
       totalUnidades,
     }
@@ -189,26 +192,28 @@ export async function GET() {
     })
     const tendenciaVentas = Object.entries(tendenciaMap).map(([fecha, unidades]) => ({ fecha, unidades }))
 
-    // El costo de compra por item sigue la misma regla que
-    // inventario.precio_compra en el resto de la app. capitalInmovilizado acá
-    // es por item (stock * precio_compra) y stock viaja en la misma fila, así
-    // que se cae por división y también se oculta.
+    // El costo de compra sigue la misma regla que inventario.precio_compra en
+    // el resto de la app.
     //
-    // La regla se extiende a todo agregado que se pueda reducir a un item: un
-    // agregado que se divide de vuelta al costo de un solo producto no es un
-    // agregado. porCategoria.valorCosto es un total por categoría y una
-    // categoría puede tener un único SKU, así que es costo por item
-    // disfrazado: se oculta.
+    // La regla, en una línea: quien no puede ver el costo de compra por item
+    // no recibe NINGUNA cifra derivada de precio_compra, a ningún nivel de
+    // agregación.
     //
-    // Lo que queda bajo el tier más amplio de requireAdminOrVendedor() es el
-    // total de organización valorizacion.valorCosto: una sola cifra sobre todo
-    // el inventario no se reduce a un item. Ídem resumen.valorCompra en
-    // /api/reportes/analisis-inventario, que aplica esta misma regla.
+    // Aplica a lo obvio (precioCompra por item), a lo que se cae por división
+    // dentro de la misma fila (capitalInmovilizado es stock * precio_compra y
+    // stock viaja al lado), al total por categoría (una categoría puede tener
+    // un único SKU) y también al total de organización: con totalItems === 1
+    // —una org nueva, o de un solo SKU— valorCosto / totalUnidades ES el costo
+    // unitario exacto, y la valorización entregaba las dos cifras juntas.
+    // Ídem resumen.valorCompra en /api/reportes/analisis-inventario, que
+    // aplica esta misma regla.
     //
-    // valorizacion.margenPotencial NO se oculta: es valorVenta - valorCosto y
-    // las dos cifras salen por ese mismo tier, así que un gate acá lo defiende
-    // una resta. Un gate que no protege es peor que ninguno: el que lo lee
-    // después razona sobre una garantía que no existe.
+    // valorizacion.margenPotencial queda gateado como consecuencia, y ahora el
+    // gate sí protege: es valorVenta - valorCosto, y valorCosto ya no viaja,
+    // así que la resta que antes lo volvía decorativo perdió un término.
+    //
+    // Lo que NO es costo —totalItems, totalUnidades, valorVenta, conteos—
+    // sigue visible: su tier no cambió.
     //
     // canViewCost se resolvió arriba, antes de armar las listas: el nulleo
     // solo tapa el número, no el orden en que la lista llegó hasta acá.

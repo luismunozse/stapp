@@ -157,39 +157,43 @@ export async function GET() {
       .sort((a, b) => b.totalVendido - a.totalVendido)
       .slice(0, 10)
 
-    // Resumen general
+    // Resumen general. Las cifras de costo van gateadas como el resto (ver el
+    // bloque de abajo): totalItems y totalUnidades viajan al lado, así que un
+    // valorCompra visible se divide de vuelta al costo unitario.
     const resumen = {
       totalItems: items.length,
       totalUnidades: items.reduce((sum, item) => sum + item.stock, 0),
-      valorCompra: valorTotalCompra,
+      valorCompra: canViewCost ? valorTotalCompra : null,
       valorVenta: valorTotalVenta,
-      margenPotencial: valorTotalVenta - valorTotalCompra,
+      margenPotencial: canViewCost ? valorTotalVenta - valorTotalCompra : null,
       itemsSinStock: sinStock.length,
       itemsStockCritico: stockCritico.length,
       categorias: porCategoria.length,
     }
 
-    // El costo de compra por item sigue la misma regla que
-    // inventario.precio_compra en el resto de la app: un VENDEDOR sin el
-    // permiso de inventario no puede obtener acá el número que el endpoint de
-    // inventario le niega. valorEnStock es precioCompra * stock y stock viaja
-    // en la misma fila, así que se cae por división y también se oculta.
+    // El costo de compra sigue la misma regla que inventario.precio_compra en
+    // el resto de la app: un VENDEDOR sin el permiso de inventario no puede
+    // obtener acá el número que el endpoint de inventario le niega.
     //
-    // La regla se extiende a todo agregado que se pueda reducir a un item: un
-    // agregado que se divide de vuelta al costo de un solo producto no es un
-    // agregado. porCategoria.valorTotal es un total por categoría y una
-    // categoría puede tener un único SKU, así que es costo por item
-    // disfrazado: se oculta.
+    // La regla, en una línea: quien no puede ver el costo de compra por item
+    // no recibe NINGUNA cifra derivada de precio_compra, a ningún nivel de
+    // agregación.
     //
-    // Lo que queda bajo el tier más amplio de requireAdminOrVendedor() es el
-    // total de organización resumen.valorCompra: una sola cifra sobre todo el
-    // inventario no se reduce a un item. Ídem valorizacion.valorCosto en
-    // /api/reportes/inventario-analytics, que aplica esta misma regla.
+    // Aplica a lo obvio (precioCompra por item), a lo que se cae por división
+    // dentro de la misma fila (valorEnStock es precioCompra * stock y stock
+    // viaja al lado), al total por categoría (una categoría puede tener un
+    // único SKU) y también al total de organización: con totalItems === 1
+    // —una org nueva, o de un solo SKU— valorCompra / totalUnidades ES el
+    // costo unitario exacto, y el resumen entregaba las dos cifras juntas.
+    // Ídem valorizacion.valorCosto en /api/reportes/inventario-analytics, que
+    // aplica esta misma regla.
     //
-    // resumen.margenPotencial NO se oculta: es valorVenta - valorCompra y las
-    // dos cifras salen por ese mismo tier, así que un gate acá lo defiende una
-    // resta. Un gate que no protege es peor que ninguno: el que lo lee después
-    // razona sobre una garantía que no existe.
+    // resumen.margenPotencial queda gateado como consecuencia, y ahora el gate
+    // sí protege: es valorVenta - valorCompra, y valorCompra ya no viaja, así
+    // que la resta que antes lo volvía decorativo perdió un término.
+    //
+    // Lo que NO es costo —totalItems, totalUnidades, valorVenta, conteos—
+    // sigue visible: su tier no cambió.
     //
     // canViewCost se resolvió arriba, antes de armar las listas: el nulleo solo
     // tapa el número, no el orden ni el recorte con que la lista llegó hasta acá.

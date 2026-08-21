@@ -42,12 +42,16 @@ describe("InventarioAnalytics — costo por item nulo en stock muerto", () => {
   })
 
   function payload(precioCompra: number | null, capitalInmovilizado: number | null) {
+    // Un único gate manda sobre todas las cifras de costo: el costo por item
+    // nulo implica las de organización nulas también. Un payload con
+    // precioCompra en null y valorCosto con número no lo puede producir la ruta.
+    const oculto = precioCompra === null
     return {
       scope: "organization",
       valorizacion: {
-        valorCosto: 7777,
+        valorCosto: oculto ? null : 7777,
         valorVenta: 8888,
-        margenPotencial: 1111,
+        margenPotencial: oculto ? null : 1111,
         totalItems: 1,
         totalUnidades: 10,
       },
@@ -103,26 +107,30 @@ describe("InventarioAnalytics — costo por item nulo en stock muerto", () => {
 })
 
 /**
- * La misma ruta devuelve ahora en null porCategoria[].valorCosto: una categoría
- * puede tener un único SKU, así que el total por categoría se reduce al costo de
- * un item. El total de organización valorizacion.valorCosto sigue visible (una
- * sola cifra sobre todo el inventario no se reduce a un item) y
- * valorizacion.margenPotencial también: es valorVenta - valorCosto, las dos
- * cifras que viajan al lado, así que ocultarlo no protegería nada.
+ * La ruta nullea TODA cifra derivada de precio_compra para los roles sin acceso
+ * a costos: el costo por item, el total por categoría (una categoría puede
+ * tener un único SKU) y también los totales de organización.
+ *
+ * El total de organización estaba exento con el argumento de que una sola cifra
+ * sobre todo el inventario no se reduce a un item. Es falso: con totalItems ===
+ * 1 —una org nueva, o de un solo SKU— valorCosto / totalUnidades ES el costo
+ * unitario exacto, y las dos cifras viajaban juntas. Se ocultan las celdas en
+ * vez de pintar el null como "$0", que es la convención de esta branch.
  */
-describe("InventarioAnalytics — agregados de costo por categoría nulos", () => {
+describe("InventarioAnalytics — agregados de costo nulos", () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
 
   function payload(valorCosto: number | null) {
+    const oculto = valorCosto === null
     return {
       scope: "organization",
       valorizacion: {
-        valorCosto: 7777,
+        valorCosto: oculto ? null : 7777,
         valorVenta: 8888,
-        margenPotencial: 1111,
+        margenPotencial: oculto ? null : 1111,
         totalItems: 3,
         totalUnidades: 42,
       },
@@ -155,21 +163,32 @@ describe("InventarioAnalytics — agregados de costo por categoría nulos", () =
     expect(screen.getAllByText("42").length).toBeGreaterThan(0)
   })
 
-  // El tier de reportes financieros sigue mostrando las cifras de organización:
-  // el margen no se oculta porque las dos cifras de las que sale están ahí.
-  it("mantiene el total de organización y el margen aunque el costo por categoría esté oculto", async () => {
+  it("oculta el capital invertido y el margen cuando vienen en null", async () => {
     stubFetch(payload(null))
 
     renderAnalytics()
     await openCategorias()
 
-    expect(screen.getByText("Capital Invertido")).toBeInTheDocument()
-    expect(screen.getByText("$7777")).toBeInTheDocument()
-    expect(screen.getByText("Margen Potencial")).toBeInTheDocument()
-    expect(screen.getByText("$1111")).toBeInTheDocument()
+    expect(screen.queryByText("Capital Invertido")).not.toBeInTheDocument()
+    expect(screen.queryByText("Margen Potencial")).not.toBeInTheDocument()
+    expect(screen.queryByText("$0")).not.toBeInTheDocument()
+    expect(screen.queryByText(/sobre costo/)).not.toBeInTheDocument()
   })
 
-  it("muestra la columna de valor costo cuando el rol puede verla", async () => {
+  // Lo que no es costo no cambia de tier: sigue a la vista.
+  it("mantiene las cifras que no son de costo cuando el costo está oculto", async () => {
+    stubFetch(payload(null))
+
+    renderAnalytics()
+    await openCategorias()
+
+    expect(screen.getByText("Valor en Venta")).toBeInTheDocument()
+    expect(screen.getByText("$8888")).toBeInTheDocument()
+    expect(screen.getByText("Stock Total")).toBeInTheDocument()
+    expect(screen.getByText("3 productos")).toBeInTheDocument()
+  })
+
+  it("muestra la columna de valor costo y las cifras de organización cuando el rol puede verlas", async () => {
     stubFetch(payload(5555))
 
     renderAnalytics()
@@ -177,6 +196,9 @@ describe("InventarioAnalytics — agregados de costo por categoría nulos", () =
 
     expect(screen.getByText("Valor Costo")).toBeInTheDocument()
     expect(screen.getAllByText("$5555").length).toBeGreaterThan(0)
+    expect(screen.getByText("Capital Invertido")).toBeInTheDocument()
+    expect(screen.getByText("$7777")).toBeInTheDocument()
     expect(screen.getByText("Margen Potencial")).toBeInTheDocument()
+    expect(screen.getByText("$1111")).toBeInTheDocument()
   })
 })

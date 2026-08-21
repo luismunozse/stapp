@@ -33,23 +33,29 @@ describe("AnalisisInventario — costo por item nulo", () => {
   })
 
   function payload(precioCompra: number | null, valorEnStock: number | null) {
+    // Un único gate manda sobre todas las cifras de costo, así que el costo por
+    // item nulo implica las de organización y la de categoría también nulas: un
+    // payload con precioCompra en null y valorCompra con número no lo puede
+    // producir la ruta. Las cifras visibles son distintas entre sí para que las
+    // aserciones no choquen con las tarjetas del resumen.
+    const oculto = precioCompra === null
     return {
       scope: "organization",
-      // Cifras de organización distintas del valor por item, para que las
-      // aserciones de abajo no choquen con las tarjetas del resumen.
       resumen: {
         totalItems: 1,
         totalUnidades: 10,
-        valorCompra: 7777,
+        valorCompra: oculto ? null : 7777,
         valorVenta: 8888,
-        margenPotencial: 1111,
+        margenPotencial: oculto ? null : 1111,
         itemsSinStock: 0,
         itemsStockCritico: 0,
         categorias: 1,
       },
       stockCritico: [],
       sinStock: [],
-      porCategoria: [{ categoria: "Repuestos", cantidad: 1, stockTotal: 42, valorTotal: 5555 }],
+      porCategoria: [
+        { categoria: "Repuestos", cantidad: 1, stockTotal: 42, valorTotal: oculto ? null : 5555 },
+      ],
       masValiosos: [
         {
           id: "inv-1",
@@ -128,27 +134,32 @@ describe("AnalisisInventario — costo por item nulo", () => {
 })
 
 /**
- * La misma ruta devuelve ahora en null porCategoria[].valorTotal: una categoría
- * puede tener un único SKU, así que el total por categoría se reduce al costo de
- * un item. El total de organización resumen.valorCompra sigue visible, y
- * resumen.margenPotencial también: es valorVenta - valorCompra, las dos cifras
- * que viajan al lado, así que ocultarlo no protegería nada.
+ * La ruta nullea TODA cifra derivada de precio_compra para los roles sin acceso
+ * a costos: el costo por item, el total por categoría (una categoría puede
+ * tener un único SKU) y también los totales de organización.
+ *
+ * El total de organización estaba exento con el argumento de que una sola cifra
+ * sobre todo el inventario no se reduce a un item. Es falso: con totalItems ===
+ * 1 —una org nueva, o de un solo SKU— valorCompra / totalUnidades ES el costo
+ * unitario exacto, y las dos cifras viajaban juntas. Se ocultan las celdas en
+ * vez de pintar el null como "$0", que es la convención de esta branch.
  */
-describe("AnalisisInventario — agregados de costo por categoría nulos", () => {
+describe("AnalisisInventario — agregados de costo nulos", () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
 
   function payload(valorTotal: number | null) {
+    const oculto = valorTotal === null
     return {
       scope: "organization",
       resumen: {
         totalItems: 1,
         totalUnidades: 42,
-        valorCompra: 7777,
+        valorCompra: oculto ? null : 7777,
         valorVenta: 8888,
-        margenPotencial: 1111,
+        margenPotencial: oculto ? null : 1111,
         itemsSinStock: 0,
         itemsStockCritico: 0,
         categorias: 1,
@@ -180,22 +191,33 @@ describe("AnalisisInventario — agregados de costo por categoría nulos", () =>
     expect(screen.queryByText("$0")).not.toBeInTheDocument()
   })
 
-  // El tier de reportes financieros sigue mostrando las cifras de organización:
-  // el margen no se oculta porque las dos cifras de las que sale están ahí.
-  it("mantiene el total de organización y el margen aunque el valor por categoría esté oculto", async () => {
+  it("oculta el total de organización y el margen cuando vienen en null", async () => {
     stubFetch(payload(null))
 
     render(<AnalisisInventario />)
 
     await waitFor(() => expect(screen.getByText("Repuestos")).toBeInTheDocument())
 
-    expect(screen.getByText("Valor Inventario")).toBeInTheDocument()
-    expect(screen.getByText("$7777")).toBeInTheDocument()
-    expect(screen.getByText("Margen Pot.")).toBeInTheDocument()
-    expect(screen.getByText("$1111")).toBeInTheDocument()
+    expect(screen.queryByText("Valor Inventario")).not.toBeInTheDocument()
+    expect(screen.queryByText("Margen Pot.")).not.toBeInTheDocument()
+    expect(screen.queryByText("$0")).not.toBeInTheDocument()
   })
 
-  it("muestra el valor por categoría cuando el rol puede verlo", async () => {
+  // Lo que no es costo no cambia de tier: sigue a la vista.
+  it("mantiene las cifras que no son de costo cuando el costo está oculto", async () => {
+    stubFetch(payload(null))
+
+    render(<AnalisisInventario />)
+
+    await waitFor(() => expect(screen.getByText("Repuestos")).toBeInTheDocument())
+
+    expect(screen.getByText("Total Items")).toBeInTheDocument()
+    expect(screen.getByText("42 uds")).toBeInTheDocument()
+    // "Stock Crítico" titula la tarjeta del resumen y también la card de abajo.
+    expect(screen.getAllByText("Stock Crítico").length).toBeGreaterThan(0)
+  })
+
+  it("muestra el valor por categoría y las cifras de organización cuando el rol puede verlas", async () => {
     stubFetch(payload(5555))
 
     render(<AnalisisInventario />)
@@ -204,6 +226,9 @@ describe("AnalisisInventario — agregados de costo por categoría nulos", () =>
 
     expect(screen.getByText("1 items · 42 uds · $5555")).toBeInTheDocument()
     expect(screen.getByText("Valor por Categoría")).toBeInTheDocument()
+    expect(screen.getByText("Valor Inventario")).toBeInTheDocument()
+    expect(screen.getByText("$7777")).toBeInTheDocument()
     expect(screen.getByText("Margen Pot.")).toBeInTheDocument()
+    expect(screen.getByText("$1111")).toBeInTheDocument()
   })
 })

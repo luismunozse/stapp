@@ -57,11 +57,16 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
     && data.sinMovimiento.some((i: any) => i.capitalInmovilizado === null || i.precioCompra === null)
 
   // Mismo null para el costo por categoría, que se reduce a un item cuando la
-  // categoría tiene un único SKU. Las cifras de organización (valorCosto,
-  // valorVenta y margenPotencial, que es la resta de las dos) son otro tier de
-  // permiso y siguen visibles.
+  // categoría tiene un único SKU.
   const costoPorCategoriaOculto = Array.isArray(data?.porCategoria)
     && data.porCategoria.some((c: any) => c.valorCosto === null)
+
+  // Y mismo null para las cifras de organización: con totalItems === 1 —una org
+  // nueva, o de un solo SKU— valorCosto / totalUnidades es el costo unitario
+  // exacto, y las dos cifras viajan en la misma valorización. margenPotencial
+  // cae con él porque es valorVenta - valorCosto. Se ocultan las tarjetas en vez
+  // de pintar "$0", que se lee como un inventario sin valor.
+  const costoOrgOculto = data?.valorizacion?.valorCosto === null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -85,15 +90,17 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
           <div className="space-y-4">
             {/* Summary Cards */}
             <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-              <Card>
-                <CardContent className="p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-medium text-muted-foreground uppercase">Capital Invertido</span>
-                    <Wallet className="h-3.5 w-3.5 text-blue-500" />
-                  </div>
-                  <div className="text-lg font-bold">{formatPrice(data.valorizacion.valorCosto)}</div>
-                </CardContent>
-              </Card>
+              {!costoOrgOculto && (
+                <Card>
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-medium text-muted-foreground uppercase">Capital Invertido</span>
+                      <Wallet className="h-3.5 w-3.5 text-blue-500" />
+                    </div>
+                    <div className="text-lg font-bold">{formatPrice(data.valorizacion.valorCosto)}</div>
+                  </CardContent>
+                </Card>
+              )}
               <Card>
                 <CardContent className="p-3">
                   <div className="flex items-center justify-between mb-1">
@@ -103,20 +110,22 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                   <div className="text-lg font-bold">{formatPrice(data.valorizacion.valorVenta)}</div>
                 </CardContent>
               </Card>
-              <Card>
-                <CardContent className="p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-medium text-muted-foreground uppercase">Margen Potencial</span>
-                    <TrendingUp className="h-3.5 w-3.5 text-purple-500" />
-                  </div>
-                  <div className="text-lg font-bold text-emerald-600">{formatPrice(data.valorizacion.margenPotencial)}</div>
-                  <p className="text-[10px] text-muted-foreground">
-                    {data.valorizacion.valorCosto > 0
-                      ? `${((data.valorizacion.margenPotencial / data.valorizacion.valorCosto) * 100).toFixed(1)}% sobre costo`
-                      : ""}
-                  </p>
-                </CardContent>
-              </Card>
+              {!costoOrgOculto && (
+                <Card>
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-medium text-muted-foreground uppercase">Margen Potencial</span>
+                      <TrendingUp className="h-3.5 w-3.5 text-purple-500" />
+                    </div>
+                    <div className="text-lg font-bold text-emerald-600">{formatPrice(data.valorizacion.margenPotencial)}</div>
+                    <p className="text-[10px] text-muted-foreground">
+                      {data.valorizacion.valorCosto > 0
+                        ? `${((data.valorizacion.margenPotencial / data.valorizacion.valorCosto) * 100).toFixed(1)}% sobre costo`
+                        : ""}
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
               <Card>
                 <CardContent className="p-3">
                   <div className="flex items-center justify-between mb-1">

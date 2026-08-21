@@ -42,11 +42,14 @@ interface AnalisisData {
   resumen: {
     totalItems: number
     totalUnidades: number
-    valorCompra: number
+    /** null cuando el rol no puede ver costos de compra. Con totalItems === 1
+     *  —una org nueva, o de un solo SKU— valorCompra / totalUnidades es el
+     *  costo unitario exacto, y las dos cifras viajan en este mismo resumen. */
+    valorCompra: number | null
     valorVenta: number
-    /** No se oculta: es valorVenta - valorCompra y las dos cifras vienen en
-     *  este mismo resumen, así que un gate acá lo defiende una resta. */
-    margenPotencial: number
+    /** null junto con valorCompra: es valorVenta - valorCompra, así que sin el
+     *  costo a la vista el gate ya no lo defiende una resta. */
+    margenPotencial: number | null
     itemsSinStock: number
     itemsStockCritico: number
     categorias: number
@@ -148,20 +151,27 @@ export function AnalisisInventario() {
           icon={Package}
           tone="default"
         />
-        <StatCard
-          title="Valor Inventario"
-          value={formatPrice(data.resumen.valorCompra)}
-          description="Costo compra"
-          icon={DollarSign}
-          tone="default"
-        />
-        <StatCard
-          title="Margen Pot."
-          value={formatPrice(data.resumen.margenPotencial)}
-          description="Si se vende todo"
-          icon={TrendingUp}
-          tone="success"
-        />
+        {/* Las cifras de costo llegan en null para los roles sin acceso: se
+            oculta la tarjeta entera en vez de pintar "$0", que se lee como un
+            inventario sin valor y no como un permiso faltante. */}
+        {data.resumen.valorCompra !== null && (
+          <StatCard
+            title="Valor Inventario"
+            value={formatPrice(data.resumen.valorCompra)}
+            description="Costo compra"
+            icon={DollarSign}
+            tone="default"
+          />
+        )}
+        {data.resumen.margenPotencial !== null && (
+          <StatCard
+            title="Margen Pot."
+            value={formatPrice(data.resumen.margenPotencial)}
+            description="Si se vende todo"
+            icon={TrendingUp}
+            tone="success"
+          />
+        )}
         <StatCard
           title="Stock Crítico"
           value={String(data.resumen.itemsStockCritico)}
@@ -332,8 +342,12 @@ export function AnalisisInventario() {
         <CardContent>
           <div className="space-y-4">
             {data.porCategoria.map((cat) => {
+              // Ambas cifras caen con el mismo gate, así que o están las dos o
+              // no está ninguna: sin costo no hay barra de proporción.
               const porcentaje =
-                cat.valorTotal !== null && data.resumen.valorCompra > 0
+                cat.valorTotal !== null &&
+                data.resumen.valorCompra !== null &&
+                data.resumen.valorCompra > 0
                   ? (cat.valorTotal / data.resumen.valorCompra) * 100
                   : null
               return (
