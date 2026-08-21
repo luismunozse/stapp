@@ -253,6 +253,151 @@ describe("PUT /api/cotizaciones/[id] — cost preservation on non-ADMIN edits", 
     expect(insertedItemsCapture.payload![0].costo_unitario).toBe(777)
   })
 
+  it("TECNICO: a stale item id still preserves the cost of the matching free-text line", async () => {
+    mockAuthSuccess({ role: "TECNICO", userId: "user-1" })
+    const { insertedItemsCapture } = wireSupabase({
+      existingItemRows: [
+        { id: "item-FRESH", descripcion: "Mano de obra", costo_unitario: 300, inventario_id: null },
+      ],
+    })
+
+    // The handler deletes every row and re-inserts fresh ones on each PUT, so
+    // ids are not stable. A second tab — or the SWR cache in cotizacion-list,
+    // which sets revalidateOnFocus: false — submits the id it read before the
+    // last save. Keying preservation on that id alone missed, and a free-text
+    // item has nothing to re-derive from, so an ADMIN's manual cost was
+    // silently destroyed.
+    const body = {
+      items: [
+        { id: "item-STALE", descripcion: "Mano de obra", cantidad: 1, precioUnitario: 500, unidad: "Servicio" },
+      ],
+    }
+    const res = await PUT(createPutRequest(body), createParams("cot-1"))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(insertedItemsCapture.payload![0].costo_unitario).toBe(300)
+  })
+
+  it("TECNICO: a stale item id matches on descripción regardless of surrounding whitespace and case", async () => {
+    mockAuthSuccess({ role: "TECNICO", userId: "user-1" })
+    const { insertedItemsCapture } = wireSupabase({
+      existingItemRows: [
+        { id: "item-FRESH", descripcion: "Mano de obra", costo_unitario: 300, inventario_id: null },
+      ],
+    })
+
+    const body = {
+      items: [
+        { id: "item-STALE", descripcion: "  MANO DE OBRA ", cantidad: 1, precioUnitario: 500, unidad: "Servicio" },
+      ],
+    }
+    const res = await PUT(createPutRequest(body), createParams("cot-1"))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(insertedItemsCapture.payload![0].costo_unitario).toBe(300)
+  })
+
+  it("TECNICO: a stale item id preserves the stored cost of the matching linked line", async () => {
+    mockAuthSuccess({ role: "TECNICO", userId: "user-1" })
+    const { insertedItemsCapture } = wireSupabase({
+      existingItemRows: [
+        { id: "item-FRESH", descripcion: "Pantalla", costo_unitario: 300, inventario_id: "inv-1" },
+      ],
+      // The inventory price drifted since the cost was recorded; a natural-key
+      // hit means the link did NOT change, so the stored cost still applies.
+      invRows: [{ id: "inv-1", precio_compra: 999 }],
+    })
+
+    const body = {
+      items: [
+        {
+          id: "item-STALE",
+          descripcion: "Pantalla",
+          cantidad: 1,
+          precioUnitario: 500,
+          inventarioId: "inv-1",
+          unidad: "Unidad",
+        },
+      ],
+    }
+    const res = await PUT(createPutRequest(body), createParams("cot-1"))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(insertedItemsCapture.payload![0].costo_unitario).toBe(300)
+  })
+
+  it("TECNICO: a stale id whose natural key is ambiguous falls back instead of guessing a cost", async () => {
+    mockAuthSuccess({ role: "TECNICO", userId: "user-1" })
+    const { insertedItemsCapture } = wireSupabase({
+      // Two free-text lines share descripción and link but disagree on cost:
+      // there is no single right answer, so no cost is carried over.
+      existingItemRows: [
+        { id: "item-A", descripcion: "Mano de obra", costo_unitario: 300, inventario_id: null },
+        { id: "item-B", descripcion: "Mano de obra", costo_unitario: 900, inventario_id: null },
+      ],
+    })
+
+    const body = {
+      items: [
+        { id: "item-STALE", descripcion: "Mano de obra", cantidad: 1, precioUnitario: 500, unidad: "Servicio" },
+      ],
+    }
+    const res = await PUT(createPutRequest(body), createParams("cot-1"))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(insertedItemsCapture.payload![0].costo_unitario).toBeNull()
+  })
+
+  it("TECNICO: duplicate lines that agree on cost are not ambiguous — the shared cost is preserved", async () => {
+    mockAuthSuccess({ role: "TECNICO", userId: "user-1" })
+    const { insertedItemsCapture } = wireSupabase({
+      existingItemRows: [
+        { id: "item-A", descripcion: "Mano de obra", costo_unitario: 300, inventario_id: null },
+        { id: "item-B", descripcion: "Mano de obra", costo_unitario: 300, inventario_id: null },
+      ],
+    })
+
+    const body = {
+      items: [
+        { id: "item-STALE", descripcion: "Mano de obra", cantidad: 1, precioUnitario: 500, unidad: "Servicio" },
+      ],
+    }
+    const res = await PUT(createPutRequest(body), createParams("cot-1"))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(insertedItemsCapture.payload![0].costo_unitario).toBe(300)
+  })
+
+  it("TECNICO: a genuinely new line (no id) does not inherit the cost of a same-named existing line", async () => {
+    mockAuthSuccess({ role: "TECNICO", userId: "user-1" })
+    const { insertedItemsCapture } = wireSupabase({
+      existingItemRows: [
+        { id: "item-1", descripcion: "Mano de obra", costo_unitario: 300, inventario_id: null },
+      ],
+    })
+
+    // The natural key only rescues a client that CLAIMS the line already
+    // exists (it sent an id). Without an id the line is new, and inventing a
+    // cost for it from a same-named row would be fabrication.
+    const body = {
+      items: [
+        { id: "item-1", descripcion: "Mano de obra", cantidad: 1, precioUnitario: 500, unidad: "Servicio" },
+        { descripcion: "Mano de obra", cantidad: 1, precioUnitario: 500, unidad: "Servicio" },
+      ],
+    }
+    const res = await PUT(createPutRequest(body), createParams("cot-1"))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(insertedItemsCapture.payload![0].costo_unitario).toBe(300)
+    expect(insertedItemsCapture.payload![1].costo_unitario).toBeNull()
+  })
+
   it("TECNICO: unlinking an existing item from inventario clears the cost instead of carrying over the old linked cost", async () => {
     mockAuthSuccess({ role: "TECNICO", userId: "user-1" })
     const { insertedItemsCapture } = wireSupabase({

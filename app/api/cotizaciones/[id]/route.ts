@@ -406,36 +406,91 @@ export async function PUT(
       // actors never see costoUnitario in GET responses, so their edit
       // payload can't carry trustworthy values — resolve costs server-side
       // instead:
-      //  - existing item (matched by id) with an UNCHANGED inventario link:
-      //    preserve the DB's current costo_unitario, ignoring whatever the
-      //    client sent (blocks spoofing and prevents an edit from silently
+      //  - existing item (matched to a stored row) with an UNCHANGED inventario
+      //    link: preserve the DB's current costo_unitario, ignoring whatever
+      //    the client sent (blocks spoofing and prevents an edit from silently
       //    wiping out cost data an admin entered earlier).
       //  - existing item whose inventario link CHANGED (relinked to another
       //    product, or unlinked): the old cost no longer applies — re-derive
       //    from the new inventario.precio_compra, or null if unlinked.
       //  - new item linked to inventario: derive from inventario.precio_compra.
       //  - new free-text item: costo_unitario stays null.
+      //
+      // Matching an existing item cannot rely on item.id alone. This handler
+      // deletes every items_cotizacion row and re-inserts fresh ones on each
+      // PUT, and the insert never supplies an id (the column defaults to
+      // generate_cuid()), so ids change on every save. Any client holding a
+      // pre-save copy — a second tab, or the SWR cache in cotizacion-list,
+      // which sets revalidateOnFocus: false — submits ids that no longer
+      // exist. The id lookup missed, the item looked new, and a free-text line
+      // (nothing to re-derive from) lost the manual cost an ADMIN had entered.
+      //
+      // The fix is a natural key — descripción (trimmed, case-insensitive)
+      // plus the inventario link — used ONLY when the client sent an id that
+      // missed. The key is the tuple that decides which cost applies, so a hit
+      // means the same line: it also implies the link is unchanged, since the
+      // link is part of the key. Restricting it to payloads that carry an id
+      // keeps a genuinely new line (no id) from inheriting a same-named row's
+      // cost. Rows are recreated rather than diffed because turning this into
+      // a three-way diff would rework a write path that also feeds
+      // recalcPresupuestoOrden, the stock reservations released by
+      // liberar_items_cotizacion, and the items_factura.cotizacion_item_id FK
+      // — and items_cotizacion has no unique constraint to upsert on anyway.
+      //
+      // Two limits, on purpose: a line renamed by the same edit that carries a
+      // stale id is indistinguishable from a new line and still resolves to
+      // null, and an ambiguous key (several stored rows sharing it but
+      // disagreeing on cost) declines to guess.
       const canViewCosts = canViewCotizacionCosts(role)
-      const existingItemsById = new Map<string, { costoUnitario: number | null; inventarioId: string | null }>()
+      type StoredItemCost = { costoUnitario: number | null; inventarioId: string | null }
+      const naturalKey = (descripcion: string | null, inventarioId: string | null) =>
+        `${(descripcion || "").trim().toLowerCase()} ${inventarioId ?? ""}`
+      const existingItemsById = new Map<string, StoredItemCost>()
+      // null marks an ambiguous key: several rows share it and disagree.
+      const existingItemsByNaturalKey = new Map<string, StoredItemCost | null>()
       const inventarioCostoById = new Map<string, number | null>()
       if (!canViewCosts) {
         const { data: existingItemRows, error: existingItemsError } = await supabaseAdmin
           .from("items_cotizacion")
-          .select("id, costo_unitario, inventario_id")
+          .select("id, descripcion, costo_unitario, inventario_id")
           .eq("cotizacion_id", id)
         if (existingItemsError) throw existingItemsError
         for (const row of existingItemRows || []) {
-          existingItemsById.set(row.id, {
+          const stored: StoredItemCost = {
             costoUnitario: row.costo_unitario != null ? Number(row.costo_unitario) : null,
             inventarioId: row.inventario_id ?? null,
-          })
-        }
+          }
+          existingItemsById.set(row.id, stored)
 
+          const key = naturalKey(row.descripcion, stored.inventarioId)
+          if (existingItemsByNaturalKey.has(key)) {
+            // Duplicated lines that agree on cost resolve to the same answer
+            // either way, so only a disagreement makes the key unusable.
+            const previous = existingItemsByNaturalKey.get(key)
+            if (!previous || previous.costoUnitario !== stored.costoUnitario) {
+              existingItemsByNaturalKey.set(key, null)
+            }
+          } else {
+            existingItemsByNaturalKey.set(key, stored)
+          }
+        }
+      }
+
+      const findStoredItem = (item: (typeof data.items)[number]): StoredItemCost | undefined => {
+        if (!item.id) return undefined
+        const byId = existingItemsById.get(item.id)
+        if (byId) return byId
+        return existingItemsByNaturalKey.get(
+          naturalKey(item.descripcion, item.inventarioId ?? null)
+        ) ?? undefined
+      }
+
+      if (!canViewCosts) {
         const inventarioIdsNeedingLookup = Array.from(new Set(
           data.items
             .filter((item) => {
-              const existing = item.id ? existingItemsById.get(item.id) : undefined
-              const linkChanged = existing ? existing.inventarioId !== (item.inventarioId ?? null) : true
+              const stored = findStoredItem(item)
+              const linkChanged = stored ? stored.inventarioId !== (item.inventarioId ?? null) : true
               return linkChanged && !!item.inventarioId
             })
             .map((item) => item.inventarioId as string)
@@ -455,9 +510,9 @@ export async function PUT(
 
       const resolveCostoUnitario = (item: (typeof data.items)[number]): number | null => {
         if (canViewCosts) return item.costoUnitario ?? null
-        const existing = item.id ? existingItemsById.get(item.id) : undefined
-        if (existing && existing.inventarioId === (item.inventarioId ?? null)) {
-          return existing.costoUnitario
+        const stored = findStoredItem(item)
+        if (stored && stored.inventarioId === (item.inventarioId ?? null)) {
+          return stored.costoUnitario
         }
         if (item.inventarioId) return inventarioCostoById.get(item.inventarioId) ?? null
         return null
