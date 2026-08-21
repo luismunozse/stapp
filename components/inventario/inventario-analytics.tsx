@@ -48,6 +48,16 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
     { revalidateOnFocus: false, dedupingInterval: 30000 }
   )
 
+  // El servidor devuelve null en el costo por item (precioCompra y su derivado
+  // capitalInmovilizado) cuando el rol no puede ver costos de compra: acá llega
+  // un VENDEDOR sin el opt-in de inventario, porque la ruta es
+  // requireAdminOrVendedor. Sumar esos null los coerce a 0, así que el total se
+  // oculta en vez de mostrar "$0 inmovilizado" sobre una tabla con filas.
+  // Los agregados de organización (valorización, por categoría) son otro tier
+  // de permiso y siguen visibles.
+  const costosPorItemOcultos = Array.isArray(data?.sinMovimiento)
+    && data.sinMovimiento.some((i: any) => i.capitalInmovilizado === null || i.precioCompra === null)
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
@@ -189,7 +199,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs text-muted-foreground">Productos sin ventas en 90 días con stock disponible</p>
-                  {data.sinMovimiento.length > 0 && (
+                  {data.sinMovimiento.length > 0 && !costosPorItemOcultos && (
                     <Badge variant="destructive" className="text-xs">
                       {formatPrice(data.sinMovimiento.reduce((s: number, i: any) => s + i.capitalInmovilizado, 0))} inmovilizado
                     </Badge>
@@ -205,8 +215,12 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                           <th className="pb-2 pr-2">Producto</th>
                           <th className="pb-2 pr-2">Código</th>
                           <th className="pb-2 pr-2 text-right">Stock</th>
-                          <th className="pb-2 pr-2 text-right">P. Costo</th>
-                          <th className="pb-2 text-right">Capital Inmovilizado</th>
+                          {!costosPorItemOcultos && (
+                            <>
+                              <th className="pb-2 pr-2 text-right">P. Costo</th>
+                              <th className="pb-2 text-right">Capital Inmovilizado</th>
+                            </>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
@@ -215,8 +229,12 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                             <td className="py-2 pr-2 font-medium">{item.nombre}</td>
                             <td className="py-2 pr-2 text-xs text-muted-foreground">{item.codigo}</td>
                             <td className="py-2 pr-2 text-right">{item.stock}</td>
-                            <td className="py-2 pr-2 text-right">{formatPrice(item.precioCompra)}</td>
-                            <td className="py-2 text-right font-medium text-destructive">{formatPrice(item.capitalInmovilizado)}</td>
+                            {!costosPorItemOcultos && (
+                              <>
+                                <td className="py-2 pr-2 text-right">{formatPrice(item.precioCompra)}</td>
+                                <td className="py-2 text-right font-medium text-destructive">{formatPrice(item.capitalInmovilizado)}</td>
+                              </>
+                            )}
                           </tr>
                         ))}
                       </tbody>
