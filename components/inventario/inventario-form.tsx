@@ -158,7 +158,10 @@ export function InventarioForm({
           categoria: item.categoria,
           tipoDispositivo: item.tipoDispositivo,
           stock: item.stock,
-          precioCompra: item.precioCompra,
+          // precioCompra viene en null cuando el rol no puede ver costos. El
+          // PUT de inventario ya rechaza a esos roles (requireInventarioAccess),
+          // así que acá solo hace falta un valor válido para el input.
+          precioCompra: item.precioCompra ?? 0,
           precioVenta: item.precioVenta,
           proveedorId: item.proveedorId ?? null,
           stockMinimo: item.stockMinimo ?? null,
@@ -254,7 +257,7 @@ export function InventarioForm({
         categoria: item.categoria,
         tipoDispositivo: item.tipoDispositivo,
         stock: item.stock,
-        precioCompra: item.precioCompra,
+        precioCompra: item.precioCompra ?? 0,
         precioVenta: item.precioVenta,
         proveedorId: item.proveedorId ?? null,
         stockMinimo: item.stockMinimo ?? null,
