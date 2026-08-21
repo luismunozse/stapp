@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Trash2, AlertTriangle } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { campoSincronizadoPara } from "@/lib/servicios/sincronizar-costo-final"
 import { useModal } from "@/contexts/modal-context"
 
 interface ServicioOrdenLinea {
@@ -27,6 +28,13 @@ interface OrdenServiciosTabProps {
    *  costo_final en silencio si la orden ya tiene cobros o si el costo fue
    *  editado a mano. */
   costoFinal: number | null
+  /** presupuesto actual de la orden. Antes de APROBADO es el monto VIVO: es lo
+   *  que las lineas de servicio alimentan y contra lo que se compara el
+   *  subtotal — ver calcularMontoSincronizado. */
+  presupuesto: number | null
+  /** Decide cual de los dos montos esta vivo. En estados terminales no hay
+   *  ninguno y la tab no ofrece sincronizar nada. */
+  estado: string
   /** total_cobrado de la orden. Se muestra en el banner de "Aplicar al total"
    *  y en su confirmación: el backend (PUT /api/ordenes/[id]) rechaza bajar
    *  costo_final por debajo de este monto, así que el operador tiene que ver
@@ -39,7 +47,7 @@ interface OrdenServiciosTabProps {
   onServiciosChanged: () => void | Promise<void>
 }
 
-export function OrdenServiciosTab({ ordenId, servicios, costoFinal, totalCobrado, onServiciosChanged }: OrdenServiciosTabProps) {
+export function OrdenServiciosTab({ ordenId, servicios, costoFinal, presupuesto, estado, totalCobrado, onServiciosChanged }: OrdenServiciosTabProps) {
   const { formatPrice } = useCurrency()
   const { confirm, alert } = useModal()
   const [showAddServicio, setShowAddServicio] = useState(false)
@@ -49,7 +57,7 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, totalCobrado
   const [updating, setUpdating] = useState(false)
   // Recuerda si la ultima alta/baja en esta sesion volvio con
   // costoFinalActualizado:false (ver requiereAplicarAlTotal mas abajo).
-  const [costoFinalNoSincronizado, setCostoFinalNoSincronizado] = useState(false)
+  const [montoNoSincronizado, setMontoNoSincronizado] = useState(false)
   const [nuevoServicio, setNuevoServicio] = useState({
     servicioId: "",
     cantidad: 1,
@@ -124,7 +132,7 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, totalCobrado
         const data = await res.json()
         // Si el backend no pudo sincronizar costo_final (cobros o edicion a
         // mano de por medio), lo recordamos para esta sesion.
-        setCostoFinalNoSincronizado(data.costoFinalActualizado === false)
+        setMontoNoSincronizado(data.montoActualizado === false)
         // Esperamos el refetch del padre antes de cerrar el formulario: si no,
         // el panel muestra brevemente "no hay servicios agregados" sin ningun
         // indicador de carga, lo que invita a reintentar y duplicar el alta.
@@ -168,7 +176,7 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, totalCobrado
         const data = await res.json()
         // Idem alta: si el backend no pudo sincronizar costo_final, lo
         // recordamos para esta sesion (ver requiereAplicarAlTotal).
-        setCostoFinalNoSincronizado(data.costoFinalActualizado === false)
+        setMontoNoSincronizado(data.montoActualizado === false)
         // Mismo tratamiento que al agregar: esperar el refetch antes de
         // reactivar los controles evita la ventana de estado enganoso.
         await onServiciosChanged?.()
@@ -184,13 +192,16 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, totalCobrado
     }
   }
 
+  // PATCH a la ruta de servicios y NO PUT a /api/ordenes/[id]: ese PUT
+  // auto-transiciona la orden a PRESUPUESTADO al escribir presupuesto y le
+  // notifica al cliente. Aplicar un monto calculado no es presupuestar.
   const handleAplicarAlTotal = async () => {
     const confirmed = await confirm({
       title: "Aplicar al total",
       description:
         totalCobrado > 0
-          ? `El costo final va a pasar a ${formatPrice(subtotalServicios)}. Esta orden ya tiene ${formatPrice(totalCobrado)} cobrados.`
-          : `El costo final va a pasar a ${formatPrice(subtotalServicios)}.`,
+          ? `El ${etiquetaMonto} va a pasar a ${formatPrice(subtotalServicios)}. Esta orden ya tiene ${formatPrice(totalCobrado)} cobrados.`
+          : `El ${etiquetaMonto} va a pasar a ${formatPrice(subtotalServicios)}.`,
       confirmText: "Aplicar",
       variant: totalCobrado > 0 ? "warning" : "info",
     })
@@ -198,20 +209,17 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, totalCobrado
 
     setUpdating(true)
     try {
-      const res = await fetch(`/api/ordenes/${ordenId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ costoFinal: subtotalServicios }),
-      })
+      const res = await fetch(`/api/ordenes/${ordenId}/servicios`, { method: "PATCH" })
       if (res.ok) {
+        setMontoNoSincronizado(false)
         await onServiciosChanged?.()
       } else {
         const error = await res.json()
-        await alert({ title: "Error", description: error.error || "Error al actualizar el costo final", variant: "error" })
+        await alert({ title: "Error", description: error.error || `Error al actualizar el ${etiquetaMonto}`, variant: "error" })
       }
     } catch (error) {
       console.error("Error aplicando al total:", error)
-      await alert({ title: "Error", description: "Error al actualizar el costo final", variant: "error" })
+      await alert({ title: "Error", description: `Error al actualizar el ${etiquetaMonto}`, variant: "error" })
     } finally {
       setUpdating(false)
     }
@@ -242,10 +250,18 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, totalCobrado
   // asi que una orden vieja jamas lo activa. La comparacion numerica sigue
   // siendo la que decide si hace falta el aviso (y la unica que sobrevive un
   // reload de pagina, donde el estado de sesion se pierde).
-  const costoFinalNum = Number(costoFinal ?? 0)
+  // Cual de los dos montos esta vivo lo decide el estado (ver
+  // campoSincronizadoPara). En estados terminales no hay ninguno: la orden ya
+  // se cerro y no se ofrece sincronizar nada.
+  const campoVivo = campoSincronizadoPara(estado)
+  const montoVivo = campoVivo === "presupuesto" ? presupuesto : costoFinal
+  const montoVivoNum = Number(montoVivo ?? 0)
+  const etiquetaMonto = campoVivo === "presupuesto" ? "presupuesto" : "costo final"
+
   const requiereAplicarAlTotal =
-    ((servicios?.length ?? 0) > 0 || costoFinalNoSincronizado) &&
-    Math.round(subtotalServicios * 100) !== Math.round(costoFinalNum * 100)
+    campoVivo !== null &&
+    ((servicios?.length ?? 0) > 0 || montoNoSincronizado) &&
+    Math.round(subtotalServicios * 100) !== Math.round(montoVivoNum * 100)
 
   return (
     <Card>
@@ -265,9 +281,9 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, totalCobrado
           <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3 mb-4">
             <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <div className="flex-1">
-              <div className="font-medium mb-1">El costo final no coincide con el subtotal de servicios</div>
+              <div className="font-medium mb-1">El {etiquetaMonto} no coincide con el subtotal de servicios</div>
               <div>
-                Subtotal Servicios: {formatPrice(subtotalServicios)} — Costo final actual: {formatPrice(costoFinalNum)}
+                Subtotal Servicios: {formatPrice(subtotalServicios)} — {campoVivo === "presupuesto" ? "Presupuesto" : "Costo final"} actual: {formatPrice(montoVivoNum)}
                 {totalCobrado > 0 && <> — Cobrado: {formatPrice(totalCobrado)}</>}
               </div>
             </div>

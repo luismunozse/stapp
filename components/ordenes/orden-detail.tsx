@@ -1057,6 +1057,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   ordenId={ordenId}
                   servicios={(orden as any).servicios || []}
                   costoFinal={orden.costoFinal ?? null}
+                  presupuesto={orden.presupuesto ?? null}
+                  estado={orden.estado}
                   totalCobrado={orden.totalCobrado || 0}
                   onServiciosChanged={fetchOrden}
                 />

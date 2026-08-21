@@ -134,6 +134,21 @@ export const ESTADOS_ENTREGA: EstadoOrden[] = [
 export const ESTADOS_COSTO_FINAL_BLOQUEADO: EstadoOrden[] = ["REPARADO", ...ESTADOS_ENTREGA]
 
 /**
+ * El gemelo de ESTADOS_COSTO_FINAL_BLOQUEADO, del lado del presupuesto.
+ *
+ * PRESUPUESTADO exige `presupuesto > 0` para entrar (ver CAMPOS_REQUERIDOS_POR_ESTADO
+ * más arriba), pero esa validación corre SOLO en la transición: nada impide que
+ * una orden ya presupuestada se quede después sin presupuesto. Borrar la última
+ * línea de servicio es justamente ese caso, y dejaría al cliente mirando un
+ * presupuesto vacío en el portal público.
+ *
+ * ESPECIFICACIÓN NORMATIVA de esta lista: la migración que reimplementa la regla
+ * de sincronización en plpgsql hardcodea el mismo valor en su bloque "STATE GUARD".
+ * CUALQUIER cambio acá DEBE reflejarse también ahí.
+ */
+export const ESTADOS_PRESUPUESTO_BLOQUEADO: EstadoOrden[] = ["PRESUPUESTADO"]
+
+/**
  * Deriva el estado de entrega a partir del estado actual y si la entrega es sin
  * cobro. Es la única fuente que traduce (estado, sinCobro) -> estado de entrega:
  * - sin cobro -> ENTREGADO_SIN_COBRO (tiene prioridad sobre el retiro)
