@@ -18,6 +18,7 @@ const itemSchema = z.object({
   descuentoTipo: z.enum(["porcentaje", "fijo"]).optional(),
   descuentoValor: z.number().min(0).optional(),
   inventarioId: z.string().nullable().optional(),
+  servicioId: z.string().nullable().optional(),
   tipoRepuesto: z.enum(["ORIGINAL", "ALTERNATIVO", "RECICLADO", "NO_APLICA"]).optional(),
 })
 
@@ -431,6 +432,7 @@ export async function POST(request: Request) {
           descuento_tipo: item.descuentoTipo || "porcentaje",
           descuento_valor: item.descuentoValor || 0,
           inventario_id: item.inventarioId || null,
+          servicio_id: item.servicioId || null,
           tipo_repuesto: item.tipoRepuesto || "NO_APLICA",
         }))
       )
