@@ -49,17 +49,36 @@ vi.mock("@/components/cotizaciones/cliente-selector", () => ({
   ),
 }))
 
-vi.mock("@/components/firma/signature-pad", () => ({
-  SignaturePad: ({
-    onSignatureChange,
-  }: {
-    onSignatureChange: (data: string | null, mime: string | null) => void
-  }) => (
-    <button type="button" onClick={() => onSignatureChange("FIRMA_DEL_CLIENTE_X", "image/png")}>
-      Firmar
-    </button>
-  ),
-}))
+// Mock con estado propio, como el pad de verdad: el trazo vive en su canvas
+// (components/firma/signature-pad.tsx) y solo lo borra su propio "Limpiar".
+// Poner la firma en null desde el formulario no lo toca; lo unico que lo
+// devuelve a vacio es remontarlo.
+vi.mock("@/components/firma/signature-pad", async () => {
+  const { useState } = await import("react")
+  return {
+    SignaturePad: ({
+      onSignatureChange,
+    }: {
+      onSignatureChange: (data: string | null, mime: string | null) => void
+    }) => {
+      const [firmado, setFirmado] = useState(false)
+      return (
+        <div>
+          <button
+            type="button"
+            onClick={() => {
+              setFirmado(true)
+              onSignatureChange("FIRMA_DEL_CLIENTE_X", "image/png")
+            }}
+          >
+            Firmar
+          </button>
+          {firmado && <span>Firma capturada</span>}
+        </div>
+      )
+    },
+  }
+})
 
 // La compresion real usa canvas (no implementado en jsdom) y no es lo que se
 // verifica aca: alcanza con que el archivo llegue a FileReader.
@@ -185,6 +204,35 @@ describe("OrdenForm — descartar un borrador", () => {
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
     await screen.findByText(/Paso 3\/3/)
   }
+
+  it("no arrastra la firma del cliente descartado a la orden siguiente", async () => {
+    window.localStorage.setItem(DRAFT_KEY, draftDelClienteX())
+
+    await renderForm()
+    await screen.findByText(/se restauró un borrador no guardado/i)
+
+    // El cliente X firma la conformidad de recepcion.
+    await irAlPaso3()
+    fireEvent.click(screen.getByRole("button", { name: "Firmar" }))
+    expect(screen.getByText("Firma capturada")).toBeInTheDocument()
+
+    // Se descarta todo y arranca una orden de otro cliente, que nadie firma.
+    await descartarBorrador()
+    fireEvent.click(screen.getByRole("button", { name: "Elegir cliente" }))
+    fireEvent.click(screen.getByRole("button", { name: "Celular" }))
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+      target: { value: "Moto G del cliente Y" },
+    })
+    fireEvent.change(screen.getByPlaceholderText("Describa el problema del equipo..."), {
+      target: { value: "Bateria" },
+    })
+    await irAlPaso3()
+
+    // El pad es no controlado: si el formulario no lo remonta, el trazo del
+    // cliente anterior sigue dibujado y la pantalla anuncia una conformidad
+    // que esta orden no tiene.
+    expect(screen.queryByText("Firma capturada")).not.toBeInTheDocument()
+  })
 
   it("no arrastra las fotos del equipo descartado a la orden siguiente", async () => {
     window.localStorage.setItem(DRAFT_KEY, draftDelClienteX())

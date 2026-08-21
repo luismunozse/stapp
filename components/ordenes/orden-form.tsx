@@ -235,6 +235,13 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   const [checklistNotas, setChecklistNotas] = useState("")
   const [checklistFirma, setChecklistFirma] = useState<string | null>(null)
   const [checklistFirmaMime, setChecklistFirmaMime] = useState<string | null>(null)
+  /** Se incrementa para remontar el SignaturePad (mismo mecanismo que
+   *  recepcion-form.tsx). El pad es NO controlado: el trazo vive en su canvas y
+   *  solo lo borra su propio boton "Limpiar", asi que poner `checklistFirma` en
+   *  null no lo toca. Cada vez que el formulario descarta la firma tiene que
+   *  bumpear esta key, o la pantalla sigue mostrando el trazo y el cartel
+   *  "Firma capturada" de una conformidad que la orden ya no lleva. */
+  const [firmaResetKey, setFirmaResetKey] = useState(0)
   const [checklistOpen, setChecklistOpen] = useState(true)
   /** Origen de las respuestas del checklist que restauro un borrador, mientras
    *  todavia no llego el template contra el que hay que compararlas. Ver el
@@ -491,6 +498,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     setFotos([])
     setChecklistFirma(null)
     setChecklistFirmaMime(null)
+    setFirmaResetKey((prev) => prev + 1)
     // Lo precargado por el origen NO es del borrador: descartar tiene que dejar
     // el alta como si se acabara de abrir desde el turno / deep-link. Sin esto
     // quedaba entera en blanco y la unica forma de recuperar los datos del
@@ -629,6 +637,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     setChecklistNotas("")
     setChecklistFirma(null)
     setChecklistFirmaMime(null)
+    setFirmaResetKey((prev) => prev + 1)
     // If new type has a usarComoDispositivo field, clear dispositivo so it gets set by the field
     const nuevoTipoObj = tiposDispositivo.find((t) => t.codigo === nuevoTipo)
     const nuevoConfig = nuevoTipoObj?.config
@@ -1774,6 +1783,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                   </div>
                   <div className="pt-2 border-t">
                     <SignaturePad
+                      key={firmaResetKey}
                       label="Firma del Cliente (Conformidad de recepción)"
                       onSignatureChange={(data, mime) => {
                         setChecklistFirma(data)
