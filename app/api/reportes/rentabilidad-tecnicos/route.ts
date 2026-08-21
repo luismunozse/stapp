@@ -3,6 +3,7 @@ import {
   requireAdminOrVendedor,
   hasInventarioAccess,
   resolveVendedoresHabilitados,
+  canViewCotizacionCosts,
 } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
@@ -110,10 +111,30 @@ export async function GET(request: Request) {
 
     // Se resuelve ACÁ, antes de armar la lista: el ranking por ganancia es una
     // clave de costo y el orden sobrevive al nulleo. Ver el sort de más abajo.
-    const vendedoresHabilitados = role === "VENDEDOR"
-      ? await resolveVendedoresHabilitados(organizationId!)
+    //
+    // Hacen falta las DOS llaves, porque costoRepuestos mezcla dos costos de
+    // origen distinto: repuestos_orden.precio_unitario —precio_compra
+    // congelado, que gobierna hasInventarioAccess— e
+    // items_cotizacion.costo_unitario, que gobierna canViewCotizacionCosts,
+    // ADMIN-only a propósito y MÁS estricta (costo de cotización y costo de
+    // inventario son permisos independientes; ver lib/auth-utils.ts). Un
+    // VENDEDOR con el opt-in de inventario leyendo un agregado armado en parte
+    // con costos de cotización es el mismo agujero con otra forma.
+    //
+    // NO se parte el agregado en una cifra "sólo repuestos" para ese rol: un
+    // número de rentabilidad al que le falta parte del costo es peor que uno
+    // ausente, porque se lee como exacto.
+    //
+    // canViewCotizacionCosts corta primero: si no pasa, el flag ya es false y
+    // nos ahorramos el SELECT de resolveVendedoresHabilitados. El resolutor de
+    // inventario queda intacto, así que si algún día esa regla admite VENDEDOR
+    // esto sigue siendo correcto.
+    const canViewCost = canViewCotizacionCosts(role)
+      ? hasInventarioAccess(
+          role,
+          role === "VENDEDOR" ? await resolveVendedoresHabilitados(organizationId!) : false
+        )
       : false
-    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
 
     interface Acc {
       nombre: string

@@ -3,6 +3,7 @@ import {
   requireAdminOrVendedor,
   hasInventarioAccess,
   resolveVendedoresHabilitados,
+  canViewCotizacionCosts,
 } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
@@ -53,16 +54,38 @@ export async function GET() {
 
     const { data: ordenes } = await ordenesQuery
 
+    // Sin órdenes no hay margen que calcular. Va null y no 0 para que el campo
+    // tenga UNA sola forma: el camino con datos ya devuelve null cuando el rol
+    // no puede ver costos, y dos formas para el mismo campo es como el próximo
+    // lector arma una suposición equivocada.
     if (!ordenes || ordenes.length === 0) {
-      return NextResponse.json({ data: [], margenPromedio: 0 })
+      return NextResponse.json({ data: [], margenPromedio: null })
     }
 
     // Se resuelve ACÁ, antes de armar la lista: el ranking por ganancia es una
     // clave de costo y el orden sobrevive al nulleo. Ver el sort de más abajo.
-    const vendedoresHabilitados = role === "VENDEDOR"
-      ? await resolveVendedoresHabilitados(organizationId!)
+    //
+    // Hacen falta las DOS llaves, porque `costos` mezcla dos costos de origen
+    // distinto: repuestos_orden.precio_unitario —precio_compra congelado, que
+    // gobierna hasInventarioAccess— e items_cotizacion.costo_unitario, que
+    // gobierna canViewCotizacionCosts, ADMIN-only a propósito y MÁS estricta
+    // (costo de cotización y costo de inventario son permisos independientes;
+    // ver lib/auth-utils.ts). Un VENDEDOR con el opt-in de inventario leyendo
+    // un agregado armado en parte con costos de cotización es el mismo agujero
+    // con otra forma.
+    //
+    // NO se parte el agregado en una cifra "sólo repuestos" para ese rol: un
+    // número de rentabilidad al que le falta parte del costo es peor que uno
+    // ausente, porque se lee como exacto.
+    //
+    // canViewCotizacionCosts corta primero y ahorra el SELECT de
+    // resolveVendedoresHabilitados cuando ya sabemos la respuesta.
+    const canViewCost = canViewCotizacionCosts(role)
+      ? hasInventarioAccess(
+          role,
+          role === "VENDEDOR" ? await resolveVendedoresHabilitados(organizationId!) : false
+        )
       : false
-    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
 
     // Calcular rentabilidad por tipo de dispositivo
     // Costos incluyen: repuestos consumidos + cotizaciones aceptadas (inv) + comisión técnico.

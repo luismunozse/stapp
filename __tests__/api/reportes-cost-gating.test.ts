@@ -551,8 +551,31 @@ describe("GET /api/reportes/rentabilidad-tecnicos — repuesto cost gated", () =
     expect(body.data.map((t: any) => t.nombre)).toEqual(["Ana Torres", "Beto"])
   })
 
-  it("VENDEDOR with inventario opt-in — the cost closure is visible", async () => {
+  // costoRepuestos NO es sólo precio_compra: mezcla
+  // items_cotizacion.costo_unitario, que gobierna canViewCotizacionCosts —
+  // ADMIN-only a propósito y MÁS estricta que hasInventarioAccess. Dos costos
+  // distintos alimentan un mismo número, así que hacen falta las dos llaves.
+  //
+  // No se parte el agregado en una cifra "sólo repuestos" para este rol: un
+  // número de rentabilidad al que le falta parte del costo es peor que
+  // ninguno, porque se lee como exacto.
+  it("VENDEDOR with inventario opt-in — still stripped: quote costs need the ADMIN key", async () => {
     mockRole("VENDEDOR")
+    wire(true)
+
+    const { body } = await parseResponse(await getRentabilidadTecnicos(tecnicosRequest()))
+
+    expect(body.data[0].costoRepuestos).toBeNull()
+    expect(body.data[0].ganancia).toBeNull()
+    expect(body.data[0].comision).toBeNull()
+    expect(body.margenPromedio).toBeNull()
+    // Lo que no es costo no se toca.
+    expect(body.data[0].ingresos).toBe(1000)
+    expect(body.data[0].costoManoObra).toBe(100)
+  })
+
+  it("ADMIN holds both keys — the cost closure is visible", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
     wire(true)
 
     const { body } = await parseResponse(await getRentabilidadTecnicos(tecnicosRequest()))
@@ -656,14 +679,46 @@ describe("GET /api/reportes/rentabilidad — repuesto cost gated", () => {
     expect(body.data.map((d: any) => d.tipoDispositivo)).toEqual(["CELULAR", "TABLET"])
   })
 
-  it("VENDEDOR with inventario opt-in — the cost closure is visible", async () => {
+  // Misma mezcla que rentabilidad-tecnicos: `costos` agrega
+  // items_cotizacion.costo_unitario además de repuestos_orden, así que el
+  // permiso de inventario solo no alcanza.
+  it("VENDEDOR with inventario opt-in — still stripped: quote costs need the ADMIN key", async () => {
     mockRole("VENDEDOR")
+    wire(true)
+
+    const { body } = await parseResponse(await getRentabilidad())
+
+    expect(body.data[0].costos).toBeNull()
+    expect(body.data[0].ganancia).toBeNull()
+    expect(body.margenPromedio).toBeNull()
+    expect(body.data[0].ingresos).toBe(1000)
+  })
+
+  it("ADMIN holds both keys — the cost closure is visible", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
     wire(true)
 
     const { body } = await parseResponse(await getRentabilidad())
 
     expect(body.data[0].costos).toBe(470)
     expect(body.data[0].ganancia).toBe(530)
+  })
+
+  // El early return de "sin órdenes" devolvía margenPromedio: 0 mientras el
+  // camino con datos devuelve null para el rol gateado. Formas distintas para
+  // el mismo campo es como el próximo lector arma una suposición equivocada.
+  it("empty result keeps the same shape — margenPromedio is null, not 0", async () => {
+    mockRole("VENDEDOR")
+    mockSupabaseFrom({
+      ordenes_servicio: createChainMock([]),
+      organizations: orgChain(false),
+    })
+
+    const { status, body } = await parseResponse(await getRentabilidad())
+
+    expect(status).toBe(200)
+    expect(body.data).toEqual([])
+    expect(body.margenPromedio).toBeNull()
   })
 })
 
