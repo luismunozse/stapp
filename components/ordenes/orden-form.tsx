@@ -147,6 +147,13 @@ interface OrdenDraftValue {
   selectedTecnicoId: string
   selectedRecibidoPorId: string
   checklistValores: Record<string, boolean | string | null>
+  /** Template al que pertenecen las CLAVES de `checklistValores`. El template
+   *  en si no se persiste (se re-pide por tipo de equipo al restaurar), y sin
+   *  este id no habia forma de notar que el de la organizacion cambio en los 7
+   *  dias que vive el borrador: las respuestas quedaban indexadas por items que
+   *  ya no existen. Opcional para los borradores escritos antes de que este
+   *  campo existiera, que se tratan como "de otro template". */
+  checklistTemplateId?: string | null
   checklistNotas: string
 }
 
@@ -229,6 +236,13 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   const [checklistFirma, setChecklistFirma] = useState<string | null>(null)
   const [checklistFirmaMime, setChecklistFirmaMime] = useState<string | null>(null)
   const [checklistOpen, setChecklistOpen] = useState(true)
+  /** Origen de las respuestas del checklist que restauro un borrador, mientras
+   *  todavia no llego el template contra el que hay que compararlas. Ver el
+   *  descarte de respuestas huerfanas en el efecto que trae el template. */
+  const checklistDelBorradorRef = useRef<{
+    templateId: string | null
+    tipoDispositivo: string
+  } | null>(null)
   const [currentStep, setCurrentStep] = useState(1)
   const totalSteps = 3
   // Prefill desde turno
@@ -322,6 +336,10 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         selectedTecnicoId,
         selectedRecibidoPorId,
         checklistValores,
+        // Las claves de `checklistValores` son ids de items de ESTE template:
+        // sin el id, un borrador restaurado despues de que la organizacion lo
+        // editara manda respuestas huerfanas bajo el templateId nuevo.
+        checklistTemplateId: checklistTemplate?.id ?? null,
         checklistNotas,
       }
     },
@@ -366,6 +384,16 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       setSelectedRecibidoPorId(draft.selectedRecibidoPorId)
       setChecklistValores(draft.checklistValores)
       setChecklistNotas(draft.checklistNotas)
+      // No se puede comparar todavia: el template se re-pide por tipo de equipo
+      // y la lista de tipos aun no resolvio. Queda pendiente para el efecto que
+      // lo trae (ver el descarte de respuestas huerfanas ahi).
+      checklistDelBorradorRef.current =
+        Object.keys(draft.checklistValores).length > 0
+          ? {
+              templateId: draft.checklistTemplateId ?? null,
+              tipoDispositivo: draft.form.tipoDispositivo ?? "",
+            }
+          : null
       // El paso tampoco se restaura (ni se guarda): reabrir en el paso 3 deja
       // fuera de pantalla todo lo que se venia cargando, y arrancar en el 1
       // obliga a pasar por delante de cada campo antes de crear la orden.
@@ -433,6 +461,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     setSelectedRecibidoPorId(recibidoPorPorDefecto)
     setChecklistValores({})
     setChecklistNotas("")
+    // Ya no hay respuestas restauradas que comparar contra ningun template.
+    checklistDelBorradorRef.current = null
     setCurrentStep(1)
     setSelectedClienteObj(null)
     // Fotos y firma del checklist no se persisten, asi que no vienen del
@@ -603,13 +633,37 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           // Solo el template: las respuestas se limpian en handleTipoChange
           // (ver el comentario ahi). Este efecto tambien corre al montar.
           setChecklistTemplate(data.template)
+          descartarRespuestasHuerfanas(data.template)
         }
       } catch (error) {
         console.error("Error fetching checklist template:", error)
       }
     }
+
+    /** Las respuestas del checklist se indexan por id de item del template,
+     *  pero el template no se persiste en el borrador: al restaurar se vuelve a
+     *  pedir por tipo de equipo. Si la organizacion lo edito o lo reemplazo
+     *  dentro de los 7 dias que vive el borrador, las claves restauradas no
+     *  corresponden a ningun item: el checklist se dibuja vacio y el submit
+     *  igual las manda bajo el templateId nuevo.
+     *
+     *  Se compara recien contra el template DEL TIPO DE EQUIPO DEL BORRADOR: el
+     *  primer fetch del montaje sale con el tipo todavia sin resolver (la lista
+     *  de tipos carga async y el reset del borrador recien escribio el campo) y
+     *  trae el template por defecto de la organizacion, que no es ese. */
+    const descartarRespuestasHuerfanas = (template: any) => {
+      const delBorrador = checklistDelBorradorRef.current
+      if (!delBorrador) return
+      if ((tipoSeleccionado?.codigo ?? "") !== delBorrador.tipoDispositivo) return
+      checklistDelBorradorRef.current = null
+      if ((template?.id ?? null) !== delBorrador.templateId) {
+        // Las notas son texto libre, no estan indexadas por item: se conservan.
+        setChecklistValores({})
+      }
+    }
+
     fetchChecklistTemplate()
-  }, [tipoSeleccionado?.id])
+  }, [tipoSeleccionado?.id, tipoSeleccionado?.codigo])
 
   // Fetch sectors when client changes
   const clienteId = watch("clienteId")

@@ -389,6 +389,10 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
           razonSocial: "Acme SA",
         },
         selectedSectorId: "sec-1",
+        // El template contra el que se escribieron: sigue siendo el que el
+        // servidor devuelve para este tipo de equipo, asi que las respuestas
+        // son validas y tienen que sobrevivir.
+        checklistTemplateId: "tpl-1",
         checklistValores: { pantalla: true },
         checklistNotas: "Rayada",
       }),
@@ -410,6 +414,38 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     expect(stored?.data.checklistValores).toEqual({ pantalla: true })
     expect(stored?.data.checklistNotas).toBe("Rayada")
     expect(stored?.data.selectedSectorId).toBe("sec-1")
+  })
+
+  it("descarta las respuestas del checklist cuando el template del tipo de equipo cambio", async () => {
+    // Las respuestas se indexan por id de item del template, pero el template
+    // no se persiste: al restaurar se vuelve a pedir por tipo de equipo. Si la
+    // organizacion lo edito o lo reemplazo dentro de los 7 dias de vida del
+    // borrador, las claves restauradas ya no corresponden a ningun item: el
+    // checklist se dibuja vacio y el POST /api/ordenes/{id}/checklist manda
+    // igual esas claves viejas bajo el templateId nuevo.
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      draftEnvelope({
+        form: { ...draftData().form, tipoDispositivo: "CELULAR" },
+        checklistTemplateId: "tpl-de-otra-epoca",
+        checklistValores: { "item-que-ya-no-existe": true },
+        checklistNotas: "Rayada",
+      }),
+    )
+
+    await renderForm()
+    await settle()
+
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+      target: { value: "iPhone 13 editado" },
+    })
+    await settle()
+
+    const stored = storedDraft()
+    expect(stored?.data.checklistValores).toEqual({})
+    expect(stored?.data.checklistTemplateId).toBe("tpl-1")
+    // Las notas son texto libre, no estan indexadas por item: sobreviven.
+    expect(stored?.data.checklistNotas).toBe("Rayada")
   })
 
   it("no borra el borrador restaurado cuando se toca el formulario sin cambiar nada", async () => {
