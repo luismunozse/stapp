@@ -1,18 +1,23 @@
 /**
- * Tests: SucursalSwitcher — dropping the SW API cache before reloading.
+ * Tests: SucursalSwitcher — cambiar de sucursal no espera ningún borrado.
  *
- * The active sucursal lives in an httpOnly cookie, so the switcher is the only
- * place on the client that knows it changed. Whatever the service worker stored
- * is scoped to the PREVIOUS branch and keyed by URL alone, so the reload right
- * below would be served those same entries.
+ * Hubo un `await clearServiceWorkerApiCache()` acá: la sucursal activa vive en
+ * una cookie httpOnly, así que este es el único punto del cliente que la ve
+ * cambiar, y lo que el service worker tuviera guardado quedaba escopeado a la
+ * sucursal anterior.
  *
- * The ordering is the whole point: firing the clear and reloading in the same
- * breath tears the page down before the worker has answered, so the clear may
- * never happen at all. It has to be awaited — and the helper carries its own
- * timeout, so awaiting it cannot strand the operator on a spinner.
+ * Ya no hay nada que borrar: CACHEABLE_API_ROUTES quedó vacía (ver SW-0), así
+ * que ninguna respuesta de API se guarda — mucho menos una escopeada por
+ * sucursal. Esperar la confirmación del worker le costaba al operador hasta
+ * 1500 ms en cada cambio de sucursal, en un equipo lento, por una limpieza sin
+ * nada que limpiar.
+ *
+ * Si alguna vez vuelve a entrar una ruta escopeada por sucursal a esa lista,
+ * hace falta volver a limpiar acá (o meter la sucursal en la clave del caché);
+ * está anotado arriba de la constante en public/sw.js.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"
+import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 
 vi.mock("next-auth/react", () => ({
   useSession: () => ({ data: { user: { role: "ADMIN" } }, status: "authenticated" }),
@@ -55,47 +60,18 @@ afterEach(() => {
   Object.defineProperty(window, "location", { configurable: true, value: locationOriginal })
 })
 
-/** Abre el menu y elige "Sucursal Norte". */
-async function elegirOtraSucursal() {
-  // El trigger de este dropdown abre con click (aria-haspopup="dialog"), no con
-  // el pointerdown que jsdom no sabe construir.
-  const trigger = await screen.findByRole("button")
-  fireEvent.click(trigger)
-  const item = await screen.findByText("Sucursal Norte")
-  fireEvent.click(item)
-}
-
-describe("SucursalSwitcher — limpieza del cache al cambiar de sucursal", () => {
-  it("SS-1 — no recarga hasta que el worker confirma el borrado", async () => {
-    let confirmarBorrado: (() => void) | null = null
-    clearServiceWorkerApiCache.mockReturnValue(
-      new Promise<boolean>((resolve) => {
-        confirmarBorrado = () => resolve(true)
-      })
-    )
-
+describe("SucursalSwitcher — cambio de sucursal", () => {
+  it("SS-1 — recarga sin esperar ningun borrado de cache", async () => {
     render(<SucursalSwitcher />)
-    await elegirOtraSucursal()
 
-    await waitFor(() => expect(clearServiceWorkerApiCache).toHaveBeenCalled())
-    // Todavia no: recargar ahora se lleva puesta la limpieza a medio camino.
-    expect(reload).not.toHaveBeenCalled()
-
-    await act(async () => {
-      confirmarBorrado!()
-    })
+    // El trigger abre con click (aria-haspopup="dialog"), no con el pointerdown
+    // que jsdom no sabe construir.
+    const trigger = await screen.findByRole("button")
+    fireEvent.click(trigger)
+    fireEvent.click(await screen.findByText("Sucursal Norte"))
 
     await waitFor(() => expect(reload).toHaveBeenCalled())
-  })
-
-  it("SS-2 — si el borrado no se puede confirmar, igual recarga (no deja al operador colgado)", async () => {
-    // El helper resuelve false por su cuenta (sin controller, o timeout): el
-    // cambio de sucursal tiene que completarse igual.
-    clearServiceWorkerApiCache.mockResolvedValue(false)
-
-    render(<SucursalSwitcher />)
-    await elegirOtraSucursal()
-
-    await waitFor(() => expect(reload).toHaveBeenCalled())
+    expect(clearServiceWorkerApiCache).not.toHaveBeenCalled()
+    expect(window.localStorage.getItem("sucursal-activa-ui")).toBe("suc-B")
   })
 })
