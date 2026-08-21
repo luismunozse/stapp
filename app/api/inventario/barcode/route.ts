@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
 import { getCookieSucursalId, resolveSucursalLectura, getDepositoDeSucursal } from "@/lib/sucursal"
@@ -73,11 +73,17 @@ export async function GET(request: Request) {
     // Format the item using the standard formatter (includes aggregate stock).
     // item is guaranteed non-null at this point (guarded above).
     //
-    // Cost stays out on purpose: this route guards with plain requireAuth(), so
-    // a TECNICO reaches it, and neither consumer (the POS cart, the stock-count
-    // scanner) reads precioCompra. Not opting into the formatter's cost is the
-    // whole gate here — no role lookup on the POS scan path.
-    const formattedItem = formatInventario(item)!
+    // Purchase cost (precioCompra) follows hasInventarioAccess, like the rest of
+    // the inventario read endpoints: this route guards with plain requireAuth(),
+    // so a TECNICO reaches it. Dropping the cost for everyone is NOT an option:
+    // the inventory list scanner feeds this exact object into the edit dialog
+    // and the form PUTs it back, so a null cost for an ADMIN would be persisted
+    // as 0. The role lookup only costs a round-trip for VENDEDOR.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+    const formattedItem = formatInventario(item, canViewCost)!
 
     // If scoped to a sucursal, override stock with the per-deposito value
     if (!verTodas && sucursalId) {
