@@ -149,9 +149,18 @@ export async function GET() {
     // permiso de inventario no puede obtener acá el número que el endpoint de
     // inventario le niega. valorEnStock es precioCompra * stock y stock viaja
     // en la misma fila, así que se cae por división y también se oculta.
-    // Los agregados de organización (resumen.valorCompra, margenPotencial,
-    // porCategoria.valorTotal) son un tier más amplio de reportes financieros
-    // a propósito y quedan bajo requireAdminOrVendedor(): no tocar.
+    //
+    // La regla se extiende a todo agregado que se pueda reducir a un item: un
+    // agregado que se divide de vuelta al costo de un solo producto no es un
+    // agregado. porCategoria.valorTotal es un total por categoría y una
+    // categoría puede tener un único SKU, así que es costo por item
+    // disfrazado; resumen.margenPotencial se deriva del costo y cae por lo
+    // mismo. Ambos se ocultan.
+    //
+    // Lo que queda bajo el tier más amplio de requireAdminOrVendedor() es el
+    // total de organización resumen.valorCompra: una sola cifra sobre todo el
+    // inventario no se reduce a un item. Ídem valorizacion.valorCosto en
+    // /api/reportes/inventario-analytics, que aplica esta misma regla.
     const vendedoresHabilitados = role === "VENDEDOR"
       ? await resolveVendedoresHabilitados(organizationId!)
       : false
@@ -163,12 +172,22 @@ export async function GET() {
     const gateValioso = (item: ItemInventario & { valorEnStock: number }) =>
       canViewCost ? item : { ...item, precioCompra: null, valorEnStock: null }
 
+    const porCategoriaGated = porCategoria.map((cat) => ({
+      ...cat,
+      valorTotal: canViewCost ? cat.valorTotal : null,
+    }))
+
+    const resumenGated = {
+      ...resumen,
+      margenPotencial: canViewCost ? resumen.margenPotencial : null,
+    }
+
     return NextResponse.json({
       scope: "organization",
-      resumen,
+      resumen: resumenGated,
       stockCritico: stockCritico.map(gateItem),
       sinStock: sinStock.slice(0, 10).map(gateItem),
-      porCategoria,
+      porCategoria: porCategoriaGated,
       masValiosos: masValiosos.map(gateValioso),
       masVendidos,
     }, {

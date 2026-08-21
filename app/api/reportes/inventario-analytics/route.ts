@@ -173,9 +173,18 @@ export async function GET() {
     // inventario.precio_compra en el resto de la app. capitalInmovilizado acá
     // es por item (stock * precio_compra) y stock viaja en la misma fila, así
     // que se cae por división y también se oculta.
-    // Los agregados de organización (valorizacion.valorCosto/margenPotencial y
-    // porCategoria.valorCosto) son un tier más amplio de reportes financieros
-    // a propósito y quedan bajo requireAdminOrVendedor(): no tocar.
+    //
+    // La regla se extiende a todo agregado que se pueda reducir a un item: un
+    // agregado que se divide de vuelta al costo de un solo producto no es un
+    // agregado. porCategoria.valorCosto es un total por categoría y una
+    // categoría puede tener un único SKU, así que es costo por item
+    // disfrazado; margenPotencial se deriva del costo y cae por lo mismo.
+    // Ambos se ocultan.
+    //
+    // Lo que queda bajo el tier más amplio de requireAdminOrVendedor() es el
+    // total de organización valorizacion.valorCosto: una sola cifra sobre todo
+    // el inventario no se reduce a un item. Ídem resumen.valorCompra en
+    // /api/reportes/analisis-inventario, que aplica esta misma regla.
     const vendedoresHabilitados = role === "VENDEDOR"
       ? await resolveVendedoresHabilitados(organizationId!)
       : false
@@ -185,13 +194,23 @@ export async function GET() {
       ? sinMovimiento
       : sinMovimiento.map(item => ({ ...item, precioCompra: null, capitalInmovilizado: null }))
 
+    const porCategoriaGated = porCategoria.map(cat => ({
+      ...cat,
+      valorCosto: canViewCost ? cat.valorCosto : null,
+    }))
+
+    const valorizacionGated = {
+      ...valorizacion,
+      margenPotencial: canViewCost ? valorizacion.margenPotencial : null,
+    }
+
     return NextResponse.json({
       scope: "organization",
-      valorizacion,
+      valorizacion: valorizacionGated,
       rotacion,
       sinMovimiento: sinMovimientoGated,
       alertasReorden,
-      porCategoria,
+      porCategoria: porCategoriaGated,
       tendenciaVentas,
     }, {
       headers: { "Cache-Control": "no-store" },

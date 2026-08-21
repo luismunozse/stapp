@@ -4,9 +4,14 @@
  * These routes are guarded by requireAdminOrVendedor(), which is a deliberate
  * product tier for org-level financial figures. But a VENDEDOR denied
  * precioCompra on /api/inventario could read the identical per-item number
- * here, which is a hole in that gate rather than a tier. Per-item cost — and
- * any per-item figure the same row lets you divide back into it — follows
- * hasInventarioAccess; org-level aggregates keep the broader tier.
+ * here, which is a hole in that gate rather than a tier.
+ *
+ * The line: an aggregate that can be trivially reduced to a single item's
+ * purchase cost is not an aggregate. So per-item cost, any per-item figure the
+ * same row lets you divide back into it, every per-category cost total (a
+ * category can hold one SKU) and every margin derived from cost follow
+ * hasInventarioAccess. Only the org-wide single totals — one number over the
+ * whole inventory — keep the broader requireAdminOrVendedor tier.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { auth } from "@/lib/auth"
@@ -106,20 +111,47 @@ describe("GET /api/reportes/analisis-inventario — per-item cost gated", () => 
     expect(body.masValiosos[0].precioVenta).toBe(200)
   })
 
-  // Deliberate tier: org-level financial figures stay behind
-  // requireAdminOrVendedor(), they are not this gate's business.
-  it("VENDEDOR without opt-in — org-level aggregates are still returned", async () => {
+  it("ADMIN sees the category cost total and the cost-derived margin", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    wire()
+
+    const { body } = await parseResponse(await getAnalisis())
+
+    expect(body.porCategoria[0].valorTotal).toBe(1000)
+    expect(body.resumen.margenPotencial).toBe(1000)
+  })
+
+  // porCategoria.valorTotal is a purchase-cost total over one category, and a
+  // category can hold a single SKU — then it is precio_compra × stock, the
+  // per-item number stripped a few lines above. margenPotencial is derived from
+  // the same cost.
+  it("VENDEDOR without opt-in — category cost total and margin stripped", async () => {
+    mockRole("VENDEDOR")
+    wire(false)
+
+    const { body } = await parseResponse(await getAnalisis())
+
+    expect(body.porCategoria[0].valorTotal).toBeNull()
+    expect(body.resumen.margenPotencial).toBeNull()
+    // Non-cost category data is untouched.
+    expect(body.porCategoria[0].categoria).toBe("Repuestos")
+    expect(body.porCategoria[0].cantidad).toBe(2)
+    expect(body.porCategoria[0].stockTotal).toBe(10)
+  })
+
+  // Deliberate tier: one number over the whole inventory does not reduce to a
+  // single item, so it stays behind requireAdminOrVendedor().
+  it("VENDEDOR without opt-in — the org-wide totals keep the broader tier", async () => {
     mockRole("VENDEDOR")
     wire(false)
 
     const { body } = await parseResponse(await getAnalisis())
 
     expect(body.resumen.valorCompra).toBe(1000)
-    expect(body.resumen.margenPotencial).toBe(1000)
-    expect(body.porCategoria[0].valorTotal).toBe(1000)
+    expect(body.resumen.valorVenta).toBe(2000)
   })
 
-  it("VENDEDOR with inventario opt-in — per-item cost visible", async () => {
+  it("VENDEDOR with inventario opt-in — per-item, category and margin costs visible", async () => {
     mockRole("VENDEDOR")
     wire(true)
 
@@ -127,6 +159,8 @@ describe("GET /api/reportes/analisis-inventario — per-item cost gated", () => 
 
     expect(body.masValiosos[0].precioCompra).toBe(100)
     expect(body.masValiosos[0].valorEnStock).toBe(1000)
+    expect(body.porCategoria[0].valorTotal).toBe(1000)
+    expect(body.resumen.margenPotencial).toBe(1000)
   })
 })
 
@@ -183,19 +217,46 @@ describe("GET /api/reportes/inventario-analytics — per-item cost gated", () =>
     expect(body.sinMovimiento[0].precioVenta).toBe(400)
   })
 
-  // Deliberate tier: valorizacion and porCategoria are org-level.
-  it("VENDEDOR without opt-in — org-level aggregates are still returned", async () => {
+  it("ADMIN sees the category cost total and the cost-derived margin", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    wire()
+
+    const { body } = await parseResponse(await getAnalytics())
+
+    expect(body.porCategoria[0].valorCosto).toBe(1000)
+    expect(body.valorizacion.margenPotencial).toBe(600)
+  })
+
+  // Same rule as analisis-inventario: a category can hold one SKU, so its cost
+  // total is per-item cost in disguise; margenPotencial is derived from cost.
+  it("VENDEDOR without opt-in — category cost total and margin stripped", async () => {
+    mockRole("VENDEDOR")
+    wire(false)
+
+    const { body } = await parseResponse(await getAnalytics())
+
+    expect(body.porCategoria[0].valorCosto).toBeNull()
+    expect(body.valorizacion.margenPotencial).toBeNull()
+    // Non-cost category data is untouched.
+    expect(body.porCategoria[0].categoria).toBe("Repuestos")
+    expect(body.porCategoria[0].items).toBe(1)
+    expect(body.porCategoria[0].stock).toBe(4)
+    expect(body.porCategoria[0].valorVenta).toBe(1600)
+  })
+
+  // Deliberate tier: the org-wide valorization total stays under
+  // requireAdminOrVendedor().
+  it("VENDEDOR without opt-in — the org-wide totals keep the broader tier", async () => {
     mockRole("VENDEDOR")
     wire(false)
 
     const { body } = await parseResponse(await getAnalytics())
 
     expect(body.valorizacion.valorCosto).toBe(1000)
-    expect(body.valorizacion.margenPotencial).toBe(600)
-    expect(body.porCategoria[0].valorCosto).toBe(1000)
+    expect(body.valorizacion.valorVenta).toBe(1600)
   })
 
-  it("VENDEDOR with inventario opt-in — per-item cost visible", async () => {
+  it("VENDEDOR with inventario opt-in — per-item, category and margin costs visible", async () => {
     mockRole("VENDEDOR")
     wire(true)
 
@@ -203,6 +264,8 @@ describe("GET /api/reportes/inventario-analytics — per-item cost gated", () =>
 
     expect(body.sinMovimiento[0].precioCompra).toBe(250)
     expect(body.sinMovimiento[0].capitalInmovilizado).toBe(1000)
+    expect(body.porCategoria[0].valorCosto).toBe(1000)
+    expect(body.valorizacion.margenPotencial).toBe(600)
   })
 })
 

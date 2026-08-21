@@ -33,7 +33,9 @@ interface CategoriaResumen {
   categoria: string
   cantidad: number
   stockTotal: number
-  valorTotal: number
+  /** null cuando el rol no puede ver costos de compra: el total por categoría
+   *  se reduce al costo de un item si la categoría tiene un único SKU. */
+  valorTotal: number | null
 }
 
 interface AnalisisData {
@@ -42,7 +44,8 @@ interface AnalisisData {
     totalUnidades: number
     valorCompra: number
     valorVenta: number
-    margenPotencial: number
+    /** null cuando el rol no puede ver costos de compra: se deriva del costo. */
+    margenPotencial: number | null
     itemsSinStock: number
     itemsStockCritico: number
     categorias: number
@@ -116,10 +119,16 @@ export function AnalisisInventario() {
     )
   }
 
-  const chartData = data.porCategoria.slice(0, 8).map((cat) => ({
-    name: cat.categoria,
-    value: cat.valorTotal,
-  }))
+  // El endpoint devuelve el valor por categoría en null para los roles sin
+  // acceso a costos de compra. Sin filtrar, el gráfico dibuja porciones de $0 y
+  // la tarjeta de margen pinta "$0" en vez de un permiso faltante.
+  const chartData = data.porCategoria
+    .filter((cat): cat is CategoriaResumen & { valorTotal: number } => cat.valorTotal !== null)
+    .slice(0, 8)
+    .map((cat) => ({
+      name: cat.categoria,
+      value: cat.valorTotal,
+    }))
 
   return (
     <div className="space-y-6">
@@ -139,13 +148,15 @@ export function AnalisisInventario() {
           icon={DollarSign}
           tone="default"
         />
-        <StatCard
-          title="Margen Pot."
-          value={formatPrice(data.resumen.margenPotencial)}
-          description="Si se vende todo"
-          icon={TrendingUp}
-          tone="success"
-        />
+        {data.resumen.margenPotencial !== null && (
+          <StatCard
+            title="Margen Pot."
+            value={formatPrice(data.resumen.margenPotencial)}
+            description="Si se vende todo"
+            icon={TrendingUp}
+            tone="success"
+          />
+        )}
         <StatCard
           title="Stock Crítico"
           value={String(data.resumen.itemsStockCritico)}
@@ -317,18 +328,19 @@ export function AnalisisInventario() {
           <div className="space-y-4">
             {data.porCategoria.map((cat) => {
               const porcentaje =
-                data.resumen.valorCompra > 0
+                cat.valorTotal !== null && data.resumen.valorCompra > 0
                   ? (cat.valorTotal / data.resumen.valorCompra) * 100
-                  : 0
+                  : null
               return (
                 <div key={cat.categoria} className="space-y-1.5">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 text-sm">
                     <span className="font-medium">{cat.categoria}</span>
                     <span className="text-xs text-muted-foreground">
-                      {cat.cantidad} items · {cat.stockTotal} uds · {formatPrice(cat.valorTotal)}
+                      {cat.cantidad} items · {cat.stockTotal} uds
+                      {cat.valorTotal !== null ? ` · ${formatPrice(cat.valorTotal)}` : ""}
                     </span>
                   </div>
-                  <Progress value={porcentaje} className="h-2" />
+                  {porcentaje !== null && <Progress value={porcentaje} className="h-2" />}
                 </div>
               )
             })}

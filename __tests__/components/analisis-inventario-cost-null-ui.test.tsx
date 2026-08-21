@@ -97,3 +97,73 @@ describe("AnalisisInventario — costo por item nulo", () => {
     expect(screen.getByText("$1000")).toBeInTheDocument()
   })
 })
+
+/**
+ * La misma ruta devuelve ahora en null los agregados de costo que se pueden
+ * reducir a un solo item: porCategoria[].valorTotal (una categoría puede tener
+ * un único SKU) y resumen.margenPotencial (derivado del costo). El total de
+ * organización resumen.valorCompra sigue visible.
+ */
+describe("AnalisisInventario — agregados de costo por categoría nulos", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  function payload(valorTotal: number | null, margenPotencial: number | null) {
+    return {
+      scope: "organization",
+      resumen: {
+        totalItems: 1,
+        totalUnidades: 42,
+        valorCompra: 7777,
+        valorVenta: 8888,
+        margenPotencial,
+        itemsSinStock: 0,
+        itemsStockCritico: 0,
+        categorias: 1,
+      },
+      stockCritico: [],
+      sinStock: [],
+      porCategoria: [{ categoria: "Repuestos", cantidad: 1, stockTotal: 42, valorTotal }],
+      masValiosos: [],
+      masVendidos: [],
+    }
+  }
+
+  function stubFetch(body: Record<string, unknown>) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: true, json: async () => body } as Response)),
+    )
+  }
+
+  it("oculta el valor por categoría y el margen cuando vienen en null", async () => {
+    stubFetch(payload(null, null))
+
+    render(<AnalisisInventario />)
+
+    await waitFor(() => expect(screen.getByText("Repuestos")).toBeInTheDocument())
+
+    expect(screen.getByText("1 items · 42 uds")).toBeInTheDocument()
+    expect(screen.queryByText("Margen Pot.")).not.toBeInTheDocument()
+    expect(screen.queryByText("Valor por Categoría")).not.toBeInTheDocument()
+    expect(screen.queryByText("$0")).not.toBeInTheDocument()
+    // El total de organización sigue disponible.
+    expect(screen.getByText("Valor Inventario")).toBeInTheDocument()
+    expect(screen.getByText("$7777")).toBeInTheDocument()
+  })
+
+  it("muestra el valor por categoría y el margen cuando el rol puede verlos", async () => {
+    stubFetch(payload(5555, 1111))
+
+    render(<AnalisisInventario />)
+
+    await waitFor(() => expect(screen.getByText("Repuestos")).toBeInTheDocument())
+
+    expect(screen.getByText("1 items · 42 uds · $5555")).toBeInTheDocument()
+    expect(screen.getByText("Margen Pot.")).toBeInTheDocument()
+    expect(screen.getByText("$1111")).toBeInTheDocument()
+    expect(screen.getByText("Valor por Categoría")).toBeInTheDocument()
+  })
+})
