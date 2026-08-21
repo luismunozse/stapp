@@ -5,7 +5,7 @@ import {
   getCookieSucursalId,
   resolveSucursalLectura,
   getDepositoDeSucursal,
-  resolverDestinoVentaCacheado,
+  resolverDestinoVenta,
   derivarLecturaVenta,
 } from "@/lib/sucursal"
 
@@ -44,11 +44,18 @@ export async function POST(request: Request) {
     let depositoIdPrefetched: string | null = null
 
     if (scopeVenta) {
-      const destino = await resolverDestinoVentaCacheado({
+      // Sin cache, a diferencia de search/barcode: esta ruta corre una vez por
+      // checkout, no por tecla, así que el cache no le ahorra nada y sí le puede
+      // mentir. Durante los 30s posteriores a un cambio de depósito principal,
+      // una entrada vencida haría que el diálogo valide contra el depósito viejo
+      // y diga "hay stock" mientras crear_venta_atomica descuenta del nuevo y
+      // vuelve con P0010 — exactamente el error que este chequeo existe para
+      // adelantar. La venta resuelve sin cache (app/api/ventas/route.ts): la
+      // revalidación previa tiene que mirar lo mismo que la venta.
+      const destino = await resolverDestinoVenta({
         role,
         organizationId: organizationId!,
         userSucursalId,
-        cookieSucursalId,
       })
       const lectura = derivarLecturaVenta(destino)
       sucursalId = lectura.sucursalId
