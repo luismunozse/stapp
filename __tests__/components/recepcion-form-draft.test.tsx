@@ -9,7 +9,7 @@
  * real: useFormDraft necesita userId/organizationId para resolver la key.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { render, screen, fireEvent, act } from "@testing-library/react"
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react"
 import { ModalProvider } from "@/contexts/modal-context"
 
 vi.mock("next/navigation", () => ({
@@ -199,6 +199,27 @@ describe("RecepcionForm — borrador local", () => {
     expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
   })
 
+  it("un borrador con forma invalida no rompe la pantalla", async () => {
+    // DRAFT_SCHEMA_VERSION se mantiene a mano: un cambio en RecepcionFormData
+    // sin bumpearla deja borradores de hasta 7 dias con otra forma. Recorrerlos
+    // tira un TypeError adentro de un efecto y eso deja la pantalla de
+    // recepcion en blanco, sin forma de salir que no sea la consola.
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        version: 2,
+        savedAt: Date.now(),
+        data: { form: { clienteId: "cli-1", telefonoContacto: "" }, sideState: null },
+      }),
+    )
+
+    await renderForm()
+
+    expect(screen.getAllByPlaceholderText("Ej: iPhone 13")).toHaveLength(2)
+    expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
+    expect(window.localStorage.getItem(DRAFT_KEY)).toBeNull()
+  })
+
   it("no da por aceptados los terminos al restaurar: la firma que los respalda no se guarda", async () => {
     window.localStorage.setItem(
       DRAFT_KEY,
@@ -363,6 +384,92 @@ describe("RecepcionForm — borrador local", () => {
       "Acc C",
       "Acc D",
     ])
+  })
+})
+
+/**
+ * "Descartar" tiene que dejar el formulario como recien abierto. Lo que no se
+ * limpia sobrevive al descarte y termina viajando con la recepcion del
+ * siguiente cliente, que es un dato de otra persona en un comprobante ajeno.
+ */
+describe("RecepcionForm — descartar un borrador", () => {
+  let requests: Array<{ url: string; body: any }>
+
+  beforeEach(() => {
+    requests = []
+    window.localStorage.clear()
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        if (url.includes("/api/recepciones")) {
+          requests.push({ url, body: JSON.parse(String(init?.body ?? "{}")) })
+          // 202 = encolada offline: el formulario corta ahi, sin modal de
+          // exito que montar. El payload ya se armo, que es lo que se verifica.
+          return Promise.resolve({ ok: true, status: 202, json: async () => ({ _offline: true }) } as Response)
+        }
+        return Promise.resolve({ ok: true, json: async () => [] } as Response)
+      }),
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("no arrastra la firma del cliente anterior a la recepcion siguiente", async () => {
+    const equipo = (dispositivo: string) => ({
+      dispositivo,
+      tipoDispositivo: "CELULAR",
+      marca: "",
+      color: "",
+      imei: "",
+      problemaReportado: "No enciende",
+    })
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        version: 2,
+        savedAt: Date.now(),
+        data: {
+          form: {
+            clienteId: "cli-0",
+            telefonoContacto: "",
+            observaciones: "",
+            equipos: [equipo("Equipo del cliente X"), equipo("Otro del cliente X")],
+          },
+          sideState: [
+            { accesoriosSeleccionados: [], otroAccesorio: "", camposExtraValues: {} },
+            { accesoriosSeleccionados: [], otroAccesorio: "", camposExtraValues: {} },
+          ],
+          selectedCliente: { nombre: "Cliente X", telefono: "1100000000" },
+        },
+      }),
+    )
+
+    const { container } = await renderForm()
+
+    // El cliente X firma la conformidad y despues se descarta todo.
+    fireEvent.click(screen.getByRole("button", { name: "Firmar" }))
+    fireEvent.click(screen.getByRole("button", { name: /descartar/i }))
+
+    // Recepcion nueva, cliente distinto: nadie volvio a firmar.
+    fireEvent.click(screen.getByRole("button", { name: "Elegir cliente" }))
+    for (const i of [0, 1]) {
+      fireEvent.click(screen.getAllByRole("button", { name: "Celular" })[i])
+      fireEvent.change(screen.getAllByPlaceholderText("Ej: iPhone 13")[i], {
+        target: { value: `Equipo ${i + 1} del cliente Y` },
+      })
+      fireEvent.change(container.querySelector(`[name="equipos.${i}.problemaReportado"]`)!, {
+        target: { value: "Pantalla rota" },
+      })
+    }
+    fireEvent.click(screen.getByRole("checkbox"))
+    fireEvent.click(screen.getByRole("button", { name: /Crear recepci/i }))
+
+    await waitFor(() => expect(requests).toHaveLength(1))
+    expect(requests[0].body.firmaCliente).toBeUndefined()
+    expect(requests[0].body.firmaMime).toBeUndefined()
   })
 })
 

@@ -139,6 +139,51 @@ describe("ClienteForm — borrador local", () => {
     expect(window.localStorage.getItem("draft:v2:cliente-form:org-1:user-1:edit:cli-1")).toBeNull()
   })
 
+  it("una revalidacion del cliente no pisa el borrador restaurado", () => {
+    // cliente-detalle.tsx alimenta este prop desde SWR: cada revalidacion trae
+    // un objeto nuevo con los mismos datos. Si el prefill depende de la
+    // identidad del objeto, vuelve a resetear el formulario y se lleva puesto
+    // el borrador mientras el aviso sigue diciendo que se restauro uno.
+    const key = "draft:v2:cliente-form:org-1:user-1:edit:cli-1"
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        version: 2,
+        savedAt: Date.now(),
+        recordUpdatedAt: CLIENTE_UPDATED_AT.getTime(),
+        data: {
+          tipoCliente: "INDIVIDUAL",
+          nombre: "Juan Editado Sin Guardar",
+          telefono: "1100000000",
+          email: "",
+          direccion: "",
+          dni: "",
+          razonSocial: "",
+          cuit: "",
+          aceptaWhatsapp: true,
+          tipoPrecio: "MINORISTA",
+          descuentoPct: undefined,
+        },
+      }),
+    )
+
+    const { rerender } = render(
+      <ModalProvider>
+        <ClienteForm cliente={makeCliente()} open onClose={vi.fn()} onSuccess={vi.fn()} />
+      </ModalProvider>,
+    )
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Editado Sin Guardar")
+
+    // Misma ficha, objeto nuevo: es lo unico que cambia en una revalidacion.
+    rerender(
+      <ModalProvider>
+        <ClienteForm cliente={makeCliente()} open onClose={vi.fn()} onSuccess={vi.fn()} />
+      </ModalProvider>,
+    )
+
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Editado Sin Guardar")
+  })
+
   it("descarta un borrador de edicion si otro usuario guardo el cliente despues", () => {
     // El submit de edicion manda el formulario entero (PUT /api/clientes/:id),
     // asi que restaurar un borrador viejo encima de un registro mas nuevo

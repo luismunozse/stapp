@@ -114,11 +114,17 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
   const tipoCliente = watch("tipoCliente")
   const tipoPrecio = watch("tipoPrecio")
 
+  // Depende del ID, no de la identidad del objeto: cliente-detalle.tsx pasa
+  // este prop desde SWR y cada revalidacion trae un objeto nuevo con los mismos
+  // datos. Con `cliente` en las dependencias, esa revalidacion reseteaba un
+  // dialog abierto a los valores del servidor y se llevaba puesto el borrador
+  // recien restaurado, mientras el aviso seguia diciendo que se restauro uno.
   useEffect(() => {
     if (open) {
       reset(clienteFormDefaults(cliente))
     }
-  }, [open, cliente, reset])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, cliente?.id, reset])
 
   // --- Borrador local (useFormDraft) ----------------------------------------
   // recordId por cliente.id: nunca mezcla un borrador de alta con uno de
@@ -158,11 +164,23 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
     const scopeKey = recordId ?? "new"
     if (!draftReady || draftAppliedForRef.current === scopeKey) return
     draftAppliedForRef.current = scopeKey
-    if (draft) {
+    if (!draft) return
+    try {
       reset(draft)
       setDraftNoticeVisible(true)
+    } catch (error) {
+      // Un borrador de otra forma (cambio de campos sin bump de version) no
+      // puede tumbar el dialog: la excepcion correria dentro de un efecto y se
+      // llevaria el arbol entero.
+      console.error("Borrador de cliente invalido, se descarta:", error)
+      clearDraft()
+      setDraftNoticeVisible(false)
+      reset(clienteFormDefaults(cliente))
     }
-  }, [open, recordId, draftReady, draft, reset])
+    // `cliente` solo se usa en el rescate del catch: incluirlo en las
+    // dependencias volveria a correr el efecto en cada revalidacion de SWR.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, recordId, draftReady, draft, reset, clearDraft])
 
   const discardDraft = () => {
     clearDraft()

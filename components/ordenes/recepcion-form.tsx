@@ -93,6 +93,20 @@ const equipoVacio = (): EquipoFormValues => ({
   codigoAccesoDispositivo: "",
 })
 
+/** Valores base del formulario. Vive afuera del componente (sin hooks) para
+ *  que useForm(defaultValues), el discard del borrador y el rescate de un
+ *  borrador invalido usen la MISMA lista y no se desincronicen. */
+function recepcionFormDefaults(): RecepcionFormData {
+  return {
+    clienteId: "",
+    telefonoContacto: "",
+    observaciones: "",
+    // El minimo son 2 equipos: arranca con 2 para que el mostrador no tenga
+    // que hacer un click extra para llegar al caso minimo.
+    equipos: [equipoVacio(), equipoVacio()],
+  }
+}
+
 /** Forma de un equipo en el payload que espera POST /api/recepciones (ver
  *  equipoSchema en app/api/recepciones/route.ts). */
 export type EquipoPayload = EquipoFormValues & {
@@ -234,6 +248,8 @@ export function RecepcionForm() {
   const [selectedCliente, setSelectedCliente] = useState<ClienteDraftSnapshot | null>(null)
   const [firma, setFirma] = useState<string | null>(null)
   const [firmaMime, setFirmaMime] = useState<string | null>(null)
+  /** Se incrementa para remontar el SignaturePad (ver discardDraft). */
+  const [firmaResetKey, setFirmaResetKey] = useState(0)
   const [terminosAceptados, setTerminosAceptados] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [comprimiendo, setComprimiendo] = useState(false)
@@ -258,14 +274,7 @@ export function RecepcionForm() {
     formState: { errors },
   } = useForm<RecepcionFormData>({
     resolver: zodResolver(recepcionFormSchema),
-    defaultValues: {
-      clienteId: "",
-      telefonoContacto: "",
-      observaciones: "",
-      // El minimo son 2 equipos: arranca con 2 para que el mostrador no
-      // tenga que hacer un click extra para llegar al caso minimo.
-      equipos: [equipoVacio(), equipoVacio()],
-    },
+    defaultValues: recepcionFormDefaults(),
   })
 
   const { fields, append, remove } = useFieldArray({ control, name: "equipos" })
@@ -284,6 +293,13 @@ export function RecepcionForm() {
   const draftAppliedRef = useRef(false)
   const { draft, ready: draftReady, clearDraft, notifyChange } = useFormDraft<RecepcionDraftValue>({
     feature: "recepcion-form",
+    // El restore recorre `equipos` y `sideState` por indice: si un borrador
+    // viejo (hasta 7 dias) tiene otra forma, ese recorrido tira un TypeError
+    // adentro de un efecto y la pantalla de recepcion queda en blanco.
+    validate: (data) => {
+      const value = data as RecepcionDraftValue
+      return Array.isArray(value?.form?.equipos) && Array.isArray(value?.sideState)
+    },
     // `getValues()` en vez de `watch()`: leer el form entero en render
     // suscribe el componente a cada tecla de cada equipo. El borrador no
     // necesita re-render, solo el valor al momento de grabar.
@@ -318,43 +334,57 @@ export function RecepcionForm() {
     if (!draftReady || draftAppliedRef.current) return
     draftAppliedRef.current = true
     if (!draft) return
-    // El codigo de acceso no se persiste (ver el limite en getValue): se
-    // repone vacio para no dejar el campo en undefined si un borrador viejo
-    // todavia lo trae.
-    reset({
-      ...draft.form,
-      equipos: draft.form.equipos.map((equipo) => ({
-        ...equipo,
-        codigoAccesoDispositivo: "",
-      })),
-    })
-    setSideState(
-      draft.form.equipos.map((_, i) => ({
-        ...equipoSideStateVacio(),
-        ...draft.sideState[i],
-      }))
-    )
-    // La conformidad NO se restaura. Su evidencia es la firma del cliente, que
-    // este borrador no persiste a proposito (dato binario), y el POST manda
-    // `terminosAceptados: true` con `firmaCliente: undefined`: quedaria una
-    // recepcion conforme sin nada que la respalde.
-    setTerminosAceptados(false)
-    setSelectedCliente(draft.selectedCliente ?? null)
-    setDraftNoticeVisible(true)
-  }, [draftReady, draft, reset])
+    try {
+      // El codigo de acceso no se persiste (ver el limite en getValue): se
+      // repone vacio para no dejar el campo en undefined si un borrador viejo
+      // todavia lo trae.
+      reset({
+        ...draft.form,
+        equipos: draft.form.equipos.map((equipo) => ({
+          ...equipo,
+          codigoAccesoDispositivo: "",
+        })),
+      })
+      setSideState(
+        draft.form.equipos.map((_, i) => ({
+          ...equipoSideStateVacio(),
+          ...draft.sideState[i],
+        }))
+      )
+      // La conformidad NO se restaura. Su evidencia es la firma del cliente, que
+      // este borrador no persiste a proposito (dato binario), y el POST manda
+      // `terminosAceptados: true` con `firmaCliente: undefined`: quedaria una
+      // recepcion conforme sin nada que la respalde.
+      setTerminosAceptados(false)
+      setSelectedCliente(draft.selectedCliente ?? null)
+      setDraftNoticeVisible(true)
+    } catch (error) {
+      // Ultima red, ademas del `validate` del hook: un borrador de otra forma
+      // que igual pase la validacion no puede llevarse puesta la pantalla. Una
+      // excepcion aca corre dentro de un efecto, o sea que desmonta el arbol
+      // entero y deja la recepcion en blanco, sin salida.
+      console.error("Borrador de recepcion invalido, se descarta:", error)
+      clearDraft()
+      setDraftNoticeVisible(false)
+      reset(recepcionFormDefaults())
+      setSideState([equipoSideStateVacio(), equipoSideStateVacio()])
+    }
+  }, [draftReady, draft, reset, clearDraft])
 
   const discardDraft = () => {
     clearDraft()
     setDraftNoticeVisible(false)
-    reset({
-      clienteId: "",
-      telefonoContacto: "",
-      observaciones: "",
-      equipos: [equipoVacio(), equipoVacio()],
-    })
+    reset(recepcionFormDefaults())
     setSideState([equipoSideStateVacio(), equipoSideStateVacio()])
     setTerminosAceptados(false)
     setSelectedCliente(null)
+    // La firma no se persiste, asi que no viene del borrador -- pero si sigue
+    // en pantalla despues de descartar, la recepcion del cliente siguiente se
+    // manda firmada por el anterior. El bump de la key remonta el pad: sin eso
+    // el trazo queda dibujado y el mostrador no vuelve a pedir la firma.
+    setFirma(null)
+    setFirmaMime(null)
+    setFirmaResetKey((prev) => prev + 1)
   }
 
   // --- Mantener fields (react-hook-form) y sideState sincronizados ---------
@@ -679,6 +709,7 @@ export function RecepcionForm() {
                 Una sola firma cubre los {fields.length} equipos de esta recepcion.
               </p>
               <SignaturePad
+                key={firmaResetKey}
                 label="Firma del cliente (conformidad de recepcion)"
                 onSignatureChange={(data, mime) => {
                   setFirma(data)

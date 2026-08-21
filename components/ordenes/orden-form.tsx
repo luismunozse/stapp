@@ -261,6 +261,20 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   const draftRestoredRef = useRef(false)
   const { draft, ready: draftReady, clearDraft, notifyChange } = useFormDraft<OrdenDraftValue>({
     feature: "orden-form",
+    // El restore recorre estructuras del borrador (checklistValores,
+    // accesoriosSeleccionados): un borrador viejo con otra forma haria estallar
+    // el efecto que las aplica y el alta quedaria en pantalla blanca.
+    validate: (data) => {
+      const value = data as OrdenDraftValue
+      return (
+        !!value &&
+        typeof value.form === "object" &&
+        value.form !== null &&
+        Array.isArray(value.accesoriosSeleccionados) &&
+        typeof value.checklistValores === "object" &&
+        value.checklistValores !== null
+      )
+    },
     scope: fromTurnoId
       ? `turno:${fromTurnoId}`
       : initialClienteId
@@ -317,29 +331,40 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     draftAppliedRef.current = true
     if (!draft) return
     draftRestoredRef.current = true
-    // El codigo de acceso no se persiste (ver el limite en getValue): se
-    // repone vacio para no dejar el campo en undefined si un borrador viejo
-    // todavia lo trae.
-    reset({ ...draft.form, codigoAccesoDispositivo: "" })
-    setSelectedClienteObj(draft.selectedClienteObj ?? null)
-    setAccesoriosSeleccionados(draft.accesoriosSeleccionados)
-    setOtroAccesorio(draft.otroAccesorio)
-    setCamposExtraValues(draft.camposExtraValues)
-    setPresupuestoAceptado(draft.presupuestoAceptado)
-    setSena(draft.sena)
-    setMetodoPagoSena(draft.metodoPagoSena)
-    setSelectedSectorId(draft.selectedSectorId)
-    setSelectedTecnicoId(draft.selectedTecnicoId)
-    setSelectedRecibidoPorId(draft.selectedRecibidoPorId)
-    setChecklistValores(draft.checklistValores)
-    setChecklistNotas(draft.checklistNotas)
-    // El paso NO se restaura (ni se guarda). La sena y "presupuesto aceptado"
-    // viven en el paso 2: reabrir en el paso 3 los dejaba fuera de pantalla y
-    // el submit mandaba `sena` igual, registrando un movimiento de caja por
-    // plata que el cliente nunca entrego. Arrancar en el paso 1 obliga a pasar
-    // por delante de lo que se cargo.
-    setDraftNoticeVisible(true)
-  }, [draftReady, draft, reset])
+    try {
+      // El codigo de acceso no se persiste (ver el limite en getValue): se
+      // repone vacio para no dejar el campo en undefined si un borrador viejo
+      // todavia lo trae.
+      reset({ ...draft.form, codigoAccesoDispositivo: "" })
+      setSelectedClienteObj(draft.selectedClienteObj ?? null)
+      setAccesoriosSeleccionados(draft.accesoriosSeleccionados)
+      setOtroAccesorio(draft.otroAccesorio)
+      setCamposExtraValues(draft.camposExtraValues)
+      setPresupuestoAceptado(draft.presupuestoAceptado)
+      setSena(draft.sena)
+      setMetodoPagoSena(draft.metodoPagoSena)
+      setSelectedSectorId(draft.selectedSectorId)
+      setSelectedTecnicoId(draft.selectedTecnicoId)
+      setSelectedRecibidoPorId(draft.selectedRecibidoPorId)
+      setChecklistValores(draft.checklistValores)
+      setChecklistNotas(draft.checklistNotas)
+      // El paso NO se restaura (ni se guarda). La sena y "presupuesto aceptado"
+      // viven en el paso 2: reabrir en el paso 3 los dejaba fuera de pantalla y
+      // el submit mandaba `sena` igual, registrando un movimiento de caja por
+      // plata que el cliente nunca entrego. Arrancar en el paso 1 obliga a
+      // pasar por delante de lo que se cargo.
+      setDraftNoticeVisible(true)
+    } catch (error) {
+      // Ultima red, ademas del `validate` del hook: una excepcion aca corre
+      // dentro de un efecto, o sea que desmonta el arbol entero y deja el alta
+      // en blanco. Mejor perder el borrador que la pantalla.
+      console.error("Borrador de orden invalido, se descarta:", error)
+      draftRestoredRef.current = false
+      clearDraft()
+      setDraftNoticeVisible(false)
+      reset(ordenFormDefaults())
+    }
+  }, [draftReady, draft, reset, clearDraft])
 
   const discardDraft = () => {
     clearDraft()
@@ -359,6 +384,13 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     setChecklistNotas("")
     setCurrentStep(1)
     setSelectedClienteObj(null)
+    // Fotos y firma del checklist no se persisten, asi que no vienen del
+    // borrador -- pero si sobreviven al descarte se suben con la orden
+    // siguiente: fotos de otro equipo y una conformidad firmada por otra
+    // persona.
+    setFotos([])
+    setChecklistFirma(null)
+    setChecklistFirmaMime(null)
   }
 
   // Prefill desde turno (si la orden nace de una visita agendada).
