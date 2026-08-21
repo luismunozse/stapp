@@ -35,9 +35,33 @@ interface CotizacionItem {
   descuentoTipo?: string
   descuentoValor?: number
   inventarioId?: string | null
+  servicioId?: string | null
   tipoRepuesto?: "ORIGINAL" | "ALTERNATIVO" | "RECICLADO" | "NO_APLICA"
   // Solo runtime: capturado al seleccionar del inventario para mostrar margen.
   precioCompra?: number | null
+}
+
+/**
+ * Traduce un item del formulario al payload de la API.
+ *
+ * `precioCompra` es solo de runtime: se captura al elegir un producto del
+ * inventario para poder mostrar el margen en pantalla, y viaja al servidor como
+ * `costoUnitario`. Un servicio no tiene costo conocido, asi que queda en null:
+ * null significa "no se sabe", que no es lo mismo que "el costo es cero".
+ */
+export function toItemPayload(item: CotizacionItem) {
+  return {
+    descripcion: item.descripcion,
+    cantidad: item.cantidad,
+    precioUnitario: item.precioUnitario,
+    costoUnitario: item.costoUnitario ?? item.precioCompra ?? null,
+    unidad: item.unidad || "Unidad",
+    descuentoTipo: item.descuentoTipo || "porcentaje",
+    descuentoValor: item.descuentoValor || 0,
+    inventarioId: item.inventarioId || null,
+    servicioId: item.servicioId || null,
+    tipoRepuesto: item.tipoRepuesto || "NO_APLICA",
+  }
 }
 
 interface CondicionesTecnicas {
@@ -275,7 +299,7 @@ export function CotizacionForm({
   }
 
   const addItem = () => {
-    setItems([...items, { descripcion: "", cantidad: 1, precioUnitario: 0, unidad: "Unidad", descuentoTipo: "porcentaje", descuentoValor: 0, inventarioId: null, tipoRepuesto: "NO_APLICA" }])
+    setItems([...items, { descripcion: "", cantidad: 1, precioUnitario: 0, unidad: "Unidad", descuentoTipo: "porcentaje", descuentoValor: 0, inventarioId: null, servicioId: null, tipoRepuesto: "NO_APLICA" }])
   }
 
   const handleLoadTemplates = async () => {
@@ -378,17 +402,7 @@ export function CotizacionForm({
 
       const payload: Record<string, any> = {
         tipo,
-        items: validItems.map(item => ({
-          descripcion: item.descripcion,
-          cantidad: item.cantidad,
-          precioUnitario: item.precioUnitario,
-          costoUnitario: item.costoUnitario ?? item.precioCompra ?? null,
-          unidad: item.unidad || "Unidad",
-          descuentoTipo: item.descuentoTipo || "porcentaje",
-          descuentoValor: item.descuentoValor || 0,
-          inventarioId: item.inventarioId || null,
-          tipoRepuesto: item.tipoRepuesto || "NO_APLICA",
-        })),
+        items: validItems.map(toItemPayload),
         notas: notas || undefined,
         fechaVencimiento: fechaVencimiento || undefined,
         terminos: terminos || undefined,
