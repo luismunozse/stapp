@@ -64,6 +64,19 @@ export async function GET() {
       : false
     const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
 
+    // La respuesta depende del rol, así que una cache con clave solo de URL no
+    // sirve. `Vary: Cookie` mete la sesión en la clave del navegador: otro
+    // login es otra entrada, nunca la copia del ADMIN.
+    //
+    // El ADMIN conserva la cache de 60s (este endpoint se dispara en cada
+    // montaje de /inventario) porque su acceso al costo sale de session.role,
+    // que ya queda fijo mientras dura la sesión: cachear no agrega staleness.
+    // El VENDEDOR no la conserva: su acceso depende de
+    // vendedores_administran_inventario, que se resuelve vivo en cada request,
+    // y cachear le dejaría el costo a la vista hasta un minuto después de que
+    // un admin le revoque el permiso.
+    const cacheControl = role === "ADMIN" ? "private, max-age=60" : "no-store"
+
     return NextResponse.json(
       {
         totalSkus,
@@ -74,9 +87,7 @@ export async function GET() {
         valorEnRiesgo: canViewCost ? Math.round(valorEnRiesgo * 100) / 100 : null,
       },
       {
-        // La respuesta ahora depende del rol: no se cachea, igual que el resto
-        // de los endpoints con costo detrás de un permiso.
-        headers: { "Cache-Control": "no-store" },
+        headers: { "Cache-Control": cacheControl, Vary: "Cookie" },
       }
     )
   } catch (error) {

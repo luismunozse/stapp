@@ -157,6 +157,39 @@ describe("GET /api/inventario/stats — cost-derived aggregates gated", () => {
     expect(body.valorCosto).toBeNull()
     expect(body.valorEnRiesgo).toBeNull()
   })
+
+  // The body became role-dependent, so a URL-only cache key is unsafe. Vary on
+  // Cookie makes the browser cache key include the session; ADMIN cost access
+  // comes from the session role and cannot be revoked mid-session, so it keeps
+  // the 60s client cache this endpoint has on every /inventario mount.
+  it("ADMIN keeps the 60s private cache, keyed on the session cookie", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    wire()
+
+    const res = await getStats()
+
+    expect(res.headers.get("Cache-Control")).toBe("private, max-age=60")
+    expect(res.headers.get("Vary")).toBe("Cookie")
+  })
+
+  // VENDEDOR cost access hangs off vendedores_administran_inventario, resolved
+  // live per request: caching would keep showing cost for up to a minute after
+  // an admin revokes the opt-in.
+  it("no-store for the roles whose cost access is conditional or absent", async () => {
+    mockRole("VENDEDOR")
+    wire(true)
+    expect((await getStats()).headers.get("Cache-Control")).toBe("no-store")
+
+    vi.clearAllMocks()
+    mockRole("VENDEDOR")
+    wire(false)
+    expect((await getStats()).headers.get("Cache-Control")).toBe("no-store")
+
+    vi.clearAllMocks()
+    mockRole("TECNICO")
+    wire()
+    expect((await getStats()).headers.get("Cache-Control")).toBe("no-store")
+  })
 })
 
 describe("GET /api/inventario/summary — cost-derived aggregates gated", () => {
