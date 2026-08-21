@@ -528,6 +528,90 @@ describe('useFormDraft', () => {
     expect(window.localStorage.length).toBe(0)
   })
 
+  it('keeps a restored draft when the form still equals it', () => {
+    // El borrador restaurado ES el estado previo a cualquier interaccion, asi
+    // que la primera ventana de debounce sin actividad mueve la referencia
+    // encima de el. A partir de ahi, "el formulario es igual a la referencia"
+    // dejaba de significar "el usuario deshizo lo que escribio" y pasaba a
+    // significar "el formulario sigue igual al borrador que acaba de
+    // restaurar": un click en Siguiente, abrir y cerrar un select, o cualquier
+    // click dentro de un dialogo borraba el borrador mientras el aviso todavia
+    // decia que se habia restaurado.
+    const key = 'draft:v2:cliente-form:org-1:user-1:new'
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({ version: 2, savedAt: Date.now(), data: { nombre: 'Ana' } })
+    )
+
+    const { result, rerender } = renderDraft({ nombre: '' }, { feature: 'cliente-form' })
+    expect(result.current.draft).toEqual({ nombre: 'Ana' })
+
+    // El call site aplica el borrador: el formulario ya vale lo restaurado.
+    rerender({ value: { nombre: 'Ana' } })
+    act(() => {
+      vi.advanceTimersByTime(2000)
+    })
+
+    // Interaccion que no cambia nada (Siguiente, un select que se abre y se
+    // cierra, un accesorio que se marca y se desmarca).
+    userInteracts()
+    rerender({ value: { nombre: 'Ana' } })
+    act(() => {
+      vi.advanceTimersByTime(2000)
+    })
+
+    expect(window.localStorage.getItem(key)).not.toBeNull()
+    expect(JSON.parse(window.localStorage.getItem(key)!).data).toEqual({ nombre: 'Ana' })
+  })
+
+  it('removes the entry when the user reverts after discarding a restored draft', () => {
+    // El descarte deja el formulario en blanco y sin borrador: de ahi en mas
+    // vuelve a valer la regla de arriba (escribir y deshacer borra la entrada),
+    // porque ya no hay ningun borrador restaurado que proteger.
+    const key = 'draft:v2:cliente-form:org-1:user-1:new'
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({ version: 2, savedAt: Date.now(), data: { nombre: 'Ana' } })
+    )
+
+    // Los call sites limpian y resetean en el mismo handler, asi que el valor
+    // ya es el reseteado en el render que sigue a clearDraft: se modela con una
+    // referencia mutable en vez de con rerender, que los separa en dos renders.
+    let live = { nombre: '' }
+    const { result } = renderHook(() =>
+      useFormDraft({ feature: 'cliente-form', debounceMs: 1000, getValue: () => live })
+    )
+    expect(result.current.draft).toEqual({ nombre: 'Ana' })
+
+    // El call site aplica el borrador y la primera ventana sin interaccion
+    // mueve la referencia encima de el.
+    live = { nombre: 'Ana' }
+    act(() => {
+      result.current.notifyChange()
+      vi.advanceTimersByTime(2000)
+    })
+
+    act(() => {
+      live = { nombre: '' }
+      result.current.clearDraft()
+    })
+
+    userInteracts()
+    live = { nombre: 'Otra cosa' }
+    act(() => {
+      result.current.notifyChange()
+      vi.advanceTimersByTime(1000)
+    })
+    expect(window.localStorage.getItem(key)).not.toBeNull()
+
+    live = { nombre: '' }
+    act(() => {
+      result.current.notifyChange()
+      vi.advanceTimersByTime(1000)
+    })
+    expect(window.localStorage.getItem(key)).toBeNull()
+  })
+
   it('removes the stored draft when the form goes back to its baseline', () => {
     const { rerender } = renderDraft({ nombre: '' }, { feature: 'cliente-form' })
     userInteracts()

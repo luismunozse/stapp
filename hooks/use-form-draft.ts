@@ -351,6 +351,10 @@ export function useFormDraft<T>({
   const baselineStaleRef = useRef(false)
   const lastSavedRef = useRef<string | null>(null)
   const interactedRef = useRef(false)
+  /** True while the entry on disk holds work that was handed back to this form
+   *  (a draft was found on mount and has not been cleared since). It is what
+   *  separates the two ways a form can "equal the baseline" -- see flush. */
+  const restoredRef = useRef(false)
 
   // Keep the flush-time reads pointing at the latest committed render. This
   // effect has no dependency array on purpose: it must run after every commit.
@@ -401,11 +405,22 @@ export function useFormDraft<T>({
       baselineRef.current = serialized
       return
     }
-    if (serialized === baselineRef.current) {
+    if (serialized === baselineRef.current && !restoredRef.current) {
       // Back to where the form started: typed, saved, then undone. Returning
       // early here used to leave the entry written mid-edit on disk, so the
       // next open restored an intermediate version the user had already
       // walked back. There is nothing worth keeping -- drop it.
+      //
+      // Only when the baseline is the form's own pristine state. A RESTORED
+      // draft becomes the baseline too (it is the pre-interaction value, so the
+      // branch above moves the reference onto it), and there "the form equals
+      // the baseline" means "the form still equals the draft it restored" --
+      // which is the one state that must never delete it. One click on
+      // Siguiente, a select opened and closed, or any click inside a dialog was
+      // enough to wipe the draft while the notice still announced it. Those
+      // fall through to the write below instead, so an intermediate edit that
+      // was walked back is overwritten by the restored value rather than left
+      // on disk.
       lastSavedRef.current = null
       try {
         window.localStorage.removeItem(key)
@@ -469,7 +484,9 @@ export function useFormDraft<T>({
     lastSavedRef.current = null
     baselineStaleRef.current = false
     baselineRef.current = safeStringify(getValueRef.current())
-    setDraft(readDraft<T>(key, recordUpdatedAtMs, validateRef.current))
+    const restored = readDraft<T>(key, recordUpdatedAtMs, validateRef.current)
+    restoredRef.current = restored !== null
+    setDraft(restored)
     setReady(true)
   }, [feature, recordId, scope, enabled, userId, organizationId, recordUpdatedAtMs, flushPending])
 
@@ -523,6 +540,9 @@ export function useFormDraft<T>({
     // the dirty gate: saving resumes only once the form is modified again.
     interactedRef.current = false
     lastSavedRef.current = null
+    // Nothing restored is on disk any more, so "the form equals the baseline"
+    // goes back to meaning "the user undid their own edits" (see flush).
+    restoredRef.current = false
     // Every call site clears BEFORE resetting the form ("Descartar", submit),
     // so reading the form here captures the values that are about to be thrown
     // away. Taking that as the baseline meant the first click after a discard

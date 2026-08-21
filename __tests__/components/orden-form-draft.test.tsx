@@ -309,6 +309,23 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     expect(stored?.data.selectedSectorId).toBe("sec-1")
   })
 
+  it("no borra el borrador restaurado cuando se toca el formulario sin cambiar nada", async () => {
+    // "Siguiente" esta adentro del <form>, asi que cuenta como interaccion, y
+    // el paso NO se persiste: el borrador queda identico al que se acaba de
+    // restaurar. Eso se leia como "el usuario deshizo todo" y borraba la
+    // entrada mientras el aviso seguia diciendo que se habia restaurado; un
+    // cierre de sesion despues de eso se llevaba todo lo cargado.
+    window.localStorage.setItem(DRAFT_KEY, draftEnvelope())
+
+    await renderForm()
+    await settle(2000)
+
+    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+    await settle(2000)
+
+    expect(storedDraft()?.data.form.dispositivo).toBe("iPhone 13 Restaurado")
+  })
+
   it('"Descartar" limpia tambien los campos del paso 2 (no solo los del paso 1)', async () => {
     window.localStorage.setItem(
       DRAFT_KEY,
