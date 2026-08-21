@@ -98,6 +98,8 @@ function mockSucursalesYDepositos(opts: {
   nombre?: string
   /** Error returned by getPrincipalId's .single() — e.g. two rows flagged principal. */
   principalError?: { code: string; message: string }
+  /** Error returned by the depositos lookup — e.g. a transient query failure. */
+  depositoError?: { code: string; message: string }
 }) {
   const sucursalesChain: any = {}
   for (const m of ["select", "eq", "is"]) sucursalesChain[m] = vi.fn().mockReturnValue(sucursalesChain)
@@ -113,7 +115,7 @@ function mockSucursalesYDepositos(opts: {
   for (const m of ["select", "eq", "is"]) depositosChain[m] = vi.fn().mockReturnValue(depositosChain)
   depositosChain.maybeSingle = vi.fn().mockResolvedValue({
     data: opts.depositoId ? { id: opts.depositoId } : null,
-    error: null,
+    error: opts.depositoError ?? null,
   })
 
   vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
@@ -331,6 +333,29 @@ describe("resolverDestinoVenta", () => {
 
     expect(result.sucursalId).toBe("suc-A")
     expect(result.depositoId).toBe("dep-A")
+  })
+
+  it("DV-14 — la query de depositos falla: cae a modo drenaje y avisa por consola (no se traga el error)", async () => {
+    // A transient failure and "this sucursal has no principal deposito" produce
+    // the same null, so the failure must at least be visible in the logs — and
+    // must not claim the sucursal has no deposito, which it may well have.
+    mockSucursalesYDepositos({
+      principalSucursalId: "suc-principal",
+      depositoError: { code: "57014", message: "canceling statement due to statement timeout" },
+    })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const result = await resolverDestinoVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      userSucursalId: null,
+    })
+
+    expect(result.sucursalId).toBe("suc-principal")
+    expect(result.depositoId).toBeNull()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("Could not resolve the principal deposito"))
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("has no principal deposito"))
+    warn.mockRestore()
   })
 })
 
@@ -743,6 +768,53 @@ describe("cache de resolucion de venta (solo lecturas del POS)", () => {
     expect(await resolverIndicadorVentaCacheado(params)).toBeNull()
 
     expect(contarLecturas("sucursales")).toBe(1)
+  })
+
+  it("CV-12 — una falla de la query de depositos NO se cachea (el drenaje no queda fijado 30s)", async () => {
+    // A failed deposito lookup lands on the same drain-mode fallback as a
+    // sucursal that genuinely has no principal deposito. Pinning it for a full
+    // TTL hands an ADMIN the org-wide aggregate — the exact read/write drift
+    // scope=venta exists to close — and leaves branch-scoped users fail-closed
+    // on an empty catalog, all over a blip that already passed.
+    mockSucursalesYDepositos({
+      principalSucursalId: "suc-principal",
+      depositoError: { code: "57014", message: "canceling statement due to statement timeout" },
+    })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const params = { role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null }
+
+    expect((await resolverDestinoVentaCacheado(params)).depositoId).toBeNull()
+    expect((await resolverDestinoVentaCacheado(params)).depositoId).toBeNull()
+
+    expect(contarLecturas("depositos")).toBe(2)
+    warn.mockRestore()
+  })
+
+  it("CV-13 — pasado el blip de depositos vuelve el deposito, sin esperar el TTL", async () => {
+    mockSucursalesYDepositos({
+      principalSucursalId: "suc-principal",
+      depositoError: { code: "57014", message: "canceling statement due to statement timeout" },
+    })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const params = { role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null }
+
+    expect((await resolverDestinoVentaCacheado(params)).depositoId).toBeNull()
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    expect((await resolverDestinoVentaCacheado(params)).depositoId).toBe("dep-principal")
+    warn.mockRestore()
+  })
+
+  it("CV-14 — una sucursal SIN deposito principal SI se cachea (es una respuesta real, no una falla)", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: null })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const params = { role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null }
+
+    expect((await resolverDestinoVentaCacheado(params)).depositoId).toBeNull()
+    expect((await resolverDestinoVentaCacheado(params)).depositoId).toBeNull()
+
+    expect(contarLecturas("depositos")).toBe(1)
+    warn.mockRestore()
   })
 
   it("CV-7 — el camino de ESCRITURA no se cachea: resolverDestinoVenta siempre consulta", async () => {

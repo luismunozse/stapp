@@ -134,15 +134,46 @@ export async function sucursalParaLectura(params: {
   })
 }
 
+interface DepositoDeSucursal {
+  /** Principal deposito id, or null when there is none to return. */
+  depositoId: string | null
+  /**
+   * False when the query itself failed, i.e. `depositoId` is null because we
+   * could not look it up — not because the sucursal has no principal deposito.
+   */
+  resuelto: boolean
+}
+
 /**
  * Returns the principal deposito id for a sucursal, or null if none exists.
  * Used by sales routes to resolve the strict deposit for stock deduction.
+ *
+ * A failed query also returns null: every caller of this narrow signature wants
+ * the drain-mode fallback either way. What must NOT happen is treating that null
+ * as a fact worth remembering — see `getDepositoDeSucursalInterno`.
  */
 export async function getDepositoDeSucursal(
   organizationId: string,
   sucursalId: string
 ): Promise<string | null> {
-  const { data } = await supabaseAdmin
+  return (await getDepositoDeSucursalInterno(organizationId, sucursalId)).depositoId
+}
+
+/**
+ * `getDepositoDeSucursal` plus the one bit the id alone cannot carry: whether
+ * null means "this sucursal has no principal deposito" or "the lookup failed".
+ *
+ * The two are worlds apart downstream. Both land on drain mode for the request
+ * at hand, but the first is a configuration fact that stays true until an admin
+ * changes it, while the second is a blip that may already be over — and drain
+ * mode is exactly the read/write drift `scope=venta` exists to close, so pinning
+ * it in the read cache would re-open the drift for a whole TTL over a timeout.
+ */
+async function getDepositoDeSucursalInterno(
+  organizationId: string,
+  sucursalId: string
+): Promise<DepositoDeSucursal> {
+  const { data, error } = await supabaseAdmin
     .from("depositos")
     .select("id")
     .eq("organization_id", organizationId)
@@ -150,7 +181,17 @@ export async function getDepositoDeSucursal(
     .eq("principal", true)
     .is("deleted_at", null)
     .maybeSingle()
-  return data?.id ?? null
+
+  // maybeSingle() returns data null / error null for "no rows", so an error here
+  // is always a real failure and never the empty case.
+  if (error) {
+    console.warn(
+      `[sucursal] Could not resolve the principal deposito for sucursal ${sucursalId} — falling back to drain mode: ${error.message}`
+    )
+    return { depositoId: null, resuelto: false }
+  }
+
+  return { depositoId: data?.id ?? null, resuelto: true }
 }
 
 export interface DestinoVenta {
@@ -199,21 +240,55 @@ export async function resolverDestinoVenta(params: {
   organizationId: string
   userSucursalId: string | null
 }): Promise<DestinoVenta> {
+  return (await resolverDestinoVentaInterno(params)).destino
+}
+
+interface ResolucionDestinoVenta {
+  destino: DestinoVenta
+  /**
+   * False when a lookup the destination depends on failed rather than answered.
+   * The destination is still usable — it carries the drain-mode fallback — it
+   * just describes a blip instead of the org's configuration, so it must never
+   * be pinned in the read cache. Same distinction `resolverIndicadorVentaInterno`
+   * carries for the indicator.
+   */
+  resuelto: boolean
+}
+
+/** `resolverDestinoVenta` plus whether every lookup behind it actually answered. */
+async function resolverDestinoVentaInterno(params: {
+  role: string | null
+  organizationId: string
+  userSucursalId: string | null
+}): Promise<ResolucionDestinoVenta> {
   const branchScoped = params.role !== "ADMIN"
   const unassignedSucursal = branchScoped && !params.userSucursalId
   const sucursalId = await sucursalParaEscritura(params)
   if (!sucursalId) {
-    return { sucursalId: null, depositoId: null, unassignedSucursal, branchScoped }
+    // No deposito lookup was attempted, so nothing failed here. The cache gate
+    // refuses a null sucursalId on its own anyway (see `resolverDestinoVentaCacheado`).
+    return {
+      destino: { sucursalId: null, depositoId: null, unassignedSucursal, branchScoped },
+      resuelto: true,
+    }
   }
 
-  const depositoId = await getDepositoDeSucursal(params.organizationId, sucursalId)
-  if (!depositoId) {
+  const { depositoId, resuelto } = await getDepositoDeSucursalInterno(
+    params.organizationId,
+    sucursalId
+  )
+  // Only for a lookup that answered: claiming the sucursal has no deposito when
+  // the query timed out would be inventing a configuration problem.
+  if (!depositoId && resuelto) {
     console.warn(
       `[ventas] Sucursal ${sucursalId} has no principal deposito — falling back to drain mode`
     )
   }
 
-  return { sucursalId, depositoId, unassignedSucursal, branchScoped }
+  return {
+    destino: { sucursalId, depositoId, unassignedSucursal, branchScoped },
+    resuelto,
+  }
 }
 
 export interface LecturaVenta {
@@ -306,7 +381,7 @@ interface EntradaCacheVenta<T> {
   expiresAt: number
 }
 
-const cacheDestinoVenta = new Map<string, EntradaCacheVenta<DestinoVenta>>()
+const cacheDestinoVenta = new Map<string, EntradaCacheVenta<ResolucionDestinoVenta>>()
 const cacheIndicadorVenta = new Map<string, EntradaCacheVenta<IndicadorVenta>>()
 
 /**
@@ -368,21 +443,25 @@ export async function resolverDestinoVentaCacheado(params: {
     params.userSucursalId,
     params.cookieSucursalId,
   ])
-  return memoConTtl(
+  const resolucion = await memoConTtl(
     cacheDestinoVenta,
     key,
     () =>
-      resolverDestinoVenta({
+      resolverDestinoVentaInterno({
         role: params.role,
         organizationId: params.organizationId,
         userSucursalId: params.userSucursalId,
       }),
-    // A destination with no sucursal means the resolution did not land — which
-    // for an org-wide caller reads as the org aggregate. That can come from a
-    // transient failure, so it is served but never pinned for a whole TTL: the
-    // next request retries instead of inheriting the failure.
-    (destino) => destino.sucursalId !== null
+    // Two ways the resolution can fail to land, both served but never pinned for
+    // a whole TTL — the next request retries instead of inheriting the failure:
+    //  - no sucursal at all, which for an org-wide caller reads as the org
+    //    aggregate;
+    //  - a deposito lookup that errored, which reads as drain mode: the org
+    //    aggregate for an ADMIN (and no indicator), an empty catalog for a
+    //    branch-scoped user.
+    (r) => r.destino.sucursalId !== null && r.resuelto
   )
+  return resolucion.destino
 }
 
 /** Cached `resolverIndicadorVenta` — see `resolverDestinoVentaCacheado`. */
