@@ -100,8 +100,29 @@ export function calcularMontoSincronizado(input: {
   totalCobrado: number | string | null
   sumaAnterior: number
   sumaNueva: number
-}): { debeActualizar: boolean; campo: CampoSincronizado | null; nuevoMonto: number | null } {
-  const sinActualizar = { debeActualizar: false, campo: null, nuevoMonto: null }
+}): {
+  debeActualizar: boolean
+  campo: CampoSincronizado | null
+  nuevoMonto: number | null
+  /**
+   * Hasta la migración 303 la sincronización escribía SIEMPRE costo_final. Una
+   * orden anterior a APROBADO puede arrastrar un costo_final de esa época que la
+   * regla nueva ya no gobierna. Si nadie lo limpia queda esperando a que alguien
+   * lleve la orden a REPARADO, y ahí pasa a ser lo que se le cobra al cliente:
+   * el precio de una línea que quizás ya no existe.
+   *
+   * Solo se marca cuando ese costo_final COINCIDE con la suma de líneas
+   * anterior. Esa coincidencia es la huella de la regla vieja; un número tipeado
+   * por una persona no coincide y no se toca.
+   */
+  limpiarCostoFinalHuerfano: boolean
+} {
+  const sinActualizar = {
+    debeActualizar: false,
+    campo: null,
+    nuevoMonto: null,
+    limpiarCostoFinalHuerfano: false,
+  }
 
   const campo = campoSincronizadoPara(input.estado)
   if (!campo) return sinActualizar
@@ -118,10 +139,59 @@ export function calcularMontoSincronizado(input: {
 
   if (!decision.debeActualizar) return sinActualizar
 
+  const costoFinalEsHuerfano =
+    campo === "presupuesto" &&
+    input.costoFinalActual !== null &&
+    input.costoFinalActual !== undefined &&
+    Math.abs(aNumero(input.costoFinalActual) - input.sumaAnterior) < EPSILON
+
   // STATE GUARD: la orden ya cruzó el gate de este campo, así que no la dejamos
   // sin monto en automático. La UI muestra el banner de "Aplicar al total".
   const vaciaElMonto = decision.nuevoCostoFinal === null || decision.nuevoCostoFinal === 0
   if (vaciaElMonto && BLOQUEADO_POR_CAMPO[campo].includes(input.estado)) return sinActualizar
 
-  return { debeActualizar: true, campo, nuevoMonto: decision.nuevoCostoFinal }
+  return {
+    debeActualizar: true,
+    campo,
+    nuevoMonto: decision.nuevoCostoFinal,
+    limpiarCostoFinalHuerfano: costoFinalEsHuerfano,
+  }
+}
+
+/**
+ * Si el botón "Aplicar al total" puede escribir la suma en el monto vivo.
+ *
+ * Escribir a mano no puede saltearse los gates que respeta la sincronización
+ * automática: dejar en null el costo_final de una orden ya REPARADA hace que
+ * `entregar` lea pendiente = 0, saltee `cargar_deuda_cuenta_corriente`, y la
+ * deuda desaparezca de la orden, de la cuenta corriente, del cálculo de deuda
+ * del cliente y del widget de caja.
+ */
+export function puedeAplicarMonto(input: {
+  estado: string
+  suma: number
+  totalCobrado: number | string | null
+}): { ok: boolean; error?: string } {
+  const campo = campoSincronizadoPara(input.estado)
+
+  if (!campo) {
+    return { ok: false, error: "La orden está en un estado terminal: su monto ya no se sincroniza" }
+  }
+
+  if (input.suma <= 0 && BLOQUEADO_POR_CAMPO[campo].includes(input.estado)) {
+    return {
+      ok: false,
+      error:
+        campo === "presupuesto"
+          ? "La orden ya fue presupuestada: no puede quedar sin presupuesto"
+          : "La orden ya fue reparada: no puede quedar sin costo final",
+    }
+  }
+
+  // Solo del lado del costo final: el presupuesto no es lo que se cobra.
+  if (campo === "costo_final" && input.suma < aNumero(input.totalCobrado)) {
+    return { ok: false, error: "El total de servicios es menor a lo ya cobrado en esta orden" }
+  }
+
+  return { ok: true }
 }
