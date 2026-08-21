@@ -41,14 +41,16 @@ interface KitRow {
   nombre: string
   stock: number
   stockReservado: number
-  precioCompra: number
+  /** null cuando el rol no puede ver costos de compra (hasInventarioAccess). */
+  precioCompra: number | null
   precioVenta: number
   tipoKit: "ENSAMBLADO" | "VIRTUAL" | null
   imagenUrl: string | null
   categoria: string
   tipoDispositivo: string
   cantidadComponentes: number
-  costoCalculado: number
+  /** Suma del precio_compra de los componentes: mismo permiso que precioCompra. */
+  costoCalculado: number | null
 }
 
 interface KitsResp {
@@ -174,21 +176,28 @@ export default function KitsPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                {/* costoCalculado viene en null cuando el rol no puede ver
+                    costos: se oculta la celda entera. formatPrice(null)
+                    devuelve "", que dejaba el label sin valor. */}
+                <div
+                  className={`grid ${k.costoCalculado !== null ? "grid-cols-2" : "grid-cols-1"} gap-2 text-xs`}
+                >
                   <div>
                     <div className="text-[10px] uppercase text-muted-foreground">
                       Componentes
                     </div>
                     <div className="font-semibold">{k.cantidadComponentes}</div>
                   </div>
-                  <div>
-                    <div className="text-[10px] uppercase text-muted-foreground">
-                      Costo receta
+                  {k.costoCalculado !== null && (
+                    <div>
+                      <div className="text-[10px] uppercase text-muted-foreground">
+                        Costo receta
+                      </div>
+                      <div className="font-semibold">
+                        {formatPrice(k.costoCalculado)}
+                      </div>
                     </div>
-                    <div className="font-semibold">
-                      {formatPrice(k.costoCalculado)}
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 <Button
