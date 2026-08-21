@@ -35,6 +35,26 @@ function userInteracts() {
   form.remove()
 }
 
+/** Nodos que un test agrega a mano (un formulario vecino, una capa
+ *  portaleada). Se registran para limpiarlos siempre, asi un test que falla no
+ *  ensucia el DOM de los que siguen. */
+const strayNodes: Element[] = []
+function appendToBody<T extends Element>(node: T): T {
+  document.body.appendChild(node)
+  strayNodes.push(node)
+  return node
+}
+
+/** Una tecla sobre un control que vive adentro de `container`. */
+function interactInside(container: Element) {
+  const input = document.createElement('input')
+  container.appendChild(input)
+  act(() => {
+    input.dispatchEvent(new Event('keydown', { bubbles: true }))
+  })
+  input.remove()
+}
+
 /** Renders the hook over a mutable `value` prop, reading it through getValue. */
 function renderDraft<T>(
   initialValue: T,
@@ -64,6 +84,7 @@ describe('useFormDraft', () => {
   })
 
   afterEach(() => {
+    while (strayNodes.length) strayNodes.pop()!.remove()
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
@@ -707,6 +728,83 @@ describe('useFormDraft', () => {
     })
     expect(window.localStorage.length).toBe(0)
     chrome.remove()
+  })
+
+  it('ignores typing in another form nested inside this one', () => {
+    // ClienteSelector monta ClienteForm -- su propio <form>, adentro de un
+    // dialog que Radix portalea al final de <body> -- dentro de OrdenForm y de
+    // RecepcionForm. Escribir ahi marcaba como sucio al formulario PADRE, asi
+    // que cualquier prefill que resolviera en el medio (el turno, el
+    // deep-link) se persistia como borrador de un formulario que nadie toco y
+    // la apertura siguiente anunciaba un borrador restaurado que no era tal.
+    const ownForm = appendToBody(document.createElement('form'))
+    const nestedDialog = appendToBody(document.createElement('div'))
+    nestedDialog.setAttribute('role', 'dialog')
+    const nestedForm = nestedDialog.appendChild(document.createElement('form'))
+
+    let live = { nombre: '' }
+    const { result } = renderHook(() =>
+      useFormDraft({
+        feature: 'orden-form',
+        debounceMs: 1000,
+        getValue: () => live,
+        rootRef: { current: ownForm },
+      })
+    )
+
+    interactInside(nestedForm)
+    live = { nombre: 'prefill del turno' }
+    act(() => {
+      result.current.notifyChange()
+      vi.advanceTimersByTime(2000)
+    })
+    expect(window.localStorage.length).toBe(0)
+
+    // El formulario propio si cuenta.
+    interactInside(ownForm)
+    live = { nombre: 'lo que escribio el operador' }
+    act(() => {
+      result.current.notifyChange()
+      vi.advanceTimersByTime(1000)
+    })
+    const key = Object.keys(window.localStorage)[0]
+    expect(JSON.parse(window.localStorage.getItem(key)!).data).toEqual({
+      nombre: 'lo que escribio el operador',
+    })
+  })
+
+  it('still counts a portalled select opened from the form', () => {
+    // Radix saca selects y menus a un portal al final de <body>: el control que
+    // el usuario abrio DESDE este formulario ya no esta adentro de el, y sigue
+    // siendo una edicion. Esa capa no tiene <form> propio, que es lo que la
+    // separa del dialog de "Nuevo cliente".
+    const ownForm = appendToBody(document.createElement('form'))
+    const popper = appendToBody(document.createElement('div'))
+    popper.setAttribute('data-radix-popper-content-wrapper', '')
+    const option = popper.appendChild(document.createElement('div'))
+    option.setAttribute('role', 'option')
+
+    let live = { tecnicoId: '' }
+    const { result } = renderHook(() =>
+      useFormDraft({
+        feature: 'orden-form',
+        debounceMs: 1000,
+        getValue: () => live,
+        rootRef: { current: ownForm },
+      })
+    )
+
+    act(() => {
+      option.dispatchEvent(new Event('click', { bubbles: true }))
+    })
+    live = { tecnicoId: 'tec-1' }
+    act(() => {
+      result.current.notifyChange()
+      vi.advanceTimersByTime(1000)
+    })
+
+    const key = Object.keys(window.localStorage)[0]
+    expect(JSON.parse(window.localStorage.getItem(key)!).data).toEqual({ tecnicoId: 'tec-1' })
   })
 
   it('flushes a pending write when the page is hidden', () => {

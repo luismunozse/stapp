@@ -264,6 +264,10 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   const [draftNoticeVisible, setDraftNoticeVisible] = useState(false)
   const draftAppliedRef = useRef(false)
   const draftRestoredRef = useRef(false)
+  /** Raiz del formulario para el gate de interaccion del hook: ClienteSelector
+   *  monta ClienteForm (su propio <form>) adentro de este, y escribir en ese
+   *  dialog no es una edicion del alta. */
+  const formRef = useRef<HTMLFormElement>(null)
   const { draft, ready: draftReady, clearDraft, notifyChange } = useFormDraft<OrdenDraftValue>({
     feature: "orden-form",
     // El restore recorre estructuras del borrador (checklistValores,
@@ -280,6 +284,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         value.checklistValores !== null
       )
     },
+    rootRef: formRef,
     scope: fromTurnoId
       ? `turno:${fromTurnoId}`
       : initialClienteId
@@ -985,7 +990,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             )}
           </div>
         )}
-        <form onSubmit={(e) => {
+        <form ref={formRef} onSubmit={(e) => {
           e.preventDefault()
           if (currentStep < totalSteps) {
             handleNextStep()

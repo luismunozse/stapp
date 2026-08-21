@@ -50,7 +50,9 @@ import { useSession } from "next-auth/react"
  *    instead of asking every call site for a `dirty` flag: form state lives
  *    partly outside react-hook-form (checklists, accesorios, sector) and
  *    partly behind portalled Radix menus, so no single per-form signal
- *    covers it.
+ *    covers it. Pass `rootRef` so that document-level view stays scoped to the
+ *    caller's own form: without it, typing in a nested form (the "Nuevo
+ *    cliente" dialog) marks the parent dirty too.
  *
  * 2. Debounce that cannot starve. The snapshot is read through `getValue()`
  *    at flush time and the timer is armed at most once per window -- never
@@ -113,18 +115,28 @@ const FLOATING_LAYER_SELECTOR = [
 ].join(",")
 
 /**
- * True when the event landed on something a person edits a form with. The gate
- * used to latch on ANY document event: one click on the sidebar, a backdrop or
- * a card marked the form dirty for the rest of its life, so every prefill that
- * resolved afterwards (the "recibido por" default, the turno fetch, the
- * checklist template) counted as a user edit and got persisted as a draft of
- * untouched defaults.
+ * True when the event landed on something a person edits THIS form with. The
+ * gate used to latch on ANY document event: one click on the sidebar, a
+ * backdrop or a card marked the form dirty for the rest of its life, so every
+ * prefill that resolved afterwards (the "recibido por" default, the turno
+ * fetch, the checklist template) counted as a user edit and got persisted as a
+ * draft of untouched defaults.
+ *
+ * `root` (see the `rootRef` option) is what keeps a NESTED form out of it:
+ * ClienteSelector mounts ClienteForm -- its own <form>, inside a portalled
+ * dialog -- within both OrdenForm and RecepcionForm, and typing in "Nuevo
+ * cliente" used to flip the parent's dirty flag. A control that belongs to
+ * some other form is somebody else's edit; a control with no form of its own
+ * is a portalled Radix layer (select/menu content), which is exactly the case
+ * `root` cannot see and the one this form does own.
  */
-function isFormInteraction(target: EventTarget | null): boolean {
+function isFormInteraction(target: EventTarget | null, root: Element | null): boolean {
   if (!(target instanceof Element)) return false
   const control = target.closest(FORM_CONTROL_SELECTOR)
   if (!control) return false
-  return !!control.closest("form") || !!control.closest(FLOATING_LAYER_SELECTOR)
+  const ownerForm = control.closest("form")
+  if (ownerForm) return !root || root.contains(ownerForm)
+  return !!control.closest(FLOATING_LAYER_SELECTOR)
 }
 
 interface DraftEnvelope<T> {
@@ -159,6 +171,13 @@ export interface UseFormDraftOptions<T> {
    *  it is newer than the stored draft, the draft is discarded instead of
    *  silently overwriting somebody else's save. Ignored for new records. */
   recordUpdatedAt?: string | number | Date | null
+  /** The form's own root element (its `<form>`). The interaction gate only
+   *  counts controls that belong to it, so a nested form -- the "Nuevo
+   *  cliente" dialog ClienteSelector renders inside the intake screens --
+   *  cannot mark THIS form dirty. Controls with no form of their own
+   *  (portalled Radix select/menu content) still count: they are the layers
+   *  this form opened. Omitting it keeps the old, permissive behaviour. */
+  rootRef?: { readonly current: HTMLElement | null }
   /** Shape check for a stored draft, run before it is handed back. The
    *  envelope carries a schema version, but that number is maintained by hand:
    *  a form whose state changes shape without a bump hands the call site a
@@ -326,6 +345,7 @@ export function useFormDraft<T>({
   enabled = true,
   debounceMs = DEFAULT_DEBOUNCE_MS,
   recordUpdatedAt = null,
+  rootRef,
   validate,
 }: UseFormDraftOptions<T>): UseFormDraftResult<T> {
   const { data: session } = useSession()
@@ -342,6 +362,7 @@ export function useFormDraft<T>({
   const enabledRef = useRef(enabled)
   const debounceMsRef = useRef(debounceMs)
   const recordUpdatedAtRef = useRef(recordUpdatedAtMs)
+  const rootRefRef = useRef(rootRef)
   const validateRef = useRef(validate)
   /** Serialized snapshot the form is compared against to decide "did the user
    *  change anything?". Re-captured while no interaction has happened yet. */
@@ -363,6 +384,7 @@ export function useFormDraft<T>({
     enabledRef.current = enabled
     debounceMsRef.current = debounceMs
     recordUpdatedAtRef.current = recordUpdatedAtMs
+    rootRefRef.current = rootRef
     validateRef.current = validate
   })
 
@@ -376,7 +398,7 @@ export function useFormDraft<T>({
   useEffect(() => {
     if (typeof document === "undefined") return
     const onInteraction = (event: Event) => {
-      if (!isFormInteraction(event.target)) return
+      if (!isFormInteraction(event.target, rootRefRef.current?.current ?? null)) return
       interactedRef.current = true
     }
     for (const type of USER_INTERACTION_EVENTS) {

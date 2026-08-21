@@ -291,6 +291,10 @@ export function RecepcionForm() {
   // del snapshot: son datos binarios, no formularios recuperables.
   const [draftNoticeVisible, setDraftNoticeVisible] = useState(false)
   const draftAppliedRef = useRef(false)
+  /** Raiz del formulario para el gate de interaccion del hook: ClienteSelector
+   *  monta ClienteForm (su propio <form>) adentro de este, y escribir en ese
+   *  dialog no es una edicion de la recepcion. */
+  const formRef = useRef<HTMLFormElement>(null)
   const { draft, ready: draftReady, clearDraft, notifyChange } = useFormDraft<RecepcionDraftValue>({
     feature: "recepcion-form",
     // El restore recorre `equipos` y `sideState` por indice: si un borrador
@@ -300,6 +304,7 @@ export function RecepcionForm() {
       const value = data as RecepcionDraftValue
       return Array.isArray(value?.form?.equipos) && Array.isArray(value?.sideState)
     },
+    rootRef: formRef,
     // `getValues()` en vez de `watch()`: leer el form entero en render
     // suscribe el componente a cada tecla de cada equipo. El borrador no
     // necesita re-render, solo el valor al momento de grabar.
@@ -605,7 +610,7 @@ export function RecepcionForm() {
   return (
     <Card>
       <CardContent className="pt-6 space-y-4">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form ref={formRef} onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {draftNoticeVisible && (
             <DraftRestoredNotice onDiscard={discardDraft} />
           )}

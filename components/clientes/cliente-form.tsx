@@ -134,6 +134,10 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
   const recordId = cliente?.id ?? null
   const [draftNoticeVisible, setDraftNoticeVisible] = useState(false)
   const draftAppliedForRef = useRef<string | null>(null)
+  /** Raiz del formulario para el gate de interaccion del hook: este dialog se
+   *  monta adentro de OrdenForm y RecepcionForm (via ClienteSelector), asi que
+   *  cada uno tiene que reconocer solo sus propios controles. */
+  const formRef = useRef<HTMLFormElement>(null)
   const { draft, ready: draftReady, clearDraft, notifyChange } = useFormDraft<ClienteFormData>({
     feature: "cliente-form",
     recordId,
@@ -142,6 +146,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
     // solo el valor al momento de grabar.
     getValue: () => getValues(),
     enabled: open,
+    rootRef: formRef,
     // En edicion, si otro usuario guardo el cliente despues de que se escribio
     // este borrador, restaurarlo pisaria ese guardado (el submit manda el form
     // entero). El hook lo descarta comparando contra este token.
@@ -264,7 +269,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
         <DialogHeader>
           <DialogTitle>{cliente ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form ref={formRef} onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {draftNoticeVisible && (
             <DraftRestoredNotice onDiscard={discardDraft} />
           )}
