@@ -88,8 +88,7 @@ export async function GET(
       ? await resolveVendedoresHabilitados(organizationId!)
       : false
     const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
-    const formatted = formatInventario(item)
-    return NextResponse.json(canViewCost || !formatted ? formatted : { ...formatted, precioCompra: null })
+    return NextResponse.json(formatInventario(item, canViewCost))
   } catch (error) {
     console.error("Error fetching inventario:", error)
     return NextResponse.json(
@@ -257,7 +256,9 @@ export async function PUT(
       revalidateTag("catalogo", "max")
     }
 
-    return NextResponse.json(formatInventario(item))
+    // PUT corre detrás de requireInventarioAccess(): el permiso de costo ya
+    // está resuelto por el guard, así que el costo vuelve en la respuesta.
+    return NextResponse.json(formatInventario(item, true))
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

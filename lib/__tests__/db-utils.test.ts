@@ -396,30 +396,58 @@ describe('formatRepuesto / precioVentaRepuesto', () => {
     expect(precioVentaRepuesto({ precioVentaUnitario: null, precioUnitario: null })).toBeNull()
     expect(precioVentaRepuesto({})).toBeNull()
   })
+
+  it('propaga includeCost al inventario embebido', () => {
+    const row = {
+      id: 'r-1',
+      cantidad: 1,
+      precio_unitario: 80,
+      precio_venta_unitario: 200,
+      inventario: { id: 'i-1', precio_compra: 55, precio_venta: 300, stock: 4 },
+    }
+    expect(formatRepuesto(row)?.inventario?.precioCompra).toBe(55)
+    expect(formatRepuesto(row, false)?.inventario?.precioCompra).toBeNull()
+    // Lo que no es costo sigue disponible en el embed.
+    expect(formatRepuesto(row, false)?.inventario?.precioVenta).toBe(300)
+    expect(formatRepuesto(row, false)?.inventario?.stock).toBe(4)
+  })
 })
 
 describe('formatInventario', () => {
+  const input = {
+    id: '1',
+    codigo: 'PROD001',
+    nombre: 'Pantalla iPhone',
+    descripcion: 'Pantalla OLED',
+    categoria: 'Pantallas',
+    tipo_dispositivo: 'CELULAR',
+    stock: 10,
+    precio_compra: 5000,
+    precio_venta: 8000,
+    proveedor: 'Proveedor X',
+    organization_id: 'org-1',
+    created_at: '2024-01-01',
+    updated_at: '2024-01-02',
+  }
+
   it('formatea item de inventario', () => {
-    const input = {
-      id: '1',
-      codigo: 'PROD001',
-      nombre: 'Pantalla iPhone',
-      descripcion: 'Pantalla OLED',
-      categoria: 'Pantallas',
-      tipo_dispositivo: 'CELULAR',
-      stock: 10,
-      precio_compra: 5000,
-      precio_venta: 8000,
-      proveedor: 'Proveedor X',
-      organization_id: 'org-1',
-      created_at: '2024-01-01',
-      updated_at: '2024-01-02',
-    }
-    const result = formatInventario(input)
+    const result = formatInventario(input, true)
     expect(result?.tipoDispositivo).toBe('CELULAR')
     expect(result?.precioCompra).toBe(5000)
     expect(result?.precioVenta).toBe(8000)
     expect(result?.organizationId).toBe('org-1')
+    expect(result?.codigo).toBe('PROD001')
+  })
+
+  // Default-safe: quien no pide el costo explícitamente no lo recibe. Un caller
+  // nuevo que se olvide del gate pierde el costo (bug visible) en vez de
+  // filtrarlo a un rol sin permiso (bug silencioso).
+  it('oculta precioCompra cuando el caller no lo pide', () => {
+    const result = formatInventario(input)
+    expect(result?.precioCompra).toBeNull()
+    // Lo que no es costo no cambia.
+    expect(result?.precioVenta).toBe(8000)
+    expect(result?.stock).toBe(10)
     expect(result?.codigo).toBe('PROD001')
   })
 
@@ -669,5 +697,23 @@ describe('formatVenta — facturaId from facturas embed', () => {
     // factura" button never hides for an already-invoiced venta.
     const result = formatVenta(ventaBase({ facturas: { id: 'f1' } }))
     expect(result?.facturaId).toBe('f1')
+  })
+
+  // Las ventas embeben `inventario (*)`, que trae precio_compra. Ningún
+  // consumidor de /api/ventas lee ese costo, así que el embed no lo pide.
+  it('no expone el costo de compra del inventario embebido en los items', () => {
+    const result = formatVenta(ventaBase({
+      items_venta: [{
+        id: 'iv1',
+        inventario_id: 'inv1',
+        descripcion: 'Pantalla',
+        cantidad: 1,
+        precio_unitario: '100',
+        subtotal: '100',
+        inventario: { id: 'inv1', codigo: 'C1', precio_compra: 40, precio_venta: 100 },
+      }],
+    }))
+    expect(result?.items?.[0]?.inventario?.precioCompra).toBeNull()
+    expect(result?.items?.[0]?.inventario?.codigo).toBe('C1')
   })
 })

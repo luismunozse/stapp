@@ -156,10 +156,7 @@ export async function GET(request: Request) {
       count = fallback.count
     }
 
-    const data = inventario?.map((item) => {
-      const formatted = formatInventario(item)
-      return canViewCost || !formatted ? formatted : { ...formatted, precioCompra: null }
-    })
+    const data = inventario?.map((item) => formatInventario(item, canViewCost))
 
     return NextResponse.json({
       data,
@@ -305,7 +302,9 @@ export async function POST(request: Request) {
       }).catch(() => {})
     }
 
-    return NextResponse.json(formatInventario(inventario), { status: 201 })
+    // POST corre detrás de requireInventarioAccess(): el permiso de costo ya
+    // está resuelto por el guard.
+    return NextResponse.json(formatInventario(inventario, true), { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

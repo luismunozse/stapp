@@ -98,7 +98,9 @@ export async function POST(request: Request) {
           .single()
 
         if (insertError) throw insertError
-        created.push(formatInventario(inserted))
+        // Detrás de requireInventarioAccess(): el permiso de costo ya está
+        // resuelto por el guard de la ruta.
+        created.push(formatInventario(inserted, true))
         if (auditLogger) {
           auditLogger.create("inventario", inserted.id, {
             codigo: inserted.codigo,

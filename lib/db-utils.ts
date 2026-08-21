@@ -221,7 +221,9 @@ export function formatRepuesto(repuesto: any, includeCost = true) {
     // Este último es NULL en filas anteriores a la migración 286.
     precioUnitario: includeCost ? repuesto.precio_unitario : null,
     precioVentaUnitario: repuesto.precio_venta_unitario ?? null,
-    inventario: repuesto.inventario ? formatInventario(repuesto.inventario) : undefined,
+    // El embed de inventario trae el costo VIVO (precio_compra), no la copia
+    // congelada: sale por el mismo permiso que precioUnitario.
+    inventario: repuesto.inventario ? formatInventario(repuesto.inventario, includeCost) : undefined,
   }
 }
 
@@ -243,7 +245,19 @@ export function precioVentaRepuesto(repuesto: {
   return null
 }
 
-export function formatInventario(item: any) {
+/** `includeCost` es OPT-IN y arranca en false a propósito: `precio_compra` es
+ *  el costo de compra, detrás de `hasInventarioAccess` (ADMIN siempre;
+ *  VENDEDOR solo si la org habilitó el permiso; TECNICO nunca).
+ *
+ *  Con el default apagado, un caller nuevo que se olvide del gate pierde el
+ *  costo — un bug visible que aparece en la primera prueba con un ADMIN — en
+ *  vez de filtrarlo a un rol sin permiso, que es un bug silencioso. Es lo que
+ *  hizo falta: la ruta de barcode quedó afuera de un barrido ruta por ruta
+ *  justamente porque el formateador compartido lo emitía crudo.
+ *
+ *  Pasar `true` solo desde un caller que ya resolvió el permiso (con
+ *  `hasInventarioAccess`) o que corre detrás de `requireInventarioAccess()`. */
+export function formatInventario(item: any, includeCost = false) {
   if (!item) return null
 
   // Resolver nombre del proveedor: si viene el join (proveedores), usarlo.
@@ -260,7 +274,7 @@ export function formatInventario(item: any) {
     tipoDispositivo: item.tipo_dispositivo,
     stock: item.stock,
     stockReservado: item.stock_reservado ?? 0,
-    precioCompra: item.precio_compra,
+    precioCompra: includeCost ? item.precio_compra : null,
     precioVenta: item.precio_venta,
     proveedor: proveedorNombre,
     proveedorId: item.proveedor_id ?? null,
@@ -329,6 +343,8 @@ export function formatItemVenta(item: any) {
   return {
     id: item.id,
     inventarioId: item.inventario_id,
+    // El embed `inventario (*)` de la venta trae precio_compra, pero ningún
+    // consumidor de /api/ventas lee el costo del item: no se pide.
     inventario: item.inventario ? formatInventario(item.inventario) : undefined,
     descripcion: item.descripcion,
     cantidad: item.cantidad,

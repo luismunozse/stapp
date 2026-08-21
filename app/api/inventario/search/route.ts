@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { formatInventario } from "@/lib/db-utils"
 import { getCookieSucursalId, resolveSucursalLectura, getDepositoDeSucursal } from "@/lib/sucursal"
 
 // GET /api/inventario/search?q=term&limit=10

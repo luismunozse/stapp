@@ -72,6 +72,11 @@ export async function GET(request: Request) {
 
     // Format the item using the standard formatter (includes aggregate stock).
     // item is guaranteed non-null at this point (guarded above).
+    //
+    // Cost stays out on purpose: this route guards with plain requireAuth(), so
+    // a TECNICO reaches it, and neither consumer (the POS cart, the stock-count
+    // scanner) reads precioCompra. Not opting into the formatter's cost is the
+    // whole gate here — no role lookup on the POS scan path.
     const formattedItem = formatInventario(item)!
 
     // If scoped to a sucursal, override stock with the per-deposito value

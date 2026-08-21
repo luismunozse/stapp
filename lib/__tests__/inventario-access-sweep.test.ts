@@ -27,4 +27,17 @@ describe('endpoints de inventario', () => {
     const ofensores = files.filter((f) => requireAdminUsage.test(readFileSync(f, 'utf8')))
     expect(ofensores).toEqual([])
   })
+
+  // formatInventario emite precio_compra solo con includeCost en true. Pasarlo
+  // como literal es un opt-in incondicional: vale únicamente donde el guard de
+  // la ruta ya resolvió el permiso. Si el costo depende del rol, la ruta tiene
+  // que pasar el resultado de hasInventarioAccess, no un true fijo.
+  it('formatInventario(x, true) solo aparece detrás de requireInventarioAccess', () => {
+    const optInLiteral = /formatInventario\([^)]*,\s*true\s*\)/
+    const ofensores = files.filter((f) => {
+      const src = readFileSync(f, 'utf8')
+      return optInLiteral.test(src) && !/\brequireInventarioAccess\b/.test(src)
+    })
+    expect(ofensores).toEqual([])
+  })
 })
