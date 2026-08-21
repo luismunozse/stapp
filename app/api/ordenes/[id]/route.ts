@@ -532,7 +532,18 @@ export async function PUT(
       }).catch(err => console.error("Error queueing notification:", err))
     }
 
-    return NextResponse.json(formatOrden(updatedOrden))
+    // Mismos dos gates que el GET. Hoy el select del UPDATE no trae los embeds
+    // repuestos_orden/cotizaciones, así que no hay costo que filtrar — pero
+    // dejar los defaults en true hace que la corrección dependa de que nadie
+    // agregue un embed. Se resuelven y se pasan explícitos.
+    const vendedoresHabilitadosPut = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+
+    return NextResponse.json(formatOrden(updatedOrden, {
+      includeInventarioCost: hasInventarioAccess(role, vendedoresHabilitadosPut),
+      includeCotizacionCost: canViewCotizacionCosts(role),
+    }))
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

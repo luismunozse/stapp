@@ -7,7 +7,20 @@ import {
   parseResponse,
 } from "./helpers"
 
-import { GET } from "@/app/api/ordenes/[id]/route"
+vi.mock("@/lib/audit", () => ({
+  createAuditLogger: vi.fn(() => ({ update: vi.fn().mockResolvedValue(undefined) })),
+  diffObjects: vi.fn().mockReturnValue({ before: {}, after: {} }),
+}))
+
+vi.mock("@/lib/notifications/queue", () => ({
+  queueNotification: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock("@/lib/webhooks/dispatcher", () => ({
+  emitWebhookEvent: vi.fn().mockResolvedValue(undefined),
+}))
+
+import { GET, PUT } from "@/app/api/ordenes/[id]/route"
 
 function ctx(id = "o1") {
   return { params: Promise.resolve({ id }) }
@@ -228,6 +241,112 @@ describe("GET /api/ordenes/[id] — costoRepuestosCotizaciones aggregate", () =>
     const { status, body } = await parseResponse(await GET(createGetRequest(), ctx()))
 
     expect(status).toBe(200)
+    expect(body.costoRepuestosCotizaciones).toBeNull()
+  })
+})
+
+// The PUT returns formatOrden(updatedOrden) too. It used to call it with both
+// cost gates left at their `true` defaults, safe only because that select
+// carries no repuestos_orden/cotizaciones embed — the day anyone adds one, the
+// GET's gate is silently undone on the same resource. The gates are resolved
+// and passed explicitly so correctness does not depend on the select's shape.
+describe("PUT /api/ordenes/[id] — cost gates reach formatOrden", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const ordenBase = {
+    id: "o1",
+    numero_orden: 1,
+    organization_id: "org-1",
+    tecnico_id: "tec-1",
+    estado: "RECIBIDO",
+    presupuesto: null,
+    costo_final: null,
+    clientes: { id: "c1", nombre: "Juan", email: "j@test.com", telefono: "123" },
+    organizations: { id: "org-1", nombre: "Taller", moneda: "ARS", zona_horaria: "America/Argentina/Buenos_Aires" },
+  }
+
+  // Simula el día en que alguien agrega los embeds al select del UPDATE: el
+  // gate tiene que seguir en pie sin tocar nada más.
+  const updatedConEmbeds = {
+    ...ordenBase,
+    observaciones: "actualizado",
+    repuestos_orden: ordenRow.repuestos_orden,
+    cotizaciones: ordenRow.cotizaciones,
+  }
+
+  function wirePut(vendedoresAdministranInventario = false) {
+    const chain = createChainMock(null)
+    let calls = 0
+    chain.single = vi.fn().mockImplementation(() => {
+      calls++
+      return Promise.resolve({
+        data: calls === 1 ? ordenBase : updatedConEmbeds,
+        error: null,
+      })
+    })
+    mockSupabaseFrom({
+      ordenes_servicio: chain,
+      orden_eventos: createChainMock(null),
+      organizations: createChainMock({ vendedores_administran_inventario: vendedoresAdministranInventario }),
+    })
+  }
+
+  function putRequest() {
+    return new Request("http://localhost:3000/api/ordenes/o1", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ observaciones: "actualizado" }),
+    })
+  }
+
+  it("ADMIN — costs are returned (no behavior change)", async () => {
+    mockRole("ADMIN")
+    wirePut()
+
+    const { status, body } = await parseResponse(await PUT(putRequest(), ctx()))
+
+    expect(status).toBe(200)
+    expect(body.costoRepuestosCotizaciones).toBe(300)
+    expect(body.repuestos[0].precioUnitario).toBe(50)
+    expect(body.repuestos[0].inventario.precioCompra).toBe(50)
+  })
+
+  it("TECNICO (assigned) — both cost gates hold on the PUT response", async () => {
+    mockRole("TECNICO", { userId: "tec-1" })
+    wirePut()
+
+    const { status, body } = await parseResponse(await PUT(putRequest(), ctx()))
+
+    expect(status).toBe(200)
+    expect(body.costoRepuestosCotizaciones).toBeNull()
+    expect(body.repuestos[0].precioUnitario).toBeNull()
+    expect(body.repuestos[0].inventario.precioCompra).toBeNull()
+    // Lo que no es costo sigue disponible.
+    expect(body.repuestos[0].cantidad).toBe(2)
+    expect(body.repuestos[0].precioVentaUnitario).toBe(120)
+  })
+
+  it("VENDEDOR without inventario opt-in — both cost gates hold on the PUT response", async () => {
+    mockRole("VENDEDOR")
+    wirePut(false)
+
+    const { status, body } = await parseResponse(await PUT(putRequest(), ctx()))
+
+    expect(status).toBe(200)
+    expect(body.costoRepuestosCotizaciones).toBeNull()
+    expect(body.repuestos[0].precioUnitario).toBeNull()
+  })
+
+  // Los dos gates son independientes: el opt-in de inventario no abre el costo
+  // de cotización, que es ADMIN-only.
+  it("VENDEDOR with inventario opt-in — repuesto cost visible, cotización cost still gated", async () => {
+    mockRole("VENDEDOR")
+    wirePut(true)
+
+    const { status, body } = await parseResponse(await PUT(putRequest(), ctx()))
+
+    expect(status).toBe(200)
+    expect(body.repuestos[0].precioUnitario).toBe(50)
     expect(body.costoRepuestosCotizaciones).toBeNull()
   })
 })
