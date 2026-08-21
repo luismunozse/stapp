@@ -161,26 +161,37 @@ describe("service worker — API caching", () => {
     sw = loadServiceWorker()
   })
 
-  it("SW-1 — never stores /api/inventario responses (they vary by role and sucursal)", async () => {
-    sw.setNetwork(async () => jsonResponse([{ id: "p1", precioCompra: 100 }]))
-
-    const res = await sw.dispatchFetch("/api/inventario/search?q=&scope=venta&ventaInfo=true")
-
-    expect(await res!.json()).toEqual([{ id: "p1", precioCompra: 100 }])
-    expect(await sw.caches.match(`${ORIGIN}/api/inventario/search?q=&scope=venta&ventaInfo=true`)).toBeUndefined()
-  })
-
-  it("SW-2 — never replays a cached /api/inventario response to a later session", async () => {
-    // Simulates an entry written by an ADMIN (or by a previous sucursal
-    // selection) that a VENDEDOR on the same terminal must not be served.
+  // Offline product browsing is the reason the POS is a PWA at all. Dropping
+  // /api/inventario made `networkOnlyWithError` synthesize a 503, the client's
+  // `Array.isArray(data)` went false and the operator got an EMPTY catalog —
+  // offline sales collapsed to manual entry. It is cached again, and what keeps
+  // it honest is not the route list but ApiCacheSessionGuard + SucursalSwitcher
+  // dropping the whole cache whenever the identity behind it changes.
+  it("SW-1 — stores /api/inventario responses so the POS can browse offline", async () => {
     const url = `${ORIGIN}/api/inventario/search?q=&scope=venta`
-    const store = await sw.caches.open(API_CACHE_NAME)
-    await store.put(url, jsonResponse([{ id: "leaked", precioCompra: 100 }]))
-    sw.setNetwork(async () => jsonResponse([{ id: "fresh" }]))
+    sw.setNetwork(async () => jsonResponse([{ id: "p1", nombre: "Vidrio" }]))
 
     const res = await sw.dispatchFetch("/api/inventario/search?q=&scope=venta")
 
-    expect(await res!.json()).toEqual([{ id: "fresh" }])
+    expect(await res!.json()).toEqual([{ id: "p1", nombre: "Vidrio" }])
+    expect(await sw.caches.match(url)).toBeDefined()
+  })
+
+  it("SW-2 — offline, an inventario entry is served instead of the 503 that empties the catalog", async () => {
+    const url = `${ORIGIN}/api/inventario/search?q=&scope=venta`
+    const store = await sw.caches.open(API_CACHE_NAME)
+    await store.put(
+      url,
+      jsonResponse([{ id: "p1", nombre: "Vidrio" }], { [CACHED_AT_HEADER]: String(Date.now()) })
+    )
+    sw.setNetwork(async () => {
+      throw new Error("offline")
+    })
+
+    const res = await sw.dispatchFetch("/api/inventario/search?q=&scope=venta")
+
+    // El cliente hace Array.isArray(data): un 503 sintetico le vacia el catalogo.
+    expect(Array.isArray(await res!.json())).toBe(true)
   })
 
   it("SW-3 — org-wide routes keep stale-while-revalidate (offline PWA is deliberate)", async () => {
@@ -329,12 +340,20 @@ describe("service worker — API caching", () => {
     expect(await res!.json()).toEqual({ data: ["network"] })
   })
 
-  it("SW-6 — activate drops the previous API cache, purging already-stored inventario entries", async () => {
-    const legacy = await sw.caches.open("stapp-api-v2")
-    await legacy.put(`${ORIGIN}/api/inventario/search`, jsonResponse([{ id: "leaked" }]))
+  it("SW-6 — activate drops every previous API cache, so pre-guard entries do not survive the upgrade", async () => {
+    // Entries stored before ApiCacheSessionGuard existed carry no identity
+    // marker, so the guard cannot recognise them as somebody else's: the rename
+    // is what takes them out, once, on upgrade.
+    for (const vieja of ["stapp-api-v2", "stapp-api-v3"]) {
+      const legacy = await sw.caches.open(vieja)
+      await legacy.put(`${ORIGIN}/api/inventario/search`, jsonResponse([{ id: "leaked" }]))
+    }
+    await sw.caches.open(API_CACHE_NAME)
 
     await sw.dispatchActivate()
 
     expect(await sw.caches.keys()).not.toContain("stapp-api-v2")
+    expect(await sw.caches.keys()).not.toContain("stapp-api-v3")
+    expect(await sw.caches.keys()).toContain(API_CACHE_NAME)
   })
 })

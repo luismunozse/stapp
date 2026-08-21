@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { Store, Check, ChevronsUpDown } from "lucide-react"
+import { clearServiceWorkerCache } from "@/lib/sw-cache"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +57,13 @@ export function SucursalSwitcher() {
         setActiva(id)
         if (typeof window !== "undefined") {
           window.localStorage.setItem("sucursal-activa-ui", id)
+          // Lo que guardó el service worker está escopeado a la sucursal
+          // anterior y su clave es la URL sola, así que el reload de abajo se lo
+          // volvería a servir tal cual: el stock de la sucursal vieja mientras
+          // la venta descuenta de la nueva. La sucursal activa vive en una
+          // cookie httpOnly, o sea que este es el único punto del cliente que
+          // sabe que cambió.
+          clearServiceWorkerCache()
           // Recarga completa: el scope de sucursal afecta datos que se cargan
           // client-side (fetch en useEffect), que router.refresh() no re-dispara.
           // Un reload garantiza que todo se re-fetchee con la nueva sucursal.
