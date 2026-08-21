@@ -98,3 +98,55 @@ describe("InventarioForm — PUT payload when the item loaded without a cost", (
     expect(payload.precioCompra).toBe(150)
   })
 })
+
+/**
+ * The same null, one layer up: the input itself.
+ *
+ * Seeding "Costo *" with 0 shows the operator an invented cost — the exact
+ * thing this branch avoids everywhere else ("un 0 se lee como gratis";
+ * inventario-list renders "—" for the same null). It is reachable: the
+ * /inventario page only redirects VENDEDOR, so a TECNICO can open it, and the
+ * barcode-scan flow feeds this dialog directly.
+ *
+ * The field is hidden, not zeroed, and the operator is told why — matching the
+ * submit path, which already omits the field for exactly this item.
+ */
+describe("InventarioForm — the cost input when the item loaded without a cost", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: true, json: async () => [] } as Response)),
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("hides the cost input when the item arrived with a null cost", () => {
+    render(<InventarioForm item={makeItem(null)} onClose={vi.fn()} onSuccess={vi.fn()} />)
+
+    expect(screen.queryByLabelText("Costo *")).not.toBeInTheDocument()
+    // The rest of the form still works: only the cost is withheld.
+    expect(screen.getByLabelText("Precio Venta *")).toBeInTheDocument()
+  })
+
+  it("explains the absence instead of leaving a silent gap", () => {
+    render(<InventarioForm item={makeItem(null)} onClose={vi.fn()} onSuccess={vi.fn()} />)
+
+    expect(screen.getByText(/sin permiso para ver el costo/i)).toBeInTheDocument()
+  })
+
+  it("shows the cost input, seeded with the real value, when the item did arrive with a cost", () => {
+    render(<InventarioForm item={makeItem(150)} onClose={vi.fn()} onSuccess={vi.fn()} />)
+
+    expect(screen.getByLabelText("Costo *")).toHaveValue("150")
+  })
+
+  it("shows the cost input on a new item, where 0 is a real starting value", () => {
+    render(<InventarioForm onClose={vi.fn()} onSuccess={vi.fn()} />)
+
+    expect(screen.getByLabelText("Costo *")).toBeInTheDocument()
+  })
+})

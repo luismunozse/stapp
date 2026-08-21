@@ -202,6 +202,15 @@ export function InventarioForm({
   const categoria = watch("categoria")
   const tipoDispositivo = watch("tipoDispositivo")
 
+  // ¿La fuente expuso el costo de este item? Un item nuevo no tiene costo
+  // previo que proteger, así que su 0 es un valor real. Un item cargado con
+  // `precioCompra: null` llega sin costo porque el rol no puede verlo.
+  //
+  // Manda sobre el input y sobre el payload a la vez: si no se muestra, no se
+  // manda (ver onSubmit). Antes vivía sólo en onSubmit, y el input se pintaba
+  // igual sembrado en 0 — un costo inventado a la vista del operador.
+  const costoCargado = !item || (item.precioCompra !== null && item.precioCompra !== undefined)
+
   // Categorías disponibles según el tipo seleccionado
   // Prioritize dynamic categories from device type config, fallback to hardcoded map
   const categoriasDisponibles = (() => {
@@ -512,8 +521,6 @@ export function InventarioForm({
       // precio_compra real con cero. El PUT lo acepta opcional, así que
       // omitirlo deja la columna intacta.
       const { precioCompra, ...rest } = data
-      // Item nuevo: no hay costo previo que proteger, el 0 es un valor real.
-      const costoCargado = !item || (item.precioCompra !== null && item.precioCompra !== undefined)
       const costoField = costoCargado ? { precioCompra } : {}
 
       const payload = item
@@ -894,20 +901,35 @@ export function InventarioForm({
             </div>
 
             <div>
-              <Label htmlFor="precioCompra">Costo *</Label>
-              <Input
-                id="precioCompra"
-                type="text"
-                inputMode="decimal"
-                step="0.01"
-                {...register("precioCompra", { setValueAs: (v: string) => parseMoneyInput(v) })}
-                min={0}
-                placeholder="0.00"
-              />
-              {errors.precioCompra && (
-                <p className="text-sm text-destructive mt-1">
-                  {errors.precioCompra.message}
-                </p>
+              {costoCargado ? (
+                <>
+                  <Label htmlFor="precioCompra">Costo *</Label>
+                  <Input
+                    id="precioCompra"
+                    type="text"
+                    inputMode="decimal"
+                    step="0.01"
+                    {...register("precioCompra", { setValueAs: (v: string) => parseMoneyInput(v) })}
+                    min={0}
+                    placeholder="0.00"
+                  />
+                  {errors.precioCompra && (
+                    <p className="text-sm text-destructive mt-1">
+                      {errors.precioCompra.message}
+                    </p>
+                  )}
+                </>
+              ) : (
+                // El item llegó sin costo. El input necesita un número y
+                // arrancaría en 0, así que mostrarlo le inventa un precio al
+                // operador: un 0 se lee como gratis. Se oculta y se explica,
+                // igual que inventario-list muestra "—" para este mismo null.
+                <>
+                  <Label className="text-muted-foreground">Costo</Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Sin permiso para ver el costo. El valor guardado no se modifica.
+                  </p>
+                </>
               )}
             </div>
 
