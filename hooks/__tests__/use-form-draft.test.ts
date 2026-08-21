@@ -87,6 +87,7 @@ describe('useFormDraft', () => {
     while (strayNodes.length) strayNodes.pop()!.remove()
     vi.useRealTimers()
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('does not read or write without a resolved session', () => {
@@ -980,6 +981,56 @@ describe('useFormDraft', () => {
 
     const key = Object.keys(window.localStorage)[0]
     expect(JSON.parse(window.localStorage.getItem(key)!).data).toEqual({ tecnicoId: 'tec-1' })
+  })
+
+  it('keeps walking the ancestors past an id that no selector can express', () => {
+    // El id que ata la capa portaleada a este formulario (`contentId`) lo
+    // estampa Radix en un ANCESTRO de lo que el usuario toca, no en el elemento
+    // mismo: el walk tiene que llegar hasta el. Al primer id que no se puede
+    // meter en un selector, el catch cortaba el walk ENTERO y devolvia "esta
+    // capa no es de este formulario", asi que un control genuino de este form
+    // dejaba de marcarlo sucio -- y con el gate apagado no se guarda nada de lo
+    // que se escriba despues. Sin CSS.escape (el fallback de cssEscape, que es
+    // lo que corre en jsdom y en navegadores viejos) alcanza con una comilla en
+    // el id de una opcion, y esos ids suelen salir de datos.
+    vi.stubGlobal('CSS', undefined)
+    const ownForm = appendToBody(document.createElement('form'))
+    const trigger = ownForm.appendChild(document.createElement('button'))
+    trigger.setAttribute('role', 'combobox')
+    trigger.setAttribute('aria-controls', 'radix-content-1')
+    trigger.setAttribute('aria-expanded', 'true')
+    const popper = appendToBody(document.createElement('div'))
+    popper.setAttribute('data-radix-popper-content-wrapper', '')
+    const content = popper.appendChild(document.createElement('div'))
+    content.id = 'radix-content-1'
+    content.setAttribute('role', 'listbox')
+    const option = content.appendChild(document.createElement('div'))
+    option.setAttribute('role', 'option')
+    option.id = 'opt-pantalla 5.5" OLED'
+
+    let live = { tipoDispositivo: '' }
+    const { result } = renderHook(() =>
+      useFormDraft({
+        feature: 'orden-form',
+        debounceMs: 1000,
+        getValue: () => live,
+        rootRef: { current: ownForm },
+      })
+    )
+
+    act(() => {
+      option.dispatchEvent(new Event('click', { bubbles: true }))
+    })
+    live = { tipoDispositivo: 'CELULAR' }
+    act(() => {
+      result.current.notifyChange()
+      vi.advanceTimersByTime(1000)
+    })
+
+    const key = Object.keys(window.localStorage)[0]
+    expect(JSON.parse(window.localStorage.getItem(key)!).data).toEqual({
+      tipoDispositivo: 'CELULAR',
+    })
   })
 
   it('flushes a pending write when the page is hidden', () => {

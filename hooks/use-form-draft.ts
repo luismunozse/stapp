@@ -176,8 +176,14 @@ function isLayerOpenedFrom(control: Element, root: Element): boolean {
     try {
       if (root.querySelector(`[aria-controls="${cssEscape(node.id)}"]`)) return true
     } catch {
-      // Malformed id: no selector can match it, so nothing in root owns it.
-      return false
+      // This id cannot be expressed as a selector (a quote in it, and no
+      // CSS.escape to neutralize it). It only rules out THIS node: `contentId`
+      // is stamped on an ancestor of what the user clicked, so aborting the
+      // walk here answered "nobody in root opened this layer" without ever
+      // looking at the node that carries the answer -- and a genuine portalled
+      // control of this form stopped marking it dirty, which stops every save
+      // from that point on. Skip the node, keep climbing.
+      continue
     }
   }
   return false
