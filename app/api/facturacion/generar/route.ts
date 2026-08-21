@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getNextInvoiceNumber } from "@/lib/counters"
 import { toArray } from "@/lib/db-utils"
 import { z } from "zod"
+import { construirItemsFactura } from "@/lib/facturacion/items-factura"
 
 const generarFacturaSchema = z.union([
   z.object({ ordenId: z.string().min(1, "La orden es requerida") }).strict(),
@@ -69,6 +70,11 @@ export async function POST(request: Request) {
           nombre,
           inventario_id
         ),
+        servicios_orden (
+          cantidad,
+          precio_unitario,
+          nombre
+        ),
         facturas (id),
         cotizaciones (
           id,
@@ -116,76 +122,20 @@ export async function POST(request: Request) {
       (c: any) => c.estado === "ACEPTADA"
     )
 
-    // Calcular subtotal: prioridad cotización aprobada > costo_final > repuestos > presupuesto
-    let subtotal = 0
-    let itemsParaFactura: Array<{
-      cotizacionItemId?: string
-      descripcion: string
-      cantidad: number
-      precioUnitario: number
-      subtotal: number
-      tipo: string
-    }> = []
+    // Detalle y subtotal: prioridad cotización aprobada > costo_final > líneas
+    // cargadas > presupuesto. La regla vive en construirItemsFactura, con tests.
+    const { items: itemsParaFactura, subtotal: subtotalItems } = construirItemsFactura({
+      cotizacion: cotizacionAprobada
+        ? { total: cotizacionAprobada.total, items: cotizacionAprobada.items_cotizacion }
+        : null,
+      costoFinal: orden.costo_final,
+      presupuesto: orden.presupuesto,
+      repuestos: orden.repuestos_orden,
+      servicios: (orden as any).servicios_orden,
+    })
 
-    if (cotizacionAprobada && cotizacionAprobada.items_cotizacion?.length > 0) {
-      // Usar items de la cotización aprobada
-      itemsParaFactura = cotizacionAprobada.items_cotizacion.map((item: any) => ({
-        cotizacionItemId: item.id,
-        descripcion: item.descripcion,
-        cantidad: item.cantidad,
-        precioUnitario: item.precio_unitario,
-        subtotal: item.subtotal,
-        tipo: "SERVICIO",
-      }))
-      subtotal = cotizacionAprobada.total
-    } else if (orden.costo_final) {
-      subtotal = orden.costo_final
-      // Desglosar repuestos + mano de obra
-      const repuestosTotal = (orden.repuestos_orden || []).reduce(
-        (sum: number, r: any) => sum + r.cantidad * r.precio_unitario, 0
-      )
-      if (orden.repuestos_orden?.length > 0) {
-        for (const r of orden.repuestos_orden) {
-          itemsParaFactura.push({
-            descripcion: r.nombre || "Repuesto",
-            cantidad: r.cantidad,
-            precioUnitario: r.precio_unitario,
-            subtotal: r.cantidad * r.precio_unitario,
-            tipo: "REPUESTO",
-          })
-        }
-      }
-      const manoDeObra = subtotal - repuestosTotal
-      if (manoDeObra > 0) {
-        itemsParaFactura.push({
-          descripcion: "Mano de obra",
-          cantidad: 1,
-          precioUnitario: manoDeObra,
-          subtotal: manoDeObra,
-          tipo: "MANO_DE_OBRA",
-        })
-      }
-    } else if (orden.repuestos_orden && orden.repuestos_orden.length > 0) {
-      for (const r of orden.repuestos_orden) {
-        itemsParaFactura.push({
-          descripcion: r.nombre || "Repuesto",
-          cantidad: r.cantidad,
-          precioUnitario: r.precio_unitario,
-          subtotal: r.cantidad * r.precio_unitario,
-          tipo: "REPUESTO",
-        })
-      }
-      subtotal = itemsParaFactura.reduce((sum, i) => sum + i.subtotal, 0)
-    } else if (orden.presupuesto) {
-      subtotal = orden.presupuesto
-      itemsParaFactura.push({
-        descripcion: "Servicio de reparación",
-        cantidad: 1,
-        precioUnitario: orden.presupuesto,
-        subtotal: orden.presupuesto,
-        tipo: "SERVICIO",
-      })
-    }
+    // Arranca en el bruto de los items y mas abajo se remapea al neto fiscal.
+    let subtotal = subtotalItems
 
     // Config fiscal de la organización (IVA). select("*") es defensivo:
     // si las columnas no existen aún (migración 229 sin aplicar) quedan undefined
