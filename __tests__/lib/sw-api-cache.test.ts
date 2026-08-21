@@ -51,12 +51,20 @@ class FakeCache {
    * QuotaExceededError, the way it does on a mobile PWA near its quota.
    */
   failPut = false
+  /**
+   * Simulates slow storage: `cache.put` never settles. Anything that awaits it
+   * in the response path stops dead, which is exactly what must not happen.
+   */
+  blockPut = false
   async match(request: FakeRequest | string) {
     return this.entries.get(cacheKey(request))
   }
   async put(request: FakeRequest | string, response: Response) {
     if (this.failPut) {
       throw Object.assign(new Error("Quota exceeded"), { name: "QuotaExceededError" })
+    }
+    if (this.blockPut) {
+      await new Promise(() => {})
     }
     this.entries.set(cacheKey(request), response)
   }
@@ -376,6 +384,42 @@ describe("service worker — API caching", () => {
 
     expect(res!.status).toBe(200)
     expect(await res!.json()).toEqual({ data: ["network"] })
+  })
+
+  // Guardar es un efecto de responder, nunca parte de responder. Mientras el put
+  // viva en la cadena que se espera, la pagina recibe su respuesta recien
+  // despues de bufferear el body entero y escribirlo en disco.
+  it("SW-17 — un cache.put lento no retrasa la respuesta de la red", async () => {
+    const store = await sw.caches.open(API_CACHE_NAME)
+    store.blockPut = true
+    sw.setNetwork(async () => jsonResponse({ data: ["network"] }))
+
+    const res = await sw.dispatchFetch(RUTA_CACHEABLE)
+
+    expect(await res!.json()).toEqual({ data: ["network"] })
+  })
+
+  it("SW-18 — con una entrada vencida, el put lento NO se le cobra al presupuesto", async () => {
+    // Si la escritura cuenta contra STALE_REVALIDATE_BUDGET, un almacenamiento
+    // lento hace que una red rapida "no llegue a tiempo" y el operador termina
+    // viendo la copia vencida aunque la fresca ya habia contestado.
+    vi.useFakeTimers()
+    try {
+      const store = await sw.caches.open(API_CACHE_NAME)
+      await store.put(
+        `${ORIGIN}${RUTA_CACHEABLE}`,
+        jsonResponse({ data: ["stale"] }, { [CACHED_AT_HEADER]: String(Date.now() - 6 * 60 * 1000) })
+      )
+      store.blockPut = true
+      sw.setNetwork(async () => jsonResponse({ data: ["network"] }))
+
+      const pendiente = sw.dispatchFetch(RUTA_CACHEABLE)
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      expect(await (await pendiente)!.json()).toEqual({ data: ["network"] })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   // CLEAR_CACHE se dispara ahora en cada cambio de identidad y en cada cambio de

@@ -307,29 +307,38 @@ async function staleWhileRevalidate(request, cacheName, event) {
   const cache = await caches.open(cacheName)
   const cached = await cache.match(request)
 
-  const fetchPromise = fetch(request).then(async (response) => {
-    if (response.ok) {
-      // Guardar es un efecto de servir el request, nunca una precondicion. En un
-      // telefono con el almacenamiento al limite `cache.put` rechaza con
-      // QuotaExceededError: dejar que ese rechazo suba lo tomaria el .catch de
-      // abajo como "no hubo red" y degradaria una respuesta 200 buena a la copia
-      // vencida o al 503 sintetico. La red siempre gana.
-      try {
-        await cache.put(request, await conSelloDeCache(response.clone()))
-      } catch (error) {
+  const fetchPromise = fetch(request).catch(() => null)
+
+  // Guardar es un efecto de responder, NUNCA parte de responder. Mientras el put
+  // vivía dentro de esta cadena, la página recibía su respuesta recién después
+  // de bufferear el body entero y escribirlo: en un miss eso es la descarga
+  // completa antes de empezar a mostrar nada, y en el camino de la copia vencida
+  // esa escritura se le cobraba a STALE_REVALIDATE_BUDGET, así que un
+  // almacenamiento lento podía hacer que una red rápida no llegue a tiempo.
+  // Ahora `fetchPromise` resuelve con la respuesta y el guardado corre aparte.
+  const guardado = fetchPromise.then((response) => {
+    if (!response || !response.ok) return null
+    // El clone tiene que salir ANTES de que la página empiece a consumir el
+    // body; por eso es lo primero del callback y no hay ningún await antes.
+    const copia = response.clone()
+    return conSelloDeCache(copia)
+      .then((sellada) => cache.put(request, sellada))
+      .catch((error) => {
+        // Un QuotaExceededError en un teléfono al límite ya no puede degradar
+        // una respuesta 200 buena: acá no está en el camino de la respuesta.
         console.log('[SW] No se pudo cachear la respuesta de API:', request.url, error.message)
-      }
-    }
-    return response
-  }).catch(() => null)
+        return null
+      })
+  })
 
   // Dejar de ESPERAR la revalidación no es renunciar a ella. Servida la
   // respuesta, el navegador puede terminar el worker cuando quiera: sin esto el
-  // cache.put de arriba nunca llega a correr y, en un enlace a medias, cada
-  // request paga el presupuesto y vuelve a servir la MISMA copia vencida para
-  // siempre. waitUntil es lo que mantiene vivo al worker hasta guardarla.
+  // guardado nunca llega a correr y, en un enlace a medias, cada request paga el
+  // presupuesto y vuelve a servir la MISMA copia vencida para siempre. waitUntil
+  // es lo que mantiene vivo al worker hasta guardarla (y `guardado` depende de
+  // `fetchPromise`, así que también cubre la revalidación en sí).
   if (event) {
-    event.waitUntil(fetchPromise)
+    event.waitUntil(guardado)
   }
 
   if (cached && !cacheVencido(cached)) {
