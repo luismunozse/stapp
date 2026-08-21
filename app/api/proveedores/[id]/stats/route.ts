@@ -82,6 +82,13 @@ export async function GET(
     // valorCostoStock sale de precio_compra. Con un solo producto,
     // valorCostoStock / stock devuelve el costo exacto de ese item, así que va
     // detrás del mismo permiso. Los conteos y el valor a venta se mantienen.
+    //
+    // totalComprado va detrás del MISMO permiso: es la suma de
+    // ordenes_compra.total recibidas, o sea lo que la organización le pagó a
+    // este proveedor. Es el mismo dato comercial que valorCostoStock y viaja en
+    // la misma respuesta — mostrar uno y tapar el otro no es una línea
+    // defendible. Con un proveedor de una sola OC recibida, totalComprado ES el
+    // precio de esa compra.
     const vendedoresHabilitados = role === "VENDEDOR"
       ? await resolveVendedoresHabilitados(organizationId!)
       : false
@@ -96,7 +103,7 @@ export async function GET(
         itemsBajoStock,
         ordenesCount: ocRes.data?.length || 0,
         ordenesAbiertas,
-        totalComprado: Math.round(totalComprado * 100) / 100,
+        totalComprado: canViewCost ? Math.round(totalComprado * 100) / 100 : null,
         ultimaCompra,
       },
       { headers: { "Cache-Control": "no-store" } }

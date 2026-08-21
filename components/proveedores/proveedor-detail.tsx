@@ -101,7 +101,9 @@ interface Stats {
   itemsBajoStock: number
   ordenesCount: number
   ordenesAbiertas: number
-  totalComprado: number
+  /** null cuando el rol no puede ver costos de compra (hasInventarioAccess):
+   *  es lo que la organización le pagó a este proveedor. */
+  totalComprado: number | null
   ultimaCompra: string | null
 }
 
@@ -347,11 +349,16 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
             ) : null
           }
         />
-        <KpiCard
-          icon={<DollarSign className="h-4 w-4" />}
-          label="Total comprado"
-          value={stats ? formatPrice(stats.totalComprado) : "—"}
-        />
+        {/* Se oculta la tarjeta entera cuando el rol no puede ver costos de
+            compra. Mientras carga (stats undefined) se mantiene con "—" para
+            no saltar el layout. */}
+        {(!stats || stats.totalComprado !== null) && (
+          <KpiCard
+            icon={<DollarSign className="h-4 w-4" />}
+            label="Total comprado"
+            value={stats ? formatPrice(stats.totalComprado!) : "—"}
+          />
+        )}
         <KpiCard
           icon={<ShoppingCart className="h-4 w-4" />}
           label="Órdenes de compra"
