@@ -111,6 +111,8 @@ export async function POST(
     return NextResponse.json(
       {
         servicio: lineaDTO(result),
+        campoSincronizado: result.campoSincronizado ?? null,
+        montoActualizado: result.montoActualizado ?? false,
         costoFinalActualizado: result.costoFinalActualizado,
         sumaServicios: result.sumaServicios,
       },
@@ -158,11 +160,61 @@ export async function DELETE(
     }
 
     return NextResponse.json({
+      campoSincronizado: result.campoSincronizado ?? null,
+      montoActualizado: result.montoActualizado ?? false,
       costoFinalActualizado: result.costoFinalActualizado,
       sumaServicios: result.sumaServicios,
     })
   } catch (err) {
     console.error("Error deleting servicio de orden:", err)
     return NextResponse.json({ error: "Error al eliminar el servicio" }, { status: 500 })
+  }
+}
+
+/**
+ * "Aplicar al total": escribe la suma de las lineas en el monto vivo de la orden
+ * (presupuesto antes de APROBADO, costo_final desde APROBADO).
+ *
+ * Va por un RPC dedicado y NO por el PUT de /api/ordenes/[id] a proposito: ese
+ * PUT auto-transiciona la orden a PRESUPUESTADO al escribir presupuesto
+ * (route.ts:345-348) y encola la notificacion al cliente (:505). Aplicar un
+ * monto calculado no es presupuestar: cambiar de estado y avisarle al cliente
+ * siguen siendo actos explicitos del operador.
+ *
+ * El RPC rechaza dejar costo_final por debajo de total_cobrado, que es la guarda
+ * que evita que estado_cobro pase a COBRADO y la deuda desaparezca.
+ */
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { error, organizationId } = await requireAuth()
+    if (error) return error
+
+    const { id: ordenId } = await params
+
+    const { data: result, error: rpcError } = await supabaseAdmin.rpc(
+      "aplicar_monto_servicios_orden",
+      {
+        p_orden_id: ordenId,
+        p_organization_id: organizationId!,
+      }
+    )
+
+    if (rpcError) throw rpcError
+
+    if (result?.error) {
+      const noEncontrada = result.error === "Orden no encontrada"
+      return NextResponse.json({ error: result.error }, { status: noEncontrada ? 404 : 400 })
+    }
+
+    return NextResponse.json({
+      campoSincronizado: result.campoSincronizado,
+      monto: result.monto,
+    })
+  } catch (err) {
+    console.error("Error aplicando el monto de servicios:", err)
+    return NextResponse.json({ error: "Error al aplicar el total" }, { status: 500 })
   }
 }

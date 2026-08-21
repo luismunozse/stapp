@@ -1,3 +1,5 @@
+import { ESTADOS_COSTO_FINAL_BLOQUEADO, ESTADOS_PRESUPUESTO_BLOQUEADO } from "@/lib/orden-state-machine"
+
 /**
  * Regla de sincronización entre las líneas de servicio de una orden y su costo_final.
  *
@@ -54,4 +56,72 @@ export function calcularCostoFinalSincronizado(input: {
   }
 
   return { debeActualizar: true, nuevoCostoFinal: Math.round(input.sumaNueva * 100) / 100 }
+}
+
+/**
+ * Qué monto de la orden alimentan las líneas de servicio, según el estado.
+ *
+ * Una orden tiene dos números y solo uno está vivo por vez. Antes de que el
+ * cliente apruebe, el que importa es `presupuesto`: es lo que ve en el portal y
+ * lo que exige la transición a PRESUPUESTADO. Desde APROBADO en adelante el
+ * número vivo es `costo_final`, de donde salen el cobro y la comisión.
+ *
+ * El corte está en APROBADO y no más adelante porque ahí el presupuesto ya lo
+ * aceptó el cliente: seguir moviéndolo sería alterar un número acordado.
+ *
+ * En los estados terminales no se sincroniza nada. Las líneas se siguen viendo y
+ * el botón "Aplicar al total" sigue disponible para la corrección manual.
+ *
+ * ESPECIFICACIÓN NORMATIVA: igual que calcularCostoFinalSincronizado, esta
+ * función se reimplementa en plpgsql dentro de los RPCs. CUALQUIER cambio acá
+ * DEBE aplicarse también al bloque "SYNC RULE" de ambas funciones.
+ */
+export type CampoSincronizado = "presupuesto" | "costo_final"
+
+const ESTADOS_PRESUPUESTO: string[] = ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO"]
+const ESTADOS_COSTO_FINAL: string[] = ["APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO", "REPARADO"]
+
+/** Estados en los que el monto ya cruzó su gate y no puede volver a null/0. */
+const BLOQUEADO_POR_CAMPO: Record<CampoSincronizado, string[]> = {
+  presupuesto: ESTADOS_PRESUPUESTO_BLOQUEADO,
+  costo_final: ESTADOS_COSTO_FINAL_BLOQUEADO,
+}
+
+export function campoSincronizadoPara(estado: string): CampoSincronizado | null {
+  if (ESTADOS_PRESUPUESTO.includes(estado)) return "presupuesto"
+  if (ESTADOS_COSTO_FINAL.includes(estado)) return "costo_final"
+  return null
+}
+
+export function calcularMontoSincronizado(input: {
+  estado: string
+  presupuestoActual: number | string | null
+  costoFinalActual: number | string | null
+  totalCobrado: number | string | null
+  sumaAnterior: number
+  sumaNueva: number
+}): { debeActualizar: boolean; campo: CampoSincronizado | null; nuevoMonto: number | null } {
+  const sinActualizar = { debeActualizar: false, campo: null, nuevoMonto: null }
+
+  const campo = campoSincronizadoPara(input.estado)
+  if (!campo) return sinActualizar
+
+  // La decisión de "cobrado / editado a mano / última línea" es la misma para
+  // los dos montos: se evalúa sobre el campo vivo, no sobre el otro.
+  const valorActual = campo === "presupuesto" ? input.presupuestoActual : input.costoFinalActual
+  const decision = calcularCostoFinalSincronizado({
+    costoFinalActual: valorActual,
+    totalCobrado: input.totalCobrado,
+    sumaAnterior: input.sumaAnterior,
+    sumaNueva: input.sumaNueva,
+  })
+
+  if (!decision.debeActualizar) return sinActualizar
+
+  // STATE GUARD: la orden ya cruzó el gate de este campo, así que no la dejamos
+  // sin monto en automático. La UI muestra el banner de "Aplicar al total".
+  const vaciaElMonto = decision.nuevoCostoFinal === null || decision.nuevoCostoFinal === 0
+  if (vaciaElMonto && BLOQUEADO_POR_CAMPO[campo].includes(input.estado)) return sinActualizar
+
+  return { debeActualizar: true, campo, nuevoMonto: decision.nuevoCostoFinal }
 }
