@@ -231,6 +231,12 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   const [nuevoSectorNombre, setNuevoSectorNombre] = useState("")
   const [crearSectorLoading, setCrearSectorLoading] = useState(false)
   const [checklistTemplate, setChecklistTemplate] = useState<any>(null)
+  /** Tipo de equipo (codigo; "" = template por defecto de la organizacion) para
+   *  el que se resolvio `checklistTemplate`. `null` mientras no resolvio
+   *  ninguno todavia. Es lo que separa "el template que se va a enviar es otro"
+   *  de "el template de este tipo todavia no llego", que es la diferencia entre
+   *  descartar respuestas huerfanas y descartar respuestas validas. */
+  const [checklistTemplateTipo, setChecklistTemplateTipo] = useState<string | null>(null)
   const [checklistValores, setChecklistValores] = useState<Record<string, boolean | string | null>>({})
   const [checklistNotas, setChecklistNotas] = useState("")
   const [checklistFirma, setChecklistFirma] = useState<string | null>(null)
@@ -244,9 +250,15 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   const [firmaResetKey, setFirmaResetKey] = useState(0)
   const [checklistOpen, setChecklistOpen] = useState(true)
   /** Origen de las respuestas del checklist que restauro un borrador, mientras
-   *  todavia no llego el template contra el que hay que compararlas. Ver el
-   *  descarte de respuestas huerfanas en el efecto que trae el template. */
-  const checklistDelBorradorRef = useRef<{
+   *  todavia no se resolvio el template contra el que hay que compararlas. Ver
+   *  el efecto que descarta las respuestas huerfanas.
+   *
+   *  Estado y no ref: la comparacion vive en un efecto propio, asi que tiene
+   *  que despertarlo. Mientras era una ref, el unico que la leia era el efecto
+   *  del fetch del template -- y ese solo corre cuando cambia el tipo de
+   *  equipo, o sea nunca cuando el borrador no tiene tipo o trae uno que la
+   *  organizacion borro. */
+  const [checklistDelBorrador, setChecklistDelBorrador] = useState<{
     templateId: string | null
     tipoDispositivo: string
   } | null>(null)
@@ -412,14 +424,15 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       setChecklistNotas(draft.checklistNotas)
       // No se puede comparar todavia: el template se re-pide por tipo de equipo
       // y la lista de tipos aun no resolvio. Queda pendiente para el efecto que
-      // lo trae (ver el descarte de respuestas huerfanas ahi).
-      checklistDelBorradorRef.current =
+      // descarta las respuestas huerfanas.
+      setChecklistDelBorrador(
         Object.keys(draft.checklistValores).length > 0
           ? {
               templateId: draft.checklistTemplateId ?? null,
               tipoDispositivo: draft.form.tipoDispositivo ?? "",
             }
           : null
+      )
       // El paso tampoco se restaura (ni se guarda): reabrir en el paso 3 deja
       // fuera de pantalla todo lo que se venia cargando, y arrancar en el 1
       // obliga a pasar por delante de cada campo antes de crear la orden.
@@ -488,7 +501,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     setChecklistValores({})
     setChecklistNotas("")
     // Ya no hay respuestas restauradas que comparar contra ningun template.
-    checklistDelBorradorRef.current = null
+    setChecklistDelBorrador(null)
     setCurrentStep(1)
     setSelectedClienteObj(null)
     // Fotos y firma del checklist no se persisten, asi que no vienen del
@@ -638,6 +651,9 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     setChecklistFirma(null)
     setChecklistFirmaMime(null)
     setFirmaResetKey((prev) => prev + 1)
+    // Las respuestas que venian del borrador se acaban de ir con el cambio de
+    // tipo: ya no hay nada que comparar contra ningun template.
+    setChecklistDelBorrador(null)
     // If new type has a usarComoDispositivo field, clear dispositivo so it gets set by the field
     const nuevoTipoObj = tiposDispositivo.find((t) => t.codigo === nuevoTipo)
     const nuevoConfig = nuevoTipoObj?.config
@@ -649,49 +665,87 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
   // Fetch checklist template when device type changes
   useEffect(() => {
+    let cancelled = false
+    const tipoId = tipoSeleccionado?.id
+    const codigoTipo = tipoSeleccionado?.codigo ?? ""
+
     const fetchChecklistTemplate = async () => {
-      const tipoId = tipoSeleccionado?.id
       try {
         const url = tipoId
           ? `/api/checklist-templates/by-device-type?tipoDispositivoId=${tipoId}`
           : `/api/checklist-templates/by-device-type`
         const res = await fetch(url)
-        if (res.ok) {
-          const data = await res.json()
-          // Solo el template: las respuestas se limpian en handleTipoChange
-          // (ver el comentario ahi). Este efecto tambien corre al montar.
-          setChecklistTemplate(data.template)
-          descartarRespuestasHuerfanas(data.template)
-        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        // `cancelled`: el operador puede cambiar de tipo antes de que llegue
+        // esta respuesta, y la vieja pisaria al template del tipo nuevo.
+        if (cancelled) return
+        // Solo el template: las respuestas se limpian en handleTipoChange
+        // (ver el comentario ahi). Este efecto tambien corre al montar.
+        setChecklistTemplate(data.template)
+        setChecklistTemplateTipo(codigoTipo)
       } catch (error) {
         console.error("Error fetching checklist template:", error)
-      }
-    }
-
-    /** Las respuestas del checklist se indexan por id de item del template,
-     *  pero el template no se persiste en el borrador: al restaurar se vuelve a
-     *  pedir por tipo de equipo. Si la organizacion lo edito o lo reemplazo
-     *  dentro de los 7 dias que vive el borrador, las claves restauradas no
-     *  corresponden a ningun item: el checklist se dibuja vacio y el submit
-     *  igual las manda bajo el templateId nuevo.
-     *
-     *  Se compara recien contra el template DEL TIPO DE EQUIPO DEL BORRADOR: el
-     *  primer fetch del montaje sale con el tipo todavia sin resolver (la lista
-     *  de tipos carga async y el reset del borrador recien escribio el campo) y
-     *  trae el template por defecto de la organizacion, que no es ese. */
-    const descartarRespuestasHuerfanas = (template: any) => {
-      const delBorrador = checklistDelBorradorRef.current
-      if (!delBorrador) return
-      if ((tipoSeleccionado?.codigo ?? "") !== delBorrador.tipoDispositivo) return
-      checklistDelBorradorRef.current = null
-      if ((template?.id ?? null) !== delBorrador.templateId) {
-        // Las notas son texto libre, no estan indexadas por item: se conservan.
-        setChecklistValores({})
+        if (cancelled) return
+        // Sin template no hay checklist que enviar, y dejar en pantalla el del
+        // tipo anterior es peor: el submit lo mandaria con las respuestas de
+        // este. La resolucion se marca igual (aunque haya fallado) para que las
+        // respuestas restauradas no queden esperando un template que no vino.
+        setChecklistTemplate(null)
+        setChecklistTemplateTipo(codigoTipo)
       }
     }
 
     fetchChecklistTemplate()
+    return () => {
+      cancelled = true
+    }
   }, [tipoSeleccionado?.id, tipoSeleccionado?.codigo])
+
+  /**
+   * Las respuestas del checklist se indexan por id de item del template, pero
+   * el template no se persiste en el borrador: al restaurar se vuelve a pedir
+   * por tipo de equipo. Si la organizacion lo edito o lo reemplazo dentro de los
+   * 7 dias que vive el borrador, las claves restauradas no corresponden a ningun
+   * item: el checklist se dibuja vacio y el submit igual las manda bajo el
+   * templateId nuevo.
+   *
+   * Vive en su propio efecto, y no adentro del fetch, porque ahi la comparacion
+   * dependia de que la respuesta del servidor llegara despues de que el borrador
+   * se aplicara, y directamente no corria en los dos casos en que el tipo del
+   * borrador no resuelve nunca (un borrador sin tipo de equipo, o de un tipo que
+   * la organizacion borro) ni cuando el fetch fallaba, porque la llamada estaba
+   * adentro del `if (res.ok)`.
+   */
+  useEffect(() => {
+    if (!checklistDelBorrador) return
+    // El tipo del borrador todavia puede estar por resolver.
+    if (tiposLoading) return
+    const codigoTipo = tipoSeleccionado?.codigo ?? ""
+    if (codigoTipo !== checklistDelBorrador.tipoDispositivo) {
+      // El tipo con el que se respondio el checklist ya no existe en la
+      // organizacion (si lo hubiera cambiado el operador, handleTipoChange ya
+      // limpio esto): el template que se va a enviar es otro, con otros items.
+      setChecklistDelBorrador(null)
+      setChecklistValores({})
+      return
+    }
+    // El template DE ESTE TIPO todavia no resolvio. Comparar contra el que haya
+    // en pantalla descartaria respuestas validas: el primer fetch del montaje
+    // sale con el tipo aun sin resolver y trae el default de la organizacion.
+    if (checklistTemplateTipo !== codigoTipo) return
+    setChecklistDelBorrador(null)
+    if ((checklistTemplate?.id ?? null) !== checklistDelBorrador.templateId) {
+      // Las notas son texto libre, no estan indexadas por item: se conservan.
+      setChecklistValores({})
+    }
+  }, [
+    checklistDelBorrador,
+    tiposLoading,
+    tipoSeleccionado?.codigo,
+    checklistTemplate,
+    checklistTemplateTipo,
+  ])
 
   // Fetch sectors when client changes
   const clienteId = watch("clienteId")

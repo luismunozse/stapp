@@ -499,6 +499,85 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     expect(stored?.data.checklistNotas).toBe("Rayada")
   })
 
+  it("descarta las respuestas restauradas de un tipo de equipo que ya no existe", async () => {
+    // El tipo con el que se respondio el checklist no esta mas en la lista de
+    // la organizacion, asi que `tipoSeleccionado` no resuelve nunca: el
+    // descarte vivia en el efecto del template, que con estas dependencias
+    // corre una sola vez al montar. Las respuestas quedaban en el formulario y
+    // el submit las mandaba bajo el template por defecto, que tiene otros
+    // items.
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      draftEnvelope({
+        form: { ...draftData().form, tipoDispositivo: "TABLET" },
+        checklistTemplateId: "tpl-de-otra-epoca",
+        checklistValores: { "item-que-ya-no-existe": true },
+        checklistNotas: "Rayada",
+      }),
+    )
+
+    await renderForm()
+    await settle()
+
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+      target: { value: "iPhone 13 editado" },
+    })
+    await settle()
+
+    const stored = storedDraft()
+    expect(stored?.data.checklistValores).toEqual({})
+    // Las notas son texto libre, no estan indexadas por item: sobreviven.
+    expect(stored?.data.checklistNotas).toBe("Rayada")
+  })
+
+  it("descarta las respuestas restauradas cuando no se pudo traer el template del tipo", async () => {
+    // El descarte vivia adentro del `if (res.ok)`: con el endpoint caido, las
+    // respuestas del borrador seguian en el formulario y el submit las mandaba
+    // bajo el template que hubiera quedado en pantalla (el default de la
+    // organizacion, que no es el que las respondio).
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes("by-device-type?tipoDispositivoId=")) {
+          return Promise.resolve({ ok: false, status: 500, json: async () => ({}) } as Response)
+        }
+        if (url.includes("/api/checklist-templates/by-device-type")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              template: {
+                id: "tpl-1",
+                nombre: "Ingreso",
+                items: [{ key: "pantalla", label: "Pantalla", tipo: "BOOLEAN" }],
+              },
+            }),
+          } as Response)
+        }
+        return Promise.resolve({ ok: true, json: async () => [] } as Response)
+      }),
+    )
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      draftEnvelope({
+        form: { ...draftData().form, tipoDispositivo: "CELULAR" },
+        checklistTemplateId: "tpl-de-otra-epoca",
+        checklistValores: { "item-que-ya-no-existe": true },
+        checklistNotas: "Rayada",
+      }),
+    )
+
+    await renderForm()
+    await settle()
+
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+      target: { value: "iPhone 13 editado" },
+    })
+    await settle()
+
+    expect(storedDraft()?.data.checklistValores).toEqual({})
+  })
+
   it("no borra el borrador restaurado cuando se toca el formulario sin cambiar nada", async () => {
     // "Siguiente" esta adentro del <form>, asi que cuenta como interaccion, y
     // el paso NO se persiste: el borrador queda identico al que se acaba de
