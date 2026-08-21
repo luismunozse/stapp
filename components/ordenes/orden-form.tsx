@@ -323,7 +323,32 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
    *  esta sincronizado con el estado del hook: cada re-lectura devuelve uno
    *  nuevo, cada re-render devuelve el mismo. */
   const draftAppliedRef = useRef<OrdenDraftValue | null>(null)
-  const draftRestoredRef = useRef(false)
+  /** Origen del borrador que este formulario aplico, envuelto para poder
+   *  distinguir "ninguno" (null) del alta de mostrador, cuyo scope ES null.
+   *
+   *  Guarda el SCOPE y no un booleano porque los efectos de origen (turno,
+   *  deep-link) lo leen en el mismo commit en que cambia el origen -- y en ese
+   *  commit `draft` todavia es el del origen ANTERIOR, asi que el efecto que lo
+   *  aplica no volvio a correr y un booleano seguia en true. El deep-link nuevo
+   *  se salteaba entonces su `setValue("clienteId", ...)` y el formulario se
+   *  quedaba con el cliente del borrador viejo, mientras el fetch en vuelo si
+   *  dejaba el cliente nuevo en `selectedClienteObj`: la pantalla mostraba uno y
+   *  la orden se creaba para el otro. Comparado contra el scope del render que
+   *  lo lee, el latch no puede contestar por un origen que ya no es este. */
+  const draftRestoredRef = useRef<{ scope: string | null } | null>(null)
+  /** Scope del borrador segun el origen del alta. Una sola definicion para la
+   *  key del hook y para el latch de arriba: si se calcularan por separado,
+   *  volverian a poder hablar de origenes distintos. */
+  const draftScope = fromTurnoId
+    ? `turno:${fromTurnoId}`
+    : initialClienteId
+      ? `cliente:${initialClienteId}`
+      : null
+  /** True solo si el borrador aplicado es el de ESTE origen. Cada call site
+   *  pasa el scope de su propio render (el del origen para el que salio a pedir
+   *  datos), no el que este vigente cuando la promesa resuelve. */
+  const isDraftRestoredFor = (scope: string | null) =>
+    draftRestoredRef.current !== null && draftRestoredRef.current.scope === scope
   /** Raiz del formulario para el gate de interaccion del hook: ClienteSelector
    *  monta ClienteForm (su propio <form>) adentro de este, y escribir en ese
    *  dialog no es una edicion del alta. */
@@ -345,11 +370,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       )
     },
     rootRef: formRef,
-    scope: fromTurnoId
-      ? `turno:${fromTurnoId}`
-      : initialClienteId
-        ? `cliente:${initialClienteId}`
-        : null,
+    scope: draftScope,
     // `getValues()` en vez de `watch()`: leer el form entero en render
     // suscribe este componente (1500 lineas, 3 pasos) a cada tecla. El
     // borrador no necesita re-render, solo el valor al momento de grabar.
@@ -428,12 +449,12 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       // Key nueva y sin borrador: lo que quedo marcado como restaurado era del
       // origen anterior, y con esa marca puesta el prefill de ESTE turno se
       // saltea a si mismo al resolver (lee draftRestoredRef).
-      draftRestoredRef.current = false
+      draftRestoredRef.current = null
       return
     }
     if (draftAppliedRef.current === draft) return
     draftAppliedRef.current = draft
-    draftRestoredRef.current = true
+    draftRestoredRef.current = { scope: draftScope }
     try {
       // El codigo de acceso no se persiste (ver el limite en getValue): se
       // repone vacio para no dejar el campo en undefined si un borrador viejo
@@ -474,12 +495,12 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       // dentro de un efecto, o sea que desmonta el arbol entero y deja el alta
       // en blanco. Mejor perder el borrador que la pantalla.
       console.error("Borrador de orden invalido, se descarta:", error)
-      draftRestoredRef.current = false
+      draftRestoredRef.current = null
       clearDraft()
       setAppliedDraft(null)
       reset(ordenFormDefaults())
     }
-  }, [draftReady, draft, reset, clearDraft])
+  }, [draftReady, draft, draftScope, reset, clearDraft])
 
   /** Datos de origen ya traidos del servidor (turno / deep-link). Se guardan
    *  aunque el borrador gane, porque descartarlo tiene que devolver el
@@ -520,7 +541,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     // El aviso se apaga solo: `clearDraft` deja `draft` en null en este mismo
     // commit y de ahi se deriva (ver draftNoticeVisible).
     clearDraft()
-    draftRestoredRef.current = false
+    draftRestoredRef.current = null
     reset(ordenFormDefaults())
     setAccesoriosSeleccionados([])
     setOtroAccesorio("")
@@ -568,6 +589,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   useEffect(() => {
     if (!fromTurnoId || !draftReady) return
     let cancelled = false
+    const scopeDelFetch = draftScope
     fetch(`/api/turnos/${fromTurnoId}/prefill-orden`, { cache: "no-store" })
       .then(async (r) => {
         if (!r.ok) {
@@ -587,8 +609,10 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         turnoPrefillDataRef.current = d
         // Se relee al resolver, no al arrancar el efecto: si el operador
         // descarto el borrador mientras el fetch estaba en vuelo, el prefill
-        // que llega es justo lo que hay que aplicar.
-        if (draftRestoredRef.current) return
+        // que llega es justo lo que hay que aplicar. Contra el scope de ESTE
+        // turno, no contra el que este vigente al resolver: la respuesta que
+        // llega es la del origen que la pidio.
+        if (isDraftRestoredFor(scopeDelFetch)) return
         applyTurnoPrefill(d)
       })
       .catch((err) => {
@@ -604,7 +628,12 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   useEffect(() => {
     if (!initialClienteId || fromTurnoId || !draftReady) return
     let cancelled = false
-    if (!draftRestoredRef.current) {
+    const scopeDelFetch = draftScope
+    // Contra el scope de ESTE deep-link: el latch todavia puede estar puesto
+    // por el borrador del cliente anterior (el efecto que lo aplica no volvio a
+    // correr en este commit), y saltear el setValue por eso deja la orden a
+    // nombre del cliente que ya no esta en pantalla.
+    if (!isDraftRestoredFor(scopeDelFetch)) {
       setValue("clienteId", initialClienteId, { shouldValidate: true })
     }
     // El cliente se pide igual aunque gane el borrador: descartarlo tiene que
@@ -615,7 +644,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         if (cancelled || !cliente || cliente.error) return
         const resumen = toClienteResumen(cliente)
         deepLinkClienteRef.current = resumen
-        if (draftRestoredRef.current) return
+        if (isDraftRestoredFor(scopeDelFetch)) return
         setSelectedClienteObj(resumen)
       })
       .catch(() => {})
