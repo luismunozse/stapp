@@ -524,8 +524,16 @@ export function useFormDraft<T>({
   /** Serialized snapshot the form is compared against to decide "did the user
    *  change anything?". Re-captured while no interaction has happened yet. */
   const baselineRef = useRef<string | null>(null)
-  /** Set by clearDraft: the baseline has to be taken again once the caller's
-   *  reset has actually rendered. See the note in clearDraft. */
+  /** The baseline above is PROVISIONAL: it was taken before the caller's own
+   *  writes for this key had rendered, so it must keep being re-taken on every
+   *  commit until the operator actually touches the form (see the effect that
+   *  consumes it).
+   *
+   *  Set by clearDraft -- which every call site runs BEFORE resetting the form
+   *  -- and by the key effect, which has the same problem one commit later: the
+   *  prefill that fills the form for the record being opened lives in an effect
+   *  declared AFTER this hook, so when the key effect reads the form it still
+   *  holds the previous record's values. */
   const baselineStaleRef = useRef(false)
   const lastSavedRef = useRef<string | null>(null)
   const interactedRef = useRef(false)
@@ -727,7 +735,13 @@ export function useFormDraft<T>({
     keyRecordUpdatedAtRef.current = recordUpdatedAtMs
     interactedRef.current = false
     lastSavedRef.current = null
-    baselineStaleRef.current = false
+    // Provisional: lo que se lee ACA es el formulario del registro ANTERIOR. El
+    // prefill de este (reset con los valores de la ficha que se acaba de abrir)
+    // corre en un efecto declarado despues de este hook, o sea en el commit que
+    // sigue. Dejar la referencia clavada aca hacia que el primer click dentro
+    // de la ventana del debounce grabara un borrador de una ficha recien
+    // precargada que nadie edito.
+    baselineStaleRef.current = true
     baselineRef.current = safeSnapshot(() => getValueRef.current())
     const restored = readDraft<T>(key, recordUpdatedAtMs, validateRef.current)
     restoredRef.current = restored !== null
@@ -744,13 +758,23 @@ export function useFormDraft<T>({
   // Schedule a save after every commit. Cheap: `getValue()` only runs when the
   // timer actually fires, and an already-armed timer is left alone.
   useEffect(() => {
-    // The reset that follows clearDraft lands in this commit, not in the one
-    // where clearDraft ran, so this is the first moment the blank form is
-    // readable. Skipped once the user has touched the form again: what they
-    // typed after the clear is a real edit and must not become the baseline.
-    if (baselineStaleRef.current && !interactedRef.current) {
-      baselineStaleRef.current = false
-      baselineRef.current = safeSnapshot(() => getValueRef.current())
+    // Whatever the caller wrote after arming the flag (the reset that follows
+    // clearDraft, the prefill that follows a key re-initialisation) lands in a
+    // LATER commit than the one that armed it, and there is no way to know
+    // which: the reset after clearDraft arrives in the next commit, while the
+    // prefill effect of a call site runs in the same effect flush as the key
+    // effect -- i.e. after THIS effect has already run -- and only shows up one
+    // commit further on. So the baseline is re-taken on every commit while the
+    // flag is armed, and the flag is only disarmed by the operator touching the
+    // form: from that point on the value IS a real edit and must not become the
+    // baseline. Cheap while it lasts -- a form is only untouched for the handful
+    // of commits its own mount-time prefills take.
+    if (baselineStaleRef.current) {
+      if (interactedRef.current) {
+        baselineStaleRef.current = false
+      } else {
+        baselineRef.current = safeSnapshot(() => getValueRef.current())
+      }
     }
     armSave()
   })

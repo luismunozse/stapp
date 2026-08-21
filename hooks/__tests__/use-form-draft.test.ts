@@ -882,6 +882,33 @@ describe('useFormDraft', () => {
     expect(window.localStorage.length).toBe(0)
   })
 
+  it('re-captures the baseline after the call site prefills, not before it', () => {
+    // Mismo problema que el de arriba, por el otro extremo: la referencia se
+    // toma en el efecto de la key, y el prefill del call site corre en un
+    // efecto declarado DESPUES de este hook. En el commit que inicializa la key
+    // el formulario todavia tiene los valores ANTERIORES (la ficha que estaba
+    // abierta antes, o los defaults en blanco), asi que la referencia queda
+    // apuntando ahi mientras la pantalla ya muestra la ficha nueva.
+    //
+    // Un click cualquiera dentro de la ventana del debounce arma el gate de
+    // sucio, el flush ve "el formulario no es igual a la referencia" y graba un
+    // borrador de un registro recien precargado que nadie edito: "se restauro
+    // un borrador" encima de datos intactos, que es justo el aviso inutil que
+    // el gate de sucio existe para no producir.
+    const { rerender } = renderDraft(
+      { nombre: 'Ficha anterior' },
+      { feature: 'cliente-form', recordId: 'cli-1' }
+    )
+    // El prefill del call site: reset(clienteFormDefaults(cliente)).
+    rerender({ value: { nombre: 'Ficha nueva' } })
+
+    userInteracts()
+    act(() => {
+      vi.advanceTimersByTime(2000)
+    })
+    expect(window.localStorage.length).toBe(0)
+  })
+
   it('keeps a restored draft when the form still equals it', () => {
     // El borrador restaurado ES el estado previo a cualquier interaccion, asi
     // que la primera ventana de debounce sin actividad mueve la referencia
