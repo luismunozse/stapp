@@ -9,7 +9,7 @@
  * real: useFormDraft necesita userId/organizationId para resolver la key.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { render, screen, fireEvent } from "@testing-library/react"
+import { render, screen, fireEvent, act } from "@testing-library/react"
 import { ModalProvider } from "@/contexts/modal-context"
 
 vi.mock("next/navigation", () => ({
@@ -35,15 +35,46 @@ vi.mock("@/hooks/use-tipos-dispositivo", () => ({
   }),
 }))
 
+/** Cliente completo tal como lo entrega el buscador real: el stub dispara
+ *  onChange con TODO el objeto para poder verificar que solo una proyeccion
+ *  minima llega a localStorage. */
+const CLIENTE_COMPLETO = {
+  id: "cli-1",
+  nombre: "Acme SA",
+  telefono: "1155667788",
+  email: "contacto@acme.test",
+  dni: "30111222",
+  cuit: "30-71111111-9",
+  direccion: "Av. Siempreviva 742",
+  tipoCliente: "EMPRESA",
+  razonSocial: "Acme SA",
+}
+
 vi.mock("@/components/cotizaciones/cliente-selector", () => ({
-  ClienteSelector: () => <div data-testid="cliente-selector-stub" />,
+  ClienteSelector: ({
+    onChange,
+  }: {
+    onChange: (id: string | null, cliente: unknown) => void
+  }) => (
+    <button type="button" onClick={() => onChange(CLIENTE_COMPLETO.id, CLIENTE_COMPLETO)}>
+      Elegir cliente
+    </button>
+  ),
 }))
 
 vi.mock("@/components/firma/signature-pad", () => ({
-  SignaturePad: () => <div data-testid="signature-pad-stub" />,
+  SignaturePad: ({
+    onSignatureChange,
+  }: {
+    onSignatureChange: (data: string | null, mime: string | null) => void
+  }) => (
+    <button type="button" onClick={() => onSignatureChange("FIRMA_BASE64", "image/png")}>
+      Firmar
+    </button>
+  ),
 }))
 
-const DRAFT_KEY = "draft:v1:recepcion-form:org-1:user-1:new"
+const DRAFT_KEY = "draft:v2:recepcion-form:org-1:user-1:new"
 
 async function renderForm() {
   const { RecepcionForm } = await import("@/components/ordenes/recepcion-form")
@@ -68,7 +99,7 @@ describe("RecepcionForm — borrador local", () => {
     window.localStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
-        version: 1,
+        version: 2,
         savedAt: Date.now(),
         data: {
           form: {
@@ -116,7 +147,7 @@ describe("RecepcionForm — borrador local", () => {
     window.localStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
-        version: 1,
+        version: 2,
         savedAt: Date.now(),
         data: {
           form: {
@@ -177,7 +208,7 @@ describe("RecepcionForm — borrador local", () => {
     window.localStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
-        version: 1,
+        version: 2,
         savedAt: Date.now(),
         data: {
           form: {
@@ -238,7 +269,7 @@ describe("RecepcionForm — borrador local", () => {
     window.localStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
-        version: 1,
+        version: 2,
         savedAt: Date.now(),
         data: {
           form: {
@@ -285,5 +316,113 @@ describe("RecepcionForm — borrador local", () => {
       "Acc C",
       "Acc D",
     ])
+  })
+})
+
+/**
+ * Estas pantallas viven en terminales compartidas de mostrador y el borrador
+ * dura 7 dias sin borrarse al cerrar sesion: lo que se escribe en
+ * localStorage lo lee cualquiera que use el equipo despues. El limite de
+ * persistencia (getValue en recepcion-form.tsx) tiene que dejar afuera el
+ * codigo de acceso del dispositivo y todo dato del cliente que el formulario
+ * restaurado no necesite.
+ */
+describe("RecepcionForm — borrador local (datos sensibles)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: true, json: async () => [] } as Response)))
+    window.localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  async function settle(ms = 2000) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms)
+    })
+  }
+
+  function storedDraft() {
+    const raw = window.localStorage.getItem(DRAFT_KEY)
+    return raw ? JSON.parse(raw) : null
+  }
+
+  it("nunca escribe el codigo de acceso del dispositivo en el borrador", async () => {
+    await renderForm()
+    await settle(100)
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Agregar código de acceso/i })[0])
+    fireEvent.change(screen.getByPlaceholderText("Ej: 1234"), {
+      target: { value: "998877" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }))
+    fireEvent.change(screen.getAllByPlaceholderText("Ej: iPhone 13")[0], {
+      target: { value: "iPhone 13" },
+    })
+    await settle()
+
+    const raw = window.localStorage.getItem(DRAFT_KEY)
+    expect(raw).not.toBeNull()
+    expect(raw).not.toContain("998877")
+    expect(storedDraft().data.form.equipos[0]).not.toHaveProperty("codigoAccesoDispositivo")
+  })
+
+  it("no restaura el codigo de acceso guardado por un borrador viejo", async () => {
+    const equipo = (dispositivo: string) => ({
+      dispositivo,
+      tipoDispositivo: "",
+      marca: "",
+      color: "",
+      imei: "",
+      problemaReportado: "",
+      codigoAccesoDispositivo: "998877",
+    })
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        version: 2,
+        savedAt: Date.now(),
+        data: {
+          form: {
+            clienteId: "",
+            telefonoContacto: "",
+            observaciones: "",
+            equipos: [equipo("Equipo A"), equipo("Equipo B")],
+          },
+          sideState: [
+            { accesoriosSeleccionados: [], otroAccesorio: "", camposExtraValues: {} },
+            { accesoriosSeleccionados: [], otroAccesorio: "", camposExtraValues: {} },
+          ],
+          selectedCliente: null,
+        },
+      }),
+    )
+
+    await renderForm()
+    await settle(100)
+
+    expect(screen.getAllByPlaceholderText("Ej: iPhone 13")[0]).toHaveValue("Equipo A")
+    expect(screen.queryAllByLabelText(/Editar código de acceso/i)).toHaveLength(0)
+  })
+
+  it("guarda solo el nombre y el telefono del cliente elegido", async () => {
+    await renderForm()
+    await settle(100)
+
+    fireEvent.click(screen.getByRole("button", { name: "Elegir cliente" }))
+    await settle()
+
+    const raw = window.localStorage.getItem(DRAFT_KEY)
+    expect(raw).not.toBeNull()
+    expect(storedDraft().data.selectedCliente).toEqual({
+      nombre: "Acme SA",
+      telefono: "1155667788",
+    })
+    for (const dato of ["contacto@acme.test", "30111222", "30-71111111-9", "Siempreviva"]) {
+      expect(raw).not.toContain(dato)
+    }
   })
 })

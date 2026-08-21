@@ -37,7 +37,22 @@ vi.mock("@/hooks/use-tipos-dispositivo", () => ({
   }),
 }))
 
-const DRAFT_KEY = "draft:v1:orden-form:org-1:user-1:new"
+const DRAFT_KEY = "draft:v2:orden-form:org-1:user-1:new"
+
+/** Cliente completo tal como lo devuelve GET /api/clientes/:id — el deep-link
+ *  (?clienteId=) es la unica forma de cargar el objeto entero sin tocar el
+ *  buscador, asi que es el camino que usan los tests de proyeccion. */
+const CLIENTE_COMPLETO = {
+  id: "cli-1",
+  nombre: "Acme SA",
+  telefono: "1122334455",
+  email: "contacto@acme.test",
+  dni: "30111222",
+  cuit: "30-71111111-9",
+  direccion: "Av. Siempreviva 742",
+  tipoCliente: "EMPRESA",
+  razonSocial: "Acme SA",
+}
 
 /** fetch por URL: el template del checklist y los sectores del cliente son
  *  los dos que pisaban el borrador restaurado, asi que tienen que responder
@@ -64,6 +79,9 @@ function stubFetch() {
           ok: true,
           json: async () => [{ id: "sec-1", nombre: "Contaduria" }],
         } as Response)
+      }
+      if (url.includes("/api/clientes/cli-1")) {
+        return Promise.resolve({ ok: true, json: async () => CLIENTE_COMPLETO } as Response)
       }
       return Promise.resolve({ ok: true, json: async () => [] } as Response)
     }),
@@ -105,14 +123,14 @@ function draftData(overrides: Record<string, unknown> = {}) {
 }
 
 function draftEnvelope(overrides: Record<string, unknown> = {}) {
-  return JSON.stringify({ version: 1, savedAt: Date.now(), data: draftData(overrides) })
+  return JSON.stringify({ version: 2, savedAt: Date.now(), data: draftData(overrides) })
 }
 
-async function renderForm() {
+async function renderForm(props: { initialClienteId?: string } = {}) {
   const { OrdenForm } = await import("@/components/ordenes/orden-form")
   return render(
     <ModalProvider>
-      <OrdenForm onClose={vi.fn()} onSuccess={vi.fn()} />
+      <OrdenForm onClose={vi.fn()} onSuccess={vi.fn()} {...props} />
     </ModalProvider>,
   )
 }
@@ -299,5 +317,61 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     expect(form.telefonoContacto).toBe("")
     expect(form.observaciones).toBe("")
     expect(form.notasInternas).toBe("")
+  })
+})
+
+/**
+ * El alta corre en terminales compartidas de mostrador y el borrador dura 7
+ * dias sin borrarse al cerrar sesion: lo que se escribe en localStorage lo lee
+ * cualquiera que use el equipo despues. El limite de persistencia (getValue en
+ * orden-form.tsx) deja afuera el codigo de acceso del dispositivo y todo dato
+ * del cliente que el formulario restaurado no consuma.
+ */
+describe("OrdenForm — borrador local (datos sensibles)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    stubFetch()
+    window.localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it("nunca escribe el codigo de acceso del dispositivo en el borrador", async () => {
+    await renderForm()
+    await settle(100)
+
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+      target: { value: "Moto G" },
+    })
+    await settle()
+
+    expect(storedDraft()?.data.form).not.toHaveProperty("codigoAccesoDispositivo")
+  })
+
+  it("guarda solo la proyeccion minima del cliente, no la ficha entera", async () => {
+    const deepLinkKey = "draft:v2:orden-form:org-1:user-1:new:cliente:cli-1"
+    await renderForm({ initialClienteId: "cli-1" })
+    await settle()
+
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+      target: { value: "Moto G" },
+    })
+    await settle()
+
+    const raw = window.localStorage.getItem(deepLinkKey)
+    expect(raw).not.toBeNull()
+    expect(JSON.parse(raw!).data.selectedClienteObj).toEqual({
+      id: "cli-1",
+      nombre: "Acme SA",
+      telefono: "1122334455",
+      tipoCliente: "EMPRESA",
+      razonSocial: "Acme SA",
+    })
+    for (const dato of ["contacto@acme.test", "30111222", "30-71111111-9", "Siempreviva"]) {
+      expect(raw).not.toContain(dato)
+    }
   })
 })

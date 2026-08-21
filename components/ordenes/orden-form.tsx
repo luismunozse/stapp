@@ -80,17 +80,58 @@ function ordenFormDefaults(): OrdenFormData {
   }
 }
 
+/** Lo que este formulario consume del cliente elegido: el id (para saber si el
+ *  objeto corresponde al clienteId cargado), nombre y telefono (modal de orden
+ *  creada, placeholder de contacto), y tipoCliente/razonSocial/cuit para el
+ *  bloque de empresa. Se guarda esto en el estado en vez del Cliente entero
+ *  para que ningun campo de la ficha llegue al formulario sin que se note. */
+type ClienteResumen = Pick<
+  Cliente,
+  "id" | "nombre" | "telefono" | "tipoCliente" | "razonSocial" | "cuit"
+>
+
+/** Proyeccion que ademas se persiste. El cuit queda afuera: es dato fiscal del
+ *  cliente y solo alimenta una linea informativa del bloque de empresa, que
+ *  puede vivir sin el hasta que se vuelva a elegir el cliente. */
+type ClienteDraftSnapshot = Omit<ClienteResumen, "cuit">
+
+/** Estructura minima que alcanza para proyectar. Mas laxa que el Cliente del
+ *  dominio a proposito: el buscador (cliente-selector.tsx) declara su propio
+ *  tipo con casi todo opcional, y los prefills (turno, deep-link) llegan como
+ *  JSON sin tipar. */
+interface ClienteProyectable {
+  id: string
+  nombre: string
+  telefono?: string | null
+  tipoCliente?: string | null
+  razonSocial?: string | null
+  cuit?: string | null
+}
+
+function toClienteResumen(cliente: ClienteProyectable | null | undefined): ClienteResumen | null {
+  if (!cliente) return null
+  return {
+    id: cliente.id,
+    nombre: cliente.nombre,
+    telefono: cliente.telefono ?? "",
+    tipoCliente: (cliente.tipoCliente ?? undefined) as ClienteResumen["tipoCliente"],
+    razonSocial: cliente.razonSocial ?? null,
+    cuit: cliente.cuit ?? null,
+  }
+}
+
 /** Snapshot persistido por useFormDraft (hooks/use-form-draft.ts). Deja
- *  afuera fotos, firma del checklist (binarios) y todo lo que se re-obtiene
- *  solo con fetch (listas de tecnicos/operadores/sectores, template del
- *  checklist). El objeto Cliente SI se guarda: ClienteSelector re-hidrata su
- *  propio display a partir del id, pero nunca llama a onChange (ver
- *  cliente-selector.tsx), asi que sin esto el selector de Sector/Area de
+ *  afuera fotos, firma del checklist (binarios), el codigo de acceso del
+ *  equipo (ver el limite de persistencia en getValue) y todo lo que se
+ *  re-obtiene solo con fetch (listas de tecnicos/operadores/sectores, template
+ *  del checklist). Una proyeccion del cliente SI se guarda: ClienteSelector
+ *  re-hidrata su propio display a partir del id, pero nunca llama a onChange
+ *  (ver cliente-selector.tsx), asi que sin esto el selector de Sector/Area de
  *  empresas no aparece y el modal de orden creada sale sin nombre ni
  *  telefono del cliente. */
 interface OrdenDraftValue {
-  form: OrdenFormData
-  selectedClienteObj: Cliente | null
+  form: Omit<OrdenFormData, "codigoAccesoDispositivo">
+  selectedClienteObj: ClienteDraftSnapshot | null
   accesoriosSeleccionados: string[]
   otroAccesorio: string
   camposExtraValues: Record<string, any>
@@ -154,7 +195,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   const { data: session } = useSession()
   const isTecnicoRole = session?.user?.role === "TECNICO"
   const [loading, setLoading] = useState(false)
-  const [selectedClienteObj, setSelectedClienteObj] = useState<Cliente | null>(null)
+  const [selectedClienteObj, setSelectedClienteObj] = useState<ClienteResumen | null>(null)
   const [fotos, setFotos] = useState<FotoPreview[]>([])
   const [accesoriosSeleccionados, setAccesoriosSeleccionados] = useState<string[]>([])
   const [otroAccesorio, setOtroAccesorio] = useState("")
@@ -229,22 +270,41 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     // `getValues()` en vez de `watch()`: leer el form entero en render
     // suscribe este componente (1500 lineas, 3 pasos) a cada tecla. El
     // borrador no necesita re-render, solo el valor al momento de grabar.
-    getValue: () => ({
-      form: getValues(),
-      selectedClienteObj,
-      accesoriosSeleccionados,
-      otroAccesorio,
-      camposExtraValues,
-      presupuestoAceptado,
-      sena,
-      metodoPagoSena,
-      selectedSectorId,
-      selectedTecnicoId,
-      selectedRecibidoPorId,
-      checklistValores,
-      checklistNotas,
-      currentStep,
-    }),
+    //
+    // LIMITE DE PERSISTENCIA — lo que se devuelve aca queda en localStorage en
+    // texto plano, 7 dias, en una terminal que comparten varios operadores y
+    // que no borra nada al cerrar sesion. Solo entra lo que el formulario
+    // restaurado necesita para seguir cargandose: nada de codigos de acceso al
+    // equipo, nada de la ficha del cliente mas alla de la proyeccion de abajo.
+    // Antes de agregar un campo aca, preguntarse si molestaria verlo en la
+    // pantalla del proximo turno.
+    getValue: () => {
+      const { codigoAccesoDispositivo: _codigo, ...form } = getValues()
+      return {
+        form,
+        selectedClienteObj: selectedClienteObj
+          ? {
+              id: selectedClienteObj.id,
+              nombre: selectedClienteObj.nombre,
+              telefono: selectedClienteObj.telefono,
+              tipoCliente: selectedClienteObj.tipoCliente,
+              razonSocial: selectedClienteObj.razonSocial,
+            }
+          : null,
+        accesoriosSeleccionados,
+        otroAccesorio,
+        camposExtraValues,
+        presupuestoAceptado,
+        sena,
+        metodoPagoSena,
+        selectedSectorId,
+        selectedTecnicoId,
+        selectedRecibidoPorId,
+        checklistValores,
+        checklistNotas,
+        currentStep,
+      }
+    },
   })
 
   // Los cambios de react-hook-form ya no re-renderizan el formulario, asi que
@@ -259,7 +319,10 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     draftAppliedRef.current = true
     if (!draft) return
     draftRestoredRef.current = true
-    reset(draft.form)
+    // El codigo de acceso no se persiste (ver el limite en getValue): se
+    // repone vacio para no dejar el campo en undefined si un borrador viejo
+    // todavia lo trae.
+    reset({ ...draft.form, codigoAccesoDispositivo: "" })
     setSelectedClienteObj(draft.selectedClienteObj ?? null)
     setAccesoriosSeleccionados(draft.accesoriosSeleccionados)
     setOtroAccesorio(draft.otroAccesorio)
@@ -323,7 +386,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         })
         if (soloAviso) return
         if (d.cliente) {
-          setSelectedClienteObj(d.cliente)
+          setSelectedClienteObj(toClienteResumen(d.cliente))
           setValue("clienteId", d.cliente.id, { shouldValidate: true })
         }
         if (d.orden?.tipoDispositivo) setValue("tipoDispositivo", d.orden.tipoDispositivo)
@@ -356,7 +419,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       .then((r) => (r.ok ? r.json() : null))
       .then((cliente) => {
         if (cancelled || !cliente || cliente.error) return
-        setSelectedClienteObj(cliente)
+        setSelectedClienteObj(toClienteResumen(cliente))
       })
       .catch(() => {})
     return () => { cancelled = true }
@@ -912,7 +975,9 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               value={watch("clienteId") || null}
               onChange={(id, cliente) => {
                 setValue("clienteId", id || "", { shouldValidate: !!id })
-                setSelectedClienteObj(cliente as Cliente | null)
+                // Proyectado en el acto: la ficha entera del cliente nunca
+                // entra al estado que el borrador persiste (ver getValue).
+                setSelectedClienteObj(toClienteResumen(cliente))
                 if (id) clearErrors("clienteId")
               }}
             />

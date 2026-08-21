@@ -28,6 +28,16 @@ import { useSession } from "next-auth/react"
  * -- SSR-safe (window/localStorage guarded) and quota-safe (write failures
  * are swallowed, never surfaced to the form).
  *
+ * WHAT MAY BE PERSISTED. These forms run on shared front-desk terminals and a
+ * draft survives logout on purpose, for up to MAX_AGE_MS. Everything the
+ * caller returns from `getValue()` is therefore readable in plaintext by the
+ * next operator on that machine. Call sites must project their state down to
+ * what the restored form actually consumes: no device unlock codes, no
+ * customer record beyond the couple of fields the restored UI reads back.
+ * Bump DRAFT_SCHEMA_VERSION whenever that shape changes -- the key carries the
+ * version, and the mount sweep below deletes every entry written by an older
+ * one, which is what retires drafts that were saved under a laxer rule.
+ *
  * Two things this hook deliberately does NOT do naively:
  *
  * 1. Dirty gate. It persists only after a real user interaction AND only
@@ -51,7 +61,10 @@ import { useSession } from "next-auth/react"
  *    every keystroke just to feed this hook.
  */
 
-const DRAFT_SCHEMA_VERSION = 1
+/** v2: the persisted snapshots dropped the device access code and were cut
+ *  down to a minimal customer projection (see "WHAT MAY BE PERSISTED"). The
+ *  bump is what retires the v1 entries that still hold those values. */
+const DRAFT_SCHEMA_VERSION = 2
 const DEFAULT_DEBOUNCE_MS = 1000
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
@@ -168,6 +181,54 @@ function isStaleAgainstRecord<T>(
   return recordUpdatedAtMs > envelope.savedAt
 }
 
+/** Throttles the sweep below: every mounted form would otherwise walk the
+ *  whole of localStorage again. Not a one-shot flag because a front-desk PWA
+ *  can stay open for days, which is long enough for drafts to expire while the
+ *  page never reloads. */
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000
+let lastSweepAt = 0
+
+/**
+ * Deletes every `draft:` entry that no read will ever reach again: those
+ * written by another schema version (the version is part of the key, so
+ * bumping it orphans them) and those past MAX_AGE_MS. Without this, expired
+ * and orphaned drafts -- the ones most likely to hold data written under an
+ * older, laxer persistence rule -- pile up until a `setItem` hits the quota,
+ * at which point every save fails silently and the feature quietly stops
+ * working. Runs on mount because that is the only moment guaranteed to happen
+ * on a shared terminal that never reloads.
+ */
+function sweepStaleDrafts(): void {
+  if (Date.now() - lastSweepAt < SWEEP_INTERVAL_MS) return
+  lastSweepAt = Date.now()
+  try {
+    const currentPrefix = `draft:v${DRAFT_SCHEMA_VERSION}:`
+    const doomed: string[] = []
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i)
+      if (!key || !key.startsWith("draft:")) continue
+      if (!key.startsWith(currentPrefix)) {
+        doomed.push(key)
+        continue
+      }
+      let expired = true
+      try {
+        const parsed = JSON.parse(window.localStorage.getItem(key) ?? "") as DraftEnvelope<unknown>
+        expired =
+          !parsed ||
+          typeof parsed.savedAt !== "number" ||
+          Date.now() - parsed.savedAt > MAX_AGE_MS
+      } catch {
+        expired = true // unparseable: nothing can restore it either
+      }
+      if (expired) doomed.push(key)
+    }
+    for (const key of doomed) window.localStorage.removeItem(key)
+  } catch {
+    // Storage disabled/full: housekeeping is best-effort by definition.
+  }
+}
+
 function readDraft<T>(key: string, recordUpdatedAtMs: number | null): T | null {
   try {
     const raw = window.localStorage.getItem(key)
@@ -233,6 +294,12 @@ export function useFormDraft<T>({
     debounceMsRef.current = debounceMs
     recordUpdatedAtRef.current = recordUpdatedAtMs
   })
+
+  // Housekeeping for entries no read can reach any more (see sweepStaleDrafts).
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    sweepStaleDrafts()
+  }, [])
 
   // One-shot user-interaction detector -- see the "dirty gate" note above.
   useEffect(() => {

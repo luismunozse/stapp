@@ -58,16 +58,28 @@ const equipoSideStateVacio = (): EquipoSideState => ({
  *  fotos adjuntas nunca se restauran desde un borrador. */
 type EquipoSideStateDraft = Omit<EquipoSideState, "fotos">
 
+/** Equipo tal como se persiste: sin `codigoAccesoDispositivo`. Es la clave con
+ *  la que se desbloquea el equipo del cliente y el borrador vive 7 dias en
+ *  texto plano en una terminal compartida — perderlo al restaurar es aceptable,
+ *  filtrarlo no. */
+type EquipoFormDraft = Omit<EquipoFormValues, "codigoAccesoDispositivo">
+
+/** Proyeccion minima del cliente elegido: lo unico que el formulario
+ *  restaurado consume de ese objeto es el nombre y el telefono (placeholder de
+ *  contacto y modal de recepcion creada). El resto de la ficha (dni, cuit,
+ *  email, direccion) no se persiste. */
+type ClienteDraftSnapshot = Pick<Cliente, "nombre" | "telefono">
+
 /** Forma persistida por useFormDraft para este formulario. La firma del
  *  cliente tampoco se incluye (mismo motivo que las fotos: dato binario).
- *  `selectedCliente` SI se incluye: ClienteSelector re-hidrata su propio
- *  display a partir del id, pero nunca llama a onChange, asi que sin esto el
- *  modal de exito muestra el nombre del cliente en blanco. */
+ *  `selectedCliente` SI se incluye (proyectado): ClienteSelector re-hidrata su
+ *  propio display a partir del id, pero nunca llama a onChange, asi que sin
+ *  esto el modal de exito muestra el nombre del cliente en blanco. */
 interface RecepcionDraftValue {
-  form: RecepcionFormData
+  form: Omit<RecepcionFormData, "equipos"> & { equipos: EquipoFormDraft[] }
   sideState: EquipoSideStateDraft[]
   terminosAceptados: boolean
-  selectedCliente: Cliente | null
+  selectedCliente: ClienteDraftSnapshot | null
 }
 
 const equipoVacio = (): EquipoFormValues => ({
@@ -215,7 +227,10 @@ export function RecepcionForm() {
     return () => ro.disconnect()
   }, [])
 
-  const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null)
+  // Tipado como la proyeccion que se persiste (no como Cliente entero): asi el
+  // compilador avisa si alguien empieza a consumir un campo del cliente que el
+  // borrador no puede reponer.
+  const [selectedCliente, setSelectedCliente] = useState<ClienteDraftSnapshot | null>(null)
   const [firma, setFirma] = useState<string | null>(null)
   const [firmaMime, setFirmaMime] = useState<string | null>(null)
   const [terminosAceptados, setTerminosAceptados] = useState(false)
@@ -271,8 +286,21 @@ export function RecepcionForm() {
     // `getValues()` en vez de `watch()`: leer el form entero en render
     // suscribe el componente a cada tecla de cada equipo. El borrador no
     // necesita re-render, solo el valor al momento de grabar.
+    //
+    // LIMITE DE PERSISTENCIA — lo que se devuelve aca queda en localStorage en
+    // texto plano, 7 dias, en una terminal que comparten varios operadores y
+    // que no borra nada al cerrar sesion. Solo entra lo que el formulario
+    // restaurado necesita para seguir cargandose: nada de codigos de acceso al
+    // equipo, nada de la ficha del cliente mas alla de la proyeccion de abajo.
+    // Antes de agregar un campo aca, preguntarse si molestaria verlo en la
+    // pantalla del proximo turno.
     getValue: () => ({
-      form: getValues(),
+      form: {
+        ...getValues(),
+        equipos: getValues().equipos.map(
+          ({ codigoAccesoDispositivo: _codigo, ...equipo }) => equipo
+        ),
+      },
       sideState: sideState.map(({ fotos: _fotos, ...rest }) => rest),
       terminosAceptados,
       selectedCliente,
@@ -290,7 +318,16 @@ export function RecepcionForm() {
     if (!draftReady || draftAppliedRef.current) return
     draftAppliedRef.current = true
     if (!draft) return
-    reset(draft.form)
+    // El codigo de acceso no se persiste (ver el limite en getValue): se
+    // repone vacio para no dejar el campo en undefined si un borrador viejo
+    // todavia lo trae.
+    reset({
+      ...draft.form,
+      equipos: draft.form.equipos.map((equipo) => ({
+        ...equipo,
+        codigoAccesoDispositivo: "",
+      })),
+    })
     setSideState(
       draft.form.equipos.map((_, i) => ({
         ...equipoSideStateVacio(),
@@ -544,7 +581,13 @@ export function RecepcionForm() {
               value={clienteId || null}
               onChange={(id, cliente) => {
                 setValue("clienteId", id || "", { shouldValidate: !!id })
-                setSelectedCliente(cliente as Cliente | null)
+                // Proyectado en el acto: el objeto entero nunca entra al estado
+                // que el borrador persiste (ver el limite en getValue).
+                setSelectedCliente(
+                  cliente
+                    ? { nombre: cliente.nombre, telefono: cliente.telefono ?? "" }
+                    : null
+                )
               }}
             />
             {errors.clienteId && (

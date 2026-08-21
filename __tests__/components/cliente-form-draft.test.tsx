@@ -41,9 +41,9 @@ describe("ClienteForm — borrador local", () => {
 
   it("restaura un borrador de alta ('new') y muestra el aviso dismissible", () => {
     window.localStorage.setItem(
-      "draft:v1:cliente-form:org-1:user-1:new",
+      "draft:v2:cliente-form:org-1:user-1:new",
       JSON.stringify({
-        version: 1,
+        version: 2,
         savedAt: Date.now(),
         data: {
           tipoCliente: "INDIVIDUAL",
@@ -73,9 +73,9 @@ describe("ClienteForm — borrador local", () => {
 
   it("no restaura un borrador de alta en un formulario de edicion (recordId distinto)", () => {
     window.localStorage.setItem(
-      "draft:v1:cliente-form:org-1:user-1:new",
+      "draft:v2:cliente-form:org-1:user-1:new",
       JSON.stringify({
-        version: 1,
+        version: 2,
         savedAt: Date.now(),
         data: {
           tipoCliente: "INDIVIDUAL",
@@ -105,9 +105,9 @@ describe("ClienteForm — borrador local", () => {
 
   it('"Descartar" borra el borrador y vuelve al prefill del cliente', () => {
     window.localStorage.setItem(
-      "draft:v1:cliente-form:org-1:user-1:edit:cli-1",
+      "draft:v2:cliente-form:org-1:user-1:edit:cli-1",
       JSON.stringify({
-        version: 1,
+        version: 2,
         savedAt: Date.now(),
         data: {
           tipoCliente: "INDIVIDUAL",
@@ -136,21 +136,21 @@ describe("ClienteForm — borrador local", () => {
 
     expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
     expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Perez")
-    expect(window.localStorage.getItem("draft:v1:cliente-form:org-1:user-1:edit:cli-1")).toBeNull()
+    expect(window.localStorage.getItem("draft:v2:cliente-form:org-1:user-1:edit:cli-1")).toBeNull()
   })
 
   it("descarta un borrador de edicion si otro usuario guardo el cliente despues", () => {
     // El submit de edicion manda el formulario entero (PUT /api/clientes/:id),
     // asi que restaurar un borrador viejo encima de un registro mas nuevo
     // pisaria en silencio lo que guardo el otro usuario.
-    const key = "draft:v1:cliente-form:org-1:user-1:edit:cli-1"
+    const key = "draft:v2:cliente-form:org-1:user-1:edit:cli-1"
     // Borrador reciente (dentro de la ventana de 7 dias) escrito cuando el
     // registro tenia otro updatedAt: alguien lo guardo en el medio.
     const savedAt = Date.now() - 60_000
     window.localStorage.setItem(
       key,
       JSON.stringify({
-        version: 1,
+        version: 2,
         savedAt,
         recordUpdatedAt: savedAt - 60_000,
         data: {
