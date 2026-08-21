@@ -121,6 +121,7 @@ export function formatOrden(orden: any) {
     } : null,
     fotos: orden.fotos_orden?.map(formatFoto),
     repuestos: orden.repuestos_orden?.map(formatRepuesto),
+    servicios: orden.servicios_orden?.map(formatServicioOrden),
     facturas: orden.facturas,
     cotizaciones: orden.cotizaciones,
     garantia: orden.garantias,
@@ -199,6 +200,19 @@ export function formatRepuesto(repuesto: any) {
     precioUnitario: repuesto.precio_unitario,
     precioVentaUnitario: repuesto.precio_venta_unitario ?? null,
     inventario: repuesto.inventario ? formatInventario(repuesto.inventario) : undefined,
+  }
+}
+
+export function formatServicioOrden(servicio: any) {
+  if (!servicio) return null
+
+  return {
+    id: servicio.id,
+    ordenId: servicio.orden_id,
+    servicioId: servicio.servicio_id, // Nullable: null en líneas manuales
+    nombre: servicio.nombre, // Snapshot, ver comentario en 300_servicios.sql
+    cantidad: servicio.cantidad,
+    precioUnitario: servicio.precio_unitario,
   }
 }
 

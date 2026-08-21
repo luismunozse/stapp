@@ -19,7 +19,7 @@
 - **Sin `sucursal_id`.** Consistente con `inventario`, que es catálogo a nivel organización.
 - **Sin `tipo_dispositivo`.** Un servicio es transversal.
 - **Precio fijo únicamente.** Sin `precio_hasta` ni tarifa por hora.
-- **Numeración de migración:** 279. La 277 es el trigger (PR 1) y la 278 está reservada para el backfill (PR 2).
+- **Numeración de migración:** 300 y 301 (renumeradas el 2026-08-21 desde 283 y 284, que a su vez venían de 279 y 280). `main` llegó a 299 mientras el PR esperaba, y la 284 quedó tomada por `284_editar_cantidad_repuesto.sql`. Los bloques de código de este plan todavía dicen 283/284: los archivos reales son `300_servicios.sql` y `301_servicios_orden_atomico.sql`. Original: La 277 ya está en `main`, 278-280 quedan como huecos permanentes reservados por otras branches abiertas, y la 281 ya está aplicada en producción. Con aplicación manual, la única propiedad que sirve es "número mayor = aplicada después", así que se salta en vez de rellenar.
 - **Identificadores de base de datos en español**, extendiendo el esquema existente (`ordenes_servicio`, `repuestos_orden`, `costo_final`). Comentarios SQL en español neutro. Copy de UI en español, como el resto de la app.
 - **Comando de test:** `npm run test:run`.
 
@@ -27,8 +27,8 @@
 
 | Archivo | Responsabilidad |
 |---|---|
-| `supabase/migrations/279_servicios.sql` | Tablas `servicios` y `servicios_orden`, índices, RLS, trigger de `updated_at`. |
-| `supabase/migrations/rollback/279_rollback.sql` | Revertir la migración. |
+| `supabase/migrations/283_servicios.sql` | Tablas `servicios` y `servicios_orden`, índices, RLS, trigger de `updated_at`. |
+| `supabase/migrations/rollback/283_rollback.sql` | Revertir la migración. |
 | `types/database.ts` | Tipos `Servicio` y `ServicioOrden` + entradas en el mapa de tablas. |
 | `lib/servicios/sincronizar-costo-final.ts` | **Única** implementación de la regla de sincronización de `costo_final`. Función pura, testeable sin base de datos. |
 | `app/api/servicios/route.ts` | GET (listado) y POST (alta) del catálogo. |
@@ -43,21 +43,21 @@ La regla de sincronización vive en `lib/servicios/sincronizar-costo-final.ts` y
 
 ---
 
-### Task 1: Migración 279 — tablas `servicios` y `servicios_orden`
+### Task 1: Migración 283 — tablas `servicios` y `servicios_orden`
 
 **Files:**
-- Create: `supabase/migrations/279_servicios.sql`
-- Create: `supabase/migrations/rollback/279_rollback.sql`
+- Create: `supabase/migrations/283_servicios.sql`
+- Create: `supabase/migrations/rollback/283_rollback.sql`
 
 **Interfaces:**
 - Produces: tablas `servicios` y `servicios_orden` con las columnas que consumen todas las tasks siguientes.
 
 - [ ] **Step 1: Escribir la migración**
 
-Crear `supabase/migrations/279_servicios.sql`:
+Crear `supabase/migrations/283_servicios.sql`:
 
 ```sql
--- 279: Servicios asignables a órdenes
+-- 283: Servicios asignables a órdenes
 --
 -- CONTEXTO
 -- Un taller tiene servicios con precio prefijado (ej. instalación de Windows).
@@ -110,15 +110,25 @@ CREATE TRIGGER servicios_updated_at
   BEFORE UPDATE ON servicios
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+-- RLS sigue la convención endurecida de 201_rls_hardening_phase1.sql (201:7-12):
+--   - El catch-all de service_role lleva TO service_role explícito. Sin rol,
+--     una policy FOR ALL USING(true) aplica a PUBLIC, y Postgres OR-combina
+--     policies permisivas, así que ese catch-all anularía el aislamiento por
+--     org del SELECT para cualquier rol sujeto a RLS.
+--   - El SELECT usa public.get_current_organization_id() en vez del GUC
+--     current_setting('app.organization_id', true), que nunca se setea en el
+--     flujo normal de requests y siempre resuelve a NULL.
 ALTER TABLE servicios ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS servicios_select ON servicios;
 CREATE POLICY servicios_select ON servicios
-  FOR SELECT USING (organization_id = current_setting('app.organization_id', true));
+  FOR SELECT TO authenticated
+  USING (organization_id = public.get_current_organization_id());
 
 DROP POLICY IF EXISTS servicios_all_service ON servicios;
 CREATE POLICY servicios_all_service ON servicios
-  FOR ALL USING (true) WITH CHECK (true);
+  FOR ALL TO service_role
+  USING (true) WITH CHECK (true);
 
 -- ========================================
 -- LÍNEAS DE SERVICIO EN UNA ORDEN
@@ -148,27 +158,32 @@ COMMENT ON COLUMN servicios_orden.servicio_id IS
 ALTER TABLE servicios_orden ENABLE ROW LEVEL SECURITY;
 
 -- Hereda acceso vía join con la orden, igual que items_factura (053:168-176).
+-- Mismo endurecimiento que en servicios más arriba (201:7-12): TO authenticated
+-- + TO service_role explícitos y public.get_current_organization_id() en vez
+-- del GUC roto.
 DROP POLICY IF EXISTS servicios_orden_select ON servicios_orden;
 CREATE POLICY servicios_orden_select ON servicios_orden
-  FOR SELECT USING (
+  FOR SELECT TO authenticated
+  USING (
     EXISTS (
       SELECT 1 FROM ordenes_servicio o
       WHERE o.id = servicios_orden.orden_id
-        AND o.organization_id = current_setting('app.organization_id', true)
+        AND o.organization_id = public.get_current_organization_id()
     )
   );
 
 DROP POLICY IF EXISTS servicios_orden_all_service ON servicios_orden;
 CREATE POLICY servicios_orden_all_service ON servicios_orden
-  FOR ALL USING (true) WITH CHECK (true);
+  FOR ALL TO service_role
+  USING (true) WITH CHECK (true);
 ```
 
 - [ ] **Step 2: Escribir el rollback**
 
-Crear `supabase/migrations/rollback/279_rollback.sql`:
+Crear `supabase/migrations/rollback/283_rollback.sql`:
 
 ```sql
--- Rollback de 279_servicios.sql
+-- Rollback de 283_servicios.sql
 -- Destructivo: elimina el catálogo de servicios y todas las líneas asignadas.
 
 DROP TABLE IF EXISTS servicios_orden;
@@ -219,7 +234,7 @@ ROLLBACK;
 - [ ] **Step 4: Commit**
 
 ```bash
-git add supabase/migrations/279_servicios.sql supabase/migrations/rollback/279_rollback.sql
+git add supabase/migrations/283_servicios.sql supabase/migrations/rollback/283_rollback.sql
 git commit -m "feat(servicios): tablas de catalogo y lineas de orden"
 ```
 
@@ -525,15 +540,14 @@ describe("GET /api/servicios", () => {
   })
 
   it("devuelve los servicios de la organizacion", async () => {
-    mockSupabaseFrom({
-      servicios: createChainMock([
-        {
-          id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
-          descripcion: null, categoria: "Software", precio: 25000,
-          duracion_estimada_min: 60, activo: true,
-        },
-      ]),
-    })
+    const chain = createChainMock([
+      {
+        id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
+        descripcion: null, categoria: "Software", precio: 25000,
+        duracion_estimada_min: 60, activo: true,
+      },
+    ])
+    mockSupabaseFrom({ servicios: chain })
 
     const res = await GET(createGetRequest("http://localhost:3000/api/servicios"))
     const { status, body } = await parseResponse(res)
@@ -542,6 +556,7 @@ describe("GET /api/servicios", () => {
     expect(body.servicios).toHaveLength(1)
     expect(body.servicios[0].nombre).toBe("Instalacion de Windows")
     expect(body.servicios[0].precio).toBe(25000)
+    expect(chain.eq).toHaveBeenCalledWith("organization_id", "org-1")
   })
 })
 
@@ -552,13 +567,12 @@ describe("POST /api/servicios", () => {
 
   it("crea un servicio", async () => {
     mockAuthSuccess({ organizationId: "org-1", role: "ADMIN" })
-    mockSupabaseFrom({
-      servicios: createChainMock({
-        id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
-        descripcion: null, categoria: null, precio: 25000,
-        duracion_estimada_min: null, activo: true,
-      }),
+    const chain = createChainMock({
+      id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
+      descripcion: null, categoria: null, precio: 25000,
+      duracion_estimada_min: null, activo: true,
     })
+    mockSupabaseFrom({ servicios: chain })
 
     const res = await POST(
       createPostRequest({ codigo: "SRV-001", nombre: "Instalacion de Windows", precio: 25000 })
@@ -567,6 +581,9 @@ describe("POST /api/servicios", () => {
 
     expect(status).toBe(201)
     expect(body.servicio.id).toBe("srv-1")
+    expect(chain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ organization_id: "org-1" })
+    )
   })
 
   it("rechaza precio negativo", async () => {
@@ -779,13 +796,12 @@ describe("PUT /api/servicios/[id]", () => {
 
   it("actualiza el precio", async () => {
     mockAuthSuccess({ organizationId: "org-1", role: "ADMIN" })
-    mockSupabaseFrom({
-      servicios: createChainMock({
-        id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
-        descripcion: null, categoria: null, precio: 30000,
-        duracion_estimada_min: null, activo: true,
-      }),
+    const chain = createChainMock({
+      id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
+      descripcion: null, categoria: null, precio: 30000,
+      duracion_estimada_min: null, activo: true,
     })
+    mockSupabaseFrom({ servicios: chain })
 
     const req = new Request("http://localhost:3000/api/servicios/srv-1", {
       method: "PUT",
@@ -797,6 +813,7 @@ describe("PUT /api/servicios/[id]", () => {
 
     expect(status).toBe(200)
     expect(body.servicio.precio).toBe(30000)
+    expect(chain.eq).toHaveBeenCalledWith("organization_id", "org-1")
   })
 
   it("devuelve 403 si el usuario no es ADMIN", async () => {
@@ -811,6 +828,22 @@ describe("PUT /api/servicios/[id]", () => {
 
     const { status } = await parseResponse(await PUT(req, params("srv-1")))
     expect(status).toBe(403)
+  })
+
+  it("devuelve 404 si el servicio no existe", async () => {
+    mockAuthSuccess({ organizationId: "org-1", role: "ADMIN" })
+    mockSupabaseFrom({
+      servicios: createChainMock(null, { code: "PGRST116", message: "no rows returned" }),
+    })
+
+    const req = new Request("http://localhost:3000/api/servicios/srv-1", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ precio: 1 }),
+    })
+
+    const { status } = await parseResponse(await PUT(req, params("srv-1")))
+    expect(status).toBe(404)
   })
 })
 
@@ -828,6 +861,7 @@ describe("DELETE /api/servicios/[id]", () => {
     expect(status).toBe(200)
     expect(chain.update).toHaveBeenCalled()
     expect(chain.delete).not.toHaveBeenCalled()
+    expect(chain.eq).toHaveBeenCalledWith("organization_id", "org-1")
   })
 })
 ```
@@ -908,10 +942,19 @@ export async function PUT(
           { status: 400 }
         )
       }
+      if (dbError.code === "PGRST116") {
+        return NextResponse.json(
+          { error: "Servicio no encontrado" },
+          { status: 404 }
+        )
+      }
       console.error("Error updating servicio:", dbError)
       return NextResponse.json({ error: "Error al actualizar el servicio" }, { status: 500 })
     }
 
+    // Defensivo: con .single() supabase-js siempre setea error.code = PGRST116
+    // en cero filas, así que esta rama no debería alcanzarse. Se mantiene
+    // como guarda de segundo nivel, no como el único camino a 404.
     if (!data) {
       return NextResponse.json({ error: "Servicio no encontrado" }, { status: 404 })
     }
@@ -944,8 +987,16 @@ export async function DELETE(
       .update({ deleted_at: new Date().toISOString(), activo: false })
       .eq("id", id)
       .eq("organization_id", organizationId!)
+      .select("id")
+      .single()
 
     if (dbError) {
+      if (dbError.code === "PGRST116") {
+        return NextResponse.json(
+          { error: "Servicio no encontrado" },
+          { status: 404 }
+        )
+      }
       console.error("Error deleting servicio:", dbError)
       return NextResponse.json({ error: "Error al eliminar el servicio" }, { status: 500 })
     }
@@ -961,7 +1012,7 @@ export async function DELETE(
 - [ ] **Step 4: Correr el test — debe pasar**
 
 Run: `npm run test:run -- __tests__/api/servicios-id.test.ts`
-Expected: PASS, 3 tests.
+Expected: PASS, 4 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -1273,7 +1324,7 @@ export async function POST(
     if (parsed.tipo === "manual" && parsed.guardarEnCatalogo) {
       const { error: catalogoError } = await supabaseAdmin.from("servicios").insert({
         organization_id: organizationId!,
-        codigo: `SRV-${Date.now()}`,
+        codigo: `SRV-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         nombre,
         precio: precioUnitario,
       })
@@ -1439,6 +1490,7 @@ Crear `components/ordenes/orden-servicios-tab.tsx`, espejando la estructura de `
 - En el modo manual, un checkbox **"Guardar en Servicios"** que envía `guardarEnCatalogo: true`.
 - El pie muestra **"Subtotal Servicios"**.
 - Si la respuesta trae `costoFinalActualizado: false` y `sumaServicios` difiere del `costo_final` de la orden, mostrar un aviso con un botón **"Aplicar al total"** que hace `PUT /api/ordenes/[id]` con `{ costoFinal: sumaServicios }`.
+- El aviso compara `subtotalServicios` contra `costoFinal` (una comparación derivada, que sobrevive a un reload de página), pero solo cuando `servicios.length > 0` **o** la última alta/baja de esta sesión devolvió `costoFinalActualizado: false` (guardado en estado local). El guard de `length > 0` evita un falso positivo en órdenes anteriores a esta funcionalidad (costo cargado a mano, cero líneas, nunca desincronizadas); el flag de sesión evita que ese mismo guard esconda el aviso cuando se elimina la última línea de una orden con cobros (o con el costo editado a mano) — ahí el backend no puede sincronizar `costo_final` a `null` y, sin el flag, la tab se queda sin forma de ofrecer la reconciliación.
 
 Igual que en la tab de repuestos, esperar el refetch del padre antes de cerrar el formulario y reactivar los controles (ver el comentario en `orden-repuestos-tab.tsx:25-29`): cerrar antes provoca un parpadeo de "sin servicios" que invita a reintentar y duplicar el alta.
 
@@ -1458,7 +1510,11 @@ Verificar sobre una orden sin cobros:
 3. Editar el costo final a mano a 30000 y agregar un tercer servicio → el costo final **no** cambia y aparece el botón "Aplicar al total".
 4. Eliminar todas las líneas → el costo final queda vacío.
 
-Y sobre una orden con un cobro registrado: agregar un servicio → el costo final **no** cambia y aparece el aviso.
+Y sobre una orden con un cobro registrado:
+5. Agregar un servicio → el costo final **no** cambia y aparece el aviso.
+6. Eliminar la única línea de servicio → el costo final sigue sin cambiar, la tab queda en "No hay servicios agregados" y el aviso **sigue apareciendo** (fix de esta ronda: antes desaparecía junto con la última línea, dejando `costo_final` desincronizado sin forma de reconciliar desde esta tab).
+
+Y sobre una orden **anterior a esta funcionalidad** (costo final cargado a mano, cero líneas de servicio, nunca tocada en esta tab): no debe aparecer ningún aviso.
 
 - [ ] **Step 4: Correr toda la suite**
 
@@ -1476,7 +1532,7 @@ git commit -m "feat(servicios): tab de servicios en el detalle de orden"
 
 ## Definition of Done
 
-- [ ] Migración 279 aplicada; los dos probes de la Task 1 dan el resultado esperado.
+- [ ] Migración 283 aplicada; los dos probes de la Task 1 dan el resultado esperado.
 - [ ] `npm run test:run` en verde, con los 20 tests nuevos (8 de sincronización, 5 + 3 de catálogo, 4 de líneas de orden).
 - [ ] `npx tsc --noEmit` sin errores.
 - [ ] Los cuatro escenarios manuales de la Task 8 Step 3 verificados en el navegador.
