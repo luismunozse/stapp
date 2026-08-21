@@ -2,6 +2,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { ConfirmarReparadoDialog } from "@/components/ordenes/confirmar-reparado-dialog"
+import { printDeviceLabel } from "@/components/ordenes/print-label"
+
+vi.mock("@/components/ordenes/print-label", () => ({ printDeviceLabel: vi.fn() }))
 
 const baseOrden = {
   id: "o1",
@@ -17,6 +20,7 @@ const baseOrden = {
 
 describe("ConfirmarReparadoDialog", () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }) as any
   })
 
@@ -67,5 +71,33 @@ describe("ConfirmarReparadoDialog", () => {
     expect(body.estado).toBe("REPARADO")
     expect(body.costoFinal).toBe(15000)
     await waitFor(() => expect(onSuccess).toHaveBeenCalled())
+  })
+
+  it("imprime la etiqueta 'Reparado' al confirmar (checkbox tildado por defecto)", async () => {
+    render(
+      <ConfirmarReparadoDialog
+        open
+        onOpenChange={vi.fn()}
+        orden={{ ...baseOrden, costoFinal: 15000, dispositivo: "iPhone 12", problemaReportado: "No carga", publicToken: "tok" }}
+        onSuccess={vi.fn()}
+      />,
+    )
+    fireEvent.click(screen.getByRole("button", { name: /marcar como reparado/i }))
+
+    await waitFor(() => expect(printDeviceLabel).toHaveBeenCalled())
+    const [data] = (printDeviceLabel as any).mock.calls[0]
+    expect(data.variant).toBe("reparado")
+    expect(data.dispositivo).toBe("iPhone 12")
+  })
+
+  it("no imprime la etiqueta si se destilda el checkbox", async () => {
+    render(
+      <ConfirmarReparadoDialog open onOpenChange={vi.fn()} orden={{ ...baseOrden, costoFinal: 15000 }} onSuccess={vi.fn()} />,
+    )
+    fireEvent.click(screen.getByRole("checkbox")) // estaba tildado; lo destildo
+    fireEvent.click(screen.getByRole("button", { name: /marcar como reparado/i }))
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    expect(printDeviceLabel).not.toHaveBeenCalled()
   })
 })

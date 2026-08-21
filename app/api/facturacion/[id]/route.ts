@@ -23,6 +23,131 @@ function isFunctionMissingError(err: unknown): boolean {
   )
 }
 
+// ---------------------------------------------------------------------------
+// fetchFacturaConOrigen — resolves a factura by id regardless of whether it
+// is orden-sourced or venta-sourced. Two-step (base lookup by id, then a
+// branch-specific `!inner` fetch) instead of a single dual-left-join query,
+// for the same reason as GET /api/facturacion (see Task 3): embedded filters
+// don't turn a left-embed into an inner join on the parent row.
+//
+// `organizationId` is mandatory and is enforced INSIDE both branch queries
+// (`.eq("ordenes_servicio.organization_id", ...)` / `.eq("ventas.organization_id", ...)`),
+// mirroring app/api/facturacion/route.ts. supabaseAdmin is service-role and
+// bypasses RLS, so this is the only backstop against a cross-org row — a
+// caller-side comparison after the fact is not enough, since it's easy for a
+// future caller to forget it.
+// ---------------------------------------------------------------------------
+async function fetchFacturaConOrigen(
+  id: string,
+  organizationId: string,
+  opts?: { sid?: string | null }
+): Promise<{ origen: "orden" | "venta"; organizationId: string; factura: any } | null> {
+  const { data: base, error: baseError } = await supabaseAdmin
+    .from("facturas")
+    .select("id, orden_id, venta_id")
+    .eq("id", id)
+    .single()
+
+  if (baseError || !base) return null
+
+  if (base.orden_id) {
+    let query = supabaseAdmin
+      .from("facturas")
+      .select(`
+        *,
+        ordenes_servicio!inner (
+          id,
+          numero_orden,
+          dispositivo,
+          organization_id,
+          sucursal_id,
+          cliente_id,
+          clientes (*)
+        ),
+        pagos_parciales (*)
+      `)
+      .eq("id", id)
+      .eq("ordenes_servicio.organization_id", organizationId)
+    if (opts?.sid) query = query.eq("ordenes_servicio.sucursal_id", opts.sid)
+    const { data, error } = await query.single()
+    if (error || !data) return null
+    return { origen: "orden", organizationId: data.ordenes_servicio.organization_id, factura: data }
+  }
+
+  let query = supabaseAdmin
+    .from("facturas")
+    .select(`
+      *,
+      ventas!inner (
+        id,
+        numero_venta,
+        cliente_nombre,
+        cliente_id,
+        organization_id,
+        sucursal_id
+      ),
+      pagos_parciales (*)
+    `)
+    .eq("id", id)
+    .eq("ventas.organization_id", organizationId)
+  if (opts?.sid) query = query.eq("ventas.sucursal_id", opts.sid)
+  const { data, error } = await query.single()
+  if (error || !data) return null
+  return { origen: "venta", organizationId: data.ventas.organization_id, factura: data }
+}
+
+function formatFacturaResponse(result: { origen: "orden" | "venta"; factura: any }) {
+  const f = result.factura
+  const base = {
+    id: f.id,
+    origen: result.origen,
+    numeroFactura: f.numero_factura,
+    fecha: f.fecha,
+    subtotal: f.subtotal,
+    iva: f.iva,
+    total: f.total,
+    montoAbonado: f.monto_abonado,
+    estadoPago: f.estado_pago,
+    createdAt: f.fecha,
+    pagos: (f.pagos_parciales || [])
+      .map((p: any) => ({
+        id: p.id,
+        monto: p.monto,
+        metodoPago: p.metodo_pago,
+        referencia: p.numero_referencia,
+        fecha: p.fecha,
+        notas: p.observaciones,
+        cuotas: p.cuotas,
+        recargoPorcentaje: p.recargo_porcentaje,
+        montoOriginal: p.monto_original,
+      }))
+      .sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()),
+  }
+
+  if (result.origen === "orden") {
+    return {
+      ...base,
+      ordenId: f.orden_id,
+      orden: {
+        id: f.ordenes_servicio.id,
+        numeroOrden: f.ordenes_servicio.numero_orden,
+        dispositivo: f.ordenes_servicio.dispositivo,
+        cliente: f.ordenes_servicio.clientes,
+      },
+    }
+  }
+
+  return {
+    ...base,
+    ventaId: f.venta_id,
+    venta: {
+      id: f.ventas.id,
+      numeroVenta: f.ventas.numero_venta,
+      cliente: { id: f.ventas.cliente_id, nombre: f.ventas.cliente_nombre },
+    },
+  }
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -38,71 +163,19 @@ export async function GET(
     const sid = filtro.verTodas ? null : filtro.sucursalId
 
     const { id } = await params
+    const result = await fetchFacturaConOrigen(id, organizationId!, { sid })
 
-    let query = supabaseAdmin
-      .from("facturas")
-      .select(`
-        *,
-        ordenes_servicio!inner (
-          id,
-          numero_orden,
-          dispositivo,
-          organization_id,
-          clientes (*)
-        ),
-        pagos_parciales (*)
-      `)
-      .eq("id", id)
-      .eq("ordenes_servicio.organization_id", organizationId!)
-
-    if (sid) query = query.eq("ordenes_servicio.sucursal_id", sid)
-
-    const { data: factura, error: dbError } = await query.single()
-
-    if (dbError || !factura) {
-      return NextResponse.json(
-        { error: "Factura no encontrada" },
-        { status: 404 }
-      )
+    if (!result || result.organizationId !== organizationId) {
+      return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
     }
 
-    return NextResponse.json({
-      id: factura.id,
-      ordenId: factura.orden_id,
-      numeroFactura: factura.numero_factura,
-      fecha: factura.fecha,
-      subtotal: factura.subtotal,
-      iva: factura.iva,
-      total: factura.total,
-      montoAbonado: factura.monto_abonado,
-      estadoPago: factura.estado_pago,
-      createdAt: factura.fecha,
-      orden: {
-        id: factura.ordenes_servicio.id,
-        numeroOrden: factura.ordenes_servicio.numero_orden,
-        dispositivo: factura.ordenes_servicio.dispositivo,
-        cliente: factura.ordenes_servicio.clientes,
-      },
-      pagos: factura.pagos_parciales?.map((p: any) => ({
-        id: p.id,
-        monto: p.monto,
-        metodoPago: p.metodo_pago,
-        referencia: p.numero_referencia,
-        fecha: p.fecha,
-        notas: p.observaciones,
-        cuotas: p.cuotas,
-        recargoPorcentaje: p.recargo_porcentaje,
-        montoOriginal: p.monto_original,
-      })).sort((a: any, b: any) =>
-        new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
-      ),
-    }, {
+    return NextResponse.json(formatFacturaResponse(result), {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })
   } catch (error) {
     console.error("Error fetching factura:", error)
     return NextResponse.json(
-      { error: "Error al obtener factura" },
+      { error: "Error al obtener remito" },
       { status: 500 }
     )
   }
@@ -118,7 +191,7 @@ export async function PUT(
 
     if (role !== "ADMIN") {
       return NextResponse.json(
-        { error: "Solo administradores pueden modificar facturas" },
+        { error: "Solo administradores pueden modificar remitos" },
         { status: 403 }
       )
     }
@@ -132,7 +205,7 @@ export async function PUT(
     // payments and must not be set manually.
     if (data.estadoPago !== undefined && data.estadoPago !== "ANULADA") {
       return NextResponse.json(
-        { error: "El estado de pago se deriva de los pagos; la factura solo puede anularse." },
+        { error: "El estado de pago se deriva de los pagos; el remito solo puede anularse." },
         { status: 400 }
       )
     }
@@ -153,7 +226,7 @@ export async function PUT(
     }
     console.error("Error updating factura:", error)
     return NextResponse.json(
-      { error: "Error al actualizar factura" },
+      { error: "Error al actualizar remito" },
       { status: 500 }
     )
   }
@@ -180,7 +253,7 @@ async function handleAnularFactura(opts: {
 
   if (!rpcError) {
     // Fetch and return the updated factura (same shape as before)
-    return await fetchAndReturnFactura(id)
+    return await fetchAndReturnFactura(id, organizationId)
   }
 
   if (isFunctionMissingError(rpcError)) {
@@ -188,20 +261,32 @@ async function handleAnularFactura(opts: {
     return await anularFacturaJsFallback({ id, organizationId, userId })
   }
 
-  // Map known business errors
+  // Map known business errors.
+  // Migration 295 changed anular_factura_atomica's RAISE EXCEPTION wording
+  // from feminine ("factura") to masculine ("remito"): "Factura no
+  // encontrada" / "La factura ya esta anulada" -> "Remito no encontrado" /
+  // "El remito ya esta anulado". The app and the migration don't deploy
+  // atomically (this route can ship before 295 runs, or 295 can be rolled
+  // back — see supabase/migrations/rollback/295_rollback.sql — after this
+  // route already shipped), so these matches are gender-agnostic and accept
+  // BOTH wordings. This also makes the rollback self-contained: reverting
+  // just the DB function is enough, this route doesn't need a matching
+  // revert to keep working.
+  // eliminar_factura_atomica is untouched by migration 295 and still raises
+  // "Factura no encontrada" — its own match (below, in DELETE) keeps the old wording.
   const msg = rpcError.message ?? ""
-  if (msg.includes("no encontrada")) {
-    return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
+  if (/no encontrad[oa]/.test(msg)) {
+    return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
   }
   if (msg.includes("No autorizado")) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 })
   }
-  if (msg.includes("ya esta anulada")) {
+  if (/ya esta anulad[oa]/.test(msg)) {
     return NextResponse.json({ error: msg }, { status: 400 })
   }
 
   console.error("[facturacion] Unexpected RPC error (anular):", rpcError)
-  return NextResponse.json({ error: "Error al anular factura" }, { status: 500 })
+  return NextResponse.json({ error: "Error al anular remito" }, { status: 500 })
 }
 
 // ---------------------------------------------------------------------------
@@ -226,7 +311,7 @@ async function anularFacturaJsFallback(opts: {
     .single()
 
   if (fetchError || !factura) {
-    return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
+    return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
   }
 
   const ordenOrgId = (factura.ordenes_servicio as any)?.organization_id
@@ -235,7 +320,7 @@ async function anularFacturaJsFallback(opts: {
   }
 
   if ((factura as any).estado_pago === "ANULADA") {
-    return NextResponse.json({ error: "La factura ya esta anulada" }, { status: 400 })
+    return NextResponse.json({ error: "El remito ya está anulado" }, { status: 400 })
   }
 
   const clienteId = (factura.ordenes_servicio as any)?.cliente_id
@@ -253,7 +338,7 @@ async function anularFacturaJsFallback(opts: {
         p_referencia_tipo: "FACTURA",
         p_referencia_id: id,
         p_usuario_id: userId,
-        p_observaciones: `Anulacion factura ${(factura as any).numero_factura}`,
+        p_observaciones: `Anulacion remito ${(factura as any).numero_factura}`,
         // Derived from the parent orden's sucursal_id, not the current
         // operator's active cookie.
         p_sucursal_id: sucursalId,
@@ -275,63 +360,21 @@ async function anularFacturaJsFallback(opts: {
 
   if (updateError) {
     console.error("[facturacion] Error updating estado_pago to ANULADA:", updateError)
-    return NextResponse.json({ error: "Error al anular factura" }, { status: 500 })
+    return NextResponse.json({ error: "Error al anular remito" }, { status: 500 })
   }
 
-  return await fetchAndReturnFactura(id)
+  return await fetchAndReturnFactura(id, organizationId)
 }
 
 // ---------------------------------------------------------------------------
 // fetchAndReturnFactura — re-reads the factura and returns the standard shape
 // ---------------------------------------------------------------------------
-async function fetchAndReturnFactura(id: string): Promise<NextResponse> {
-  const { data: factura, error: fetchError } = await supabaseAdmin
-    .from("facturas")
-    .select(`
-      *,
-      ordenes_servicio (
-        id,
-        numero_orden,
-        dispositivo,
-        clientes (*)
-      ),
-      pagos_parciales (*)
-    `)
-    .eq("id", id)
-    .single()
-
-  if (fetchError || !factura) {
-    return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
+async function fetchAndReturnFactura(id: string, organizationId: string): Promise<NextResponse> {
+  const result = await fetchFacturaConOrigen(id, organizationId)
+  if (!result) {
+    return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
   }
-
-  return NextResponse.json({
-    id: factura.id,
-    ordenId: factura.orden_id,
-    numeroFactura: factura.numero_factura,
-    fecha: factura.fecha,
-    subtotal: factura.subtotal,
-    iva: factura.iva,
-    total: factura.total,
-    montoAbonado: factura.monto_abonado,
-    estadoPago: factura.estado_pago,
-    orden: {
-      id: factura.ordenes_servicio.id,
-      numeroOrden: factura.ordenes_servicio.numero_orden,
-      dispositivo: factura.ordenes_servicio.dispositivo,
-      cliente: factura.ordenes_servicio.clientes,
-    },
-    pagos: factura.pagos_parciales?.map((p: any) => ({
-      id: p.id,
-      monto: p.monto,
-      metodoPago: p.metodo_pago,
-      referencia: p.numero_referencia,
-      fecha: p.fecha,
-      notas: p.observaciones,
-      cuotas: p.cuotas,
-      recargoPorcentaje: p.recargo_porcentaje,
-      montoOriginal: p.monto_original,
-    })),
-  })
+  return NextResponse.json(formatFacturaResponse(result))
 }
 
 export async function DELETE(
@@ -344,43 +387,25 @@ export async function DELETE(
 
     if (role !== "ADMIN") {
       return NextResponse.json(
-        { error: "Solo administradores pueden eliminar facturas" },
+        { error: "Solo administradores pueden eliminar remitos" },
         { status: 403 }
       )
     }
 
     const { id } = await params
 
-    // Pre-check: verify the factura exists and belongs to this org
-    // (needed for audit log details and early 404/403 before RPC)
-    const { data: factura, error: fetchError } = await supabaseAdmin
-      .from("facturas")
-      .select(`
-        id,
-        numero_factura,
-        total,
-        ordenes_servicio!inner(
-          organization_id,
-          numero_orden
-        )
-      `)
-      .eq("id", id)
-      .single()
-
-    if (fetchError || !factura) {
-      return NextResponse.json(
-        { error: "Factura no encontrada" },
-        { status: 404 }
-      )
+    const result = await fetchFacturaConOrigen(id, organizationId!)
+    if (!result) {
+      return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
+    }
+    if (result.organizationId !== organizationId) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 })
     }
 
-    const ordenOrgId = (factura.ordenes_servicio as any)?.organization_id
-    if (ordenOrgId !== organizationId) {
-      return NextResponse.json(
-        { error: "No autorizado" },
-        { status: 403 }
-      )
-    }
+    const numeroOrigen =
+      result.origen === "orden"
+        ? result.factura.ordenes_servicio.numero_orden
+        : result.factura.ventas.numero_venta
 
     // --- Atomic RPC path (migration 248) ---
     const { error: rpcError } = await supabaseAdmin.rpc("eliminar_factura_atomica", {
@@ -390,7 +415,6 @@ export async function DELETE(
     })
 
     if (!rpcError) {
-      // Audit log after successful atomic delete
       await supabaseAdmin.from("audit_logs").insert({
         organization_id: organizationId,
         user_id: userId,
@@ -398,35 +422,60 @@ export async function DELETE(
         entity_type: "factura",
         entity_id: id,
         details: {
-          numero_factura: factura.numero_factura,
-          total: factura.total,
-          numero_orden: (factura.ordenes_servicio as any)?.numero_orden,
+          numero_factura: result.factura.numero_factura,
+          total: result.factura.total,
+          origen: result.origen,
+          numeroOrigen,
         },
       })
       return NextResponse.json({ success: true })
     }
 
     if (isFunctionMissingError(rpcError)) {
+      if (result.origen === "venta") {
+        // The legacy JS fallback (below) predates venta-sourced invoices and
+        // assumes an orden join; eliminar_factura_atomica always exists once
+        // migration 292 is applied, so this path is unreachable in practice.
+        console.error("[facturacion] eliminar_factura_atomica missing; venta-origin fallback not supported")
+        return NextResponse.json(
+          { error: "No se pudo eliminar el remito: falta aplicar una migración pendiente" },
+          { status: 500 }
+        )
+      }
       console.warn("[facturacion] eliminar_factura_atomica not found; falling back to JS path")
-      return await eliminarFacturaJsFallback({ id, organizationId: organizationId!, userId: userId!, factura })
+      return await eliminarFacturaJsFallback({
+        id,
+        organizationId: organizationId!,
+        userId: userId!,
+        factura: {
+          id: result.factura.id,
+          numero_factura: result.factura.numero_factura,
+          total: result.factura.total,
+          ordenes_servicio: { organization_id: result.organizationId, numero_orden: numeroOrigen },
+        },
+      })
     }
 
-    // Map known business errors
+    // Map known business errors.
+    // eliminar_factura_atomica is untouched by migration 295 — it still raises
+    // "Factura no encontrada" (feminine), unlike anular_factura_atomica above
+    // which migration 295 reworded to "Remito no encontrado". Keep this
+    // matching the old wording; do not "fix" it to match the anular handler.
     const msg = rpcError.message ?? ""
     if (msg.includes("no encontrada")) {
-      return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
+      return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
     }
     if (msg.includes("No autorizado")) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 })
     }
 
     console.error("[facturacion] Unexpected RPC error (eliminar):", rpcError)
-    return NextResponse.json({ error: "Error al eliminar factura" }, { status: 500 })
+    return NextResponse.json({ error: "Error al eliminar remito" }, { status: 500 })
 
   } catch (error) {
     console.error("Error deleting factura:", error)
     return NextResponse.json(
-      { error: "Error al eliminar factura" },
+      { error: "Error al eliminar remito" },
       { status: 500 }
     )
   }
@@ -451,7 +500,7 @@ async function eliminarFacturaJsFallback(opts: {
 
   if (pagosError) {
     console.error("[facturacion] Error loading pagos for CC re-credit:", pagosError)
-    return NextResponse.json({ error: "Error al eliminar factura" }, { status: 500 })
+    return NextResponse.json({ error: "Error al eliminar remito" }, { status: 500 })
   }
 
   // Load cliente_id + sucursal_id from orden
@@ -474,7 +523,7 @@ async function eliminarFacturaJsFallback(opts: {
         p_referencia_tipo: "FACTURA",
         p_referencia_id: id,
         p_usuario_id: userId,
-        p_observaciones: `Eliminacion factura ${factura.numero_factura}`,
+        p_observaciones: `Eliminacion remito ${factura.numero_factura}`,
         // Derived from the parent orden's sucursal_id, not the current
         // operator's active cookie.
         p_sucursal_id: sucursalId,
@@ -497,7 +546,7 @@ async function eliminarFacturaJsFallback(opts: {
 
   if (deletePagosError) {
     console.error("[facturacion] Error deleting pagos:", deletePagosError)
-    return NextResponse.json({ error: "Error al eliminar factura" }, { status: 500 })
+    return NextResponse.json({ error: "Error al eliminar remito" }, { status: 500 })
   }
 
   const { error: deleteError } = await supabaseAdmin
@@ -507,7 +556,7 @@ async function eliminarFacturaJsFallback(opts: {
 
   if (deleteError) {
     console.error("[facturacion] Error deleting factura:", deleteError)
-    return NextResponse.json({ error: "Error al eliminar factura" }, { status: 500 })
+    return NextResponse.json({ error: "Error al eliminar remito" }, { status: 500 })
   }
 
   // Audit log

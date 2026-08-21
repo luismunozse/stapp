@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useCurrency } from "@/contexts/currency-context"
 import { useHasFeature } from "@/hooks/use-subscription"
+import { TipoPrecioBadge } from "@/components/clientes/tipo-precio-badge"
 import type { Cliente } from "@/types"
 
 interface ClienteDetalleHeaderProps {
@@ -44,6 +45,7 @@ export function ClienteDetalleHeader({
             {esEmpresa && (
               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-warning/10 text-warning-700">Empresa</span>
             )}
+            <TipoPrecioBadge tipoPrecio={cliente.tipoPrecio} />
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2">
             {cliente.telefono && <span>{cliente.telefono}</span>}

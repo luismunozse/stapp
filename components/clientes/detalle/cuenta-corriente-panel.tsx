@@ -232,7 +232,7 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
                     </div>
                     {mov.referenciaTipo && mov.referenciaTipo !== "MANUAL" && (
                       <div className="text-xs text-muted-foreground">
-                        {mov.referenciaTipo === "VENTA" ? "Venta" : mov.referenciaTipo === "FACTURA" ? "Factura" : mov.referenciaTipo}
+                        {mov.referenciaTipo === "VENTA" ? "Venta" : mov.referenciaTipo === "FACTURA" ? "Remito" : mov.referenciaTipo}
                       </div>
                     )}
                     {mov.observaciones && (

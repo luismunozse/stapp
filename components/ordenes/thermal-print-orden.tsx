@@ -16,6 +16,15 @@ import { useTerminologia } from "@/contexts/currency-context"
 import { fitPrintPageToContent } from "@/lib/print-fit-page"
 import { generateOrdenTicketCommands, type OrdenTicketData } from "@/lib/escpos"
 import { imageUrlToRaster, imageUrlToBinarizedDataUrl } from "@/lib/escpos-image"
+import {
+  readAncho,
+  saveAncho,
+  anchoToPx,
+  anchoLogoDots,
+  ANCHOS_TERMICOS,
+  DEFAULT_ANCHO,
+  type AnchoTermico,
+} from "@/lib/thermal-paper"
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
 import { toast } from "sonner"
 import type { OrdenServicio } from "@/types"
@@ -65,6 +74,11 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
   const { timezone, terminologia } = useCurrency()
   const [open, setOpen] = useState(false)
   const [printingThermal, setPrintingThermal] = useState(false)
+  const [ancho, setAncho] = useState<AnchoTermico>(DEFAULT_ANCHO)
+
+  useEffect(() => {
+    setAncho(readAncho())
+  }, [])
 
   const preview: PreviewData = useMemo(() => {
     const seguimientoUrl = orden.publicToken && typeof window !== "undefined"
@@ -107,7 +121,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
   const buildTicketData = async (): Promise<OrdenTicketData> => {
     let logoRaster: Uint8Array | null = null
     if (preview.logoUrl) {
-      logoRaster = await imageUrlToRaster(preview.logoUrl, { maxWidth: 384 })
+      logoRaster = await imageUrlToRaster(preview.logoUrl, { maxWidth: anchoLogoDots(ancho) })
     }
     return {
       numeroOrden: orden.numeroOrden,
@@ -143,7 +157,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
     setPrintingThermal(true)
     try {
       const ticketData = await buildTicketData()
-      const commands = generateOrdenTicketCommands(ticketData, 80, terminologia)
+      const commands = generateOrdenTicketCommands(ticketData, ancho, terminologia)
       const ok = await print(commands)
       if (ok) toast.success("Comprobante impreso")
       else toast.error("Error al imprimir")
@@ -164,7 +178,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
     // Pre-binarize logo so driver receives pure B/W (no grays to crush)
     let logoDataUrl: string | null = null
     if (preview.logoUrl) {
-      logoDataUrl = await imageUrlToBinarizedDataUrl(preview.logoUrl, { maxWidth: 384 })
+      logoDataUrl = await imageUrlToBinarizedDataUrl(preview.logoUrl, { maxWidth: anchoLogoDots(ancho) })
     }
 
     const clone = source.cloneNode(true) as HTMLElement
@@ -200,10 +214,10 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
 <meta charset="utf-8" />
 ${styles}
 <style>
-  @page { size: 80mm auto; margin: 0; }
+  @page { size: ${ancho}mm auto; margin: 0; }
   html, body { margin: 0; padding: 0; background: #fff; }
-  body { width: 80mm; }
-  #thermal-receipt-print-area { width: 80mm !important; padding: 2mm; box-sizing: border-box; }
+  body { width: ${ancho}mm; }
+  #thermal-receipt-print-area { width: ${ancho}mm !important; padding: 2mm; box-sizing: border-box; }
   img { max-width: 100%; image-rendering: pixelated; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 </style>
 </head>
@@ -235,7 +249,7 @@ ${styles}
       try {
         await waitForImages()
         try { await doc.fonts.ready } catch { /* measurement falls back to current metrics */ }
-        fitPrintPageToContent(doc, doc.getElementById("thermal-receipt-print-area"), 80)
+        fitPrintPageToContent(doc, doc.getElementById("thermal-receipt-print-area"), ancho)
         iframe.contentWindow?.focus()
         iframe.contentWindow?.print()
       } finally {
@@ -256,7 +270,7 @@ ${styles}
         variant="outline"
         size="sm"
         onClick={() => setOpen(true)}
-        title="Comprobante térmico 80mm"
+        title={`Comprobante térmico ${ancho}mm`}
       >
         <Receipt className="h-4 w-4 mr-2" />
         Térmica
@@ -267,12 +281,33 @@ ${styles}
           <DialogHeader>
             <DialogTitle>Comprobante térmico</DialogTitle>
             <DialogDescription>
-              Vista previa del comprobante 80mm. Imprimí en impresora térmica USB o por navegador.
+              Vista previa del comprobante {ancho}mm. Imprimí en impresora térmica USB o por navegador.
             </DialogDescription>
           </DialogHeader>
 
+          <div className="flex items-center justify-center gap-2 text-sm">
+            <span className="text-muted-foreground">Ancho del rollo:</span>
+            {ANCHOS_TERMICOS.map((a) => (
+              <button
+                key={a}
+                type="button"
+                onClick={() => {
+                  setAncho(a)
+                  saveAncho(a)
+                }}
+                className={`px-3 py-1 rounded-md border text-xs transition-colors ${
+                  ancho === a
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background hover:bg-muted"
+                }`}
+              >
+                {a}mm
+              </button>
+            ))}
+          </div>
+
           <div className="flex justify-center bg-muted/40 rounded-md p-4 max-h-[60vh] overflow-y-auto">
-            <ReceiptPreview data={preview} />
+            <ReceiptPreview data={preview} ancho={ancho} />
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 pt-2">
@@ -327,7 +362,7 @@ function Row({ left, right }: { left: string; right: string }) {
   )
 }
 
-function ReceiptPreview({ data }: { data: PreviewData }) {
+function ReceiptPreview({ data, ancho }: { data: PreviewData; ancho: AnchoTermico }) {
   const term = useTerminologia()
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
 
@@ -345,7 +380,7 @@ function ReceiptPreview({ data }: { data: PreviewData }) {
     <div
       id="thermal-receipt-print-area"
       className="bg-white text-black font-mono text-[11px] leading-tight p-3 text-center"
-      style={{ width: "302px" }}
+      style={{ width: anchoToPx(ancho) + "px" }}
     >
       {data.logoUrl && (
         // eslint-disable-next-line @next/next/no-img-element

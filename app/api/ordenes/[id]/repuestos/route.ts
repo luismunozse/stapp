@@ -10,12 +10,19 @@ const repuestoInventarioSchema = z.object({
   cantidad: z.number().int().min(1),
 })
 
-// Schema para repuesto manual
+// Schema para repuesto manual.
+// precioUnitario es el COSTO (lo que pagó el taller) y precioVentaUnitario lo
+// que se le cobra al cliente. Sin los dos números el reporte de rentabilidad
+// muestra margen cero para todo repuesto cargado a mano.
 const repuestoManualSchema = z.object({
   tipo: z.literal("manual"),
   nombre: z.string().min(1, "El nombre es requerido"),
   cantidad: z.number().int().min(1),
-  precioUnitario: z.number().min(0, "El precio debe ser mayor o igual a 0"),
+  precioUnitario: z.number().min(0, "El costo debe ser mayor o igual a 0"),
+  precioVentaUnitario: z
+    .number()
+    .min(0, "El precio de venta debe ser mayor o igual a 0")
+    .optional(),
 })
 
 // Schema combinado
@@ -23,6 +30,11 @@ const repuestoSchema = z.discriminatedUnion("tipo", [
   repuestoInventarioSchema,
   repuestoManualSchema,
 ])
+
+// Edición de cantidad de un repuesto ya cargado
+const cantidadPatchSchema = z.object({
+  cantidad: z.number().int().min(1, "La cantidad debe ser al menos 1"),
+})
 
 export async function POST(
   request: Request,
@@ -80,12 +92,15 @@ export async function POST(
         )
       }
     } else {
-      // Repuesto manual (sin inventario)
+      // Repuesto manual (sin inventario). Si no se informa precio de venta, se
+      // usa el costo: es lo que hacía el sistema antes de la migración 286 y
+      // evita cobrar 0 por un repuesto real.
       await supabaseAdmin.from("repuestos_orden").insert({
         orden_id: ordenId,
         nombre: data.nombre,
         cantidad: data.cantidad,
         precio_unitario: data.precioUnitario,
+        precio_venta_unitario: data.precioVentaUnitario ?? data.precioUnitario,
       })
     }
 
@@ -100,6 +115,82 @@ export async function POST(
     console.error("Error adding repuesto:", error)
     return NextResponse.json(
       { error: "Error al agregar repuesto" },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { error, organizationId, userId } = await requireAuth()
+    if (error) return error
+
+    const { id: ordenId } = await params
+    const { searchParams } = new URL(request.url)
+    const repuestoId = searchParams.get("repuestoId")
+
+    if (!repuestoId) {
+      return NextResponse.json({ error: "ID de repuesto requerido" }, { status: 400 })
+    }
+
+    const body = await request.json()
+    const data = cantidadPatchSchema.parse(body)
+
+    // Verificar que la orden pertenece a la org
+    const { data: orden, error: ordenError } = await supabaseAdmin
+      .from("ordenes_servicio")
+      .select("id")
+      .eq("id", ordenId)
+      .eq("organization_id", organizationId!)
+      .single()
+
+    if (ordenError || !orden) {
+      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
+    }
+
+    // Verificar que el repuesto es de ESTA orden: sin esto, un repuestoId de
+    // otra orden de la misma org pasaría el chequeo anterior.
+    const { data: repuesto } = await supabaseAdmin
+      .from("repuestos_orden")
+      .select("id, orden_id")
+      .eq("id", repuestoId)
+      .single()
+
+    if (!repuesto || repuesto.orden_id !== ordenId) {
+      return NextResponse.json({ error: "Repuesto no encontrado" }, { status: 404 })
+    }
+
+    // El RPC ajusta sólo el delta de reserva y valida el estado de la orden.
+    const { data: result, error: rpcError } = await supabaseAdmin.rpc(
+      "update_repuesto_cantidad",
+      {
+        p_repuesto_id: repuestoId,
+        p_cantidad_nueva: data.cantidad,
+        p_user_id: userId,
+      }
+    )
+
+    if (rpcError) throw rpcError
+
+    if (result?.error) {
+      const status =
+        result.code === "ORDEN_CERRADA" ? 409 :
+        result.code === "STOCK_INSUFICIENTE" ? 400 :
+        404
+      return NextResponse.json({ error: result.error, code: result.code }, { status })
+    }
+
+    return NextResponse.json({ success: true, cantidad: data.cantidad })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.errors[0].message }, { status: 400 })
+    }
+    console.error("Error updating repuesto cantidad:", error)
+    return NextResponse.json(
+      { error: "Error al actualizar la cantidad" },
       { status: 500 }
     )
   }

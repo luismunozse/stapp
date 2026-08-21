@@ -3,6 +3,7 @@ import { supabaseAdmin, STORAGE_BUCKETS } from "@/lib/supabase"
 import { queueNotification } from "@/lib/notifications/queue"
 import { z } from "zod"
 import { getOrderByPublicToken } from "@/lib/public-token"
+import { transicionarOrden } from "@/lib/orden-transicion"
 
 const approveSchema = z.object({
   firma: z.string().max(2 * 1024 * 1024, "La firma excede el tamaño máximo").optional(),
@@ -56,20 +57,29 @@ export async function POST(
       }
     }
 
-    // Actualizar orden a APROBADO con costo_final = presupuesto
-    const { error: updateError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .update({
-        estado: "APROBADO",
+    // Transición atómica PRESUPUESTADO -> APROBADO (guarda de concurrencia:
+    // dos aprobaciones simultáneas no duplican el evento ni la notificación).
+    const resultado = await transicionarOrden(supabaseAdmin, {
+      ordenId: orden.id,
+      organizationId: orden.organization_id,
+      esperado: "PRESUPUESTADO",
+      nuevo: "APROBADO",
+      camposExtra: {
         costo_final: orden.presupuesto,
         presupuesto_aprobado_portal: true,
         presupuesto_firma_url: firmaUrl,
         presupuesto_firma_path: firmaPath,
         presupuesto_fecha_aprobacion: new Date().toISOString(),
-      })
-      .eq("id", orden.id)
+      },
+    })
 
-    if (updateError) throw updateError
+    // Idempotente: si otra pestaña o request ya aprobó, no dupliquemos.
+    if (!resultado.ok) {
+      return NextResponse.json({
+        message: "El presupuesto ya fue aprobado",
+        estado: "APROBADO",
+      })
+    }
 
     // Registrar evento
     await supabaseAdmin.from("orden_eventos").insert({

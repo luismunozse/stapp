@@ -16,6 +16,7 @@ import {
   Megaphone,
   DollarSign,
   CalendarClock,
+  MessageCircleOff,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 
@@ -42,6 +43,8 @@ function getNotificationIcon(type: string) {
       return <CalendarClock className="h-4 w-4 text-red-500" />
     case "DEUDA_PENDIENTE":
       return <DollarSign className="h-4 w-4 text-orange-500" />
+    case "WHATSAPP_DESCONECTADO":
+      return <MessageCircleOff className="h-4 w-4 text-red-500" />
     default:
       return <Bell className="h-4 w-4 text-muted-foreground" />
   }

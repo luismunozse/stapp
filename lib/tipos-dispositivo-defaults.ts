@@ -9,6 +9,8 @@
  * (049_device_type_config.sql, 092_tipo_dispositivo_impresora.sql, etc.).
  */
 
+import type { TipoDispositivoConfig } from "@/types"
+
 export const TIPOS_BASE_CONFIG: Record<string, any> = {
   CELULAR: {
     campos: {
@@ -266,4 +268,29 @@ export const DEFAULT_TIPO_CONFIG = TIPOS_BASE_CONFIG.TODOS
 
 export function getTipoBaseConfig(codigo: string) {
   return TIPOS_BASE_CONFIG[codigo] ?? DEFAULT_TIPO_CONFIG
+}
+
+/** Config por defecto para tipos sin `config` en la base. */
+export const FALLBACK_CONFIG: TipoDispositivoConfig = {
+  campos: {
+    imei: { visible: true, label: "Numero de Serie", placeholder: "S/N del equipo" },
+    password: { visible: true },
+    color: { visible: true },
+    marca: { visible: true },
+  },
+  camposExtra: [],
+  accesorios: [
+    { id: "cable_poder", label: "Cable de poder" },
+    { id: "cargador", label: "Cargador/Fuente" },
+    { id: "cable_datos", label: "Cable de datos" },
+    { id: "control_remoto", label: "Control remoto" },
+    { id: "manual", label: "Manual" },
+    { id: "caja_original", label: "Caja original" },
+  ],
+  problemasComunes: [
+    "No enciende", "No funciona correctamente", "Hace ruido extrano",
+    "Se apaga solo", "Error en pantalla/display", "No conecta a red/WiFi",
+    "Mantenimiento preventivo", "Revision general",
+  ],
+  marcas: [],
 }

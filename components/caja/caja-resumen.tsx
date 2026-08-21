@@ -46,7 +46,7 @@ const METODO_LABELS: Record<string, string> = {
 
 const TIPO_LABELS: Record<string, { label: string; icon: any; color: string }> = {
   COBRO_ORDEN: { label: "Cobro de Orden", icon: Wrench, color: "text-info-600" },
-  PAGO_FACTURA: { label: "Pago Factura", icon: FileText, color: "text-purple-600" },
+  PAGO_FACTURA: { label: "Pago Remito", icon: FileText, color: "text-purple-600" },
   PAGO_VENTA: { label: "Venta", icon: ShoppingBag, color: "text-success-600" },
   DEPOSITO_CUENTA: { label: "Depósito a Cuenta", icon: PiggyBank, color: "text-warning-600" },
   INGRESO_MANUAL: { label: "Ingreso Manual", icon: TrendingUp, color: "text-success-600" },

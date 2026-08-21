@@ -40,6 +40,15 @@ export function transformToSnakeCase<T extends Record<string, any>>(obj: T): any
   return result
 }
 
+// PostgREST returns a reverse embed over a UNIQUE FK (one-to-one relationship
+// detection, e.g. `facturas (id)` embedded via `facturas.venta_id`/`orden_id`)
+// as a single object instead of an array. Normalize either shape to an array
+// so callers can safely use `.length` / `[0]` regardless of which shape came
+// back.
+export function toArray<T>(value: T | T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : value ? [value] : []
+}
+
 // Mapeo específico para órdenes (incluye relaciones)
 export function formatOrden(orden: any) {
   if (!orden) return null
@@ -151,6 +160,8 @@ export function formatCliente(cliente: any) {
     razonSocial: cliente.razon_social,
     cuit: cliente.cuit,
     aceptaWhatsapp: cliente.acepta_whatsapp ?? true,
+    tipoPrecio: cliente.tipo_precio || "MINORISTA",
+    descuentoPct: cliente.descuento_pct != null ? Number(cliente.descuento_pct) : null,
     saldoCuenta: parseFloat(cliente.saldo_cuenta || "0"),
     organizationId: cliente.organization_id,
     createdAt: cliente.created_at,
@@ -183,7 +194,11 @@ export function formatRepuesto(repuesto: any) {
     inventarioId: repuesto.inventario_id,
     nombre: repuesto.nombre, // Para repuestos manuales
     cantidad: repuesto.cantidad,
+    // precioUnitario es el COSTO (precio_compra congelado al cargar el
+    // repuesto); precioVentaUnitario es lo que se le cobra al cliente.
+    // Este último es NULL en filas anteriores a la migración 286.
     precioUnitario: repuesto.precio_unitario,
+    precioVentaUnitario: repuesto.precio_venta_unitario ?? null,
     inventario: repuesto.inventario ? formatInventario(repuesto.inventario) : undefined,
   }
 }
@@ -199,6 +214,17 @@ export function formatServicioOrden(servicio: any) {
     cantidad: servicio.cantidad,
     precioUnitario: servicio.precio_unitario,
   }
+}
+
+/** Lo que se le cobra al cliente por un repuesto. Cae al costo cuando la fila
+ *  es anterior a la migración 286 y no tiene precio de venta registrado. */
+export function precioVentaRepuesto(repuesto: {
+  precioVentaUnitario?: number | string | null
+  precioUnitario?: number | string | null
+}) {
+  const venta = repuesto.precioVentaUnitario
+  if (venta !== null && venta !== undefined && venta !== "") return Number(venta)
+  return Number(repuesto.precioUnitario ?? 0)
 }
 
 export function formatInventario(item: any) {
@@ -277,6 +303,7 @@ export function formatVenta(venta: any) {
       (a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
     ) || [],
     devoluciones: venta.devoluciones_venta?.map(formatDevolucion) || [],
+    facturaId: toArray(venta.facturas)[0]?.id ?? null,
   }
 }
 

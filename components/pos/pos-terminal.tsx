@@ -113,11 +113,18 @@ export function PosTerminal() {
   const [fiscal, setFiscal] = useState<FiscalConfig | null>(null)
   const [orgGarantiaDefault, setOrgGarantiaDefault] = useState<number>(0)
 
+  // Facturación electrónica: emitir comprobante desde el overlay de venta exitosa
+  const [facturacionDisponible, setFacturacionDisponible] = useState(false)
+  const [emitiendoFE, setEmitiendoFE] = useState(false)
+  const [comprobanteFE, setComprobanteFE] = useState<any>(null)
+  const [errorFE, setErrorFE] = useState<string | null>(null)
+
   // Devolucion (return) flow
   const [devolucionOpen, setDevolucionOpen] = useState(false)
   const [devolucionVenta, setDevolucionVenta] = useState<VentaForDevolucion | null>(null)
 
-  // Fetch fiscal config and org warranty default on mount
+  // Fetch fiscal config, org warranty default y disponibilidad de facturación
+  // electrónica on mount (una sola llamada, se reutiliza para todo).
   useEffect(() => {
     fetch("/api/configuracion")
       .then((r) => (r.ok ? r.json() : null))
@@ -129,6 +136,7 @@ export function PosTerminal() {
             redondeoEfectivo: data.redondeoEfectivo ?? 0,
           })
           setOrgGarantiaDefault(Number(data.garantiaDiasDefault) || 0)
+          setFacturacionDisponible(!!data.facturacionElectronicaDisponible)
         }
       })
       .catch(() => {})
@@ -549,6 +557,10 @@ export function PosTerminal() {
     setShowClienteSearch(false)
     setDescuentoGlobal(null)
     setDescuentoMotivo("")
+    // Facturación electrónica: nueva venta, limpiar estado de emisión anterior
+    setEmitiendoFE(false)
+    setComprobanteFE(null)
+    setErrorFE(null)
 
     // Auto-print ticket if printer connected
     if (printer.connected) {
@@ -559,8 +571,42 @@ export function PosTerminal() {
   const handleSuccessClose = useCallback(() => {
     setSuccessData(null)
     setMobileTab("products")
+    // Facturación electrónica: limpiar estado de emisión al cerrar el overlay
+    setEmitiendoFE(false)
+    setComprobanteFE(null)
+    setErrorFE(null)
     searchRef.current?.focusSearch()
   }, [])
+
+  // Facturación electrónica: emitir comprobante para la venta del overlay actual
+  const handleEmitirFactura = useCallback(async () => {
+    if (!successData?.id || emitiendoFE || comprobanteFE) return
+    setEmitiendoFE(true)
+    setErrorFE(null)
+    try {
+      const res = await fetch("/api/facturacion-electronica/emitir", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ventaId: successData.id }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.status === 200) {
+        setComprobanteFE(data.comprobante ?? null)
+      } else if (res.status === 409) {
+        setComprobanteFE(data.comprobante ? { ...data.comprobante, yaEmitido: true } : null)
+      } else if (res.status === 422) {
+        setErrorFE(data.comprobante?.error_msg || data.error || "No se pudo emitir el comprobante")
+      } else if (res.status === 403) {
+        setErrorFE("Facturación electrónica no disponible. Configurá facturación electrónica en Ajustes.")
+      } else {
+        setErrorFE(data.error || "No se pudo emitir el comprobante")
+      }
+    } catch {
+      setErrorFE("Error de conexión al emitir el comprobante")
+    } finally {
+      setEmitiendoFE(false)
+    }
+  }, [successData, emitiendoFE, comprobanteFE])
 
   // Item 2: build WhatsApp URL for manual phone share
   const buildManualWhatsAppUrl = useCallback((phone: string, ventaData: any) => {
@@ -1092,6 +1138,50 @@ export function PosTerminal() {
 
               {/* WhatsApp share as image + download image */}
               <PosTicketShare ventaData={successData} plantillaCorta={plantillaCorta} countryCode={pais} />
+
+              {/* Facturación electrónica: emitir comprobante para esta venta */}
+              {facturacionDisponible && (
+                <div className="flex flex-col gap-1.5">
+                  <Button
+                    variant="outline"
+                    className="h-11"
+                    onClick={handleEmitirFactura}
+                    disabled={emitiendoFE || !!comprobanteFE}
+                  >
+                    {emitiendoFE ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileText className="mr-2 h-4 w-4" />
+                    )}
+                    {emitiendoFE ? "Emitiendo factura..." : "Emitir factura"}
+                  </Button>
+
+                  {comprobanteFE && (
+                    <p className="text-sm text-success">
+                      {comprobanteFE.yaEmitido ? "Ya emitida" : "Factura emitida"}
+                      {": "}
+                      Factura {comprobanteFE.tipo} #{comprobanteFE.numero}
+                      {comprobanteFE.pdf_url && (
+                        <>
+                          {" — "}
+                          <a
+                            href={comprobanteFE.pdf_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline"
+                          >
+                            Ver factura
+                          </a>
+                        </>
+                      )}
+                    </p>
+                  )}
+
+                  {errorFE && (
+                    <p className="text-sm text-destructive">{errorFE}</p>
+                  )}
+                </div>
+              )}
 
               {/* Item 2: Manual WhatsApp share when no phone on record */}
               {!successData.clienteTelefono && (

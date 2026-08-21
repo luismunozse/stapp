@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Wrench, Loader2 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { printDeviceLabel } from "@/components/ordenes/print-label"
 import { toast } from "sonner"
 
 interface ConfirmarReparadoDialogProps {
@@ -27,6 +28,9 @@ interface ConfirmarReparadoDialogProps {
     totalCobrado?: number
     descuentoCobro?: number
     clienteNombre?: string
+    dispositivo?: string
+    problemaReportado?: string
+    publicToken?: string | null
   }
   onSuccess: () => void
 }
@@ -41,9 +45,10 @@ interface ConfirmarReparadoDialogProps {
  * sigue siendo un paso aparte (CobrarOrdenDialog).
  */
 export function ConfirmarReparadoDialog({ open, onOpenChange, orden, onSuccess }: ConfirmarReparadoDialogProps) {
-  const { formatPrice } = useCurrency()
+  const { formatPrice, timezone } = useCurrency()
   const [costo, setCosto] = useState<string>("")
   const [loading, setLoading] = useState(false)
+  const [imprimirEtiqueta, setImprimirEtiqueta] = useState(true)
 
   // Pre-carga al abrir: costo final existente o, si no hay, el presupuesto. En el
   // flujo con cotización costo_final ya viene sembrado; en el express arranca vacío.
@@ -71,6 +76,37 @@ export function ConfirmarReparadoDialog({ open, onOpenChange, orden, onSuccess }
         body: JSON.stringify({ estado: "REPARADO", costoFinal: costoNum }),
       })
       if (res.ok) {
+        if (imprimirEtiqueta) {
+          // try/catch propio: el PUT de arriba YA pasó y la orden quedó en
+          // REPARADO. printDeviceLabel espera el diálogo real del driver y
+          // por lo tanto puede rechazar; si ese reject cayera en el catch de
+          // abajo, el operador leería "No se pudo marcar como reparado"
+          // sobre una orden que sí se marcó, y su reintento natural chocaría
+          // contra una transición REPARADO → REPARADO. Solo falló imprimir:
+          // se avisa eso y el flujo de éxito sigue igual.
+          try {
+            const fecha = new Date().toLocaleDateString("es-AR", { timeZone: timezone })
+            await printDeviceLabel(
+              {
+                codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
+                numeroOrden: orden.numeroOrden,
+                clienteNombre: orden.clienteNombre || "",
+                dispositivo: orden.dispositivo || "",
+                problemaReportado: orden.problemaReportado || "",
+                fechaIngreso: fecha,
+                publicToken: orden.publicToken,
+                variant: "reparado",
+                fechaReparacion: fecha,
+              },
+              window.location.origin,
+            )
+          } catch (printError) {
+            console.error("Error imprimiendo la etiqueta de reparado:", printError)
+            toast.error(
+              "La orden quedó marcada como reparada, pero no se pudo imprimir la etiqueta. Revisá la impresora y reimprimila desde el detalle.",
+            )
+          }
+        }
         onSuccess()
         onOpenChange(false)
       } else {
@@ -147,6 +183,17 @@ export function ConfirmarReparadoDialog({ open, onOpenChange, orden, onSuccess }
               <span className="text-lg">{formatPrice(pendiente)}</span>
             </div>
           )}
+
+          <label className="flex items-center gap-2 cursor-pointer text-sm pt-1">
+            <input
+              type="checkbox"
+              checked={imprimirEtiqueta}
+              onChange={(e) => setImprimirEtiqueta(e.target.checked)}
+              disabled={loading}
+              className="rounded"
+            />
+            Imprimir etiqueta para el equipo
+          </label>
         </div>
 
         <div className="mt-4 flex gap-2">

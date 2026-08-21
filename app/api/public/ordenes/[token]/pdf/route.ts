@@ -39,6 +39,18 @@ export async function GET(
       .eq("orden_id", orden.id)
       .maybeSingle()
 
+    // Firma del lote solo cuando la orden vino de una recepcion multiple.
+    // Con recepcion_id en NULL (flujo clasico) no se hace ninguna query extra.
+    let firmaRecepcionLote: string | null = null
+    if (orden.recepcion_id) {
+      const { data: recepcion } = await supabaseAdmin
+        .from("recepciones")
+        .select("firma_cliente")
+        .eq("id", orden.recepcion_id)
+        .maybeSingle()
+      firmaRecepcionLote = recepcion?.firma_cliente ?? null
+    }
+
     // Fetch intake photos
     const { data: fotosData } = await supabaseAdmin
       .from("fotos_orden")
@@ -47,6 +59,16 @@ export async function GET(
       .eq("tipo", "INGRESO")
       .order("created_at", { ascending: true })
       .limit(4)
+
+    // Timeline de estados: mismo dato que ya se expone en la pagina de
+    // seguimiento (endpoint /timeline, via orden_eventos). Es lo UNICO del
+    // expediente que se agrega a esta copia publica junto con diagnostico y
+    // codigoOrden — nada de costos, cliente fiscal, sucursal ni repuestos.
+    const { data: tiemposData } = await supabaseAdmin
+      .from("orden_tiempos_estado")
+      .select("estado, inicio")
+      .eq("orden_id", orden.id)
+      .order("inicio", { ascending: true })
 
     // Build base URL for QR
     const headersList = await headers()
@@ -73,6 +95,18 @@ export async function GET(
         valor: valores[item.id] ?? null,
       })).filter((item: any) => item.valor !== null && item.valor !== undefined)
     }
+
+    // Timeline: primera ocurrencia de cada estado (orden_tiempos_estado ya
+    // viene ordenado por inicio ascendente).
+    const timelineSeen = new Set<string>()
+    const timelineAll = ((tiemposData || []) as any[])
+      .filter((t) => {
+        if (timelineSeen.has(t.estado)) return false
+        timelineSeen.add(t.estado)
+        return true
+      })
+      .map((t) => ({ estado: t.estado, fecha: new Date(t.inicio) }))
+    const timeline = timelineAll.length > 0 ? timelineAll : null
 
     // Preparar datos para el PDF
     const pdfData: OrdenPDFData = {
@@ -120,10 +154,18 @@ export async function GET(
       metodoPagoSena: orden.metodo_pago_sena,
       checklistItems,
       checklistNotas: checklistData?.notas || null,
-      firmaRecepcion: checklistData?.firma_cliente || null,
+      firmaRecepcion: checklistData?.firma_cliente ?? firmaRecepcionLote,
       firmaRecepcionMime: checklistData?.firma_mime || null,
       fotosIngreso: fotosData && fotosData.length > 0 ? fotosData : null,
       soloCliente: true,
+      // Del expediente (Task D2): SOLO estos tres campos. Ya son publicos en
+      // la pagina de seguimiento (diagnostico y codigo_orden via
+      // /api/public/ordenes/[token], timeline equivalente via
+      // /api/public/ordenes/[token]/timeline). Nada de costos, datos
+      // fiscales del cliente, sucursal, tecnico ni repuestos.
+      codigoOrden: orden.codigo_orden,
+      diagnostico: orden.diagnostico,
+      timeline,
     }
 
     // Resolver terminología configurable y generar PDF

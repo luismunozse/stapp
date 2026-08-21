@@ -7,6 +7,11 @@ import { usePathname, useRouter } from "next/navigation"
 // Intervalo de verificación de sesión (cada 5 minutos)
 const SESSION_CHECK_INTERVAL = 5 * 60 * 1000
 
+// Mínimo entre refrescos de sesión. Foco y visibilitychange se disparan juntos
+// (y varias veces al volver de un diálogo del sistema); refrescar en cada uno
+// deja el status en "loading" una y otra vez.
+const SESSION_CHECK_THROTTLE = 60 * 1000
+
 // Rutas públicas que no requieren sesión
 const PUBLIC_PATHS = [
   "/login",
@@ -21,6 +26,13 @@ const PUBLIC_PATHS = [
 // Claves de localStorage para PWA
 const PWA_REFRESH_TOKEN_KEY = "pwa_refresh_token"
 const PWA_REFRESH_TOKEN_EXPIRES_KEY = "pwa_refresh_token_expires"
+
+// Marca de recarga por restauración, por pestaña (sessionStorage).
+// isRestoringRef solo protege dentro de una carga; sin esta marca, si la sesión
+// sigue sin reconocerse después de recargar, el ciclo restaurar → recargar se
+// repite sin fin y la página parece refrescarse sola. Eso además cancela
+// cualquier trabajo en curso (por ejemplo, elegir un archivo para importar).
+const PWA_RESTORE_RELOAD_KEY = "pwa_restore_reloaded"
 
 // IndexedDB como backup para iOS PWA (localStorage puede limpiarse)
 const IDB_NAME = "stapp_auth"
@@ -151,6 +163,7 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const lastActivityRef = useRef(Date.now())
+  const lastCheckRef = useRef(0)
   const [isRestoring, setIsRestoring] = useState(false)
   const isRestoringRef = useRef(false)
 
@@ -210,8 +223,23 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
           console.error("[SessionRefresher] Error updating stored refresh token:", e)
         }
 
-        // Recargar la página para aplicar la sesión completamente
-        window.location.reload()
+        // Recargar la página para aplicar la sesión completamente, pero una
+        // sola vez por pestaña: si al volver la sesión sigue sin reconocerse,
+        // recargar de nuevo solo reiniciaría el ciclo.
+        let yaRecargo = false
+        try {
+          yaRecargo = sessionStorage.getItem(PWA_RESTORE_RELOAD_KEY) === "1"
+          sessionStorage.setItem(PWA_RESTORE_RELOAD_KEY, "1")
+        } catch {
+          // sessionStorage bloqueado: sin marca no podemos garantizar el corte,
+          // así que no recargamos para no arriesgar un bucle.
+          yaRecargo = true
+        }
+        if (!yaRecargo) {
+          window.location.reload()
+        } else {
+          console.warn("[SessionRefresher] Restauración repetida sin sesión válida: no se recarga de nuevo")
+        }
         return true
       } else {
         console.log("[SessionRefresher] Failed to restore session, clearing tokens")
@@ -236,9 +264,16 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
     router.push("/login?expired=true")
   }, [router])
 
-  // Verificar y refrescar sesión
+  // Verificar y refrescar sesión.
+  // Throttle: update() deja el status en "loading" mientras revalida, y foco +
+  // visibilitychange llegan juntos (varias veces por interacción). Sin este
+  // freno, cada vuelta a la ventana disparaba una ráfaga de refrescos.
   const checkSession = useCallback(async () => {
     if (status !== "authenticated" || isPublicPath) return
+
+    const ahora = Date.now()
+    if (ahora - lastCheckRef.current < SESSION_CHECK_THROTTLE) return
+    lastCheckRef.current = ahora
 
     try {
       // Forzar actualización del token
@@ -254,6 +289,17 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
       handleSessionError()
     }
   }, [session?.error, handleSessionError])
+
+  // Sesión reconocida: la restauración cumplió su objetivo, se limpia la marca
+  // para que una restauración futura y legítima pueda volver a recargar.
+  useEffect(() => {
+    if (status !== "authenticated") return
+    try {
+      sessionStorage.removeItem(PWA_RESTORE_RELOAD_KEY)
+    } catch {
+      // sin sessionStorage no hay marca que limpiar
+    }
+  }, [status])
 
   // Intentar restaurar sesión si no hay sesión activa (para PWA)
   useEffect(() => {

@@ -13,6 +13,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Eye, EyeOff, CheckCircle, Mail } from "lucide-react"
 import { BusinessLogo } from "@/components/shared/business-logo"
 import { savePWATokens } from "@/components/auth/session-refresher"
+import { extractAuthCode, parseRequires2FA } from "@/lib/auth-client"
 import { isNativePlatform } from "@/lib/capacitor"
 import { TwoFactorVerify } from "@/components/auth/two-factor-verify"
 
@@ -198,7 +199,8 @@ function LoginForm() {
       })
 
       if (result?.error) {
-        if (result.error.includes("INVALID_2FA_CODE")) {
+        const code = extractAuthCode(result)
+        if (code.includes("INVALID_2FA_CODE")) {
           // Mantener el modal abierto y mostrar error
           setTwoFAError("Código inválido. Verificá e intentá de nuevo.")
           setLoading(false)
@@ -268,20 +270,26 @@ function LoginForm() {
       })
 
       if (result?.error) {
-        if (result.error.includes("REQUIRES_2FA")) {
-          // Extraer userId del error
-          const userId = result.error.split("REQUIRES_2FA:")[1]
-          setPending2FAUserId(userId)
+        const code = extractAuthCode(result)
+        const userId2FA = parseRequires2FA(code)
+        if (userId2FA) {
+          setPending2FAUserId(userId2FA)
           setRequires2FA(true)
           setLoading(false)
           return
-        } else if (result.error.includes("EMAIL_NOT_VERIFIED")) {
+        } else if (code.includes("SUPERADMIN_REQUIRES_2FA_SETUP")) {
+          setError("Tu cuenta requiere tener 2FA configurado. Contactá al administrador del sistema.")
+          setShowResendOption(false)
+        } else if (code.includes("EMAIL_NOT_VERIFIED")) {
           setError("Tu email no ha sido verificado. Revisá tu bandeja de entrada y la carpeta de spam/correo no deseado.")
           setShowResendOption(true)
-        } else if (result.error.includes("USE_GOOGLE_LOGIN")) {
+        } else if (code.includes("ACCOUNT_LOCKED")) {
+          setError("Tu cuenta está bloqueada temporalmente por intentos fallidos. Esperá unos minutos antes de reintentar.")
+          setShowResendOption(false)
+        } else if (code.includes("USE_GOOGLE_LOGIN")) {
           setError("Esta cuenta fue creada con Google. Usá el botón \"Continuar con Google\" para iniciar sesión.")
           setShowResendOption(false)
-        } else if (result.error.includes("GOOGLE_NO_ACCOUNT")) {
+        } else if (code.includes("GOOGLE_NO_ACCOUNT")) {
           setError("No existe una cuenta con este email de Google. Registrate primero.")
           setShowResendOption(false)
         } else {

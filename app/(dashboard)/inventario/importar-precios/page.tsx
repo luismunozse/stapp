@@ -63,7 +63,8 @@ function fileToBase64(file: File): Promise<string> {
       const base64 = result.split(",")[1] || ""
       resolve(base64)
     }
-    reader.onerror = () => reject(reader.error)
+    reader.onerror = () =>
+      reject(new Error("No se pudo leer el archivo. Verificá que no esté abierto en Excel."))
     reader.readAsDataURL(file)
   })
 }
@@ -147,7 +148,7 @@ export default function ImportarPreciosPage() {
       setStep("sheet")
     } catch (e) {
       console.error(e)
-      toast.error("Error al leer el archivo")
+      toast.error(e instanceof Error ? e.message : "Error al leer el archivo")
     } finally {
       setLoading(false)
     }
@@ -328,6 +329,9 @@ export default function ImportarPreciosPage() {
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0]
+                  // Limpiar el value: sin esto, re-elegir el MISMO archivo no
+                  // dispara change y el reintento queda en silencio.
+                  e.target.value = ""
                   if (f) handleFile(f)
                 }}
               />

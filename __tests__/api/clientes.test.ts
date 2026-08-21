@@ -54,6 +54,30 @@ describe("GET /api/clientes", () => {
     expect(body.page).toBe(1)
   })
 
+  it("maps tipo_precio/descuento_pct to tipoPrecio/descuentoPct", async () => {
+    mockAuthSuccess()
+
+    const mockClientes = [
+      { id: "c1", nombre: "Juan Perez", telefono: "123", tipo_precio: "MAYORISTA", descuento_pct: "15.00" },
+      { id: "c2", nombre: "Maria Lopez", telefono: "456", tipo_precio: "MINORISTA", descuento_pct: null },
+      { id: "c3", nombre: "Legacy Cliente", telefono: "789" },
+    ]
+
+    const chain = createChainMock(mockClientes, null, 3)
+    mockSupabaseFrom({ v_clientes_resumen: chain })
+
+    const response = await GET(createGetRequest("http://localhost:3000/api/clientes"))
+    const { body } = await parseResponse(response)
+
+    expect(body.data[0].tipoPrecio).toBe("MAYORISTA")
+    expect(body.data[0].descuentoPct).toBe(15)
+    expect(body.data[1].tipoPrecio).toBe("MINORISTA")
+    expect(body.data[1].descuentoPct).toBeNull()
+    // Cliente sin la columna todavía poblada (defensivo): default MINORISTA/null.
+    expect(body.data[2].tipoPrecio).toBe("MINORISTA")
+    expect(body.data[2].descuentoPct).toBeNull()
+  })
+
   it("applies search filter when provided", async () => {
     mockAuthSuccess()
 

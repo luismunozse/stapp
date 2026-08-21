@@ -14,6 +14,18 @@ import { CURRENCY_OPTIONS } from "@/lib/currency"
 import { TIMEZONE_OPTIONS } from "@/lib/timezone"
 import { COUNTRY_OPTIONS, getCountryConfig } from "@/lib/countries"
 
+// Condición frente al IVA del emisor: texto libre (organizations.condicion_iva
+// es TEXT, sin enum en DB) impreso tal cual en el remito — a diferencia de
+// components/proveedores/proveedor-form.tsx, que sí persiste códigos porque
+// proveedores.condicion_iva está validado contra un enum de Zod.
+const CONDICION_IVA_OPTIONS = [
+  "Responsable Inscripto",
+  "Monotributo",
+  "Exento",
+  "Consumidor Final",
+] as const
+const CONDICION_IVA_NONE = "__none__"
+
 interface Config {
   logoData: string | null
   logoMime: string | null
@@ -58,6 +70,26 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [ivaRegimen, setIvaRegimen] = useState<"EXENTO" | "INCLUIDO" | "ADITIVO">("EXENTO")
   const [ivaTasa, setIvaTasa] = useState("21")
   const [redondeoEfectivo, setRedondeoEfectivo] = useState("0")
+  // Datos fiscales y de cobro (migración 295) — alimentan el remito.
+  const [cuit, setCuit] = useState("")
+  const [condicionIva, setCondicionIva] = useState("")
+  const [domicilioFiscal, setDomicilioFiscal] = useState("")
+  const [ingresosBrutos, setIngresosBrutos] = useState("")
+  const [inicioActividades, setInicioActividades] = useState("")
+  const [cbuAlias, setCbuAlias] = useState("")
+  const [mediosPagoTexto, setMediosPagoTexto] = useState("")
+  const [plazoPagoDias, setPlazoPagoDias] = useState("")
+  const [facturacionDisponible, setFacturacionDisponible] = useState(false)
+  const [facturacionHabilitada, setFacturacionHabilitada] = useState(false)
+  const [feApitoken, setFeApitoken] = useState("")
+  const [feApikey, setFeApikey] = useState("")
+  const [feUsertoken, setFeUsertoken] = useState("")
+  const [fePuntoVenta, setFePuntoVenta] = useState("1")
+  const [feCondicionFiscal, setFeCondicionFiscal] = useState<"MONOTRIBUTO" | "RESPONSABLE_INSCRIPTO">("MONOTRIBUTO")
+  const [feConectado, setFeConectado] = useState(false)
+  const [fePuntoVentaGuardado, setFePuntoVentaGuardado] = useState<number | null>(null)
+  const [feConectando, setFeConectando] = useState(false)
+  const [feMessage, setFeMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -94,6 +126,19 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setIvaRegimen(data.ivaRegimen ?? "EXENTO")
         setIvaTasa(String(data.ivaTasa ?? 21))
         setRedondeoEfectivo(String(data.redondeoEfectivo ?? 0))
+        setCuit(data.cuit || "")
+        setCondicionIva(data.condicionIva || "")
+        setDomicilioFiscal(data.domicilioFiscal || "")
+        setIngresosBrutos(data.ingresosBrutos || "")
+        setInicioActividades(data.inicioActividades || "")
+        setCbuAlias(data.cbuAlias || "")
+        setMediosPagoTexto(data.mediosPagoTexto || "")
+        setPlazoPagoDias(data.plazoPagoDias != null ? String(data.plazoPagoDias) : "")
+        setFacturacionDisponible(!!data.facturacionElectronicaDisponible)
+        setFacturacionHabilitada(!!data.facturacionElectronicaHabilitada)
+        if (data.facturacionElectronicaDisponible) {
+          fetchCredencialesFE()
+        }
         // Usar logoUrl si existe, o logoData para compatibilidad
         if (data.logoUrl) {
           setPreview(data.logoUrl)
@@ -105,6 +150,58 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       console.error("Error fetching config:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchCredencialesFE = async () => {
+    try {
+      const res = await fetch("/api/facturacion-electronica/credenciales")
+      if (res.ok) {
+        const data = await res.json()
+        setFeConectado(!!data.conectado)
+        setFePuntoVentaGuardado(data.puntoVenta ?? null)
+        if (data.puntoVenta) setFePuntoVenta(String(data.puntoVenta))
+        if (data.condicionFiscal) setFeCondicionFiscal(data.condicionFiscal)
+      }
+    } catch (error) {
+      console.error("Error fetching credenciales de facturación electrónica:", error)
+    }
+  }
+
+  const handleConectarFE = async () => {
+    setFeConectando(true)
+    setFeMessage(null)
+    try {
+      const res = await fetch("/api/facturacion-electronica/credenciales", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apitoken: feApitoken,
+          apikey: feApikey,
+          usertoken: feUsertoken,
+          puntoVenta: fePuntoVenta,
+          condicionFiscal: feCondicionFiscal,
+        }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setFeConectado(!!data.conectado)
+        setFePuntoVentaGuardado(data.puntoVenta ?? null)
+        if (data.condicionFiscal) setFeCondicionFiscal(data.condicionFiscal)
+        setFeApitoken("")
+        setFeApikey("")
+        setFeUsertoken("")
+        setFeMessage({ type: "success", text: "Conectado con AFIP/ARCA correctamente" })
+      } else {
+        const error = await res.json()
+        setFeMessage({ type: "error", text: error.error || "No se pudo conectar" })
+      }
+    } catch (error) {
+      console.error("Error conectando facturación electrónica:", error)
+      setFeMessage({ type: "error", text: "Error al conectar" })
+    } finally {
+      setFeConectando(false)
     }
   }
 
@@ -178,7 +275,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada: facturacionHabilitada }),
       })
 
       if (res.ok) {
@@ -428,7 +525,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         <CardHeader className="p-4 sm:p-6">
           <CardTitle className="text-base sm:text-lg">Moneda</CardTitle>
           <CardDescription className="text-xs sm:text-sm">
-            Moneda utilizada para montos, facturas y comprobantes.
+            Moneda utilizada para montos, remitos y comprobantes.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 sm:p-6 pt-0">
@@ -603,6 +700,247 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
             </Select>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Redondea el total al múltiplo más cercano cuando el pago es en efectivo.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {facturacionDisponible && (
+        <Card>
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="text-base sm:text-lg">Facturación electrónica (AFIP/ARCA)</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
+              Emití comprobantes electrónicos ante AFIP/ARCA usando tus propias credenciales.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
+            <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors">
+              <input
+                type="checkbox"
+                checked={facturacionHabilitada}
+                onChange={(e) => setFacturacionHabilitada(e.target.checked)}
+                disabled={!allowEdit}
+                className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+              />
+              <div className="flex-1">
+                <div className="text-sm font-medium">Activar facturación electrónica</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  Al activarse, se pueden emitir comprobantes electrónicos válidos ante AFIP/ARCA para las órdenes y ventas.
+                </div>
+              </div>
+            </label>
+
+            {facturacionHabilitada && (
+              <div className="space-y-4 pt-2 border-t">
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  Ingresá tus credenciales para conectar la cuenta. Se guardan cifradas y no vuelven a mostrarse.
+                </p>
+                <div>
+                  <Label htmlFor="feApitoken" className="text-sm">API Token</Label>
+                  <Input
+                    id="feApitoken"
+                    type="password"
+                    value={feApitoken}
+                    onChange={(e) => setFeApitoken(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="off"
+                    disabled={!allowEdit}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="feApikey" className="text-sm">API Key</Label>
+                  <Input
+                    id="feApikey"
+                    type="password"
+                    value={feApikey}
+                    onChange={(e) => setFeApikey(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="off"
+                    disabled={!allowEdit}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="feUsertoken" className="text-sm">User Token</Label>
+                  <Input
+                    id="feUsertoken"
+                    type="password"
+                    value={feUsertoken}
+                    onChange={(e) => setFeUsertoken(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="off"
+                    disabled={!allowEdit}
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="fePuntoVenta" className="text-sm">Punto de Venta</Label>
+                    <Input
+                      id="fePuntoVenta"
+                      type="number"
+                      min="1"
+                      value={fePuntoVenta}
+                      onChange={(e) => setFePuntoVenta(e.target.value)}
+                      placeholder="1"
+                      disabled={!allowEdit}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="feCondicionFiscal" className="text-sm">Condición Fiscal</Label>
+                    <Select
+                      value={feCondicionFiscal}
+                      onValueChange={(val) => setFeCondicionFiscal(val as "MONOTRIBUTO" | "RESPONSABLE_INSCRIPTO")}
+                      disabled={!allowEdit}
+                    >
+                      <SelectTrigger id="feCondicionFiscal">
+                        <SelectValue placeholder="Seleccionar condición fiscal" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="MONOTRIBUTO">Monotributo</SelectItem>
+                        <SelectItem value="RESPONSABLE_INSCRIPTO">Responsable Inscripto</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {feMessage && (
+                  <div
+                    className={`px-3 py-2 rounded text-sm ${
+                      feMessage.type === "success"
+                        ? "bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500"
+                        : "bg-destructive/10 border border-destructive/30 text-destructive"
+                    }`}
+                  >
+                    {feMessage.text}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleConectarFE}
+                    disabled={feConectando || !allowEdit || !feApitoken || !feApikey || !feUsertoken}
+                  >
+                    {feConectando ? "Conectando..." : "Conectar"}
+                  </Button>
+                  <span
+                    className={`text-sm font-medium ${
+                      feConectado ? "text-success-600 dark:text-success-500" : "text-muted-foreground"
+                    }`}
+                  >
+                    {feConectado
+                      ? `Conectado${fePuntoVentaGuardado ? ` · Punto de venta ${fePuntoVentaGuardado}` : ""}`
+                      : "No conectado"}
+                  </span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Datos fiscales y de cobro</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
+            Datos del emisor y condiciones de cobro que se muestran en el remito.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
+          <div>
+            <Label htmlFor="cuit" className="text-sm">CUIT</Label>
+            <Input
+              id="cuit"
+              value={cuit}
+              onChange={(e) => setCuit(e.target.value)}
+              placeholder="30-12345678-9"
+              disabled={!allowEdit}
+            />
+          </div>
+          <div>
+            <Label htmlFor="condicionIva" className="text-sm">Condición frente al IVA</Label>
+            <Select
+              value={condicionIva || CONDICION_IVA_NONE}
+              onValueChange={(val) => setCondicionIva(val === CONDICION_IVA_NONE ? "" : val)}
+              disabled={!allowEdit}
+            >
+              <SelectTrigger id="condicionIva">
+                <SelectValue placeholder="Sin especificar" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={CONDICION_IVA_NONE}>Sin especificar</SelectItem>
+                {CONDICION_IVA_OPTIONS.map((opt) => (
+                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="domicilioFiscal" className="text-sm">Domicilio fiscal</Label>
+            <Input
+              id="domicilioFiscal"
+              value={domicilioFiscal}
+              onChange={(e) => setDomicilioFiscal(e.target.value)}
+              placeholder="Av. Principal 123, Córdoba"
+              disabled={!allowEdit}
+            />
+          </div>
+          <div>
+            <Label htmlFor="ingresosBrutos" className="text-sm">Ingresos brutos</Label>
+            <Input
+              id="ingresosBrutos"
+              value={ingresosBrutos}
+              onChange={(e) => setIngresosBrutos(e.target.value)}
+              placeholder="902-123456-7"
+              disabled={!allowEdit}
+            />
+          </div>
+          <div>
+            <Label htmlFor="inicioActividades" className="text-sm">Inicio de actividades</Label>
+            <Input
+              id="inicioActividades"
+              value={inicioActividades}
+              onChange={(e) => setInicioActividades(e.target.value)}
+              placeholder="01/2020"
+              disabled={!allowEdit}
+            />
+          </div>
+          <div>
+            <Label htmlFor="cbuAlias" className="text-sm">CBU o alias</Label>
+            <Input
+              id="cbuAlias"
+              value={cbuAlias}
+              onChange={(e) => setCbuAlias(e.target.value)}
+              placeholder="mi.alias.mp"
+              disabled={!allowEdit}
+            />
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Se muestra en el remito para pagos por transferencia
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="mediosPagoTexto" className="text-sm">Medios de pago aceptados</Label>
+            <Input
+              id="mediosPagoTexto"
+              value={mediosPagoTexto}
+              onChange={(e) => setMediosPagoTexto(e.target.value)}
+              placeholder="Efectivo, transferencia, tarjeta"
+              disabled={!allowEdit}
+            />
+          </div>
+          <div>
+            <Label htmlFor="plazoPagoDias" className="text-sm">Plazo de pago (días)</Label>
+            <Input
+              id="plazoPagoDias"
+              type="number"
+              min="0"
+              value={plazoPagoDias}
+              onChange={(e) => setPlazoPagoDias(e.target.value)}
+              placeholder="Ej: 30"
+              disabled={!allowEdit}
+            />
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Si se completa, el remito muestra la fecha de vencimiento calculada desde la emisión
             </p>
           </div>
         </CardContent>

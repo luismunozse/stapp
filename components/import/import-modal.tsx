@@ -26,6 +26,7 @@ interface ImportResults {
   success: number
   skipped: number
   errors: number
+  sinPrecio?: number
   errorDetails: Array<{ row: number; error: string; data: any }>
   skippedDetails: Array<{ row: number; reason: string; data: any }>
 }
@@ -43,11 +44,16 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
   const [results, setResults] = useState<ImportResults | null>(null)
   const [error, setError] = useState<string>("")
   const [unmappedColumns, setUnmappedColumns] = useState<string[]>([])
+  const [invalidRows, setInvalidRows] = useState(0)
+  const [sinPrecio, setSinPrecio] = useState(0)
 
   const entityLabel = entityType === 'CLIENTES' ? 'Clientes' : 'Inventario'
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
+    // El input conserva el value: si no lo limpiamos, re-elegir el MISMO
+    // archivo no dispara change y el reintento queda en silencio total.
+    e.target.value = ""
     if (!selectedFile) return
 
     setError("")
@@ -79,10 +85,21 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
     const reader = new FileReader()
     reader.onload = async () => {
       const base64 = reader.result?.toString().split(',')[1] || ''
+      if (!base64) {
+        setError('No se pudo leer el archivo. Verificá que no esté abierto en Excel y volvé a intentarlo.')
+        setFile(null)
+        return
+      }
       setFileBase64(base64)
 
       // Get preview
       await getPreview(base64, selectedFile.type, selectedFile.name)
+    }
+    // Sin este handler, un archivo ilegible (abierto en Excel, unidad de red
+    // desconectada, permisos) fallaba en silencio: sin error y sin request.
+    reader.onerror = () => {
+      setError('No se pudo leer el archivo. Verificá que no esté abierto en Excel y volvé a intentarlo.')
+      setFile(null)
     }
     reader.readAsDataURL(selectedFile)
   }
@@ -112,6 +129,8 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
       setPreview(data.preview)
       setTotalRows(data.totalRows)
       setUnmappedColumns(data.unmappedColumns ?? [])
+      setInvalidRows(data.invalidRows ?? 0)
+      setSinPrecio(data.sinPrecio ?? 0)
       setStep('preview')
     } catch (error) {
       console.error('Error getting preview:', error)
@@ -281,6 +300,8 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
                     setPreview([])
                     setError("")
                     setUnmappedColumns([])
+                    setInvalidRows(0)
+                    setSinPrecio(0)
                   }}
                 >
                   Cambiar archivo
@@ -291,6 +312,19 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
                 <div className="bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300 px-4 py-3 rounded-lg text-sm">
                   <p className="font-medium mb-1">Columnas ignoradas (no se pudieron mapear):</p>
                   <p className="text-xs">{unmappedColumns.join(', ')}</p>
+                </div>
+              )}
+
+              {invalidRows > 0 && (
+                <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-400 px-4 py-3 rounded-lg flex items-start gap-2 text-sm">
+                  <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                  <p>{invalidRows} de {totalRows} fila{totalRows !== 1 ? 's' : ''} tienen errores y no se importarán</p>
+                </div>
+              )}
+
+              {entityType === 'INVENTARIO' && sinPrecio > 0 && (
+                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-3 rounded-lg text-sm">
+                  <p>{sinPrecio} fila{sinPrecio !== 1 ? 's' : ''} sin precio de venta — se importarán con precio $0. Podés completarlos después desde Importar → Actualizar precios.</p>
                 </div>
               )}
 
@@ -346,7 +380,7 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
                 <Button variant="outline" onClick={onClose}>
                   Cancelar
                 </Button>
-                <Button onClick={handleImport}>
+                <Button onClick={handleImport} disabled={invalidRows > 0 && invalidRows === totalRows}>
                   Importar {totalRows} registro{totalRows !== 1 ? 's' : ''}
                 </Button>
               </div>
@@ -374,9 +408,29 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
           {step === 'results' && results && (
             <div className="space-y-4">
               <div className="text-center py-4">
-                <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-600" />
-                <p className="font-medium text-lg">Importación completada</p>
+                {results.success === 0 ? (
+                  <>
+                    <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-600" />
+                    <p className="font-medium text-lg">No se importó ningún registro</p>
+                  </>
+                ) : results.errors > 0 || results.skipped > 0 ? (
+                  <>
+                    <AlertCircle className="h-12 w-12 mx-auto mb-4 text-amber-600" />
+                    <p className="font-medium text-lg">Importación parcial</p>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-600" />
+                    <p className="font-medium text-lg">Importación completada</p>
+                  </>
+                )}
               </div>
+
+              {entityType === 'INVENTARIO' && !!results.sinPrecio && (
+                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-3 rounded-lg text-sm">
+                  <p>{results.sinPrecio} artículo{results.sinPrecio !== 1 ? 's' : ''} importado{results.sinPrecio !== 1 ? 's' : ''} sin precio de venta (precio $0)</p>
+                </div>
+              )}
 
               <div className="grid grid-cols-4 gap-4">
                 <Card>

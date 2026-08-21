@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -121,6 +122,7 @@ interface VentaDetail {
   createdAt: string
   pagos: Pago[]
   devoluciones?: Devolucion[]
+  facturaId: string | null
 }
 
 const metodoPagoLabels: Record<string, string> = {
@@ -146,12 +148,15 @@ interface Organization {
 
 export function VentaDetail({ ventaId }: VentaDetailProps) {
   const router = useRouter()
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "ADMIN"
   const { formatPrice, formatDate } = useCurrency()
   const { confirm, showError, showSuccess } = useModal()
   const [venta, setVenta] = useState<VentaDetail | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [loading, setLoading] = useState(true)
   const [anulando, setAnulando] = useState(false)
+  const [generandoFactura, setGenerandoFactura] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDevolucionModal, setShowDevolucionModal] = useState(false)
   const [showPagoForm, setShowPagoForm] = useState(false)
@@ -228,6 +233,30 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
       await showError("Error al anular la venta")
     } finally {
       setAnulando(false)
+    }
+  }
+
+  const handleGenerarFactura = async () => {
+    if (!venta) return
+    setGenerandoFactura(true)
+    try {
+      const res = await fetch("/api/facturacion/generar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ventaId: venta.id }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        await showError(data.error || "Error al generar el remito")
+        return
+      }
+      await showSuccess("Remito generado correctamente")
+      fetchVenta()
+    } catch (error) {
+      console.error("Error:", error)
+      await showError("Error al generar el remito")
+    } finally {
+      setGenerandoFactura(false)
     }
   }
 
@@ -317,6 +346,16 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
         </Button>
         {venta.estado === "COMPLETADA" && (
           <>
+            {isAdmin && !venta.facturaId && (
+              <Button
+                variant="outline"
+                onClick={handleGenerarFactura}
+                disabled={generandoFactura}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                {generandoFactura ? "Generando..." : "Generar remito"}
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() => setShowEditModal(true)}

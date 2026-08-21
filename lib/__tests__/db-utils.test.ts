@@ -12,7 +12,30 @@ import {
   formatProveedorContacto,
   formatProveedorAdjunto,
   formatProveedorCatalogoItem,
+  formatVenta,
 } from '../db-utils'
+
+function ventaBase(over: Partial<any> = {}) {
+  return {
+    id: 'v1',
+    numero_venta: 5,
+    cliente_id: null,
+    cliente_nombre: 'Consumidor Final',
+    cliente_telefono: null,
+    vendedor_id: null,
+    subtotal: '100',
+    descuento: '0',
+    total: '100',
+    monto_abonado: '100',
+    estado_pago: 'PAGADO',
+    metodo_pago: 'EFECTIVO',
+    estado: 'COMPLETADA',
+    observaciones: null,
+    created_at: '2026-01-01',
+    updated_at: '2026-01-01',
+    ...over,
+  }
+}
 
 describe('snakeToCamel', () => {
   it('convierte snake_case a camelCase', () => {
@@ -173,6 +196,8 @@ describe('formatCliente', () => {
       cuit: undefined,
       aceptaWhatsapp: true,
       saldoCuenta: 0,
+      tipoPrecio: 'MINORISTA',
+      descuentoPct: null,
       organizationId: 'org-1',
       createdAt: '2024-01-01',
       updatedAt: '2024-01-02',
@@ -565,5 +590,30 @@ describe('formatProveedorCatalogoItem', () => {
     expect(result?.moneda).toBe('ARS')
     expect(result?.precioReferencia).toBe(null)
     expect(result?.inventario).toBe(null)
+  })
+})
+
+describe('formatVenta — facturaId from facturas embed', () => {
+  it('retorna null para input null', () => {
+    expect(formatVenta(null)).toBe(null)
+  })
+
+  it('facturaId null cuando no hay factura (array vacío)', () => {
+    const result = formatVenta(ventaBase({ facturas: [] }))
+    expect(result?.facturaId).toBe(null)
+  })
+
+  it('facturaId toma el id cuando facturas es un array (shape normal)', () => {
+    const result = formatVenta(ventaBase({ facturas: [{ id: 'f1' }] }))
+    expect(result?.facturaId).toBe('f1')
+  })
+
+  it('facturaId toma el id cuando facturas viene como objeto (PostgREST one-to-one embed)', () => {
+    // facturas (id) is a reverse embed over the UNIQUE venta_id FK — PostgREST
+    // one-to-one detection can return it as a bare object instead of an
+    // array. Without normalizing, facturaId stays null and the "Generar
+    // factura" button never hides for an already-invoiced venta.
+    const result = formatVenta(ventaBase({ facturas: { id: 'f1' } }))
+    expect(result?.facturaId).toBe('f1')
   })
 })

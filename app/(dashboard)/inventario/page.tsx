@@ -14,6 +14,11 @@ export default function InventarioPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [accesoVendedor, setAccesoVendedor] = useState<boolean | null>(null)
+  const [sesionConocida, setSesionConocida] = useState(false)
+
+  useEffect(() => {
+    if (status === "authenticated") setSesionConocida(true)
+  }, [status])
 
   useEffect(() => {
     if (session?.user?.role !== "VENDEDOR") return
@@ -26,7 +31,10 @@ export default function InventarioPage() {
       .catch(() => router.replace("/dashboard"))
   }, [session, router])
 
-  if (status === "loading") return null
+  // Solo ocultamos la página en la carga inicial. Un refresco de sesión deja
+  // status en "loading" un instante, y desmontar acá tiraba abajo todo el
+  // subárbol: se perdía el modal de importación con el archivo ya elegido.
+  if (status === "loading" && !sesionConocida) return null
   if (session?.user?.role === "VENDEDOR" && accesoVendedor !== true) return null
 
   return (

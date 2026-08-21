@@ -43,7 +43,7 @@ export const manualSections: ManualSection[] = [
         body: "Una vez creada tu cuenta, te recomendamos seguir el asistente de configuración inicial (onboarding) que te guiará paso a paso. Podés cargar datos de ejemplo para explorar las funciones antes de ingresar tu información real.",
         steps: [
           "Completá los datos de tu empresa en Configuración > General",
-          "Subí el logo de tu taller (aparecerá en órdenes, presupuestos y facturas)",
+          "Subí el logo de tu taller (aparecerá en órdenes, presupuestos y remitos)",
           "Agregá tus técnicos y vendedores desde las secciones correspondientes",
           "Cargá tu inventario de repuestos",
           "Configurá las plantillas de checklist de recepción",
@@ -57,7 +57,7 @@ export const manualSections: ManualSection[] = [
         subtitle: "Roles y permisos",
         body: "STApp maneja tres roles con distintos niveles de acceso. El Administrador tiene acceso completo a todas las funciones. El Técnico puede gestionar órdenes asignadas, ver clientes y cotizaciones. El Vendedor puede gestionar ventas, clientes, POS y proveedores.",
         steps: [
-          "Administrador (ADMIN): acceso total — órdenes, inventario, facturación, reportes, configuración, técnicos, vendedores, caja y más",
+          "Administrador (ADMIN): acceso total — órdenes, inventario, comprobantes, reportes, configuración, técnicos, vendedores, caja y más",
           "Técnico (TECNICO): órdenes asignadas, clientes, cotizaciones y dashboard",
           "Vendedor (VENDEDOR): ventas, POS, clientes, proveedores, reportes de ventas y dashboard",
         ],
@@ -189,7 +189,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Cuenta corriente",
-        body: "STApp lleva el registro de saldos pendientes de cada cliente. Podés ver cuánto debe cada cliente y gestionar los pagos parciales asociados a sus facturas.",
+        body: "STApp lleva el registro de saldos pendientes de cada cliente. Podés ver cuánto debe cada cliente y gestionar los pagos parciales asociados a sus remitos.",
         roles: ["ADMIN"],
         seeAlso: ["facturacion", "caja", "glosario"],
       },
@@ -375,8 +375,8 @@ export const manualSections: ManualSection[] = [
         body: "Cada cotización genera un enlace público único que podés compartir con el cliente. Desde ahí, el cliente puede ver el detalle, aceptar o rechazar el presupuesto, e incluso firmar digitalmente.",
       },
       {
-        subtitle: "Convertir a factura",
-        body: "Una vez aceptada, podés convertir la cotización en factura con un solo clic, trasladando todos los items y montos automáticamente.",
+        subtitle: "Convertir a remito",
+        body: "Una vez aceptada, podés convertir la cotización en remito con un solo clic, trasladando todos los items y montos automáticamente.",
         roles: ["ADMIN"],
         seeAlso: ["facturacion"],
       },
@@ -388,24 +388,24 @@ export const manualSections: ManualSection[] = [
   },
   {
     id: "facturacion",
-    title: "Facturación",
+    title: "Comprobantes",
     roles: ["ADMIN"],
     content: [
       {
-        subtitle: "Crear una factura",
-        body: "El módulo de facturación te permite generar facturas internas asociadas a órdenes de servicio o independientes. Importante: STApp emite documentos no fiscales (comprobantes internos para tu control), no facturas electrónicas AFIP. Los precios se cargan finales (sin discriminación de IVA).",
+        subtitle: "Crear un remito",
+        body: "El módulo de Comprobantes te permite generar remitos internos asociados a órdenes de servicio o independientes. Importante: STApp emite documentos no fiscales (comprobantes internos para tu control), no facturas electrónicas AFIP. Los precios se cargan finales (sin discriminación de IVA).",
         steps: [
-          "Andá a \"Facturación\" y hacé clic en \"Nueva Factura\"",
+          "Andá a \"Comprobantes\" y hacé clic en \"Generar remito\"",
           "Seleccioná el cliente",
           "Agregá los conceptos con descripción, cantidad y precio final",
-          "Asigná un número de factura (manual)",
-          "Guardá la factura",
+          "Asigná un número de remito (manual)",
+          "Guardá el remito",
         ],
         tip: "Si necesitás emitir facturas electrónicas válidas para AFIP, usá tu sistema fiscal habitual. STApp te sirve para llevar el control interno, los pagos parciales y la cuenta corriente del cliente.",
       },
       {
         subtitle: "Pagos parciales",
-        body: "STApp permite registrar pagos parciales en cada factura. El estado de pago se actualiza automáticamente:",
+        body: "STApp permite registrar pagos parciales en cada remito. El estado de pago se actualiza automáticamente:",
         steps: [
           "PENDIENTE: no se registraron pagos",
           "PAGADO PARCIAL: se registró al menos un pago pero queda saldo",
@@ -414,11 +414,11 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Generación de PDF",
-        body: "Podés descargar cada factura en formato PDF con el logo de tu taller, datos del cliente, detalle de conceptos y totales. Ideal para enviar por email o WhatsApp.",
+        body: "Podés descargar cada remito en formato PDF con el logo de tu taller, datos del cliente, detalle de conceptos y totales. Ideal para enviar por email o WhatsApp.",
       },
       {
         subtitle: "Asociar a orden de servicio",
-        body: "Podés vincular una factura a una orden de servicio para mantener la trazabilidad completa: desde la recepción del equipo hasta el cobro.",
+        body: "Podés vincular un remito a una orden de servicio para mantener la trazabilidad completa: desde la recepción del equipo hasta el cobro.",
         seeAlso: ["ordenes", "caja"],
       },
     ],
@@ -430,7 +430,7 @@ export const manualSections: ManualSection[] = [
     content: [
       {
         subtitle: "Cómo funciona la Caja",
-        body: "El módulo de Caja unifica en una sola vista todos los movimientos de dinero del día: cobros de órdenes, ventas del POS, pagos de facturas, depósitos a cuenta corriente y movimientos manuales (ingresos y egresos). Cada movimiento queda registrado con su método de pago (Efectivo, Transferencia, Tarjeta Débito, Tarjeta Crédito, MercadoPago, Cuenta Corriente u Otro). Podés navegar día por día con las flechas y usar el botón \"Hoy\" para volver al día actual.",
+        body: "El módulo de Caja unifica en una sola vista todos los movimientos de dinero del día: cobros de órdenes, ventas del POS, pagos de remitos, depósitos a cuenta corriente y movimientos manuales (ingresos y egresos). Cada movimiento queda registrado con su método de pago (Efectivo, Transferencia, Tarjeta Débito, Tarjeta Crédito, MercadoPago, Cuenta Corriente u Otro). Podés navegar día por día con las flechas y usar el botón \"Hoy\" para volver al día actual.",
         tip: "La Caja muestra siempre el dinero del día seleccionado. No es un saldo acumulado: es lo que entró y salió ese día.",
       },
       {
@@ -446,7 +446,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Movimientos manuales (ingresos y egresos)",
-        body: "Además de los cobros automáticos (órdenes, ventas, facturas), podés registrar movimientos manuales desde la pestaña \"Movimientos Manuales\". Sirven para asentar gastos del día (insumos, pago a proveedor, retiros) o ingresos extra que no provienen de una venta.",
+        body: "Además de los cobros automáticos (órdenes, ventas, remitos), podés registrar movimientos manuales desde la pestaña \"Movimientos Manuales\". Sirven para asentar gastos del día (insumos, pago a proveedor, retiros) o ingresos extra que no provienen de una venta.",
         steps: [
           "Andá a Caja > pestaña \"Movimientos Manuales\"",
           "Elegí Egreso o Ingreso",
@@ -615,7 +615,7 @@ export const manualSections: ManualSection[] = [
     content: [
       {
         subtitle: "Gestión de emails",
-        body: "Desde esta sección podés ver el historial de emails enviados desde STApp: notificaciones de órdenes, cotizaciones enviadas, facturas y comunicaciones con clientes.",
+        body: "Desde esta sección podés ver el historial de emails enviados desde STApp: notificaciones de órdenes, cotizaciones enviadas, remitos y comunicaciones con clientes.",
       },
       {
         subtitle: "Plantillas de email",
@@ -677,7 +677,7 @@ export const manualSections: ManualSection[] = [
     content: [
       {
         subtitle: "Datos de la empresa",
-        body: "En Configuración > General podés editar los datos de tu organización: nombre, dirección, teléfono, email y logo. Estos datos aparecen en todas las comunicaciones y documentos generados (órdenes, facturas, cotizaciones).",
+        body: "En Configuración > General podés editar los datos de tu organización: nombre, dirección, teléfono, email y logo. Estos datos aparecen en todas las comunicaciones y documentos generados (órdenes, remitos, cotizaciones).",
       },
       {
         subtitle: "Checklist de recepción",
@@ -830,7 +830,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Pago parcial",
-        body: "Cobro a cuenta de una factura, venta u orden. El estado pasa a \"Pagado parcial\" hasta que la suma de los pagos cubra el total, momento en que pasa a \"Pagado\".",
+        body: "Cobro a cuenta de un remito, venta u orden. El estado pasa a \"Pagado parcial\" hasta que la suma de los pagos cubra el total, momento en que pasa a \"Pagado\".",
       },
       {
         subtitle: "Estado de cobro de una orden",

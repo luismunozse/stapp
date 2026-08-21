@@ -35,6 +35,7 @@ import {
   Receipt,
   Printer,
   Tag,
+  BadgeCheck,
   HandCoins,
   Lock,
   AlertTriangle,
@@ -54,7 +55,14 @@ import { FotoGallery } from "@/components/fotos/foto-gallery"
 import { ChecklistCard } from "@/components/checklist/checklist-card"
 import { WhatsAppDialog } from "@/components/ordenes/whatsapp-dialog"
 import { EntregaDialog } from "@/components/ordenes/entrega-dialog"
-import { printDeviceLabel } from "@/components/ordenes/print-label"
+import {
+  printDeviceLabel,
+  readEtiquetaSize,
+  saveEtiquetaSize,
+  LABEL_SIZE_OPTIONS,
+  DEFAULT_LABEL_SIZE,
+  type LabelSize,
+} from "@/components/ordenes/print-label"
 import { ThermalPrintOrden } from "@/components/ordenes/thermal-print-orden"
 import { NotificationHistory } from "@/components/ordenes/notification-history"
 import { OrdenEstadoCard } from "@/components/ordenes/orden-estado-card"
@@ -113,6 +121,11 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [showReparadoDialog, setShowReparadoDialog] = useState(false)
   const [showNCDialog, setShowNCDialog] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [etiquetaSize, setEtiquetaSize] = useState<LabelSize>(DEFAULT_LABEL_SIZE)
+
+  useEffect(() => {
+    setEtiquetaSize(readEtiquetaSize())
+  }, [])
 
   const isAdmin = session?.user?.role === "ADMIN"
   const userRole = session?.user?.role
@@ -323,10 +336,20 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     }
   }
 
-  const handleEntregaSuccess = () => {
+  const handleEntregaSuccess = async (pendienteCobro?: number) => {
     setShowEntregaDialog(false)
-    fetchOrden()
+    // Refrescar ANTES de abrir el cobro: el diálogo lee costoFinal del estado,
+    // y en la entrega puede haberse confirmado un total distinto al que tenía.
+    await fetchOrden()
     toast.success("Estado actualizado")
+
+    // El cobro es parte del flujo de entrega, no un trámite aparte: si quedó
+    // saldo, se abre solo. Sigue siendo opcional — cerrarlo deja el saldo en
+    // la cuenta corriente del cliente, igual que antes.
+    if (!sinCobroEntrega && (pendienteCobro ?? 0) > 0) {
+      setShowCobrarDialog(true)
+    }
+    setSinCobroEntrega(false)
   }
 
   const handleReingreso = async () => {
@@ -414,8 +437,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
   const handleGenerarFactura = async () => {
     const confirmed = await confirm({
-      title: "Generar factura",
-      description: "¿Generar factura para esta orden?",
+      title: "Generar remito",
+      description: "¿Generar remito para esta orden?",
       confirmText: "Generar",
       variant: "info",
     })
@@ -431,8 +454,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
       if (res.ok) {
         await alert({
-          title: "Factura generada",
-          description: "La factura se generó correctamente",
+          title: "Remito generado",
+          description: "El remito se generó correctamente",
           variant: "success",
         })
         router.push("/facturacion")
@@ -440,14 +463,14 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         const error = await res.json()
         await alert({
           title: "Error",
-          description: error.error || "Error al generar factura",
+          description: error.error || "Error al generar remito",
           variant: "error",
         })
       }
     } catch (error) {
       await alert({
         title: "Error",
-        description: "Error al generar factura",
+        description: "Error al generar remito",
         variant: "error",
       })
     } finally {
@@ -671,6 +694,22 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             {printingPdf ? "..." : "Imprimir"}
           </Button>
           <ThermalPrintOrden orden={orden as any} />
+          <select
+            value={etiquetaSize}
+            onChange={(e) => {
+              const s = e.target.value as LabelSize
+              setEtiquetaSize(s)
+              saveEtiquetaSize(s)
+            }}
+            className="h-9 rounded-md border bg-background px-2 text-xs"
+            title="Tamaño de etiqueta (térmica): elegí según tu impresora"
+          >
+            {LABEL_SIZE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
           <Button
             variant="outline"
             size="sm"
@@ -688,13 +727,41 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 fechaIngreso: fecha,
                 publicToken: orden.publicToken,
                 organizationName: undefined,
-              }, baseUrl)
+              }, baseUrl, { size: etiquetaSize })
             }}
             title="Imprimir etiqueta para el equipo"
           >
             <Tag className="h-4 w-4 mr-2" />
             Etiqueta
           </Button>
+          {orden.estado === "REPARADO" && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const baseUrl = window.location.origin
+                const fechaRep = orden.fechaCompletado
+                  ? new Date(orden.fechaCompletado).toLocaleDateString("es-AR", { timeZone: timezone })
+                  : new Date().toLocaleDateString("es-AR", { timeZone: timezone })
+                printDeviceLabel({
+                  codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
+                  numeroOrden: orden.numeroOrden,
+                  clienteNombre: orden.cliente?.nombre || "",
+                  dispositivo: orden.dispositivo,
+                  problemaReportado: orden.problemaReportado,
+                  fechaIngreso: fechaRep,
+                  publicToken: orden.publicToken,
+                  organizationName: undefined,
+                  variant: "reparado",
+                  fechaReparacion: fechaRep,
+                }, baseUrl, { size: etiquetaSize })
+              }}
+              title="Imprimir etiqueta de reparado para pegar en el equipo"
+            >
+              <BadgeCheck className="h-4 w-4 mr-2" />
+              Etiqueta Reparado
+            </Button>
+          )}
           {isAdmin && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -706,7 +773,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 {(orden.estado === "REPARADO" || orden.estado === "ENTREGADO") && (
                   <DropdownMenuItem onClick={handleGenerarFactura} disabled={updating}>
                     <Receipt className="h-4 w-4 mr-2" />
-                    Generar Factura
+                    Generar Remito
                   </DropdownMenuItem>
                 )}
                 {(orden.estado === "ENTREGADO" || orden.estado === "REPARADO") && !orden.esReingreso && (
@@ -978,6 +1045,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               <OrdenRepuestosTab
                 ordenId={ordenId}
                 repuestos={(orden as any).repuestos || []}
+                mostrarCostos={isAdmin}
+                ordenEstado={orden.estado}
                 onRepuestosChanged={fetchOrden}
               />
             </TabsContent>
@@ -1201,6 +1270,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             totalCobrado: orden.totalCobrado || 0,
             descuentoCobro: orden.descuentoCobro || 0,
             clienteNombre: orden.cliente?.nombre,
+            dispositivo: orden.dispositivo,
+            problemaReportado: orden.problemaReportado,
+            publicToken: orden.publicToken,
           }}
           onSuccess={() => {
             fetchOrden()
@@ -1237,6 +1309,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             },
             estadoCobro: orden.estadoCobro,
             pendienteCobro: (orden.costoFinal || 0) - (orden.descuentoCobro || 0) - (orden.totalCobrado || 0),
+            costoFinal: orden.costoFinal,
+            repuestos: (orden as any).repuestos || [],
           }}
           encargadoNombre={session?.user?.name || "Usuario"}
           esRetiro={orden.estado === "SIN_REPARACION" && !sinCobroEntrega}

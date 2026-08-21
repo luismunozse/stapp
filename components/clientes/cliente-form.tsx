@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -38,6 +39,10 @@ const clienteSchema = z.object({
   razonSocial: z.string().optional(),
   cuit: z.string().optional().or(z.literal("")),
   aceptaWhatsapp: z.boolean().default(true),
+  // Solo se renderizan/envían para ADMIN (ver design ADR-7) — el server
+  // igual los rechaza con 403 si un no-ADMIN los manda igual.
+  tipoPrecio: z.enum(["MINORISTA", "MAYORISTA"]).default("MINORISTA"),
+  descuentoPct: z.number().min(0, "Debe estar entre 0 y 100").max(100, "Debe estar entre 0 y 100").optional(),
 })
 
 type ClienteFormData = z.infer<typeof clienteSchema>
@@ -54,6 +59,8 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
   const countryConfig = getCountryConfig(pais)
   const { showError, showInfo } = useModal()
   const { offlineFetch } = useOffline()
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "ADMIN"
   const [loading, setLoading] = useState(false)
   const {
     register,
@@ -75,6 +82,8 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
           razonSocial: cliente.razonSocial || "",
           cuit: cliente.cuit || "",
           aceptaWhatsapp: cliente.aceptaWhatsapp ?? true,
+          tipoPrecio: cliente.tipoPrecio || "MINORISTA",
+          descuentoPct: cliente.descuentoPct ?? undefined,
         }
       : {
           tipoCliente: "INDIVIDUAL",
@@ -86,10 +95,13 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
           razonSocial: "",
           cuit: "",
           aceptaWhatsapp: true,
+          tipoPrecio: "MINORISTA",
+          descuentoPct: undefined,
         },
   })
 
   const tipoCliente = watch("tipoCliente")
+  const tipoPrecio = watch("tipoPrecio")
 
   useEffect(() => {
     if (open) {
@@ -104,6 +116,8 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
             razonSocial: cliente.razonSocial || "",
             cuit: cliente.cuit || "",
             aceptaWhatsapp: cliente.aceptaWhatsapp ?? true,
+            tipoPrecio: cliente.tipoPrecio || "MINORISTA",
+            descuentoPct: cliente.descuentoPct ?? undefined,
           }
         : {
             tipoCliente: "INDIVIDUAL",
@@ -115,6 +129,8 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
             razonSocial: "",
             cuit: "",
             aceptaWhatsapp: true,
+            tipoPrecio: "MINORISTA",
+            descuentoPct: undefined,
           }
       )
     }
@@ -130,6 +146,22 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
       if (data.tipoCliente === "INDIVIDUAL") {
         payload.razonSocial = ""
         payload.cuit = ""
+      }
+      if (isAdmin) {
+        // Mismo patrón que razonSocial/cuit arriba: al volver a MINORISTA se
+        // limpia el % explícitamente (REQ-5.2), no queda un descuento
+        // fantasma guardado detrás de un tier que ya no lo usa.
+        if (data.tipoPrecio === "MINORISTA") {
+          payload.descuentoPct = null
+        }
+      } else {
+        // Los campos ni siquiera se renderizan para no-ADMIN, pero el estado
+        // por defecto del form ("MINORISTA") no debe reenviarse — el back
+        // ya lo ignora si viene undefined, pero si viniera un valor previo
+        // de un cliente MAYORISTA (edición sin tocar el tier) reenviar
+        // tipoPrecio dispararía el gate 403 aunque el usuario no tocó nada.
+        delete payload.tipoPrecio
+        delete payload.descuentoPct
       }
 
       const isCreating = !cliente
@@ -316,6 +348,59 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
               placeholder="Dirección completa"
             />
           </div>
+
+          {/* Precio mayorista — solo ADMIN puede definirlo (design ADR-7) */}
+          {isAdmin && (
+            <div>
+              <Label>Precio</Label>
+              <div className="grid grid-cols-2 gap-2 mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => setValue("tipoPrecio", "MINORISTA")}
+                  className={`px-3 py-2.5 rounded-md border text-sm font-medium transition-colors ${
+                    tipoPrecio === "MINORISTA"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-input bg-background hover:bg-accent"
+                  }`}
+                >
+                  Minorista
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setValue("tipoPrecio", "MAYORISTA")}
+                  className={`px-3 py-2.5 rounded-md border text-sm font-medium transition-colors ${
+                    tipoPrecio === "MAYORISTA"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-input bg-background hover:bg-accent"
+                  }`}
+                >
+                  Mayorista
+                </button>
+              </div>
+              {tipoPrecio === "MAYORISTA" && (
+                <div className="mt-2">
+                  <Label htmlFor="descuentoPct">Descuento mayorista (%)</Label>
+                  <Input
+                    id="descuentoPct"
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    max={100}
+                    step="0.01"
+                    {...register("descuentoPct", {
+                      setValueAs: (v) => (v === "" || v === null ? undefined : Number(v)),
+                    })}
+                    placeholder="15"
+                  />
+                  {errors.descuentoPct && (
+                    <p className="text-sm text-destructive mt-1">
+                      {errors.descuentoPct.message}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center justify-between rounded-md border p-3">
             <div className="space-y-0.5">
