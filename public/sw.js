@@ -1,6 +1,9 @@
 // Service Worker para PWA - Optimizado para móviles con soporte offline completo
 const CACHE_NAME = 'stapp-v8'
-const API_CACHE_NAME = 'stapp-api-v2'
+// v3: el caché de API pasó a llevar sello de tiempo y dejó de guardar
+// /api/inventario. Renombrarlo hace que `activate` borre las entradas viejas
+// (sin sello, y posiblemente con inventario de otro rol o sucursal).
+const API_CACHE_NAME = 'stapp-api-v3'
 const STATIC_CACHE_NAME = 'stapp-static-v3'
 const DB_NAME = 'stapp-offline'
 const DB_VERSION = 2
@@ -21,17 +24,31 @@ const EXCLUDED_ROUTES = [
   '/landing',
 ]
 
-// Rutas de API que se pueden cachear temporalmente (lectura)
+// Rutas de API que se pueden cachear temporalmente (lectura).
+//
+// NO agregar acá ninguna ruta cuya respuesta dependa del rol o de la sucursal
+// activa. Este caché es del navegador, no de la sesión: la clave es la URL y
+// nada más — sin cookie, sin usuario, sin rol. Todo lo que entra puede
+// devolverse después a OTRA sesión del mismo equipo, o a la misma sesión
+// después de cambiar de sucursal.
+//
+// Por eso /api/inventario quedó fuera: bajo scope=venta la respuesta trae el
+// stock de una sucursal concreta (más los headers X-Venta-Sucursal-*) y, para
+// un ADMIN, precioCompra. Servirla desde el caché mostraba el stock de la
+// sucursal anterior mientras la venta descontaba de otra, y en un mostrador
+// compartido le entregaba a un VENDEDOR el catálogo del ADMIN.
 const CACHEABLE_API_ROUTES = [
   '/api/clientes',
-  '/api/inventario',
   '/api/servicios',
   '/api/configuracion',
   '/api/tipos-dispositivo',
 ]
 
-// Tiempo de vida del caché de API (5 minutos)
+// Tiempo de vida del caché de API (5 minutos). Se aplica con el sello
+// CACHED_AT_HEADER que se escribe al guardar: pasado el TTL la entrada deja de
+// servirse mientras haya red, pero sigue siendo el fallback offline.
 const API_CACHE_TTL = 5 * 60 * 1000
+const CACHED_AT_HEADER = 'x-sw-cached-at'
 
 // Todos los stores de IndexedDB para operaciones offline
 const ALL_STORES = [
@@ -209,25 +226,52 @@ async function cacheFirst(request, cacheName) {
   }
 }
 
+// Sella la respuesta con la hora de guardado. Los headers de una respuesta de
+// red son inmutables, así que hay que reconstruirla.
+async function conSelloDeCache(response) {
+  const headers = new Headers(response.headers)
+  headers.set(CACHED_AT_HEADER, String(Date.now()))
+  const body = await response.arrayBuffer()
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  })
+}
+
+// Una entrada sin sello viene de una versión anterior del SW: se trata como
+// vencida (se revalida) en vez de asumir que es fresca.
+function cacheVencido(response) {
+  const sello = response.headers.get(CACHED_AT_HEADER)
+  if (!sello) return true
+  return Date.now() - Number(sello) > API_CACHE_TTL
+}
+
 // Estrategia: Stale-while-revalidate para APIs cacheables
 async function staleWhileRevalidate(request, cacheName) {
   const cache = await caches.open(cacheName)
   const cached = await cache.match(request)
 
-  const fetchPromise = fetch(request).then((response) => {
+  const fetchPromise = fetch(request).then(async (response) => {
     if (response.ok) {
-      cache.put(request, response.clone())
+      await cache.put(request, await conSelloDeCache(response.clone()))
     }
     return response
   }).catch(() => null)
 
-  if (cached) {
+  if (cached && !cacheVencido(cached)) {
     return cached
   }
 
   const response = await fetchPromise
   if (response) {
     return response
+  }
+
+  // Sin red: una copia vencida sigue siendo mejor que nada (es el caso que la
+  // PWA offline existe para cubrir).
+  if (cached) {
+    return cached
   }
 
   return new Response(JSON.stringify({ error: 'No data available' }), {
