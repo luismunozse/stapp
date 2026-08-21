@@ -127,8 +127,9 @@ const FLOATING_LAYER_SELECTOR = [
  * dialog -- within both OrdenForm and RecepcionForm, and typing in "Nuevo
  * cliente" used to flip the parent's dirty flag. A control that belongs to
  * some other form is somebody else's edit; a control with no form of its own
- * is a portalled Radix layer (select/menu content), which is exactly the case
- * `root` cannot see and the one this form does own.
+ * is a portalled layer, which `root` cannot see by containment and is
+ * therefore traced back to `root` through the trigger that opened it (see
+ * isLayerOpenedFrom).
  */
 function isFormInteraction(target: EventTarget | null, root: Element | null): boolean {
   if (!(target instanceof Element)) return false
@@ -136,7 +137,52 @@ function isFormInteraction(target: EventTarget | null, root: Element | null): bo
   if (!control) return false
   const ownerForm = control.closest("form")
   if (ownerForm) return !root || root.contains(ownerForm)
-  return !!control.closest(FLOATING_LAYER_SELECTOR)
+  if (!control.closest(FLOATING_LAYER_SELECTOR)) return false
+  return !root || isLayerOpenedFrom(control, root)
+}
+
+/**
+ * True when the portalled layer holding `control` was opened by something
+ * inside `root`.
+ *
+ * The floating-layer branch above exists because `root.contains()` cannot see a
+ * Radix select/menu/popover: its content is portalled to the end of <body>, so
+ * a control the user opened FROM this form is no longer inside the form. What
+ * that branch must NOT accept is a surface that merely floats on top of this
+ * form. Two of them are one click away on every intake screen: the close X that
+ * DialogContent renders outside the nested <form> (components/ui/dialog.tsx)
+ * and the button of a useModal alert (components/ui/alert-dialog-custom.tsx).
+ * Neither belongs to any form, so both used to land here and latch the dirty
+ * gate for the rest of the page's life -- dismissing "no se pudo cargar el
+ * turno" was enough -- and every async default that resolved afterwards got
+ * persisted as a draft of untouched values.
+ *
+ * The link Radix does leave in the DOM is `aria-controls`: the trigger points
+ * at the id of the content it opened (`contentId` in @radix-ui/react-select and
+ * @radix-ui/react-popover). Following it back into `root` is what tells "the
+ * select this form opened" from "a dialog that happens to be on screen". A
+ * layer nobody in `root` points at is somebody else's surface.
+ */
+function isLayerOpenedFrom(control: Element, root: Element): boolean {
+  // Walk up from the control: whichever element Radix stamped with the content
+  // id is an ancestor of what the user clicked, whether that is the popper
+  // wrapper or the listbox/dialog inside it.
+  for (let node: Element | null = control; node; node = node.parentElement) {
+    if (!node.id) continue
+    try {
+      if (root.querySelector(`[aria-controls="${cssEscape(node.id)}"]`)) return true
+    } catch {
+      // Malformed id: no selector can match it, so nothing in root owns it.
+      return false
+    }
+  }
+  return false
+}
+
+function cssEscape(value: string): string {
+  return typeof CSS !== "undefined" && typeof CSS.escape === "function"
+    ? CSS.escape(value)
+    : value
 }
 
 interface DraftEnvelope<T> {

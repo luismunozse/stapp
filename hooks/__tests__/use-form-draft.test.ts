@@ -773,15 +773,60 @@ describe('useFormDraft', () => {
     })
   })
 
+  it('ignores the chrome of a floating layer this form never opened', () => {
+    // El X que DialogContent dibuja FUERA del <form> anidado
+    // (components/ui/dialog.tsx) y los botones de los alerts de useModal viven
+    // adentro de un [role="dialog"] y no pertenecen a ningun <form>: la rama de
+    // capas flotantes los contaba como una edicion de ESTE formulario porque
+    // ignoraba `root`. Descartar un aviso de "no se pudo cargar el turno"
+    // alcanzaba para dejar el gate de sucio encendido por el resto de la vida
+    // de la pagina, sin que se tocara un solo campo del alta, asi que cualquier
+    // default asincronico que resolviera despues se persistia como borrador de
+    // valores intactos -- el aviso que entrena a la gente a ignorarlo.
+    const ownForm = appendToBody(document.createElement('form'))
+    const alertLayer = appendToBody(document.createElement('div'))
+    alertLayer.setAttribute('role', 'dialog')
+    const aceptar = alertLayer.appendChild(document.createElement('button'))
+
+    let live = { recibidoPorId: '' }
+    const { result } = renderHook(() =>
+      useFormDraft({
+        feature: 'orden-form',
+        debounceMs: 1000,
+        getValue: () => live,
+        rootRef: { current: ownForm },
+      })
+    )
+
+    act(() => {
+      aceptar.dispatchEvent(new Event('click', { bubbles: true }))
+    })
+    live = { recibidoPorId: 'user-1' }
+    act(() => {
+      result.current.notifyChange()
+      vi.advanceTimersByTime(2000)
+    })
+    expect(window.localStorage.length).toBe(0)
+  })
+
   it('still counts a portalled select opened from the form', () => {
     // Radix saca selects y menus a un portal al final de <body>: el control que
     // el usuario abrio DESDE este formulario ya no esta adentro de el, y sigue
-    // siendo una edicion. Esa capa no tiene <form> propio, que es lo que la
-    // separa del dialog de "Nuevo cliente".
+    // siendo una edicion. Lo que lo ata a este formulario es `aria-controls`:
+    // el trigger (adentro del <form>) apunta al id del contenido que abrio.
+    // Ese es el DOM real que renderiza Radix -- ver `contentId` en
+    // @radix-ui/react-select y @radix-ui/react-popover.
     const ownForm = appendToBody(document.createElement('form'))
+    const trigger = ownForm.appendChild(document.createElement('button'))
+    trigger.setAttribute('role', 'combobox')
+    trigger.setAttribute('aria-controls', 'radix-content-1')
+    trigger.setAttribute('aria-expanded', 'true')
     const popper = appendToBody(document.createElement('div'))
     popper.setAttribute('data-radix-popper-content-wrapper', '')
-    const option = popper.appendChild(document.createElement('div'))
+    const content = popper.appendChild(document.createElement('div'))
+    content.id = 'radix-content-1'
+    content.setAttribute('role', 'listbox')
+    const option = content.appendChild(document.createElement('div'))
     option.setAttribute('role', 'option')
 
     let live = { tecnicoId: '' }
