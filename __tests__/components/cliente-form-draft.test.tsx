@@ -263,6 +263,47 @@ describe("ClienteForm — borrador local", () => {
     expect(screen.getByText(/otro usuario guardó esta ficha/i)).toBeInTheDocument()
   })
 
+  it("sigue avisando el conflicto al reabrir el dialog sobre la misma ficha", () => {
+    // El ciclo completo, que es donde se perdia de verdad. El aviso vivia solo
+    // en el estado del hook: cerrar el dialog sin guardar ni descartar y
+    // volverlo a abrir re-inicializa la key, lo apagaba, y el borrador -- ya
+    // re-estampado con el `updatedAt` del companero -- pasaba el control de
+    // frescura y se restauraba como si nada hubiera pasado. "Guardar" mandaba
+    // entonces el registro entero encima del guardado ajeno, sin una palabra.
+    const key = "draft:v3:cliente-form:org-1:user-1:edit:cli-1"
+    const actualizado = makeCliente({
+      nombre: "Juan Perez Actualizado",
+      updatedAt: new Date("2026-01-03T10:00:00.000Z"),
+    })
+    const dialog = (props: { cliente: Cliente; open: boolean }) => (
+      <ModalProvider>
+        <ClienteForm {...props} onClose={vi.fn()} onSuccess={vi.fn()} />
+      </ModalProvider>
+    )
+
+    const { rerender } = render(dialog({ cliente: makeCliente(), open: true }))
+    fireEvent.change(screen.getByLabelText("Nombre *"), {
+      target: { value: "Juan Perez (sin guardar)" },
+    })
+
+    // El companero guarda la ficha; SWR revalida y el token se mueve.
+    rerender(dialog({ cliente: actualizado, open: true }))
+    expect(screen.getByText(/otro usuario guardó esta ficha/i)).toBeInTheDocument()
+
+    // El operador cierra sin guardar ni descartar: el hook se pausa y vuelca
+    // lo que tenia pendiente.
+    rerender(dialog({ cliente: actualizado, open: false }))
+    expect(window.localStorage.getItem(key)).not.toBeNull()
+
+    // Y vuelve a abrir la misma ficha.
+    rerender(dialog({ cliente: actualizado, open: true }))
+
+    // Lo escrito sigue ahi -- nada se pierde en silencio...
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Perez (sin guardar)")
+    // ...y el conflicto sigue avisado: guardar ahora reemplaza al companero.
+    expect(screen.getByText(/otro usuario guardó esta ficha/i)).toBeInTheDocument()
+  })
+
   it("descarta un borrador cuya forma ya no es la del formulario", () => {
     // DRAFT_SCHEMA_VERSION se mantiene a mano: si alguien cambia los campos de
     // este formulario sin tocarla, el borrador viejo (hasta 7 dias) pasa las
