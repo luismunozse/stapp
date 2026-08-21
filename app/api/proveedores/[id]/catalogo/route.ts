@@ -92,6 +92,15 @@ export async function POST(
     const body = await request.json()
     const data = itemSchema.parse(body)
 
+    // requireAdminOrVendedor deja pasar a un VENDEDOR sin acceso a inventario.
+    // El gate se resuelve ACÁ, antes del insert, porque manda sobre la
+    // ESCRITURA y no sólo sobre el eco: leer precio_referencia y escribirlo
+    // siguen la misma regla.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
     const { data: created, error: dbErr } = await supabaseAdmin
       .from("proveedor_catalogo_items")
       .insert({
@@ -101,7 +110,12 @@ export async function POST(
         codigo_proveedor: data.codigoProveedor || null,
         nombre: data.nombre,
         descripcion: data.descripcion || null,
-        precio_referencia: data.precioReferencia ?? null,
+        // Un precio que el caller no puede VER tampoco puede escribirlo. Acá
+        // no hay valor previo que preservar, así que el alta queda sin precio:
+        // el precio del proveedor no se puede inventar desde ningún otro lado
+        // (precio_compra del inventario es otra cifra, la que compara la tab
+        // de comparativa). Un ADMIN lo carga después.
+        precio_referencia: canViewCost ? (data.precioReferencia ?? null) : null,
         moneda: data.moneda || "ARS",
         unidad: data.unidad || null,
         notas: data.notas || null,
@@ -111,13 +125,7 @@ export async function POST(
 
     if (dbErr) throw dbErr
 
-    // requireAdminOrVendedor deja pasar a un VENDEDOR sin acceso a inventario:
-    // el eco del row recién escrito respeta el mismo gate que el GET.
-    const vendedoresHabilitados = role === "VENDEDOR"
-      ? await resolveVendedoresHabilitados(organizationId!)
-      : false
-    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
-
+    // El eco del row recién escrito respeta el mismo gate que el GET.
     return NextResponse.json(formatProveedorCatalogoItem(created, canViewCost), { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {

@@ -31,11 +31,27 @@ export async function PUT(
     const body = await request.json()
     const data = updateSchema.parse(body)
 
+    // requireAdminOrVendedor deja pasar a un VENDEDOR sin acceso a inventario.
+    // El gate se resuelve ACÁ, antes de armar el update, porque manda sobre la
+    // ESCRITURA y no sólo sobre el eco: leer precio_referencia y escribirlo
+    // siguen la misma regla.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
     const update: Record<string, any> = {}
     if (data.nombre !== undefined) update.nombre = data.nombre
     if (data.codigoProveedor !== undefined) update.codigo_proveedor = data.codigoProveedor || null
     if (data.descripcion !== undefined) update.descripcion = data.descripcion || null
-    if (data.precioReferencia !== undefined) update.precio_referencia = data.precioReferencia ?? null
+    // Un precio que el caller no puede VER tampoco puede escribirlo: el GET le
+    // niega el número, así que lo que mande no es un valor que haya visto —es
+    // spoofing, o el 0 de un form que nunca recibió el precio real. Se ignora
+    // y la columna queda intacta, igual que resolveCostoUnitario preserva el
+    // costo guardado en las rutas de cotizaciones.
+    if (canViewCost && data.precioReferencia !== undefined) {
+      update.precio_referencia = data.precioReferencia ?? null
+    }
     if (data.moneda !== undefined) update.moneda = data.moneda || "ARS"
     if (data.unidad !== undefined) update.unidad = data.unidad || null
     if (data.notas !== undefined) update.notas = data.notas || null
@@ -54,14 +70,8 @@ export async function PUT(
       return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
     }
 
-    // requireAdminOrVendedor deja pasar a un VENDEDOR sin acceso a inventario.
-    // Sin este gate, un PUT que sólo toca el nombre devolvía el
-    // precio_referencia guardado: el mismo dato que el GET oculta.
-    const vendedoresHabilitados = role === "VENDEDOR"
-      ? await resolveVendedoresHabilitados(organizationId!)
-      : false
-    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
-
+    // El mismo gate tapa el eco: sin él, un PUT que sólo toca el nombre
+    // devolvía el precio_referencia guardado, el dato que el GET oculta.
     return NextResponse.json(formatProveedorCatalogoItem(updated, canViewCost))
   } catch (err) {
     if (err instanceof z.ZodError) {
