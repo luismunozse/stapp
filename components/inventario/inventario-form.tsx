@@ -158,9 +158,10 @@ export function InventarioForm({
           categoria: item.categoria,
           tipoDispositivo: item.tipoDispositivo,
           stock: item.stock,
-          // precioCompra viene en null cuando el rol no puede ver costos. El
-          // PUT de inventario ya rechaza a esos roles (requireInventarioAccess),
-          // así que acá solo hace falta un valor válido para el input.
+          // precioCompra viene en null cuando la fuente no expuso el costo. El
+          // input necesita un número, así que arranca en 0 — pero ese 0 no se
+          // envía: onSubmit omite el campo del payload cuando el item cargó
+          // sin costo (ver `costoCargado`).
           precioCompra: item.precioCompra ?? 0,
           precioVenta: item.precioVenta,
           proveedorId: item.proveedorId ?? null,
@@ -257,6 +258,7 @@ export function InventarioForm({
         categoria: item.categoria,
         tipoDispositivo: item.tipoDispositivo,
         stock: item.stock,
+        // Ver nota en defaultValues: el 0 es solo para el input, no se envía.
         precioCompra: item.precioCompra ?? 0,
         precioVenta: item.precioVenta,
         proveedorId: item.proveedorId ?? null,
@@ -503,10 +505,21 @@ export function InventarioForm({
       const barcodeFromWatch = (watch("barcode") || "").toString().trim()
       const normalizedBarcode = barcodeFromWatch.length > 0 ? barcodeFromWatch : null
 
+      // El costo se manda solo si la fuente lo expuso. Cuando el item llega con
+      // `precioCompra: null` el input arranca en 0 porque necesita un número —
+      // pero ese 0 es "no lo recibí", no "vale cero". Como el payload se
+      // spreadea entero y no hay filtro de campos sucios, mandarlo pisaría el
+      // precio_compra real con cero. El PUT lo acepta opcional, así que
+      // omitirlo deja la columna intacta.
+      const { precioCompra, ...rest } = data
+      const costoCargado = !item || item.precioCompra !== null && item.precioCompra !== undefined
+      const costoField = costoCargado ? { precioCompra } : {}
+
       const payload = item
-        ? { ...data, barcode: normalizedBarcode }
+        ? { ...rest, ...costoField, barcode: normalizedBarcode }
         : {
-            ...data,
+            ...rest,
+            ...costoField,
             barcode: normalizedBarcode,
             codigo: generatedCode,
             descripcion: "",
