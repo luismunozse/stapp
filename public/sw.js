@@ -44,6 +44,14 @@ const CACHEABLE_API_ROUTES = [
   '/api/tipos-dispositivo',
 ]
 
+// Excepciones a lo anterior: rutas que caen bajo un prefijo cacheable pero
+// cuya respuesta depende del rol y de la sucursal activa (las dos corren
+// sucursalParaLectura). Mismo problema que /api/inventario, solo que anidadas.
+const SUCURSAL_SCOPED_API_PATTERNS = [
+  /^\/api\/clientes\/[^/]+\/deuda-sucursal$/,
+  /^\/api\/clientes\/[^/]+\/ordenes-pendientes$/,
+]
+
 // Tiempo de vida del caché de API (5 minutos). Se aplica con el sello
 // CACHED_AT_HEADER que se escribe al guardar: pasado el TTL la entrada deja de
 // servirse mientras haya red, pero sigue siendo el fallback offline.
@@ -166,7 +174,10 @@ self.addEventListener('fetch', (event) => {
   // Estrategia para API calls
   if (url.pathname.startsWith('/api/')) {
     // Para API que puede cachearse, usar stale-while-revalidate
-    if (CACHEABLE_API_ROUTES.some(route => url.pathname.startsWith(route)) && request.method === 'GET') {
+    const cacheable =
+      CACHEABLE_API_ROUTES.some(route => url.pathname.startsWith(route)) &&
+      !SUCURSAL_SCOPED_API_PATTERNS.some(pattern => pattern.test(url.pathname))
+    if (cacheable && request.method === 'GET') {
       event.respondWith(staleWhileRevalidate(request, API_CACHE_NAME))
     } else {
       // Para otras APIs, network only con fallback a error

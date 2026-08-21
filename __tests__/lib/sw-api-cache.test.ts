@@ -119,16 +119,16 @@ function loadServiceWorker() {
         method: init.method ?? "GET",
         mode: init.mode ?? "cors",
       }
-      let responded: Promise<Response> | null = null
+      const responded: Array<Promise<Response>> = []
       const event = {
         request,
         respondWith: (value: Promise<Response>) => {
-          responded = value
+          responded.push(value)
         },
         waitUntil: (value: Promise<unknown>) => value,
       }
       for (const handler of listeners.fetch ?? []) handler(event)
-      return responded ? await responded : null
+      return responded.length > 0 ? await responded[0] : null
     },
     async dispatchActivate() {
       const pending: Array<Promise<unknown>> = []
@@ -217,6 +217,34 @@ describe("service worker — API caching", () => {
     const res = await sw.dispatchFetch("/api/clientes?page=1")
 
     expect(await res!.json()).toEqual({ data: ["stale"] })
+  })
+
+  it("SW-7 — never stores the sucursal-scoped routes nested under /api/clientes", async () => {
+    // deuda-sucursal and ordenes-pendientes both run sucursalParaLectura, so
+    // their answer depends on the role and on the active sucursal exactly like
+    // /api/inventario does — they just happen to sit under a cacheable prefix.
+    sw.setNetwork(async () => jsonResponse({ deuda: 5000 }))
+
+    await sw.dispatchFetch("/api/clientes/cli-1/deuda-sucursal")
+    await sw.dispatchFetch("/api/clientes/cli-1/ordenes-pendientes")
+
+    expect(await sw.caches.match(`${ORIGIN}/api/clientes/cli-1/deuda-sucursal`)).toBeUndefined()
+    expect(await sw.caches.match(`${ORIGIN}/api/clientes/cli-1/ordenes-pendientes`)).toBeUndefined()
+  })
+
+  it("SW-8 — never replays a sucursal-scoped clientes response to a later session", async () => {
+    const url = `${ORIGIN}/api/clientes/cli-1/deuda-sucursal`
+    const store = await sw.caches.open(API_CACHE_NAME)
+    // Freshly stamped on purpose: the TTL must not be what saves us here.
+    await store.put(
+      url,
+      jsonResponse({ deuda: 999999, scope: "org-wide" }, { [CACHED_AT_HEADER]: String(Date.now()) })
+    )
+    sw.setNetwork(async () => jsonResponse({ deuda: 5000, scope: "sucursal" }))
+
+    const res = await sw.dispatchFetch("/api/clientes/cli-1/deuda-sucursal")
+
+    expect(await res!.json()).toEqual({ deuda: 5000, scope: "sucursal" })
   })
 
   it("SW-6 — activate drops the previous API cache, purging already-stored inventario entries", async () => {
