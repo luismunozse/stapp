@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import {
+  requireAdminOrVendedor,
+  hasInventarioAccess,
+  resolveVendedoresHabilitados,
+} from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 interface ItemInventario {
@@ -25,7 +29,7 @@ interface CategoriaResumen {
  */
 export async function GET() {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId, role } = await requireAdminOrVendedor()
     if (error) return error
 
     // Obtener todo el inventario
@@ -140,14 +144,35 @@ export async function GET() {
       categorias: porCategoria.length,
     }
 
+    // El costo de compra por item sigue la misma regla que
+    // inventario.precio_compra en el resto de la app: un VENDEDOR sin el
+    // permiso de inventario no puede obtener acá el número que el endpoint de
+    // inventario le niega. valorEnStock es precioCompra * stock y stock viaja
+    // en la misma fila, así que se cae por división y también se oculta.
+    // Los agregados de organización (resumen.valorCompra, margenPotencial,
+    // porCategoria.valorTotal) son un tier más amplio de reportes financieros
+    // a propósito y quedan bajo requireAdminOrVendedor(): no tocar.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
+    const gateItem = (item: ItemInventario) =>
+      canViewCost ? item : { ...item, precioCompra: null }
+
+    const gateValioso = (item: ItemInventario & { valorEnStock: number }) =>
+      canViewCost ? item : { ...item, precioCompra: null, valorEnStock: null }
+
     return NextResponse.json({
       scope: "organization",
       resumen,
-      stockCritico,
-      sinStock: sinStock.slice(0, 10),
+      stockCritico: stockCritico.map(gateItem),
+      sinStock: sinStock.slice(0, 10).map(gateItem),
       porCategoria,
-      masValiosos,
+      masValiosos: masValiosos.map(gateValioso),
       masVendidos,
+    }, {
+      headers: { "Cache-Control": "no-store" },
     })
   } catch (error) {
     console.error("Error en análisis de inventario:", error)

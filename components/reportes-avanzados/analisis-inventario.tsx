@@ -26,7 +26,7 @@ interface ItemInventario {
   stock: number
   precioCompra: number | null
   precioVenta: number | null
-  valorEnStock?: number
+  valorEnStock?: number | null
 }
 
 interface CategoriaResumen {
@@ -50,7 +50,7 @@ interface AnalisisData {
   stockCritico: ItemInventario[]
   sinStock: ItemInventario[]
   porCategoria: CategoriaResumen[]
-  masValiosos: (ItemInventario & { valorEnStock: number })[]
+  masValiosos: (ItemInventario & { valorEnStock: number | null })[]
 }
 
 const COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"]
@@ -227,14 +227,21 @@ export function AnalisisInventario() {
                       </span>
                       <div className="min-w-0">
                         <p className="font-medium text-xs sm:text-sm truncate">{item.nombre}</p>
+                        {/* El endpoint devuelve null en el costo por item para
+                            los roles sin acceso a inventario: se oculta, no se
+                            pinta como $0. */}
                         <p className="text-[10px] sm:text-xs text-muted-foreground">
-                          {item.stock} uds x {formatPrice(item.precioCompra || 0)}
+                          {item.precioCompra !== null
+                            ? `${item.stock} uds x ${formatPrice(item.precioCompra)}`
+                            : `${item.stock} uds`}
                         </p>
                       </div>
                     </div>
-                    <Badge variant="default" className="bg-success text-white text-[10px] sm:text-xs shrink-0">
-                      {formatPrice(item.valorEnStock)}
-                    </Badge>
+                    {item.valorEnStock != null && (
+                      <Badge variant="default" className="bg-success text-white text-[10px] sm:text-xs shrink-0">
+                        {formatPrice(item.valorEnStock)}
+                      </Badge>
+                    )}
                   </div>
                 ))}
               </div>

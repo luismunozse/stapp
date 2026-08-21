@@ -1,9 +1,13 @@
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import {
+  requireAdminOrVendedor,
+  hasInventarioAccess,
+  resolveVendedoresHabilitados,
+} from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { NextResponse } from "next/server"
 
 export async function GET() {
-  const { error, organizationId } = await requireAdminOrVendedor()
+  const { error, organizationId, role } = await requireAdminOrVendedor()
   if (error) return error
 
   const now = new Date()
@@ -165,14 +169,32 @@ export async function GET() {
     })
     const tendenciaVentas = Object.entries(tendenciaMap).map(([fecha, unidades]) => ({ fecha, unidades }))
 
+    // El costo de compra por item sigue la misma regla que
+    // inventario.precio_compra en el resto de la app. capitalInmovilizado acá
+    // es por item (stock * precio_compra) y stock viaja en la misma fila, así
+    // que se cae por división y también se oculta.
+    // Los agregados de organización (valorizacion.valorCosto/margenPotencial y
+    // porCategoria.valorCosto) son un tier más amplio de reportes financieros
+    // a propósito y quedan bajo requireAdminOrVendedor(): no tocar.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
+    const sinMovimientoGated = canViewCost
+      ? sinMovimiento
+      : sinMovimiento.map(item => ({ ...item, precioCompra: null, capitalInmovilizado: null }))
+
     return NextResponse.json({
       scope: "organization",
       valorizacion,
       rotacion,
-      sinMovimiento,
+      sinMovimiento: sinMovimientoGated,
       alertasReorden,
       porCategoria,
       tendenciaVentas,
+    }, {
+      headers: { "Cache-Control": "no-store" },
     })
   } catch (err) {
     console.error("Error en inventario-analytics:", err)
