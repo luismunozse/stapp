@@ -477,8 +477,11 @@ export function resetCacheResolucionVenta(): void {
 }
 
 /**
- * Cached `resolverDestinoVenta` for the POS READ endpoints
- * (search/barcode/check-stock under `scope=venta`).
+ * Cached `resolverDestinoVenta` for the POS SEARCH endpoint under `scope=venta`
+ * — the one read that runs per keystroke, and the only caller of this.
+ * barcode and check-stock deliberately use the uncached resolver: both run once
+ * per scan / per checkout, so the cache buys them nothing and can lie (see the
+ * rationale in each route).
  *
  * The caller passes `cookieSucursalId` explicitly — it is already in scope in
  * every route — because it is part of the cache identity: two admins of the

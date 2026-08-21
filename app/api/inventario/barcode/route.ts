@@ -6,7 +6,7 @@ import {
   getCookieSucursalId,
   resolveSucursalLectura,
   getDepositoDeSucursal,
-  resolverDestinoVentaCacheado,
+  resolverDestinoVenta,
   derivarLecturaVenta,
 } from "@/lib/sucursal"
 
@@ -41,11 +41,17 @@ export async function GET(request: Request) {
     let depositoIdPrefetched: string | null = null
 
     if (scopeVenta) {
-      const destino = await resolverDestinoVentaCacheado({
+      // Sin cache, igual que check-stock: un escaneo corre una vez por escaneo,
+      // no por tecla, así que el cache no le ahorra nada y sí le puede mentir.
+      // Durante los 30s posteriores a un cambio de depósito principal, una
+      // entrada vencida haría que el escaneo agregue el ítem con el stock del
+      // depósito viejo mientras la revalidación previa al cobro y
+      // crear_venta_atomica ya usan el nuevo — el P0010 que scope=venta existe
+      // para adelantar. El cache es para el buscador (una consulta por tecla).
+      const destino = await resolverDestinoVenta({
         role,
         organizationId: organizationId!,
         userSucursalId,
-        cookieSucursalId,
       })
       const lectura = derivarLecturaVenta(destino)
       sucursalId = lectura.sucursalId

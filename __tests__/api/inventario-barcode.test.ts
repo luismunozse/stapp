@@ -220,6 +220,65 @@ describe("GET /api/inventario/barcode", () => {
     expect(body.item.stock).toBe(10)
   })
 
+  it("scope=venta resuelve SIN cache: un escaneo no puede ir 30s atrasado respecto al depósito principal", async () => {
+    // Mismo criterio que check-stock: un escaneo corre una vez por escaneo, no
+    // por tecla, así que el cache no le ahorra nada y sí le puede mentir.
+    // Durante los 30s posteriores a un cambio de depósito principal, una
+    // entrada vieja hace que el escaneo agregue el ítem con el stock del
+    // depósito anterior mientras la revalidación previa al cobro y
+    // crear_venta_atomica usan el nuevo — el P0010 que esta rama existe para
+    // evitar.
+    mockAuthSuccess({ role: "ADMIN" })
+    mockNoCookie()
+
+    const invChain = makeInventarioChain([ITEM_ROW])
+    const sucursalesChain: any = {}
+    for (const m of ["select", "eq", "is"]) sucursalesChain[m] = vi.fn().mockReturnValue(sucursalesChain)
+    sucursalesChain.single = vi.fn().mockResolvedValue({ data: { id: "suc-principal" }, error: null })
+
+    // Entre los dos escaneos, un admin cambia cuál depósito es el principal.
+    const depositosChain: any = {}
+    for (const m of ["select", "eq", "is"]) depositosChain[m] = vi.fn().mockReturnValue(depositosChain)
+    depositosChain.maybeSingle = vi
+      .fn()
+      .mockResolvedValueOnce({ data: { id: "dep-viejo" }, error: null })
+      .mockResolvedValue({ data: { id: "dep-nuevo" }, error: null })
+
+    // El stock depende del depósito contra el que se consulte.
+    const depStockChain: any = {}
+    let depositoConsultado: string | null = null
+    depStockChain.select = vi.fn().mockReturnValue(depStockChain)
+    depStockChain.eq = vi.fn((columna: string, valor: string) => {
+      if (columna === "deposito_id") depositoConsultado = valor
+      return depStockChain
+    })
+    depStockChain.maybeSingle = vi.fn(async () => ({
+      data: { stock: depositoConsultado === "dep-nuevo" ? 7 : 2, stock_reservado: 0 },
+      error: null,
+    }))
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "sucursales") return sucursalesChain as any
+      if (table === "depositos") return depositosChain as any
+      if (table === "inventario_depositos") return depStockChain as any
+      if (table === "inventario") return invChain as any
+      return { then: (r: any) => r({ data: null, error: { message: `No mock for: ${table}` } }) } as any
+    })
+
+    const escanear = async () =>
+      parseResponse(
+        await GET(createGetRequest("http://localhost:3000/api/inventario/barcode?code=7890001234567&scope=venta"))
+      )
+
+    const primero = await escanear()
+    expect(primero.body.item.stock).toBe(2)
+
+    const segundo = await escanear()
+    // Con el resolvedor cacheado esto seguiría siendo 2 durante 30s.
+    expect(segundo.body.item.stock).toBe(7)
+    expect(depositosChain.maybeSingle).toHaveBeenCalledTimes(2)
+  })
+
   it("scope=venta con VENDEDOR sin sucursal asignada: sigue fail-closed (stock 0)", async () => {
     vi.mocked(auth).mockResolvedValue({
       user: {
