@@ -248,6 +248,17 @@ export interface UseFormDraftResult<T> {
    *  react-hook-form field subscription. Without it, a form that stopped
    *  re-rendering per keystroke would also stop scheduling saves. */
   notifyChange: () => void
+  /** True while this form is holding work this hook is responsible for: the
+   *  operator has already interacted with it, or a restored draft is still on
+   *  screen. It is the same condition the key effect below branches on, exposed
+   *  so a call site that re-prefills from the server (see the SWR-driven
+   *  prefill in cliente-form.tsx) takes that decision from the same signal
+   *  instead of a second, differently-computed one that can drift.
+   *
+   *  A function over refs and not a state value on purpose: it must answer for
+   *  the CURRENT commit. State would be read one commit late by any effect that
+   *  runs before this hook's own -- which is exactly when the answer matters. */
+  hasUnsavedWork: () => boolean
   /** True when somebody else saved the record while this form was already
    *  holding unsaved work: typed edits, or a restored draft still on screen.
    *  Nothing is discarded -- the work stays in the form and on disk -- but the
@@ -715,5 +726,17 @@ export function useFormDraft<T>({
     }
   }, [])
 
-  return { draft, ready, clearDraft, notifyChange: armSave, recordChangedWhileEditing }
+  const hasUnsavedWork = useCallback(
+    () => interactedRef.current || restoredRef.current,
+    []
+  )
+
+  return {
+    draft,
+    ready,
+    clearDraft,
+    notifyChange: armSave,
+    hasUnsavedWork,
+    recordChangedWhileEditing,
+  }
 }

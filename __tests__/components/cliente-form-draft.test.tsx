@@ -196,6 +196,73 @@ describe("ClienteForm — borrador local", () => {
     expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Editado Sin Guardar")
   })
 
+  it("muestra el guardado de otro usuario cuando el dialog no tiene nada escrito", async () => {
+    // El prefill depende de `cliente?.id` (y no de la identidad del objeto)
+    // para que una revalidacion de SWR no se lleve puesto lo que el operador
+    // esta escribiendo. Pero cuando no escribio NADA no hay nada que proteger:
+    // sin refrescar, el dialog se queda con la version vieja de la ficha y
+    // "Guardar" manda el registro entero, pisando en silencio lo que guardo el
+    // companero. El aviso de conflicto tampoco sale (el hook re-inicializa,
+    // porque no hay trabajo del que hacerse cargo).
+    const { rerender } = render(
+      <ModalProvider>
+        <ClienteForm cliente={makeCliente()} open onClose={vi.fn()} onSuccess={vi.fn()} />
+      </ModalProvider>,
+    )
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Perez")
+
+    // El companero guarda la ficha; SWR revalida y trae los datos nuevos.
+    rerender(
+      <ModalProvider>
+        <ClienteForm
+          cliente={makeCliente({
+            nombre: "Juan Perez Actualizado",
+            telefono: "1155556666",
+            updatedAt: new Date("2026-01-03T10:00:00.000Z"),
+          })}
+          open
+          onClose={vi.fn()}
+          onSuccess={vi.fn()}
+        />
+      </ModalProvider>,
+    )
+
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Perez Actualizado")
+    expect(screen.getByLabelText("Teléfono *")).toHaveValue("1155556666")
+    // Nada que avisar: en pantalla estan los datos del companero.
+    expect(screen.queryByText(/otro usuario guardó esta ficha/i)).not.toBeInTheDocument()
+  })
+
+  it("no pisa lo que el operador escribio cuando otro usuario guarda la ficha", async () => {
+    // La otra mitad de la regla: si hay algo escrito, se conserva y el
+    // conflicto se avisa. Refrescar aca seria perder trabajo sin decirlo.
+    const { rerender } = render(
+      <ModalProvider>
+        <ClienteForm cliente={makeCliente()} open onClose={vi.fn()} onSuccess={vi.fn()} />
+      </ModalProvider>,
+    )
+    fireEvent.change(screen.getByLabelText("Nombre *"), {
+      target: { value: "Juan Perez (sin guardar)" },
+    })
+
+    rerender(
+      <ModalProvider>
+        <ClienteForm
+          cliente={makeCliente({
+            nombre: "Juan Perez Actualizado",
+            updatedAt: new Date("2026-01-03T10:00:00.000Z"),
+          })}
+          open
+          onClose={vi.fn()}
+          onSuccess={vi.fn()}
+        />
+      </ModalProvider>,
+    )
+
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Perez (sin guardar)")
+    expect(screen.getByText(/otro usuario guardó esta ficha/i)).toBeInTheDocument()
+  })
+
   it("descarta un borrador cuya forma ya no es la del formulario", () => {
     // DRAFT_SCHEMA_VERSION se mantiene a mano: si alguien cambia los campos de
     // este formulario sin tocarla, el borrador viejo (hasta 7 dias) pasa las

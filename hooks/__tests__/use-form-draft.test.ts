@@ -516,6 +516,38 @@ describe('useFormDraft', () => {
     expect(result.current.recordChangedWhileEditing).toBe(true)
   })
 
+  it('reports whether the form is holding work, for call sites that re-prefill', () => {
+    // Same condition the key effect branches on (interacted || restored),
+    // exposed so a call site that re-prefills from the server -- cliente-form
+    // when SWR brings a newer record -- decides from this signal instead of a
+    // second one of its own. A pristine form has nothing to protect: refreshing
+    // it to the colleague's data is safe, and NOT refreshing it means the next
+    // submit silently replaces that save.
+    const { result } = renderDraft({ nombre: '' }, { feature: 'cliente-form', recordId: 'cli-1' })
+    expect(result.current.hasUnsavedWork()).toBe(false)
+
+    userInteracts()
+    expect(result.current.hasUnsavedWork()).toBe(true)
+
+    act(() => {
+      result.current.clearDraft()
+    })
+    expect(result.current.hasUnsavedWork()).toBe(false)
+  })
+
+  it('reports a restored draft as work even before the operator touches anything', () => {
+    const key = 'draft:v2:cliente-form:org-1:user-1:edit:cli-1'
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({ version: 2, savedAt: Date.now(), data: { nombre: 'Mi borrador' } })
+    )
+
+    const { result } = renderDraft({ nombre: '' }, { feature: 'cliente-form', recordId: 'cli-1' })
+    expect(result.current.draft).toEqual({ nombre: 'Mi borrador' })
+    // Sigue en pantalla: re-prefillar encima lo borraria sin decirlo.
+    expect(result.current.hasUnsavedWork()).toBe(true)
+  })
+
   it('clears the conflict flag once the draft is discarded or submitted', () => {
     const key = 'draft:v2:cliente-form:org-1:user-1:edit:cli-1'
     const primerUpdatedAt = Date.now() - 120_000

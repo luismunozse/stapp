@@ -114,17 +114,18 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
   const tipoCliente = watch("tipoCliente")
   const tipoPrecio = watch("tipoPrecio")
 
-  // Depende del ID, no de la identidad del objeto: cliente-detalle.tsx pasa
-  // este prop desde SWR y cada revalidacion trae un objeto nuevo con los mismos
-  // datos. Con `cliente` en las dependencias, esa revalidacion reseteaba un
-  // dialog abierto a los valores del servidor y se llevaba puesto el borrador
-  // recien restaurado, mientras el aviso seguia diciendo que se restauro uno.
-  useEffect(() => {
-    if (open) {
-      reset(clienteFormDefaults(cliente))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, cliente?.id, reset])
+  /** Momento del ultimo guardado de la ficha, en ms. Es lo que se mueve cuando
+   *  OTRA persona la guarda: la identidad del objeto tambien cambia en cada
+   *  revalidacion de SWR sin que haya cambiado nada, y por eso no sirve como
+   *  disparador. */
+  const clienteUpdatedAtMs = cliente?.updatedAt ? new Date(cliente.updatedAt).getTime() : null
+  /** Con que (apertura, ficha) se hizo el ultimo prefill. Distingue "abri el
+   *  dialog / cambie de ficha" -- donde el prefill va siempre -- de "la misma
+   *  ficha se movio en el servidor", donde depende de lo que haya en pantalla. */
+  const prefillAplicadoRef = useRef<{ open: boolean; clienteId: string | null }>({
+    open: false,
+    clienteId: null,
+  })
 
   // --- Borrador local (useFormDraft) ----------------------------------------
   // recordId por cliente.id: nunca mezcla un borrador de alta con uno de
@@ -150,6 +151,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
     ready: draftReady,
     clearDraft,
     notifyChange,
+    hasUnsavedWork,
     recordChangedWhileEditing,
   } = useFormDraft<ClienteFormData>({
     feature: "cliente-form",
@@ -180,6 +182,43 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
     // entero). El hook lo descarta comparando contra este token.
     recordUpdatedAt: cliente?.updatedAt ?? null,
   })
+
+  // Prefill de la ficha. Declarado DESPUES del hook (necesita hasUnsavedWork) y
+  // ANTES del efecto que aplica el borrador, que es lo que le da al borrador la
+  // ultima palabra sobre estos mismos campos.
+  //
+  // No depende de la identidad de `cliente`: cliente-detalle.tsx pasa este prop
+  // desde SWR y cada revalidacion trae un objeto nuevo con los mismos datos.
+  // Con `cliente` en las dependencias, esa revalidacion reseteaba un dialog
+  // abierto a los valores del servidor y se llevaba puesto lo que el operador
+  // estaba escribiendo (o el borrador recien restaurado, mientras el aviso
+  // seguia diciendo que se restauro uno).
+  //
+  // Pero depender solo del `id` dejaba el otro agujero: un dialog abierto no se
+  // enteraba nunca de un guardado ajeno. Sobre un formulario intacto no hay
+  // nada del operador que proteger, y quedarse con la version vieja significa
+  // que "Guardar" manda el registro entero y pisa en silencio lo que guardo la
+  // otra persona -- sin aviso, porque el hook re-inicializa (justamente porque
+  // no hay trabajo del que hacerse cargo) y apaga recordChangedWhileEditing.
+  // Con algo escrito o un borrador en pantalla se conserva lo que hay y el
+  // conflicto lo avisa RecordChangedNotice.
+  useEffect(() => {
+    if (!open) {
+      prefillAplicadoRef.current = { open: false, clienteId: cliente?.id ?? null }
+      return
+    }
+    const anterior = prefillAplicadoRef.current
+    const mismaFichaYaAbierta = anterior.open && anterior.clienteId === (cliente?.id ?? null)
+    prefillAplicadoRef.current = { open: true, clienteId: cliente?.id ?? null }
+    // La misma ficha ya abierta solo puede haber llegado aca por un `updatedAt`
+    // nuevo: es el unico dato del registro en las dependencias.
+    if (mismaFichaYaAbierta && hasUnsavedWork()) return
+    reset(clienteFormDefaults(cliente))
+    // `cliente` entero se lee adentro, pero no va en las dependencias a
+    // proposito (ver arriba): las que disparan son la apertura, la ficha y su
+    // momento de guardado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, cliente?.id, clienteUpdatedAtMs, reset, hasUnsavedWork])
 
   // Los cambios de react-hook-form ya no re-renderizan el formulario, asi que
   // hay que avisarle al borrador por suscripcion.
