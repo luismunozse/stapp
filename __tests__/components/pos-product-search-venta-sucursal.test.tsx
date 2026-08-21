@@ -213,6 +213,43 @@ describe("PosProductSearch — scope=venta", () => {
       expect(screen.queryByText("Producto de Casa Central")).not.toBeInTheDocument()
     })
 
+    it("VS-6 — la revalidacion re-corre la BUSQUEDA ACTIVA, no solo el listado inicial", async () => {
+      // Con texto en el buscador, lo que se ve —y lo que se clickea al carrito—
+      // son `results`, no `recentProducts`. Refrescar solo el listado inicial
+      // deja el encabezado diciendo "Vendiendo desde: Sucursal Norte" sobre
+      // filas con el catalogo y el stock por deposito de Casa Central, y al
+      // clickear una, pos-terminal siembra `stockDisponible` con el de la
+      // sucursal vieja: la misma mentira que la revalidacion existe para
+      // evitar, una pantalla mas abajo.
+      let sucursalActiva = CASA_CENTRAL
+      let etiquetaCatalogo = "Casa Central"
+      const fetchMock = vi.fn(async (url: string) =>
+        okResponse(
+          sucursalActiva,
+          url.includes("q=iphone")
+            ? [{ id: "p-1", codigo: "C1", nombre: `iPhone de ${etiquetaCatalogo}`, precioVenta: 100, stock: 2 }]
+            : []
+        )
+      )
+      vi.stubGlobal("fetch", fetchMock)
+
+      renderConIndicador(vi.fn())
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+
+      fireEvent.change(screen.getByPlaceholderText(/Buscar producto/i), {
+        target: { value: "iphone" },
+      })
+      await waitFor(() => expect(screen.getByText("iPhone de Casa Central")).toBeInTheDocument())
+
+      // En otra pestaña cambiaron la sucursal activa (la cookie es compartida).
+      sucursalActiva = NORTE
+      etiquetaCatalogo = "Norte"
+      fireEvent(window, new Event("focus"))
+
+      await waitFor(() => expect(screen.getByText("iPhone de Norte")).toBeInTheDocument())
+      expect(screen.queryByText("iPhone de Casa Central")).not.toBeInTheDocument()
+    })
+
     it("VS-5 — la revalidacion pide el listado completo, no una fila suelta", async () => {
       const fetchMock = vi.fn().mockResolvedValue(okResponse(CASA_CENTRAL))
       vi.stubGlobal("fetch", fetchMock)

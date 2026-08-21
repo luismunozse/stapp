@@ -170,6 +170,10 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     const [loading, setLoading] = useState(false)
     const [recentProducts, setRecentProducts] = useState<InventarioResult[]>([])
     const [initialLoad, setInitialLoad] = useState(true)
+    // Se incrementa en cada revalidacion que trajo datos nuevos. La busqueda
+    // activa depende de este contador para volver a correr — ver el efecto del
+    // debounce mas abajo.
+    const [revalidacion, setRevalidacion] = useState(0)
     const [showManualForm, setShowManualForm] = useState(false)
     const [manualNombre, setManualNombre] = useState("")
     // Draft en string para permitir escribir decimales (coma es-AR) sin que el
@@ -237,6 +241,14 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     // depósito de la sucursal anterior, y esas filas se pueden clickear al
     // carrito. El listado ya venía en el mismo response: descartarlo no ahorra
     // un request, solo deja la mitad de la pantalla desactualizada.
+    //
+    // Con texto en el buscador la grilla visible NO es `recentProducts` sino
+    // `results`, que sale de otro request: por eso la revalidación además
+    // incrementa `revalidacion`, y el efecto del debounce vuelve a correr la
+    // búsqueda activa contra la sucursal nueva. Se re-consulta en vez de
+    // vaciar `results` porque vaciar cambia una grilla desactualizada por una
+    // vacía que contradice el "N resultados" de arriba y obliga a re-tipear;
+    // re-consultar deja un solo lugar dueño de qué significa `results`.
     useEffect(() => {
       let cancelado = false
       // `focus` y `visibilitychange` llegan juntos al volver a la pestaña (y
@@ -261,6 +273,9 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
             setRecentProducts(data)
           }
           onVentaSucursal?.(readVentaSucursalHeaders(res))
+          // Solo con una revalidación que trajo datos: una que falló no tiene
+          // por qué hacer parpadear la búsqueda activa.
+          setRevalidacion((n) => n + 1)
         } catch {
           // Sin red se conserva lo último resuelto.
         }
@@ -276,28 +291,38 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    // Debounced search
+    // Debounced search.
+    //
+    // Depende también de `revalidacion`: al volver a la pestaña, la sucursal
+    // activa puede ser otra, y los resultados en pantalla son los de la
+    // anterior. `cancelado` hace que solo escriba la corrida vigente — sin él,
+    // el request de la sucursal vieja que quedó en vuelo puede llegar último y
+    // pisar el de la nueva.
     useEffect(() => {
       if (!query.trim()) {
         setResults([])
         return
       }
 
+      let cancelado = false
       const timer = setTimeout(async () => {
         setLoading(true)
         try {
           const res = await fetch(`/api/inventario/search?q=${encodeURIComponent(query)}&limit=20&scope=venta`)
           const data = await res.json()
-          setResults(Array.isArray(data) ? data : [])
+          if (!cancelado) setResults(Array.isArray(data) ? data : [])
         } catch {
-          setResults([])
+          if (!cancelado) setResults([])
         } finally {
-          setLoading(false)
+          if (!cancelado) setLoading(false)
         }
       }, 200)
 
-      return () => clearTimeout(timer)
-    }, [query])
+      return () => {
+        cancelado = true
+        clearTimeout(timer)
+      }
+    }, [query, revalidacion])
 
     const handleAdd = useCallback((product: InventarioResult) => {
       onAddProduct(product)
