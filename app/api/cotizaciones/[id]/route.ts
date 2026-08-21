@@ -443,8 +443,18 @@ export async function PUT(
       // disagreeing on cost) declines to guess.
       const canViewCosts = canViewCotizacionCosts(role)
       type StoredItemCost = { costoUnitario: number | null; inventarioId: string | null }
+      // El separador se escribe como ESCAPE, nunca como el carácter literal.
+      // Un NUL crudo en el fuente hace que ripgrep clasifique el archivo como
+      // binario: informa "binary file matches" y devuelve CERO líneas, así que
+      // la ruta entera desaparece de toda búsqueda del proyecto. Y `git diff`
+      // pinta el NUL como un espacio común, así que quien revisa el PR lee un
+      // separador de espacio — que sería inseguro, porque las descripciones
+      // tienen espacios; cualquier editor o formateador que limpie caracteres
+      // de control convertiría la clave segura en esa otra, en silencio.
+      // Se elige NUL justamente porque no puede aparecer en una descripción.
+      // Guard en __tests__/source-nul-bytes.test.ts.
       const naturalKey = (descripcion: string | null, inventarioId: string | null) =>
-        `${(descripcion || "").trim().toLowerCase()} ${inventarioId ?? ""}`
+        `${(descripcion || "").trim().toLowerCase()}\u0000${inventarioId ?? ""}`
       const existingItemsById = new Map<string, StoredItemCost>()
       // null marks an ambiguous key: several rows share it and disagree.
       const existingItemsByNaturalKey = new Map<string, StoredItemCost | null>()
