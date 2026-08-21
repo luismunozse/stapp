@@ -536,4 +536,43 @@ describe("GET /api/inventario/search — scope=venta (POS opt-in)", () => {
     expect(invChain.select).not.toHaveBeenCalled()
     expect(res.headers.get("X-Venta-Sucursal-Id")).toBe("")
   })
+
+  it.each(["VENDEDOR", "TECNICO"])(
+    "scope=venta con %s cuya sucursal no tiene depósito principal: fail-closed, NO el agregado de la org",
+    async (role) => {
+      vi.mocked(auth).mockResolvedValue({
+        user: {
+          id: "usuario-suc-B",
+          organizationId: "org-1",
+          role,
+          sucursalId: "suc-B",
+          email: "u@u.com",
+        },
+        expires: new Date(Date.now() + 86400000).toISOString(),
+      } as any)
+      mockNoCookie()
+
+      const sucursalesChain = makeSucursalesChain("suc-principal", "Casa Central")
+      const depositosChain = makeDepositosChain(null) // suc-B misconfigured
+      const invChain = createChainMock([
+        { id: "i9", codigo: "C9", nombre: "Teclado", stock: 7, stock_reservado: 0,
+          precio_venta: 30, precio_compra: 10, trackea_series: false },
+      ])
+      mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain, inventario: invChain })
+
+      const res = await GET(
+        createGetRequest("http://localhost:3000/api/inventario/search?q=teclado&scope=venta&ventaInfo=true")
+      )
+      const { status, body } = await parseResponse(res)
+
+      expect(status).toBe(200)
+      // The org-wide aggregate counts units sitting in OTHER branches, and it
+      // leaks precio_compra too. A misconfigured branch must read as "nothing
+      // here", never as another branch's inventory.
+      expect(body).toEqual([])
+      expect(invChain.select).not.toHaveBeenCalled()
+      expect(res.headers.get("X-Venta-Sucursal-Id")).toBe("")
+      expect(res.headers.get("X-Venta-Sucursal-Nombre")).toBe("")
+    }
+  )
 })

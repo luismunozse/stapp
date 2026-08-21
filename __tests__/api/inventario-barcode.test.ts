@@ -256,4 +256,43 @@ describe("GET /api/inventario/barcode", () => {
     // Neither the aggregate (10) nor the principal sucursal's deposito (3).
     expect(body.item.stock).toBe(0)
   })
+
+  it.each(["VENDEDOR", "TECNICO"])(
+    "scope=venta con %s cuya sucursal no tiene depósito principal: fail-closed (stock 0), NO el agregado",
+    async (role) => {
+      vi.mocked(auth).mockResolvedValue({
+        user: {
+          id: "usuario-suc-B",
+          organizationId: "org-1",
+          role,
+          sucursalId: "suc-B",
+          email: "u@u.com",
+        },
+        expires: new Date(Date.now() + 86400000).toISOString(),
+      } as any)
+      mockNoCookie()
+
+      const invChain = makeInventarioChain([ITEM_ROW]) // ITEM_ROW.stock === 10 (aggregate)
+      const sucursalesChain: any = {}
+      for (const m of ["select", "eq", "is"]) sucursalesChain[m] = vi.fn().mockReturnValue(sucursalesChain)
+      sucursalesChain.single = vi.fn().mockResolvedValue({ data: { id: "suc-principal" }, error: null })
+      const depositosChain = makeDepositosChain(null) // suc-B misconfigured
+
+      vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+        if (table === "sucursales") return sucursalesChain as any
+        if (table === "depositos") return depositosChain as any
+        if (table === "inventario") return invChain as any
+        return { then: (r: any) => r({ data: null, error: { message: `No mock for: ${table}` } }) } as any
+      })
+
+      const res = await GET(createGetRequest("http://localhost:3000/api/inventario/barcode?code=7890001234567&scope=venta"))
+      const { status, body } = await parseResponse(res)
+
+      expect(status).toBe(200)
+      expect(body.found).toBe(true)
+      // Drain mode widens the read only for an org-wide role. A branch-scoped
+      // one would otherwise be told it can sell another branch's units.
+      expect(body.item.stock).toBe(0)
+    }
+  )
 })

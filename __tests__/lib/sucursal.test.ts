@@ -140,6 +140,7 @@ describe("resolverDestinoVenta", () => {
       sucursalId: "suc-principal",
       depositoId: "dep-principal",
       unassignedSucursal: false,
+      branchScoped: false,
     })
   })
 
@@ -182,10 +183,11 @@ describe("resolverDestinoVenta", () => {
       sucursalId: "suc-principal",
       depositoId: null,
       unassignedSucursal: false,
+      branchScoped: false,
     })
   })
 
-  it("DV-5 — org sin sucursal principal: sucursalId y depositoId null", async () => {
+  it("DV-5 — org sin sucursal principal y ADMIN en 'todas': sucursalId y depositoId null", async () => {
     mockSucursalesYDepositos({ principalSucursalId: null })
 
     const result = await resolverDestinoVenta({
@@ -194,7 +196,12 @@ describe("resolverDestinoVenta", () => {
       userSucursalId: null,
     })
 
-    expect(result).toEqual({ sucursalId: null, depositoId: null, unassignedSucursal: false })
+    expect(result).toEqual({
+      sucursalId: null,
+      depositoId: null,
+      unassignedSucursal: false,
+      branchScoped: false,
+    })
   })
 
   it("DV-6 — no-ADMIN sin sucursal asignada: marca unassignedSucursal, pero la escritura sigue cayendo a la principal", async () => {
@@ -220,7 +227,12 @@ describe("resolverDestinoVenta", () => {
       userSucursalId: "suc-B",
     })
 
-    expect(result).toEqual({ sucursalId: "suc-B", depositoId: "dep-B", unassignedSucursal: false })
+    expect(result).toEqual({
+      sucursalId: "suc-B",
+      depositoId: "dep-B",
+      unassignedSucursal: false,
+      branchScoped: true,
+    })
   })
 
   it("DV-8 — ADMIN sin sucursal asignada: NO es unassigned (asimetria ADMIN / no-ADMIN)", async () => {
@@ -234,6 +246,36 @@ describe("resolverDestinoVenta", () => {
 
     expect(result.unassignedSucursal).toBe(false)
   })
+
+  // `branchScoped` is what tells the read derivation whether widening the scope
+  // is legitimate: an ADMIN is org-wide by definition, a VENDEDOR/TECNICO is
+  // pinned to one branch and must never read another branch's stock.
+  it.each(["VENDEDOR", "TECNICO"])(
+    "DV-9 — %s: branchScoped true (el rol esta atado a una sucursal)",
+    async (role) => {
+      mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-B" })
+
+      const result = await resolverDestinoVenta({
+        role,
+        organizationId: "org-1",
+        userSucursalId: "suc-B",
+      })
+
+      expect(result.branchScoped).toBe(true)
+    }
+  )
+
+  it("DV-10 — ADMIN: branchScoped false (es org-wide por definicion)", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    const result = await resolverDestinoVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      userSucursalId: null,
+    })
+
+    expect(result.branchScoped).toBe(false)
+  })
 })
 
 describe("derivarLecturaVenta", () => {
@@ -242,6 +284,7 @@ describe("derivarLecturaVenta", () => {
       sucursalId: "suc-principal",
       depositoId: "dep-principal",
       unassignedSucursal: true,
+      branchScoped: true,
     })
 
     expect(lectura).toEqual({
@@ -257,6 +300,7 @@ describe("derivarLecturaVenta", () => {
       sucursalId: "suc-A",
       depositoId: "dep-A",
       unassignedSucursal: false,
+      branchScoped: false,
     })
 
     expect(lectura).toEqual({
@@ -267,11 +311,12 @@ describe("derivarLecturaVenta", () => {
     })
   })
 
-  it("LV-3 — destino sin deposito (modo drenaje): lectura agregada org-wide", () => {
+  it("LV-3 — ADMIN sin deposito (modo drenaje): lectura agregada org-wide", () => {
     const lectura = derivarLecturaVenta({
       sucursalId: "suc-A",
       depositoId: null,
       unassignedSucursal: false,
+      branchScoped: false,
     })
 
     expect(lectura.verTodas).toBe(true)
@@ -282,6 +327,7 @@ describe("derivarLecturaVenta", () => {
       sucursalId: "suc-A",
       depositoId: null,
       unassignedSucursal: false,
+      branchScoped: false,
     })
 
     // descontar_stock_deposito(..., strict=false) puede tomar unidades del
@@ -289,6 +335,42 @@ describe("derivarLecturaVenta", () => {
     // seria mentira. El escopeo de la lectura sigue apuntando a la sucursal.
     expect(lectura.ventaSucursalId).toBeNull()
     expect(lectura.sucursalId).toBe("suc-A")
+  })
+
+  it("LV-5 — rol atado a una sucursal en modo drenaje: fail-closed, NO ensancha a toda la org", () => {
+    // A VENDEDOR/TECNICO whose sucursal has no principal deposito is a
+    // configuration gap. Widening the read to the org aggregate would show —
+    // and let them sell — units physically sitting in another branch, so the
+    // read stays closed exactly as it was before scope=venta existed.
+    const lectura = derivarLecturaVenta({
+      sucursalId: "suc-B",
+      depositoId: null,
+      unassignedSucursal: false,
+      branchScoped: true,
+    })
+
+    expect(lectura).toEqual({
+      sucursalId: SUCURSAL_NINGUNA,
+      depositoId: null,
+      verTodas: false,
+      ventaSucursalId: null,
+    })
+  })
+
+  it("LV-6 — rol atado a una sucursal CON deposito: lectura escopeada normal (el fail-closed es solo el drenaje)", () => {
+    const lectura = derivarLecturaVenta({
+      sucursalId: "suc-B",
+      depositoId: "dep-B",
+      unassignedSucursal: false,
+      branchScoped: true,
+    })
+
+    expect(lectura).toEqual({
+      sucursalId: "suc-B",
+      depositoId: "dep-B",
+      verTodas: false,
+      ventaSucursalId: "suc-B",
+    })
   })
 })
 

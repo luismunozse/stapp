@@ -56,7 +56,7 @@ describe("POST /api/inventario/check-stock", () => {
 
   it("scope=venta: ignora verTodas (mocked true) y usa el depósito resuelto por resolverDestinoVentaCacheado", async () => {
     mockAuthSuccess({ role: "ADMIN" }) // resolveSucursalLectura sigue mockeado en "todas"
-    vi.mocked(resolverDestinoVentaCacheado).mockResolvedValue({ sucursalId: "suc-1", depositoId: "dep-1", unassignedSucursal: false })
+    vi.mocked(resolverDestinoVentaCacheado).mockResolvedValue({ sucursalId: "suc-1", depositoId: "dep-1", unassignedSucursal: false, branchScoped: false })
     mockSupabaseFrom({
       inventario_depositos: createChainMock([{ inventario_id: "a", stock: 2 }]),
     })
@@ -79,7 +79,7 @@ describe("POST /api/inventario/check-stock", () => {
     mockAuthSuccess({ role: "ADMIN" })
     // Sucursal resolved but no principal deposito: the write path passes
     // p_deposito_id = null and drains org-wide, so the sale WOULD succeed.
-    vi.mocked(resolverDestinoVentaCacheado).mockResolvedValue({ sucursalId: "suc-1", depositoId: null, unassignedSucursal: false })
+    vi.mocked(resolverDestinoVentaCacheado).mockResolvedValue({ sucursalId: "suc-1", depositoId: null, unassignedSucursal: false, branchScoped: false })
     mockSupabaseFrom({
       inventario: createChainMock([{ id: "a", stock: 4 }]),
     })
@@ -105,6 +105,7 @@ describe("POST /api/inventario/check-stock", () => {
       sucursalId: "suc-principal",
       depositoId: "dep-principal",
       unassignedSucursal: true,
+      branchScoped: true,
     })
     const invChain = createChainMock([{ id: "a", stock: 9 }])
     const depChain = createChainMock([{ inventario_id: "a", stock: 6 }])
@@ -124,4 +125,33 @@ describe("POST /api/inventario/check-stock", () => {
     expect(invChain.select).not.toHaveBeenCalled()
     expect(depChain.select).not.toHaveBeenCalled()
   })
+
+  it.each(["VENDEDOR", "TECNICO"])(
+    "scope=venta con %s cuya sucursal no tiene depósito: fail-closed (todo en 0), NO el agregado de la org",
+    async (role) => {
+      mockAuthSuccess({ role })
+      vi.mocked(resolverDestinoVentaCacheado).mockResolvedValue({
+        sucursalId: "suc-B",
+        depositoId: null,
+        unassignedSucursal: false,
+        branchScoped: true,
+      })
+      const invChain = createChainMock([{ id: "a", stock: 9 }])
+      mockSupabaseFrom({ inventario: invChain })
+
+      const res = await POST(
+        new Request("http://localhost:3000/api/inventario/check-stock?scope=venta", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: ["a", "b"] }),
+        })
+      )
+      const { status, body } = await parseResponse(res)
+
+      expect(status).toBe(200)
+      // The aggregate would green-light a checkout backed by another branch's units.
+      expect(body.stock).toEqual({ a: 0, b: 0 })
+      expect(invChain.select).not.toHaveBeenCalled()
+    }
+  )
 })

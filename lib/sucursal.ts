@@ -150,6 +150,12 @@ export interface DestinoVenta {
    * (see `derivarLecturaVenta`); writes keep the fallback.
    */
   unassignedSucursal: boolean
+  /**
+   * True when the caller's role is pinned to a single branch (VENDEDOR/TECNICO)
+   * rather than being org-wide (ADMIN). Decides whether widening a read past
+   * that branch is ever legitimate — see `derivarLecturaVenta`.
+   */
+  branchScoped: boolean
 }
 
 /**
@@ -158,7 +164,12 @@ export interface DestinoVenta {
  * path (`sucursalParaEscritura` + `getDepositoDeSucursal`). Exposed as a
  * single helper so the ventas write route and the POS read endpoints
  * (search/barcode/check-stock, via their opt-in `scope=venta` query param)
- * can never drift apart on which sucursal/deposito a sale actually uses.
+ * do not drift apart on which sucursal/deposito a sale actually uses.
+ *
+ * The guarantee reaches exactly as far as `scope=venta` does — today, POS. The
+ * other sale surfaces (venta-form, venta-edit-form, cotizaciones item-row) POST
+ * to /api/ventas but still read stock unscoped, so the original read/write
+ * drift is unchanged there.
  *
  * ADMIN vs non-ADMIN asymmetry, deliberate: for an ADMIN the "no sucursal
  * selected" state means "all branches", so falling back to the principal
@@ -173,10 +184,11 @@ export async function resolverDestinoVenta(params: {
   organizationId: string
   userSucursalId: string | null
 }): Promise<DestinoVenta> {
-  const unassignedSucursal = params.role !== "ADMIN" && !params.userSucursalId
+  const branchScoped = params.role !== "ADMIN"
+  const unassignedSucursal = branchScoped && !params.userSucursalId
   const sucursalId = await sucursalParaEscritura(params)
   if (!sucursalId) {
-    return { sucursalId: null, depositoId: null, unassignedSucursal }
+    return { sucursalId: null, depositoId: null, unassignedSucursal, branchScoped }
   }
 
   const depositoId = await getDepositoDeSucursal(params.organizationId, sucursalId)
@@ -186,7 +198,7 @@ export async function resolverDestinoVenta(params: {
     )
   }
 
-  return { sucursalId, depositoId, unassignedSucursal }
+  return { sucursalId, depositoId, unassignedSucursal, branchScoped }
 }
 
 export interface LecturaVenta {
@@ -211,9 +223,16 @@ export interface LecturaVenta {
  *
  *  - No assigned sucursal (non-ADMIN): fail-closed — sentinel sucursal, no
  *    deposito and no aggregate, so the caller sees nothing.
- *  - No concrete deposito: the write path passes p_deposito_id = null and
- *    drains org-wide, so the read must show the org-wide aggregate rather
- *    than hiding stock a sale could actually decrement.
+ *  - No concrete deposito, ORG-WIDE caller (ADMIN): the write path passes
+ *    p_deposito_id = null and drains org-wide, so the read shows the org-wide
+ *    aggregate rather than hiding stock a sale could actually decrement.
+ *  - No concrete deposito, BRANCH-SCOPED caller (VENDEDOR/TECNICO):
+ *    fail-closed. The aggregate counts units physically held by OTHER branches
+ *    (and carries precio_compra), so widening here would hand a branch user
+ *    another branch's inventory to browse and sell — over a configuration gap
+ *    they did not cause and cannot see. Reading nothing is what this state did
+ *    before scope=venta existed, and it surfaces as "nothing here, fix the
+ *    config" instead of silently selling someone else's stock.
  *  - Otherwise: scope the read to that deposito.
  *
  * On `ventaSucursalId` in drain mode (deliberate asymmetry with `sucursalId`):
@@ -228,14 +247,18 @@ export interface LecturaVenta {
  * operator about where their inventory went.
  */
 export function derivarLecturaVenta(destino: DestinoVenta): LecturaVenta {
-  if (destino.unassignedSucursal) {
-    return {
-      sucursalId: SUCURSAL_NINGUNA,
-      depositoId: null,
-      verTodas: false,
-      ventaSucursalId: null,
-    }
+  const failClosed: LecturaVenta = {
+    sucursalId: SUCURSAL_NINGUNA,
+    depositoId: null,
+    verTodas: false,
+    ventaSucursalId: null,
   }
+
+  if (destino.unassignedSucursal) return failClosed
+
+  // Drain mode widens the read to the whole org. That is only ever acceptable
+  // for a role that is legitimately org-wide.
+  if (!destino.depositoId && destino.branchScoped) return failClosed
 
   return {
     sucursalId: destino.sucursalId,
