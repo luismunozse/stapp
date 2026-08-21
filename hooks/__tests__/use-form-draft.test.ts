@@ -1128,4 +1128,59 @@ describe('useFormDraft', () => {
 
     setItemSpy.mockRestore()
   })
+
+  it('fails silently when the caller snapshot throws', () => {
+    // Todos los caminos de falla de este hook estan tragados a proposito: un
+    // borrador es best-effort y no puede romper el formulario. La LECTURA del
+    // snapshot era la excepcion -- corria fuera del try -- y las tres rutas que
+    // la disparan son las peores: el timer del debounce, la limpieza del
+    // desmontaje y el handler de `pagehide`. Una excepcion ahi no deja un
+    // borrador sin guardar, deja el arbol entero desmontado y la pantalla en
+    // blanco.
+    let explota = false
+    const { result, unmount } = renderHook(() =>
+      useFormDraft({
+        feature: 'cliente-form',
+        debounceMs: 1000,
+        getValue: () => {
+          if (explota) throw new Error('estado a medio desmontar')
+          return { nombre: 'Ana' }
+        },
+      })
+    )
+    expect(result.current.ready).toBe(true)
+    userInteracts()
+    explota = true
+
+    // 1. El timer del debounce.
+    act(() => {
+      result.current.notifyChange()
+    })
+    expect(() => {
+      act(() => {
+        vi.advanceTimersByTime(2000)
+      })
+    }).not.toThrow()
+
+    // 2. `pagehide` -- la unica ruta que corre cuando el navegador mata el
+    //    proceso, o sea la que existe justamente para no perder la ultima
+    //    ventana de debounce.
+    act(() => {
+      result.current.notifyChange()
+    })
+    expect(() => {
+      act(() => {
+        window.dispatchEvent(new Event('pagehide'))
+      })
+    }).not.toThrow()
+
+    // 3. La limpieza del desmontaje.
+    act(() => {
+      result.current.notifyChange()
+    })
+    expect(() => unmount()).not.toThrow()
+
+    // Un snapshot que no se pudo leer no escribe nada.
+    expect(window.localStorage.length).toBe(0)
+  })
 })

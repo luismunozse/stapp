@@ -302,12 +302,24 @@ function toMillis(value?: string | number | Date | null): number | null {
   return Number.isFinite(ms) ? ms : null
 }
 
-function safeStringify(value: unknown): string | null {
+/**
+ * Reads the caller's snapshot and serializes it, or returns null if either
+ * step fails.
+ *
+ * The READ is inside the try on purpose. `getValue()` is the caller's own code
+ * (react-hook-form's `getValues()` plus whatever component state the form
+ * projects), and the three places this runs from are the unmount cleanup, the
+ * key effect and the `pagehide` handler: an exception there does not lose a
+ * draft, it tears the whole tree down and leaves the screen blank. Every other
+ * failure path in this hook is swallowed for the same reason -- a draft is
+ * best-effort and must never break the form it is protecting.
+ */
+function safeSnapshot(read: () => unknown): string | null {
   try {
-    const serialized = JSON.stringify(value)
+    const serialized = JSON.stringify(read())
     return typeof serialized === "string" ? serialized : null
   } catch {
-    // Cyclic structure / non-serializable value -- a draft is best-effort.
+    // Snapshot that throws / cyclic structure / non-serializable value.
     return null
   }
 }
@@ -523,7 +535,7 @@ export function useFormDraft<T>({
     const key = keyRef.current
     if (typeof window === "undefined" || !key) return
 
-    const serialized = safeStringify(getValueRef.current())
+    const serialized = safeSnapshot(() => getValueRef.current())
     if (serialized === null) return
 
     if (!interactedRef.current) {
@@ -664,7 +676,7 @@ export function useFormDraft<T>({
     lastSavedRef.current = null
     baselineStaleRef.current = false
     setRecordChangedWhileEditing(false)
-    baselineRef.current = safeStringify(getValueRef.current())
+    baselineRef.current = safeSnapshot(() => getValueRef.current())
     const restored = readDraft<T>(key, recordUpdatedAtMs, validateRef.current)
     restoredRef.current = restored !== null
     setDraft(restored)
@@ -680,7 +692,7 @@ export function useFormDraft<T>({
     // typed after the clear is a real edit and must not become the baseline.
     if (baselineStaleRef.current && !interactedRef.current) {
       baselineStaleRef.current = false
-      baselineRef.current = safeStringify(getValueRef.current())
+      baselineRef.current = safeSnapshot(() => getValueRef.current())
     }
     armSave()
   })
@@ -734,7 +746,7 @@ export function useFormDraft<T>({
     // saved a draft of the blank defaults and the next open announced a
     // restored draft with nothing in it. Provisional value now, re-taken on
     // the commit that carries the reset (see the effect above).
-    baselineRef.current = safeStringify(getValueRef.current())
+    baselineRef.current = safeSnapshot(() => getValueRef.current())
     baselineStaleRef.current = true
     setDraft(null)
     const key = keyRef.current
