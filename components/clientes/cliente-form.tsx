@@ -150,7 +150,18 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
   // dialog esta abierto (el componente queda montado con `open=false` entre
   // usos) para no seguir grabando ni restaurando en segundo plano.
   const recordId = cliente?.id ?? null
-  const [draftNoticeVisible, setDraftNoticeVisible] = useState(false)
+  /** El borrador que este formulario efectivamente aplico. Es lo que se usa
+   *  para DERIVAR el aviso de "se restauró un borrador" (ver
+   *  `draftNoticeVisible`, debajo del hook) en vez de tener un booleano aparte:
+   *  ese booleano tenia un `set(true)` por cada camino de restauracion y un
+   *  `set(false)` por cada camino que da de baja el borrador. Aca lo salvaba
+   *  que TODOS los que montan este dialog lo cierran al guardar (el `!open` de
+   *  abajo bajaba el aviso), o sea que dependia de una decision de los call
+   *  sites: el primero que dejara el dialog abierto despues de un guardado
+   *  ofline/exitoso se quedaba con el cartel colgado sobre un borrador que ya
+   *  no existe. Derivarlo lo saca de esa dependencia -- mismo criterio que
+   *  orden-form.tsx y recepcion-form.tsx. */
+  const [appliedDraft, setAppliedDraft] = useState<ClienteDraftValue | null>(null)
   /** El borrador ya aplicado, POR IDENTIDAD (mismo latch que orden-form.tsx y
    *  recepcion-form.tsx). Una marca por scope (`recordId`) se adelanta al hook:
    *  el scope cambia en el render y `draft` recien en el commit siguiente, asi
@@ -206,6 +217,17 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
     recordUpdatedAt: cliente?.updatedAt ?? null,
   })
 
+  /** El aviso no puede sobrevivir al borrador que anuncia: sale solo mientras
+   *  el borrador que el hook tiene AHORA es exactamente el que este formulario
+   *  aplico. `clearDraft` pone `draft` en null en todos los caminos que lo dan
+   *  de baja (guardado, encolado offline, "Descartar"), asi que ninguno de
+   *  ellos -- ni los que todavia no existen -- puede dejar el cartel colgado
+   *  sin acordarse de apagarlo. Con el dialog cerrado el hook queda en pausa y
+   *  conserva `draft`, por eso el efecto de abajo suelta el borrador aplicado
+   *  al cerrar: sin eso el aviso reaparecia al reabrir, antes de que el hook
+   *  volviera a leer. */
+  const draftNoticeVisible = draft !== null && appliedDraft === draft
+
   // Prefill de la ficha. Declarado DESPUES del hook (necesita hasUnsavedWork) y
   // ANTES del efecto que aplica el borrador, que es lo que le da al borrador la
   // ultima palabra sobre estos mismos campos.
@@ -256,7 +278,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
       // ficha anterior mientras el hook esta pausado, y limpiarlo dejaba que se
       // aplicara ese al reabrir sobre otra ficha. La identidad ya cubre el
       // reabrir: la re-lectura devuelve un objeto nuevo.
-      setDraftNoticeVisible(false)
+      setAppliedDraft(null)
       return
     }
     // El latch se toca DESPUES de saber que hay algo que aplicar. Marcarlo
@@ -274,14 +296,14 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
       // cual los pondria en blanco, y el PUT de edicion manda el registro
       // entero: el documento del cliente se borraria de la ficha.
       reset({ ...clienteFormDefaults(cliente), ...draft })
-      setDraftNoticeVisible(true)
+      setAppliedDraft(draft)
     } catch (error) {
       // Un borrador de otra forma (cambio de campos sin bump de version) no
       // puede tumbar el dialog: la excepcion correria dentro de un efecto y se
       // llevaria el arbol entero.
       console.error("Borrador de cliente invalido, se descarta:", error)
       clearDraft()
-      setDraftNoticeVisible(false)
+      setAppliedDraft(null)
       reset(clienteFormDefaults(cliente))
     }
     // `cliente` se lee adentro (base del prefill y rescate del catch) pero no va
@@ -292,8 +314,9 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
   }, [open, draftReady, draft, reset, clearDraft])
 
   const discardDraft = () => {
+    // El aviso se apaga solo: `clearDraft` deja `draft` en null en este mismo
+    // commit y de ahi se deriva (ver draftNoticeVisible).
     clearDraft()
-    setDraftNoticeVisible(false)
     reset(clienteFormDefaults(cliente))
   }
 

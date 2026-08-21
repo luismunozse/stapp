@@ -289,7 +289,16 @@ export function RecepcionForm() {
   // Siempre "new record" (esta pantalla no tiene modo edicion), asi que no
   // hace falta recordId. La firma y las fotos de cada equipo quedan afuera
   // del snapshot: son datos binarios, no formularios recuperables.
-  const [draftNoticeVisible, setDraftNoticeVisible] = useState(false)
+  /** El borrador que este formulario efectivamente aplico. Es lo que se usa
+   *  para DERIVAR el aviso de "se restauró un borrador" (ver
+   *  `draftNoticeVisible`, debajo del hook) en vez de tener un booleano aparte:
+   *  ese booleano tenia un `set(true)` por cada camino de restauracion y un
+   *  `set(false)` por cada camino que da de baja el borrador, y alcanzaba con
+   *  que uno solo se olvidara de apagarlo para dejar el cartel colgado. Esta
+   *  pantalla tenia justo ese caso: el submit encolado offline borra el
+   *  borrador y corta ahi, sin resetear ni navegar, asi que el aviso quedaba
+   *  sobre un formulario lleno cuyo borrador ya no existe. */
+  const [appliedDraft, setAppliedDraft] = useState<RecepcionDraftValue | null>(null)
   /** El borrador ya aplicado, POR IDENTIDAD (mismo latch que orden-form.tsx y
    *  cliente-form.tsx). Cada re-lectura del hook devuelve un objeto nuevo y
    *  cada re-render devuelve el mismo, asi que es la unica marca que esta
@@ -334,6 +343,15 @@ export function RecepcionForm() {
     }),
   })
 
+  /** El aviso no puede sobrevivir al borrador que anuncia: sale solo mientras
+   *  el borrador que el hook tiene AHORA es exactamente el que este formulario
+   *  aplico. `clearDraft` pone `draft` en null en todos los caminos que lo dan
+   *  de baja (submit, encolado offline, "Descartar") y una key nueva sin nada
+   *  guardado lo deja en null tambien, asi que ninguno de ellos -- ni los que
+   *  todavia no existen -- puede dejar el cartel colgado sin acordarse de
+   *  apagarlo. */
+  const draftNoticeVisible = draft !== null && appliedDraft === draft
+
   // Los cambios de react-hook-form ya no re-renderizan el formulario, asi que
   // hay que avisarle al borrador por suscripcion.
   useEffect(() => {
@@ -374,7 +392,7 @@ export function RecepcionForm() {
       // recepcion conforme sin nada que la respalde.
       setTerminosAceptados(false)
       setSelectedCliente(draft.selectedCliente ?? null)
-      setDraftNoticeVisible(true)
+      setAppliedDraft(draft)
     } catch (error) {
       // Ultima red, ademas del `validate` del hook: un borrador de otra forma
       // que igual pase la validacion no puede llevarse puesta la pantalla. Una
@@ -382,15 +400,16 @@ export function RecepcionForm() {
       // entero y deja la recepcion en blanco, sin salida.
       console.error("Borrador de recepcion invalido, se descarta:", error)
       clearDraft()
-      setDraftNoticeVisible(false)
+      setAppliedDraft(null)
       reset(recepcionFormDefaults())
       setSideState([equipoSideStateVacio(), equipoSideStateVacio()])
     }
   }, [draftReady, draft, reset, clearDraft])
 
   const discardDraft = () => {
+    // El aviso se apaga solo: `clearDraft` deja `draft` en null en este mismo
+    // commit y de ahi se deriva (ver draftNoticeVisible).
     clearDraft()
-    setDraftNoticeVisible(false)
     reset(recepcionFormDefaults())
     setSideState([equipoSideStateVacio(), equipoSideStateVacio()])
     setTerminosAceptados(false)

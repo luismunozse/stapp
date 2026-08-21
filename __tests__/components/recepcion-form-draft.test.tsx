@@ -567,6 +567,53 @@ describe("RecepcionForm — descartar un borrador", () => {
     expect(requests[0].body.firmaCliente).toBeUndefined()
     expect(requests[0].body.firmaMime).toBeUndefined()
   })
+
+  it("baja el aviso cuando la recepcion restaurada se encola offline", async () => {
+    // El encolado offline borra el borrador (clearDraft) y corta ahi: no
+    // resetea el formulario ni navega a ningun lado, asi que la pantalla se
+    // queda tal cual, llena, con el aviso diciendo que hay un borrador
+    // restaurado que ya no existe. "Descartar" a esa altura limpia una
+    // recepcion que ya se mando.
+    const equipo = (dispositivo: string) => ({
+      dispositivo,
+      tipoDispositivo: "CELULAR",
+      marca: "",
+      color: "",
+      imei: "",
+      problemaReportado: "No enciende",
+    })
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        version: 3,
+        savedAt: Date.now(),
+        data: {
+          form: {
+            clienteId: "cli-1",
+            telefonoContacto: "",
+            observaciones: "",
+            equipos: [equipo("Equipo 1 restaurado"), equipo("Equipo 2 restaurado")],
+          },
+          sideState: [
+            { accesoriosSeleccionados: [], otroAccesorio: "", camposExtraValues: {} },
+            { accesoriosSeleccionados: [], otroAccesorio: "", camposExtraValues: {} },
+          ],
+          selectedCliente: { nombre: "Cliente X", telefono: "1100000000" },
+        },
+      }),
+    )
+
+    await renderForm()
+    expect(screen.getByText(/se restauró un borrador no guardado/i)).toBeInTheDocument()
+
+    // La conformidad no se restaura (la firma que la respalda no se persiste).
+    fireEvent.click(screen.getByRole("checkbox"))
+    fireEvent.click(screen.getByRole("button", { name: /Crear recepci/i }))
+
+    await waitFor(() => expect(requests).toHaveLength(1))
+    await waitFor(() => expect(window.localStorage.getItem(DRAFT_KEY)).toBeNull())
+    expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
+  })
 })
 
 /**

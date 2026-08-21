@@ -299,7 +299,17 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   // El `scope` separa los borradores por origen: una orden abandonada desde un
   // turno (o desde un deep-link ?clienteId=) no tiene por que reaparecer en el
   // alta de mostrador siguiente, que es otra orden distinta.
-  const [draftNoticeVisible, setDraftNoticeVisible] = useState(false)
+  /** El borrador que este formulario efectivamente aplico. Es lo que se usa
+   *  para DERIVAR el aviso de "se restauró un borrador" (ver
+   *  `draftNoticeVisible`, debajo del hook) en vez de tener un booleano aparte:
+   *  ese booleano tenia un `set(true)` por cada camino de restauracion y un
+   *  `set(false)` por cada camino que da de baja el borrador, y alcanzaba con
+   *  que uno solo se olvidara de apagarlo para dejar el cartel colgado. Este
+   *  formulario tenia justo ese caso: la key cambia de turno sin remontar (ver
+   *  el latch de abajo), y la rama "key nueva, sin borrador" no lo bajaba, asi
+   *  que el aviso quedaba sobre un alta que no restauro nada -- con "Descartar"
+   *  al lado, que corre el descarte entero igual. */
+  const [appliedDraft, setAppliedDraft] = useState<OrdenDraftValue | null>(null)
   /** El borrador ya aplicado, POR IDENTIDAD y no un booleano ni un scope:
    *  `fromTurnoId` / `initialClienteId` salen de useSearchParams
    *  (ordenes-list.tsx) y el overlay se queda montado, asi que abrir el alta de
@@ -375,6 +385,15 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     },
   })
 
+  /** El aviso no puede sobrevivir al borrador que anuncia: sale solo mientras
+   *  el borrador que el hook tiene AHORA es exactamente el que este formulario
+   *  aplico. `clearDraft` pone `draft` en null en todos los caminos que lo dan
+   *  de baja (submit, encolado offline, "Descartar") y una key nueva sin nada
+   *  guardado lo deja en null tambien, asi que ninguno de ellos -- ni los que
+   *  todavia no existen -- puede dejar el cartel colgado sin acordarse de
+   *  apagarlo. */
+  const draftNoticeVisible = draft !== null && appliedDraft === draft
+
   // Los cambios de react-hook-form ya no re-renderizan el formulario, asi que
   // hay que avisarle al borrador por suscripcion.
   useEffect(() => {
@@ -435,7 +454,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       // El paso tampoco se restaura (ni se guarda): reabrir en el paso 3 deja
       // fuera de pantalla todo lo que se venia cargando, y arrancar en el 1
       // obliga a pasar por delante de cada campo antes de crear la orden.
-      setDraftNoticeVisible(true)
+      setAppliedDraft(draft)
     } catch (error) {
       // Ultima red, ademas del `validate` del hook: una excepcion aca corre
       // dentro de un efecto, o sea que desmonta el arbol entero y deja el alta
@@ -443,7 +462,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       console.error("Borrador de orden invalido, se descarta:", error)
       draftRestoredRef.current = false
       clearDraft()
-      setDraftNoticeVisible(false)
+      setAppliedDraft(null)
       reset(ordenFormDefaults())
     }
   }, [draftReady, draft, reset, clearDraft])
@@ -484,8 +503,9 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     session?.user?.id && session.user.role !== "ADMIN" ? session.user.id : ""
 
   const discardDraft = () => {
+    // El aviso se apaga solo: `clearDraft` deja `draft` en null en este mismo
+    // commit y de ahi se deriva (ver draftNoticeVisible).
     clearDraft()
-    setDraftNoticeVisible(false)
     draftRestoredRef.current = false
     reset(ordenFormDefaults())
     setAccesoriosSeleccionados([])

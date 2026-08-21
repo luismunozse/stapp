@@ -366,6 +366,36 @@ describe("OrdenForm — borrador local", () => {
     })
   })
 
+  it("baja el aviso cuando el alta pasa a un turno que no tiene borrador", async () => {
+    // Mismo cambio de key sin desmontar que el test de arriba, pero el turno
+    // nuevo no tiene nada guardado: no se restaura ningun borrador y el aviso
+    // se quedaba en pantalla anunciando el del turno anterior. Con "Descartar"
+    // al lado, que corre el descarte entero (reset del formulario, firma,
+    // fotos, checklist) sobre un borrador que este formulario nunca aplico.
+    window.localStorage.setItem(
+      "draft:v3:orden-form:org-1:user-1:new:turno:t-1",
+      draftEnvelope({ form: { ...draftData().form, dispositivo: "Borrador del turno 1" } }),
+    )
+
+    const { OrdenForm } = await import("@/components/ordenes/orden-form")
+    const { rerender } = render(
+      <ModalProvider>
+        <OrdenForm onClose={vi.fn()} onSuccess={vi.fn()} fromTurnoId="t-1" />
+      </ModalProvider>,
+    )
+    expect(screen.getByText(/se restauró un borrador no guardado/i)).toBeInTheDocument()
+
+    rerender(
+      <ModalProvider>
+        <OrdenForm onClose={vi.fn()} onSuccess={vi.fn()} fromTurnoId="t-2" />
+      </ModalProvider>,
+    )
+
+    await waitFor(() => {
+      expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
+    })
+  })
+
   it("muestra el selector de Sector/Area de una empresa restaurada desde el borrador", async () => {
     // ClienteSelector re-hidrata su propio display por id pero nunca llama a
     // onChange, asi que el objeto Cliente tiene que venir del borrador: sin el
