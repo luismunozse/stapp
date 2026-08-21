@@ -608,6 +608,86 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     expect(storedDraft()?.data.checklistValores).toEqual({})
   })
 
+  it("re-estampa las respuestas restauradas con SU template, no con el que hay en pantalla", async () => {
+    // Entre el restore y la llegada del template del tipo de equipo hay una
+    // ventana en la que las respuestas en pantalla son las que restauro el
+    // borrador pero `checklistTemplate` es cualquier otra cosa: el default de
+    // la organizacion cuando el tipo resuelve tarde, o directamente null como
+    // aca, porque el fetch del montaje se cancela al cambiar el tipo con el
+    // restore. Un flush ahi adentro -- que es justo lo que este hook existe
+    // para cubrir: se cae la sesion, se cierra la pestana -- reescribia el
+    // borrador estampandole ESE templateId. En la apertura siguiente las
+    // respuestas figuran como de un template que no es el suyo, asi que el
+    // guard de respuestas huerfanas las tira: respuestas validas perdidas, en
+    // silencio, por el mecanismo puesto para protegerlas.
+    let entregarTemplateDelTipo: ((res: Response) => void) | undefined
+    const templateDelTipo = new Promise<Response>((resolve) => {
+      entregarTemplateDelTipo = resolve
+    })
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes("by-device-type?tipoDispositivoId=")) return templateDelTipo
+        if (url.includes("/api/checklist-templates/by-device-type")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              template: {
+                id: "tpl-default-org",
+                nombre: "Ingreso generico",
+                items: [{ id: "generico", label: "Generico", tipo: "BOOLEAN" }],
+              },
+            }),
+          } as Response)
+        }
+        return Promise.resolve({ ok: true, json: async () => [] } as Response)
+      }),
+    )
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      draftEnvelope({
+        form: { ...draftData().form, tipoDispositivo: "CELULAR" },
+        checklistTemplateId: "tpl-celular",
+        checklistValores: { espejo: true },
+      }),
+    )
+
+    await renderForm()
+    await settle()
+
+    // Dentro de la ventana: el template del tipo todavia no llego.
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+      target: { value: "iPhone 13 editado en la ventana" },
+    })
+    await settle()
+
+    expect(storedDraft()?.data.checklistValores).toEqual({ espejo: true })
+    expect(storedDraft()?.data.checklistTemplateId).toBe("tpl-celular")
+
+    // Y cuando el template del tipo por fin llega y resulta ser el mismo con el
+    // que se respondio, las respuestas se conservan y el estampado sigue igual.
+    entregarTemplateDelTipo!({
+      ok: true,
+      json: async () => ({
+        template: {
+          id: "tpl-celular",
+          nombre: "Ingreso celular",
+          items: [{ id: "espejo", label: "Espejo", tipo: "BOOLEAN" }],
+        },
+      }),
+    } as Response)
+    await settle()
+
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+      target: { value: "iPhone 13 editado despues" },
+    })
+    await settle()
+
+    expect(storedDraft()?.data.checklistValores).toEqual({ espejo: true })
+    expect(storedDraft()?.data.checklistTemplateId).toBe("tpl-celular")
+  })
+
   it("no borra el borrador restaurado cuando se toca el formulario sin cambiar nada", async () => {
     // "Siguiente" esta adentro del <form>, asi que cuenta como interaccion, y
     // el paso NO se persiste: el borrador queda identico al que se acaba de

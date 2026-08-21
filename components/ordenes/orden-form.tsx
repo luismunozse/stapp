@@ -379,7 +379,21 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         // Las claves de `checklistValores` son ids de items de ESTE template:
         // sin el id, un borrador restaurado despues de que la organizacion lo
         // editara manda respuestas huerfanas bajo el templateId nuevo.
-        checklistTemplateId: checklistTemplate?.id ?? null,
+        //
+        // Con `checklistDelBorrador` puesto, las respuestas todavia son las que
+        // restauro el borrador y el template al que pertenecen es el que venia
+        // con el: `checklistTemplate` es en esa ventana el default de la
+        // organizacion (el tipo de equipo aun no resolvio) o null (el fetch del
+        // montaje se cancelo al aplicarse el tipo del borrador). Estampar ese
+        // era escribir el id equivocado sobre respuestas validas, y en la
+        // apertura siguiente el guard de huerfanas las tiraba por no coincidir
+        // con su propio template -- el mecanismo puesto para protegerlas
+        // volviendose en su contra. El efecto de mas abajo apaga
+        // `checklistDelBorrador` en cuanto resuelve el template del tipo: de ahi
+        // en adelante el que corresponde vuelve a ser el que hay en pantalla.
+        checklistTemplateId: checklistDelBorrador
+          ? checklistDelBorrador.templateId
+          : (checklistTemplate?.id ?? null),
         checklistNotas,
       }
     },
