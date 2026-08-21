@@ -512,7 +512,8 @@ export function InventarioForm({
       // precio_compra real con cero. El PUT lo acepta opcional, así que
       // omitirlo deja la columna intacta.
       const { precioCompra, ...rest } = data
-      const costoCargado = !item || item.precioCompra !== null && item.precioCompra !== undefined
+      // Item nuevo: no hay costo previo que proteger, el 0 es un valor real.
+      const costoCargado = !item || (item.precioCompra !== null && item.precioCompra !== undefined)
       const costoField = costoCargado ? { precioCompra } : {}
 
       const payload = item
