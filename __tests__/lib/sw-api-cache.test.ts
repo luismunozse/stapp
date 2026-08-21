@@ -37,10 +37,18 @@ function cacheKey(request: FakeRequest | string): string {
 
 class FakeCache {
   entries = new Map<string, Response>()
+  /**
+   * Simulates a storage-tight device: `cache.put` rejects with
+   * QuotaExceededError, the way it does on a mobile PWA near its quota.
+   */
+  failPut = false
   async match(request: FakeRequest | string) {
     return this.entries.get(cacheKey(request))
   }
   async put(request: FakeRequest | string, response: Response) {
+    if (this.failPut) {
+      throw Object.assign(new Error("Quota exceeded"), { name: "QuotaExceededError" })
+    }
     this.entries.set(cacheKey(request), response)
   }
   async delete(request: FakeRequest | string) {
@@ -245,6 +253,36 @@ describe("service worker — API caching", () => {
     const res = await sw.dispatchFetch("/api/clientes/cli-1/deuda-sucursal")
 
     expect(await res!.json()).toEqual({ deuda: 5000, scope: "sucursal" })
+  })
+
+  // Writing to the cache is a side effect of serving a request, never a
+  // precondition for it. On a storage-tight phone `cache.put` rejects with
+  // QuotaExceededError, and the two tests below pin that this can only cost the
+  // user the *caching*, never the fresh answer they are online to receive.
+  it("SW-9 — a failed cache write still returns the fresh network response, not a stale copy", async () => {
+    const url = `${ORIGIN}/api/clientes?page=1`
+    const store = await sw.caches.open(API_CACHE_NAME)
+    await store.put(
+      url,
+      jsonResponse({ data: ["stale"] }, { [CACHED_AT_HEADER]: String(Date.now() - 6 * 60 * 1000) })
+    )
+    store.failPut = true
+    sw.setNetwork(async () => jsonResponse({ data: ["network"] }))
+
+    const res = await sw.dispatchFetch("/api/clientes?page=1")
+
+    expect(await res!.json()).toEqual({ data: ["network"] })
+  })
+
+  it("SW-10 — a failed cache write with nothing cached does not degrade into the 503", async () => {
+    const store = await sw.caches.open(API_CACHE_NAME)
+    store.failPut = true
+    sw.setNetwork(async () => jsonResponse({ data: ["network"] }))
+
+    const res = await sw.dispatchFetch("/api/clientes?page=1")
+
+    expect(res!.status).toBe(200)
+    expect(await res!.json()).toEqual({ data: ["network"] })
   })
 
   it("SW-6 — activate drops the previous API cache, purging already-stored inventario entries", async () => {

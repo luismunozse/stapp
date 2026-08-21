@@ -265,7 +265,16 @@ async function staleWhileRevalidate(request, cacheName) {
 
   const fetchPromise = fetch(request).then(async (response) => {
     if (response.ok) {
-      await cache.put(request, await conSelloDeCache(response.clone()))
+      // Guardar es un efecto de servir el request, nunca una precondicion. En un
+      // telefono con el almacenamiento al limite `cache.put` rechaza con
+      // QuotaExceededError: dejar que ese rechazo suba lo tomaria el .catch de
+      // abajo como "no hubo red" y degradaria una respuesta 200 buena a la copia
+      // vencida o al 503 sintetico. La red siempre gana.
+      try {
+        await cache.put(request, await conSelloDeCache(response.clone()))
+      } catch (error) {
+        console.log('[SW] No se pudo cachear la respuesta de API:', request.url, error.message)
+      }
     }
     return response
   }).catch(() => null)
