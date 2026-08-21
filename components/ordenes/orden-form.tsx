@@ -276,7 +276,19 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   // turno (o desde un deep-link ?clienteId=) no tiene por que reaparecer en el
   // alta de mostrador siguiente, que es otra orden distinta.
   const [draftNoticeVisible, setDraftNoticeVisible] = useState(false)
-  const draftAppliedRef = useRef(false)
+  /** El borrador ya aplicado, POR IDENTIDAD y no un booleano ni un scope:
+   *  `fromTurnoId` / `initialClienteId` salen de useSearchParams
+   *  (ordenes-list.tsx) y el overlay se queda montado, asi que abrir el alta de
+   *  otro turno desde la agenda cambia la key del hook sin remontar este
+   *  componente. Un latch booleano se quedaba pegado en el primer borrador y el
+   *  segundo no se aplicaba nunca (el hook si lo contaba como restaurado, asi
+   *  que el flush siguiente lo pisaba con lo que quedo en pantalla del turno
+   *  anterior); un latch por scope se adelanta al hook, porque el scope cambia
+   *  en el render y `draft` recien en el commit siguiente, y aplica el borrador
+   *  del turno viejo sobre el nuevo. La identidad del objeto es lo unico que
+   *  esta sincronizado con el estado del hook: cada re-lectura devuelve uno
+   *  nuevo, cada re-render devuelve el mismo. */
+  const draftAppliedRef = useRef<OrdenDraftValue | null>(null)
   const draftRestoredRef = useRef(false)
   /** Raiz del formulario para el gate de interaccion del hook: ClienteSelector
    *  monta ClienteForm (su propio <form>) adentro de este, y escribir en ese
@@ -353,16 +365,23 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   }, [watch, notifyChange])
 
   useEffect(() => {
-    if (!draftReady || draftAppliedRef.current) return
-    // Se marca DESPUES de saber que hay algo que aplicar (mismo criterio que
-    // cliente-form.tsx). Marcarlo antes dejaba el formulario "con el borrador ya
-    // aplicado" sin haberlo aplicado: si el hook volvia a resolver la key (otro
-    // turno, una sesion que se cae y vuelve) y aparecia un borrador que otra
-    // pestana habia escrito, este efecto no lo tocaba nunca -- pero el hook si
-    // lo contaba como restaurado, asi que el flush siguiente lo pisaba en
-    // silencio con lo que hubiera en pantalla y el aviso no salia.
-    if (!draft) return
-    draftAppliedRef.current = true
+    if (!draftReady) return
+    // El latch se toca DESPUES de saber que hay algo que aplicar (mismo
+    // criterio que cliente-form.tsx). Marcarlo antes dejaba el formulario "con
+    // el borrador ya aplicado" sin haberlo aplicado: si el hook volvia a
+    // resolver la key (otro turno, una sesion que se cae y vuelve) y aparecia un
+    // borrador que otra pestana habia escrito, este efecto no lo tocaba nunca
+    // -- pero el hook si lo contaba como restaurado, asi que el flush siguiente
+    // lo pisaba en silencio con lo que hubiera en pantalla y el aviso no salia.
+    if (!draft) {
+      // Key nueva y sin borrador: lo que quedo marcado como restaurado era del
+      // origen anterior, y con esa marca puesta el prefill de ESTE turno se
+      // saltea a si mismo al resolver (lee draftRestoredRef).
+      draftRestoredRef.current = false
+      return
+    }
+    if (draftAppliedRef.current === draft) return
+    draftAppliedRef.current = draft
     draftRestoredRef.current = true
     try {
       // El codigo de acceso no se persiste (ver el limite en getValue): se

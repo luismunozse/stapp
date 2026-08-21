@@ -315,6 +315,46 @@ describe("OrdenForm — borrador local", () => {
     )
   })
 
+  it("cambia de borrador cuando el alta pasa de un turno a otro sin desmontarse", async () => {
+    // `fromTurno` / `clienteId` salen de useSearchParams (ordenes-list.tsx) y
+    // el overlay se queda montado, asi que abrir el alta de otro turno desde la
+    // agenda cambia el `scope` del hook sin remontar este componente. Un latch
+    // booleano se queda pegado en el primer borrador: el segundo no se aplica
+    // nunca aunque el hook lo cuente como restaurado, y el flush siguiente lo
+    // pisa con lo que quedo en pantalla del turno anterior. Por eso el latch va
+    // por scope, igual que en cliente-form.tsx.
+    window.localStorage.setItem(
+      "draft:v2:orden-form:org-1:user-1:new:turno:t-1",
+      draftEnvelope({ form: { ...draftData().form, dispositivo: "Borrador del turno 1" } }),
+    )
+    window.localStorage.setItem(
+      "draft:v2:orden-form:org-1:user-1:new:turno:t-2",
+      draftEnvelope({ form: { ...draftData().form, dispositivo: "Borrador del turno 2" } }),
+    )
+
+    const { OrdenForm } = await import("@/components/ordenes/orden-form")
+    const { rerender } = render(
+      <ModalProvider>
+        <OrdenForm onClose={vi.fn()} onSuccess={vi.fn()} fromTurnoId="t-1" />
+      </ModalProvider>,
+    )
+    expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+      "Borrador del turno 1",
+    )
+
+    rerender(
+      <ModalProvider>
+        <OrdenForm onClose={vi.fn()} onSuccess={vi.fn()} fromTurnoId="t-2" />
+      </ModalProvider>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+        "Borrador del turno 2",
+      )
+    })
+  })
+
   it("muestra el selector de Sector/Area de una empresa restaurada desde el borrador", async () => {
     // ClienteSelector re-hidrata su propio display por id pero nunca llama a
     // onChange, asi que el objeto Cliente tiene que venir del borrador: sin el

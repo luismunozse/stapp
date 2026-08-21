@@ -133,7 +133,14 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
   // usos) para no seguir grabando ni restaurando en segundo plano.
   const recordId = cliente?.id ?? null
   const [draftNoticeVisible, setDraftNoticeVisible] = useState(false)
-  const draftAppliedForRef = useRef<string | null>(null)
+  /** El borrador ya aplicado, POR IDENTIDAD (mismo latch que orden-form.tsx y
+   *  recepcion-form.tsx). Una marca por scope (`recordId`) se adelanta al hook:
+   *  el scope cambia en el render y `draft` recien en el commit siguiente, asi
+   *  que al reabrir el dialog sobre OTRA ficha con el borrador de la anterior
+   *  todavia en `draft` se aplicaba ese. Cada re-lectura del hook devuelve un
+   *  objeto nuevo y cada re-render devuelve el mismo, asi que la identidad es
+   *  la unica marca sincronizada con su estado. */
+  const draftAppliedRef = useRef<ClienteFormData | null>(null)
   /** Raiz del formulario para el gate de interaccion del hook: este dialog se
    *  monta adentro de OrdenForm y RecepcionForm (via ClienteSelector), asi que
    *  cada uno tiene que reconocer solo sus propios controles. */
@@ -183,20 +190,21 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
 
   useEffect(() => {
     if (!open) {
-      draftAppliedForRef.current = null
+      // El latch NO se limpia al cerrar: `draft` conserva el borrador de la
+      // ficha anterior mientras el hook esta pausado, y limpiarlo dejaba que se
+      // aplicara ese al reabrir sobre otra ficha. La identidad ya cubre el
+      // reabrir: la re-lectura devuelve un objeto nuevo.
       setDraftNoticeVisible(false)
       return
     }
-    const scopeKey = recordId ?? "new"
-    if (!draftReady || draftAppliedForRef.current === scopeKey) return
-    // Se marca DESPUES de saber que hay algo que aplicar. Marcarlo antes dejaba
-    // el formulario "con el borrador ya aplicado" sin haberlo aplicado: si mas
-    // tarde aparecia uno para el mismo scope (otra pestana escribiendo la misma
-    // key, el token de frescura resolviendo), el hook lo contaba como
+    // El latch se toca DESPUES de saber que hay algo que aplicar. Marcarlo
+    // antes dejaba el formulario "con el borrador ya aplicado" sin haberlo
+    // aplicado: si mas tarde aparecia uno para la misma key (otra pestana
+    // escribiendola, el token de frescura resolviendo), el hook lo contaba como
     // restaurado y este efecto no lo tocaba nunca, asi que se pisaba en
     // silencio con lo que hubiera en pantalla y el aviso no salia.
-    if (!draft) return
-    draftAppliedForRef.current = scopeKey
+    if (!draftReady || !draft || draftAppliedRef.current === draft) return
+    draftAppliedRef.current = draft
     try {
       reset(draft)
       setDraftNoticeVisible(true)
@@ -212,7 +220,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
     // `cliente` solo se usa en el rescate del catch: incluirlo en las
     // dependencias volveria a correr el efecto en cada revalidacion de SWR.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, recordId, draftReady, draft, reset, clearDraft])
+  }, [open, draftReady, draft, reset, clearDraft])
 
   const discardDraft = () => {
     clearDraft()

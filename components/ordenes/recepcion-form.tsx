@@ -290,7 +290,13 @@ export function RecepcionForm() {
   // hace falta recordId. La firma y las fotos de cada equipo quedan afuera
   // del snapshot: son datos binarios, no formularios recuperables.
   const [draftNoticeVisible, setDraftNoticeVisible] = useState(false)
-  const draftAppliedRef = useRef(false)
+  /** El borrador ya aplicado, POR IDENTIDAD (mismo latch que orden-form.tsx y
+   *  cliente-form.tsx). Cada re-lectura del hook devuelve un objeto nuevo y
+   *  cada re-render devuelve el mismo, asi que es la unica marca que esta
+   *  sincronizada con su estado: no se queda pegada cuando el hook vuelve a
+   *  resolver la key (aca, una sesion que se cae y vuelve) ni se adelanta a el.
+   */
+  const draftAppliedRef = useRef<RecepcionDraftValue | null>(null)
   /** Raiz del formulario para el gate de interaccion del hook: ClienteSelector
    *  monta ClienteForm (su propio <form>) adentro de este, y escribir en ese
    *  dialog no es una edicion de la recepcion. */
@@ -336,16 +342,15 @@ export function RecepcionForm() {
   }, [watch, notifyChange])
 
   useEffect(() => {
-    if (!draftReady || draftAppliedRef.current) return
-    // Se marca DESPUES de saber que hay algo que aplicar (mismo criterio que
-    // cliente-form.tsx). Marcarlo antes dejaba el formulario "con el borrador ya
-    // aplicado" sin haberlo aplicado: si el hook volvia a resolver la key (una
-    // sesion que se cae y vuelve) y aparecia un borrador que otra pestana habia
-    // escrito, este efecto no lo tocaba nunca -- pero el hook si lo contaba como
-    // restaurado, asi que el flush siguiente lo pisaba en silencio con lo que
-    // hubiera en pantalla y el aviso no salia.
-    if (!draft) return
-    draftAppliedRef.current = true
+    // El latch se toca DESPUES de saber que hay algo que aplicar (mismo
+    // criterio que cliente-form.tsx). Marcarlo antes dejaba el formulario "con
+    // el borrador ya aplicado" sin haberlo aplicado: si el hook volvia a
+    // resolver la key (una sesion que se cae y vuelve) y aparecia un borrador
+    // que otra pestana habia escrito, este efecto no lo tocaba nunca -- pero el
+    // hook si lo contaba como restaurado, asi que el flush siguiente lo pisaba
+    // en silencio con lo que hubiera en pantalla y el aviso no salia.
+    if (!draftReady || !draft || draftAppliedRef.current === draft) return
+    draftAppliedRef.current = draft
     try {
       // El codigo de acceso no se persiste (ver el limite en getValue): se
       // repone vacio para no dejar el campo en undefined si un borrador viejo

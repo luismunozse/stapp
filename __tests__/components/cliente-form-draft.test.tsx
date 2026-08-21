@@ -268,6 +268,58 @@ describe("ClienteForm — borrador local", () => {
     expect(screen.getByText(/se restauró un borrador no guardado/i)).toBeInTheDocument()
   })
 
+  it("no aplica el borrador de una ficha al reabrir el dialog sobre otra", () => {
+    // El dialog se queda montado con open=false entre usos y el hook pausado no
+    // limpia `draft`, asi que al reabrir sobre otra ficha el borrador de la
+    // anterior sigue ahi por un commit. Un latch por scope (recordId) se
+    // adelanta al hook -- el scope cambia en el render, `draft` recien en el
+    // commit siguiente -- y aplicaba ese borrador sobre la ficha equivocada. El
+    // latch va por identidad del objeto justamente para que no pueda pasar.
+    window.localStorage.setItem(
+      "draft:v2:cliente-form:org-1:user-1:edit:cli-1",
+      JSON.stringify({
+        version: 2,
+        savedAt: Date.now(),
+        recordUpdatedAt: CLIENTE_UPDATED_AT.getTime(),
+        data: {
+          tipoCliente: "INDIVIDUAL",
+          nombre: "Borrador de la ficha 1",
+          telefono: "1100000000",
+          email: "",
+          direccion: "",
+          dni: "",
+          razonSocial: "",
+          cuit: "",
+          aceptaWhatsapp: true,
+          tipoPrecio: "MINORISTA",
+          descuentoPct: undefined,
+        },
+      }),
+    )
+
+    const otraFicha = makeCliente({ id: "cli-2", nombre: "Otra Persona" })
+    const { rerender } = render(
+      <ModalProvider>
+        <ClienteForm cliente={makeCliente()} open onClose={vi.fn()} onSuccess={vi.fn()} />
+      </ModalProvider>,
+    )
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Borrador de la ficha 1")
+
+    rerender(
+      <ModalProvider>
+        <ClienteForm cliente={makeCliente()} open={false} onClose={vi.fn()} onSuccess={vi.fn()} />
+      </ModalProvider>,
+    )
+    rerender(
+      <ModalProvider>
+        <ClienteForm cliente={otraFicha} open onClose={vi.fn()} onSuccess={vi.fn()} />
+      </ModalProvider>,
+    )
+
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Otra Persona")
+    expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
+  })
+
   it("conserva el borrador ya aplicado cuando otro usuario guarda la ficha en el medio", () => {
     // El efecto de la key vuelve a correr cada vez que SWR trae un `updatedAt`
     // nuevo. Sobre un dialog que YA tiene el borrador aplicado en pantalla y
