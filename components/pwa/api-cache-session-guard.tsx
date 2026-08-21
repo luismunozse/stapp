@@ -34,7 +34,11 @@ function recordar(identidad: string) {
  *
  * Solo mira sesiones autenticadas, a proposito. Cerrar sesion no necesita
  * limpiar: a quien hay que proteger es a quien entra despues, y ese momento ya
- * esta cubierto — con la ventaja de que ahi hay red. Limpiar en
+ * esta cubierto — con la ventaja de que ahi hay red. Cuando no hubo a quien
+ * pedirle el borrado, el guard queda escuchando `controllerchange` y reintenta
+ * apenas el worker toma control.
+ *
+ * Limpiar en
  * "loading"/"unauthenticated" ademas dispararia en cada restauracion de sesion
  * de la PWA, incluso sin red, sin proteger a nadie que el login siguiente no
  * proteja igual.
@@ -70,17 +74,44 @@ export function ApiCacheSessionGuard() {
     // el caso para el que existe este guard. En un equipo realmente nuevo la
     // limpieza de mas cuesta el cache que la propia sesion acaba de traer.
     let cancelado = false
-    void clearServiceWorkerApiCache().then((limpio) => {
-      // SOLO si el worker confirmo el borrado. Sin controller el mensaje no
-      // llega a ningun lado (force-reload, SW nuevo activandose antes de
-      // clients.claim(), registro fallido): anotar la identidad ahi seria
-      // afirmar una limpieza que no ocurrio, y el guard no volveria a intentar
-      // NUNCA — el cache de la sesion anterior quedaria servido de manera
-      // permanente. Al no anotar nada, el proximo montaje lo reintenta.
-      if (limpio && !cancelado) recordar(identidad)
-    })
+    const sw =
+      typeof navigator !== "undefined" && "serviceWorker" in navigator
+        ? navigator.serviceWorker
+        : null
+
+    const intentar = () => {
+      void clearServiceWorkerApiCache().then((limpio) => {
+        // SOLO si el worker confirmo el borrado. Sin controller el mensaje no
+        // llega a ningun lado (force-reload, SW nuevo activandose antes de
+        // clients.claim(), registro fallido): anotar la identidad ahi seria
+        // afirmar una limpieza que no ocurrio, y el cache de la sesion anterior
+        // quedaria servido de manera permanente.
+        if (cancelado || !limpio) return
+        recordar(identidad)
+        // Limpio y anotado: los controllerchange que vengan despues (un deploy
+        // activa un worker nuevo) tirarian el cache que esta misma sesion acaba
+        // de llenar, sin proteger a nadie.
+        sw?.removeEventListener("controllerchange", alTomarControl)
+      })
+    }
+
+    const alTomarControl = () => {
+      if (!cancelado) intentar()
+    }
+
+    // El reintento tiene que ser real, no "el proximo montaje": este componente
+    // vive en Providers, que no se desmonta en toda la navegacion del cliente,
+    // y el efecto solo re-corre si cambia la identidad. En la primera visita la
+    // pagina esta SIN CONTROLAR hasta que el worker activa y llama a
+    // clients.claim(), asi que el primer intento resuelve false y sin escuchar
+    // controllerchange no habria otro hasta una recarga completa. Se suscribe
+    // ANTES del primer intento: el controller puede llegar justo en el medio.
+    sw?.addEventListener("controllerchange", alTomarControl)
+    intentar()
+
     return () => {
       cancelado = true
+      sw?.removeEventListener("controllerchange", alTomarControl)
     }
   }, [status, identidad])
 

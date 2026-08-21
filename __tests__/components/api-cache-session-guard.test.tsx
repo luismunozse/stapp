@@ -28,27 +28,35 @@ const USER_B = { id: "u-B", organizationId: "org-2", role: "VENDEDOR", sucursalI
 let postMessage: ReturnType<typeof vi.fn>
 /** Contesta CACHE_CLEARED, como hace el worker cuando termino de borrar. */
 let confirmar: () => void
+/** Simula clients.claim(): recien ahi hay controller, y llega controllerchange. */
+let tomarControl: () => void
 
 function mockSesion(user: unknown, status = "authenticated") {
   useSessionMock.mockReturnValue({ data: user ? { user } : null, status })
 }
 
 function instalarServiceWorker({ conControlador = true } = {}) {
-  const listeners = new Set<(event: { data: unknown }) => void>()
+  const listeners = new Map<string, Set<(event: any) => void>>()
+  const emitir = (tipo: string, event: any) =>
+    listeners.get(tipo)?.forEach((cb) => cb(event))
   postMessage = vi.fn()
-  confirmar = () => listeners.forEach((cb) => cb({ data: { type: "CACHE_CLEARED" } }))
-  Object.defineProperty(navigator, "serviceWorker", {
-    configurable: true,
-    value: {
-      controller: conControlador ? { postMessage } : null,
-      addEventListener: (type: string, cb: (event: { data: unknown }) => void) => {
-        if (type === "message") listeners.add(cb)
-      },
-      removeEventListener: (_type: string, cb: (event: { data: unknown }) => void) => {
-        listeners.delete(cb)
-      },
+  const controlador = { postMessage }
+  confirmar = () => emitir("message", { data: { type: "CACHE_CLEARED" } })
+  const sw = {
+    controller: conControlador ? controlador : null,
+    addEventListener: (type: string, cb: (event: any) => void) => {
+      if (!listeners.has(type)) listeners.set(type, new Set())
+      listeners.get(type)!.add(cb)
     },
-  })
+    removeEventListener: (type: string, cb: (event: any) => void) => {
+      listeners.get(type)?.delete(cb)
+    },
+  }
+  tomarControl = () => {
+    sw.controller = controlador
+    emitir("controllerchange", new Event("controllerchange"))
+  }
+  Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: sw })
 }
 
 /** Renderiza, deja que el worker confirme y espera a que el efecto termine. */
@@ -100,6 +108,57 @@ describe("ApiCacheSessionGuard", () => {
     })
 
     expect(window.localStorage.getItem(SW_API_IDENTITY_KEY)).toBe("u-A|org-1|ADMIN|")
+  })
+
+  it("AC-10 — sin controller al montar: reintenta cuando el worker toma control", async () => {
+    // AC-8 deja el reintento pendiente, pero el "proximo montaje" no existe:
+    // ApiCacheSessionGuard vive en Providers, que no se desmonta en toda la
+    // sesion, y el efecto solo re-corre si cambia status/identidad. En la
+    // primera visita la pagina esta sin controlar hasta que el SW activa y
+    // llama clients.claim(), asi que el clear resuelve false y no se reintenta
+    // NUNCA hasta una recarga completa. Escuchar controllerchange lo vuelve un
+    // reintento de verdad.
+    instalarServiceWorker({ conControlador: false })
+    window.localStorage.setItem(SW_API_IDENTITY_KEY, "u-A|org-1|ADMIN|")
+    mockSesion(USER_B)
+
+    render(<ApiCacheSessionGuard />)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(postMessage).not.toHaveBeenCalled()
+
+    await act(async () => {
+      tomarControl()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(postMessage).toHaveBeenCalledWith({ type: "CLEAR_CACHE", cache: "api" })
+    confirmar()
+    await waitFor(() =>
+      expect(window.localStorage.getItem(SW_API_IDENTITY_KEY)).toBe("u-B|org-2|VENDEDOR|suc-B")
+    )
+  })
+
+  it("AC-11 — una vez limpio, un controllerchange posterior no vuelve a limpiar", async () => {
+    // El worker puede cambiar de controlador varias veces por sesion (un
+    // deploy activa uno nuevo). Reintentar con la identidad ya anotada tiraria
+    // el cache que la propia sesion acaba de llenar, sin proteger a nadie.
+    window.localStorage.setItem(SW_API_IDENTITY_KEY, "u-A|org-1|ADMIN|")
+    mockSesion(USER_B)
+
+    await renderYConfirmar()
+    await waitFor(() =>
+      expect(window.localStorage.getItem(SW_API_IDENTITY_KEY)).toBe("u-B|org-2|VENDEDOR|suc-B")
+    )
+    expect(postMessage).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      tomarControl()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(postMessage).toHaveBeenCalledTimes(1)
   })
 
   it("AC-9 — si el worker no confirma, tampoco guarda la identidad", async () => {
