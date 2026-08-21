@@ -53,6 +53,14 @@ const TIPO_REPUESTO_OPTIONS = [
   { value: "RECICLADO", label: "Reciclado" },
 ]
 
+/** Costo de compra de un resultado de inventario, o null si el producto no
+ *  tiene uno cargado (o el rol no puede verlo: la búsqueda lo devuelve nulo). */
+function costoDeInventario(inv: { precioCompra?: number | string | null }): number | null {
+  if (inv.precioCompra === null || inv.precioCompra === undefined || inv.precioCompra === "") return null
+  const costo = Number(inv.precioCompra)
+  return Number.isFinite(costo) ? costo : null
+}
+
 export function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuentoTipo?: string; descuentoValor?: number }) {
   const bruto = item.cantidad * item.precioUnitario
   const dv = item.descuentoValor || 0
@@ -136,6 +144,14 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
     onUpdate(index, "precioUnitario", Number(inv.precioVenta))
     onUpdate(index, "inventarioId", inv.id)
     onUpdate(index, "precioCompra", Number(inv.precioCompra) || 0)
+    // El costo del producto anterior no aplica al nuevo. El servidor solo
+    // re-deriva el costo cuando el rol NO ve costos; al ADMIN le confía el
+    // costoUnitario del payload, y el input manual está oculto mientras el item
+    // está vinculado — así que sin esto queda guardado el costo (y el margen)
+    // del producto viejo, sin forma de verlo ni corregirlo.
+    // null, no 0, cuando el producto no tiene precio_compra: mismo criterio que
+    // la re-derivación del servidor (un 0 se lee como "sale gratis").
+    onUpdate(index, "costoUnitario", costoDeInventario(inv))
     setShowInvSearch(false)
     setInvSearch("")
     setInvResults([])
@@ -144,6 +160,8 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
   const clearInvLink = () => {
     onUpdate(index, "inventarioId", null)
     onUpdate(index, "precioCompra", null)
+    // Desvincular también descarta el costo: era el del producto que se quitó.
+    onUpdate(index, "costoUnitario", null)
   }
   const hasDiscount = (item.descuentoValor || 0) > 0
   const costoUnit = Number(item.precioCompra) || 0

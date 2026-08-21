@@ -109,3 +109,97 @@ describe("ItemRow (cotización) — costo y margen visibles solo con mostrarCost
     vi.unstubAllGlobals()
   })
 })
+
+/**
+ * El PUT de cotizaciones vuelve a derivar el costo desde inventario cuando el
+ * link cambia, pero SOLO para los roles que no ven costos: al ADMIN se le confía
+ * el costoUnitario del payload. Y el input manual de costo está oculto mientras
+ * el item está vinculado, así que un costo viejo arrastrado desde otro producto
+ * queda guardado con un margen equivocado que el ADMIN no puede ver ni corregir.
+ * El cliente tiene que re-derivarlo igual que el servidor.
+ */
+describe("ItemRow (cotización) — costo unitario al vincular/desvincular inventario", () => {
+  type OnUpdate = (index: number, field: string, value: string | number | null) => void
+
+  const inventarioResult = (precioCompra: number | null) => [
+    { id: "inv-2", nombre: "Batería", stock: 5, stockReservado: 0, precioVenta: 900, precioCompra },
+  ]
+
+  function stubInventarioSearch(precioCompra: number | null) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: async () => inventarioResult(precioCompra),
+        } as Response)
+      )
+    )
+  }
+
+  // Item guardado con el costo de OTRO producto: es el estado exacto que deja
+  // una cotización editada por un ADMIN antes de re-vincular.
+  const itemConCostoViejo = {
+    descripcion: "Pantalla",
+    cantidad: 1,
+    precioUnitario: 500,
+    costoUnitario: 300,
+  }
+
+  async function seleccionarDelInventario(onUpdate: OnUpdate) {
+    render(<ItemRow item={itemConCostoViejo} index={0} onUpdate={onUpdate} onRemove={vi.fn()} mostrarCostos />)
+
+    fireEvent.click(screen.getAllByTitle("Buscar en inventario")[0])
+    fireEvent.change(screen.getAllByPlaceholderText("Buscar producto...")[0], {
+      target: { value: "bateria" },
+    })
+
+    await waitFor(() => expect(screen.getAllByText("Batería").length).toBeGreaterThan(0))
+    fireEvent.click(screen.getAllByText("Batería")[0])
+  }
+
+  it("al vincular un producto reescribe el costo unitario con el costo del producto nuevo", async () => {
+    stubInventarioSearch(450)
+    const onUpdate = vi.fn<OnUpdate>()
+
+    await seleccionarDelInventario(onUpdate)
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledWith(0, "costoUnitario", 450))
+    expect(onUpdate).toHaveBeenCalledWith(0, "inventarioId", "inv-2")
+    expect(onUpdate).toHaveBeenCalledWith(0, "precioCompra", 450)
+
+    vi.unstubAllGlobals()
+  })
+
+  // Mismo criterio que el servidor: sin precio_compra el costo es desconocido,
+  // no cero. Un cero se lee como "me sale gratis" y pinta 100% de margen.
+  it("al vincular un producto sin costo deja el costo unitario en null", async () => {
+    stubInventarioSearch(null)
+    const onUpdate = vi.fn<OnUpdate>()
+
+    await seleccionarDelInventario(onUpdate)
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledWith(0, "costoUnitario", null))
+
+    vi.unstubAllGlobals()
+  })
+
+  it("al desvincular limpia el costo unitario junto con el link", () => {
+    const onUpdate = vi.fn<OnUpdate>()
+    render(
+      <ItemRow
+        item={{ ...itemConCostoViejo, inventarioId: "inv-1", precioCompra: 300 }}
+        index={0}
+        onUpdate={onUpdate}
+        onRemove={vi.fn()}
+        mostrarCostos
+      />
+    )
+
+    fireEvent.click(screen.getAllByTitle("Desvincular producto")[0])
+
+    expect(onUpdate).toHaveBeenCalledWith(0, "inventarioId", null)
+    expect(onUpdate).toHaveBeenCalledWith(0, "precioCompra", null)
+    expect(onUpdate).toHaveBeenCalledWith(0, "costoUnitario", null)
+  })
+})
