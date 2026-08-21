@@ -307,7 +307,7 @@ interface EntradaCacheVenta<T> {
 }
 
 const cacheDestinoVenta = new Map<string, EntradaCacheVenta<DestinoVenta>>()
-const cacheIndicadorVenta = new Map<string, EntradaCacheVenta<string | null>>()
+const cacheIndicadorVenta = new Map<string, EntradaCacheVenta<IndicadorVenta>>()
 
 async function memoConTtl<T>(
   store: Map<string, EntradaCacheVenta<T>>,
@@ -396,7 +396,28 @@ export async function resolverIndicadorVentaCacheado(params: {
     params.cookieSucursalId,
     params.ventaSucursalId,
   ])
-  return memoConTtl(cacheIndicadorVenta, key, () => resolverIndicadorVenta(params))
+  const indicador = await memoConTtl(
+    cacheIndicadorVenta,
+    key,
+    () => resolverIndicadorVentaInterno(params),
+    // A failed sucursal list reads as "hide the indicator", which is
+    // indistinguishable from the legitimate hidden cases by the name alone.
+    // Pinning it would be worse here than for the destination: the client reads
+    // the header once, on mount, so a single blip would hide the indicator for
+    // the whole POS session rather than for one TTL.
+    (resultado) => resultado.resuelto
+  )
+  return indicador.nombre
+}
+
+interface IndicadorVenta {
+  /** Label for the indicator, or null when it must stay hidden. */
+  nombre: string | null
+  /**
+   * False when the sucursal list query failed, i.e. `nombre` is null because we
+   * could not look it up — not because the indicator should be hidden.
+   */
+  resuelto: boolean
 }
 
 /**
@@ -431,20 +452,48 @@ export async function resolverIndicadorVenta(params: {
   cookieSucursalId: string | null
   ventaSucursalId: string | null
 }): Promise<string | null> {
-  if (!params.ventaSucursalId) return null
-  if (params.role !== "ADMIN") return null
-  if (params.cookieSucursalId && params.cookieSucursalId !== TODAS) return null
+  return (await resolverIndicadorVentaInterno(params)).nombre
+}
 
-  const { data } = await supabaseAdmin
+/**
+ * `resolverIndicadorVenta` plus the one bit the caching layer needs and the
+ * label alone cannot carry: whether null means "hide it" or "the lookup failed".
+ */
+async function resolverIndicadorVentaInterno(params: {
+  role: string | null
+  organizationId: string
+  cookieSucursalId: string | null
+  ventaSucursalId: string | null
+}): Promise<IndicadorVenta> {
+  const oculto: IndicadorVenta = { nombre: null, resuelto: true }
+
+  if (!params.ventaSucursalId) return oculto
+  if (params.role !== "ADMIN") return oculto
+  if (params.cookieSucursalId && params.cookieSucursalId !== TODAS) return oculto
+
+  const { data, error } = await supabaseAdmin
     .from("sucursales")
     .select("id, nombre")
     .eq("organization_id", params.organizationId)
     .is("deleted_at", null)
 
-  const sucursales = (data ?? []) as Array<{ id: string; nombre: string }>
-  if (sucursales.length <= 1) return null
+  // A successful read of an org with no sucursales returns [], never null — so
+  // either branch here is a real failure, and must not be pinned as "hidden".
+  if (error || !data) {
+    console.warn(
+      `[ventas] Could not load sucursales for org ${params.organizationId} — hiding the selling-from indicator:`,
+      error?.message ?? "no data returned"
+    )
+    return { nombre: null, resuelto: false }
+  }
 
-  return sucursales.find((s) => s.id === params.ventaSucursalId)?.nombre ?? null
+  const sucursales = data as Array<{ id: string; nombre: string }>
+  if (sucursales.length <= 1) return oculto
+
+  return {
+    nombre: sucursales.find((s) => s.id === params.ventaSucursalId)?.nombre ?? null,
+    resuelto: true,
+  }
 }
 
 /**

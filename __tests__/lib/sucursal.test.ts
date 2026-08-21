@@ -450,6 +450,20 @@ function mockListaSucursales(sucursales: Array<{ id: string; nombre: string }>) 
   return chain
 }
 
+/** Same shape as mockListaSucursales, but the list query comes back failed. */
+function mockListaSucursalesConError(error: { code: string; message: string }) {
+  const chain: any = {}
+  for (const m of ["select", "eq", "is"]) chain[m] = vi.fn().mockReturnValue(chain)
+  chain.then = (resolve: any, reject?: any) =>
+    Promise.resolve({ data: null, error }).then(resolve, reject)
+
+  vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+    if (table === "sucursales") return chain
+    return createUnusedChain()
+  })
+  return chain
+}
+
 function createUnusedChain(): any {
   const chain: any = {}
   for (const m of ["select", "eq", "is"]) chain[m] = vi.fn().mockReturnValue(chain)
@@ -558,6 +572,22 @@ describe("resolverIndicadorVenta", () => {
 
     expect(nombre).toBeNull()
   })
+
+  it("IV-8 — la query de sucursales falla: null y avisa por consola (no se traga el error)", async () => {
+    mockListaSucursalesConError({ code: "57014", message: "canceling statement due to statement timeout" })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const nombre = await resolverIndicadorVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-principal",
+    })
+
+    expect(nombre).toBeNull()
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
 })
 
 // ─── Cache de resolucion para el camino de LECTURA del POS ───
@@ -657,6 +687,57 @@ describe("cache de resolucion de venta (solo lecturas del POS)", () => {
     expect(primera.sucursalId).toBeNull()
     expect(segunda.sucursalId).toBeNull()
     expect(contarLecturas("sucursales")).toBe(2)
+  })
+
+  it("CV-9 — un indicador sin resolver NO se cachea (un blip no lo oculta toda la sesion)", async () => {
+    // El cliente lee el header una sola vez, al montar: si una falla transitoria
+    // queda fijada 30s, el indicador desaparece para TODA la sesion del POS.
+    mockListaSucursalesConError({ code: "57014", message: "canceling statement due to statement timeout" })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const params = {
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-principal",
+    }
+
+    expect(await resolverIndicadorVentaCacheado(params)).toBeNull()
+    expect(await resolverIndicadorVentaCacheado(params)).toBeNull()
+
+    expect(contarLecturas("sucursales")).toBe(2)
+    warn.mockRestore()
+  })
+
+  it("CV-10 — pasado el blip el indicador vuelve, sin esperar el TTL", async () => {
+    mockListaSucursalesConError({ code: "57014", message: "canceling statement due to statement timeout" })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const params = {
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-principal",
+    }
+
+    expect(await resolverIndicadorVentaCacheado(params)).toBeNull()
+    mockListaSucursales(DOS_SUCURSALES)
+
+    expect(await resolverIndicadorVentaCacheado(params)).toBe("Casa Central")
+    warn.mockRestore()
+  })
+
+  it("CV-11 — una org de UNA sucursal SI se cachea (es una respuesta real, no una falla)", async () => {
+    mockListaSucursales([{ id: "suc-unica", nombre: "Casa Central" }])
+    const params = {
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-unica",
+    }
+
+    expect(await resolverIndicadorVentaCacheado(params)).toBeNull()
+    expect(await resolverIndicadorVentaCacheado(params)).toBeNull()
+
+    expect(contarLecturas("sucursales")).toBe(1)
   })
 
   it("CV-7 — el camino de ESCRITURA no se cachea: resolverDestinoVenta siempre consulta", async () => {
