@@ -217,6 +217,58 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
+    // Revalidación al volver a la pestaña.
+    //
+    // La cookie de sucursal activa la comparten TODAS las pestañas, pero solo la
+    // que hace el cambio recarga. Sin esto, un ADMIN con el POS abierto en la
+    // pestaña 1 que cambia de sucursal en la pestaña 2 sigue leyendo "Vendiendo
+    // desde: <sucursal vieja>" mientras /api/ventas atribuye y descuenta de la
+    // nueva: el indicador pasa de informar a desinformar, que es justo lo que
+    // `derivarLecturaVenta` evita ocultándolo cuando no puede afirmar de dónde
+    // sale el stock.
+    //
+    // Se revalida, NO se recarga: el cambio lo hizo otra pestaña y acá puede
+    // haber un carrito a medio armar que el operador no pidió perder. El stock
+    // de los resultados se re-consulta en cada búsqueda y el checkout revalida
+    // contra el servidor (check-stock, sin caché), así que refrescar el
+    // indicador alcanza para que lo que se muestra deje de mentir.
+    useEffect(() => {
+      let cancelado = false
+      // `focus` y `visibilitychange` llegan juntos al volver a la pestaña (y
+      // varias veces al volver de un diálogo del sistema): sin esta ventana,
+      // cada vuelta cuesta varias consultas por cada montaje del buscador.
+      let ultima = 0
+      const MIN_ENTRE_REVALIDACIONES = 5000
+
+      const revalidar = async () => {
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") return
+        const ahora = Date.now()
+        if (ahora - ultima < MIN_ENTRE_REVALIDACIONES) return
+        ultima = ahora
+        try {
+          // limit=1: acá solo interesan los headers, no el listado.
+          const res = await fetch("/api/inventario/search?q=&limit=1&scope=venta&ventaInfo=true")
+          // Mismo criterio que el montaje: un error también parsea como JSON y
+          // no trae headers, así que reportarlo apagaría un indicador que ya
+          // estaba bien resuelto.
+          if (!cancelado && res.ok) {
+            onVentaSucursal?.(readVentaSucursalHeaders(res))
+          }
+        } catch {
+          // Sin red se conserva lo último resuelto.
+        }
+      }
+
+      window.addEventListener("focus", revalidar)
+      document.addEventListener("visibilitychange", revalidar)
+      return () => {
+        cancelado = true
+        window.removeEventListener("focus", revalidar)
+        document.removeEventListener("visibilitychange", revalidar)
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
     // Debounced search
     useEffect(() => {
       if (!query.trim()) {
