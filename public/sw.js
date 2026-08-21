@@ -205,7 +205,7 @@ self.addEventListener('fetch', (event) => {
       CACHEABLE_API_ROUTES.some(route => url.pathname.startsWith(route)) &&
       !SUCURSAL_SCOPED_API_PATTERNS.some(pattern => pattern.test(url.pathname))
     if (cacheable && request.method === 'GET') {
-      event.respondWith(staleWhileRevalidate(request, API_CACHE_NAME))
+      event.respondWith(staleWhileRevalidate(request, API_CACHE_NAME, event))
     } else {
       // Para otras APIs, network only con fallback a error
       event.respondWith(networkOnlyWithError(request))
@@ -298,7 +298,7 @@ function conTiempoLimite(promise, ms) {
 }
 
 // Estrategia: Stale-while-revalidate para APIs cacheables
-async function staleWhileRevalidate(request, cacheName) {
+async function staleWhileRevalidate(request, cacheName, event) {
   const cache = await caches.open(cacheName)
   const cached = await cache.match(request)
 
@@ -317,6 +317,15 @@ async function staleWhileRevalidate(request, cacheName) {
     }
     return response
   }).catch(() => null)
+
+  // Dejar de ESPERAR la revalidación no es renunciar a ella. Servida la
+  // respuesta, el navegador puede terminar el worker cuando quiera: sin esto el
+  // cache.put de arriba nunca llega a correr y, en un enlace a medias, cada
+  // request paga el presupuesto y vuelve a servir la MISMA copia vencida para
+  // siempre. waitUntil es lo que mantiene vivo al worker hasta guardarla.
+  if (event) {
+    event.waitUntil(fetchPromise)
+  }
 
   if (cached && !cacheVencido(cached)) {
     return cached

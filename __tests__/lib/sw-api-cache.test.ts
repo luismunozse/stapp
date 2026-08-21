@@ -116,8 +116,12 @@ function loadServiceWorker() {
     {}
   )
 
+  /** Everything the SW handed to `event.waitUntil` during a fetch dispatch. */
+  const waitUntilCalls: Array<Promise<unknown>> = []
+
   return {
     caches: cacheStorage,
+    waitUntilCalls,
     setNetwork(handler: (request: FakeRequest) => Promise<Response>) {
       networkHandler = handler
     },
@@ -133,7 +137,10 @@ function loadServiceWorker() {
         respondWith: (value: Promise<Response>) => {
           responded.push(value)
         },
-        waitUntil: (value: Promise<unknown>) => value,
+        waitUntil: (value: Promise<unknown>) => {
+          waitUntilCalls.push(value)
+          return value
+        },
       }
       for (const handler of listeners.fetch ?? []) handler(event)
       return responded.length > 0 ? await responded[0] : null
@@ -287,6 +294,40 @@ describe("service worker — API caching", () => {
       await vi.advanceTimersByTimeAsync(30_000)
 
       expect(await (await pendiente)!.json()).toEqual({ data: ["stale"] })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("SW-13 — la revalidacion abandonada se registra con waitUntil y termina guardando", async () => {
+    // Dejar de esperar la revalidacion no es lo mismo que renunciar a ella:
+    // servida la respuesta, el navegador puede matar el worker en cualquier
+    // momento. Sin waitUntil el cache.put nunca corre y, en un enlace a medias,
+    // cada request paga el presupuesto y vuelve a servir la MISMA copia vencida
+    // para siempre — justo el caso para el que se agrego el presupuesto.
+    vi.useFakeTimers()
+    try {
+      const url = `${ORIGIN}/api/clientes?page=1`
+      const store = await sw.caches.open(API_CACHE_NAME)
+      await store.put(
+        url,
+        jsonResponse({ data: ["stale"] }, { [CACHED_AT_HEADER]: String(Date.now() - 6 * 60 * 1000) })
+      )
+      let responder: ((value: Response) => void) | null = null
+      sw.setNetwork(() => new Promise<Response>((resolve) => { responder = resolve }))
+
+      const pendiente = sw.dispatchFetch("/api/clientes?page=1")
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(await (await pendiente)!.json()).toEqual({ data: ["stale"] })
+
+      expect(sw.waitUntilCalls.length).toBeGreaterThan(0)
+
+      // La red contesta tarde: el trabajo registrado tiene que dejar la fresca.
+      responder!(jsonResponse({ data: ["fresh"] }))
+      await Promise.all(sw.waitUntilCalls)
+
+      const guardada = await sw.caches.match(url)
+      expect(await guardada!.json()).toEqual({ data: ["fresh"] })
     } finally {
       vi.useRealTimers()
     }
