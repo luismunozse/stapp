@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useFormDraft } from '../use-form-draft'
+import { useFormDraft, fingerprintRecord } from '../use-form-draft'
 
 // Mutable session fixture read by the mocked useSession() below -- each
 // test sets it to whatever session shape it needs before rendering.
@@ -68,7 +68,7 @@ function renderDraft<T>(
     scope?: string | null
     enabled?: boolean
     debounceMs?: number
-    recordUpdatedAt?: string | number | Date | null
+    recordVersion?: string | number | Date | null
     validate?: (data: unknown) => boolean
   } = {}
 ) {
@@ -417,12 +417,12 @@ describe('useFormDraft', () => {
     const savedAt = Date.now() - 60_000
     window.localStorage.setItem(
       key,
-      JSON.stringify({ version: 3, savedAt, recordUpdatedAt: savedAt - 1000, data: { nombre: 'Mi borrador' } })
+      JSON.stringify({ version: 3, savedAt, recordVersion: savedAt - 1000, data: { nombre: 'Mi borrador' } })
     )
 
     const { result } = renderDraft(
       { nombre: 'Nombre del server' },
-      { feature: 'cliente-form', recordId: 'cli-1', recordUpdatedAt: new Date(Date.now() - 10_000) }
+      { feature: 'cliente-form', recordId: 'cli-1', recordVersion: new Date(Date.now() - 10_000) }
     )
     expect(result.current.ready).toBe(true)
     expect(result.current.draft).toBeNull()
@@ -431,20 +431,20 @@ describe('useFormDraft', () => {
 
   it('keeps an edit draft when the server record has not changed since it was written', () => {
     const key = 'draft:v3:cliente-form:org-1:user-1:edit:cli-1'
-    const recordUpdatedAt = Date.now() - 120_000
+    const recordVersion = Date.now() - 120_000
     window.localStorage.setItem(
       key,
       JSON.stringify({
         version: 3,
         savedAt: Date.now() - 60_000,
-        recordUpdatedAt,
+        recordVersion,
         data: { nombre: 'Mi borrador' },
       })
     )
 
     const { result } = renderDraft(
       { nombre: 'Nombre del server' },
-      { feature: 'cliente-form', recordId: 'cli-1', recordUpdatedAt: new Date(recordUpdatedAt) }
+      { feature: 'cliente-form', recordId: 'cli-1', recordVersion: new Date(recordVersion) }
     )
     expect(result.current.draft).toEqual({ nombre: 'Mi borrador' })
   })
@@ -462,15 +462,15 @@ describe('useFormDraft', () => {
 
     let live = { nombre: 'Nombre del server' }
     const { result, rerender } = renderHook(
-      ({ recordUpdatedAt }: { recordUpdatedAt: number }) =>
+      ({ recordVersion }: { recordVersion: number }) =>
         useFormDraft({
           feature: 'cliente-form',
           recordId: 'cli-1',
           debounceMs: 1000,
           getValue: () => live,
-          recordUpdatedAt,
+          recordVersion,
         }),
-      { initialProps: { recordUpdatedAt: primerUpdatedAt } }
+      { initialProps: { recordVersion: primerUpdatedAt } }
     )
 
     userInteracts()
@@ -485,7 +485,7 @@ describe('useFormDraft', () => {
 
     // El guardado del companero: misma key, otro token de frescura.
     const segundoUpdatedAt = Date.now()
-    rerender({ recordUpdatedAt: segundoUpdatedAt })
+    rerender({ recordVersion: segundoUpdatedAt })
     act(() => {
       vi.advanceTimersByTime(2000)
     })
@@ -495,7 +495,7 @@ describe('useFormDraft', () => {
     // Reestampado contra el registro que el operador tiene en pantalla: con el
     // token viejo la entrada sobrevive pero la proxima apertura la descarta por
     // desactualizada, que es la misma perdida por otro camino.
-    expect(guardado.recordUpdatedAt).toBe(segundoUpdatedAt)
+    expect(guardado.recordVersion).toBe(segundoUpdatedAt)
 
     // Y el flag de sucio sigue armado: lo que se escriba despues se sigue
     // grabando sin tener que volver a tocar otro control.
@@ -525,22 +525,22 @@ describe('useFormDraft', () => {
       JSON.stringify({
         version: 3,
         savedAt: Date.now() - 60_000,
-        recordUpdatedAt: primerUpdatedAt,
+        recordVersion: primerUpdatedAt,
         data: { nombre: 'Mi borrador' },
       })
     )
 
     let live = { nombre: 'Nombre del server' }
     const { result, rerender } = renderHook(
-      ({ recordUpdatedAt }: { recordUpdatedAt: number }) =>
+      ({ recordVersion }: { recordVersion: number }) =>
         useFormDraft({
           feature: 'cliente-form',
           recordId: 'cli-1',
           debounceMs: 1000,
           getValue: () => live,
-          recordUpdatedAt,
+          recordVersion,
         }),
-      { initialProps: { recordUpdatedAt: primerUpdatedAt } }
+      { initialProps: { recordVersion: primerUpdatedAt } }
     )
     expect(result.current.draft).toEqual({ nombre: 'Mi borrador' })
     expect(result.current.recordChangedWhileEditing).toBe(false)
@@ -554,7 +554,7 @@ describe('useFormDraft', () => {
 
     // El guardado del companero: misma key, token de frescura nuevo.
     const segundoUpdatedAt = Date.now()
-    rerender({ recordUpdatedAt: segundoUpdatedAt })
+    rerender({ recordVersion: segundoUpdatedAt })
     act(() => {
       vi.advanceTimersByTime(2000)
     })
@@ -566,9 +566,96 @@ describe('useFormDraft', () => {
     // ...y la entrada queda estampada contra el registro que el operador tiene
     // delante: con el token viejo sobrevive en disco pero la proxima apertura
     // la descarta por desactualizada, que es la misma perdida diferida.
-    expect(guardado.recordUpdatedAt).toBe(segundoUpdatedAt)
+    expect(guardado.recordVersion).toBe(segundoUpdatedAt)
     // El conflicto se avisa en vez de resolverlo por el operador.
     expect(result.current.recordChangedWhileEditing).toBe(true)
+  })
+
+  it('accepts an opaque fingerprint as the token, not only a timestamp', () => {
+    // El token de un registro cuyo `updatedAt` no distingue una edicion de
+    // cualquier otro UPDATE sobre la fila es una huella de sus campos (ver
+    // fingerprintRecord). Tiene que sobrevivir al sobre, que se arma a mano
+    // concatenando JSON: interpolar una string cruda ahi escribia un sobre que
+    // no se puede releer, o sea un borrador perdido.
+    const key = 'draft:v3:cliente-form:org-1:user-1:edit:cli-1'
+    const { rerender } = renderDraft(
+      { nombre: 'Server' },
+      { feature: 'cliente-form', recordId: 'cli-1', recordVersion: 'k3f9x1' }
+    )
+    userInteracts()
+    rerender({ value: { nombre: 'Editado' } })
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+
+    const stored = JSON.parse(window.localStorage.getItem(key)!)
+    expect(stored.recordVersion).toBe('k3f9x1')
+    expect(stored.data).toEqual({ nombre: 'Editado' })
+  })
+
+  it('keeps a draft whose envelope carries the token under its old name', () => {
+    // Los sobres escritos antes de que el token dejara de ser `updatedAt` viven
+    // hasta 7 dias: leerlos como "sin token" seria descartar trabajo por un
+    // cambio de nombre de campo.
+    const key = 'draft:v3:cliente-form:org-1:user-1:edit:cli-1'
+    const updatedAt = Date.now() - 120_000
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        version: 3,
+        savedAt: Date.now() - 60_000,
+        recordUpdatedAt: updatedAt,
+        data: { nombre: 'Mi borrador' },
+      })
+    )
+
+    const { result } = renderDraft(
+      { nombre: 'Nombre del server' },
+      { feature: 'cliente-form', recordId: 'cli-1', recordVersion: new Date(updatedAt) }
+    )
+    expect(result.current.draft).toEqual({ nombre: 'Mi borrador' })
+  })
+
+  it('discards a draft whose envelope carries an old-name token that moved', () => {
+    const key = 'draft:v3:cliente-form:org-1:user-1:edit:cli-1'
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        version: 3,
+        savedAt: Date.now() - 60_000,
+        recordUpdatedAt: Date.now() - 120_000,
+        data: { nombre: 'Mi borrador' },
+      })
+    )
+
+    const { result } = renderDraft(
+      { nombre: 'Nombre del server' },
+      { feature: 'cliente-form', recordId: 'cli-1', recordVersion: new Date() }
+    )
+    expect(result.current.draft).toBeNull()
+    expect(window.localStorage.getItem(key)).toBeNull()
+  })
+
+  it('keeps a draft whose envelope carries no token at all', () => {
+    // No se puede contestar si el registro se movio: una huella de campos no se
+    // ordena en el tiempo, asi que no hay contra que comparar `savedAt`. Ante la
+    // duda se conserva el trabajo, que es lo unico irrecuperable de los dos
+    // lados -- el conflicto real lo sigue atajando el submit del servidor.
+    const key = 'draft:v3:cliente-form:org-1:user-1:edit:cli-1'
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        version: 3,
+        savedAt: Date.now() - 60_000,
+        data: { nombre: 'Mi borrador' },
+      })
+    )
+
+    const { result } = renderDraft(
+      { nombre: 'Nombre del server' },
+      { feature: 'cliente-form', recordId: 'cli-1', recordVersion: 'huella-de-hoy' }
+    )
+    expect(result.current.draft).toEqual({ nombre: 'Mi borrador' })
   })
 
   it('reports whether the form is holding work, for call sites that re-prefill', () => {
@@ -619,35 +706,35 @@ describe('useFormDraft', () => {
       JSON.stringify({
         version: 3,
         savedAt: Date.now() - 60_000,
-        recordUpdatedAt: primerUpdatedAt,
+        recordVersion: primerUpdatedAt,
         data: { nombre: 'Mi borrador' },
       })
     )
 
     const live = { nombre: 'Mi borrador' }
-    const renderOptions = (recordUpdatedAt: number, enabled: boolean) => ({
+    const renderOptions = (recordVersion: number, enabled: boolean) => ({
       feature: 'cliente-form',
       recordId: 'cli-1',
       debounceMs: 1000,
       getValue: () => live,
-      recordUpdatedAt,
+      recordVersion,
       enabled,
     })
     const segundoUpdatedAt = Date.now()
     const { result, rerender, unmount } = renderHook(
-      ({ recordUpdatedAt, enabled }: { recordUpdatedAt: number; enabled: boolean }) =>
-        useFormDraft(renderOptions(recordUpdatedAt, enabled)),
-      { initialProps: { recordUpdatedAt: primerUpdatedAt, enabled: true } }
+      ({ recordVersion, enabled }: { recordVersion: number; enabled: boolean }) =>
+        useFormDraft(renderOptions(recordVersion, enabled)),
+      { initialProps: { recordVersion: primerUpdatedAt, enabled: true } }
     )
     expect(result.current.draft).toEqual({ nombre: 'Mi borrador' })
 
     // El companero guarda la ficha: misma key, token nuevo.
-    rerender({ recordUpdatedAt: segundoUpdatedAt, enabled: true })
+    rerender({ recordVersion: segundoUpdatedAt, enabled: true })
     expect(result.current.recordChangedWhileEditing).toBe(true)
     expect(JSON.parse(window.localStorage.getItem(key)!).conflicted).toBe(true)
 
     // El operador cierra sin guardar ni descartar.
-    rerender({ recordUpdatedAt: segundoUpdatedAt, enabled: false })
+    rerender({ recordVersion: segundoUpdatedAt, enabled: false })
     unmount()
 
     // ...y vuelve a abrir la misma ficha. El borrador se restaura -- nada se
@@ -667,15 +754,15 @@ describe('useFormDraft', () => {
 
     let live = { nombre: 'Nombre del server' }
     const { result, rerender } = renderHook(
-      ({ recordUpdatedAt }: { recordUpdatedAt: number }) =>
+      ({ recordVersion }: { recordVersion: number }) =>
         useFormDraft({
           feature: 'cliente-form',
           recordId: 'cli-1',
           debounceMs: 1000,
           getValue: () => live,
-          recordUpdatedAt,
+          recordVersion,
         }),
-      { initialProps: { recordUpdatedAt: primerUpdatedAt } }
+      { initialProps: { recordVersion: primerUpdatedAt } }
     )
 
     userInteracts()
@@ -685,7 +772,7 @@ describe('useFormDraft', () => {
       vi.advanceTimersByTime(1000)
     })
 
-    rerender({ recordUpdatedAt: Date.now() })
+    rerender({ recordVersion: Date.now() })
     expect(result.current.recordChangedWhileEditing).toBe(true)
 
     live = { nombre: 'Y un poco mas' }
@@ -709,15 +796,15 @@ describe('useFormDraft', () => {
 
     let live = { nombre: 'Nombre del server' }
     const { result, rerender } = renderHook(
-      ({ recordUpdatedAt }: { recordUpdatedAt: number }) =>
+      ({ recordVersion }: { recordVersion: number }) =>
         useFormDraft({
           feature: 'cliente-form',
           recordId: 'cli-1',
           debounceMs: 1000,
           getValue: () => live,
-          recordUpdatedAt,
+          recordVersion,
         }),
-      { initialProps: { recordUpdatedAt: primerUpdatedAt } }
+      { initialProps: { recordVersion: primerUpdatedAt } }
     )
 
     userInteracts()
@@ -726,7 +813,7 @@ describe('useFormDraft', () => {
       result.current.notifyChange()
       vi.advanceTimersByTime(1000)
     })
-    rerender({ recordUpdatedAt: Date.now() })
+    rerender({ recordVersion: Date.now() })
     expect(result.current.recordChangedWhileEditing).toBe(true)
 
     act(() => {
@@ -753,24 +840,24 @@ describe('useFormDraft', () => {
       JSON.stringify({
         version: 3,
         savedAt: Date.now() - 60_000,
-        recordUpdatedAt: primerUpdatedAt,
+        recordVersion: primerUpdatedAt,
         data: { nombre: 'Mi borrador' },
       })
     )
 
     const live = { nombre: 'Mi borrador' }
     const { result, rerender } = renderHook(
-      ({ recordUpdatedAt }: { recordUpdatedAt: number }) =>
+      ({ recordVersion }: { recordVersion: number }) =>
         useFormDraft({
           feature: 'cliente-form',
           recordId: 'cli-1',
           debounceMs: 1000,
           getValue: () => live,
-          recordUpdatedAt,
+          recordVersion,
         }),
-      { initialProps: { recordUpdatedAt: primerUpdatedAt } }
+      { initialProps: { recordVersion: primerUpdatedAt } }
     )
-    rerender({ recordUpdatedAt: Date.now() })
+    rerender({ recordVersion: Date.now() })
     expect(result.current.recordChangedWhileEditing).toBe(true)
 
     // Descartar deja el formulario en la version del companero: el conflicto
@@ -782,10 +869,10 @@ describe('useFormDraft', () => {
   })
 
   it('stores the record freshness token so a later save can be compared against it', () => {
-    const recordUpdatedAt = new Date(Date.now() - 120_000)
+    const recordVersion = new Date(Date.now() - 120_000)
     const { rerender } = renderDraft(
       { nombre: 'Server' },
-      { feature: 'cliente-form', recordId: 'cli-1', recordUpdatedAt }
+      { feature: 'cliente-form', recordId: 'cli-1', recordVersion }
     )
     userInteracts()
     rerender({ value: { nombre: 'Editado' } })
@@ -796,7 +883,7 @@ describe('useFormDraft', () => {
     const stored = JSON.parse(
       window.localStorage.getItem('draft:v3:cliente-form:org-1:user-1:edit:cli-1')!
     )
-    expect(stored.recordUpdatedAt).toBe(recordUpdatedAt.getTime())
+    expect(stored.recordVersion).toBe(recordVersion.getTime())
   })
 
   // --- clearDraft ----------------------------------------------------------
@@ -1405,5 +1492,51 @@ describe('useFormDraft', () => {
 
     // Un snapshot que no se pudo leer no escribe nada.
     expect(window.localStorage.length).toBe(0)
+  })
+})
+
+/**
+ * La huella con la que un call site arma su `recordVersion` cuando el
+ * `updatedAt` del registro no distingue una edicion de cualquier otro UPDATE
+ * sobre la fila (ver la nota de esa opcion, y cliente-form.tsx).
+ */
+describe('fingerprintRecord', () => {
+  it('does not depend on the order the fields come in', () => {
+    expect(fingerprintRecord({ nombre: 'Ana', telefono: '11' })).toBe(
+      fingerprintRecord({ telefono: '11', nombre: 'Ana' })
+    )
+  })
+
+  it('reads undefined and null as the same "no value"', () => {
+    // El servidor devuelve null y el formulario undefined para el mismo campo
+    // vacio: tomarlos como distintos convertiria una revalidacion cualquiera en
+    // "otro usuario guardo esta ficha".
+    expect(fingerprintRecord({ nombre: 'Ana', descuentoPct: undefined })).toBe(
+      fingerprintRecord({ nombre: 'Ana', descuentoPct: null })
+    )
+  })
+
+  it('moves when any field of the projection changes', () => {
+    const base = { nombre: 'Ana', telefono: '11', aceptaWhatsapp: true }
+    const huella = fingerprintRecord(base)
+    expect(fingerprintRecord({ ...base, telefono: '22' })).not.toBe(huella)
+    expect(fingerprintRecord({ ...base, aceptaWhatsapp: false })).not.toBe(huella)
+    expect(fingerprintRecord({ ...base, nombre: 'Ana ' })).not.toBe(huella)
+  })
+
+  it('does not carry the values it fingerprints', () => {
+    // Termina en un sobre que vive una semana en localStorage de una terminal
+    // compartida, y los campos que resume incluyen justo los que la proyeccion
+    // de borrador se ocupa de dejar afuera (lib/cliente-draft-projection.ts).
+    const huella = fingerprintRecord({
+      nombre: 'Ana Perez',
+      dni: '30111222',
+      cuit: '27-30111222-4',
+      email: 'ana@perez.test',
+      direccion: 'Av. Siempreviva 742',
+    })
+    for (const valor of ['Ana', '30111222', '27-30111222-4', 'perez.test', 'Siempreviva']) {
+      expect(huella).not.toContain(valor)
+    }
   })
 })

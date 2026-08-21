@@ -23,7 +23,7 @@ import type { Cliente } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { useOffline } from "@/contexts/offline-context"
-import { useFormDraft } from "@/hooks/use-form-draft"
+import { useFormDraft, fingerprintRecord } from "@/hooks/use-form-draft"
 import {
   stripSensitiveClienteFields,
   type WithoutSensitiveClienteFields,
@@ -131,11 +131,25 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
   const tipoCliente = watch("tipoCliente")
   const tipoPrecio = watch("tipoPrecio")
 
-  /** Momento del ultimo guardado de la ficha, en ms. Es lo que se mueve cuando
-   *  OTRA persona la guarda: la identidad del objeto tambien cambia en cada
-   *  revalidacion de SWR sin que haya cambiado nada, y por eso no sirve como
-   *  disparador. */
-  const clienteUpdatedAtMs = cliente?.updatedAt ? new Date(cliente.updatedAt).getTime() : null
+  /** Huella de los campos que ESTE formulario edita y manda en el PUT. Es lo
+   *  que se mueve cuando OTRA persona guarda la ficha, y solo entonces: la
+   *  identidad del objeto cambia en cada revalidacion de SWR sin que haya
+   *  cambiado nada, asi que tampoco sirve como disparador.
+   *
+   *  Deliberadamente NO es `updatedAt`. La tabla `clientes` tiene un trigger
+   *  BEFORE UPDATE que mantiene esa columna (migracion 001) y cada movimiento de
+   *  cuenta corriente hace `UPDATE clientes SET saldo_cuenta = ...` (migracion
+   *  234): cobrar o fiar una orden contra la cuenta del cliente movia el
+   *  timestamp sin que nadie hubiera tocado la ficha, y con el timestamp como
+   *  token se borraba el borrador de quien la tenia abierta y se le avisaba que
+   *  un companero la habia guardado. Las dos cosas, por trabajo de mostrador
+   *  rutinario.
+   *
+   *  Se calcula sobre `clienteFormDefaults(cliente)` a proposito: es la unica
+   *  funcion que mapea el registro a los campos de este formulario, asi que
+   *  agregar un campo al form lo agrega tambien a la huella y las dos no pueden
+   *  separarse. */
+  const clienteRecordVersion = cliente ? fingerprintRecord(clienteFormDefaults(cliente)) : null
   /** Con que (apertura, ficha) se hizo el ultimo prefill. Distingue "abri el
    *  dialog / cambie de ficha" -- donde el prefill va siempre -- de "la misma
    *  ficha se movio en el servidor", donde depende de lo que haya en pantalla. */
@@ -211,10 +225,10 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
         (value.tipoCliente === "INDIVIDUAL" || value.tipoCliente === "EMPRESA")
       )
     },
-    // En edicion, si otro usuario guardo el cliente despues de que se escribio
+    // En edicion, si otro usuario EDITO el cliente despues de que se escribio
     // este borrador, restaurarlo pisaria ese guardado (el submit manda el form
     // entero). El hook lo descarta comparando contra este token.
-    recordUpdatedAt: cliente?.updatedAt ?? null,
+    recordVersion: clienteRecordVersion,
   })
 
   /** El aviso no puede sobrevivir al borrador que anuncia: sale solo mientras
@@ -255,15 +269,16 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
     const anterior = prefillAplicadoRef.current
     const mismaFichaYaAbierta = anterior.open && anterior.clienteId === (cliente?.id ?? null)
     prefillAplicadoRef.current = { open: true, clienteId: cliente?.id ?? null }
-    // La misma ficha ya abierta solo puede haber llegado aca por un `updatedAt`
-    // nuevo: es el unico dato del registro en las dependencias.
+    // La misma ficha ya abierta solo puede haber llegado aca por una huella
+    // nueva: es el unico dato del registro en las dependencias, y se mueve
+    // cuando alguien edito de verdad alguno de estos campos.
     if (mismaFichaYaAbierta && hasUnsavedWork()) return
     reset(clienteFormDefaults(cliente))
     // `cliente` entero se lee adentro, pero no va en las dependencias a
     // proposito (ver arriba): las que disparan son la apertura, la ficha y su
     // momento de guardado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, cliente?.id, clienteUpdatedAtMs, reset, hasUnsavedWork])
+  }, [open, cliente?.id, clienteRecordVersion, reset, hasUnsavedWork])
 
   // Los cambios de react-hook-form ya no re-renderizan el formulario, asi que
   // hay que avisarle al borrador por suscripcion.

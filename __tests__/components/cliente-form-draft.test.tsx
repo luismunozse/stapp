@@ -15,11 +15,19 @@ vi.mock("next-auth/react", () => ({
   useSession: () => ({ data: { user: { id: "user-1", organizationId: "org-1", role: "ADMIN" } } }),
 }))
 
-/** `updatedAt` fijo y viejo a proposito: es el token de frescura que el hook
- *  compara contra el borrador. Con `new Date()` el registro quedaria empatado
- *  (o un milisegundo por delante) con el borrador recien escrito y el
- *  resultado del test dependeria del reloj. */
+/** `updatedAt` fijo y viejo a proposito, para que ningun test dependa del
+ *  reloj. Ya NO es el token de frescura del borrador: ese se calcula sobre los
+ *  campos que el formulario edita, justamente para que moverlo requiera una
+ *  edicion y no cualquier UPDATE sobre la fila (ver el bloque de cuenta
+ *  corriente mas abajo). */
 const CLIENTE_UPDATED_AT = new Date("2026-01-01T10:00:00.000Z")
+
+/** Los sobres que estos tests siembran a mano NO llevan `recordVersion`. Un
+ *  sobre sin token no se considera desactualizado (es la rama documentada de
+ *  `isStaleAgainstRecord`), asi que sirve para montar un borrador restaurable
+ *  sin tener que recalcular aca la huella del formulario. Los tests que si
+ *  prueban el descarte por frescura ponen un token explicito que no es el de la
+ *  ficha. */
 
 function makeCliente(overrides: Partial<Cliente> = {}): Cliente {
   return {
@@ -162,7 +170,6 @@ describe("ClienteForm — borrador local", () => {
       JSON.stringify({
         version: 3,
         savedAt: Date.now(),
-        recordUpdatedAt: CLIENTE_UPDATED_AT.getTime(),
         data: {
           tipoCliente: "INDIVIDUAL",
           nombre: "Juan Editado Sin Guardar",
@@ -354,7 +361,6 @@ describe("ClienteForm — borrador local", () => {
       JSON.stringify({
         version: 3,
         savedAt: Date.now(),
-        recordUpdatedAt: otroUpdatedAt.getTime(),
         data: {
           tipoCliente: "INDIVIDUAL",
           nombre: "Escrito en la otra pestana",
@@ -371,12 +377,13 @@ describe("ClienteForm — borrador local", () => {
       }),
     )
 
-    // La revalidacion que trae el guardado de la otra pestana: mueve el token
-    // de frescura y vuelve a correr la lectura del borrador.
+    // La revalidacion que trae el guardado de la otra pestana: cambio un campo
+    // de la ficha, o sea que mueve el token de frescura y vuelve a correr la
+    // lectura del borrador.
     rerender(
       <ModalProvider>
         <ClienteForm
-          cliente={makeCliente({ updatedAt: otroUpdatedAt })}
+          cliente={makeCliente({ telefono: "1199998888", updatedAt: otroUpdatedAt })}
           open
           onClose={vi.fn()}
           onSuccess={vi.fn()}
@@ -400,7 +407,6 @@ describe("ClienteForm — borrador local", () => {
       JSON.stringify({
         version: 3,
         savedAt: Date.now(),
-        recordUpdatedAt: CLIENTE_UPDATED_AT.getTime(),
         data: {
           tipoCliente: "INDIVIDUAL",
           nombre: "Borrador de la ficha 1",
@@ -454,7 +460,6 @@ describe("ClienteForm — borrador local", () => {
       JSON.stringify({
         version: 3,
         savedAt: Date.now(),
-        recordUpdatedAt: CLIENTE_UPDATED_AT.getTime(),
         data: {
           tipoCliente: "INDIVIDUAL",
           nombre: "Juan Editado Sin Guardar",
@@ -478,11 +483,14 @@ describe("ClienteForm — borrador local", () => {
     )
     expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Editado Sin Guardar")
 
-    // El companero guarda la misma ficha; SWR revalida y el token se mueve.
+    // El companero EDITA la misma ficha; SWR revalida y el token se mueve.
     rerender(
       <ModalProvider>
         <ClienteForm
-          cliente={makeCliente({ updatedAt: new Date("2026-01-03T10:00:00.000Z") })}
+          cliente={makeCliente({
+            nombre: "Juan Perez Actualizado",
+            updatedAt: new Date("2026-01-03T10:00:00.000Z"),
+          })}
           open
           onClose={vi.fn()}
           onSuccess={vi.fn()}
@@ -497,20 +505,90 @@ describe("ClienteForm — borrador local", () => {
     expect(screen.getByText(/otro usuario guardó esta ficha/i)).toBeInTheDocument()
   })
 
-  it("descarta un borrador de edicion si otro usuario guardo el cliente despues", () => {
+  // --- El token de frescura no es `updatedAt` --------------------------------
+  //
+  // `clientes` tiene un trigger BEFORE UPDATE que mantiene `updated_at`
+  // (supabase/migrations/001_schema.sql), y cada movimiento de cuenta corriente
+  // hace `UPDATE clientes SET saldo_cuenta = ...`
+  // (supabase/migrations/234_cc_fiado_tipos_y_funciones.sql): cobrar o fiar una
+  // orden contra la cuenta de un cliente le mueve el `updatedAt` sin que nadie
+  // haya tocado su ficha. Con ese timestamp como token de frescura, trabajo de
+  // mostrador rutinario borraba el borrador de quien tenia la ficha abierta --
+  // exactamente la perdida que esta funcion existe para evitar, disparada por
+  // algo que no fue una edicion.
+
+  it("no descarta el borrador al reabrir la ficha despues de un movimiento de cuenta corriente", () => {
+    const key = "draft:v3:cliente-form:org-1:user-1:edit:cli-1"
+    const dialog = (props: { cliente: Cliente; open: boolean }) => (
+      <ModalProvider>
+        <ClienteForm {...props} onClose={vi.fn()} onSuccess={vi.fn()} />
+      </ModalProvider>
+    )
+
+    const { rerender } = render(dialog({ cliente: makeCliente(), open: true }))
+    fireEvent.change(screen.getByLabelText("Nombre *"), {
+      target: { value: "Juan Perez (sin guardar)" },
+    })
+
+    // Se le vence la sesion / cierra el dialog: el hook se pausa y vuelca lo
+    // que tenia pendiente.
+    rerender(dialog({ cliente: makeCliente(), open: false }))
+    expect(window.localStorage.getItem(key)).not.toBeNull()
+
+    // Mientras tanto, un companero cobra una orden contra la cuenta corriente de
+    // este cliente. Ningun campo de la ficha cambio; solo el saldo, y con el el
+    // `updatedAt` de la fila.
+    const conSaldoMovido = makeCliente({ updatedAt: new Date("2026-01-03T10:00:00.000Z") })
+    rerender(dialog({ cliente: conSaldoMovido, open: true }))
+
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Perez (sin guardar)")
+    expect(screen.getByText(/se restauró un borrador no guardado/i)).toBeInTheDocument()
+    expect(window.localStorage.getItem(key)).not.toBeNull()
+  })
+
+  it("no avisa un conflicto cuando lo unico que se movio fue el saldo de cuenta corriente", () => {
+    // El otro lado del mismo problema: con el dialog abierto, SWR revalida al
+    // volver el foco y traia un `updatedAt` nuevo. El hook lo leia como "otro
+    // usuario guardo esta ficha" y levantaba el aviso sobre un registro que
+    // nadie edito -- el aviso que entrena a ignorar los avisos.
+    const { rerender } = render(
+      <ModalProvider>
+        <ClienteForm cliente={makeCliente()} open onClose={vi.fn()} onSuccess={vi.fn()} />
+      </ModalProvider>,
+    )
+    fireEvent.change(screen.getByLabelText("Nombre *"), {
+      target: { value: "Juan Perez (sin guardar)" },
+    })
+
+    rerender(
+      <ModalProvider>
+        <ClienteForm
+          cliente={makeCliente({ updatedAt: new Date("2026-01-03T10:00:00.000Z") })}
+          open
+          onClose={vi.fn()}
+          onSuccess={vi.fn()}
+        />
+      </ModalProvider>,
+    )
+
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Perez (sin guardar)")
+    expect(screen.queryByText(/otro usuario guardó esta ficha/i)).not.toBeInTheDocument()
+  })
+
+  it("descarta un borrador de edicion si otro usuario edito el cliente despues", () => {
     // El submit de edicion manda el formulario entero (PUT /api/clientes/:id),
     // asi que restaurar un borrador viejo encima de un registro mas nuevo
     // pisaria en silencio lo que guardo el otro usuario.
     const key = "draft:v3:cliente-form:org-1:user-1:edit:cli-1"
-    // Borrador reciente (dentro de la ventana de 7 dias) escrito cuando el
-    // registro tenia otro updatedAt: alguien lo guardo en el medio.
+    // Borrador reciente (dentro de la ventana de 7 dias) escrito cuando la ficha
+    // todavia decia otra cosa: alguien la edito en el medio.
     const savedAt = Date.now() - 60_000
     window.localStorage.setItem(
       key,
       JSON.stringify({
         version: 3,
         savedAt,
-        recordUpdatedAt: savedAt - 60_000,
+        recordVersion: "huella-de-antes-del-guardado-ajeno",
         data: {
           tipoCliente: "INDIVIDUAL",
           nombre: "Version vieja sin guardar",
@@ -530,7 +608,10 @@ describe("ClienteForm — borrador local", () => {
     render(
       <ModalProvider>
         <ClienteForm
-          cliente={makeCliente({ updatedAt: new Date(Date.now() - 10_000) })}
+          cliente={makeCliente({
+            nombre: "Juan Perez Actualizado",
+            updatedAt: new Date(Date.now() - 10_000),
+          })}
           open
           onClose={vi.fn()}
           onSuccess={vi.fn()}
@@ -539,7 +620,7 @@ describe("ClienteForm — borrador local", () => {
     )
 
     expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
-    expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Perez")
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Perez Actualizado")
     expect(window.localStorage.getItem(key)).toBeNull()
   })
 })
@@ -615,7 +696,6 @@ describe("ClienteForm — borrador local (datos sensibles)", () => {
       JSON.stringify({
         version: 3,
         savedAt: Date.now(),
-        recordUpdatedAt: CLIENTE_UPDATED_AT.getTime(),
         data: {
           tipoCliente: "INDIVIDUAL",
           nombre: "Juan Editado Sin Guardar",

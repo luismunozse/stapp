@@ -20,9 +20,15 @@
  * less (recepcion-form.tsx keeps just `nombre`/`telefono`), never more.
  */
 
-/** Never persisted: identity documents and contact/location data. None of it is
- *  needed to keep filling in a form that was interrupted -- the customer is in
- *  front of the counter, or the record already has it. */
+/** Never persisted: identity and tax documents, plus the two pieces of contact
+ *  data the restored form does not need in order to keep going -- an address
+ *  and an email address. None of it is: the customer is in front of the
+ *  counter, or the record already has it.
+ *
+ *  `nombre` and `telefono` deliberately stay on the safe side. They are the two
+ *  fields a form cannot be filled in without, they are what the restored UI
+ *  reads back to say WHICH customer this draft is about, and both are already
+ *  on the paper ticket sitting on that same counter. */
 export const SENSITIVE_CLIENTE_FIELDS = ["dni", "cuit", "email", "direccion"] as const
 
 export type SensitiveClienteField = (typeof SENSITIVE_CLIENTE_FIELDS)[number]

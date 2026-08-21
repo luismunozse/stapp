@@ -21,8 +21,10 @@ import { useSession } from "next-auth/react"
  * key can't accidentally leak data across users/orgs sharing a device.
  *
  * The stored envelope carries its own schema version, a timestamp and -- for
- * edit-mode forms -- the record's `updatedAt` as it was when the draft was
- * written. A draft that fails to parse, was written by an older/newer schema,
+ * edit-mode forms -- a freshness token of the record as it was when the draft
+ * was written (see the `recordVersion` option, and read its warning before
+ * reaching for `updatedAt`).
+ * A draft that fails to parse, was written by an older/newer schema,
  * is older than MAX_AGE_MS, or belongs to a record that someone else has
  * saved since, is treated as absent and removed. Persistence is best-effort
  * -- SSR-safe (window/localStorage guarded) and quota-safe (write failures
@@ -222,14 +224,17 @@ function cssEscape(value: string): string {
 interface DraftEnvelope<T> {
   version: number
   savedAt: number
-  /** `updatedAt` of the edited record when the draft was written, in ms.
-   *  Absent for new-record drafts (and for drafts written before this field
-   *  existed, which fall back to a savedAt comparison). */
+  /** Freshness token of the edited record as it was when the draft was written
+   *  (see the `recordVersion` option). Absent for new-record drafts. */
+  recordVersion?: string | number | null
+  /** What `recordVersion` was called while it could only hold `updatedAt` in
+   *  ms. Still read, so an entry written before the rename keeps being
+   *  validated instead of silently reading as "no token". */
   recordUpdatedAt?: number | null
   /** Somebody else saved the record while this draft's form was already
    *  holding it. Lives in the envelope and not only in React state because the
    *  re-stamp that keeps the draft readable (see restampDraft) also erases the
-   *  only other trace of the conflict: `recordUpdatedAt` now MATCHES the
+   *  only other trace of the conflict: `recordVersion` now MATCHES the
    *  colleague's save, so the next open restores the draft as if nothing had
    *  happened. Absent means "no conflict" -- which is what every envelope
    *  written before this field existed meant too. */
@@ -262,10 +267,24 @@ export interface UseFormDraftOptions<T> {
   enabled?: boolean
   /** Debounce delay in ms before a changed value is written. Defaults to 1000. */
   debounceMs?: number
-  /** `updatedAt` of the record being edited, as loaded from the server. When
-   *  it is newer than the stored draft, the draft is discarded instead of
-   *  silently overwriting somebody else's save. Ignored for new records. */
-  recordUpdatedAt?: string | number | Date | null
+  /** Freshness token of the record being edited: an opaque value that changes
+   *  EXACTLY when the fields this form owns change. When it differs from the
+   *  one stored alongside the draft, the draft is discarded -- or, if the form
+   *  is already holding work, kept and reported through
+   *  `recordChangedWhileEditing` -- instead of silently overwriting somebody
+   *  else's save. Ignored for new records.
+   *
+   *  NOT the record's `updatedAt` column, tempting as that is. A row timestamp
+   *  moves for ANY write to the row, and a `BEFORE UPDATE` trigger plus one
+   *  denormalized counter is all it takes for that to include work nobody would
+   *  call an edit: every cuenta-corriente movement runs
+   *  `UPDATE clientes SET saldo_cuenta = ...`, so charging an order against a
+   *  customer's account deleted the draft of whoever had that customer's form
+   *  open and told them a colleague had saved the record. Derive the token from
+   *  the editable fields instead -- `fingerprintRecord` below does exactly that,
+   *  and a Date/number is still accepted for a record whose timestamp really is
+   *  its edit token. */
+  recordVersion?: string | number | Date | null
   /** The form's own root element (its `<form>`). The interaction gate only
    *  counts controls that belong to it, so a nested form -- the "Nuevo
    *  cliente" dialog ClienteSelector renders inside the intake screens --
@@ -326,7 +345,7 @@ export interface UseFormDraftResult<T> {
    *  look current. Cleared ONLY by `clearDraft` -- submit and "Descartar", the
    *  two ways the conflict actually gets settled -- and it goes with the entry
    *  they delete. Always false for new-record forms, which have no
-   *  `recordUpdatedAt` to move. */
+   *  `recordVersion` to move. */
   recordChangedWhileEditing: boolean
 }
 
@@ -342,15 +361,55 @@ function buildDraftKey(
   return `draft:v${DRAFT_SCHEMA_VERSION}:${feature}:${organizationId}:${userId}:${base}${suffix}`
 }
 
-function toMillis(value?: string | number | Date | null): number | null {
+/** Normalizes whatever the caller passed as `recordVersion` into something two
+ *  reads can be compared with `!==`. A Date becomes its instant; a string is an
+ *  opaque token and is kept verbatim (parsing it as a date would turn a
+ *  fingerprint into NaN, i.e. into "no token at all"). */
+function toRecordVersion(value?: string | number | Date | null): string | number | null {
   if (value === null || value === undefined) return null
-  const ms =
-    value instanceof Date
-      ? value.getTime()
-      : typeof value === "number"
-        ? value
-        : Date.parse(value)
-  return Number.isFinite(ms) ? ms : null
+  if (value instanceof Date) {
+    const ms = value.getTime()
+    return Number.isFinite(ms) ? ms : null
+  }
+  if (typeof value === "number") return Number.isFinite(value) ? value : null
+  return value
+}
+
+/**
+ * Stable fingerprint of the fields a form owns -- what a call site passes as
+ * `recordVersion` when the record's own timestamp is not an edit token (see
+ * that option). Feed it the same projection the form submits, so the two can
+ * never drift: in cliente-form.tsx that is `clienteFormDefaults(cliente)`, the
+ * one function that maps a customer record onto this form's fields.
+ *
+ * Hashed rather than stored verbatim, because the envelope this ends up in sits
+ * in localStorage for a week on a counter terminal several operators share --
+ * and the fields being fingerprinted include the very ones the draft projection
+ * takes pains to keep out of it (lib/cliente-draft-projection.ts). A 53-bit
+ * digest answers "did any of them change?" without carrying any of them.
+ *
+ * Key order is normalized and `undefined` folds into `null`: both mean "no
+ * value" in a form, and a record that comes back from the server with one where
+ * it had the other must not read as somebody's edit.
+ */
+export function fingerprintRecord(values: Record<string, unknown>): string {
+  const canonical = Object.keys(values)
+    .sort()
+    .map((key) => `${key}:${JSON.stringify(values[key] ?? null)}`)
+    .join("|")
+  // cyrb53: two interleaved 32-bit rounds combined into 53 bits. A change
+  // detector, not a security control -- it never has to resist an adversary,
+  // only tell one field edit from none.
+  let h1 = 0xdeadbeef
+  let h2 = 0x41c6ce57
+  for (let i = 0; i < canonical.length; i++) {
+    const ch = canonical.charCodeAt(i)
+    h1 = Math.imul(h1 ^ ch, 2654435761)
+    h2 = Math.imul(h2 ^ ch, 1597334677)
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36)
 }
 
 /**
@@ -376,20 +435,24 @@ function safeSnapshot(read: () => unknown): string | null {
 }
 
 /**
- * True when the record was saved by somebody else after this draft was
- * written. Preferred check is the token captured at write time (exact: any
- * change to the record invalidates the draft); the savedAt comparison is the
- * fallback for envelopes written before the token existed.
+ * True when the record's editable content moved after this draft was written.
+ * Preferred check is the token captured at write time; the savedAt comparison
+ * is the fallback for envelopes written before any token existed.
  */
 function isStaleAgainstRecord<T>(
   envelope: DraftEnvelope<T>,
-  recordUpdatedAtMs: number | null
+  recordVersion: string | number | null
 ): boolean {
-  if (recordUpdatedAtMs === null) return false
-  if (typeof envelope.recordUpdatedAt === "number") {
-    return recordUpdatedAtMs !== envelope.recordUpdatedAt
+  if (recordVersion === null) return false
+  const stored = envelope.recordVersion ?? envelope.recordUpdatedAt
+  if (typeof stored === "string" || typeof stored === "number") {
+    return recordVersion !== stored
   }
-  return recordUpdatedAtMs > envelope.savedAt
+  // El sobre no trae token. Solo queda compararlo contra `savedAt`, y eso pide
+  // que el token de hoy sea un instante: una huella de campos no se ordena en el
+  // tiempo, asi que ahi la pregunta no tiene respuesta -- y ante la duda se
+  // conserva el trabajo, que es lo unico irrecuperable de los dos lados.
+  return typeof recordVersion === "number" ? recordVersion > envelope.savedAt : false
 }
 
 /** Throttles the sweep below: every mounted form would otherwise walk the
@@ -442,7 +505,7 @@ function sweepStaleDrafts(): void {
 
 function readDraft<T>(
   key: string,
-  recordUpdatedAtMs: number | null,
+  recordVersion: string | number | null,
   validate?: (data: unknown) => boolean
 ): StoredDraft<T> | null {
   try {
@@ -454,7 +517,7 @@ function readDraft<T>(
       parsed.version === DRAFT_SCHEMA_VERSION &&
       typeof parsed.savedAt === "number" &&
       Date.now() - parsed.savedAt <= MAX_AGE_MS &&
-      !isStaleAgainstRecord(parsed, recordUpdatedAtMs) &&
+      !isStaleAgainstRecord(parsed, recordVersion) &&
       // Inside the try on purpose: a validator that throws on a shape it did
       // not expect means the same thing as one that returns false.
       (!validate || validate(parsed.data))
@@ -498,13 +561,16 @@ function readDraft<T>(
  * then replaces the colleague's save silently, which is the loss the whole
  * freshness token exists to prevent.
  */
-function restampDraft(key: string, recordUpdatedAtMs: number | null): void {
+function restampDraft(key: string, recordVersion: string | number | null): void {
   try {
     const raw = window.localStorage.getItem(key)
     if (!raw) return
     const parsed = JSON.parse(raw) as DraftEnvelope<unknown>
     if (!parsed || typeof parsed.savedAt !== "number") return
-    parsed.recordUpdatedAt = recordUpdatedAtMs
+    parsed.recordVersion = recordVersion
+    // Un sobre viejo traeria el token bajo el nombre anterior: dejarlo seria
+    // guardar dos respuestas a la misma pregunta.
+    delete parsed.recordUpdatedAt
     parsed.conflicted = true
     window.localStorage.setItem(key, JSON.stringify(parsed))
   } catch {
@@ -519,14 +585,14 @@ export function useFormDraft<T>({
   getValue,
   enabled = true,
   debounceMs = DEFAULT_DEBOUNCE_MS,
-  recordUpdatedAt = null,
+  recordVersion = null,
   rootRef,
   validate,
 }: UseFormDraftOptions<T>): UseFormDraftResult<T> {
   const { data: session, status: sessionStatus } = useSession()
   const userId = session?.user?.id
   const organizationId = session?.user?.organizationId
-  const recordUpdatedAtMs = toMillis(recordUpdatedAt)
+  const recordVersionValue = toRecordVersion(recordVersion)
   const sessionUsable = !!userId && !!organizationId
   /** La sesion contesto, y lo que contesto no alcanza para armar una key: el
    *  fetch fallo (queda "unauthenticated") o el usuario no tiene organizacion.
@@ -541,16 +607,16 @@ export function useFormDraft<T>({
   const [sessionGraceExpired, setSessionGraceExpired] = useState(false)
 
   const keyRef = useRef<string | null>(null)
-  /** `recordUpdatedAt` the current key was last initialized (or re-stamped)
+  /** `recordVersion` the current key was last initialized (or re-stamped)
    *  against. It is what lets a same-key re-run tell "the record moved under
    *  us" from a re-run for any other reason, without depending on which of the
    *  effect's dependencies happens to be the volatile one today. */
-  const keyRecordUpdatedAtRef = useRef<number | null>(null)
+  const keyRecordVersionRef = useRef<string | number | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const getValueRef = useRef(getValue)
   const enabledRef = useRef(enabled)
   const debounceMsRef = useRef(debounceMs)
-  const recordUpdatedAtRef = useRef(recordUpdatedAtMs)
+  const recordVersionRef = useRef(recordVersionValue)
   const rootRefRef = useRef(rootRef)
   const validateRef = useRef(validate)
   /** Serialized snapshot the form is compared against to decide "did the user
@@ -585,7 +651,7 @@ export function useFormDraft<T>({
     getValueRef.current = getValue
     enabledRef.current = enabled
     debounceMsRef.current = debounceMs
-    recordUpdatedAtRef.current = recordUpdatedAtMs
+    recordVersionRef.current = recordVersionValue
     rootRefRef.current = rootRef
     validateRef.current = validate
   })
@@ -682,7 +748,10 @@ export function useFormDraft<T>({
       const envelope =
         `{"version":${DRAFT_SCHEMA_VERSION},` +
         `"savedAt":${Date.now()},` +
-        `"recordUpdatedAt":${recordUpdatedAtRef.current ?? "null"},` +
+        // Serializado, no interpolado: el token puede ser una huella de campos
+        // (una string), y pegarla cruda escribe JSON invalido -- un sobre que no
+        // se puede releer es un borrador perdido.
+        `"recordVersion":${JSON.stringify(recordVersionRef.current ?? null)},` +
         // Only written when it is true: an absent mark is what "no conflict"
         // has always meant on disk, so nothing has to be migrated.
         (conflictedRef.current ? `"conflicted":true,` : "") +
@@ -759,8 +828,8 @@ export function useFormDraft<T>({
     // formulario lo AVISE. Guardar o descartar es una decision de quien esta
     // mirando la pantalla, no algo que se resuelva en silencio.
     if (key === keyRef.current && (interactedRef.current || restoredRef.current)) {
-      if (recordUpdatedAtMs !== keyRecordUpdatedAtRef.current) {
-        keyRecordUpdatedAtRef.current = recordUpdatedAtMs
+      if (recordVersionValue !== keyRecordVersionRef.current) {
+        keyRecordVersionRef.current = recordVersionValue
         // El flag va en la ref ANTES que en el estado y ademas queda en el
         // sobre (restampDraft): el aviso tiene que sobrevivir a que se cierre y
         // se vuelva a abrir el formulario, y el estado de React no. Ver la nota
@@ -768,7 +837,7 @@ export function useFormDraft<T>({
         // nada escrito en disco -- el debounce no llego a disparar -- para que
         // el flush siguiente ya salga marcado.
         conflictedRef.current = true
-        restampDraft(key, recordUpdatedAtMs)
+        restampDraft(key, recordVersionValue)
         setRecordChangedWhileEditing(true)
       }
       // Fuerza la reescritura del sobre completo en el flush siguiente, para lo
@@ -779,7 +848,7 @@ export function useFormDraft<T>({
     }
     if (key !== keyRef.current) flushPending()
     keyRef.current = key
-    keyRecordUpdatedAtRef.current = recordUpdatedAtMs
+    keyRecordVersionRef.current = recordVersionValue
     interactedRef.current = false
     lastSavedRef.current = null
     // Provisional: lo que se lee ACA es el formulario del registro ANTERIOR. El
@@ -790,7 +859,7 @@ export function useFormDraft<T>({
     // precargada que nadie edito.
     baselineStaleRef.current = true
     baselineRef.current = safeSnapshot(() => getValueRef.current())
-    const restored = readDraft<T>(key, recordUpdatedAtMs, validateRef.current)
+    const restored = readDraft<T>(key, recordVersionValue, validateRef.current)
     restoredRef.current = restored !== null
     // El conflicto se recupera del sobre, no se apaga. Re-inicializar es
     // justamente el camino por el que se perdia: el re-estampado deja la
@@ -807,7 +876,7 @@ export function useFormDraft<T>({
     enabled,
     userId,
     organizationId,
-    recordUpdatedAtMs,
+    recordVersionValue,
     flushPending,
     sessionResolvedUnusable,
     sessionGraceExpired,
