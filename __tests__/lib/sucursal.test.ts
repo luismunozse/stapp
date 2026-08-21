@@ -896,6 +896,29 @@ describe("cache de resolucion de venta (solo lecturas del POS)", () => {
     }
   })
 
+  it("CV-18 — el TTL se cuenta desde que la query CONTESTO, no desde que arranco", async () => {
+    // Un round trip lento a Supabase transcurre entre las dos marcas: medir el
+    // vencimiento contra la de antes guarda una entrada que ya nace vieja, y le
+    // recorta al TTL exactamente lo que tardo la consulta.
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+    const T0 = 1_000_000
+    const ahora = vi.spyOn(Date, "now")
+    try {
+      // Antes de resolver: T0. Despues de resolver: T0 + 3s (la query tardo).
+      ahora.mockReturnValueOnce(T0).mockReturnValue(T0 + 3_000)
+      await resolverDestinoVentaCacheado(paramsDeOrg("org-lenta"))
+
+      // A los 29s de que la query contesto la entrada TIENE que seguir viva.
+      ahora.mockReturnValue(T0 + 3_000 + 29_000)
+      const antes = contarLecturas("depositos")
+      await resolverDestinoVentaCacheado(paramsDeOrg("org-lenta"))
+
+      expect(contarLecturas("depositos")).toBe(antes)
+    } finally {
+      ahora.mockRestore()
+    }
+  })
+
   it("CV-7 — el camino de ESCRITURA no se cachea: resolverDestinoVenta siempre consulta", async () => {
     mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
     const params = { role: "ADMIN", organizationId: "org-1", userSucursalId: null }

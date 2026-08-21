@@ -414,6 +414,13 @@ async function memoConTtl<T>(
   const data = await resolver()
   if (cacheable && !cacheable(data)) return data
 
+  // Releer el reloj: entre las dos marcas transcurrio un round trip a Supabase.
+  // Con la marca de antes, una consulta de 3s guardaria una entrada que ya nace
+  // 3s vieja (TTL efectivo 27s) y el barrido de abajo mediria contra un instante
+  // pasado, recolectando de menos y haciendo desalojar entradas que ya no hacia
+  // falta desalojar.
+  const guardadoEn = Date.now()
+
   // Refrescar una entrada vencida es un uso, igual que un hit. `Map.set` sobre
   // una clave que ya existe NO la mueve de lugar, asi que sin este delete la
   // clave que se refresca una y otra vez — el tenant mas activo — se quedaba
@@ -424,7 +431,7 @@ async function memoConTtl<T>(
 
   if (store.size >= CACHE_VENTA_MAX_ENTRIES) {
     for (const [k, entry] of store) {
-      if (entry.expiresAt <= now) store.delete(k)
+      if (entry.expiresAt <= guardadoEn) store.delete(k)
     }
     // The sweep frees nothing when every entry is still inside its TTL — the
     // exact case the cap exists for, since the key carries org + role + user +
@@ -437,7 +444,7 @@ async function memoConTtl<T>(
       store.delete(masVieja.value)
     }
   }
-  store.set(key, { data, expiresAt: now + CACHE_VENTA_TTL_MS })
+  store.set(key, { data, expiresAt: guardadoEn + CACHE_VENTA_TTL_MS })
   return data
 }
 
