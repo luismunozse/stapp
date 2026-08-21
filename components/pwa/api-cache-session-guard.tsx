@@ -34,10 +34,10 @@ function recordar(identidad: string) {
  *
  * Solo mira sesiones autenticadas, a proposito. Cerrar sesion no necesita
  * limpiar: a quien hay que proteger es a quien entra despues, y ese momento ya
- * esta cubierto — con la ventaja de que ahi hay red para volver a llenar el
- * cache. Limpiar en "loading"/"unauthenticated" ademas le vaciaria el catalogo
- * a la PWA offline justo mientras SessionRefresher restaura la sesion, que es
- * cuando el cache es lo unico que el operador tiene.
+ * esta cubierto — con la ventaja de que ahi hay red. Limpiar en
+ * "loading"/"unauthenticated" ademas dispararia en cada restauracion de sesion
+ * de la PWA, incluso sin red, sin proteger a nadie que el login siguiente no
+ * proteja igual.
  */
 export function ApiCacheSessionGuard() {
   const { data: session, status } = useSession()
@@ -62,13 +62,13 @@ export function ApiCacheSessionGuard() {
 
     if (previa === identidad) return
 
-    // Sin marca previa no hay sesion anterior de la cual protegerse: es el
-    // primer login del equipo, y limpiar solo costaria el cache que ya trajo.
-    if (!previa) {
-      recordar(identidad)
-      return
-    }
-
+    // Ojo con la tentacion de saltear la limpieza cuando NO hay marca previa:
+    // que no haya marca no prueba que no haya habido nadie antes. `recordar()`
+    // se traga su propio fallo (Safari en privado, cuota), asi que una sesion
+    // anterior pudo llenar el cache y no dejar rastro; leer esa ausencia como
+    // "equipo nuevo" serviria ese cache al usuario siguiente, que es exactamente
+    // el caso para el que existe este guard. En un equipo realmente nuevo la
+    // limpieza de mas cuesta el cache que la propia sesion acaba de traer.
     let cancelado = false
     void clearServiceWorkerApiCache().then((limpio) => {
       // SOLO si el worker confirmo el borrado. Sin controller el mensaje no

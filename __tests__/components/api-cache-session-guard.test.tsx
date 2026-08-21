@@ -144,13 +144,21 @@ describe("ApiCacheSessionGuard", () => {
     expect(postMessage).not.toHaveBeenCalled()
   })
 
-  it("AC-5 — primer login del equipo: NO limpia, solo recuerda quien es", () => {
+  it("AC-5 — sin marca previa limpia igual: la ausencia de marca no prueba que no hubo nadie", async () => {
+    // `recordar()` se traga su propio fallo (Safari en privado, cuota): si la
+    // escritura fallo para el usuario A, A igual lleno el cache y no dejo marca.
+    // Leer esa ausencia como "equipo nuevo" y saltear la limpieza deja servido
+    // el cache de A al usuario B — justo el caso para el que existe el guard.
+    // Limpiar de mas en un equipo realmente nuevo cuesta el cache que la propia
+    // sesion acaba de traer, que es nada.
     mockSesion(USER_A)
 
-    render(<ApiCacheSessionGuard />)
+    await renderYConfirmar()
 
-    expect(postMessage).not.toHaveBeenCalled()
-    expect(window.localStorage.getItem(SW_API_IDENTITY_KEY)).toBe("u-A|org-1|ADMIN|")
+    expect(postMessage).toHaveBeenCalledWith({ type: "CLEAR_CACHE", cache: "api" })
+    await waitFor(() =>
+      expect(window.localStorage.getItem(SW_API_IDENTITY_KEY)).toBe("u-A|org-1|ADMIN|")
+    )
   })
 
   it.each(["loading", "unauthenticated"])(
