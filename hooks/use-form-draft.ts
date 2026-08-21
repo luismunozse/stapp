@@ -248,6 +248,14 @@ export interface UseFormDraftResult<T> {
    *  react-hook-form field subscription. Without it, a form that stopped
    *  re-rendering per keystroke would also stop scheduling saves. */
   notifyChange: () => void
+  /** True when somebody else saved the record while this form was already
+   *  holding unsaved work: typed edits, or a restored draft still on screen.
+   *  Nothing is discarded -- the work stays in the form and on disk -- but the
+   *  call site must say so, because submitting now replaces what the other
+   *  person saved. Cleared by `clearDraft` (submit / "Descartar", both of which
+   *  settle the conflict) and by a fresh key. Always false for new-record
+   *  forms, which have no `recordUpdatedAt` to move. */
+  recordChangedWhileEditing: boolean
 }
 
 function buildDraftKey(
@@ -383,6 +391,32 @@ function readDraft<T>(
   }
 }
 
+/**
+ * Re-stamps the stored entry against the record the operator actually has in
+ * front of them, leaving its data untouched.
+ *
+ * Used when the record moved under a form that is already holding work this
+ * hook is responsible for. Deleting the entry is not an option -- that work is
+ * on screen -- but leaving the old token on it is the same loss through the
+ * back door: the next open reads it, calls it stale and removes it. Whatever
+ * happens here, either this operator's work or the colleague's save is going to
+ * lose; the hook keeps the work and reports the conflict
+ * (`recordChangedWhileEditing`) so the decision belongs to the person looking
+ * at the screen instead of being taken silently.
+ */
+function restampDraft(key: string, recordUpdatedAtMs: number | null): void {
+  try {
+    const raw = window.localStorage.getItem(key)
+    if (!raw) return
+    const parsed = JSON.parse(raw) as DraftEnvelope<unknown>
+    if (!parsed || typeof parsed.savedAt !== "number") return
+    parsed.recordUpdatedAt = recordUpdatedAtMs
+    window.localStorage.setItem(key, JSON.stringify(parsed))
+  } catch {
+    // Corrupt entry / storage disabled -- every write here is best-effort.
+  }
+}
+
 export function useFormDraft<T>({
   feature,
   recordId = null,
@@ -401,8 +435,14 @@ export function useFormDraft<T>({
 
   const [draft, setDraft] = useState<T | null>(null)
   const [ready, setReady] = useState(false)
+  const [recordChangedWhileEditing, setRecordChangedWhileEditing] = useState(false)
 
   const keyRef = useRef<string | null>(null)
+  /** `recordUpdatedAt` the current key was last initialized (or re-stamped)
+   *  against. It is what lets a same-key re-run tell "the record moved under
+   *  us" from a re-run for any other reason, without depending on which of the
+   *  effect's dependencies happens to be the volatile one today. */
+  const keyRecordUpdatedAtRef = useRef<number | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const getValueRef = useRef(getValue)
   const enabledRef = useRef(enabled)
@@ -546,30 +586,53 @@ export function useFormDraft<T>({
       return
     }
     const key = buildDraftKey(feature, organizationId, userId, recordId, scope)
-    if (key === keyRef.current && interactedRef.current) {
-      // Misma key, pero el efecto volvio a correr: tipicamente porque el
-      // `updatedAt` del registro se movio (otro operador guardo la misma ficha
-      // y SWR revalido). Re-inicializar aca, sobre un formulario que el usuario
-      // YA edito, es exactamente la perdida que este hook existe para evitar:
-      // `readDraft` borra la entrada por desactualizada, la referencia de
-      // comparacion pasa a ser lo que hay escrito sin guardar y el flag de
-      // sucio se apaga, asi que el flush siguiente solo mueve la referencia y
-      // no vuelve a grabar hasta que se toque otro control. Un vencimiento de
-      // sesion en ese hueco se lleva todo lo escrito.
-      //
-      // Se fuerza ademas una reescritura (lastSavedRef) para que el sobre quede
-      // estampado contra el registro que el operador tiene delante: con el
-      // token viejo la entrada sobrevive en disco, pero la proxima apertura la
-      // descarta por desactualizada -- la misma perdida por otro camino.
+    // Misma key, pero el efecto volvio a correr: tipicamente porque el
+    // `updatedAt` del registro se movio (otro operador guardo la misma ficha y
+    // SWR revalido). Re-inicializar aca, sobre un formulario que YA tiene
+    // trabajo del que este hook se hizo cargo, es exactamente la perdida que
+    // existe para evitar. Ese trabajo es de dos tipos y los dos cuentan:
+    //
+    //  - `interactedRef`: lo que el operador escribio. `readDraft` borra la
+    //    entrada por desactualizada, la referencia de comparacion pasa a ser lo
+    //    que hay escrito sin guardar y el flag de sucio se apaga, asi que el
+    //    flush siguiente solo mueve la referencia y no vuelve a grabar hasta
+    //    que se toque otro control. Un vencimiento de sesion en ese hueco se
+    //    lleva todo lo escrito.
+    //
+    //  - `restoredRef`: un borrador que el call site ya aplico y sigue
+    //    mostrando. Su propio latch de "borrador aplicado" ya esta puesto, asi
+    //    que nunca va a volver a aplicar nada: la entrada se borraba, `draft`
+    //    pasaba a null y el formulario se quedaba en pantalla con esos valores
+    //    y con el aviso diciendo que se habia restaurado uno. "Guardar" pisaba
+    //    entonces el guardado del companero con exactamente el contenido que el
+    //    token de frescura existe para rechazar -- la misma perdida por otra
+    //    puerta.
+    //
+    // Nada de eso se descarta: se conserva el trabajo, se re-estampa la entrada
+    // contra el registro que el operador tiene delante (con el token viejo
+    // sobrevive en disco pero la proxima apertura la descarta, que es la misma
+    // perdida diferida) y se levanta `recordChangedWhileEditing` para que el
+    // formulario lo AVISE. Guardar o descartar es una decision de quien esta
+    // mirando la pantalla, no algo que se resuelva en silencio.
+    if (key === keyRef.current && (interactedRef.current || restoredRef.current)) {
+      if (recordUpdatedAtMs !== keyRecordUpdatedAtRef.current) {
+        keyRecordUpdatedAtRef.current = recordUpdatedAtMs
+        restampDraft(key, recordUpdatedAtMs)
+        setRecordChangedWhileEditing(true)
+      }
+      // Fuerza la reescritura del sobre completo en el flush siguiente, para lo
+      // que el operador siga escribiendo a partir de ahora.
       lastSavedRef.current = null
       setReady(true)
       return
     }
     if (key !== keyRef.current) flushPending()
     keyRef.current = key
+    keyRecordUpdatedAtRef.current = recordUpdatedAtMs
     interactedRef.current = false
     lastSavedRef.current = null
     baselineStaleRef.current = false
+    setRecordChangedWhileEditing(false)
     baselineRef.current = safeStringify(getValueRef.current())
     const restored = readDraft<T>(key, recordUpdatedAtMs, validateRef.current)
     restoredRef.current = restored !== null
@@ -630,6 +693,10 @@ export function useFormDraft<T>({
     // Nothing restored is on disk any more, so "the form equals the baseline"
     // goes back to meaning "the user undid their own edits" (see flush).
     restoredRef.current = false
+    // Submit and "Descartar" are the two ways the conflict gets settled: either
+    // this operator's version won or they took the colleague's. Leaving the
+    // warning up after that is the notice that trains people to ignore it.
+    setRecordChangedWhileEditing(false)
     // Every call site clears BEFORE resetting the form ("Descartar", submit),
     // so reading the form here captures the values that are about to be thrown
     // away. Taking that as the baseline meant the first click after a discard
@@ -648,5 +715,5 @@ export function useFormDraft<T>({
     }
   }, [])
 
-  return { draft, ready, clearDraft, notifyChange: armSave }
+  return { draft, ready, clearDraft, notifyChange: armSave, recordChangedWhileEditing }
 }

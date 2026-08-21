@@ -28,3 +28,24 @@ export function DraftRestoredNotice({ onDiscard }: DraftRestoredNoticeProps) {
     </div>
   )
 }
+
+/**
+ * Aviso de conflicto: mientras el formulario tenia trabajo sin guardar (lo que
+ * el operador venia escribiendo, o un borrador restaurado que sigue en
+ * pantalla), otra persona guardo el mismo registro.
+ *
+ * No se descarta nada — perder el trabajo en silencio es peor que el conflicto,
+ * y descartar el guardado ajeno sin decirlo es peor todavia. El submit de estos
+ * formularios manda el registro entero, asi que guardar ahora reemplaza lo que
+ * guardo la otra persona: la decision es de quien esta mirando la pantalla y
+ * este aviso es lo que se la da. Ver `recordChangedWhileEditing` en
+ * hooks/use-form-draft.ts.
+ */
+export function RecordChangedNotice() {
+  return (
+    <div className="rounded-md border border-amber-200 dark:border-amber-900/40 bg-amber-50/70 dark:bg-amber-950/20 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
+      Otro usuario guardó esta ficha mientras estaba abierta. Si guarda ahora, sus cambios
+      reemplazarán los de esa persona.
+    </div>
+  )
+}

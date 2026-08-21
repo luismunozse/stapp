@@ -268,6 +268,63 @@ describe("ClienteForm — borrador local", () => {
     expect(screen.getByText(/se restauró un borrador no guardado/i)).toBeInTheDocument()
   })
 
+  it("conserva el borrador ya aplicado cuando otro usuario guarda la ficha en el medio", () => {
+    // El efecto de la key vuelve a correr cada vez que SWR trae un `updatedAt`
+    // nuevo. Sobre un dialog que YA tiene el borrador aplicado en pantalla y
+    // que el operador todavia no toco, re-inicializar borraba la entrada por
+    // desactualizada y ponia `draft` en null mientras el formulario seguia
+    // mostrando esos valores y el aviso seguia anunciando el borrador:
+    // "Guardar" pisaba el guardado del companero con exactamente el contenido
+    // que el token de frescura existe para rechazar.
+    const key = "draft:v2:cliente-form:org-1:user-1:edit:cli-1"
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        version: 2,
+        savedAt: Date.now(),
+        recordUpdatedAt: CLIENTE_UPDATED_AT.getTime(),
+        data: {
+          tipoCliente: "INDIVIDUAL",
+          nombre: "Juan Editado Sin Guardar",
+          telefono: "1100000000",
+          email: "",
+          direccion: "",
+          dni: "",
+          razonSocial: "",
+          cuit: "",
+          aceptaWhatsapp: true,
+          tipoPrecio: "MINORISTA",
+          descuentoPct: undefined,
+        },
+      }),
+    )
+
+    const { rerender } = render(
+      <ModalProvider>
+        <ClienteForm cliente={makeCliente()} open onClose={vi.fn()} onSuccess={vi.fn()} />
+      </ModalProvider>,
+    )
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Editado Sin Guardar")
+
+    // El companero guarda la misma ficha; SWR revalida y el token se mueve.
+    rerender(
+      <ModalProvider>
+        <ClienteForm
+          cliente={makeCliente({ updatedAt: new Date("2026-01-03T10:00:00.000Z") })}
+          open
+          onClose={vi.fn()}
+          onSuccess={vi.fn()}
+        />
+      </ModalProvider>,
+    )
+
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Editado Sin Guardar")
+    expect(screen.getByText(/se restauró un borrador no guardado/i)).toBeInTheDocument()
+    expect(window.localStorage.getItem(key)).not.toBeNull()
+    // Nadie pierde en silencio: el conflicto se avisa y lo resuelve el operador.
+    expect(screen.getByText(/otro usuario guardó esta ficha/i)).toBeInTheDocument()
+  })
+
   it("descarta un borrador de edicion si otro usuario guardo el cliente despues", () => {
     // El submit de edicion manda el formulario entero (PUT /api/clientes/:id),
     // asi que restaurar un borrador viejo encima de un registro mas nuevo

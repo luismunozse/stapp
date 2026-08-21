@@ -454,6 +454,104 @@ describe('useFormDraft', () => {
     })
   })
 
+  it('keeps a restored draft when the record moves before the user touches anything', () => {
+    // El otro lado de la misma condicion. Con el gate de sucio todavia apagado
+    // (el operador abrio la ficha, se restauro el borrador y no toco nada), el
+    // efecto de la key caia en la re-inicializacion completa: `readDraft`
+    // borraba la entrada por desactualizada y `draft` pasaba a null, mientras
+    // el dialog seguia mostrando esos valores y el aviso seguia diciendo que se
+    // habia restaurado uno. "Guardar" pisaba entonces el guardado del companero
+    // con exactamente el contenido que el token de frescura existe para
+    // rechazar -- la misma perdida, por otra puerta.
+    const key = 'draft:v2:cliente-form:org-1:user-1:edit:cli-1'
+    const primerUpdatedAt = Date.now() - 120_000
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        version: 2,
+        savedAt: Date.now() - 60_000,
+        recordUpdatedAt: primerUpdatedAt,
+        data: { nombre: 'Mi borrador' },
+      })
+    )
+
+    let live = { nombre: 'Nombre del server' }
+    const { result, rerender } = renderHook(
+      ({ recordUpdatedAt }: { recordUpdatedAt: number }) =>
+        useFormDraft({
+          feature: 'cliente-form',
+          recordId: 'cli-1',
+          debounceMs: 1000,
+          getValue: () => live,
+          recordUpdatedAt,
+        }),
+      { initialProps: { recordUpdatedAt: primerUpdatedAt } }
+    )
+    expect(result.current.draft).toEqual({ nombre: 'Mi borrador' })
+    expect(result.current.recordChangedWhileEditing).toBe(false)
+
+    // El call site aplica el borrador. El operador todavia no toco nada, asi
+    // que la primera ventana sin actividad mueve la referencia encima de el.
+    live = { nombre: 'Mi borrador' }
+    act(() => {
+      vi.advanceTimersByTime(2000)
+    })
+
+    // El guardado del companero: misma key, token de frescura nuevo.
+    const segundoUpdatedAt = Date.now()
+    rerender({ recordUpdatedAt: segundoUpdatedAt })
+    act(() => {
+      vi.advanceTimersByTime(2000)
+    })
+
+    // Nada de lo que hay en pantalla se descarta en silencio...
+    expect(result.current.draft).toEqual({ nombre: 'Mi borrador' })
+    const guardado = JSON.parse(window.localStorage.getItem(key)!)
+    expect(guardado.data).toEqual({ nombre: 'Mi borrador' })
+    // ...y la entrada queda estampada contra el registro que el operador tiene
+    // delante: con el token viejo sobrevive en disco pero la proxima apertura
+    // la descarta por desactualizada, que es la misma perdida diferida.
+    expect(guardado.recordUpdatedAt).toBe(segundoUpdatedAt)
+    // El conflicto se avisa en vez de resolverlo por el operador.
+    expect(result.current.recordChangedWhileEditing).toBe(true)
+  })
+
+  it('clears the conflict flag once the draft is discarded or submitted', () => {
+    const key = 'draft:v2:cliente-form:org-1:user-1:edit:cli-1'
+    const primerUpdatedAt = Date.now() - 120_000
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        version: 2,
+        savedAt: Date.now() - 60_000,
+        recordUpdatedAt: primerUpdatedAt,
+        data: { nombre: 'Mi borrador' },
+      })
+    )
+
+    const live = { nombre: 'Mi borrador' }
+    const { result, rerender } = renderHook(
+      ({ recordUpdatedAt }: { recordUpdatedAt: number }) =>
+        useFormDraft({
+          feature: 'cliente-form',
+          recordId: 'cli-1',
+          debounceMs: 1000,
+          getValue: () => live,
+          recordUpdatedAt,
+        }),
+      { initialProps: { recordUpdatedAt: primerUpdatedAt } }
+    )
+    rerender({ recordUpdatedAt: Date.now() })
+    expect(result.current.recordChangedWhileEditing).toBe(true)
+
+    // Descartar deja el formulario en la version del companero: el conflicto
+    // esta resuelto y el aviso no puede quedarse pegado.
+    act(() => {
+      result.current.clearDraft()
+    })
+    expect(result.current.recordChangedWhileEditing).toBe(false)
+  })
+
   it('stores the record freshness token so a later save can be compared against it', () => {
     const recordUpdatedAt = new Date(Date.now() - 120_000)
     const { rerender } = renderDraft(

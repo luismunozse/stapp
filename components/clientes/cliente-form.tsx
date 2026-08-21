@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { FormActionBar } from "@/components/ui/form-action-bar"
-import { DraftRestoredNotice } from "@/components/ui/draft-restored-notice"
+import { DraftRestoredNotice, RecordChangedNotice } from "@/components/ui/draft-restored-notice"
 import { User, Building2 } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { Switch } from "@/components/ui/switch"
@@ -138,7 +138,13 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
    *  monta adentro de OrdenForm y RecepcionForm (via ClienteSelector), asi que
    *  cada uno tiene que reconocer solo sus propios controles. */
   const formRef = useRef<HTMLFormElement>(null)
-  const { draft, ready: draftReady, clearDraft, notifyChange } = useFormDraft<ClienteFormData>({
+  const {
+    draft,
+    ready: draftReady,
+    clearDraft,
+    notifyChange,
+    recordChangedWhileEditing,
+  } = useFormDraft<ClienteFormData>({
     feature: "cliente-form",
     recordId,
     // `getValues()` en vez de `watch()`: leer el form entero en render
@@ -291,6 +297,9 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
           <DialogTitle>{cliente ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
         </DialogHeader>
         <form ref={formRef} onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Primero el conflicto: el borrador se conserva, pero guardarlo
+              reemplaza lo que guardo la otra persona. */}
+          {recordChangedWhileEditing && <RecordChangedNotice />}
           {draftNoticeVisible && (
             <DraftRestoredNotice onDiscard={discardDraft} />
           )}
