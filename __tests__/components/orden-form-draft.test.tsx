@@ -453,6 +453,45 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     expect(storedDraft()?.data.form.dispositivo).toBe("Moto G restaurable")
   })
 
+  it("no arrastra al alta de mostrador los valores del turno anterior", async () => {
+    // El overlay del listado no se remonta (ordenes-list.tsx solo hace
+    // setShowForm(true)) y `fromTurno` sale de useSearchParams: volver con el
+    // boton Atras deja este formulario con los datos del turno en pantalla
+    // mientras la key del hook ya es la del alta de mostrador. Eso no es solo
+    // cosmetico -- la primera tecla persiste los valores del turno bajo el
+    // borrador del mostrador, que es otra orden, de otro cliente.
+    const { OrdenForm } = await import("@/components/ordenes/orden-form")
+    const { rerender } = render(
+      <ModalProvider>
+        <OrdenForm onClose={vi.fn()} onSuccess={vi.fn()} fromTurnoId="t-1" />
+      </ModalProvider>,
+    )
+    await settle()
+    expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+      "Samsung A54 del turno",
+    )
+
+    rerender(
+      <ModalProvider>
+        <OrdenForm onClose={vi.fn()} onSuccess={vi.fn()} />
+      </ModalProvider>,
+    )
+    await settle()
+
+    expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue("")
+    expect(screen.getByPlaceholderText("Describa el problema del equipo...")).toHaveValue("")
+
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+      target: { value: "Moto G de mostrador" },
+    })
+    await settle()
+
+    const stored = storedDraft()
+    expect(stored?.data.form.dispositivo).toBe("Moto G de mostrador")
+    expect(stored?.data.form.problemaReportado).toBe("")
+    expect(stored?.data.form.marca).toBe("")
+  })
+
   it("no pierde el checklist ni el sector restaurados cuando cargan los efectos de montaje", async () => {
     window.localStorage.setItem(
       DRAFT_KEY,

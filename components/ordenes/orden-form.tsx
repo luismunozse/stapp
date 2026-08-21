@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -436,8 +436,90 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     return () => subscription.unsubscribe()
   }, [watch, notifyChange])
 
+  /** Datos de origen ya traidos del servidor (turno / deep-link). Se guardan
+   *  aunque el borrador gane, porque descartarlo tiene que devolver el
+   *  formulario al estado precargado: los dos efectos que lo aplican dependen
+   *  de [origen, draftReady] y descartar no mueve ninguna de las dos, asi que
+   *  no vuelven a correr solos. */
+  const turnoPrefillDataRef = useRef<any>(null)
+  const deepLinkClienteRef = useRef<ClienteResumen | null>(null)
+
+  /** "Recibido por" que corresponde cuando el alta se abre limpia: el propio
+   *  operador salvo que sea admin (ver el efecto que lo preselecciona). Se
+   *  calcula afuera de ese efecto porque el descarte del borrador tiene que
+   *  poder reponerlo: el efecto depende de la sesion, y descartar no la mueve,
+   *  asi que no vuelve a correr solo. */
+  const recibidoPorPorDefecto =
+    session?.user?.id && session.user.role !== "ADMIN" ? session.user.id : ""
+
+  /** Deja el alta como recien abierta, ANTES de lo que aporte el origen. Es el
+   *  estado en blanco completo -- incluido lo que no vive en react-hook-form
+   *  (accesorios, checklist, campos extra) y lo que no se persiste pero viaja
+   *  con la orden si sobrevive (fotos, firma de conformidad).
+   *
+   *  Una sola definicion para sus dos usos ("Descartar" y el cambio de origen):
+   *  cuando se duplicaba, el campo que faltaba en la copia se enviaba igual en
+   *  el submit siguiente, que es justo lo que estas dos operaciones existen
+   *  para evitar. */
+  const resetFormToBlank = useCallback(() => {
+    reset(ordenFormDefaults())
+    setAccesoriosSeleccionados([])
+    setOtroAccesorio("")
+    setCamposExtraValues({})
+    setPresupuestoAceptado(false)
+    setSena("")
+    setMetodoPagoSena("EFECTIVO")
+    setSelectedSectorId("")
+    setSelectedTecnicoId("")
+    setSelectedRecibidoPorId(recibidoPorPorDefecto)
+    setChecklistValores({})
+    setChecklistNotas("")
+    // Ya no hay respuestas restauradas que comparar contra ningun template.
+    setChecklistDelBorrador(null)
+    setCurrentStep(1)
+    setSelectedClienteObj(null)
+    // Fotos y firma del checklist no se persisten, asi que no vienen del
+    // borrador -- pero si sobreviven se suben con la orden siguiente: fotos de
+    // otro equipo y una conformidad firmada por otra persona.
+    setFotos([])
+    setChecklistFirma(null)
+    setChecklistFirmaMime(null)
+    setFirmaResetKey((prev) => prev + 1)
+  }, [reset, recibidoPorPorDefecto])
+
+  /** Origen que este efecto vio la ultima vez; `undefined` mientras no corrio
+   *  ninguna vez, que es lo que separa "el alta acaba de abrirse" de "el origen
+   *  cambio debajo del formulario". */
+  const draftScopeRef = useRef<string | null | undefined>(undefined)
+
   useEffect(() => {
     if (!draftReady) return
+    if (draftScopeRef.current !== undefined && draftScopeRef.current !== draftScope) {
+      // El origen cambio sin que el componente se remonte: el overlay del
+      // listado solo hace setShowForm(true) y `fromTurno` / `clienteId` salen de
+      // useSearchParams, asi que el boton Atras del navegador (o abrir el alta
+      // de otro cliente) cambia las props en pleno vuelo. Lo que quedaba en
+      // pantalla era del origen anterior mientras la key del hook ya era la
+      // nueva: la primera tecla persistia los datos del turno viejo bajo el
+      // borrador del alta de mostrador, que es otra orden y de otro cliente.
+      //
+      // Se vuelve al estado en blanco y se corta aca: `draft` todavia es el del
+      // origen ANTERIOR en este commit. El del origen nuevo llega en el
+      // siguiente y se aplica encima, igual que al montar.
+      draftScopeRef.current = draftScope
+      draftAppliedRef.current = null
+      draftRestoredRef.current = null
+      setAppliedDraft(null)
+      // Lo precargado tampoco sirve para este origen: cada efecto de origen
+      // vuelve a pedir lo suyo, y dejarlo cacheado hace que "Descartar" reponga
+      // los datos del turno anterior.
+      turnoPrefillDataRef.current = null
+      deepLinkClienteRef.current = null
+      setTurnoPrefill(null)
+      resetFormToBlank()
+      return
+    }
+    draftScopeRef.current = draftScope
     // El latch se toca DESPUES de saber que hay algo que aplicar (mismo
     // criterio que cliente-form.tsx). Marcarlo antes dejaba el formulario "con
     // el borrador ya aplicado" sin haberlo aplicado: si el hook volvia a
@@ -500,15 +582,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       setAppliedDraft(null)
       reset(ordenFormDefaults())
     }
-  }, [draftReady, draft, draftScope, reset, clearDraft])
-
-  /** Datos de origen ya traidos del servidor (turno / deep-link). Se guardan
-   *  aunque el borrador gane, porque descartarlo tiene que devolver el
-   *  formulario al estado precargado: los dos efectos que lo aplican dependen
-   *  de [origen, draftReady] y descartar no mueve ninguna de las dos, asi que
-   *  no vuelven a correr solos. */
-  const turnoPrefillDataRef = useRef<any>(null)
-  const deepLinkClienteRef = useRef<ClienteResumen | null>(null)
+  }, [draftReady, draft, draftScope, reset, clearDraft, resetFormToBlank])
 
   /** Escribe en el formulario lo que vino del turno. Vive afuera del efecto
    *  para que el descarte pueda re-aplicarlo sin volver a pedirlo al servidor. */
@@ -529,43 +603,12 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     }
   }
 
-  /** "Recibido por" que corresponde cuando el alta se abre limpia: el propio
-   *  operador salvo que sea admin (ver el efecto que lo preselecciona). Se
-   *  calcula afuera de ese efecto porque el descarte del borrador tiene que
-   *  poder reponerlo: el efecto depende de la sesion, y descartar no la mueve,
-   *  asi que no vuelve a correr solo. */
-  const recibidoPorPorDefecto =
-    session?.user?.id && session.user.role !== "ADMIN" ? session.user.id : ""
-
   const discardDraft = () => {
     // El aviso se apaga solo: `clearDraft` deja `draft` en null en este mismo
     // commit y de ahi se deriva (ver draftNoticeVisible).
     clearDraft()
     draftRestoredRef.current = null
-    reset(ordenFormDefaults())
-    setAccesoriosSeleccionados([])
-    setOtroAccesorio("")
-    setCamposExtraValues({})
-    setPresupuestoAceptado(false)
-    setSena("")
-    setMetodoPagoSena("EFECTIVO")
-    setSelectedSectorId("")
-    setSelectedTecnicoId("")
-    setSelectedRecibidoPorId(recibidoPorPorDefecto)
-    setChecklistValores({})
-    setChecklistNotas("")
-    // Ya no hay respuestas restauradas que comparar contra ningun template.
-    setChecklistDelBorrador(null)
-    setCurrentStep(1)
-    setSelectedClienteObj(null)
-    // Fotos y firma del checklist no se persisten, asi que no vienen del
-    // borrador -- pero si sobreviven al descarte se suben con la orden
-    // siguiente: fotos de otro equipo y una conformidad firmada por otra
-    // persona.
-    setFotos([])
-    setChecklistFirma(null)
-    setChecklistFirmaMime(null)
-    setFirmaResetKey((prev) => prev + 1)
+    resetFormToBlank()
     // Lo precargado por el origen NO es del borrador: descartar tiene que dejar
     // el alta como si se acabara de abrir desde el turno / deep-link. Sin esto
     // quedaba entera en blanco y la unica forma de recuperar los datos del
