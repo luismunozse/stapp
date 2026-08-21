@@ -1406,7 +1406,10 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     const manoDeObraEn = data.costoFinal != null && trabajosRawEn.length > 0 && data.costoFinal > subtotalTrabajoEn
       ? data.costoFinal - subtotalTrabajoEn
       : null
-    const trabajoHeadingEn = manoDeObraEn != null ? "Trabajo realizado — repuestos y mano de obra" : "Trabajo realizado — repuestos"
+    // El detalle ya no es solo repuestos: incluye las lineas de servicios_orden
+    // (ver construirTrabajos). El encabezado se mantiene corto a proposito —
+    // enumerar las tres clases desborda el ancho de la columna a 8.5pt.
+    const trabajoHeadingEn = manoDeObraEn != null ? "Trabajo realizado — detalle y mano de obra" : "Trabajo realizado — detalle"
     drawSectionLabel(page, archivoBold, trabajoHeadingEn, midLeftXEn, ly)
     ly -= 12
 
@@ -1446,7 +1449,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         ly -= 10
       }
     } else {
-      page.drawText("Sin repuestos ni mano de obra registrados.", { x: midLeftXEn, y: ly, size: 8.5, font: archivoRegular, color: MONO.faint })
+      page.drawText("Sin trabajos registrados.", { x: midLeftXEn, y: ly, size: 8.5, font: archivoRegular, color: MONO.faint })
       ly -= 12
     }
 
