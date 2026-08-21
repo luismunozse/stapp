@@ -132,7 +132,7 @@ describe('useFormDraft', () => {
     expect(keys[0]).toContain('user-1')
 
     const stored = JSON.parse(window.localStorage.getItem(keys[0])!)
-    expect(stored).toMatchObject({ version: 2, data: { a: 2 } })
+    expect(stored).toMatchObject({ version: 3, data: { a: 2 } })
     expect(typeof stored.savedAt).toBe('number')
   })
 
@@ -225,7 +225,7 @@ describe('useFormDraft', () => {
   })
 
   it('discards a draft with an unknown schema version', () => {
-    const key = 'draft:v2:cliente-form:org-1:user-1:new'
+    const key = 'draft:v3:cliente-form:org-1:user-1:new'
     window.localStorage.setItem(
       key,
       JSON.stringify({ version: 99, savedAt: Date.now(), data: { nombre: 'Ana' } })
@@ -238,10 +238,10 @@ describe('useFormDraft', () => {
   })
 
   it('discards a draft older than the max age', () => {
-    const key = 'draft:v2:cliente-form:org-1:user-1:new'
+    const key = 'draft:v3:cliente-form:org-1:user-1:new'
     window.localStorage.setItem(
       key,
-      JSON.stringify({ version: 2, savedAt: Date.now() - 8 * 24 * 60 * 60 * 1000, data: { nombre: 'Old' } })
+      JSON.stringify({ version: 3, savedAt: Date.now() - 8 * 24 * 60 * 60 * 1000, data: { nombre: 'Old' } })
     )
 
     const { result } = renderDraft({ nombre: '' }, { feature: 'cliente-form' })
@@ -255,10 +255,10 @@ describe('useFormDraft', () => {
     // un formulario sin tocarla, el borrador viejo pasa las validaciones del
     // sobre y explota recien cuando el call site lo recorre. El validador del
     // call site es la red que lo agarra antes.
-    const key = 'draft:v2:recepcion-form:org-1:user-1:new'
+    const key = 'draft:v3:recepcion-form:org-1:user-1:new'
     window.localStorage.setItem(
       key,
-      JSON.stringify({ version: 2, savedAt: Date.now(), data: { form: {} } })
+      JSON.stringify({ version: 3, savedAt: Date.now(), data: { form: {} } })
     )
 
     const { result } = renderDraft(
@@ -275,10 +275,10 @@ describe('useFormDraft', () => {
   })
 
   it('treats a throwing validator as a corrupt draft', () => {
-    const key = 'draft:v2:recepcion-form:org-1:user-1:new'
+    const key = 'draft:v3:recepcion-form:org-1:user-1:new'
     window.localStorage.setItem(
       key,
-      JSON.stringify({ version: 2, savedAt: Date.now(), data: null })
+      JSON.stringify({ version: 3, savedAt: Date.now(), data: null })
     )
 
     const { result } = renderDraft(
@@ -294,7 +294,7 @@ describe('useFormDraft', () => {
   })
 
   it('discards malformed JSON without throwing', () => {
-    const key = 'draft:v2:cliente-form:org-1:user-1:new'
+    const key = 'draft:v3:cliente-form:org-1:user-1:new'
     window.localStorage.setItem(key, '{not-json')
 
     const { result } = renderDraft({ nombre: '' }, { feature: 'cliente-form' })
@@ -358,11 +358,11 @@ describe('useFormDraft', () => {
   // --- Freshness token (edit-mode drafts vs a newer server record) ----------
 
   it('discards an edit draft when the server record changed after the draft was written', () => {
-    const key = 'draft:v2:cliente-form:org-1:user-1:edit:cli-1'
+    const key = 'draft:v3:cliente-form:org-1:user-1:edit:cli-1'
     const savedAt = Date.now() - 60_000
     window.localStorage.setItem(
       key,
-      JSON.stringify({ version: 2, savedAt, recordUpdatedAt: savedAt - 1000, data: { nombre: 'Mi borrador' } })
+      JSON.stringify({ version: 3, savedAt, recordUpdatedAt: savedAt - 1000, data: { nombre: 'Mi borrador' } })
     )
 
     const { result } = renderDraft(
@@ -375,12 +375,12 @@ describe('useFormDraft', () => {
   })
 
   it('keeps an edit draft when the server record has not changed since it was written', () => {
-    const key = 'draft:v2:cliente-form:org-1:user-1:edit:cli-1'
+    const key = 'draft:v3:cliente-form:org-1:user-1:edit:cli-1'
     const recordUpdatedAt = Date.now() - 120_000
     window.localStorage.setItem(
       key,
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now() - 60_000,
         recordUpdatedAt,
         data: { nombre: 'Mi borrador' },
@@ -402,7 +402,7 @@ describe('useFormDraft', () => {
     // por desactualizada, la referencia de comparacion pasaba a ser lo que
     // habia escrito sin guardar y el flag de sucio se apagaba, asi que el
     // flush siguiente solo movia la referencia y no volvia a grabar.
-    const key = 'draft:v2:cliente-form:org-1:user-1:edit:cli-1'
+    const key = 'draft:v3:cliente-form:org-1:user-1:edit:cli-1'
     const primerUpdatedAt = Date.now() - 120_000
 
     let live = { nombre: 'Nombre del server' }
@@ -463,12 +463,12 @@ describe('useFormDraft', () => {
     // habia restaurado uno. "Guardar" pisaba entonces el guardado del companero
     // con exactamente el contenido que el token de frescura existe para
     // rechazar -- la misma perdida, por otra puerta.
-    const key = 'draft:v2:cliente-form:org-1:user-1:edit:cli-1'
+    const key = 'draft:v3:cliente-form:org-1:user-1:edit:cli-1'
     const primerUpdatedAt = Date.now() - 120_000
     window.localStorage.setItem(
       key,
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now() - 60_000,
         recordUpdatedAt: primerUpdatedAt,
         data: { nombre: 'Mi borrador' },
@@ -536,10 +536,10 @@ describe('useFormDraft', () => {
   })
 
   it('reports a restored draft as work even before the operator touches anything', () => {
-    const key = 'draft:v2:cliente-form:org-1:user-1:edit:cli-1'
+    const key = 'draft:v3:cliente-form:org-1:user-1:edit:cli-1'
     window.localStorage.setItem(
       key,
-      JSON.stringify({ version: 2, savedAt: Date.now(), data: { nombre: 'Mi borrador' } })
+      JSON.stringify({ version: 3, savedAt: Date.now(), data: { nombre: 'Mi borrador' } })
     )
 
     const { result } = renderDraft({ nombre: '' }, { feature: 'cliente-form', recordId: 'cli-1' })
@@ -549,12 +549,12 @@ describe('useFormDraft', () => {
   })
 
   it('clears the conflict flag once the draft is discarded or submitted', () => {
-    const key = 'draft:v2:cliente-form:org-1:user-1:edit:cli-1'
+    const key = 'draft:v3:cliente-form:org-1:user-1:edit:cli-1'
     const primerUpdatedAt = Date.now() - 120_000
     window.localStorage.setItem(
       key,
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now() - 60_000,
         recordUpdatedAt: primerUpdatedAt,
         data: { nombre: 'Mi borrador' },
@@ -597,7 +597,7 @@ describe('useFormDraft', () => {
     })
 
     const stored = JSON.parse(
-      window.localStorage.getItem('draft:v2:cliente-form:org-1:user-1:edit:cli-1')!
+      window.localStorage.getItem('draft:v3:cliente-form:org-1:user-1:edit:cli-1')!
     )
     expect(stored.recordUpdatedAt).toBe(recordUpdatedAt.getTime())
   })
@@ -605,10 +605,10 @@ describe('useFormDraft', () => {
   // --- clearDraft ----------------------------------------------------------
 
   it('clearDraft removes the stored entry and resets draft to null', () => {
-    const key = 'draft:v2:cliente-form:org-1:user-1:new'
+    const key = 'draft:v3:cliente-form:org-1:user-1:new'
     window.localStorage.setItem(
       key,
-      JSON.stringify({ version: 2, savedAt: Date.now(), data: { nombre: 'Ana' } })
+      JSON.stringify({ version: 3, savedAt: Date.now(), data: { nombre: 'Ana' } })
     )
 
     const { result } = renderDraft({ nombre: 'Ana' }, { feature: 'cliente-form' })
@@ -685,19 +685,19 @@ describe('useFormDraft', () => {
     })
 
     const otraVersion = 'draft:v1:cliente-form:org-1:user-1:new'
-    const vencido = 'draft:v2:orden-form:org-1:user-1:new'
-    const vigente = 'draft:v2:recepcion-form:org-1:user-1:new'
+    const vencido = 'draft:v3:orden-form:org-1:user-1:new'
+    const vigente = 'draft:v3:recepcion-form:org-1:user-1:new'
     window.localStorage.setItem(
       otraVersion,
       JSON.stringify({ version: 1, savedAt: Date.now(), data: { codigoAcceso: '1234' } })
     )
     window.localStorage.setItem(
       vencido,
-      JSON.stringify({ version: 2, savedAt: Date.now() - 8 * 24 * 60 * 60 * 1000, data: {} })
+      JSON.stringify({ version: 3, savedAt: Date.now() - 8 * 24 * 60 * 60 * 1000, data: {} })
     )
     window.localStorage.setItem(
       vigente,
-      JSON.stringify({ version: 2, savedAt: Date.now(), data: { nombre: 'Ana' } })
+      JSON.stringify({ version: 3, savedAt: Date.now(), data: { nombre: 'Ana' } })
     )
     window.localStorage.setItem('otra-app:preferencia', 'no tocar')
 
@@ -748,10 +748,10 @@ describe('useFormDraft', () => {
     // restaurar": un click en Siguiente, abrir y cerrar un select, o cualquier
     // click dentro de un dialogo borraba el borrador mientras el aviso todavia
     // decia que se habia restaurado.
-    const key = 'draft:v2:cliente-form:org-1:user-1:new'
+    const key = 'draft:v3:cliente-form:org-1:user-1:new'
     window.localStorage.setItem(
       key,
-      JSON.stringify({ version: 2, savedAt: Date.now(), data: { nombre: 'Ana' } })
+      JSON.stringify({ version: 3, savedAt: Date.now(), data: { nombre: 'Ana' } })
     )
 
     const { result, rerender } = renderDraft({ nombre: '' }, { feature: 'cliente-form' })
@@ -779,10 +779,10 @@ describe('useFormDraft', () => {
     // El descarte deja el formulario en blanco y sin borrador: de ahi en mas
     // vuelve a valer la regla de arriba (escribir y deshacer borra la entrada),
     // porque ya no hay ningun borrador restaurado que proteger.
-    const key = 'draft:v2:cliente-form:org-1:user-1:new'
+    const key = 'draft:v3:cliente-form:org-1:user-1:new'
     window.localStorage.setItem(
       key,
-      JSON.stringify({ version: 2, savedAt: Date.now(), data: { nombre: 'Ana' } })
+      JSON.stringify({ version: 3, savedAt: Date.now(), data: { nombre: 'Ana' } })
     )
 
     // Los call sites limpian y resetean en el mismo handler, asi que el valor
@@ -1006,10 +1006,10 @@ describe('useFormDraft', () => {
   })
 
   it('does not read or write while disabled', () => {
-    const key = 'draft:v2:cliente-form:org-1:user-1:new'
+    const key = 'draft:v3:cliente-form:org-1:user-1:new'
     window.localStorage.setItem(
       key,
-      JSON.stringify({ version: 2, savedAt: Date.now(), data: { nombre: 'Ana' } })
+      JSON.stringify({ version: 3, savedAt: Date.now(), data: { nombre: 'Ana' } })
     )
 
     const { result, rerender } = renderDraft({ nombre: '' }, { feature: 'cliente-form', enabled: false })

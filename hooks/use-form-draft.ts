@@ -64,9 +64,13 @@ import { useSession } from "next-auth/react"
  */
 
 /** v2: the persisted snapshots dropped the device access code and were cut
- *  down to a minimal customer projection (see "WHAT MAY BE PERSISTED"). The
- *  bump is what retires the v1 entries that still hold those values. */
-const DRAFT_SCHEMA_VERSION = 2
+ *  down to a minimal customer projection (see "WHAT MAY BE PERSISTED").
+ *  v3: the customer form itself stopped persisting the record it edits --
+ *  national id, tax id, email and address (lib/cliente-draft-projection.ts).
+ *  Each bump is what retires the entries that still hold those values: they were
+ *  written under a laxer rule and would otherwise sit in localStorage, readable,
+ *  for the rest of their 7 days. */
+const DRAFT_SCHEMA_VERSION = 3
 const DEFAULT_DEBOUNCE_MS = 1000
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 

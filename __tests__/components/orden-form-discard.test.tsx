@@ -86,7 +86,7 @@ vi.mock("@/lib/image-compression", () => ({
   compressImage: async (file: File) => file,
 }))
 
-const DRAFT_KEY = "draft:v2:orden-form:org-1:user-1:new"
+const DRAFT_KEY = "draft:v3:orden-form:org-1:user-1:new"
 
 const CHECKLIST_TEMPLATE = {
   id: "tpl-1",
@@ -98,7 +98,7 @@ const CHECKLIST_TEMPLATE = {
  *  es lo que habilita "Siguiente" hasta llegar al paso 3. */
 function draftDelClienteX() {
   return JSON.stringify({
-    version: 2,
+    version: 3,
     savedAt: Date.now(),
     data: {
       form: {

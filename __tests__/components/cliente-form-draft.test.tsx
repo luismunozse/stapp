@@ -5,7 +5,7 @@
  * nunca se cruzan. "Descartar" borra el borrador y vuelve el formulario al
  * prefill/blanco base.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, fireEvent, act } from "@testing-library/react"
 import { ModalProvider } from "@/contexts/modal-context"
 import { ClienteForm } from "@/components/clientes/cliente-form"
@@ -53,9 +53,9 @@ describe("ClienteForm — borrador local", () => {
 
   it("restaura un borrador de alta ('new') y muestra el aviso dismissible", () => {
     window.localStorage.setItem(
-      "draft:v2:cliente-form:org-1:user-1:new",
+      "draft:v3:cliente-form:org-1:user-1:new",
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         data: {
           tipoCliente: "INDIVIDUAL",
@@ -85,9 +85,9 @@ describe("ClienteForm — borrador local", () => {
 
   it("no restaura un borrador de alta en un formulario de edicion (recordId distinto)", () => {
     window.localStorage.setItem(
-      "draft:v2:cliente-form:org-1:user-1:new",
+      "draft:v3:cliente-form:org-1:user-1:new",
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         data: {
           tipoCliente: "INDIVIDUAL",
@@ -117,9 +117,9 @@ describe("ClienteForm — borrador local", () => {
 
   it('"Descartar" borra el borrador y vuelve al prefill del cliente', async () => {
     window.localStorage.setItem(
-      "draft:v2:cliente-form:org-1:user-1:edit:cli-1",
+      "draft:v3:cliente-form:org-1:user-1:edit:cli-1",
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         data: {
           tipoCliente: "INDIVIDUAL",
@@ -148,7 +148,7 @@ describe("ClienteForm — borrador local", () => {
 
     expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
     expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Perez")
-    expect(window.localStorage.getItem("draft:v2:cliente-form:org-1:user-1:edit:cli-1")).toBeNull()
+    expect(window.localStorage.getItem("draft:v3:cliente-form:org-1:user-1:edit:cli-1")).toBeNull()
   })
 
   it("una revalidacion del cliente no pisa el borrador restaurado", () => {
@@ -156,11 +156,11 @@ describe("ClienteForm — borrador local", () => {
     // un objeto nuevo con los mismos datos. Si el prefill depende de la
     // identidad del objeto, vuelve a resetear el formulario y se lleva puesto
     // el borrador mientras el aviso sigue diciendo que se restauro uno.
-    const key = "draft:v2:cliente-form:org-1:user-1:edit:cli-1"
+    const key = "draft:v3:cliente-form:org-1:user-1:edit:cli-1"
     window.localStorage.setItem(
       key,
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         recordUpdatedAt: CLIENTE_UPDATED_AT.getTime(),
         data: {
@@ -270,11 +270,11 @@ describe("ClienteForm — borrador local", () => {
     // equivocada -- aplica lo que le den -- asi que el try/catch de abajo no lo
     // agarra: el dialog abre con campos vacios o con basura y esos valores se
     // van tal cual en el PUT/POST.
-    const key = "draft:v2:cliente-form:org-1:user-1:new"
+    const key = "draft:v3:cliente-form:org-1:user-1:new"
     window.localStorage.setItem(
       key,
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         data: { nombre: 42, direccion: "Calle Falsa 123" },
       }),
@@ -298,7 +298,7 @@ describe("ClienteForm — borrador local", () => {
     // esa entrada no se aplica nunca -- pero el hook si la cuenta como
     // restaurada, asi que despues la pisa en silencio con lo que hay en
     // pantalla y el aviso nunca aparece.
-    const key = "draft:v2:cliente-form:org-1:user-1:edit:cli-1"
+    const key = "draft:v3:cliente-form:org-1:user-1:edit:cli-1"
 
     const { rerender } = render(
       <ModalProvider>
@@ -311,7 +311,7 @@ describe("ClienteForm — borrador local", () => {
     window.localStorage.setItem(
       key,
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         recordUpdatedAt: otroUpdatedAt.getTime(),
         data: {
@@ -355,9 +355,9 @@ describe("ClienteForm — borrador local", () => {
     // commit siguiente -- y aplicaba ese borrador sobre la ficha equivocada. El
     // latch va por identidad del objeto justamente para que no pueda pasar.
     window.localStorage.setItem(
-      "draft:v2:cliente-form:org-1:user-1:edit:cli-1",
+      "draft:v3:cliente-form:org-1:user-1:edit:cli-1",
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         recordUpdatedAt: CLIENTE_UPDATED_AT.getTime(),
         data: {
@@ -407,11 +407,11 @@ describe("ClienteForm — borrador local", () => {
     // mostrando esos valores y el aviso seguia anunciando el borrador:
     // "Guardar" pisaba el guardado del companero con exactamente el contenido
     // que el token de frescura existe para rechazar.
-    const key = "draft:v2:cliente-form:org-1:user-1:edit:cli-1"
+    const key = "draft:v3:cliente-form:org-1:user-1:edit:cli-1"
     window.localStorage.setItem(
       key,
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         recordUpdatedAt: CLIENTE_UPDATED_AT.getTime(),
         data: {
@@ -460,14 +460,14 @@ describe("ClienteForm — borrador local", () => {
     // El submit de edicion manda el formulario entero (PUT /api/clientes/:id),
     // asi que restaurar un borrador viejo encima de un registro mas nuevo
     // pisaria en silencio lo que guardo el otro usuario.
-    const key = "draft:v2:cliente-form:org-1:user-1:edit:cli-1"
+    const key = "draft:v3:cliente-form:org-1:user-1:edit:cli-1"
     // Borrador reciente (dentro de la ventana de 7 dias) escrito cuando el
     // registro tenia otro updatedAt: alguien lo guardo en el medio.
     const savedAt = Date.now() - 60_000
     window.localStorage.setItem(
       key,
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt,
         recordUpdatedAt: savedAt - 60_000,
         data: {
@@ -500,5 +500,106 @@ describe("ClienteForm — borrador local", () => {
     expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
     expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Perez")
     expect(window.localStorage.getItem(key)).toBeNull()
+  })
+})
+
+/**
+ * Este formulario tambien se monta adentro de ClienteSelector, o sea en las dos
+ * pantallas de ingreso, que corren en terminales compartidas de mostrador. El
+ * borrador dura 7 dias y no se borra al cerrar sesion: lo que se escriba en
+ * localStorage lo lee el operador siguiente. Es la ficha con mas datos
+ * personales de todo el panel, asi que el limite de persistencia
+ * (hooks/use-form-draft.ts) pega justo aca.
+ */
+describe("ClienteForm — borrador local (datos sensibles)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ id: "c1" }) }))
+    window.localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  async function settle(ms = 2000) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms)
+    })
+  }
+
+  it("nunca escribe el documento, el CUIT, el email ni la direccion del cliente", async () => {
+    render(
+      <ModalProvider>
+        <ClienteForm cliente={null} open onClose={vi.fn()} onSuccess={vi.fn()} />
+      </ModalProvider>,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Empresa" }))
+    fireEvent.change(screen.getByLabelText("Nombre de contacto *"), {
+      target: { value: "Ana Gomez" },
+    })
+    fireEvent.change(screen.getByLabelText("Teléfono *"), { target: { value: "1122334455" } })
+    fireEvent.change(screen.getByLabelText("DNI del contacto"), { target: { value: "30111222" } })
+    fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "30-71111111-9" } })
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ana@acme.test" } })
+    fireEvent.change(screen.getByLabelText("Dirección"), {
+      target: { value: "Av. Siempreviva 742" },
+    })
+    await settle()
+
+    const raw = window.localStorage.getItem("draft:v3:cliente-form:org-1:user-1:new")
+    expect(raw).not.toBeNull()
+    const data = JSON.parse(raw!).data
+    // Lo que no se guarda no se puede leer despues: es la unica garantia real.
+    expect(data).not.toHaveProperty("dni")
+    expect(data).not.toHaveProperty("cuit")
+    expect(data).not.toHaveProperty("email")
+    expect(data).not.toHaveProperty("direccion")
+    for (const dato of ["30111222", "30-71111111-9", "ana@acme.test", "Siempreviva"]) {
+      expect(raw).not.toContain(dato)
+    }
+    // Lo que el formulario restaurado si necesita para seguir cargandose.
+    expect(data.nombre).toBe("Ana Gomez")
+    expect(data.telefono).toBe("1122334455")
+  })
+
+  it("restaurar un borrador no borra los datos que la ficha ya tenia guardados", async () => {
+    // El borrador no los trae porque no se persisten, no porque esten vacios:
+    // aplicarlo tal cual dejaria el documento del cliente en blanco y el PUT lo
+    // borraria del registro.
+    window.localStorage.setItem(
+      "draft:v3:cliente-form:org-1:user-1:edit:cli-1",
+      JSON.stringify({
+        version: 3,
+        savedAt: Date.now(),
+        recordUpdatedAt: CLIENTE_UPDATED_AT.getTime(),
+        data: {
+          tipoCliente: "INDIVIDUAL",
+          nombre: "Juan Editado Sin Guardar",
+          telefono: "1100000000",
+          razonSocial: "",
+          aceptaWhatsapp: true,
+          tipoPrecio: "MINORISTA",
+          descuentoPct: undefined,
+        },
+      }),
+    )
+
+    render(
+      <ModalProvider>
+        <ClienteForm
+          cliente={makeCliente({ dni: "30111222", email: "juan@perez.test" })}
+          open
+          onClose={vi.fn()}
+          onSuccess={vi.fn()}
+        />
+      </ModalProvider>,
+    )
+
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Editado Sin Guardar")
+    expect(screen.getByLabelText("DNI")).toHaveValue("30111222")
+    expect(screen.getByLabelText("Email")).toHaveValue("juan@perez.test")
   })
 })

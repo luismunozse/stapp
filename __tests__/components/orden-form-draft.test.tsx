@@ -37,7 +37,7 @@ vi.mock("@/hooks/use-tipos-dispositivo", () => ({
   }),
 }))
 
-const DRAFT_KEY = "draft:v2:orden-form:org-1:user-1:new"
+const DRAFT_KEY = "draft:v3:orden-form:org-1:user-1:new"
 
 /** Cliente completo tal como lo devuelve GET /api/clientes/:id — el deep-link
  *  (?clienteId=) es la unica forma de cargar el objeto entero sin tocar el
@@ -154,7 +154,7 @@ function draftData(overrides: Record<string, unknown> = {}) {
 }
 
 function draftEnvelope(overrides: Record<string, unknown> = {}) {
-  return JSON.stringify({ version: 2, savedAt: Date.now(), data: draftData(overrides) })
+  return JSON.stringify({ version: 3, savedAt: Date.now(), data: draftData(overrides) })
 }
 
 async function renderForm(props: { initialClienteId?: string; fromTurnoId?: string } = {}) {
@@ -312,7 +312,7 @@ describe("OrdenForm — borrador local", () => {
       )
     })
 
-    window.localStorage.setItem("draft:v2:orden-form:org-1:user-1:new:turno:t-2", draftEnvelope())
+    window.localStorage.setItem("draft:v3:orden-form:org-1:user-1:new:turno:t-2", draftEnvelope())
 
     rerender(
       <ModalProvider>
@@ -335,11 +335,11 @@ describe("OrdenForm — borrador local", () => {
     // pisa con lo que quedo en pantalla del turno anterior. Por eso el latch va
     // por scope, igual que en cliente-form.tsx.
     window.localStorage.setItem(
-      "draft:v2:orden-form:org-1:user-1:new:turno:t-1",
+      "draft:v3:orden-form:org-1:user-1:new:turno:t-1",
       draftEnvelope({ form: { ...draftData().form, dispositivo: "Borrador del turno 1" } }),
     )
     window.localStorage.setItem(
-      "draft:v2:orden-form:org-1:user-1:new:turno:t-2",
+      "draft:v3:orden-form:org-1:user-1:new:turno:t-2",
       draftEnvelope({ form: { ...draftData().form, dispositivo: "Borrador del turno 2" } }),
     )
 
@@ -656,7 +656,7 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
  * del turno salvo recargando la pagina.
  */
 describe("OrdenForm — borrador de una orden nacida de un turno", () => {
-  const TURNO_DRAFT_KEY = "draft:v2:orden-form:org-1:user-1:new:turno:t-1"
+  const TURNO_DRAFT_KEY = "draft:v3:orden-form:org-1:user-1:new:turno:t-1"
 
   beforeEach(() => {
     stubFetch()
@@ -730,7 +730,7 @@ describe("OrdenForm — borrador de una orden nacida de un turno", () => {
   it('"Descartar" mantiene el cliente del deep-link (?clienteId=)', async () => {
     // Mismo agujero por el otro camino: el efecto del deep-link tampoco vuelve
     // a correr, y sin cliente el alta no puede ni empezar a cargarse.
-    const deepLinkKey = "draft:v2:orden-form:org-1:user-1:new:cliente:cli-1"
+    const deepLinkKey = "draft:v3:orden-form:org-1:user-1:new:cliente:cli-1"
     window.localStorage.setItem(deepLinkKey, turnoDraftEnvelope())
 
     await renderForm({ initialClienteId: "cli-1" })
@@ -806,7 +806,7 @@ describe("OrdenForm — borrador local (datos sensibles)", () => {
   })
 
   it("guarda solo la proyeccion minima del cliente, no la ficha entera", async () => {
-    const deepLinkKey = "draft:v2:orden-form:org-1:user-1:new:cliente:cli-1"
+    const deepLinkKey = "draft:v3:orden-form:org-1:user-1:new:cliente:cli-1"
     await renderForm({ initialClienteId: "cli-1" })
     await settle()
 

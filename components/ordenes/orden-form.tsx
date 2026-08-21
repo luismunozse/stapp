@@ -24,6 +24,10 @@ import { compressImage } from "@/lib/image-compression"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { useTipoDispositivoConfig } from "@/hooks/use-tipo-dispositivo-config"
 import { useFormDraft } from "@/hooks/use-form-draft"
+import {
+  stripSensitiveClienteFields,
+  type WithoutSensitiveClienteFields,
+} from "@/lib/cliente-draft-projection"
 import { useTerminologia } from "@/contexts/currency-context"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { useOffline } from "@/contexts/offline-context"
@@ -90,10 +94,11 @@ type ClienteResumen = Pick<
   "id" | "nombre" | "telefono" | "tipoCliente" | "razonSocial" | "cuit"
 >
 
-/** Proyeccion que ademas se persiste. El cuit queda afuera: es dato fiscal del
- *  cliente y solo alimenta una linea informativa del bloque de empresa, que
- *  puede vivir sin el hasta que se vuelva a elegir el cliente. */
-type ClienteDraftSnapshot = Omit<ClienteResumen, "cuit">
+/** Proyeccion que ademas se persiste. Los datos personales (aca, el cuit: es
+ *  dato fiscal y solo alimenta una linea informativa del bloque de empresa) los
+ *  saca la proyeccion compartida, la misma que usa cliente-form.tsx, para que
+ *  la regla no dependa de que cada formulario se acuerde de escribirla. */
+type ClienteDraftSnapshot = WithoutSensitiveClienteFields<ClienteResumen>
 
 /** Estructura minima que alcanza para proyectar. Mas laxa que el Cliente del
  *  dominio a proposito: el buscador (cliente-selector.tsx) declara su propio
@@ -351,13 +356,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       return {
         form,
         selectedClienteObj: selectedClienteObj
-          ? {
-              id: selectedClienteObj.id,
-              nombre: selectedClienteObj.nombre,
-              telefono: selectedClienteObj.telefono,
-              tipoCliente: selectedClienteObj.tipoCliente,
-              razonSocial: selectedClienteObj.razonSocial,
-            }
+          ? stripSensitiveClienteFields(selectedClienteObj)
           : null,
         accesoriosSeleccionados,
         otroAccesorio,

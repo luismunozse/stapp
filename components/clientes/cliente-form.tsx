@@ -24,6 +24,10 @@ import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { useOffline } from "@/contexts/offline-context"
 import { useFormDraft } from "@/hooks/use-form-draft"
+import {
+  stripSensitiveClienteFields,
+  type WithoutSensitiveClienteFields,
+} from "@/lib/cliente-draft-projection"
 import { STORES } from "@/lib/offline/constants"
 import { getCountryConfig } from "@/lib/countries"
 
@@ -48,6 +52,19 @@ const clienteSchema = z.object({
 })
 
 type ClienteFormData = z.infer<typeof clienteSchema>
+
+/** Lo unico del formulario que llega a localStorage. Es la ficha con mas datos
+ *  personales del panel y este dialog se monta ademas adentro de
+ *  ClienteSelector, o sea en las dos pantallas de ingreso, sobre terminales
+ *  compartidas donde el borrador vive 7 dias en texto plano y no se borra al
+ *  cerrar sesion (ver el limite de persistencia en hooks/use-form-draft.ts). El
+ *  documento, el CUIT, el email y la direccion se quedan afuera por el tipo, no
+ *  por acordarse: los saca la proyeccion compartida, la misma que usa el
+ *  snapshot de cliente de orden-form.tsx.
+ *
+ *  Volver a escribirlos es una molestia acotada; que el proximo operador los lea
+ *  en el navegador, no. */
+type ClienteDraftValue = WithoutSensitiveClienteFields<ClienteFormData>
 
 /** Valores base para el form: prefill de edicion o blanco para alta. Vive
  *  afuera del componente (sin dependencias de hooks) para poder reusarla en
@@ -141,7 +158,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
    *  todavia en `draft` se aplicaba ese. Cada re-lectura del hook devuelve un
    *  objeto nuevo y cada re-render devuelve el mismo, asi que la identidad es
    *  la unica marca sincronizada con su estado. */
-  const draftAppliedRef = useRef<ClienteFormData | null>(null)
+  const draftAppliedRef = useRef<ClienteDraftValue | null>(null)
   /** Raiz del formulario para el gate de interaccion del hook: este dialog se
    *  monta adentro de OrdenForm y RecepcionForm (via ClienteSelector), asi que
    *  cada uno tiene que reconocer solo sus propios controles. */
@@ -153,13 +170,19 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
     notifyChange,
     hasUnsavedWork,
     recordChangedWhileEditing,
-  } = useFormDraft<ClienteFormData>({
+  } = useFormDraft<ClienteDraftValue>({
     feature: "cliente-form",
     recordId,
     // `getValues()` en vez de `watch()`: leer el form entero en render
     // suscribe el componente a cada tecla. El borrador no necesita re-render,
     // solo el valor al momento de grabar.
-    getValue: () => getValues(),
+    //
+    // LIMITE DE PERSISTENCIA — lo que se devuelve aca queda en localStorage en
+    // texto plano, 7 dias, en una terminal que comparten varios operadores y
+    // que no borra nada al cerrar sesion. La proyeccion compartida saca los
+    // datos personales que el formulario restaurado puede recuperar de otro
+    // lado: de la ficha (en edicion) o del cliente que esta en el mostrador.
+    getValue: () => stripSensitiveClienteFields(getValues()),
     enabled: open,
     rootRef: formRef,
     // `reset()` no tira excepcion con un borrador de otra forma: aplica lo que
@@ -168,7 +191,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
     // este formulario abre el dialog con campos vacios o con basura, en
     // silencio, y esos valores salen tal cual en el PUT/POST.
     validate: (data) => {
-      const value = data as ClienteFormData
+      const value = data as ClienteDraftValue
       return (
         !!value &&
         typeof value === "object" &&
@@ -245,7 +268,12 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
     if (!draftReady || !draft || draftAppliedRef.current === draft) return
     draftAppliedRef.current = draft
     try {
-      reset(draft)
+      // El borrador se aplica ENCIMA del prefill, no en su lugar: los campos
+      // que la proyeccion deja afuera (documento, CUIT, email, direccion) no
+      // faltan porque esten vacios, faltan porque no se guardan. Aplicarlo tal
+      // cual los pondria en blanco, y el PUT de edicion manda el registro
+      // entero: el documento del cliente se borraria de la ficha.
+      reset({ ...clienteFormDefaults(cliente), ...draft })
       setDraftNoticeVisible(true)
     } catch (error) {
       // Un borrador de otra forma (cambio de campos sin bump de version) no
@@ -256,8 +284,10 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
       setDraftNoticeVisible(false)
       reset(clienteFormDefaults(cliente))
     }
-    // `cliente` solo se usa en el rescate del catch: incluirlo en las
-    // dependencias volveria a correr el efecto en cada revalidacion de SWR.
+    // `cliente` se lee adentro (base del prefill y rescate del catch) pero no va
+    // en las dependencias: volveria a correr el efecto en cada revalidacion de
+    // SWR. El efecto corre por borrador nuevo y ahi lee la ficha del render en
+    // curso, que es la que corresponde.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, draftReady, draft, reset, clearDraft])
 

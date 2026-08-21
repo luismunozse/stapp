@@ -82,7 +82,7 @@ vi.mock("@/components/firma/signature-pad", () => ({
   ),
 }))
 
-const DRAFT_KEY = "draft:v2:recepcion-form:org-1:user-1:new"
+const DRAFT_KEY = "draft:v3:recepcion-form:org-1:user-1:new"
 
 async function renderForm() {
   const { RecepcionForm } = await import("@/components/ordenes/recepcion-form")
@@ -120,7 +120,7 @@ describe("RecepcionForm — borrador local", () => {
     window.localStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         data: {
           form: {
@@ -168,7 +168,7 @@ describe("RecepcionForm — borrador local", () => {
     window.localStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         data: {
           form: {
@@ -246,7 +246,7 @@ describe("RecepcionForm — borrador local", () => {
     window.localStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         data: {
           form: {
@@ -303,7 +303,7 @@ describe("RecepcionForm — borrador local", () => {
     window.localStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         data: { form: { clienteId: "cli-1", telefonoContacto: "" }, sideState: null },
       }),
@@ -320,7 +320,7 @@ describe("RecepcionForm — borrador local", () => {
     window.localStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         data: {
           form: {
@@ -372,7 +372,7 @@ describe("RecepcionForm — borrador local", () => {
     window.localStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         data: {
           form: {
@@ -433,7 +433,7 @@ describe("RecepcionForm — borrador local", () => {
     window.localStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         data: {
           form: {
@@ -525,7 +525,7 @@ describe("RecepcionForm — descartar un borrador", () => {
     window.localStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         data: {
           form: {
@@ -633,7 +633,7 @@ describe("RecepcionForm — borrador local (datos sensibles)", () => {
     window.localStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
-        version: 2,
+        version: 3,
         savedAt: Date.now(),
         data: {
           form: {
