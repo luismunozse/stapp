@@ -17,6 +17,7 @@ const itemSchema = z.object({
   descuentoTipo: z.enum(["porcentaje", "fijo"]).optional(),
   descuentoValor: z.number().min(0).optional(),
   inventarioId: z.string().nullable().optional(),
+  servicioId: z.string().nullable().optional(),
   tipoRepuesto: z.enum(["ORIGINAL", "ALTERNATIVO", "RECICLADO", "NO_APLICA"]).optional(),
 })
 
@@ -216,6 +217,7 @@ function formatCotizacion(c: any) {
       descuentoTipo: i.descuento_tipo,
       descuentoValor: i.descuento_valor,
       inventarioId: i.inventario_id ?? null,
+      servicioId: i.servicio_id ?? null,
       tipoRepuesto: i.tipo_repuesto || "NO_APLICA",
     })),
   }
@@ -440,6 +442,7 @@ export async function PUT(
             descuento_tipo: item.descuentoTipo || "porcentaje",
             descuento_valor: item.descuentoValor || 0,
             inventario_id: item.inventarioId || null,
+            servicio_id: item.servicioId || null,
             tipo_repuesto: item.tipoRepuesto || "NO_APLICA",
           }))
         )
