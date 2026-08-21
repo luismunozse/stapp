@@ -413,6 +413,15 @@ async function memoConTtl<T>(
 
   const data = await resolver()
   if (cacheable && !cacheable(data)) return data
+
+  // Refrescar una entrada vencida es un uso, igual que un hit. `Map.set` sobre
+  // una clave que ya existe NO la mueve de lugar, asi que sin este delete la
+  // clave que se refresca una y otra vez — el tenant mas activo — se quedaba
+  // clavada al frente y era siempre la primera victima del desalojo de abajo.
+  // De paso, borrarla antes de medir el tamaño evita desalojar a un tercero
+  // para hacerle lugar a una entrada que ya estaba ocupando ese lugar.
+  store.delete(key)
+
   if (store.size >= CACHE_VENTA_MAX_ENTRIES) {
     for (const [k, entry] of store) {
       if (entry.expiresAt <= now) store.delete(k)

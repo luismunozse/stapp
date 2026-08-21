@@ -859,6 +859,43 @@ describe("cache de resolucion de venta (solo lecturas del POS)", () => {
     expect(contarLecturas("depositos")).toBe(antes)
   })
 
+  it("CV-17 — una clave que se refresca seguido NO es la primera en caer (refrescar tambien renueva el uso)", async () => {
+    // Map.set sobre una clave que ya existe no la mueve de lugar, asi que el
+    // camino de refresco (entrada vencida que se vuelve a resolver) la dejaba
+    // clavada en su posicion original — y el desalojo, que empieza por la
+    // primera, terminaba echando justo al tenant mas activo.
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+    const T0 = 1_000_000
+    const ahora = vi.spyOn(Date, "now")
+    try {
+      ahora.mockReturnValue(T0)
+      await resolverDestinoVentaCacheado(paramsDeOrg("org-activa"))
+
+      // Vecinas mas nuevas, todas vivas cuando org-activa se refresca (asi el
+      // barrido de vencidas no las limpia y el desalojo tiene que elegir).
+      ahora.mockReturnValue(T0 + 25_000)
+      for (let i = 0; i < CACHE_VENTA_MAX_ENTRIES - 2; i++) {
+        await resolverDestinoVentaCacheado(paramsDeOrg(`org-${i}`))
+      }
+
+      // org-activa vencio y se vuelve a resolver: ese es el camino en cuestion,
+      // y la deja como la entrada usada mas recientemente de todo el mapa.
+      ahora.mockReturnValue(T0 + 31_000)
+      await resolverDestinoVentaCacheado(paramsDeOrg("org-activa"))
+
+      // Presion de desalojo: cada una de estas empuja a la menos usada afuera.
+      for (let i = 0; i < 5; i++) {
+        await resolverDestinoVentaCacheado(paramsDeOrg(`nueva-${i}`))
+      }
+
+      const antes = contarLecturas("depositos")
+      await resolverDestinoVentaCacheado(paramsDeOrg("org-activa"))
+      expect(contarLecturas("depositos")).toBe(antes)
+    } finally {
+      ahora.mockRestore()
+    }
+  })
+
   it("CV-7 — el camino de ESCRITURA no se cachea: resolverDestinoVenta siempre consulta", async () => {
     mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
     const params = { role: "ADMIN", organizationId: "org-1", userSucursalId: null }
