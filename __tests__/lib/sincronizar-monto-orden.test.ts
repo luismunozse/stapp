@@ -19,7 +19,7 @@ describe("calcularMontoSincronizado — elección del campo por estado", () => {
     "en %s alimenta el presupuesto",
     (estado) => {
       const r = calcularMontoSincronizado({ ...BASE, estado })
-      expect(r).toEqual({ debeActualizar: true, campo: "presupuesto", nuevoMonto: 25000 })
+      expect(r).toEqual({ debeActualizar: true, campo: "presupuesto", nuevoMonto: 25000, limpiarCostoFinalHuerfano: false })
     }
   )
 
@@ -27,7 +27,7 @@ describe("calcularMontoSincronizado — elección del campo por estado", () => {
     "en %s alimenta el costo final",
     (estado) => {
       const r = calcularMontoSincronizado({ ...BASE, estado })
-      expect(r).toEqual({ debeActualizar: true, campo: "costo_final", nuevoMonto: 25000 })
+      expect(r).toEqual({ debeActualizar: true, campo: "costo_final", nuevoMonto: 25000, limpiarCostoFinalHuerfano: false })
     }
   )
 
@@ -40,7 +40,7 @@ describe("calcularMontoSincronizado — elección del campo por estado", () => {
     "SIN_FALLA_DETECTADA",
   ])("en %s no toca ningún monto", (estado) => {
     const r = calcularMontoSincronizado({ ...BASE, estado })
-    expect(r).toEqual({ debeActualizar: false, campo: null, nuevoMonto: null })
+    expect(r).toEqual({ debeActualizar: false, campo: null, nuevoMonto: null, limpiarCostoFinalHuerfano: false })
   })
 
   it("el corte está en APROBADO: ahí el presupuesto ya lo aceptó el cliente", () => {
@@ -72,7 +72,7 @@ describe("calcularMontoSincronizado — guardas sobre el campo elegido", () => {
       costoFinalActual: 99999,
       sumaNueva: 25000,
     })
-    expect(r).toEqual({ debeActualizar: true, campo: "presupuesto", nuevoMonto: 25000 })
+    expect(r).toEqual({ debeActualizar: true, campo: "presupuesto", nuevoMonto: 25000, limpiarCostoFinalHuerfano: false })
   })
 
   it("no toca nada cuando ya hay dinero cobrado, sin importar el estado", () => {
@@ -92,7 +92,7 @@ describe("calcularMontoSincronizado — guardas sobre el campo elegido", () => {
       sumaAnterior: 25000,
       sumaNueva: 0,
     })
-    expect(r).toEqual({ debeActualizar: true, campo: "presupuesto", nuevoMonto: null })
+    expect(r).toEqual({ debeActualizar: true, campo: "presupuesto", nuevoMonto: null, limpiarCostoFinalHuerfano: false })
   })
 
   it("no deja sin presupuesto a una orden ya PRESUPUESTADA: ese gate ya se cruzó", () => {
