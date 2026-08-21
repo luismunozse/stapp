@@ -143,7 +143,6 @@ interface OrdenDraftValue {
   selectedRecibidoPorId: string
   checklistValores: Record<string, boolean | string | null>
   checklistNotas: string
-  currentStep: number
 }
 
 interface OrdenFormProps {
@@ -302,7 +301,6 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         selectedRecibidoPorId,
         checklistValores,
         checklistNotas,
-        currentStep,
       }
     },
   })
@@ -335,7 +333,11 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     setSelectedRecibidoPorId(draft.selectedRecibidoPorId)
     setChecklistValores(draft.checklistValores)
     setChecklistNotas(draft.checklistNotas)
-    setCurrentStep(draft.currentStep)
+    // El paso NO se restaura (ni se guarda). La sena y "presupuesto aceptado"
+    // viven en el paso 2: reabrir en el paso 3 los dejaba fuera de pantalla y
+    // el submit mandaba `sena` igual, registrando un movimiento de caja por
+    // plata que el cliente nunca entrego. Arrancar en el paso 1 obliga a pasar
+    // por delante de lo que se cargo.
     setDraftNoticeVisible(true)
   }, [draftReady, draft, reset])
 

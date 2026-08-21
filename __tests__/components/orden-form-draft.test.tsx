@@ -192,6 +192,26 @@ describe("OrdenForm — borrador local", () => {
     expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
   })
 
+  it("vuelve siempre al primer paso, aunque el borrador se haya guardado en otro", async () => {
+    // El paso 2 es donde viven la sena y "presupuesto aceptado": restaurar el
+    // paso guardado dejaba esos campos fuera de pantalla y el submit
+    // registraba un movimiento de caja por plata que el cliente nunca pago.
+    // Arrancar siempre en el paso 1 obliga a pasar por delante de ellos.
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      draftEnvelope({
+        currentStep: 3,
+        presupuestoAceptado: true,
+        sena: "5000",
+      }),
+    )
+
+    await renderForm()
+
+    expect(screen.getByText(/Paso 1\/3/)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Seña \/ Adelanto/i)).not.toBeInTheDocument()
+  })
+
   it("muestra el selector de Sector/Area de una empresa restaurada desde el borrador", async () => {
     // ClienteSelector re-hidrata su propio display por id pero nunca llama a
     // onChange, asi que el objeto Cliente tiene que venir del borrador: sin el
@@ -337,6 +357,18 @@ describe("OrdenForm — borrador local (datos sensibles)", () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+  })
+
+  it("no guarda el paso en el que quedo el formulario", async () => {
+    await renderForm()
+    await settle(100)
+
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+      target: { value: "Moto G" },
+    })
+    await settle()
+
+    expect(storedDraft()?.data).not.toHaveProperty("currentStep")
   })
 
   it("nunca escribe el codigo de acceso del dispositivo en el borrador", async () => {

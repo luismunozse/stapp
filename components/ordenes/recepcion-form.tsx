@@ -71,14 +71,15 @@ type EquipoFormDraft = Omit<EquipoFormValues, "codigoAccesoDispositivo">
 type ClienteDraftSnapshot = Pick<Cliente, "nombre" | "telefono">
 
 /** Forma persistida por useFormDraft para este formulario. La firma del
- *  cliente tampoco se incluye (mismo motivo que las fotos: dato binario).
- *  `selectedCliente` SI se incluye (proyectado): ClienteSelector re-hidrata su
- *  propio display a partir del id, pero nunca llama a onChange, asi que sin
- *  esto el modal de exito muestra el nombre del cliente en blanco. */
+ *  cliente tampoco se incluye (mismo motivo que las fotos: dato binario) y por
+ *  eso `terminosAceptados` queda afuera: la aceptacion no puede sobrevivir a
+ *  la evidencia que la respalda. `selectedCliente` SI se incluye (proyectado):
+ *  ClienteSelector re-hidrata su propio display a partir del id, pero nunca
+ *  llama a onChange, asi que sin esto el modal de exito muestra el nombre del
+ *  cliente en blanco. */
 interface RecepcionDraftValue {
   form: Omit<RecepcionFormData, "equipos"> & { equipos: EquipoFormDraft[] }
   sideState: EquipoSideStateDraft[]
-  terminosAceptados: boolean
   selectedCliente: ClienteDraftSnapshot | null
 }
 
@@ -302,7 +303,6 @@ export function RecepcionForm() {
         ),
       },
       sideState: sideState.map(({ fotos: _fotos, ...rest }) => rest),
-      terminosAceptados,
       selectedCliente,
     }),
   })
@@ -334,7 +334,11 @@ export function RecepcionForm() {
         ...draft.sideState[i],
       }))
     )
-    setTerminosAceptados(draft.terminosAceptados)
+    // La conformidad NO se restaura. Su evidencia es la firma del cliente, que
+    // este borrador no persiste a proposito (dato binario), y el POST manda
+    // `terminosAceptados: true` con `firmaCliente: undefined`: quedaria una
+    // recepcion conforme sin nada que la respalde.
+    setTerminosAceptados(false)
     setSelectedCliente(draft.selectedCliente ?? null)
     setDraftNoticeVisible(true)
   }, [draftReady, draft, reset])

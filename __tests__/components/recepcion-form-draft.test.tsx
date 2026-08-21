@@ -199,6 +199,53 @@ describe("RecepcionForm — borrador local", () => {
     expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
   })
 
+  it("no da por aceptados los terminos al restaurar: la firma que los respalda no se guarda", async () => {
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        version: 2,
+        savedAt: Date.now(),
+        data: {
+          form: {
+            clienteId: "cli-1",
+            telefonoContacto: "",
+            observaciones: "",
+            equipos: [
+              {
+                dispositivo: "iPhone 13",
+                tipoDispositivo: "CELULAR",
+                marca: "",
+                color: "",
+                imei: "",
+                problemaReportado: "No enciende",
+              },
+              {
+                dispositivo: "Moto G",
+                tipoDispositivo: "CELULAR",
+                marca: "",
+                color: "",
+                imei: "",
+                problemaReportado: "Bateria",
+              },
+            ],
+          },
+          sideState: [
+            { accesoriosSeleccionados: [], otroAccesorio: "", camposExtraValues: {} },
+            { accesoriosSeleccionados: [], otroAccesorio: "", camposExtraValues: {} },
+          ],
+          terminosAceptados: true,
+          selectedCliente: null,
+        },
+      }),
+    )
+
+    await renderForm()
+
+    // El POST manda terminosAceptados junto a firmaCliente: sin la firma (que
+    // el borrador no persiste) la conformidad no tiene con que respaldarse.
+    expect(screen.getByRole("checkbox")).not.toBeChecked()
+  })
+
   it("restaura el cliente elegido, no solo su id", async () => {
     // ClienteSelector re-hidrata su propio display a partir del id pero nunca
     // llama a onChange, asi que sin el objeto en el borrador el comprobante de
