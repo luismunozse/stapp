@@ -80,6 +80,53 @@ const USER_INTERACTION_EVENTS = [
   "paste",
 ] as const
 
+/** Anything a person edits a form through. Radix builds its controls out of
+ *  divs with an ARIA role, so the roles matter as much as the tag names. */
+const FORM_CONTROL_SELECTOR = [
+  "input",
+  "textarea",
+  "select",
+  "button",
+  "canvas",
+  '[contenteditable="true"]',
+  '[role="option"]',
+  '[role="checkbox"]',
+  '[role="radio"]',
+  '[role="switch"]',
+  '[role="combobox"]',
+  '[role="menuitem"]',
+  '[role="menuitemcheckbox"]',
+  '[role="menuitemradio"]',
+  '[role="slider"]',
+  '[role="textbox"]',
+].join(",")
+
+/** Radix renders selects/menus/dialogs into a portal at the end of <body>, so
+ *  a control the user opened from the form is not inside the <form> element
+ *  any more. These are the layers that still count as "in the form". */
+const FLOATING_LAYER_SELECTOR = [
+  "[data-radix-popper-content-wrapper]",
+  '[role="listbox"]',
+  '[role="menu"]',
+  '[role="dialog"]',
+  '[role="alertdialog"]',
+].join(",")
+
+/**
+ * True when the event landed on something a person edits a form with. The gate
+ * used to latch on ANY document event: one click on the sidebar, a backdrop or
+ * a card marked the form dirty for the rest of its life, so every prefill that
+ * resolved afterwards (the "recibido por" default, the turno fetch, the
+ * checklist template) counted as a user edit and got persisted as a draft of
+ * untouched defaults.
+ */
+function isFormInteraction(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  const control = target.closest(FORM_CONTROL_SELECTOR)
+  if (!control) return false
+  return !!control.closest("form") || !!control.closest(FLOATING_LAYER_SELECTOR)
+}
+
 interface DraftEnvelope<T> {
   version: number
   savedAt: number
@@ -112,6 +159,13 @@ export interface UseFormDraftOptions<T> {
    *  it is newer than the stored draft, the draft is discarded instead of
    *  silently overwriting somebody else's save. Ignored for new records. */
   recordUpdatedAt?: string | number | Date | null
+  /** Shape check for a stored draft, run before it is handed back. The
+   *  envelope carries a schema version, but that number is maintained by hand:
+   *  a form whose state changes shape without a bump hands the call site a
+   *  7-day-old draft of the previous shape, and the TypeError that follows
+   *  happens inside an effect -- i.e. it blanks the whole screen. Returning
+   *  false (or throwing) discards the draft and the form opens clean. */
+  validate?: (data: unknown) => boolean
 }
 
 export interface UseFormDraftResult<T> {
@@ -229,7 +283,11 @@ function sweepStaleDrafts(): void {
   }
 }
 
-function readDraft<T>(key: string, recordUpdatedAtMs: number | null): T | null {
+function readDraft<T>(
+  key: string,
+  recordUpdatedAtMs: number | null,
+  validate?: (data: unknown) => boolean
+): T | null {
   try {
     const raw = window.localStorage.getItem(key)
     if (!raw) return null
@@ -239,7 +297,10 @@ function readDraft<T>(key: string, recordUpdatedAtMs: number | null): T | null {
       parsed.version === DRAFT_SCHEMA_VERSION &&
       typeof parsed.savedAt === "number" &&
       Date.now() - parsed.savedAt <= MAX_AGE_MS &&
-      !isStaleAgainstRecord(parsed, recordUpdatedAtMs)
+      !isStaleAgainstRecord(parsed, recordUpdatedAtMs) &&
+      // Inside the try on purpose: a validator that throws on a shape it did
+      // not expect means the same thing as one that returns false.
+      (!validate || validate(parsed.data))
     if (!isValid) {
       window.localStorage.removeItem(key)
       return null
@@ -265,6 +326,7 @@ export function useFormDraft<T>({
   enabled = true,
   debounceMs = DEFAULT_DEBOUNCE_MS,
   recordUpdatedAt = null,
+  validate,
 }: UseFormDraftOptions<T>): UseFormDraftResult<T> {
   const { data: session } = useSession()
   const userId = session?.user?.id
@@ -280,9 +342,13 @@ export function useFormDraft<T>({
   const enabledRef = useRef(enabled)
   const debounceMsRef = useRef(debounceMs)
   const recordUpdatedAtRef = useRef(recordUpdatedAtMs)
+  const validateRef = useRef(validate)
   /** Serialized snapshot the form is compared against to decide "did the user
    *  change anything?". Re-captured while no interaction has happened yet. */
   const baselineRef = useRef<string | null>(null)
+  /** Set by clearDraft: the baseline has to be taken again once the caller's
+   *  reset has actually rendered. See the note in clearDraft. */
+  const baselineStaleRef = useRef(false)
   const lastSavedRef = useRef<string | null>(null)
   const interactedRef = useRef(false)
 
@@ -293,6 +359,7 @@ export function useFormDraft<T>({
     enabledRef.current = enabled
     debounceMsRef.current = debounceMs
     recordUpdatedAtRef.current = recordUpdatedAtMs
+    validateRef.current = validate
   })
 
   // Housekeeping for entries no read can reach any more (see sweepStaleDrafts).
@@ -304,7 +371,8 @@ export function useFormDraft<T>({
   // One-shot user-interaction detector -- see the "dirty gate" note above.
   useEffect(() => {
     if (typeof document === "undefined") return
-    const onInteraction = () => {
+    const onInteraction = (event: Event) => {
+      if (!isFormInteraction(event.target)) return
       interactedRef.current = true
     }
     for (const type of USER_INTERACTION_EVENTS) {
@@ -333,7 +401,20 @@ export function useFormDraft<T>({
       baselineRef.current = serialized
       return
     }
-    if (serialized === baselineRef.current || serialized === lastSavedRef.current) return
+    if (serialized === baselineRef.current) {
+      // Back to where the form started: typed, saved, then undone. Returning
+      // early here used to leave the entry written mid-edit on disk, so the
+      // next open restored an intermediate version the user had already
+      // walked back. There is nothing worth keeping -- drop it.
+      lastSavedRef.current = null
+      try {
+        window.localStorage.removeItem(key)
+      } catch {
+        // ignore
+      }
+      return
+    }
+    if (serialized === lastSavedRef.current) return
 
     try {
       // Built by hand instead of re-serializing the whole snapshot: `serialized`
@@ -386,14 +467,23 @@ export function useFormDraft<T>({
     keyRef.current = key
     interactedRef.current = false
     lastSavedRef.current = null
+    baselineStaleRef.current = false
     baselineRef.current = safeStringify(getValueRef.current())
-    setDraft(readDraft<T>(key, recordUpdatedAtMs))
+    setDraft(readDraft<T>(key, recordUpdatedAtMs, validateRef.current))
     setReady(true)
   }, [feature, recordId, scope, enabled, userId, organizationId, recordUpdatedAtMs, flushPending])
 
   // Schedule a save after every commit. Cheap: `getValue()` only runs when the
   // timer actually fires, and an already-armed timer is left alone.
   useEffect(() => {
+    // The reset that follows clearDraft lands in this commit, not in the one
+    // where clearDraft ran, so this is the first moment the blank form is
+    // readable. Skipped once the user has touched the form again: what they
+    // typed after the clear is a real edit and must not become the baseline.
+    if (baselineStaleRef.current && !interactedRef.current) {
+      baselineStaleRef.current = false
+      baselineRef.current = safeStringify(getValueRef.current())
+    }
     armSave()
   })
 
@@ -401,6 +491,24 @@ export function useFormDraft<T>({
   useEffect(() => {
     return () => {
       flushPending()
+    }
+  }, [flushPending])
+
+  // React's cleanup does NOT run when the tab is closed, the process is killed
+  // or iOS suspends the PWA -- the exact cases this hook exists for. These two
+  // events are the ones browsers do fire, so they are what actually makes the
+  // last debounce window survive.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const onPageHide = () => flushPending()
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flushPending()
+    }
+    window.addEventListener("pagehide", onPageHide)
+    document.addEventListener("visibilitychange", onVisibilityChange)
+    return () => {
+      window.removeEventListener("pagehide", onPageHide)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
     }
   }, [flushPending])
 
@@ -415,7 +523,14 @@ export function useFormDraft<T>({
     // the dirty gate: saving resumes only once the form is modified again.
     interactedRef.current = false
     lastSavedRef.current = null
+    // Every call site clears BEFORE resetting the form ("Descartar", submit),
+    // so reading the form here captures the values that are about to be thrown
+    // away. Taking that as the baseline meant the first click after a discard
+    // saved a draft of the blank defaults and the next open announced a
+    // restored draft with nothing in it. Provisional value now, re-taken on
+    // the commit that carries the reset (see the effect above).
     baselineRef.current = safeStringify(getValueRef.current())
+    baselineStaleRef.current = true
     setDraft(null)
     const key = keyRef.current
     if (typeof window === "undefined" || !key) return

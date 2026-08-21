@@ -19,17 +19,34 @@ const SESSION_B = { user: { id: 'user-2', organizationId: 'org-2' } }
  * value it sees is mount-time prefill / async defaults / a restored draft,
  * and persisting those produced a bogus "draft restored" banner on every
  * reopen. Tests that expect a write must therefore simulate the interaction.
+ *
+ * The gate only counts interactions that land on a form control, so this
+ * dispatches on a real field inside a real <form>, the way a keystroke in one
+ * of these screens does.
  */
 function userInteracts() {
+  const form = document.createElement('form')
+  const input = document.createElement('input')
+  form.appendChild(input)
+  document.body.appendChild(form)
   act(() => {
-    document.dispatchEvent(new Event('keydown', { bubbles: true }))
+    input.dispatchEvent(new Event('keydown', { bubbles: true }))
   })
+  form.remove()
 }
 
 /** Renders the hook over a mutable `value` prop, reading it through getValue. */
 function renderDraft<T>(
   initialValue: T,
-  options: { feature?: string; recordId?: string | null; scope?: string | null; enabled?: boolean; debounceMs?: number; recordUpdatedAt?: string | number | Date | null } = {}
+  options: {
+    feature?: string
+    recordId?: string | null
+    scope?: string | null
+    enabled?: boolean
+    debounceMs?: number
+    recordUpdatedAt?: string | number | Date | null
+    validate?: (data: unknown) => boolean
+  } = {}
 ) {
   const { feature = 'orden-form', debounceMs = 1000, ...rest } = options
   return renderHook(
@@ -208,6 +225,49 @@ describe('useFormDraft', () => {
 
     const { result } = renderDraft({ nombre: '' }, { feature: 'cliente-form' })
     expect(result.current.ready).toBe(true)
+    expect(result.current.draft).toBeNull()
+    expect(window.localStorage.getItem(key)).toBeNull()
+  })
+
+  it('discards a draft whose shape the caller rejects', () => {
+    // DRAFT_SCHEMA_VERSION se mantiene a mano: si alguien cambia la forma de
+    // un formulario sin tocarla, el borrador viejo pasa las validaciones del
+    // sobre y explota recien cuando el call site lo recorre. El validador del
+    // call site es la red que lo agarra antes.
+    const key = 'draft:v2:recepcion-form:org-1:user-1:new'
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({ version: 2, savedAt: Date.now(), data: { form: {} } })
+    )
+
+    const { result } = renderDraft(
+      { form: { equipos: [] } },
+      {
+        feature: 'recepcion-form',
+        validate: (data) => Array.isArray((data as any)?.form?.equipos),
+      }
+    )
+
+    expect(result.current.ready).toBe(true)
+    expect(result.current.draft).toBeNull()
+    expect(window.localStorage.getItem(key)).toBeNull()
+  })
+
+  it('treats a throwing validator as a corrupt draft', () => {
+    const key = 'draft:v2:recepcion-form:org-1:user-1:new'
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({ version: 2, savedAt: Date.now(), data: null })
+    )
+
+    const { result } = renderDraft(
+      { form: { equipos: [] } },
+      {
+        feature: 'recepcion-form',
+        validate: (data) => (data as any).form.equipos.length >= 0,
+      }
+    )
+
     expect(result.current.draft).toBeNull()
     expect(window.localStorage.getItem(key)).toBeNull()
   })
@@ -438,6 +498,94 @@ describe('useFormDraft', () => {
     expect(window.localStorage.getItem(vencido)).toBeNull()
     expect(window.localStorage.getItem(vigente)).not.toBeNull()
     expect(window.localStorage.getItem('otra-app:preferencia')).toBe('no tocar')
+  })
+
+  it('re-captures the baseline after the form resets, not before it', () => {
+    // Los tres call sites llaman clearDraft() ANTES de resetear el formulario
+    // ("Descartar"). Si la referencia se toma en ese instante, queda apuntando
+    // al borrador descartado: el primer click despues del reset graba un
+    // borrador de los valores en blanco y la proxima apertura anuncia un
+    // borrador restaurado que no restaura nada.
+    const { result, rerender } = renderDraft({ nombre: '' }, { feature: 'cliente-form' })
+    userInteracts()
+    rerender({ value: { nombre: 'Editado' } })
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(window.localStorage.length).toBe(1)
+
+    act(() => {
+      result.current.clearDraft()
+    })
+    // El reset del call site, que llega en el render siguiente.
+    rerender({ value: { nombre: '' } })
+
+    userInteracts()
+    rerender({ value: { nombre: '' } })
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(window.localStorage.length).toBe(0)
+  })
+
+  it('removes the stored draft when the form goes back to its baseline', () => {
+    const { rerender } = renderDraft({ nombre: '' }, { feature: 'cliente-form' })
+    userInteracts()
+    rerender({ value: { nombre: 'Ana' } })
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(window.localStorage.length).toBe(1)
+
+    // Deshacer hasta el valor original: sin borrar la entrada, la proxima
+    // apertura restaura la edicion intermedia que el usuario ya descarto.
+    rerender({ value: { nombre: '' } })
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(window.localStorage.length).toBe(0)
+  })
+
+  it('ignores interactions that do not land on a form control', () => {
+    const { rerender } = renderDraft({ nombre: '' })
+
+    // Un click en el layout (sidebar, backdrop, una tarjeta) no es una edicion
+    // del formulario: si lo fuera, cualquier prefill que resuelva despues
+    // pasaria por cambio del usuario y se grabaria un borrador de defaults.
+    const chrome = document.createElement('div')
+    document.body.appendChild(chrome)
+    act(() => {
+      chrome.dispatchEvent(new Event('click', { bubbles: true }))
+    })
+    rerender({ value: { nombre: 'prefill asincronico' } })
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+    expect(window.localStorage.length).toBe(0)
+    chrome.remove()
+  })
+
+  it('flushes a pending write when the page is hidden', () => {
+    // El unico flush de salida era la limpieza de un efecto de React, que no
+    // corre al cerrar la pestana ni cuando iOS suspende la PWA -- justo los
+    // escenarios que el hook dice cubrir.
+    const { rerender } = renderDraft({ nombre: '' })
+    userInteracts()
+    rerender({ value: { nombre: 'A medio escribir' } })
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
+    expect(window.localStorage.length).toBe(0)
+
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'))
+    })
+
+    const key = Object.keys(window.localStorage)[0]
+    expect(key).toBeDefined()
+    expect(JSON.parse(window.localStorage.getItem(key)!).data).toEqual({
+      nombre: 'A medio escribir',
+    })
   })
 
   it('does not read or write while disabled', () => {
