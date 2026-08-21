@@ -281,6 +281,49 @@ describe("PosProductSearch — scope=venta", () => {
       expect(fetchMock).toHaveBeenCalledTimes(2)
     })
 
+    it("VS-7 — la respuesta lenta del montaje NO pisa a una revalidacion mas fresca", async () => {
+      // `ultima` arranca en 0, asi que un `focus` apenas montado pasa el
+      // throttle de una y deja DOS pedidos identicos en vuelo. Sin guard de
+      // orden gana el que llega ultimo, no el que se pidio ultimo: si el lento
+      // es el del montaje, su payload viejo devuelve la grilla y el indicador a
+      // la sucursal anterior. Y a diferencia de VS-6, aca no hay ningun evento
+      // posterior que lo corrija.
+      let responderMontaje: (respuesta: unknown) => void = () => {}
+      const fetchMock = vi
+        .fn()
+        .mockImplementationOnce(
+          () => new Promise((resolve) => { responderMontaje = resolve })
+        )
+        .mockResolvedValue(
+          okResponse(NORTE, [
+            { id: "p-nueva", codigo: "C2", nombre: "Producto de Norte", precioVenta: 200, stock: 5 },
+          ])
+        )
+      vi.stubGlobal("fetch", fetchMock)
+      const onVentaSucursal = vi.fn()
+
+      renderConIndicador(onVentaSucursal)
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+
+      fireEvent(window, new Event("focus"))
+      await waitFor(() =>
+        expect(onVentaSucursal).toHaveBeenCalledWith({ id: "suc-B", nombre: "Sucursal Norte" })
+      )
+
+      // Recien ahora contesta el montaje, con el catalogo de la sucursal vieja.
+      responderMontaje(
+        okResponse(CASA_CENTRAL, [
+          { id: "p-vieja", codigo: "C1", nombre: "Producto de Casa Central", precioVenta: 100, stock: 3 },
+        ])
+      )
+
+      // El skeleton da paso a la grilla cuando el montaje termina: lo que
+      // queda en pantalla tiene que ser lo ultimo pedido, no lo ultimo llegado.
+      await waitFor(() => expect(screen.getByText("Producto de Norte")).toBeInTheDocument())
+      expect(screen.queryByText("Producto de Casa Central")).not.toBeInTheDocument()
+      expect(onVentaSucursal).toHaveBeenLastCalledWith({ id: "suc-B", nombre: "Sucursal Norte" })
+    })
+
     it("VS-3 — una revalidacion que falla NO borra el indicador ya resuelto", async () => {
       const fetchMock = vi
         .fn()

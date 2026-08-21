@@ -174,6 +174,15 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     // activa depende de este contador para volver a correr — ver el efecto del
     // debounce mas abajo.
     const [revalidacion, setRevalidacion] = useState(0)
+    // El montaje y la revalidación escriben las MISMAS dos cosas
+    // (`recentProducts` y el indicador) con pedidos idénticos que pueden estar
+    // en vuelo a la vez: `ultima` arranca en 0, así que un `focus` apenas
+    // montado pasa el throttle de inmediato. Sin este orden gana el que llega
+    // último y no el que se pidió último — y cuando el lento es el del montaje,
+    // la grilla vuelve a la sucursal anterior sin ningún evento posterior que
+    // lo corrija.
+    const pedidoCatalogo = useRef(0)
+    const catalogoAplicado = useRef(0)
     const [showManualForm, setShowManualForm] = useState(false)
     const [manualNombre, setManualNombre] = useState("")
     // Draft en string para permitir escribir decimales (coma es-AR) sin que el
@@ -202,9 +211,14 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     // answer (drain mode / fail-closed, "hide the indicator") and is reported.
     useEffect(() => {
       const loadInitial = async () => {
+        const pedido = ++pedidoCatalogo.current
         try {
           const res = await fetch("/api/inventario/search?q=&limit=20&scope=venta&ventaInfo=true")
           const data = await res.json()
+          // Ver `pedidoCatalogo`: una revalidación que ya llegó describe una
+          // sucursal más nueva que la de este response.
+          if (pedido < catalogoAplicado.current) return
+          catalogoAplicado.current = pedido
           if (Array.isArray(data)) {
             setRecentProducts(data)
           }
@@ -262,13 +276,18 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
         const ahora = Date.now()
         if (ahora - ultima < MIN_ENTRE_REVALIDACIONES) return
         ultima = ahora
+        const pedido = ++pedidoCatalogo.current
         try {
           const res = await fetch("/api/inventario/search?q=&limit=20&scope=venta&ventaInfo=true")
           // Mismo criterio que el montaje: un error también parsea como JSON y
           // no trae headers, así que reportarlo apagaría un indicador que ya
-          // estaba bien resuelto y vaciaría la grilla.
+          // estaba bien resuelto y vaciaría la grilla. Se sale ANTES de tomar
+          // el turno: una revalidación que no escribió nada no tiene por qué
+          // descartar a la que venía en camino.
           if (cancelado || !res.ok) return
           const data = await res.json()
+          if (pedido < catalogoAplicado.current) return
+          catalogoAplicado.current = pedido
           if (Array.isArray(data)) {
             setRecentProducts(data)
           }
