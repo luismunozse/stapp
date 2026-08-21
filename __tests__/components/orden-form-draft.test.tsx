@@ -166,6 +166,17 @@ async function renderForm(props: { initialClienteId?: string; fromTurnoId?: stri
   )
 }
 
+/** "Descartar" pasa por una confirmacion (components/ui/draft-restored-notice.tsx):
+ *  un click solo abre el dialogo, el borrador recien se pierde al confirmar. */
+async function descartarBorrador() {
+  // El dialogo abre en el mismo commit del click, asi que se busca sincronico:
+  // findBy* cuelga en los bloques que corren con timers falsos.
+  fireEvent.click(screen.getByRole("button", { name: "Descartar" }))
+  fireEvent.click(screen.getByRole("button", { name: "Descartar borrador" }))
+  // El handler descarta recien cuando resuelve la promesa del dialogo.
+  await act(async () => {})
+}
+
 /** Deja correr los efectos asincronicos de montaje (fetches del template y de
  *  los sectores) y luego la ventana de debounce del borrador. */
 async function settle(ms = 2000) {
@@ -211,7 +222,7 @@ describe("OrdenForm — borrador local", () => {
       "iPhone 13 Restaurado",
     )
 
-    fireEvent.click(screen.getByRole("button", { name: /descartar/i }))
+    await descartarBorrador()
 
     expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
     expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue("")
@@ -516,7 +527,7 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
 
     await renderForm()
     await settle(100)
-    fireEvent.click(screen.getByRole("button", { name: /descartar/i }))
+    await descartarBorrador()
 
     fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
       target: { value: "Equipo nuevo" },
@@ -542,7 +553,7 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
 
     await renderForm()
     await settle(100)
-    fireEvent.click(screen.getByRole("button", { name: /descartar/i }))
+    await descartarBorrador()
 
     fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
       target: { value: "Equipo nuevo" },
@@ -624,7 +635,7 @@ describe("OrdenForm — borrador de una orden nacida de un turno", () => {
     await renderForm({ fromTurnoId: "t-1" })
     await screen.findByText(/se restauró un borrador no guardado/i)
 
-    fireEvent.click(screen.getByRole("button", { name: /descartar/i }))
+    await descartarBorrador()
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
@@ -646,7 +657,7 @@ describe("OrdenForm — borrador de una orden nacida de un turno", () => {
     await renderForm({ initialClienteId: "cli-1" })
     await screen.findByText(/se restauró un borrador no guardado/i)
 
-    fireEvent.click(screen.getByRole("button", { name: /descartar/i }))
+    await descartarBorrador()
 
     // "Sector / Area" solo aparece cuando el formulario tiene el clienteId Y el
     // objeto del cliente (que es una empresa): es la senal de que el deep-link

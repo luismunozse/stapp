@@ -93,6 +93,18 @@ async function renderForm() {
   )
 }
 
+
+/** "Descartar" pasa por una confirmacion (components/ui/draft-restored-notice.tsx):
+ *  un click solo abre el dialogo, el borrador recien se pierde al confirmar. El
+ *  dialogo abre en el mismo commit del click, asi que se busca sincronico:
+ *  findBy* cuelga en los bloques que corren con timers falsos. */
+async function descartarBorrador() {
+  fireEvent.click(screen.getByRole("button", { name: "Descartar" }))
+  fireEvent.click(screen.getByRole("button", { name: "Descartar borrador" }))
+  // El handler descarta recien cuando resuelve la promesa del dialogo.
+  await act(async () => {})
+}
+
 describe("RecepcionForm — borrador local", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: true, json: async () => [] } as Response)))
@@ -196,7 +208,7 @@ describe("RecepcionForm — borrador local", () => {
     await renderForm()
     expect(screen.getByPlaceholderText("Numero alternativo")).toHaveValue("1122334455")
 
-    fireEvent.click(screen.getByRole("button", { name: /descartar/i }))
+    await descartarBorrador()
 
     expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
     expect(screen.getByPlaceholderText("Numero alternativo")).toHaveValue("")
@@ -535,7 +547,7 @@ describe("RecepcionForm — descartar un borrador", () => {
 
     // El cliente X firma la conformidad y despues se descarta todo.
     fireEvent.click(screen.getByRole("button", { name: "Firmar" }))
-    fireEvent.click(screen.getByRole("button", { name: /descartar/i }))
+    await descartarBorrador()
 
     // Recepcion nueva, cliente distinto: nadie volvio a firmar.
     fireEvent.click(screen.getByRole("button", { name: "Elegir cliente" }))

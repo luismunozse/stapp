@@ -6,7 +6,7 @@
  * prefill/blanco base.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, fireEvent } from "@testing-library/react"
+import { render, screen, fireEvent, act } from "@testing-library/react"
 import { ModalProvider } from "@/contexts/modal-context"
 import { ClienteForm } from "@/components/clientes/cliente-form"
 import type { Cliente } from "@/types"
@@ -31,6 +31,18 @@ function makeCliente(overrides: Partial<Cliente> = {}): Cliente {
     updatedAt: CLIENTE_UPDATED_AT,
     ...overrides,
   }
+}
+
+
+/** "Descartar" pasa por una confirmacion (components/ui/draft-restored-notice.tsx):
+ *  un click solo abre el dialogo, el borrador recien se pierde al confirmar. El
+ *  dialogo abre en el mismo commit del click, asi que se busca sincronico:
+ *  findBy* cuelga en los bloques que corren con timers falsos. */
+async function descartarBorrador() {
+  fireEvent.click(screen.getByRole("button", { name: "Descartar" }))
+  fireEvent.click(screen.getByRole("button", { name: "Descartar borrador" }))
+  // El handler descarta recien cuando resuelve la promesa del dialogo.
+  await act(async () => {})
 }
 
 describe("ClienteForm — borrador local", () => {
@@ -103,7 +115,7 @@ describe("ClienteForm — borrador local", () => {
     expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Perez")
   })
 
-  it('"Descartar" borra el borrador y vuelve al prefill del cliente', () => {
+  it('"Descartar" borra el borrador y vuelve al prefill del cliente', async () => {
     window.localStorage.setItem(
       "draft:v2:cliente-form:org-1:user-1:edit:cli-1",
       JSON.stringify({
@@ -132,7 +144,7 @@ describe("ClienteForm — borrador local", () => {
     )
     expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Editado Sin Guardar")
 
-    fireEvent.click(screen.getByRole("button", { name: /descartar/i }))
+    await descartarBorrador()
 
     expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
     expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Perez")

@@ -9,7 +9,7 @@
  * hasta el paso 3 y hasta el submit.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react"
 import { ModalProvider } from "@/contexts/modal-context"
 
 vi.mock("next-auth/react", () => ({
@@ -118,6 +118,18 @@ function draftDelClienteX() {
   })
 }
 
+
+/** "Descartar" pasa por una confirmacion (components/ui/draft-restored-notice.tsx):
+ *  un click solo abre el dialogo, el borrador recien se pierde al confirmar. El
+ *  dialogo abre en el mismo commit del click, asi que se busca sincronico:
+ *  findBy* cuelga en los bloques que corren con timers falsos. */
+async function descartarBorrador() {
+  fireEvent.click(screen.getByRole("button", { name: "Descartar" }))
+  fireEvent.click(screen.getByRole("button", { name: "Descartar borrador" }))
+  // El handler descarta recien cuando resuelve la promesa del dialogo.
+  await act(async () => {})
+}
+
 describe("OrdenForm — descartar un borrador", () => {
   let requests: Array<{ url: string; body: any }>
 
@@ -190,7 +202,7 @@ describe("OrdenForm — descartar un borrador", () => {
     fireEvent.click(screen.getByRole("button", { name: "Firmar" }))
 
     // Se descarta todo y arranca una orden de otro cliente.
-    fireEvent.click(screen.getByRole("button", { name: /descartar/i }))
+    await descartarBorrador()
     fireEvent.click(screen.getByRole("button", { name: "Elegir cliente" }))
     fireEvent.click(screen.getByRole("button", { name: "Celular" }))
     fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {

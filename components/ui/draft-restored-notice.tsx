@@ -1,6 +1,7 @@
 "use client"
 
 import { X } from "lucide-react"
+import { useModal } from "@/contexts/modal-context"
 
 interface DraftRestoredNoticeProps {
   onDiscard: () => void
@@ -14,12 +15,39 @@ interface DraftRestoredNoticeProps {
  * el formulario en vez de fijo en el header.
  */
 export function DraftRestoredNotice({ onDiscard }: DraftRestoredNoticeProps) {
+  const { confirm } = useModal()
+
+  /**
+   * La confirmacion vive ACA y no en cada `discardDraft`: los tres
+   * formularios que muestran este aviso (orden, recepcion, cliente) comparten
+   * el mismo boton, y dejarla en cada call site es exactamente la forma de que
+   * uno se quede sin ella.
+   *
+   * Un solo click era irreversible: descartar borra la entrada de localStorage
+   * (clearDraft) y resetea el formulario, sin nada que deshaga ninguna de las
+   * dos cosas. En orden-form.tsx el aviso ademas vive arriba de todo del
+   * cuerpo del formulario, pegado al indicador de pasos y al buscador de
+   * clientes, o sea justo donde la mano va primero. Cualquier otra accion
+   * destructiva de estos formularios ya pasa por useModal.
+   */
+  const handleDiscard = async () => {
+    const confirmado = await confirm({
+      title: "Descartar borrador",
+      description:
+        "Se perderá lo que quedó sin guardar en este formulario. No se puede deshacer.",
+      confirmText: "Descartar borrador",
+      cancelText: "Seguir editando",
+      variant: "danger",
+    })
+    if (confirmado) onDiscard()
+  }
+
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-blue-200 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-950/20 px-3 py-2 text-sm text-blue-900 dark:text-blue-200">
       <span>Se restauró un borrador no guardado.</span>
       <button
         type="button"
-        onClick={onDiscard}
+        onClick={handleDiscard}
         className="inline-flex items-center gap-1 shrink-0 font-medium underline-offset-2 hover:underline"
       >
         <X className="h-3.5 w-3.5" />
