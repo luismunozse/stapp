@@ -23,6 +23,7 @@ import {
 } from "lucide-react"
 
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
+import { precioVentaRepuesto } from "@/lib/db-utils"
 import { useCurrency } from "@/contexts/currency-context"
 import { useHasFeature } from "@/hooks/use-subscription"
 import { CotizacionForm } from "./cotizacion-form"
@@ -62,7 +63,12 @@ interface RepuestoOrden {
   inventario?: { id: string; nombre: string; stock: number } | null
   nombre?: string
   cantidad: number
-  precioUnitario: number
+  /** COSTO unitario: lo que pagó el taller. El servidor lo devuelve en NULL a
+   *  los roles sin acceso a inventario. */
+  precioUnitario: number | null
+  /** Precio de VENTA unitario: lo que se le cobra al cliente.
+   *  NULL en repuestos cargados antes de la migración 286. */
+  precioVentaUnitario?: number | null
 }
 
 interface CotizacionListProps {
@@ -96,6 +102,29 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
   const { confirm, showError, showSuccess, showWarning } = useModal()
   const { hasFeature: hasCotizaciones, loading: cotizacionesLoading } = useHasFeature("cotizaciones_online")
   const canCrear = cotizacionesLoading || hasCotizaciones
+
+  // Un item de cotización es lo que se le COBRA al cliente, así que el prefill
+  // sale del precio de venta y no de `precioUnitario`, que es el costo de
+  // compra congelado (y que el servidor devuelve en NULL a los roles sin
+  // acceso a inventario -- justamente el TECNICO que usa este botón).
+  //
+  // Una fila anterior a la migración 286 leída por un rol gateado no tiene
+  // ningún precio utilizable: queda afuera del prefill y se avisa. Prefilear
+  // esa fila en cero dejaba el formulario imposible de guardar, porque el
+  // submit descarta los items con precio <= 0.
+  const itemsPrefill = repuestos
+    .map((r) => ({ repuesto: r, precioVenta: precioVentaRepuesto(r) }))
+    .filter((x): x is { repuesto: RepuestoOrden; precioVenta: number } => x.precioVenta !== null)
+    .map(({ repuesto, precioVenta }) => ({
+      descripcion: repuesto.inventario?.nombre || repuesto.nombre || "",
+      cantidad: repuesto.cantidad,
+      precioUnitario: precioVenta,
+      unidad: "Unidad",
+      descuentoTipo: "porcentaje",
+      descuentoValor: 0,
+      inventarioId: repuesto.inventarioId || null,
+    }))
+  const repuestosSinPrecio = repuestos.length - itemsPrefill.length
 
   const fetcher = (url: string) => fetch(url).then(res => res.json())
   const { data: cotizaciones = [], isLoading: loading, mutate } = useSWR<Cotizacion[]>(
@@ -331,7 +360,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
         </h3>
         {!readOnly && !showForm && !editingCotizacion && canCrear && (
           <div className="flex gap-2">
-            {repuestos.length > 0 && (
+            {itemsPrefill.length > 0 && (
               <Button size="sm" variant="outline" onClick={() => { setPrefillFromRepuestos(true); setShowForm(true) }}>
                 <Plus className="mr-2 h-4 w-4" />
                 Desde Repuestos
@@ -345,6 +374,14 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
         )}
       </div>
 
+      {!readOnly && !showForm && !editingCotizacion && canCrear && repuestosSinPrecio > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {repuestosSinPrecio === 1
+            ? "Hay 1 repuesto sin precio de venta cargado: no se incluye al crear la cotización desde repuestos. Agregalo como item manual."
+            : `Hay ${repuestosSinPrecio} repuestos sin precio de venta cargado: no se incluyen al crear la cotización desde repuestos. Agregalos como items manuales.`}
+        </p>
+      )}
+
       {showForm && (
         <CotizacionForm
           ordenId={ordenId}
@@ -355,19 +392,8 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
             setPrefillFromRepuestos(false)
             mutate()
           }}
-          {...(prefillFromRepuestos && repuestos.length > 0 ? {
-            initialData: {
-              id: "",
-              items: repuestos.map(r => ({
-                descripcion: r.inventario?.nombre || r.nombre || "",
-                cantidad: r.cantidad,
-                precioUnitario: r.precioUnitario,
-                unidad: "Unidad",
-                descuentoTipo: "porcentaje",
-                descuentoValor: 0,
-                inventarioId: r.inventarioId || null,
-              })),
-            },
+          {...(prefillFromRepuestos && itemsPrefill.length > 0 ? {
+            initialData: { id: "", items: itemsPrefill },
           } : {})}
         />
       )}
