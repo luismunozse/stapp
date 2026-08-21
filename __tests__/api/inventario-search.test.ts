@@ -332,7 +332,9 @@ describe("GET /api/inventario/search — scope=venta (POS opt-in)", () => {
     ])
     mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain, inventario: invChain })
 
-    const res = await GET(createGetRequest("http://localhost:3000/api/inventario/search?q=teclado&scope=venta"))
+    const res = await GET(
+      createGetRequest("http://localhost:3000/api/inventario/search?q=teclado&scope=venta&ventaInfo=true")
+    )
     const { status, body } = await parseResponse(res)
 
     expect(status).toBe(200)
@@ -341,6 +343,10 @@ describe("GET /api/inventario/search — scope=venta (POS opt-in)", () => {
     expect(body).toHaveLength(1)
     expect(body[0].stock).toBe(7)
     expect(invChain.gt).toHaveBeenCalledWith("stock", 0)
+    // ...but the stock can come from ANY sucursal's deposito, so the indicator
+    // must not claim one (see derivarLecturaVenta).
+    expect(res.headers.get("X-Venta-Sucursal-Id")).toBe("")
+    expect(res.headers.get("X-Venta-Sucursal-Nombre")).toBe("")
   })
 
   it("scope=venta con VENDEDOR sin sucursal asignada: sigue fail-closed (catalogo vacio, sin indicador)", async () => {

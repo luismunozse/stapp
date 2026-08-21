@@ -271,7 +271,20 @@ describe("derivarLecturaVenta", () => {
     })
 
     expect(lectura.verTodas).toBe(true)
-    expect(lectura.ventaSucursalId).toBe("suc-A")
+  })
+
+  it("LV-4 — modo drenaje: NO nombra una sucursal (el RPC puede drenar de cualquier deposito)", () => {
+    const lectura = derivarLecturaVenta({
+      sucursalId: "suc-A",
+      depositoId: null,
+      unassignedSucursal: false,
+    })
+
+    // descontar_stock_deposito(..., strict=false) puede tomar unidades del
+    // deposito de cualquier otra sucursal: afirmar "vendiendo desde suc-A"
+    // seria mentira. El escopeo de la lectura sigue apuntando a la sucursal.
+    expect(lectura.ventaSucursalId).toBeNull()
+    expect(lectura.sucursalId).toBe("suc-A")
   })
 })
 

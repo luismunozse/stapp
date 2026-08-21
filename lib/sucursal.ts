@@ -196,7 +196,12 @@ export interface LecturaVenta {
   depositoId: string | null
   /** True => read the org-wide aggregate, mirroring the write path's drain mode. */
   verTodas: boolean
-  /** Sucursal to name in the POS "selling from" indicator; null when the caller cannot sell. */
+  /**
+   * Sucursal the POS "selling from" indicator may name, or null when no single
+   * sucursal can be honestly asserted (see `derivarLecturaVenta`). Deliberately
+   * NOT the same as `sucursalId`: the read scope and what we are willing to
+   * claim in the UI diverge in drain mode.
+   */
   ventaSucursalId: string | null
 }
 
@@ -210,6 +215,17 @@ export interface LecturaVenta {
  *    drains org-wide, so the read must show the org-wide aggregate rather
  *    than hiding stock a sale could actually decrement.
  *  - Otherwise: scope the read to that deposito.
+ *
+ * On `ventaSucursalId` in drain mode (deliberate asymmetry with `sucursalId`):
+ * when the resolved sucursal has no principal deposito, `crear_venta_atomica`
+ * calls `descontar_stock_deposito(..., p_deposito_id => null, strict => false)`,
+ * which is free to take units from ANY deposito in the org — including another
+ * branch's. The sale is still *attributed* to `sucursalId` (so the read stays
+ * scoped to it), but the stock origin is genuinely unknown. Naming a single
+ * branch in the "Vendiendo desde" indicator would therefore be a lie, so we
+ * suppress the indicator instead of wording around it: an absent indicator
+ * degrades to the pre-existing UI, while a wrong one actively misinforms the
+ * operator about where their inventory went.
  */
 export function derivarLecturaVenta(destino: DestinoVenta): LecturaVenta {
   if (destino.unassignedSucursal) {
@@ -225,7 +241,7 @@ export function derivarLecturaVenta(destino: DestinoVenta): LecturaVenta {
     sucursalId: destino.sucursalId,
     depositoId: destino.depositoId,
     verTodas: !destino.depositoId,
-    ventaSucursalId: destino.sucursalId,
+    ventaSucursalId: destino.depositoId ? destino.sucursalId : null,
   }
 }
 
