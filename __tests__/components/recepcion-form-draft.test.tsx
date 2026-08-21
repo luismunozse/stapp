@@ -164,6 +164,75 @@ describe("RecepcionForm — borrador local", () => {
     expect(screen.getAllByPlaceholderText("Ej: iPhone 13")[0]).toHaveValue("iPhone 13")
   })
 
+  it("conserva el borrador cuando la respuesta exitosa no se puede leer", async () => {
+    // `clearDraft()` corria ANTES de `await res.json()`. Un 2xx cuyo body no
+    // parsea (un proxy que corta la respuesta, contenido truncado) cae en el
+    // catch y le dice al operador "Error al crear la recepcion" -- sobre una
+    // recepcion que el servidor SI creo -- con el borrador ya borrado: nada
+    // para recuperar, ni para reintentar ni para comparar contra lo que quedo
+    // en el sistema. orden-form.tsx y cliente-form.tsx leen primero y dan de
+    // baja el borrador despues; este es el mismo orden.
+    const equipo = (dispositivo: string, problema: string) => ({
+      dispositivo,
+      tipoDispositivo: "CELULAR",
+      marca: "",
+      color: "",
+      imei: "",
+      problemaReportado: problema,
+      codigoAccesoDispositivo: "",
+    })
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        version: 3,
+        savedAt: Date.now(),
+        data: {
+          form: {
+            clienteId: "cli-1",
+            telefonoContacto: "1122334455",
+            observaciones: "",
+            equipos: [
+              equipo("iPhone 13", "No enciende"),
+              equipo("Moto G", "Pantalla rota"),
+            ],
+          },
+          sideState: [
+            { accesoriosSeleccionados: [], otroAccesorio: "", camposExtraValues: {} },
+            { accesoriosSeleccionados: [], otroAccesorio: "", camposExtraValues: {} },
+          ],
+          selectedCliente: { nombre: "Acme SA", telefono: "1155667788" },
+        },
+      }),
+    )
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        if (String(input) === "/api/recepciones") {
+          return Promise.resolve({
+            ok: true,
+            status: 201,
+            // El servidor creo la recepcion; lo que no llega entero es el body.
+            json: async () => {
+              throw new SyntaxError("Unexpected end of JSON input")
+            },
+          } as unknown as Response)
+        }
+        return Promise.resolve({ ok: true, json: async () => [] } as Response)
+      }),
+    )
+
+    await renderForm()
+    expect(screen.getAllByPlaceholderText("Ej: iPhone 13")[0]).toHaveValue("iPhone 13")
+
+    fireEvent.click(screen.getByLabelText(/El cliente acepta los terminos/i))
+    fireEvent.click(screen.getByRole("button", { name: /Crear recepcion/i }))
+    await act(async () => {})
+
+    // Lo cargado sigue en disco: el operador tiene con que verificar y, si hace
+    // falta, con que reintentar.
+    expect(window.localStorage.getItem(DRAFT_KEY)).not.toBeNull()
+  })
+
   it('"Descartar" borra el borrador y limpia el formulario', async () => {
     window.localStorage.setItem(
       DRAFT_KEY,

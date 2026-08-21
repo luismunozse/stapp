@@ -610,8 +610,14 @@ export function RecepcionForm() {
         return
       }
 
-      clearDraft()
+      // Leer ANTES de dar de baja el borrador. Un 2xx cuyo body no parsea (un
+      // proxy que corta la respuesta) cae en el catch de abajo y avisa "Error
+      // al crear la recepcion" sobre una recepcion que el servidor SI creo: con
+      // el borrador ya borrado el operador queda con un error y sin nada para
+      // verificar ni reintentar. Mismo orden que orden-form.tsx y
+      // cliente-form.tsx.
       const creada: RecepcionCreadaResultado = await res.json()
+      clearDraft()
       // Snapshot de lo enviado: problemaReportado/tipoDispositivo/marca/
       // accesorios no vuelven en la respuesta del endpoint (a diferencia de
       // POST /api/ordenes), asi que el modal los necesita de aca, alineados
