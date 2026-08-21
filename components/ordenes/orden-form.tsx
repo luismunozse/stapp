@@ -128,15 +128,20 @@ function toClienteResumen(cliente: ClienteProyectable | null | undefined): Clien
  *  re-hidrata su propio display a partir del id, pero nunca llama a onChange
  *  (ver cliente-selector.tsx), asi que sin esto el selector de Sector/Area de
  *  empresas no aparece y el modal de orden creada sale sin nombre ni
- *  telefono del cliente. */
+ *  telefono del cliente.
+ *
+ *  `sena` y `presupuestoAceptado` tampoco entran, por el mismo motivo que
+ *  `terminosAceptados` en recepcion-form.tsx: un borrador no puede reclamar
+ *  plata. La sena genera un movimiento de caja en el submit y "presupuesto
+ *  aceptado" es la conformidad que lo habilita, asi que restaurarlos registra
+ *  un cobro que el cliente nunca hizo en esta visita. Perderlos al restaurar
+ *  es aceptable; inventar un pago no. */
 interface OrdenDraftValue {
   form: Omit<OrdenFormData, "codigoAccesoDispositivo">
   selectedClienteObj: ClienteDraftSnapshot | null
   accesoriosSeleccionados: string[]
   otroAccesorio: string
   camposExtraValues: Record<string, any>
-  presupuestoAceptado: boolean
-  sena: string
   metodoPagoSena: string
   selectedSectorId: string
   selectedTecnicoId: string
@@ -307,8 +312,6 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         accesoriosSeleccionados,
         otroAccesorio,
         camposExtraValues,
-        presupuestoAceptado,
-        sena,
         metodoPagoSena,
         selectedSectorId,
         selectedTecnicoId,
@@ -340,19 +343,20 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       setAccesoriosSeleccionados(draft.accesoriosSeleccionados)
       setOtroAccesorio(draft.otroAccesorio)
       setCamposExtraValues(draft.camposExtraValues)
-      setPresupuestoAceptado(draft.presupuestoAceptado)
-      setSena(draft.sena)
+      // La plata NO se restaura (ni se guarda, ver OrdenDraftValue). Un
+      // borrador viejo puede traer todavia los dos campos: se reponen en cero
+      // explicitamente para que ni siquiera por ahi se cuele un cobro.
+      setPresupuestoAceptado(false)
+      setSena("")
       setMetodoPagoSena(draft.metodoPagoSena)
       setSelectedSectorId(draft.selectedSectorId)
       setSelectedTecnicoId(draft.selectedTecnicoId)
       setSelectedRecibidoPorId(draft.selectedRecibidoPorId)
       setChecklistValores(draft.checklistValores)
       setChecklistNotas(draft.checklistNotas)
-      // El paso NO se restaura (ni se guarda). La sena y "presupuesto aceptado"
-      // viven en el paso 2: reabrir en el paso 3 los dejaba fuera de pantalla y
-      // el submit mandaba `sena` igual, registrando un movimiento de caja por
-      // plata que el cliente nunca entrego. Arrancar en el paso 1 obliga a
-      // pasar por delante de lo que se cargo.
+      // El paso tampoco se restaura (ni se guarda): reabrir en el paso 3 deja
+      // fuera de pantalla todo lo que se venia cargando, y arrancar en el 1
+      // obliga a pasar por delante de cada campo antes de crear la orden.
       setDraftNoticeVisible(true)
     } catch (error) {
       // Ultima red, ademas del `validate` del hook: una excepcion aca corre

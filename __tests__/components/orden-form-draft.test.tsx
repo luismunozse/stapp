@@ -224,10 +224,10 @@ describe("OrdenForm — borrador local", () => {
   })
 
   it("vuelve siempre al primer paso, aunque el borrador se haya guardado en otro", async () => {
-    // El paso 2 es donde viven la sena y "presupuesto aceptado": restaurar el
-    // paso guardado dejaba esos campos fuera de pantalla y el submit
-    // registraba un movimiento de caja por plata que el cliente nunca pago.
-    // Arrancar siempre en el paso 1 obliga a pasar por delante de ellos.
+    // Restaurar el paso guardado deja fuera de pantalla todo lo que se venia
+    // cargando: el operador crea la orden sin haber visto nunca los campos de
+    // los pasos anteriores. Arrancar siempre en el paso 1 obliga a pasar por
+    // delante de ellos.
     window.localStorage.setItem(
       DRAFT_KEY,
       draftEnvelope({
@@ -240,6 +240,44 @@ describe("OrdenForm — borrador local", () => {
     await renderForm()
 
     expect(screen.getByText(/Paso 1\/3/)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Seña \/ Adelanto/i)).not.toBeInTheDocument()
+  })
+
+  it("no restaura la seña ni el presupuesto aceptado", async () => {
+    // Un borrador no puede reclamar plata. `sena` alimenta un movimiento de
+    // caja en el submit y "presupuesto aceptado" es la conformidad que lo
+    // habilita: restaurarlos registraba un cobro por plata que el cliente
+    // nunca entrego en esta visita. Arrancar en el paso 1 no alcanzaba, dos
+    // clicks en "Siguiente" y el submit los mandaba igual. Mismo criterio que
+    // `terminosAceptados` en recepcion-form.tsx.
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      draftEnvelope({
+        form: {
+          ...draftData().form,
+          clienteId: "cli-1",
+          tipoDispositivo: "CELULAR",
+          presupuesto: 15000,
+        },
+        selectedClienteObj: {
+          id: "cli-1",
+          nombre: "Acme SA",
+          telefono: "1122334455",
+          tipoCliente: "EMPRESA",
+          razonSocial: "Acme SA",
+        },
+        presupuestoAceptado: true,
+        sena: "5000",
+      }),
+    )
+
+    await renderForm()
+    await screen.findByText(/se restauró un borrador no guardado/i)
+
+    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+
+    await screen.findByText("Presupuesto aceptado al momento")
+    expect(screen.getByLabelText(/Presupuesto aceptado al momento/i)).not.toBeChecked()
     expect(screen.queryByLabelText(/Seña \/ Adelanto/i)).not.toBeInTheDocument()
   })
 
@@ -517,6 +555,21 @@ describe("OrdenForm — borrador local (datos sensibles)", () => {
     await settle()
 
     expect(storedDraft()?.data).not.toHaveProperty("currentStep")
+  })
+
+  it("nunca escribe la seña ni el presupuesto aceptado en el borrador", async () => {
+    // Lo que no se guarda no se puede restaurar: es la unica garantia real de
+    // que un borrador no reclame un cobro que nadie hizo.
+    await renderForm()
+    await settle(100)
+
+    fireEvent.change(screen.getByPlaceholderText("Modelo o descripcion del equipo"), {
+      target: { value: "Moto G" },
+    })
+    await settle()
+
+    expect(storedDraft()?.data).not.toHaveProperty("sena")
+    expect(storedDraft()?.data).not.toHaveProperty("presupuestoAceptado")
   })
 
   it("nunca escribe el codigo de acceso del dispositivo en el borrador", async () => {
