@@ -80,6 +80,24 @@ const DRAFT_SCHEMA_VERSION = 3
 const DEFAULT_DEBOUNCE_MS = 1000
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
+/**
+ * How long the hook waits for the session to hand over a user and an
+ * organization before it reports itself ready ANYWAY, with no draft and no
+ * persistence.
+ *
+ * `ready` is the signal call sites gate their own prefill on -- the order
+ * opened from an agenda turno, the `?clienteId=` deep link -- so a `ready` that
+ * never arrives is an intake screen that stays blank with nothing on it to
+ * explain why. `status` covers the two cases that resolve (a failed session
+ * fetch reports "unauthenticated", a user without `organizationId` reports
+ * "authenticated" with nothing usable in it); this timeout covers the one that
+ * does not, a session request left hanging on a flaky counter network.
+ *
+ * Losing draft persistence in that state is a fair price. Losing the screen the
+ * operator receives equipment on is not.
+ */
+const SESSION_GRACE_MS = 3000
+
 /** Events that count as "the user is working on this form". Capture phase on
  *  `document` so portalled UI (Radix selects/dialogs) counts too. */
 const USER_INTERACTION_EVENTS = [
@@ -269,7 +287,13 @@ export interface UseFormDraftResult<T> {
    *  version/age/freshness-validated. Null when there's nothing to restore.
    *  The caller decides how to apply it (setValue/reset) and when to dismiss it. */
   draft: T | null
-  /** True once the initial localStorage read for the current key has run. */
+  /** True once the initial localStorage read for the current key has run --
+   *  and ALSO once it is settled that no key can be built at all, because the
+   *  session resolved without a user/organization or never resolved within
+   *  SESSION_GRACE_MS. `draft` is null in that second case and nothing is ever
+   *  persisted, but call sites that gate their own prefill on this flag get to
+   *  run: waiting forever on a session that is not coming leaves the intake
+   *  screen blank with no error on it. */
   ready: boolean
   /** Removes the persisted draft, cancels any pending write, and stops saving
    *  until the form is modified again. Call on successful submit or explicit
@@ -499,14 +523,22 @@ export function useFormDraft<T>({
   rootRef,
   validate,
 }: UseFormDraftOptions<T>): UseFormDraftResult<T> {
-  const { data: session } = useSession()
+  const { data: session, status: sessionStatus } = useSession()
   const userId = session?.user?.id
   const organizationId = session?.user?.organizationId
   const recordUpdatedAtMs = toMillis(recordUpdatedAt)
+  const sessionUsable = !!userId && !!organizationId
+  /** La sesion contesto, y lo que contesto no alcanza para armar una key: el
+   *  fetch fallo (queda "unauthenticated") o el usuario no tiene organizacion.
+   *  No hay nada mas que esperar. */
+  const sessionResolvedUnusable = !sessionUsable && sessionStatus !== "loading"
 
   const [draft, setDraft] = useState<T | null>(null)
   const [ready, setReady] = useState(false)
   const [recordChangedWhileEditing, setRecordChangedWhileEditing] = useState(false)
+  /** El plazo de SESSION_GRACE_MS ya vencio sin una sesion utilizable. Ver la
+   *  nota de la constante. */
+  const [sessionGraceExpired, setSessionGraceExpired] = useState(false)
 
   const keyRef = useRef<string | null>(null)
   /** `recordUpdatedAt` the current key was last initialized (or re-stamped)
@@ -563,6 +595,16 @@ export function useFormDraft<T>({
     if (typeof window === "undefined") return
     sweepStaleDrafts()
   }, [])
+
+  // Plazo maximo de espera de la sesion (ver SESSION_GRACE_MS). Solo se arma
+  // mientras falte algo: con la sesion resuelta el efecto corta antes de crear
+  // el timer, asi que un formulario sano no paga ni un re-render por esto.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (!enabled || sessionUsable) return
+    const timer = setTimeout(() => setSessionGraceExpired(true), SESSION_GRACE_MS)
+    return () => clearTimeout(timer)
+  }, [enabled, sessionUsable])
 
   // One-shot user-interaction detector -- see the "dirty gate" note above.
   useEffect(() => {
@@ -679,7 +721,12 @@ export function useFormDraft<T>({
       // the point of this hook.
       flushPending()
       keyRef.current = null
-      setReady(false)
+      // Sin key no se lee ni se graba nada, pero eso no puede dejar a los call
+      // sites esperando para siempre: `ready` es lo que habilita el prefill de
+      // un turno o de un ?clienteId=, y sin el la pantalla de alta queda en
+      // blanco sin ningun error (ver SESSION_GRACE_MS). Con el dialog cerrado
+      // (`enabled` en false) no hay nada que habilitar: ahi sigue en false.
+      setReady(enabled && (sessionResolvedUnusable || sessionGraceExpired))
       return
     }
     const key = buildDraftKey(feature, organizationId, userId, recordId, scope)
@@ -753,7 +800,18 @@ export function useFormDraft<T>({
     setRecordChangedWhileEditing(conflictedRef.current)
     setDraft(restored ? restored.data : null)
     setReady(true)
-  }, [feature, recordId, scope, enabled, userId, organizationId, recordUpdatedAtMs, flushPending])
+  }, [
+    feature,
+    recordId,
+    scope,
+    enabled,
+    userId,
+    organizationId,
+    recordUpdatedAtMs,
+    flushPending,
+    sessionResolvedUnusable,
+    sessionGraceExpired,
+  ])
 
   // Schedule a save after every commit. Cheap: `getValue()` only runs when the
   // timer actually fires, and an already-armed timer is left alone.

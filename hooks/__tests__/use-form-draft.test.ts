@@ -4,10 +4,14 @@ import { useFormDraft } from '../use-form-draft'
 
 // Mutable session fixture read by the mocked useSession() below -- each
 // test sets it to whatever session shape it needs before rendering.
-let mockSession: { user: { id: string; organizationId: string } } | null = null
+let mockSession: { user: { id?: string; organizationId?: string } } | null = null
+/** `status` de next-auth. Separado de `data` a proposito: la diferencia entre
+ *  "la sesion todavia no resolvio" y "resolvio y no sirve" es justamente lo que
+ *  decide si el hook puede darse por listo sin borrador. */
+let mockSessionStatus: 'loading' | 'authenticated' | 'unauthenticated' = 'authenticated'
 
 vi.mock('next-auth/react', () => ({
-  useSession: () => ({ data: mockSession }),
+  useSession: () => ({ data: mockSession, status: mockSessionStatus }),
 }))
 
 const SESSION_A = { user: { id: 'user-1', organizationId: 'org-1' } }
@@ -81,6 +85,7 @@ describe('useFormDraft', () => {
     vi.useFakeTimers()
     window.localStorage.clear()
     mockSession = SESSION_A
+    mockSessionStatus = 'authenticated'
   })
 
   afterEach(() => {
@@ -90,16 +95,65 @@ describe('useFormDraft', () => {
     vi.unstubAllGlobals()
   })
 
-  it('does not read or write without a resolved session', () => {
+  it('does not read or write while the session has not resolved', () => {
     mockSession = null
+    mockSessionStatus = 'loading'
     const { result } = renderDraft({ a: 1 })
     expect(result.current.ready).toBe(false)
     expect(result.current.draft).toBeNull()
 
     userInteracts()
     act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(window.localStorage.length).toBe(0)
+  })
+
+  // --- Sesion que resuelve mal, o que no resuelve nunca ---------------------
+  //
+  // `ready` es la senal con la que los call sites dejan pasar su propio prefill
+  // (el de un turno agendado, el de un ?clienteId=). Mientras no se levante, la
+  // pantalla de alta se queda literalmente en blanco. Perder la persistencia del
+  // borrador cuando la sesion no da los ids es aceptable; perder la pantalla de
+  // ingreso no lo es, y menos en silencio.
+
+  it('becomes ready with no draft when the session resolved without an organization', () => {
+    mockSession = { user: { id: 'user-1' } }
+    mockSessionStatus = 'authenticated'
+    const { result } = renderDraft({ a: 1 })
+    expect(result.current.ready).toBe(true)
+    expect(result.current.draft).toBeNull()
+
+    // Listo, pero sin key: no hay donde grabar y no se graba en ningun lado.
+    userInteracts()
+    act(() => {
       vi.advanceTimersByTime(5000)
     })
+    expect(window.localStorage.length).toBe(0)
+  })
+
+  it('becomes ready with no draft when the session resolved unauthenticated', () => {
+    mockSession = null
+    mockSessionStatus = 'unauthenticated'
+    const { result } = renderDraft({ a: 1 })
+    expect(result.current.ready).toBe(true)
+    expect(result.current.draft).toBeNull()
+  })
+
+  it('becomes ready anyway when the session never resolves at all', () => {
+    // Un fetch de sesion colgado (no fallado) deja `status` en "loading" para
+    // siempre: no hay error que mostrar y tampoco ids. Sin este plazo la
+    // pantalla de alta no se dibuja nunca.
+    mockSession = null
+    mockSessionStatus = 'loading'
+    const { result } = renderDraft({ a: 1 })
+    expect(result.current.ready).toBe(false)
+
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+    expect(result.current.ready).toBe(true)
+    expect(result.current.draft).toBeNull()
     expect(window.localStorage.length).toBe(0)
   })
 
