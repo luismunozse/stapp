@@ -1,4 +1,4 @@
--- 283: Servicios asignables a órdenes
+-- 300: Servicios asignables a órdenes
 --
 -- CONTEXTO
 -- Un taller tiene servicios con precio prefijado (ej. instalación de Windows).

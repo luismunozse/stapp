@@ -10,12 +10,12 @@
  *
  * ESPECIFICACIÓN NORMATIVA: esta función (junto con sus 8 tests en
  * __tests__/lib/sincronizar-costo-final.test.ts) es la fuente de verdad de la
- * regla. supabase/migrations/284_servicios_orden_atomico.sql la reimplementa en
+ * regla. supabase/migrations/301_servicios_orden_atomico.sql la reimplementa en
  * plpgsql dentro de agregar_servicio_orden y eliminar_servicio_orden, porque el
  * lock (SELECT ... FOR UPDATE) que evita la condición de carrera solo existe
  * dentro de la transacción del RPC, así que la decisión tiene que evaluarse ahí
  * adentro y no acá. CUALQUIER cambio a esta función DEBE aplicarse también al
- * bloque "SYNC RULE" de ambas funciones en la migración 284.
+ * bloque "SYNC RULE" de ambas funciones en la migración 301.
  */
 
 /** Tolerancia de comparación: costo_final es DECIMAL(10,2). */

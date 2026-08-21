@@ -1,5 +1,5 @@
 -- ============================================
--- 284: Servicios en órdenes — RPCs atómicos para agregar/eliminar líneas
+-- 301: Servicios en órdenes — RPCs atómicos para agregar/eliminar líneas
 -- ============================================
 -- Bug: app/api/ordenes/[id]/servicios/route.ts hacía SELECT-then-decide-then-UPDATE
 -- sobre costo_final sin lock ni transacción. Cada llamada de supabase-js es su
@@ -141,7 +141,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION agregar_servicio_orden(TEXT, TEXT, TEXT, TEXT, INTEGER, NUMERIC) IS
-  'Inserta una linea en servicios_orden y sincroniza costo_final atomicamente (FOR UPDATE sobre la orden). Devuelve la fila persistida (servicio_id/nombre/cantidad/precio_unitario) para que el caller no reconstruya la respuesta a partir del request. Espejo obligatorio de calcularCostoFinalSincronizado en lib/servicios/sincronizar-costo-final.ts y de ESTADOS_COSTO_FINAL_BLOQUEADO en lib/orden-state-machine.ts: ver comentario de acoplamiento al inicio de esta migracion (284).';
+  'Inserta una linea en servicios_orden y sincroniza costo_final atomicamente (FOR UPDATE sobre la orden). Devuelve la fila persistida (servicio_id/nombre/cantidad/precio_unitario) para que el caller no reconstruya la respuesta a partir del request. Espejo obligatorio de calcularCostoFinalSincronizado en lib/servicios/sincronizar-costo-final.ts y de ESTADOS_COSTO_FINAL_BLOQUEADO en lib/orden-state-machine.ts: ver comentario de acoplamiento al inicio de esta migracion (301).';
 
 CREATE OR REPLACE FUNCTION eliminar_servicio_orden(
   p_orden_id TEXT,
@@ -219,4 +219,4 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION eliminar_servicio_orden(TEXT, TEXT, TEXT) IS
-  'Elimina una linea de servicios_orden y sincroniza costo_final atomicamente (FOR UPDATE sobre la orden). Espejo obligatorio de calcularCostoFinalSincronizado en lib/servicios/sincronizar-costo-final.ts y de ESTADOS_COSTO_FINAL_BLOQUEADO en lib/orden-state-machine.ts: ver comentario de acoplamiento al inicio de esta migracion (284).';
+  'Elimina una linea de servicios_orden y sincroniza costo_final atomicamente (FOR UPDATE sobre la orden). Espejo obligatorio de calcularCostoFinalSincronizado en lib/servicios/sincronizar-costo-final.ts y de ESTADOS_COSTO_FINAL_BLOQUEADO en lib/orden-state-machine.ts: ver comentario de acoplamiento al inicio de esta migracion (301).';

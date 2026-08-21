@@ -19,7 +19,7 @@
 - **Sin `sucursal_id`.** Consistente con `inventario`, que es catálogo a nivel organización.
 - **Sin `tipo_dispositivo`.** Un servicio es transversal.
 - **Precio fijo únicamente.** Sin `precio_hasta` ni tarifa por hora.
-- **Numeración de migración:** 283 y 284 (renumeradas desde 279 y 280). La 277 ya está en `main`, 278-280 quedan como huecos permanentes reservados por otras branches abiertas, y la 281 ya está aplicada en producción. Con aplicación manual, la única propiedad que sirve es "número mayor = aplicada después", así que se salta en vez de rellenar.
+- **Numeración de migración:** 300 y 301 (renumeradas el 2026-08-21 desde 283 y 284, que a su vez venían de 279 y 280). `main` llegó a 299 mientras el PR esperaba, y la 284 quedó tomada por `284_editar_cantidad_repuesto.sql`. Los bloques de código de este plan todavía dicen 283/284: los archivos reales son `300_servicios.sql` y `301_servicios_orden_atomico.sql`. Original: La 277 ya está en `main`, 278-280 quedan como huecos permanentes reservados por otras branches abiertas, y la 281 ya está aplicada en producción. Con aplicación manual, la única propiedad que sirve es "número mayor = aplicada después", así que se salta en vez de rellenar.
 - **Identificadores de base de datos en español**, extendiendo el esquema existente (`ordenes_servicio`, `repuestos_orden`, `costo_final`). Comentarios SQL en español neutro. Copy de UI en español, como el resto de la app.
 - **Comando de test:** `npm run test:run`.
 

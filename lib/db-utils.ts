@@ -210,7 +210,7 @@ export function formatServicioOrden(servicio: any) {
     id: servicio.id,
     ordenId: servicio.orden_id,
     servicioId: servicio.servicio_id, // Nullable: null en líneas manuales
-    nombre: servicio.nombre, // Snapshot, ver comentario en 283_servicios.sql
+    nombre: servicio.nombre, // Snapshot, ver comentario en 300_servicios.sql
     cantidad: servicio.cantidad,
     precioUnitario: servicio.precio_unitario,
   }
