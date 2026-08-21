@@ -72,7 +72,9 @@ export function ProveedorCatalogoTab({ proveedorId }: { proveedorId: string }) {
     fetcher,
     { revalidateOnFocus: false }
   )
-  const items = data?.items ?? []
+  // Memoizado para que el `?? []` no devuelva un array nuevo en cada render:
+  // sin esto el useMemo de `filtered` se recalcula siempre.
+  const items = useMemo(() => data?.items ?? [], [data])
   const canViewCost = data?.canViewCost ?? false
 
   const [editingId, setEditingId] = useState<string | null>(null)
