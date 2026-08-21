@@ -61,7 +61,9 @@ const DRAFT_KEY = "draft:v3:orden-form:org-1:user-1:new"
 
 /** El borrador que quedo de una carga anterior: respuestas contestadas sobre
  *  el template del tipo CELULAR, con su id guardado al lado. */
-function draftEnvelope() {
+function draftEnvelope(
+  checklistValores: Record<string, boolean | string | null> = { espejo: true },
+) {
   return JSON.stringify({
     version: 3,
     savedAt: Date.now(),
@@ -95,7 +97,7 @@ function draftEnvelope() {
       selectedSectorId: "",
       selectedTecnicoId: "",
       selectedRecibidoPorId: "",
-      checklistValores: { espejo: true },
+      checklistValores,
       checklistTemplateId: "tpl-celular",
       checklistNotas: "",
     },
@@ -246,5 +248,81 @@ describe("OrdenForm — checklist restaurado en el submit", () => {
     expect(screen.getByText(/el checklist de ingreso no se guardó/i)).toBeInTheDocument()
     // Y el borrador si se da de baja: la orden ya existe.
     expect(window.localStorage.getItem(DRAFT_KEY)).toBeNull()
+  })
+
+  it("descarta las respuestas de items que el template ya no tiene, aunque el id no haya cambiado", async () => {
+    // El guard de respuestas huerfanas comparaba SOLO el id del template. Pero
+    // PUT /api/checklist-templates/[id] edita la fila en el lugar y los items
+    // viven en su propia tabla: agregar o sacar items durante los 7 dias que
+    // vive el borrador deja el mismo id. El guard pasaba, y el submit mandaba
+    // respuestas indexadas por items que ya no existen bajo un templateId que
+    // si -- exactamente la corrupcion que el guard dice cubrir ("si la
+    // organizacion lo edito o lo reemplazo").
+    const fetchSpy = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void init
+      const url = String(input)
+      if (url.includes("by-device-type?tipoDispositivoId=")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            // Mismo id que el del borrador; la organizacion le saco el item
+            // "espejo" y le dejo "pantalla".
+            template: {
+              id: "tpl-celular",
+              nombre: "Ingreso celular",
+              items: [{ id: "pantalla", label: "Pantalla", tipo: "BOOLEAN", orden: 1 }],
+            },
+          }),
+        } as Response)
+      }
+      if (url.includes("/api/checklist-templates/by-device-type")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            template: {
+              id: "tpl-default-org",
+              nombre: "Ingreso generico",
+              items: [{ id: "generico", label: "Generico", tipo: "BOOLEAN", orden: 1 }],
+            },
+          }),
+        } as Response)
+      }
+      if (url === "/api/ordenes") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ id: "ord-1", numeroOrden: 1 }),
+        } as Response)
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => [] } as Response)
+    })
+    vi.stubGlobal("fetch", fetchSpy)
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      draftEnvelope({ espejo: true, pantalla: false }),
+    )
+
+    await renderForm()
+    await settle()
+
+    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+    await settle()
+    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+    await settle()
+    fireEvent.click(screen.getByRole("button", { name: "Crear Orden" }))
+    await settle()
+
+    const checklistCall = fetchSpy.mock.calls.find((call) =>
+      /^\/api\/ordenes\/.+\/checklist$/.test(String(call[0])),
+    )
+    expect(checklistCall).toBeDefined()
+    const body = JSON.parse(String(checklistCall![1]?.body))
+    expect(body.templateId).toBe("tpl-celular")
+    // Se conserva lo que el template de hoy sigue reconociendo...
+    expect(body.valores).toEqual({ pantalla: false })
+    // ...y se va lo que quedo apuntando a un item que ya no existe.
+    expect(body.valores).not.toHaveProperty("espejo")
   })
 })

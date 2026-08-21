@@ -97,7 +97,7 @@ function stubFetch() {
             template: {
               id: "tpl-1",
               nombre: "Ingreso",
-              items: [{ key: "pantalla", label: "Pantalla", tipo: "BOOLEAN" }],
+              items: [{ id: "pantalla", label: "Pantalla", tipo: "BOOLEAN" }],
             },
           }),
         } as Response)
@@ -618,7 +618,7 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
               template: {
                 id: "tpl-1",
                 nombre: "Ingreso",
-                items: [{ key: "pantalla", label: "Pantalla", tipo: "BOOLEAN" }],
+                items: [{ id: "pantalla", label: "Pantalla", tipo: "BOOLEAN" }],
               },
             }),
           } as Response)

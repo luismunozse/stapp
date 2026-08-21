@@ -810,10 +810,15 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   /**
    * Las respuestas del checklist se indexan por id de item del template, pero
    * el template no se persiste en el borrador: al restaurar se vuelve a pedir
-   * por tipo de equipo. Si la organizacion lo edito o lo reemplazo dentro de los
-   * 7 dias que vive el borrador, las claves restauradas no corresponden a ningun
-   * item: el checklist se dibuja vacio y el submit igual las manda bajo el
-   * templateId nuevo.
+   * por tipo de equipo. Si la organizacion lo reemplazo dentro de los 7 dias que
+   * vive el borrador, las claves restauradas no corresponden a ningun item: el
+   * checklist se dibuja vacio y el submit igual las manda bajo el templateId
+   * nuevo.
+   *
+   * Y "lo edito" no es lo mismo que "lo reemplazo": el endpoint de edicion
+   * actualiza la fila en el lugar, con lo cual sacarle o agregarle items deja el
+   * MISMO id. Por eso no alcanza con comparar ids -- cada clave restaurada se
+   * valida ademas contra los items que el template tiene hoy.
    *
    * Vive en su propio efecto, y no adentro del fetch, porque ahi la comparacion
    * dependia de que la respuesta del servidor llegara despues de que el borrador
@@ -843,7 +848,28 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     if ((checklistTemplate?.id ?? null) !== checklistDelBorrador.templateId) {
       // Las notas son texto libre, no estan indexadas por item: se conservan.
       setChecklistValores({})
+      return
     }
+    // Mismo id de template, pero eso no alcanza: PUT /api/checklist-templates/[id]
+    // lo edita EN EL LUGAR y los items viven en su propia tabla, asi que
+    // agregarle o sacarle items durante los 7 dias que vive el borrador deja el
+    // id intacto. Comparar solo el id dejaba pasar respuestas indexadas por
+    // items que ya no existen, bajo un templateId que si -- invisibles en la
+    // ficha, igual que si el template hubiera cambiado entero. Se valida cada
+    // clave contra los items de hoy.
+    const itemsVigentes = new Set<string>(
+      ((checklistTemplate?.items ?? []) as { id?: string }[])
+        .map((item) => item.id)
+        .filter((id): id is string => typeof id === "string")
+    )
+    setChecklistValores((previas) => {
+      const claves = Object.keys(previas).filter((clave) => itemsVigentes.has(clave))
+      // Sin cambios se devuelve el mismo objeto: un objeto nuevo por cada
+      // resolucion de template re-dispara todo lo que depende de estas
+      // respuestas sin que ninguna haya cambiado.
+      if (claves.length === Object.keys(previas).length) return previas
+      return Object.fromEntries(claves.map((clave) => [clave, previas[clave]]))
+    })
   }, [
     checklistDelBorrador,
     tiposLoading,
