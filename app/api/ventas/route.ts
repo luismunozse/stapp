@@ -404,7 +404,16 @@ export async function POST(request: Request) {
       if (rpcError.code === "P0010") {
         // El nombre solo se necesita acá: resolverlo de forma diferida evita
         // una query extra en cada venta exitosa.
-        const sucursalNombre = sucursalId ? await getNombreSucursal(organizationId!, sucursalId) : null
+        //
+        // Solo se nombra la sucursal cuando la venta salió de SU depósito. Sin
+        // depositoId resuelto el RPC corrió con p_deposito_id = null y drenó de
+        // toda la organización: el faltante es org-wide y esa sucursal no tiene
+        // depósito principal, así que nombrarla sería falso (mismo criterio que
+        // el indicador "Vendiendo desde", ver derivarLecturaVenta).
+        const sucursalNombre =
+          sucursalId && resolvedDepositoId
+            ? await getNombreSucursal(organizationId!, sucursalId)
+            : null
         return NextResponse.json(
           {
             error: sucursalNombre
