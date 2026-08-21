@@ -575,4 +575,39 @@ describe("GET /api/inventario/search — scope=venta (POS opt-in)", () => {
       expect(res.headers.get("X-Venta-Sucursal-Nombre")).toBe("")
     }
   )
+
+  it("scope=venta con VENDEDOR bien configurado y org sin sucursal principal: sigue escopeado a SU depósito", async () => {
+    vi.mocked(auth).mockResolvedValue({
+      user: {
+        id: "vendedor-1",
+        organizationId: "org-1",
+        role: "VENDEDOR",
+        sucursalId: "suc-B",
+        email: "v@v.com",
+      },
+      expires: new Date(Date.now() + 86400000).toISOString(),
+    } as any)
+    mockNoCookie()
+
+    // getPrincipalId comes back empty (none configured, two principal rows, or
+    // a transient failure) — an org-level lookup this user never needed.
+    const sucursalesChain = makeSucursalesChain(null)
+    const depositosChain = makeDepositosChain("dep-B")
+    const invChain = createChainMock([
+      {
+        id: "i1", codigo: "C1", nombre: "Notebook",
+        precio_venta: 100, precio_compra: 60, trackea_series: false,
+        inventario_depositos: [{ stock: 2, stock_reservado: 0, deposito_id: "dep-B" }],
+      },
+    ])
+    mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain, inventario: invChain })
+
+    const res = await GET(createGetRequest("http://localhost:3000/api/inventario/search?q=note&scope=venta"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(body[0].stock).toBe(2)
+    expect(invChain.eq).toHaveBeenCalledWith("inventario_depositos.deposito_id", "dep-B")
+    expect(res.headers.get("X-Venta-Sucursal-Id")).toBe("suc-B")
+  })
 })

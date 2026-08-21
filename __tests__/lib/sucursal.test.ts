@@ -96,6 +96,8 @@ function mockSucursalesYDepositos(opts: {
   principalSucursalId?: string | null
   depositoId?: string | null
   nombre?: string
+  /** Error returned by getPrincipalId's .single() — e.g. two rows flagged principal. */
+  principalError?: { code: string; message: string }
 }) {
   const sucursalesChain: any = {}
   for (const m of ["select", "eq", "is"]) sucursalesChain[m] = vi.fn().mockReturnValue(sucursalesChain)
@@ -104,7 +106,7 @@ function mockSucursalesYDepositos(opts: {
       opts.principalSucursalId === null
         ? null
         : { id: opts.principalSucursalId ?? "suc-principal", nombre: opts.nombre ?? "Sucursal Centro" },
-    error: null,
+    error: opts.principalError ?? null,
   })
 
   const depositosChain: any = {}
@@ -275,6 +277,60 @@ describe("resolverDestinoVenta", () => {
     })
 
     expect(result.branchScoped).toBe(false)
+  })
+
+  // The org-level principal sucursal is only a FALLBACK. Resolving it first and
+  // bailing out on null collapsed every role to "no sucursal" — which reads then
+  // widened org-wide — over an org-level lookup the user's own branch never needed.
+  it("DV-11 — VENDEDOR con su sucursal bien configurada y org SIN principal: usa su propia sucursal", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: null, depositoId: "dep-B" })
+
+    const result = await resolverDestinoVenta({
+      role: "VENDEDOR",
+      organizationId: "org-1",
+      userSucursalId: "suc-B",
+    })
+
+    expect(result).toEqual({
+      sucursalId: "suc-B",
+      depositoId: "dep-B",
+      unassignedSucursal: false,
+      branchScoped: true,
+    })
+  })
+
+  it("DV-12 — dos sucursales marcadas principal (.single() falla): la sucursal propia sigue mandando", async () => {
+    // The demote in POST /api/sucursales is not atomic with the insert, so an
+    // org can transiently have two principal=true rows; .single() then errors
+    // and getPrincipalId returns null. Same shape as any transient failure.
+    mockSucursalesYDepositos({
+      principalSucursalId: null,
+      depositoId: "dep-B",
+      principalError: { code: "PGRST116", message: "multiple (or no) rows returned" },
+    })
+
+    const result = await resolverDestinoVenta({
+      role: "TECNICO",
+      organizationId: "org-1",
+      userSucursalId: "suc-B",
+    })
+
+    expect(result.sucursalId).toBe("suc-B")
+    expect(result.depositoId).toBe("dep-B")
+  })
+
+  it("DV-13 — ADMIN con sucursal seleccionada y org SIN principal: usa la seleccionada", async () => {
+    mockCookie("suc-A")
+    mockSucursalesYDepositos({ principalSucursalId: null, depositoId: "dep-A" })
+
+    const result = await resolverDestinoVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      userSucursalId: null,
+    })
+
+    expect(result.sucursalId).toBe("suc-A")
+    expect(result.depositoId).toBe("dep-A")
   })
 })
 
@@ -586,6 +642,21 @@ describe("cache de resolucion de venta (solo lecturas del POS)", () => {
     expect(primera).toBe("Casa Central")
     expect(segunda).toBe("Casa Central")
     expect(contarLecturas("sucursales")).toBe(1)
+  })
+
+  it("CV-8 — un destino sin resolver NO se cachea (una falla transitoria no queda fijada 30s)", async () => {
+    // getPrincipalId came back empty (none configured, two principal rows, or a
+    // transient query failure). For an ADMIN in "todas" that means org-wide
+    // reads; pinning it for a full TTL would outlive the failure that caused it.
+    mockSucursalesYDepositos({ principalSucursalId: null })
+    const params = { role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null }
+
+    const primera = await resolverDestinoVentaCacheado(params)
+    const segunda = await resolverDestinoVentaCacheado(params)
+
+    expect(primera.sucursalId).toBeNull()
+    expect(segunda.sucursalId).toBeNull()
+    expect(contarLecturas("sucursales")).toBe(2)
   })
 
   it("CV-7 — el camino de ESCRITURA no se cachea: resolverDestinoVenta siempre consulta", async () => {

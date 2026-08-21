@@ -41,19 +41,29 @@ export function resolveSucursalLectura(input: InputResolucion): ResultadoLectura
   return { sucursalId: input.cookieSucursalId, verTodas: false }
 }
 
+/**
+ * The part of the write resolution that does NOT depend on the org's principal
+ * sucursal: a branch-scoped user's own branch, or the branch an ADMIN has
+ * explicitly selected. Returns null only when the principal fallback is the
+ * answer, so callers can keep resolving even if that org-level lookup fails.
+ */
+export function resolveSucursalPropia(input: InputResolucion): string | null {
+  const esAdmin = input.role === "ADMIN"
+
+  if (!esAdmin) {
+    return input.userSucursalId
+  }
+  if (!input.cookieSucursalId || input.cookieSucursalId === TODAS) {
+    return null
+  }
+  return input.cookieSucursalId
+}
+
 /** Resuelve la sucursal CONCRETA para ESCRITURAS (siempre devuelve un id). */
 export function resolveSucursalEscritura(
   input: InputResolucion & { principalId: string }
 ): string {
-  const esAdmin = input.role === "ADMIN"
-
-  if (!esAdmin) {
-    return input.userSucursalId ?? input.principalId
-  }
-  if (!input.cookieSucursalId || input.cookieSucursalId === TODAS) {
-    return input.principalId
-  }
-  return input.cookieSucursalId
+  return resolveSucursalPropia(input) ?? input.principalId
 }
 
 /** Lee el id de la sucursal principal (Casa Central) de una org. */
@@ -97,13 +107,18 @@ export async function sucursalParaEscritura(params: {
 }): Promise<string | null> {
   const cookieSucursalId = await getCookieSucursalId()
   const principalId = await getPrincipalId(params.organizationId)
-  if (!principalId) return null
-  return resolveSucursalEscritura({
+  // The principal sucursal is a FALLBACK, not a precondition. Bailing out on a
+  // null principalId used to collapse a user whose own sucursal is perfectly
+  // configured — and `derivarLecturaVenta` then read that null as "no branch",
+  // widening POS reads org-wide. getPrincipalId returns null for a missing
+  // principal, for two rows flagged principal (its .single() errors, and the
+  // demote in POST /api/sucursales is not atomic with the insert), and for any
+  // transient query failure, so it must not be able to unscope anyone.
+  return resolveSucursalPropia({
     role: params.role,
     userSucursalId: params.userSucursalId,
     cookieSucursalId,
-    principalId,
-  })
+  }) ?? principalId
 }
 
 /** Resuelve el filtro de sucursal para una LECTURA en el request actual. */
@@ -297,13 +312,16 @@ const cacheIndicadorVenta = new Map<string, EntradaCacheVenta<string | null>>()
 async function memoConTtl<T>(
   store: Map<string, EntradaCacheVenta<T>>,
   key: string,
-  resolver: () => Promise<T>
+  resolver: () => Promise<T>,
+  /** Optional gate: a result it rejects is returned but never stored. */
+  cacheable?: (data: T) => boolean
 ): Promise<T> {
   const now = Date.now()
   const hit = store.get(key)
   if (hit && hit.expiresAt > now) return hit.data
 
   const data = await resolver()
+  if (cacheable && !cacheable(data)) return data
   if (store.size >= CACHE_VENTA_MAX_ENTRIES) {
     for (const [k, entry] of store) {
       if (entry.expiresAt <= now) store.delete(k)
@@ -344,12 +362,20 @@ export async function resolverDestinoVentaCacheado(params: {
     params.userSucursalId,
     params.cookieSucursalId,
   ])
-  return memoConTtl(cacheDestinoVenta, key, () =>
-    resolverDestinoVenta({
-      role: params.role,
-      organizationId: params.organizationId,
-      userSucursalId: params.userSucursalId,
-    })
+  return memoConTtl(
+    cacheDestinoVenta,
+    key,
+    () =>
+      resolverDestinoVenta({
+        role: params.role,
+        organizationId: params.organizationId,
+        userSucursalId: params.userSucursalId,
+      }),
+    // A destination with no sucursal means the resolution did not land — which
+    // for an org-wide caller reads as the org aggregate. That can come from a
+    // transient failure, so it is served but never pinned for a whole TTL: the
+    // next request retries instead of inheriting the failure.
+    (destino) => destino.sucursalId !== null
   )
 }
 
