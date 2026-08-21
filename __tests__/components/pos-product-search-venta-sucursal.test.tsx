@@ -12,11 +12,11 @@ vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}` }),
 }))
 
-function okResponse(headers: Record<string, string> = {}) {
+function okResponse(headers: Record<string, string> = {}, body: unknown[] = []) {
   return {
     ok: true,
     status: 200,
-    json: async () => [],
+    json: async () => body,
     headers: new Headers(headers),
   }
 }
@@ -183,6 +183,49 @@ describe("PosProductSearch — scope=venta", () => {
       await waitFor(() =>
         expect(onVentaSucursal).toHaveBeenLastCalledWith({ id: "suc-B", nombre: "Sucursal Norte" })
       )
+    })
+
+    it("VS-4 — la revalidacion tambien refresca la grilla, no solo el indicador", async () => {
+      // Refrescar solo el encabezado hace que la pantalla mienta MAS fuerte: el
+      // titulo diria "Vendiendo desde: Sucursal Norte" mientras la grilla de
+      // abajo sigue mostrando el catalogo y el stock por deposito de la sucursal
+      // anterior — y esas filas se pueden clickear al carrito.
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          okResponse(CASA_CENTRAL, [
+            { id: "p-vieja", nombre: "Producto de Casa Central", precio: 100, stock: 3 },
+          ])
+        )
+        .mockResolvedValue(
+          okResponse(NORTE, [
+            { id: "p-nueva", nombre: "Producto de Norte", precio: 200, stock: 5 },
+          ])
+        )
+      vi.stubGlobal("fetch", fetchMock)
+
+      renderConIndicador(vi.fn())
+      await waitFor(() => expect(screen.getByText("Producto de Casa Central")).toBeInTheDocument())
+
+      fireEvent(window, new Event("focus"))
+
+      await waitFor(() => expect(screen.getByText("Producto de Norte")).toBeInTheDocument())
+      expect(screen.queryByText("Producto de Casa Central")).not.toBeInTheDocument()
+    })
+
+    it("VS-5 — la revalidacion pide el listado completo, no una fila suelta", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(okResponse(CASA_CENTRAL))
+      vi.stubGlobal("fetch", fetchMock)
+
+      renderConIndicador(vi.fn())
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+      const urlMontaje = fetchMock.mock.calls[0][0] as string
+
+      fireEvent(window, new Event("focus"))
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+      // Mismo pedido que el montaje: lo que se muestra sale de este body.
+      expect(fetchMock.mock.calls[1][0]).toBe(urlMontaje)
     })
 
     it("VS-2 — foco y visibilitychange llegan juntos: revalida UNA sola vez", async () => {

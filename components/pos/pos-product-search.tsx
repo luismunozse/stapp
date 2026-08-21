@@ -228,10 +228,15 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     // sale el stock.
     //
     // Se revalida, NO se recarga: el cambio lo hizo otra pestaña y acá puede
-    // haber un carrito a medio armar que el operador no pidió perder. El stock
-    // de los resultados se re-consulta en cada búsqueda y el checkout revalida
-    // contra el servidor (check-stock, sin caché), así que refrescar el
-    // indicador alcanza para que lo que se muestra deje de mentir.
+    // haber un carrito a medio armar que el operador no pidió perder.
+    //
+    // Se refresca el indicador Y la grilla, con el mismo pedido que el montaje.
+    // Traer solo los headers haría que la pantalla mienta MÁS fuerte: el título
+    // diría "Vendiendo desde: Sucursal Nueva" mientras `recentProducts` —lo que
+    // se ve con el buscador vacío— sigue listando el catálogo y el stock por
+    // depósito de la sucursal anterior, y esas filas se pueden clickear al
+    // carrito. El listado ya venía en el mismo response: descartarlo no ahorra
+    // un request, solo deja la mitad de la pantalla desactualizada.
     useEffect(() => {
       let cancelado = false
       // `focus` y `visibilitychange` llegan juntos al volver a la pestaña (y
@@ -246,14 +251,16 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
         if (ahora - ultima < MIN_ENTRE_REVALIDACIONES) return
         ultima = ahora
         try {
-          // limit=1: acá solo interesan los headers, no el listado.
-          const res = await fetch("/api/inventario/search?q=&limit=1&scope=venta&ventaInfo=true")
+          const res = await fetch("/api/inventario/search?q=&limit=20&scope=venta&ventaInfo=true")
           // Mismo criterio que el montaje: un error también parsea como JSON y
           // no trae headers, así que reportarlo apagaría un indicador que ya
-          // estaba bien resuelto.
-          if (!cancelado && res.ok) {
-            onVentaSucursal?.(readVentaSucursalHeaders(res))
+          // estaba bien resuelto y vaciaría la grilla.
+          if (cancelado || !res.ok) return
+          const data = await res.json()
+          if (Array.isArray(data)) {
+            setRecentProducts(data)
           }
+          onVentaSucursal?.(readVentaSucursalHeaders(res))
         } catch {
           // Sin red se conserva lo último resuelto.
         }
