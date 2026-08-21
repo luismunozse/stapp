@@ -57,6 +57,14 @@ export async function GET() {
       .single()
     const threshold = orgConfig?.umbral_stock_bajo ?? 5
 
+    // Se resuelve ACÁ, antes de armar las listas derivadas, y no al final junto
+    // con el nulleo: hay listas que se ORDENAN (y se recortan) por una clave de
+    // costo, y eso sobrevive al nulleo. Ver masValiosos y porCategoria.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
     // Items con stock crítico (< threshold)
     const stockCritico = items
       .filter((item) => item.stock < threshold)
@@ -92,19 +100,36 @@ export async function GET() {
       categoriaMap.set(cat, existing)
     })
 
+    // valorTotal se nullea más abajo, pero el ORDEN por valorTotal no: con
+    // stockTotal visible en cada fila, el ranking devuelve el costo unitario
+    // promedio relativo de cada categoría. Para quien no ve costo, se ordena
+    // por stock.
     const porCategoria = Array.from(categoriaMap.values()).sort(
-      (a, b) => b.valorTotal - a.valorTotal
+      canViewCost
+        ? (a, b) => b.valorTotal - a.valorTotal
+        : (a, b) => b.stockTotal - a.stockTotal || a.categoria.localeCompare(b.categoria, "es")
     )
 
-    // Items más valiosos (por valor en stock)
-    const masValiosos = items
-      .map((item) => ({
-        ...item,
-        valorEnStock: (item.precioCompra || 0) * item.stock,
-      }))
-      .filter((item) => item.valorEnStock > 0)
-      .sort((a, b) => b.valorEnStock - a.valorEnStock)
-      .slice(0, 10)
+    // Items más valiosos (por valor en stock).
+    //
+    // Acá no alcanza con cambiar la clave de orden: el filtro valorEnStock > 0
+    // y el recorte a 10 eligen QUIÉNES entran, y ambos son costo. Pertenecer al
+    // top 10 por valor ES el ranking. Para quien no puede ver costo, selección
+    // y orden pasan a stock, que ya ve. Para quien sí puede, no cambia nada.
+    const masValiososBase = items.map((item) => ({
+      ...item,
+      valorEnStock: (item.precioCompra || 0) * item.stock,
+    }))
+
+    const masValiosos = canViewCost
+      ? masValiososBase
+          .filter((item) => item.valorEnStock > 0)
+          .sort((a, b) => b.valorEnStock - a.valorEnStock)
+          .slice(0, 10)
+      : masValiososBase
+          .filter((item) => item.stock > 0)
+          .sort((a, b) => b.stock - a.stock || a.nombre.localeCompare(b.nombre, "es"))
+          .slice(0, 10)
 
     // Top productos vendidos (últimos 30 días)
     const thirtyDaysAgo = new Date()
@@ -165,11 +190,9 @@ export async function GET() {
     // dos cifras salen por ese mismo tier, así que un gate acá lo defiende una
     // resta. Un gate que no protege es peor que ninguno: el que lo lee después
     // razona sobre una garantía que no existe.
-    const vendedoresHabilitados = role === "VENDEDOR"
-      ? await resolveVendedoresHabilitados(organizationId!)
-      : false
-    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
-
+    //
+    // canViewCost se resolvió arriba, antes de armar las listas: el nulleo solo
+    // tapa el número, no el orden ni el recorte con que la lista llegó hasta acá.
     const gateItem = (item: ItemInventario) =>
       canViewCost ? item : { ...item, precioCompra: null }
 

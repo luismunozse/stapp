@@ -131,6 +131,12 @@ export function AnalisisInventario() {
       value: cat.valorTotal,
     }))
 
+  // Sin acceso a costo, el endpoint ya no ordena masValiosos por valor (el
+  // orden solo devolvía el ranking de costo): la lista llega ordenada por
+  // stock. La card tiene que decir eso — titularla "Más Valiosos" sobre una
+  // lista ordenada por unidades es afirmar algo que la lista no dice.
+  const valorPorItemOculto = data.masValiosos.some((item) => item.valorEnStock === null)
+
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
@@ -205,15 +211,15 @@ export function AnalisisInventario() {
           </Card>
         )}
 
-        {/* Items Más Valiosos */}
+        {/* Items Más Valiosos (o, sin acceso a costo, los de más stock) */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
               <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-success" />
-              Items Más Valiosos
+              {valorPorItemOculto ? "Items con más stock" : "Items Más Valiosos"}
             </CardTitle>
             <CardDescription className="text-xs sm:text-sm">
-              Mayor valor en stock
+              {valorPorItemOculto ? "Mayor cantidad de unidades" : "Mayor valor en stock"}
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -96,6 +96,35 @@ describe("AnalisisInventario — costo por item nulo", () => {
     expect(screen.getByText("13 uds x $100")).toBeInTheDocument()
     expect(screen.getByText("$1000")).toBeInTheDocument()
   })
+
+  // El endpoint dejó de rankear masValiosos por valor cuando el rol no puede
+  // ver costo: el orden por sí solo devolvía el ranking de costo. Ahora la
+  // lista viene ordenada por stock, así que el título tiene que decir eso —
+  // una card titulada "Más Valiosos" sobre una lista ordenada por unidades
+  // miente, y el que la lee saca conclusiones de plata que la lista no tiene.
+  it("titula la card por stock cuando el valor está oculto", async () => {
+    stubFetch(payload(null, null))
+
+    render(<AnalisisInventario />)
+
+    await waitFor(() => expect(screen.getByText("Pantalla")).toBeInTheDocument())
+
+    expect(screen.queryByText("Items Más Valiosos")).not.toBeInTheDocument()
+    expect(screen.queryByText("Mayor valor en stock")).not.toBeInTheDocument()
+    expect(screen.getByText("Items con más stock")).toBeInTheDocument()
+    expect(screen.getByText("Mayor cantidad de unidades")).toBeInTheDocument()
+  })
+
+  it("mantiene el título por valor cuando el rol puede verlo", async () => {
+    stubFetch(payload(100, 1000))
+
+    render(<AnalisisInventario />)
+
+    await waitFor(() => expect(screen.getByText("Pantalla")).toBeInTheDocument())
+
+    expect(screen.getByText("Items Más Valiosos")).toBeInTheDocument()
+    expect(screen.getByText("Mayor valor en stock")).toBeInTheDocument()
+  })
 })
 
 /**

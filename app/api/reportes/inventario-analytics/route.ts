@@ -50,6 +50,14 @@ export async function GET() {
     const movimientos90 = movimientosVentaResult.data || []
     const movimientos30 = movimientos30DiasResult.data || []
 
+    // Se resuelve ACÁ, antes de armar las listas derivadas, y no al final junto
+    // con el nulleo: hay listas que se ORDENAN por una clave de costo, y el
+    // orden sobrevive al nulleo. Ver sinMovimiento más abajo.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
     // --- Valorización ---
     let valorCosto = 0
     let valorVenta = 0
@@ -97,7 +105,13 @@ export async function GET() {
 
     // --- Sin Movimiento (dead stock) ---
     const itemsConVenta = new Set(Object.keys(ventasPorItem))
-    const sinMovimiento = items
+    // El orden es un canal lateral: capitalInmovilizado es stock x
+    // precio_compra y stock viaja visible en cada fila, así que un ranking por
+    // capital devuelve el ranking de costo unitario aunque el número esté en
+    // null. El recorte tampoco es inocente: pertenecer al "top 20 por capital"
+    // ES el ranking. Para quien no puede ver costo, la clave y el recorte pasan
+    // a stock, que ya ve. Para quien sí puede, el informe no cambia.
+    const sinMovimientoBase = items
       .filter(item => !itemsConVenta.has(item.id) && item.stock > 0)
       .map(item => ({
         id: item.id,
@@ -108,8 +122,14 @@ export async function GET() {
         precioVenta: item.precio_venta,
         capitalInmovilizado: (item.stock || 0) * (item.precio_compra || 0),
       }))
-      .sort((a, b) => b.capitalInmovilizado - a.capitalInmovilizado)
-      .slice(0, 20)
+
+    const sinMovimiento = (
+      canViewCost
+        ? sinMovimientoBase.sort((a, b) => b.capitalInmovilizado - a.capitalInmovilizado)
+        : sinMovimientoBase.sort(
+            (a, b) => b.stock - a.stock || (a.nombre || "").localeCompare(b.nombre || "", "es")
+          )
+    ).slice(0, 20)
 
     // --- Alertas de Reorden ---
     const diasPeriodo = 90
@@ -189,11 +209,9 @@ export async function GET() {
     // las dos cifras salen por ese mismo tier, así que un gate acá lo defiende
     // una resta. Un gate que no protege es peor que ninguno: el que lo lee
     // después razona sobre una garantía que no existe.
-    const vendedoresHabilitados = role === "VENDEDOR"
-      ? await resolveVendedoresHabilitados(organizationId!)
-      : false
-    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
-
+    //
+    // canViewCost se resolvió arriba, antes de armar las listas: el nulleo
+    // solo tapa el número, no el orden en que la lista llegó hasta acá.
     const sinMovimientoGated = canViewCost
       ? sinMovimiento
       : sinMovimiento.map(item => ({ ...item, precioCompra: null, capitalInmovilizado: null }))
