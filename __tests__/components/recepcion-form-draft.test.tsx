@@ -16,8 +16,16 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
+/** Sesion mutable: el unico disparador que tiene esta pantalla para que el hook
+ *  vuelva a resolver su key es que la sesion se caiga y vuelva (no tiene props
+ *  de origen ni modo edicion). */
+const sesion = vi.hoisted(() => ({
+  actual: { user: { id: "user-1", organizationId: "org-1" } } as unknown,
+}))
+const SESION_ACTIVA = { user: { id: "user-1", organizationId: "org-1" } }
+
 vi.mock("next-auth/react", () => ({
-  useSession: () => ({ data: { user: { id: "user-1", organizationId: "org-1" } } }),
+  useSession: () => ({ data: sesion.actual }),
 }))
 
 vi.mock("@/hooks/use-tipos-dispositivo", () => ({
@@ -89,6 +97,7 @@ describe("RecepcionForm — borrador local", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: true, json: async () => [] } as Response)))
     window.localStorage.clear()
+    sesion.actual = SESION_ACTIVA
   })
 
   afterEach(() => {
@@ -197,6 +206,81 @@ describe("RecepcionForm — borrador local", () => {
   it("no muestra el aviso cuando no hay borrador guardado", async () => {
     await renderForm()
     expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
+  })
+
+  it("aplica un borrador que aparece despues de que la sesion se recupera", async () => {
+    // El mismo agujero que ya se arreglo en cliente-form.tsx: marcar el
+    // borrador como "aplicado" ANTES de saber si habia uno deja el latch puesto
+    // sin haber aplicado nada. Al recuperarse la sesion el hook vuelve a
+    // resolver la key y encuentra el borrador que otra pestana dejo en el
+    // hueco; esta pantalla no lo aplica nunca, pero el hook si lo cuenta como
+    // restaurado, asi que el flush siguiente lo pisa con el formulario en
+    // blanco que hay en pantalla.
+    const { RecepcionForm } = await import("@/components/ordenes/recepcion-form")
+    const { rerender } = render(
+      <ModalProvider>
+        <RecepcionForm />
+      </ModalProvider>,
+    )
+    expect(screen.getByPlaceholderText("Numero alternativo")).toHaveValue("")
+
+    sesion.actual = null
+    rerender(
+      <ModalProvider>
+        <RecepcionForm />
+      </ModalProvider>,
+    )
+
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        version: 2,
+        savedAt: Date.now(),
+        data: {
+          form: {
+            clienteId: "",
+            telefonoContacto: "1199887766",
+            observaciones: "",
+            equipos: [
+              {
+                dispositivo: "Escrito en la otra pestana",
+                tipoDispositivo: "",
+                marca: "",
+                color: "",
+                imei: "",
+                problemaReportado: "",
+                codigoAccesoDispositivo: "",
+              },
+              {
+                dispositivo: "",
+                tipoDispositivo: "",
+                marca: "",
+                color: "",
+                imei: "",
+                problemaReportado: "",
+                codigoAccesoDispositivo: "",
+              },
+            ],
+          },
+          sideState: [
+            { accesoriosSeleccionados: [], otroAccesorio: "", camposExtraValues: {} },
+            { accesoriosSeleccionados: [], otroAccesorio: "", camposExtraValues: {} },
+          ],
+        },
+      }),
+    )
+
+    sesion.actual = SESION_ACTIVA
+    rerender(
+      <ModalProvider>
+        <RecepcionForm />
+      </ModalProvider>,
+    )
+
+    await screen.findByText(/se restauró un borrador no guardado/i)
+    expect(screen.getAllByPlaceholderText("Ej: iPhone 13")[0]).toHaveValue(
+      "Escrito en la otra pestana",
+    )
   })
 
   it("un borrador con forma invalida no rompe la pantalla", async () => {

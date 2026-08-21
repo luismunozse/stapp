@@ -281,6 +281,40 @@ describe("OrdenForm — borrador local", () => {
     expect(screen.queryByLabelText(/Seña \/ Adelanto/i)).not.toBeInTheDocument()
   })
 
+  it("aplica un borrador que aparece despues de que la key cambia de origen", async () => {
+    // El mismo agujero que ya se arreglo en cliente-form.tsx: marcar el
+    // borrador como "aplicado" ANTES de saber si habia uno deja el latch puesto
+    // sin haber aplicado nada. Cuando el hook vuelve a resolver la key (otro
+    // turno, una sesion que se cae y vuelve) y encuentra un borrador que otra
+    // pestana escribio, este formulario no lo aplica nunca -- pero el hook si lo
+    // cuenta como restaurado, asi que el flush siguiente lo pisa con lo que hay
+    // en pantalla y el aviso no sale.
+    const { OrdenForm } = await import("@/components/ordenes/orden-form")
+    const { rerender } = render(
+      <ModalProvider>
+        <OrdenForm onClose={vi.fn()} onSuccess={vi.fn()} fromTurnoId="t-1" />
+      </ModalProvider>,
+    )
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+        "Samsung A54 del turno",
+      )
+    })
+
+    window.localStorage.setItem("draft:v2:orden-form:org-1:user-1:new:turno:t-2", draftEnvelope())
+
+    rerender(
+      <ModalProvider>
+        <OrdenForm onClose={vi.fn()} onSuccess={vi.fn()} fromTurnoId="t-2" />
+      </ModalProvider>,
+    )
+
+    await screen.findByText(/se restauró un borrador no guardado/i)
+    expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+      "iPhone 13 Restaurado",
+    )
+  })
+
   it("muestra el selector de Sector/Area de una empresa restaurada desde el borrador", async () => {
     // ClienteSelector re-hidrata su propio display por id pero nunca llama a
     // onChange, asi que el objeto Cliente tiene que venir del borrador: sin el

@@ -336,8 +336,15 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
   useEffect(() => {
     if (!draftReady || draftAppliedRef.current) return
-    draftAppliedRef.current = true
+    // Se marca DESPUES de saber que hay algo que aplicar (mismo criterio que
+    // cliente-form.tsx). Marcarlo antes dejaba el formulario "con el borrador ya
+    // aplicado" sin haberlo aplicado: si el hook volvia a resolver la key (otro
+    // turno, una sesion que se cae y vuelve) y aparecia un borrador que otra
+    // pestana habia escrito, este efecto no lo tocaba nunca -- pero el hook si
+    // lo contaba como restaurado, asi que el flush siguiente lo pisaba en
+    // silencio con lo que hubiera en pantalla y el aviso no salia.
     if (!draft) return
+    draftAppliedRef.current = true
     draftRestoredRef.current = true
     try {
       // El codigo de acceso no se persiste (ver el limite en getValue): se
