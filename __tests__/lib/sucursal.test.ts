@@ -657,7 +657,12 @@ describe("cache de resolucion de venta (solo lecturas del POS)", () => {
     expect(contarLecturas("sucursales")).toBe(2)
   })
 
-  it("CV-6 — el indicador tambien se cachea (los dos montajes de PosProductSearch pagan una sola query)", async () => {
+  // NO afirma que los dos montajes de PosProductSearch paguen una sola query:
+  // memoConTtl cachea VALORES, no promesas en vuelo, asi que dos requests
+  // realmente concurrentes pueden consultar las dos. Lo que si garantiza (y es
+  // lo que se mide aca) es que una llamada posterior a que la primera resolvio
+  // reusa la entrada — el caso del buscador debounced, tecla tras tecla.
+  it("CV-6 — el indicador tambien se cachea: resuelta la primera, la siguiente no consulta", async () => {
     mockListaSucursales(DOS_SUCURSALES)
     const params = {
       role: "ADMIN",

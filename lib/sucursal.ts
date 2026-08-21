@@ -309,6 +309,12 @@ interface EntradaCacheVenta<T> {
 const cacheDestinoVenta = new Map<string, EntradaCacheVenta<DestinoVenta>>()
 const cacheIndicadorVenta = new Map<string, EntradaCacheVenta<IndicadorVenta>>()
 
+/**
+ * Caches VALUES, not in-flight promises: concurrent callers that miss together
+ * all run the resolver, and only the last one to finish is stored. The win is
+ * over time (keystroke after keystroke), not over simultaneous requests — the
+ * two PosProductSearch mounts can still resolve once each.
+ */
 async function memoConTtl<T>(
   store: Map<string, EntradaCacheVenta<T>>,
   key: string,

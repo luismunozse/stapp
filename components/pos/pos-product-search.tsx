@@ -189,6 +189,13 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     // ventaInfo=true also resolves the sucursal name for the "selling from"
     // indicator — asked for only here, since this fetch always runs on mount and
     // it is the only one whose response headers are read.
+    //
+    // PosProductSearch is mounted twice (desktop + mobile), so two of these run
+    // per POS load and both report into the same parent state. Only an `ok`
+    // response is reported: an error body still parses as JSON and would carry
+    // no X-Venta-Sucursal-* headers, so reporting it would clear the sucursal
+    // the other mount already resolved. A resolved-but-empty header is a real
+    // answer (drain mode / fail-closed, "hide the indicator") and is reported.
     useEffect(() => {
       const loadInitial = async () => {
         try {
@@ -197,7 +204,9 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
           if (Array.isArray(data)) {
             setRecentProducts(data)
           }
-          onVentaSucursal?.(readVentaSucursalHeaders(res))
+          if (res.ok) {
+            onVentaSucursal?.(readVentaSucursalHeaders(res))
+          }
         } catch {
           // ignore
         } finally {

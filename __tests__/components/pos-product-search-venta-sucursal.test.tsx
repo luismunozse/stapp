@@ -12,11 +12,28 @@ vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}` }),
 }))
 
-function mockFetchOnce(headers: Record<string, string> = {}) {
-  return vi.fn().mockResolvedValue({
+function okResponse(headers: Record<string, string> = {}) {
+  return {
+    ok: true,
+    status: 200,
     json: async () => [],
     headers: new Headers(headers),
-  })
+  }
+}
+
+function errorResponse(status = 500) {
+  return {
+    ok: false,
+    status,
+    // A 500 from the route still has a JSON body, so parsing succeeds and the
+    // failure is only visible through `ok`.
+    json: async () => ({ error: "Error al buscar productos" }),
+    headers: new Headers(),
+  }
+}
+
+function mockFetchOnce(headers: Record<string, string> = {}) {
+  return vi.fn().mockResolvedValue(okResponse(headers))
 }
 
 describe("PosProductSearch — scope=venta", () => {
@@ -99,5 +116,59 @@ describe("PosProductSearch — scope=venta", () => {
     )
 
     await waitFor(() => expect(onVentaSucursal).toHaveBeenCalledWith({ id: null, nombre: null }))
+  })
+
+  it("una respuesta con error NO reporta sucursal (un 500 tambien parsea como JSON)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(errorResponse())
+    vi.stubGlobal("fetch", fetchMock)
+    const onVentaSucursal = vi.fn()
+
+    render(
+      <PosProductSearch
+        onAddProduct={() => {}}
+        onAddManualProduct={() => {}}
+        onOpenScanner={() => {}}
+        scanSuccess={null}
+        onVentaSucursal={onVentaSucursal}
+      />
+    )
+
+    // La carga inicial ya termino (el skeleton dio paso al empty state).
+    await waitFor(() => expect(screen.getByText("Sin productos")).toBeInTheDocument())
+    expect(onVentaSucursal).not.toHaveBeenCalled()
+  })
+
+  it("dos montajes (desktop + mobile): el que falla no pisa al que resolvio", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        okResponse({
+          "X-Venta-Sucursal-Id": "suc-1",
+          "X-Venta-Sucursal-Nombre": encodeURIComponent("Casa Central"),
+        })
+      )
+      .mockResolvedValueOnce(errorResponse())
+    vi.stubGlobal("fetch", fetchMock)
+    const onVentaSucursal = vi.fn()
+
+    const props = {
+      onAddProduct: () => {},
+      onAddManualProduct: () => {},
+      onOpenScanner: () => {},
+      scanSuccess: null,
+      onVentaSucursal,
+    }
+    render(
+      <>
+        <PosProductSearch {...props} />
+        <PosProductSearch {...props} />
+      </>
+    )
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await waitFor(() =>
+      expect(onVentaSucursal).toHaveBeenCalledWith({ id: "suc-1", nombre: "Casa Central" })
+    )
+    expect(onVentaSucursal).toHaveBeenCalledTimes(1)
   })
 })
