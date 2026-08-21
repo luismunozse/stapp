@@ -19,6 +19,7 @@ import {
   resolveSucursalLectura,
   resolverDestinoVenta,
   derivarLecturaVenta,
+  derivarAvisoAlcanceOrg,
   getNombreSucursal,
   resolverIndicadorVenta,
   resolverDestinoVentaCacheado,
@@ -453,6 +454,80 @@ describe("derivarLecturaVenta", () => {
       verTodas: false,
       ventaSucursalId: "suc-B",
     })
+  })
+})
+
+// ─── derivarAvisoAlcanceOrg ───
+//
+// El modo drenaje con una sucursal concreta elegida es el unico estado donde la
+// pantalla se contradice sola: el chip del switcher dice "Sucursal X" mientras
+// la grilla lista stock que esta fisicamente en otras sucursales, y el
+// indicador "Vendiendo desde" —lo unico que podria explicarlo— esta apagado
+// justo ahi (ventaSucursalId null, ver LV-4). Los numeros son honestos sobre lo
+// que una venta puede tomar; lo que falta es que la UI lo diga.
+
+describe("derivarAvisoAlcanceOrg", () => {
+  const DRENAJE: ReturnType<typeof derivarLecturaVenta> = {
+    sucursalId: "suc-X",
+    depositoId: null,
+    verTodas: true,
+    ventaSucursalId: null,
+  }
+
+  it("AO-1 — ADMIN con sucursal concreta elegida en modo drenaje: avisa", () => {
+    // El chip dice "Sucursal X" y la grilla es de toda la org: sin este aviso
+    // no queda nada en pantalla que explique la diferencia.
+    expect(
+      derivarAvisoAlcanceOrg({ role: "ADMIN", cookieSucursalId: "suc-X", lectura: DRENAJE })
+    ).toBe(true)
+  })
+
+  it("AO-2 — ADMIN con sucursal concreta y deposito propio: no avisa (no hay nada raro que explicar)", () => {
+    expect(
+      derivarAvisoAlcanceOrg({
+        role: "ADMIN",
+        cookieSucursalId: "suc-X",
+        lectura: {
+          sucursalId: "suc-X",
+          depositoId: "dep-X",
+          verTodas: false,
+          ventaSucursalId: "suc-X",
+        },
+      })
+    ).toBe(false)
+  })
+
+  it.each([null, "todas"])(
+    "AO-3 — ADMIN en 'todas' (cookie %s) en modo drenaje: no avisa, el chip ya dice toda la org",
+    (cookie) => {
+      expect(
+        derivarAvisoAlcanceOrg({ role: "ADMIN", cookieSucursalId: cookie, lectura: DRENAJE })
+      ).toBe(false)
+    }
+  )
+
+  it.each(["VENDEDOR", "TECNICO"])(
+    "AO-4 — %s: nunca avisa (su lectura ya es fail-closed, no se ensancha)",
+    (role) => {
+      expect(
+        derivarAvisoAlcanceOrg({ role, cookieSucursalId: "suc-X", lectura: DRENAJE })
+      ).toBe(false)
+    }
+  )
+
+  it("AO-5 — lectura fail-closed: no avisa (no se ensancho nada, se cerro)", () => {
+    expect(
+      derivarAvisoAlcanceOrg({
+        role: "ADMIN",
+        cookieSucursalId: "suc-X",
+        lectura: {
+          sucursalId: SUCURSAL_NINGUNA,
+          depositoId: null,
+          verTodas: false,
+          ventaSucursalId: null,
+        },
+      })
+    ).toBe(false)
   })
 })
 

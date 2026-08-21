@@ -477,6 +477,67 @@ describe("GET /api/inventario/search — scope=venta (POS opt-in)", () => {
     expect(res.headers.get("X-Venta-Sucursal-Nombre")).toBe("")
   })
 
+  it("ADMIN con sucursal concreta SIN depósito principal: avisa que la lectura es de toda la org", async () => {
+    // El único estado donde la pantalla se contradice sola: el chip del
+    // switcher dice "Sucursal A" mientras la grilla lista stock que está en
+    // otras sucursales, y el indicador "Vendiendo desde" está apagado (el RPC
+    // puede drenar de cualquier depósito, nombrar una sucursal sería mentira).
+    // Los números son honestos sobre lo que la venta puede tomar; falta que la
+    // UI lo diga, y este header es la única señal que el browser puede leer.
+    mockAuthSuccess({ role: "ADMIN" })
+    mockCookie("suc-A")
+
+    const sucursalesChain = makeSucursalesChain("suc-principal", "Casa Central")
+    const depositosChain = makeDepositosChain(null) // suc-A sin depósito principal
+    const invChain = createChainMock([
+      { id: "i9", codigo: "C9", nombre: "Teclado", stock: 7, stock_reservado: 0,
+        precio_venta: 30, precio_compra: 10, trackea_series: false },
+    ])
+    mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain, inventario: invChain })
+
+    const res = await GET(
+      createGetRequest("http://localhost:3000/api/inventario/search?q=teclado&scope=venta&ventaInfo=true")
+    )
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(body[0].stock).toBe(7) // agregado org-wide, como el write path
+    expect(res.headers.get("X-Venta-Sucursal-Nombre")).toBe("")
+    expect(res.headers.get("X-Venta-Alcance")).toBe("org")
+  })
+
+  it("ADMIN con sucursal concreta Y depósito propio: no avisa alcance org", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockCookie("suc-A")
+
+    const sucursalesChain = makeSucursalesChain("suc-principal", "Casa Central")
+    const depositosChain = makeDepositosChain("dep-A")
+    const invChain = createChainMock([])
+    mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain, inventario: invChain })
+
+    const res = await GET(
+      createGetRequest("http://localhost:3000/api/inventario/search?q=note&scope=venta&ventaInfo=true")
+    )
+
+    expect(res.headers.get("X-Venta-Alcance")).toBe("")
+  })
+
+  it("ADMIN en 'todas' en modo drenaje: no avisa (el chip ya dice toda la org)", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockNoCookie()
+
+    const sucursalesChain = makeSucursalesChain("suc-principal", "Casa Central")
+    const depositosChain = makeDepositosChain(null)
+    const invChain = createChainMock([])
+    mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain, inventario: invChain })
+
+    const res = await GET(
+      createGetRequest("http://localhost:3000/api/inventario/search?q=note&scope=venta&ventaInfo=true")
+    )
+
+    expect(res.headers.get("X-Venta-Alcance")).toBe("")
+  })
+
   it("VENDEDOR con sucursal asignada: NO manda nombre (nunca ve mas de una sucursal)", async () => {
     vi.mocked(auth).mockResolvedValue({
       user: {

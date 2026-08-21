@@ -19,7 +19,7 @@ vi.mock("@/contexts/currency-context", () => ({
 
 const noop = () => {}
 
-function renderCart(ventaSucursalNombre: string | null) {
+function renderCart(ventaSucursalNombre: string | null, ventaAlcanceOrg = false) {
   render(
     <PosCart
       items={[]}
@@ -43,6 +43,7 @@ function renderCart(ventaSucursalNombre: string | null) {
       onSetDescuentoMotivo={noop}
       onSetPrecio={noop}
       ventaSucursalNombre={ventaSucursalNombre}
+      ventaAlcanceOrg={ventaAlcanceOrg}
     />
   )
 }
@@ -59,6 +60,26 @@ describe("PosCart — indicador 'Vendiendo desde'", () => {
     renderCart(null)
 
     expect(screen.queryByText("Vendiendo desde:")).not.toBeInTheDocument()
+  })
+
+  it("alcance org: dice de donde sale el stock en vez de no decir nada", () => {
+    // Estado: ADMIN con la sucursal X elegida, X sin deposito principal. El
+    // chip del switcher dice "Sucursal X" mientras la grilla lista stock que
+    // esta en otras sucursales, y el server no manda nombre porque nombrar una
+    // sola sucursal seria mentira (el RPC drena de cualquier deposito). Sin
+    // este aviso no queda NADA en pantalla que explique la diferencia.
+    renderCart(null, true)
+
+    expect(screen.getByText(/todas las sucursales/i)).toBeInTheDocument()
+    expect(screen.getByText(/no tiene depósito principal/i)).toBeInTheDocument()
+    // Y sigue sin afirmar una sucursal concreta.
+    expect(screen.queryByText("Vendiendo desde:")).not.toBeInTheDocument()
+  })
+
+  it("sin alcance org: no muestra el aviso", () => {
+    renderCart("Sucursal Centro")
+
+    expect(screen.queryByText(/todas las sucursales/i)).not.toBeInTheDocument()
   })
 
   it("no requiere SessionProvider: monta sin next-auth en el arbol", () => {

@@ -96,7 +96,34 @@ describe("PosProductSearch — scope=venta", () => {
     )
 
     await waitFor(() =>
-      expect(onVentaSucursal).toHaveBeenCalledWith({ id: "suc-1", nombre: "Sucursal Ñuñoa" })
+      expect(onVentaSucursal).toHaveBeenCalledWith({ id: "suc-1", nombre: "Sucursal Ñuñoa", alcanceOrg: false })
+    )
+  })
+
+  it("reporta el alcance org cuando el server avisa que la lectura se ensancho", async () => {
+    // Sin este bit el POS no tiene forma de saberlo: la cookie de sucursal es
+    // httpOnly y el nombre viene vacio justamente porque no hay una sucursal
+    // que se pueda nombrar sin mentir.
+    const fetchMock = mockFetchOnce({
+      "X-Venta-Sucursal-Id": "suc-X",
+      "X-Venta-Sucursal-Nombre": "",
+      "X-Venta-Alcance": "org",
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    const onVentaSucursal = vi.fn()
+
+    render(
+      <PosProductSearch
+        onAddProduct={() => {}}
+        onAddManualProduct={() => {}}
+        onOpenScanner={() => {}}
+        scanSuccess={null}
+        onVentaSucursal={onVentaSucursal}
+      />
+    )
+
+    await waitFor(() =>
+      expect(onVentaSucursal).toHaveBeenCalledWith({ id: "suc-X", nombre: null, alcanceOrg: true })
     )
   })
 
@@ -115,7 +142,7 @@ describe("PosProductSearch — scope=venta", () => {
       />
     )
 
-    await waitFor(() => expect(onVentaSucursal).toHaveBeenCalledWith({ id: null, nombre: null }))
+    await waitFor(() => expect(onVentaSucursal).toHaveBeenCalledWith({ id: null, nombre: null, alcanceOrg: false }))
   })
 
   it("una respuesta con error NO reporta sucursal (un 500 tambien parsea como JSON)", async () => {
@@ -175,13 +202,13 @@ describe("PosProductSearch — scope=venta", () => {
 
       renderConIndicador(onVentaSucursal)
       await waitFor(() =>
-        expect(onVentaSucursal).toHaveBeenCalledWith({ id: "suc-A", nombre: "Casa Central" })
+        expect(onVentaSucursal).toHaveBeenCalledWith({ id: "suc-A", nombre: "Casa Central", alcanceOrg: false })
       )
 
       fireEvent(window, new Event("focus"))
 
       await waitFor(() =>
-        expect(onVentaSucursal).toHaveBeenLastCalledWith({ id: "suc-B", nombre: "Sucursal Norte" })
+        expect(onVentaSucursal).toHaveBeenLastCalledWith({ id: "suc-B", nombre: "Sucursal Norte", alcanceOrg: false })
       )
     })
 
@@ -307,7 +334,7 @@ describe("PosProductSearch — scope=venta", () => {
 
       fireEvent(window, new Event("focus"))
       await waitFor(() =>
-        expect(onVentaSucursal).toHaveBeenCalledWith({ id: "suc-B", nombre: "Sucursal Norte" })
+        expect(onVentaSucursal).toHaveBeenCalledWith({ id: "suc-B", nombre: "Sucursal Norte", alcanceOrg: false })
       )
 
       // Recien ahora contesta el montaje, con el catalogo de la sucursal vieja.
@@ -321,7 +348,7 @@ describe("PosProductSearch — scope=venta", () => {
       // queda en pantalla tiene que ser lo ultimo pedido, no lo ultimo llegado.
       await waitFor(() => expect(screen.getByText("Producto de Norte")).toBeInTheDocument())
       expect(screen.queryByText("Producto de Casa Central")).not.toBeInTheDocument()
-      expect(onVentaSucursal).toHaveBeenLastCalledWith({ id: "suc-B", nombre: "Sucursal Norte" })
+      expect(onVentaSucursal).toHaveBeenLastCalledWith({ id: "suc-B", nombre: "Sucursal Norte", alcanceOrg: false })
     })
 
     it("VS-3 — una revalidacion que falla NO borra el indicador ya resuelto", async () => {
@@ -374,7 +401,7 @@ describe("PosProductSearch — scope=venta", () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
     await waitFor(() =>
-      expect(onVentaSucursal).toHaveBeenCalledWith({ id: "suc-1", nombre: "Casa Central" })
+      expect(onVentaSucursal).toHaveBeenCalledWith({ id: "suc-1", nombre: "Casa Central", alcanceOrg: false })
     )
     expect(onVentaSucursal).toHaveBeenCalledTimes(1)
   })

@@ -24,6 +24,14 @@ interface ManualProduct {
 export interface VentaSucursalInfo {
   id: string | null
   nombre: string | null
+  /**
+   * True when the sale spans the WHOLE org even though the selector shows a
+   * concrete sucursal: la elegida no tiene depósito principal y el RPC drena de
+   * cualquiera. `nombre` viene vacío justamente en ese estado (no hay una sola
+   * sucursal que nombrar sin mentir), así que este es el único dato que le
+   * permite al POS explicar la diferencia entre el chip y la grilla.
+   */
+  alcanceOrg: boolean
 }
 
 interface PosProductSearchProps {
@@ -35,12 +43,13 @@ interface PosProductSearchProps {
   onVentaSucursal?: (info: VentaSucursalInfo) => void
 }
 
-/** Reads the X-Venta-Sucursal-* headers set by search/route.ts under scope=venta. */
+/** Reads the X-Venta-* headers set by search/route.ts under scope=venta. */
 function readVentaSucursalHeaders(res: Response): VentaSucursalInfo {
   const nombreRaw = res.headers?.get("X-Venta-Sucursal-Nombre")
   return {
     id: res.headers?.get("X-Venta-Sucursal-Id") || null,
     nombre: nombreRaw ? decodeURIComponent(nombreRaw) : null,
+    alcanceOrg: res.headers?.get("X-Venta-Alcance") === "org",
   }
 }
 

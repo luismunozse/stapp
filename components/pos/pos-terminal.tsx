@@ -883,6 +883,7 @@ export function PosTerminal() {
             onSetPrecio={setItemPrecio}
             fiscal={fiscal}
             ventaSucursalNombre={ventaSucursal?.nombre ?? null}
+            ventaAlcanceOrg={ventaSucursal?.alcanceOrg ?? false}
           />
         </div>
       </div>
@@ -925,6 +926,7 @@ export function PosTerminal() {
               onSetPrecio={setItemPrecio}
               fiscal={fiscal}
               ventaSucursalNombre={ventaSucursal?.nombre ?? null}
+              ventaAlcanceOrg={ventaSucursal?.alcanceOrg ?? false}
             />
           </div>
         </div>

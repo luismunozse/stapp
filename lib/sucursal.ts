@@ -377,6 +377,34 @@ export function derivarLecturaVenta(destino: DestinoVenta): LecturaVenta {
   }
 }
 
+/**
+ * True when the POS has to SAY, on screen, that this sale is not confined to the
+ * branch the switcher chip names.
+ *
+ * Drain mode with a concrete branch selected is the one state where the UI
+ * contradicts itself. `derivarLecturaVenta` widens the read to the org aggregate
+ * — correctly, since the write path drains org-wide too and hiding that stock
+ * would hide units a sale really can take — and it suppresses `ventaSucursalId`
+ * — also correctly, since naming one branch when the RPC may pull from any
+ * deposito would be a lie. What is left is the chip reading "Sucursal X" over a
+ * grid listing stock physically held by other branches, with nothing on screen
+ * to explain the widening. The numbers stay as they are; this is the bit that
+ * lets the UI admit what they mean, without claiming an origin it does not have.
+ *
+ * Only when a concrete branch is selected: with "todas" the chip already says
+ * org-wide, so there is no contradiction to resolve. A branch-scoped role never
+ * reaches this state at all — it fail-closes instead of widening.
+ */
+export function derivarAvisoAlcanceOrg(params: {
+  role: string | null
+  cookieSucursalId: string | null
+  lectura: LecturaVenta
+}): boolean {
+  if (params.role !== "ADMIN") return false
+  if (!params.lectura.verTodas) return false
+  return !!params.cookieSucursalId && params.cookieSucursalId !== TODAS
+}
+
 // ─── POS read-path resolution cache ───
 //
 // `scope=venta` runs on every debounced keystroke of the POS search box, and

@@ -8,6 +8,7 @@ import {
   getDepositoDeSucursal,
   resolverDestinoVentaCacheado,
   derivarLecturaVenta,
+  derivarAvisoAlcanceOrg,
   resolverIndicadorVentaCacheado,
 } from "@/lib/sucursal"
 
@@ -51,6 +52,7 @@ export async function GET(request: Request) {
     let depositoIdPrefetched: string | null = null
     let ventaSucursalId: string | null = null
     let ventaSucursalNombre: string | null = null
+    let avisoAlcanceOrg = false
 
     if (scopeVenta) {
       // Cached: this route is the debounced per-keystroke search (see
@@ -66,6 +68,9 @@ export async function GET(request: Request) {
       sucursalId = lectura.sucursalId
       depositoIdPrefetched = lectura.depositoId
       verTodas = lectura.verTodas
+      // Gratis (puro): el header sale en toda respuesta scope=venta, no solo
+      // en la que pide ventaInfo.
+      avisoAlcanceOrg = derivarAvisoAlcanceOrg({ role, cookieSucursalId, lectura })
       if (ventaInfo) {
         // The name doubles as the "should this indicator exist at all" signal:
         // the client cannot read the httpOnly cookie or count sucursales, so
@@ -90,6 +95,12 @@ export async function GET(request: Request) {
           "X-Venta-Sucursal-Nombre",
           ventaSucursalNombre ? encodeURIComponent(ventaSucursalNombre) : ""
         )
+        // "org" => la lectura (y la venta) abarcan toda la organización pese a
+        // haber una sucursal concreta elegida en el selector. El POS lo dice en
+        // pantalla porque nada más ahí puede explicarlo: el nombre viene vacío
+        // justamente porque no hay una sola sucursal que nombrar sin mentir
+        // (ver derivarAvisoAlcanceOrg en lib/sucursal.ts).
+        res.headers.set("X-Venta-Alcance", avisoAlcanceOrg ? "org" : "")
       }
       return res
     }
