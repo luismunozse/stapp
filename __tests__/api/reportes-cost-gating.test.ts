@@ -30,6 +30,7 @@ import { auth } from "@/lib/auth"
 import {
   mockAuthSuccess,
   createChainMock,
+  createGetRequest,
   mockSupabaseFrom,
   parseResponse,
 } from "./helpers"
@@ -38,10 +39,17 @@ vi.mock("@/lib/subscriptions", () => ({
   hasPlanFeature: vi.fn(),
 }))
 
+vi.mock("@/lib/sucursal", () => ({
+  sucursalParaLectura: vi.fn().mockResolvedValue({ verTodas: true, sucursalId: null }),
+}))
+
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { GET as getAnalisis } from "@/app/api/reportes/analisis-inventario/route"
 import { GET as getAnalytics } from "@/app/api/reportes/inventario-analytics/route"
 import { GET as getPrediccion } from "@/app/api/reportes/prediccion-repuestos/route"
+import { GET as getRentabilidad } from "@/app/api/reportes/rentabilidad/route"
+import { GET as getRentabilidadTecnicos } from "@/app/api/reportes/rentabilidad-tecnicos/route"
+import { GET as getVentasAnalytics } from "@/app/api/reportes/ventas-analytics/route"
 
 function mockRole(role: string) {
   vi.mocked(auth).mockResolvedValue({
@@ -50,11 +58,12 @@ function mockRole(role: string) {
   } as any)
 }
 
-// One organizations row serves both the umbral lookup and
-// resolveVendedoresHabilitados, which share the same table mock.
+// One organizations row serves the umbral lookup, the commission flag and
+// resolveVendedoresHabilitados, which all share the same table mock.
 function orgChain(vendedoresAdministranInventario = false) {
   return createChainMock({
     umbral_stock_bajo: 5,
+    comision_aplica_sin_reparacion: false,
     vendedores_administran_inventario: vendedoresAdministranInventario,
   })
 }
@@ -394,5 +403,340 @@ describe("GET /api/reportes/prediccion-repuestos — per-item costoReposicion ga
     const { body } = await parseResponse(await getPrediccion())
 
     expect(body.data[0].costoReposicion).toBe(200)
+  })
+})
+
+/**
+ * The three siblings below sit behind the same requireAdminOrVendedor() guard
+ * as the reports above and derive the same purchase cost, but by a different
+ * route: repuestos_orden.precio_unitario is a FROZEN copy of precio_compra,
+ * and items_cotizacion falls back to inventario.precio_compra outright.
+ *
+ * The single-order fixture is the reduction that makes this per-item rather
+ * than aggregate: one técnico, one order, one repuesto of quantity 1, so
+ * costoRepuestos IS precio_compra exactly — the number /api/ordenes/[id]
+ * already nulls for the same role.
+ *
+ * Gating only the cost line is not enough, and that lesson is already written
+ * into analisis-inventario: ganancia is ingresos - costos with ingresos in the
+ * same row, so it hands the cost back by subtraction. margen and
+ * gananciaPorHora are ganancia rescaled by visible divisors. Every figure in
+ * that closure is gated, and the sort key moves off it too, because ordering
+ * rows by a cost-derived key survives nulling the number.
+ */
+
+describe("GET /api/reportes/rentabilidad-tecnicos — repuesto cost gated", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(hasPlanFeature).mockResolvedValue(true)
+  })
+
+  // No date range: the route falls back to the current month.
+  const tecnicosRequest = () =>
+    createGetRequest("http://localhost:3000/api/reportes/rentabilidad-tecnicos")
+
+  // costoRepuestos = 1 x 300 = 300, the frozen precio_compra itself.
+  // comision = (1000 - 300) x 10% = 70. manoObra = 100.
+  // ganancia = 1000 - 300 - 100 - 70 = 530. margen = 53%.
+  // gananciaPorHora = 530 / 2 = 265.
+  const ordenes = [
+    {
+      id: "ord-1",
+      tecnico_id: "tec-1",
+      costo_final: "1000",
+      porcentaje_comision: "10",
+      estado: "ENTREGADO",
+      horas_trabajadas: "2",
+      costo_mano_obra: "100",
+      tecnico: { nombre: "Ana Torres" },
+      repuestos_orden: [{ cantidad: 1, precio_unitario: "300" }],
+      cotizaciones: [],
+    },
+  ]
+
+  function wire(vendedoresAdministranInventario = false) {
+    mockSupabaseFrom({
+      ordenes_servicio: createChainMock(ordenes),
+      organizations: orgChain(vendedoresAdministranInventario),
+    })
+  }
+
+  it("ADMIN sees the repuesto cost and the whole profit closure (no behavior change)", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    wire()
+
+    const { status, body } = await parseResponse(await getRentabilidadTecnicos(tecnicosRequest()))
+
+    expect(status).toBe(200)
+    expect(body.data[0].costoRepuestos).toBe(300)
+    expect(body.data[0].comision).toBe(70)
+    expect(body.data[0].ganancia).toBe(530)
+    expect(body.data[0].margen).toBe(53)
+    expect(body.data[0].gananciaPorHora).toBe(265)
+    expect(body.totales.ganancia).toBe(530)
+    expect(body.margenPromedio).toBe(53)
+  })
+
+  it("VENDEDOR without inventario opt-in — costoRepuestos stripped", async () => {
+    mockRole("VENDEDOR")
+    wire(false)
+
+    const { status, body } = await parseResponse(await getRentabilidadTecnicos(tecnicosRequest()))
+
+    expect(status).toBe(200)
+    expect(body.data[0].costoRepuestos).toBeNull()
+  })
+
+  // ganancia is ingresos - costoRepuestos - costoManoObra - comision, and
+  // ingresos and costoManoObra ship in the same row: leaving it exposed hands
+  // the cost back by subtraction, exactly the way margenPotencial did.
+  it("VENDEDOR without opt-in — the figures that invert back to the cost are stripped too", async () => {
+    mockRole("VENDEDOR")
+    wire(false)
+
+    const { body } = await parseResponse(await getRentabilidadTecnicos(tecnicosRequest()))
+
+    expect(body.data[0].ganancia).toBeNull()
+    expect(body.data[0].margen).toBeNull()
+    expect(body.data[0].gananciaPorHora).toBeNull()
+    expect(body.data[0].comision).toBeNull()
+    expect(body.totales.ganancia).toBeNull()
+    expect(body.margenPromedio).toBeNull()
+  })
+
+  it("VENDEDOR without opt-in — non-cost figures stay visible", async () => {
+    mockRole("VENDEDOR")
+    wire(false)
+
+    const { body } = await parseResponse(await getRentabilidadTecnicos(tecnicosRequest()))
+
+    expect(body.data[0].nombre).toBe("Ana Torres")
+    expect(body.data[0].ordenes).toBe(1)
+    expect(body.data[0].horasTrabajadas).toBe(2)
+    expect(body.data[0].ingresos).toBe(1000)
+    expect(body.data[0].costoManoObra).toBe(100)
+    expect(body.totales.tecnicos).toBe(1)
+    expect(body.totales.ingresos).toBe(1000)
+    expect(body.totales.horas).toBe(2)
+  })
+
+  // The rows are ranked by ganancia for a caller who can see it. Nulling the
+  // number but keeping that order would still publish the ranking, and with
+  // ingresos visible per row a ganancia ranking is a cost ranking.
+  it("VENDEDOR without opt-in — rows are ordered by a visible key, not by ganancia", async () => {
+    mockRole("VENDEDOR")
+    mockSupabaseFrom({
+      ordenes_servicio: createChainMock([
+        // Lower ingresos, but far cheaper repuestos: ranks FIRST by ganancia
+        // and SECOND by ingresos, so the two orderings disagree.
+        {
+          ...ordenes[0],
+          id: "ord-2",
+          tecnico_id: "tec-2",
+          costo_final: "900",
+          porcentaje_comision: "0",
+          costo_mano_obra: "0",
+          tecnico: { nombre: "Beto" },
+          repuestos_orden: [{ cantidad: 1, precio_unitario: "10" }],
+        },
+        ordenes[0],
+      ]),
+      organizations: orgChain(false),
+    })
+
+    const { body } = await parseResponse(await getRentabilidadTecnicos(tecnicosRequest()))
+
+    // Beto's ganancia is 890 vs Ana's 530, so a ganancia sort would put Beto
+    // first. Ingresos put Ana (1000) first.
+    expect(body.data.map((t: any) => t.nombre)).toEqual(["Ana Torres", "Beto"])
+  })
+
+  it("VENDEDOR with inventario opt-in — the cost closure is visible", async () => {
+    mockRole("VENDEDOR")
+    wire(true)
+
+    const { body } = await parseResponse(await getRentabilidadTecnicos(tecnicosRequest()))
+
+    expect(body.data[0].costoRepuestos).toBe(300)
+    expect(body.data[0].ganancia).toBe(530)
+    expect(body.margenPromedio).toBe(53)
+  })
+})
+
+describe("GET /api/reportes/rentabilidad — repuesto cost gated", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(hasPlanFeature).mockResolvedValue(true)
+  })
+
+  // costos = repuestos 300 + comision 70 + manoObra 100 = 470.
+  // ganancia = 1000 - 470 = 530. margen = 53%.
+  const ordenes = [
+    {
+      id: "ord-1",
+      tipo_dispositivo: "CELULAR",
+      costo_final: "1000",
+      estado: "ENTREGADO",
+      porcentaje_comision: "10",
+      tecnico_id: "tec-1",
+      costo_mano_obra: "100",
+      repuestos_orden: [{ cantidad: 1, precio_unitario: "300" }],
+      cotizaciones: [],
+    },
+  ]
+
+  function wire(vendedoresAdministranInventario = false) {
+    mockSupabaseFrom({
+      ordenes_servicio: createChainMock(ordenes),
+      organizations: orgChain(vendedoresAdministranInventario),
+    })
+  }
+
+  it("ADMIN sees costos, ganancia and margen (no behavior change)", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    wire()
+
+    const { status, body } = await parseResponse(await getRentabilidad())
+
+    expect(status).toBe(200)
+    expect(body.data[0].costos).toBe(470)
+    expect(body.data[0].ganancia).toBe(530)
+    expect(body.data[0].margen).toBe(53)
+    expect(body.margenPromedio).toBe(53)
+  })
+
+  // A device type can hold a single order, and this fixture is that case:
+  // costos minus the visible costoManoObra is the repuesto cost.
+  it("VENDEDOR without inventario opt-in — costos and everything that inverts to it are stripped", async () => {
+    mockRole("VENDEDOR")
+    wire(false)
+
+    const { status, body } = await parseResponse(await getRentabilidad())
+
+    expect(status).toBe(200)
+    expect(body.data[0].costos).toBeNull()
+    expect(body.data[0].ganancia).toBeNull()
+    expect(body.data[0].margen).toBeNull()
+    expect(body.margenPromedio).toBeNull()
+  })
+
+  it("VENDEDOR without opt-in — non-cost figures stay visible", async () => {
+    mockRole("VENDEDOR")
+    wire(false)
+
+    const { body } = await parseResponse(await getRentabilidad())
+
+    expect(body.data[0].tipoDispositivo).toBe("CELULAR")
+    expect(body.data[0].ingresos).toBe(1000)
+    expect(body.data[0].cantidad).toBe(1)
+    expect(body.data[0].costoManoObra).toBe(100)
+  })
+
+  it("VENDEDOR without opt-in — rows are ordered by a visible key, not by ganancia", async () => {
+    mockRole("VENDEDOR")
+    mockSupabaseFrom({
+      ordenes_servicio: createChainMock([
+        {
+          ...ordenes[0],
+          id: "ord-2",
+          tipo_dispositivo: "TABLET",
+          costo_final: "900",
+          porcentaje_comision: "0",
+          costo_mano_obra: "0",
+          repuestos_orden: [{ cantidad: 1, precio_unitario: "10" }],
+        },
+        ordenes[0],
+      ]),
+      organizations: orgChain(false),
+    })
+
+    const { body } = await parseResponse(await getRentabilidad())
+
+    // TABLET's ganancia is 890 vs CELULAR's 530; ingresos put CELULAR first.
+    expect(body.data.map((d: any) => d.tipoDispositivo)).toEqual(["CELULAR", "TABLET"])
+  })
+
+  it("VENDEDOR with inventario opt-in — the cost closure is visible", async () => {
+    mockRole("VENDEDOR")
+    wire(true)
+
+    const { body } = await parseResponse(await getRentabilidad())
+
+    expect(body.data[0].costos).toBe(470)
+    expect(body.data[0].ganancia).toBe(530)
+  })
+})
+
+describe("GET /api/reportes/ventas-analytics — margen bruto cost gated", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  // totalVentas 400, totalCosto = 2 x 100 = 200, margen 200, porcentaje 50.
+  const itemsVenta = [
+    {
+      descripcion: "Pantalla",
+      cantidad: 2,
+      subtotal: 400,
+      precio_unitario: 200,
+      inventario_id: "inv-1",
+      venta_id: "venta-1",
+      costo_unitario_snapshot: 100,
+      inventario: { precio_compra: 120 },
+      ventas: { organization_id: "org-1", estado: "COMPLETADA", created_at: new Date().toISOString(), vendedor_id: null, sucursal_id: null },
+    },
+  ]
+
+  function wire(vendedoresAdministranInventario = false) {
+    mockSupabaseFrom({
+      ventas: createChainMock([]),
+      items_venta: createChainMock(itemsVenta),
+      organizations: orgChain(vendedoresAdministranInventario),
+    })
+  }
+
+  it("ADMIN sees the gross margin block (no behavior change)", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    wire()
+
+    const { status, body } = await parseResponse(await getVentasAnalytics())
+
+    expect(status).toBe(200)
+    expect(body.margenBruto.totalCosto).toBe(200)
+    expect(body.margenBruto.margen).toBe(200)
+    expect(body.margenBruto.porcentaje).toBe(50)
+  })
+
+  // Same shape as resumen.valorCompra, which this branch already gated: margen
+  // is totalVentas - totalCosto and totalVentas ships beside it, so nulling
+  // only totalCosto would leave the subtraction to give it back.
+  it("VENDEDOR without inventario opt-in — totalCosto, margen and porcentaje stripped", async () => {
+    mockRole("VENDEDOR")
+    wire(false)
+
+    const { status, body } = await parseResponse(await getVentasAnalytics())
+
+    expect(status).toBe(200)
+    expect(body.margenBruto.totalCosto).toBeNull()
+    expect(body.margenBruto.margen).toBeNull()
+    expect(body.margenBruto.porcentaje).toBeNull()
+  })
+
+  it("VENDEDOR without opt-in — sale revenue stays visible", async () => {
+    mockRole("VENDEDOR")
+    wire(false)
+
+    const { body } = await parseResponse(await getVentasAnalytics())
+
+    expect(body.margenBruto.totalVentas).toBe(400)
+    expect(body.topProductos[0].descripcion).toBe("Pantalla")
+  })
+
+  it("VENDEDOR with inventario opt-in — the gross margin block is visible", async () => {
+    mockRole("VENDEDOR")
+    wire(true)
+
+    const { body } = await parseResponse(await getVentasAnalytics())
+
+    expect(body.margenBruto.totalCosto).toBe(200)
+    expect(body.margenBruto.margen).toBe(200)
   })
 })

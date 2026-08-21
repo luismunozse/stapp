@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import {
+  requireAdminOrVendedor,
+  hasInventarioAccess,
+  resolveVendedoresHabilitados,
+} from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { sucursalParaLectura } from "@/lib/sucursal"
@@ -10,11 +14,13 @@ interface TecnicoRentabilidad {
   ordenes: number
   horasTrabajadas: number
   ingresos: number
-  costoRepuestos: number
+  /** null cuando el rol no puede ver costos de compra: repuestos_orden
+   *  .precio_unitario es una copia congelada de precio_compra. */
+  costoRepuestos: number | null
   costoManoObra: number
-  comision: number
-  ganancia: number
-  margen: number
+  comision: number | null
+  ganancia: number | null
+  margen: number | null
   gananciaPorHora: number | null
 }
 
@@ -102,6 +108,13 @@ export async function GET(request: Request) {
 
     if (dbError) throw dbError
 
+    // Se resuelve ACÁ, antes de armar la lista: el ranking por ganancia es una
+    // clave de costo y el orden sobrevive al nulleo. Ver el sort de más abajo.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
     interface Acc {
       nombre: string
       ordenes: number
@@ -155,10 +168,11 @@ export async function GET(request: Request) {
       acc.comision += comision
     }
 
-    const data: TecnicoRentabilidad[] = Object.entries(porTecnico).map(([tecnicoId, a]) => {
+    // Filas completas primero. El gate se aplica recién al escribir la
+    // respuesta, así los totales se siguen calculando sobre las cifras reales
+    // y no sobre los nulls.
+    const filas = Object.entries(porTecnico).map(([tecnicoId, a]) => {
       const ganancia = a.ingresos - a.repuestos - a.manoObra - a.comision
-      const margen = a.ingresos > 0 ? Math.round((ganancia / a.ingresos) * 100) : 0
-      const gananciaPorHora = a.horas > 0 ? Math.round((ganancia / a.horas) * 100) / 100 : null
       return {
         tecnicoId,
         nombre: a.nombre,
@@ -169,26 +183,72 @@ export async function GET(request: Request) {
         costoManoObra: Math.round(a.manoObra),
         comision: Math.round(a.comision),
         ganancia: Math.round(ganancia),
-        margen,
-        gananciaPorHora,
+        margen: a.ingresos > 0 ? Math.round((ganancia / a.ingresos) * 100) : 0,
+        gananciaPorHora: a.horas > 0 ? Math.round((ganancia / a.horas) * 100) / 100 : null,
       }
-    }).sort((x, y) => y.ganancia - x.ganancia)
+    })
 
-    const totalIngresos = data.reduce((s, d) => s + d.ingresos, 0)
-    const totalCostos = data.reduce((s, d) => s + d.costoRepuestos + d.costoManoObra + d.comision, 0)
+    // El orden es un canal lateral, igual que en masValiosos y sinMovimiento:
+    // ganancia es ingresos menos costos, ingresos viaja visible en cada fila, y
+    // entonces el ranking por ganancia ES el ranking por costo aunque el número
+    // vaya en null. Para quien no puede ver costo se ordena por ingresos, que
+    // ya ve. Para quien sí puede, el informe no cambia.
+    filas.sort(
+      canViewCost
+        ? (x, y) => y.ganancia - x.ganancia
+        : (x, y) => y.ingresos - x.ingresos || x.nombre.localeCompare(y.nombre, "es")
+    )
+
+    const totalIngresos = filas.reduce((s, d) => s + d.ingresos, 0)
+    const totalCostos = filas.reduce((s, d) => s + d.costoRepuestos + d.costoManoObra + d.comision, 0)
     const margenPromedio = totalIngresos > 0
       ? Math.round(((totalIngresos - totalCostos) / totalIngresos) * 100)
       : 0
+
+    // Mismo gate que /api/reportes/analisis-inventario e
+    // /api/reportes/inventario-analytics, por la misma regla: quien no puede
+    // ver el costo de compra por item no recibe NINGUNA cifra derivada de
+    // precio_compra, a ningún nivel de agregación.
+    //
+    // Acá el costo entra por dos caminos y los dos son precio_compra:
+    // repuestos_orden.precio_unitario es la copia CONGELADA del costo de
+    // compra, e items_cotizacion cae de vuelta a inventario.precio_compra
+    // cuando no tiene costo_unitario propio. Con un técnico de una sola orden
+    // que consumió un solo repuesto de cantidad 1 —el caso de una orden
+    // recién cargada— costoRepuestos ES el precio de compra exacto, el mismo
+    // número que /api/ordenes/[id] ya le niega al rol.
+    //
+    // No alcanza con tapar costoRepuestos: ganancia es
+    // ingresos - costoRepuestos - costoManoObra - comision, y ingresos y
+    // costoManoObra viajan visibles al lado, así que la resta lo devuelve.
+    // margen y gananciaPorHora son ganancia reescalada por divisores visibles
+    // (ingresos y horasTrabajadas), y comision es
+    // (ingresos - costoRepuestos) x porcentaje: con el porcentaje de comisión
+    // de la casa —que no es secreto para quien lee este informe— también se
+    // invierte. Toda la clausura se gatea junta o no se gatea ninguna.
+    //
+    // Lo que NO deriva de precio_compra sigue visible: ordenes, horas,
+    // ingresos y costoManoObra, que es mano de obra propia y otro tier.
+    const data: TecnicoRentabilidad[] = canViewCost
+      ? filas
+      : filas.map((f) => ({
+          ...f,
+          costoRepuestos: null,
+          comision: null,
+          ganancia: null,
+          margen: null,
+          gananciaPorHora: null,
+        }))
 
     return NextResponse.json({
       data,
       totales: {
         tecnicos: data.length,
         ingresos: totalIngresos,
-        ganancia: totalIngresos - totalCostos,
-        horas: Math.round(data.reduce((s, d) => s + d.horasTrabajadas, 0) * 100) / 100,
+        ganancia: canViewCost ? totalIngresos - totalCostos : null,
+        horas: Math.round(filas.reduce((s, d) => s + d.horasTrabajadas, 0) * 100) / 100,
       },
-      margenPromedio,
+      margenPromedio: canViewCost ? margenPromedio : null,
       periodo: { desde: desde.toISOString(), hasta: hasta.toISOString() },
     })
   } catch (err) {

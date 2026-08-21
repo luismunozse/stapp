@@ -26,25 +26,31 @@ interface TecnicoRentabilidad {
   ordenes: number
   horasTrabajadas: number
   ingresos: number
-  costoRepuestos: number
+  /** null cuando el rol no puede ver costos de compra:
+   *  repuestos_orden.precio_unitario es la copia congelada de precio_compra. */
+  costoRepuestos: number | null
   costoManoObra: number
-  comision: number
-  ganancia: number
-  margen: number
+  /** null junto con costoRepuestos: es (ingresos - costoRepuestos) por el
+   *  porcentaje de comisión, así que también se invierte. */
+  comision: number | null
+  /** null junto con costoRepuestos: es ingresos - costoRepuestos -
+   *  costoManoObra - comision, y los otros términos viajan visibles. */
+  ganancia: number | null
+  margen: number | null
   gananciaPorHora: number | null
 }
 
 interface Totales {
   tecnicos: number
   ingresos: number
-  ganancia: number
+  ganancia: number | null
   horas: number
 }
 
 interface RentabilidadTecnicosData {
   data: TecnicoRentabilidad[]
   totales: Totales
-  margenPromedio: number
+  margenPromedio: number | null
   periodo: { desde: string; hasta: string }
 }
 
@@ -96,7 +102,7 @@ const PRESET_OPTIONS: { key: PresetKey; label: string }[] = [
 export function RentabilidadTecnicos() {
   const [data, setData] = useState<TecnicoRentabilidad[]>([])
   const [totales, setTotales] = useState<Totales | null>(null)
-  const [margenPromedio, setMargenPromedio] = useState<number>(0)
+  const [margenPromedio, setMargenPromedio] = useState<number | null>(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [featureLocked, setFeatureLocked] = useState(false)
@@ -267,9 +273,15 @@ export function RentabilidadTecnicos() {
     )
   }
 
+  // Las cifras de costo llegan en null para los roles sin acceso: se ocultan
+  // las columnas, las tarjetas y el gráfico en vez de pintar el null como "$0"
+  // o "0%", que se leen como una ganancia real de cero y no como un permiso
+  // faltante. El gráfico entero es ganancia, así que se va completo.
+  const costosOcultos = data.some((t) => t.ganancia === null)
+
   const chartData = data.map((t) => ({
     nombre: t.nombre.split(" ")[0],
-    ganancia: Math.round(t.ganancia),
+    ganancia: Math.round(t.ganancia ?? 0),
   }))
 
   return (
@@ -285,20 +297,24 @@ export function RentabilidadTecnicos() {
           icon={Users}
           tone="default"
         />
-        <StatCard
-          title="Ganancia total"
-          value={formatCurrency(totales?.ganancia ?? 0)}
-          description="Todos los técnicos"
-          icon={DollarSign}
-          tone="success"
-        />
-        <StatCard
-          title="Margen promedio"
-          value={`${margenPromedio}%`}
-          description="Sobre ingresos"
-          icon={TrendingUp}
-          tone="default"
-        />
+        {!costosOcultos && (
+          <>
+            <StatCard
+              title="Ganancia total"
+              value={formatCurrency(totales?.ganancia ?? 0)}
+              description="Todos los técnicos"
+              icon={DollarSign}
+              tone="success"
+            />
+            <StatCard
+              title="Margen promedio"
+              value={`${margenPromedio ?? 0}%`}
+              description="Sobre ingresos"
+              icon={TrendingUp}
+              tone="default"
+            />
+          </>
+        )}
         <StatCard
           title="Horas totales"
           value={String(totales?.horas ?? 0)}
@@ -309,31 +325,33 @@ export function RentabilidadTecnicos() {
       </div>
 
       {/* Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base sm:text-lg">Ganancia por Técnico</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Ganancia neta por técnico en el periodo
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[220px] sm:h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" fontSize={12} />
-                <YAxis dataKey="nombre" type="category" width={80} fontSize={12} />
-                <Tooltip
-                  formatter={(value: number) =>
-                    [formatCurrency(value), "Ganancia"]
-                  }
-                />
-                <Bar dataKey="ganancia" name="Ganancia" fill="#22c55e" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+      {!costosOcultos && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base sm:text-lg">Ganancia por Técnico</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
+              Ganancia neta por técnico en el periodo
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[220px] sm:h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" fontSize={12} />
+                  <YAxis dataKey="nombre" type="category" width={80} fontSize={12} />
+                  <Tooltip
+                    formatter={(value: number) =>
+                      [formatCurrency(value), "Ganancia"]
+                    }
+                  />
+                  <Bar dataKey="ganancia" name="Ganancia" fill="#22c55e" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Table */}
       <Card>
@@ -351,12 +369,18 @@ export function RentabilidadTecnicos() {
                 <th className="pb-2 pr-3 font-medium text-right whitespace-nowrap">Órdenes</th>
                 <th className="pb-2 pr-3 font-medium text-right whitespace-nowrap">Horas</th>
                 <th className="pb-2 pr-3 font-medium text-right whitespace-nowrap">Ingresos</th>
-                <th className="pb-2 pr-3 font-medium text-right whitespace-nowrap">Repuestos</th>
+                {!costosOcultos && (
+                  <th className="pb-2 pr-3 font-medium text-right whitespace-nowrap">Repuestos</th>
+                )}
                 <th className="pb-2 pr-3 font-medium text-right whitespace-nowrap">Mano de obra</th>
-                <th className="pb-2 pr-3 font-medium text-right whitespace-nowrap">Comisión</th>
-                <th className="pb-2 pr-3 font-medium text-right whitespace-nowrap">Ganancia</th>
-                <th className="pb-2 pr-3 font-medium text-right whitespace-nowrap">Margen %</th>
-                <th className="pb-2 font-medium text-right whitespace-nowrap">Gan./hora</th>
+                {!costosOcultos && (
+                  <>
+                    <th className="pb-2 pr-3 font-medium text-right whitespace-nowrap">Comisión</th>
+                    <th className="pb-2 pr-3 font-medium text-right whitespace-nowrap">Ganancia</th>
+                    <th className="pb-2 pr-3 font-medium text-right whitespace-nowrap">Margen %</th>
+                    <th className="pb-2 font-medium text-right whitespace-nowrap">Gan./hora</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -368,22 +392,28 @@ export function RentabilidadTecnicos() {
                   <td className="py-2 pr-3 text-right tabular-nums text-success">
                     {formatCurrency(t.ingresos)}
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums text-destructive">
-                    {formatCurrency(t.costoRepuestos)}
-                  </td>
+                  {!costosOcultos && (
+                    <td className="py-2 pr-3 text-right tabular-nums text-destructive">
+                      {formatCurrency(t.costoRepuestos ?? 0)}
+                    </td>
+                  )}
                   <td className="py-2 pr-3 text-right tabular-nums text-destructive">
                     {formatCurrency(t.costoManoObra)}
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums">
-                    {formatCurrency(t.comision)}
-                  </td>
-                  <td className="py-2 pr-3 text-right tabular-nums font-semibold text-success">
-                    {formatCurrency(t.ganancia)}
-                  </td>
-                  <td className="py-2 pr-3 text-right tabular-nums">{t.margen}%</td>
-                  <td className="py-2 text-right tabular-nums">
-                    {t.gananciaPorHora !== null ? formatCurrency(t.gananciaPorHora) : "—"}
-                  </td>
+                  {!costosOcultos && (
+                    <>
+                      <td className="py-2 pr-3 text-right tabular-nums">
+                        {formatCurrency(t.comision ?? 0)}
+                      </td>
+                      <td className="py-2 pr-3 text-right tabular-nums font-semibold text-success">
+                        {formatCurrency(t.ganancia ?? 0)}
+                      </td>
+                      <td className="py-2 pr-3 text-right tabular-nums">{t.margen}%</td>
+                      <td className="py-2 text-right tabular-nums">
+                        {t.gananciaPorHora !== null ? formatCurrency(t.gananciaPorHora) : "—"}
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>
