@@ -919,6 +919,26 @@ describe("cache de resolucion de venta (solo lecturas del POS)", () => {
     }
   })
 
+  it("CV-19 — la sucursal del selector que se pasa es la que RESUELVE, no solo la que arma la clave", async () => {
+    // Hoy los tres callers pasan exactamente lo que hay en la cookie, asi que la
+    // clave y el contenido coinciden por casualidad. Un caller futuro que pase un
+    // valor recordado o normalizado (por ejemplo null por "todas") guardaria una
+    // entrada bajo una clave que NO describe lo que contiene, y cada request con
+    // esa clave heredaria la sucursal equivocada por un TTL entero. Que el valor
+    // que identifica la entrada sea el mismo que la resuelve cierra esa puerta.
+    mockCookie("suc-de-la-cookie")
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-X" })
+
+    const destino = await resolverDestinoVentaCacheado({
+      role: "ADMIN",
+      organizationId: "org-1",
+      userSucursalId: null,
+      cookieSucursalId: "suc-pasada",
+    })
+
+    expect(destino.sucursalId).toBe("suc-pasada")
+  })
+
   it("CV-7 — el camino de ESCRITURA no se cachea: resolverDestinoVenta siempre consulta", async () => {
     mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
     const params = { role: "ADMIN", organizationId: "org-1", userSucursalId: null }

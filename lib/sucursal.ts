@@ -240,7 +240,8 @@ export async function resolverDestinoVenta(params: {
   organizationId: string
   userSucursalId: string | null
 }): Promise<DestinoVenta> {
-  return (await resolverDestinoVentaInterno(params)).destino
+  const cookieSucursalId = await getCookieSucursalId()
+  return (await resolverDestinoVentaInterno({ ...params, cookieSucursalId })).destino
 }
 
 interface ResolucionDestinoVenta {
@@ -255,15 +256,33 @@ interface ResolucionDestinoVenta {
   resuelto: boolean
 }
 
-/** `resolverDestinoVenta` plus whether every lookup behind it actually answered. */
+/**
+ * `resolverDestinoVenta` plus whether every lookup behind it actually answered.
+ *
+ * Takes the active sucursal as a VALUE instead of reading the cookie itself, so
+ * the caching layer above can key an entry on the exact same value the entry was
+ * resolved from. When the key material and the resolution input can drift apart,
+ * an entry ends up filed under a key that does not describe it — and every
+ * request landing on that key inherits the wrong sucursal for a whole TTL.
+ */
 async function resolverDestinoVentaInterno(params: {
   role: string | null
   organizationId: string
   userSucursalId: string | null
+  cookieSucursalId: string | null
 }): Promise<ResolucionDestinoVenta> {
   const branchScoped = params.role !== "ADMIN"
   const unassignedSucursal = branchScoped && !params.userSucursalId
-  const sucursalId = await sucursalParaEscritura(params)
+  // Igual que `sucursalParaEscritura` (ver ahi el porque la principal es un
+  // FALLBACK y no una precondicion), pero con la cookie ya resuelta por el
+  // caller. Se consulta la principal siempre, como esa funcion.
+  const principalId = await getPrincipalId(params.organizationId)
+  const sucursalId =
+    resolveSucursalPropia({
+      role: params.role,
+      userSucursalId: params.userSucursalId,
+      cookieSucursalId: params.cookieSucursalId,
+    }) ?? principalId
   if (!sucursalId) {
     // No deposito lookup was attempted, so nothing failed here. The cache gate
     // refuses a null sucursalId on its own anyway (see `resolverDestinoVentaCacheado`).
@@ -466,6 +485,12 @@ export function resetCacheResolucionVenta(): void {
  * same org with different branches selected must never share an entry, and
  * neither must two orgs or two roles. Everything that can change the answer is
  * in the key.
+ *
+ * That same value is what RESOLVES the entry, not just what names it. If the
+ * resolver re-read the cookie on its own, a caller passing anything else — a
+ * remembered value, `null` normalised for "todas" — would file the entry under
+ * a key that does not describe it, and every request landing on that key would
+ * inherit the wrong sucursal for a whole TTL.
  */
 export async function resolverDestinoVentaCacheado(params: {
   role: string | null
@@ -487,6 +512,7 @@ export async function resolverDestinoVentaCacheado(params: {
         role: params.role,
         organizationId: params.organizationId,
         userSucursalId: params.userSucursalId,
+        cookieSucursalId: params.cookieSucursalId,
       }),
     // Two ways the resolution can fail to land, both served but never pinned for
     // a whole TTL — the next request retries instead of inheriting the failure:
