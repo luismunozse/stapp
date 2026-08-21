@@ -56,13 +56,12 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
   const costosPorItemOcultos = Array.isArray(data?.sinMovimiento)
     && data.sinMovimiento.some((i: any) => i.capitalInmovilizado === null || i.precioCompra === null)
 
-  // Mismo null para los agregados que se reducen a un item: el costo por
-  // categoría (una categoría puede tener un único SKU) y el margen derivado del
-  // costo. El total de organización (valorizacion.valorCosto) es otro tier de
-  // permiso y sigue visible.
+  // Mismo null para el costo por categoría, que se reduce a un item cuando la
+  // categoría tiene un único SKU. Las cifras de organización (valorCosto,
+  // valorVenta y margenPotencial, que es la resta de las dos) son otro tier de
+  // permiso y siguen visibles.
   const costoPorCategoriaOculto = Array.isArray(data?.porCategoria)
     && data.porCategoria.some((c: any) => c.valorCosto === null)
-  const margenOculto = data?.valorizacion?.margenPotencial === null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -104,22 +103,20 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                   <div className="text-lg font-bold">{formatPrice(data.valorizacion.valorVenta)}</div>
                 </CardContent>
               </Card>
-              {!margenOculto && (
-                <Card>
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-medium text-muted-foreground uppercase">Margen Potencial</span>
-                      <TrendingUp className="h-3.5 w-3.5 text-purple-500" />
-                    </div>
-                    <div className="text-lg font-bold text-emerald-600">{formatPrice(data.valorizacion.margenPotencial)}</div>
-                    <p className="text-[10px] text-muted-foreground">
-                      {data.valorizacion.valorCosto > 0
-                        ? `${((data.valorizacion.margenPotencial / data.valorizacion.valorCosto) * 100).toFixed(1)}% sobre costo`
-                        : ""}
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
+              <Card>
+                <CardContent className="p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase">Margen Potencial</span>
+                    <TrendingUp className="h-3.5 w-3.5 text-purple-500" />
+                  </div>
+                  <div className="text-lg font-bold text-emerald-600">{formatPrice(data.valorizacion.margenPotencial)}</div>
+                  <p className="text-[10px] text-muted-foreground">
+                    {data.valorizacion.valorCosto > 0
+                      ? `${((data.valorizacion.margenPotencial / data.valorizacion.valorCosto) * 100).toFixed(1)}% sobre costo`
+                      : ""}
+                  </p>
+                </CardContent>
+              </Card>
               <Card>
                 <CardContent className="p-3">
                   <div className="flex items-center justify-between mb-1">

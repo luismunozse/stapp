@@ -8,10 +8,15 @@
  *
  * The line: an aggregate that can be trivially reduced to a single item's
  * purchase cost is not an aggregate. So per-item cost, any per-item figure the
- * same row lets you divide back into it, every per-category cost total (a
- * category can hold one SKU) and every margin derived from cost follow
- * hasInventarioAccess. Only the org-wide single totals — one number over the
- * whole inventory — keep the broader requireAdminOrVendedor tier.
+ * same row lets you divide back into it, and every per-category cost total (a
+ * category can hold one SKU) follow hasInventarioAccess. Only the org-wide
+ * single totals — one number over the whole inventory — keep the broader
+ * requireAdminOrVendedor tier.
+ *
+ * margenPotencial is NOT gated: it is valorVenta - valorCosto, and both
+ * operands ship ungated under that tier. A gate one subtraction defeats
+ * protects nothing and is worse than none, because the next reader takes it for
+ * a guarantee. Honest surface over decorative surface.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { auth } from "@/lib/auth"
@@ -111,28 +116,25 @@ describe("GET /api/reportes/analisis-inventario — per-item cost gated", () => 
     expect(body.masValiosos[0].precioVenta).toBe(200)
   })
 
-  it("ADMIN sees the category cost total and the cost-derived margin", async () => {
+  it("ADMIN sees the category cost total", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     wire()
 
     const { body } = await parseResponse(await getAnalisis())
 
     expect(body.porCategoria[0].valorTotal).toBe(1000)
-    expect(body.resumen.margenPotencial).toBe(1000)
   })
 
   // porCategoria.valorTotal is a purchase-cost total over one category, and a
   // category can hold a single SKU — then it is precio_compra × stock, the
-  // per-item number stripped a few lines above. margenPotencial is derived from
-  // the same cost.
-  it("VENDEDOR without opt-in — category cost total and margin stripped", async () => {
+  // per-item number stripped a few lines above.
+  it("VENDEDOR without opt-in — category cost total stripped", async () => {
     mockRole("VENDEDOR")
     wire(false)
 
     const { body } = await parseResponse(await getAnalisis())
 
     expect(body.porCategoria[0].valorTotal).toBeNull()
-    expect(body.resumen.margenPotencial).toBeNull()
     // Non-cost category data is untouched.
     expect(body.porCategoria[0].categoria).toBe("Repuestos")
     expect(body.porCategoria[0].cantidad).toBe(2)
@@ -140,8 +142,10 @@ describe("GET /api/reportes/analisis-inventario — per-item cost gated", () => 
   })
 
   // Deliberate tier: one number over the whole inventory does not reduce to a
-  // single item, so it stays behind requireAdminOrVendedor().
-  it("VENDEDOR without opt-in — the org-wide totals keep the broader tier", async () => {
+  // single item, so it stays behind requireAdminOrVendedor(). margenPotencial
+  // rides along on purpose — it is valorVenta - valorCompra, both of which ship
+  // right here, so gating it would protect nothing while reading as a promise.
+  it("VENDEDOR without opt-in — the org-wide totals and the margin keep the broader tier", async () => {
     mockRole("VENDEDOR")
     wire(false)
 
@@ -149,9 +153,11 @@ describe("GET /api/reportes/analisis-inventario — per-item cost gated", () => 
 
     expect(body.resumen.valorCompra).toBe(1000)
     expect(body.resumen.valorVenta).toBe(2000)
+    expect(body.resumen.margenPotencial).toBe(1000)
+    expect(body.resumen.margenPotencial).toBe(body.resumen.valorVenta - body.resumen.valorCompra)
   })
 
-  it("VENDEDOR with inventario opt-in — per-item, category and margin costs visible", async () => {
+  it("VENDEDOR with inventario opt-in — per-item and category costs visible", async () => {
     mockRole("VENDEDOR")
     wire(true)
 
@@ -160,7 +166,6 @@ describe("GET /api/reportes/analisis-inventario — per-item cost gated", () => 
     expect(body.masValiosos[0].precioCompra).toBe(100)
     expect(body.masValiosos[0].valorEnStock).toBe(1000)
     expect(body.porCategoria[0].valorTotal).toBe(1000)
-    expect(body.resumen.margenPotencial).toBe(1000)
   })
 })
 
@@ -217,26 +222,24 @@ describe("GET /api/reportes/inventario-analytics — per-item cost gated", () =>
     expect(body.sinMovimiento[0].precioVenta).toBe(400)
   })
 
-  it("ADMIN sees the category cost total and the cost-derived margin", async () => {
+  it("ADMIN sees the category cost total", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     wire()
 
     const { body } = await parseResponse(await getAnalytics())
 
     expect(body.porCategoria[0].valorCosto).toBe(1000)
-    expect(body.valorizacion.margenPotencial).toBe(600)
   })
 
   // Same rule as analisis-inventario: a category can hold one SKU, so its cost
-  // total is per-item cost in disguise; margenPotencial is derived from cost.
-  it("VENDEDOR without opt-in — category cost total and margin stripped", async () => {
+  // total is per-item cost in disguise.
+  it("VENDEDOR without opt-in — category cost total stripped", async () => {
     mockRole("VENDEDOR")
     wire(false)
 
     const { body } = await parseResponse(await getAnalytics())
 
     expect(body.porCategoria[0].valorCosto).toBeNull()
-    expect(body.valorizacion.margenPotencial).toBeNull()
     // Non-cost category data is untouched.
     expect(body.porCategoria[0].categoria).toBe("Repuestos")
     expect(body.porCategoria[0].items).toBe(1)
@@ -245,8 +248,9 @@ describe("GET /api/reportes/inventario-analytics — per-item cost gated", () =>
   })
 
   // Deliberate tier: the org-wide valorization total stays under
-  // requireAdminOrVendedor().
-  it("VENDEDOR without opt-in — the org-wide totals keep the broader tier", async () => {
+  // requireAdminOrVendedor(), and margenPotencial with it — it is
+  // valorVenta - valorCosto, both of which ship right here.
+  it("VENDEDOR without opt-in — the org-wide totals and the margin keep the broader tier", async () => {
     mockRole("VENDEDOR")
     wire(false)
 
@@ -254,9 +258,13 @@ describe("GET /api/reportes/inventario-analytics — per-item cost gated", () =>
 
     expect(body.valorizacion.valorCosto).toBe(1000)
     expect(body.valorizacion.valorVenta).toBe(1600)
+    expect(body.valorizacion.margenPotencial).toBe(600)
+    expect(body.valorizacion.margenPotencial).toBe(
+      body.valorizacion.valorVenta - body.valorizacion.valorCosto
+    )
   })
 
-  it("VENDEDOR with inventario opt-in — per-item, category and margin costs visible", async () => {
+  it("VENDEDOR with inventario opt-in — per-item and category costs visible", async () => {
     mockRole("VENDEDOR")
     wire(true)
 
@@ -265,7 +273,6 @@ describe("GET /api/reportes/inventario-analytics — per-item cost gated", () =>
     expect(body.sinMovimiento[0].precioCompra).toBe(250)
     expect(body.sinMovimiento[0].capitalInmovilizado).toBe(1000)
     expect(body.porCategoria[0].valorCosto).toBe(1000)
-    expect(body.valorizacion.margenPotencial).toBe(600)
   })
 })
 

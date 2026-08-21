@@ -154,13 +154,17 @@ export async function GET() {
     // agregado que se divide de vuelta al costo de un solo producto no es un
     // agregado. porCategoria.valorTotal es un total por categoría y una
     // categoría puede tener un único SKU, así que es costo por item
-    // disfrazado; resumen.margenPotencial se deriva del costo y cae por lo
-    // mismo. Ambos se ocultan.
+    // disfrazado: se oculta.
     //
     // Lo que queda bajo el tier más amplio de requireAdminOrVendedor() es el
     // total de organización resumen.valorCompra: una sola cifra sobre todo el
     // inventario no se reduce a un item. Ídem valorizacion.valorCosto en
     // /api/reportes/inventario-analytics, que aplica esta misma regla.
+    //
+    // resumen.margenPotencial NO se oculta: es valorVenta - valorCompra y las
+    // dos cifras salen por ese mismo tier, así que un gate acá lo defiende una
+    // resta. Un gate que no protege es peor que ninguno: el que lo lee después
+    // razona sobre una garantía que no existe.
     const vendedoresHabilitados = role === "VENDEDOR"
       ? await resolveVendedoresHabilitados(organizationId!)
       : false
@@ -177,14 +181,9 @@ export async function GET() {
       valorTotal: canViewCost ? cat.valorTotal : null,
     }))
 
-    const resumenGated = {
-      ...resumen,
-      margenPotencial: canViewCost ? resumen.margenPotencial : null,
-    }
-
     return NextResponse.json({
       scope: "organization",
-      resumen: resumenGated,
+      resumen,
       stockCritico: stockCritico.map(gateItem),
       sinStock: sinStock.slice(0, 10).map(gateItem),
       porCategoria: porCategoriaGated,

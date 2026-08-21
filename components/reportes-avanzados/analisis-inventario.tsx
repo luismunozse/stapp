@@ -44,8 +44,9 @@ interface AnalisisData {
     totalUnidades: number
     valorCompra: number
     valorVenta: number
-    /** null cuando el rol no puede ver costos de compra: se deriva del costo. */
-    margenPotencial: number | null
+    /** No se oculta: es valorVenta - valorCompra y las dos cifras vienen en
+     *  este mismo resumen, así que un gate acá lo defiende una resta. */
+    margenPotencial: number
     itemsSinStock: number
     itemsStockCritico: number
     categorias: number
@@ -120,8 +121,8 @@ export function AnalisisInventario() {
   }
 
   // El endpoint devuelve el valor por categoría en null para los roles sin
-  // acceso a costos de compra. Sin filtrar, el gráfico dibuja porciones de $0 y
-  // la tarjeta de margen pinta "$0" en vez de un permiso faltante.
+  // acceso a costos de compra. Sin filtrar, el gráfico dibuja porciones de $0:
+  // un número real en vez de un permiso faltante.
   const chartData = data.porCategoria
     .filter((cat): cat is CategoriaResumen & { valorTotal: number } => cat.valorTotal !== null)
     .slice(0, 8)
@@ -148,15 +149,13 @@ export function AnalisisInventario() {
           icon={DollarSign}
           tone="default"
         />
-        {data.resumen.margenPotencial !== null && (
-          <StatCard
-            title="Margen Pot."
-            value={formatPrice(data.resumen.margenPotencial)}
-            description="Si se vende todo"
-            icon={TrendingUp}
-            tone="success"
-          />
-        )}
+        <StatCard
+          title="Margen Pot."
+          value={formatPrice(data.resumen.margenPotencial)}
+          description="Si se vende todo"
+          icon={TrendingUp}
+          tone="success"
+        />
         <StatCard
           title="Stock Crítico"
           value={String(data.resumen.itemsStockCritico)}
