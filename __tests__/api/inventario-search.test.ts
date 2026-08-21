@@ -6,6 +6,7 @@ import {
   mockAuthSuccess, mockAuthError, createChainMock, mockSupabaseFrom,
   createGetRequest, parseResponse,
 } from "./helpers"
+import { resetCacheResolucionVenta } from "@/lib/sucursal"
 import { GET } from "@/app/api/inventario/search/route"
 
 // Helper: configure the cookies mock for sucursal tests
@@ -47,6 +48,9 @@ function makeDepositosChain(depositoId: string | null) {
 describe("GET /api/inventario/search", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Module-level cache: vi.clearAllMocks() does not touch it, so a resolution
+    // from a previous test would otherwise leak into the next one.
+    resetCacheResolucionVenta()
     mockNoCookie()
   })
 
@@ -130,7 +134,10 @@ describe("GET /api/inventario/search", () => {
 })
 
 describe("GET /api/inventario/search — scoped por sucursal", () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetCacheResolucionVenta()
+  })
 
   it("VENDEDOR con sucursalId fija: query usa inventario_depositos!inner filtrado por deposito_id de la sucursal", async () => {
     // VENDEDOR con sucursalId = "suc-1" en sesion
@@ -238,7 +245,10 @@ describe("GET /api/inventario/search — scoped por sucursal", () => {
 })
 
 describe("GET /api/inventario/search — scope=venta (POS opt-in)", () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetCacheResolucionVenta()
+  })
 
   // The `sucursales` table is read two different ways on this path:
   //  - getPrincipalId  → .single(), the org's principal sucursal
@@ -365,6 +375,58 @@ describe("GET /api/inventario/search — scope=venta (POS opt-in)", () => {
     // must not claim one (see derivarLecturaVenta).
     expect(res.headers.get("X-Venta-Sucursal-Id")).toBe("")
     expect(res.headers.get("X-Venta-Sucursal-Nombre")).toBe("")
+  })
+
+  it("tecleo seguido: la resolucion de sucursal/deposito se paga una sola vez, no por tecla", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockNoCookie()
+
+    const sucursalesChain = makeSucursalesChain("suc-principal", "Casa Central")
+    const depositosChain = makeDepositosChain("dep-principal")
+    const invChain = createChainMock([])
+    mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain, inventario: invChain })
+
+    // Three debounced keystrokes of the same POS session.
+    for (const q of ["no", "not", "note"]) {
+      const res = await GET(
+        createGetRequest(`http://localhost:3000/api/inventario/search?q=${q}&limit=20&scope=venta`)
+      )
+      expect(res.status).toBe(200)
+      // Scoping must stay correct on every one of them.
+      expect(res.headers.get("X-Venta-Sucursal-Id")).toBe("suc-principal")
+    }
+
+    const reads = (tabla: string) =>
+      vi.mocked(supabaseAdmin.from).mock.calls.filter((call) => call[0] === tabla).length
+    expect(reads("sucursales")).toBe(1)
+    expect(reads("depositos")).toBe(1)
+    // The catalog query itself is NOT cached — every keystroke still searches.
+    expect(reads("inventario")).toBe(3)
+  })
+
+  it("dos montajes de PosProductSearch (desktop + mobile): el nombre del indicador se resuelve una vez", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockNoCookie()
+
+    const sucursalesChain = makeSucursalesChain("suc-principal", "Casa Central")
+    const depositosChain = makeDepositosChain("dep-principal")
+    const invChain = createChainMock([])
+    mockFromPerTable({ sucursales: sucursalesChain, depositos: depositosChain, inventario: invChain })
+
+    const url = "http://localhost:3000/api/inventario/search?q=&limit=20&scope=venta&ventaInfo=true"
+    const primera = await GET(createGetRequest(url))
+    const segunda = await GET(createGetRequest(url))
+
+    // Both mounts still get the indicator...
+    for (const res of [primera, segunda]) {
+      expect(decodeURIComponent(res.headers.get("X-Venta-Sucursal-Nombre")!)).toBe("Casa Central")
+    }
+    // ...but `sucursales` is read once for getPrincipalId and once for the
+    // indicator list, and neither is repeated for the second mount.
+    const sucursalesReads = vi
+      .mocked(supabaseAdmin.from)
+      .mock.calls.filter((call) => call[0] === "sucursales").length
+    expect(sucursalesReads).toBe(2)
   })
 
   it("org de UNA sola sucursal: NO manda nombre para el indicador (el switcher ni existe para ella)", async () => {

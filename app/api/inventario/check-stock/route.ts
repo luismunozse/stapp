@@ -5,7 +5,7 @@ import {
   getCookieSucursalId,
   resolveSucursalLectura,
   getDepositoDeSucursal,
-  resolverDestinoVenta,
+  resolverDestinoVentaCacheado,
   derivarLecturaVenta,
 } from "@/lib/sucursal"
 
@@ -44,7 +44,12 @@ export async function POST(request: Request) {
     let depositoIdPrefetched: string | null = null
 
     if (scopeVenta) {
-      const destino = await resolverDestinoVenta({ role, organizationId: organizationId!, userSucursalId })
+      const destino = await resolverDestinoVentaCacheado({
+        role,
+        organizationId: organizationId!,
+        userSucursalId,
+        cookieSucursalId,
+      })
       const lectura = derivarLecturaVenta(destino)
       sucursalId = lectura.sucursalId
       depositoIdPrefetched = lectura.depositoId

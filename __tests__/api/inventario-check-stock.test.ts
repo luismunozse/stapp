@@ -8,10 +8,10 @@ vi.mock("@/lib/sucursal", async (importActual) => ({
   getCookieSucursalId: vi.fn().mockResolvedValue(null),
   resolveSucursalLectura: vi.fn(() => ({ sucursalId: null, verTodas: true })),
   getDepositoDeSucursal: vi.fn().mockResolvedValue(null),
-  resolverDestinoVenta: vi.fn(),
+  resolverDestinoVentaCacheado: vi.fn(),
 }))
 
-import { resolverDestinoVenta } from "@/lib/sucursal"
+import { resolverDestinoVentaCacheado } from "@/lib/sucursal"
 import { POST } from "@/app/api/inventario/check-stock/route"
 
 function req(body: unknown) {
@@ -54,9 +54,9 @@ describe("POST /api/inventario/check-stock", () => {
     expect(body.stock).toEqual({ a: 5, b: 0, c: 0 })
   })
 
-  it("scope=venta: ignora verTodas (mocked true) y usa el depósito resuelto por resolverDestinoVenta", async () => {
+  it("scope=venta: ignora verTodas (mocked true) y usa el depósito resuelto por resolverDestinoVentaCacheado", async () => {
     mockAuthSuccess({ role: "ADMIN" }) // resolveSucursalLectura sigue mockeado en "todas"
-    vi.mocked(resolverDestinoVenta).mockResolvedValue({ sucursalId: "suc-1", depositoId: "dep-1", unassignedSucursal: false })
+    vi.mocked(resolverDestinoVentaCacheado).mockResolvedValue({ sucursalId: "suc-1", depositoId: "dep-1", unassignedSucursal: false })
     mockSupabaseFrom({
       inventario_depositos: createChainMock([{ inventario_id: "a", stock: 2 }]),
     })
@@ -79,7 +79,7 @@ describe("POST /api/inventario/check-stock", () => {
     mockAuthSuccess({ role: "ADMIN" })
     // Sucursal resolved but no principal deposito: the write path passes
     // p_deposito_id = null and drains org-wide, so the sale WOULD succeed.
-    vi.mocked(resolverDestinoVenta).mockResolvedValue({ sucursalId: "suc-1", depositoId: null, unassignedSucursal: false })
+    vi.mocked(resolverDestinoVentaCacheado).mockResolvedValue({ sucursalId: "suc-1", depositoId: null, unassignedSucursal: false })
     mockSupabaseFrom({
       inventario: createChainMock([{ id: "a", stock: 4 }]),
     })
@@ -101,7 +101,7 @@ describe("POST /api/inventario/check-stock", () => {
     mockAuthSuccess({ role: "VENDEDOR" })
     // The write path still falls back to the principal sucursal/deposito, but
     // a non-ADMIN with no assigned sucursal must keep reading nothing.
-    vi.mocked(resolverDestinoVenta).mockResolvedValue({
+    vi.mocked(resolverDestinoVentaCacheado).mockResolvedValue({
       sucursalId: "suc-principal",
       depositoId: "dep-principal",
       unassignedSucursal: true,

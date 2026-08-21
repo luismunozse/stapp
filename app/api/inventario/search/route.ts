@@ -6,9 +6,9 @@ import {
   getCookieSucursalId,
   resolveSucursalLectura,
   getDepositoDeSucursal,
-  resolverDestinoVenta,
+  resolverDestinoVentaCacheado,
   derivarLecturaVenta,
-  resolverIndicadorVenta,
+  resolverIndicadorVentaCacheado,
 } from "@/lib/sucursal"
 
 // GET /api/inventario/search?q=term&limit=10
@@ -53,7 +53,14 @@ export async function GET(request: Request) {
     let ventaSucursalNombre: string | null = null
 
     if (scopeVenta) {
-      const destino = await resolverDestinoVenta({ role, organizationId: organizationId!, userSucursalId })
+      // Cached: this route is the debounced per-keystroke search (see
+      // lib/sucursal.ts for why the read path caches and the write path does not).
+      const destino = await resolverDestinoVentaCacheado({
+        role,
+        organizationId: organizationId!,
+        userSucursalId,
+        cookieSucursalId,
+      })
       const lectura = derivarLecturaVenta(destino)
       ventaSucursalId = lectura.ventaSucursalId
       sucursalId = lectura.sucursalId
@@ -63,7 +70,7 @@ export async function GET(request: Request) {
         // The name doubles as the "should this indicator exist at all" signal:
         // the client cannot read the httpOnly cookie or count sucursales, so
         // the whole gate lives in resolverIndicadorVenta (see lib/sucursal.ts).
-        ventaSucursalNombre = await resolverIndicadorVenta({
+        ventaSucursalNombre = await resolverIndicadorVentaCacheado({
           role,
           organizationId: organizationId!,
           cookieSucursalId,

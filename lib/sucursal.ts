@@ -245,6 +245,111 @@ export function derivarLecturaVenta(destino: DestinoVenta): LecturaVenta {
   }
 }
 
+// ─── POS read-path resolution cache ───
+//
+// `scope=venta` runs on every debounced keystroke of the POS search box, and
+// PosProductSearch is mounted twice (desktop + mobile), so this resolution is
+// paid several times per second of typing. What it resolves — which sucursal is
+// principal, which deposito is that sucursal's principal, the org's sucursal
+// list — only changes when an admin edits branch configuration.
+//
+// READS ONLY. `resolverDestinoVenta` stays uncached so the ventas write path
+// never attributes a sale from a possibly-stale entry. The worst case here is
+// that POS reads keep the previous scope for up to one TTL after a
+// configuration change — the same short-TTL tradeoff lib/tenant-status-edge.ts
+// already makes, and self-healing without a deploy.
+
+const CACHE_VENTA_TTL_MS = 30_000
+/** Above this many live entries, expired ones are swept before inserting. */
+const CACHE_VENTA_MAX_ENTRIES = 500
+
+interface EntradaCacheVenta<T> {
+  data: T
+  expiresAt: number
+}
+
+const cacheDestinoVenta = new Map<string, EntradaCacheVenta<DestinoVenta>>()
+const cacheIndicadorVenta = new Map<string, EntradaCacheVenta<string | null>>()
+
+async function memoConTtl<T>(
+  store: Map<string, EntradaCacheVenta<T>>,
+  key: string,
+  resolver: () => Promise<T>
+): Promise<T> {
+  const now = Date.now()
+  const hit = store.get(key)
+  if (hit && hit.expiresAt > now) return hit.data
+
+  const data = await resolver()
+  if (store.size >= CACHE_VENTA_MAX_ENTRIES) {
+    for (const [k, entry] of store) {
+      if (entry.expiresAt <= now) store.delete(k)
+    }
+  }
+  store.set(key, { data, expiresAt: now + CACHE_VENTA_TTL_MS })
+  return data
+}
+
+/**
+ * Clears the POS read-path cache. Exported for tests, and safe to call after a
+ * sucursal/deposito configuration change to drop the TTL window entirely.
+ */
+export function resetCacheResolucionVenta(): void {
+  cacheDestinoVenta.clear()
+  cacheIndicadorVenta.clear()
+}
+
+/**
+ * Cached `resolverDestinoVenta` for the POS READ endpoints
+ * (search/barcode/check-stock under `scope=venta`).
+ *
+ * The caller passes `cookieSucursalId` explicitly — it is already in scope in
+ * every route — because it is part of the cache identity: two admins of the
+ * same org with different branches selected must never share an entry, and
+ * neither must two orgs or two roles. Everything that can change the answer is
+ * in the key.
+ */
+export async function resolverDestinoVentaCacheado(params: {
+  role: string | null
+  organizationId: string
+  userSucursalId: string | null
+  cookieSucursalId: string | null
+}): Promise<DestinoVenta> {
+  const key = JSON.stringify([
+    params.organizationId,
+    params.role,
+    params.userSucursalId,
+    params.cookieSucursalId,
+  ])
+  return memoConTtl(cacheDestinoVenta, key, () =>
+    resolverDestinoVenta({
+      role: params.role,
+      organizationId: params.organizationId,
+      userSucursalId: params.userSucursalId,
+    })
+  )
+}
+
+/** Cached `resolverIndicadorVenta` — see `resolverDestinoVentaCacheado`. */
+export async function resolverIndicadorVentaCacheado(params: {
+  role: string | null
+  organizationId: string
+  cookieSucursalId: string | null
+  ventaSucursalId: string | null
+}): Promise<string | null> {
+  // The gate below the query is pure, so short-circuit before touching the
+  // cache: hidden-indicator callers then cost neither a query nor an entry.
+  if (!params.ventaSucursalId || params.role !== "ADMIN") return null
+
+  const key = JSON.stringify([
+    params.organizationId,
+    params.role,
+    params.cookieSucursalId,
+    params.ventaSucursalId,
+  ])
+  return memoConTtl(cacheIndicadorVenta, key, () => resolverIndicadorVenta(params))
+}
+
 /**
  * Resolves the label for the POS "Vendiendo desde" indicator, or null when the
  * indicator must not be shown at all.

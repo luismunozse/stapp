@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import {
   mockAuthSuccess, mockAuthError, createGetRequest, parseResponse,
 } from "./helpers"
+import { resetCacheResolucionVenta } from "@/lib/sucursal"
 import { GET } from "@/app/api/inventario/barcode/route"
 
 function mockNoCookie() {
@@ -64,6 +65,9 @@ function makeDepStockChain(stock: number | null) {
 describe("GET /api/inventario/barcode", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Module-level cache: vi.clearAllMocks() does not touch it, so a resolution
+    // from a previous test would otherwise leak into the next one.
+    resetCacheResolucionVenta()
     mockNoCookie()
   })
 

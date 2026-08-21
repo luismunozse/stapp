@@ -21,6 +21,9 @@ import {
   derivarLecturaVenta,
   getNombreSucursal,
   resolverIndicadorVenta,
+  resolverDestinoVentaCacheado,
+  resolverIndicadorVentaCacheado,
+  resetCacheResolucionVenta,
   SUCURSAL_NINGUNA,
 } from "@/lib/sucursal"
 
@@ -416,6 +419,103 @@ describe("resolverIndicadorVenta", () => {
     })
 
     expect(nombre).toBeNull()
+  })
+})
+
+// ─── Cache de resolucion para el camino de LECTURA del POS ───
+//
+// scope=venta corre en cada tecla del buscador debounced. Sin cache eso son
+// dos queries extra por tecla (principal + deposito) que casi nunca cambian.
+
+describe("cache de resolucion de venta (solo lecturas del POS)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetCacheResolucionVenta()
+    mockCookie(null)
+  })
+
+  function contarLecturas(tabla: string) {
+    return vi.mocked(supabaseAdmin.from).mock.calls.filter((call) => call[0] === tabla).length
+  }
+
+  it("CV-1 — dos llamadas seguidas con el mismo contexto: una sola tanda de queries", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+    const params = { role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null }
+
+    const primera = await resolverDestinoVentaCacheado(params)
+    const segunda = await resolverDestinoVentaCacheado(params)
+
+    expect(segunda).toEqual(primera)
+    expect(contarLecturas("sucursales")).toBe(1)
+    expect(contarLecturas("depositos")).toBe(1)
+  })
+
+  it("CV-2 — otra org NO reusa la entrada (aislamiento multi-tenant)", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    await resolverDestinoVentaCacheado({ role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null })
+    await resolverDestinoVentaCacheado({ role: "ADMIN", organizationId: "org-2", userSucursalId: null, cookieSucursalId: null })
+
+    expect(contarLecturas("sucursales")).toBe(2)
+  })
+
+  it("CV-3 — distinto estado del selector NO comparte entrada", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    await resolverDestinoVentaCacheado({ role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null })
+    mockCookie("suc-B")
+    await resolverDestinoVentaCacheado({ role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: "suc-B" })
+
+    expect(contarLecturas("sucursales")).toBe(2)
+  })
+
+  it("CV-4 — distinto usuario/rol NO comparte entrada (no filtrar scope entre roles)", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    await resolverDestinoVentaCacheado({ role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null })
+    await resolverDestinoVentaCacheado({ role: "VENDEDOR", organizationId: "org-1", userSucursalId: "suc-V", cookieSucursalId: null })
+
+    expect(contarLecturas("sucursales")).toBe(2)
+  })
+
+  it("CV-5 — resetCacheResolucionVenta fuerza volver a consultar", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+    const params = { role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null }
+
+    await resolverDestinoVentaCacheado(params)
+    resetCacheResolucionVenta()
+    await resolverDestinoVentaCacheado(params)
+
+    expect(contarLecturas("sucursales")).toBe(2)
+  })
+
+  it("CV-6 — el indicador tambien se cachea (los dos montajes de PosProductSearch pagan una sola query)", async () => {
+    mockListaSucursales(DOS_SUCURSALES)
+    const params = {
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-principal",
+    }
+
+    const primera = await resolverIndicadorVentaCacheado(params)
+    const segunda = await resolverIndicadorVentaCacheado(params)
+
+    expect(primera).toBe("Casa Central")
+    expect(segunda).toBe("Casa Central")
+    expect(contarLecturas("sucursales")).toBe(1)
+  })
+
+  it("CV-7 — el camino de ESCRITURA no se cachea: resolverDestinoVenta siempre consulta", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+    const params = { role: "ADMIN", organizationId: "org-1", userSucursalId: null }
+
+    await resolverDestinoVenta(params)
+    await resolverDestinoVenta(params)
+
+    // Una venta real nunca debe apoyarse en un destino potencialmente vencido.
+    expect(contarLecturas("sucursales")).toBe(2)
+    expect(contarLecturas("depositos")).toBe(2)
   })
 })
 
