@@ -31,40 +31,55 @@ const EXCLUDED_ROUTES = [
 
 // Rutas de API que se pueden cachear temporalmente (lectura).
 //
-// LA REGLA: acá NO entra ninguna ruta cuya respuesta dependa de la identidad
-// —usuario, rol, org o sucursal activa—. No "se cachea y después se limpia":
-// NO SE GUARDA.
+// ESTÁ VACÍA, Y NO ES UN DESCUIDO. Hoy NINGUNA respuesta de API se cachea.
 //
-// El motivo es que este caché es del navegador, no de la sesión: la clave es la
-// URL y nada más, sin cookie, sin usuario, sin rol, sin org. Una respuesta
-// guardada acá no sabe de quién es, así que por sí sola puede devolverse a otra
+// LA REGLA: acá no entra ninguna ruta cuya respuesta dependa de la identidad
+// —usuario, rol, org o sucursal activa—. No "se cachea y después se limpia":
+// no se guarda. El motivo es que este caché es del navegador, no de la sesión:
+// la clave es la URL y nada más, sin cookie, sin usuario, sin rol, sin org. Una
+// respuesta guardada acá no sabe de quién es, así que puede devolverse a otra
 // sesión del mismo equipo — el mostrador compartido donde el usuario A de la
 // org 1 cierra sesión y entra el usuario B de la org 2.
 //
-// Ya se intentó resolverlo limpiando el caché al cambiar la identidad de sesión
+// Aplicada de verdad, en una app multi-tenant esa regla no deja NADA:
+//   - /api/inventario — bajo scope=venta trae el stock de una sucursal concreta
+//     (más los headers X-Venta-Sucursal-*) y, para un ADMIN, precioCompra.
+//   - /api/clientes — la lista es de UNA org, y lo que cuelga abajo
+//     (deuda-sucursal, ordenes-pendientes) corre sucursalParaLectura. Dejar
+//     afuera el prefijo cubre todo lo anidado sin listas de excepciones.
+//   - /api/configuracion — es requireAdmin() y filtra por org. Peor todavía:
+//     acá solo se guardan respuestas 200, así que toda entrada suya es una
+//     respuesta de ADMIN, y un VENDEDOR pidiendo esa misma URL la recibiría del
+//     caché sin que salga un solo request a la red.
+//   - /api/tipos-dispositivo — filtra por organization_id, misma forma.
+//   - /api/servicios — no existe; era una entrada muerta.
+//
+// Ya se intentó sostenerlo limpiando el caché al cambiar la identidad de sesión
 // (ApiCacheSessionGuard). No alcanza, y no por cómo esté escrito: limpiar es
 // una carrera por construcción. Tiene que haber TERMINADO antes de que algo
-// lea, y la primera pantalla lee en el mismo commit en que monta el guard;
-// además no puede demostrar que corrió (sin `controller` el mensaje se pierde
-// en silencio, y el borrado del worker es asincrónico). El guard sigue vivo
-// como defensa en profundidad, pero lo que garantiza el aislamiento es esta
-// lista.
+// lea, y la primera pantalla lee en el mismo commit en que monta el guard
+// (CurrencyProvider pide /api/configuracion ahí mismo); además no puede
+// demostrar que corrió: sin `controller` el mensaje se pierde en silencio y el
+// borrado del worker es asincrónico. El guard sigue vivo como defensa en
+// profundidad — por si alguien agrega una ruta acá — pero no es una garantía.
 //
-// Por eso /api/inventario queda afuera: bajo scope=venta trae el stock de una
-// sucursal concreta (más los headers X-Venta-Sucursal-*) y, para un ADMIN,
-// precioCompra. Y /api/clientes también: la lista es de UNA org, y lo que
-// cuelga abajo (deuda-sucursal, ordenes-pendientes) corre sucursalParaLectura.
-// Dejar el prefijo afuera cubre todo lo anidado sin listas de excepciones.
+// El costo, explícito: NO hay datos de API offline. El POS no tiene catálogo
+// offline y la app depende de la red para todo lo que no sea el shell.
 //
-// El costo, explícito: el POS no tiene catálogo offline. Recuperarlo sin volver
-// a la carrera pide un caché KEYEADO por identidad (un nombre de caché por
-// sesión, de modo que otra identidad lea otro caché y no haya nada que limpiar
-// ni que llegue tarde) — es otro cambio, no este.
-const CACHEABLE_API_ROUTES = [
-  '/api/servicios',
-  '/api/configuracion',
-  '/api/tipos-dispositivo',
-]
+// Para recuperarlo hace falta cambiar el modelo, no la lista: un caché KEYEADO
+// POR IDENTIDAD (un nombre de caché por sesión, p. ej. `stapp-api-v5-<hash de
+// usuario+org+rol+sucursal>`), donde otra identidad simplemente lee otro caché.
+// Ahí no hay nada que limpiar ni nada que pueda llegar tarde, y estas rutas
+// vuelven a ser cacheables sin carrera. Es otro cambio, no este.
+//
+// La maquinaria de abajo (sello de tiempo, stale-while-revalidate, presupuesto,
+// waitUntil) queda como andamiaje para ese cambio y hoy es inalcanzable: con la
+// lista vacía, `cacheable` siempre da false y todo /api/ cae en
+// networkOnlyWithError. Los tests la siguen cubriendo inyectando una ruta.
+// OJO si alguna vez vuelve a entrar una ruta escopeada por SUCURSAL: el guard
+// mira la sesión, no la cookie de sucursal activa, así que haría falta volver a
+// limpiar desde SucursalSwitcher (o meter la sucursal en la clave del caché).
+const CACHEABLE_API_ROUTES = []
 
 // Tiempo de vida del caché de API (5 minutos). Se aplica con el sello
 // CACHED_AT_HEADER que se escribe al guardar: pasado el TTL la entrada deja de

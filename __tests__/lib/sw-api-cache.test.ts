@@ -32,11 +32,11 @@ const CACHED_AT_HEADER = "x-sw-cached-at"
 const ORIGIN = "https://app.test"
 
 /**
- * Ruta de fixture para el comportamiento generico del caché (TTL, offline,
- * presupuesto). A propósito NO es /api/clientes ni /api/inventario: esas dos
- * dependen de la identidad y no se cachean — ver los tests que lo fijan.
+ * Ruta SINTÉTICA para ejercitar el comportamiento genérico del caché (TTL,
+ * offline, presupuesto). No existe: hoy ninguna ruta real es cacheable (SW-0),
+ * así que usar una de verdad acá daría a entender que sí lo es.
  */
-const RUTA_CACHEABLE = "/api/tipos-dispositivo"
+const RUTA_CACHEABLE = "/api/ruta-de-prueba"
 
 type FakeRequest = { url: string; method: string; mode: string }
 
@@ -97,7 +97,17 @@ class FakeCacheStorage {
   }
 }
 
-function loadServiceWorker() {
+/**
+ * @param rutasCacheables Reemplaza CACHEABLE_API_ROUTES antes de evaluar el SW.
+ *
+ * La lista de producción está VACÍA a propósito (ver SW-0), así que la
+ * maquinaria de stale-while-revalidate no se puede ejercitar sin inyectar una
+ * ruta. Es una costura explícita: los tests que la usan describen cómo tiene que
+ * comportarse el caché el día que exista un caché keyeado por identidad, y los
+ * que NO la usan (SW-1, SW-2, SW-0) siguen corriendo contra la lista real, que
+ * es lo único que dice qué se cachea hoy.
+ */
+function loadServiceWorker(opciones: { rutasCacheables?: string[] } = {}) {
   const listeners: Record<string, Array<(event: any) => void>> = {}
   const cacheStorage = new FakeCacheStorage()
   let networkHandler: (request: FakeRequest) => Promise<Response> = async () => {
@@ -117,13 +127,24 @@ function loadServiceWorker() {
     location: { origin: ORIGIN },
   }
 
+  let fuente = SW_SOURCE
+  if (opciones.rutasCacheables) {
+    fuente = SW_SOURCE.replace(
+      /const CACHEABLE_API_ROUTES = \[[\s\S]*?\]/,
+      `const CACHEABLE_API_ROUTES = ${JSON.stringify(opciones.rutasCacheables)}`
+    )
+    if (fuente === SW_SOURCE) {
+      throw new Error("No se pudo inyectar CACHEABLE_API_ROUTES: cambio la forma de la constante")
+    }
+  }
+
   const factory = new Function(
     "self",
     "caches",
     "location",
     "fetch",
     "indexedDB",
-    SW_SOURCE
+    fuente
   )
   factory(
     self,
@@ -194,7 +215,26 @@ describe("service worker — API caching", () => {
   let sw: ReturnType<typeof loadServiceWorker>
 
   beforeEach(() => {
+    // Lista REAL: lo que se cachea hoy y nada mas.
     sw = loadServiceWorker()
+  })
+
+  /** Vuelve a cargar el SW con una ruta cacheable inyectada (ver loadServiceWorker). */
+  function conCacheHabilitado() {
+    sw = loadServiceWorker({ rutasCacheables: [RUTA_CACHEABLE] })
+    return sw
+  }
+
+  it("SW-0 — NINGUNA ruta de API es cacheable: la lista esta vacia", () => {
+    // La regla escrita arriba de la constante dice que no entra nada que dependa
+    // de la identidad. En una app multi-tenant donde la clave del cache es la
+    // URL sola, eso no deja NADA: /api/configuracion es requireAdmin() y por org,
+    // /api/tipos-dispositivo filtra por organization_id, y /api/servicios ni
+    // siquiera existe. Este test es lo que impide que la lista y su regla se
+    // vuelvan a separar: agregar una ruta aca obliga a justificarla.
+    const lista = /const CACHEABLE_API_ROUTES = \[([\s\S]*?)\]/.exec(SW_SOURCE)![1]
+
+    expect(lista.replace(/\s|\/\/.*/g, "")).toBe("")
   })
 
   // Las dos familias que dependen de la identidad. No se cachean, punto: la
@@ -235,6 +275,7 @@ describe("service worker — API caching", () => {
   })
 
   it("SW-3 — org-wide routes keep stale-while-revalidate (offline PWA is deliberate)", async () => {
+    conCacheHabilitado()
     const url = `${ORIGIN}${RUTA_CACHEABLE}`
     const store = await sw.caches.open(API_CACHE_NAME)
     await store.put(
@@ -249,6 +290,7 @@ describe("service worker — API caching", () => {
   })
 
   it("SW-4 — a cached entry older than API_CACHE_TTL is not served while online", async () => {
+    conCacheHabilitado()
     const url = `${ORIGIN}${RUTA_CACHEABLE}`
     const store = await sw.caches.open(API_CACHE_NAME)
     await store.put(
@@ -263,6 +305,7 @@ describe("service worker — API caching", () => {
   })
 
   it("SW-5 — an expired entry is still served when the network is unreachable", async () => {
+    conCacheHabilitado()
     const url = `${ORIGIN}${RUTA_CACHEABLE}`
     const store = await sw.caches.open(API_CACHE_NAME)
     await store.put(
@@ -284,6 +327,7 @@ describe("service worker — API caching", () => {
   // a usable stale copy is the failure mode offline tests cannot catch, so the
   // network gets a short budget and the cached copy wins once it runs out.
   it("SW-11 — con la red colgada, una entrada vencida se sirve sin esperar el timeout del SO", async () => {
+    conCacheHabilitado()
     vi.useFakeTimers()
     try {
       const url = `${ORIGIN}${RUTA_CACHEABLE}`
@@ -305,6 +349,7 @@ describe("service worker — API caching", () => {
   })
 
   it("SW-13 — la revalidacion abandonada se registra con waitUntil y termina guardando", async () => {
+    conCacheHabilitado()
     // Dejar de esperar la revalidacion no es lo mismo que renunciar a ella:
     // servida la respuesta, el navegador puede matar el worker en cualquier
     // momento. Sin waitUntil el cache.put nunca corre y, en un enlace a medias,
@@ -339,6 +384,7 @@ describe("service worker — API caching", () => {
   })
 
   it("SW-12 — sin nada cacheado y la red colgada, se sigue esperando la respuesta (no hay copia que servir)", async () => {
+    conCacheHabilitado()
     vi.useFakeTimers()
     try {
       let responder: ((value: Response) => void) | null = null
@@ -361,6 +407,7 @@ describe("service worker — API caching", () => {
   // QuotaExceededError, and the two tests below pin that this can only cost the
   // user the *caching*, never the fresh answer they are online to receive.
   it("SW-9 — a failed cache write still returns the fresh network response, not a stale copy", async () => {
+    conCacheHabilitado()
     const url = `${ORIGIN}${RUTA_CACHEABLE}`
     const store = await sw.caches.open(API_CACHE_NAME)
     await store.put(
@@ -376,6 +423,7 @@ describe("service worker — API caching", () => {
   })
 
   it("SW-10 — a failed cache write with nothing cached does not degrade into the 503", async () => {
+    conCacheHabilitado()
     const store = await sw.caches.open(API_CACHE_NAME)
     store.failPut = true
     sw.setNetwork(async () => jsonResponse({ data: ["network"] }))
@@ -390,6 +438,7 @@ describe("service worker — API caching", () => {
   // viva en la cadena que se espera, la pagina recibe su respuesta recien
   // despues de bufferear el body entero y escribirlo en disco.
   it("SW-17 — un cache.put lento no retrasa la respuesta de la red", async () => {
+    conCacheHabilitado()
     const store = await sw.caches.open(API_CACHE_NAME)
     store.blockPut = true
     sw.setNetwork(async () => jsonResponse({ data: ["network"] }))
@@ -400,6 +449,7 @@ describe("service worker — API caching", () => {
   })
 
   it("SW-18 — con una entrada vencida, el put lento NO se le cobra al presupuesto", async () => {
+    conCacheHabilitado()
     // Si la escritura cuenta contra STALE_REVALIDATE_BUDGET, un almacenamiento
     // lento hace que una red rapida "no llegue a tiempo" y el operador termina
     // viendo la copia vencida aunque la fresca ya habia contestado.
