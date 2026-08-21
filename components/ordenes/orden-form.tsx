@@ -366,6 +366,33 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     }
   }, [draftReady, draft, reset, clearDraft])
 
+  /** Datos de origen ya traidos del servidor (turno / deep-link). Se guardan
+   *  aunque el borrador gane, porque descartarlo tiene que devolver el
+   *  formulario al estado precargado: los dos efectos que lo aplican dependen
+   *  de [origen, draftReady] y descartar no mueve ninguna de las dos, asi que
+   *  no vuelven a correr solos. */
+  const turnoPrefillDataRef = useRef<any>(null)
+  const deepLinkClienteRef = useRef<ClienteResumen | null>(null)
+
+  /** Escribe en el formulario lo que vino del turno. Vive afuera del efecto
+   *  para que el descarte pueda re-aplicarlo sin volver a pedirlo al servidor. */
+  const applyTurnoPrefill = (d: any) => {
+    if (d.cliente) {
+      setSelectedClienteObj(toClienteResumen(d.cliente))
+      setValue("clienteId", d.cliente.id, { shouldValidate: true })
+    }
+    if (d.orden?.tipoDispositivo) setValue("tipoDispositivo", d.orden.tipoDispositivo)
+    if (d.orden?.dispositivo) setValue("dispositivo", d.orden.dispositivo)
+    if (d.orden?.marca) setValue("marca", d.orden.marca)
+    if (d.orden?.problemaReportado) setValue("problemaReportado", d.orden.problemaReportado)
+    if (d.orden?.observaciones) setValue("observaciones", d.orden.observaciones)
+    if (d.orden?.telefonoContacto) setValue("telefonoContacto", d.orden.telefonoContacto)
+    if (d.orden?.tecnicoId) setSelectedTecnicoId(d.orden.tecnicoId)
+    if (d.orden?.fechaPrometida) {
+      setValue("fechaPrometida", String(d.orden.fechaPrometida).slice(0, 10))
+    }
+  }
+
   const discardDraft = () => {
     clearDraft()
     setDraftNoticeVisible(false)
@@ -391,6 +418,17 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     setFotos([])
     setChecklistFirma(null)
     setChecklistFirmaMime(null)
+    // Lo precargado por el origen NO es del borrador: descartar tiene que dejar
+    // el alta como si se acabara de abrir desde el turno / deep-link. Sin esto
+    // quedaba entera en blanco y la unica forma de recuperar los datos del
+    // turno era recargar la pagina. Si el fetch todavia no respondio, el que se
+    // encarga es el efecto: relee draftRestoredRef al resolver.
+    if (fromTurnoId) {
+      if (turnoPrefillDataRef.current) applyTurnoPrefill(turnoPrefillDataRef.current)
+    } else if (initialClienteId) {
+      setValue("clienteId", initialClienteId, { shouldValidate: true })
+      if (deepLinkClienteRef.current) setSelectedClienteObj(deepLinkClienteRef.current)
+    }
   }
 
   // Prefill desde turno (si la orden nace de una visita agendada).
@@ -402,7 +440,6 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   // para el aviso de "crear cliente".
   useEffect(() => {
     if (!fromTurnoId || !draftReady) return
-    const soloAviso = draftRestoredRef.current
     let cancelled = false
     fetch(`/api/turnos/${fromTurnoId}/prefill-orden`, { cache: "no-store" })
       .then(async (r) => {
@@ -418,21 +455,14 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           requiereCrearCliente: !!d.requiereCrearCliente,
           clienteSnapshot: d.clienteSnapshot || null,
         })
-        if (soloAviso) return
-        if (d.cliente) {
-          setSelectedClienteObj(toClienteResumen(d.cliente))
-          setValue("clienteId", d.cliente.id, { shouldValidate: true })
-        }
-        if (d.orden?.tipoDispositivo) setValue("tipoDispositivo", d.orden.tipoDispositivo)
-        if (d.orden?.dispositivo) setValue("dispositivo", d.orden.dispositivo)
-        if (d.orden?.marca) setValue("marca", d.orden.marca)
-        if (d.orden?.problemaReportado) setValue("problemaReportado", d.orden.problemaReportado)
-        if (d.orden?.observaciones) setValue("observaciones", d.orden.observaciones)
-        if (d.orden?.telefonoContacto) setValue("telefonoContacto", d.orden.telefonoContacto)
-        if (d.orden?.tecnicoId) setSelectedTecnicoId(d.orden.tecnicoId)
-        if (d.orden?.fechaPrometida) {
-          setValue("fechaPrometida", String(d.orden.fechaPrometida).slice(0, 10))
-        }
+        // Se cachea siempre, incluso en modo "solo aviso": es lo que el
+        // descarte del borrador re-aplica (ver discardDraft).
+        turnoPrefillDataRef.current = d
+        // Se relee al resolver, no al arrancar el efecto: si el operador
+        // descarto el borrador mientras el fetch estaba en vuelo, el prefill
+        // que llega es justo lo que hay que aplicar.
+        if (draftRestoredRef.current) return
+        applyTurnoPrefill(d)
       })
       .catch((err) => {
         void showError(err.message || "Error al cargar datos del turno")
@@ -446,14 +476,20 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   // mismo deep-link (la key lo incluye) gana sobre el re-prefill.
   useEffect(() => {
     if (!initialClienteId || fromTurnoId || !draftReady) return
-    if (draftRestoredRef.current) return
     let cancelled = false
-    setValue("clienteId", initialClienteId, { shouldValidate: true })
+    if (!draftRestoredRef.current) {
+      setValue("clienteId", initialClienteId, { shouldValidate: true })
+    }
+    // El cliente se pide igual aunque gane el borrador: descartarlo tiene que
+    // poder devolverlo sin un segundo viaje al servidor (ver discardDraft).
     fetch(`/api/clientes/${initialClienteId}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((cliente) => {
         if (cancelled || !cliente || cliente.error) return
-        setSelectedClienteObj(toClienteResumen(cliente))
+        const resumen = toClienteResumen(cliente)
+        deepLinkClienteRef.current = resumen
+        if (draftRestoredRef.current) return
+        setSelectedClienteObj(resumen)
       })
       .catch(() => {})
     return () => { cancelled = true }

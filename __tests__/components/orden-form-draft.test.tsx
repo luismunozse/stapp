@@ -14,7 +14,7 @@
  * key de storage).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { render, screen, fireEvent, act } from "@testing-library/react"
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react"
 import { ModalProvider } from "@/contexts/modal-context"
 
 vi.mock("next-auth/react", () => ({
@@ -54,6 +54,34 @@ const CLIENTE_COMPLETO = {
   razonSocial: "Acme SA",
 }
 
+/** Respuesta de GET /api/turnos/:id/prefill-orden — los datos con los que el
+ *  operador espera encontrarse cuando el alta nace de un turno agendado. */
+const TURNO_PREFILL = {
+  turnoId: "t-1",
+  requiereCrearCliente: false,
+  cliente: {
+    id: "cli-1",
+    nombre: "Acme SA",
+    telefono: "1122334455",
+    email: "contacto@acme.test",
+    direccion: "Av. Siempreviva 742",
+    dni: "30111222",
+  },
+  clienteSnapshot: null,
+  orden: {
+    clienteId: "cli-1",
+    tecnicoId: null,
+    tipoDispositivo: "CELULAR",
+    dispositivo: "Samsung A54 del turno",
+    marca: "Samsung",
+    problemaReportado: "No carga",
+    observaciones: null,
+    telefonoContacto: "1122334455",
+    fechaPrometida: "2026-08-25T10:00:00.000Z",
+    fotosPrevias: [],
+  },
+}
+
 /** fetch por URL: el template del checklist y los sectores del cliente son
  *  los dos que pisaban el borrador restaurado, asi que tienen que responder
  *  de verdad para que esos efectos lleguen a su rama de exito. */
@@ -82,6 +110,9 @@ function stubFetch() {
       }
       if (url.includes("/api/clientes/cli-1")) {
         return Promise.resolve({ ok: true, json: async () => CLIENTE_COMPLETO } as Response)
+      }
+      if (url.includes("/api/turnos/t-1/prefill-orden")) {
+        return Promise.resolve({ ok: true, json: async () => TURNO_PREFILL } as Response)
       }
       return Promise.resolve({ ok: true, json: async () => [] } as Response)
     }),
@@ -126,7 +157,7 @@ function draftEnvelope(overrides: Record<string, unknown> = {}) {
   return JSON.stringify({ version: 2, savedAt: Date.now(), data: draftData(overrides) })
 }
 
-async function renderForm(props: { initialClienteId?: string } = {}) {
+async function renderForm(props: { initialClienteId?: string; fromTurnoId?: string } = {}) {
   const { OrdenForm } = await import("@/components/ordenes/orden-form")
   return render(
     <ModalProvider>
@@ -354,6 +385,106 @@ describe("OrdenForm — borrador local (ventana de debounce)", () => {
     expect(form.telefonoContacto).toBe("")
     expect(form.observaciones).toBe("")
     expect(form.notasInternas).toBe("")
+  })
+})
+
+/**
+ * Un alta que nace de un turno agendado (o de un deep-link ?clienteId=) llega
+ * con datos precargados. Si ademas hay un borrador de ESE mismo origen, el
+ * borrador gana y el prefill queda solo para el aviso de "crear cliente" — pero
+ * descartar el borrador tiene que devolver el formulario al estado precargado,
+ * no dejarlo en blanco: el operador no tiene de donde sacar de nuevo los datos
+ * del turno salvo recargando la pagina.
+ */
+describe("OrdenForm — borrador de una orden nacida de un turno", () => {
+  const TURNO_DRAFT_KEY = "draft:v2:orden-form:org-1:user-1:new:turno:t-1"
+
+  beforeEach(() => {
+    stubFetch()
+    window.localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function turnoDraftEnvelope() {
+    return draftEnvelope({
+      form: {
+        ...draftData().form,
+        dispositivo: "Lo que el operador venia cargando",
+        problemaReportado: "Nota a medio escribir",
+      },
+    })
+  }
+
+  it("precarga los datos del turno cuando no hay borrador", async () => {
+    await renderForm({ fromTurnoId: "t-1" })
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+        "Samsung A54 del turno",
+      )
+    })
+    expect(screen.getByPlaceholderText("Describa el problema del equipo...")).toHaveValue(
+      "No carga",
+    )
+  })
+
+  it("restaura el borrador del turno en vez de pisarlo con el prefill", async () => {
+    window.localStorage.setItem(TURNO_DRAFT_KEY, turnoDraftEnvelope())
+
+    await renderForm({ fromTurnoId: "t-1" })
+    await screen.findByText(/se restauró un borrador no guardado/i)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Origen: turno agendado/)).toBeInTheDocument()
+    })
+    expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+      "Lo que el operador venia cargando",
+    )
+  })
+
+  it('"Descartar" vuelve a los datos del turno, no a un formulario vacio', async () => {
+    // El prefill corre en modo "solo aviso" cuando hay borrador, y los dos
+    // efectos que lo aplican dependen de [fromTurnoId, draftReady]: descartar
+    // no cambia ninguna de las dos, asi que nada los volvia a correr y el
+    // operador se quedaba con el alta entera en blanco.
+    window.localStorage.setItem(TURNO_DRAFT_KEY, turnoDraftEnvelope())
+
+    await renderForm({ fromTurnoId: "t-1" })
+    await screen.findByText(/se restauró un borrador no guardado/i)
+
+    fireEvent.click(screen.getByRole("button", { name: /descartar/i }))
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Modelo o descripcion del equipo")).toHaveValue(
+        "Samsung A54 del turno",
+      )
+    })
+    expect(screen.getByPlaceholderText("Describa el problema del equipo...")).toHaveValue(
+      "No carga",
+    )
+    expect(window.localStorage.getItem(TURNO_DRAFT_KEY)).toBeNull()
+  })
+
+  it('"Descartar" mantiene el cliente del deep-link (?clienteId=)', async () => {
+    // Mismo agujero por el otro camino: el efecto del deep-link tampoco vuelve
+    // a correr, y sin cliente el alta no puede ni empezar a cargarse.
+    const deepLinkKey = "draft:v2:orden-form:org-1:user-1:new:cliente:cli-1"
+    window.localStorage.setItem(deepLinkKey, turnoDraftEnvelope())
+
+    await renderForm({ initialClienteId: "cli-1" })
+    await screen.findByText(/se restauró un borrador no guardado/i)
+
+    fireEvent.click(screen.getByRole("button", { name: /descartar/i }))
+
+    // "Sector / Area" solo aparece cuando el formulario tiene el clienteId Y el
+    // objeto del cliente (que es una empresa): es la senal de que el deep-link
+    // volvio a aplicarse entero.
+    await waitFor(() => {
+      expect(screen.getByText("Sector / Area")).toBeInTheDocument()
+    })
   })
 })
 
