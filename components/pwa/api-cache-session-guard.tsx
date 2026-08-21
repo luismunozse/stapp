@@ -7,6 +7,15 @@ import { clearServiceWorkerApiCache } from "@/lib/sw-cache"
 /** Identidad de sesion detras de lo que hay guardado en el cache del SW. */
 export const SW_API_IDENTITY_KEY = "stapp-sw-api-identity"
 
+function recordar(identidad: string) {
+  try {
+    window.localStorage.setItem(SW_API_IDENTITY_KEY, identidad)
+  } catch {
+    // Sin marca la proxima identidad se vuelve a evaluar contra lo que haya:
+    // se pierde precision, nunca seguridad.
+  }
+}
+
 /**
  * Tira el cache de API del service worker cuando cambia la identidad de sesion.
  *
@@ -47,20 +56,31 @@ export function ApiCacheSessionGuard() {
     } catch {
       // Sin poder leer quien estuvo antes no se puede afirmar que es el mismo,
       // y "no puedo verificar" tiene que resolverse del lado seguro.
-      clearServiceWorkerApiCache()
+      void clearServiceWorkerApiCache()
       return
     }
 
     if (previa === identidad) return
+
     // Sin marca previa no hay sesion anterior de la cual protegerse: es el
     // primer login del equipo, y limpiar solo costaria el cache que ya trajo.
-    if (previa) clearServiceWorkerApiCache()
+    if (!previa) {
+      recordar(identidad)
+      return
+    }
 
-    try {
-      window.localStorage.setItem(SW_API_IDENTITY_KEY, identidad)
-    } catch {
-      // Sin marca la proxima identidad se vuelve a evaluar contra lo que haya:
-      // se pierde precision, nunca seguridad.
+    let cancelado = false
+    void clearServiceWorkerApiCache().then((limpio) => {
+      // SOLO si el worker confirmo el borrado. Sin controller el mensaje no
+      // llega a ningun lado (force-reload, SW nuevo activandose antes de
+      // clients.claim(), registro fallido): anotar la identidad ahi seria
+      // afirmar una limpieza que no ocurrio, y el guard no volveria a intentar
+      // NUNCA — el cache de la sesion anterior quedaria servido de manera
+      // permanente. Al no anotar nada, el proximo montaje lo reintenta.
+      if (limpio && !cancelado) recordar(identidad)
+    })
+    return () => {
+      cancelado = true
     }
   }, [status, identidad])
 

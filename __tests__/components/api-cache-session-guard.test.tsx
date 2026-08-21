@@ -15,7 +15,7 @@
  * PWA's data with it.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { render } from "@testing-library/react"
+import { render, waitFor, act } from "@testing-library/react"
 
 const useSessionMock = vi.fn()
 vi.mock("next-auth/react", () => ({ useSession: () => useSessionMock() }))
@@ -26,19 +26,42 @@ const USER_A = { id: "u-A", organizationId: "org-1", role: "ADMIN", sucursalId: 
 const USER_B = { id: "u-B", organizationId: "org-2", role: "VENDEDOR", sucursalId: "suc-B" }
 
 let postMessage: ReturnType<typeof vi.fn>
+/** Contesta CACHE_CLEARED, como hace el worker cuando termino de borrar. */
+let confirmar: () => void
 
 function mockSesion(user: unknown, status = "authenticated") {
   useSessionMock.mockReturnValue({ data: user ? { user } : null, status })
 }
 
+function instalarServiceWorker({ conControlador = true } = {}) {
+  const listeners = new Set<(event: { data: unknown }) => void>()
+  postMessage = vi.fn()
+  confirmar = () => listeners.forEach((cb) => cb({ data: { type: "CACHE_CLEARED" } }))
+  Object.defineProperty(navigator, "serviceWorker", {
+    configurable: true,
+    value: {
+      controller: conControlador ? { postMessage } : null,
+      addEventListener: (type: string, cb: (event: { data: unknown }) => void) => {
+        if (type === "message") listeners.add(cb)
+      },
+      removeEventListener: (_type: string, cb: (event: { data: unknown }) => void) => {
+        listeners.delete(cb)
+      },
+    },
+  })
+}
+
+/** Renderiza, deja que el worker confirme y espera a que el efecto termine. */
+async function renderYConfirmar() {
+  render(<ApiCacheSessionGuard />)
+  await waitFor(() => expect(postMessage).toHaveBeenCalled())
+  confirmar()
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   window.localStorage.clear()
-  postMessage = vi.fn()
-  Object.defineProperty(navigator, "serviceWorker", {
-    configurable: true,
-    value: { controller: { postMessage } },
-  })
+  instalarServiceWorker()
 })
 
 afterEach(() => {
@@ -47,14 +70,51 @@ afterEach(() => {
 })
 
 describe("ApiCacheSessionGuard", () => {
-  it("AC-1 — otro usuario en el mismo equipo: limpia el cache antes de que pueda leerlo", () => {
+  it("AC-1 — otro usuario en el mismo equipo: limpia y recien ahi recuerda quien es", async () => {
+    window.localStorage.setItem(SW_API_IDENTITY_KEY, "u-A|org-1|ADMIN|")
+    mockSesion(USER_B)
+
+    await renderYConfirmar()
+
+    expect(postMessage).toHaveBeenCalledWith({ type: "CLEAR_CACHE", cache: "api" })
+    await waitFor(() =>
+      expect(window.localStorage.getItem(SW_API_IDENTITY_KEY)).toBe("u-B|org-2|VENDEDOR|suc-B")
+    )
+  })
+
+  it("AC-8 — sin controller NO guarda la identidad: reintenta en vez de quedar latcheado", async () => {
+    // Sin controller el postMessage no ocurre y el borrado nunca pasa: pasa
+    // despues de un force-reload, o con un SW nuevo activandose antes de
+    // clients.claim(). Si igual se anotara la identidad de B, el guard no
+    // volveria a intentar NUNCA y el cache de la org 1 quedaria servido a la
+    // org 2 de manera permanente — la fuga, ahora durable.
+    instalarServiceWorker({ conControlador: false })
     window.localStorage.setItem(SW_API_IDENTITY_KEY, "u-A|org-1|ADMIN|")
     mockSesion(USER_B)
 
     render(<ApiCacheSessionGuard />)
+    // Un macrotask completo: sin esto la aserccion corre ANTES de que la cadena
+    // del clear siga, y pasaria igual aunque el guard anotara la identidad.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
 
-    expect(postMessage).toHaveBeenCalledWith({ type: "CLEAR_CACHE", cache: "api" })
-    expect(window.localStorage.getItem(SW_API_IDENTITY_KEY)).toBe("u-B|org-2|VENDEDOR|suc-B")
+    expect(window.localStorage.getItem(SW_API_IDENTITY_KEY)).toBe("u-A|org-1|ADMIN|")
+  })
+
+  it("AC-9 — si el worker no confirma, tampoco guarda la identidad", async () => {
+    vi.useFakeTimers()
+    try {
+      window.localStorage.setItem(SW_API_IDENTITY_KEY, "u-A|org-1|ADMIN|")
+      mockSesion(USER_B)
+
+      render(<ApiCacheSessionGuard />)
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      expect(window.localStorage.getItem(SW_API_IDENTITY_KEY)).toBe("u-A|org-1|ADMIN|")
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("AC-2 — otra ORG en el mismo equipo: limpia (la fuga entre tenants es la peor)", () => {
@@ -97,9 +157,9 @@ describe("ApiCacheSessionGuard", () => {
     "AC-6 — status %s: NO limpia ni pisa la identidad guardada",
     (status) => {
       // La PWA offline arranca asi mientras SessionRefresher restaura la sesion.
-      // Limpiar aca le vaciaria el catalogo al operador justo cuando el cache es
-      // lo unico que tiene, y sin ganar nada: al usuario siguiente lo protege el
-      // clear de SU login, que es el momento en que se puede volver a llenar.
+      // Limpiar aca le sacaria al operador lo unico que tiene justo cuando no
+      // hay red para volver a llenarlo, y sin ganar nada: al usuario siguiente
+      // lo protege el clear de SU login, que ademas ocurre con red disponible.
       window.localStorage.setItem(SW_API_IDENTITY_KEY, "u-A|org-1|ADMIN|")
       mockSesion(null, status)
 
