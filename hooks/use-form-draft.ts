@@ -69,7 +69,13 @@ import { useSession } from "next-auth/react"
  *  national id, tax id, email and address (lib/cliente-draft-projection.ts).
  *  Each bump is what retires the entries that still hold those values: they were
  *  written under a laxer rule and would otherwise sit in localStorage, readable,
- *  for the rest of their 7 days. */
+ *  for the rest of their 7 days.
+ *
+ *  A bump is about the DATA the envelope carries, not about the envelope's own
+ *  fields: `conflicted` was added afterwards without one because it is optional
+ *  and additive -- an entry that predates it reads back as "no conflict", which
+ *  is what it meant -- and no snapshot got any wider. Discarding everyone's
+ *  drafts for that would cost the exact work this hook exists to protect. */
 const DRAFT_SCHEMA_VERSION = 3
 const DEFAULT_DEBOUNCE_MS = 1000
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
@@ -202,7 +208,22 @@ interface DraftEnvelope<T> {
    *  Absent for new-record drafts (and for drafts written before this field
    *  existed, which fall back to a savedAt comparison). */
   recordUpdatedAt?: number | null
+  /** Somebody else saved the record while this draft's form was already
+   *  holding it. Lives in the envelope and not only in React state because the
+   *  re-stamp that keeps the draft readable (see restampDraft) also erases the
+   *  only other trace of the conflict: `recordUpdatedAt` now MATCHES the
+   *  colleague's save, so the next open restores the draft as if nothing had
+   *  happened. Absent means "no conflict" -- which is what every envelope
+   *  written before this field existed meant too. */
+  conflicted?: boolean
   data: T
+}
+
+/** What `readDraft` hands back: the caller's snapshot plus the conflict the
+ *  envelope was carrying, which is what lets a reopened form warn again. */
+interface StoredDraft<T> {
+  data: T
+  conflicted: boolean
 }
 
 export interface UseFormDraftOptions<T> {
@@ -273,9 +294,15 @@ export interface UseFormDraftResult<T> {
    *  holding unsaved work: typed edits, or a restored draft still on screen.
    *  Nothing is discarded -- the work stays in the form and on disk -- but the
    *  call site must say so, because submitting now replaces what the other
-   *  person saved. Cleared by `clearDraft` (submit / "Descartar", both of which
-   *  settle the conflict) and by a fresh key. Always false for new-record
-   *  forms, which have no `recordUpdatedAt` to move. */
+   *  person saved.
+   *
+   *  It rides in the stored envelope (`conflicted`) and not only in this state,
+   *  so closing and reopening the form still warns: re-initializing is exactly
+   *  where the warning used to disappear, over a draft the re-stamp had made
+   *  look current. Cleared ONLY by `clearDraft` -- submit and "Descartar", the
+   *  two ways the conflict actually gets settled -- and it goes with the entry
+   *  they delete. Always false for new-record forms, which have no
+   *  `recordUpdatedAt` to move. */
   recordChangedWhileEditing: boolean
 }
 
@@ -393,7 +420,7 @@ function readDraft<T>(
   key: string,
   recordUpdatedAtMs: number | null,
   validate?: (data: unknown) => boolean
-): T | null {
+): StoredDraft<T> | null {
   try {
     const raw = window.localStorage.getItem(key)
     if (!raw) return null
@@ -411,7 +438,7 @@ function readDraft<T>(
       window.localStorage.removeItem(key)
       return null
     }
-    return parsed.data
+    return { data: parsed.data, conflicted: parsed.conflicted === true }
   } catch {
     // Corrupt draft (bad JSON, storage disabled, etc.) -- never let a
     // draft-restore failure break the form. Best-effort cleanup.
@@ -426,7 +453,7 @@ function readDraft<T>(
 
 /**
  * Re-stamps the stored entry against the record the operator actually has in
- * front of them, leaving its data untouched.
+ * front of them and marks it conflicted, leaving its data untouched.
  *
  * Used when the record moved under a form that is already holding work this
  * hook is responsible for. Deleting the entry is not an option -- that work is
@@ -436,6 +463,16 @@ function readDraft<T>(
  * lose; the hook keeps the work and reports the conflict
  * (`recordChangedWhileEditing`) so the decision belongs to the person looking
  * at the screen instead of being taken silently.
+ *
+ * The `conflicted` mark is the other half of that, and it is why the re-stamp
+ * cannot be the only thing written here. Moving the token is what keeps the
+ * draft readable, but it also destroys the evidence: the entry now looks
+ * exactly like one written against the colleague's own save. A form that is
+ * closed and reopened before the operator decides -- the customer dialog does
+ * it on every `open` toggle -- re-initializes from scratch, the React flag goes
+ * back to false, and the draft restores with no warning anywhere. "Guardar"
+ * then replaces the colleague's save silently, which is the loss the whole
+ * freshness token exists to prevent.
  */
 function restampDraft(key: string, recordUpdatedAtMs: number | null): void {
   try {
@@ -444,6 +481,7 @@ function restampDraft(key: string, recordUpdatedAtMs: number | null): void {
     const parsed = JSON.parse(raw) as DraftEnvelope<unknown>
     if (!parsed || typeof parsed.savedAt !== "number") return
     parsed.recordUpdatedAt = recordUpdatedAtMs
+    parsed.conflicted = true
     window.localStorage.setItem(key, JSON.stringify(parsed))
   } catch {
     // Corrupt entry / storage disabled -- every write here is best-effort.
@@ -495,6 +533,11 @@ export function useFormDraft<T>({
    *  (a draft was found on mount and has not been cleared since). It is what
    *  separates the two ways a form can "equal the baseline" -- see flush. */
   const restoredRef = useRef(false)
+  /** Mirrors the `conflicted` mark of the entry on disk for the current key, so
+   *  every envelope written from here keeps carrying it. Without this, the first
+   *  keystroke after the conflict rewrites the whole envelope and drops the
+   *  mark -- and the reopen goes back to restoring in silence. */
+  const conflictedRef = useRef(false)
 
   // Keep the flush-time reads pointing at the latest committed render. This
   // effect has no dependency array on purpose: it must run after every commit.
@@ -590,6 +633,9 @@ export function useFormDraft<T>({
         `{"version":${DRAFT_SCHEMA_VERSION},` +
         `"savedAt":${Date.now()},` +
         `"recordUpdatedAt":${recordUpdatedAtRef.current ?? "null"},` +
+        // Only written when it is true: an absent mark is what "no conflict"
+        // has always meant on disk, so nothing has to be migrated.
+        (conflictedRef.current ? `"conflicted":true,` : "") +
         `"data":${serialized}}`
       window.localStorage.setItem(key, envelope)
       lastSavedRef.current = serialized
@@ -660,6 +706,13 @@ export function useFormDraft<T>({
     if (key === keyRef.current && (interactedRef.current || restoredRef.current)) {
       if (recordUpdatedAtMs !== keyRecordUpdatedAtRef.current) {
         keyRecordUpdatedAtRef.current = recordUpdatedAtMs
+        // El flag va en la ref ANTES que en el estado y ademas queda en el
+        // sobre (restampDraft): el aviso tiene que sobrevivir a que se cierre y
+        // se vuelva a abrir el formulario, y el estado de React no. Ver la nota
+        // de restampDraft. La ref cubre ademas el caso en que todavia no hay
+        // nada escrito en disco -- el debounce no llego a disparar -- para que
+        // el flush siguiente ya salga marcado.
+        conflictedRef.current = true
         restampDraft(key, recordUpdatedAtMs)
         setRecordChangedWhileEditing(true)
       }
@@ -675,11 +728,16 @@ export function useFormDraft<T>({
     interactedRef.current = false
     lastSavedRef.current = null
     baselineStaleRef.current = false
-    setRecordChangedWhileEditing(false)
     baselineRef.current = safeSnapshot(() => getValueRef.current())
     const restored = readDraft<T>(key, recordUpdatedAtMs, validateRef.current)
     restoredRef.current = restored !== null
-    setDraft(restored)
+    // El conflicto se recupera del sobre, no se apaga. Re-inicializar es
+    // justamente el camino por el que se perdia: el re-estampado deja la
+    // entrada con el token del companero, asi que sin esta marca el borrador
+    // vuelve a restaurarse como si nadie hubiera guardado nada en el medio.
+    conflictedRef.current = restored?.conflicted ?? false
+    setRecordChangedWhileEditing(conflictedRef.current)
+    setDraft(restored ? restored.data : null)
     setReady(true)
   }, [feature, recordId, scope, enabled, userId, organizationId, recordUpdatedAtMs, flushPending])
 
@@ -738,7 +796,11 @@ export function useFormDraft<T>({
     restoredRef.current = false
     // Submit and "Descartar" are the two ways the conflict gets settled: either
     // this operator's version won or they took the colleague's. Leaving the
-    // warning up after that is the notice that trains people to ignore it.
+    // warning up after that is the notice that trains people to ignore it. The
+    // entry itself goes away below, so the mark on disk goes with it; the ref
+    // is what keeps the NEXT draft written from this form -- work started after
+    // the conflict was settled -- from inheriting it.
+    conflictedRef.current = false
     setRecordChangedWhileEditing(false)
     // Every call site clears BEFORE resetting the form ("Descartar", submit),
     // so reading the form here captures the values that are about to be thrown

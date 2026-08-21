@@ -549,6 +549,148 @@ describe('useFormDraft', () => {
     expect(result.current.hasUnsavedWork()).toBe(true)
   })
 
+  it('carries the conflict in the stored envelope so a reopen still warns', () => {
+    // El aviso vivia SOLO en el estado de React, y la entrada quedaba
+    // re-estampada con el token del companero. Cerrar el formulario sin
+    // guardar ni descartar (el dialog de cliente pausa el hook: `enabled` pasa
+    // a false) y volver a abrirlo caia en la re-inicializacion completa, que
+    // apaga el flag -- y el borrador ya no figuraba desactualizado, porque el
+    // re-estampado le habia puesto justamente ese token. El borrador se
+    // restauraba como si nada hubiera pasado y "Guardar" mandaba el registro
+    // entero encima del guardado del companero, sin aviso en ninguna parte.
+    const key = 'draft:v3:cliente-form:org-1:user-1:edit:cli-1'
+    const primerUpdatedAt = Date.now() - 120_000
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        version: 3,
+        savedAt: Date.now() - 60_000,
+        recordUpdatedAt: primerUpdatedAt,
+        data: { nombre: 'Mi borrador' },
+      })
+    )
+
+    const live = { nombre: 'Mi borrador' }
+    const renderOptions = (recordUpdatedAt: number, enabled: boolean) => ({
+      feature: 'cliente-form',
+      recordId: 'cli-1',
+      debounceMs: 1000,
+      getValue: () => live,
+      recordUpdatedAt,
+      enabled,
+    })
+    const segundoUpdatedAt = Date.now()
+    const { result, rerender, unmount } = renderHook(
+      ({ recordUpdatedAt, enabled }: { recordUpdatedAt: number; enabled: boolean }) =>
+        useFormDraft(renderOptions(recordUpdatedAt, enabled)),
+      { initialProps: { recordUpdatedAt: primerUpdatedAt, enabled: true } }
+    )
+    expect(result.current.draft).toEqual({ nombre: 'Mi borrador' })
+
+    // El companero guarda la ficha: misma key, token nuevo.
+    rerender({ recordUpdatedAt: segundoUpdatedAt, enabled: true })
+    expect(result.current.recordChangedWhileEditing).toBe(true)
+    expect(JSON.parse(window.localStorage.getItem(key)!).conflicted).toBe(true)
+
+    // El operador cierra sin guardar ni descartar.
+    rerender({ recordUpdatedAt: segundoUpdatedAt, enabled: false })
+    unmount()
+
+    // ...y vuelve a abrir la misma ficha. El borrador se restaura -- nada se
+    // pierde -- pero el conflicto sigue avisado: guardar ahora reemplaza lo
+    // que guardo la otra persona.
+    const reabierto = renderHook(() => useFormDraft(renderOptions(segundoUpdatedAt, true)))
+    expect(reabierto.result.current.draft).toEqual({ nombre: 'Mi borrador' })
+    expect(reabierto.result.current.recordChangedWhileEditing).toBe(true)
+  })
+
+  it('keeps the conflict on every envelope written after it', () => {
+    // El sobre se reescribe entero en cada flush: si el flag no viajara con el,
+    // la primera tecla despues del conflicto lo borraria de disco y la apertura
+    // siguiente volveria a restaurar en silencio.
+    const key = 'draft:v3:cliente-form:org-1:user-1:edit:cli-1'
+    const primerUpdatedAt = Date.now() - 120_000
+
+    let live = { nombre: 'Nombre del server' }
+    const { result, rerender } = renderHook(
+      ({ recordUpdatedAt }: { recordUpdatedAt: number }) =>
+        useFormDraft({
+          feature: 'cliente-form',
+          recordId: 'cli-1',
+          debounceMs: 1000,
+          getValue: () => live,
+          recordUpdatedAt,
+        }),
+      { initialProps: { recordUpdatedAt: primerUpdatedAt } }
+    )
+
+    userInteracts()
+    live = { nombre: 'Lo que estoy escribiendo' }
+    act(() => {
+      result.current.notifyChange()
+      vi.advanceTimersByTime(1000)
+    })
+
+    rerender({ recordUpdatedAt: Date.now() })
+    expect(result.current.recordChangedWhileEditing).toBe(true)
+
+    live = { nombre: 'Y un poco mas' }
+    act(() => {
+      result.current.notifyChange()
+      vi.advanceTimersByTime(1000)
+    })
+
+    const guardado = JSON.parse(window.localStorage.getItem(key)!)
+    expect(guardado.data).toEqual({ nombre: 'Y un poco mas' })
+    expect(guardado.conflicted).toBe(true)
+  })
+
+  it('drops the conflict from later envelopes once the draft is cleared', () => {
+    // Guardar y "Descartar" son las dos formas de saldar el conflicto (las dos
+    // pasan por clearDraft). Lo que se escriba despues es trabajo nuevo sobre
+    // la version que quedo: arrastrar el flag ahi deja el aviso colgado para
+    // siempre, que es el aviso que entrena a ignorarlos.
+    const key = 'draft:v3:cliente-form:org-1:user-1:edit:cli-1'
+    const primerUpdatedAt = Date.now() - 120_000
+
+    let live = { nombre: 'Nombre del server' }
+    const { result, rerender } = renderHook(
+      ({ recordUpdatedAt }: { recordUpdatedAt: number }) =>
+        useFormDraft({
+          feature: 'cliente-form',
+          recordId: 'cli-1',
+          debounceMs: 1000,
+          getValue: () => live,
+          recordUpdatedAt,
+        }),
+      { initialProps: { recordUpdatedAt: primerUpdatedAt } }
+    )
+
+    userInteracts()
+    live = { nombre: 'Lo que estoy escribiendo' }
+    act(() => {
+      result.current.notifyChange()
+      vi.advanceTimersByTime(1000)
+    })
+    rerender({ recordUpdatedAt: Date.now() })
+    expect(result.current.recordChangedWhileEditing).toBe(true)
+
+    act(() => {
+      result.current.clearDraft()
+    })
+
+    userInteracts()
+    live = { nombre: 'Arrancando de nuevo' }
+    act(() => {
+      result.current.notifyChange()
+      vi.advanceTimersByTime(1000)
+    })
+
+    const guardado = JSON.parse(window.localStorage.getItem(key)!)
+    expect(guardado.data).toEqual({ nombre: 'Arrancando de nuevo' })
+    expect(guardado.conflicted).toBeUndefined()
+  })
+
   it('clears the conflict flag once the draft is discarded or submitted', () => {
     const key = 'draft:v3:cliente-form:org-1:user-1:edit:cli-1'
     const primerUpdatedAt = Date.now() - 120_000
