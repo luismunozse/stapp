@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getEntityHistory } from "@/lib/audit"
+import { getEntityHistory, generateDescription } from "@/lib/audit"
 
 // Campos de AUDITED_FIELDS (ver app/api/inventario/[id]/route.ts) que exponen
 // costo de compra. El audit log guarda before/after crudos, así que el valor
@@ -12,8 +12,7 @@ const COST_FIELDS = ["precio_compra"]
 type AuditChanges = { before?: Record<string, unknown>; after?: Record<string, unknown> }
 
 // Saca los campos de costo de ambos lados del diff. CREATE trae solo `after`,
-// DELETE solo `before`. Si el UPDATE tocó únicamente el costo, la entrada queda
-// sin filas y la UI ya no la pinta (guard de fieldsChanged.length).
+// DELETE solo `before`.
 function stripCostFields(changes: AuditChanges | null): AuditChanges | null {
   if (!changes || typeof changes !== "object") return changes
   const out: AuditChanges = { ...changes }
@@ -25,6 +24,17 @@ function stripCostFields(changes: AuditChanges | null): AuditChanges | null {
     out[side] = clone
   }
   return out
+}
+
+// Campos que siguen difiriendo DESPUÉS del filtro. Es la misma comparación que
+// hace generateDescription, y decide si al UPDATE le queda algo que contar.
+function changedFieldsAfterStrip(changes: AuditChanges | null): string[] {
+  const before = changes?.before
+  const after = changes?.after
+  if (!before || !after) return []
+  return Object.keys(after).filter(
+    (key) => JSON.stringify(before[key]) !== JSON.stringify(after[key])
+  )
 }
 
 // GET /api/inventario/[id]/audit
@@ -59,17 +69,48 @@ export async function GET(
 
     const logs = await getEntityHistory(organizationId!, "inventario", id)
 
-    return NextResponse.json({
-      data: (logs || []).map((l: any) => ({
-        id: l.id,
-        action: l.action,
-        description: l.description,
-        changes: canViewCost ? l.changes : stripCostFields(l.changes),
-        user: l.users ? { id: l.users.id, nombre: l.users.nombre, email: l.users.email } : null,
-        ipAddress: l.ip_address,
-        createdAt: l.created_at,
-      })),
+    const row = (l: any, description: string, changes: AuditChanges | null) => ({
+      id: l.id,
+      action: l.action,
+      description,
+      changes,
+      user: l.users ? { id: l.users.id, nombre: l.users.nombre, email: l.users.email } : null,
+      ipAddress: l.ip_address,
+      createdAt: l.created_at,
     })
+
+    // Filtrar `changes` no alcanzaba: `description` se generó con el diff
+    // COMPLETO y generateDescription empuja el label del campo para los
+    // numéricos, así que un UPDATE que tocó solo el costo quedó guardado como
+    // "Cambió precio_compra en producto #ab12cd". audit-historial.tsx pinta
+    // log.description sin condición — el guard de fieldsChanged.length esconde
+    // las filas del diff, no la entrada — y el rol sin acceso leía un renglón
+    // anunciando que el precio de compra cambió, con el diff vacío abajo. No
+    // se filtraba el valor, pero sí la edición.
+    //
+    // Dos reglas, para los dos casos:
+    //
+    // - UPDATE que después del filtro no cambió NADA: era un cambio de costo y
+    //   nada más. Se saca la entrada entera. Es lo que el comentario viejo
+    //   afirmaba que ya pasaba, y no pasaba.
+    // - UPDATE mixto: la descripción se RE-genera sobre el diff ya filtrado,
+    //   así nombra los campos que el rol sí puede ver y ninguno de los que se
+    //   sacaron.
+    //
+    // CREATE y DELETE conservan su descripción: nombran el item, no los campos
+    // (ver generateDescription), así que no delatan nada.
+    const data = (logs || []).flatMap((l: any) => {
+      if (canViewCost) return [row(l, l.description, l.changes)]
+
+      const changes = stripCostFields(l.changes)
+      const esUpdateConDiff = l.action === "UPDATE" && l.changes?.before && l.changes?.after
+      if (!esUpdateConDiff) return [row(l, l.description, changes)]
+
+      if (changedFieldsAfterStrip(changes).length === 0) return []
+      return [row(l, generateDescription("UPDATE", "inventario", id, changes ?? undefined), changes)]
+    })
+
+    return NextResponse.json({ data })
   } catch (err) {
     console.error("Error fetching audit history:", err)
     return NextResponse.json({ error: "Error al obtener historial" }, { status: 500 })
