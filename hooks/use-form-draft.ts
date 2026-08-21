@@ -550,11 +550,21 @@ export function useFormDraft<T>({
       // fall through to the write below instead, so an intermediate edit that
       // was walked back is overwritten by the restored value rather than left
       // on disk.
-      lastSavedRef.current = null
-      try {
-        window.localStorage.removeItem(key)
-      } catch {
-        // ignore
+      //
+      // And only what THIS instance wrote. Two tabs open on the same form share
+      // the key: one that mounted before the other saved anything has an empty
+      // storage behind it, so its own pristine state IS its baseline and it has
+      // no restored draft to protect -- the first click that changes nothing
+      // deleted the draft the other tab had just written. `lastSavedRef` is the
+      // same distinction `restoredRef` already makes for the restore case: it is
+      // non-null exactly when the entry on disk came from here.
+      if (lastSavedRef.current !== null) {
+        lastSavedRef.current = null
+        try {
+          window.localStorage.removeItem(key)
+        } catch {
+          // ignore
+        }
       }
       return
     }

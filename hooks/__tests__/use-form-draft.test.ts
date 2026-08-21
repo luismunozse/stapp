@@ -842,6 +842,39 @@ describe('useFormDraft', () => {
     expect(window.localStorage.length).toBe(0)
   })
 
+  it('does not delete an entry this instance never wrote (a second tab)', () => {
+    // "El formulario volvio a su estado inicial" solo autoriza a borrar LO QUE
+    // ESTA INSTANCIA escribio. Una segunda pestana abierta sobre el mismo
+    // formulario arranca con el storage vacio, asi que su estado pristino ES su
+    // referencia de comparacion y no tiene ningun borrador restaurado que
+    // proteger: el primer click que no cambia nada le borraba a la otra pestana
+    // el borrador que acababa de guardar.
+    const key = 'draft:v3:cliente-form:org-1:user-1:new'
+
+    // Esta pestana abre el formulario sin nada guardado y no escribe nunca.
+    const { rerender } = renderDraft({ nombre: '' }, { feature: 'cliente-form' })
+    act(() => {
+      vi.advanceTimersByTime(2000)
+    })
+
+    // La otra pestana, sobre el mismo formulario, guarda su borrador.
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({ version: 3, savedAt: Date.now(), data: { nombre: 'Ana' } })
+    )
+
+    // Un click aca que no cambia nada (Siguiente, un select que se abre y se
+    // cierra, un accesorio que se marca y se desmarca).
+    userInteracts()
+    rerender({ value: { nombre: '' } })
+    act(() => {
+      vi.advanceTimersByTime(2000)
+    })
+
+    expect(window.localStorage.getItem(key)).not.toBeNull()
+    expect(JSON.parse(window.localStorage.getItem(key)!).data).toEqual({ nombre: 'Ana' })
+  })
+
   it('ignores interactions that do not land on a form control', () => {
     const { rerender } = renderDraft({ nombre: '' })
 
