@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { Store, Check, ChevronsUpDown } from "lucide-react"
-import { clearServiceWorkerCache } from "@/lib/sw-cache"
+import { clearServiceWorkerApiCache } from "@/lib/sw-cache"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,7 +63,7 @@ export function SucursalSwitcher() {
           // la venta descuenta de la nueva. La sucursal activa vive en una
           // cookie httpOnly, o sea que este es el único punto del cliente que
           // sabe que cambió.
-          clearServiceWorkerCache()
+          clearServiceWorkerApiCache()
           // Recarga completa: el scope de sucursal afecta datos que se cargan
           // client-side (fetch en useEffect), que router.refresh() no re-dispara.
           // Un reload garantiza que todo se re-fetchee con la nueva sucursal.

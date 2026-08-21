@@ -154,6 +154,18 @@ function loadServiceWorker() {
       for (const handler of listeners.fetch ?? []) handler(event)
       return responded.length > 0 ? await responded[0] : null
     },
+    async dispatchMessage(data: unknown) {
+      const pending: Array<Promise<unknown>> = []
+      const respuestas: unknown[] = []
+      const event = {
+        data,
+        source: { postMessage: (value: unknown) => respuestas.push(value) },
+        waitUntil: (value: Promise<unknown>) => pending.push(value),
+      }
+      for (const handler of listeners.message ?? []) handler(event)
+      await Promise.all(pending)
+      return respuestas
+    },
     async dispatchActivate() {
       const pending: Array<Promise<unknown>> = []
       const event = { waitUntil: (value: Promise<unknown>) => pending.push(value) }
@@ -364,6 +376,45 @@ describe("service worker — API caching", () => {
 
     expect(res!.status).toBe(200)
     expect(await res!.json()).toEqual({ data: ["network"] })
+  })
+
+  // CLEAR_CACHE se dispara ahora en cada cambio de identidad y en cada cambio de
+  // sucursal. Si sigue borrando TODO, el mostrador que cambia de operador pierde
+  // el shell de navegacion y los assets — y despues no puede arrancar offline.
+  it("SW-14 — CLEAR_CACHE con scope api borra solo el cache de API, no el shell ni los assets", async () => {
+    const nombres = ["stapp-v8", "stapp-static-v3", "stapp-api-v3", API_CACHE_NAME]
+    for (const nombre of nombres) await sw.caches.open(nombre)
+
+    await sw.dispatchMessage({ type: "CLEAR_CACHE", cache: "api" })
+
+    const restantes = await sw.caches.keys()
+    expect(restantes).toContain("stapp-v8")
+    expect(restantes).toContain("stapp-static-v3")
+    expect(restantes).not.toContain(API_CACHE_NAME)
+    // Tambien las versiones viejas del cache de API: son del mismo problema.
+    expect(restantes).not.toContain("stapp-api-v3")
+  })
+
+  it("SW-15 — CLEAR_CACHE sin scope sigue borrando todo (recuperacion manual / pantalla de error)", async () => {
+    for (const nombre of ["stapp-v8", "stapp-static-v3", API_CACHE_NAME]) {
+      await sw.caches.open(nombre)
+    }
+
+    await sw.dispatchMessage({ type: "CLEAR_CACHE" })
+
+    expect(await sw.caches.keys()).toEqual([])
+  })
+
+  it("SW-16 — CLEAR_CACHE contesta CACHE_CLEARED recien despues de borrar", async () => {
+    // El caller espera esta confirmacion antes de recargar o de dar por hecho
+    // que limpio: contestarla antes de tiempo la volveria una mentira.
+    const store = await sw.caches.open(API_CACHE_NAME)
+    await store.put(`${ORIGIN}${RUTA_CACHEABLE}`, jsonResponse({ data: ["vieja"] }))
+
+    const respuestas = await sw.dispatchMessage({ type: "CLEAR_CACHE", cache: "api" })
+
+    expect(respuestas).toEqual([{ type: "CACHE_CLEARED" }])
+    expect(await sw.caches.keys()).not.toContain(API_CACHE_NAME)
   })
 
   it("SW-6 — activate drops every previous API cache, so entries from a permissive rule do not survive", async () => {

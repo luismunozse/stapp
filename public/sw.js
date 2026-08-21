@@ -141,11 +141,19 @@ self.addEventListener('activate', (event) => {
 // Manejar mensajes del cliente
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'CLEAR_CACHE') {
+    // `cache: 'api'` borra SOLO el caché de API (todas sus versiones). Lo manda
+    // quien limpia por un cambio de identidad o de sucursal, que ocurre seguido
+    // en un mostrador que rota operadores: borrar además el shell de navegación
+    // (CACHE_NAME) y los assets (STATIC_CACHE_NAME) le sacaría a ese equipo la
+    // capacidad de arrancar offline, que no tiene nada que ver con la sesión.
+    // Sin `cache` se borra todo: es la recuperación manual (pull-to-refresh,
+    // pantallas de error), donde justamente se quiere empezar de cero.
+    const soloApi = event.data.cache === 'api'
     event.waitUntil(
       caches.keys().then((cacheNames) => {
         return Promise.all(
           cacheNames
-            .filter((name) => name.startsWith('stapp-'))
+            .filter((name) => soloApi ? name.startsWith('stapp-api-') : name.startsWith('stapp-'))
             .map((name) => caches.delete(name))
         )
       }).then(() => {

@@ -53,7 +53,7 @@ describe("ApiCacheSessionGuard", () => {
 
     render(<ApiCacheSessionGuard />)
 
-    expect(postMessage).toHaveBeenCalledWith({ type: "CLEAR_CACHE" })
+    expect(postMessage).toHaveBeenCalledWith({ type: "CLEAR_CACHE", cache: "api" })
     expect(window.localStorage.getItem(SW_API_IDENTITY_KEY)).toBe("u-B|org-2|VENDEDOR|suc-B")
   })
 
@@ -63,7 +63,7 @@ describe("ApiCacheSessionGuard", () => {
 
     render(<ApiCacheSessionGuard />)
 
-    expect(postMessage).toHaveBeenCalledWith({ type: "CLEAR_CACHE" })
+    expect(postMessage).toHaveBeenCalledWith({ type: "CLEAR_CACHE", cache: "api" })
   })
 
   it("AC-3 — le cambian la sucursal asignada al usuario: limpia (el scope de lectura cambio)", () => {
@@ -72,7 +72,7 @@ describe("ApiCacheSessionGuard", () => {
 
     render(<ApiCacheSessionGuard />)
 
-    expect(postMessage).toHaveBeenCalledWith({ type: "CLEAR_CACHE" })
+    expect(postMessage).toHaveBeenCalledWith({ type: "CLEAR_CACHE", cache: "api" })
   })
 
   it("AC-4 — misma identidad: NO limpia (cada navegacion no puede tirar el cache offline)", () => {
@@ -119,7 +119,7 @@ describe("ApiCacheSessionGuard", () => {
 
       render(<ApiCacheSessionGuard />)
 
-      expect(postMessage).toHaveBeenCalledWith({ type: "CLEAR_CACHE" })
+      expect(postMessage).toHaveBeenCalledWith({ type: "CLEAR_CACHE", cache: "api" })
     } finally {
       getItem.mockRestore()
     }

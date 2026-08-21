@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import { useSession } from "next-auth/react"
-import { clearServiceWorkerCache } from "@/lib/sw-cache"
+import { clearServiceWorkerApiCache } from "@/lib/sw-cache"
 
 /** Identidad de sesion detras de lo que hay guardado en el cache del SW. */
 export const SW_API_IDENTITY_KEY = "stapp-sw-api-identity"
@@ -47,14 +47,14 @@ export function ApiCacheSessionGuard() {
     } catch {
       // Sin poder leer quien estuvo antes no se puede afirmar que es el mismo,
       // y "no puedo verificar" tiene que resolverse del lado seguro.
-      clearServiceWorkerCache()
+      clearServiceWorkerApiCache()
       return
     }
 
     if (previa === identidad) return
     // Sin marca previa no hay sesion anterior de la cual protegerse: es el
     // primer login del equipo, y limpiar solo costaria el cache que ya trajo.
-    if (previa) clearServiceWorkerCache()
+    if (previa) clearServiceWorkerApiCache()
 
     try {
       window.localStorage.setItem(SW_API_IDENTITY_KEY, identidad)
