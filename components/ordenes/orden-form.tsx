@@ -1127,7 +1127,17 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       }
 
       const nuevaOrden = await res.json()
+      // El borrador se da de baja siempre, incluso cuando el checklist se queda
+      // afuera (ver mas abajo): la orden YA existe, asi que conservarlo dejaria
+      // la apertura siguiente restaurando una carga que ya se convirtio en
+      // orden -- una segunda orden del mismo equipo.
       clearDraft()
+
+      /** Respuestas restauradas que este submit no puede mandar. Se calcula
+       *  antes del POST porque es lo que hay que AVISAR despues: el borrador ya
+       *  no esta, o sea que estas respuestas no quedan guardadas en ningun lado. */
+      const checklistSinResolver =
+        !!checklistDelBorrador && Object.keys(checklistValores).length > 0
 
       // Guardar checklist si hay template y valores completados.
       //
@@ -1139,8 +1149,9 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       // "Crear orden" apretado mientras el del tipo sigue en vuelo guardaba las
       // respuestas del borrador bajo un templateId que no es el suyo -- items
       // que no existen en ese template, invisibles en la ficha. Mientras el
-      // latch siga puesto no hay contra que validarlas: se retienen y se
-      // conservan en el borrador, que es lo unico que no las corrompe.
+      // latch siga puesto no hay contra que validarlas, asi que no se mandan:
+      // guardarlas mal es peor que no guardarlas, pero las dos son una perdida
+      // y el operador tiene que enterarse (el aviso, despues del POST).
       if (!checklistDelBorrador && checklistTemplate && Object.keys(checklistValores).length > 0) {
         try {
           const checklistBody = {
@@ -1162,6 +1173,16 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         } catch (checklistError) {
           console.error("[CHECKLIST SAVE] Exception:", checklistError)
         }
+      }
+
+      if (checklistSinResolver) {
+        // Se dice antes del modal de exito. Callarlo dejaba al operador con una
+        // orden creada, un checklist que contesto y ningun rastro de que no se
+        // guardo: lo iba a descubrir el que abriera la ficha, sin saber que
+        // habia estado completo alguna vez.
+        await showInfo(
+          `Se creó la ${term("orden")}, pero el checklist de ingreso no se guardó: el checklist del tipo de ${term("equipo")} todavía no había terminado de cargar. Completalo desde la ficha.`
+        )
       }
 
       setOrdenCreada({

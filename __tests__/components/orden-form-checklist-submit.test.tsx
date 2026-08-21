@@ -192,4 +192,59 @@ describe("OrdenForm — checklist restaurado en el submit", () => {
     expect(urls).toContain("/api/ordenes")
     expect(urls.filter((url) => /^\/api\/ordenes\/.+\/checklist$/.test(url))).toEqual([])
   })
+
+  it("avisa que el checklist quedo sin guardar en vez de tirarlo en silencio", async () => {
+    // El freno de arriba se combinaba con el `clearDraft()` que corre apenas la
+    // orden se crea, un renglon ANTES: la orden quedaba creada, la entrada del
+    // borrador borrada de localStorage y el POST del checklist salteado, sin una
+    // palabra en pantalla. El comentario del codigo decia que las respuestas "se
+    // retienen y se conservan en el borrador" -- no se conservaba nada.
+    //
+    // Conservar el borrador tampoco es una opcion: la orden ya existe, asi que
+    // la apertura siguiente restauraria una carga que ya se convirtio en orden,
+    // o sea una segunda orden del mismo equipo. Se pierde el checklist y se
+    // dice, que es la unica de las dos perdidas que el operador puede reparar.
+    const templateDelTipo = new Promise<Response>(() => {})
+    const fetchSpy = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes("by-device-type?tipoDispositivoId=")) return templateDelTipo
+      if (url.includes("/api/checklist-templates/by-device-type")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            template: {
+              id: "tpl-default-org",
+              nombre: "Ingreso generico",
+              items: [{ id: "generico", label: "Generico", tipo: "BOOLEAN" }],
+            },
+          }),
+        } as Response)
+      }
+      if (url === "/api/ordenes") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ id: "ord-1", numeroOrden: 1 }),
+        } as Response)
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => [] } as Response)
+    })
+    vi.stubGlobal("fetch", fetchSpy)
+    window.localStorage.setItem(DRAFT_KEY, draftEnvelope())
+
+    await renderForm()
+    await settle()
+
+    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+    await settle()
+    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+    await settle()
+    fireEvent.click(screen.getByRole("button", { name: "Crear Orden" }))
+    await settle()
+
+    expect(screen.getByText(/el checklist de ingreso no se guardó/i)).toBeInTheDocument()
+    // Y el borrador si se da de baja: la orden ya existe.
+    expect(window.localStorage.getItem(DRAFT_KEY)).toBeNull()
+  })
 })
