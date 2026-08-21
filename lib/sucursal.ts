@@ -373,8 +373,11 @@ export function derivarLecturaVenta(destino: DestinoVenta): LecturaVenta {
 // already makes, and self-healing without a deploy.
 
 const CACHE_VENTA_TTL_MS = 30_000
-/** Above this many live entries, expired ones are swept before inserting. */
-const CACHE_VENTA_MAX_ENTRIES = 500
+/**
+ * Hard cap on live entries per map. Exported so tests can pin the bound instead
+ * of hardcoding the number next to it.
+ */
+export const CACHE_VENTA_MAX_ENTRIES = 500
 
 interface EntradaCacheVenta<T> {
   data: T
@@ -399,13 +402,30 @@ async function memoConTtl<T>(
 ): Promise<T> {
   const now = Date.now()
   const hit = store.get(key)
-  if (hit && hit.expiresAt > now) return hit.data
+  if (hit && hit.expiresAt > now) {
+    // A Map iterates in insertion order, so re-inserting the entry marks it as
+    // the most recently used and keeps the eviction below honest LRU. The TTL is
+    // absolute and does NOT get extended: a hit renews recency, never freshness.
+    store.delete(key)
+    store.set(key, hit)
+    return hit.data
+  }
 
   const data = await resolver()
   if (cacheable && !cacheable(data)) return data
   if (store.size >= CACHE_VENTA_MAX_ENTRIES) {
     for (const [k, entry] of store) {
       if (entry.expiresAt <= now) store.delete(k)
+    }
+    // The sweep frees nothing when every entry is still inside its TTL — the
+    // exact case the cap exists for, since the key carries org + role + user +
+    // sucursal and a busy multi-tenant instance mints new ones faster than they
+    // expire. Evicting the least recently used ones is what makes the cap a
+    // bound instead of a scan trigger.
+    while (store.size >= CACHE_VENTA_MAX_ENTRIES) {
+      const masVieja = store.keys().next()
+      if (masVieja.done) break
+      store.delete(masVieja.value)
     }
   }
   store.set(key, { data, expiresAt: now + CACHE_VENTA_TTL_MS })

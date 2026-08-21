@@ -24,6 +24,7 @@ import {
   resolverDestinoVentaCacheado,
   resolverIndicadorVentaCacheado,
   resetCacheResolucionVenta,
+  CACHE_VENTA_MAX_ENTRIES,
   SUCURSAL_NINGUNA,
 } from "@/lib/sucursal"
 
@@ -815,6 +816,47 @@ describe("cache de resolucion de venta (solo lecturas del POS)", () => {
 
     expect(contarLecturas("depositos")).toBe(1)
     warn.mockRestore()
+  })
+
+  // Cada request de POS que resuelve un contexto nuevo deja una entrada. La org,
+  // el rol, el usuario y la sucursal del selector forman la clave, asi que una
+  // instancia con muchos tenants pasa el tope sin que venza nada: el barrido de
+  // expiradas no libera una sola entrada y el tope tiene que morder igual.
+  function paramsDeOrg(org: string) {
+    return { role: "ADMIN", organizationId: org, userSucursalId: null, cookieSucursalId: null }
+  }
+
+  it("CV-15 — el tope de entradas es real: pasado el limite se desaloja la menos usada", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    for (let i = 0; i < CACHE_VENTA_MAX_ENTRIES + 10; i++) {
+      await resolverDestinoVentaCacheado(paramsDeOrg(`org-${i}`))
+    }
+
+    const antes = contarLecturas("depositos")
+    await resolverDestinoVentaCacheado(paramsDeOrg("org-0"))
+    expect(contarLecturas("depositos")).toBe(antes + 1)
+
+    const despues = contarLecturas("depositos")
+    await resolverDestinoVentaCacheado(paramsDeOrg(`org-${CACHE_VENTA_MAX_ENTRIES + 9}`))
+    expect(contarLecturas("depositos")).toBe(despues)
+  })
+
+  it("CV-16 — el desalojo mira el uso, no el orden de llegada: una entrada recien usada sobrevive", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    for (let i = 0; i < CACHE_VENTA_MAX_ENTRIES; i++) {
+      await resolverDestinoVentaCacheado(paramsDeOrg(`org-${i}`))
+    }
+    // La mas vieja por orden de llegada, pero la mas reciente por uso.
+    await resolverDestinoVentaCacheado(paramsDeOrg("org-0"))
+    for (let i = 0; i < 5; i++) {
+      await resolverDestinoVentaCacheado(paramsDeOrg(`nueva-${i}`))
+    }
+
+    const antes = contarLecturas("depositos")
+    await resolverDestinoVentaCacheado(paramsDeOrg("org-0"))
+    expect(contarLecturas("depositos")).toBe(antes)
   })
 
   it("CV-7 — el camino de ESCRITURA no se cachea: resolverDestinoVenta siempre consulta", async () => {
