@@ -15,7 +15,7 @@
  * There is no bundler entry for sw.js (it ships verbatim from /public), so the
  * harness below evaluates the file against a fake ServiceWorkerGlobalScope.
  */
-import { describe, it, expect, beforeEach } from "vitest"
+import { describe, it, expect, beforeEach, vi } from "vitest"
 import fs from "node:fs"
 import path from "node:path"
 
@@ -253,6 +253,50 @@ describe("service worker — API caching", () => {
     const res = await sw.dispatchFetch("/api/clientes/cli-1/deuda-sucursal")
 
     expect(await res!.json()).toEqual({ deuda: 5000, scope: "sucursal" })
+  })
+
+  // A half-connected link — captive portal, dead cell, the normal state of a
+  // shop counter — is NOT the offline case: `fetch` neither answers nor rejects,
+  // it hangs for the OS connect timeout. Waiting that out before falling back to
+  // a usable stale copy is the failure mode offline tests cannot catch, so the
+  // network gets a short budget and the cached copy wins once it runs out.
+  it("SW-11 — con la red colgada, una entrada vencida se sirve sin esperar el timeout del SO", async () => {
+    vi.useFakeTimers()
+    try {
+      const url = `${ORIGIN}/api/clientes?page=1`
+      const store = await sw.caches.open(API_CACHE_NAME)
+      await store.put(
+        url,
+        jsonResponse({ data: ["stale"] }, { [CACHED_AT_HEADER]: String(Date.now() - 6 * 60 * 1000) })
+      )
+      // Ni resuelve ni rechaza: exactamente lo que hace un fetch sin salida.
+      sw.setNetwork(() => new Promise<Response>(() => {}))
+
+      const pendiente = sw.dispatchFetch("/api/clientes?page=1")
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      expect(await (await pendiente)!.json()).toEqual({ data: ["stale"] })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("SW-12 — sin nada cacheado y la red colgada, se sigue esperando la respuesta (no hay copia que servir)", async () => {
+    vi.useFakeTimers()
+    try {
+      let responder: ((value: Response) => void) | null = null
+      sw.setNetwork(() => new Promise<Response>((resolve) => { responder = resolve }))
+
+      const pendiente = sw.dispatchFetch("/api/clientes?page=1")
+      await vi.advanceTimersByTimeAsync(30_000)
+      // Recien ahora contesta la red: sin copia vencida, el presupuesto no puede
+      // degradar el request a un 503 anticipado.
+      responder!(jsonResponse({ data: ["network"] }))
+
+      expect(await (await pendiente)!.json()).toEqual({ data: ["network"] })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   // Writing to the cache is a side effect of serving a request, never a

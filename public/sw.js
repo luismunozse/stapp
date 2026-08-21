@@ -58,6 +58,18 @@ const SUCURSAL_SCOPED_API_PATTERNS = [
 const API_CACHE_TTL = 5 * 60 * 1000
 const CACHED_AT_HEADER = 'x-sw-cached-at'
 
+// Cuánto se espera a la red antes de servir una copia vencida que igual sirve.
+//
+// "Mientras haya red" no puede significar "esperemos el connect timeout del
+// sistema operativo". Un enlace a medias — portal cautivo, celda muerta, el
+// estado normal de un mostrador — no rechaza el fetch: lo cuelga decenas de
+// segundos, y sin este presupuesto el operador mira un spinner mientras la
+// respuesta que necesita ya está en el caché. Pasado el presupuesto se sirve la
+// copia vencida y la revalidación sigue en segundo plano, así que la próxima
+// lectura ya encuentra la fresca. Con red sana la red gana igual y el TTL sigue
+// mandando: este límite solo decide cuánto se espera, no qué se prefiere.
+const STALE_REVALIDATE_BUDGET = 1500
+
 // Todos los stores de IndexedDB para operaciones offline
 const ALL_STORES = [
   'pendingOrders',
@@ -258,6 +270,18 @@ function cacheVencido(response) {
   return Date.now() - Number(sello) > API_CACHE_TTL
 }
 
+// Espera una promesa hasta `ms` y resuelve a null si no llegó a tiempo (o si
+// falló). La promesa original sigue viva: acá solo se deja de esperarla.
+function conTiempoLimite(promise, ms) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), ms)
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value) },
+      () => { clearTimeout(timer); resolve(null) }
+    )
+  })
+}
+
 // Estrategia: Stale-while-revalidate para APIs cacheables
 async function staleWhileRevalidate(request, cacheName) {
   const cache = await caches.open(cacheName)
@@ -283,7 +307,12 @@ async function staleWhileRevalidate(request, cacheName) {
     return cached
   }
 
-  const response = await fetchPromise
+  // Con una copia vencida en mano la revalidación tiene presupuesto: si la red
+  // no contesta a tiempo se sirve esa copia y la revalidación sigue sola. Sin
+  // copia no hay nada mejor que esperar, así que el presupuesto no aplica.
+  const response = cached
+    ? await conTiempoLimite(fetchPromise, STALE_REVALIDATE_BUDGET)
+    : await fetchPromise
   if (response) {
     return response
   }
