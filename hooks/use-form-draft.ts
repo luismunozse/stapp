@@ -478,6 +478,25 @@ export function useFormDraft<T>({
       return
     }
     const key = buildDraftKey(feature, organizationId, userId, recordId, scope)
+    if (key === keyRef.current && interactedRef.current) {
+      // Misma key, pero el efecto volvio a correr: tipicamente porque el
+      // `updatedAt` del registro se movio (otro operador guardo la misma ficha
+      // y SWR revalido). Re-inicializar aca, sobre un formulario que el usuario
+      // YA edito, es exactamente la perdida que este hook existe para evitar:
+      // `readDraft` borra la entrada por desactualizada, la referencia de
+      // comparacion pasa a ser lo que hay escrito sin guardar y el flag de
+      // sucio se apaga, asi que el flush siguiente solo mueve la referencia y
+      // no vuelve a grabar hasta que se toque otro control. Un vencimiento de
+      // sesion en ese hueco se lleva todo lo escrito.
+      //
+      // Se fuerza ademas una reescritura (lastSavedRef) para que el sobre quede
+      // estampado contra el registro que el operador tiene delante: con el
+      // token viejo la entrada sobrevive en disco, pero la proxima apertura la
+      // descarta por desactualizada -- la misma perdida por otro camino.
+      lastSavedRef.current = null
+      setReady(true)
+      return
+    }
     if (key !== keyRef.current) flushPending()
     keyRef.current = key
     interactedRef.current = false

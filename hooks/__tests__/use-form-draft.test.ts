@@ -373,6 +373,66 @@ describe('useFormDraft', () => {
     expect(result.current.draft).toEqual({ nombre: 'Mi borrador' })
   })
 
+  it('keeps the unsaved edits when somebody else saves the record mid-edit', () => {
+    // El efecto de la key vuelve a correr cada vez que se mueve el `updatedAt`
+    // del registro (un companero guarda la misma ficha y SWR revalida).
+    // Reinicializar ahi sobre un formulario que el operador YA edito era la
+    // perdida que este hook existe para evitar: la lectura borraba la entrada
+    // por desactualizada, la referencia de comparacion pasaba a ser lo que
+    // habia escrito sin guardar y el flag de sucio se apagaba, asi que el
+    // flush siguiente solo movia la referencia y no volvia a grabar.
+    const key = 'draft:v2:cliente-form:org-1:user-1:edit:cli-1'
+    const primerUpdatedAt = Date.now() - 120_000
+
+    let live = { nombre: 'Nombre del server' }
+    const { result, rerender } = renderHook(
+      ({ recordUpdatedAt }: { recordUpdatedAt: number }) =>
+        useFormDraft({
+          feature: 'cliente-form',
+          recordId: 'cli-1',
+          debounceMs: 1000,
+          getValue: () => live,
+          recordUpdatedAt,
+        }),
+      { initialProps: { recordUpdatedAt: primerUpdatedAt } }
+    )
+
+    userInteracts()
+    live = { nombre: 'Lo que estoy escribiendo' }
+    act(() => {
+      result.current.notifyChange()
+      vi.advanceTimersByTime(1000)
+    })
+    expect(JSON.parse(window.localStorage.getItem(key)!).data).toEqual({
+      nombre: 'Lo que estoy escribiendo',
+    })
+
+    // El guardado del companero: misma key, otro token de frescura.
+    const segundoUpdatedAt = Date.now()
+    rerender({ recordUpdatedAt: segundoUpdatedAt })
+    act(() => {
+      vi.advanceTimersByTime(2000)
+    })
+
+    const guardado = JSON.parse(window.localStorage.getItem(key)!)
+    expect(guardado.data).toEqual({ nombre: 'Lo que estoy escribiendo' })
+    // Reestampado contra el registro que el operador tiene en pantalla: con el
+    // token viejo la entrada sobrevive pero la proxima apertura la descarta por
+    // desactualizada, que es la misma perdida por otro camino.
+    expect(guardado.recordUpdatedAt).toBe(segundoUpdatedAt)
+
+    // Y el flag de sucio sigue armado: lo que se escriba despues se sigue
+    // grabando sin tener que volver a tocar otro control.
+    live = { nombre: 'Y un poco mas' }
+    act(() => {
+      result.current.notifyChange()
+      vi.advanceTimersByTime(1000)
+    })
+    expect(JSON.parse(window.localStorage.getItem(key)!).data).toEqual({
+      nombre: 'Y un poco mas',
+    })
+  })
+
   it('stores the record freshness token so a later save can be compared against it', () => {
     const recordUpdatedAt = new Date(Date.now() - 120_000)
     const { rerender } = renderDraft(
