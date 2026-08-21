@@ -147,6 +147,21 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
     getValue: () => getValues(),
     enabled: open,
     rootRef: formRef,
+    // `reset()` no tira excepcion con un borrador de otra forma: aplica lo que
+    // le den. El try/catch de mas abajo por si solo no alcanza, entonces --
+    // un borrador viejo (hasta 7 dias) que quedo de una version anterior de
+    // este formulario abre el dialog con campos vacios o con basura, en
+    // silencio, y esos valores salen tal cual en el PUT/POST.
+    validate: (data) => {
+      const value = data as ClienteFormData
+      return (
+        !!value &&
+        typeof value === "object" &&
+        typeof value.nombre === "string" &&
+        typeof value.telefono === "string" &&
+        (value.tipoCliente === "INDIVIDUAL" || value.tipoCliente === "EMPRESA")
+      )
+    },
     // En edicion, si otro usuario guardo el cliente despues de que se escribio
     // este borrador, restaurarlo pisaria ese guardado (el submit manda el form
     // entero). El hook lo descarta comparando contra este token.
@@ -168,8 +183,14 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
     }
     const scopeKey = recordId ?? "new"
     if (!draftReady || draftAppliedForRef.current === scopeKey) return
-    draftAppliedForRef.current = scopeKey
+    // Se marca DESPUES de saber que hay algo que aplicar. Marcarlo antes dejaba
+    // el formulario "con el borrador ya aplicado" sin haberlo aplicado: si mas
+    // tarde aparecia uno para el mismo scope (otra pestana escribiendo la misma
+    // key, el token de frescura resolviendo), el hook lo contaba como
+    // restaurado y este efecto no lo tocaba nunca, asi que se pisaba en
+    // silencio con lo que hubiera en pantalla y el aviso no salia.
     if (!draft) return
+    draftAppliedForRef.current = scopeKey
     try {
       reset(draft)
       setDraftNoticeVisible(true)

@@ -184,6 +184,90 @@ describe("ClienteForm — borrador local", () => {
     expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Editado Sin Guardar")
   })
 
+  it("descarta un borrador cuya forma ya no es la del formulario", () => {
+    // DRAFT_SCHEMA_VERSION se mantiene a mano: si alguien cambia los campos de
+    // este formulario sin tocarla, el borrador viejo (hasta 7 dias) pasa las
+    // validaciones del sobre igual. `reset()` no tira excepcion con una forma
+    // equivocada -- aplica lo que le den -- asi que el try/catch de abajo no lo
+    // agarra: el dialog abre con campos vacios o con basura y esos valores se
+    // van tal cual en el PUT/POST.
+    const key = "draft:v2:cliente-form:org-1:user-1:new"
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        version: 2,
+        savedAt: Date.now(),
+        data: { nombre: 42, direccion: "Calle Falsa 123" },
+      }),
+    )
+
+    render(
+      <ModalProvider>
+        <ClienteForm cliente={null} open onClose={vi.fn()} onSuccess={vi.fn()} />
+      </ModalProvider>,
+    )
+
+    expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("")
+    expect(window.localStorage.getItem(key)).toBeNull()
+  })
+
+  it("aplica un borrador que aparece despues de abrir el dialog", () => {
+    // localStorage se comparte entre pestanas: la del mostrador puede escribir
+    // el borrador de esta misma ficha mientras el dialog ya esta abierto. Si el
+    // formulario se marca como "borrador aplicado" antes de saber si habia uno,
+    // esa entrada no se aplica nunca -- pero el hook si la cuenta como
+    // restaurada, asi que despues la pisa en silencio con lo que hay en
+    // pantalla y el aviso nunca aparece.
+    const key = "draft:v2:cliente-form:org-1:user-1:edit:cli-1"
+
+    const { rerender } = render(
+      <ModalProvider>
+        <ClienteForm cliente={makeCliente()} open onClose={vi.fn()} onSuccess={vi.fn()} />
+      </ModalProvider>,
+    )
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Juan Perez")
+
+    const otroUpdatedAt = new Date("2026-01-02T10:00:00.000Z")
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        version: 2,
+        savedAt: Date.now(),
+        recordUpdatedAt: otroUpdatedAt.getTime(),
+        data: {
+          tipoCliente: "INDIVIDUAL",
+          nombre: "Escrito en la otra pestana",
+          telefono: "1100000000",
+          email: "",
+          direccion: "",
+          dni: "",
+          razonSocial: "",
+          cuit: "",
+          aceptaWhatsapp: true,
+          tipoPrecio: "MINORISTA",
+          descuentoPct: undefined,
+        },
+      }),
+    )
+
+    // La revalidacion que trae el guardado de la otra pestana: mueve el token
+    // de frescura y vuelve a correr la lectura del borrador.
+    rerender(
+      <ModalProvider>
+        <ClienteForm
+          cliente={makeCliente({ updatedAt: otroUpdatedAt })}
+          open
+          onClose={vi.fn()}
+          onSuccess={vi.fn()}
+        />
+      </ModalProvider>,
+    )
+
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Escrito en la otra pestana")
+    expect(screen.getByText(/se restauró un borrador no guardado/i)).toBeInTheDocument()
+  })
+
   it("descarta un borrador de edicion si otro usuario guardo el cliente despues", () => {
     // El submit de edicion manda el formulario entero (PUT /api/clientes/:id),
     // asi que restaurar un borrador viejo encima de un registro mas nuevo
