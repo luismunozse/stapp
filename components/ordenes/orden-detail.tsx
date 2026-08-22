@@ -1019,10 +1019,15 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 <Package className="h-4 w-4" />
                 Repuestos
               </TabsTrigger>
-              <TabsTrigger value="servicios" className="gap-2">
-                <Hammer className="h-4 w-4" />
-                Servicios
-              </TabsTrigger>
+              {/* Servicios mueve el presupuesto y el costo final de la orden,
+                  asi que el panel es solo ADMIN. El trigger sigue al panel: si
+                  se muestra sin el, el tecnico abre una pestana vacia. */}
+              {isAdmin && (
+                <TabsTrigger value="servicios" className="gap-2">
+                  <Hammer className="h-4 w-4" />
+                  Servicios
+                </TabsTrigger>
+              )}
               <TabsTrigger value="fotos" className="gap-2">
                 <Camera className="h-4 w-4" />
                 Fotos
