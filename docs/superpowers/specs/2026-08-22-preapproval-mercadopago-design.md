@@ -110,11 +110,15 @@ Ya funcionan: `subscription_authorized_payment` → `handleAuthorizedPaymentNoti
 
 ### 4.1 La gracia
 
-`subscription-sweep` no marca `PAST_DUE` cuando la suscripción tiene `mercadopago_preapproval_id` y su `current_period_end` venció hace **menos de 7 días**.
+`subscription-sweep` no marca `PAST_DUE` cuando la suscripción tiene `mercadopago_preapproval_id` y su `current_period_end` venció hace **menos de 12 días**.
 
-Siete días porque cubre el ciclo de reintentos de MercadoPago. Vencido ese plazo sin un cobro nuevo, se marca `PAST_DUE` como hoy: si en una semana el débito no prosperó, el problema es real.
+El número sale de la política de MercadoPago, no de una estimación: cuando un cobro se rechaza, la cuota entra en estado `recycling` y **se reintenta durante 10 días, con un máximo de 4 intentos**. Si el cuarto falla, la cuota queda procesada con pago rechazado. Los 12 días son esos 10 más margen para que llegue el webhook.
 
-**La fecha deja de ser la señal.** Para una suscripción con débito automático, la señal buena es MercadoPago diciendo `cancelled` o `paused`, y eso ya lo escribe `handlePreApprovalNotification`. La fecha pasa a ser el respaldo para cuando el webhook nunca llega.
+**La cancelación de MercadoPago NO sirve como señal de bloqueo.** MercadoPago recién cancela la suscripción **después de 3 cuotas con pago rechazado** — alrededor de tres meses. Esperar esa señal significaría regalar tres meses de servicio a alguien cuyo cobro rebota desde el primero.
+
+Por eso la fecha sigue siendo nuestra señal, y lo único que cambia es cuánto hay que esperarla: 12 días en vez de cero. Vencido ese plazo sin un cobro nuevo registrado, se marca `PAST_DUE` como hoy — MercadoPago agotó sus reintentos y el mes no se cobró.
+
+`handlePreApprovalNotification` sigue siendo la vía rápida: si el taller cancela desde MercadoPago, el estado llega antes que la fecha y no hay que esperar nada.
 
 La regla se implementa como una función pura con tests, no como una condición suelta dentro del cron.
 
@@ -129,8 +133,8 @@ Con este cambio:
 
 ### 4.3 Tests
 
-- Una sub con `preapproval_id` vencida hace 3 días no se marca `PAST_DUE`.
-- La misma vencida hace 10 días **sí** se marca.
+- Una sub con `preapproval_id` vencida hace 3 días no se marca `PAST_DUE` (MercadoPago sigue reintentando).
+- La misma vencida hace 15 días **sí** se marca: los 10 días de reintentos ya pasaron.
 - Una sub sin `preapproval_id` vencida hace 1 día se marca, como hoy.
 - Una sub `MANUAL` sigue bajando a Free, sin cambios.
 - El copy de `current-plan` cambia según haya o no `preapproval_id`.
@@ -179,9 +183,10 @@ El mensaje explica qué cambia: se cobra solo, se cancela cuando quieras, y no h
 |---|---|
 | **MercadoPago no acepta tarjetas prepagas para suscripciones (23% de los pagos)** | El diseño mantiene el pago único: esos talleres siguen pagando como hoy. Confirmar contra la API antes de la campaña, para no invitar a quien no puede adherir. |
 | **Inflación: una PreApproval cobra el mismo monto para siempre** | Actualizar el importe por API cuando cambie el precio del plan. **Hay que verificar si MercadoPago exige re-autorización del pagador al subir el monto**: si la exige, el aumento se vuelve una campaña, no un update. Fuera del primer slice. |
-| **El 80% paga desde saldo: los rebotes van a ser frecuentes** | La ventana de gracia (§4.1) evita el bloqueo durante los reintentos. El aviso al taller de que su cobro rebotó es parte del dunning, que es otro spec. |
+| **El 80% paga desde saldo: los rebotes van a ser frecuentes** | La ventana de gracia de 12 días (§4.1) evita el bloqueo durante los 10 días de reintentos de MercadoPago. El aviso al taller de que su cobro rebotó es parte del dunning, que es otro spec — y con esta política se vuelve más urgente: MercadoPago reintenta 4 veces en silencio y el taller no se entera de que su billetera está vacía. |
 | **Un taller adhiere y además paga a mano el mismo mes** | El período se apila (`webhook/route.ts:441-447`), que es el comportamiento correcto: pagó dos meses. El UNIQUE de la 305 evita que un mismo pago se cuente dos veces. |
 | **La campaña llega a quien no corresponde** | Los tres filtros de §5.3, cubiertos por tests. |
+| **Un taller con cobros rechazados sigue con la suscripción viva en MercadoPago hasta 3 cuotas** | No se espera esa cancelación para bloquear: la ventana de 12 días la resuelve antes. Se documenta para que nadie "arregle" el cron confiando en el estado que reporta MercadoPago. |
 | **Adhiere y el primer cobro nunca llega** | Queda `ACTIVE` con `current_period_end` en NULL, y el sweep filtra `current_period_end IS NOT NULL`: nunca la barre, así que tendría el plan pago sin haber pagado nunca. El PR 2 agrega la rama que la detecta — autorizada hace más de 7 días y sin un solo pago registrado — y la marca `PAST_DUE`. La consulta que encontró este caso ya está escrita: es la de suscripciones activas con cero pagos sobre un plan de precio mayor a cero. |
 
 ---
