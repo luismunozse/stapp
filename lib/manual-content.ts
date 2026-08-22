@@ -55,13 +55,15 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Roles y permisos",
-        body: "STApp maneja tres roles con distintos niveles de acceso. El Administrador tiene acceso completo a todas las funciones. El Técnico puede gestionar órdenes asignadas, ver clientes y cotizaciones. El Vendedor puede gestionar ventas, clientes, POS y proveedores.",
+        body: "STApp maneja tres roles con distintos niveles de acceso. El Administrador tiene acceso completo. El Técnico trabaja sobre las órdenes. El Vendedor atiende el mostrador. Además de qué secciones ve cada uno, el rol define qué números de dinero se muestran.",
         steps: [
-          "Administrador (ADMIN): acceso total — órdenes, inventario, comprobantes, reportes, configuración, técnicos, vendedores, caja y más",
-          "Técnico (TECNICO): órdenes asignadas, clientes, cotizaciones y dashboard",
-          "Vendedor (VENDEDOR): ventas, POS, clientes, proveedores, reportes de ventas y dashboard",
+          "Administrador (ADMIN): acceso total — órdenes, inventario, servicios, compras, comprobantes, caja, finanzas, reportes, comisiones y configuración",
+          "Técnico (TECNICO): órdenes, clientes, cotizaciones, agenda y su propio desempeño",
+          "Vendedor (VENDEDOR): ventas, POS, clientes, proveedores, reportes de ventas y agenda",
+          "Inventario para vendedores: viene apagado. El administrador puede habilitarlo desde Configuración > Módulos opcionales",
         ],
-        tip: "Solo los administradores pueden agregar o modificar usuarios y cambiar la configuración del sistema.",
+        tip: "Los costos son información sensible: el precio de compra solo se muestra a quien tiene acceso a inventario, y el costo y la ganancia de una cotización se muestran solo al administrador. El técnico ve el presupuesto y el total, no lo que te costó a vos.",
+        seeAlso: ["inventario", "configuracion"],
       },
       {
         subtitle: "Navegación general",
@@ -122,16 +124,43 @@ export const manualSections: ManualSection[] = [
         seeAlso: ["clientes", "configuracion"],
       },
       {
-        subtitle: "Estados de una orden",
-        body: "Cada orden pasa por distintos estados que reflejan el progreso de la reparación:",
+        subtitle: "Recibir varios equipos de un mismo cliente",
+        body: "Cuando un cliente trae más de un equipo, no hace falta cargar una orden por vez. Desde Órdenes > \"Recibir varios equipos\" cargás todos en una sola atención: los datos del cliente se tipean una vez, los términos y la firma se toman una sola vez, y STApp crea una orden independiente por equipo, cada una con su número, su seguimiento y su etiqueta.",
         steps: [
-          "PENDIENTE: la orden fue creada y espera ser atendida",
-          "EN REPARACIÓN: el técnico está trabajando en el equipo",
-          "ESPERANDO REPUESTOS: se necesita un repuesto que no está en stock",
-          "COMPLETADA: la reparación fue finalizada, el equipo está listo para retirar",
-          "ENTREGADA: el cliente ya retiró su equipo",
-          "CANCELADA: la orden fue cancelada",
+          "Andá a \"Órdenes\" y elegí \"Recibir varios equipos\"",
+          "Seleccioná o creá el cliente y confirmá el teléfono de contacto",
+          "Cargá cada equipo: tipo, marca, modelo o IMEI, color, falla reportada, accesorios y fotos",
+          "Indicá quién recibe y agregá observaciones si corresponde",
+          "Pedile al cliente que acepte los términos y firme una sola vez",
+          "Confirmá: se crea una orden por equipo y un comprobante único con todos",
         ],
+        tip: "La recepción de varios equipos necesita al menos 2 equipos y está disponible en el plan Profesional.",
+        seeAlso: ["clientes", "suscripcion"],
+      },
+      {
+        subtitle: "Código de acceso del dispositivo",
+        body: "Si el equipo necesita PIN, patrón o contraseña para poder probarse, guardalo en la orden al momento de recibirlo. Queda disponible para el técnico y se imprime únicamente en el talón que se queda el taller — nunca en la copia que se lleva el cliente.",
+        tip: "Pedí el código siempre que el equipo encienda: sin él, el técnico no puede verificar la reparación y el equipo vuelve al mostrador.",
+      },
+      {
+        subtitle: "Estados de una orden",
+        body: "Cada orden avanza por una máquina de estados: desde cada estado solo se puede pasar a los que tienen sentido, así nadie se saltea pasos por error.",
+        steps: [
+          "RECIBIDO: el equipo entró al taller y espera revisión",
+          "EN DIAGNÓSTICO: el técnico está evaluando la falla",
+          "PRESUPUESTADO: se cargó el presupuesto y se espera la respuesta del cliente",
+          "APROBADO: el cliente aceptó el presupuesto",
+          "EN REPARACIÓN: el técnico está trabajando en el equipo",
+          "ESPERANDO REPUESTO: la reparación quedó pausada por falta de un repuesto",
+          "REPARADO: el trabajo terminó y el equipo está listo para entregar",
+          "SIN FALLA DETECTADA: se revisó y no se reproduce la falla que reportó el cliente",
+          "SIN REPARACIÓN: no se puede reparar, o el cliente rechazó el presupuesto",
+          "ENTREGADO: el cliente retiró el equipo reparado (final)",
+          "ENTREGADO SIN REPARACIÓN: el cliente retiró el equipo sin reparar (final)",
+          "ENTREGADO SIN COBRO: se entregó sin cobrar — cortesía, garantía, no reparable o sin falla (final)",
+          "CANCELADO: la orden se dio de baja; se puede reactivar volviéndola a RECIBIDO",
+        ],
+        tip: "Los estados de entrega son finales: una vez entregado, el equipo no vuelve atrás. En cambio, desde REPARADO todavía podés volver a EN REPARACIÓN si aparece una falla antes de que el cliente lo retire.",
       },
       {
         subtitle: "Gestión de repuestos en la orden",
@@ -144,6 +173,27 @@ export const manualSections: ManualSection[] = [
           "El sistema verifica stock disponible, descuenta y registra el movimiento automáticamente",
         ],
         seeAlso: ["inventario"],
+      },
+      {
+        subtitle: "Servicios realizados en la orden",
+        body: "En el detalle de la orden, la pestaña \"Servicios\" es donde cargás el trabajo que se cobra, aparte de los repuestos que se pusieron. Podés elegir un servicio del catálogo o escribir uno a mano para ese caso puntual.",
+        steps: [
+          "Abrí la orden y andá a la pestaña \"Servicios\"",
+          "Elegí un servicio del catálogo, o cargá uno manual con nombre y precio",
+          "Indicá la cantidad",
+          "Si el servicio manual lo vas a repetir seguido, marcá \"Guardar en Servicios\" y queda en el catálogo",
+          "El subtotal de servicios se suma al monto de la orden",
+        ],
+        tip: "El precio del catálogo es un punto de partida, no una atadura: podés cambiarlo en el renglón y la orden guarda lo que cobraste de verdad. Si mañana actualizás la lista, las órdenes viejas no se mueven.",
+        roles: ["ADMIN"],
+        seeAlso: ["servicios", "cotizaciones"],
+      },
+      {
+        subtitle: "Cómo impactan los servicios en el total",
+        body: "Al agregar o quitar servicios, el monto de la orden se actualiza solo — y cuál se actualiza depende del estado: antes de APROBADO se mueve el presupuesto (todavía estás cotizando), y desde APROBADO se mueve el costo final (ya estás ejecutando). El total nunca puede quedar por debajo de lo que ya le cobraste al cliente.",
+        tip: "Si querés sacar un servicio y el sistema no te deja, es porque el total quedaría por debajo de los pagos ya registrados. Revisá primero los cobros de esa orden.",
+        roles: ["ADMIN"],
+        seeAlso: ["caja", "servicios"],
       },
       {
         subtitle: "Fotos de la orden",
@@ -159,9 +209,93 @@ export const manualSections: ManualSection[] = [
         body: "Cada orden genera un enlace de seguimiento único que podés compartir con el cliente. Desde ahí, el cliente puede ver el estado actual de su reparación sin necesitar una cuenta en STApp.",
       },
       {
-        subtitle: "Impresión / PDF de la orden",
-        body: "Podés generar un PDF de la orden de servicio con todos los datos: cliente, equipo, diagnóstico, repuestos utilizados, costos y firma. Este PDF incluye el logo de tu taller configurado en el sistema.",
+        subtitle: "Marcar como Reparado y registrar el costo final",
+        body: "Cuando pasás una orden a REPARADO, STApp te pide el costo final del trabajo. Lo hace en ese momento, y no antes, porque recién ahí sabés qué se usó de verdad. El diálogo te muestra el contexto para no equivocarte: el presupuesto que le pasaste al cliente, lo que ya cobraste de seña y lo que queda pendiente.",
+        steps: [
+          "Desde el detalle de la orden, cambiá el estado a REPARADO",
+          "Revisá el presupuesto y la seña que muestra el diálogo",
+          "Ingresá el costo final del trabajo",
+          "Confirmá — la orden queda lista para entregar y podés imprimir la etiqueta",
+        ],
+        tip: "El cambio masivo de estado no incluye REPARADO justamente por esto: cada orden necesita su propio costo final.",
         roles: ["ADMIN", "TECNICO"],
+        seeAlso: ["caja", "comisiones"],
+      },
+      {
+        subtitle: "Entrega del equipo y cobro",
+        body: "Al entregar, STApp confirma el total a cobrar y encadena el cobro: si queda saldo, te lleva directo a registrarlo con su método de pago, y el movimiento aparece en la caja del día. También podés dejar constancia con la firma del cliente y la del encargado.",
+        steps: [
+          "Desde la orden en estado REPARADO, elegí entregar",
+          "Confirmá el total a cobrar (podés sumarle los repuestos usados)",
+          "Tomá la firma del cliente y, si tu taller lo usa, la del encargado",
+          "Registrá el cobro del saldo pendiente",
+          "Si la entrega es sin cobro, elegí el motivo: no reparable, cortesía, garantía o el cliente desistió",
+        ],
+        tip: "Entregar sin cobrar es una decisión que queda registrada con su motivo. Sirve para que después puedas ver cuánto trabajo se fue en cortesías y garantías.",
+        roles: ["ADMIN", "VENDEDOR"],
+        seeAlso: ["caja", "clientes"],
+      },
+      {
+        subtitle: "Etiqueta térmica del equipo",
+        body: "Podés imprimir una etiqueta para pegar en el equipo, con el número de orden, el cliente, el equipo y un QR de seguimiento. Se imprime con el driver normal de tu impresora, así que funciona con cualquier etiquetadora o impresora de tickets.",
+        steps: [
+          "Elegí el tamaño: etiquetas troqueladas de 40×30, 50×30, 50×40 o 60×40 mm, o rollo continuo de 58 o 80 mm",
+          "El tamaño elegido queda guardado en ese equipo para las próximas impresiones",
+          "Imprimí al recibir el equipo, y de nuevo al marcarlo como REPARADO si querés identificar lo que está listo para entregar",
+        ],
+        tip: "Si la etiqueta sale cortada o corrida, casi siempre es el tamaño de papel del driver, no la app: revisá que coincida con el tamaño elegido acá.",
+        roles: ["ADMIN", "TECNICO"],
+        seeAlso: ["configuracion"],
+      },
+      {
+        subtitle: "Comprobante de recepción y expediente de la orden",
+        body: "La orden imprime en A4 como un expediente: los datos del cliente y del equipo, el checklist de recepción, el diagnóstico, los repuestos usados, los totales y los espacios de firma, con el logo de tu taller. La hoja de recepción trae además una línea de corte con el talón interno del taller (ahí va el código de acceso). La hoja de entrega incluye el conforme del cliente.",
+        tip: "Guardá el talón: es tu respaldo de qué equipo entró, en qué estado y con qué accesorios.",
+        roles: ["ADMIN", "TECNICO"],
+        seeAlso: ["facturacion"],
+      },
+    ],
+  },
+  {
+    id: "agenda",
+    title: "Agenda",
+    roles: ["ADMIN", "TECNICO", "VENDEDOR"],
+    content: [
+      {
+        subtitle: "Para qué sirve la Agenda",
+        body: "La Agenda es un calendario de turnos para todo lo que se coordina con día y hora: visitas de diagnóstico, reparaciones en el domicilio del cliente, retiros y entregas de equipos y mantenimientos programados. Es un módulo opcional: el administrador lo activa desde Configuración > Módulos opcionales.",
+        tip: "Si trabajás solo en mostrador, dejala apagada — el menú queda más corto. Activala cuando empieces a salir a domicilio o a coordinar retiros.",
+        seeAlso: ["configuracion"],
+      },
+      {
+        subtitle: "Crear un turno",
+        body: "Desde el calendario hacé clic en el horario que querés ocupar y completá el turno.",
+        steps: [
+          "Elegí el tipo: visita de diagnóstico, reparación en sitio, retiro de equipo, entrega de equipo o mantenimiento",
+          "Definí inicio y fin, y la dirección si es a domicilio",
+          "Asigná el técnico responsable (o dejalo sin asignar y resolvelo después)",
+          "Vinculá el cliente y, si corresponde, el equipo",
+          "Guardá — el turno aparece en el calendario con el color de su estado",
+        ],
+      },
+      {
+        subtitle: "Estados del turno",
+        body: "Cada turno refleja en qué punto de la coordinación está:",
+        steps: [
+          "Agendado: reservado, todavía sin confirmar con el cliente",
+          "Confirmado: el cliente confirmó día y hora",
+          "En camino: el técnico salió hacia el domicilio",
+          "Realizado: el turno se cumplió",
+          "Orden generada: del turno salió una orden de servicio",
+          "Cancelado / No se presentó: el turno no se concretó",
+        ],
+        tip: "Marcar los \"no se presentó\" te da, con el tiempo, el dato de cuántas horas de técnico se pierden en visitas fallidas.",
+        seeAlso: ["ordenes"],
+      },
+      {
+        subtitle: "Avisos al cliente",
+        body: "Los turnos pueden avisarle al cliente por WhatsApp o email — confirmación y recordatorio — usando las plantillas de tu organización.",
+        seeAlso: ["configuracion", "clientes"],
       },
     ],
   },
@@ -194,8 +328,29 @@ export const manualSections: ManualSection[] = [
         seeAlso: ["facturacion", "caja", "glosario"],
       },
       {
+        subtitle: "Tipo de precio: minorista o mayorista",
+        body: "Cada cliente puede marcarse como Minorista (el caso normal) o Mayorista con un porcentaje de descuento propio. Cuando cargás una venta, un presupuesto o una orden para un cliente mayorista, STApp ya sugiere el precio con su descuento aplicado, en vez de dejarte hacer la cuenta a mano cada vez.",
+        steps: [
+          "Abrí la ficha del cliente y editala",
+          "Elegí el tipo de precio: Minorista o Mayorista",
+          "Si es mayorista, cargá su porcentaje de descuento",
+          "Guardá — en la lista y en el buscador queda con la etiqueta \"Mayorista\"",
+        ],
+        tip: "Solo el administrador puede marcar un cliente como mayorista o cambiar su descuento. El vendedor lo ve y lo usa, pero no lo modifica.",
+        roles: ["ADMIN"],
+        seeAlso: ["ventas", "pos", "cotizaciones"],
+      },
+      {
         subtitle: "Comunicación por WhatsApp",
-        body: "Desde la ficha del cliente podés enviar un mensaje de WhatsApp directamente, abriendo una conversación con el número registrado.",
+        body: "Desde la ficha del cliente podés enviar un mensaje de WhatsApp directamente, abriendo una conversación con el número registrado. Los mensajes salen de las plantillas de tu organización, con los datos ya completados.",
+        seeAlso: ["configuracion"],
+      },
+      {
+        subtitle: "Recordatorio de cobro",
+        body: "Si el cliente tiene deuda, el diálogo de WhatsApp te ofrece un mensaje de recordatorio de cobro ya armado, con el total adeudado y el desglose entre cuenta corriente y órdenes pendientes. Vos revisás el texto antes de enviarlo.",
+        tip: "Un recordatorio amable a los pocos días cobra mucho mejor que un reclamo a los dos meses. Aprovechá que el mensaje ya viene con los números correctos.",
+        roles: ["ADMIN"],
+        seeAlso: ["caja", "facturacion"],
       },
     ],
   },
@@ -246,9 +401,38 @@ export const manualSections: ManualSection[] = [
     ],
   },
   {
+    id: "comisiones",
+    title: "Comisiones",
+    roles: ["ADMIN"],
+    content: [
+      {
+        subtitle: "Cómo se liquidan las comisiones",
+        body: "La sección Comisiones muestra, orden por orden, cuánto le corresponde a cada técnico. Una orden entra en la liquidación cuando está REPARADO o ENTREGADO y además está cobrada: mientras el cliente no pagó, no se genera comisión.",
+        steps: [
+          "Elegí el período y, si querés, filtrá por técnico",
+          "La tabla muestra orden, equipo, costo final, costo de repuestos, ganancia, % de comisión y monto",
+          "Filtrá por pendientes para ver solo lo que falta pagar",
+          "Marcá las comisiones como pagadas, de a una o todas las pendientes juntas",
+        ],
+        tip: "La comisión se calcula sobre la ganancia (costo final menos repuestos), no sobre el total cobrado. Así un trabajo con muchos repuestos no infla la comisión.",
+        seeAlso: ["tecnicos", "ordenes"],
+      },
+      {
+        subtitle: "Órdenes entregadas sin reparar",
+        body: "Por defecto no generan comisión. Si en tu negocio se cobra la revisión y querés reconocerla igual, activá \"Pagar comisión en órdenes sin reparación\" en Configuración > Módulos opcionales.",
+        seeAlso: ["configuracion"],
+      },
+      {
+        subtitle: "Comisiones de vendedores",
+        body: "La pestaña de vendedores liquida sobre las ventas atribuidas a cada uno en el período, con el mismo circuito: ver pendientes y marcar como pagadas.",
+        seeAlso: ["vendedores", "ventas"],
+      },
+    ],
+  },
+  {
     id: "inventario",
     title: "Inventario",
-    roles: ["ADMIN"],
+    roles: ["ADMIN", "VENDEDOR"],
     content: [
       {
         subtitle: "Control de stock",
@@ -273,8 +457,22 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Movimientos de inventario",
-        body: "Cada entrada y salida de stock queda registrada automáticamente. Podés ver el historial completo de movimientos de cada item: salidas por órdenes de servicio, ventas, ajustes manuales y entradas por compras.",
-        seeAlso: ["ordenes", "ventas", "proveedores"],
+        body: "Cada entrada y salida de stock queda registrada automáticamente. Podés ver el historial completo de movimientos de cada item: salidas por órdenes de servicio, ventas, ajustes manuales, entradas por compras y transferencias entre depósitos.",
+        seeAlso: ["ordenes", "ventas", "compras"],
+      },
+      {
+        subtitle: "Depósitos y sucursales",
+        body: "Si guardás mercadería en más de un lugar (el mostrador, el taller, un depósito aparte), podés darlos de alta en Configuración > Depósitos y llevar el stock separado por cada uno. Las sucursales, en cambio, se configuran en Configuración > Sucursales y separan la operación completa: órdenes, ventas y personal.",
+        tip: "Si vendés desde el POS y el stock no te cierra, revisá desde qué depósito está saliendo la mercadería. Tener stock repartido y no darse cuenta es la causa más común de \"stock insuficiente\" con el producto ahí en la vitrina.",
+        roles: ["ADMIN"],
+        seeAlso: ["configuracion", "pos"],
+      },
+      {
+        subtitle: "Quién ve el inventario y los costos",
+        body: "El inventario es del administrador por defecto. Si tus vendedores necesitan cargar productos o consultar stock, activá el permiso desde Configuración > Módulos opcionales; mientras esté apagado, la sección no aparece en su menú.",
+        tip: "El permiso también decide quién ve el precio de compra. Al habilitarlo, el vendedor pasa a ver cuánto te costó cada producto — tenelo en cuenta antes de activarlo.",
+        roles: ["ADMIN"],
+        seeAlso: ["configuracion", "vendedores"],
       },
       {
         subtitle: "Importación masiva",
@@ -286,6 +484,36 @@ export const manualSections: ManualSection[] = [
           "Subí el archivo y revisá la vista previa",
           "Confirmá la importación",
         ],
+      },
+    ],
+  },
+  {
+    id: "servicios",
+    title: "Servicios",
+    roles: ["ADMIN"],
+    content: [
+      {
+        subtitle: "El catálogo de servicios",
+        body: "Tu taller no solo pone repuestos: cobra trabajo. Diagnósticos, instalaciones, mantenimientos, visitas a domicilio. Todo eso vive en Servicios, un catálogo aparte del inventario — porque un servicio no tiene stock: lo podés vender las veces que quieras sin que se te acabe.",
+        steps: [
+          "Andá a \"Servicios\" y creá uno nuevo",
+          "Cargá el código (por ejemplo SRV-001) y el nombre (por ejemplo \"Instalación de Windows\")",
+          "Opcionalmente agregá descripción y categoría para agruparlos",
+          "Definí el precio de lista",
+          "Opcionalmente indicá la duración estimada en minutos",
+          "Dejalo Activo para que aparezca al cargar órdenes y cotizaciones",
+        ],
+        tip: "La duración estimada no es un adorno: es lo que después te deja ver si el precio que cobrás se banca las horas que se lleva el trabajo.",
+        seeAlso: ["ordenes", "cotizaciones"],
+      },
+      {
+        subtitle: "Quién carga y quién consulta",
+        body: "Los precios son una decisión comercial, así que solo el administrador da de alta y edita servicios. El técnico sí puede consultar el catálogo, porque lo necesita para saber qué se ofrece y a cuánto.",
+      },
+      {
+        subtitle: "Dar de baja sin perder el historial",
+        body: "Un servicio que dejás de ofrecer no se borra: se desactiva. Deja de aparecer al cargar trabajo nuevo, pero las órdenes y cotizaciones que ya lo usaron siguen mostrando lo que se cobró en su momento.",
+        tip: "Desactivar en vez de borrar es lo que mantiene sanos los reportes históricos. Si borrás, los números viejos dejan de cerrar.",
       },
     ],
   },
@@ -329,14 +557,60 @@ export const manualSections: ManualSection[] = [
     content: [
       {
         subtitle: "Terminal de venta rápida",
-        body: "El POS es una interfaz simplificada y rápida para registrar ventas en mostrador. Está diseñado para agilizar la atención al cliente con un flujo de cobro rápido.",
+        body: "El POS es una interfaz simplificada y rápida para registrar ventas en mostrador. Está diseñado para agilizar la atención al cliente con un flujo de cobro corto.",
         steps: [
           "Abrí la sección \"POS\"",
-          "Buscá y agregá productos al carrito",
+          "Buscá y agregá productos al carrito (por nombre, código o lector de códigos)",
           "Ajustá cantidades si es necesario",
+          "Elegí el cliente si querés que la venta quede en su historial",
           "Seleccioná el método de pago",
           "Confirmá la venta — el stock se actualiza automáticamente",
         ],
+      },
+      {
+        subtitle: "El precio cambia según cómo paga el cliente",
+        body: "Si cobrás distinto según el medio de pago (efectivo más barato, tarjeta con recargo), configurá el porcentaje de cada método en Configuración > Recargos por método de pago. En el POS, al elegir el método, el total se ajusta solo: dejás de hacer la cuenta mental delante del cliente y de perder ese porcentaje por olvido.",
+        tip: "El recargo es parte del precio de esa venta, no un adicional aparte: los reportes lo cuentan como ingreso real.",
+        seeAlso: ["configuracion", "reportes"],
+      },
+      {
+        subtitle: "Clientes mayoristas",
+        body: "Si el cliente está marcado como mayorista, el POS ya sugiere el precio con su descuento aplicado. No hace falta acordarse del porcentaje de cada uno.",
+        seeAlso: ["clientes"],
+      },
+      {
+        subtitle: "Ticket para el cliente",
+        body: "Al cerrar la venta podés imprimir el ticket en tu impresora térmica, con los datos del negocio, el detalle de los productos, el total y el método de pago. Soporta rollos de 58 y de 80 mm — elegí el que use tu impresora para que no salga cortado.",
+        seeAlso: ["ventas", "facturacion"],
+      },
+    ],
+  },
+  {
+    id: "catalogo",
+    title: "Catálogo público",
+    roles: ["ADMIN"],
+    content: [
+      {
+        subtitle: "Qué es el catálogo público",
+        body: "El catálogo es una página pública, con su propia dirección, donde mostrás los productos y servicios que querés vender. El cliente entra desde un link o un QR, arma su pedido y te llega listo, sin que tengas que responder precio por precio en el chat.",
+        steps: [
+          "Items: qué se publica, con precio, foto y descripción",
+          "Categorías: cómo se agrupan los items para el cliente",
+          "Cupones: códigos de descuento para promociones puntuales",
+          "Abandonados: carritos que alguien empezó y no confirmó",
+          "Compartir: el link público y el QR para imprimir o mandar",
+        ],
+      },
+      {
+        subtitle: "Publicar y despublicar",
+        body: "El catálogo tiene un interruptor de activación: mientras está apagado, el link no muestra nada. Cada item además se publica u oculta por separado, así podés prepararlo con calma y abrirlo cuando esté listo.",
+        tip: "Antes de compartir el link, abrilo vos desde el celular: es exactamente lo que va a ver tu cliente.",
+      },
+      {
+        subtitle: "Carritos abandonados",
+        body: "Si alguien armó un pedido y no lo confirmó, queda registrado con lo que había elegido y cuánto sumaba. Desde ahí podés mandarle un mensaje para recuperar la venta, o descartarlo.",
+        tip: "El carrito abandonado es la venta más barata de recuperar: el cliente ya eligió, solo se distrajo.",
+        seeAlso: ["clientes", "ventas"],
       },
     ],
   },
@@ -361,6 +635,11 @@ export const manualSections: ManualSection[] = [
         tip: "El IVA en cotizaciones es configurable porque cada actividad y régimen fiscal usa una alícuota distinta. Si sos monotributista, dejalo en 0%.",
       },
       {
+        subtitle: "Cotizar servicios del catálogo",
+        body: "Al cargar los items podés elegir un servicio del catálogo en lugar de escribir la descripción a mano. La línea queda vinculada a ese servicio, así siempre cotizás con el mismo nombre y el mismo precio de lista, sin depender de cómo lo escribió cada uno.",
+        seeAlso: ["servicios"],
+      },
+      {
         subtitle: "Estados de cotización",
         body: "Las cotizaciones pasan por los siguientes estados:",
         steps: [
@@ -369,6 +648,13 @@ export const manualSections: ManualSection[] = [
           "ACEPTADA: el cliente aceptó el presupuesto",
           "RECHAZADA: el cliente rechazó el presupuesto",
         ],
+      },
+      {
+        subtitle: "Costo y ganancia: solo el administrador",
+        body: "Al armar una cotización podés cargar el costo de cada item para ver la ganancia bruta antes de mandar el presupuesto. Ese costo y esa ganancia se muestran únicamente al administrador: el técnico trabaja sobre el precio de venta y el total, sin ver el margen.",
+        tip: "Si vinculás un item al inventario, el costo se toma del precio de compra actual — y se vuelve a tomar si después cambiás de producto, para que no quede un costo viejo pegado.",
+        roles: ["ADMIN"],
+        seeAlso: ["inventario", "reportes"],
       },
       {
         subtitle: "Enlace público de cotización",
@@ -413,8 +699,20 @@ export const manualSections: ManualSection[] = [
         ],
       },
       {
-        subtitle: "Generación de PDF",
-        body: "Podés descargar cada remito en formato PDF con el logo de tu taller, datos del cliente, detalle de conceptos y totales. Ideal para enviar por email o WhatsApp.",
+        subtitle: "El remito impreso",
+        body: "El remito se descarga en PDF con formato clásico de comprobante A4: el encabezado con los datos de tu negocio y su logo, el bloque del cliente, el detalle de conceptos, los pagos registrados y el saldo pendiente como número principal, más el espacio de \"recibí conforme\". Sirve para mandarlo por email o WhatsApp, o para imprimirlo y entregarlo en mano.",
+        tip: "Si el remito tiene muchos renglones, la impresión continúa en la hoja siguiente manteniendo el encabezado y los totales, así no queda un total suelto sin contexto.",
+      },
+      {
+        subtitle: "Datos fiscales y de cobro en el comprobante",
+        body: "Para que el remito salga completo, cargá una vez tus datos en Configuración > Datos fiscales y de cobro: CUIT, condición frente al IVA, domicilio fiscal, ingresos brutos e inicio de actividades, más los datos de cobro (CBU o alias, medios de pago aceptados y plazo de pago). A partir de ahí aparecen impresos en cada comprobante.",
+        tip: "Poner el CBU o alias en el propio remito acorta el cobro: el cliente transfiere desde el mismo papel que le entregaste, sin tener que pedirte los datos.",
+        seeAlso: ["configuracion", "caja"],
+      },
+      {
+        subtitle: "Los servicios en el comprobante",
+        body: "Cuando el comprobante sale de una orden, los servicios realizados se desglosan renglón por renglón junto con los repuestos. El cliente ve qué se le hizo al equipo, no solo un total que tiene que creerte.",
+        seeAlso: ["servicios", "ordenes"],
       },
       {
         subtitle: "Asociar a orden de servicio",
@@ -516,6 +814,25 @@ export const manualSections: ManualSection[] = [
     ],
   },
   {
+    id: "finanzas",
+    title: "Finanzas",
+    roles: ["ADMIN"],
+    content: [
+      {
+        subtitle: "La plata del período, no la del día",
+        body: "La Caja te muestra el día; Finanzas te muestra el período. Elegís un rango de fechas y ves las cuatro vistas con el mismo filtro:",
+        steps: [
+          "Resumen: ingresos, gastos y resultado del período",
+          "Estado de resultados: ingresos menos costo de mercadería es la ganancia bruta; menos los gastos, la ganancia neta",
+          "Ingresos: de dónde vino la plata (órdenes, ventas, POS)",
+          "Gastos: en qué se fue, agrupado por categoría",
+        ],
+        tip: "Mirá Finanzas una vez por mes con el mismo rango que el mes anterior. La comparación es la que te dice si mejoraste, no el número suelto.",
+        seeAlso: ["caja", "reportes"],
+      },
+    ],
+  },
+  {
     id: "proveedores",
     title: "Proveedores",
     roles: ["ADMIN", "VENDEDOR"],
@@ -532,6 +849,37 @@ export const manualSections: ManualSection[] = [
       {
         subtitle: "Asociación con inventario",
         body: "Al crear o editar un item de inventario, podés asignarle un proveedor. Esto te permite saber rápidamente a quién comprarle cuando necesitás reponer stock.",
+      },
+    ],
+  },
+  {
+    id: "compras",
+    title: "Compras",
+    roles: ["ADMIN"],
+    content: [
+      {
+        subtitle: "Órdenes de compra a proveedores",
+        body: "Las órdenes de compra formalizan lo que le pedís a cada proveedor y, sobre todo, hacen que la mercadería entre al inventario cuando llega, con su costo real, sin cargarla a mano.",
+        steps: [
+          "Andá a \"Compras\" y creá una nueva orden de compra",
+          "Elegí el proveedor",
+          "Agregá los items con cantidad y costo unitario",
+          "Guardala como Borrador y, cuando se la mandes al proveedor, pasala a Enviada",
+        ],
+        seeAlso: ["proveedores", "inventario"],
+      },
+      {
+        subtitle: "Recibir la mercadería",
+        body: "Cuando llega el pedido, usá \"Recibir\" e indicá cuánto entró de cada item. Si vino todo, la orden queda Recibida; si vino una parte, queda Parcial y podés seguir recibiendo el resto más adelante. Cada recepción genera el movimiento de stock correspondiente.",
+        steps: [
+          "Borrador: la orden se está armando",
+          "Enviada: ya se la pasaste al proveedor",
+          "Parcial: llegó una parte del pedido",
+          "Recibida: entró todo",
+          "Cancelada: el pedido no se concretó",
+        ],
+        tip: "Recibí siempre por el sistema, aunque tengas la caja abierta en el mostrador: es lo que mantiene el stock y el costo de compra al día para los reportes de rentabilidad.",
+        seeAlso: ["inventario", "reportes"],
       },
     ],
   },
@@ -599,8 +947,16 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Reportes avanzados",
-        body: "Los reportes avanzados permiten análisis más detallados con filtros personalizados, cruces de datos y exportación a Excel y PDF.",
+        body: "Los reportes avanzados permiten análisis más detallados con filtros personalizados, cruces de datos y exportación a Excel y PDF: rentabilidad por período, rentabilidad por técnico y análisis de inventario.",
         roles: ["ADMIN"],
+        seeAlso: ["finanzas", "comisiones"],
+      },
+      {
+        subtitle: "Costos y márgenes: quién los ve",
+        body: "Los reportes que muestran costo de mercadería, margen o rentabilidad son del administrador. El vendedor ve el movimiento de ventas — cuánto se vendió y de qué — pero no lo que cada producto costó ni el margen que dejó, salvo que se le haya habilitado el acceso a inventario.",
+        tip: "Es la misma regla en todo el sistema: el precio de compra viaja con el permiso de inventario, no con la sección donde aparece.",
+        roles: ["ADMIN"],
+        seeAlso: ["configuracion", "inventario"],
       },
       {
         subtitle: "Exportación de datos",
@@ -650,6 +1006,24 @@ export const manualSections: ManualSection[] = [
     ],
   },
   {
+    id: "asistente",
+    title: "Asistente del panel",
+    roles: ["ADMIN", "TECNICO", "VENDEDOR"],
+    content: [
+      {
+        subtitle: "Preguntale al asistente",
+        body: "Dentro del panel hay un asistente que responde dudas de uso: cómo hacer algo, dónde está una función, qué significa un estado. Contesta en base a este mismo manual y te deja el enlace a la sección correspondiente.",
+        tip: "El asistente explica cómo usar STApp; no toca tus datos ni hace cambios por vos.",
+        seeAlso: ["soporte"],
+      },
+      {
+        subtitle: "Disponibilidad",
+        body: "Está incluido en el plan Profesional. En el plan Free el ícono aparece bloqueado, con el enlace para ver los planes.",
+        seeAlso: ["suscripcion"],
+      },
+    ],
+  },
+  {
     id: "soporte",
     title: "Soporte",
     roles: ["ADMIN", "TECNICO", "VENDEDOR"],
@@ -680,6 +1054,57 @@ export const manualSections: ManualSection[] = [
         body: "En Configuración > General podés editar los datos de tu organización: nombre, dirección, teléfono, email y logo. Estos datos aparecen en todas las comunicaciones y documentos generados (órdenes, remitos, cotizaciones).",
       },
       {
+        subtitle: "Datos fiscales y de cobro",
+        body: "Cargá una sola vez tus datos fiscales (CUIT, condición frente al IVA, domicilio fiscal, ingresos brutos e inicio de actividades) y tus datos de cobro (CBU o alias, medios de pago que aceptás y plazo de pago). Aparecen impresos en los remitos y comprobantes.",
+        seeAlso: ["facturacion"],
+      },
+      {
+        subtitle: "Facturación / IVA",
+        body: "Definí tu régimen de IVA y la alícuota que usás por defecto en presupuestos y comprobantes. También podés activar el redondeo en efectivo para evitar los centavos imposibles de dar de vuelto.",
+        seeAlso: ["cotizaciones", "pos"],
+      },
+      {
+        subtitle: "Módulos opcionales",
+        body: "Tres interruptores que cambian qué ve tu equipo y cómo se liquida el trabajo:",
+        steps: [
+          "Agenda de turnos: agrega la sección Agenda al menú",
+          "Los vendedores pueden administrar inventario: les habilita la sección Inventario (y con ella, el precio de compra)",
+          "Pagar comisión en órdenes sin reparación: incluye en la liquidación los equipos entregados sin reparar",
+        ],
+        seeAlso: ["agenda", "inventario", "comisiones"],
+      },
+      {
+        subtitle: "Vocabulario del rubro",
+        body: "STApp no es solo para talleres de celulares. Desde Configuración > Vocabulario cambiás los términos que usa el sistema para que hablen tu idioma: \"equipo\" puede ser vehículo, prenda, bicicleta o lo que trabajes. Los textos de la app, los comprobantes y los mensajes se adaptan.",
+        tip: "Ajustar el vocabulario antes de capacitar al equipo evita la confusión de traducir mentalmente cada pantalla.",
+      },
+      {
+        subtitle: "Sucursales y depósitos",
+        body: "Si tenés más de un local, dalos de alta en Configuración > Sucursales: cada uno lleva sus órdenes, sus ventas y su personal por separado. Los depósitos (Configuración > Depósitos) son distintos: separan dónde está guardado el stock, no la operación.",
+        tip: "Una sucursal solo se puede archivar si no tiene órdenes ni personal asignado; un depósito, solo si no tiene stock. Si todavía los tienen, desactivalos en lugar de archivarlos.",
+        seeAlso: ["inventario"],
+      },
+      {
+        subtitle: "Recargos por método de pago",
+        body: "Definí un porcentaje por cada método de pago (efectivo, transferencia, débito, crédito, MercadoPago). El POS y las ventas aplican el ajuste solo cuando elegís el método, sin que tengas que recalcular a mano.",
+        seeAlso: ["pos", "ventas"],
+      },
+      {
+        subtitle: "Etiquetas térmicas",
+        body: "Desde Configuración > Etiquetas térmicas definís cómo salen las etiquetas de los equipos y de los productos: tamaño de papel y qué datos se imprimen.",
+        seeAlso: ["ordenes", "inventario"],
+      },
+      {
+        subtitle: "Comprobantes y términos",
+        body: "Los textos legales que se imprimen los editás vos: términos de la recepción (lo que el cliente acepta al dejar el equipo), términos de las cotizaciones y del comprobante, días de garantía por defecto, porcentaje de anticipo sugerido y política de abandono de equipos.",
+        tip: "La política de abandono impresa en el comprobante de recepción es tu respaldo cuando un equipo lleva meses sin que lo retiren.",
+        seeAlso: ["ordenes", "cotizaciones", "facturacion"],
+      },
+      {
+        subtitle: "API keys y webhooks",
+        body: "Si querés conectar STApp con otro sistema, podés generar claves de API y configurar webhooks para que te avisen cuando pasan cosas (por ejemplo, una orden que cambia de estado). Es una función para integraciones, no hace falta tocarla para el uso diario.",
+      },
+      {
         subtitle: "Checklist de recepción",
         body: "Configurá plantillas de checklist personalizadas para la recepción de equipos. Podés definir los puntos a verificar según el tipo de dispositivo (celular, computadora, tablet, etc.).",
         steps: [
@@ -695,13 +1120,19 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Integración WhatsApp",
-        body: "Configurá la integración con WhatsApp Business API para enviar notificaciones automáticas a tus clientes cuando cambie el estado de una orden.",
+        body: "Configurá la conexión de WhatsApp para enviar notificaciones a tus clientes cuando cambie el estado de una orden. Si trabajás con más de una sucursal, cada una puede tener su propio número.",
         steps: [
           "Andá a Configuración > WhatsApp",
-          "Seguí las instrucciones para vincular tu número de WhatsApp Business",
-          "Configurá las plantillas de mensaje",
-          "Activá las notificaciones automáticas que desees",
+          "Seguí las instrucciones para vincular tu número",
+          "Elegí qué avisos automáticos querés activar",
         ],
+        seeAlso: ["ordenes", "clientes"],
+      },
+      {
+        subtitle: "Plantillas de mensajes",
+        body: "En Configuración > Plantillas de WhatsApp editás el texto de cada mensaje: equipo listo para retirar, presupuesto enviado, recordatorio de cobro, aviso de turno y varios más. Cada plantilla tiene variables que STApp completa sola (nombre del cliente, número de orden, saldo, link de seguimiento).",
+        tip: "Escribí los mensajes como los dirías vos. El cliente nota la diferencia entre un aviso escrito por el negocio y un texto genérico de sistema.",
+        seeAlso: ["clientes", "agenda"],
       },
       {
         subtitle: "Importación y exportación de datos",
@@ -849,6 +1280,30 @@ export const manualSections: ManualSection[] = [
         body: "STApp es una sola plataforma usada por muchos talleres a la vez, pero los datos de cada uno están completamente aislados. Ningún taller puede ver datos de otro, ni siquiera por error técnico.",
       },
       {
+        subtitle: "Servicio",
+        body: "Trabajo que cobrás y que no consume stock: diagnóstico, instalación, mantenimiento, visita. Vive en la sección Servicios con su precio de lista y su duración estimada. A diferencia de un repuesto, se puede vender infinitas veces porque no hay unidades que se agoten.",
+      },
+      {
+        subtitle: "Cliente mayorista",
+        body: "Cliente marcado con un porcentaje de descuento propio. Cuando le cargás una venta, una orden o un presupuesto, STApp ya sugiere el precio con ese descuento aplicado, en vez de dejarte hacer la cuenta cada vez.",
+      },
+      {
+        subtitle: "Talón del comprobante de recepción",
+        body: "La parte de la hoja de recepción que se queda el taller, separada por una línea de corte. Ahí va el código de acceso del equipo; en la copia del cliente no aparece.",
+      },
+      {
+        subtitle: "Depósito vs sucursal",
+        body: "Depósito = dónde está guardada la mercadería (mostrador, taller, galpón). Sucursal = una operación completa aparte, con sus órdenes, sus ventas y su personal. Una sucursal puede tener varios depósitos.",
+      },
+      {
+        subtitle: "Comisión",
+        body: "Parte del trabajo que le queda al técnico o al vendedor. En órdenes se calcula sobre la ganancia (costo final menos repuestos) y solo se liquida cuando la orden está cobrada.",
+      },
+      {
+        subtitle: "Recargo por método de pago",
+        body: "Porcentaje que se suma al precio según cómo paga el cliente (por ejemplo, tarjeta de crédito). No es un cargo aparte: forma parte del precio de esa venta y los reportes lo cuentan como ingreso.",
+      },
+      {
         subtitle: "2FA (autenticación en dos pasos)",
         body: "Capa extra de seguridad para iniciar sesión: además de tu contraseña, te pide un código que se genera en una app de tu celular (Google Authenticator, Authy, etc.). Hace mucho más difícil que alguien acceda a tu cuenta aunque sepa tu contraseña.",
       },
@@ -865,11 +1320,18 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Planes disponibles",
-        body: "STApp ofrece un plan Premium con todas las funciones incluidas. Podés elegir entre facturación mensual o anual (con descuento).",
+        body: "Terminado el período de prueba, la cuenta queda en el plan Free: sigue siendo usable para lo básico, pero con límites de órdenes, clientes y usuarios, y sin las funciones avanzadas. El plan Profesional levanta esos límites y habilita WhatsApp, cotizaciones, POS, cuenta corriente, reportes avanzados, recepción de varios equipos, asistente del panel y exportación de datos. Podés pagarlo por mes o por año, con descuento en el anual.",
+        tip: "En Configuración > Billing ves siempre qué plan tenés activo, cuánto te queda de prueba y qué límite estás por alcanzar.",
+        seeAlso: ["configuracion"],
       },
       {
         subtitle: "Métodos de pago",
-        body: "Los pagos se procesan a través de MercadoPago, aceptando tarjetas de crédito, débito, efectivo y otros medios de pago disponibles en Argentina.",
+        body: "Podés pagar en pesos con MercadoPago (tarjetas, débito, efectivo y demás medios disponibles en Argentina) o en dólares con tarjeta internacional. Elegís el medio al momento de contratar el plan.",
+      },
+      {
+        subtitle: "Si un pago falla",
+        body: "Cuando un cobro no sale, STApp no te corta el acceso de golpe: te avisa por email y reintenta durante unos días para que puedas actualizar la tarjeta. Recién si el problema no se resuelve, la cuenta baja al plan Free — tus datos siguen ahí.",
+        tip: "Las tarjetas vencen y los bancos rechazan cobros por motivos tontos. Si te llega el aviso, actualizá el medio de pago desde Configuración > Billing y listo.",
       },
       {
         subtitle: "Cancelación",
