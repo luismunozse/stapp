@@ -172,11 +172,25 @@ export async function GET(request: Request) {
       .neq("organizations.slug", "superadmin")
 
     for (const ad of (adhesiones || []) as any[]) {
-      const { count } = await supabaseAdmin
+      const { count, error: countError } = await supabaseAdmin
         .from("subscription_payments")
         .select("id", { count: "exact", head: true })
         .eq("organization_id", ad.organization_id)
         .eq("status", "SUCCEEDED")
+
+      // Si esta consulta falla no sabemos cuantos pagos tiene la org: un
+      // error de infraestructura no puede leerse como "cero pagos exitosos",
+      // porque eso terminaria bloqueando a un taller que si esta pagando.
+      // Ante la duda, no se toca la organizacion y se reintenta la proxima
+      // corrida del cron.
+      if (countError) {
+        console.error(
+          `[subscription-sweep] FAIL conteo de pagos org ${ad.organization_id}:`,
+          countError.message
+        )
+        results.failed++
+        continue
+      }
 
       const marcar = esAdhesionSinCobro({
         tienePreapproval: true,
