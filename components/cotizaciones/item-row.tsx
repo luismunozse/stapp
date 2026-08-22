@@ -34,6 +34,7 @@ interface ItemRowProps {
     descuentoTipo?: string
     descuentoValor?: number
     inventarioId?: string | null
+    servicioId?: string | null
     tipoRepuesto?: string
     precioCompra?: number | null
   }
@@ -110,10 +111,21 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
   useEffect(() => {
     if (!invSearch || invSearch.length < 2) { setInvResults([]); return }
     const t = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/inventario/search?q=${encodeURIComponent(invSearch)}&limit=5&includeZeroStock=true`)
-        if (res.ok) setInvResults(await res.json())
-      } catch { /* ignore */ }
+      const q = encodeURIComponent(invSearch)
+      // Los dos catalogos de lo que el taller vende: productos y servicios.
+      // Fallan por separado: que el inventario no responda no debe esconder los servicios.
+      const [productos, servicios] = await Promise.all([
+        fetch(`/api/inventario/search?q=${q}&limit=5&includeZeroStock=true`)
+          .then((r) => (r.ok ? r.json() : []))
+          .catch(() => []),
+        fetch(`/api/servicios?buscar=${q}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null),
+      ])
+      setInvResults([
+        ...(Array.isArray(productos) ? productos : []).map((p: any) => ({ ...p, tipo: "PRODUCTO" })),
+        ...((servicios?.servicios ?? []) as any[]).slice(0, 5).map((sv: any) => ({ ...sv, tipo: "SERVICIO" })),
+      ])
     }, 300)
     return () => clearTimeout(t)
   }, [invSearch])
@@ -157,12 +169,30 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
     setInvResults([])
   }
 
-  const clearInvLink = () => {
+  // Un servicio no tiene stock que chequear ni precio de compra que arrastrar:
+  // el margen de la linea queda sin costo conocido, no con costo cero.
+  const selectServicio = (srv: any) => {
+    onUpdate(index, "descripcion", srv.nombre)
+    onUpdate(index, "precioUnitario", Number(srv.precio) || 0)
+    onUpdate(index, "unidad", "Servicio")
+    onUpdate(index, "servicioId", srv.id)
+    setShowInvSearch(false)
+    setInvSearch("")
+    setInvResults([])
+  }
+
+  const clearLink = () => {
+    if (item.servicioId) {
+      onUpdate(index, "servicioId", null)
+      return
+    }
     onUpdate(index, "inventarioId", null)
     onUpdate(index, "precioCompra", null)
     // Desvincular también descarta el costo: era el del producto que se quitó.
     onUpdate(index, "costoUnitario", null)
   }
+
+  const vinculado = !!item.inventarioId || !!item.servicioId
   const hasDiscount = (item.descuentoValor || 0) > 0
   const costoUnit = Number(item.precioCompra) || 0
   const costoTotal = costoUnit * (item.cantidad || 0)
@@ -180,7 +210,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
             {showInvSearch ? (
               <div>
                 <Input
-                  placeholder="Buscar producto..."
+                  placeholder="Buscar producto o servicio..."
                   value={invSearch}
                   onChange={(e) => setInvSearch(e.target.value)}
                   autoFocus
@@ -188,6 +218,15 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
                 {invResults.length > 0 && (
                   <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto">
                     {invResults.map((inv) => {
+                      if (inv.tipo === "SERVICIO") {
+                        return (
+                          <button key={`srv-${inv.id}`} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-accent" onClick={() => selectServicio(inv)}>
+                            <div className="font-medium">{inv.nombre}</div>
+                            <div className="text-xs text-muted-foreground">Servicio{inv.categoria ? ` · ${inv.categoria}` : ""}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5">Precio: {formatPrice(Number(inv.precio) || 0)}</div>
+                          </button>
+                        )
+                      }
                       const pc = Number(inv.precioCompra) || 0
                       const pv = Number(inv.precioVenta) || 0
                       const mPct = pv > 0 && pc > 0 ? Math.round(((pv - pc) / pv) * 100) : null
@@ -222,8 +261,8 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
               />
             )}
           </div>
-          <Button type="button" variant={item.inventarioId ? "secondary" : "outline"} size="icon" className="h-8 w-8 shrink-0" onClick={() => item.inventarioId ? clearInvLink() : setShowInvSearch(!showInvSearch)} disabled={disabled} title={item.inventarioId ? "Desvincular producto" : "Buscar en inventario"}>
-            {item.inventarioId ? <X className="h-3.5 w-3.5" /> : <Package className="h-3.5 w-3.5" />}
+          <Button type="button" variant={vinculado ? "secondary" : "outline"} size="icon" className="h-8 w-8 shrink-0" onClick={() => vinculado ? clearLink() : setShowInvSearch(!showInvSearch)} disabled={disabled} title={vinculado ? "Desvincular del catálogo" : "Buscar producto o servicio"}>
+            {vinculado ? <X className="h-3.5 w-3.5" /> : <Package className="h-3.5 w-3.5" />}
           </Button>
           <Button
             type="button"
@@ -365,7 +404,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
           <div className="flex gap-1">
             {showInvSearch ? (
               <Input
-                placeholder="Buscar producto..."
+                placeholder="Buscar producto o servicio..."
                 value={invSearch}
                 onChange={(e) => setInvSearch(e.target.value)}
                 autoFocus
@@ -380,13 +419,29 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
                 className="flex-1"
               />
             )}
-            <Button type="button" variant={item.inventarioId ? "secondary" : "ghost"} size="icon" className="h-10 w-8 shrink-0" onClick={() => item.inventarioId ? clearInvLink() : setShowInvSearch(!showInvSearch)} disabled={disabled} title={item.inventarioId ? "Desvincular producto" : "Buscar en inventario"}>
-              {item.inventarioId ? <X className="h-3.5 w-3.5" /> : <Package className="h-3.5 w-3.5" />}
+            <Button type="button" variant={vinculado ? "secondary" : "ghost"} size="icon" className="h-10 w-8 shrink-0" onClick={() => vinculado ? clearLink() : setShowInvSearch(!showInvSearch)} disabled={disabled} title={vinculado ? "Desvincular del catálogo" : "Buscar producto o servicio"}>
+              {vinculado ? <X className="h-3.5 w-3.5" /> : <Package className="h-3.5 w-3.5" />}
             </Button>
           </div>
           {showInvSearch && invResults.length > 0 && (
             <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-56 overflow-y-auto">
               {invResults.map((inv) => {
+                if (inv.tipo === "SERVICIO") {
+                  return (
+                    <button key={`srv-${inv.id}`} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-accent" onClick={() => selectServicio(inv)}>
+                      <div className="flex justify-between gap-2">
+                        <div>
+                          <span className="font-medium">{inv.nombre}</span>
+                          <span className="ml-2 text-xs text-muted-foreground">{inv.codigo}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground shrink-0">Servicio</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        Precio: {formatPrice(Number(inv.precio) || 0)}{inv.categoria ? ` · ${inv.categoria}` : ""}
+                      </div>
+                    </button>
+                  )
+                }
                 const pc = Number(inv.precioCompra) || 0
                 const pv = Number(inv.precioVenta) || 0
                 const mPct = pv > 0 && pc > 0 ? Math.round(((pv - pc) / pv) * 100) : null

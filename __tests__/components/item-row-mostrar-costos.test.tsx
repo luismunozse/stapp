@@ -68,8 +68,8 @@ describe("ItemRow (cotización) — costo y margen visibles solo con mostrarCost
 
     render(<ItemRow item={itemManual} index={0} onUpdate={vi.fn()} onRemove={vi.fn()} />)
 
-    fireEvent.click(screen.getAllByTitle("Buscar en inventario")[0])
-    fireEvent.change(screen.getAllByPlaceholderText("Buscar producto...")[0], {
+    fireEvent.click(screen.getAllByTitle("Buscar producto o servicio")[0])
+    fireEvent.change(screen.getAllByPlaceholderText("Buscar producto o servicio...")[0], {
       target: { value: "bateria" },
     })
 
@@ -97,8 +97,8 @@ describe("ItemRow (cotización) — costo y margen visibles solo con mostrarCost
 
     render(<ItemRow item={itemManual} index={0} onUpdate={vi.fn()} onRemove={vi.fn()} mostrarCostos />)
 
-    fireEvent.click(screen.getAllByTitle("Buscar en inventario")[0])
-    fireEvent.change(screen.getAllByPlaceholderText("Buscar producto...")[0], {
+    fireEvent.click(screen.getAllByTitle("Buscar producto o servicio")[0])
+    fireEvent.change(screen.getAllByPlaceholderText("Buscar producto o servicio...")[0], {
       target: { value: "bateria" },
     })
 
@@ -149,8 +149,8 @@ describe("ItemRow (cotización) — costo unitario al vincular/desvincular inven
   async function seleccionarDelInventario(onUpdate: OnUpdate) {
     render(<ItemRow item={itemConCostoViejo} index={0} onUpdate={onUpdate} onRemove={vi.fn()} mostrarCostos />)
 
-    fireEvent.click(screen.getAllByTitle("Buscar en inventario")[0])
-    fireEvent.change(screen.getAllByPlaceholderText("Buscar producto...")[0], {
+    fireEvent.click(screen.getAllByTitle("Buscar producto o servicio")[0])
+    fireEvent.change(screen.getAllByPlaceholderText("Buscar producto o servicio...")[0], {
       target: { value: "bateria" },
     })
 
@@ -196,7 +196,7 @@ describe("ItemRow (cotización) — costo unitario al vincular/desvincular inven
       />
     )
 
-    fireEvent.click(screen.getAllByTitle("Desvincular producto")[0])
+    fireEvent.click(screen.getAllByTitle("Desvincular del catálogo")[0])
 
     expect(onUpdate).toHaveBeenCalledWith(0, "inventarioId", null)
     expect(onUpdate).toHaveBeenCalledWith(0, "precioCompra", null)

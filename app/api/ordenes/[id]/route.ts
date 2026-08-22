@@ -5,7 +5,7 @@ import { createAuditLogger, diffObjects } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { queueNotification } from "@/lib/notifications/queue"
 import { formatOrden } from "@/lib/db-utils"
-import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos, ESTADO_LABELS } from "@/lib/orden-state-machine"
+import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos, ESTADO_LABELS, ESTADOS_COSTO_FINAL_BLOQUEADO } from "@/lib/orden-state-machine"
 import { z } from "zod"
 
 // Estados que solo se alcanzan por POST /api/ordenes/[id]/entregar. Ese endpoint,
@@ -76,6 +76,7 @@ export async function GET(
           *,
           inventario (*)
         ),
+        servicios_orden (*),
         cotizaciones!cotizaciones_orden_id_fkey (
           id,
           estado,
@@ -325,7 +326,35 @@ export async function PUT(
     }
     if (data.porcentajeComision !== undefined) updateData.porcentaje_comision = data.porcentajeComision
     if (data.presupuesto !== undefined) updateData.presupuesto = data.presupuesto
-    if (data.costoFinal !== undefined) updateData.costo_final = data.costoFinal
+    if (data.costoFinal !== undefined) {
+      // costo_final es la base de la comisión del técnico (migración 119) y del
+      // saldo que se carga a cuenta corriente al entregar. Las columnas DECIMAL
+      // llegan como string desde supabase-js, así que se coercionan con Number()
+      // antes de comparar.
+      const totalCobradoActual = Number(orden.total_cobrado ?? 0)
+      const descuentoCobroActual = Number(orden.descuento_cobro ?? 0)
+      const nuevoCostoFinal = data.costoFinal === null ? 0 : data.costoFinal
+
+      if (nuevoCostoFinal - descuentoCobroActual < totalCobradoActual) {
+        return NextResponse.json(
+          {
+            error: `No se puede bajar el costo final por debajo de lo ya cobrado ($${totalCobradoActual.toLocaleString()}). Para devolver dinero al cliente hay que registrar una devolución, no editar el costo final.`,
+          },
+          { status: 400 }
+        )
+      }
+
+      if (nuevoCostoFinal === 0 && ESTADOS_COSTO_FINAL_BLOQUEADO.includes(orden.estado)) {
+        return NextResponse.json(
+          {
+            error: `No se puede dejar el costo final vacío en una orden en estado "${ESTADO_LABELS[orden.estado as keyof typeof ESTADO_LABELS] ?? orden.estado}". Si hace falta corregir el precio, hay que cargar un valor mayor a cero.`,
+          },
+          { status: 400 }
+        )
+      }
+
+      updateData.costo_final = data.costoFinal
+    }
     if (data.observaciones !== undefined) updateData.observaciones = data.observaciones
     if (data.notasInternas !== undefined) updateData.notas_internas = data.notasInternas
     if (data.diagnostico !== undefined) updateData.diagnostico = data.diagnostico

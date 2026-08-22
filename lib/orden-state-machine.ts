@@ -117,6 +117,38 @@ export const ESTADOS_ENTREGA: EstadoOrden[] = [
 ]
 
 /**
+ * Estados en los que costo_final ya cruzó el gate de CAMPOS_REQUERIDOS_POR_ESTADO
+ * (ver REPARADO más arriba: exige costo_final > 0 para entrar) y por lo tanto no
+ * puede volver a quedar en null/0: la comisión del técnico (monto_comision =
+ * (costo_final - repuestos) * pct/100, migración 119), la cuenta corriente y la
+ * entrega ya asumen que hay un precio cargado. REPARADO es el propio gate;
+ * ESTADOS_ENTREGA son los estados terminales de entrega, siempre al mismo nivel
+ * o más allá en el flujo de reparación.
+ *
+ * ESPECIFICACIÓN NORMATIVA de esta lista: supabase/migrations/301_servicios_orden_atomico.sql
+ * hardcodea los mismos cuatro valores ('REPARADO', 'ENTREGADO', 'ENTREGADO_SIN_REPARACION',
+ * 'ENTREGADO_SIN_COBRO') en el bloque "STATE GUARD" de agregar_servicio_orden y
+ * eliminar_servicio_orden, porque esa migración corre en plpgsql y no puede importar
+ * esta constante de TypeScript. CUALQUIER cambio acá DEBE reflejarse también ahí.
+ */
+export const ESTADOS_COSTO_FINAL_BLOQUEADO: EstadoOrden[] = ["REPARADO", ...ESTADOS_ENTREGA]
+
+/**
+ * El gemelo de ESTADOS_COSTO_FINAL_BLOQUEADO, del lado del presupuesto.
+ *
+ * PRESUPUESTADO exige `presupuesto > 0` para entrar (ver CAMPOS_REQUERIDOS_POR_ESTADO
+ * más arriba), pero esa validación corre SOLO en la transición: nada impide que
+ * una orden ya presupuestada se quede después sin presupuesto. Borrar la última
+ * línea de servicio es justamente ese caso, y dejaría al cliente mirando un
+ * presupuesto vacío en el portal público.
+ *
+ * ESPECIFICACIÓN NORMATIVA de esta lista: la migración que reimplementa la regla
+ * de sincronización en plpgsql hardcodea el mismo valor en su bloque "STATE GUARD".
+ * CUALQUIER cambio acá DEBE reflejarse también ahí.
+ */
+export const ESTADOS_PRESUPUESTO_BLOQUEADO: EstadoOrden[] = ["PRESUPUESTADO"]
+
+/**
  * Deriva el estado de entrega a partir del estado actual y si la entrega es sin
  * cobro. Es la única fuente que traduce (estado, sinCobro) -> estado de entrega:
  * - sin cobro -> ENTREGADO_SIN_COBRO (tiene prioridad sobre el retiro)

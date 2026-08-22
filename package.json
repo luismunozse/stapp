@@ -25,7 +25,9 @@
     "cap:build:aab": "npx cap sync && cd android && gradlew bundleRelease",
     "cap:build:apk:release": "npx cap sync && cd android && gradlew assembleRelease",
     "cap:upload:apk": "node scripts/upload-apk.mjs",
-    "cap:publish:apk": "npx cap sync && cd android && gradlew assembleDebug && cd .. && node scripts/upload-apk.mjs"
+    "cap:publish:apk": "npx cap sync && cd android && gradlew assembleDebug && cd .. && node scripts/upload-apk.mjs",
+    "db:dry": "node scripts/db-run.mjs",
+    "db:apply": "node scripts/db-run.mjs --apply"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",
@@ -112,6 +114,7 @@
     "eslint-config-next": "^16.0.0",
     "jsdom": "^27.4.0",
     "pdfjs-dist": "^6.2.108",
+    "pg": "^8.22.0",
     "postcss": "^8.4.47",
     "prettier": "^3.8.4",
     "tailwindcss": "^3.4.14",

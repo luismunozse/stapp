@@ -141,6 +141,7 @@ export function formatOrden(orden: any, options: FormatOrdenOptions = {}) {
     } : null,
     fotos: orden.fotos_orden?.map(formatFoto),
     repuestos: orden.repuestos_orden?.map((r: any) => formatRepuesto(r, includeInventarioCost)),
+    servicios: orden.servicios_orden?.map(formatServicioOrden),
     facturas: orden.facturas,
     cotizaciones: orden.cotizaciones,
     garantia: orden.garantias,
@@ -224,6 +225,19 @@ export function formatRepuesto(repuesto: any, includeCost = true) {
     // El embed de inventario trae el costo VIVO (precio_compra), no la copia
     // congelada: sale por el mismo permiso que precioUnitario.
     inventario: repuesto.inventario ? formatInventario(repuesto.inventario, includeCost) : undefined,
+  }
+}
+
+export function formatServicioOrden(servicio: any) {
+  if (!servicio) return null
+
+  return {
+    id: servicio.id,
+    ordenId: servicio.orden_id,
+    servicioId: servicio.servicio_id, // Nullable: null en líneas manuales
+    nombre: servicio.nombre, // Snapshot, ver comentario en 300_servicios.sql
+    cantidad: servicio.cantidad,
+    precioUnitario: servicio.precio_unitario,
   }
 }
 
