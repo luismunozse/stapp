@@ -77,8 +77,10 @@ Se elige una ruta nueva en vez de un flag en `/preference` porque son dos objeto
 
 `components/billing/upgrade-modal.tsx:98` hoy pega siempre a `/api/mercadopago/preference`. Se agrega un selector de dos opciones:
 
-- **Débito automático** (por defecto) → `/api/mercadopago/preapproval`
-- **Pago único** → `/api/mercadopago/preference`, el flujo actual sin cambios
+- **Pago único** (por defecto) → `/api/mercadopago/preference`, el flujo actual sin cambios
+- **Débito automático** → `/api/mercadopago/preapproval`
+
+**El débito automático es una elección explícita, no el default.** Es una autorización permanente sobre el medio de pago de otra persona: que venga preseleccionada empuja a alguien a darla sin decidirlo. Que convenga al negocio no lo vuelve el default correcto.
 
 El copy tiene que decir qué implica cada uno: el débito automático se cobra solo todos los meses hasta que lo canceles; el pago único vence y hay que volver a pagar a mano.
 
@@ -89,9 +91,28 @@ El copy tiene que decir qué implica cada uno: el débito automático se cobra s
 - `plan_id` — sale del `plan_slug` / `plan_id` del `external_reference`, que `createSubscription()` ya carga.
 - `billing_period`
 - `payment_provider: "MERCADOPAGO"`
-- `current_period_start` / `current_period_end` — el primer cobro llega por `subscription_authorized_payment` y ahí se fija el período; en la autorización se deja el período abierto hasta que llegue ese cobro.
+- `current_period_start` / `current_period_end` — el primer cobro llega por `subscription_authorized_payment` y ahí se fija el período. En la autorización el período queda en NULL hasta que llegue ese cobro, y por eso el guard de §3.6 entra en ESTE PR y no en el siguiente.
 
 Sin `plan_id`, una organización que adhiere queda `ACTIVE` sobre el plan que tuviera antes: adhiere al Profesional y sigue con los límites del Free.
+
+### 3.6 El guard del período en NULL (adelantado desde el PR 2)
+
+Una suscripción `ACTIVE` con `current_period_end` en NULL **no la barre nadie**: el cron filtra `current_period_end IS NOT NULL`. Una organización que adhiere y cuyo primer cobro nunca llega se queda con el plan pago para siempre sin haber pagado nunca.
+
+Es la misma familia del bug de la migración 304: una regla que se aplica por fecha, sobre una fila donde la fecha no existe.
+
+El sweep suma una segunda pasada: suscripción `ACTIVE`, sobre un plan de precio mayor a cero, con `current_period_end` en NULL, creada hace más de 12 días y **sin un solo pago `SUCCEEDED`** → `PAST_DUE`.
+
+Los 12 días son los mismos de §4.1 y por el mismo motivo: una adhesión recién hecha todavía puede estar esperando su primer cobro.
+
+**Esto puede estar pasando hoy, antes de PreApproval.** Nada impide que una suscripción quede `ACTIVE` sobre un plan pago con el período en NULL por otra vía. Antes de implementar, hay que correr la consulta de §8.6: si devuelve filas, el guard deja de ser prevención y pasa a ser una corrección urgente que sale sola, sin esperar a PreApproval.
+
+**Tests:**
+
+- Sub ACTIVE, plan pago, período NULL, creada hace 20 días, cero pagos → `PAST_DUE`.
+- La misma creada hace 3 días → no se toca (puede estar esperando el primer cobro).
+- Sub ACTIVE, plan pago, período NULL, **con** un pago exitoso → no se toca.
+- Sub ACTIVE sobre plan **gratis** con período NULL → no se toca. Son la mayoría: Free y trials.
 
 ### 3.4 Los cobros mensuales no se tocan
 
@@ -187,13 +208,35 @@ El mensaje explica qué cambia: se cobra solo, se cancela cuando quieras, y no h
 | **Un taller adhiere y además paga a mano el mismo mes** | El período se apila (`webhook/route.ts:441-447`), que es el comportamiento correcto: pagó dos meses. El UNIQUE de la 305 evita que un mismo pago se cuente dos veces. |
 | **La campaña llega a quien no corresponde** | Los tres filtros de §5.3, cubiertos por tests. |
 | **Un taller con cobros rechazados sigue con la suscripción viva en MercadoPago hasta 3 cuotas** | No se espera esa cancelación para bloquear: la ventana de 12 días la resuelve antes. Se documenta para que nadie "arregle" el cron confiando en el estado que reporta MercadoPago. |
-| **Adhiere y el primer cobro nunca llega** | Queda `ACTIVE` con `current_period_end` en NULL, y el sweep filtra `current_period_end IS NOT NULL`: nunca la barre, así que tendría el plan pago sin haber pagado nunca. El PR 2 agrega la rama que la detecta — autorizada hace más de 7 días y sin un solo pago registrado — y la marca `PAST_DUE`. La consulta que encontró este caso ya está escrita: es la de suscripciones activas con cero pagos sobre un plan de precio mayor a cero. |
+| **Adhiere y el primer cobro nunca llega** | Resuelto en el PR 1 (§3.6), adelantado desde el PR 2 por pedido explícito: el plan pago sin ningún pago detrás es plata, no una molestia. |
 
 ---
 
 ## 8. Verificación
 
 Ninguna de estas piezas se puede probar de verdad sin MercadoPago del otro lado. Antes de exponer el débito automático a los talleres:
+
+### 8.6 Antes de escribir una línea
+
+Correr esto: dice si el hueco del período en NULL ya está ocupado hoy.
+
+```sql
+SELECT o.nombre, p.nombre AS plan, p.precio_mensual, s.created_at,
+       COUNT(sp.id) FILTER (WHERE sp.status = 'SUCCEEDED') AS pagos
+FROM subscriptions s
+JOIN organizations o ON o.id = s.organization_id
+JOIN plans p         ON p.id = s.plan_id
+LEFT JOIN subscription_payments sp ON sp.organization_id = s.organization_id
+WHERE s.status = 'ACTIVE'
+  AND p.precio_mensual > 0
+  AND s.current_period_end IS NULL
+GROUP BY o.nombre, p.nombre, p.precio_mensual, s.created_at
+ORDER BY s.created_at;
+```
+
+Cada fila es una organización con plan pago activo, sin fecha de vencimiento y —si `pagos` da cero— sin haber pagado nunca. Si devuelve filas, el guard de §3.6 sale como corrección propia, antes que PreApproval.
+
+### 8.7 Con MercadoPago del otro lado
 
 1. Adherir con una cuenta de prueba y confirmar que la suscripción queda `ACTIVE` **con el plan correcto**.
 2. Confirmar que el primer cobro llega como `subscription_authorized_payment` y extiende el período.
