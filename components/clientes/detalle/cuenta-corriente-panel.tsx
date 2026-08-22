@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import {
   PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, Banknote,
-  ArrowRightLeft, CreditCard, Wallet, MoreHorizontal, Loader2,
+  ArrowRightLeft, CreditCard, Wallet, MoreHorizontal, Loader2, Printer,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -43,9 +43,17 @@ interface Movimiento {
   createdAt: string
 }
 
+// CARGO and PAGO come from migration 234 (fiado). Without them the badge
+// falls through to the raw enum for every credit sale and every debt payment.
 const tipoLabels: Record<string, string> = {
   DEPOSITO: "Depósito", USO: "Uso", DEVOLUCION: "Devolución", AJUSTE: "Ajuste",
+  CARGO: "Cargo", PAGO: "Pago",
 }
+
+// A recibo acknowledges money received, so only the two movement types that
+// bring money in can be emitted — same rule the API and migration 306 enforce.
+const TIPOS_CON_RECIBO = ["DEPOSITO", "PAGO"]
+
 const metodoPagoLabels: Record<string, string> = {
   EFECTIVO: "Efectivo", TRANSFERENCIA: "Transferencia", TARJETA_DEBITO: "Tarjeta Débito",
   TARJETA_CREDITO: "Tarjeta Crédito", MERCADOPAGO: "MercadoPago", OTRO: "Otro",
@@ -240,8 +248,28 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
                     )}
                   </div>
                 </div>
-                <div className="text-xs text-muted-foreground whitespace-nowrap">
-                  Saldo: {formatPrice(mov.saldoPosterior)}
+                <div className="flex items-center gap-1 shrink-0">
+                  <div className="text-xs text-muted-foreground whitespace-nowrap">
+                    Saldo: {formatPrice(mov.saldoPosterior)}
+                  </div>
+                  {TIPOS_CON_RECIBO.includes(mov.tipo) && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      title="Emitir recibo"
+                      aria-label={`Emitir recibo de ${tipoLabels[mov.tipo] || mov.tipo} por ${formatPrice(Math.abs(mov.monto))}`}
+                      onClick={() =>
+                        window.open(
+                          `/api/clientes/${cliente.id}/cuenta-corriente/${mov.id}/recibo`,
+                          "_blank",
+                          "noopener,noreferrer"
+                        )
+                      }
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
