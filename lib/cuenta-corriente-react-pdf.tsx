@@ -63,6 +63,29 @@ export interface ReciboCCPDFData extends CuentaCorrienteEmisor {
   observaciones?: string | null
 }
 
+/** One row of the account statement, as cuenta_corriente stores it. */
+export interface ResumenCCMovimiento {
+  fecha: Date | string
+  tipo: string
+  /** Signed: negative = debe (CARGO/USO), positive = haber. */
+  monto: number
+  /** Running balance the movement left behind — never recomputed here. */
+  saldoPosterior: number
+  metodoPago?: string | null
+  numeroReferencia?: string | null
+  referenciaTipo?: string | null
+}
+
+export interface ResumenCCPDFData extends CuentaCorrienteEmisor {
+  desde: Date | string
+  hasta: Date | string
+  /** Balance the account carried into the period (0 when it had no history). */
+  saldoInicial: number
+  saldoFinal: number
+  /** Oldest first — the statement reads top-down. */
+  movimientos: ResumenCCMovimiento[]
+}
+
 const conceptoLabels: Record<string, string> = {
   DEPOSITO: "Depósito en cuenta corriente",
   PAGO: "Pago de cuenta corriente",
@@ -182,6 +205,73 @@ const styles = StyleSheet.create({
   sigCol: { flex: 1, marginRight: 20 },
   sigLine: { borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.ink },
   sigCaption: { fontSize: TYPE.fine, color: MONO.label, marginTop: 4 },
+
+  // === Statement table ===
+  // Widths are absolute so the header cells and the data cells cannot drift
+  // apart. They sum to the table frame's inner width, with CONCEPTO taking
+  // whatever is left over (flex: 1).
+  tablaSection: { marginTop: 14 },
+  tablaFrame: { borderWidth: RULE_WIDTH, borderColor: MONO.ink, marginTop: 8 },
+  tablaHeaderRow: {
+    flexDirection: "row",
+    borderBottomWidth: RULE_WIDTH,
+    borderBottomColor: MONO.ink,
+    backgroundColor: MONO.totalBg,
+    paddingVertical: 5,
+  },
+  tablaRow: {
+    flexDirection: "row",
+    borderBottomWidth: RULE_WIDTH,
+    borderBottomColor: MONO.rule,
+    paddingVertical: 4,
+  },
+  colFecha: {
+    width: 58,
+    paddingLeft: 6,
+    borderRightWidth: RULE_WIDTH,
+    borderRightColor: MONO.ink,
+    fontSize: TYPE.small,
+  },
+  colConcepto: {
+    flex: 1,
+    paddingLeft: 6,
+    paddingRight: 4,
+    borderRightWidth: RULE_WIDTH,
+    borderRightColor: MONO.ink,
+    fontSize: TYPE.small,
+  },
+  colComprobante: {
+    width: 86,
+    paddingLeft: 6,
+    paddingRight: 4,
+    borderRightWidth: RULE_WIDTH,
+    borderRightColor: MONO.ink,
+    fontSize: TYPE.small,
+  },
+  colDebe: {
+    width: 68,
+    paddingRight: 6,
+    borderRightWidth: RULE_WIDTH,
+    borderRightColor: MONO.ink,
+    fontSize: TYPE.small,
+    textAlign: "right",
+  },
+  colHaber: {
+    width: 68,
+    paddingRight: 6,
+    borderRightWidth: RULE_WIDTH,
+    borderRightColor: MONO.ink,
+    fontSize: TYPE.small,
+    textAlign: "right",
+  },
+  colSaldo: { width: 74, paddingRight: 6, fontSize: TYPE.small, textAlign: "right", fontFamily: "Helvetica-Bold" },
+  headerCellLabel: { fontFamily: "Helvetica-Bold", fontSize: TYPE.small, color: MONO.label },
+  conceptoNote: { fontSize: TYPE.fine, color: MONO.label, marginTop: 1 },
+  totalesRow: { flexDirection: "row", borderTopWidth: RULE_WIDTH, borderTopColor: MONO.ink, paddingVertical: 5 },
+  totalesLabel: { flex: 1, paddingLeft: 6, fontSize: TYPE.small, fontFamily: "Helvetica-Bold" },
+  totalesCell: { width: 68, paddingRight: 6, fontSize: TYPE.small, textAlign: "right", fontFamily: "Helvetica-Bold" },
+  totalesSaldo: { width: 74, paddingRight: 6, fontSize: TYPE.small, textAlign: "right", fontFamily: "Helvetica-Bold" },
+  vacio: { paddingVertical: 20, textAlign: "center", fontSize: TYPE.small, color: MONO.label },
 
   footer: { position: "absolute", bottom: 40, left: 40, right: 40 },
   footerRule: { borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.rule },
@@ -443,4 +533,121 @@ export function ReciboCCDocument({
 export async function generateReciboCCPDF(data: ReciboCCPDFData): Promise<Buffer> {
   const [metrics, logo] = await Promise.all([helveticaMetrics(), fetchLogo(data.logoUrl)])
   return renderToBuffer(<ReciboCCDocument data={data} logo={logo} metrics={metrics} />)
+}
+
+/**
+ * Account statement for a date range.
+ *
+ * Every balance it prints is read, never recomputed: each row already carries
+ * the saldo_posterior the movement left behind, and saldoInicial/saldoFinal
+ * come from the caller (which reads the movement immediately before the
+ * range — see the resumen route). Re-deriving a running balance here would
+ * silently diverge from the ledger the rest of the app trusts.
+ */
+export function ResumenCCDocument({
+  data,
+  logo = null,
+  metrics,
+}: {
+  data: ResumenCCPDFData
+  logo?: PdfLogo | null
+  metrics: HelveticaMetrics
+}) {
+  const currency = (data.moneda as CurrencyCode) || DEFAULT_CURRENCY
+  const tz = data.zonaHoraria || DEFAULT_TIMEZONE
+  const fmt = (n: number) => formatCurrencyValue(n, currency)
+
+  const desde = formatDateValue(data.desde, tz)
+  const hasta = formatDateValue(data.hasta, tz)
+  const movimientos = data.movimientos || []
+
+  const totalDebe = movimientos.reduce((acc, m) => (m.monto < 0 ? acc + Math.abs(m.monto) : acc), 0)
+  const totalHaber = movimientos.reduce((acc, m) => (m.monto > 0 ? acc + m.monto : acc), 0)
+  const { label: saldoLabel, valor: saldoValor } = saldoHeadline(data.saldoFinal)
+
+  return (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        <CabeceraCC
+          data={data}
+          logo={logo}
+          metrics={metrics}
+          titulo="RESUMEN DE CUENTA"
+          lineasDerecha={[`Período: ${desde} — ${hasta}`]}
+          clienteLabel="Cliente"
+        />
+
+        <View style={styles.tablaSection}>
+          <Text style={styles.sectionLabel}>Movimientos del período</Text>
+
+          <View style={styles.detalleBlock}>
+            <View style={styles.detalleRow}>
+              <Text style={styles.detalleLabel}>Saldo inicial al {desde}</Text>
+              <Text style={styles.detalleValue}>{fmt(data.saldoInicial)}</Text>
+            </View>
+          </View>
+
+          {movimientos.length === 0 ? (
+            <Text style={styles.vacio}>Sin movimientos en el período.</Text>
+          ) : (
+            <View style={styles.tablaFrame}>
+              {/* `fixed` repeats this row at the top of every page. Safe here
+                  in a way it is not on the remito: this table is the
+                  document's only body block, so there is no later section a
+                  document-global repeat could leak onto. */}
+              <View style={styles.tablaHeaderRow} fixed>
+                <Text style={[styles.colFecha, styles.headerCellLabel]}>FECHA</Text>
+                <Text style={[styles.colConcepto, styles.headerCellLabel]}>CONCEPTO</Text>
+                <Text style={[styles.colComprobante, styles.headerCellLabel]}>COMPROBANTE</Text>
+                <Text style={[styles.colDebe, styles.headerCellLabel]}>DEBE</Text>
+                <Text style={[styles.colHaber, styles.headerCellLabel]}>HABER</Text>
+                <Text style={[styles.colSaldo, styles.headerCellLabel]}>SALDO</Text>
+              </View>
+
+              {movimientos.map((mov, i) => {
+                const metodo = mov.metodoPago ? metodoPagoLabels[mov.metodoPago] || mov.metodoPago : ""
+                const comprobante = safe(mov.numeroReferencia) || safe(mov.referenciaTipo)
+                return (
+                  <View key={i} style={styles.tablaRow} wrap={false}>
+                    <Text style={styles.colFecha}>{formatDateValue(mov.fecha, tz)}</Text>
+                    <View style={styles.colConcepto}>
+                      <Text>{conceptoLabels[mov.tipo] || mov.tipo}</Text>
+                      {metodo ? <Text style={styles.conceptoNote}>{metodo}</Text> : null}
+                    </View>
+                    <Text style={styles.colComprobante}>{comprobante}</Text>
+                    <Text style={styles.colDebe}>{mov.monto < 0 ? fmt(Math.abs(mov.monto)) : ""}</Text>
+                    <Text style={styles.colHaber}>{mov.monto > 0 ? fmt(mov.monto) : ""}</Text>
+                    <Text style={styles.colSaldo}>{fmt(mov.saldoPosterior)}</Text>
+                  </View>
+                )
+              })}
+
+              <View style={styles.totalesRow} wrap={false}>
+                <Text style={styles.totalesLabel}>Totales del período</Text>
+                <Text style={styles.totalesCell}>{fmt(totalDebe)}</Text>
+                <Text style={styles.totalesCell}>{fmt(totalHaber)}</Text>
+                <Text style={styles.totalesSaldo}>{fmt(data.saldoFinal)}</Text>
+              </View>
+            </View>
+          )}
+
+          <View style={styles.saldoBar} wrap={false}>
+            <Text style={styles.saldoLabel}>{saldoLabel}</Text>
+            <Text style={styles.saldoValue}>{fmt(saldoValor)}</Text>
+          </View>
+          <Text style={styles.saldoNote}>Saldo de la cuenta corriente al {hasta}.</Text>
+        </View>
+
+        <PieCC
+          leyenda="Resumen interno de cuenta corriente — no válido como comprobante fiscal."
+          fechaImpresion={formatDateTimeValue(new Date(), tz)}
+        />
+      </Page>
+    </Document>
+  )
+}
+
+export async function generateResumenCCPDF(data: ResumenCCPDFData): Promise<Buffer> {
+  const [metrics, logo] = await Promise.all([helveticaMetrics(), fetchLogo(data.logoUrl)])
+  return renderToBuffer(<ResumenCCDocument data={data} logo={logo} metrics={metrics} />)
 }
