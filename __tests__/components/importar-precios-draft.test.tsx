@@ -451,6 +451,35 @@ describe("ImportarPreciosPage — el mapeo no sobrevive al cambio de contexto", 
   })
 })
 
+describe("ImportarPreciosPage — el <form> que envuelve el asistente", () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: true, json: async () => ({}) } as unknown as Response)),
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("se hace cargo del espaciado en vez de desaparecer con `contents`", () => {
+    // El <form> existe solo para el gate de interaccion del borrador, pero es el
+    // unico hijo del stack `space-y-6` de PageShell. `space-y-*` de Tailwind
+    // compila a `> :not([hidden]) ~ :not([hidden])`, que es por HIJO DE DOM: con
+    // `display: contents` el form no genera caja (su propio margen se descarta) y
+    // sus hijos dejan de matchear el `>`, asi que el aviso de borrador, los
+    // chips de pasos y la Card del asistente quedan pegados sin separacion, en
+    // todos los pasos.
+    renderPage()
+
+    const form = document.querySelector("form")!
+    expect(form.className.split(/\s+/)).not.toContain("contents")
+    expect(form.className.split(/\s+/)).toContain("space-y-6")
+  })
+})
+
 describe("ImportarPreciosPage — lo que nunca se persiste", () => {
   beforeEach(() => {
     window.localStorage.clear()

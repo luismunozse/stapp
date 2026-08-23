@@ -498,8 +498,15 @@ export default function ImportarPreciosPage() {
         controles que pertenecen a un <form> (o a una capa portalada que un
         <form> haya abierto, como el listado de un Select): sin esto, elegir la
         hoja o la fila de encabezados no marcaba nada como sucio.
+
+        El espaciado del asistente vive ACA y no puede ser `contents`: este form
+        es el unico hijo del stack `space-y-6` de PageShell, y `space-y-*`
+        compila a `> :not([hidden]) ~ :not([hidden])`, que es por hijo de DOM.
+        Con `display: contents` el form no genera caja (su margen se descarta) y
+        sus hijos dejan de matchear el `>`: el aviso de borrador, los chips de
+        pasos y la Card quedaban pegados, en todos los pasos.
       */}
-      <form ref={formRef} onSubmit={(e) => e.preventDefault()} className="contents">
+      <form ref={formRef} onSubmit={(e) => e.preventDefault()} className="space-y-6">
       {draftNoticeVisible && (
         <DraftRestoredNotice
           onDiscard={discardDraft}
