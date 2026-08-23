@@ -17,6 +17,7 @@ import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { compressImage } from "@/lib/image-compression"
 import { parseMoneyInput } from "@/lib/parse-money"
 import { validateBarcode, computeEAN13CheckDigit } from "@/lib/barcode-validation"
+import { ignoreSelectEcho } from "@/lib/radix-select-echo"
 import useSWR from "swr"
 import { useModal } from "@/contexts/modal-context"
 import { useFormDraft, fingerprintRecord } from "@/hooks/use-form-draft"
@@ -259,37 +260,6 @@ export function InventarioForm({
   const categoria = watch("categoria")
   const tipoDispositivo = watch("tipoDispositivo")
 
-  /**
-   * Descarta el "" que devuelve el <select> oculto de Radix, y deja pasar todo
-   * lo demas.
-   *
-   * Radix monta un <select> nativo invisible al lado de cada trigger para que el
-   * formulario tenga un control real (SelectBubbleInput, en
-   * @radix-ui/react-select). Cuando el valor cambia DESDE AFUERA, ese componente
-   * hace `select.value = nuevo` y dispara un `change` a mano. Las <option> de
-   * ese select las registran los <SelectItem>, que solo estan montados mientras
-   * el listado esta abierto: con el listado cerrado no hay ninguna opcion,
-   * asignarle un valor que no existe lo deja en "" y el `change` devuelve ese ""
-   * por `onValueChange`. El formulario se pisa el campo que acaba de setear.
-   *
-   * Nadie lo habia notado porque el resto de los caminos que setean estos campos
-   * por codigo lo hacen con el Select DESMONTADO ("Agregar tipo" / "Agregar
-   * categoria" lo reemplazan por un input inline) o con el valor ya puesto en
-   * `defaultValues`, o sea antes de que exista un valor anterior con el cual
-   * comparar. Restaurar un borrador es el primer caso que cambia el valor de un
-   * Select montado: sin esto, el borrador volvia con Tipo y Categoria en blanco
-   * -- los dos campos obligatorios que ademas gatillan la generacion del codigo,
-   * asi que "Guardar" quedaba deshabilitado sin nada en pantalla que lo
-   * explicara.
-   *
-   * Un "" nunca puede venir de una eleccion real: Radix rechaza un SelectItem
-   * con `value=""`. Por eso alcanza con ignorarlo para separar el eco del
-   * control oculto de lo que hizo el operador.
-   */
-  const onSelectValueChange = (apply: (value: string) => void) => (value: string) => {
-    if (!value) return
-    apply(value)
-  }
 
   // ¿La fuente expuso el costo de este item? Un item nuevo no tiene costo
   // previo que proteger, así que su 0 es un valor real. Un item cargado con
@@ -1053,7 +1023,7 @@ export function InventarioForm({
                 <div className="flex gap-1.5">
                   <Select
                     value={tipoDispositivo || ""}
-                    onValueChange={onSelectValueChange((value) =>
+                    onValueChange={ignoreSelectEcho((value) =>
                       setValue("tipoDispositivo", value, { shouldValidate: true, shouldDirty: true })
                     )}
                     disabled={tiposLoading}
@@ -1133,7 +1103,7 @@ export function InventarioForm({
                 <div className="flex gap-1.5">
                   <Select
                     value={watch("categoria") || ""}
-                    onValueChange={onSelectValueChange((value) =>
+                    onValueChange={ignoreSelectEcho((value) =>
                       setValue("categoria", value, { shouldValidate: true, shouldDirty: true })
                     )}
                     disabled={!tipoDispositivo}
@@ -1244,7 +1214,7 @@ export function InventarioForm({
             <Label htmlFor="proveedor">Proveedor</Label>
             <Select
               value={watch("proveedorId") || "none"}
-              onValueChange={onSelectValueChange((value) =>
+              onValueChange={ignoreSelectEcho((value) =>
                 setValue("proveedorId", value === "none" ? null : value, {
                   shouldDirty: true,
                 })
@@ -1478,7 +1448,7 @@ export function InventarioForm({
                   <Label className="text-xs">Tipo de kit</Label>
                   <Select
                     value={watch("tipoKit") ?? "ENSAMBLADO"}
-                    onValueChange={onSelectValueChange((v) =>
+                    onValueChange={ignoreSelectEcho((v) =>
                       setValue("tipoKit", v as "ENSAMBLADO" | "VIRTUAL", { shouldDirty: true })
                     )}
                   >

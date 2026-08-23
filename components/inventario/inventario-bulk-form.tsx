@@ -23,8 +23,11 @@ import {
   CheckCircle2,
   AlertTriangle,
 } from "lucide-react"
+import { DraftRestoredNotice } from "@/components/ui/draft-restored-notice"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { useTerminologia } from "@/contexts/currency-context"
+import { useFormDraft } from "@/hooks/use-form-draft"
+import { ignoreSelectEcho } from "@/lib/radix-select-echo"
 
 interface ProveedorLite {
   id: string
@@ -109,6 +112,45 @@ function newRow(overrides: Partial<Row> = {}): Row {
   }
 }
 
+/**
+ * Una fila TAL COMO SE PERSISTE: sin el `id`.
+ *
+ * Ese id es una key de React generada con `crypto.randomUUID()`, no un dato del
+ * producto -- no significa nada del otro lado de un reinicio y nada del lote lo
+ * referencia (`matchesByRow` y `rowErrors` se recalculan). Guardarlo solo abre
+ * la puerta a que dos filas vuelvan con el mismo, y ahi editar o borrar una toca
+ * a las dos. Se regenera al restaurar, que es la unica forma de garantizar que
+ * sean unicos.
+ */
+type BulkDraftRow = Omit<Row, "id">
+
+/** Lo que se persiste de esta pantalla: los seis valores compartidos de arriba
+ *  y las filas sin su id. Nada de esto es sensible -- son nombres de producto y
+ *  precios de lista -- y todo es lo que cuesta volver a tipear. */
+interface BulkDraftValue {
+  tipoDispositivo: string
+  categoria: string
+  proveedorId: string
+  defaultStock: string
+  defaultPrecioCompra: string
+  defaultPrecioVenta: string
+  rows: BulkDraftRow[]
+}
+
+function isBulkDraftRow(value: unknown): value is BulkDraftRow {
+  if (!value || typeof value !== "object") return false
+  const row = value as Record<string, unknown>
+  return (
+    typeof row.nombre === "string" &&
+    typeof row.stock === "string" &&
+    typeof row.precioCompra === "string" &&
+    typeof row.precioVenta === "string" &&
+    typeof row.barcode === "string"
+  )
+}
+
+const FILAS_INICIALES = 3
+
 interface InventarioBulkFormProps {
   onClose: () => void
   onSuccess: (createdCount: number) => void
@@ -136,7 +178,9 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
   const [defaultPrecioVenta, setDefaultPrecioVenta] = useState("")
   const [defaultStock, setDefaultStock] = useState("0")
 
-  const [rows, setRows] = useState<Row[]>([newRow(), newRow(), newRow()])
+  const [rows, setRows] = useState<Row[]>(() =>
+    Array.from({ length: FILAS_INICIALES }, () => newRow())
+  )
   const prevDefaultsRef = useRef({
     stock: "0",
     precioCompra: "",
@@ -182,6 +226,100 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
     )
     prevDefaultsRef.current = next
   }, [defaultStock, defaultPrecioCompra, defaultPrecioVenta])
+
+  // --- Borrador local (useFormDraft) ----------------------------------------
+  //
+  // Es la pantalla donde mas se escribe de una sentada -- seis valores
+  // compartidos y una tabla sin techo -- y hasta ahora se perdia entera ante un
+  // vencimiento de sesion o el cierre de la pestana.
+  //
+  // Todo el estado vive en useState (no hay react-hook-form aca), asi que el
+  // snapshot se arma a mano. Una entrada por usuario: un lote no tiene id, y dos
+  // lotes en paralelo no es un caso real.
+  /** Raiz del gate de interaccion del hook. Ver la nota del <form> en el render:
+   *  sin un <form> alrededor, el hook no cuenta ningun control de esta pantalla
+   *  y no graba nunca. */
+  const formRef = useRef<HTMLFormElement>(null)
+  const [appliedDraft, setAppliedDraft] = useState<BulkDraftValue | null>(null)
+  const draftAppliedRef = useRef<BulkDraftValue | null>(null)
+  const { draft, ready: draftReady, clearDraft, notifyChange } = useFormDraft<BulkDraftValue>({
+    feature: "inventario-bulk-form",
+    getValue: () => ({
+      tipoDispositivo,
+      categoria,
+      proveedorId,
+      defaultStock,
+      defaultPrecioCompra,
+      defaultPrecioVenta,
+      // Sin el id (ver BulkDraftRow). De paso el sobre queda mas chico, que en
+      // una tabla sin techo no es un detalle: el hook se come el
+      // QuotaExceededError en silencio y ahi la persistencia deja de funcionar
+      // sin que nadie se entere.
+      rows: rows.map(({ id: _id, ...row }) => row),
+    }),
+    rootRef: formRef,
+    validate: (data) => {
+      const value = data as BulkDraftValue
+      return (
+        !!value &&
+        typeof value === "object" &&
+        typeof value.tipoDispositivo === "string" &&
+        typeof value.categoria === "string" &&
+        Array.isArray(value.rows) &&
+        value.rows.length > 0 &&
+        value.rows.every(isBulkDraftRow)
+      )
+    },
+  })
+
+  /** El aviso no puede sobrevivir al borrador que anuncia. */
+  const draftNoticeVisible = draft !== null && appliedDraft === draft
+
+  // Todo el estado de esta pantalla es useState y no re-renderiza por si solo
+  // fuera de los setters, asi que no hace falta notificar por suscripcion: cada
+  // tecla ya produce un commit. `notifyChange` se usa igual al restaurar, para
+  // que el hook no espere a la proxima tecla para reprogramar.
+  useEffect(() => {
+    if (!draftReady || !draft || draftAppliedRef.current === draft) return
+    draftAppliedRef.current = draft
+    setTipoDispositivo(draft.tipoDispositivo)
+    setCategoria(draft.categoria)
+    setProveedorId(typeof draft.proveedorId === "string" ? draft.proveedorId : "")
+    setDefaultStock(typeof draft.defaultStock === "string" ? draft.defaultStock : "0")
+    setDefaultPrecioCompra(
+      typeof draft.defaultPrecioCompra === "string" ? draft.defaultPrecioCompra : ""
+    )
+    setDefaultPrecioVenta(
+      typeof draft.defaultPrecioVenta === "string" ? draft.defaultPrecioVenta : ""
+    )
+    setRows(draft.rows.map((row) => newRow(row)))
+    // Los defaults restaurados NO son un cambio de defaults: sin esto, el efecto
+    // de propagacion de mas arriba los compara contra los iniciales, ve una
+    // diferencia y pisa toda fila cuyo valor coincida con el default viejo --
+    // una fila que el operador habia puesto en 0 a proposito vuelve con el stock
+    // por defecto del lote.
+    prevDefaultsRef.current = {
+      stock: draft.defaultStock,
+      precioCompra: draft.defaultPrecioCompra,
+      precioVenta: draft.defaultPrecioVenta,
+    }
+    setAppliedDraft(draft)
+    notifyChange()
+  }, [draftReady, draft, notifyChange])
+
+  const discardDraft = () => {
+    // El aviso se apaga solo: `clearDraft` deja `draft` en null en este mismo
+    // commit y de ahi se deriva (ver draftNoticeVisible).
+    clearDraft()
+    setTipoDispositivo("")
+    setCategoria("")
+    setProveedorId("")
+    setDefaultStock("0")
+    setDefaultPrecioCompra("")
+    setDefaultPrecioVenta("")
+    setRows(Array.from({ length: FILAS_INICIALES }, () => newRow()))
+    prevDefaultsRef.current = { stock: "0", precioCompra: "", precioVenta: "" }
+  }
 
   // Chequeo de duplicados contra inventario existente (debounced).
   // Corre cuando hay tipo + categoría. Por cada fila con nombre de 3+ chars,
@@ -404,6 +542,10 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
         errors: body.errors ?? [],
       })
       if ((body.errors?.length ?? 0) === 0) {
+        // Solo el lote entero. Con un 207 parcial las filas que fallaron siguen
+        // en pantalla para corregirlas: borrar el borrador ahi es perder
+        // exactamente lo que queda por hacer.
+        clearDraft()
         onSuccess(body.createdCount ?? 0)
       }
     } catch (e) {
@@ -431,17 +573,33 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
           </Button>
         </CardHeader>
 
+        {/*
+          El <form> no envia nada -- la accion primaria sigue siendo el boton
+          del pie, fuera de el, y `onSubmit` corta un Enter accidental antes de
+          que el navegador navegue. Existe porque el gate de interaccion de
+          useFormDraft solo cuenta controles que pertenecen a un <form> (o a una
+          capa portalada que un <form> haya abierto, como el listado de un
+          Select): sin esto, escribir en esta pantalla no marcaba nada como
+          sucio y el borrador no se grababa nunca.
+        */}
+        <form
+          ref={formRef}
+          onSubmit={(e) => e.preventDefault()}
+          className="contents"
+        >
         <CardContent className="overflow-y-auto flex-1 space-y-4 pt-4">
+          {draftNoticeVisible && <DraftRestoredNotice onDiscard={discardDraft} />}
+
           {/* Defaults compartidos */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3 bg-muted/40 rounded-md">
             <div>
               <Label className="text-xs">Tipo de {term("equipo").toLowerCase()} *</Label>
               <Select
                 value={tipoDispositivo}
-                onValueChange={(v) => {
+                onValueChange={ignoreSelectEcho((v) => {
                   setTipoDispositivo(v)
                   setCategoria("")
-                }}
+                })}
                 disabled={tiposLoading}
               >
                 <SelectTrigger>
@@ -460,7 +618,7 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
               <Label className="text-xs">Categoría *</Label>
               <Select
                 value={categoria}
-                onValueChange={setCategoria}
+                onValueChange={ignoreSelectEcho(setCategoria)}
                 disabled={!tipoDispositivo || categoriasDisponibles.length === 0}
               >
                 <SelectTrigger>
@@ -479,7 +637,7 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
               <Label className="text-xs">Proveedor</Label>
               <Select
                 value={proveedorId || "none"}
-                onValueChange={(v) => setProveedorId(v === "none" ? "" : v)}
+                onValueChange={ignoreSelectEcho((v) => setProveedorId(v === "none" ? "" : v))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Sin proveedor" />
@@ -495,8 +653,12 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
               </Select>
             </div>
             <div>
-              <Label className="text-xs">Stock por defecto</Label>
+              {/* htmlFor/id: estos tres tenian el label solo al lado del input,
+                  sin asociacion, asi que un lector de pantalla los anunciaba
+                  como campos sin nombre. */}
+              <Label htmlFor="bulk-default-stock" className="text-xs">Stock por defecto</Label>
               <Input
+                id="bulk-default-stock"
                 type="number"
                 min={0}
                 value={defaultStock}
@@ -504,8 +666,9 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
               />
             </div>
             <div>
-              <Label className="text-xs">Precio compra por defecto</Label>
+              <Label htmlFor="bulk-default-precio-compra" className="text-xs">Precio compra por defecto</Label>
               <Input
+                id="bulk-default-precio-compra"
                 type="number"
                 min={0}
                 step="0.01"
@@ -514,8 +677,9 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
               />
             </div>
             <div>
-              <Label className="text-xs">Precio venta por defecto</Label>
+              <Label htmlFor="bulk-default-precio-venta" className="text-xs">Precio venta por defecto</Label>
               <Input
+                id="bulk-default-precio-venta"
                 type="number"
                 min={0}
                 step="0.01"
@@ -710,6 +874,7 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
             </div>
           )}
         </CardContent>
+        </form>
 
         {showDuplicateConfirm && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-4 z-10">
