@@ -1135,7 +1135,7 @@ The last and most valuable piece: a table whose header repeats across page break
   - `type ColumnaTabla = { key: string; titulo: string; ancho?: number; flex?: boolean; alinear?: "left" | "right"; bold?: boolean }`
   - `<Tabla columnas={ColumnaTabla[]} filas={Array<Record<string, React.ReactNode>>} headerFijo={boolean} />`
 
-`headerFijo` exists because `fixed` is document-global in react-pdf: it repeats the row on every page of the document, not just the pages the table spans. Safe for the resumen, whose table is the only body block; unsafe for the remito, which has sections after its tables. Default `false`.
+`headerFijo` exists because `fixed` repeats a node across every page that its own nearest splitting parent spans — verified at source in `@react-pdf/layout`: `splitNodes` pushes a fixed child into both the current and next page's copy of whatever node list it is handed, and only a *direct child of `Page`* is handed the Page's own children, which is the one case where that reads as "document-global". Nested further down the tree (as `<Tabla>`'s header row is), a fixed node repeats only across the pages its own parent — the table's frame — spans, then stops. Both the resumen's and the remito's tables want that. Default `false`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1231,7 +1231,11 @@ export function Tabla({
 
   return (
     <View style={estilosShell.tablaFrame}>
-      <View style={estilosShell.tablaHeader} fixed={headerFijo}>
+      {/* fixed={headerFijo} would be wrong here: @react-pdf/layout's
+          shouldBreak tests `'fixed' in props`, not its value, so
+          fixed={false} is not equivalent to omitting the prop. The flag must
+          be spread in conditionally. */}
+      <View style={estilosShell.tablaHeader} {...(headerFijo ? { fixed: true } : {})}>
         {columnas.map((col, i) => (
           <Text key={col.key} style={[celda(col, i === columnas.length - 1), estilosShell.tablaHeaderCell]}>
             {col.titulo}
@@ -1278,12 +1282,12 @@ Replace the hand-built table in `ResumenCCDocument` with `<Tabla headerFijo colu
 
 - [ ] **Step 6: Adopt in the remito**
 
-Replace the items table and the pagos table with `<Tabla>`, both **without** `headerFijo` — the remito has sections after its tables and a document-global `fixed` header would leak onto them. Its pagos rows carry a note line under the reference, which is why `filas` accepts `React.ReactNode` and not just strings.
+Replace the items table and the pagos table with `<Tabla>`, both **with** `headerFijo` — `fixed` only repeats a node across the pages its own parent (here, the table's frame) spans, not document-globally, so the remito's sections after each table are never at risk. Its pagos rows carry a note line under the reference, which is why `filas` accepts `React.ReactNode` and not just strings.
 
 - [ ] **Step 7: Run the affected suites**
 
 Run: `npx vitest run __tests__/lib/pdf-react-shell.test.tsx __tests__/lib/cuenta-corriente-react-pdf.test.ts __tests__/lib/cuenta-corriente-resumen-pdf.test.ts __tests__/lib/remito-react-pdf.test.ts`
-Expected: PASS, 65 tests. `remito-react-pdf.test.ts` has a test named "HISTORIAL DE PAGOS paginates on its own: continuation page redraws the pagos header row" — it must still pass, and it is the reason the remito does not use `headerFijo`.
+Expected: PASS, 65 tests. `factura-pdf-venta.test.ts:780` has a test named "HISTORIAL DE PAGOS paginates on its own" — it exercises the pdf-lib engine, not this one, and is unaffected either way; it is cited here only as a reminder that the remito's pagos table has paginated on its own since before this migration and must keep doing so under react-pdf.
 
 - [ ] **Step 8: Full suite, types, lint**
 

@@ -84,16 +84,29 @@ atendido por. Today each generator redeclares these.
 
 | Piece | Responsibility |
 |---|---|
-| `<Cabecera>` | logo + emisor left, título + número + fechas + fiscal data right, with the truncation clamp. Letter box and centered legend are **optional** — the remito has them, the recibo does not. |
+| `<Cabecera>` | logo + emisor left, título + número + fechas + fiscal data right, with the truncation clamp. Letter box and centered legend are **optional** — the remito has them, the recibo does not. `zonaDerecha` (`"fija"` \| `"auto"`) is required, no default: it decides whether the right zone is pinned to a fixed width (starving the left zone/logo box if the content doesn't fit) or sized to its own content — a document must state which it needs. |
 | `<BandaCliente>` | cliente left; free slot on the right for the document's own reference (`VENTA: V0020`, `ORDEN #0042`). |
-| `<Seccion titulo>` | label + rule. Wraps everything, including sections that are not shared. |
+| `<Seccion titulo>` | label only, no rule — each document still draws its own rule beneath it, because the three in this branch use slightly different ones. Wraps everything, including sections that are not shared. |
 | `<Tabla>` | declared columns, header repeated across page breaks. |
-| `<FilaDetalle>`, `<BarraTotal>` | subtotal / total / saldo, with the grey bar. |
+| `<FilaDetalle>`, `<BarraTotal>` | subtotal / total / saldo, with the grey bar. There is no shared *emphasised* total row yet — see the note below. |
 | `<Badge>`, `<Firmas>` | estado; conformity block parameterised instead of six copies. |
 | `<Pie>`, `LEYENDA_NO_FISCAL` | footer and a single wording of the fiscal legend. |
 
 `CabeceraCC` and `PieCC` in `lib/cuenta-corriente-react-pdf.tsx` are the seed —
 they already do this for two documents. Slice 1 generalises them.
+
+**Missing piece: an emphasised total row.** `FilaDetalle` hardcodes its own
+typography, so it cannot serve as an emphasised row, and both documents that
+needed one in slice 1 hand-rolled a different version: the remito reaches past
+the shell into its own `estilosShell.filaDetalle` / `barraLabel` / `barraValor`
+styles for its TOTAL row, and cuenta corriente hand-rolls `styles.totalRow` /
+`totalLabel` / `totalValue` for IMPORTE RECIBIDO, with its own
+`paddingVertical`/`marginTop`. It was **not** built as a shell piece in slice 1
+— two hand-rolled instances are not enough to validate the cut, and a
+premature `FilaTotal` risks guessing the wrong shape. When devolución or venta
+needs the same conceptual row (slice 2/3), that is the third instance: treat
+it as the trigger to extract `FilaTotal` rather than hand-rolling a fourth or
+fifth copy.
 
 ## Migration recipe (per document)
 
@@ -109,9 +122,16 @@ they already do this for two documents. Slice 1 generalises them.
    verified against `generateVentaPDF`, including its subsetted Type0/Identity-H
    fonts. Use the pdfjs extractor for characterization tests, never the
    pdf-lib-specific one, so the engine swap is invisible to the test body.
-5. **`TAG=after` and compare the two PDFs by eye.** Layout *will* change — that
-   is the goal — but every difference must be one we chose. Deliberate ones get
-   listed in the PR; the rest are bugs.
+5. **`TAG=after` and compare the two PDFs by eye, plus the golden harness.**
+   Layout *will* change — that is the goal — but every difference must be one
+   we chose. Deliberate ones get listed in the PR; the rest are bugs. Eyeballing
+   the rendered PDF is necessary but not sufficient: `__tests__/pdf-golden.test.ts`
+   (`PDF_GOLDEN=1`, see `__tests__/lib/pdf-golden-helper.ts`) compares every text
+   item's page/x/y and the page content streams' graphics operators against a
+   baseline dump, and it is what caught the invisible regressions slice 1's own
+   eyeballing missed (a starved logo box, a re-wrapped dirección, and an 8-14pt
+   signature-block shift). Run it before and after the migration and treat any
+   diff the same as a failed characterization test.
 6. **Open the document in production after merge.** Slice 0 covers bundle-level
    failures; this covers environment-specific ones (a missing env var, an
    unapplied migration, a logo URL that 404s).
