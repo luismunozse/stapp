@@ -24,8 +24,6 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}))
     const simulacion = body?.simulacion !== false
 
-    // Sin .in(): se trae todo y se filtra el status en JS. El volumen de
-    // suscripciones es chico (accion manual de superadmin, no un hot path).
     const { data: subs, error: dbError } = await supabaseAdmin
       .from("subscriptions")
       .select(`
@@ -33,6 +31,7 @@ export async function POST(request: Request) {
         organizations!inner ( id, nombre, email, slug, activo ),
         plans!inner ( precio_mensual )
       `)
+      .in("status", ["ACTIVE", "PAST_DUE"])
 
     if (dbError) {
       console.error("[campana-preapproval] Error consultando suscripciones:", dbError)
@@ -42,11 +41,7 @@ export async function POST(request: Request) {
     const destinatarios: Array<{ organizationId: string; nombre: string; email: string; slug: string }> = []
     let sinEmail = 0
 
-    const candidatas = ((subs || []) as any[]).filter(
-      (sub) => sub.status === "ACTIVE" || sub.status === "PAST_DUE"
-    )
-
-    for (const sub of candidatas) {
+    for (const sub of (subs || []) as any[]) {
       const org = sub.organizations
       if (!org || org.activo === false) continue
 
