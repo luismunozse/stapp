@@ -185,7 +185,13 @@ export default function InventarioPage() {
   // La lista ofrece importación masiva, que crea items de inventario por
   // /api/import. El servidor ya la gatea con el mismo permiso; acá la pantalla
   // no ofrece una acción que todavía no puede justificar.
-  const puedeImportar = !esVendedor || resultado === "permitido"
+  //
+  // Se nombra a quién SÍ, en vez de negar al vendedor: escrito como
+  // `!esVendedor || permitido` esto se abría con cualquier rol falsy, así que
+  // una ventana en la que la sesión falta un instante sobre una página ya
+  // montada (vencimiento, RefreshTokenExpired) hacía reaparecer el botón que se
+  // acababa de esconder. Un affordance fail-closed se escribe por la afirmativa.
+  const puedeImportar = role === "ADMIN" || resultado === "permitido"
 
   if (esperandoSesion || saliendo) return null
 

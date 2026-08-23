@@ -320,6 +320,30 @@ describe("InventarioPage — la importación masiva sigue al permiso", () => {
 
     expect(screen.getByTestId("lista")).toHaveAttribute("data-allow-import", "true")
   })
+
+  /**
+   * La polaridad importa. Escrito como `!esVendedor || permitido`, el permiso se
+   * abría con CUALQUIER rol falsy, no solo para el ADMIN: en cualquier ventana
+   * en la que la sesión falte un instante sobre una página ya montada
+   * (vencimiento, RefreshTokenExpired, error de auth) el vendedor deja de serlo
+   * a los ojos del render y el botón de importar reaparece — la pantalla
+   * ofreciendo, una render después, exactamente la acción que acababa de
+   * esconder. El servidor lo rechaza igual, pero un affordance fail-closed no se
+   * escribe al revés.
+   */
+  it("no reaparece si la sesión se cae un instante con la página montada", async () => {
+    fetchMock.mockImplementation(() => Promise.reject(new TypeError("Failed to fetch")))
+    const { rerender } = render(<InventarioPage />)
+
+    await waitFor(() => expect(screen.getByText(/no se pudo verificar/i)).toBeInTheDocument())
+    expect(screen.getByTestId("lista")).toHaveAttribute("data-allow-import", "false")
+
+    // La sesión desaparece un instante: sin rol, no hay nada que autorice.
+    sessionState = { data: null, status: "loading" }
+    rerender(<InventarioPage />)
+
+    expect(screen.getByTestId("lista")).toHaveAttribute("data-allow-import", "false")
+  })
 })
 
 /**
