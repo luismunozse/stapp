@@ -270,6 +270,37 @@ describe("seedOrganizationFromRubro", () => {
     }
   })
 
+  it("usa el detalle libre para nombrar el tipo del pack generico", async () => {
+    const c = crearClienteFake({
+      tipos_dispositivo: { rows: [{ id: "t-maq", codigo: "MAQUINA_DE_CAFE" }] },
+      checklist_templates: { rows: [{ id: "tpl-1" }] },
+    })
+
+    await seedOrganizationFromRubro("org-1", "generico", c as any, "maquinas de cafe")
+
+    const tipo = c._tablas.tipos_dispositivo.upserted[0]
+    expect(tipo.codigo).toBe("MAQUINA_DE_CAFE")
+    expect(tipo.nombre).toBe("Maquina de cafe")
+    expect(c._tablas.organizations.updated[0].terminologia.equipo).toBe("Maquina de cafe")
+  })
+
+  it("ignora el detalle cuando el rubro es un pack curado", async () => {
+    await seedOrganizationFromRubro("org-1", "automotor", client as any, "maquinas de cafe")
+
+    const codigos = client._tablas.tipos_dispositivo.upserted.map((r) => r.codigo)
+    expect(codigos).toEqual(["AUTO", "CAMIONETA", "UTILITARIO"])
+  })
+
+  it("cae al tipo EQUIPO si el detalle no sirve", async () => {
+    const c = crearClienteFake({
+      tipos_dispositivo: { rows: [{ id: "t-eq", codigo: "EQUIPO" }] },
+      checklist_templates: { rows: [{ id: "tpl-1" }] },
+    })
+
+    await seedOrganizationFromRubro("org-1", "generico", c as any, "###")
+    expect(c._tablas.tipos_dispositivo.upserted[0].codigo).toBe("EQUIPO")
+  })
+
   it("devuelve el resumen de lo sembrado", async () => {
     const result = await seedOrganizationFromRubro("org-1", "automotor", client as any)
 

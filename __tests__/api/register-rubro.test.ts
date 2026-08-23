@@ -97,7 +97,12 @@ describe("POST /api/auth/register — rubro", () => {
 
     await callRoute({ ...bodyBase, organizacion: { ...bodyBase.organizacion, rubro: "automotor" } })
 
-    expect(seedOrganizationFromRubro).toHaveBeenCalledWith("org-1", "automotor")
+    expect(seedOrganizationFromRubro).toHaveBeenCalledWith(
+      "org-1",
+      "automotor",
+      expect.anything(),
+      null
+    )
   })
 
   it("rechaza un rubro que no existe en el registro", async () => {
@@ -117,7 +122,12 @@ describe("POST /api/auth/register — rubro", () => {
 
     expect(status).toBe(200)
     expect(inserts.organizations[0].rubro).toBe("generico")
-    expect(seedOrganizationFromRubro).toHaveBeenCalledWith("org-1", "generico")
+    expect(seedOrganizationFromRubro).toHaveBeenCalledWith(
+      "org-1",
+      "generico",
+      expect.anything(),
+      null
+    )
   })
 
   it("ya no inserta el checklist de celular hardcodeado", async () => {
@@ -139,6 +149,54 @@ describe("POST /api/auth/register — rubro", () => {
 
     expect(status).toBe(200)
     expect(body.success).toBe(true)
+  })
+
+  it("pasa el detalle libre a la siembra y lo persiste", async () => {
+    const inserts = await setupRegisterMocks()
+
+    await callRoute({
+      ...bodyBase,
+      organizacion: {
+        ...bodyBase.organizacion,
+        rubro: "generico",
+        rubroDetalle: "  maquinas de cafe  ",
+      },
+    })
+
+    expect(inserts.organizations[0].rubro_detalle).toBe("maquinas de cafe")
+    expect(seedOrganizationFromRubro).toHaveBeenCalledWith(
+      "org-1",
+      "generico",
+      expect.anything(),
+      "maquinas de cafe"
+    )
+  })
+
+  it("trata un detalle en blanco como ausente", async () => {
+    const inserts = await setupRegisterMocks()
+
+    await callRoute({
+      ...bodyBase,
+      organizacion: { ...bodyBase.organizacion, rubro: "generico", rubroDetalle: "   " },
+    })
+
+    expect(inserts.organizations[0].rubro_detalle).toBeNull()
+  })
+
+  it("rechaza un detalle mas largo que el limite de la columna", async () => {
+    await setupRegisterMocks()
+
+    const res = await callRoute({
+      ...bodyBase,
+      organizacion: {
+        ...bodyBase.organizacion,
+        rubro: "generico",
+        rubroDetalle: "x".repeat(121),
+      },
+    })
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(400)
   })
 
   it("informa el rubro aplicado en la respuesta", async () => {

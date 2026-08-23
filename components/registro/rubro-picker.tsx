@@ -1,7 +1,9 @@
 "use client"
 
 import { Bike, Car, Refrigerator, Smartphone, Watch, Wrench, type LucideIcon } from "lucide-react"
-import { listRubrosParaSelector } from "@/lib/rubros"
+import { listRubrosParaSelector, DEFAULT_RUBRO_ID } from "@/lib/rubros"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 
 /**
@@ -23,11 +25,23 @@ const RUBROS = listRubrosParaSelector()
 interface RubroPickerProps {
   value: string
   onChange: (rubroId: string) => void
+  /** Texto libre del rubro genérico. */
+  detalle: string
+  onDetalleChange: (detalle: string) => void
   disabled?: boolean
 }
 
-export function RubroPicker({ value, onChange, disabled }: RubroPickerProps) {
+export function RubroPicker({
+  value,
+  onChange,
+  detalle,
+  onDetalleChange,
+  disabled,
+}: RubroPickerProps) {
+  const esGenerico = value === DEFAULT_RUBRO_ID
+
   return (
+    <div className="space-y-3">
     <div
       role="radiogroup"
       aria-label="Rubro del negocio"
@@ -68,6 +82,28 @@ export function RubroPicker({ value, onChange, disabled }: RubroPickerProps) {
           </button>
         )
       })}
+    </div>
+
+      {esGenerico && (
+        <div className="space-y-1.5 rounded-lg border border-primary/40 bg-primary/5 p-3">
+          <Label htmlFor="rubroDetalle" className="text-sm font-medium">
+            ¿Qué reparás?
+          </Label>
+          <Input
+            id="rubroDetalle"
+            value={detalle}
+            onChange={(e) => onDetalleChange(e.target.value)}
+            disabled={disabled}
+            maxLength={120}
+            placeholder="Ej: máquinas de café, cortadoras de pasto, cerraduras"
+            autoComplete="off"
+          />
+          <p className="text-xs text-muted-foreground">
+            Con esto nombramos tus órdenes y tu ficha de trabajo. Si lo dejás
+            vacío arrancás con una base neutral.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

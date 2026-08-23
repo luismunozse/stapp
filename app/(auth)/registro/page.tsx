@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { RubroPicker } from "@/components/registro/rubro-picker"
-import { DEFAULT_RUBRO_ID } from "@/lib/rubros"
+import { validarSeleccionRubro } from "@/lib/rubros/seleccion"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,6 +26,7 @@ interface FormData {
   orgNombre: string
   orgSlug: string
   rubro: string
+  rubroDetalle: string
   nombre: string
   email: string
   password: string
@@ -50,7 +51,8 @@ function RegistroForm() {
   const [formData, setFormData] = useState<FormData>({
     orgNombre: "",
     orgSlug: "",
-    rubro: DEFAULT_RUBRO_ID,
+    rubro: "",
+    rubroDetalle: "",
     nombre: "",
     email: "",
     password: "",
@@ -168,6 +170,11 @@ function RegistroForm() {
       setError("Espera mientras verificamos el subdominio")
       return false
     }
+    const errorRubro = validarSeleccionRubro(formData.rubro, formData.rubroDetalle)
+    if (errorRubro) {
+      setError(errorRubro)
+      return false
+    }
     if (!formData.nombre.trim()) {
       setError("Tu nombre es requerido")
       return false
@@ -211,6 +218,13 @@ function RegistroForm() {
       setError("Esperá mientras verificamos el subdominio")
       return
     }
+    // El alta con Google se va del formulario y vuelve por /google-auth, asi
+    // que el rubro tiene que quedar resuelto antes de salir.
+    const errorRubro = validarSeleccionRubro(formData.rubro, formData.rubroDetalle)
+    if (errorRubro) {
+      setError(errorRubro)
+      return
+    }
 
     const cleanSlug = formData.orgSlug.replace(/-$/, "")
     const params = new URLSearchParams({
@@ -218,6 +232,7 @@ function RegistroForm() {
       orgNombre: formData.orgNombre,
       orgSlug: cleanSlug,
       rubro: formData.rubro,
+      rubroDetalle: formData.rubroDetalle.trim(),
       userName: formData.nombre || "",
     })
     // Pasar UTMs al flujo de Google auth
@@ -248,6 +263,7 @@ function RegistroForm() {
             nombre: formData.orgNombre,
             slug: cleanSlug,
             rubro: formData.rubro,
+            rubroDetalle: formData.rubroDetalle.trim() || undefined,
           },
           usuario: {
             nombre: formData.nombre,
@@ -381,6 +397,8 @@ function RegistroForm() {
               <RubroPicker
                 value={formData.rubro}
                 onChange={(rubro) => updateForm("rubro", rubro)}
+                detalle={formData.rubroDetalle}
+                onDetalleChange={(detalle) => updateForm("rubroDetalle", detalle)}
                 disabled={loading}
               />
               <p className="text-xs text-muted-foreground">
