@@ -522,6 +522,12 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
     const payload = validate()
     if (!payload) return
     setShowDuplicateConfirm(false)
+    // Las filas que se mandan, en el MISMO orden que el payload: `validate` arma
+    // un item por cada fila con nombre y la API devuelve sus errores por indice
+    // sobre ese arreglo. Es lo unico que permite traducir "fallo la 1" a una
+    // fila concreta de la pantalla. Se captura antes del await, contra las
+    // mismas filas que se enviaron.
+    const idsEnviados = rows.filter((r) => r.nombre.trim().length > 0).map((r) => r.id)
 
     setSubmitting(true)
     setResult(null)
@@ -537,16 +543,33 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
         setSubmitting(false)
         return
       }
+      const errores: { index: number; nombre: string; error: string }[] = body.errors ?? []
       setResult({
         createdCount: body.createdCount ?? 0,
-        errors: body.errors ?? [],
+        errors: errores,
       })
-      if ((body.errors?.length ?? 0) === 0) {
+      if (errores.length === 0) {
         // Solo el lote entero. Con un 207 parcial las filas que fallaron siguen
         // en pantalla para corregirlas: borrar el borrador ahi es perder
         // exactamente lo que queda por hacer.
         clearDraft()
         onSuccess(body.createdCount ?? 0)
+        return
+      }
+      // 207 parcial. Las filas que SI entraron ya son productos del inventario;
+      // dejarlas en la tabla las manda de nuevo en el proximo "Crear N
+      // productos", y como la tabla es lo que se persiste, cerrar el modal y
+      // volver a abrirlo restaura el lote entero con ellas adentro y las
+      // duplica sin que nadie toque nada. Se van: en pantalla queda exactamente
+      // lo que falta hacer, que es tambien lo que hay que conservar.
+      const fallaron = new Set(errores.map((e) => e.index))
+      const creados = new Set(idsEnviados.filter((_, i) => !fallaron.has(i)))
+      if (creados.size > 0) {
+        setRows((prev) => {
+          const quedan = prev.filter((r) => !creados.has(r.id))
+          // La tabla no puede quedar sin ninguna fila (no habria donde escribir).
+          return quedan.length > 0 ? quedan : [newRow()]
+        })
       }
     } catch (e) {
       setGlobalError(e instanceof Error ? e.message : "Error de red")
@@ -574,13 +597,28 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
         </CardHeader>
 
         {/*
-          El <form> no envia nada -- la accion primaria sigue siendo el boton
-          del pie, fuera de el, y `onSubmit` corta un Enter accidental antes de
-          que el navegador navegue. Existe porque el gate de interaccion de
-          useFormDraft solo cuenta controles que pertenecen a un <form> (o a una
-          capa portalada que un <form> haya abierto, como el listado de un
-          Select): sin esto, escribir en esta pantalla no marcaba nada como
-          sucio y el borrador no se grababa nunca.
+          El <form> no envia nada -- la accion primaria es el boton del pie, con
+          su onClick, y `onSubmit` corta un Enter accidental antes de que el
+          navegador navegue. Existe porque el gate de interaccion de useFormDraft
+          solo cuenta controles que pertenecen a un <form> (o a una capa portalada
+          que un <form> haya abierto, como el listado de un Select): sin esto,
+          escribir en esta pantalla no marcaba nada como sucio y el borrador no
+          se grababa nunca.
+
+          Por eso envuelve tambien el pie y el dialogo de duplicados, aunque no
+          los envie: un click en "Crear N productos" es trabajo de este
+          formulario, y con el boton afuera no lo era. Un lote restaurado que
+          vuelve con un 207 parcial reacomoda las filas SIN que el operador haya
+          tecleado nada, y ese reacomodo tiene que llegar al disco -- si no, el
+          borrador se queda con los productos que ya se crearon. Los botones van
+          con type="button" explicito: adentro de un <form>, el default del
+          navegador es "submit".
+
+          `contents` y no un espaciado propio: el Card es `flex flex-col` y sus
+          hijos dependen de serlo (el CardContent con `flex-1` es el que scrollea
+          y el pie es `shrink-0`). Un form con caja se meteria en el medio de esa
+          columna. Distinto del asistente de importar precios, donde el form SI
+          es el que tiene que llevar el `space-y` del stack de PageShell.
         */}
         <form
           ref={formRef}
@@ -874,7 +912,6 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
             </div>
           )}
         </CardContent>
-        </form>
 
         {showDuplicateConfirm && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-4 z-10">
@@ -922,12 +959,13 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
               </CardContent>
               <div className="border-t p-3 flex justify-end gap-2">
                 <Button
+                  type="button"
                   variant="outline"
                   onClick={() => setShowDuplicateConfirm(false)}
                 >
                   Revisar
                 </Button>
-                <Button onClick={doSubmit} disabled={submitting}>
+                <Button type="button" onClick={doSubmit} disabled={submitting}>
                   {submitting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
                   Crear igual
                 </Button>
@@ -937,10 +975,11 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
         )}
 
         <div className="border-t p-3 flex justify-end gap-2 shrink-0">
-          <Button variant="outline" onClick={onClose} disabled={submitting}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
             {result && result.createdCount > 0 ? "Cerrar" : "Cancelar"}
           </Button>
           <Button
+            type="button"
             onClick={handleSubmitClick}
             disabled={submitting || totalConNombre === 0}
           >
@@ -949,6 +988,7 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
             {totalConNombre === 1 ? "" : "s"}
           </Button>
         </div>
+        </form>
       </Card>
     </div>
   )

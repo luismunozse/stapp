@@ -219,6 +219,78 @@ describe("InventarioBulkForm — borrador local", () => {
     expect(window.localStorage.getItem(KEY)).not.toBeNull()
   })
 
+  it("saca del lote las filas que sí entraron", async () => {
+    // 207: la fila 0 se creó y la 1 falló. Dejar la creada en pantalla hace que
+    // el siguiente "Crear N productos" la vuelva a mandar, y el producto se
+    // duplica.
+    seedDraft(draftDeLote())
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: unknown, init?: RequestInit) => {
+        if (String(url).includes("bulk-create") && init?.method === "POST") {
+          return Promise.resolve({
+            ok: false,
+            status: 207,
+            json: async () => ({
+              createdCount: 1,
+              errors: [{ index: 1, nombre: "Funda iPhone 16", error: "Código duplicado" }],
+            }),
+          } as Response)
+        }
+        return Promise.resolve({ ok: true, json: async () => [] } as unknown as Response)
+      }),
+    )
+
+    renderBulk()
+    await screen.findByText(/se restauró un borrador no guardado/i)
+
+    fireEvent.click(screen.getByRole("button", { name: /Crear 2 productos/i }))
+
+    await screen.findByText(/1 fila con error/i)
+    expect(screen.queryByDisplayValue("Funda iPhone 15")).not.toBeInTheDocument()
+    expect(screen.getByDisplayValue("Funda iPhone 16")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Crear 1 producto$/i })).toBeInTheDocument()
+  })
+
+  it("y también las saca del borrador", async () => {
+    // Es lo que convierte el problema en permanente: cerrar el modal y volver a
+    // abrirlo restauraba el lote ENTERO, con los productos ya creados adentro.
+    seedDraft(draftDeLote())
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: unknown, init?: RequestInit) => {
+        if (String(url).includes("bulk-create") && init?.method === "POST") {
+          return Promise.resolve({
+            ok: false,
+            status: 207,
+            json: async () => ({
+              createdCount: 1,
+              errors: [{ index: 1, nombre: "Funda iPhone 16", error: "Código duplicado" }],
+            }),
+          } as Response)
+        }
+        return Promise.resolve({ ok: true, json: async () => [] } as unknown as Response)
+      }),
+    )
+
+    renderBulk()
+    await screen.findByText(/se restauró un borrador no guardado/i)
+
+    fireEvent.click(screen.getByRole("button", { name: /Crear 2 productos/i }))
+    await screen.findByText(/1 fila con error/i)
+
+    await waitFor(
+      () => {
+        const raw = window.localStorage.getItem(KEY)
+        expect(raw).not.toBeNull()
+        expect(JSON.parse(raw!).data.rows).toEqual([
+          expect.objectContaining({ nombre: "Funda iPhone 16" }),
+        ])
+      },
+      { timeout: 5000 },
+    )
+  })
+
   it("descarta el borrador y deja la pantalla en blanco", async () => {
     seedDraft(draftDeLote())
 
