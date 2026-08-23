@@ -37,13 +37,17 @@ Distribución real de los 30 pagos cobrados por MercadoPago en los últimos 6 me
 | Medio | Pagos | % | ¿Admite débito automático? |
 |---|---|---|---|
 | `account_money` | 17 | 57% | Sí |
-| `prepaid_card` | 7 | 23% | **Sin confirmar** |
+| `prepaid_card` | 7 | 23% | **NO.** Verificado el 2026-08-23 |
 | `debit_card` | 4 | 13% | Sí |
 | `credit_card` | 2 | 7% | Sí |
 
 **Cero pagos en efectivo.** Nadie usa Rapipago ni Pago Fácil, así que forzar un medio compatible con débito automático no deja a nadie afuera por ese lado.
 
-La documentación de suscripciones de MercadoPago lista **tarjeta de crédito, tarjeta de débito y dinero disponible en Mercado Pago**. La tarjeta prepaga no aparece nombrada: es el 23% y queda como riesgo abierto (§7).
+La documentación de suscripciones de MercadoPago lista **tarjeta de crédito, tarjeta de débito y dinero disponible en Mercado Pago**. La tarjeta prepaga no aparece nombrada.
+
+**Verificado el 2026-08-23**: se creó un PreApproval real (`scripts/mp-probar-adhesion.mjs`) y se abrió su pantalla de adhesión. **La tarjeta prepaga NO figura entre los medios ofrecidos** — y según el titular de la cuenta, tampoco aparece para ningún otro servicio con débito automático. Deja de ser un riesgo abierto y pasa a ser una restricción conocida: esos 7 talleres no pueden adherir.
+
+Eso no invalida nada de este diseño; lo confirma. Es exactamente el motivo por el que los dos modelos conviven (§2, decisión 1): el pago único es su camino y sigue intacto. Lo único que cambia es la campaña (§5), que tiene que decir de entrada qué medios sirven para que nadie choque contra una pared sin explicación.
 
 **El 80% paga con saldo, no con crédito.** `account_money` y `prepaid_card` dependen de que haya fondos en el momento exacto del cobro. Una tarjeta de crédito autoriza casi siempre; una billetera vacía, no. Con débito automático eso deja de ser "el cliente se olvidó" y pasa a ser "el cobro rebotó", que necesita reintentos y aviso. MercadoPago reintenta por su cuenta: es el estado `recycling` que el handler ya contempla.
 
@@ -202,7 +206,8 @@ El mensaje explica qué cambia: se cobra solo, se cancela cuando quieras, y no h
 
 | Riesgo | Mitigación |
 |---|---|
-| **MercadoPago no acepta tarjetas prepagas para suscripciones (23% de los pagos)** | El diseño mantiene el pago único: esos talleres siguen pagando como hoy. Confirmar contra la API antes de la campaña, para no invitar a quien no puede adherir. |
+| ~~**MercadoPago no acepta tarjetas prepagas**~~ CONFIRMADO el 2026-08-23 | No es hipótesis: la prepaga no figura en la pantalla de adhesión. El pago único queda como su camino. La campaña (§5) debe aclarar los medios aceptados en el propio mensaje. |
+| **`back_url` con `localhost` es rechazado por la API de PreApproval** | Verificado el 2026-08-23: devuelve `400 Invalid value for back_url`. `NEXTAUTH_URL` vale `http://localhost:3000` en desarrollo, así que el flujo NO se puede probar en local sin apuntarla a una URL pública. En producción Vercel la define con el dominio real. Conviene que la ruta devuelva un error explícito en vez de dejar pasar el 400 opaco de MercadoPago. |
 | **Inflación: una PreApproval cobra el mismo monto para siempre** | Actualizar el importe por API cuando cambie el precio del plan. **Hay que verificar si MercadoPago exige re-autorización del pagador al subir el monto**: si la exige, el aumento se vuelve una campaña, no un update. Fuera del primer slice. |
 | **El 80% paga desde saldo: los rebotes van a ser frecuentes** | La ventana de gracia de 12 días (§4.1) evita el bloqueo durante los 10 días de reintentos de MercadoPago. El aviso al taller de que su cobro rebotó es parte del dunning, que es otro spec — y con esta política se vuelve más urgente: MercadoPago reintenta 4 veces en silencio y el taller no se entera de que su billetera está vacía. |
 | **Un taller adhiere y además paga a mano el mismo mes** | El período se apila (`webhook/route.ts:441-447`), que es el comportamiento correcto: pagó dos meses. El UNIQUE de la 305 evita que un mismo pago se cuente dos veces. |
