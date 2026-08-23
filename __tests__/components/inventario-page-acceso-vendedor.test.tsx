@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { render, screen, waitFor, fireEvent } from "@testing-library/react"
+import { render, screen, waitFor, fireEvent, act } from "@testing-library/react"
 
 /**
  * The inventory page runs an org-level permission check for VENDEDOR
@@ -23,10 +23,22 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react"
  *     who truly lacks access gets 403s from the API instead of losing work.
  */
 
-const { routerMock } = vi.hoisted(() => ({
+const { routerMock, confirmMock } = vi.hoisted(() => ({
   routerMock: { replace: vi.fn(), push: vi.fn() },
+  confirmMock: vi.fn(),
 }))
 const replaceMock = routerMock.replace
+
+vi.mock("@/contexts/modal-context", () => ({
+  useModal: () => ({
+    confirm: confirmMock,
+    alert: vi.fn().mockResolvedValue(undefined),
+    showSuccess: vi.fn().mockResolvedValue(undefined),
+    showError: vi.fn().mockResolvedValue(undefined),
+    showWarning: vi.fn().mockResolvedValue(undefined),
+    showInfo: vi.fn().mockResolvedValue(undefined),
+  }),
+}))
 
 let sessionState: { data: unknown; status: string } = {
   data: { user: { id: "u1", role: "VENDEDOR" } },
@@ -307,5 +319,218 @@ describe("InventarioPage — la importación masiva sigue al permiso", () => {
     render(<InventarioPage />)
 
     expect(screen.getByTestId("lista")).toHaveAttribute("data-allow-import", "true")
+  })
+})
+
+/**
+ * El botón "Reintentar" que este PR agregó es, él mismo, una acción que puede
+ * destruir trabajo: si el reintento vuelve con una denegación explícita, la
+ * página se desmonta entera —formulario incluido— sin preguntar nada.
+ *
+ * El caso concreto: el primer chequeo se cae por un blip mientras el flag de la
+ * org REALMENTE está en false. El vendedor sigue la instrucción del propio
+ * aviso, toca Reintentar con el formulario a medio llenar, y lo pierde. O sea:
+ * la pérdida que este PR existe para evitar, disparada por el affordance que
+ * este PR agregó.
+ *
+ * Quedarse es seguro: todas las escrituras de inventario están gateadas en el
+ * servidor (requireInventarioAccess + denyIfNoInventarioAccess), así que el
+ * operador no puede guardar — solo copiar lo suyo antes de salir.
+ */
+describe("InventarioPage — una denegación que llega con la pantalla montada", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  const responde = (vendedoresAdministranInventario: unknown) =>
+    Promise.resolve({
+      ok: true,
+      json: async () => ({ vendedoresAdministranInventario }),
+    } as Response)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    sessionState = sesionVendedor()
+    confirmMock.mockResolvedValue(true)
+    fetchMock = vi.fn(() => responde(true))
+    vi.stubGlobal("fetch", fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  /** Deja la pantalla en "indeterminado" y devuelve el botón de reintento. */
+  async function pantallaTrasUnFalloDeRed() {
+    fetchMock.mockImplementationOnce(() => Promise.reject(new TypeError("Failed to fetch")))
+    render(<InventarioPage />)
+    return await screen.findByRole("button", { name: /reintentar/i })
+  }
+
+  it("pregunta antes de desmontar la pantalla", async () => {
+    confirmMock.mockResolvedValue(false)
+    const reintentar = await pantallaTrasUnFalloDeRed()
+
+    fetchMock.mockImplementation(() => responde(false))
+    fireEvent.click(reintentar)
+
+    await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1))
+  })
+
+  it("deja al operador rescatar lo suyo si dice que no", async () => {
+    confirmMock.mockResolvedValue(false)
+    const reintentar = await pantallaTrasUnFalloDeRed()
+
+    fetchMock.mockImplementation(() => responde(false))
+    fireEvent.click(reintentar)
+
+    await waitFor(() => expect(confirmMock).toHaveBeenCalled())
+    expect(screen.getByTestId("lista")).toBeInTheDocument()
+    expect(replaceMock).not.toHaveBeenCalled()
+    // Y se lo dice: ya no es "no pude verificar", es "no tenés permiso".
+    expect(screen.getByText(/no vas a poder guardar/i)).toBeInTheDocument()
+    expect(screen.getByTestId("lista")).toHaveAttribute("data-allow-import", "false")
+  })
+
+  it("sale al panel si el operador acepta", async () => {
+    confirmMock.mockResolvedValue(true)
+    const reintentar = await pantallaTrasUnFalloDeRed()
+
+    fetchMock.mockImplementation(() => responde(false))
+    fireEvent.click(reintentar)
+
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/dashboard"))
+    expect(screen.queryByTestId("lista")).not.toBeInTheDocument()
+  })
+
+  it("no molesta con una confirmación en la primera carga, donde no hay nada que perder", async () => {
+    fetchMock.mockImplementation(() => responde(false))
+
+    render(<InventarioPage />)
+
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/dashboard"))
+    expect(confirmMock).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Un pedido colgado dejaba la pantalla en blanco indefinidamente.
+ *
+ * El AbortController estaba cableado solo a la limpieza del efecto, nunca a un
+ * timeout, y public/sw.js rutea /api/org/features por networkOnlyWithError, que
+ * tampoco tiene uno — su propio comentario documenta el caso: un enlace de
+ * mostrador medio muerto "no rechaza el fetch: lo cuelga decenas de segundos".
+ * Con el veredicto en null la página devuelve null, así que el operador se come
+ * una pantalla blanca sin spinner ni reintento, y el camino "indeterminado"
+ * nunca se dispara porque la promesa nunca se resuelve.
+ */
+describe("InventarioPage — cuando el chequeo se cuelga", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  /** Como el fetch real: no se resuelve nunca, pero rechaza si lo abortan. */
+  const fetchQueSeCuelga = (_url: string, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => {
+        reject(Object.assign(new Error("Aborted"), { name: "AbortError" }))
+      })
+    })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    sessionState = sesionVendedor()
+    confirmMock.mockResolvedValue(true)
+    fetchMock = vi.fn(fetchQueSeCuelga)
+    vi.stubGlobal("fetch", fetchMock)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it("no deja la pantalla en blanco para siempre", async () => {
+    vi.useFakeTimers()
+    render(<InventarioPage />)
+
+    // Antes del vencimiento sigue siendo un chequeo en curso.
+    expect(screen.queryByTestId("lista")).not.toBeInTheDocument()
+
+    await act(async () => {
+      vi.advanceTimersByTime(5000)
+    })
+
+    expect(screen.getByTestId("lista")).toBeInTheDocument()
+    expect(screen.getByText(/no se pudo verificar/i)).toBeInTheDocument()
+    expect(replaceMock).not.toHaveBeenCalled()
+  })
+
+  it("no confunde el desmontaje con un vencimiento", async () => {
+    vi.useFakeTimers()
+    const { unmount } = render(<InventarioPage />)
+
+    unmount()
+    await act(async () => {
+      vi.advanceTimersByTime(5000)
+    })
+
+    // Nada que reportar: el abort de la limpieza no es un chequeo fallido.
+    expect(replaceMock).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * La misma tesis que se arregló en el servidor ("no pude leer" no es "el flag
+ * está apagado"), que había quedado en pie del lado del cliente: cualquier
+ * valor falsy —incluido un 200 cuyo body simplemente no trae la clave— caía en
+ * el camino de denegación y desmontaba el formulario. Y una vez denegado no hay
+ * botón de reintento: una denegación falsa es irrecuperable sin recargar.
+ */
+describe("InventarioPage — solo un false explícito es una denegación", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    sessionState = sesionVendedor()
+    confirmMock.mockResolvedValue(true)
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("no toma un 200 sin el campo como una denegación", async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve({ ok: true, json: async () => ({ moduloAgenda: true }) } as Response),
+    )
+
+    render(<InventarioPage />)
+
+    await waitFor(() => expect(screen.getByText(/no se pudo verificar/i)).toBeInTheDocument())
+    expect(screen.getByTestId("lista")).toBeInTheDocument()
+    expect(replaceMock).not.toHaveBeenCalled()
+  })
+
+  it("tampoco toma un body que no es un objeto", async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve({ ok: true, json: async () => null } as Response),
+    )
+
+    render(<InventarioPage />)
+
+    await waitFor(() => expect(screen.getByText(/no se pudo verificar/i)).toBeInTheDocument())
+    expect(replaceMock).not.toHaveBeenCalled()
+  })
+
+  it("sí deniega con un false explícito", async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => ({ vendedoresAdministranInventario: false }),
+      } as Response),
+    )
+
+    render(<InventarioPage />)
+
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/dashboard"))
   })
 })

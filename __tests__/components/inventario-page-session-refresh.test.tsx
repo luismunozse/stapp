@@ -14,6 +14,20 @@ vi.mock("next-auth/react", () => ({
   useSession: () => sessionState,
 }))
 
+// La página confirma antes de desmontarse ante una denegación que llega con
+// trabajo en pantalla (ver inventario-page-acceso-vendedor.test.tsx), así que
+// necesita el contexto de modales. Acá nunca se abre: la sesión es ADMIN.
+vi.mock("@/contexts/modal-context", () => ({
+  useModal: () => ({
+    confirm: vi.fn().mockResolvedValue(true),
+    alert: vi.fn().mockResolvedValue(undefined),
+    showSuccess: vi.fn().mockResolvedValue(undefined),
+    showError: vi.fn().mockResolvedValue(undefined),
+    showWarning: vi.fn().mockResolvedValue(undefined),
+    showInfo: vi.fn().mockResolvedValue(undefined),
+  }),
+}))
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
 }))
