@@ -20,6 +20,7 @@ import {
   type PdfLogo,
   type HelveticaMetrics,
 } from "./pdf-react-shared"
+import { Pie, leyendaPie } from "./pdf-react-shell"
 
 /** Emisor + cliente identity, shared by every cuenta corriente document. */
 export interface CuentaCorrienteEmisor {
@@ -272,13 +273,6 @@ const styles = StyleSheet.create({
   totalesCell: { width: 68, paddingRight: 6, fontSize: TYPE.small, textAlign: "right", fontFamily: "Helvetica-Bold" },
   totalesSaldo: { width: 74, paddingRight: 6, fontSize: TYPE.small, textAlign: "right", fontFamily: "Helvetica-Bold" },
   vacio: { paddingVertical: 20, textAlign: "center", fontSize: TYPE.small, color: MONO.label },
-
-  footer: { position: "absolute", bottom: 40, left: 40, right: 40 },
-  footerRule: { borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.rule },
-  footerDisclaimer: { fontSize: TYPE.fine, color: MONO.faint, marginTop: 8 },
-  footerRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 4 },
-  footerFine: { fontSize: 7, color: MONO.faint },
-  footerPageNum: { fontSize: TYPE.small, color: MONO.faint },
 })
 
 /**
@@ -399,22 +393,6 @@ function saldoHeadline(saldo: number): { label: string; valor: number } {
   }
 }
 
-function PieCC({ leyenda, fechaImpresion }: { leyenda: string; fechaImpresion: string }) {
-  return (
-    <View style={styles.footer} fixed>
-      <View style={styles.footerRule} />
-      <Text style={styles.footerDisclaimer}>{leyenda}</Text>
-      <View style={styles.footerRow}>
-        <Text style={styles.footerFine}>Impreso: {fechaImpresion}</Text>
-        <Text
-          style={styles.footerPageNum}
-          render={({ pageNumber, totalPages }) => (totalPages > 1 ? `Página ${pageNumber} de ${totalPages}` : "")}
-        />
-      </View>
-    </View>
-  )
-}
-
 export function ReciboCCDocument({
   data,
   logo = null,
@@ -521,8 +499,8 @@ export function ReciboCCDocument({
           </View>
         </View>
 
-        <PieCC
-          leyenda="Recibo interno de cuenta corriente — no válido como comprobante fiscal."
+        <Pie
+          leyenda={leyendaPie("Recibo interno de cuenta corriente")}
           fechaImpresion={formatDateTimeValue(new Date(), tz)}
         />
       </Page>
@@ -638,8 +616,8 @@ export function ResumenCCDocument({
           <Text style={styles.saldoNote}>Saldo de la cuenta corriente al {hasta}.</Text>
         </View>
 
-        <PieCC
-          leyenda="Resumen interno de cuenta corriente — no válido como comprobante fiscal."
+        <Pie
+          leyenda={leyendaPie("Resumen interno de cuenta corriente")}
           fechaImpresion={formatDateTimeValue(new Date(), tz)}
         />
       </Page>

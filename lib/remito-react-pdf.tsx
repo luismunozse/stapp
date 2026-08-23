@@ -24,6 +24,7 @@ import {
   truncateToWidth,
   type PdfLogo,
 } from "./pdf-react-shared"
+import { Pie, LEYENDA_NO_FISCAL, leyendaPie } from "./pdf-react-shell"
 import type { FacturaPDFData } from "./pdf"
 
 const estadoPagoLabels: Record<string, string> = {
@@ -113,7 +114,7 @@ const LETTER_BOX_GAP = 10
 // name, which never reaches the legend) rather than tracked per row
 // position — always safe, since the legend is wider than the letter box so
 // its left edge is always the tighter of the two constraints.
-const LEGEND_TEXT = "Documento no válido como comprobante fiscal"
+// LEYENDA_NO_FISCAL (lib/pdf-react-shell.tsx) is this same string, shared.
 
 // === Styles ===
 // PAINT POINT #1 (letter-box straddle): the classic remito's letter box (X)
@@ -230,13 +231,6 @@ const styles = StyleSheet.create({
   sigCaption: { fontSize: TYPE.fine, color: MONO.label, marginTop: 4 },
 
   continuationTitle: { position: "absolute", top: 14, left: 40, fontFamily: "Helvetica-Bold", fontSize: TYPE.docTitle },
-
-  footer: { position: "absolute", bottom: 40, left: 40, right: 40 },
-  footerRule: { borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.rule },
-  footerDisclaimer: { fontSize: TYPE.fine, color: MONO.faint, marginTop: 8 },
-  footerRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 4 },
-  footerFine: { fontSize: 7, color: MONO.faint },
-  footerPageNum: { fontSize: TYPE.small, color: MONO.faint },
 })
 
 export function RemitoDocument({
@@ -288,12 +282,12 @@ export function RemitoDocument({
   const leftZoneMaxWidth = LETTER_BOX_X - LETTER_BOX_GAP - leftZoneX
   const empresaNombreDisplay = truncateToWidth(metrics.bold, empresaNombre, TYPE.body, leftZoneMaxWidth)
 
-  // Legend-aware clamp (Task 5 fix) — see the LEGEND_TEXT comment above for
-  // the geometry/derivation. legendAwareMaxWidth is always <= leftZoneMaxWidth
+  // Legend-aware clamp (Task 5 fix) — see the LEYENDA_NO_FISCAL comment above
+  // for the geometry/derivation. legendAwareMaxWidth is always <= leftZoneMaxWidth
   // (the legend, being wider than the 34pt letter box, always starts further
   // left), so applying it to all three conditional left-zone lines is always
   // at least as safe as the letter-box-only budget, never less.
-  const legendWidth = metrics.regular.widthOfTextAtSize(LEGEND_TEXT, TYPE.fine)
+  const legendWidth = metrics.regular.widthOfTextAtSize(LEYENDA_NO_FISCAL, TYPE.fine)
   const legendStartX = PAGE_WIDTH_A4 / 2 - legendWidth / 2
   const legendAwareMaxWidth = Math.min(leftZoneMaxWidth, legendStartX - LETTER_BOX_GAP - leftZoneX)
   const telefonoDisplay = telefonoEmpresa
@@ -399,7 +393,7 @@ export function RemitoDocument({
             </View>
           </View>
           <View style={styles.legendWrap}>
-            <Text style={styles.legendText}>{LEGEND_TEXT}</Text>
+            <Text style={styles.legendText}>{LEYENDA_NO_FISCAL}</Text>
           </View>
         </View>
 
@@ -544,17 +538,7 @@ export function RemitoDocument({
         ) : null}
 
         {/* === FOOTER — fixed, repeats on every page for free. === */}
-        <View style={styles.footer} fixed>
-          <View style={styles.footerRule} />
-          <Text style={styles.footerDisclaimer}>Remito interno — no válido como comprobante fiscal.</Text>
-          <View style={styles.footerRow}>
-            <Text style={styles.footerFine}>Impreso: {fechaImpresion}</Text>
-            <Text
-              style={styles.footerPageNum}
-              render={({ pageNumber, totalPages }) => (totalPages > 1 ? `Página ${pageNumber} de ${totalPages}` : "")}
-            />
-          </View>
-        </View>
+        <Pie leyenda={leyendaPie("Remito interno")} fechaImpresion={fechaImpresion} />
       </Page>
     </Document>
   )
