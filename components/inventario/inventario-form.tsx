@@ -357,6 +357,7 @@ export function InventarioForm({
     ready: draftReady,
     clearDraft,
     notifyChange,
+    hasUnsavedWork,
     recordChangedWhileEditing,
   } = useFormDraft<InventarioDraftValue>({
     feature: "inventario-form",
@@ -667,7 +668,14 @@ export function InventarioForm({
   // ocultarla, porque enseña a desconfiar del resto de los avisos.
   const handleEditExisting = async (match: DuplicateMatch) => {
     if (!onEditExisting) return
-    const hayTrabajoSinGuardar = isDirty || pendingFile !== null
+    // `hasUnsavedWork()` y no solo `isDirty`: el borrador se aplica con
+    // `reset()`, que deja `isDirty` en false. Una recarga con borrador en disco
+    // devolvia el formulario LLENO de trabajo restaurado y con el aviso de
+    // duplicados arriba, y "Editar este" cambiaba la pantalla entera sin
+    // preguntar nada -- justo el caso para el que existe la confirmacion. El
+    // hook ya sabe la respuesta (lo escrito por el operador, o un borrador
+    // restaurado que sigue en pantalla); calcularla aparte es dejarla derivar.
+    const hayTrabajoSinGuardar = isDirty || pendingFile !== null || hasUnsavedWork()
     if (hayTrabajoSinGuardar) {
       const confirmado = await confirm({
         title: "Abrir el producto existente",

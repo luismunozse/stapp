@@ -137,6 +137,55 @@ describe("InventarioForm — 'Editar este' sobre un duplicado detectado", () => 
     await waitFor(() => expect(onEditExisting).toHaveBeenCalledWith("existente-1"))
   })
 
+  it("pregunta también cuando el trabajo en pantalla vino de un borrador", async () => {
+    // El caso exacto para el que existe la confirmación: la pantalla está llena
+    // de trabajo sin guardar. Pero ese trabajo lo puso `reset()` al aplicar el
+    // borrador, y reset() deja `isDirty` en false — con lo que la única señal
+    // que miraba la confirmación decía "no hay nada que perder" justo cuando la
+    // pantalla estaba más llena. Se pregunta por el mismo signo que usa el hook
+    // (`hasUnsavedWork`), que cuenta también el borrador restaurado.
+    confirmMock.mockResolvedValue(false)
+    const onEditExisting = vi.fn()
+    window.localStorage.setItem(
+      "draft:v3:inventario-form:org-1:user-1:new",
+      JSON.stringify({
+        version: 3,
+        savedAt: Date.now(),
+        data: {
+          values: {
+            nombre: "Bateria iPhone 12 original",
+            categoria: "Baterías",
+            tipoDispositivo: "CELULAR",
+            stock: 2,
+            precioVenta: 250,
+            proveedorId: null,
+            barcode: null,
+          },
+          ui: {
+            showStockConfig: false,
+            showNewTipo: false,
+            newTipo: "",
+            showNewCategoria: false,
+            newCategoria: "",
+            imagenPendiente: false,
+          },
+        },
+      }),
+    )
+
+    render(
+      <InventarioForm onClose={vi.fn()} onSuccess={vi.fn()} onEditExisting={onEditExisting} />,
+    )
+    await screen.findByText(/se restauró un borrador no guardado/i)
+    // Sin tocar una sola tecla: el nombre ya vino del borrador.
+    fireEvent.blur(screen.getByLabelText("Nombre *"))
+
+    fireEvent.click(await screen.findByRole("button", { name: /editar este/i }))
+
+    await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1))
+    expect(onEditExisting).not.toHaveBeenCalled()
+  })
+
   it("dice en el diálogo qué pasa con lo cargado para el producto nuevo", async () => {
     confirmMock.mockResolvedValue(false)
 
