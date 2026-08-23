@@ -526,6 +526,13 @@ export function InventarioForm({
       reset({
         ...inventarioFormDefaults(item, initialBarcode),
         ...sinCostoDeCompra(draft.values),
+        // ...salvo el codigo que el lector acaba de entregar, que va DESPUES del
+        // borrador. Es el unico campo de esta pantalla que el operador no tipeo
+        // y no vuelve a mirar: un borrador de hasta 7 dias lo reemplazaba --
+        // casi siempre por null -- y el producto se guardaba sin el codigo que
+        // se acababa de escanear. La condicion es la misma del prefill del
+        // scanner: nunca pisa un barcode que el item ya tenia guardado.
+        ...(initialBarcode && !item?.barcode ? { barcode: initialBarcode } : {}),
       })
       setShowStockConfig(draft.ui?.showStockConfig === true)
       setShowNewTipo(draft.ui?.showNewTipo === true)

@@ -242,6 +242,41 @@ describe("InventarioForm — borrador local", () => {
     expect(screen.queryByText(/volvé a seleccionarla/i)).not.toBeInTheDocument()
   })
 
+  it("no reemplaza con el borrador el codigo que acaba de leer el scanner", async () => {
+    // Alta desde el lector: `initialBarcode` es el EAN que el operador acaba de
+    // escanear. Es el unico campo de la pantalla que nunca tipeo y que por lo
+    // tanto no vuelve a mirar, asi que un borrador de hasta 7 dias que lo pise
+    // -- casi siempre con null -- se lleva el codigo sin que nadie se entere,
+    // aviso de restauracion incluido.
+    seedDraft(KEY_ALTA, draftDeAlta())
+
+    renderForm({ initialBarcode: "7791234567890" })
+
+    await screen.findByText(/se restauró un borrador no guardado/i)
+    expect(screen.getByLabelText("Código de Barras")).toHaveValue("7791234567890")
+    // El resto del borrador si vuelve.
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Bateria restaurada")
+  })
+
+  it("deja ganar al borrador cuando el item ya tenia su propio codigo", async () => {
+    // El scanner matcheo por codigo interno y el item YA tiene barcode: ahi el
+    // prefill no lo toca (seria pisar el codigo guardado), asi que el borrador
+    // es lo ultimo que se escribio sobre ese campo.
+    const draft = draftDeAlta()
+    seedDraft("draft:v3:inventario-form:org-1:user-1:edit:inv-1", {
+      ...draft,
+      values: { ...draft.values, barcode: "111111111111" },
+    })
+
+    renderForm({
+      item: makeItem({ barcode: "999999999999" }),
+      initialBarcode: "7791234567890",
+    })
+
+    await screen.findByText(/se restauró un borrador no guardado/i)
+    expect(screen.getByLabelText("Código de Barras")).toHaveValue("111111111111")
+  })
+
   it("borra el borrador cuando el alta se guarda bien", async () => {
     seedDraft(KEY_ALTA, draftDeAlta())
     fetchMock.mockImplementation((url: unknown, init?: RequestInit) => {
