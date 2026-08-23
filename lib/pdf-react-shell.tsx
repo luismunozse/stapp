@@ -572,13 +572,15 @@ export function Badge({ texto }: { texto: string }) {
 }
 
 /**
- * `espacioSuperior`/`espacioFilas` override firmasBlock's/firmasRow's own
- * marginTop (18/22 — the cuenta corriente documents' pre-existing values,
- * kept as the shared default since both adopt it unchanged). The remito's
- * signature block shipped tighter (10/16) before this component existed;
- * collapsing it onto the cuenta corriente spacing would shift a live
- * customer document's layout for no functional reason, so it passes both
- * overrides to keep its own numbers exactly.
+ * `espacioSuperior`/`espacioFilas` set firmasBlock's/firmasRow's marginTop.
+ * Required, never defaulted: the golden harness proved the two documents'
+ * pre-existing numbers are NOT the same value — cuenta corriente shipped
+ * 18/22, the remito shipped 10/16 — and neither is more "natural" than the
+ * other; both are historical accidents this component must reproduce
+ * exactly rather than paper over. Defaulting to one of them would silently
+ * re-hide that divergence from the next of the six documents that adopts
+ * this component, the same reasoning `zonaDerecha` and `espacioDerecha`
+ * were made required for one task earlier.
  */
 export function Firmas({
   titulo,
@@ -588,17 +590,14 @@ export function Firmas({
 }: {
   titulo: string
   campos: string[]
-  espacioSuperior?: number
-  espacioFilas?: number
+  espacioSuperior: number
+  espacioFilas: number
 }) {
   return (
-    <View
-      style={[estilosShell.firmasBlock, espacioSuperior === undefined ? undefined : { marginTop: espacioSuperior }]}
-      wrap={false}
-    >
+    <View style={[estilosShell.firmasBlock, { marginTop: espacioSuperior }]} wrap={false}>
       <Text style={estilosShell.sectionLabel}>{titulo}</Text>
       <View style={[estilosShell.hr, { marginTop: 4 }]} />
-      <View style={[estilosShell.firmasRow, espacioFilas === undefined ? undefined : { marginTop: espacioFilas }]}>
+      <View style={[estilosShell.firmasRow, { marginTop: espacioFilas }]}>
         {campos.map((campo) => (
           <View key={campo} style={estilosShell.firmaCol}>
             <View style={estilosShell.firmaLinea} />

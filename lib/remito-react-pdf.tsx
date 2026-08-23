@@ -305,10 +305,10 @@ export function RemitoDocument({
 
         {/* === RECIBÍ CONFORME (orden-sourced only) === */}
         {data.orden ? (
-          // espacioSuperior/espacioFilas: this block shipped tighter (10/16)
-          // than the cuenta corriente documents (18/22, the shell's shared
-          // default) before Firmas existed — kept exactly to avoid moving a
-          // live customer document's layout.
+          // espacioSuperior/espacioFilas: this document's own pre-existing
+          // numbers (10/16, tighter than cuenta corriente's 18/22) — required
+          // on Firmas, not defaulted, so this call site states them
+          // explicitly rather than inheriting them by omission.
           <Firmas
             titulo="Recibí conforme"
             campos={["Firma", "Aclaración"]}

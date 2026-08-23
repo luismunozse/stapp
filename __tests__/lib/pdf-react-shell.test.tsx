@@ -270,7 +270,7 @@ describe("BandaCliente", () => {
 describe("Firmas", () => {
   it("draws one caption per field", async () => {
     const text = await extractReactPdfText(
-      await render(<Firmas titulo="Conformidad" campos={["Firma", "Aclaración"]} />)
+      await render(<Firmas titulo="Conformidad" campos={["Firma", "Aclaración"]} espacioSuperior={18} espacioFilas={22} />)
     )
     expect(text).toContain("CONFORMIDAD")
     expect(text).toContain("Firma")
@@ -280,7 +280,12 @@ describe("Firmas", () => {
   it("supports the four-field entrega variant", async () => {
     const text = await extractReactPdfText(
       await render(
-        <Firmas titulo="Firmas de conformidad" campos={["Cliente (quien recibe)", "Encargado (quien entrega)"]} />
+        <Firmas
+          titulo="Firmas de conformidad"
+          campos={["Cliente (quien recibe)", "Encargado (quien entrega)"]}
+          espacioSuperior={10}
+          espacioFilas={16}
+        />
       )
     )
     expect(text).toContain("Cliente (quien recibe)")

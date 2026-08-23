@@ -303,7 +303,11 @@ export function ReciboCCDocument({
           </View>
         ) : null}
 
-        <Firmas titulo="Conformidad" campos={["Firma", "Aclaración"]} />
+        {/* espacioSuperior/espacioFilas: this document's own pre-existing
+            numbers (18/22) — required on Firmas, not defaulted, so this
+            call site states them explicitly rather than inheriting them by
+            omission. */}
+        <Firmas titulo="Conformidad" campos={["Firma", "Aclaración"]} espacioSuperior={18} espacioFilas={22} />
 
         <Pie
           leyenda={leyendaPie("Recibo interno de cuenta corriente")}
