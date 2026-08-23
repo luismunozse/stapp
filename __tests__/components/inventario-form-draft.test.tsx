@@ -196,6 +196,34 @@ describe("InventarioForm — borrador local", () => {
     expect(screen.queryByText(/se restauró un borrador no guardado/i)).not.toBeInTheDocument()
   })
 
+  it("no devuelve el costo de compra, y el aviso lo dice", async () => {
+    // El costo no se persiste (ver el describe de mas abajo). Un borrador viejo
+    // que todavia lo traiga tampoco lo devuelve: el input arranca en el default
+    // del alta, no en lo que quedo escrito en disco.
+    seedDraft(KEY_ALTA, draftDeAlta())
+
+    renderForm()
+
+    await screen.findByText(/se restauró un borrador no guardado/i)
+    expect(screen.getByLabelText("Costo *")).toHaveValue("0")
+    expect(screen.getByText(/el costo no se guarda en el borrador/i)).toBeInTheDocument()
+    // El resto del borrador vuelve entero.
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Bateria restaurada")
+    expect(screen.getByLabelText("Precio Venta *")).toHaveValue("250")
+  })
+
+  it("no habla del costo cuando el rol no puede verlo", async () => {
+    // Sin permiso el input ni se muestra: pedir que lo vuelvan a cargar es
+    // mandar a alguien a un campo que no existe en su pantalla.
+    seedDraft("draft:v3:inventario-form:org-1:user-1:edit:inv-1", draftDeAlta())
+
+    renderForm({ item: makeItem({ precioCompra: null }) })
+
+    await screen.findByText(/se restauró un borrador no guardado/i)
+    expect(screen.getByText(/sin permiso para ver el costo/i)).toBeInTheDocument()
+    expect(screen.queryByText(/el costo no se guarda en el borrador/i)).not.toBeInTheDocument()
+  })
+
   it("avisa que la foto hay que volver a elegirla cuando el borrador tenia una", async () => {
     seedDraft(KEY_ALTA, draftDeAlta({ imagenPendiente: true }))
 
@@ -334,6 +362,29 @@ describe("InventarioForm — borrador local (lo que nunca se persiste)", () => {
     // El submit spreadea los valores del formulario dentro del payload: una
     // clave de UI en ese nivel viaja al POST.
     expect(data.values).not.toHaveProperty("showNewTipo")
+  })
+
+  it("nunca escribe el costo de compra", async () => {
+    // El costo de compra es el unico campo de esta pantalla con permiso propio:
+    // el formulario lo oculta y lo saca del payload cuando el rol no puede verlo
+    // (`costoCargado`). Un borrador vive hasta 7 dias en localStorage, en claro,
+    // en una terminal de mostrador que sobrevive al logout: persistirlo se lo
+    // deja al operador siguiente, sea cual sea su rol. Mismo criterio que
+    // lib/cliente-draft-projection.ts con el dni y el cuit.
+    renderForm()
+
+    fireEvent.change(screen.getByLabelText("Nombre *"), { target: { value: "Bateria" } })
+    fireEvent.change(screen.getByLabelText("Costo *"), { target: { value: "8888.77" } })
+    fireEvent.change(screen.getByLabelText("Precio Venta *"), { target: { value: "9999.55" } })
+    await settle()
+
+    const raw = window.localStorage.getItem(KEY_ALTA)
+    expect(raw).not.toBeNull()
+    const data = JSON.parse(raw!).data
+    expect(data.values).not.toHaveProperty("precioCompra")
+    expect(JSON.stringify(data)).not.toContain("8888")
+    // El precio de venta si: es lo que ve cualquiera que entre al catalogo.
+    expect(data.values.precioVenta).toBe(9999.55)
   })
 
   it("nunca escribe la imagen: ni el File ni su base64", async () => {

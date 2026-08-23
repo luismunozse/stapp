@@ -160,6 +160,47 @@ interface InventarioDraftUi {
 }
 
 /**
+ * Los campos del formulario TAL COMO SE PERSISTEN: sin el costo de compra.
+ *
+ * `precioCompra` es el unico campo de esta pantalla con permiso propio -- el
+ * formulario lo oculta y lo saca del payload cuando la fuente no lo expuso (ver
+ * `costoCargado`) -- y un borrador es exactamente lo contrario de eso: vive
+ * hasta 7 dias en localStorage, en texto plano, sobrevive al logout a proposito
+ * y esta en una terminal de mostrador que varias personas comparten. Lo que
+ * `getValue()` devuelve queda legible para el operador siguiente, sea cual sea
+ * su rol. Persistir el costo de un proveedor ahi es el mismo error que
+ * lib/cliente-draft-projection.ts existe para no repetir con el dni y el cuit.
+ *
+ * Se excluye SIEMPRE, no solo cuando el rol actual no puede ver el costo: la
+ * amenaza es quien use la maquina despues, no quien la esta usando ahora.
+ * Volver a tipear un costo cuesta una linea; que salga de la organizacion no se
+ * deshace.
+ *
+ * El tipo es lo que lo sostiene: `getValue()` devuelve esto, asi que un
+ * `getValues()` crudo no compila y el campo solo puede volver si alguien lo
+ * agrega a mano.
+ *
+ * Sin bump de DRAFT_SCHEMA_VERSION, a diferencia de los dos anteriores: esos
+ * retiraban entradas que YA estaban escritas en las terminales bajo una regla
+ * mas laxa, y aca no hay ninguna -- el borrador de este formulario no existe
+ * todavia fuera de esta rama. Bumpear igual borraria los borradores vivos de
+ * orden, recepcion y cliente, que es exactamente el trabajo que el hook existe
+ * para proteger. Lo que pueda haber quedado en una maquina de desarrollo lo
+ * cubre `sinCostoDeCompra` al leer.
+ */
+type InventarioDraftValues = Omit<InventarioFormData, "precioCompra">
+
+/** Runtime de la exclusion de arriba. Tambien se aplica al LEER: un borrador
+ *  escrito antes de esta regla todavia puede traer el costo en disco, y
+ *  restaurarlo seria devolverlo a la pantalla igual. */
+function sinCostoDeCompra(
+  values: InventarioFormData | InventarioDraftValues
+): InventarioDraftValues {
+  const { precioCompra: _costo, ...rest } = values as InventarioFormData
+  return rest
+}
+
+/**
  * Lo unico de este formulario que llega a localStorage.
  *
  * Los campos de react-hook-form van SEPARADOS del estado de UI y no mezclados
@@ -170,7 +211,7 @@ interface InventarioDraftUi {
  * API por olvido.
  */
 interface InventarioDraftValue {
-  values: InventarioFormData
+  values: InventarioDraftValues
   ui: InventarioDraftUi
 }
 
@@ -327,7 +368,8 @@ export function InventarioForm({
     getValue: () => ({
       // `getValues()` y no `watch()`: leer el form entero en render suscribe el
       // componente a cada tecla y el borrador no necesita re-renderizar nada.
-      values: getValues(),
+      // LIMITE DE PERSISTENCIA: sin el costo de compra (ver InventarioDraftValues).
+      values: sinCostoDeCompra(getValues()),
       ui: {
         showStockConfig,
         showNewTipo,
@@ -364,6 +406,28 @@ export function InventarioForm({
 
   /** El aviso no puede sobrevivir al borrador que anuncia. */
   const draftNoticeVisible = draft !== null && appliedDraft === draft
+
+  /**
+   * Lo que el borrador NO pudo traer de vuelta. "Se restauro un borrador" a
+   * secas seria una promesa que este formulario no cumple, y las dos cosas que
+   * faltan son campos que el operador no va a mirar dos veces.
+   *
+   * El costo se nombra siempre que el campo este a la vista: no se persiste
+   * NUNCA (ver InventarioDraftValues), asi que no hay forma de saber si el
+   * borrador tenia uno -- y el input vuelve mostrando 0, que se lee como un
+   * costo real. Cuando el rol no puede ver el costo el campo ni existe en la
+   * pantalla, y ahi mencionarlo es mandar a alguien a un campo que no tiene.
+   */
+  const detalleDelAviso = [
+    costoCargado ? "El costo no se guarda en el borrador: volvé a cargarlo." : null,
+    // La foto queda afuera por ser un `File`. Se dice solo cuando habia una:
+    // decirlo siempre es ruido sobre los altas que ni la usan.
+    appliedDraft?.ui?.imagenPendiente
+      ? "La foto no se guarda en el borrador: volvé a seleccionarla."
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" ")
 
   // Categorías disponibles según el tipo seleccionado
   // Prioritize dynamic categories from device type config, fallback to hardcoded map
@@ -456,10 +520,13 @@ export function InventarioForm({
     if (!draftReady || !draft || draftAppliedRef.current === draft) return
     draftAppliedRef.current = draft
     try {
-      // Encima del prefill, no en su lugar: si manana la proyeccion deja algun
-      // campo afuera, aplicar el borrador tal cual lo pondria en blanco y el PUT
-      // manda el item entero.
-      reset({ ...inventarioFormDefaults(item, initialBarcode), ...draft.values })
+      // Encima del prefill, no en su lugar: la proyeccion deja el costo afuera
+      // a proposito (ver InventarioDraftValues), asi que aplicar el borrador tal
+      // cual lo pondria en blanco -- y el PUT manda el item entero.
+      reset({
+        ...inventarioFormDefaults(item, initialBarcode),
+        ...sinCostoDeCompra(draft.values),
+      })
       setShowStockConfig(draft.ui?.showStockConfig === true)
       setShowNewTipo(draft.ui?.showNewTipo === true)
       setNewTipo(typeof draft.ui?.newTipo === "string" ? draft.ui.newTipo : "")
@@ -858,14 +925,7 @@ export function InventarioForm({
           {draftNoticeVisible && (
             <DraftRestoredNotice
               onDiscard={discardDraft}
-              // La foto se queda afuera del borrador por diseño (es un `File`).
-              // El aviso lo dice solo cuando había una: decirlo siempre es ruido
-              // sobre los altas que ni la usan.
-              detail={
-                appliedDraft?.ui?.imagenPendiente
-                  ? "La foto no se guarda en el borrador: volvé a seleccionarla."
-                  : undefined
-              }
+              detail={detalleDelAviso || undefined}
             />
           )}
 
