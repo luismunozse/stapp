@@ -259,6 +259,32 @@ const resumenFixtures: Record<string, unknown> = {
       numeroReferencia: `REF-${i}`,
     })),
   },
+  // The resumen's PAGINATED form. "02-full" tops out at 12 movimientos and
+  // fits one page, which left the repeated header, the grey band on page 2+,
+  // the continuation pages' own cell borders and the `pie` totals row landing
+  // after a split entirely outside the golden proof — the mirror of what
+  // "remito/15-both-tables-overflow" covers for the other document. Every
+  // other movimiento carries a metodoPago, so the taller two-line row shape
+  // is what moves the page breaks, exactly as it does in production.
+  "03-multipagina": {
+    cliente: { nombre: "Distribuidora Mayorista del Litoral Argentino Sociedad Anónima", dni: "30-71234567-8" },
+    nombreEmpresa: "Servicio Técnico Integral de Reparaciones y Mantenimiento S.R.L.",
+    cuitEmpresa: "30-71234567-8",
+    condicionIvaEmpresa: "Responsable Inscripto",
+    logoUrl: tinyPngDataUri,
+    desde: new Date("2026-05-01"),
+    hasta: new Date("2026-07-31"),
+    saldoInicial: -1000,
+    saldoFinal: -13000,
+    movimientos: Array.from({ length: 60 }, (_, i) => ({
+      fecha: new Date(2026, 4 + (i % 3), (i % 28) + 1),
+      tipo: i % 2 === 0 ? "CARGO" : "PAGO",
+      monto: i % 2 === 0 ? -500 : 300,
+      saldoPosterior: -1000 - i * 200,
+      metodoPago: i % 2 === 0 ? "TRANSFERENCIA" : null,
+      numeroReferencia: `REF-${String(i + 1).padStart(3, "0")}`,
+    })),
+  },
 }
 
 describe.runIf(process.env.PDF_GOLDEN === "1")("pdf golden positions", () => {

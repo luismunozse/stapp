@@ -51,9 +51,43 @@
 // --qdf`, which is not installed here and must not become a system
 // dependency.
 //
-// WHAT IT STILL DOES NOT COMPARE: the actual bytes of embedded images (only
-// the `Do` invocation and the CTM that sizes it), and anything a PDF viewer
-// derives rather than reads.
+// WHAT IT STILL DOES NOT COMPARE. Read this list before trusting a green run:
+// a harness that overstates its own coverage is how the next person gets
+// burned. Every entry below was checked against the code, and the first two
+// were confirmed by mutation.
+//
+//   1. FONT SELECTION AND SIZE. `Tf` is excluded from dumpGraphics (it is a
+//      text operator) and extractReactPdfTextPositions keeps only `str` plus
+//      transform[4]/[5], discarding pdfjs's own `fontName`. So a font-WEIGHT
+//      change is invisible to BOTH dumps whenever it does not move a glyph
+//      origin — which is the normal case for a left-aligned cell. Verified:
+//      adding `bold: true` to the resumen's left-aligned FECHA column renders
+//      every date in the statement in Helvetica-Bold across all three pages of
+//      resumen/03-multipagina, and the whole harness stays green. (A
+//      right-aligned column would be caught, but only incidentally, because
+//      right-alignment derives the origin from the measured width.) A font
+//      SIZE change usually shifts y, but that is a side effect, not coverage.
+//      To close this, resolve each `Tf`'s font resource name through the
+//      page's /Font dict to its BaseFont before recording it — the raw /F1,
+//      /F2 names are assignment-order dependent and would diff spuriously.
+//   2. GLYPH ADVANCE STATE: `Tc`, `Tw`, `Tz`, `Ts`, `Tr`. Excluded from
+//      dumpGraphics with the rest of the text operators, and they change how
+//      glyphs advance rather than where a run starts, so dumpPositions misses
+//      them too.
+//   3. EMPTY AND WHITESPACE-ONLY TEXT RUNS, dropped by the `.str.trim()`
+//      filter in extractReactPdfTextPositions.
+//   4. THE "Impreso:" FOOTER LINE, dropped on purpose — it carries the wall
+//      clock and is the only nondeterministic string these documents render.
+//   5. THE BYTES OF EMBEDDED IMAGES. Only the `Do` invocation and the CTM
+//      that sizes and places it are recorded.
+//   6. EVERYTHING OUTSIDE THE PAGE CONTENT STREAM: link annotations, outlines,
+//      document metadata, page rotation and MediaBox.
+//
+// Text FILL COLOUR is covered, despite being a text attribute: react-pdf sets
+// it with the same `cs`/`scn` operators a path uses, and this walker records
+// those wherever they appear, inside a text object or not. Verified by
+// mutating estilosShell.tablaHeaderCell's colour from MONO.label to MONO.ink
+// and watching the graphics dump fail.
 import { PDFDocument, PDFName, PDFDict, PDFStream, PDFArray, type PDFPage } from "pdf-lib"
 import zlib from "zlib"
 import { extractReactPdfTextPositions } from "./pdf-text-helper-react"
