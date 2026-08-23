@@ -193,10 +193,16 @@ const styles = StyleSheet.create({
 
 /**
  * What both cuenta corriente documents pin to the right of the cliente band:
- * where the movement was taken and by whom. Absent on both counts the slot
- * collapses, so BandaCliente never draws an empty column.
+ * where the movement was taken and by whom.
+ *
+ * Deliberately a plain function, NOT a component, and called as
+ * `derechaSucursal(data)` rather than rendered as `<DerechaSucursal />`: it
+ * must be able to return `undefined` so BandaCliente's `derecha ? ... : null`
+ * sees a falsy slot and skips the column entirely. A component always
+ * produces a truthy element, which would draw an empty right column on every
+ * document that sets neither field.
  */
-function DerechaSucursal({ data }: { data: DocumentoBase }): React.ReactNode {
+function derechaSucursal(data: DocumentoBase): React.ReactNode {
   const sucursalNombre = safe(data.sucursalNombre)
   const atendidoPor = safe(data.atendidoPor)
   if (!sucursalNombre && !atendidoPor) return undefined
@@ -259,11 +265,20 @@ export function ReciboCCDocument({
           emisor={data}
           logo={logo}
           metrics={metrics}
+          zonaDerecha="fija"
           titulo="RECIBO"
-          numero={safe(data.numeroRecibo)}
+          // `|| undefined` keeps a blank número collapsing the row entirely,
+          // as it always has here — Cabecera reserves the row for "" so a
+          // document that always prints a number never shifts.
+          numero={safe(data.numeroRecibo) || undefined}
           lineasDerecha={[`Fecha: ${formatDateValue(data.fecha, tz)}`]}
         >
-          <BandaCliente label="Recibimos de" cliente={data.cliente} derecha={DerechaSucursal({ data })} />
+          <BandaCliente
+            label="Recibimos de"
+            cliente={data.cliente}
+            espacioDerecha={8}
+            derecha={derechaSucursal(data)}
+          />
         </Cabecera>
 
         <Seccion titulo="Detalle del movimiento">
@@ -359,10 +374,16 @@ export function ResumenCCDocument({
           emisor={data}
           logo={logo}
           metrics={metrics}
+          zonaDerecha="fija"
           titulo="RESUMEN DE CUENTA"
           lineasDerecha={[`Período: ${desde} — ${hasta}`]}
         >
-          <BandaCliente label="Cliente" cliente={data.cliente} derecha={DerechaSucursal({ data })} />
+          <BandaCliente
+            label="Cliente"
+            cliente={data.cliente}
+            espacioDerecha={8}
+            derecha={derechaSucursal(data)}
+          />
         </Cabecera>
 
         <Seccion titulo="Movimientos del período">

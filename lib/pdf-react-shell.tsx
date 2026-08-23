@@ -115,30 +115,50 @@ const LETTER_BOX_X = PAGE_WIDTH_A4 / 2 - LETTER_BOX_WIDTH / 2
 // rows onto the tight budget silently truncates company names measuring
 // between the two boundaries on a live document.
 
-// Plain two-zone header (no letter box, no legend). Nothing sits in the
-// middle, so the only competitor for horizontal space is the right zone:
+// Right-zone sizing — the `zonaDerecha` axis, independent of the letter box:
 //   - CONTENT_WIDTH: the A4 page minus both 40pt margins, minus the frame's
 //     own border on each side, minus frameInner's padding on each side.
-//   - RIGHT_ZONE_WIDTH: estilosShell.rightZone's fixed width, sized for the
-//     widest line it can hold. It is a fixed width only on this branch:
-//     the letter-box header's right zone stays auto-sized because it carries
-//     more identity lines (ingresos brutos, inicio de actividades) and
-//     pinning it to 190pt squeezes the left zone until the reserved logo box
-//     itself shrinks (measured).
-//   - HEADER_GAP: estilosShell.leftZone's own paddingRight on this branch.
+//   - RIGHT_ZONE_WIDTH: the pinned width of a "fija" right zone, sized for
+//     the widest line it can hold. A document pins it when its right zone's
+//     content is predictable (a recibo tops out at CUIT + condición IVA);
+//     it leaves the zone "auto" when the zone carries more identity lines
+//     than that. The remito is "auto" because pinning it to 190pt squeezes
+//     the left zone until yoga shrinks the reserved logo box itself, from
+//     80pt to ~49pt, and re-wraps company names that fit today (measured
+//     against the pre-refactor render).
+//   - HEADER_GAP: the left zone's own paddingRight when the right zone is
+//     pinned — the budget subtracts exactly what the style reserves.
 const RIGHT_ZONE_WIDTH = 190
 const HEADER_GAP = 14
 const CONTENT_WIDTH = PAGE_WIDTH_A4 - 40 - 40 - RULE_WIDTH * 2 - 10 * 2
 
 /**
+ * How the header splits its width. "fija" pins the right zone to
+ * RIGHT_ZONE_WIDTH; "auto" lets it size to its own content. Required, never
+ * defaulted: it is the axis a migrating document is most likely to get wrong
+ * by inheriting someone else's header.
+ */
+export type ZonaDerecha = "fija" | "auto"
+
+/**
  * Truncation budget for the header's left zone, in points.
  *
- * With a letter box there are two competitors and they bind different rows:
- * the box itself for the company-name row, and the centered legend — which
- * at TYPE.fine measures ~135pt, so its left edge sits further left than the
- * box's — for the conditional rows underneath it. `fila` picks which.
- * Without a letter box neither exists, the only competitor is the right
- * zone, and every row shares one budget.
+ * Two INDEPENDENT axes bound it, and a document sets them separately:
+ *
+ *   - `zonaDerecha`: "fija" pins the right zone to RIGHT_ZONE_WIDTH, which
+ *     bounds the left zone from the right by a constant. "auto" lets the
+ *     right zone size to its own content, so it contributes no constant.
+ *   - `letterBox`: the box bounds the left zone from the middle, and the
+ *     legend underneath it bounds every row below the company name — at
+ *     TYPE.fine the legend measures ~135pt, so its left edge sits further
+ *     left than the box's. `fila` picks which of the two applies.
+ *
+ * They were one flag until the shell's second review: right-zone sizing is a
+ * function of what the right zone CARRIES (the remito prints ingresos brutos
+ * and inicio de actividades, a recibo does not), never of whether a fiscal
+ * box happens to be drawn. Folding them together would hand the first later
+ * document that wants a boxed header with a pinned right zone a third style
+ * pair instead of a combination that already works.
  *
  * Shrinks by the logo box plus its gap when a logo is present, because the
  * text column is pushed right by exactly that much.
@@ -146,11 +166,13 @@ const CONTENT_WIDTH = PAGE_WIDTH_A4 - 40 - 40 - RULE_WIDTH * 2 - 10 * 2
 export function presupuestoZonaIzquierda({
   logo,
   letterBox,
+  zonaDerecha,
   metrics,
   fila = "datos",
 }: {
   logo: boolean
   letterBox: boolean
+  zonaDerecha: ZonaDerecha
   metrics: HelveticaMetrics
   /** "nombre" = the company-name row, which clears the legend. */
   fila?: "nombre" | "datos"
@@ -158,14 +180,26 @@ export function presupuestoZonaIzquierda({
   const anchoLogo = logo ? LOGO_BOX_WIDTH + LOGO_GAP : 0
   const x = LEFT_ZONE_X + anchoLogo
 
-  if (!letterBox) return CONTENT_WIDTH - RIGHT_ZONE_WIDTH - HEADER_GAP - anchoLogo
+  // Collect every bound that actually applies and let the tightest win. The
+  // two axes are independent: a pinned right zone bounds the left zone from
+  // the right, a letter box bounds it from the middle, and a document may
+  // have either, both or neither. The frame's own inner width is the floor
+  // case, for a header with no competitor at all.
+  const topes = [CONTENT_WIDTH - anchoLogo]
 
-  const hastaLaCaja = LETTER_BOX_X - LETTER_BOX_GAP - x
-  if (fila === "nombre") return hastaLaCaja
+  if (zonaDerecha === "fija") topes.push(CONTENT_WIDTH - RIGHT_ZONE_WIDTH - HEADER_GAP - anchoLogo)
 
-  const anchoLeyenda = metrics.regular.widthOfTextAtSize(LEYENDA_NO_FISCAL, TYPE.fine)
-  const hastaLaLeyenda = PAGE_WIDTH_A4 / 2 - anchoLeyenda / 2 - LETTER_BOX_GAP - x
-  return Math.min(hastaLaCaja, hastaLaLeyenda)
+  if (letterBox) {
+    topes.push(LETTER_BOX_X - LETTER_BOX_GAP - x)
+    // The company-name row sits above the legend's row and only has to clear
+    // the box; every row under it also has to clear the legend.
+    if (fila !== "nombre") {
+      const anchoLeyenda = metrics.regular.widthOfTextAtSize(LEYENDA_NO_FISCAL, TYPE.fine)
+      topes.push(PAGE_WIDTH_A4 / 2 - anchoLeyenda / 2 - LETTER_BOX_GAP - x)
+    }
+  }
+
+  return Math.min(...topes)
 }
 
 export type EmisorData = {
@@ -258,26 +292,22 @@ export const estilosShell = StyleSheet.create({
   },
   frameInner: { padding: 10 },
   headerRow: { flexDirection: "row", justifyContent: "space-between" },
-  // Two left/right zone pairs, one per header shape. They are NOT
-  // interchangeable — measured, not assumed:
-  //   - leftZone/rightZone (no letter box): paddingRight is HEADER_GAP, the
-  //     same gap CONTENT_WIDTH's budget subtracts, and the right zone is
-  //     pinned to RIGHT_ZONE_WIDTH so the budget is a constant.
-  //   - leftZoneConCaja/rightZoneConCaja (letter box): the centerGutter
-  //     already reserves the middle, so the left zone only needs a hairline
-  //     of separation, and the right zone must stay auto-sized. Pinning it to
-  //     190pt starves the left zone enough that yoga shrinks the reserved
-  //     logo box (80pt -> ~49pt) and re-wraps company names that fit today.
-  leftZone: { flex: 1, paddingRight: HEADER_GAP, flexDirection: "row", alignItems: "flex-start" },
-  leftZoneConCaja: { flex: 1, paddingRight: 4, flexDirection: "row", alignItems: "flex-start" },
+  // Two left/right zone pairs, keyed to the `zonaDerecha` axis — NOT to the
+  // letter box, which only owns the box, the legend and the centerGutter:
+  //   - *Fija: the right zone is pinned to RIGHT_ZONE_WIDTH and the left
+  //     zone reserves HEADER_GAP, the same gap the budget subtracts.
+  //   - *Auto: the right zone sizes to its content, so the left zone needs
+  //     only a hairline of separation from whatever sits beside it.
+  leftZoneDerechaFija: { flex: 1, paddingRight: HEADER_GAP, flexDirection: "row", alignItems: "flex-start" },
+  leftZoneDerechaAuto: { flex: 1, paddingRight: 4, flexDirection: "row", alignItems: "flex-start" },
   // Fixed reservation (LOGO_BOX_WIDTH/HEIGHT/GAP) — objectFit "contain" keeps
   // the actual image's own aspect ratio inside this box without react needing
   // to know its pixel dimensions up front.
   leftZoneLogo: { width: LOGO_BOX_WIDTH, height: LOGO_BOX_HEIGHT, marginRight: LOGO_GAP, objectFit: "contain" },
   leftZoneText: { flexDirection: "column" },
   centerGutter: { width: 180 }, // reserves room under the letter box/legend
-  rightZone: { width: RIGHT_ZONE_WIDTH, alignItems: "flex-end" },
-  rightZoneConCaja: { alignItems: "flex-end" },
+  rightZoneFija: { width: RIGHT_ZONE_WIDTH, alignItems: "flex-end" },
+  rightZoneAuto: { alignItems: "flex-end" },
   companyName: { fontFamily: "Helvetica-Bold", fontSize: TYPE.body },
   smallLabel: { fontSize: TYPE.small, color: MONO.label, marginTop: 2 },
   smallLabelRight: { fontSize: TYPE.small, color: MONO.label, marginTop: 2, textAlign: "right" },
@@ -297,8 +327,12 @@ export const estilosShell = StyleSheet.create({
   legendText: { fontSize: TYPE.fine, color: MONO.label },
 
   // === Cliente band ===
+  // clienteLeft's paddingRight is a per-document value, not a house constant:
+  // `nombre` and `email` in this column are NOT length-capped (only the
+  // address is), so the column's width decides where a long email wraps.
+  // Each document keeps its own via BandaCliente's `espacioDerecha`.
   clienteBand: { flexDirection: "row", justifyContent: "space-between", paddingTop: 6 },
-  clienteLeft: { flex: 1, paddingRight: 8 },
+  clienteLeft: { flex: 1 },
   clienteRight: { alignItems: "flex-end" },
   clienteNombre: { fontFamily: "Helvetica-Bold", fontSize: TYPE.body, marginTop: 3 },
 })
@@ -316,6 +350,7 @@ export const estilosShell = StyleSheet.create({
 export function Cabecera({
   emisor,
   metrics,
+  zonaDerecha,
   logo = null,
   titulo,
   numero,
@@ -326,6 +361,8 @@ export function Cabecera({
 }: {
   emisor: EmisorData
   metrics: HelveticaMetrics
+  /** How the header splits its width — see ZonaDerecha. Required on purpose. */
+  zonaDerecha: ZonaDerecha
   logo?: PdfLogo | null
   titulo: string
   numero?: string
@@ -343,12 +380,14 @@ export function Cabecera({
   const presupuestoNombre = presupuestoZonaIzquierda({
     logo: Boolean(logo),
     letterBox: conCaja,
+    zonaDerecha,
     metrics,
     fila: "nombre",
   })
   const presupuestoDatos = presupuestoZonaIzquierda({
     logo: Boolean(logo),
     letterBox: conCaja,
+    zonaDerecha,
     metrics,
     fila: "datos",
   })
@@ -372,7 +411,11 @@ export function Cabecera({
     <View style={estilosShell.frame} wrap={wrap}>
       <View style={estilosShell.frameInner}>
         <View style={estilosShell.headerRow}>
-          <View style={conCaja ? estilosShell.leftZoneConCaja : estilosShell.leftZone}>
+          <View
+            style={
+              zonaDerecha === "fija" ? estilosShell.leftZoneDerechaFija : estilosShell.leftZoneDerechaAuto
+            }
+          >
             {logo ? <Image style={estilosShell.leftZoneLogo} src={{ data: logo.data, format: logo.format }} /> : null}
             <View style={estilosShell.leftZoneText}>
               <Text style={estilosShell.companyName}>{nombre}</Text>
@@ -388,7 +431,7 @@ export function Cabecera({
               never slides into them. Only needed when they are drawn. */}
           {conCaja ? <View style={estilosShell.centerGutter} /> : null}
 
-          <View style={conCaja ? estilosShell.rightZoneConCaja : estilosShell.rightZone}>
+          <View style={zonaDerecha === "fija" ? estilosShell.rightZoneFija : estilosShell.rightZoneAuto}>
             <Text style={estilosShell.docTitle}>{titulo}</Text>
             {/* `undefined` means the document has no number line at all (the
                 resumen); an empty string means it has one that happens to be
@@ -447,6 +490,7 @@ export function BandaCliente({
   campos = ["dni", "telefono", "email", "direccion"],
   derecha,
   espacioInferior = 0,
+  espacioDerecha,
 }: {
   label: string
   cliente: ClienteData
@@ -454,6 +498,12 @@ export function BandaCliente({
   derecha?: React.ReactNode
   /** Bottom padding, for a band followed by another band inside the frame. */
   espacioInferior?: number
+  /**
+   * Gutter between the cliente column and `derecha`. Required: `nombre` and
+   * `email` are not length-capped, so this width decides where a long email
+   * wraps — no document may inherit another's value by omission.
+   */
+  espacioDerecha: number
 }) {
   const nombre = safe(cliente?.nombre) || "Consumidor Final"
   const valores: Record<CampoCliente, string> = {
@@ -465,7 +515,7 @@ export function BandaCliente({
 
   return (
     <View style={[estilosShell.clienteBand, { paddingBottom: espacioInferior }]}>
-      <View style={estilosShell.clienteLeft}>
+      <View style={[estilosShell.clienteLeft, { paddingRight: espacioDerecha }]}>
         <Text style={estilosShell.sectionLabel}>{label}</Text>
         <Text style={estilosShell.clienteNombre}>{nombre}</Text>
         {campos.map((campo) =>

@@ -162,6 +162,10 @@ export function RemitoDocument({
           emisor={data}
           logo={logo}
           metrics={metrics}
+          // The right zone carries ingresos brutos and inicio de actividades
+          // on top of CUIT/IVA, so it sizes to its content: pinning it starves
+          // the left zone and shrinks the reserved logo box.
+          zonaDerecha="auto"
           titulo="REMITO"
           numero={numeroFactura}
           lineasDerecha={[
@@ -179,6 +183,7 @@ export function RemitoDocument({
             cliente={{ ...data.cliente, direccion: clienteDireccion.substring(0, 40) }}
             campos={["direccion", "telefono", "email"]}
             espacioInferior={6}
+            espacioDerecha={4}
             derecha={
               <>
                 {clienteDni ? <Text style={estilosShell.smallLabelRight}>CUIT/DNI: {clienteDni}</Text> : null}
