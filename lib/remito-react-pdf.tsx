@@ -5,26 +5,26 @@
 // implementation stays available as generateFacturaPDFLegacy behind
 // REMITO_PDF_ENGINE=pdflib.
 import * as React from "react"
-import { Document, Page, View, Text, Image, StyleSheet, renderToBuffer } from "@react-pdf/renderer"
+import { Document, Page, View, Text, StyleSheet, renderToBuffer } from "@react-pdf/renderer"
 import { type PDFFont } from "pdf-lib"
 import { formatCurrencyValue, DEFAULT_CURRENCY, type CurrencyCode } from "./currency"
 import { formatDateValue, formatDateTimeValue, DEFAULT_TIMEZONE } from "./timezone"
 // Monochrome tokens, logo fetching and Helvetica text measurement are shared
-// with the other react-pdf engines — see lib/pdf-react-shared.ts. Everything
-// below that carries this document's own geometry (the letter box, the
-// centered legend and the clamps derived from them) stays here on purpose.
+// with the other react-pdf engines — see lib/pdf-react-shared.ts. The frame,
+// the header and the cliente band — including this document's letter box,
+// centered legend and the clamps derived from them — live in
+// lib/pdf-react-shell.tsx, which draws them for every A4 document.
+import { MONO, TYPE, RULE_WIDTH, safe, fetchLogo, helveticaMetrics, type PdfLogo } from "./pdf-react-shared"
 import {
-  MONO,
-  TYPE,
-  RULE_WIDTH,
-  PAGE_WIDTH_A4,
-  safe,
-  fetchLogo,
-  helveticaMetrics,
-  truncateToWidth,
-  type PdfLogo,
-} from "./pdf-react-shared"
-import { Pie, LEYENDA_NO_FISCAL, leyendaPie, estilosShell, FilaDetalle, BarraTotal, Badge } from "./pdf-react-shell"
+  Pie,
+  leyendaPie,
+  estilosShell,
+  FilaDetalle,
+  BarraTotal,
+  Badge,
+  Cabecera,
+  BandaCliente,
+} from "./pdf-react-shell"
 import type { FacturaPDFData } from "./pdf"
 
 const estadoPagoLabels: Record<string, string> = {
@@ -43,90 +43,13 @@ const metodoPagoFacturaLabels: Record<string, string> = {
   OTRO: "Otro",
 }
 
-// === LOGO ===
-// fetchLogo lives in lib/pdf-react-shared.ts. It was ported from
-// generateFacturaPDFLegacy's LOGO block (lib/pdf.ts) and keeps legacy's
-// try/catch degrade-to-no-logo guarantee. Unlike legacy, it does NOT decode
-// pixel dimensions: the component reserves a FIXED box (LOGO_BOX_WIDTH x
-// LOGO_BOX_HEIGHT below) and lets react-pdf's own objectFit:"contain"
-// preserve the image's aspect ratio inside it, so the left-zone offset the
-// clamp budget depends on is a known constant instead of varying per image.
-
-// === Left-zone truncation clamp (letter box vs. header text) ===
-// Ported from generateFacturaPDFLegacy's clampLeftZoneText (lib/pdf.ts).
-// truncateToWidth + helveticaMetrics are shared (lib/pdf-react-shared.ts);
-// the budget they are applied to is this document's own, derived below.
-
-// Logo box — matches legacy's max ~50pt tall / ~80pt wide proportions
-// (generateFacturaPDFLegacy's `maxLogoHeight`/`maxLogoWidth`), fixed rather
-// than scaled per-image (see the LOGO comment above). LOGO_GAP mirrors
-// legacy's "+15" gap between the logo and the company text
-// (`logoWidth = scaledWidth + 15`).
-const LOGO_BOX_WIDTH = 80
-const LOGO_BOX_HEIGHT = 50
-const LOGO_GAP = 15
-
-// Left-zone x-origin and truncation budget. Mirrors legacy's
-// `leftX = frameLeft + innerPad + logoWidth` and
-// `leftZoneMaxWidth = letterBoxX - 10 - leftX` (lib/pdf.ts), but derived
-// from THIS component's own layout instead of legacy's pdf-lib coordinates:
-//   - LEFT_ZONE_X: styles.page.paddingLeft (40) + styles.frameInner.padding
-//     (10) — the left zone's content starts right after the frame's own
-//     padding, same as legacy's frameLeft(=margin) + innerPad.
-//   - LETTER_BOX_X: the letter box (styles.letterBox, width 34) is centered
-//     on the full A4 page width (595.28pt — @react-pdf/layout's
-//     PAGE_SIZES.A4[0]) via letterBoxWrap's alignItems:'center' over a
-//     left:0/right:0 span — same value as legacy's
-//     `(width - letterBoxWidth) / 2` because both frames sit on symmetric
-//     40pt page margins.
-//   - LETTER_BOX_GAP: the 10pt clearance legacy's clampLeftZoneText leaves
-//     before the letter box.
-// Budget shrinks by LOGO_BOX_WIDTH + LOGO_GAP when a logo is present,
-// because the left zone's text column is pushed right by that much (see
-// styles.leftZoneLogo below).
-const LEFT_ZONE_X = 40 + 10
-const LETTER_BOX_X = PAGE_WIDTH_A4 / 2 - 34 / 2
-const LETTER_BOX_GAP = 10
-
-// Legend under the letter box ("Documento no válido..."), centered on the
-// FULL page width via styles.legendWrap below — mirrors legacy's own
-// legend-aware clamp (lib/pdf.ts's clampLeftZoneText + glyphBandsIntersect).
-// At TYPE.fine (6.5), this string measures ~135pt wide, so its own left edge
-// (~230pt, page-center minus half its width) sits FURTHER LEFT than the
-// letter-box-only budget's boundary (~270-280pt, depending on logo) — a
-// left-zone line that clears the letter box can still run into the legend
-// if the two sit in the same page row.
-//
-// Row geometry (measured via extractReactPdfTextPositions against this
-// component's actual render, task-5 fix — react-pdf computes line height
-// from the font's own metrics, not a simple multiplier, so this isn't a
-// closed-form derivation like legacy's fixed "12pt per row" pdf-lib
-// stepping, but the empirical result is the same shape): row 1 (company
-// name, TYPE.body bold) sits clear above the legend's row by ~4pt — never
-// truncate it tighter. Row 2 — whichever of Tel/dirección/domicilio is the
-// FIRST one present, since the other two are conditionally omitted and the
-// remaining ones shift up to fill the gap — lands only ~2pt from the
-// legend's own baseline, well within both lines' glyph heights: it visibly
-// overlaps. Row 3+ clears the legend again by a full row-step (~11pt).
-// Because which field ends up in row 2 depends on which optional org
-// fields are set, the tighter legend-aware budget below is applied
-// uniformly to all three conditional left-zone lines (never to the company
-// name, which never reaches the legend) rather than tracked per row
-// position — always safe, since the legend is wider than the letter box so
-// its left edge is always the tighter of the two constraints.
-// LEYENDA_NO_FISCAL (lib/pdf-react-shell.tsx) is this same string, shared.
-
 // === Styles ===
-// PAINT POINT #1 (letter-box straddle): the classic remito's letter box (X)
-// straddles the outer frame's top border — half above, half below. In
-// pdf-lib this is one absolute rectangle at a hardcoded y. In react-pdf we
-// get it via position:'absolute' + a negative `top` on a child of the frame
-// itself (not the padded content wrapper) — actually LESS code than
-// pdf-lib's version, since we don't need to separately compute frameTop: the
-// offset is relative to the frame's own border, guaranteed aligned by flex
-// flow. Centering is `alignItems:'center'` on a full-width wrapper instead
-// of pdf-lib's manual `(width - letterBoxWidth) / 2` text-width math — a
-// genuine win.
+// The frame, the letter box, the centered legend, the header zones and the
+// cliente band are all drawn by lib/pdf-react-shell.tsx now. Their geometry
+// constants (LOGO_BOX_*, LEFT_ZONE_X, LETTER_BOX_*, the legend-row
+// measurements) and the derivations documenting them moved there with the
+// code: this document selects the letter-box branch by passing
+// `letterBox="X"` to <Cabecera>. Everything below is the remito's own body.
 const styles = StyleSheet.create({
   page: {
     paddingTop: 30,
@@ -139,50 +62,8 @@ const styles = StyleSheet.create({
     fontSize: TYPE.body,
     color: MONO.ink,
   },
-  frame: {
-    borderWidth: RULE_WIDTH,
-    borderColor: MONO.ink,
-    position: "relative", // anchor for the straddling letter box below
-  },
-  frameInner: { padding: 10 },
-  headerRow: { flexDirection: "row", justifyContent: "space-between" },
-  leftZone: { flex: 1, paddingRight: 4, flexDirection: "row", alignItems: "flex-start" },
-  // Fixed reservation (Task 4 LOGO_BOX_WIDTH/HEIGHT/GAP) — objectFit
-  // "contain" keeps the actual image's own aspect ratio inside this box
-  // without react needing to know its pixel dimensions up front.
-  leftZoneLogo: { width: LOGO_BOX_WIDTH, height: LOGO_BOX_HEIGHT, marginRight: LOGO_GAP, objectFit: "contain" },
-  leftZoneText: { flexDirection: "column" },
-  centerGutter: { width: 180 }, // reserves room under the letter box/legend
-  rightZone: { alignItems: "flex-end" },
-  companyName: { fontFamily: "Helvetica-Bold", fontSize: TYPE.body },
-  smallLabel: { fontSize: TYPE.small, color: MONO.label, marginTop: 2 },
-  smallLabelInk: { fontSize: TYPE.small, color: MONO.label, marginTop: 2, textAlign: "right" },
-  docTitle: { fontFamily: "Helvetica-Bold", fontSize: TYPE.docTitle },
-  docNumber: { fontFamily: "Helvetica-Bold", fontSize: TYPE.docNumber, marginTop: 2 },
-  letterBoxWrap: {
-    position: "absolute",
-    top: -15,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-  },
-  letterBox: {
-    width: 34,
-    height: 30,
-    borderWidth: RULE_WIDTH,
-    borderColor: MONO.ink,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  letterBoxText: { fontFamily: "Helvetica-Bold", fontSize: 20 },
-  legendWrap: { position: "absolute", top: 21, left: 0, right: 0, alignItems: "center" },
-  legendText: { fontSize: TYPE.fine, color: MONO.label },
   hr: { borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.rule },
   sectionLabel: { fontFamily: "Helvetica-Bold", fontSize: TYPE.sectionLabel, color: MONO.label, textTransform: "uppercase" },
-  clienteBand: { flexDirection: "row", justifyContent: "space-between", paddingTop: 6, paddingBottom: 6 },
-  clienteLeft: { flex: 1, paddingRight: 4 },
-  clienteRight: { alignItems: "flex-end" },
-  clienteNombre: { fontFamily: "Helvetica-Bold", fontSize: TYPE.body, marginTop: 3 },
   condicionesBand: { paddingTop: 6, paddingBottom: 6 },
   condicionesRule: { borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.rule, marginTop: 3, marginBottom: 5 },
   condicionesLine: { fontSize: TYPE.small, marginTop: 2 },
@@ -237,19 +118,8 @@ export function RemitoDocument({
   const fmt = (n: number | null | undefined) => formatCurrencyValue(n, currency)
   const fmtDate = (d: Date | string | null | undefined) => formatDateValue(d, tz)
 
-  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Tecnico"
-  const telefonoEmpresa = safe(data.telefonoEmpresa)
-  const direccionEmpresa = safe(data.direccionEmpresa)
-  const cuitEmpresa = safe(data.cuitEmpresa)
-  const condicionIvaEmpresa = safe(data.condicionIvaEmpresa)
-  const domicilioFiscalEmpresa = safe(data.domicilioFiscalEmpresa)
-  const ingresosBrutosEmpresa = safe(data.ingresosBrutosEmpresa)
-  const inicioActividadesEmpresa = safe(data.inicioActividadesEmpresa)
   const numeroFactura = safe(data.numeroFactura)
   const fecha = fmtDate(data.fecha)
-  const clienteNombre = safe(data.cliente?.nombre) || "Consumidor Final"
-  const clienteTelefono = safe(data.cliente?.telefono)
-  const clienteEmail = safe(data.cliente?.email)
   const clienteDireccion = safe(data.cliente?.direccion)
   const clienteDni = safe(data.cliente?.dni)
   const ordenDisplay = data.orden ? data.orden.codigoOrden || `#${String(data.orden.numeroOrden).padStart(4, "0")}` : ""
@@ -263,33 +133,6 @@ export function RemitoDocument({
   const saldoLabel = saldo === 0 ? "SALDO" : "SALDO PENDIENTE"
   const estadoLabel = estadoPagoLabels[data.estadoPago] || data.estadoPago
   const fechaImpresion = formatDateTimeValue(new Date(), tz)
-
-  // Left-zone truncation clamp (Task 4) — see the LEFT_ZONE_X/LETTER_BOX_X/
-  // LOGO_* constants above for the budget derivation. Company name uses
-  // bold metrics (matches styles.companyName's Helvetica-Bold), the
-  // tel/dirección/domicilio lines use regular metrics (styles.smallLabel).
-  const leftZoneX = LEFT_ZONE_X + (logo ? LOGO_BOX_WIDTH + LOGO_GAP : 0)
-  const leftZoneMaxWidth = LETTER_BOX_X - LETTER_BOX_GAP - leftZoneX
-  const empresaNombreDisplay = truncateToWidth(metrics.bold, empresaNombre, TYPE.body, leftZoneMaxWidth)
-
-  // Legend-aware clamp (Task 5 fix) — see the LEYENDA_NO_FISCAL comment above
-  // for the geometry/derivation. legendAwareMaxWidth is always <= leftZoneMaxWidth
-  // (the legend, being wider than the 34pt letter box, always starts further
-  // left), so applying it to all three conditional left-zone lines is always
-  // at least as safe as the letter-box-only budget, never less.
-  const legendWidth = metrics.regular.widthOfTextAtSize(LEYENDA_NO_FISCAL, TYPE.fine)
-  const legendStartX = PAGE_WIDTH_A4 / 2 - legendWidth / 2
-  const legendAwareMaxWidth = Math.min(leftZoneMaxWidth, legendStartX - LETTER_BOX_GAP - leftZoneX)
-  const telefonoDisplay = telefonoEmpresa
-    ? truncateToWidth(metrics.regular, `Tel: ${telefonoEmpresa}`, TYPE.small, legendAwareMaxWidth)
-    : ""
-  const direccionDisplay = direccionEmpresa
-    ? truncateToWidth(metrics.regular, direccionEmpresa, TYPE.small, legendAwareMaxWidth)
-    : ""
-  const domicilioDisplay =
-    domicilioFiscalEmpresa && domicilioFiscalEmpresa !== direccionEmpresa
-      ? truncateToWidth(metrics.regular, domicilioFiscalEmpresa, TYPE.small, legendAwareMaxWidth)
-      : ""
 
   // Running saldo for the HISTORIAL DE PAGOS column — plain data prep, same
   // cost in either engine (not a layout concern).
@@ -315,77 +158,50 @@ export function RemitoDocument({
           render={({ pageNumber }) => (pageNumber > 1 ? `REMITO ${numeroFactura} — continuación` : "")}
         />
 
-        <View style={styles.frame} wrap={false}>
-          <View style={styles.frameInner}>
-            <View style={styles.headerRow}>
-              <View style={styles.leftZone}>
-                {logo ? (
-                  <Image style={styles.leftZoneLogo} src={{ data: logo.data, format: logo.format }} />
-                ) : null}
-                <View style={styles.leftZoneText}>
-                  <Text style={styles.companyName}>{empresaNombreDisplay}</Text>
-                  {telefonoDisplay ? <Text style={styles.smallLabel}>{telefonoDisplay}</Text> : null}
-                  {direccionDisplay ? <Text style={styles.smallLabel}>{direccionDisplay}</Text> : null}
-                  {domicilioDisplay ? <Text style={styles.smallLabel}>{domicilioDisplay}</Text> : null}
-                </View>
-              </View>
-              <View style={styles.centerGutter} />
-              <View style={styles.rightZone}>
-                <Text style={styles.docTitle}>REMITO</Text>
-                <Text style={styles.docNumber}>{numeroFactura}</Text>
-                <Text style={styles.smallLabelInk}>Emisión: {fecha}</Text>
-                {data.fechaOperacion ? <Text style={styles.smallLabelInk}>Operación: {fmtDate(data.fechaOperacion)}</Text> : null}
-                {cuitEmpresa ? <Text style={styles.smallLabelInk}>CUIT: {cuitEmpresa}</Text> : null}
-                {ingresosBrutosEmpresa ? <Text style={styles.smallLabelInk}>Ingresos brutos: {ingresosBrutosEmpresa}</Text> : null}
-                {inicioActividadesEmpresa ? <Text style={styles.smallLabelInk}>Inicio actividades: {inicioActividadesEmpresa}</Text> : null}
-                {condicionIvaEmpresa ? <Text style={styles.smallLabelInk}>{condicionIvaEmpresa.toUpperCase()}</Text> : null}
-              </View>
-            </View>
-
-            <View style={[styles.hr, { marginTop: 10 }]} />
-
-            <View style={styles.clienteBand}>
-              <View style={styles.clienteLeft}>
-                <Text style={styles.sectionLabel}>CLIENTE</Text>
-                <Text style={styles.clienteNombre}>{clienteNombre}</Text>
-                {clienteDireccion ? <Text style={styles.smallLabel}>{clienteDireccion.substring(0, 40)}</Text> : null}
-                {clienteTelefono ? <Text style={styles.smallLabel}>Tel: {clienteTelefono}</Text> : null}
-                {clienteEmail ? <Text style={styles.smallLabel}>{clienteEmail}</Text> : null}
-              </View>
-              <View style={styles.clienteRight}>
-                {clienteDni ? <Text style={styles.smallLabelInk}>CUIT/DNI: {clienteDni}</Text> : null}
+        <Cabecera
+          emisor={data}
+          logo={logo}
+          metrics={metrics}
+          titulo="REMITO"
+          numero={numeroFactura}
+          lineasDerecha={[
+            `Emisión: ${fecha}`,
+            ...(data.fechaOperacion ? [`Operación: ${fmtDate(data.fechaOperacion)}`] : []),
+          ]}
+          letterBox="X"
+          wrap={false}
+        >
+          {/* The remito's cliente band leads with the address and keeps the
+              DNI on the right, next to the VENTA/ORDEN reference — hence the
+              explicit `campos` order. */}
+          <BandaCliente
+            label="Cliente"
+            cliente={{ ...data.cliente, direccion: clienteDireccion.substring(0, 40) }}
+            campos={["direccion", "telefono", "email"]}
+            espacioInferior={6}
+            derecha={
+              <>
+                {clienteDni ? <Text style={estilosShell.smallLabelRight}>CUIT/DNI: {clienteDni}</Text> : null}
                 <Text style={[styles.detalleValue, { marginTop: 4 }]}>
                   {data.venta ? `VENTA: V${String(data.venta.numeroVenta).padStart(4, "0")}` : `ORDEN: ${ordenDisplay}${dispositivo ? ` — ${dispositivo}` : ""}`}
                 </Text>
-              </View>
-            </View>
-
-            {hasCondiciones ? (
-              <>
-                <View style={styles.hr} />
-                <View style={styles.condicionesBand}>
-                  <Text style={styles.sectionLabel}>Condiciones de pago</Text>
-                  <View style={styles.condicionesRule} />
-                  {vencimientoText ? <Text style={styles.condicionesLine}>Vencimiento: {vencimientoText}</Text> : null}
-                  {mediosPago ? <Text style={styles.condicionesLine}>Medios de pago: {mediosPago}</Text> : null}
-                  {cbuAlias ? <Text style={styles.condicionesLine}>CBU/Alias: {cbuAlias}</Text> : null}
-                </View>
               </>
-            ) : null}
-          </View>
+            }
+          />
 
-          {/* Letter box + legend: absolute, straddling the frame's own top
-              border — direct children of `frame`, not `frameInner`, so
-              the -15 offset is relative to the actual bordered edge. */}
-          <View style={styles.letterBoxWrap}>
-            <View style={styles.letterBox}>
-              <Text style={styles.letterBoxText}>X</Text>
-            </View>
-          </View>
-          <View style={styles.legendWrap}>
-            <Text style={styles.legendText}>{LEYENDA_NO_FISCAL}</Text>
-          </View>
-        </View>
+          {hasCondiciones ? (
+            <>
+              <View style={styles.hr} />
+              <View style={styles.condicionesBand}>
+                <Text style={styles.sectionLabel}>Condiciones de pago</Text>
+                <View style={styles.condicionesRule} />
+                {vencimientoText ? <Text style={styles.condicionesLine}>Vencimiento: {vencimientoText}</Text> : null}
+                {mediosPago ? <Text style={styles.condicionesLine}>Medios de pago: {mediosPago}</Text> : null}
+                {cbuAlias ? <Text style={styles.condicionesLine}>CBU/Alias: {cbuAlias}</Text> : null}
+              </View>
+            </>
+          ) : null}
+        </Cabecera>
 
         {/* === DETALLE DE ITEMS === */}
         {data.items && data.items.length > 0 ? (

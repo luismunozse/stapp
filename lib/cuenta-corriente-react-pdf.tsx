@@ -1,50 +1,37 @@
 // react-pdf engine for cuenta corriente receipts. Same monochrome house
 // style as the remito (lib/remito-react-pdf.tsx), sharing its tokens, logo
-// fetching and text metrics via lib/pdf-react-shared.ts — but NOT its frame
-// geometry: a recibo carries no fiscal letter box and no centered legend, so
-// its header has a single left/right split and a wider left zone. Those
-// constants are derived below from this document's own composition.
+// fetching and text metrics via lib/pdf-react-shared.ts and its header,
+// cliente band and structural pieces via lib/pdf-react-shell.tsx. These
+// documents carry no fiscal letter box and no centered legend, so they draw
+// the shell's plain two-zone header — the branch Cabecera takes when no
+// `letterBox` is passed.
 import * as React from "react"
-import { Document, Page, View, Text, Image, StyleSheet, renderToBuffer } from "@react-pdf/renderer"
+import { Document, Page, View, Text, StyleSheet, renderToBuffer } from "@react-pdf/renderer"
 import { formatCurrencyValue, DEFAULT_CURRENCY, type CurrencyCode } from "./currency"
 import { formatDateValue, formatDateTimeValue, DEFAULT_TIMEZONE } from "./timezone"
 import {
   MONO,
   TYPE,
   RULE_WIDTH,
-  PAGE_WIDTH_A4,
   safe,
   fetchLogo,
   helveticaMetrics,
-  truncateToWidth,
   type PdfLogo,
   type HelveticaMetrics,
 } from "./pdf-react-shared"
-import { Pie, leyendaPie, estilosShell, Seccion, FilaDetalle, BarraTotal } from "./pdf-react-shell"
+import {
+  Pie,
+  leyendaPie,
+  estilosShell,
+  Seccion,
+  FilaDetalle,
+  BarraTotal,
+  Cabecera,
+  BandaCliente,
+  type DocumentoBase,
+} from "./pdf-react-shell"
 
-/** Emisor + cliente identity, shared by every cuenta corriente document. */
-export interface CuentaCorrienteEmisor {
-  cliente: {
-    nombre?: string | null
-    dni?: string | null
-    telefono?: string | null
-    email?: string | null
-    direccion?: string | null
-  }
-  nombreEmpresa?: string | null
-  telefonoEmpresa?: string | null
-  direccionEmpresa?: string | null
-  cuitEmpresa?: string | null
-  condicionIvaEmpresa?: string | null
-  domicilioFiscalEmpresa?: string | null
-  logoUrl?: string | null
-  moneda?: string | null
-  zonaHoraria?: string | null
-  sucursalNombre?: string | null
-  atendidoPor?: string | null
-}
-
-export interface ReciboCCPDFData extends CuentaCorrienteEmisor {
+export interface ReciboCCPDFData extends DocumentoBase {
   /** Display number, already formatted by the caller (e.g. "REC-00007"). */
   numeroRecibo: string
   fecha: Date | string
@@ -77,7 +64,7 @@ export interface ResumenCCMovimiento {
   referenciaTipo?: string | null
 }
 
-export interface ResumenCCPDFData extends CuentaCorrienteEmisor {
+export interface ResumenCCPDFData extends DocumentoBase {
   desde: Date | string
   hasta: Date | string
   /** Balance the account carried into the period (0 when it had no history). */
@@ -105,29 +92,6 @@ const metodoPagoLabels: Record<string, string> = {
   OTRO: "Otro",
 }
 
-// Logo box — same reservation as the remito's, so both documents line their
-// headers up when an org prints them side by side.
-const LOGO_BOX_WIDTH = 80
-const LOGO_BOX_HEIGHT = 50
-const LOGO_GAP = 15
-
-// Left-zone truncation budget. Unlike the remito, nothing sits in the middle
-// of this header, so the only competitor for horizontal space is the right
-// zone itself:
-//   - LEFT_ZONE_X: styles.page.paddingLeft (40) + styles.frameInner.padding (10).
-//   - CONTENT_WIDTH: the A4 page minus both 40pt margins, minus the frame's
-//     own border on each side, minus frameInner's padding on each side.
-//   - RIGHT_ZONE_WIDTH: styles.rightZone's fixed width, sized for the widest
-//     line it can hold ("Inicio actividades"-class labels are not printed on
-//     a recibo, so CUIT + condición IVA is the ceiling).
-// Budget shrinks by LOGO_BOX_WIDTH + LOGO_GAP when a logo is present, since
-// the text column is pushed right by exactly that much.
-const LEFT_ZONE_X = 40 + 10
-const RIGHT_ZONE_WIDTH = 190
-const HEADER_GAP = 14
-const CONTENT_WIDTH = PAGE_WIDTH_A4 - 40 - 40 - RULE_WIDTH * 2 - 10 * 2
-const LEFT_ZONE_BUDGET = CONTENT_WIDTH - RIGHT_ZONE_WIDTH - HEADER_GAP
-
 const styles = StyleSheet.create({
   page: {
     paddingTop: 30,
@@ -139,24 +103,6 @@ const styles = StyleSheet.create({
     fontSize: TYPE.body,
     color: MONO.ink,
   },
-  frame: { borderWidth: RULE_WIDTH, borderColor: MONO.ink },
-  frameInner: { padding: 10 },
-  headerRow: { flexDirection: "row", justifyContent: "space-between" },
-  leftZone: { flex: 1, paddingRight: HEADER_GAP, flexDirection: "row", alignItems: "flex-start" },
-  leftZoneLogo: { width: LOGO_BOX_WIDTH, height: LOGO_BOX_HEIGHT, marginRight: LOGO_GAP, objectFit: "contain" },
-  leftZoneText: { flexDirection: "column" },
-  rightZone: { width: RIGHT_ZONE_WIDTH, alignItems: "flex-end" },
-  companyName: { fontFamily: "Helvetica-Bold", fontSize: TYPE.body },
-  smallLabel: { fontSize: TYPE.small, color: MONO.label, marginTop: 2 },
-  smallLabelRight: { fontSize: TYPE.small, color: MONO.label, marginTop: 2, textAlign: "right" },
-  docTitle: { fontFamily: "Helvetica-Bold", fontSize: TYPE.docTitle },
-  docNumber: { fontFamily: "Helvetica-Bold", fontSize: TYPE.docNumber, marginTop: 2 },
-
-  clienteBand: { flexDirection: "row", justifyContent: "space-between", paddingTop: 6 },
-  clienteLeft: { flex: 1, paddingRight: 8 },
-  clienteRight: { alignItems: "flex-end" },
-  clienteNombre: { fontFamily: "Helvetica-Bold", fontSize: TYPE.body, marginTop: 3 },
-
   totalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -246,108 +192,25 @@ const styles = StyleSheet.create({
 })
 
 /**
- * Emisor + cliente frame shared by both cuenta corriente documents. The right
- * zone renders whatever identity lines the document wants under its title, so
- * a recibo shows its number and a resumen shows its period, without either
- * one owning the emisor block.
+ * What both cuenta corriente documents pin to the right of the cliente band:
+ * where the movement was taken and by whom. Absent on both counts the slot
+ * collapses, so BandaCliente never draws an empty column.
  */
-function CabeceraCC({
-  data,
-  logo,
-  metrics,
-  titulo,
-  numero,
-  lineasDerecha = [],
-  clienteLabel,
-}: {
-  data: CuentaCorrienteEmisor
-  logo: PdfLogo | null
-  metrics: HelveticaMetrics
-  titulo: string
-  numero?: string
-  lineasDerecha?: string[]
-  clienteLabel: string
-}) {
-  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Tecnico"
-  const telefonoEmpresa = safe(data.telefonoEmpresa)
-  const direccionEmpresa = safe(data.direccionEmpresa)
-  const domicilioFiscalEmpresa = safe(data.domicilioFiscalEmpresa)
-  const cuitEmpresa = safe(data.cuitEmpresa)
-  const condicionIvaEmpresa = safe(data.condicionIvaEmpresa)
-
-  const clienteNombre = safe(data.cliente?.nombre) || "Consumidor Final"
-  const clienteDni = safe(data.cliente?.dni)
-  const clienteTelefono = safe(data.cliente?.telefono)
-  const clienteEmail = safe(data.cliente?.email)
-  const clienteDireccion = safe(data.cliente?.direccion)
+function DerechaSucursal({ data }: { data: DocumentoBase }): React.ReactNode {
   const sucursalNombre = safe(data.sucursalNombre)
   const atendidoPor = safe(data.atendidoPor)
-
-  // Header clamp — see LEFT_ZONE_BUDGET above. The company name measures
-  // against bold metrics (styles.companyName), the rest against regular
-  // (styles.smallLabel).
-  const leftBudget = LEFT_ZONE_BUDGET - (logo ? LOGO_BOX_WIDTH + LOGO_GAP : 0)
-  const clamp = (text: string, bold = false) =>
-    truncateToWidth(bold ? metrics.bold : metrics.regular, text, bold ? TYPE.body : TYPE.small, leftBudget)
-
-  const telefonoDisplay = telefonoEmpresa ? clamp(`Tel: ${telefonoEmpresa}`) : ""
-  const direccionDisplay = direccionEmpresa ? clamp(direccionEmpresa) : ""
-  const domicilioDisplay =
-    domicilioFiscalEmpresa && domicilioFiscalEmpresa !== direccionEmpresa ? clamp(domicilioFiscalEmpresa) : ""
+  if (!sucursalNombre && !atendidoPor) return undefined
 
   return (
-    <View style={styles.frame}>
-      <View style={styles.frameInner}>
-        <View style={styles.headerRow}>
-          <View style={styles.leftZone}>
-            {logo ? <Image style={styles.leftZoneLogo} src={{ data: logo.data, format: logo.format }} /> : null}
-            <View style={styles.leftZoneText}>
-              <Text style={styles.companyName}>{clamp(empresaNombre, true)}</Text>
-              {telefonoDisplay ? <Text style={styles.smallLabel}>{telefonoDisplay}</Text> : null}
-              {direccionDisplay ? <Text style={styles.smallLabel}>{direccionDisplay}</Text> : null}
-              {domicilioDisplay ? <Text style={styles.smallLabel}>{domicilioDisplay}</Text> : null}
-            </View>
-          </View>
-          <View style={styles.rightZone}>
-            <Text style={styles.docTitle}>{titulo}</Text>
-            {numero ? <Text style={styles.docNumber}>{numero}</Text> : null}
-            {lineasDerecha.map((linea, i) => (
-              <Text key={i} style={styles.smallLabelRight}>
-                {linea}
-              </Text>
-            ))}
-            {cuitEmpresa ? <Text style={styles.smallLabelRight}>CUIT: {cuitEmpresa}</Text> : null}
-            {condicionIvaEmpresa ? (
-              <Text style={styles.smallLabelRight}>{condicionIvaEmpresa.toUpperCase()}</Text>
-            ) : null}
-          </View>
-        </View>
-
-        <View style={[estilosShell.hr, { marginTop: 10 }]} />
-
-        <View style={styles.clienteBand}>
-          <View style={styles.clienteLeft}>
-            <Text style={estilosShell.sectionLabel}>{clienteLabel}</Text>
-            <Text style={styles.clienteNombre}>{clienteNombre}</Text>
-            {clienteDni ? <Text style={styles.smallLabel}>DNI/CUIT: {clienteDni}</Text> : null}
-            {clienteTelefono ? <Text style={styles.smallLabel}>Tel: {clienteTelefono}</Text> : null}
-            {clienteEmail ? <Text style={styles.smallLabel}>{clienteEmail}</Text> : null}
-            {clienteDireccion ? <Text style={styles.smallLabel}>{clienteDireccion}</Text> : null}
-          </View>
-          {sucursalNombre || atendidoPor ? (
-            <View style={styles.clienteRight}>
-              {sucursalNombre ? (
-                <>
-                  <Text style={estilosShell.sectionLabel}>Sucursal</Text>
-                  <Text style={styles.smallLabelRight}>{sucursalNombre}</Text>
-                </>
-              ) : null}
-              {atendidoPor ? <Text style={styles.smallLabelRight}>Atendió: {atendidoPor}</Text> : null}
-            </View>
-          ) : null}
-        </View>
-      </View>
-    </View>
+    <>
+      {sucursalNombre ? (
+        <>
+          <Text style={estilosShell.sectionLabel}>Sucursal</Text>
+          <Text style={estilosShell.smallLabelRight}>{sucursalNombre}</Text>
+        </>
+      ) : null}
+      {atendidoPor ? <Text style={estilosShell.smallLabelRight}>Atendió: {atendidoPor}</Text> : null}
+    </>
   )
 }
 
@@ -392,15 +255,16 @@ export function ReciboCCDocument({
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <CabeceraCC
-          data={data}
+        <Cabecera
+          emisor={data}
           logo={logo}
           metrics={metrics}
           titulo="RECIBO"
           numero={safe(data.numeroRecibo)}
           lineasDerecha={[`Fecha: ${formatDateValue(data.fecha, tz)}`]}
-          clienteLabel="Recibimos de"
-        />
+        >
+          <BandaCliente label="Recibimos de" cliente={data.cliente} derecha={DerechaSucursal({ data })} />
+        </Cabecera>
 
         <Seccion titulo="Detalle del movimiento">
           <FilaDetalle label="Concepto" valor={concepto} />
@@ -491,14 +355,15 @@ export function ResumenCCDocument({
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <CabeceraCC
-          data={data}
+        <Cabecera
+          emisor={data}
           logo={logo}
           metrics={metrics}
           titulo="RESUMEN DE CUENTA"
           lineasDerecha={[`Período: ${desde} — ${hasta}`]}
-          clienteLabel="Cliente"
-        />
+        >
+          <BandaCliente label="Cliente" cliente={data.cliente} derecha={DerechaSucursal({ data })} />
+        </Cabecera>
 
         <Seccion titulo="Movimientos del período">
           <FilaDetalle label={`Saldo inicial al ${desde}`} valor={fmt(data.saldoInicial)} />
