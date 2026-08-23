@@ -205,6 +205,29 @@ export const INVENTARIO_COLUMNS: CSVColumn<any>[] = [
   { key: "proveedor", header: "Proveedor" },
 ]
 
+// Columnas de INVENTARIO_COLUMNS que exponen costo de compra. El costo sigue
+// hasInventarioAccess como el resto del inventario (ADMIN siempre, VENDEDOR
+// solo con el opt-in de la org, TECNICO nunca).
+const INVENTARIO_COST_KEYS: string[] = ["precio_compra"]
+
+/**
+ * Columnas de inventario para exportar, según si el rol puede ver el costo.
+ *
+ * El costo se declara acá y no en la ruta, que es justamente por qué el
+ * barrido endpoint por endpoint no lo vio. Cualquier export nuevo de
+ * inventario tiene que pasar por este helper en vez de usar
+ * INVENTARIO_COLUMNS directo.
+ *
+ * Sin acceso se cae la columna en vez de rechazar el export entero: la
+ * portabilidad de datos no está gateada por rol ni por plan.
+ */
+export function inventarioColumns(includeCost: boolean): CSVColumn<any>[] {
+  if (includeCost) return INVENTARIO_COLUMNS
+  return INVENTARIO_COLUMNS.filter(
+    (col) => !INVENTARIO_COST_KEYS.includes(col.key.toString())
+  )
+}
+
 export const MOVIMIENTOS_COLUMNS: CSVColumn<any>[] = [
   {
     key: "created_at",

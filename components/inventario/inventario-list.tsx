@@ -475,8 +475,13 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       hideOnMobile: true,
       className: "text-right",
       headerClassName: "text-right",
+      // precioCompra viene en null cuando el rol no puede ver costos: se
+      // oculta la celda. Pintarlo mostraba "$0", un precio real en vez de un
+      // permiso faltante — y el $0 de verdad tiene su propio aviso.
       render: (item) => (
-        item.precioCompra === 0 ? (
+        item.precioCompra === null ? (
+          <span className="text-muted-foreground">—</span>
+        ) : item.precioCompra === 0 ? (
           <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400" title="Costo en $0 — el margen puede no ser real">
             <AlertCircle className="h-3.5 w-3.5" />
             {formatPrice(0)}
@@ -499,7 +504,12 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       header: "Margen",
       className: "text-right hidden xl:table-cell",
       headerClassName: "text-right hidden xl:table-cell",
+      // Sin costo no hay margen que calcular: con null, precioVenta - null
+      // daba el precio de venta entero publicado como ganancia.
       render: (item) => {
+        if (item.precioCompra === null) {
+          return <span className="text-muted-foreground text-xs">—</span>
+        }
         const margen = item.precioVenta - item.precioCompra
         if (item.precioCompra === 0 && item.precioVenta > 0) {
           return <span className="text-amber-500 text-xs font-medium" title="Sin costo cargado">~{formatPrice(margen)}</span>
@@ -1150,7 +1160,8 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                 const itemThreshold = item.stockMinimo ?? umbralStockBajo
                 const esStockBajo = item.stock <= itemThreshold
                 const sinStock = item.stock === 0
-                const margen = item.precioVenta - item.precioCompra
+                // Sin costo visible no se publica margen (ver columna Margen).
+                const margen = item.precioCompra === null ? null : item.precioVenta - item.precioCompra
                 return (
                   <div className="flex items-start gap-3">
                     <div className="h-11 w-11 shrink-0 rounded-md overflow-hidden bg-muted/50 flex items-center justify-center border">
@@ -1165,7 +1176,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                       <div className="text-xs text-muted-foreground truncate">{item.codigo}</div>
                       <div className="mt-1.5 flex items-center gap-2 text-sm">
                         <span className="font-semibold">{formatPrice(item.precioVenta)}</span>
-                        {margen > 0 && (
+                        {margen !== null && margen > 0 && (
                           <span className="text-[11px] text-emerald-600 dark:text-emerald-400">+{formatPrice(margen)}</span>
                         )}
                       </div>
@@ -1201,7 +1212,8 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                   const itemThreshold = item.stockMinimo ?? umbralStockBajo
                   const esStockBajo = item.stock <= itemThreshold
                   const sinStock = item.stock === 0
-                  const margen = item.precioVenta - item.precioCompra
+                  // Sin costo visible no se publica margen (ver columna Margen).
+                  const margen = item.precioCompra === null ? null : item.precioVenta - item.precioCompra
                   const tipoNombre = tiposDispositivo.find((t) => t.codigo === item.tipoDispositivo)?.nombre || item.tipoDispositivo
                   const isArchived = !!item.deletedAt
 
@@ -1312,8 +1324,9 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                           )}
                         </div>
 
-                        {/* Row 3: Stock + Price grid */}
-                        <div className="grid grid-cols-3 gap-2 rounded-lg bg-muted/50 p-2.5">
+                        {/* Row 3: Stock + Price grid. Sin la celda de Costo la
+                            fila queda en dos columnas, no con un hueco. */}
+                        <div className={`grid ${item.precioCompra !== null ? "grid-cols-3" : "grid-cols-2"} gap-2 rounded-lg bg-muted/50 p-2.5`}>
                           {/* Stock */}
                           <div className="text-center">
                             <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Stock</div>
@@ -1342,20 +1355,22 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                               </div>
                             )}
                           </div>
-                          {/* Costo */}
-                          <div className="text-center border-x border-border/50">
-                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Costo</div>
-                            <div className="text-sm font-medium leading-none text-muted-foreground">
-                              {formatPrice(item.precioCompra)}
+                          {/* Costo — oculto cuando el rol no puede verlo */}
+                          {item.precioCompra !== null && (
+                            <div className="text-center border-x border-border/50">
+                              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Costo</div>
+                              <div className="text-sm font-medium leading-none text-muted-foreground">
+                                {formatPrice(item.precioCompra)}
+                              </div>
                             </div>
-                          </div>
+                          )}
                           {/* Venta */}
                           <div className="text-center">
                             <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Venta</div>
                             <div className="text-sm font-bold leading-none">
                               {formatPrice(item.precioVenta)}
                             </div>
-                            {margen > 0 && (
+                            {margen !== null && margen > 0 && (
                               <div className="text-[9px] text-emerald-600 font-medium mt-0.5">
                                 +{formatPrice(margen)}
                               </div>

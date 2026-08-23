@@ -78,9 +78,14 @@ const FIELD_DISPLAY: Record<string, string> = {
 }
 
 /**
- * Genera una descripción legible del cambio para la columna description
+ * Genera una descripción legible del cambio para la columna description.
+ *
+ * Se exporta porque las rutas que filtran campos del diff antes de devolverlo
+ * tienen que RE-generar la descripción sobre el diff ya filtrado: la original
+ * se armó con los campos completos y nombra los que se acaban de sacar. Ver
+ * app/api/inventario/[id]/audit/route.ts.
  */
-function generateDescription(
+export function generateDescription(
   action: AuditAction,
   entity: AuditEntity,
   entityId: string,

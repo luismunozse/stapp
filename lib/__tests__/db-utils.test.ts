@@ -13,6 +13,8 @@ import {
   formatProveedorAdjunto,
   formatProveedorCatalogoItem,
   formatVenta,
+  formatRepuesto,
+  precioVentaRepuesto,
 } from '../db-utils'
 
 function ventaBase(over: Partial<any> = {}) {
@@ -342,30 +344,110 @@ describe('formatOrden', () => {
   it('retorna null para input null', () => {
     expect(formatOrden(null)).toBe(null)
   })
+
+  it('oculta el costo de los repuestos y el agregado de cotizaciones cuando se lo pide', () => {
+    const input = {
+      id: 'ord-3',
+      repuestos_orden: [
+        { id: 'r-1', cantidad: 2, precio_unitario: 50, precio_venta_unitario: 120 },
+      ],
+      cotizaciones: [
+        {
+          estado: 'ACEPTADA',
+          deleted_at: null,
+          items_cotizacion: [{ cantidad: 2, inventario: { precio_compra: 150 } }],
+        },
+      ],
+    }
+
+    const visible = formatOrden(input)
+    expect(visible?.repuestos?.[0]?.precioUnitario).toBe(50)
+    expect(visible?.costoRepuestosCotizaciones).toBe(300)
+
+    const oculto = formatOrden(input, {
+      includeInventarioCost: false,
+      includeCotizacionCost: false,
+    })
+    expect(oculto?.repuestos?.[0]?.precioUnitario).toBeNull()
+    expect(oculto?.costoRepuestosCotizaciones).toBeNull()
+    // Lo que el rol sí necesita sigue disponible.
+    expect(oculto?.repuestos?.[0]?.cantidad).toBe(2)
+    expect(oculto?.repuestos?.[0]?.precioVentaUnitario).toBe(120)
+  })
+})
+
+describe('formatRepuesto / precioVentaRepuesto', () => {
+  it('formatRepuesto oculta el costo con includeCost en false', () => {
+    const row = { id: 'r-1', cantidad: 1, precio_unitario: 80, precio_venta_unitario: 200 }
+    expect(formatRepuesto(row)?.precioUnitario).toBe(80)
+    expect(formatRepuesto(row, false)?.precioUnitario).toBeNull()
+    expect(formatRepuesto(row, false)?.precioVentaUnitario).toBe(200)
+  })
+
+  it('usa el precio de venta cuando existe', () => {
+    expect(precioVentaRepuesto({ precioVentaUnitario: 200, precioUnitario: 80 })).toBe(200)
+  })
+
+  it('cae al costo en filas anteriores a la migracion 286', () => {
+    expect(precioVentaRepuesto({ precioVentaUnitario: null, precioUnitario: 80 })).toBe(80)
+  })
+
+  it('devuelve null cuando no queda ningun precio (fila vieja + costo oculto)', () => {
+    expect(precioVentaRepuesto({ precioVentaUnitario: null, precioUnitario: null })).toBeNull()
+    expect(precioVentaRepuesto({})).toBeNull()
+  })
+
+  it('propaga includeCost al inventario embebido', () => {
+    const row = {
+      id: 'r-1',
+      cantidad: 1,
+      precio_unitario: 80,
+      precio_venta_unitario: 200,
+      inventario: { id: 'i-1', precio_compra: 55, precio_venta: 300, stock: 4 },
+    }
+    expect(formatRepuesto(row)?.inventario?.precioCompra).toBe(55)
+    expect(formatRepuesto(row, false)?.inventario?.precioCompra).toBeNull()
+    // Lo que no es costo sigue disponible en el embed.
+    expect(formatRepuesto(row, false)?.inventario?.precioVenta).toBe(300)
+    expect(formatRepuesto(row, false)?.inventario?.stock).toBe(4)
+  })
 })
 
 describe('formatInventario', () => {
+  const input = {
+    id: '1',
+    codigo: 'PROD001',
+    nombre: 'Pantalla iPhone',
+    descripcion: 'Pantalla OLED',
+    categoria: 'Pantallas',
+    tipo_dispositivo: 'CELULAR',
+    stock: 10,
+    precio_compra: 5000,
+    precio_venta: 8000,
+    proveedor: 'Proveedor X',
+    organization_id: 'org-1',
+    created_at: '2024-01-01',
+    updated_at: '2024-01-02',
+  }
+
   it('formatea item de inventario', () => {
-    const input = {
-      id: '1',
-      codigo: 'PROD001',
-      nombre: 'Pantalla iPhone',
-      descripcion: 'Pantalla OLED',
-      categoria: 'Pantallas',
-      tipo_dispositivo: 'CELULAR',
-      stock: 10,
-      precio_compra: 5000,
-      precio_venta: 8000,
-      proveedor: 'Proveedor X',
-      organization_id: 'org-1',
-      created_at: '2024-01-01',
-      updated_at: '2024-01-02',
-    }
-    const result = formatInventario(input)
+    const result = formatInventario(input, true)
     expect(result?.tipoDispositivo).toBe('CELULAR')
     expect(result?.precioCompra).toBe(5000)
     expect(result?.precioVenta).toBe(8000)
     expect(result?.organizationId).toBe('org-1')
+    expect(result?.codigo).toBe('PROD001')
+  })
+
+  // Default-safe: quien no pide el costo explícitamente no lo recibe. Un caller
+  // nuevo que se olvide del gate pierde el costo (bug visible) en vez de
+  // filtrarlo a un rol sin permiso (bug silencioso).
+  it('oculta precioCompra cuando el caller no lo pide', () => {
+    const result = formatInventario(input)
+    expect(result?.precioCompra).toBeNull()
+    // Lo que no es costo no cambia.
+    expect(result?.precioVenta).toBe(8000)
+    expect(result?.stock).toBe(10)
     expect(result?.codigo).toBe('PROD001')
   })
 
@@ -556,23 +638,25 @@ describe('formatProveedorCatalogoItem', () => {
     expect(formatProveedorCatalogoItem(null)).toBe(null)
   })
 
+  const itemRow = {
+    id: 'i1',
+    proveedor_id: 'p1',
+    inventario_id: 'inv1',
+    codigo_proveedor: 'SKU-123',
+    nombre: 'Producto X',
+    descripcion: 'desc',
+    precio_referencia: '999.99',
+    moneda: 'ARS',
+    unidad: 'caja',
+    notas: null,
+    precio_actualizado_at: '2026-01-15',
+    inventario: { id: 'inv1', codigo: 'COD-1', nombre: 'Item inv' },
+    created_at: '2026-01-01',
+    updated_at: '2026-01-15',
+  }
+
   it('formatea item con inventario vinculado', () => {
-    const result = formatProveedorCatalogoItem({
-      id: 'i1',
-      proveedor_id: 'p1',
-      inventario_id: 'inv1',
-      codigo_proveedor: 'SKU-123',
-      nombre: 'Producto X',
-      descripcion: 'desc',
-      precio_referencia: '999.99',
-      moneda: 'ARS',
-      unidad: 'caja',
-      notas: null,
-      precio_actualizado_at: '2026-01-15',
-      inventario: { id: 'inv1', codigo: 'COD-1', nombre: 'Item inv' },
-      created_at: '2026-01-01',
-      updated_at: '2026-01-15',
-    })
+    const result = formatProveedorCatalogoItem(itemRow, true)
     expect(result?.id).toBe('i1')
     expect(result?.codigoProveedor).toBe('SKU-123')
     expect(result?.precioReferencia).toBe(999.99)
@@ -586,10 +670,21 @@ describe('formatProveedorCatalogoItem', () => {
   it('moneda default ARS si null', () => {
     const result = formatProveedorCatalogoItem({
       id: 'i1', proveedor_id: 'p1', nombre: 'X',
-    })
+    }, true)
     expect(result?.moneda).toBe('ARS')
     expect(result?.precioReferencia).toBe(null)
     expect(result?.inventario).toBe(null)
+  })
+
+  // includeCost es opt-in: un caller que se olvida del gate pierde el precio,
+  // no lo filtra. Es el mismo default que formatInventario.
+  it('omite precioReferencia por default, sin pedir el costo', () => {
+    const result = formatProveedorCatalogoItem(itemRow)
+    expect(result?.precioReferencia).toBe(null)
+    // El resto del item sigue completo: sólo cae el costo.
+    expect(result?.nombre).toBe('Producto X')
+    expect(result?.codigoProveedor).toBe('SKU-123')
+    expect(result?.inventarioId).toBe('inv1')
   })
 })
 
@@ -615,5 +710,23 @@ describe('formatVenta — facturaId from facturas embed', () => {
     // factura" button never hides for an already-invoiced venta.
     const result = formatVenta(ventaBase({ facturas: { id: 'f1' } }))
     expect(result?.facturaId).toBe('f1')
+  })
+
+  // Las ventas embeben `inventario (*)`, que trae precio_compra. Ningún
+  // consumidor de /api/ventas lee ese costo, así que el embed no lo pide.
+  it('no expone el costo de compra del inventario embebido en los items', () => {
+    const result = formatVenta(ventaBase({
+      items_venta: [{
+        id: 'iv1',
+        inventario_id: 'inv1',
+        descripcion: 'Pantalla',
+        cantidad: 1,
+        precio_unitario: '100',
+        subtotal: '100',
+        inventario: { id: 'inv1', codigo: 'C1', precio_compra: 40, precio_venta: 100 },
+      }],
+    }))
+    expect(result?.items?.[0]?.inventario?.precioCompra).toBeNull()
+    expect(result?.items?.[0]?.inventario?.codigo).toBe('C1')
   })
 })

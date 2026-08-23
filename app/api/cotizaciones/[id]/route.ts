@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, canViewCotizacionCosts } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { transicionarOrden } from "@/lib/orden-transicion"
@@ -161,7 +161,7 @@ function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuent
   return Math.max(0, bruto * (1 - dv / 100))
 }
 
-function formatCotizacion(c: any) {
+function formatCotizacion(c: any, includeCosts: boolean) {
   const orden = c.ordenes_servicio
   const cliente = c.clientes || orden?.clientes
   const sector = c.sectores_cliente
@@ -211,7 +211,8 @@ function formatCotizacion(c: any) {
       descripcion: i.descripcion,
       cantidad: i.cantidad,
       precioUnitario: i.precio_unitario,
-      costoUnitario: i.costo_unitario != null ? Number(i.costo_unitario) : null,
+      // Cost/margin data is ADMIN-only (server-side enforced, not just hidden in UI).
+      costoUnitario: includeCosts && i.costo_unitario != null ? Number(i.costo_unitario) : null,
       subtotal: i.subtotal,
       unidad: i.unidad,
       descuentoTipo: i.descuento_tipo,
@@ -228,7 +229,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     const { id } = await params
@@ -258,7 +259,7 @@ export async function GET(
       )
     }
 
-    return NextResponse.json(formatCotizacion(cotizacion))
+    return NextResponse.json(formatCotizacion(cotizacion, canViewCotizacionCosts(role)))
   } catch (error) {
     console.error("Error fetching cotizacion:", error)
     return NextResponse.json(
@@ -401,9 +402,138 @@ export async function PUT(
       const descGlobalTipo = data.descuentoGlobalTipo ?? "porcentaje"
       const descGlobalValor = data.descuentoGlobalValor ?? 0
 
+      // Cost/margin data is ADMIN-only, uniformly (VENDEDOR included — they
+      // have no cotizaciones nav access today, so losing cost entry here is
+      // deliberate, not an oversight; see canViewCotizacionCosts). Non-admin
+      // actors never see costoUnitario in GET responses, so their edit
+      // payload can't carry trustworthy values — resolve costs server-side
+      // instead:
+      //  - existing item (matched to a stored row) with an UNCHANGED inventario
+      //    link: preserve the DB's current costo_unitario, ignoring whatever
+      //    the client sent (blocks spoofing and prevents an edit from silently
+      //    wiping out cost data an admin entered earlier).
+      //  - existing item whose inventario link CHANGED (relinked to another
+      //    product, or unlinked): the old cost no longer applies — re-derive
+      //    from the new inventario.precio_compra, or null if unlinked.
+      //  - new item linked to inventario: derive from inventario.precio_compra.
+      //  - new free-text item: costo_unitario stays null.
+      //
+      // Matching an existing item cannot rely on item.id alone. This handler
+      // deletes every items_cotizacion row and re-inserts fresh ones on each
+      // PUT, and the insert never supplies an id (the column defaults to
+      // generate_cuid()), so ids change on every save. Any client holding a
+      // pre-save copy — a second tab, or the SWR cache in cotizacion-list,
+      // which sets revalidateOnFocus: false — submits ids that no longer
+      // exist. The id lookup missed, the item looked new, and a free-text line
+      // (nothing to re-derive from) lost the manual cost an ADMIN had entered.
+      //
+      // The fix is a natural key — descripción (trimmed, case-insensitive)
+      // plus the inventario link — used ONLY when the client sent an id that
+      // missed. The key is the tuple that decides which cost applies, so a hit
+      // means the same line: it also implies the link is unchanged, since the
+      // link is part of the key. Restricting it to payloads that carry an id
+      // keeps a genuinely new line (no id) from inheriting a same-named row's
+      // cost. Rows are recreated rather than diffed because turning this into
+      // a three-way diff would rework a write path that also feeds
+      // recalcPresupuestoOrden, the stock reservations released by
+      // liberar_items_cotizacion, and the items_factura.cotizacion_item_id FK
+      // — and items_cotizacion has no unique constraint to upsert on anyway.
+      //
+      // Two limits, on purpose: a line renamed by the same edit that carries a
+      // stale id is indistinguishable from a new line and still resolves to
+      // null, and an ambiguous key (several stored rows sharing it but
+      // disagreeing on cost) declines to guess.
+      const canViewCosts = canViewCotizacionCosts(role)
+      type StoredItemCost = { costoUnitario: number | null; inventarioId: string | null }
+      // El separador se escribe como ESCAPE, nunca como el carácter literal.
+      // Un NUL crudo en el fuente hace que ripgrep clasifique el archivo como
+      // binario: informa "binary file matches" y devuelve CERO líneas, así que
+      // la ruta entera desaparece de toda búsqueda del proyecto. Y `git diff`
+      // pinta el NUL como un espacio común, así que quien revisa el PR lee un
+      // separador de espacio — que sería inseguro, porque las descripciones
+      // tienen espacios; cualquier editor o formateador que limpie caracteres
+      // de control convertiría la clave segura en esa otra, en silencio.
+      // Se elige NUL justamente porque no puede aparecer en una descripción.
+      // Guard en __tests__/source-nul-bytes.test.ts.
+      const naturalKey = (descripcion: string | null, inventarioId: string | null) =>
+        `${(descripcion || "").trim().toLowerCase()}\u0000${inventarioId ?? ""}`
+      const existingItemsById = new Map<string, StoredItemCost>()
+      // null marks an ambiguous key: several rows share it and disagree.
+      const existingItemsByNaturalKey = new Map<string, StoredItemCost | null>()
+      const inventarioCostoById = new Map<string, number | null>()
+      if (!canViewCosts) {
+        const { data: existingItemRows, error: existingItemsError } = await supabaseAdmin
+          .from("items_cotizacion")
+          .select("id, descripcion, costo_unitario, inventario_id")
+          .eq("cotizacion_id", id)
+        if (existingItemsError) throw existingItemsError
+        for (const row of existingItemRows || []) {
+          const stored: StoredItemCost = {
+            costoUnitario: row.costo_unitario != null ? Number(row.costo_unitario) : null,
+            inventarioId: row.inventario_id ?? null,
+          }
+          existingItemsById.set(row.id, stored)
+
+          const key = naturalKey(row.descripcion, stored.inventarioId)
+          if (existingItemsByNaturalKey.has(key)) {
+            // Duplicated lines that agree on cost resolve to the same answer
+            // either way, so only a disagreement makes the key unusable.
+            const previous = existingItemsByNaturalKey.get(key)
+            if (!previous || previous.costoUnitario !== stored.costoUnitario) {
+              existingItemsByNaturalKey.set(key, null)
+            }
+          } else {
+            existingItemsByNaturalKey.set(key, stored)
+          }
+        }
+      }
+
+      const findStoredItem = (item: (typeof data.items)[number]): StoredItemCost | undefined => {
+        if (!item.id) return undefined
+        const byId = existingItemsById.get(item.id)
+        if (byId) return byId
+        return existingItemsByNaturalKey.get(
+          naturalKey(item.descripcion, item.inventarioId ?? null)
+        ) ?? undefined
+      }
+
+      if (!canViewCosts) {
+        const inventarioIdsNeedingLookup = Array.from(new Set(
+          data.items
+            .filter((item) => {
+              const stored = findStoredItem(item)
+              const linkChanged = stored ? stored.inventarioId !== (item.inventarioId ?? null) : true
+              return linkChanged && !!item.inventarioId
+            })
+            .map((item) => item.inventarioId as string)
+        ))
+        if (inventarioIdsNeedingLookup.length > 0) {
+          const { data: invRows, error: invError } = await supabaseAdmin
+            .from("inventario")
+            .select("id, precio_compra")
+            .eq("organization_id", organizationId!)
+            .in("id", inventarioIdsNeedingLookup)
+          if (invError) throw invError
+          for (const row of invRows || []) {
+            inventarioCostoById.set(row.id, row.precio_compra != null ? Number(row.precio_compra) : null)
+          }
+        }
+      }
+
+      const resolveCostoUnitario = (item: (typeof data.items)[number]): number | null => {
+        if (canViewCosts) return item.costoUnitario ?? null
+        const stored = findStoredItem(item)
+        if (stored && stored.inventarioId === (item.inventarioId ?? null)) {
+          return stored.costoUnitario
+        }
+        if (item.inventarioId) return inventarioCostoById.get(item.inventarioId) ?? null
+        return null
+      }
+
       const items = data.items.map((item) => ({
         ...item,
         subtotal: calcItemNeto(item),
+        costoUnitario: resolveCostoUnitario(item),
       }))
       const subtotalNeto = items.reduce((sum, item) => sum + item.subtotal, 0)
 
@@ -436,7 +566,7 @@ export async function PUT(
             descripcion: item.descripcion,
             cantidad: item.cantidad,
             precio_unitario: item.precioUnitario,
-            costo_unitario: item.costoUnitario ?? null,
+            costo_unitario: item.costoUnitario,
             subtotal: item.subtotal,
             unidad: item.unidad || "Unidad",
             descuento_tipo: item.descuentoTipo || "porcentaje",
@@ -556,7 +686,7 @@ export async function PUT(
       total: cotizacion?.total,
     })
 
-    return NextResponse.json(formatCotizacion(cotizacion))
+    return NextResponse.json(formatCotizacion(cotizacion, canViewCotizacionCosts(role)))
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

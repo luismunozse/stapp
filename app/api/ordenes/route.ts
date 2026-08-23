@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server"
 import { randomBytes } from "crypto"
-import { requireAuth } from "@/lib/auth-utils"
+import {
+  requireAuth,
+  hasInventarioAccess,
+  resolveVendedoresHabilitados,
+  canViewCotizacionCosts,
+} from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumberByType } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
@@ -245,8 +250,22 @@ export async function GET(request: Request) {
       throw dbError
     }
 
-    // Transformar datos usando formatOrden unificado
-    const ordenesFormatted = ordenes?.map(formatOrden)
+    // Transformar datos usando formatOrden unificado. Wrapped on purpose:
+    // passing formatOrden bare to .map would feed the array index into its
+    // options argument.
+    //
+    // Hoy este select no trae los embeds repuestos_orden/cotizaciones, así que
+    // no hay costo de compra que filtrar — pero dejar los defaults en true hace
+    // que la corrección dependa de que nadie agregue un embed. Se resuelven los
+    // mismos dos gates que en GET /api/ordenes/[id] y se pasan explícitos.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const ordenOptions = {
+      includeInventarioCost: hasInventarioAccess(role, vendedoresHabilitados),
+      includeCotizacionCost: canViewCotizacionCosts(role),
+    }
+    const ordenesFormatted = ordenes?.map((o: any) => formatOrden(o, ordenOptions))
 
     // Retornar con información de paginación y cache headers
     return NextResponse.json({

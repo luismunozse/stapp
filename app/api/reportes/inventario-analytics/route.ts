@@ -1,9 +1,13 @@
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import {
+  requireAdminOrVendedor,
+  hasInventarioAccess,
+  resolveVendedoresHabilitados,
+} from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { NextResponse } from "next/server"
 
 export async function GET() {
-  const { error, organizationId } = await requireAdminOrVendedor()
+  const { error, organizationId, role } = await requireAdminOrVendedor()
   if (error) return error
 
   const now = new Date()
@@ -46,6 +50,14 @@ export async function GET() {
     const movimientos90 = movimientosVentaResult.data || []
     const movimientos30 = movimientos30DiasResult.data || []
 
+    // Se resuelve ACÁ, antes de armar las listas derivadas, y no al final junto
+    // con el nulleo: hay listas que se ORDENAN por una clave de costo, y el
+    // orden sobrevive al nulleo. Ver sinMovimiento más abajo.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
     // --- Valorización ---
     let valorCosto = 0
     let valorVenta = 0
@@ -55,10 +67,13 @@ export async function GET() {
       valorVenta += (item.stock || 0) * (item.precio_venta || 0)
       totalUnidades += item.stock || 0
     })
+    // Las cifras de costo van gateadas como el resto (ver el bloque de abajo):
+    // totalItems y totalUnidades viajan al lado, así que un valorCosto visible
+    // se divide de vuelta al costo unitario.
     const valorizacion = {
-      valorCosto,
+      valorCosto: canViewCost ? valorCosto : null,
       valorVenta,
-      margenPotencial: valorVenta - valorCosto,
+      margenPotencial: canViewCost ? valorVenta - valorCosto : null,
       totalItems: items.length,
       totalUnidades,
     }
@@ -93,7 +108,13 @@ export async function GET() {
 
     // --- Sin Movimiento (dead stock) ---
     const itemsConVenta = new Set(Object.keys(ventasPorItem))
-    const sinMovimiento = items
+    // El orden es un canal lateral: capitalInmovilizado es stock x
+    // precio_compra y stock viaja visible en cada fila, así que un ranking por
+    // capital devuelve el ranking de costo unitario aunque el número esté en
+    // null. El recorte tampoco es inocente: pertenecer al "top 20 por capital"
+    // ES el ranking. Para quien no puede ver costo, la clave y el recorte pasan
+    // a stock, que ya ve. Para quien sí puede, el informe no cambia.
+    const sinMovimientoBase = items
       .filter(item => !itemsConVenta.has(item.id) && item.stock > 0)
       .map(item => ({
         id: item.id,
@@ -104,8 +125,14 @@ export async function GET() {
         precioVenta: item.precio_venta,
         capitalInmovilizado: (item.stock || 0) * (item.precio_compra || 0),
       }))
-      .sort((a, b) => b.capitalInmovilizado - a.capitalInmovilizado)
-      .slice(0, 20)
+
+    const sinMovimiento = (
+      canViewCost
+        ? sinMovimientoBase.sort((a, b) => b.capitalInmovilizado - a.capitalInmovilizado)
+        : sinMovimientoBase.sort(
+            (a, b) => b.stock - a.stock || (a.nombre || "").localeCompare(b.nombre || "", "es")
+          )
+    ).slice(0, 20)
 
     // --- Alertas de Reorden ---
     const diasPeriodo = 90
@@ -165,14 +192,50 @@ export async function GET() {
     })
     const tendenciaVentas = Object.entries(tendenciaMap).map(([fecha, unidades]) => ({ fecha, unidades }))
 
+    // El costo de compra sigue la misma regla que inventario.precio_compra en
+    // el resto de la app.
+    //
+    // La regla, en una línea: quien no puede ver el costo de compra por item
+    // no recibe NINGUNA cifra derivada de precio_compra, a ningún nivel de
+    // agregación.
+    //
+    // Aplica a lo obvio (precioCompra por item), a lo que se cae por división
+    // dentro de la misma fila (capitalInmovilizado es stock * precio_compra y
+    // stock viaja al lado), al total por categoría (una categoría puede tener
+    // un único SKU) y también al total de organización: con totalItems === 1
+    // —una org nueva, o de un solo SKU— valorCosto / totalUnidades ES el costo
+    // unitario exacto, y la valorización entregaba las dos cifras juntas.
+    // Ídem resumen.valorCompra en /api/reportes/analisis-inventario, que
+    // aplica esta misma regla.
+    //
+    // valorizacion.margenPotencial queda gateado como consecuencia, y ahora el
+    // gate sí protege: es valorVenta - valorCosto, y valorCosto ya no viaja,
+    // así que la resta que antes lo volvía decorativo perdió un término.
+    //
+    // Lo que NO es costo —totalItems, totalUnidades, valorVenta, conteos—
+    // sigue visible: su tier no cambió.
+    //
+    // canViewCost se resolvió arriba, antes de armar las listas: el nulleo
+    // solo tapa el número, no el orden en que la lista llegó hasta acá.
+    const sinMovimientoGated = canViewCost
+      ? sinMovimiento
+      : sinMovimiento.map(item => ({ ...item, precioCompra: null, capitalInmovilizado: null }))
+
+    const porCategoriaGated = porCategoria.map(cat => ({
+      ...cat,
+      valorCosto: canViewCost ? cat.valorCosto : null,
+    }))
+
     return NextResponse.json({
       scope: "organization",
       valorizacion,
       rotacion,
-      sinMovimiento,
+      sinMovimiento: sinMovimientoGated,
       alertasReorden,
-      porCategoria,
+      porCategoria: porCategoriaGated,
       tendenciaVentas,
+    }, {
+      headers: { "Cache-Control": "no-store" },
     })
   } catch (err) {
     console.error("Error en inventario-analytics:", err)

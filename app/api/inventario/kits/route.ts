@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 // GET /api/inventario/kits
 // Lista items con es_kit=true, con conteo de componentes y costo calculado.
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
+
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search")?.trim() ?? ""
@@ -85,14 +90,14 @@ export async function GET(request: Request) {
       nombre: k.nombre,
       stock: k.stock ?? 0,
       stockReservado: k.stock_reservado ?? 0,
-      precioCompra: Number(k.precio_compra ?? 0),
+      precioCompra: canViewCost ? Number(k.precio_compra ?? 0) : null,
       precioVenta: Number(k.precio_venta ?? 0),
       tipoKit: k.tipo_kit ?? null,
       imagenUrl: k.imagen_url ?? null,
       categoria: k.categoria,
       tipoDispositivo: k.tipo_dispositivo,
       cantidadComponentes: conteoMap.get(k.id) ?? 0,
-      costoCalculado: costoMap.get(k.id) ?? 0,
+      costoCalculado: canViewCost ? (costoMap.get(k.id) ?? 0) : null,
     }))
 
     return NextResponse.json({

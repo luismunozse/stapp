@@ -40,6 +40,29 @@ describe("toItemPayload — ítem de cotización", () => {
     expect(payload).not.toHaveProperty("precioCompra")
   })
 
+  it("devuelve el id de un ítem ya guardado para que el PUT lo reconozca", () => {
+    const payload = toItemPayload({
+      id: "item-1",
+      descripcion: "Mano de obra",
+      cantidad: 1,
+      precioUnitario: 15000,
+    })
+
+    // Sin id, findStoredItem corta en el PUT y una línea manual editada por un
+    // rol sin acceso a costos pierde el costo que cargó un ADMIN.
+    expect(payload.id).toBe("item-1")
+  })
+
+  it("no manda id cuando el ítem es nuevo", () => {
+    const payload = toItemPayload({
+      descripcion: "Línea recién agregada",
+      cantidad: 1,
+      precioUnitario: 5000,
+    })
+
+    expect(payload).not.toHaveProperty("id")
+  })
+
   it("conserva el vínculo con inventario y su costo para los productos", () => {
     const payload = toItemPayload({
       descripcion: "Pantalla",

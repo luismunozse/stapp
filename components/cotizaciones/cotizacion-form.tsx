@@ -25,6 +25,10 @@ import { OrdenSelector, type OrdenLite } from "./orden-selector"
 import { ChecklistPicker, type ChecklistPickerValue } from "./checklist-picker"
 
 interface CotizacionItem {
+  // Present on items loaded from an existing cotización (GET). Sent back on
+  // PUT so the server can match existing items and preserve cost data that a
+  // non-ADMIN editor never receives (see item-based cost preservation on PUT).
+  id?: string
   descripcion: string
   cantidad: number
   precioUnitario: number
@@ -51,6 +55,10 @@ interface CotizacionItem {
  */
 export function toItemPayload(item: CotizacionItem) {
   return {
+    // Solo en items que ya existen. El PUT lo necesita para reconocer la linea
+    // y conservar el costo que un editor sin permiso de costos no recibe; sin
+    // id, findStoredItem corta y una linea manual pierde el costo cargado.
+    ...(item.id ? { id: item.id } : {}),
     descripcion: item.descripcion,
     cantidad: item.cantidad,
     precioUnitario: item.precioUnitario,
@@ -93,6 +101,8 @@ interface CotizacionFormProps {
   initialClienteId?: string
   onClose: () => void
   onSuccess: () => void
+  /** Cost/margin data is ADMIN-only. Defaults to hidden (fail-closed). */
+  mostrarCostos?: boolean
   initialData?: {
     id: string
     items: CotizacionItem[]
@@ -115,6 +125,7 @@ export function CotizacionForm({
   initialClienteId,
   onClose,
   onSuccess,
+  mostrarCostos,
   initialData,
 }: CotizacionFormProps) {
   const isPresupuesto = tipo === "PRESUPUESTO"
@@ -801,6 +812,7 @@ export function CotizacionForm({
                 onRemove={removeItem}
                 disabled={loading}
                 showTipoRepuesto={isPresupuesto}
+                mostrarCostos={mostrarCostos}
               />
             ))}
 
@@ -953,7 +965,7 @@ export function CotizacionForm({
                   <span>Total:</span>
                   <span>{formatPrice(total)}</span>
                 </div>
-                {tieneCostos && (
+                {mostrarCostos && tieneCostos && (
                   <div className="pt-2 mt-1 border-t space-y-1">
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Costo repuestos:</span>

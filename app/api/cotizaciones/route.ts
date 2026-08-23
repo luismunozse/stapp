@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, canViewCotizacionCosts } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextQuoteNumber } from "@/lib/counters"
 import { parsePagination } from "@/lib/api-utils"
@@ -77,7 +77,7 @@ function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuent
   return Math.max(0, bruto * (1 - dv / 100))
 }
 
-function formatCotizacion(c: any) {
+function formatCotizacion(c: any, includeCosts: boolean) {
   const orden = c.ordenes_servicio
   const cliente = c.clientes || orden?.clientes
   const sector = c.sectores_cliente
@@ -136,7 +136,8 @@ function formatCotizacion(c: any) {
       descripcion: i.descripcion,
       cantidad: i.cantidad,
       precioUnitario: i.precio_unitario,
-      costoUnitario: i.costo_unitario != null ? Number(i.costo_unitario) : null,
+      // Cost/margin data is ADMIN-only (server-side enforced, not just hidden in UI).
+      costoUnitario: includeCosts && i.costo_unitario != null ? Number(i.costo_unitario) : null,
       subtotal: i.subtotal,
       unidad: i.unidad,
       descuentoTipo: i.descuento_tipo,
@@ -182,7 +183,8 @@ export async function GET(request: Request) {
       const { data: cotizaciones, error: dbError } = await query
       if (dbError) throw dbError
 
-      return NextResponse.json(cotizaciones?.map(formatCotizacion) || [])
+      const includeCosts = canViewCotizacionCosts(role)
+      return NextResponse.json(cotizaciones?.map((c) => formatCotizacion(c, includeCosts)) || [])
     }
 
     // Modo standalone: filtrar por organization_id con LEFT join + paginacion
@@ -234,7 +236,8 @@ export async function GET(request: Request) {
     if (dbError) throw dbError
 
     const total = count || 0
-    const result = cotizaciones?.map(formatCotizacion) || []
+    const includeCosts = canViewCotizacionCosts(role)
+    const result = cotizaciones?.map((c) => formatCotizacion(c, includeCosts)) || []
 
     return NextResponse.json({
       data: result,
@@ -357,6 +360,32 @@ export async function POST(request: Request) {
       }
     }
 
+    // Cost/margin data is ADMIN-only, uniformly (VENDEDOR included — they
+    // have no cotizaciones nav access today, so losing cost entry here is
+    // deliberate, not an oversight; see canViewCotizacionCosts). Non-admin
+    // creators never see costoUnitario, so their client can't submit a
+    // trustworthy value: derive it server-side from the linked inventario
+    // record instead, and ignore whatever costoUnitario the client sent.
+    // Free-text (non-linked) items from non-admin creators get null cost.
+    const canViewCosts = canViewCotizacionCosts(role)
+    const inventarioCostoById = new Map<string, number | null>()
+    if (!canViewCosts) {
+      const inventarioIds = Array.from(new Set(
+        data.items.filter((item) => item.inventarioId).map((item) => item.inventarioId as string)
+      ))
+      if (inventarioIds.length > 0) {
+        const { data: invRows, error: invError } = await supabaseAdmin
+          .from("inventario")
+          .select("id, precio_compra")
+          .eq("organization_id", organizationId!)
+          .in("id", inventarioIds)
+        if (invError) throw invError
+        for (const row of invRows || []) {
+          inventarioCostoById.set(row.id, row.precio_compra != null ? Number(row.precio_compra) : null)
+        }
+      }
+    }
+
     // Calculate totals with discounts and IVA
     const ivaPct = data.ivaPorcentaje || 0
     const descGlobalTipo = data.descuentoGlobalTipo || "porcentaje"
@@ -365,6 +394,9 @@ export async function POST(request: Request) {
     const items = data.items.map((item) => ({
       ...item,
       subtotal: calcItemNeto(item),
+      costoUnitario: canViewCosts
+        ? (item.costoUnitario ?? null)
+        : (item.inventarioId ? (inventarioCostoById.get(item.inventarioId) ?? null) : null),
     }))
     const subtotalNeto = items.reduce((sum, item) => sum + item.subtotal, 0)
 
@@ -426,7 +458,7 @@ export async function POST(request: Request) {
           descripcion: item.descripcion,
           cantidad: item.cantidad,
           precio_unitario: item.precioUnitario,
-          costo_unitario: item.costoUnitario ?? null,
+          costo_unitario: item.costoUnitario,
           subtotal: item.subtotal,
           unidad: item.unidad || "Unidad",
           descuento_tipo: item.descuentoTipo || "porcentaje",
@@ -482,7 +514,7 @@ export async function POST(request: Request) {
       items_count: items.length,
     })
 
-    return NextResponse.json(formatCotizacion(cotizacionCompleta), { status: 201 })
+    return NextResponse.json(formatCotizacion(cotizacionCompleta, canViewCotizacionCosts(role)), { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import {
+  requireAdminOrVendedor,
+  hasInventarioAccess,
+  resolveVendedoresHabilitados,
+} from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { hasPlanFeature } from "@/lib/subscriptions"
@@ -66,6 +70,15 @@ export async function GET() {
       }
     }
 
+    // costoReposicion es usoMensualPromedio * precio_compra y el promedio
+    // viaja en la misma fila, así que expone el costo de compra por item por
+    // división. Sigue la misma regla que inventario.precio_compra en el resto
+    // de la app: un VENDEDOR sin el permiso de inventario no lo ve.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
     const mesesAnalizados = 3
     const data = inventario.map((item) => {
       const usoTotal = usoPorRepuesto[item.id] || 0
@@ -89,7 +102,9 @@ export async function GET() {
         usoMensualPromedio: Math.round(usoMensual * 10) / 10,
         semanasHastaAgotamiento,
         urgencia,
-        costoReposicion: Math.round(usoMensual * item.precio_compra),
+        costoReposicion: canViewCost
+          ? Math.round(usoMensual * (item.precio_compra ?? 0))
+          : null,
       }
     })
       .filter((d) => d.usoTotal > 0 || d.stockActual > 0)
@@ -102,6 +117,8 @@ export async function GET() {
       data,
       scope: "mixed",
       scopeNote: "Uso por sucursal; stock total de la organización",
+    }, {
+      headers: { "Cache-Control": "no-store" },
     })
   } catch (err) {
     console.error("Error en reporte prediccion-repuestos:", err)

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados, canViewCotizacionCosts } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
@@ -135,7 +135,53 @@ export async function GET(
       .limit(1)
       .maybeSingle()
 
-    const formatted = formatOrden(orden)
+    // The repuestos_orden/cotizaciones embeds carry a live inventario join
+    // (repuestos_orden -> inventario, items_cotizacion -> inventario) with
+    // its purchase cost (precio_compra). That is inventario cost data, not
+    // orden pricing (orden.costoFinal/orden.presupuesto stay visible to
+    // everyone), so it follows the two independent cost gates:
+    //  - inventario purchase cost -> hasInventarioAccess (ADMIN always,
+    //    VENDEDOR only if the org opted in, TECNICO never)
+    //  - cotización item cost -> canViewCotizacionCosts (ADMIN only,
+    //    uniformly — VENDEDOR included, since they have no cotizaciones nav
+    //    access today; that loss is deliberate, not an oversight)
+    //
+    // Both gates have to reach formatOrden itself, not just its output: the
+    // frozen cost copy (repuesto.precioUnitario) and the cotización cost
+    // aggregate (costoRepuestosCotizaciones) are produced inside it.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewInventarioCost = hasInventarioAccess(role, vendedoresHabilitados)
+    const canViewCotizacionCost = canViewCotizacionCosts(role)
+
+    const formatted = formatOrden(orden, {
+      includeInventarioCost: canViewInventarioCost,
+      includeCotizacionCost: canViewCotizacionCost,
+    })
+
+    // formatOrden only returns null for a falsy orden, already handled above;
+    // the guard is here so the gating below type-checks under `strict`.
+    if (!formatted) {
+      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
+    }
+
+    if (!canViewInventarioCost && Array.isArray(formatted.repuestos)) {
+      formatted.repuestos = formatted.repuestos.map((r: any) =>
+        r?.inventario ? { ...r, inventario: { ...r.inventario, precioCompra: null } } : r
+      )
+    }
+    if (!canViewCotizacionCost && Array.isArray(formatted.cotizaciones)) {
+      formatted.cotizaciones = formatted.cotizaciones.map((c: any) => ({
+        ...c,
+        items_cotizacion: Array.isArray(c.items_cotizacion)
+          ? c.items_cotizacion.map((it: any) =>
+              it?.inventario ? { ...it, inventario: { ...it.inventario, precio_compra: null } } : it
+            )
+          : c.items_cotizacion,
+      }))
+    }
+
     const org = (orden as any).organizations
     return NextResponse.json({
       ...formatted,
@@ -515,7 +561,18 @@ export async function PUT(
       }).catch(err => console.error("Error queueing notification:", err))
     }
 
-    return NextResponse.json(formatOrden(updatedOrden))
+    // Mismos dos gates que el GET. Hoy el select del UPDATE no trae los embeds
+    // repuestos_orden/cotizaciones, así que no hay costo que filtrar — pero
+    // dejar los defaults en true hace que la corrección dependa de que nadie
+    // agregue un embed. Se resuelven y se pasan explícitos.
+    const vendedoresHabilitadosPut = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+
+    return NextResponse.json(formatOrden(updatedOrden, {
+      includeInventarioCost: hasInventarioAccess(role, vendedoresHabilitadosPut),
+      includeCotizacionCost: canViewCotizacionCosts(role),
+    }))
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

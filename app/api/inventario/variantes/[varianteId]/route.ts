@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireInventarioAccess } from "@/lib/auth-utils"
+import { requireAuth, requireInventarioAccess, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 
@@ -11,7 +11,9 @@ import { z } from "zod"
 // DELETE - soft delete (?force=true para confirmar con stock)
 // ============================================================
 
-function formatVariante(row: any) {
+// includeCost defaults true: PATCH/DELETE call this only after requireInventarioAccess
+// already granted cost access, so they don't need to pass the flag explicitly.
+function formatVariante(row: any, includeCost = true) {
   return {
     id: row.id,
     inventarioId: row.inventario_id,
@@ -22,7 +24,7 @@ function formatVariante(row: any) {
     stock: row.stock,
     stockReservado: row.stock_reservado,
     stockDisponible: Math.max(0, (row.stock ?? 0) - (row.stock_reservado ?? 0)),
-    precioCompra: row.precio_compra !== null && row.precio_compra !== undefined
+    precioCompra: includeCost && row.precio_compra !== null && row.precio_compra !== undefined
       ? Number(row.precio_compra)
       : null,
     precioVenta: row.precio_venta !== null && row.precio_venta !== undefined
@@ -55,7 +57,7 @@ export async function GET(
   { params }: { params: Promise<{ varianteId: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     const { varianteId } = await params
@@ -73,7 +75,11 @@ export async function GET(
       return NextResponse.json({ error: "Variante no encontrada" }, { status: 404 })
     }
 
-    return NextResponse.json(formatVariante(data))
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+    return NextResponse.json(formatVariante(data, canViewCost))
   } catch (err) {
     console.error("Error fetching variante:", err)
     return NextResponse.json({ error: "Error al obtener variante" }, { status: 500 })
