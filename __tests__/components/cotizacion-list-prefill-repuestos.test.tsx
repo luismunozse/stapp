@@ -18,11 +18,16 @@ vi.mock("@/hooks/use-subscription", () => ({
   useHasFeature: () => ({ hasFeature: true, loading: false }),
 }))
 
+  // El componente tambien consume el vocabulario configurable de la org
+  // (useTerminologia). Un mock parcial de este modulo hace que el render
+  // explote con "No export is defined on the mock", asi que la superficie
+  // mockeada tiene que seguir a la que usa el componente.
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({
     formatPrice: (n: number) => `$${n}`,
     formatDate: (d: string) => String(d),
   }),
+  useTerminologia: () => (key: string) => key,
 }))
 
 /** Repuesto tal como lo ve un rol sin acceso a inventario: el costo viene en
