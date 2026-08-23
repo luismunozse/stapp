@@ -66,12 +66,39 @@ describe("GET /api/org/features", () => {
     expect(body.vendedoresAdministranInventario).toBeUndefined()
   })
 
-  it("tampoco la inventa cuando la fila de la organización no aparece", async () => {
+  it("tampoco la inventa cuando la respuesta llega vacía sin explicar por qué", async () => {
     mockSupabaseFrom({ organizations: createChainMock(null, null) })
 
     const { GET } = await import("@/app/api/org/features/route")
     const { status } = await parseResponse(await GET())
 
     expect(status).toBe(503)
+  })
+
+  /**
+   * La otra cara: "no hay fila" SÍ es una respuesta.
+   *
+   * `.single()` devuelve PGRST116 con data en null cuando no matchea ninguna
+   * fila, y meter eso en la misma bolsa que un error de transporte lo convierte
+   * en un 503 permanente: el VENDEDOR queda clavado en "indeterminado" —UI de
+   * inventario completa más un aviso cuyo reintento no puede tener éxito
+   * nunca— y el navbar esconde los módulos opcionales sin forma de recuperarse.
+   * Antes eso contestaba 200 con los flags apagados, que es la respuesta
+   * correcta y además fail-closed.
+   */
+  it("contesta que no hay módulos cuando la organización no tiene fila", async () => {
+    mockSupabaseFrom({
+      organizations: createChainMock(null, {
+        code: "PGRST116",
+        message: "JSON object requested, multiple (or no) rows returned",
+      }),
+    })
+
+    const { GET } = await import("@/app/api/org/features/route")
+    const { status, body } = await parseResponse(await GET())
+
+    expect(status).toBe(200)
+    expect(body.vendedoresAdministranInventario).toBe(false)
+    expect(body.moduloAgenda).toBe(false)
   })
 })

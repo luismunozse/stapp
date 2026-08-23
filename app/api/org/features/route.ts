@@ -20,7 +20,16 @@ export async function GET() {
     // cable la página de inventario saca al vendedor de la pantalla con lo que
     // tenga escrito en el formulario. Un 503 lo dice como lo que es: el navbar
     // ya trata !r.ok como "me quedo con lo que tenía".
-    if (readError || !data) {
+    //
+    // Pero "no hay fila" SÍ es una respuesta, y es la que hay que dar. `.single()`
+    // devuelve PGRST116 cuando no matchea nada; meterlo en la misma bolsa que un
+    // error de transporte lo vuelve un 503 permanente, y ahí el vendedor queda
+    // clavado en "no se pudo verificar" con un reintento que no puede tener
+    // éxito nunca, más el navbar escondiendo los módulos opcionales sin
+    // recuperación. Sin fila no hay módulos habilitados: eso es fail-closed y es
+    // lo que esta ruta contestaba antes.
+    const sinFila = readError?.code === "PGRST116"
+    if (!sinFila && (readError || !data)) {
       console.error("Error reading org features:", readError)
       return NextResponse.json(
         { error: "No se pudieron leer los módulos de la organización" },
