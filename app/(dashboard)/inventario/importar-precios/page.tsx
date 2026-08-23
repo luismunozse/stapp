@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { FileSpreadsheet, Upload, Loader2, Check, X, AlertTriangle } from "lucide-react"
@@ -18,6 +18,9 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
+import { DraftRestoredNotice } from "@/components/ui/draft-restored-notice"
+import { useFormDraft } from "@/hooks/use-form-draft"
+import { ignoreSelectEcho } from "@/lib/radix-select-echo"
 
 type Cell = string | number | null
 
@@ -55,6 +58,66 @@ const NONE_VALUE = "__none__"
 
 type Step = "upload" | "sheet" | "mapping" | "preview"
 
+interface ColumnMapping {
+  codigo?: number
+  nombre?: number
+  precioCompra?: number
+  precioVenta?: number
+}
+
+/**
+ * Lo unico de este asistente que llega a localStorage: las DECISIONES, nunca la
+ * planilla.
+ *
+ * La planilla llega como `File` y ademas se guarda en base64 para mandarla al
+ * backend en cada paso. Ninguna de las dos puede persistirse: un `File` se
+ * serializa a `{}`, y el base64 de un xlsx de hasta 6MB no entra en una cuota de
+ * ~5MB que ademas comparte con todos los otros borradores del panel -- el
+ * `setItem` empieza a tirar QuotaExceededError y la persistencia deja de
+ * funcionar en TODO el panel, en silencio.
+ *
+ * El reparto es el correcto igual: volver a elegir el archivo son dos clicks,
+ * volver a mapear las columnas de una lista de proveedor es la parte tediosa.
+ * Por eso el borrador restaura el asistente en el paso 1 con las decisiones ya
+ * tomadas, y el aviso dice que falta el archivo (ver el `detail` del aviso: un
+ * "se restauro un borrador" a secas seria una promesa que este asistente no
+ * puede cumplir).
+ *
+ * Tampoco van la vista previa ni las filas excluidas -- ver `teniaExclusiones`.
+ */
+interface ImportarPreciosDraft {
+  selectedSheet: string
+  headerRow: number
+  mapping: ColumnMapping
+  onlyIncrease: boolean
+  motivo: string
+  /**
+   * Habia filas desmarcadas a mano en la vista previa anterior.
+   *
+   * La lista en si (`excludedIds`) es un `Set`, que se serializa a `{}`: no
+   * sobrevive. Y restaurarla a medias es peor que no restaurarla -- volver a
+   * incluir en un cambio masivo de precios filas que alguien saco a proposito
+   * es exactamente el error que el paso de revision existe para evitar. Asi que
+   * no se restaura ninguna, y esta marca es lo que le permite al aviso decirlo
+   * en vez de dejar que el operador lo descubra al aplicar.
+   */
+  teniaExclusiones: boolean
+}
+
+/** True si el mapeo guardado todavia significa algo en la planilla que se acaba
+ *  de subir. Un indice que apunta a una columna que ya no existe no es un mapeo
+ *  a medias: es un mapeo que le manda basura a la API. */
+function mapeoEntraEnLaPlanilla(mapping: ColumnMapping, columnas: number): boolean {
+  const indices = [
+    mapping.codigo,
+    mapping.nombre,
+    mapping.precioCompra,
+    mapping.precioVenta,
+  ].filter((i): i is number => typeof i === "number")
+  if (indices.length === 0) return false
+  return indices.every((i) => Number.isInteger(i) && i >= 0 && i < columnas)
+}
+
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -90,12 +153,7 @@ export default function ImportarPreciosPage() {
   const [sheets, setSheets] = useState<SheetPreview[]>([])
   const [selectedSheet, setSelectedSheet] = useState<string>("")
   const [headerRow, setHeaderRow] = useState<number>(0)
-  const [mapping, setMapping] = useState<{
-    codigo?: number
-    nombre?: number
-    precioCompra?: number
-    precioVenta?: number
-  }>({})
+  const [mapping, setMapping] = useState<ColumnMapping>({})
   const [onlyIncrease, setOnlyIncrease] = useState(false)
   const [motivo, setMotivo] = useState("")
   const [preview, setPreview] = useState<PreviewResponse | null>(null)
@@ -112,6 +170,65 @@ export default function ImportarPreciosPage() {
     return sheetData.rows[headerRow] || []
   }, [sheetData, headerRow])
 
+  // --- Borrador local (useFormDraft) ----------------------------------------
+  //
+  // Ver ImportarPreciosDraft para QUE se guarda y por que la planilla no.
+  /** Raiz del gate de interaccion del hook. Esta pantalla no tenia ningun
+   *  <form>, y el gate solo cuenta controles que pertenecen a uno (o a una capa
+   *  portalada que un <form> haya abierto): sin el, elegir la hoja no marcaba
+   *  nada como sucio y el borrador no se grababa nunca.
+   *
+   *  La fila de encabezados se elige clickeando un <tr>, que no es un control de
+   *  formulario y por lo tanto NO abre el gate por si solo. No hace falta que lo
+   *  haga: el paso siguiente es el boton "Continuar", que si lo abre, y a partir
+   *  de ahi el snapshot incluye la fila elegida. Un operador que elige la fila y
+   *  no hace nada mas no tiene todavia nada que perder. */
+  const formRef = useRef<HTMLFormElement>(null)
+  const [appliedDraft, setAppliedDraft] = useState<ImportarPreciosDraft | null>(null)
+  const draftAppliedRef = useRef<ImportarPreciosDraft | null>(null)
+  const { draft, ready: draftReady, clearDraft, notifyChange } = useFormDraft<ImportarPreciosDraft>({
+    feature: "importar-precios",
+    getValue: () => ({
+      selectedSheet,
+      headerRow,
+      mapping,
+      onlyIncrease,
+      motivo,
+      teniaExclusiones: excludedIds.size > 0,
+    }),
+    rootRef: formRef,
+    validate: (data) => {
+      const value = data as ImportarPreciosDraft
+      return (
+        !!value &&
+        typeof value === "object" &&
+        typeof value.selectedSheet === "string" &&
+        typeof value.headerRow === "number" &&
+        !!value.mapping &&
+        typeof value.mapping === "object" &&
+        typeof value.motivo === "string"
+      )
+    },
+  })
+
+  /** El aviso no puede sobrevivir al borrador que anuncia. */
+  const draftNoticeVisible = draft !== null && appliedDraft === draft
+
+  useEffect(() => {
+    if (!draftReady || !draft || draftAppliedRef.current === draft) return
+    draftAppliedRef.current = draft
+    // El paso NO se restaura: sin la planilla no hay hojas que mostrar ni
+    // preview que revisar, asi que cualquier paso posterior al 1 seria una
+    // pantalla vacia. Las decisiones quedan cargadas esperando el archivo.
+    setSelectedSheet(draft.selectedSheet)
+    setHeaderRow(Number.isInteger(draft.headerRow) ? draft.headerRow : 0)
+    setMapping(draft.mapping)
+    setOnlyIncrease(draft.onlyIncrease === true)
+    setMotivo(draft.motivo)
+    setAppliedDraft(draft)
+    notifyChange()
+  }, [draftReady, draft, notifyChange])
+
   const reset = () => {
     setFileName("")
     setFileBase64("")
@@ -124,6 +241,13 @@ export default function ImportarPreciosPage() {
     setPreview(null)
     setExcludedIds(new Set())
     setStep("upload")
+  }
+
+  const discardDraft = () => {
+    // El aviso se apaga solo: `clearDraft` deja `draft` en null en este mismo
+    // commit y de ahi se deriva (ver draftNoticeVisible).
+    clearDraft()
+    reset()
   }
 
   const handleFile = async (file: File) => {
@@ -143,8 +267,20 @@ export default function ImportarPreciosPage() {
       setFileName(file.name)
       setFileBase64(base64)
       setSheets(data.sheets)
-      setSelectedSheet(data.sheets[0]?.name || "")
-      setHeaderRow(0)
+      // La hoja y la fila de encabezados que venian del borrador se respetan si
+      // la planilla nueva las tiene. Pisarlas con la primera hoja (que es lo
+      // correcto para una subida limpia) le haria rehacer al operador las dos
+      // decisiones que el borrador acaba de devolverle.
+      const hojas: SheetPreview[] = data.sheets || []
+      const hojaGuardada = hojas.find((s) => s.name === selectedSheet)
+      if (hojaGuardada) {
+        // Solo cuando la fila sigue existiendo en esa hoja: una planilla mas
+        // corta dejaria el encabezado apuntando a la nada.
+        if (headerRow >= hojaGuardada.rows.length) setHeaderRow(0)
+      } else {
+        setSelectedSheet(hojas[0]?.name || "")
+        setHeaderRow(0)
+      }
       setStep("sheet")
     } catch (e) {
       console.error(e)
@@ -175,12 +311,21 @@ export default function ImportarPreciosPage() {
       }
       return undefined
     }
-    setMapping({
-      codigo: detect([/^c[oó]digo$/i, /^codigo$/i, /^cod\.?$/i, /^sku$/i]),
-      nombre: detect([/^nombre$/i, /descrip/i, /producto/i, /art[ií]culo/i]),
-      precioCompra: detect([/costo/i, /compra/i, /precio.?compra/i]),
-      precioVenta: detect([/venta/i, /^precio$/i, /^pvp$/i, /lista/i]),
-    })
+    // El auto-detect es una PRIMERA propuesta, no una correccion: si el
+    // borrador trajo un mapeo que todavia entra en esta planilla, ese es el que
+    // el operador ya reviso a mano y el que hay que respetar. Correrlo igual
+    // volvia a mapear columnas que alguien habia desmapeado a proposito, que es
+    // justo el trabajo que el borrador existe para no repetir.
+    setMapping((actual) =>
+      mapeoEntraEnLaPlanilla(actual, hs.length)
+        ? actual
+        : {
+            codigo: detect([/^c[oó]digo$/i, /^codigo$/i, /^cod\.?$/i, /^sku$/i]),
+            nombre: detect([/^nombre$/i, /descrip/i, /producto/i, /art[ií]culo/i]),
+            precioCompra: detect([/costo/i, /compra/i, /precio.?compra/i]),
+            precioVenta: detect([/venta/i, /^precio$/i, /^pvp$/i, /lista/i]),
+          }
+    )
     setStep("mapping")
   }
 
@@ -256,6 +401,9 @@ export default function ImportarPreciosPage() {
         toast.error(data.error || "Error al aplicar cambios")
         return
       }
+      // Solo aca: los `return` de arriba (error de la API, nada seleccionado)
+      // dejan el borrador donde esta.
+      clearDraft()
       toast.success(`${data.updated} precio${data.updated === 1 ? "" : "s"} actualizado${data.updated === 1 ? "" : "s"}`)
       router.push("/inventario")
     } catch (e) {
@@ -284,6 +432,30 @@ export default function ImportarPreciosPage() {
       icon={FileSpreadsheet}
       backHref="/inventario"
     >
+      {/*
+        El <form> no envia nada -- cada paso avanza con su propio boton y
+        `onSubmit` corta un Enter accidental antes de que el navegador navegue.
+        Existe porque el gate de interaccion de useFormDraft solo cuenta
+        controles que pertenecen a un <form> (o a una capa portalada que un
+        <form> haya abierto, como el listado de un Select): sin esto, elegir la
+        hoja o la fila de encabezados no marcaba nada como sucio.
+      */}
+      <form ref={formRef} onSubmit={(e) => e.preventDefault()} className="contents">
+      {draftNoticeVisible && (
+        <DraftRestoredNotice
+          onDiscard={discardDraft}
+          detail={
+            <>
+              El archivo no se guarda en el borrador: volvé a subirlo. Se conservan la hoja,
+              la fila de encabezados, el mapeo de columnas y las opciones.
+              {appliedDraft?.teniaExclusiones
+                ? " Las filas que desmarcaste en la vista previa anterior no vuelven: revisalas de nuevo antes de aplicar."
+                : ""}
+            </>
+          }
+        />
+      )}
+
       <div className="flex gap-2 text-xs">
         {(["upload", "sheet", "mapping", "preview"] as Step[]).map((s, idx) => {
           const active = s === step
@@ -366,7 +538,13 @@ export default function ImportarPreciosPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label>Hoja</Label>
-                <Select value={selectedSheet} onValueChange={(v) => { setSelectedSheet(v); setHeaderRow(0) }}>
+                <Select
+                  value={selectedSheet}
+                  onValueChange={ignoreSelectEcho((v) => {
+                    setSelectedSheet(v)
+                    setHeaderRow(0)
+                  })}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -418,10 +596,10 @@ export default function ImportarPreciosPage() {
             </div>
 
             <div className="flex justify-between">
-              <Button variant="outline" onClick={reset}>
+              <Button type="button" variant="outline" onClick={reset}>
                 Cambiar archivo
               </Button>
-              <Button onClick={goToMapping}>Continuar</Button>
+              <Button type="button" onClick={goToMapping}>Continuar</Button>
             </div>
           </CardContent>
         </Card>
@@ -442,9 +620,9 @@ export default function ImportarPreciosPage() {
                 <Label>Código <span className="text-red-500">*</span></Label>
                 <Select
                   value={mapping.codigo != null ? String(mapping.codigo) : NONE_VALUE}
-                  onValueChange={(v) =>
+                  onValueChange={ignoreSelectEcho((v) =>
                     setMapping((m) => ({ ...m, codigo: v === NONE_VALUE ? undefined : Number(v) }))
-                  }
+                  )}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Elegí columna..." />
@@ -464,9 +642,9 @@ export default function ImportarPreciosPage() {
                 <Label>Nombre (informativo)</Label>
                 <Select
                   value={mapping.nombre != null ? String(mapping.nombre) : NONE_VALUE}
-                  onValueChange={(v) =>
+                  onValueChange={ignoreSelectEcho((v) =>
                     setMapping((m) => ({ ...m, nombre: v === NONE_VALUE ? undefined : Number(v) }))
-                  }
+                  )}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Elegí columna..." />
@@ -486,12 +664,12 @@ export default function ImportarPreciosPage() {
                 <Label>Precio compra / costo</Label>
                 <Select
                   value={mapping.precioCompra != null ? String(mapping.precioCompra) : NONE_VALUE}
-                  onValueChange={(v) =>
+                  onValueChange={ignoreSelectEcho((v) =>
                     setMapping((m) => ({
                       ...m,
                       precioCompra: v === NONE_VALUE ? undefined : Number(v),
                     }))
-                  }
+                  )}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Elegí columna..." />
@@ -511,12 +689,12 @@ export default function ImportarPreciosPage() {
                 <Label>Precio venta</Label>
                 <Select
                   value={mapping.precioVenta != null ? String(mapping.precioVenta) : NONE_VALUE}
-                  onValueChange={(v) =>
+                  onValueChange={ignoreSelectEcho((v) =>
                     setMapping((m) => ({
                       ...m,
                       precioVenta: v === NONE_VALUE ? undefined : Number(v),
                     }))
-                  }
+                  )}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Elegí columna..." />
@@ -541,10 +719,10 @@ export default function ImportarPreciosPage() {
             </div>
 
             <div className="flex justify-between pt-2">
-              <Button variant="outline" onClick={() => setStep("sheet")}>
+              <Button type="button" variant="outline" onClick={() => setStep("sheet")}>
                 Atrás
               </Button>
-              <Button onClick={runPreview} disabled={loading}>
+              <Button type="button" onClick={runPreview} disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Ver cambios
               </Button>
@@ -728,10 +906,10 @@ export default function ImportarPreciosPage() {
                 />
               </div>
               <div className="flex justify-between">
-                <Button variant="outline" onClick={() => setStep("mapping")}>
+                <Button type="button" variant="outline" onClick={() => setStep("mapping")}>
                   Atrás
                 </Button>
-                <Button onClick={applyChanges} disabled={loading || cambiosCount === 0}>
+                <Button type="button" onClick={applyChanges} disabled={loading || cambiosCount === 0}>
                   {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
                   Aplicar {cambiosCount} cambio{cambiosCount === 1 ? "" : "s"}
                 </Button>
@@ -740,6 +918,7 @@ export default function ImportarPreciosPage() {
           </Card>
         </div>
       )}
+      </form>
     </PageShell>
   )
 }
