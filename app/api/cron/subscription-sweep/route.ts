@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { requireCronAuth } from "@/lib/cron-auth"
-import { esAdhesionSinCobro } from "@/lib/subscriptions/sweep-rules"
+import { esAdhesionSinCobro, venceLaGracia } from "@/lib/subscriptions/sweep-rules"
 
 // Cron diario: barre subscriptions ACTIVE con current_period_end vencido.
 //   - MANUAL  → downgrade plan a Free (admin no renovó → asumimos churn)
@@ -19,6 +19,7 @@ type Sub = {
   plan_id: string
   payment_provider: string | null
   current_period_end: string | null
+  mercadopago_preapproval_id: string | null
   organizations: { slug: string } | { slug: string }[] | null
 }
 
@@ -64,6 +65,7 @@ export async function GET(request: Request) {
       .from("subscriptions")
       .select(`
         id, organization_id, plan_id, payment_provider, current_period_end,
+        mercadopago_preapproval_id,
         organizations!inner ( slug ),
         plans!inner ( tipo )
       `)
@@ -123,6 +125,17 @@ export async function GET(request: Request) {
         sub.payment_provider === "MERCADOPAGO" ||
         sub.payment_provider === "REBILL"
       ) {
+        if (
+          !venceLaGracia({
+            tienePreapproval: !!sub.mercadopago_preapproval_id,
+            currentPeriodEnd: sub.current_period_end,
+            ahora: new Date(nowIso),
+          })
+        ) {
+          results.skipped++
+          continue
+        }
+
         const { error: upErr } = await supabaseAdmin
           .from("subscriptions")
           .update({ status: "PAST_DUE", updated_at: nowIso })

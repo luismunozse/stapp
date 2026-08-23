@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest"
-import { esAdhesionSinCobro, DIAS_GRACIA_PREAPPROVAL } from "@/lib/subscriptions/sweep-rules"
+import {
+  esAdhesionSinCobro,
+  venceLaGracia,
+  DIAS_GRACIA_PREAPPROVAL,
+} from "@/lib/subscriptions/sweep-rules"
 
 const AHORA = new Date("2026-08-22T12:00:00Z")
 
@@ -60,5 +64,31 @@ describe("esAdhesionSinCobro", () => {
 
   it("la ventana es la misma que la de la gracia", () => {
     expect(DIAS_GRACIA_PREAPPROVAL).toBe(12)
+  })
+})
+
+describe("venceLaGracia", () => {
+  it("no bloquea mientras MercadoPago sigue reintentando", () => {
+    expect(
+      venceLaGracia({ tienePreapproval: true, currentPeriodEnd: hace(3), ahora: AHORA })
+    ).toBe(false)
+  })
+
+  it("bloquea cuando los reintentos ya se agotaron", () => {
+    expect(
+      venceLaGracia({ tienePreapproval: true, currentPeriodEnd: hace(15), ahora: AHORA })
+    ).toBe(true)
+  })
+
+  it("sin debito automatico no hay gracia: la fecha vencida significa que no pago", () => {
+    expect(
+      venceLaGracia({ tienePreapproval: false, currentPeriodEnd: hace(1), ahora: AHORA })
+    ).toBe(true)
+  })
+
+  it("una suscripcion sin fecha no la decide esta regla", () => {
+    expect(
+      venceLaGracia({ tienePreapproval: true, currentPeriodEnd: null, ahora: AHORA })
+    ).toBe(false)
   })
 })
