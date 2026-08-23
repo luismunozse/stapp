@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, denyIfNoInventarioAccess } from "@/lib/auth-utils"
 import { parseCSV, parseExcel } from "@/lib/csv-parser"
 import { validateClienteRow, validateInventarioRow, validateCSVHeaders, normalizeHeaders, normalizeRow } from "@/lib/csv-validator"
 import { hasPlanFeature } from "@/lib/subscriptions"
@@ -16,7 +16,7 @@ const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.s
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     const hasImport = await hasPlanFeature(organizationId!, "import_export")
@@ -29,6 +29,16 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const data = previewSchema.parse(body)
+
+    // Mismo permiso que el execute que viene después. El preview no revela nada
+    // de la organización —solo parsea el archivo que subió quien llama—, así que
+    // esto no cierra una filtración: corta el flujo en el primer paso en vez de
+    // dejar que alguien suba y mapee un archivo entero para comerse un 403 al
+    // final.
+    if (data.entityType === 'INVENTARIO') {
+      const denied = await denyIfNoInventarioAccess(role, organizationId!)
+      if (denied) return denied
+    }
 
     // Detect by filename + mime. Excel 97-2003 (.xls) no soportado por ExcelJS.
     const lowerName = (data.filename ?? '').toLowerCase()

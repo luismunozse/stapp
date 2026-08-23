@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, denyIfNoInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { parseCSV, parseExcel } from "@/lib/csv-parser"
 import { validateClienteRow, validateInventarioRow, validateCSVHeaders, normalizeHeaders, normalizeRow, resolveTipoDispositivo, generateCodigo } from "@/lib/csv-validator"
@@ -68,7 +68,7 @@ async function batchInsert(
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId } = await requireAuth()
+    const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
     const hasImport = await hasPlanFeature(organizationId!, "import_export")
@@ -81,6 +81,16 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const data = executeSchema.parse(body)
+
+    // Importar inventario ES escribir inventario, así que pasa por el mismo
+    // permiso que el resto de /api/inventario. El chequeo va acá y no arriba de
+    // todo porque este handler también atiende CLIENTES, que es otro permiso; y
+    // va antes de parsear el archivo, para no hacer trabajo por alguien que no
+    // puede escribir.
+    if (data.entityType === 'INVENTARIO') {
+      const denied = await denyIfNoInventarioAccess(role, organizationId!)
+      if (denied) return denied
+    }
 
     // Detect by filename + mime. Excel 97-2003 (.xls) no soportado por ExcelJS.
     const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
