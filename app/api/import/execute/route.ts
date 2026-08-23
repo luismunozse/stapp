@@ -71,25 +71,29 @@ export async function POST(request: Request) {
     const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
+    const body = await request.json()
+    const data = executeSchema.parse(body)
+
+    // Importar inventario ES escribir inventario, así que pasa por el mismo
+    // permiso que el resto de /api/inventario.
+    //
+    // Va lo más arriba que el handler permite, que NO es arriba de todo: el
+    // discriminador (`entityType`) viaja en el body, así que hay que leerlo
+    // primero. Lo que sí queda por debajo es el chequeo de plan, y ese orden
+    // importa — al revés, a un vendedor que jamás va a poder importar
+    // inventario se le contestaba "necesitás el plan Profesional", y un admin
+    // persiguiendo ese mensaje puede pagar un upgrade que no cambia nada.
+    if (data.entityType === 'INVENTARIO') {
+      const denied = await denyIfNoInventarioAccess(role, organizationId!)
+      if (denied) return denied
+    }
+
     const hasImport = await hasPlanFeature(organizationId!, "import_export")
     if (!hasImport) {
       return NextResponse.json(
         { error: "Importación requiere el plan Profesional", code: "PREMIUM_REQUIRED" },
         { status: 403 }
       )
-    }
-
-    const body = await request.json()
-    const data = executeSchema.parse(body)
-
-    // Importar inventario ES escribir inventario, así que pasa por el mismo
-    // permiso que el resto de /api/inventario. El chequeo va acá y no arriba de
-    // todo porque este handler también atiende CLIENTES, que es otro permiso; y
-    // va antes de parsear el archivo, para no hacer trabajo por alguien que no
-    // puede escribir.
-    if (data.entityType === 'INVENTARIO') {
-      const denied = await denyIfNoInventarioAccess(role, organizationId!)
-      if (denied) return denied
     }
 
     // Detect by filename + mime. Excel 97-2003 (.xls) no soportado por ExcelJS.

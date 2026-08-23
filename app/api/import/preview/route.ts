@@ -19,25 +19,27 @@ export async function POST(request: Request) {
     const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
+    const body = await request.json()
+    const data = previewSchema.parse(body)
+
+    // Mismo permiso, y en el mismo orden, que el execute que viene después (ver
+    // la nota de allá sobre por qué el gate de entidad va arriba del de plan).
+    //
+    // El preview no revela nada de la organización —solo parsea el archivo que
+    // subió quien llama—, así que esto no cierra una filtración: corta el flujo
+    // en el primer paso en vez de dejar que alguien suba y mapee un archivo
+    // entero para comerse un 403 al final.
+    if (data.entityType === 'INVENTARIO') {
+      const denied = await denyIfNoInventarioAccess(role, organizationId!)
+      if (denied) return denied
+    }
+
     const hasImport = await hasPlanFeature(organizationId!, "import_export")
     if (!hasImport) {
       return NextResponse.json(
         { error: "Importación requiere el plan Profesional", code: "PREMIUM_REQUIRED" },
         { status: 403 }
       )
-    }
-
-    const body = await request.json()
-    const data = previewSchema.parse(body)
-
-    // Mismo permiso que el execute que viene después. El preview no revela nada
-    // de la organización —solo parsea el archivo que subió quien llama—, así que
-    // esto no cierra una filtración: corta el flujo en el primer paso en vez de
-    // dejar que alguien suba y mapee un archivo entero para comerse un 403 al
-    // final.
-    if (data.entityType === 'INVENTARIO') {
-      const denied = await denyIfNoInventarioAccess(role, organizationId!)
-      if (denied) return denied
     }
 
     // Detect by filename + mime. Excel 97-2003 (.xls) no soportado por ExcelJS.

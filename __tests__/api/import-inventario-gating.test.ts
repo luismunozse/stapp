@@ -31,6 +31,8 @@ vi.mock("@/lib/subscriptions", () => ({
   checkPlanLimit: vi.fn().mockResolvedValue({ allowed: true }),
 }))
 
+import { hasPlanFeature } from "@/lib/subscriptions"
+
 /** La org contesta el flag opt-in que habilita al VENDEDOR. */
 function orgConFlag(habilitado: boolean) {
   mockSupabaseFrom({
@@ -141,5 +143,78 @@ describe("POST /api/import/preview — permiso de inventario", () => {
     const { status } = await postPreview("CLIENTES")
 
     expect(status).toBe(400)
+  })
+})
+
+/**
+ * El chequeo de plan corría ANTES del de rol, así que a un vendedor que nunca
+ * va a poder importar inventario se le contestaba "necesitás el plan
+ * Profesional". Un admin persiguiendo ese mensaje puede pagar un upgrade que no
+ * cambia nada.
+ *
+ * El gate de entidad va primero. No puede ir más arriba todavía —el
+ * discriminador (`entityType`) viaja en el body, así que hay que leerlo— pero sí
+ * antes de la consulta de plan y de todo el parseo del archivo.
+ */
+describe("orden de los gates en /api/import", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // clearAllMocks limpia las llamadas, no las implementaciones: hay que
+    // reponer el default o el `false` de un test se filtra a los que siguen.
+    vi.mocked(hasPlanFeature).mockResolvedValue(true)
+  })
+
+  it("le dice al vendedor que no tiene permiso, no que le falta plan", async () => {
+    mockAuthSuccess({ role: "VENDEDOR" })
+    orgConFlag(false)
+    vi.mocked(hasPlanFeature).mockResolvedValue(false)
+
+    const { status, body } = await postExecute("INVENTARIO")
+
+    expect(status).toBe(403)
+    expect(body.error).toBe("Acceso denegado")
+    expect(body.code).toBeUndefined()
+  })
+
+  it("no gasta la consulta de plan por alguien que no puede escribir", async () => {
+    mockAuthSuccess({ role: "VENDEDOR" })
+    orgConFlag(false)
+
+    await postExecute("INVENTARIO")
+
+    expect(hasPlanFeature).not.toHaveBeenCalled()
+  })
+
+  it("sigue pidiendo el plan a quien sí tiene el permiso", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    orgConFlag(false)
+    vi.mocked(hasPlanFeature).mockResolvedValue(false)
+
+    const { status, body } = await postExecute("INVENTARIO")
+
+    expect(status).toBe(403)
+    expect(body.code).toBe("PREMIUM_REQUIRED")
+  })
+
+  it("no cambia nada para CLIENTES, que no pasa por el gate de entidad", async () => {
+    mockAuthSuccess({ role: "VENDEDOR" })
+    orgConFlag(false)
+    vi.mocked(hasPlanFeature).mockResolvedValue(false)
+
+    const { status, body } = await postExecute("CLIENTES")
+
+    expect(status).toBe(403)
+    expect(body.code).toBe("PREMIUM_REQUIRED")
+  })
+
+  it("mismo orden en el preview", async () => {
+    mockAuthSuccess({ role: "VENDEDOR" })
+    orgConFlag(false)
+    vi.mocked(hasPlanFeature).mockResolvedValue(false)
+
+    const { status, body } = await postPreview("INVENTARIO")
+
+    expect(status).toBe(403)
+    expect(body.error).toBe("Acceso denegado")
   })
 })
