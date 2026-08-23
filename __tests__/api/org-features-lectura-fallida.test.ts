@@ -101,4 +101,75 @@ describe("GET /api/org/features", () => {
     expect(body.vendedoresAdministranInventario).toBe(false)
     expect(body.moduloAgenda).toBe(false)
   })
+
+  /**
+   * Y la que este proyecto se garantiza a sí mismo: las migraciones se aplican a
+   * MANO y después del merge, así que siempre existe una ventana en la que el
+   * deploy va adelante de su migración. Ese desfasaje solía degradar —el módulo
+   * opcional quedaba oculto y la app andaba—; convertido en 503 clava a todo
+   * VENDEDOR en "no se pudo verificar", con un reintento que no puede tener
+   * éxito hasta que alguien corra la migración a mano, y al navbar sin módulos.
+   *
+   * Hoy ninguna columna de este select falta, así que esto no arregla un bug
+   * vivo: le saca el filo a la próxima columna que se agregue acá.
+   */
+  it("degrada cuando una columna del select todavía no existe en la base", async () => {
+    mockSupabaseFrom({
+      organizations: createChainMock(null, {
+        code: "42703",
+        message: 'column organizations.vendedores_administran_inventario does not exist',
+      }),
+    })
+
+    const { GET } = await import("@/app/api/org/features/route")
+    const { status, body } = await parseResponse(await GET())
+
+    expect(status).toBe(200)
+    expect(body.vendedoresAdministranInventario).toBe(false)
+    expect(body.moduloAgenda).toBe(false)
+  })
+
+  /**
+   * El borde filoso de degradar: NO todo lo que huele a "esquema" es una
+   * respuesta.
+   *
+   * PostgREST contesta PGRST205 ("Could not find the table 'public.x' in the
+   * schema cache") durante la ventana que sigue a CUALQUIER DDL — o sea,
+   * exactamente el flujo de migraciones a mano de este proyecto, el mismo
+   * escenario para el que se escribió la degradación de arriba. Servido como 200
+   * con los flags apagados, del otro lado del cable eso se lee como una
+   * denegación EXPLÍCITA: el vendedor sale al panel y se lleva puesto el
+   * formulario. Es la denegación fabricada que este PR existe para eliminar,
+   * entrando por la puerta que abrió el arreglo del desfasaje.
+   *
+   * Una tabla que no está no dice nada sobre los flags. Una columna que no está,
+   * sí.
+   */
+  it("no degrada cuando lo que falta es la TABLA, no la columna", async () => {
+    mockSupabaseFrom({
+      organizations: createChainMock(null, {
+        code: "PGRST205",
+        message: "Could not find the table 'public.organizations' in the schema cache",
+      }),
+    })
+
+    const { GET } = await import("@/app/api/org/features/route")
+    const { status, body } = await parseResponse(await GET())
+
+    expect(status).toBe(503)
+    expect(body.vendedoresAdministranInventario).toBeUndefined()
+  })
+
+  it("tampoco degrada por un error cuyo mensaje apenas menciona el esquema", async () => {
+    mockSupabaseFrom({
+      organizations: createChainMock(null, {
+        message: "relation \"organizations\" does not exist",
+      }),
+    })
+
+    const { GET } = await import("@/app/api/org/features/route")
+    const { status } = await parseResponse(await GET())
+
+    expect(status).toBe(503)
+  })
 })

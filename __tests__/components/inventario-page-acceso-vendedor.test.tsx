@@ -320,6 +320,30 @@ describe("InventarioPage — la importación masiva sigue al permiso", () => {
 
     expect(screen.getByTestId("lista")).toHaveAttribute("data-allow-import", "true")
   })
+
+  /**
+   * La polaridad importa. Escrito como `!esVendedor || permitido`, el permiso se
+   * abría con CUALQUIER rol falsy, no solo para el ADMIN: en cualquier ventana
+   * en la que la sesión falte un instante sobre una página ya montada
+   * (vencimiento, RefreshTokenExpired, error de auth) el vendedor deja de serlo
+   * a los ojos del render y el botón de importar reaparece — la pantalla
+   * ofreciendo, una render después, exactamente la acción que acababa de
+   * esconder. El servidor lo rechaza igual, pero un affordance fail-closed no se
+   * escribe al revés.
+   */
+  it("no reaparece si la sesión se cae un instante con la página montada", async () => {
+    fetchMock.mockImplementation(() => Promise.reject(new TypeError("Failed to fetch")))
+    const { rerender } = render(<InventarioPage />)
+
+    await waitFor(() => expect(screen.getByText(/no se pudo verificar/i)).toBeInTheDocument())
+    expect(screen.getByTestId("lista")).toHaveAttribute("data-allow-import", "false")
+
+    // La sesión desaparece un instante: sin rol, no hay nada que autorice.
+    sessionState = { data: null, status: "loading" }
+    rerender(<InventarioPage />)
+
+    expect(screen.getByTestId("lista")).toHaveAttribute("data-allow-import", "false")
+  })
 })
 
 /**
@@ -365,40 +389,52 @@ describe("InventarioPage — una denegación que llega con la pantalla montada",
     return await screen.findByRole("button", { name: /reintentar/i })
   }
 
-  it("pregunta antes de desmontar la pantalla", async () => {
-    confirmMock.mockResolvedValue(false)
+  it("no desmonta nada: avisa en la pantalla y espera", async () => {
     const reintentar = await pantallaTrasUnFalloDeRed()
 
     fetchMock.mockImplementation(() => responde(false))
     fireEvent.click(reintentar)
 
-    await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1))
-  })
-
-  it("deja al operador rescatar lo suyo si dice que no", async () => {
-    confirmMock.mockResolvedValue(false)
-    const reintentar = await pantallaTrasUnFalloDeRed()
-
-    fetchMock.mockImplementation(() => responde(false))
-    fireEvent.click(reintentar)
-
-    await waitFor(() => expect(confirmMock).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByText(/no vas a poder guardar/i)).toBeInTheDocument())
     expect(screen.getByTestId("lista")).toBeInTheDocument()
     expect(replaceMock).not.toHaveBeenCalled()
-    // Y se lo dice: ya no es "no pude verificar", es "no tenés permiso".
-    expect(screen.getByText(/no vas a poder guardar/i)).toBeInTheDocument()
     expect(screen.getByTestId("lista")).toHaveAttribute("data-allow-import", "false")
   })
 
-  it("sale al panel si el operador acepta", async () => {
-    confirmMock.mockResolvedValue(true)
+  /**
+   * La pregunta NO puede ser un modal.
+   *
+   * ModalProvider tiene un solo diálogo y un solo `confirmResolve`, así que un
+   * segundo confirm() pisa al primero y su promesa queda colgada para siempre.
+   * Con la página preguntando desde un callback de red —o sea en cualquier
+   * momento— alcanzaba con que el operador tuviera abierto el confirm de
+   * "Editar este" para que ese await no resolviera nunca y el click se perdiera
+   * en silencio.
+   *
+   * Un aviso en la pantalla no compite por el diálogo, no roba el foco y su
+   * default es quedarse, que es la dirección segura para el trabajo del
+   * operador.
+   */
+  it("no abre un modal para preguntarlo", async () => {
     const reintentar = await pantallaTrasUnFalloDeRed()
 
     fetchMock.mockImplementation(() => responde(false))
     fireEvent.click(reintentar)
 
+    await waitFor(() => expect(screen.getByText(/no vas a poder guardar/i)).toBeInTheDocument())
+    expect(confirmMock).not.toHaveBeenCalled()
+  })
+
+  it("sale al panel cuando el operador lo pide", async () => {
+    const reintentar = await pantallaTrasUnFalloDeRed()
+
+    fetchMock.mockImplementation(() => responde(false))
+    fireEvent.click(reintentar)
+
+    const salir = await screen.findByRole("button", { name: /salir al panel/i })
+    fireEvent.click(salir)
+
     await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/dashboard"))
-    expect(screen.queryByTestId("lista")).not.toBeInTheDocument()
   })
 
   it("no molesta con una confirmación en la primera carga, donde no hay nada que perder", async () => {
@@ -446,12 +482,32 @@ describe("InventarioPage — cuando el chequeo se cuelga", () => {
     vi.unstubAllGlobals()
   })
 
-  it("no deja la pantalla en blanco para siempre", async () => {
+  /**
+   * Mientras espera NO se queda en blanco: dice que está verificando.
+   *
+   * Esto es lo que desactiva la disyuntiva del presupuesto. Con la pantalla en
+   * blanco, cada segundo de espera era un segundo de nada, así que el timeout
+   * tenía que ser corto — y uno corto convierte una conexión lenta pero sana en
+   * una falsa alarma. Con el estado visible, esperar cuesta poco y el
+   * presupuesto puede ser generoso.
+   */
+  it("dice que está verificando en vez de mostrar una pantalla en blanco", async () => {
+    render(<InventarioPage />)
+
+    expect(screen.getByText(/verificando/i)).toBeInTheDocument()
+    expect(screen.queryByTestId("lista")).not.toBeInTheDocument()
+  })
+
+  it("no deja la pantalla colgada para siempre", async () => {
     vi.useFakeTimers()
     render(<InventarioPage />)
 
-    // Antes del vencimiento sigue siendo un chequeo en curso.
+    // A los 5s todavía espera: una conexión lenta pero sana no es una falla.
+    await act(async () => {
+      vi.advanceTimersByTime(5000)
+    })
     expect(screen.queryByTestId("lista")).not.toBeInTheDocument()
+    expect(screen.getByText(/verificando/i)).toBeInTheDocument()
 
     await act(async () => {
       vi.advanceTimersByTime(5000)
@@ -468,7 +524,7 @@ describe("InventarioPage — cuando el chequeo se cuelga", () => {
 
     unmount()
     await act(async () => {
-      vi.advanceTimersByTime(5000)
+      vi.advanceTimersByTime(10000)
     })
 
     // Nada que reportar: el abort de la limpieza no es un chequeo fallido.

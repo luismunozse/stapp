@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useCallback, ReactNode } from "react"
+import { createContext, useContext, useState, useCallback, useRef, ReactNode } from "react"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { AlertDialogCustom } from "@/components/ui/alert-dialog-custom"
 
@@ -40,7 +40,10 @@ export function ModalProvider({ children }: { children: ReactNode }) {
     title: "",
     description: "",
   })
-  const [confirmResolve, setConfirmResolve] = useState<((value: boolean) => void) | null>(null)
+  /** En una ref y no en estado: `confirm` tiene que poder leer al resolver
+   *  pendiente en el mismo tick en que llega el siguiente, y un estado ahí se
+   *  lee una render tarde. */
+  const confirmResolveRef = useRef<((value: boolean) => void) | null>(null)
   const [confirmLoading, setConfirmLoading] = useState(false)
 
   // Alert dialog state
@@ -51,25 +54,46 @@ export function ModalProvider({ children }: { children: ReactNode }) {
   })
   const [alertResolve, setAlertResolve] = useState<(() => void) | null>(null)
 
-  const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
-    return new Promise((resolve) => {
-      setConfirmOptions(options)
-      setConfirmResolve(() => resolve)
-      setConfirmOpen(true)
-    })
+  /** Contesta la pregunta pendiente, si hay, y la da por cerrada. Una sola vez:
+   *  la ref se limpia antes de resolver. */
+  const settleConfirm = useCallback((value: boolean) => {
+    const resolve = confirmResolveRef.current
+    confirmResolveRef.current = null
+    resolve?.(value)
   }, [])
 
+  const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
+    return new Promise((resolve) => {
+      // Este provider tiene UN diálogo y UN resolver, así que una pregunta nueva
+      // reemplaza a la anterior en el lugar. Lo que no puede hacer es
+      // abandonarla: sin esto, la promesa de la primera no se resolvía nunca y
+      // el `await` de quien preguntó quedaba colgado para siempre —en silencio,
+      // sin error y sin nada en pantalla—. Pasa cada vez que un confirm sale de
+      // un callback asíncrono y cae arriba de un diálogo ya abierto.
+      //
+      // Se contesta `false`, que es exactamente lo que ya devuelven ESC y el
+      // click en el overlay: desde el punto de vista de quien preguntó, su
+      // diálogo desapareció de la pantalla sin que nadie lo aceptara. Encolar
+      // sería más fiel, pero le apila diálogos a un operador que ya perdió el
+      // contexto de la primera pregunta.
+      settleConfirm(false)
+      confirmResolveRef.current = resolve
+      setConfirmOptions(options)
+      setConfirmOpen(true)
+    })
+  }, [settleConfirm])
+
   const handleConfirm = useCallback(() => {
-    confirmResolve?.(true)
+    settleConfirm(true)
     setConfirmOpen(false)
     setConfirmLoading(false)
-  }, [confirmResolve])
+  }, [settleConfirm])
 
   const handleConfirmCancel = useCallback(() => {
-    confirmResolve?.(false)
+    settleConfirm(false)
     setConfirmOpen(false)
     setConfirmLoading(false)
-  }, [confirmResolve])
+  }, [settleConfirm])
 
   const alert = useCallback((options: AlertOptions): Promise<void> => {
     return new Promise((resolve) => {

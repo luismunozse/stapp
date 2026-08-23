@@ -6,9 +6,8 @@ import { useRouter } from "next/navigation"
 import { InventarioList } from "@/components/inventario/inventario-list"
 import { InventarioAnalytics } from "@/components/inventario/inventario-analytics"
 import { Button } from "@/components/ui/button"
-import { BarChart3, AlertTriangle, RefreshCw, LogOut } from "lucide-react"
+import { BarChart3, AlertTriangle, RefreshCw, LogOut, Loader2 } from "lucide-react"
 import { PageShell } from "@/components/ui/page-shell"
-import { useModal } from "@/contexts/modal-context"
 
 /**
  * Cuánto se espera al chequeo antes de darlo por no contestado.
@@ -17,12 +16,19 @@ import { useModal } from "@/contexts/modal-context"
  * de falla más común de una tablet de mostrador no es un fetch que rechaza sino
  * uno que NO rechaza: public/sw.js rutea /api/org/features por
  * networkOnlyWithError, cuyo propio comentario lo dice — un enlace medio muerto
- * "no rechaza el fetch: lo cuelga decenas de segundos". Mientras tanto el
- * veredicto queda en null y la página devuelve null: pantalla en blanco, sin
- * spinner y sin reintento, justamente en el caso que el camino "indeterminado"
- * existe para cubrir.
+ * "no rechaza el fetch: lo cuelga decenas de segundos".
+ *
+ * Diez segundos, y no los cinco de la primera versión, porque el presupuesto
+ * dejó de competir contra una pantalla en blanco. Mientras el chequeo está en
+ * curso ahora se ve un estado de "verificando" (ver más abajo): antes no se veía
+ * NADA, así que cada segundo de espera era un segundo de nada y el timeout tenía
+ * que ser corto — y uno corto convierte un arranque en frío sobre una conexión
+ * lenta pero sana en una falsa alarma, con aviso ámbar y sin el botón de
+ * importar, para alguien que sí tenía el permiso. Con la espera visible, errar
+ * por lento cuesta poco y errar por apurado cuesta una falsa alarma: conviene
+ * esperar.
  */
-const TIEMPO_MAXIMO_CHEQUEO_MS = 5000
+const TIEMPO_MAXIMO_CHEQUEO_MS = 10000
 
 /** Qué contestó el chequeo de permiso de inventario. */
 type ResultadoAcceso =
@@ -61,7 +67,6 @@ export default function InventarioPage() {
   const [showAnalytics, setShowAnalytics] = useState(false)
   const { data: session, status } = useSession()
   const router = useRouter()
-  const { confirm } = useModal()
   const [veredicto, setVeredicto] = useState<VeredictoAcceso | null>(null)
   const [reintento, setReintento] = useState(0)
   const [sesionConocida, setSesionConocida] = useState(false)
@@ -115,23 +120,21 @@ export default function InventarioPage() {
         }
         // Denegación explícita. Salir de acá desmonta la lista y todo lo que
         // tenga adentro, así que si la pantalla ya estuvo arriba para este
-        // operador —o sea, si pudo haber empezado a cargar algo— se pregunta
-        // primero. Quedarse es seguro: todas las escrituras de inventario están
-        // gateadas en el servidor, así que no puede guardar nada; solo copiar lo
-        // suyo antes de irse.
+        // operador —o sea, si pudo haber empezado a cargar algo— no se sale
+        // solo: se avisa y se espera a que él decida. Quedarse es seguro, todas
+        // las escrituras de inventario están gateadas en el servidor.
+        //
+        // El aviso va EN LA PANTALLA y no en un modal, por dos razones. La
+        // primera es que ModalProvider tiene un solo diálogo y un solo
+        // `confirmResolve`: preguntar desde un callback de red —o sea en
+        // cualquier momento— podía pisar el confirm que el operador ya tenía
+        // abierto ("Editar este") y dejar ese await colgado para siempre. La
+        // segunda es el default: el de un modal es responder, y responder de
+        // apuro acá borra el trabajo; el de un aviso es no hacer nada, que es la
+        // dirección segura.
         if (contenidoMostradoPara.current === userId) {
-          const salir = await confirm({
-            title: "No tenés permiso para administrar inventario",
-            description:
-              "Tu organización no habilitó esta pantalla para tu usuario. Si salís ahora vas a perder lo que tengas sin guardar acá. Podés quedarte para copiarlo, pero el sistema no va a aceptar los cambios.",
-            confirmText: "Salir al panel",
-            cancelText: "Quedarme y copiar",
-            variant: "danger",
-          })
-          if (!salir) {
-            emitir("denegado-se-queda")
-            return
-          }
+          emitir("denegado-se-queda")
+          return
         }
         emitir("denegado")
         router.replace("/dashboard")
@@ -157,7 +160,7 @@ export default function InventarioPage() {
       clearTimeout(timer)
       controller.abort()
     }
-  }, [userId, role, reintento, router, confirm])
+  }, [userId, role, reintento, router])
 
   const esVendedor = role === "VENDEDOR"
   // Un veredicto sobre otro usuario no dice nada sobre este: cuenta como "sin
@@ -168,11 +171,12 @@ export default function InventarioPage() {
   // status en "loading" un instante, y desmontar acá tiraba abajo todo el
   // subárbol: se perdía el modal de importación con el archivo ya elegido.
   const esperandoSesion = status === "loading" && !sesionConocida
-  // Mientras el chequeo de ESTE usuario está en curso, o ya se resolvió que no
-  // hay acceso y el operador aceptó salir. Un chequeo que no se pudo hacer, o
-  // una denegación que el operador prefirió postergar, dejan la página en pie.
-  const chequeoSinResolver = esVendedor && (resultado === null || resultado === "denegado")
-  const mostrandoContenido = !esperandoSesion && !chequeoSinResolver
+  // El chequeo de ESTE usuario está en curso. Un chequeo que no se pudo hacer, o
+  // una denegación que el operador todavía no aceptó, dejan la página en pie.
+  const verificando = esVendedor && resultado === null
+  // Denegado y aceptado: la navegación al panel está en camino.
+  const saliendo = esVendedor && resultado === "denegado"
+  const mostrandoContenido = !esperandoSesion && !verificando && !saliendo
 
   useEffect(() => {
     if (mostrandoContenido) contenidoMostradoPara.current = userId
@@ -181,9 +185,33 @@ export default function InventarioPage() {
   // La lista ofrece importación masiva, que crea items de inventario por
   // /api/import. El servidor ya la gatea con el mismo permiso; acá la pantalla
   // no ofrece una acción que todavía no puede justificar.
-  const puedeImportar = !esVendedor || resultado === "permitido"
+  //
+  // Se nombra a quién SÍ, en vez de negar al vendedor: escrito como
+  // `!esVendedor || permitido` esto se abría con cualquier rol falsy, así que
+  // una ventana en la que la sesión falta un instante sobre una página ya
+  // montada (vencimiento, RefreshTokenExpired) hacía reaparecer el botón que se
+  // acababa de esconder. Un affordance fail-closed se escribe por la afirmativa.
+  const puedeImportar = role === "ADMIN" || resultado === "permitido"
 
-  if (!mostrandoContenido) return null
+  if (esperandoSesion || saliendo) return null
+
+  // Esperar sin decir nada era el verdadero costo del chequeo: el operador veía
+  // una pantalla en blanco, sin explicación ni forma de salir, todo el tiempo que
+  // tardara la red. Decirlo es lo que permite además esperar más (ver
+  // TIEMPO_MAXIMO_CHEQUEO_MS).
+  if (verificando) {
+    return (
+      <PageShell
+        title="Inventario"
+        description="Gestiona el stock de repuestos, accesorios y productos"
+      >
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Verificando tu acceso al inventario…
+        </div>
+      </PageShell>
+    )
+  }
 
   return (
     <PageShell

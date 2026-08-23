@@ -5,6 +5,7 @@ import { parseCSV, parseExcel } from "@/lib/csv-parser"
 import { validateClienteRow, validateInventarioRow, validateCSVHeaders, normalizeHeaders, normalizeRow, resolveTipoDispositivo, generateCodigo } from "@/lib/csv-validator"
 import { uploadImportFile, base64ToBuffer } from "@/lib/storage"
 import { enforcePlanLimit } from "@/lib/plan-limits"
+import { excedeTechoDeImportacion, MAX_IMPORT_FILE_LABEL } from "@/lib/import-limits"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { z } from "zod"
 
@@ -70,6 +71,15 @@ export async function POST(request: Request) {
   try {
     const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
+
+    // Antes de `request.json()`, que es lo que materializa el base64 entero en
+    // memoria. Ver lib/import-limits.ts.
+    if (excedeTechoDeImportacion(request)) {
+      return NextResponse.json(
+        { error: `Archivo demasiado grande (máx ${MAX_IMPORT_FILE_LABEL})` },
+        { status: 413 },
+      )
+    }
 
     const body = await request.json()
     const data = executeSchema.parse(body)
