@@ -3,8 +3,13 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { ModalProvider } from "@/contexts/modal-context"
 import { CotizacionForm } from "@/components/cotizaciones/cotizacion-form"
 
+  // El componente tambien consume el vocabulario configurable de la org
+  // (useTerminologia). Un mock parcial de este modulo hace que el render
+  // explote con "No export is defined on the mock", asi que la superficie
+  // mockeada tiene que seguir a la que usa el componente.
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}` }),
+  useTerminologia: () => (key: string) => key,
 }))
 
 const initialDataConCosto = {
