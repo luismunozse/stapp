@@ -141,6 +141,7 @@ export type LifecycleEmailType =
   | "WIN_BACK_7"
   | "WIN_BACK_30"
   | "MILESTONE"
+  | "PREAPPROVAL_INVITE"
 
 // ============================================
 // TEMPLATES
@@ -447,6 +448,38 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
             </p>
 
             ${button(appUrl, "Seguir trabajando")}
+          `,
+        }),
+      }
+
+    case "PREAPPROVAL_INVITE":
+      return {
+        subject: "Ya no hace falta que te acuerdes de pagar STApp todos los meses",
+        html: baseTemplate({
+          preheader: `${data.nombre}, activá el débito automático y despreocupate de la renovación.`,
+          content: `
+            <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; text-align: center; margin: 0 0 16px 0;">
+              Dejá de acordarte de pagar STApp
+            </h1>
+            <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
+              Hola <strong>${data.nombre}</strong>, hoy tenés que entrar todos los meses a pagar
+              <strong>${data.organizacion}</strong>. Si te olvidás, el sistema se bloquea hasta que lo hagas.
+            </p>
+
+            <p class="text-body" style="color: #4b5563; font-size: 15px; text-align: center; margin: 0 0 24px 0;">
+              Activando el <strong>débito automático</strong> te lo cobramos solo, todos los meses,
+              sin que tengas que acordarte de nada.
+            </p>
+
+            ${tipCard("💳", "Medios que sirven", "Tarjeta de crédito, tarjeta de débito o dinero en cuenta de Mercado Pago.")}
+            ${tipCard("🚫", "La prepaga no sirve", "Mercado Pago no acepta tarjetas prepagas para débito automático. Si hoy pagás con una, vas a poder seguir pagando mes a mes como hasta ahora.")}
+            ${tipCard("🔓", "Cancelás cuando quieras", "Podés dar de baja el débito automático en cualquier momento desde la misma pantalla.")}
+
+            ${button(appUrl + "/configuracion/billing", "Activar débito automático")}
+
+            <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 24px 0 0 0;">
+              Si preferís seguir pagando mes a mes, no tenés que hacer nada.
+            </p>
           `,
         }),
       }
