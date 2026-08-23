@@ -1,4 +1,5 @@
 "use client"
+import { useTerminologia } from "@/contexts/currency-context"
 
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
@@ -17,8 +18,8 @@ interface FotoUploadProps {
   onClose: () => void
 }
 
-const tipoFotoOptions = [
-  { value: "INGRESO", label: "Ingreso del equipo" },
+const buildTipoFotoOptions = (term: (k: string) => string) => [
+  { value: "INGRESO", label: `Ingreso del ${term("equipo").toLowerCase()}` },
   { value: "DIAGNOSTICO", label: "Diagnóstico / Falla detectada" },
   { value: "COMPONENTE", label: "Componente / Repuesto" },
   { value: "REPARACION", label: "Durante reparación" },
@@ -26,6 +27,8 @@ const tipoFotoOptions = [
 ]
 
 export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
+  const term = useTerminologia()
+  const tipoFotoOptions = buildTipoFotoOptions(term)
   const { showError } = useModal()
   const [loading, setLoading] = useState(false)
   const [comprimiendo, setComprimiendo] = useState(false)

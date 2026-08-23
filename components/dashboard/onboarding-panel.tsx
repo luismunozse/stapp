@@ -1,4 +1,5 @@
 "use client"
+import { useTerminologia } from "@/contexts/currency-context"
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
@@ -25,6 +26,7 @@ interface OnboardingPanelProps {
 }
 
 export function OnboardingPanel({ hasConfig, hasTecnicos, hasOrdenes }: OnboardingPanelProps) {
+  const term = useTerminologia()
   const [dismissed, setDismissed] = useState(true)
 
   useEffect(() => {
@@ -45,7 +47,7 @@ export function OnboardingPanel({ hasConfig, hasTecnicos, hasOrdenes }: Onboardi
     },
     {
       key: "tecnico",
-      label: "Agregar tu primer técnico",
+      label: `Agregar tu primer ${term("tecnico").toLowerCase()}`,
       description: "Asigná órdenes a tu equipo",
       href: "/tecnicos",
       icon: Users,
@@ -54,7 +56,7 @@ export function OnboardingPanel({ hasConfig, hasTecnicos, hasOrdenes }: Onboardi
     {
       key: "orden",
       label: "Crear tu primera orden",
-      description: "Registrá un equipo en servicio",
+      description: `Registrá un ${term("equipo").toLowerCase()} en servicio`,
       href: "/ordenes?nueva=1",
       icon: ClipboardList,
       completed: hasOrdenes,

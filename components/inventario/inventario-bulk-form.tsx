@@ -24,6 +24,7 @@ import {
   AlertTriangle,
 } from "lucide-react"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
+import { useTerminologia } from "@/contexts/currency-context"
 
 interface ProveedorLite {
   id: string
@@ -114,6 +115,7 @@ interface InventarioBulkFormProps {
 }
 
 export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormProps) {
+  const term = useTerminologia()
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo({
     incluirTodos: true,
   })
@@ -300,7 +302,7 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
   const validate = () => {
     setGlobalError(null)
     if (!tipoDispositivo) {
-      setGlobalError("Seleccioná un tipo de dispositivo")
+      setGlobalError(`Seleccioná un tipo de ${term("equipo").toLowerCase()}`)
       return null
     }
     if (!categoria) {
@@ -433,7 +435,7 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
           {/* Defaults compartidos */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3 bg-muted/40 rounded-md">
             <div>
-              <Label className="text-xs">Tipo de dispositivo *</Label>
+              <Label className="text-xs">Tipo de {term("equipo").toLowerCase()} *</Label>
               <Select
                 value={tipoDispositivo}
                 onValueChange={(v) => {

@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select"
 import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2, BookOpen, Smartphone, Wrench } from "lucide-react"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
-import { useCurrency } from "@/contexts/currency-context"
+import { useCurrency, useTerminologia } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { ItemRow, calcItemNeto } from "./item-row"
 import { ClienteSelector } from "./cliente-selector"
@@ -120,6 +120,7 @@ export function CotizacionForm({
   const isPresupuesto = tipo === "PRESUPUESTO"
   const [loading, setLoading] = useState(false)
   const { formatPrice } = useCurrency()
+  const t = useTerminologia()
   const { showError, showWarning } = useModal()
   const [items, setItems] = useState<CotizacionItem[]>(
     initialData?.items || [{ descripcion: "", cantidad: 1, precioUnitario: 0, unidad: "Unidad", descuentoTipo: "porcentaje", descuentoValor: 0, tipoRepuesto: "NO_APLICA" }]
@@ -372,11 +373,11 @@ export function CotizacionForm({
 
     if (isPresupuesto) {
       if (!equipo.tipoDispositivoId) {
-        await showWarning("Seleccioná el tipo de dispositivo")
+        await showWarning(`Seleccioná el tipo de ${t("equipo").toLowerCase()}`)
         return
       }
       if (!equipo.marca?.trim() || !equipo.modelo?.trim()) {
-        await showWarning("Ingresá marca y modelo del equipo")
+        await showWarning(`Ingresá ${t("marca").toLowerCase()} y ${t("modelo").toLowerCase()} del ${t("equipo").toLowerCase()}`)
         return
       }
       if (!equipo.problemaReportado.trim()) {
@@ -572,11 +573,11 @@ export function CotizacionForm({
 
           {/* Datos del equipo + Checklist + Condiciones técnicas (solo PRESUPUESTO) */}
           {isPresupuesto && (
-            <CollapsibleSection title="Datos del equipo" icon={Smartphone} defaultOpen>
+            <CollapsibleSection title={`Datos del ${t("equipo").toLowerCase()}`} icon={Smartphone} defaultOpen>
               <div className="space-y-3 p-3 border rounded-lg bg-muted/20">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <Label>Tipo de dispositivo *</Label>
+                    <Label>Tipo de {t("equipo").toLowerCase()} *</Label>
                     <Select
                       value={equipo.tipoDispositivoId || ""}
                       onValueChange={(id) => {
@@ -658,7 +659,7 @@ export function CotizacionForm({
                   <Textarea
                     value={equipo.problemaReportado}
                     onChange={(e) => setEquipo((p) => ({ ...p, problemaReportado: e.target.value }))}
-                    placeholder="Descripción del problema del equipo..."
+                    placeholder={`Descripción del problema del ${t("equipo").toLowerCase()}...`}
                     rows={2}
                     disabled={loading}
                     className="mt-1"
@@ -682,7 +683,7 @@ export function CotizacionForm({
                   <Textarea
                     value={condiciones.diagnostico || ""}
                     onChange={(e) => setCondiciones((p) => ({ ...p, diagnostico: e.target.value || null }))}
-                    placeholder="Qué encontró el técnico al revisar el equipo (distinto del problema reportado por el cliente)"
+                    placeholder={`Qué encontró el ${t("tecnico").toLowerCase()} al revisar el ${t("equipo").toLowerCase()} (distinto del problema reportado por el cliente)`}
                     rows={2}
                     disabled={loading}
                     className="mt-1"

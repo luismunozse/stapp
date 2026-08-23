@@ -1,4 +1,5 @@
 "use client"
+import { useTerminologia } from "@/contexts/currency-context"
 
 import { useEffect, useState } from "react"
 import { Input } from "@/components/ui/input"
@@ -51,6 +52,7 @@ const categoriaLabels: Record<string, string> = {
  * envía junto con el payload de la cotización.
  */
 export function ChecklistPicker({ tipoDispositivoId, value, onChange, disabled }: Props) {
+  const term = useTerminologia()
   const [template, setTemplate] = useState<Template | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -74,7 +76,7 @@ export function ChecklistPicker({ tipoDispositivoId, value, onChange, disabled }
         if (cancelled) return
         if (!tpl) {
           setTemplate(null)
-          setError("No hay checklist configurado para este tipo de dispositivo")
+          setError(`No hay checklist configurado para este tipo de ${term("equipo").toLowerCase()}`)
           onChange(null)
           return
         }
@@ -122,7 +124,7 @@ export function ChecklistPicker({ tipoDispositivoId, value, onChange, disabled }
   if (!tipoDispositivoId) {
     return (
       <div className="p-3 border rounded-lg bg-muted/30 text-sm text-muted-foreground">
-        Seleccioná primero un tipo de dispositivo para cargar su checklist.
+        Seleccioná primero un tipo de {term("equipo").toLowerCase()} para cargar su checklist.
       </div>
     )
   }
@@ -248,7 +250,7 @@ export function ChecklistPicker({ tipoDispositivoId, value, onChange, disabled }
           }
           rows={2}
           disabled={disabled}
-          placeholder="Notas adicionales sobre el estado del equipo..."
+          placeholder={`Notas adicionales sobre el estado del ${term("equipo").toLowerCase()}...`}
           className="mt-1"
         />
       </div>

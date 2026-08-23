@@ -1,5 +1,7 @@
 "use client"
 
+import { useTerminologia } from "@/contexts/currency-context"
+
 import { useState, useEffect, useRef, useCallback } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -39,10 +41,16 @@ export function OrdenSelector({
   value,
   onChange,
   disabled,
-  label = "Orden de servicio (opcional)",
-  placeholder = "Buscar por N° de orden, dispositivo o cliente...",
+  label,
+  placeholder,
   excludeEstados = DEFAULT_EXCLUDE,
 }: OrdenSelectorProps) {
+  const term = useTerminologia()
+  // Los defaults se resuelven aca (y no en la firma) porque dependen del
+  // vocabulario de la organizacion, que solo esta disponible via hook.
+  const labelFinal = label ?? `${term("orden")} (opcional)`
+  const placeholderFinal =
+    placeholder ?? `Buscar por N° de orden, ${term("equipo").toLowerCase()} o cliente...`
   const [search, setSearch] = useState("")
   const [results, setResults] = useState<OrdenLite[]>([])
   const [loading, setLoading] = useState(false)
@@ -106,11 +114,11 @@ export function OrdenSelector({
 
   return (
     <div ref={containerRef} className="relative">
-      <Label className="text-sm">{label}</Label>
+      <Label className="text-sm">{labelFinal}</Label>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder={placeholder}
+          placeholder={placeholderFinal}
           value={search}
           onChange={(e) => handleSearchChange(e.target.value)}
           onFocus={() => { if (search.length >= 1) setOpen(true) }}
