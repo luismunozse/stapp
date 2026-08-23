@@ -134,3 +134,78 @@ describe("InventarioForm — 'Editar este' sobre un duplicado detectado", () => 
     expect(opciones.confirmText).toBeTruthy()
   })
 })
+
+/**
+ * "Sumar stock", el botón de al lado, descarta el formulario igual de rápido:
+ * suma la cantidad al item existente y llama a onSuccess(), que lo cierra —
+ * nombre, precios, ubicación, imagen pendiente, todo lo cargado para el producto
+ * nuevo se va con él.
+ *
+ * Estaba anotado como deuda deliberada mientras "Editar este" tampoco
+ * preguntaba. Ahora que el de al lado sí, la inconsistencia queda a la vista en
+ * una sola fila de la UI: dos botones pegados, uno pregunta y el otro no.
+ */
+describe("InventarioForm — 'Sumar stock' sobre un duplicado detectado", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fetchMock = vi.fn((url: string) => {
+      if (typeof url === "string" && url.includes("/api/inventario/check-duplicate")) {
+        return Promise.resolve({ ok: true, json: async () => ({ matches: [MATCH] }) } as Response)
+      }
+      return Promise.resolve({ ok: true, json: async () => [] } as Response)
+    })
+    vi.stubGlobal("fetch", fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  /** Nombre + stock cargados, que es lo mínimo para que consolidar tenga sentido. */
+  async function mostrarDuplicadoConStock(onSuccess: () => void) {
+    render(<InventarioForm onClose={vi.fn()} onSuccess={onSuccess} onEditExisting={vi.fn()} />)
+    const nombre = screen.getByLabelText("Nombre *")
+    fireEvent.change(nombre, { target: { value: "Bateria iPhone 12 original" } })
+    fireEvent.change(screen.getByLabelText("Stock *"), { target: { value: "3" } })
+    fireEvent.blur(nombre)
+
+    return await screen.findByRole("button", { name: /sumar stock/i })
+  }
+
+  it("pide confirmación antes de descartar lo cargado", async () => {
+    confirmMock.mockResolvedValue(false)
+
+    const boton = await mostrarDuplicadoConStock(vi.fn())
+    fireEvent.click(boton)
+
+    await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1))
+    expect(confirmMock.mock.calls[0][0].description).toMatch(/perder|pierde/i)
+  })
+
+  it("no suma nada si el operador cancela", async () => {
+    confirmMock.mockResolvedValue(false)
+    const onSuccess = vi.fn()
+
+    const boton = await mostrarDuplicadoConStock(onSuccess)
+    fireEvent.click(boton)
+
+    await waitFor(() => expect(confirmMock).toHaveBeenCalled())
+    expect(onSuccess).not.toHaveBeenCalled()
+    expect(fetchMock.mock.calls.some(([, init]: any[]) => init?.method === "POST")).toBe(false)
+    expect(screen.getByLabelText("Nombre *")).toHaveValue("Bateria iPhone 12 original")
+  })
+
+  it("suma cuando el operador acepta", async () => {
+    confirmMock.mockResolvedValue(true)
+    const onSuccess = vi.fn()
+
+    const boton = await mostrarDuplicadoConStock(onSuccess)
+    fireEvent.click(boton)
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled())
+    const post = fetchMock.mock.calls.find(([, init]: any[]) => init?.method === "POST")
+    expect(post![0]).toContain("/api/inventario/existente-1/stock")
+  })
+})

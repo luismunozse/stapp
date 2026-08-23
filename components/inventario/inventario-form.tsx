@@ -339,6 +339,18 @@ export function InventarioForm({
       await showError("Ingresá una cantidad de stock mayor a 0 para sumar al existente.")
       return
     }
+    // Consolidar cierra el formulario (onSuccess), así que del producto nuevo
+    // sobrevive únicamente el stock: nombre, precios, ubicación e imagen
+    // pendiente se descartan. Mismo criterio que el botón de al lado.
+    const confirmado = await confirm({
+      title: "Sumar el stock al producto existente",
+      description:
+        `Se van a sumar ${stockToAdd} al stock de "${match.nombre}" y este formulario se va a cerrar: se pierde el resto de lo que cargaste para el producto nuevo. No se puede deshacer.`,
+      confirmText: "Sumar stock",
+      cancelText: "Seguir con el nuevo",
+      variant: "danger",
+    })
+    if (!confirmado) return
     setConsolidating(match.id)
     try {
       const res = await fetch(`/api/inventario/${match.id}/stock`, {
