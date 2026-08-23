@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { isMissingColumnError } from "@/lib/db-errors"
 
 // Lectura pública (cualquier rol autenticado) de feature flags por org.
 // Se usa desde el sidebar/nav para mostrar/ocultar módulos opcionales.
@@ -28,8 +29,17 @@ export async function GET() {
     // éxito nunca, más el navbar escondiendo los módulos opcionales sin
     // recuperación. Sin fila no hay módulos habilitados: eso es fail-closed y es
     // lo que esta ruta contestaba antes.
-    const sinFila = readError?.code === "PGRST116"
-    if (!sinFila && (readError || !data)) {
+    //
+    // Lo mismo, por el mismo motivo, con una columna que todavía no existe. En
+    // este proyecto las migraciones se aplican A MANO y después del merge, así
+    // que siempre hay una ventana en la que el deploy va adelante de su
+    // migración: eso solía degradar —el módulo opcional quedaba oculto y la app
+    // andaba— y como 503 clavaría a todo VENDEDOR en "no se pudo verificar"
+    // hasta que alguien corra la migración. Una columna ausente es una
+    // respuesta: la feature todavía no está.
+    const respuestaSinDatos =
+      readError?.code === "PGRST116" || isMissingColumnError(readError)
+    if (!respuestaSinDatos && (readError || !data)) {
       console.error("Error reading org features:", readError)
       return NextResponse.json(
         { error: "No se pudieron leer los módulos de la organización" },

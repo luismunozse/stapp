@@ -101,4 +101,31 @@ describe("GET /api/org/features", () => {
     expect(body.vendedoresAdministranInventario).toBe(false)
     expect(body.moduloAgenda).toBe(false)
   })
+
+  /**
+   * Y la que este proyecto se garantiza a sí mismo: las migraciones se aplican a
+   * MANO y después del merge, así que siempre existe una ventana en la que el
+   * deploy va adelante de su migración. Ese desfasaje solía degradar —el módulo
+   * opcional quedaba oculto y la app andaba—; convertido en 503 clava a todo
+   * VENDEDOR en "no se pudo verificar", con un reintento que no puede tener
+   * éxito hasta que alguien corra la migración a mano, y al navbar sin módulos.
+   *
+   * Hoy ninguna columna de este select falta, así que esto no arregla un bug
+   * vivo: le saca el filo a la próxima columna que se agregue acá.
+   */
+  it("degrada cuando una columna del select todavía no existe en la base", async () => {
+    mockSupabaseFrom({
+      organizations: createChainMock(null, {
+        code: "42703",
+        message: 'column organizations.vendedores_administran_inventario does not exist',
+      }),
+    })
+
+    const { GET } = await import("@/app/api/org/features/route")
+    const { status, body } = await parseResponse(await GET())
+
+    expect(status).toBe(200)
+    expect(body.vendedoresAdministranInventario).toBe(false)
+    expect(body.moduloAgenda).toBe(false)
+  })
 })
