@@ -20,7 +20,7 @@ import {
   type PdfLogo,
   type HelveticaMetrics,
 } from "./pdf-react-shared"
-import { Pie, leyendaPie } from "./pdf-react-shell"
+import { Pie, leyendaPie, estilosShell, Seccion, FilaDetalle, BarraTotal } from "./pdf-react-shell"
 
 /** Emisor + cliente identity, shared by every cuenta corriente document. */
 export interface CuentaCorrienteEmisor {
@@ -152,29 +152,10 @@ const styles = StyleSheet.create({
   docTitle: { fontFamily: "Helvetica-Bold", fontSize: TYPE.docTitle },
   docNumber: { fontFamily: "Helvetica-Bold", fontSize: TYPE.docNumber, marginTop: 2 },
 
-  hr: { borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.rule },
-  sectionLabel: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: TYPE.sectionLabel,
-    color: MONO.label,
-    textTransform: "uppercase",
-  },
   clienteBand: { flexDirection: "row", justifyContent: "space-between", paddingTop: 6 },
   clienteLeft: { flex: 1, paddingRight: 8 },
   clienteRight: { alignItems: "flex-end" },
   clienteNombre: { fontFamily: "Helvetica-Bold", fontSize: TYPE.body, marginTop: 3 },
-
-  detalleSection: { marginTop: 14 },
-  detalleBlock: { marginTop: 8 },
-  detalleRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    borderBottomWidth: RULE_WIDTH,
-    borderBottomColor: MONO.rule,
-    paddingVertical: 3,
-  },
-  detalleLabel: { fontSize: TYPE.body, color: MONO.label },
-  detalleValue: { fontSize: TYPE.body, textAlign: "right" },
 
   totalRow: {
     flexDirection: "row",
@@ -186,16 +167,6 @@ const styles = StyleSheet.create({
   },
   totalLabel: { fontFamily: "Helvetica-Bold", fontSize: TYPE.total },
   totalValue: { fontFamily: "Helvetica-Bold", fontSize: TYPE.total },
-  saldoBar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    backgroundColor: MONO.totalBg,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    marginTop: 4,
-  },
-  saldoLabel: { fontFamily: "Helvetica-Bold", fontSize: TYPE.total },
-  saldoValue: { fontFamily: "Helvetica-Bold", fontSize: TYPE.total },
   saldoNote: { fontSize: TYPE.fine, color: MONO.label, marginTop: 4 },
 
   obsBlock: { marginTop: 12 },
@@ -211,7 +182,6 @@ const styles = StyleSheet.create({
   // Widths are absolute so the header cells and the data cells cannot drift
   // apart. They sum to the table frame's inner width, with CONCEPTO taking
   // whatever is left over (flex: 1).
-  tablaSection: { marginTop: 14 },
   tablaFrame: { borderWidth: RULE_WIDTH, borderColor: MONO.ink, marginTop: 8 },
   tablaHeaderRow: {
     flexDirection: "row",
@@ -353,11 +323,11 @@ function CabeceraCC({
           </View>
         </View>
 
-        <View style={[styles.hr, { marginTop: 10 }]} />
+        <View style={[estilosShell.hr, { marginTop: 10 }]} />
 
         <View style={styles.clienteBand}>
           <View style={styles.clienteLeft}>
-            <Text style={styles.sectionLabel}>{clienteLabel}</Text>
+            <Text style={estilosShell.sectionLabel}>{clienteLabel}</Text>
             <Text style={styles.clienteNombre}>{clienteNombre}</Text>
             {clienteDni ? <Text style={styles.smallLabel}>DNI/CUIT: {clienteDni}</Text> : null}
             {clienteTelefono ? <Text style={styles.smallLabel}>Tel: {clienteTelefono}</Text> : null}
@@ -368,7 +338,7 @@ function CabeceraCC({
             <View style={styles.clienteRight}>
               {sucursalNombre ? (
                 <>
-                  <Text style={styles.sectionLabel}>Sucursal</Text>
+                  <Text style={estilosShell.sectionLabel}>Sucursal</Text>
                   <Text style={styles.smallLabelRight}>{sucursalNombre}</Text>
                 </>
               ) : null}
@@ -432,61 +402,36 @@ export function ReciboCCDocument({
           clienteLabel="Recibimos de"
         />
 
-        <View style={styles.detalleSection}>
-          <Text style={styles.sectionLabel}>Detalle del movimiento</Text>
-          <View style={styles.detalleBlock}>
-            <View style={styles.detalleRow}>
-              <Text style={styles.detalleLabel}>Concepto</Text>
-              <Text style={styles.detalleValue}>{concepto}</Text>
-            </View>
-            {metodoPago ? (
-              <View style={styles.detalleRow}>
-                <Text style={styles.detalleLabel}>Método de pago</Text>
-                <Text style={styles.detalleValue}>{metodoPago}</Text>
-              </View>
-            ) : null}
-            {referencia ? (
-              <View style={styles.detalleRow}>
-                <Text style={styles.detalleLabel}>Referencia</Text>
-                <Text style={styles.detalleValue}>{referencia}</Text>
-              </View>
-            ) : null}
-            <View style={styles.detalleRow}>
-              <Text style={styles.detalleLabel}>Fecha del movimiento</Text>
-              <Text style={styles.detalleValue}>{formatDateTimeValue(data.fecha, tz)}</Text>
-            </View>
-          </View>
+        <Seccion titulo="Detalle del movimiento">
+          <FilaDetalle label="Concepto" valor={concepto} />
+          {metodoPago ? <FilaDetalle label="Método de pago" valor={metodoPago} /> : null}
+          {referencia ? <FilaDetalle label="Referencia" valor={referencia} /> : null}
+          <FilaDetalle label="Fecha del movimiento" valor={formatDateTimeValue(data.fecha, tz)} />
 
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>IMPORTE RECIBIDO</Text>
             <Text style={styles.totalValue}>{fmt(importe)}</Text>
           </View>
 
-          <View style={styles.detalleRow}>
-            <Text style={styles.detalleLabel}>Saldo anterior</Text>
-            <Text style={styles.detalleValue}>{fmt(saldoAnterior)}</Text>
-          </View>
+          <FilaDetalle label="Saldo anterior" valor={fmt(saldoAnterior)} />
 
-          <View style={styles.saldoBar}>
-            <Text style={styles.saldoLabel}>{saldoLabel}</Text>
-            <Text style={styles.saldoValue}>{fmt(saldoValor)}</Text>
-          </View>
+          <BarraTotal label={saldoLabel} valor={fmt(saldoValor)} />
           <Text style={styles.saldoNote}>
             Saldo de la cuenta corriente del cliente posterior a este movimiento.
           </Text>
-        </View>
+        </Seccion>
 
         {observaciones ? (
           <View style={styles.obsBlock}>
-            <Text style={styles.sectionLabel}>Observaciones</Text>
-            <View style={[styles.hr, { marginTop: 4 }]} />
+            <Text style={estilosShell.sectionLabel}>Observaciones</Text>
+            <View style={[estilosShell.hr, { marginTop: 4 }]} />
             <Text style={styles.obsText}>{observaciones}</Text>
           </View>
         ) : null}
 
         <View style={styles.recibiBlock}>
-          <Text style={styles.sectionLabel}>Conformidad</Text>
-          <View style={[styles.hr, { marginTop: 4 }]} />
+          <Text style={estilosShell.sectionLabel}>Conformidad</Text>
+          <View style={[estilosShell.hr, { marginTop: 4 }]} />
           <View style={styles.sigRow}>
             <View style={styles.sigCol}>
               <View style={styles.sigLine} />
@@ -555,15 +500,8 @@ export function ResumenCCDocument({
           clienteLabel="Cliente"
         />
 
-        <View style={styles.tablaSection}>
-          <Text style={styles.sectionLabel}>Movimientos del período</Text>
-
-          <View style={styles.detalleBlock}>
-            <View style={styles.detalleRow}>
-              <Text style={styles.detalleLabel}>Saldo inicial al {desde}</Text>
-              <Text style={styles.detalleValue}>{fmt(data.saldoInicial)}</Text>
-            </View>
-          </View>
+        <Seccion titulo="Movimientos del período">
+          <FilaDetalle label={`Saldo inicial al ${desde}`} valor={fmt(data.saldoInicial)} />
 
           {movimientos.length === 0 ? (
             <Text style={styles.vacio}>Sin movimientos en el período.</Text>
@@ -609,12 +547,9 @@ export function ResumenCCDocument({
             </View>
           )}
 
-          <View style={styles.saldoBar} wrap={false}>
-            <Text style={styles.saldoLabel}>{saldoLabel}</Text>
-            <Text style={styles.saldoValue}>{fmt(saldoValor)}</Text>
-          </View>
+          <BarraTotal label={saldoLabel} valor={fmt(saldoValor)} />
           <Text style={styles.saldoNote}>Saldo de la cuenta corriente al {hasta}.</Text>
-        </View>
+        </Seccion>
 
         <Pie
           leyenda={leyendaPie("Resumen interno de cuenta corriente")}

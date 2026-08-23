@@ -24,7 +24,7 @@ import {
   truncateToWidth,
   type PdfLogo,
 } from "./pdf-react-shared"
-import { Pie, LEYENDA_NO_FISCAL, leyendaPie } from "./pdf-react-shell"
+import { Pie, LEYENDA_NO_FISCAL, leyendaPie, estilosShell, FilaDetalle, BarraTotal, Badge } from "./pdf-react-shell"
 import type { FacturaPDFData } from "./pdf"
 
 const estadoPagoLabels: Record<string, string> = {
@@ -207,20 +207,10 @@ const styles = StyleSheet.create({
   pagoNote: { fontSize: TYPE.fine, color: MONO.label, marginTop: 2 },
 
   detalleBlock: { marginTop: 8 },
-  detalleRow: { flexDirection: "row", justifyContent: "space-between", borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.rule, paddingVertical: 3 },
-  detalleLabel: { fontSize: TYPE.body, color: MONO.label },
   detalleValue: { fontSize: TYPE.body },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.rule, paddingVertical: 3 },
-  totalLabel: { fontFamily: "Helvetica-Bold", fontSize: TYPE.total },
-  totalValue: { fontFamily: "Helvetica-Bold", fontSize: TYPE.total },
-  saldoBar: { flexDirection: "row", justifyContent: "space-between", backgroundColor: MONO.totalBg, paddingVertical: 6, paddingHorizontal: 10, marginTop: 4 },
-  saldoLabel: { fontFamily: "Helvetica-Bold", fontSize: TYPE.total },
-  saldoValue: { fontFamily: "Helvetica-Bold", fontSize: TYPE.total },
 
   estadoBlock: { marginTop: 10 },
   estadoRow: { flexDirection: "row", alignItems: "center", marginTop: 6 },
-  badge: { borderWidth: 0.75, borderColor: MONO.ink, paddingHorizontal: 5, paddingVertical: 3.5 },
-  badgeText: { fontFamily: "Helvetica-Bold", fontSize: 7 },
   estadoMonto: { fontSize: TYPE.body, marginLeft: 20 },
   estadoPendiente: { fontFamily: "Helvetica-Bold", fontSize: TYPE.body, marginLeft: 20 },
 
@@ -427,52 +417,30 @@ export function RemitoDocument({
           <Text style={styles.sectionLabel}>DETALLE</Text>
           <View style={[styles.hr, { marginTop: 4, marginBottom: 8 }]} />
 
-          <View style={styles.detalleRow}>
-            <Text style={styles.detalleLabel}>Subtotal</Text>
-            <Text style={styles.detalleValue}>{fmt(data.subtotal)}</Text>
-          </View>
-          {data.iva > 0 ? (
-            <View style={styles.detalleRow}>
-              <Text style={styles.detalleLabel}>IVA</Text>
-              <Text style={styles.detalleValue}>{fmt(data.iva)}</Text>
-            </View>
-          ) : null}
+          <FilaDetalle label="Subtotal" valor={fmt(data.subtotal)} />
+          {data.iva > 0 ? <FilaDetalle label="IVA" valor={fmt(data.iva)} /> : null}
           {data.descuento && data.descuento > 0 ? (
-            <View style={styles.detalleRow}>
-              <Text style={styles.detalleLabel}>Descuento</Text>
-              <Text style={styles.detalleValue}>-{fmt(data.descuento)}</Text>
-            </View>
+            <FilaDetalle label="Descuento" valor={`-${fmt(data.descuento)}`} />
           ) : null}
           {data.redondeo && data.redondeo !== 0 ? (
-            <View style={styles.detalleRow}>
-              <Text style={styles.detalleLabel}>Redondeo</Text>
-              <Text style={styles.detalleValue}>
-                {data.redondeo >= 0 ? "+" : ""}
-                {fmt(data.redondeo)}
-              </Text>
-            </View>
+            <FilaDetalle
+              label="Redondeo"
+              valor={`${data.redondeo >= 0 ? "+" : ""}${fmt(data.redondeo)}`}
+            />
           ) : null}
 
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>TOTAL</Text>
-            <Text style={styles.totalValue}>{fmt(data.total)}</Text>
+          <View style={estilosShell.filaDetalle}>
+            <Text style={estilosShell.barraLabel}>TOTAL</Text>
+            <Text style={estilosShell.barraValor}>{fmt(data.total)}</Text>
           </View>
-          <View style={styles.detalleRow}>
-            <Text style={styles.detalleLabel}>Pagado a cuenta</Text>
-            <Text style={styles.detalleValue}>{fmt(data.montoAbonado)}</Text>
-          </View>
-          <View style={styles.saldoBar}>
-            <Text style={styles.saldoLabel}>{saldoLabel}</Text>
-            <Text style={styles.saldoValue}>{fmt(saldo)}</Text>
-          </View>
+          <FilaDetalle label="Pagado a cuenta" valor={fmt(data.montoAbonado)} />
+          <BarraTotal label={saldoLabel} valor={fmt(saldo)} />
 
           <View style={styles.estadoBlock}>
             <Text style={styles.sectionLabel}>ESTADO DE PAGO</Text>
             <View style={[styles.hr, { marginTop: 4 }]} />
             <View style={styles.estadoRow}>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{estadoLabel}</Text>
-              </View>
+              <Badge texto={estadoLabel} />
               <Text style={styles.estadoMonto}>Abonado: {fmt(data.montoAbonado)}</Text>
               {pendiente > 0 && data.estadoPago !== "ANULADA" ? (
                 <Text style={styles.estadoPendiente}>Pendiente: {fmt(pendiente)}</Text>
