@@ -273,6 +273,11 @@ export const estilosShell = StyleSheet.create({
   barraValor: { fontFamily: "Helvetica-Bold", fontSize: TYPE.total },
   badge: { borderWidth: 0.75, borderColor: MONO.ink, paddingHorizontal: 5, paddingVertical: 3.5, alignSelf: "flex-start" },
   badgeText: { fontFamily: "Helvetica-Bold", fontSize: 7 },
+  firmasBlock: { marginTop: 18 },
+  firmasRow: { flexDirection: "row", marginTop: 22 },
+  firmaCol: { flex: 1, marginRight: 20 },
+  firmaLinea: { borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.ink },
+  firmaCaption: { fontSize: TYPE.fine, color: MONO.label, marginTop: 4 },
 
   // === Header ===
   // PAINT POINT #1 (letter-box straddle): the classic remito's letter box (X)
@@ -329,7 +334,7 @@ export const estilosShell = StyleSheet.create({
   // === Cliente band ===
   // clienteLeft's paddingRight is a per-document value, not a house constant:
   // `nombre` and `email` in this column are NOT length-capped (only the
-  // address is), so the column's width decides where a long email wraps.
+  // address is), so the column's width decides where a long nombre wraps.
   // Each document keeps its own via BandaCliente's `espacioDerecha`.
   clienteBand: { flexDirection: "row", justifyContent: "space-between", paddingTop: 6 },
   clienteLeft: { flex: 1 },
@@ -500,7 +505,7 @@ export function BandaCliente({
   espacioInferior?: number
   /**
    * Gutter between the cliente column and `derecha`. Required: `nombre` and
-   * `email` are not length-capped, so this width decides where a long email
+   * `email` are not length-capped, so this width decides where a long nombre
    * wraps — no document may inherit another's value by omission.
    */
   espacioDerecha: number
@@ -562,6 +567,45 @@ export function Badge({ texto }: { texto: string }) {
   return (
     <View style={estilosShell.badge}>
       <Text style={estilosShell.badgeText}>{texto}</Text>
+    </View>
+  )
+}
+
+/**
+ * `espacioSuperior`/`espacioFilas` override firmasBlock's/firmasRow's own
+ * marginTop (18/22 — the cuenta corriente documents' pre-existing values,
+ * kept as the shared default since both adopt it unchanged). The remito's
+ * signature block shipped tighter (10/16) before this component existed;
+ * collapsing it onto the cuenta corriente spacing would shift a live
+ * customer document's layout for no functional reason, so it passes both
+ * overrides to keep its own numbers exactly.
+ */
+export function Firmas({
+  titulo,
+  campos,
+  espacioSuperior,
+  espacioFilas,
+}: {
+  titulo: string
+  campos: string[]
+  espacioSuperior?: number
+  espacioFilas?: number
+}) {
+  return (
+    <View
+      style={[estilosShell.firmasBlock, espacioSuperior === undefined ? undefined : { marginTop: espacioSuperior }]}
+      wrap={false}
+    >
+      <Text style={estilosShell.sectionLabel}>{titulo}</Text>
+      <View style={[estilosShell.hr, { marginTop: 4 }]} />
+      <View style={[estilosShell.firmasRow, espacioFilas === undefined ? undefined : { marginTop: espacioFilas }]}>
+        {campos.map((campo) => (
+          <View key={campo} style={estilosShell.firmaCol}>
+            <View style={estilosShell.firmaLinea} />
+            <Text style={estilosShell.firmaCaption}>{campo}</Text>
+          </View>
+        ))}
+      </View>
     </View>
   )
 }

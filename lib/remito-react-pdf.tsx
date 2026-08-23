@@ -24,6 +24,7 @@ import {
   Badge,
   Cabecera,
   BandaCliente,
+  Firmas,
 } from "./pdf-react-shell"
 import type { FacturaPDFData } from "./pdf"
 
@@ -94,12 +95,6 @@ const styles = StyleSheet.create({
   estadoRow: { flexDirection: "row", alignItems: "center", marginTop: 6 },
   estadoMonto: { fontSize: TYPE.body, marginLeft: 20 },
   estadoPendiente: { fontFamily: "Helvetica-Bold", fontSize: TYPE.body, marginLeft: 20 },
-
-  recibiBlock: { marginTop: 10 },
-  sigRow: { flexDirection: "row", marginTop: 16 },
-  sigCol: { flex: 1, marginRight: 20 },
-  sigLine: { borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.ink },
-  sigCaption: { fontSize: TYPE.fine, color: MONO.label, marginTop: 4 },
 
   continuationTitle: { position: "absolute", top: 14, left: 40, fontFamily: "Helvetica-Bold", fontSize: TYPE.docTitle },
 })
@@ -310,20 +305,16 @@ export function RemitoDocument({
 
         {/* === RECIBÍ CONFORME (orden-sourced only) === */}
         {data.orden ? (
-          <View style={styles.recibiBlock} wrap={false}>
-            <Text style={styles.sectionLabel}>Recibí conforme</Text>
-            <View style={[styles.hr, { marginTop: 4 }]} />
-            <View style={styles.sigRow}>
-              <View style={styles.sigCol}>
-                <View style={styles.sigLine} />
-                <Text style={styles.sigCaption}>Firma</Text>
-              </View>
-              <View style={styles.sigCol}>
-                <View style={styles.sigLine} />
-                <Text style={styles.sigCaption}>Aclaración</Text>
-              </View>
-            </View>
-          </View>
+          // espacioSuperior/espacioFilas: this block shipped tighter (10/16)
+          // than the cuenta corriente documents (18/22, the shell's shared
+          // default) before Firmas existed — kept exactly to avoid moving a
+          // live customer document's layout.
+          <Firmas
+            titulo="Recibí conforme"
+            campos={["Firma", "Aclaración"]}
+            espacioSuperior={10}
+            espacioFilas={16}
+          />
         ) : null}
 
         {/* === FOOTER — fixed, repeats on every page for free. === */}

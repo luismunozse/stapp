@@ -11,6 +11,7 @@ import {
   presupuestoZonaIzquierda,
   Cabecera,
   BandaCliente,
+  Firmas,
 } from "@/lib/pdf-react-shell"
 import { helveticaMetrics } from "@/lib/pdf-react-shared"
 import { extractReactPdfText, extractReactPdfTextPositions } from "./pdf-text-helper-react"
@@ -263,5 +264,26 @@ describe("BandaCliente", () => {
 
     expect(await lineas(4)).toBe(1) // a hairline gutter keeps it on one line
     expect(await lineas(60)).toBeGreaterThan(1) // a wider one breaks it
+  })
+})
+
+describe("Firmas", () => {
+  it("draws one caption per field", async () => {
+    const text = await extractReactPdfText(
+      await render(<Firmas titulo="Conformidad" campos={["Firma", "Aclaración"]} />)
+    )
+    expect(text).toContain("CONFORMIDAD")
+    expect(text).toContain("Firma")
+    expect(text).toContain("Aclaración")
+  })
+
+  it("supports the four-field entrega variant", async () => {
+    const text = await extractReactPdfText(
+      await render(
+        <Firmas titulo="Firmas de conformidad" campos={["Cliente (quien recibe)", "Encargado (quien entrega)"]} />
+      )
+    )
+    expect(text).toContain("Cliente (quien recibe)")
+    expect(text).toContain("Encargado (quien entrega)")
   })
 })

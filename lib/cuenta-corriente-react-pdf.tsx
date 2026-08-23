@@ -28,6 +28,7 @@ import {
   BarraTotal,
   Cabecera,
   BandaCliente,
+  Firmas,
   type DocumentoBase,
 } from "./pdf-react-shell"
 
@@ -117,12 +118,6 @@ const styles = StyleSheet.create({
 
   obsBlock: { marginTop: 12 },
   obsText: { fontSize: TYPE.small, marginTop: 4 },
-
-  recibiBlock: { marginTop: 18 },
-  sigRow: { flexDirection: "row", marginTop: 22 },
-  sigCol: { flex: 1, marginRight: 20 },
-  sigLine: { borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.ink },
-  sigCaption: { fontSize: TYPE.fine, color: MONO.label, marginTop: 4 },
 
   // === Statement table ===
   // Widths are absolute so the header cells and the data cells cannot drift
@@ -308,20 +303,7 @@ export function ReciboCCDocument({
           </View>
         ) : null}
 
-        <View style={styles.recibiBlock}>
-          <Text style={estilosShell.sectionLabel}>Conformidad</Text>
-          <View style={[estilosShell.hr, { marginTop: 4 }]} />
-          <View style={styles.sigRow}>
-            <View style={styles.sigCol}>
-              <View style={styles.sigLine} />
-              <Text style={styles.sigCaption}>Firma</Text>
-            </View>
-            <View style={styles.sigCol}>
-              <View style={styles.sigLine} />
-              <Text style={styles.sigCaption}>Aclaración</Text>
-            </View>
-          </View>
-        </View>
+        <Firmas titulo="Conformidad" campos={["Firma", "Aclaración"]} />
 
         <Pie
           leyenda={leyendaPie("Recibo interno de cuenta corriente")}
