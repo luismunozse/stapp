@@ -260,6 +260,13 @@ export const estilosShell = StyleSheet.create({
     paddingVertical: 3,
   },
   filaLabel: { fontSize: TYPE.body, color: MONO.label },
+  // `textAlign: "right"` is currently a no-op: `filaDetalle`'s row is
+  // `flexDirection: "row", justifyContent: "space-between"` with no `flex`/
+  // `width` on filaLabel or filaValor, so each Text's box is sized exactly to
+  // its own single-line content — there is no leftover space inside the box
+  // for textAlign to act on. Kept because it is the correct declared intent
+  // and because it stops being a no-op the moment filaValor gains a `flex` or
+  // explicit `width`, or wraps to more than one line.
   filaValor: { fontSize: TYPE.body, textAlign: "right" },
   barraTotal: {
     flexDirection: "row",
@@ -271,6 +278,14 @@ export const estilosShell = StyleSheet.create({
   },
   barraLabel: { fontFamily: "Helvetica-Bold", fontSize: TYPE.total },
   barraValor: { fontFamily: "Helvetica-Bold", fontSize: TYPE.total },
+  // `alignSelf: "flex-start"` is currently a no-op: Badge (border + padding +
+  // a 7pt text line, ≈16.5pt tall) is the tallest element in every row it
+  // shares today (its siblings are single-line 9pt text, ≈10pt tall), so it
+  // already defines the row's own cross-axis extent — flex-start vs the
+  // parent's implicit stretch/center has nothing to override. This holds only
+  // as long as no sibling in Badge's row grows taller than Badge itself; a
+  // future document that pairs it with a taller sibling would make this the
+  // only thing keeping Badge pinned to the top.
   badge: { borderWidth: 0.75, borderColor: MONO.ink, paddingHorizontal: 5, paddingVertical: 3.5, alignSelf: "flex-start" },
   badgeText: { fontFamily: "Helvetica-Bold", fontSize: 7 },
   firmasBlock: { marginTop: 18 },
@@ -509,21 +524,30 @@ export function Cabecera({
  * address first and carries the DNI on the right, the cuenta corriente
  * documents lead with the DNI. `derecha` is a free slot for whatever the
  * document pins to the right (a VENTA/ORDEN reference, sucursal, ...).
+ *
+ * `campos` and `espacioInferior` are required, no default — same doctrine as
+ * `espacioDerecha` below and `Firmas`' spacings. A default here would silently
+ * impose cuenta corriente's field set *and order* on the next document that
+ * forgets to pass one (a DNI line it may not want, in an order it did not
+ * choose, and no test would notice); `espacioInferior` sat at a same-file
+ * default of 0 while `espacioDerecha` was required for exactly this reason,
+ * which is the inconsistency this doctrine exists to prevent. Every caller
+ * must state both, even when the value is 0.
  */
 export function BandaCliente({
   label,
   cliente,
-  campos = ["dni", "telefono", "email", "direccion"],
+  campos,
   derecha,
-  espacioInferior = 0,
+  espacioInferior,
   espacioDerecha,
 }: {
   label: string
   cliente: ClienteData
-  campos?: CampoCliente[]
+  campos: CampoCliente[]
   derecha?: React.ReactNode
   /** Bottom padding, for a band followed by another band inside the frame. */
-  espacioInferior?: number
+  espacioInferior: number
   /**
    * Gutter between the cliente column and `derecha`. Required: `nombre` and
    * `email` are not length-capped, so this width decides where a long nombre
@@ -681,9 +705,20 @@ function celdaTabla(col: ColumnaTabla, ultima: boolean) {
 }
 
 /**
+ * A `filas` cell value. Not `React.ReactNode`: that would admit a raw
+ * `number`, which react-pdf silently drops with a console warning nobody
+ * reads on a server render — the cell just renders blank, on a financial
+ * document. Every current caller already formats numbers to a string before
+ * handing them to `filas` (`fmt`, `String(...)`); this type makes that
+ * required, catching a forgotten conversion at compile time instead of at
+ * render time.
+ */
+type CeldaTabla = string | React.ReactElement | null | undefined | false
+
+/**
  * Ruled table with a header row that can repeat across page breaks.
  *
- * `filas` values are `React.ReactNode`, not strings: the remito's pagos rows
+ * `filas` values are `CeldaTabla`, not plain strings: the remito's pagos rows
  * carry a note line under the reference and the resumen's movimientos carry
  * the payment method under the concept, so a cell is sometimes two stacked
  * Texts. A plain string is wrapped in a <Text> for the caller.
@@ -702,8 +737,12 @@ function celdaTabla(col: ColumnaTabla, ultima: boolean) {
  * omitting it and would suppress page breaks the table needs.
  *
  * `headerSombreado` — the resumen's header carries a MONO.totalBg band, the
- * remito's two do not. Same reasoning as Firmas' required spacings: the
- * documents disagree, and neither value is more "natural" than the other.
+ * remito's two do not. Unlike Firmas' required spacings, this one may default
+ * (to `false`): it is an off-by-default visual feature, not a spacing
+ * constant with no neutral value. Firmas' 18/22 vs 10/16 disagree with no
+ * value that means "nothing" — defaulting to either would silently impose
+ * one document's history on the next. A boolean already has a neutral value,
+ * "no band", and every document that wants the band still has to say so.
  */
 export function Tabla({
   columnas,
@@ -713,7 +752,7 @@ export function Tabla({
   pie,
 }: {
   columnas: ColumnaTabla[]
-  filas: Array<Record<string, React.ReactNode>>
+  filas: Array<Record<string, CeldaTabla>>
   /** Repeat the header row on the pages the table spans. */
   headerFijo?: boolean
   /** Grey band behind the header row. */

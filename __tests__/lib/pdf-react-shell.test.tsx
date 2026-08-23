@@ -208,6 +208,8 @@ describe("BandaCliente", () => {
         <BandaCliente
           label="Recibimos de"
           cliente={{ nombre: "Juan Pérez", dni: "20123456" }}
+          campos={["dni", "telefono", "email", "direccion"]}
+          espacioInferior={0}
           espacioDerecha={8}
           derecha={<Text>VENTA: V0020</Text>}
         />
@@ -222,13 +224,27 @@ describe("BandaCliente", () => {
   it("prints only the fields the document asks for, in the order it asks for them", async () => {
     const cliente = { nombre: "Juan Pérez", dni: "20123456", telefono: "011-1", direccion: "Calle 1" }
     const conDni = await extractReactPdfText(
-      await render(<BandaCliente label="Cliente" cliente={cliente} espacioDerecha={8} />)
+      await render(
+        <BandaCliente
+          label="Cliente"
+          cliente={cliente}
+          campos={["dni", "telefono", "email", "direccion"]}
+          espacioInferior={0}
+          espacioDerecha={8}
+        />
+      )
     )
     expect(conDni).toContain("DNI/CUIT: 20123456")
 
     const sinDni = await extractReactPdfText(
       await render(
-        <BandaCliente label="Cliente" cliente={cliente} espacioDerecha={8} campos={["direccion", "telefono"]} />
+        <BandaCliente
+          label="Cliente"
+          cliente={cliente}
+          espacioDerecha={8}
+          espacioInferior={0}
+          campos={["direccion", "telefono"]}
+        />
       )
     )
     expect(sinDni).not.toContain("DNI/CUIT: 20123456")
@@ -258,6 +274,7 @@ describe("BandaCliente", () => {
                 label="Cliente"
                 cliente={{ nombre }}
                 espacioDerecha={espacioDerecha}
+                espacioInferior={0}
                 campos={[]}
               />
             </View>

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { PDFDocument } from "pdf-lib"
 import { generateFacturaPDFReact } from "@/lib/remito-react-pdf"
 import { generateReciboCCPDF, generateResumenCCPDF } from "@/lib/cuenta-corriente-react-pdf"
 
@@ -84,6 +85,13 @@ export async function GET() {
         cliente: { nombre: "Cliente Smoke" },
       }),
     ])
+
+    // A non-trivial byte count alone doesn't prove the buffer is a real PDF —
+    // it would pass on any garbage of the right size. PDFDocument.load parses
+    // the structure (xref table, trailer, page tree); a bundle-level failure
+    // that produces a truncated or malformed buffer throws here instead of
+    // slipping through as a "big enough" 500 KB of nothing.
+    await Promise.all([PDFDocument.load(remito), PDFDocument.load(reciboCC), PDFDocument.load(resumenCC)])
 
     return NextResponse.json({
       ok: true,

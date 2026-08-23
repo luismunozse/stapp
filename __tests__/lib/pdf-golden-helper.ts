@@ -412,7 +412,10 @@ export function diffDumps(base: GoldenDump, head: GoldenDump, maxPorFixture = 20
     const b = head[nombre] ?? []
     if (a.length === b.length && a.every((linea, i) => linea === b[i])) continue
 
-    salida.push(`${nombre}: ${a.length} -> ${b.length} text items`)
+    // `nombre` carries a " [gfx]" suffix (see pdf-golden.test.ts's `registrar`)
+    // for the graphics-operator slot; every other slot is a text-position dump.
+    const unidad = nombre.endsWith(" [gfx]") ? "graphics operators" : "text items"
+    salida.push(`${nombre}: ${a.length} -> ${b.length} ${unidad}`)
     let mostrados = 0
     for (let i = 0; i < Math.max(a.length, b.length) && mostrados < maxPorFixture; i++) {
       if (a[i] !== b[i]) {

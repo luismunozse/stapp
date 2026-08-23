@@ -87,6 +87,13 @@ const styles = StyleSheet.create({
     fontSize: TYPE.body,
     color: MONO.ink,
   },
+  // `hr` and `sectionLabel` are byte-identical to estilosShell.hr /
+  // estilosShell.sectionLabel — deliberately kept local rather than imported,
+  // and <Seccion> is deliberately not used for this document's six section
+  // headings. <Seccion> wraps its body in `seccionBody` (marginTop: 8) on top
+  // of this document's own spacing (e.g. <Tabla>'s own `marginTop: 8`),
+  // which would double up and move the output. Reuse the values, not the
+  // wrapper.
   hr: { borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.rule },
   sectionLabel: { fontFamily: "Helvetica-Bold", fontSize: TYPE.sectionLabel, color: MONO.label, textTransform: "uppercase" },
   condicionesBand: { paddingTop: 6, paddingBottom: 6 },
@@ -291,7 +298,7 @@ export function RemitoDocument({
                   fecha: fmtDate(pago.fecha),
                   metodo: metodoPagoFacturaLabels[pago.metodoPago] || pago.metodoPago,
                   // The note line under the reference is why Tabla's `filas`
-                  // takes React.ReactNode rather than plain strings.
+                  // accepts an element, not just a plain string.
                   referencia: (
                     <>
                       <Text>{safe(pago.referencia).substring(0, 16)}</Text>
