@@ -23,6 +23,13 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
+// Sesion real: con `data: null` useFormDraft se queda en ready=false y el
+// formulario corre sin su camino de borrador, que no es el que este archivo
+// verifica pero si el que monta/desmonta junto con la barra.
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({ data: { user: { id: "user-1", organizationId: "org-1" } } }),
+}))
+
 vi.mock("@/hooks/use-tipos-dispositivo", () => ({
   useTiposDispositivo: () => ({
     tipos: [
@@ -71,6 +78,10 @@ describe("RecepcionForm — barra de acciones sticky en mobile", () => {
       "fetch",
       vi.fn(() => Promise.resolve({ ok: true, json: async () => [] } as Response)),
     )
+    // Con la sesion mockeada el formulario graba borradores de verdad: sin
+    // limpiar, un test le restaura al siguiente los equipos que dejo cargados
+    // y el contador arranca en otro numero.
+    window.localStorage.clear()
   })
 
   // vi.stubGlobal("matchMedia", ...) y vi.stubGlobal("fetch", ...) quedarian

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { FormActionBar } from "@/components/ui/form-action-bar"
+import { DraftRestoredNotice, RecordChangedNotice } from "@/components/ui/draft-restored-notice"
 import { User, Building2 } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { Switch } from "@/components/ui/switch"
@@ -22,6 +23,11 @@ import type { Cliente } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { useOffline } from "@/contexts/offline-context"
+import { useFormDraft, fingerprintRecord } from "@/hooks/use-form-draft"
+import {
+  stripSensitiveClienteFields,
+  type WithoutSensitiveClienteFields,
+} from "@/lib/cliente-draft-projection"
 import { STORES } from "@/lib/offline/constants"
 import { getCountryConfig } from "@/lib/countries"
 
@@ -47,6 +53,53 @@ const clienteSchema = z.object({
 
 type ClienteFormData = z.infer<typeof clienteSchema>
 
+/** Lo unico del formulario que llega a localStorage. Es la ficha con mas datos
+ *  personales del panel y este dialog se monta ademas adentro de
+ *  ClienteSelector, o sea en las dos pantallas de ingreso, sobre terminales
+ *  compartidas donde el borrador vive 7 dias en texto plano y no se borra al
+ *  cerrar sesion (ver el limite de persistencia en hooks/use-form-draft.ts). El
+ *  documento, el CUIT, el email y la direccion se quedan afuera por el tipo, no
+ *  por acordarse: los saca la proyeccion compartida, la misma que usa el
+ *  snapshot de cliente de orden-form.tsx.
+ *
+ *  Volver a escribirlos es una molestia acotada; que el proximo operador los lea
+ *  en el navegador, no. */
+type ClienteDraftValue = WithoutSensitiveClienteFields<ClienteFormData>
+
+/** Valores base para el form: prefill de edicion o blanco para alta. Vive
+ *  afuera del componente (sin dependencias de hooks) para poder reusarla en
+ *  useForm(defaultValues), el efecto de prefill y el discard del borrador
+ *  sin triplicar el mismo objeto literal. */
+function clienteFormDefaults(cliente?: Cliente | null): ClienteFormData {
+  return cliente
+    ? {
+        tipoCliente: cliente.tipoCliente || "INDIVIDUAL",
+        nombre: cliente.nombre,
+        telefono: cliente.telefono,
+        email: cliente.email || "",
+        direccion: cliente.direccion || "",
+        dni: cliente.dni || "",
+        razonSocial: cliente.razonSocial || "",
+        cuit: cliente.cuit || "",
+        aceptaWhatsapp: cliente.aceptaWhatsapp ?? true,
+        tipoPrecio: cliente.tipoPrecio || "MINORISTA",
+        descuentoPct: cliente.descuentoPct ?? undefined,
+      }
+    : {
+        tipoCliente: "INDIVIDUAL",
+        nombre: "",
+        telefono: "",
+        email: "",
+        direccion: "",
+        dni: "",
+        razonSocial: "",
+        cuit: "",
+        aceptaWhatsapp: true,
+        tipoPrecio: "MINORISTA",
+        descuentoPct: undefined,
+      }
+}
+
 interface ClienteFormProps {
   cliente?: Cliente | null
   open: boolean
@@ -68,73 +121,219 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
     formState: { errors },
     reset,
     watch,
+    getValues,
     setValue,
   } = useForm<ClienteFormData>({
     resolver: zodResolver(clienteSchema),
-    defaultValues: cliente
-      ? {
-          tipoCliente: cliente.tipoCliente || "INDIVIDUAL",
-          nombre: cliente.nombre,
-          telefono: cliente.telefono,
-          email: cliente.email || "",
-          direccion: cliente.direccion || "",
-          dni: cliente.dni || "",
-          razonSocial: cliente.razonSocial || "",
-          cuit: cliente.cuit || "",
-          aceptaWhatsapp: cliente.aceptaWhatsapp ?? true,
-          tipoPrecio: cliente.tipoPrecio || "MINORISTA",
-          descuentoPct: cliente.descuentoPct ?? undefined,
-        }
-      : {
-          tipoCliente: "INDIVIDUAL",
-          nombre: "",
-          telefono: "",
-          email: "",
-          direccion: "",
-          dni: "",
-          razonSocial: "",
-          cuit: "",
-          aceptaWhatsapp: true,
-          tipoPrecio: "MINORISTA",
-          descuentoPct: undefined,
-        },
+    defaultValues: clienteFormDefaults(cliente),
   })
 
   const tipoCliente = watch("tipoCliente")
   const tipoPrecio = watch("tipoPrecio")
 
-  useEffect(() => {
-    if (open) {
-      reset(cliente
-        ? {
-            tipoCliente: cliente.tipoCliente || "INDIVIDUAL",
-            nombre: cliente.nombre,
-            telefono: cliente.telefono,
-            email: cliente.email || "",
-            direccion: cliente.direccion || "",
-            dni: cliente.dni || "",
-            razonSocial: cliente.razonSocial || "",
-            cuit: cliente.cuit || "",
-            aceptaWhatsapp: cliente.aceptaWhatsapp ?? true,
-            tipoPrecio: cliente.tipoPrecio || "MINORISTA",
-            descuentoPct: cliente.descuentoPct ?? undefined,
-          }
-        : {
-            tipoCliente: "INDIVIDUAL",
-            nombre: "",
-            telefono: "",
-            email: "",
-            direccion: "",
-            dni: "",
-            razonSocial: "",
-            cuit: "",
-            aceptaWhatsapp: true,
-            tipoPrecio: "MINORISTA",
-            descuentoPct: undefined,
-          }
+  /** Huella de los campos que ESTE formulario edita y manda en el PUT. Es lo
+   *  que se mueve cuando OTRA persona guarda la ficha, y solo entonces: la
+   *  identidad del objeto cambia en cada revalidacion de SWR sin que haya
+   *  cambiado nada, asi que tampoco sirve como disparador.
+   *
+   *  Deliberadamente NO es `updatedAt`. La tabla `clientes` tiene un trigger
+   *  BEFORE UPDATE que mantiene esa columna (migracion 001) y cada movimiento de
+   *  cuenta corriente hace `UPDATE clientes SET saldo_cuenta = ...` (migracion
+   *  234): cobrar o fiar una orden contra la cuenta del cliente movia el
+   *  timestamp sin que nadie hubiera tocado la ficha, y con el timestamp como
+   *  token se borraba el borrador de quien la tenia abierta y se le avisaba que
+   *  un companero la habia guardado. Las dos cosas, por trabajo de mostrador
+   *  rutinario.
+   *
+   *  Se calcula sobre `clienteFormDefaults(cliente)` a proposito: es la unica
+   *  funcion que mapea el registro a los campos de este formulario, asi que
+   *  agregar un campo al form lo agrega tambien a la huella y las dos no pueden
+   *  separarse. */
+  const clienteRecordVersion = cliente ? fingerprintRecord(clienteFormDefaults(cliente)) : null
+  /** Con que (apertura, ficha) se hizo el ultimo prefill. Distingue "abri el
+   *  dialog / cambie de ficha" -- donde el prefill va siempre -- de "la misma
+   *  ficha se movio en el servidor", donde depende de lo que haya en pantalla. */
+  const prefillAplicadoRef = useRef<{ open: boolean; clienteId: string | null }>({
+    open: false,
+    clienteId: null,
+  })
+
+  // --- Borrador local (useFormDraft) ----------------------------------------
+  // recordId por cliente.id: nunca mezcla un borrador de alta con uno de
+  // edicion, ni el de un cliente con el de otro. Solo activo mientras el
+  // dialog esta abierto (el componente queda montado con `open=false` entre
+  // usos) para no seguir grabando ni restaurando en segundo plano.
+  const recordId = cliente?.id ?? null
+  /** El borrador que este formulario efectivamente aplico. Es lo que se usa
+   *  para DERIVAR el aviso de "se restauró un borrador" (ver
+   *  `draftNoticeVisible`, debajo del hook) en vez de tener un booleano aparte:
+   *  ese booleano tenia un `set(true)` por cada camino de restauracion y un
+   *  `set(false)` por cada camino que da de baja el borrador. Aca lo salvaba
+   *  que TODOS los que montan este dialog lo cierran al guardar (el `!open` de
+   *  abajo bajaba el aviso), o sea que dependia de una decision de los call
+   *  sites: el primero que dejara el dialog abierto despues de un guardado
+   *  ofline/exitoso se quedaba con el cartel colgado sobre un borrador que ya
+   *  no existe. Derivarlo lo saca de esa dependencia -- mismo criterio que
+   *  orden-form.tsx y recepcion-form.tsx. */
+  const [appliedDraft, setAppliedDraft] = useState<ClienteDraftValue | null>(null)
+  /** El borrador ya aplicado, POR IDENTIDAD (mismo latch que orden-form.tsx y
+   *  recepcion-form.tsx). Una marca por scope (`recordId`) se adelanta al hook:
+   *  el scope cambia en el render y `draft` recien en el commit siguiente, asi
+   *  que al reabrir el dialog sobre OTRA ficha con el borrador de la anterior
+   *  todavia en `draft` se aplicaba ese. Cada re-lectura del hook devuelve un
+   *  objeto nuevo y cada re-render devuelve el mismo, asi que la identidad es
+   *  la unica marca sincronizada con su estado. */
+  const draftAppliedRef = useRef<ClienteDraftValue | null>(null)
+  /** Raiz del formulario para el gate de interaccion del hook: este dialog se
+   *  monta adentro de OrdenForm y RecepcionForm (via ClienteSelector), asi que
+   *  cada uno tiene que reconocer solo sus propios controles. */
+  const formRef = useRef<HTMLFormElement>(null)
+  const {
+    draft,
+    ready: draftReady,
+    clearDraft,
+    notifyChange,
+    hasUnsavedWork,
+    recordChangedWhileEditing,
+  } = useFormDraft<ClienteDraftValue>({
+    feature: "cliente-form",
+    recordId,
+    // `getValues()` en vez de `watch()`: leer el form entero en render
+    // suscribe el componente a cada tecla. El borrador no necesita re-render,
+    // solo el valor al momento de grabar.
+    //
+    // LIMITE DE PERSISTENCIA — lo que se devuelve aca queda en localStorage en
+    // texto plano, 7 dias, en una terminal que comparten varios operadores y
+    // que no borra nada al cerrar sesion. La proyeccion compartida saca los
+    // datos personales que el formulario restaurado puede recuperar de otro
+    // lado: de la ficha (en edicion) o del cliente que esta en el mostrador.
+    getValue: () => stripSensitiveClienteFields(getValues()),
+    enabled: open,
+    rootRef: formRef,
+    // `reset()` no tira excepcion con un borrador de otra forma: aplica lo que
+    // le den. El try/catch de mas abajo por si solo no alcanza, entonces --
+    // un borrador viejo (hasta 7 dias) que quedo de una version anterior de
+    // este formulario abre el dialog con campos vacios o con basura, en
+    // silencio, y esos valores salen tal cual en el PUT/POST.
+    validate: (data) => {
+      const value = data as ClienteDraftValue
+      return (
+        !!value &&
+        typeof value === "object" &&
+        typeof value.nombre === "string" &&
+        typeof value.telefono === "string" &&
+        (value.tipoCliente === "INDIVIDUAL" || value.tipoCliente === "EMPRESA")
       )
+    },
+    // En edicion, si otro usuario EDITO el cliente despues de que se escribio
+    // este borrador, restaurarlo pisaria ese guardado (el submit manda el form
+    // entero). El hook lo descarta comparando contra este token.
+    recordVersion: clienteRecordVersion,
+  })
+
+  /** El aviso no puede sobrevivir al borrador que anuncia: sale solo mientras
+   *  el borrador que el hook tiene AHORA es exactamente el que este formulario
+   *  aplico. `clearDraft` pone `draft` en null en todos los caminos que lo dan
+   *  de baja (guardado, encolado offline, "Descartar"), asi que ninguno de
+   *  ellos -- ni los que todavia no existen -- puede dejar el cartel colgado
+   *  sin acordarse de apagarlo. Con el dialog cerrado el hook queda en pausa y
+   *  conserva `draft`, por eso el efecto de abajo suelta el borrador aplicado
+   *  al cerrar: sin eso el aviso reaparecia al reabrir, antes de que el hook
+   *  volviera a leer. */
+  const draftNoticeVisible = draft !== null && appliedDraft === draft
+
+  // Prefill de la ficha. Declarado DESPUES del hook (necesita hasUnsavedWork) y
+  // ANTES del efecto que aplica el borrador, que es lo que le da al borrador la
+  // ultima palabra sobre estos mismos campos.
+  //
+  // No depende de la identidad de `cliente`: cliente-detalle.tsx pasa este prop
+  // desde SWR y cada revalidacion trae un objeto nuevo con los mismos datos.
+  // Con `cliente` en las dependencias, esa revalidacion reseteaba un dialog
+  // abierto a los valores del servidor y se llevaba puesto lo que el operador
+  // estaba escribiendo (o el borrador recien restaurado, mientras el aviso
+  // seguia diciendo que se restauro uno).
+  //
+  // Pero depender solo del `id` dejaba el otro agujero: un dialog abierto no se
+  // enteraba nunca de un guardado ajeno. Sobre un formulario intacto no hay
+  // nada del operador que proteger, y quedarse con la version vieja significa
+  // que "Guardar" manda el registro entero y pisa en silencio lo que guardo la
+  // otra persona -- sin aviso, porque el hook re-inicializa (justamente porque
+  // no hay trabajo del que hacerse cargo) y apaga recordChangedWhileEditing.
+  // Con algo escrito o un borrador en pantalla se conserva lo que hay y el
+  // conflicto lo avisa RecordChangedNotice.
+  useEffect(() => {
+    if (!open) {
+      prefillAplicadoRef.current = { open: false, clienteId: cliente?.id ?? null }
+      return
     }
-  }, [open, cliente, reset])
+    const anterior = prefillAplicadoRef.current
+    const mismaFichaYaAbierta = anterior.open && anterior.clienteId === (cliente?.id ?? null)
+    prefillAplicadoRef.current = { open: true, clienteId: cliente?.id ?? null }
+    // La misma ficha ya abierta solo puede haber llegado aca por una huella
+    // nueva: es el unico dato del registro en las dependencias, y se mueve
+    // cuando alguien edito de verdad alguno de estos campos.
+    if (mismaFichaYaAbierta && hasUnsavedWork()) return
+    reset(clienteFormDefaults(cliente))
+    // `cliente` entero se lee adentro, pero no va en las dependencias a
+    // proposito (ver arriba): las que disparan son la apertura, la ficha y su
+    // momento de guardado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, cliente?.id, clienteRecordVersion, reset, hasUnsavedWork])
+
+  // Los cambios de react-hook-form ya no re-renderizan el formulario, asi que
+  // hay que avisarle al borrador por suscripcion.
+  useEffect(() => {
+    const subscription = watch(() => notifyChange())
+    return () => subscription.unsubscribe()
+  }, [watch, notifyChange])
+
+  useEffect(() => {
+    if (!open) {
+      // El latch NO se limpia al cerrar: `draft` conserva el borrador de la
+      // ficha anterior mientras el hook esta pausado, y limpiarlo dejaba que se
+      // aplicara ese al reabrir sobre otra ficha. La identidad ya cubre el
+      // reabrir: la re-lectura devuelve un objeto nuevo.
+      setAppliedDraft(null)
+      return
+    }
+    // El latch se toca DESPUES de saber que hay algo que aplicar. Marcarlo
+    // antes dejaba el formulario "con el borrador ya aplicado" sin haberlo
+    // aplicado: si mas tarde aparecia uno para la misma key (otra pestana
+    // escribiendola, el token de frescura resolviendo), el hook lo contaba como
+    // restaurado y este efecto no lo tocaba nunca, asi que se pisaba en
+    // silencio con lo que hubiera en pantalla y el aviso no salia.
+    if (!draftReady || !draft || draftAppliedRef.current === draft) return
+    draftAppliedRef.current = draft
+    try {
+      // El borrador se aplica ENCIMA del prefill, no en su lugar: los campos
+      // que la proyeccion deja afuera (documento, CUIT, email, direccion) no
+      // faltan porque esten vacios, faltan porque no se guardan. Aplicarlo tal
+      // cual los pondria en blanco, y el PUT de edicion manda el registro
+      // entero: el documento del cliente se borraria de la ficha.
+      reset({ ...clienteFormDefaults(cliente), ...draft })
+      setAppliedDraft(draft)
+    } catch (error) {
+      // Un borrador de otra forma (cambio de campos sin bump de version) no
+      // puede tumbar el dialog: la excepcion correria dentro de un efecto y se
+      // llevaria el arbol entero.
+      console.error("Borrador de cliente invalido, se descarta:", error)
+      clearDraft()
+      setAppliedDraft(null)
+      reset(clienteFormDefaults(cliente))
+    }
+    // `cliente` se lee adentro (base del prefill y rescate del catch) pero no va
+    // en las dependencias: volveria a correr el efecto en cada revalidacion de
+    // SWR. El efecto corre por borrador nuevo y ahi lee la ficha del render en
+    // curso, que es la que corresponde.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, draftReady, draft, reset, clearDraft])
+
+  const discardDraft = () => {
+    // El aviso se apaga solo: `clearDraft` deja `draft` en null en este mismo
+    // commit y de ahi se deriva (ver draftNoticeVisible).
+    clearDraft()
+    reset(clienteFormDefaults(cliente))
+  }
 
   const onSubmit = async (data: ClienteFormData) => {
     setLoading(true)
@@ -178,6 +377,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
           }))
 
       if (res.status === 202) {
+        clearDraft()
         await showInfo("Cliente guardado offline. Se sincronizará automáticamente cuando vuelva la conexión. No podrá asignarse a la operación actual hasta entonces.")
         onSuccess(undefined, { queuedOffline: true })
         return
@@ -195,6 +395,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
       } catch {
         createdCliente = undefined
       }
+      clearDraft()
       onSuccess(createdCliente)
     } catch (error) {
       console.error("Error saving cliente:", error)
@@ -210,7 +411,14 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
         <DialogHeader>
           <DialogTitle>{cliente ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form ref={formRef} onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Primero el conflicto: el borrador se conserva, pero guardarlo
+              reemplaza lo que guardo la otra persona. */}
+          {recordChangedWhileEditing && <RecordChangedNotice />}
+          {draftNoticeVisible && (
+            <DraftRestoredNotice onDiscard={discardDraft} />
+          )}
+
           {/* Tipo de cliente */}
           <div>
             <Label>Tipo de cliente</Label>
