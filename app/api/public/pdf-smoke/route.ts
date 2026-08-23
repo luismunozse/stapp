@@ -13,6 +13,17 @@ export const dynamic = "force-dynamic"
 
 const FECHA = new Date("2026-08-20T15:00:00Z")
 
+// logoUrl is deliberately non-empty: fetchLogo() short-circuits to null when
+// it's absent, and every document gates <Image> behind that null check. A
+// fixture with no logo exercises zero image-embedding code, so a bundle-level
+// regression isolated to <Image> would pass this smoke check while still
+// breaking production, where tenants do have logos. The inline data: URL
+// needs no network and no real asset — fetch() resolves data: URLs and
+// reports content-type: image/png, so fetchLogo sniffs it as a real PNG.
+// Do not "simplify" this away.
+const LOGO_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+
 const EMISOR = {
   nombreEmpresa: "Smoke Test SRL",
   telefonoEmpresa: "+54 11 4000-0000",
@@ -21,6 +32,7 @@ const EMISOR = {
   condicionIvaEmpresa: "Responsable Inscripto",
   moneda: "ARS",
   zonaHoraria: "America/Argentina/Buenos_Aires",
+  logoUrl: LOGO_URL,
 }
 
 export async function GET() {
@@ -43,7 +55,7 @@ export async function GET() {
         total: 1000,
         montoAbonado: 1000,
         pagos: [{ fecha: FECHA, metodoPago: "EFECTIVO", monto: 1000, referencia: "" }],
-      } as never),
+      }),
 
       generateReciboCCPDF({
         ...EMISOR,
