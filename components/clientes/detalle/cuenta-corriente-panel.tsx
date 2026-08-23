@@ -11,11 +11,12 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import {
   PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, Banknote,
-  ArrowRightLeft, CreditCard, Wallet, MoreHorizontal, Loader2,
+  ArrowRightLeft, CreditCard, Wallet, MoreHorizontal, Loader2, Printer, FileText,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { EmptyState } from "@/components/ui/empty-state"
 import { useCurrency } from "@/contexts/currency-context"
+import { todayInTimeZone } from "@/lib/timezone"
 import { useModal } from "@/contexts/modal-context"
 import type { Cliente } from "@/types"
 
@@ -43,9 +44,17 @@ interface Movimiento {
   createdAt: string
 }
 
+// CARGO and PAGO come from migration 234 (fiado). Without them the badge
+// falls through to the raw enum for every credit sale and every debt payment.
 const tipoLabels: Record<string, string> = {
   DEPOSITO: "Depósito", USO: "Uso", DEVOLUCION: "Devolución", AJUSTE: "Ajuste",
+  CARGO: "Cargo", PAGO: "Pago",
 }
+
+// A recibo acknowledges money received, so only the two movement types that
+// bring money in can be emitted — same rule the API and migration 306 enforce.
+const TIPOS_CON_RECIBO = ["DEPOSITO", "PAGO"]
+
 const metodoPagoLabels: Record<string, string> = {
   EFECTIVO: "Efectivo", TRANSFERENCIA: "Transferencia", TARJETA_DEBITO: "Tarjeta Débito",
   TARJETA_CREDITO: "Tarjeta Crédito", MERCADOPAGO: "MercadoPago", OTRO: "Otro",
@@ -57,10 +66,17 @@ interface CuentaCorrientePanelProps {
 }
 
 export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePanelProps) {
-  const { formatPrice, formatDate } = useCurrency()
+  const { formatPrice, formatDate, timezone } = useCurrency()
   const { showError } = useModal()
   const { data: session } = useSession()
   const esAdmin = session?.user?.role === "ADMIN"
+
+  // Month-to-date in the org's timezone, matching the resumen route's own
+  // default so the form opens on the range the API would have picked anyway.
+  const hoy = todayInTimeZone(timezone)
+  const [showResumen, setShowResumen] = useState(false)
+  const [resumenDesde, setResumenDesde] = useState(`${hoy.slice(0, 7)}-01`)
+  const [resumenHasta, setResumenHasta] = useState(hoy)
 
   const [showDeposito, setShowDeposito] = useState(false)
   const [depositoLoading, setDepositoLoading] = useState(false)
@@ -200,7 +216,43 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
       )}
 
       <div className="space-y-2">
-        <h4 className="font-medium text-sm">Movimientos</h4>
+        <div className="flex items-center justify-between">
+          <h4 className="font-medium text-sm">Movimientos</h4>
+          <Button variant="outline" size="sm" onClick={() => setShowResumen((v) => !v)}>
+            <FileText className="mr-2 h-3.5 w-3.5" />
+            Resumen de cuenta
+          </Button>
+        </div>
+
+        {showResumen && (
+          <div className="rounded-lg border p-3 space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">Desde</Label>
+                <Input type="date" value={resumenDesde} onChange={(e) => setResumenDesde(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">Hasta</Label>
+                <Input type="date" value={resumenHasta} onChange={(e) => setResumenHasta(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                disabled={!resumenDesde || !resumenHasta || resumenDesde > resumenHasta}
+                onClick={() =>
+                  window.open(
+                    `/api/clientes/${cliente.id}/cuenta-corriente/resumen?desde=${resumenDesde}&hasta=${resumenHasta}`,
+                    "_blank",
+                    "noopener,noreferrer"
+                  )
+                }
+              >
+                Emitir resumen
+              </Button>
+            </div>
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -240,8 +292,28 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
                     )}
                   </div>
                 </div>
-                <div className="text-xs text-muted-foreground whitespace-nowrap">
-                  Saldo: {formatPrice(mov.saldoPosterior)}
+                <div className="flex items-center gap-1 shrink-0">
+                  <div className="text-xs text-muted-foreground whitespace-nowrap">
+                    Saldo: {formatPrice(mov.saldoPosterior)}
+                  </div>
+                  {TIPOS_CON_RECIBO.includes(mov.tipo) && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      title="Emitir recibo"
+                      aria-label={`Emitir recibo de ${tipoLabels[mov.tipo] || mov.tipo} por ${formatPrice(Math.abs(mov.monto))}`}
+                      onClick={() =>
+                        window.open(
+                          `/api/clientes/${cliente.id}/cuenta-corriente/${mov.id}/recibo`,
+                          "_blank",
+                          "noopener,noreferrer"
+                        )
+                      }
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}

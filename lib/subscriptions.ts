@@ -12,6 +12,9 @@ export interface SubscriptionInfo {
   status: "ACTIVE" | "CANCELED" | "PAST_DUE" | "TRIALING"
   billingPeriod: "MONTHLY" | "YEARLY" | null
   paymentProvider: "MERCADOPAGO" | "REBILL" | "MANUAL" | null
+  /** Si la suscripcion se cobra sola. Es un booleano y no el id del preapproval:
+   *  el identificador del proveedor no tiene por que viajar al browser. */
+  autoDebito: boolean
   currentPeriodEnd: string | null
   trialEnd: string | null
   cancelAtPeriodEnd: boolean
@@ -55,6 +58,7 @@ export async function getSubscriptionInfo(
       status,
       billing_period,
       payment_provider,
+      mercadopago_preapproval_id,
       current_period_end,
       trial_end,
       cancel_at_period_end,
@@ -93,6 +97,7 @@ export async function getSubscriptionInfo(
     status: data.status,
     billingPeriod: data.billing_period,
     paymentProvider: data.payment_provider,
+    autoDebito: !!data.mercadopago_preapproval_id,
     currentPeriodEnd: data.current_period_end,
     trialEnd: data.trial_end,
     cancelAtPeriodEnd: data.cancel_at_period_end,

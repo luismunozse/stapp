@@ -94,13 +94,16 @@ function pagoLabel(p?: Proveedor | null): string {
 
 interface Stats {
   productosCount: number
-  valorCostoStock: number
+  /** null cuando el rol no puede ver costos de compra (hasInventarioAccess). */
+  valorCostoStock: number | null
   valorVentaStock: number
   itemsSinStock: number
   itemsBajoStock: number
   ordenesCount: number
   ordenesAbiertas: number
-  totalComprado: number
+  /** null cuando el rol no puede ver costos de compra (hasInventarioAccess):
+   *  es lo que la organización le pagó a este proveedor. */
+  totalComprado: number | null
   ultimaCompra: string | null
 }
 
@@ -346,11 +349,16 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
             ) : null
           }
         />
-        <KpiCard
-          icon={<DollarSign className="h-4 w-4" />}
-          label="Total comprado"
-          value={stats ? formatPrice(stats.totalComprado) : "—"}
-        />
+        {/* Se oculta la tarjeta entera cuando el rol no puede ver costos de
+            compra. Mientras carga (stats undefined) se mantiene con "—" para
+            no saltar el layout. */}
+        {(!stats || stats.totalComprado !== null) && (
+          <KpiCard
+            icon={<DollarSign className="h-4 w-4" />}
+            label="Total comprado"
+            value={stats ? formatPrice(stats.totalComprado!) : "—"}
+          />
+        )}
         <KpiCard
           icon={<ShoppingCart className="h-4 w-4" />}
           label="Órdenes de compra"
@@ -492,7 +500,10 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <div className="text-muted-foreground text-xs uppercase tracking-wide">A costo</div>
-                  <div className="font-semibold">{stats ? formatPrice(stats.valorCostoStock) : "—"}</div>
+                  {/* null = el rol no puede ver costos de compra. */}
+                  <div className="font-semibold">
+                    {stats && stats.valorCostoStock !== null ? formatPrice(stats.valorCostoStock) : "—"}
+                  </div>
                 </div>
                 <div>
                   <div className="text-muted-foreground text-xs uppercase tracking-wide">A venta</div>

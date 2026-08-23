@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DatePicker } from "@/components/ui/date-picker"
 import { FormActionBar } from "@/components/ui/form-action-bar"
+import { DraftRestoredNotice } from "@/components/ui/draft-restored-notice"
 import { X, Plus, Loader2, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp } from "lucide-react"
 import { PatternLock } from "@/components/ui/pattern-lock"
 import { ClienteSelector } from "@/components/cotizaciones/cliente-selector"
@@ -22,6 +23,11 @@ import { usePlanLimitError } from "@/lib/hooks/use-plan-limit-error"
 import { compressImage } from "@/lib/image-compression"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { useTipoDispositivoConfig } from "@/hooks/use-tipo-dispositivo-config"
+import { useFormDraft } from "@/hooks/use-form-draft"
+import {
+  stripSensitiveClienteFields,
+  type WithoutSensitiveClienteFields,
+} from "@/lib/cliente-draft-projection"
 import { useTerminologia } from "@/contexts/currency-context"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { useOffline } from "@/contexts/offline-context"
@@ -53,6 +59,108 @@ const ordenSchema = z.object({
 })
 
 type OrdenFormData = z.infer<typeof ordenSchema>
+
+/** Valores base del formulario. Vive afuera del componente (sin dependencias
+ *  de hooks) para que useForm(defaultValues) y el discard del borrador usen
+ *  la MISMA lista: cuando se duplicaba a mano, los campos que faltaban en la
+ *  copia (register() sin control) se quedaban con el texto del borrador
+ *  descartado y se enviaban igual en el submit. */
+function ordenFormDefaults(): OrdenFormData {
+  return {
+    clienteId: "",
+    dispositivo: "",
+    tipoDispositivo: "",
+    marca: "",
+    color: "",
+    imei: "",
+    problemaReportado: "",
+    accesorios: "",
+    codigoAccesoDispositivo: "",
+    telefonoContacto: "",
+    presupuesto: undefined,
+    fechaPrometida: "",
+    observaciones: "",
+    notasInternas: "",
+  }
+}
+
+/** Lo que este formulario consume del cliente elegido: el id (para saber si el
+ *  objeto corresponde al clienteId cargado), nombre y telefono (modal de orden
+ *  creada, placeholder de contacto), y tipoCliente/razonSocial/cuit para el
+ *  bloque de empresa. Se guarda esto en el estado en vez del Cliente entero
+ *  para que ningun campo de la ficha llegue al formulario sin que se note. */
+type ClienteResumen = Pick<
+  Cliente,
+  "id" | "nombre" | "telefono" | "tipoCliente" | "razonSocial" | "cuit"
+>
+
+/** Proyeccion que ademas se persiste. Los datos personales (aca, el cuit: es
+ *  dato fiscal y solo alimenta una linea informativa del bloque de empresa) los
+ *  saca la proyeccion compartida, la misma que usa cliente-form.tsx, para que
+ *  la regla no dependa de que cada formulario se acuerde de escribirla. */
+type ClienteDraftSnapshot = WithoutSensitiveClienteFields<ClienteResumen>
+
+/** Estructura minima que alcanza para proyectar. Mas laxa que el Cliente del
+ *  dominio a proposito: el buscador (cliente-selector.tsx) declara su propio
+ *  tipo con casi todo opcional, y los prefills (turno, deep-link) llegan como
+ *  JSON sin tipar. */
+interface ClienteProyectable {
+  id: string
+  nombre: string
+  telefono?: string | null
+  tipoCliente?: string | null
+  razonSocial?: string | null
+  cuit?: string | null
+}
+
+function toClienteResumen(cliente: ClienteProyectable | null | undefined): ClienteResumen | null {
+  if (!cliente) return null
+  return {
+    id: cliente.id,
+    nombre: cliente.nombre,
+    telefono: cliente.telefono ?? "",
+    tipoCliente: (cliente.tipoCliente ?? undefined) as ClienteResumen["tipoCliente"],
+    razonSocial: cliente.razonSocial ?? null,
+    cuit: cliente.cuit ?? null,
+  }
+}
+
+/** Snapshot persistido por useFormDraft (hooks/use-form-draft.ts). Deja
+ *  afuera fotos, firma del checklist (binarios), el codigo de acceso del
+ *  equipo (ver el limite de persistencia en getValue) y todo lo que se
+ *  re-obtiene solo con fetch (listas de tecnicos/operadores/sectores, template
+ *  del checklist). Una proyeccion del cliente SI se guarda: ClienteSelector
+ *  re-hidrata su propio display a partir del id, pero nunca llama a onChange
+ *  (ver cliente-selector.tsx), asi que sin esto el selector de Sector/Area de
+ *  empresas no aparece y el modal de orden creada sale sin nombre ni
+ *  telefono del cliente.
+ *
+ *  `sena` y `presupuestoAceptado` tampoco entran, por el mismo motivo que
+ *  `terminosAceptados` en recepcion-form.tsx: un borrador no puede reclamar
+ *  plata. La sena genera un movimiento de caja en el submit y "presupuesto
+ *  aceptado" es la conformidad que lo habilita, asi que restaurarlos registra
+ *  un cobro que el cliente nunca hizo en esta visita. Perderlos al restaurar
+ *  es aceptable; inventar un pago no. */
+interface OrdenDraftValue {
+  form: Omit<OrdenFormData, "codigoAccesoDispositivo">
+  selectedClienteObj: ClienteDraftSnapshot | null
+  accesoriosSeleccionados: string[]
+  otroAccesorio: string
+  camposExtraValues: Record<string, any>
+  metodoPagoSena: string
+  selectedSectorId: string
+  selectedTecnicoId: string
+  selectedRecibidoPorId: string
+  checklistValores: Record<string, boolean | string | null>
+  /** Template al que pertenecen las CLAVES de `checklistValores`. El template
+   *  en si no se persiste (se re-pide por tipo de equipo al restaurar), y sin
+   *  este id no habia forma de notar que el de la organizacion cambio en los 7
+   *  dias que vive el borrador: las respuestas quedaban indexadas por items que
+   *  ya no existen. Opcional para los borradores escritos antes de que este
+   *  campo existiera, que se tratan como "de otro template". */
+  checklistTemplateId?: string | null
+  checklistNotas: string
+}
 
 interface OrdenFormProps {
   onClose: () => void
@@ -103,7 +211,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   const { data: session } = useSession()
   const isTecnicoRole = session?.user?.role === "TECNICO"
   const [loading, setLoading] = useState(false)
-  const [selectedClienteObj, setSelectedClienteObj] = useState<Cliente | null>(null)
+  const [selectedClienteObj, setSelectedClienteObj] = useState<ClienteResumen | null>(null)
   const [fotos, setFotos] = useState<FotoPreview[]>([])
   const [accesoriosSeleccionados, setAccesoriosSeleccionados] = useState<string[]>([])
   const [otroAccesorio, setOtroAccesorio] = useState("")
@@ -128,11 +236,37 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   const [nuevoSectorNombre, setNuevoSectorNombre] = useState("")
   const [crearSectorLoading, setCrearSectorLoading] = useState(false)
   const [checklistTemplate, setChecklistTemplate] = useState<any>(null)
+  /** Tipo de equipo (codigo; "" = template por defecto de la organizacion) para
+   *  el que se resolvio `checklistTemplate`. `null` mientras no resolvio
+   *  ninguno todavia. Es lo que separa "el template que se va a enviar es otro"
+   *  de "el template de este tipo todavia no llego", que es la diferencia entre
+   *  descartar respuestas huerfanas y descartar respuestas validas. */
+  const [checklistTemplateTipo, setChecklistTemplateTipo] = useState<string | null>(null)
   const [checklistValores, setChecklistValores] = useState<Record<string, boolean | string | null>>({})
   const [checklistNotas, setChecklistNotas] = useState("")
   const [checklistFirma, setChecklistFirma] = useState<string | null>(null)
   const [checklistFirmaMime, setChecklistFirmaMime] = useState<string | null>(null)
+  /** Se incrementa para remontar el SignaturePad (mismo mecanismo que
+   *  recepcion-form.tsx). El pad es NO controlado: el trazo vive en su canvas y
+   *  solo lo borra su propio boton "Limpiar", asi que poner `checklistFirma` en
+   *  null no lo toca. Cada vez que el formulario descarta la firma tiene que
+   *  bumpear esta key, o la pantalla sigue mostrando el trazo y el cartel
+   *  "Firma capturada" de una conformidad que la orden ya no lleva. */
+  const [firmaResetKey, setFirmaResetKey] = useState(0)
   const [checklistOpen, setChecklistOpen] = useState(true)
+  /** Origen de las respuestas del checklist que restauro un borrador, mientras
+   *  todavia no se resolvio el template contra el que hay que compararlas. Ver
+   *  el efecto que descarta las respuestas huerfanas.
+   *
+   *  Estado y no ref: la comparacion vive en un efecto propio, asi que tiene
+   *  que despertarlo. Mientras era una ref, el unico que la leia era el efecto
+   *  del fetch del template -- y ese solo corre cuando cambia el tipo de
+   *  equipo, o sea nunca cuando el borrador no tiene tipo o trae uno que la
+   *  organizacion borro. */
+  const [checklistDelBorrador, setChecklistDelBorrador] = useState<{
+    templateId: string | null
+    tipoDispositivo: string
+  } | null>(null)
   const [currentStep, setCurrentStep] = useState(1)
   const totalSteps = 3
   // Prefill desde turno
@@ -148,31 +282,357 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     formState: { errors },
     setValue,
     watch,
+    getValues,
     trigger,
     clearErrors,
     setError,
+    reset,
   } = useForm<OrdenFormData>({
     resolver: zodResolver(ordenSchema),
-    defaultValues: {
-      clienteId: "",
-      dispositivo: "",
-      tipoDispositivo: "",
-      marca: "",
-      color: "",
-      imei: "",
-      problemaReportado: "",
-      accesorios: "",
-      codigoAccesoDispositivo: "",
-      fechaPrometida: "",
-    },
+    defaultValues: ordenFormDefaults(),
   })
 
   const tipoDispositivo = watch("tipoDispositivo")
 
-  // Prefill desde turno (si la orden nace de una visita agendada)
+  // --- Borrador local (useFormDraft) ----------------------------------------
+  // Siempre "new record": esta pantalla solo crea ordenes, nunca las edita.
+  // El `scope` separa los borradores por origen: una orden abandonada desde un
+  // turno (o desde un deep-link ?clienteId=) no tiene por que reaparecer en el
+  // alta de mostrador siguiente, que es otra orden distinta.
+  /** El borrador que este formulario efectivamente aplico. Es lo que se usa
+   *  para DERIVAR el aviso de "se restauró un borrador" (ver
+   *  `draftNoticeVisible`, debajo del hook) en vez de tener un booleano aparte:
+   *  ese booleano tenia un `set(true)` por cada camino de restauracion y un
+   *  `set(false)` por cada camino que da de baja el borrador, y alcanzaba con
+   *  que uno solo se olvidara de apagarlo para dejar el cartel colgado. Este
+   *  formulario tenia justo ese caso: la key cambia de turno sin remontar (ver
+   *  el latch de abajo), y la rama "key nueva, sin borrador" no lo bajaba, asi
+   *  que el aviso quedaba sobre un alta que no restauro nada -- con "Descartar"
+   *  al lado, que corre el descarte entero igual. */
+  const [appliedDraft, setAppliedDraft] = useState<OrdenDraftValue | null>(null)
+  /** El borrador ya aplicado, POR IDENTIDAD y no un booleano ni un scope:
+   *  `fromTurnoId` / `initialClienteId` salen de useSearchParams
+   *  (ordenes-list.tsx) y el overlay se queda montado, asi que abrir el alta de
+   *  otro turno desde la agenda cambia la key del hook sin remontar este
+   *  componente. Un latch booleano se quedaba pegado en el primer borrador y el
+   *  segundo no se aplicaba nunca (el hook si lo contaba como restaurado, asi
+   *  que el flush siguiente lo pisaba con lo que quedo en pantalla del turno
+   *  anterior); un latch por scope se adelanta al hook, porque el scope cambia
+   *  en el render y `draft` recien en el commit siguiente, y aplica el borrador
+   *  del turno viejo sobre el nuevo. La identidad del objeto es lo unico que
+   *  esta sincronizado con el estado del hook: cada re-lectura devuelve uno
+   *  nuevo, cada re-render devuelve el mismo. */
+  const draftAppliedRef = useRef<OrdenDraftValue | null>(null)
+  /** Origen del borrador que este formulario aplico, envuelto para poder
+   *  distinguir "ninguno" (null) del alta de mostrador, cuyo scope ES null.
+   *
+   *  Guarda el SCOPE y no un booleano porque los efectos de origen (turno,
+   *  deep-link) lo leen en el mismo commit en que cambia el origen -- y en ese
+   *  commit `draft` todavia es el del origen ANTERIOR, asi que el efecto que lo
+   *  aplica no volvio a correr y un booleano seguia en true. El deep-link nuevo
+   *  se salteaba entonces su `setValue("clienteId", ...)` y el formulario se
+   *  quedaba con el cliente del borrador viejo, mientras el fetch en vuelo si
+   *  dejaba el cliente nuevo en `selectedClienteObj`: la pantalla mostraba uno y
+   *  la orden se creaba para el otro. Comparado contra el scope del render que
+   *  lo lee, el latch no puede contestar por un origen que ya no es este. */
+  const draftRestoredRef = useRef<{ scope: string | null } | null>(null)
+  /** Scope del borrador segun el origen del alta. Una sola definicion para la
+   *  key del hook y para el latch de arriba: si se calcularan por separado,
+   *  volverian a poder hablar de origenes distintos. */
+  const draftScope = fromTurnoId
+    ? `turno:${fromTurnoId}`
+    : initialClienteId
+      ? `cliente:${initialClienteId}`
+      : null
+  /** True solo si el borrador aplicado es el de ESTE origen. Cada call site
+   *  pasa el scope de su propio render (el del origen para el que salio a pedir
+   *  datos), no el que este vigente cuando la promesa resuelve. */
+  const isDraftRestoredFor = (scope: string | null) =>
+    draftRestoredRef.current !== null && draftRestoredRef.current.scope === scope
+  /** Raiz del formulario para el gate de interaccion del hook: ClienteSelector
+   *  monta ClienteForm (su propio <form>) adentro de este, y escribir en ese
+   *  dialog no es una edicion del alta. */
+  const formRef = useRef<HTMLFormElement>(null)
+  const { draft, ready: draftReady, clearDraft, notifyChange } = useFormDraft<OrdenDraftValue>({
+    feature: "orden-form",
+    // El restore recorre estructuras del borrador (checklistValores,
+    // accesoriosSeleccionados): un borrador viejo con otra forma haria estallar
+    // el efecto que las aplica y el alta quedaria en pantalla blanca.
+    validate: (data) => {
+      const value = data as OrdenDraftValue
+      return (
+        !!value &&
+        typeof value.form === "object" &&
+        value.form !== null &&
+        Array.isArray(value.accesoriosSeleccionados) &&
+        typeof value.checklistValores === "object" &&
+        value.checklistValores !== null
+      )
+    },
+    rootRef: formRef,
+    scope: draftScope,
+    // `getValues()` en vez de `watch()`: leer el form entero en render
+    // suscribe este componente (1500 lineas, 3 pasos) a cada tecla. El
+    // borrador no necesita re-render, solo el valor al momento de grabar.
+    //
+    // LIMITE DE PERSISTENCIA — lo que se devuelve aca queda en localStorage en
+    // texto plano, 7 dias, en una terminal que comparten varios operadores y
+    // que no borra nada al cerrar sesion. Solo entra lo que el formulario
+    // restaurado necesita para seguir cargandose: nada de codigos de acceso al
+    // equipo, nada de la ficha del cliente mas alla de la proyeccion de abajo.
+    // Antes de agregar un campo aca, preguntarse si molestaria verlo en la
+    // pantalla del proximo turno.
+    getValue: () => {
+      const { codigoAccesoDispositivo: _codigo, ...form } = getValues()
+      return {
+        form,
+        selectedClienteObj: selectedClienteObj
+          ? stripSensitiveClienteFields(selectedClienteObj)
+          : null,
+        accesoriosSeleccionados,
+        otroAccesorio,
+        camposExtraValues,
+        metodoPagoSena,
+        selectedSectorId,
+        selectedTecnicoId,
+        selectedRecibidoPorId,
+        checklistValores,
+        // Las claves de `checklistValores` son ids de items de ESTE template:
+        // sin el id, un borrador restaurado despues de que la organizacion lo
+        // editara manda respuestas huerfanas bajo el templateId nuevo.
+        //
+        // Con `checklistDelBorrador` puesto, las respuestas todavia son las que
+        // restauro el borrador y el template al que pertenecen es el que venia
+        // con el: `checklistTemplate` es en esa ventana el default de la
+        // organizacion (el tipo de equipo aun no resolvio) o null (el fetch del
+        // montaje se cancelo al aplicarse el tipo del borrador). Estampar ese
+        // era escribir el id equivocado sobre respuestas validas, y en la
+        // apertura siguiente el guard de huerfanas las tiraba por no coincidir
+        // con su propio template -- el mecanismo puesto para protegerlas
+        // volviendose en su contra. El efecto de mas abajo apaga
+        // `checklistDelBorrador` en cuanto resuelve el template del tipo: de ahi
+        // en adelante el que corresponde vuelve a ser el que hay en pantalla.
+        checklistTemplateId: checklistDelBorrador
+          ? checklistDelBorrador.templateId
+          : (checklistTemplate?.id ?? null),
+        checklistNotas,
+      }
+    },
+  })
+
+  /** El aviso no puede sobrevivir al borrador que anuncia: sale solo mientras
+   *  el borrador que el hook tiene AHORA es exactamente el que este formulario
+   *  aplico. `clearDraft` pone `draft` en null en todos los caminos que lo dan
+   *  de baja (submit, encolado offline, "Descartar") y una key nueva sin nada
+   *  guardado lo deja en null tambien, asi que ninguno de ellos -- ni los que
+   *  todavia no existen -- puede dejar el cartel colgado sin acordarse de
+   *  apagarlo. */
+  const draftNoticeVisible = draft !== null && appliedDraft === draft
+
+  // Los cambios de react-hook-form ya no re-renderizan el formulario, asi que
+  // hay que avisarle al borrador por suscripcion.
   useEffect(() => {
-    if (!fromTurnoId) return
+    const subscription = watch(() => notifyChange())
+    return () => subscription.unsubscribe()
+  }, [watch, notifyChange])
+
+  /** Datos de origen ya traidos del servidor (turno / deep-link). Se guardan
+   *  aunque el borrador gane, porque descartarlo tiene que devolver el
+   *  formulario al estado precargado: los dos efectos que lo aplican dependen
+   *  de [origen, draftReady] y descartar no mueve ninguna de las dos, asi que
+   *  no vuelven a correr solos. */
+  const turnoPrefillDataRef = useRef<any>(null)
+  const deepLinkClienteRef = useRef<ClienteResumen | null>(null)
+
+  /** "Recibido por" que corresponde cuando el alta se abre limpia: el propio
+   *  operador salvo que sea admin (ver el efecto que lo preselecciona). Se
+   *  calcula afuera de ese efecto porque el descarte del borrador tiene que
+   *  poder reponerlo: el efecto depende de la sesion, y descartar no la mueve,
+   *  asi que no vuelve a correr solo. */
+  const recibidoPorPorDefecto =
+    session?.user?.id && session.user.role !== "ADMIN" ? session.user.id : ""
+
+  /** Deja el alta como recien abierta, ANTES de lo que aporte el origen. Es el
+   *  estado en blanco completo -- incluido lo que no vive en react-hook-form
+   *  (accesorios, checklist, campos extra) y lo que no se persiste pero viaja
+   *  con la orden si sobrevive (fotos, firma de conformidad).
+   *
+   *  Una sola definicion para sus dos usos ("Descartar" y el cambio de origen):
+   *  cuando se duplicaba, el campo que faltaba en la copia se enviaba igual en
+   *  el submit siguiente, que es justo lo que estas dos operaciones existen
+   *  para evitar. */
+  const resetFormToBlank = useCallback(() => {
+    reset(ordenFormDefaults())
+    setAccesoriosSeleccionados([])
+    setOtroAccesorio("")
+    setCamposExtraValues({})
+    setPresupuestoAceptado(false)
+    setSena("")
+    setMetodoPagoSena("EFECTIVO")
+    setSelectedSectorId("")
+    setSelectedTecnicoId("")
+    setSelectedRecibidoPorId(recibidoPorPorDefecto)
+    setChecklistValores({})
+    setChecklistNotas("")
+    // Ya no hay respuestas restauradas que comparar contra ningun template.
+    setChecklistDelBorrador(null)
+    setCurrentStep(1)
+    setSelectedClienteObj(null)
+    // Fotos y firma del checklist no se persisten, asi que no vienen del
+    // borrador -- pero si sobreviven se suben con la orden siguiente: fotos de
+    // otro equipo y una conformidad firmada por otra persona.
+    setFotos([])
+    setChecklistFirma(null)
+    setChecklistFirmaMime(null)
+    setFirmaResetKey((prev) => prev + 1)
+  }, [reset, recibidoPorPorDefecto])
+
+  /** Origen que este efecto vio la ultima vez; `undefined` mientras no corrio
+   *  ninguna vez, que es lo que separa "el alta acaba de abrirse" de "el origen
+   *  cambio debajo del formulario". */
+  const draftScopeRef = useRef<string | null | undefined>(undefined)
+
+  useEffect(() => {
+    if (!draftReady) return
+    if (draftScopeRef.current !== undefined && draftScopeRef.current !== draftScope) {
+      // El origen cambio sin que el componente se remonte: el overlay del
+      // listado solo hace setShowForm(true) y `fromTurno` / `clienteId` salen de
+      // useSearchParams, asi que el boton Atras del navegador (o abrir el alta
+      // de otro cliente) cambia las props en pleno vuelo. Lo que quedaba en
+      // pantalla era del origen anterior mientras la key del hook ya era la
+      // nueva: la primera tecla persistia los datos del turno viejo bajo el
+      // borrador del alta de mostrador, que es otra orden y de otro cliente.
+      //
+      // Se vuelve al estado en blanco y se corta aca: `draft` todavia es el del
+      // origen ANTERIOR en este commit. El del origen nuevo llega en el
+      // siguiente y se aplica encima, igual que al montar.
+      draftScopeRef.current = draftScope
+      draftAppliedRef.current = null
+      draftRestoredRef.current = null
+      setAppliedDraft(null)
+      // Lo precargado tampoco sirve para este origen: cada efecto de origen
+      // vuelve a pedir lo suyo, y dejarlo cacheado hace que "Descartar" reponga
+      // los datos del turno anterior.
+      turnoPrefillDataRef.current = null
+      deepLinkClienteRef.current = null
+      setTurnoPrefill(null)
+      resetFormToBlank()
+      return
+    }
+    draftScopeRef.current = draftScope
+    // El latch se toca DESPUES de saber que hay algo que aplicar (mismo
+    // criterio que cliente-form.tsx). Marcarlo antes dejaba el formulario "con
+    // el borrador ya aplicado" sin haberlo aplicado: si el hook volvia a
+    // resolver la key (otro turno, una sesion que se cae y vuelve) y aparecia un
+    // borrador que otra pestana habia escrito, este efecto no lo tocaba nunca
+    // -- pero el hook si lo contaba como restaurado, asi que el flush siguiente
+    // lo pisaba en silencio con lo que hubiera en pantalla y el aviso no salia.
+    if (!draft) {
+      // Key nueva y sin borrador: lo que quedo marcado como restaurado era del
+      // origen anterior, y con esa marca puesta el prefill de ESTE turno se
+      // saltea a si mismo al resolver (lee draftRestoredRef).
+      draftRestoredRef.current = null
+      return
+    }
+    if (draftAppliedRef.current === draft) return
+    draftAppliedRef.current = draft
+    draftRestoredRef.current = { scope: draftScope }
+    try {
+      // El codigo de acceso no se persiste (ver el limite en getValue): se
+      // repone vacio para no dejar el campo en undefined si un borrador viejo
+      // todavia lo trae.
+      reset({ ...draft.form, codigoAccesoDispositivo: "" })
+      setSelectedClienteObj(draft.selectedClienteObj ?? null)
+      setAccesoriosSeleccionados(draft.accesoriosSeleccionados)
+      setOtroAccesorio(draft.otroAccesorio)
+      setCamposExtraValues(draft.camposExtraValues)
+      // La plata NO se restaura (ni se guarda, ver OrdenDraftValue). Un
+      // borrador viejo puede traer todavia los dos campos: se reponen en cero
+      // explicitamente para que ni siquiera por ahi se cuele un cobro.
+      setPresupuestoAceptado(false)
+      setSena("")
+      setMetodoPagoSena(draft.metodoPagoSena)
+      setSelectedSectorId(draft.selectedSectorId)
+      setSelectedTecnicoId(draft.selectedTecnicoId)
+      setSelectedRecibidoPorId(draft.selectedRecibidoPorId)
+      setChecklistValores(draft.checklistValores)
+      setChecklistNotas(draft.checklistNotas)
+      // No se puede comparar todavia: el template se re-pide por tipo de equipo
+      // y la lista de tipos aun no resolvio. Queda pendiente para el efecto que
+      // descarta las respuestas huerfanas.
+      setChecklistDelBorrador(
+        Object.keys(draft.checklistValores).length > 0
+          ? {
+              templateId: draft.checklistTemplateId ?? null,
+              tipoDispositivo: draft.form.tipoDispositivo ?? "",
+            }
+          : null
+      )
+      // El paso tampoco se restaura (ni se guarda): reabrir en el paso 3 deja
+      // fuera de pantalla todo lo que se venia cargando, y arrancar en el 1
+      // obliga a pasar por delante de cada campo antes de crear la orden.
+      setAppliedDraft(draft)
+    } catch (error) {
+      // Ultima red, ademas del `validate` del hook: una excepcion aca corre
+      // dentro de un efecto, o sea que desmonta el arbol entero y deja el alta
+      // en blanco. Mejor perder el borrador que la pantalla.
+      console.error("Borrador de orden invalido, se descarta:", error)
+      draftRestoredRef.current = null
+      clearDraft()
+      setAppliedDraft(null)
+      reset(ordenFormDefaults())
+    }
+  }, [draftReady, draft, draftScope, reset, clearDraft, resetFormToBlank])
+
+  /** Escribe en el formulario lo que vino del turno. Vive afuera del efecto
+   *  para que el descarte pueda re-aplicarlo sin volver a pedirlo al servidor. */
+  const applyTurnoPrefill = (d: any) => {
+    if (d.cliente) {
+      setSelectedClienteObj(toClienteResumen(d.cliente))
+      setValue("clienteId", d.cliente.id, { shouldValidate: true })
+    }
+    if (d.orden?.tipoDispositivo) setValue("tipoDispositivo", d.orden.tipoDispositivo)
+    if (d.orden?.dispositivo) setValue("dispositivo", d.orden.dispositivo)
+    if (d.orden?.marca) setValue("marca", d.orden.marca)
+    if (d.orden?.problemaReportado) setValue("problemaReportado", d.orden.problemaReportado)
+    if (d.orden?.observaciones) setValue("observaciones", d.orden.observaciones)
+    if (d.orden?.telefonoContacto) setValue("telefonoContacto", d.orden.telefonoContacto)
+    if (d.orden?.tecnicoId) setSelectedTecnicoId(d.orden.tecnicoId)
+    if (d.orden?.fechaPrometida) {
+      setValue("fechaPrometida", String(d.orden.fechaPrometida).slice(0, 10))
+    }
+  }
+
+  const discardDraft = () => {
+    // El aviso se apaga solo: `clearDraft` deja `draft` en null en este mismo
+    // commit y de ahi se deriva (ver draftNoticeVisible).
+    clearDraft()
+    draftRestoredRef.current = null
+    resetFormToBlank()
+    // Lo precargado por el origen NO es del borrador: descartar tiene que dejar
+    // el alta como si se acabara de abrir desde el turno / deep-link. Sin esto
+    // quedaba entera en blanco y la unica forma de recuperar los datos del
+    // turno era recargar la pagina. Si el fetch todavia no respondio, el que se
+    // encarga es el efecto: relee draftRestoredRef al resolver.
+    if (fromTurnoId) {
+      if (turnoPrefillDataRef.current) applyTurnoPrefill(turnoPrefillDataRef.current)
+    } else if (initialClienteId) {
+      setValue("clienteId", initialClienteId, { shouldValidate: true })
+      if (deepLinkClienteRef.current) setSelectedClienteObj(deepLinkClienteRef.current)
+    }
+  }
+
+  // Prefill desde turno (si la orden nace de una visita agendada).
+  //
+  // Espera a que el borrador se haya resuelto (draftReady) en vez de correr
+  // en paralelo: los dos escriben los mismos campos y quien ganaba dependia
+  // de cuando respondia el fetch. Precedencia definida: si hay borrador de
+  // ESTE turno, lo que el usuario ya escribio gana y el prefill queda solo
+  // para el aviso de "crear cliente".
+  useEffect(() => {
+    if (!fromTurnoId || !draftReady) return
     let cancelled = false
+    const scopeDelFetch = draftScope
     fetch(`/api/turnos/${fromTurnoId}/prefill-orden`, { cache: "no-store" })
       .then(async (r) => {
         if (!r.ok) {
@@ -187,43 +647,53 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           requiereCrearCliente: !!d.requiereCrearCliente,
           clienteSnapshot: d.clienteSnapshot || null,
         })
-        if (d.cliente) {
-          setSelectedClienteObj(d.cliente)
-          setValue("clienteId", d.cliente.id, { shouldValidate: true })
-        }
-        if (d.orden?.tipoDispositivo) setValue("tipoDispositivo", d.orden.tipoDispositivo)
-        if (d.orden?.dispositivo) setValue("dispositivo", d.orden.dispositivo)
-        if (d.orden?.marca) setValue("marca", d.orden.marca)
-        if (d.orden?.problemaReportado) setValue("problemaReportado", d.orden.problemaReportado)
-        if (d.orden?.observaciones) setValue("observaciones", d.orden.observaciones)
-        if (d.orden?.telefonoContacto) setValue("telefonoContacto", d.orden.telefonoContacto)
-        if (d.orden?.tecnicoId) setSelectedTecnicoId(d.orden.tecnicoId)
-        if (d.orden?.fechaPrometida) {
-          setValue("fechaPrometida", String(d.orden.fechaPrometida).slice(0, 10))
-        }
+        // Se cachea siempre, incluso en modo "solo aviso": es lo que el
+        // descarte del borrador re-aplica (ver discardDraft).
+        turnoPrefillDataRef.current = d
+        // Se relee al resolver, no al arrancar el efecto: si el operador
+        // descarto el borrador mientras el fetch estaba en vuelo, el prefill
+        // que llega es justo lo que hay que aplicar. Contra el scope de ESTE
+        // turno, no contra el que este vigente al resolver: la respuesta que
+        // llega es la del origen que la pidio.
+        if (isDraftRestoredFor(scopeDelFetch)) return
+        applyTurnoPrefill(d)
       })
       .catch((err) => {
         void showError(err.message || "Error al cargar datos del turno")
       })
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromTurnoId])
+  }, [fromTurnoId, draftReady])
 
-  // Preselección de cliente vía deep-link (?clienteId=) — no aplica si viene de turno
+  // Preselección de cliente vía deep-link (?clienteId=) — no aplica si viene
+  // de turno. Misma precedencia que el prefill de turno: el borrador de este
+  // mismo deep-link (la key lo incluye) gana sobre el re-prefill.
   useEffect(() => {
-    if (!initialClienteId || fromTurnoId) return
+    if (!initialClienteId || fromTurnoId || !draftReady) return
     let cancelled = false
-    setValue("clienteId", initialClienteId, { shouldValidate: true })
+    const scopeDelFetch = draftScope
+    // Contra el scope de ESTE deep-link: el latch todavia puede estar puesto
+    // por el borrador del cliente anterior (el efecto que lo aplica no volvio a
+    // correr en este commit), y saltear el setValue por eso deja la orden a
+    // nombre del cliente que ya no esta en pantalla.
+    if (!isDraftRestoredFor(scopeDelFetch)) {
+      setValue("clienteId", initialClienteId, { shouldValidate: true })
+    }
+    // El cliente se pide igual aunque gane el borrador: descartarlo tiene que
+    // poder devolverlo sin un segundo viaje al servidor (ver discardDraft).
     fetch(`/api/clientes/${initialClienteId}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((cliente) => {
         if (cancelled || !cliente || cliente.error) return
-        setSelectedClienteObj(cliente)
+        const resumen = toClienteResumen(cliente)
+        deepLinkClienteRef.current = resumen
+        if (isDraftRestoredFor(scopeDelFetch)) return
+        setSelectedClienteObj(resumen)
       })
       .catch(() => {})
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialClienteId])
+  }, [initialClienteId, draftReady])
 
   // Get the selected tipo object (used below for the checklist template fetch by id)
   const tipoSeleccionado = useMemo(
@@ -275,6 +745,20 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     if (nuevoTipo) clearErrors("tipoDispositivo")
     setAccesoriosSeleccionados([])
     setCamposExtraValues({})
+    // Las respuestas del checklist pertenecen al template del tipo anterior.
+    // Se limpian ACA (accion explicita del usuario) y no en el efecto que
+    // trae el template: ese efecto tambien corre al montar y cuando la lista
+    // de tipos resuelve tarde, y ahi borraba un checklist recien restaurado
+    // de un borrador — con el agravante de que el submit solo guarda el
+    // checklist si tiene valores, asi que se perdia sin ningun aviso.
+    setChecklistValores({})
+    setChecklistNotas("")
+    setChecklistFirma(null)
+    setChecklistFirmaMime(null)
+    setFirmaResetKey((prev) => prev + 1)
+    // Las respuestas que venian del borrador se acaban de ir con el cambio de
+    // tipo: ya no hay nada que comparar contra ningun template.
+    setChecklistDelBorrador(null)
     // If new type has a usarComoDispositivo field, clear dispositivo so it gets set by the field
     const nuevoTipoObj = tiposDispositivo.find((t) => t.codigo === nuevoTipo)
     const nuevoConfig = nuevoTipoObj?.config
@@ -286,27 +770,113 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
   // Fetch checklist template when device type changes
   useEffect(() => {
+    let cancelled = false
+    const tipoId = tipoSeleccionado?.id
+    const codigoTipo = tipoSeleccionado?.codigo ?? ""
+
     const fetchChecklistTemplate = async () => {
-      const tipoId = tipoSeleccionado?.id
       try {
         const url = tipoId
           ? `/api/checklist-templates/by-device-type?tipoDispositivoId=${tipoId}`
           : `/api/checklist-templates/by-device-type`
         const res = await fetch(url)
-        if (res.ok) {
-          const data = await res.json()
-          setChecklistTemplate(data.template)
-          setChecklistValores({})
-          setChecklistNotas("")
-          setChecklistFirma(null)
-          setChecklistFirmaMime(null)
-        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        // `cancelled`: el operador puede cambiar de tipo antes de que llegue
+        // esta respuesta, y la vieja pisaria al template del tipo nuevo.
+        if (cancelled) return
+        // Solo el template: las respuestas se limpian en handleTipoChange
+        // (ver el comentario ahi). Este efecto tambien corre al montar.
+        setChecklistTemplate(data.template)
+        setChecklistTemplateTipo(codigoTipo)
       } catch (error) {
         console.error("Error fetching checklist template:", error)
+        if (cancelled) return
+        // Sin template no hay checklist que enviar, y dejar en pantalla el del
+        // tipo anterior es peor: el submit lo mandaria con las respuestas de
+        // este. La resolucion se marca igual (aunque haya fallado) para que las
+        // respuestas restauradas no queden esperando un template que no vino.
+        setChecklistTemplate(null)
+        setChecklistTemplateTipo(codigoTipo)
       }
     }
+
     fetchChecklistTemplate()
-  }, [tipoSeleccionado?.id])
+    return () => {
+      cancelled = true
+    }
+  }, [tipoSeleccionado?.id, tipoSeleccionado?.codigo])
+
+  /**
+   * Las respuestas del checklist se indexan por id de item del template, pero
+   * el template no se persiste en el borrador: al restaurar se vuelve a pedir
+   * por tipo de equipo. Si la organizacion lo reemplazo dentro de los 7 dias que
+   * vive el borrador, las claves restauradas no corresponden a ningun item: el
+   * checklist se dibuja vacio y el submit igual las manda bajo el templateId
+   * nuevo.
+   *
+   * Y "lo edito" no es lo mismo que "lo reemplazo": el endpoint de edicion
+   * actualiza la fila en el lugar, con lo cual sacarle o agregarle items deja el
+   * MISMO id. Por eso no alcanza con comparar ids -- cada clave restaurada se
+   * valida ademas contra los items que el template tiene hoy.
+   *
+   * Vive en su propio efecto, y no adentro del fetch, porque ahi la comparacion
+   * dependia de que la respuesta del servidor llegara despues de que el borrador
+   * se aplicara, y directamente no corria en los dos casos en que el tipo del
+   * borrador no resuelve nunca (un borrador sin tipo de equipo, o de un tipo que
+   * la organizacion borro) ni cuando el fetch fallaba, porque la llamada estaba
+   * adentro del `if (res.ok)`.
+   */
+  useEffect(() => {
+    if (!checklistDelBorrador) return
+    // El tipo del borrador todavia puede estar por resolver.
+    if (tiposLoading) return
+    const codigoTipo = tipoSeleccionado?.codigo ?? ""
+    if (codigoTipo !== checklistDelBorrador.tipoDispositivo) {
+      // El tipo con el que se respondio el checklist ya no existe en la
+      // organizacion (si lo hubiera cambiado el operador, handleTipoChange ya
+      // limpio esto): el template que se va a enviar es otro, con otros items.
+      setChecklistDelBorrador(null)
+      setChecklistValores({})
+      return
+    }
+    // El template DE ESTE TIPO todavia no resolvio. Comparar contra el que haya
+    // en pantalla descartaria respuestas validas: el primer fetch del montaje
+    // sale con el tipo aun sin resolver y trae el default de la organizacion.
+    if (checklistTemplateTipo !== codigoTipo) return
+    setChecklistDelBorrador(null)
+    if ((checklistTemplate?.id ?? null) !== checklistDelBorrador.templateId) {
+      // Las notas son texto libre, no estan indexadas por item: se conservan.
+      setChecklistValores({})
+      return
+    }
+    // Mismo id de template, pero eso no alcanza: PUT /api/checklist-templates/[id]
+    // lo edita EN EL LUGAR y los items viven en su propia tabla, asi que
+    // agregarle o sacarle items durante los 7 dias que vive el borrador deja el
+    // id intacto. Comparar solo el id dejaba pasar respuestas indexadas por
+    // items que ya no existen, bajo un templateId que si -- invisibles en la
+    // ficha, igual que si el template hubiera cambiado entero. Se valida cada
+    // clave contra los items de hoy.
+    const itemsVigentes = new Set<string>(
+      ((checklistTemplate?.items ?? []) as { id?: string }[])
+        .map((item) => item.id)
+        .filter((id): id is string => typeof id === "string")
+    )
+    setChecklistValores((previas) => {
+      const claves = Object.keys(previas).filter((clave) => itemsVigentes.has(clave))
+      // Sin cambios se devuelve el mismo objeto: un objeto nuevo por cada
+      // resolucion de template re-dispara todo lo que depende de estas
+      // respuestas sin que ninguna haya cambiado.
+      if (claves.length === Object.keys(previas).length) return previas
+      return Object.fromEntries(claves.map((clave) => [clave, previas[clave]]))
+    })
+  }, [
+    checklistDelBorrador,
+    tiposLoading,
+    tipoSeleccionado?.codigo,
+    checklistTemplate,
+    checklistTemplateTipo,
+  ])
 
   // Fetch sectors when client changes
   const clienteId = watch("clienteId")
@@ -356,13 +926,23 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   // Pre-seleccionar al usuario actual solo si NO es admin. Para un admin se deja
   // "Sin asignar" a propósito: el fallback server-side ya lo registra como receptor.
   useEffect(() => {
-    if (session?.user?.id && session.user.role !== "ADMIN" && !selectedRecibidoPorId) {
-      setSelectedRecibidoPorId(session.user.id)
+    if (recibidoPorPorDefecto && !selectedRecibidoPorId) {
+      setSelectedRecibidoPorId(recibidoPorPorDefecto)
     }
-  }, [session?.user?.id, session?.user?.role])
+  }, [recibidoPorPorDefecto])
 
+  // Sector elegido y lista de sectores del cliente. El sector se limpia solo
+  // cuando el cliente CAMBIA de verdad: este efecto tambien corre al montar y
+  // cuando `esClienteEmpresa` pasa a true (el objeto Cliente llega despues),
+  // y ahi borraba el sector que acababa de restaurar un borrador.
+  const sectoresClienteIdRef = useRef<string | null>(null)
   useEffect(() => {
-    setSelectedSectorId("")
+    const clienteActual = clienteId || null
+    const clienteAnterior = sectoresClienteIdRef.current
+    sectoresClienteIdRef.current = clienteActual
+    if (clienteAnterior !== null && clienteAnterior !== clienteActual) {
+      setSelectedSectorId("")
+    }
     setSectoresCliente([])
     if (!clienteId || !esClienteEmpresa) return
 
@@ -552,6 +1132,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
       if (res.status === 202) {
         // Queued offline
+        clearDraft()
         await showInfo("Orden guardada offline. Se sincronizará automáticamente cuando vuelva la conexión.")
         onSuccess?.()
         onClose()
@@ -572,9 +1153,32 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       }
 
       const nuevaOrden = await res.json()
+      // El borrador se da de baja siempre, incluso cuando el checklist se queda
+      // afuera (ver mas abajo): la orden YA existe, asi que conservarlo dejaria
+      // la apertura siguiente restaurando una carga que ya se convirtio en
+      // orden -- una segunda orden del mismo equipo.
+      clearDraft()
 
-      // Guardar checklist si hay template y valores completados
-      if (checklistTemplate && Object.keys(checklistValores).length > 0) {
+      /** Respuestas restauradas que este submit no puede mandar. Se calcula
+       *  antes del POST porque es lo que hay que AVISAR despues: el borrador ya
+       *  no esta, o sea que estas respuestas no quedan guardadas en ningun lado. */
+      const checklistSinResolver =
+        !!checklistDelBorrador && Object.keys(checklistValores).length > 0
+
+      // Guardar checklist si hay template y valores completados.
+      //
+      // `!checklistDelBorrador` es el mismo freno que el efecto de respuestas
+      // huerfanas, que solo las limpia DESPUES de que el template del tipo de
+      // equipo resuelve. Sin el, el submit entraba por la otra puerta: en una
+      // terminal lenta el fetch del montaje sale antes que la lista de tipos y
+      // deja en pantalla el template por defecto de la organizacion, asi que un
+      // "Crear orden" apretado mientras el del tipo sigue en vuelo guardaba las
+      // respuestas del borrador bajo un templateId que no es el suyo -- items
+      // que no existen en ese template, invisibles en la ficha. Mientras el
+      // latch siga puesto no hay contra que validarlas, asi que no se mandan:
+      // guardarlas mal es peor que no guardarlas, pero las dos son una perdida
+      // y el operador tiene que enterarse (el aviso, despues del POST).
+      if (!checklistDelBorrador && checklistTemplate && Object.keys(checklistValores).length > 0) {
         try {
           const checklistBody = {
             templateId: checklistTemplate.id,
@@ -595,6 +1199,16 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         } catch (checklistError) {
           console.error("[CHECKLIST SAVE] Exception:", checklistError)
         }
+      }
+
+      if (checklistSinResolver) {
+        // Se dice antes del modal de exito. Callarlo dejaba al operador con una
+        // orden creada, un checklist que contesto y ningun rastro de que no se
+        // guardo: lo iba a descubrir el que abriera la ficha, sin saber que
+        // habia estado completo alguna vez.
+        await showInfo(
+          `Se creó la ${term("orden")}, pero el checklist de ingreso no se guardó: el checklist del tipo de ${term("equipo")} todavía no había terminado de cargar. Completalo desde la ficha.`
+        )
       }
 
       setOrdenCreada({
@@ -690,12 +1304,16 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             )}
           </div>
         )}
-        <form onSubmit={(e) => {
+        <form ref={formRef} onSubmit={(e) => {
           e.preventDefault()
           if (currentStep < totalSteps) {
             handleNextStep()
           }
         }} className="space-y-4">
+          {draftNoticeVisible && (
+            <DraftRestoredNotice onDiscard={discardDraft} />
+          )}
+
           {/* Step indicator */}
           {(() => {
             const stepsForLabel = [
@@ -750,7 +1368,9 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               value={watch("clienteId") || null}
               onChange={(id, cliente) => {
                 setValue("clienteId", id || "", { shouldValidate: !!id })
-                setSelectedClienteObj(cliente as Cliente | null)
+                // Proyectado en el acto: la ficha entera del cliente nunca
+                // entra al estado que el borrador persiste (ver getValue).
+                setSelectedClienteObj(toClienteResumen(cliente))
                 if (id) clearErrors("clienteId")
               }}
             />
@@ -1380,6 +2000,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                   </div>
                   <div className="pt-2 border-t">
                     <SignaturePad
+                      key={firmaResetKey}
                       label="Firma del Cliente (Conformidad de recepción)"
                       onSignatureChange={(data, mime) => {
                         setChecklistFirma(data)

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, lazyInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { formatInventario } from "@/lib/db-utils"
 import {
   getCookieSucursalId,
   resolveSucursalLectura,
@@ -30,6 +29,16 @@ export async function GET(request: Request) {
   try {
     const { error, organizationId, role, session } = await requireAuth()
     if (error) return error
+
+    // Purchase cost (precioCompra) follows the same rule as the rest of the
+    // inventario endpoints: hasInventarioAccess (ADMIN always, VENDEDOR only
+    // if the org opted in via vendedores_administran_inventario, TECNICO never).
+    //
+    // Resolved lazily: this route runs once per keystroke of the POS product
+    // search, and the flag lives behind an uncached SELECT. It is awaited only
+    // where the cost is written into the response, so a search that returns
+    // nothing — or bails out before querying — costs no extra round trip.
+    const canViewCost = lazyInventarioAccess(role, organizationId!)
 
     const { searchParams } = new URL(request.url)
     const q = searchParams.get("q") || ""
@@ -134,14 +143,17 @@ export async function GET(request: Request) {
       const { data: items, error: dbError } = await query
       if (dbError) throw dbError
 
-      const formatted = (items || []).map((item) => ({
+      const rows = items || []
+      const puedeVerCosto = rows.length > 0 ? await canViewCost() : false
+
+      const formatted = rows.map((item) => ({
         id: item.id,
         codigo: item.codigo,
         nombre: item.nombre,
         stock: item.stock,
         stockReservado: item.stock_reservado ?? 0,
         precioVenta: item.precio_venta,
-        precioCompra: item.precio_compra ?? 0,
+        precioCompra: puedeVerCosto ? (item.precio_compra ?? 0) : null,
         trackeaSeries: item.trackea_series ?? false,
         diasGarantiaDefault: (item as any).dias_garantia_default ?? null,
       }))
@@ -183,7 +195,10 @@ export async function GET(request: Request) {
     const { data: items, error: dbError } = await query
     if (dbError) throw dbError
 
-    const formatted = (items || []).map((item: any) => {
+    const rows = items || []
+    const puedeVerCosto = rows.length > 0 ? await canViewCost() : false
+
+    const formatted = rows.map((item: any) => {
       // inventario_depositos is an array when using !inner embed; take first row
       const depRow = Array.isArray(item.inventario_depositos)
         ? item.inventario_depositos[0]
@@ -197,7 +212,7 @@ export async function GET(request: Request) {
         stock,
         stockReservado,
         precioVenta: item.precio_venta,
-        precioCompra: item.precio_compra ?? 0,
+        precioCompra: puedeVerCosto ? (item.precio_compra ?? 0) : null,
         trackeaSeries: item.trackea_series ?? false,
         diasGarantiaDefault: item.dias_garantia_default ?? null,
       }

@@ -27,6 +27,10 @@ export function UpgradeModal({ open, onClose, planSlug = "profesional" }: Upgrad
   const { showError } = useModal()
   const [billingPeriod, setBillingPeriod] = useState<"MONTHLY" | "YEARLY">("MONTHLY")
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("mercadopago")
+  // Pago único es el DEFAULT a proposito: el debito automatico es una
+  // autorizacion permanente sobre el medio de pago del taller, y que venga
+  // preseleccionada empuja a darla sin decidirlo. Ver spec §3.2.
+  const [modoCobro, setModoCobro] = useState<"unico" | "automatico">("unico")
   const [loading, setLoading] = useState(false)
   const [planName, setPlanName] = useState("Profesional")
   const [pricesArs, setPricesArs] = useState({ MONTHLY: 19999, YEARLY: 149999 })
@@ -95,7 +99,12 @@ export function UpgradeModal({ open, onClose, planSlug = "profesional" }: Upgrad
     setLoading(true)
     try {
       if (paymentMethod === "mercadopago") {
-        const response = await fetch("/api/mercadopago/preference", {
+        const ruta =
+          modoCobro === "automatico"
+            ? "/api/mercadopago/preapproval"
+            : "/api/mercadopago/preference"
+
+        const response = await fetch(ruta, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ billingPeriod, planSlug }),
@@ -106,7 +115,7 @@ export function UpgradeModal({ open, onClose, planSlug = "profesional" }: Upgrad
         if (data.initPoint) {
           await openPaymentUrl(data.initPoint)
         } else {
-          throw new Error("No se pudo iniciar el pago")
+          throw new Error(data.error || "No se pudo iniciar el pago")
         }
       } else {
         const response = await fetch("/api/creem/checkout", {
@@ -276,6 +285,45 @@ export function UpgradeModal({ open, onClose, planSlug = "profesional" }: Upgrad
               ))}
             </div>
           </div>
+
+          {/* Modo de cobro (solo MercadoPago: Creem ya tiene recurrencia propia) */}
+          {paymentMethod === "mercadopago" && (
+            <div className="space-y-2">
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="modo-cobro"
+                  value="unico"
+                  checked={modoCobro === "unico"}
+                  onChange={() => setModoCobro("unico")}
+                  className="mt-1"
+                />
+                <span className="text-sm">
+                  <span className="font-medium">Pago único</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Pagás este mes. Cuando venza, lo renovás vos.
+                  </span>
+                </span>
+              </label>
+
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="modo-cobro"
+                  value="automatico"
+                  checked={modoCobro === "automatico"}
+                  onChange={() => setModoCobro("automatico")}
+                  className="mt-1"
+                />
+                <span className="text-sm">
+                  <span className="font-medium">Débito automático</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Se cobra solo todos los meses. Lo cancelás cuando quieras.
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
 
           {/* Botón de acción */}
           <Button

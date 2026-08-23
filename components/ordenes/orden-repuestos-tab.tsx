@@ -23,8 +23,9 @@ interface Repuesto {
   inventario?: { id: string; nombre: string; stock: number } | null
   nombre?: string
   cantidad: number
-  /** COSTO unitario: lo que pagó el taller. Lo usan los reportes de rentabilidad. */
-  precioUnitario: number
+  /** COSTO unitario: lo que pagó el taller. Lo usan los reportes de rentabilidad.
+   *  El servidor lo devuelve en NULL a los roles sin acceso a inventario. */
+  precioUnitario: number | null
   /** Precio de VENTA unitario: lo que se le cobra al cliente.
    *  NULL en repuestos cargados antes de la migración 286. */
   precioVentaUnitario?: number | null
@@ -290,10 +291,17 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
   // Los importes que se muestran son los de VENTA: son los que se le cobran al
   // cliente y los que se suman al total en la entrega. El costo se muestra
   // aparte, como referencia de margen.
-  const subtotalRepuestos = repuestos?.reduce(
-    (sum, r) => sum + cantidadDe(r) * precioVentaRepuesto(r),
+  //
+  // Una fila anterior a la migración 286 no tiene precio de venta y cae al
+  // costo, que el servidor oculta a los roles sin acceso a inventario. Cuando
+  // eso pasa no hay precio que mostrar: el subtotal se oculta en vez de
+  // publicar un número que le falta un sumando.
+  const preciosDeVenta = (repuestos || []).map((r) => precioVentaRepuesto(r))
+  const subtotalCompleto = preciosDeVenta.every((p) => p !== null)
+  const subtotalRepuestos = (repuestos || []).reduce(
+    (sum, r, i) => sum + cantidadDe(r) * (preciosDeVenta[i] ?? 0),
     0
-  ) || 0
+  )
   const subtotalCosto = repuestos?.reduce(
     (sum, r) => sum + cantidadDe(r) * Number(r.precioUnitario ?? 0),
     0
@@ -368,12 +376,14 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
                         }}
                       />
                     </div>
-                    <div>
-                      <Label className="text-xs">Subtotal</Label>
-                      <div className="flex h-10 items-center rounded-md border border-dashed px-3 text-sm font-medium">
-                        {formatPrice(itemSeleccionado.precioCompra * nuevoRepuesto.cantidad)}
+                    {mostrarCostos && itemSeleccionado.precioCompra !== null && (
+                      <div>
+                        <Label className="text-xs">Subtotal</Label>
+                        <div className="flex h-10 items-center rounded-md border border-dashed px-3 text-sm font-medium">
+                          {formatPrice(itemSeleccionado.precioCompra * nuevoRepuesto.cantidad)}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
                 {excedeStock && (
@@ -484,7 +494,9 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
 
         {repuestos && repuestos.length > 0 ? (
           <div className="space-y-2">
-            {repuestos.map((repuesto) => (
+            {repuestos.map((repuesto) => {
+              const precioVenta = precioVentaRepuesto(repuesto)
+              return (
               <div
                 key={repuesto.id}
                 className="flex items-center justify-between p-3 border rounded-lg"
@@ -499,7 +511,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
                     )}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {cantidadDe(repuesto)} × {formatPrice(precioVentaRepuesto(repuesto))}
+                    {cantidadDe(repuesto)} × {precioVenta === null ? "Sin precio" : formatPrice(precioVenta)}
                     {mostrarCostos && (
                       <span className="ml-2 text-xs">
                         (costo {formatPrice(Number(repuesto.precioUnitario ?? 0))})
@@ -541,19 +553,24 @@ export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, o
                     </div>
                   )}
                   <span className="font-semibold">
-                    {formatPrice(cantidadDe(repuesto) * precioVentaRepuesto(repuesto))}
+                    {precioVenta === null
+                      ? "Sin precio"
+                      : formatPrice(cantidadDe(repuesto) * precioVenta)}
                   </span>
                   <Button variant="ghost" size="icon" className="h-8 w-8" disabled={updating} onClick={() => handleRemoveRepuesto(repuesto.id)}>
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 </div>
               </div>
-            ))}
+              )
+            })}
             <div className="pt-3 border-t space-y-1">
-              <div className="flex justify-between font-semibold">
-                <span>Subtotal Repuestos</span>
-                <span>{formatPrice(subtotalRepuestos)}</span>
-              </div>
+              {subtotalCompleto && (
+                <div className="flex justify-between font-semibold">
+                  <span>Subtotal Repuestos</span>
+                  <span>{formatPrice(subtotalRepuestos)}</span>
+                </div>
+              )}
               {mostrarCostos && (
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>Costo · margen</span>

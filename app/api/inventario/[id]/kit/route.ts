@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 // GET /api/inventario/[id]/kit
@@ -10,8 +10,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
+
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
 
     const { id } = await params
     const { searchParams } = new URL(request.url)
@@ -63,14 +68,13 @@ export async function GET(
               0,
               (c.componente.stock ?? 0) - (c.componente.stock_reservado ?? 0)
             ),
-            precioCompra: c.componente.precio_compra ?? 0,
+            precioCompra: canViewCost ? (c.componente.precio_compra ?? 0) : null,
             imagenUrl: c.componente.imagen_url ?? null,
             esKit: c.componente.es_kit ?? false,
             tipoKit: c.componente.tipo_kit ?? null,
           }
         : null,
-      subtotalCosto:
-        c.cantidad * Number(c.componente?.precio_compra ?? 0),
+      subtotalCosto: canViewCost ? c.cantidad * Number(c.componente?.precio_compra ?? 0) : null,
     }))
 
     // Costo calculado via RPC (autoritario)
@@ -91,8 +95,8 @@ export async function GET(
           codigo: r.codigo,
           nombre: r.nombre,
           cantidadTotal: Number(r.cantidad_total),
-          precioCompra: Number(r.precio_compra ?? 0),
-          costoSubtotal: Number(r.costo_subtotal ?? 0),
+          precioCompra: canViewCost ? Number(r.precio_compra ?? 0) : null,
+          costoSubtotal: canViewCost ? Number(r.costo_subtotal ?? 0) : null,
           esKit: r.es_kit,
           profundidad: r.profundidad,
         }))
@@ -106,14 +110,14 @@ export async function GET(
         nombre: kit.nombre,
         stock: kit.stock ?? 0,
         stockReservado: kit.stock_reservado ?? 0,
-        precioCompra: kit.precio_compra ?? 0,
+        precioCompra: canViewCost ? (kit.precio_compra ?? 0) : null,
         precioVenta: kit.precio_venta ?? 0,
         esKit: kit.es_kit ?? false,
         tipoKit: kit.tipo_kit ?? null,
         imagenUrl: kit.imagen_url ?? null,
       },
       componentes,
-      costoCalculado: Number(costoData ?? 0),
+      costoCalculado: canViewCost ? Number(costoData ?? 0) : null,
       explosionado,
     })
   } catch (err) {

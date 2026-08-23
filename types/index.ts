@@ -184,7 +184,9 @@ export interface Inventario {
   tipoDispositivoCustom?: TipoDispositivoCustom | null
   stock: number
   stockReservado: number
-  precioCompra: number
+  // Los endpoints devuelven null cuando el rol no tiene acceso a inventario
+  // (ver hasInventarioAccess). No es un costo de 0: es un permiso faltante.
+  precioCompra: number | null
   precioVenta: number
   proveedor?: string | null
   proveedorId?: string | null

@@ -15,6 +15,7 @@ import {
   Mail,
   MapPin,
   Wrench,
+  Hammer,
   Trash2,
   FileText,
   FileDown,
@@ -69,6 +70,7 @@ import { OrdenTecnicoCard } from "@/components/ordenes/orden-tecnico-card"
 import { OrdenCostosCard } from "@/components/ordenes/orden-costos-card"
 import { OrdenComisionCard } from "@/components/ordenes/orden-comision-card"
 import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
+import { OrdenServiciosTab } from "@/components/ordenes/orden-servicios-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
 import { ConfirmarReparadoDialog } from "@/components/ordenes/confirmar-reparado-dialog"
 import { NotaCreditoDialog } from "@/components/notas-credito/nota-credito-dialog"
@@ -1017,6 +1019,15 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 <Package className="h-4 w-4" />
                 Repuestos
               </TabsTrigger>
+              {/* Servicios mueve el presupuesto y el costo final de la orden,
+                  asi que el panel es solo ADMIN. El trigger sigue al panel: si
+                  se muestra sin el, el tecnico abre una pestana vacia. */}
+              {isAdmin && (
+                <TabsTrigger value="servicios" className="gap-2">
+                  <Hammer className="h-4 w-4" />
+                  Servicios
+                </TabsTrigger>
+              )}
               <TabsTrigger value="fotos" className="gap-2">
                 <Camera className="h-4 w-4" />
                 Fotos
@@ -1045,6 +1056,20 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               />
             </TabsContent>
 
+            <TabsContent value="servicios" className="mt-4">
+              {isAdmin && (
+                <OrdenServiciosTab
+                  ordenId={ordenId}
+                  servicios={(orden as any).servicios || []}
+                  costoFinal={orden.costoFinal ?? null}
+                  presupuesto={orden.presupuesto ?? null}
+                  estado={orden.estado}
+                  totalCobrado={orden.totalCobrado || 0}
+                  onServiciosChanged={fetchOrden}
+                />
+              )}
+            </TabsContent>
+
             <TabsContent value="fotos" className="mt-4">
               <FotoGallery ordenId={ordenId} />
             </TabsContent>
@@ -1056,7 +1081,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             <TabsContent value="cotizaciones" className="mt-4">
               <Card>
                 <CardContent className="p-6">
-                  <CotizacionList ordenId={ordenId} clienteEmail={orden.cliente?.email} readOnly={!isAdmin && userRole !== "TECNICO"} repuestos={(orden as any).repuestos || []} onOrdenChanged={fetchOrden} />
+                  <CotizacionList ordenId={ordenId} clienteEmail={orden.cliente?.email} readOnly={!isAdmin && userRole !== "TECNICO"} repuestos={(orden as any).repuestos || []} mostrarCostos={isAdmin} onOrdenChanged={fetchOrden} />
                 </CardContent>
               </Card>
             </TabsContent>

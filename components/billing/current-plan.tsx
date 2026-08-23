@@ -119,8 +119,10 @@ export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: Cur
             <Calendar className="h-4 w-4 shrink-0" />
             {isCanceled ? (
               <span>Termina el {periodEnd}</span>
-            ) : (
+            ) : subscription.autoDebito ? (
               <span>Próxima facturación: {periodEnd}</span>
+            ) : (
+              <span>Vence el {periodEnd}. Renovás vos.</span>
             )}
           </div>
         )}

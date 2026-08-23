@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 // GET /api/proveedores/stats
@@ -7,10 +7,11 @@ import { supabaseAdmin } from "@/lib/supabase"
 // - productosCount: cantidad de items de inventario asociados (no archivados)
 // - ordenesCount: cantidad de órdenes de compra
 // - totalComprado: suma de totales de ordenes_compra recibidas / parciales
+//   (null cuando el rol no puede ver costos de compra)
 // - ultimaCompra: fecha de la última OC (emisión)
 export async function GET() {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     const [invRes, ocRes] = await Promise.all([
@@ -37,6 +38,16 @@ export async function GET() {
       { productosCount: number; ordenesCount: number; totalComprado: number; ultimaCompra: string | null }
     > = {}
 
+    // totalComprado es lo que la organización le pagó al proveedor: la suma de
+    // ordenes_compra.total recibidas. Es el mismo dato comercial que
+    // valorCostoStock, que /api/proveedores/[id]/stats ya esconde detrás de
+    // hasInventarioAccess. Mostrar uno y tapar el otro en la misma pantalla no
+    // es una línea defendible, así que van juntos.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
     for (const row of invRes.data || []) {
       const id = row.proveedor_id as string
       if (!id) continue
@@ -58,7 +69,18 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json(stats, { headers: { "Cache-Control": "no-store" } })
+    // El gate se aplica recién al escribir la respuesta, así los totales se
+    // siguen sumando sobre las cifras reales y no sobre los nulls.
+    const payload: Record<
+      string,
+      { productosCount: number; ordenesCount: number; totalComprado: number | null; ultimaCompra: string | null }
+    > = canViewCost
+      ? stats
+      : Object.fromEntries(
+          Object.entries(stats).map(([id, s]) => [id, { ...s, totalComprado: null }])
+        )
+
+    return NextResponse.json(payload, { headers: { "Cache-Control": "no-store" } })
   } catch (error) {
     console.error("Error en stats proveedores:", error)
     return NextResponse.json({ error: "Error al calcular stats" }, { status: 500 })

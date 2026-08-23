@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados, canViewCotizacionCosts } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { queueNotification } from "@/lib/notifications/queue"
 import { formatOrden } from "@/lib/db-utils"
-import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos, ESTADO_LABELS } from "@/lib/orden-state-machine"
+import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos, ESTADO_LABELS, ESTADOS_COSTO_FINAL_BLOQUEADO } from "@/lib/orden-state-machine"
 import { z } from "zod"
 
 // Estados que solo se alcanzan por POST /api/ordenes/[id]/entregar. Ese endpoint,
@@ -76,6 +76,7 @@ export async function GET(
           *,
           inventario (*)
         ),
+        servicios_orden (*),
         cotizaciones!cotizaciones_orden_id_fkey (
           id,
           estado,
@@ -134,7 +135,53 @@ export async function GET(
       .limit(1)
       .maybeSingle()
 
-    const formatted = formatOrden(orden)
+    // The repuestos_orden/cotizaciones embeds carry a live inventario join
+    // (repuestos_orden -> inventario, items_cotizacion -> inventario) with
+    // its purchase cost (precio_compra). That is inventario cost data, not
+    // orden pricing (orden.costoFinal/orden.presupuesto stay visible to
+    // everyone), so it follows the two independent cost gates:
+    //  - inventario purchase cost -> hasInventarioAccess (ADMIN always,
+    //    VENDEDOR only if the org opted in, TECNICO never)
+    //  - cotización item cost -> canViewCotizacionCosts (ADMIN only,
+    //    uniformly — VENDEDOR included, since they have no cotizaciones nav
+    //    access today; that loss is deliberate, not an oversight)
+    //
+    // Both gates have to reach formatOrden itself, not just its output: the
+    // frozen cost copy (repuesto.precioUnitario) and the cotización cost
+    // aggregate (costoRepuestosCotizaciones) are produced inside it.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewInventarioCost = hasInventarioAccess(role, vendedoresHabilitados)
+    const canViewCotizacionCost = canViewCotizacionCosts(role)
+
+    const formatted = formatOrden(orden, {
+      includeInventarioCost: canViewInventarioCost,
+      includeCotizacionCost: canViewCotizacionCost,
+    })
+
+    // formatOrden only returns null for a falsy orden, already handled above;
+    // the guard is here so the gating below type-checks under `strict`.
+    if (!formatted) {
+      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
+    }
+
+    if (!canViewInventarioCost && Array.isArray(formatted.repuestos)) {
+      formatted.repuestos = formatted.repuestos.map((r: any) =>
+        r?.inventario ? { ...r, inventario: { ...r.inventario, precioCompra: null } } : r
+      )
+    }
+    if (!canViewCotizacionCost && Array.isArray(formatted.cotizaciones)) {
+      formatted.cotizaciones = formatted.cotizaciones.map((c: any) => ({
+        ...c,
+        items_cotizacion: Array.isArray(c.items_cotizacion)
+          ? c.items_cotizacion.map((it: any) =>
+              it?.inventario ? { ...it, inventario: { ...it.inventario, precio_compra: null } } : it
+            )
+          : c.items_cotizacion,
+      }))
+    }
+
     const org = (orden as any).organizations
     return NextResponse.json({
       ...formatted,
@@ -279,7 +326,35 @@ export async function PUT(
     }
     if (data.porcentajeComision !== undefined) updateData.porcentaje_comision = data.porcentajeComision
     if (data.presupuesto !== undefined) updateData.presupuesto = data.presupuesto
-    if (data.costoFinal !== undefined) updateData.costo_final = data.costoFinal
+    if (data.costoFinal !== undefined) {
+      // costo_final es la base de la comisión del técnico (migración 119) y del
+      // saldo que se carga a cuenta corriente al entregar. Las columnas DECIMAL
+      // llegan como string desde supabase-js, así que se coercionan con Number()
+      // antes de comparar.
+      const totalCobradoActual = Number(orden.total_cobrado ?? 0)
+      const descuentoCobroActual = Number(orden.descuento_cobro ?? 0)
+      const nuevoCostoFinal = data.costoFinal === null ? 0 : data.costoFinal
+
+      if (nuevoCostoFinal - descuentoCobroActual < totalCobradoActual) {
+        return NextResponse.json(
+          {
+            error: `No se puede bajar el costo final por debajo de lo ya cobrado ($${totalCobradoActual.toLocaleString()}). Para devolver dinero al cliente hay que registrar una devolución, no editar el costo final.`,
+          },
+          { status: 400 }
+        )
+      }
+
+      if (nuevoCostoFinal === 0 && ESTADOS_COSTO_FINAL_BLOQUEADO.includes(orden.estado)) {
+        return NextResponse.json(
+          {
+            error: `No se puede dejar el costo final vacío en una orden en estado "${ESTADO_LABELS[orden.estado as keyof typeof ESTADO_LABELS] ?? orden.estado}". Si hace falta corregir el precio, hay que cargar un valor mayor a cero.`,
+          },
+          { status: 400 }
+        )
+      }
+
+      updateData.costo_final = data.costoFinal
+    }
     if (data.observaciones !== undefined) updateData.observaciones = data.observaciones
     if (data.notasInternas !== undefined) updateData.notas_internas = data.notasInternas
     if (data.diagnostico !== undefined) updateData.diagnostico = data.diagnostico
@@ -486,7 +561,18 @@ export async function PUT(
       }).catch(err => console.error("Error queueing notification:", err))
     }
 
-    return NextResponse.json(formatOrden(updatedOrden))
+    // Mismos dos gates que el GET. Hoy el select del UPDATE no trae los embeds
+    // repuestos_orden/cotizaciones, así que no hay costo que filtrar — pero
+    // dejar los defaults en true hace que la corrección dependa de que nadie
+    // agregue un embed. Se resuelven y se pasan explícitos.
+    const vendedoresHabilitadosPut = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+
+    return NextResponse.json(formatOrden(updatedOrden, {
+      includeInventarioCost: hasInventarioAccess(role, vendedoresHabilitadosPut),
+      includeCotizacionCost: canViewCotizacionCosts(role),
+    }))
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

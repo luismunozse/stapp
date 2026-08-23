@@ -1,4 +1,8 @@
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import {
+  requireAdminOrVendedor,
+  hasInventarioAccess,
+  resolveVendedoresHabilitados,
+} from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { NextResponse } from "next/server"
 import { sucursalParaLectura } from "@/lib/sucursal"
@@ -188,11 +192,34 @@ export async function GET() {
           : (item.inventario as any)?.precio_compra || 0
       totalCosto += (item.cantidad || 0) * costoUnitario
     })
+    // Mismo gate y misma regla que /api/reportes/analisis-inventario: quien no
+    // puede ver el costo de compra por item no recibe NINGUNA cifra derivada
+    // de precio_compra, a ningún nivel de agregación.
+    //
+    // totalCosto tiene la misma forma que resumen.valorCompra, que esta rama
+    // ya gateó por este motivo: costo_unitario_snapshot es el precio_compra
+    // congelado al momento de la venta, y cuando falta se lee
+    // inventario.precio_compra en vivo. Con un único item vendido en el mes
+    // —o un único SKU en la organización— totalCosto sobre la cantidad ES el
+    // costo unitario exacto.
+    //
+    // margen es totalVentas - totalCosto y totalVentas viaja acá al lado, así
+    // que nullear solo totalCosto lo dejaría recuperable por resta; porcentaje
+    // es ese margen sobre totalVentas. Los tres caen juntos.
+    //
+    // totalVentas es facturación, no costo: su tier no cambió y sigue visible.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
     const margenBruto = {
       totalVentas,
-      totalCosto,
-      margen: totalVentas - totalCosto,
-      porcentaje: totalVentas > 0 ? ((totalVentas - totalCosto) / totalVentas) * 100 : 0,
+      totalCosto: canViewCost ? totalCosto : null,
+      margen: canViewCost ? totalVentas - totalCosto : null,
+      porcentaje: canViewCost
+        ? (totalVentas > 0 ? ((totalVentas - totalCosto) / totalVentas) * 100 : 0)
+        : null,
     }
 
     // --- Descuentos Otorgados ---

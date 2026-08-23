@@ -6,31 +6,25 @@
 // REMITO_PDF_ENGINE=pdflib.
 import * as React from "react"
 import { Document, Page, View, Text, Image, StyleSheet, renderToBuffer } from "@react-pdf/renderer"
-import { PDFDocument, StandardFonts, type PDFFont } from "pdf-lib"
+import { type PDFFont } from "pdf-lib"
 import { formatCurrencyValue, DEFAULT_CURRENCY, type CurrencyCode } from "./currency"
 import { formatDateValue, formatDateTimeValue, DEFAULT_TIMEZONE } from "./timezone"
+// Monochrome tokens, logo fetching and Helvetica text measurement are shared
+// with the other react-pdf engines — see lib/pdf-react-shared.ts. Everything
+// below that carries this document's own geometry (the letter box, the
+// centered legend and the clamps derived from them) stays here on purpose.
+import {
+  MONO,
+  TYPE,
+  RULE_WIDTH,
+  PAGE_WIDTH_A4,
+  safe,
+  fetchLogo,
+  helveticaMetrics,
+  truncateToWidth,
+  type PdfLogo,
+} from "./pdf-react-shared"
 import type { FacturaPDFData } from "./pdf"
-
-// === Monochrome tokens — copied 1:1 from lib/pdf-style.ts's MONO/TYPE ===
-const MONO = {
-  ink: "#111111",
-  label: "#555555",
-  faint: "#999999",
-  rule: "#cccccc",
-  totalBg: "#f2f2f2",
-}
-
-const TYPE = {
-  docNumber: 18,
-  docTitle: 10,
-  sectionLabel: 6.5,
-  body: 9,
-  small: 8,
-  fine: 6.5,
-  total: 12,
-}
-
-const RULE_WIDTH = 0.5
 
 const estadoPagoLabels: Record<string, string> = {
   PENDIENTE: "PENDIENTE",
@@ -48,69 +42,19 @@ const metodoPagoFacturaLabels: Record<string, string> = {
   OTRO: "Otro",
 }
 
-const safe = (val: unknown): string => {
-  if (val === null || val === undefined) return ""
-  if (typeof val === "string") return val.replace(/[\r\n]+/g, " ").trim()
-  if (typeof val === "number") return String(val)
-  return ""
-}
-
 // === LOGO ===
-// Ported from generateFacturaPDFLegacy's LOGO block (lib/pdf.ts): fetch
-// data.logoUrl, sniff the format from content-type (falling back to the
-// URL's extension), embed the bytes. The fetch is guarded exactly like
-// legacy's try/catch — a failed fetch (network error, non-OK response,
-// unrecognized format) degrades to "no logo" and never rejects, so a broken
-// logoUrl can never kill remito generation. Unlike legacy, we do NOT decode
-// pixel dimensions here: the component reserves a FIXED box
-// (LOGO_BOX_WIDTH x LOGO_BOX_HEIGHT below) and lets react-pdf's own
-// objectFit:"contain" preserve the image's aspect ratio inside it, so the
-// left-zone offset the clamp budget depends on is a known constant instead
-// of varying per image.
-export type RemitoLogo = { data: Buffer; format: "png" | "jpg" }
-
-async function fetchLogo(logoUrl: string | null | undefined): Promise<RemitoLogo | null> {
-  if (!logoUrl) return null
-  try {
-    const res = await fetch(logoUrl)
-    if (!res.ok) return null
-    const bytes = Buffer.from(await res.arrayBuffer())
-    const contentType = res.headers.get("content-type") || ""
-    const lowerUrl = logoUrl.toLowerCase()
-    if (contentType.includes("png") || lowerUrl.includes(".png")) return { data: bytes, format: "png" }
-    if (contentType.includes("jpeg") || contentType.includes("jpg") || lowerUrl.includes(".jpg") || lowerUrl.includes(".jpeg")) {
-      return { data: bytes, format: "jpg" }
-    }
-    return null
-  } catch (logoError) {
-    console.error("Error loading logo:", logoError)
-    return null
-  }
-}
+// fetchLogo lives in lib/pdf-react-shared.ts. It was ported from
+// generateFacturaPDFLegacy's LOGO block (lib/pdf.ts) and keeps legacy's
+// try/catch degrade-to-no-logo guarantee. Unlike legacy, it does NOT decode
+// pixel dimensions: the component reserves a FIXED box (LOGO_BOX_WIDTH x
+// LOGO_BOX_HEIGHT below) and lets react-pdf's own objectFit:"contain"
+// preserve the image's aspect ratio inside it, so the left-zone offset the
+// clamp budget depends on is a known constant instead of varying per image.
 
 // === Left-zone truncation clamp (letter box vs. header text) ===
 // Ported from generateFacturaPDFLegacy's clampLeftZoneText (lib/pdf.ts).
-// pdf-lib's StandardFonts give us the same Helvetica/Helvetica-Bold glyph
-// metrics react-pdf itself renders with, so widths measured here match the
-// actual rendered text.
-let helvCache: { regular: PDFFont; bold: PDFFont } | null = null
-async function helveticaMetrics() {
-  if (!helvCache) {
-    const doc = await PDFDocument.create()
-    helvCache = {
-      regular: await doc.embedFont(StandardFonts.Helvetica),
-      bold: await doc.embedFont(StandardFonts.HelveticaBold),
-    }
-  }
-  return helvCache
-}
-
-function truncateToWidth(font: PDFFont, text: string, size: number, maxWidth: number): string {
-  if (font.widthOfTextAtSize(text, size) <= maxWidth) return text
-  let t = text
-  while (t.length > 0 && font.widthOfTextAtSize(`${t}…`, size) > maxWidth) t = t.slice(0, -1)
-  return `${t}…`
-}
+// truncateToWidth + helveticaMetrics are shared (lib/pdf-react-shared.ts);
+// the budget they are applied to is this document's own, derived below.
 
 // Logo box — matches legacy's max ~50pt tall / ~80pt wide proportions
 // (generateFacturaPDFLegacy's `maxLogoHeight`/`maxLogoWidth`), fixed rather
@@ -139,7 +83,6 @@ const LOGO_GAP = 15
 // Budget shrinks by LOGO_BOX_WIDTH + LOGO_GAP when a logo is present,
 // because the left zone's text column is pushed right by that much (see
 // styles.leftZoneLogo below).
-const PAGE_WIDTH_A4 = 595.28
 const LEFT_ZONE_X = 40 + 10
 const LETTER_BOX_X = PAGE_WIDTH_A4 / 2 - 34 / 2
 const LETTER_BOX_GAP = 10
@@ -302,7 +245,7 @@ export function RemitoDocument({
   metrics,
 }: {
   data: FacturaPDFData
-  logo?: RemitoLogo | null
+  logo?: PdfLogo | null
   metrics: { regular: PDFFont; bold: PDFFont }
 }) {
   const currency = (data.moneda as CurrencyCode) || DEFAULT_CURRENCY

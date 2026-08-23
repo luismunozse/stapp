@@ -57,7 +57,13 @@ interface Insights {
     porTipo: Array<{ tipo: string; count: number }>
     porMarca: Array<{ marca: string; count: number }>
   }
-  topRepuestos: Array<{ nombre: string; cantidad: number; monto: number }>
+  topRepuestos: Array<{
+    nombre: string
+    cantidad: number
+    /** null cuando el rol no puede ver costos de compra (hasInventarioAccess).
+     *  No colapsar a 0 — un 0 se lee como monto real. */
+    monto: number | null
+  }>
   semanas: Array<{ semana: string; completadas: number; ingresos: number }>
   bloqueadas: Array<{
     id: string
@@ -340,7 +346,9 @@ export function TecnicoInsights({ tecnicoId }: { tecnicoId: string }) {
                   <span className="truncate flex-1 pr-2">{r.nombre}</span>
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge variant="outline" className="text-[10px]">×{r.cantidad}</Badge>
-                    <span className="text-muted-foreground">{formatPrice(r.monto)}</span>
+                    {r.monto != null && (
+                      <span className="text-muted-foreground">{formatPrice(r.monto)}</span>
+                    )}
                   </div>
                 </div>
               ))

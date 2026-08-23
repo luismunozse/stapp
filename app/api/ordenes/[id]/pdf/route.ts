@@ -5,6 +5,7 @@ import { generateOrdenPDF, OrdenPDFData } from "@/lib/pdf"
 import { getDeviceTypeLabel } from "@/lib/device-types"
 import { headers } from "next/headers"
 import { getTerminologia } from "@/lib/terminologia-server"
+import { construirTrabajos } from "@/lib/ordenes/trabajos-orden"
 
 export async function GET(
   request: Request,
@@ -42,6 +43,9 @@ export async function GET(
         repuestos_orden (
           nombre, cantidad, precio_venta_unitario,
           inventario:inventario_id ( nombre )
+        ),
+        servicios_orden (
+          nombre, cantidad, precio_unitario
         ),
         garantias (
           dias_validez, fecha_vencimiento, notas
@@ -187,20 +191,12 @@ export async function GET(
         })
       : null
 
-    // Trabajos (repuestos_orden): precio de VENTA unicamente, nunca costo
-    // (precio_unitario / costo). El nombre resuelve manual -> join a inventario.
-    const repuestosArr = (orden.repuestos_orden || []) as any[]
-    const trabajos = repuestosArr.length > 0
-      ? repuestosArr.map((r) => {
-          const cantidad = Number(r.cantidad) || 0
-          const precioVenta = Number(r.precio_venta_unitario) || 0
-          return {
-            nombre: safeString(r.nombre) || safeString(r.inventario?.nombre) || "",
-            cantidad,
-            importe: cantidad * precioVenta,
-          }
-        })
-      : null
+    // Trabajos: repuestos a precio de VENTA (nunca costo) + lineas de servicio.
+    // La regla de que columna leer de cada tabla vive en construirTrabajos.
+    const trabajos = construirTrabajos({
+      repuestos: (orden.repuestos_orden || []) as any[],
+      servicios: (orden.servicios_orden || []) as any[],
+    })
 
     const garantia = garantiaObj ? {
       dias: garantiaObj.dias_validez,

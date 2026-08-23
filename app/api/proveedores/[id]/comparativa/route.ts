@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 // GET /api/proveedores/[id]/comparativa
@@ -11,9 +11,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
     const { id } = await params
+
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
 
     const { data: prov } = await supabaseAdmin
       .from("proveedores")
@@ -100,7 +105,7 @@ export async function GET(
         mine: mineRow
           ? {
               itemId: mineRow.id,
-              precioCompra: mineRow.precio_compra != null ? Number(mineRow.precio_compra) : null,
+              precioCompra: canViewCost && mineRow.precio_compra != null ? Number(mineRow.precio_compra) : null,
               precioVenta: mineRow.precio_venta != null ? Number(mineRow.precio_venta) : null,
               stock: mineRow.stock || 0,
             }
@@ -109,12 +114,12 @@ export async function GET(
           proveedorId: r.proveedor_id,
           proveedorNombre: r.proveedores?.nombre || "—",
           itemId: r.id,
-          precioCompra: r.precio_compra != null ? Number(r.precio_compra) : null,
+          precioCompra: canViewCost && r.precio_compra != null ? Number(r.precio_compra) : null,
           precioVenta: r.precio_venta != null ? Number(r.precio_venta) : null,
           stock: r.stock || 0,
         })),
-        minPrecioCompra: min,
-        mineIsCheapest:
+        minPrecioCompra: canViewCost ? min : null,
+        mineIsCheapest: canViewCost &&
           min != null && mineRow?.precio_compra != null && Number(mineRow.precio_compra) === min,
       })
     }

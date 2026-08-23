@@ -14,7 +14,11 @@ import { useEffect, RefObject } from "react"
  * <div ref={menuRef}>...</div>
  * ```
  */
-export function useFocusTrap(ref: RefObject<HTMLElement>, active: boolean) {
+// El ref admite null porque eso es lo que devuelve `useRef<T>(null)` desde los
+// tipos de React 19, y porque es la verdad: el efecto corre antes de que el
+// elemento exista. La guarda de abajo ya contemplaba ese caso; el tipo viejo
+// (`RefObject<HTMLElement>`) era el que mentía.
+export function useFocusTrap(ref: RefObject<HTMLElement | null>, active: boolean) {
   useEffect(() => {
     if (!active || !ref.current) return
 

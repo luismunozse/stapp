@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server"
-import { requireInventarioAccess, requireAuth } from "@/lib/auth-utils"
+import {
+  requireInventarioAccess,
+  requireAuth,
+  hasInventarioAccess,
+  resolveVendedoresHabilitados,
+} from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 
@@ -10,7 +15,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     const { id } = await params
@@ -33,7 +38,21 @@ export async function GET(
     const { data, error: dbErr } = await query
     if (dbErr) throw dbErr
 
-    return NextResponse.json({ data: data ?? [] })
+    // costo_unitario is the purchase cost of the batch, so it follows the same
+    // rule as inventario.precio_compra everywhere else. Lot tracking (numbers,
+    // quantities, expiry, state) stays available to every role.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
+    const lotes = (data ?? []).map((l: any) =>
+      canViewCost ? l : { ...l, costo_unitario: null }
+    )
+
+    return NextResponse.json({ data: lotes }, {
+      headers: { "Cache-Control": "no-store" },
+    })
   } catch (err) {
     console.error("Error listing lotes:", err)
     return NextResponse.json({ error: "Error al obtener lotes" }, { status: 500 })

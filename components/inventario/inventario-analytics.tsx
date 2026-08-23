@@ -48,6 +48,26 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
     { revalidateOnFocus: false, dedupingInterval: 30000 }
   )
 
+  // El servidor devuelve null en el costo por item (precioCompra y su derivado
+  // capitalInmovilizado) cuando el rol no puede ver costos de compra: acá llega
+  // un VENDEDOR sin el opt-in de inventario, porque la ruta es
+  // requireAdminOrVendedor. Sumar esos null los coerce a 0, así que el total se
+  // oculta en vez de mostrar "$0 inmovilizado" sobre una tabla con filas.
+  const costosPorItemOcultos = Array.isArray(data?.sinMovimiento)
+    && data.sinMovimiento.some((i: any) => i.capitalInmovilizado === null || i.precioCompra === null)
+
+  // Mismo null para el costo por categoría, que se reduce a un item cuando la
+  // categoría tiene un único SKU.
+  const costoPorCategoriaOculto = Array.isArray(data?.porCategoria)
+    && data.porCategoria.some((c: any) => c.valorCosto === null)
+
+  // Y mismo null para las cifras de organización: con totalItems === 1 —una org
+  // nueva, o de un solo SKU— valorCosto / totalUnidades es el costo unitario
+  // exacto, y las dos cifras viajan en la misma valorización. margenPotencial
+  // cae con él porque es valorVenta - valorCosto. Se ocultan las tarjetas en vez
+  // de pintar "$0", que se lee como un inventario sin valor.
+  const costoOrgOculto = data?.valorizacion?.valorCosto === null
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
@@ -70,15 +90,17 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
           <div className="space-y-4">
             {/* Summary Cards */}
             <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-              <Card>
-                <CardContent className="p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-medium text-muted-foreground uppercase">Capital Invertido</span>
-                    <Wallet className="h-3.5 w-3.5 text-blue-500" />
-                  </div>
-                  <div className="text-lg font-bold">{formatPrice(data.valorizacion.valorCosto)}</div>
-                </CardContent>
-              </Card>
+              {!costoOrgOculto && (
+                <Card>
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-medium text-muted-foreground uppercase">Capital Invertido</span>
+                      <Wallet className="h-3.5 w-3.5 text-blue-500" />
+                    </div>
+                    <div className="text-lg font-bold">{formatPrice(data.valorizacion.valorCosto)}</div>
+                  </CardContent>
+                </Card>
+              )}
               <Card>
                 <CardContent className="p-3">
                   <div className="flex items-center justify-between mb-1">
@@ -88,20 +110,22 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                   <div className="text-lg font-bold">{formatPrice(data.valorizacion.valorVenta)}</div>
                 </CardContent>
               </Card>
-              <Card>
-                <CardContent className="p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-medium text-muted-foreground uppercase">Margen Potencial</span>
-                    <TrendingUp className="h-3.5 w-3.5 text-purple-500" />
-                  </div>
-                  <div className="text-lg font-bold text-emerald-600">{formatPrice(data.valorizacion.margenPotencial)}</div>
-                  <p className="text-[10px] text-muted-foreground">
-                    {data.valorizacion.valorCosto > 0
-                      ? `${((data.valorizacion.margenPotencial / data.valorizacion.valorCosto) * 100).toFixed(1)}% sobre costo`
-                      : ""}
-                  </p>
-                </CardContent>
-              </Card>
+              {!costoOrgOculto && (
+                <Card>
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-medium text-muted-foreground uppercase">Margen Potencial</span>
+                      <TrendingUp className="h-3.5 w-3.5 text-purple-500" />
+                    </div>
+                    <div className="text-lg font-bold text-emerald-600">{formatPrice(data.valorizacion.margenPotencial)}</div>
+                    <p className="text-[10px] text-muted-foreground">
+                      {data.valorizacion.valorCosto > 0
+                        ? `${((data.valorizacion.margenPotencial / data.valorizacion.valorCosto) * 100).toFixed(1)}% sobre costo`
+                        : ""}
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
               <Card>
                 <CardContent className="p-3">
                   <div className="flex items-center justify-between mb-1">
@@ -189,7 +213,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs text-muted-foreground">Productos sin ventas en 90 días con stock disponible</p>
-                  {data.sinMovimiento.length > 0 && (
+                  {data.sinMovimiento.length > 0 && !costosPorItemOcultos && (
                     <Badge variant="destructive" className="text-xs">
                       {formatPrice(data.sinMovimiento.reduce((s: number, i: any) => s + i.capitalInmovilizado, 0))} inmovilizado
                     </Badge>
@@ -205,8 +229,12 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                           <th className="pb-2 pr-2">Producto</th>
                           <th className="pb-2 pr-2">Código</th>
                           <th className="pb-2 pr-2 text-right">Stock</th>
-                          <th className="pb-2 pr-2 text-right">P. Costo</th>
-                          <th className="pb-2 text-right">Capital Inmovilizado</th>
+                          {!costosPorItemOcultos && (
+                            <>
+                              <th className="pb-2 pr-2 text-right">P. Costo</th>
+                              <th className="pb-2 text-right">Capital Inmovilizado</th>
+                            </>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
@@ -215,8 +243,12 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                             <td className="py-2 pr-2 font-medium">{item.nombre}</td>
                             <td className="py-2 pr-2 text-xs text-muted-foreground">{item.codigo}</td>
                             <td className="py-2 pr-2 text-right">{item.stock}</td>
-                            <td className="py-2 pr-2 text-right">{formatPrice(item.precioCompra)}</td>
-                            <td className="py-2 text-right font-medium text-destructive">{formatPrice(item.capitalInmovilizado)}</td>
+                            {!costosPorItemOcultos && (
+                              <>
+                                <td className="py-2 pr-2 text-right">{formatPrice(item.precioCompra)}</td>
+                                <td className="py-2 text-right font-medium text-destructive">{formatPrice(item.capitalInmovilizado)}</td>
+                              </>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -294,7 +326,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                           <th className="pb-2 pr-2">Categoría</th>
                           <th className="pb-2 pr-2 text-right">Productos</th>
                           <th className="pb-2 pr-2 text-right">Unidades</th>
-                          <th className="pb-2 pr-2 text-right">Valor Costo</th>
+                          {!costoPorCategoriaOculto && <th className="pb-2 pr-2 text-right">Valor Costo</th>}
                           <th className="pb-2 text-right">Valor Venta</th>
                         </tr>
                       </thead>
@@ -304,7 +336,9 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                             <td className="py-2 pr-2 font-medium">{cat.categoria}</td>
                             <td className="py-2 pr-2 text-right">{cat.items}</td>
                             <td className="py-2 pr-2 text-right">{cat.stock}</td>
-                            <td className="py-2 pr-2 text-right text-muted-foreground">{formatPrice(cat.valorCosto)}</td>
+                            {!costoPorCategoriaOculto && (
+                              <td className="py-2 pr-2 text-right text-muted-foreground">{formatPrice(cat.valorCosto)}</td>
+                            )}
                             <td className="py-2 text-right font-medium">{formatPrice(cat.valorVenta)}</td>
                           </tr>
                         ))}
@@ -314,7 +348,9 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
                           <td className="pt-2 pr-2">Total</td>
                           <td className="pt-2 pr-2 text-right">{data.porCategoria.reduce((s: number, c: any) => s + c.items, 0)}</td>
                           <td className="pt-2 pr-2 text-right">{data.porCategoria.reduce((s: number, c: any) => s + c.stock, 0)}</td>
-                          <td className="pt-2 pr-2 text-right">{formatPrice(data.porCategoria.reduce((s: number, c: any) => s + c.valorCosto, 0))}</td>
+                          {!costoPorCategoriaOculto && (
+                            <td className="pt-2 pr-2 text-right">{formatPrice(data.porCategoria.reduce((s: number, c: any) => s + c.valorCosto, 0))}</td>
+                          )}
                           <td className="pt-2 text-right">{formatPrice(data.porCategoria.reduce((s: number, c: any) => s + c.valorVenta, 0))}</td>
                         </tr>
                       </tfoot>
