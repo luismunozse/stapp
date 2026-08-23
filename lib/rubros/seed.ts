@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { getRubro } from "./index"
+import { personalizarPack } from "./detalle"
 import type { RubroPack } from "./types"
 
 export interface SeedRubroResult {
@@ -26,9 +27,16 @@ export interface SeedRubroResult {
 export async function seedOrganizationFromRubro(
   organizationId: string,
   rubroId: string | null | undefined,
-  client: typeof supabaseAdmin = supabaseAdmin
+  client: typeof supabaseAdmin = supabaseAdmin,
+  /**
+   * Texto libre del registro ("máquinas de café"). Solo se usa con el pack
+   * genérico: reemplaza su tipo EQUIPO por uno con el nombre del oficio y
+   * escribe el vocabulario. Es lo que cubre el long tail de rubros sin escribir
+   * un pack por cada uno. Ver lib/rubros/detalle.ts.
+   */
+  detalle?: string | null
 ): Promise<SeedRubroResult> {
-  const pack = getRubro(rubroId)
+  const pack = personalizarPack(getRubro(rubroId), detalle)
   const errors: string[] = []
 
   const tiposSembrados = await sembrarTipos(organizationId, pack, client, errors)

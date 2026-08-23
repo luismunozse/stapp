@@ -26,6 +26,10 @@ const registerSchema = z.object({
       .refine((v) => v === undefined || v === "" || isRubroId(v), {
         message: "Rubro invalido",
       }),
+    // Texto libre para el rubro generico ("maquinas de cafe"). De aca sale el
+    // nombre del tipo de equipo y el vocabulario, que es lo que cubre el long
+    // tail de oficios sin escribir un pack por cada uno.
+    rubroDetalle: z.string().max(120).optional(),
   }),
   // Datos del usuario admin (nombre y email pueden estar vacíos si hay googleIdToken)
   usuario: z.object({
@@ -69,6 +73,9 @@ export async function POST(request: NextRequest) {
     const rubro = organizacion.rubro && organizacion.rubro !== ""
       ? organizacion.rubro
       : DEFAULT_RUBRO_ID
+
+    // Solo tiene sentido junto al pack generico; los curados lo ignoran.
+    const rubroDetalle = organizacion.rubroDetalle?.trim() || null
 
     // Determinar si es registro con Google
     const isGoogleRegister = !!googleIdToken
@@ -176,6 +183,7 @@ export async function POST(request: NextRequest) {
         activo: true,
         nombre_mostrar: organizacion.nombre,
         rubro,
+        rubro_detalle: rubroDetalle,
         notificaciones_email: true,
         notificaciones_whatsapp: false,
         dias_recordatorio: 3,
@@ -268,7 +276,12 @@ export async function POST(request: NextRequest) {
     // la recupera en el primer GET de tipos. Abortar el registro por esto seria
     // mucho peor que arrancar sin checklist.
     try {
-      const seedResult = await seedOrganizationFromRubro(newOrg.id, rubro)
+      const seedResult = await seedOrganizationFromRubro(
+        newOrg.id,
+        rubro,
+        supabaseAdmin,
+        rubroDetalle
+      )
       if (seedResult.errors.length > 0) {
         console.error("Rubro seed completed with errors:", seedResult.errors)
       }

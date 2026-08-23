@@ -28,6 +28,7 @@ function GoogleAuthContent() {
   const tenant = searchParams.get("tenant") || ""
   const orgNombre = searchParams.get("orgNombre") || ""
   const rubro = searchParams.get("rubro") || ""
+  const rubroDetalle = searchParams.get("rubroDetalle") || ""
   const orgSlug = searchParams.get("orgSlug") || ""
   const userName = searchParams.get("userName") || ""
 
@@ -81,6 +82,7 @@ function GoogleAuthContent() {
               nombre: orgNombre,
               slug: orgSlug,
               ...(rubro ? { rubro } : {}),
+              ...(rubroDetalle ? { rubroDetalle } : {}),
             },
             usuario: {
               nombre: userName,
