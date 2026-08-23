@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FormActionBar } from "@/components/ui/form-action-bar"
+import { DraftRestoredNotice, RecordChangedNotice } from "@/components/ui/draft-restored-notice"
 import { X, ChevronDown, ChevronUp, Plus, Check, Loader2, ImagePlus, Trash2, Package, AlertTriangle, PlusCircle, Pencil, MapPin } from "lucide-react"
 import type { Inventario } from "@/types"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
@@ -18,6 +19,7 @@ import { parseMoneyInput } from "@/lib/parse-money"
 import { validateBarcode, computeEAN13CheckDigit } from "@/lib/barcode-validation"
 import useSWR from "swr"
 import { useModal } from "@/contexts/modal-context"
+import { useFormDraft, fingerprintRecord } from "@/hooks/use-form-draft"
 
 interface ProveedorLite {
   id: string
@@ -72,6 +74,104 @@ const inventarioSchema = z.object({
 })
 
 type InventarioFormData = z.infer<typeof inventarioSchema>
+
+/**
+ * Valores base del formulario: prefill de edicion, o blanco (con el barcode del
+ * scanner, si vino uno) para el alta.
+ *
+ * Vive afuera del componente y en UNA sola funcion a proposito. Es la base del
+ * `useForm`, del reset de edicion, del descarte de borrador y del token de
+ * frescura que compara este formulario contra el registro (`fingerprintRecord`,
+ * mas abajo): mientras las cuatro cosas salgan de aca, agregar un campo al
+ * formulario lo agrega a las cuatro y no pueden separarse.
+ */
+function inventarioFormDefaults(
+  item?: Inventario | null,
+  initialBarcode?: string | null
+): InventarioFormData {
+  return item
+    ? {
+        nombre: item.nombre,
+        categoria: item.categoria,
+        tipoDispositivo: item.tipoDispositivo,
+        stock: item.stock,
+        // precioCompra viene en null cuando la fuente no expuso el costo. El
+        // input necesita un número, así que arranca en 0 — pero ese 0 no se
+        // envía: onSubmit omite el campo del payload cuando el item cargó
+        // sin costo (ver `costoCargado`).
+        precioCompra: item.precioCompra ?? 0,
+        precioVenta: item.precioVenta,
+        proveedorId: item.proveedorId ?? null,
+        stockMinimo: item.stockMinimo ?? null,
+        stockMaximo: item.stockMaximo ?? null,
+        puntoReorden: item.puntoReorden ?? null,
+        barcode: item.barcode ?? null,
+        diasGarantiaDefault: (item as any).diasGarantiaDefault ?? null,
+        ubicacion: item.ubicacion ?? null,
+        trackeaLotes: item.trackeaLotes ?? false,
+        trackeaSeries: item.trackeaSeries ?? false,
+        tieneVariantes: item.tieneVariantes ?? false,
+        esKit: item.esKit ?? false,
+        tipoKit: item.tipoKit ?? null,
+      }
+    : {
+        nombre: "",
+        categoria: "",
+        tipoDispositivo: "",
+        stock: 0,
+        precioCompra: 0,
+        precioVenta: 0,
+        proveedorId: null,
+        stockMinimo: null,
+        stockMaximo: null,
+        puntoReorden: null,
+        barcode: initialBarcode ?? null,
+        diasGarantiaDefault: null,
+        ubicacion: null,
+        trackeaLotes: false,
+        trackeaSeries: false,
+        tieneVariantes: false,
+        esKit: false,
+        tipoKit: null,
+      }
+}
+
+/**
+ * Estado del formulario que NO vive en react-hook-form y que igual es trabajo
+ * escrito: los inputs inline de "nuevo tipo" / "nueva categoria" (texto que el
+ * operador ya tipeo y que todavia no existe en el servidor) y el panel de
+ * umbrales de stock, que se abre a mano.
+ *
+ * Un snapshot de `getValues()` a secas los tira en silencio: el borrador
+ * volveria "restaurado" con el panel cerrado y el tipo a medio crear perdido,
+ * que es justo la parte que cuesta volver a cargar.
+ */
+interface InventarioDraftUi {
+  showStockConfig: boolean
+  showNewTipo: boolean
+  newTipo: string
+  showNewCategoria: boolean
+  newCategoria: string
+  /** Habia una imagen elegida sin subir. El `File` NO se persiste (ver el
+   *  snapshot del hook, mas abajo): esto es solo la marca que le permite al
+   *  aviso decir que hay que volver a elegirla. */
+  imagenPendiente: boolean
+}
+
+/**
+ * Lo unico de este formulario que llega a localStorage.
+ *
+ * Los campos de react-hook-form van SEPARADOS del estado de UI y no mezclados
+ * en un objeto plano: el submit spreadea los valores del formulario dentro del
+ * payload (`{ ...rest }` en onSubmit), asi que una clave de UI que se cuele en
+ * ese nivel viaja al POST/PUT. Con el corte hecho por tipo, `reset()` recibe
+ * `values` y nada mas, y agregar una clave de UI manana no puede terminar en la
+ * API por olvido.
+ */
+interface InventarioDraftValue {
+  values: InventarioFormData
+  ui: InventarioDraftUi
+}
 
 // Categorías específicas por tipo de dispositivo
 const categoriasPorTipo: Record<string, string[]> = {
@@ -149,58 +249,47 @@ export function InventarioForm({
     formState: { errors, isDirty },
     reset,
     watch,
+    getValues,
     setValue,
   } = useForm<InventarioFormData>({
     resolver: zodResolver(inventarioSchema),
-    defaultValues: item
-      ? {
-          nombre: item.nombre,
-          categoria: item.categoria,
-          tipoDispositivo: item.tipoDispositivo,
-          stock: item.stock,
-          // precioCompra viene en null cuando la fuente no expuso el costo. El
-          // input necesita un número, así que arranca en 0 — pero ese 0 no se
-          // envía: onSubmit omite el campo del payload cuando el item cargó
-          // sin costo (ver `costoCargado`).
-          precioCompra: item.precioCompra ?? 0,
-          precioVenta: item.precioVenta,
-          proveedorId: item.proveedorId ?? null,
-          stockMinimo: item.stockMinimo ?? null,
-          stockMaximo: item.stockMaximo ?? null,
-          puntoReorden: item.puntoReorden ?? null,
-          barcode: item.barcode ?? null,
-          diasGarantiaDefault: (item as any).diasGarantiaDefault ?? null,
-          ubicacion: item.ubicacion ?? null,
-          trackeaLotes: item.trackeaLotes ?? false,
-          trackeaSeries: item.trackeaSeries ?? false,
-          tieneVariantes: item.tieneVariantes ?? false,
-          esKit: item.esKit ?? false,
-          tipoKit: item.tipoKit ?? null,
-        }
-      : {
-          nombre: "",
-          categoria: "",
-          tipoDispositivo: "",
-          stock: 0,
-          precioCompra: 0,
-          precioVenta: 0,
-          proveedorId: null,
-          stockMinimo: null,
-          stockMaximo: null,
-          puntoReorden: null,
-          barcode: initialBarcode ?? null,
-          diasGarantiaDefault: null,
-          ubicacion: null,
-          trackeaLotes: false,
-          trackeaSeries: false,
-          tieneVariantes: false,
-          esKit: false,
-          tipoKit: null,
-        },
+    defaultValues: inventarioFormDefaults(item, initialBarcode),
   })
 
   const categoria = watch("categoria")
   const tipoDispositivo = watch("tipoDispositivo")
+
+  /**
+   * Descarta el "" que devuelve el <select> oculto de Radix, y deja pasar todo
+   * lo demas.
+   *
+   * Radix monta un <select> nativo invisible al lado de cada trigger para que el
+   * formulario tenga un control real (SelectBubbleInput, en
+   * @radix-ui/react-select). Cuando el valor cambia DESDE AFUERA, ese componente
+   * hace `select.value = nuevo` y dispara un `change` a mano. Las <option> de
+   * ese select las registran los <SelectItem>, que solo estan montados mientras
+   * el listado esta abierto: con el listado cerrado no hay ninguna opcion,
+   * asignarle un valor que no existe lo deja en "" y el `change` devuelve ese ""
+   * por `onValueChange`. El formulario se pisa el campo que acaba de setear.
+   *
+   * Nadie lo habia notado porque el resto de los caminos que setean estos campos
+   * por codigo lo hacen con el Select DESMONTADO ("Agregar tipo" / "Agregar
+   * categoria" lo reemplazan por un input inline) o con el valor ya puesto en
+   * `defaultValues`, o sea antes de que exista un valor anterior con el cual
+   * comparar. Restaurar un borrador es el primer caso que cambia el valor de un
+   * Select montado: sin esto, el borrador volvia con Tipo y Categoria en blanco
+   * -- los dos campos obligatorios que ademas gatillan la generacion del codigo,
+   * asi que "Guardar" quedaba deshabilitado sin nada en pantalla que lo
+   * explicara.
+   *
+   * Un "" nunca puede venir de una eleccion real: Radix rechaza un SelectItem
+   * con `value=""`. Por eso alcanza con ignorarlo para separar el eco del
+   * control oculto de lo que hizo el operador.
+   */
+  const onSelectValueChange = (apply: (value: string) => void) => (value: string) => {
+    if (!value) return
+    apply(value)
+  }
 
   // ¿La fuente expuso el costo de este item? Un item nuevo no tiene costo
   // previo que proteger, así que su 0 es un valor real. Un item cargado con
@@ -210,6 +299,101 @@ export function InventarioForm({
   // manda (ver onSubmit). Antes vivía sólo en onSubmit, y el input se pintaba
   // igual sembrado en 0 — un costo inventado a la vista del operador.
   const costoCargado = !item || (item.precioCompra !== null && item.precioCompra !== undefined)
+
+  // --- Borrador local (useFormDraft) ----------------------------------------
+  //
+  // Este formulario tiene ~20 campos que se cargan a mano y hasta ahora se
+  // perdian enteros: un vencimiento de sesion, un click en el menu o el cierre
+  // de la pestana los borraba sin dejar rastro.
+  //
+  // Tres particularidades frente a los otros tres call sites del hook:
+  //
+  //  1. La IMAGEN no se persiste. Vive fuera de react-hook-form porque es un
+  //     upload multipart (ver el bloque de estado mas arriba) y es un `File`:
+  //     `JSON.stringify` lo convierte en `{}`, y guardar su base64 en su lugar
+  //     seria meter hasta varios MB en una cuota de ~5MB que ademas comparte
+  //     con todos los otros borradores -- el `setItem` empieza a tirar
+  //     QuotaExceededError y la persistencia deja de funcionar EN TODO EL
+  //     PANEL, en silencio. Se guarda solo la marca `imagenPendiente` y el
+  //     aviso le dice al operador que la vuelva a elegir.
+  //
+  //  2. El resto del estado de afuera de RHF SI se persiste (`InventarioDraftUi`).
+  //
+  //  3. `enabled` no hace falta: inventario-list monta este Card dentro de
+  //     `{showForm && ...}`, o sea que desmonta de verdad al cerrar -- a
+  //     diferencia de los dialogs, que quedan montados con `open=false`.
+  const recordId = item?.id ?? null
+  /** Huella de los campos que ESTE formulario edita, sobre la misma funcion que
+   *  arma el prefill. `Inventario` no expone `updatedAt`, pero aunque lo
+   *  expusiera no serviria: la fila se escribe en cada venta, cada recepcion y
+   *  cada ajuste de stock, o sea que el token se moveria por trabajo de
+   *  mostrador rutinario y borraria el borrador de quien tuviera la ficha
+   *  abierta (ver la advertencia de `recordVersion` en el hook). */
+  const itemRecordVersion = item ? fingerprintRecord(inventarioFormDefaults(item)) : null
+  /** El borrador que este formulario efectivamente aplico. De aca se DERIVA el
+   *  aviso (`draftNoticeVisible`) en vez de tener un booleano aparte que haya
+   *  que apagar en cada camino de baja: `clearDraft` deja `draft` en null en
+   *  todos ellos. Mismo criterio que los otros tres call sites. */
+  const [appliedDraft, setAppliedDraft] = useState<InventarioDraftValue | null>(null)
+  /** Latch POR IDENTIDAD del objeto, no por scope: el scope cambia en el render
+   *  y `draft` recien en el commit siguiente, asi que una marca por `recordId`
+   *  se adelanta al hook y aplica el borrador del registro anterior. */
+  const draftAppliedRef = useRef<InventarioDraftValue | null>(null)
+  /** Raiz del formulario para el gate de interaccion del hook. */
+  const formRef = useRef<HTMLFormElement>(null)
+  const {
+    draft,
+    ready: draftReady,
+    clearDraft,
+    notifyChange,
+    recordChangedWhileEditing,
+  } = useFormDraft<InventarioDraftValue>({
+    feature: "inventario-form",
+    // En alta no hay id (el registro todavia no existe) y `generatedCode`
+    // tampoco sirve de key: lo devuelve el servidor y cambia con la categoria y
+    // el tipo, o sea que se movería mientras el operador carga. Queda UNA
+    // entrada de "producto nuevo" por usuario, igual que el alta de ordenes.
+    recordId,
+    getValue: () => ({
+      // `getValues()` y no `watch()`: leer el form entero en render suscribe el
+      // componente a cada tecla y el borrador no necesita re-renderizar nada.
+      values: getValues(),
+      ui: {
+        showStockConfig,
+        showNewTipo,
+        newTipo,
+        showNewCategoria,
+        newCategoria,
+        // LIMITE DE PERSISTENCIA: la marca, nunca el archivo (ver punto 1).
+        imagenPendiente: pendingFile !== null,
+      },
+    }),
+    rootRef: formRef,
+    // `reset()` no tira excepcion con un borrador de otra forma: aplica lo que
+    // le den. Un borrador de hasta 7 dias escrito por una version anterior de
+    // este formulario abriria la pantalla con basura, en silencio, y esos
+    // valores saldrian tal cual en el POST/PUT.
+    validate: (data) => {
+      const value = data as InventarioDraftValue
+      return (
+        !!value &&
+        typeof value === "object" &&
+        !!value.values &&
+        typeof value.values === "object" &&
+        typeof value.values.nombre === "string" &&
+        typeof value.values.categoria === "string" &&
+        typeof value.values.tipoDispositivo === "string" &&
+        !!value.ui &&
+        typeof value.ui === "object"
+      )
+    },
+    // En edicion el PUT manda el item entero, asi que restaurar un borrador
+    // viejo encima de un registro que otro operador ya guardo lo pisaria.
+    recordVersion: itemRecordVersion,
+  })
+
+  /** El aviso no puede sobrevivir al borrador que anuncia. */
+  const draftNoticeVisible = draft !== null && appliedDraft === draft
 
   // Categorías disponibles según el tipo seleccionado
   // Prioritize dynamic categories from device type config, fallback to hardcoded map
@@ -262,32 +446,21 @@ export function InventarioForm({
 
   useEffect(() => {
     if (item) {
-      reset({
-        nombre: item.nombre,
-        categoria: item.categoria,
-        tipoDispositivo: item.tipoDispositivo,
-        stock: item.stock,
-        // Ver nota en defaultValues: el 0 es solo para el input, no se envía.
-        precioCompra: item.precioCompra ?? 0,
-        precioVenta: item.precioVenta,
-        proveedorId: item.proveedorId ?? null,
-        stockMinimo: item.stockMinimo ?? null,
-        stockMaximo: item.stockMaximo ?? null,
-        puntoReorden: item.puntoReorden ?? null,
-        barcode: item.barcode ?? null,
-        diasGarantiaDefault: (item as any).diasGarantiaDefault ?? null,
-        ubicacion: item.ubicacion ?? null,
-        trackeaLotes: item.trackeaLotes ?? false,
-        trackeaSeries: item.trackeaSeries ?? false,
-        tieneVariantes: item.tieneVariantes ?? false,
-        esKit: item.esKit ?? false,
-        tipoKit: item.tipoKit ?? null,
-      })
+      reset(inventarioFormDefaults(item))
       setImagenPreview(item.imagenUrl || null)
       setPendingFile(null)
       setRemoveExistingImage(false)
     }
   }, [item, reset])
+
+  // Los cambios de react-hook-form no re-renderizan el componente para los
+  // campos que nadie observa (stock, precios, ubicacion, umbrales...), asi que
+  // hay que avisarle al borrador por suscripcion o dejarian de programar
+  // grabados.
+  useEffect(() => {
+    const subscription = watch(() => notifyChange())
+    return () => subscription.unsubscribe()
+  }, [watch, notifyChange])
 
   // Pre-fill barcode from scanner.
   // - Item nuevo: setea siempre.
@@ -301,6 +474,60 @@ export function InventarioForm({
       setValue("barcode", initialBarcode, { shouldDirty: true, shouldTouch: true })
     }
   }, [item, initialBarcode, setValue])
+
+  // Aplicacion del borrador. Declarado DESPUES del prefill de edicion y del
+  // pre-cargado del scanner, que es lo que le da al borrador la ultima palabra
+  // sobre esos mismos campos.
+  useEffect(() => {
+    // El latch se toca DESPUES de saber que hay algo que aplicar: marcarlo antes
+    // deja el formulario "con el borrador ya aplicado" sin haberlo aplicado, y
+    // un borrador que aparezca despues (otra pestana escribiendo la misma key)
+    // se cuenta como restaurado, se pisa en silencio y el aviso no sale nunca.
+    if (!draftReady || !draft || draftAppliedRef.current === draft) return
+    draftAppliedRef.current = draft
+    try {
+      // Encima del prefill, no en su lugar: si manana la proyeccion deja algun
+      // campo afuera, aplicar el borrador tal cual lo pondria en blanco y el PUT
+      // manda el item entero.
+      reset({ ...inventarioFormDefaults(item, initialBarcode), ...draft.values })
+      setShowStockConfig(draft.ui?.showStockConfig === true)
+      setShowNewTipo(draft.ui?.showNewTipo === true)
+      setNewTipo(typeof draft.ui?.newTipo === "string" ? draft.ui.newTipo : "")
+      setShowNewCategoria(draft.ui?.showNewCategoria === true)
+      setNewCategoria(typeof draft.ui?.newCategoria === "string" ? draft.ui.newCategoria : "")
+      setAppliedDraft(draft)
+    } catch (error) {
+      // Un borrador de otra forma no puede tumbar la pantalla: la excepcion
+      // correria dentro de un efecto y se llevaria el arbol entero.
+      console.error("Borrador de inventario invalido, se descarta:", error)
+      clearDraft()
+      setAppliedDraft(null)
+      reset(inventarioFormDefaults(item, initialBarcode))
+    }
+    // `item`/`initialBarcode` se leen adentro (base del prefill) pero no van en
+    // las dependencias: el efecto corre por borrador nuevo y ahi lee el render
+    // en curso, que es el que corresponde.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftReady, draft, reset, clearDraft])
+
+  /** Vuelve el formulario ENTERO al estado base -- incluido lo que vive fuera de
+   *  react-hook-form. Resetear solo RHF dejaba el input de "nuevo tipo" abierto
+   *  con el texto del borrador que se acababa de descartar. */
+  const discardDraft = () => {
+    // El aviso se apaga solo: `clearDraft` deja `draft` en null en este mismo
+    // commit y de ahi se deriva (ver draftNoticeVisible).
+    clearDraft()
+    reset(inventarioFormDefaults(item, initialBarcode))
+    setShowStockConfig(!!(item?.stockMinimo || item?.stockMaximo || item?.puntoReorden))
+    setShowNewTipo(false)
+    setNewTipo("")
+    setShowNewCategoria(false)
+    setNewCategoria("")
+    setPendingFile(null)
+    setImagenPreview(item?.imagenUrl || null)
+    setRemoveExistingImage(false)
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
 
   // Duplicate detection — dispara on blur del nombre (cuando el usuario pasa
   // al siguiente input). Fuzzy match por tokens en el backend; tipo/categoría
@@ -356,6 +583,10 @@ export function InventarioForm({
         const err = await res.json().catch(() => ({}))
         throw new Error(err.error || "Error al sumar stock")
       }
+      // El alta se consumio: el stock que se estaba cargando ya entro contra el
+      // item existente. Dejar el borrador vivo reabriria "Nuevo Item" con ese
+      // mismo producto y el operador lo cargaria dos veces.
+      clearDraft()
       onSuccess()
     } catch (err) {
       console.error("Error consolidando stock:", err)
@@ -367,14 +598,17 @@ export function InventarioForm({
 
   // Abrir el duplicado existente reemplaza este formulario: el padre carga ese
   // item y lo pasa como `item`, lo que dispara el reset() de más arriba y pisa
-  // todos los campos cargados para el producto nuevo. Un solo click era
-  // irreversible —el inventario todavía no persiste borradores, así que no hay
-  // nada que recuperar—, y el aviso de duplicados aparece justo después de
-  // escribir el nombre, o sea con trabajo en pantalla por definición.
+  // todos los campos cargados para el producto nuevo. El aviso de duplicados
+  // aparece justo después de escribir el nombre, o sea con trabajo en pantalla
+  // por definición.
   //
-  // Misma decisión que en DraftRestoredNotice: lo destructivo se confirma. La
-  // confirmación vive acá, en el formulario, porque es el único que sabe si hay
-  // algo que perder (react-hook-form más la imagen pendiente, que vive fuera).
+  // Ya no es irreversible: al mover `item` de null a un objeto cambia la key del
+  // borrador (`new` -> `edit:{id}`) y el hook vuelca lo pendiente ANTES de
+  // cambiarla, asi que lo cargado para el producto nuevo queda en su propia
+  // entrada y vuelve solo al reabrir "Nuevo Item". La confirmación se queda
+  // igual —la pantalla cambia debajo de la mano y eso se avisa— pero dice lo que
+  // realmente pasa: prometer una pérdida que no ocurre es tan malo como
+  // ocultarla, porque enseña a desconfiar del resto de los avisos.
   const handleEditExisting = async (match: DuplicateMatch) => {
     if (!onEditExisting) return
     const hayTrabajoSinGuardar = isDirty || pendingFile !== null
@@ -382,10 +616,10 @@ export function InventarioForm({
       const confirmado = await confirm({
         title: "Abrir el producto existente",
         description:
-          `Se va a cargar "${match.nombre}" en este formulario y vas a perder lo que cargaste para el producto nuevo. No se puede deshacer.`,
+          `Se va a cargar "${match.nombre}" en este formulario. Lo que cargaste para el producto nuevo queda guardado como borrador y vuelve al abrir "Nuevo Item"` +
+          (pendingFile ? ", salvo la foto, que hay que elegir de nuevo." : "."),
         confirmText: "Abrir el existente",
         cancelText: "Seguir con el nuevo",
-        variant: "danger",
       })
       if (!confirmado) return
     }
@@ -599,6 +833,10 @@ export function InventarioForm({
         }
       }
 
+      // Solo en el camino exitoso. Los `return` de mas arriba (error de la API,
+      // codigo duplicado a reintentar) dejan el borrador donde esta: es lo unico
+      // irrecuperable de los dos lados.
+      clearDraft()
       onSuccess()
     } catch (error) {
       console.error("Error saving item:", error)
@@ -620,6 +858,7 @@ export function InventarioForm({
       </CardHeader>
       <CardContent>
         <form
+          ref={formRef}
           onSubmit={handleSubmit(onSubmit)}
           onKeyDown={(e) => {
             if (e.key !== "Enter") return
@@ -631,6 +870,23 @@ export function InventarioForm({
           }}
           className="space-y-4"
         >
+          {/* Primero el conflicto: el borrador se conserva, pero guardarlo
+              reemplaza lo que guardó la otra persona. */}
+          {recordChangedWhileEditing && <RecordChangedNotice />}
+          {draftNoticeVisible && (
+            <DraftRestoredNotice
+              onDiscard={discardDraft}
+              // La foto se queda afuera del borrador por diseño (es un `File`).
+              // El aviso lo dice solo cuando había una: decirlo siempre es ruido
+              // sobre los altas que ni la usan.
+              detail={
+                appliedDraft?.ui?.imagenPendiente
+                  ? "La foto no se guarda en el borrador: volvé a seleccionarla."
+                  : undefined
+              }
+            />
+          )}
+
           {/* Fila con imagen + nombre */}
           <div className="flex gap-4 items-start">
             <div className="shrink-0">
@@ -797,7 +1053,9 @@ export function InventarioForm({
                 <div className="flex gap-1.5">
                   <Select
                     value={tipoDispositivo || ""}
-                    onValueChange={(value) => setValue("tipoDispositivo", value, { shouldValidate: true, shouldDirty: true })}
+                    onValueChange={onSelectValueChange((value) =>
+                      setValue("tipoDispositivo", value, { shouldValidate: true, shouldDirty: true })
+                    )}
                     disabled={tiposLoading}
                   >
                     <SelectTrigger>
@@ -875,7 +1133,9 @@ export function InventarioForm({
                 <div className="flex gap-1.5">
                   <Select
                     value={watch("categoria") || ""}
-                    onValueChange={(value) => setValue("categoria", value, { shouldValidate: true, shouldDirty: true })}
+                    onValueChange={onSelectValueChange((value) =>
+                      setValue("categoria", value, { shouldValidate: true, shouldDirty: true })
+                    )}
                     disabled={!tipoDispositivo}
                   >
                     <SelectTrigger>
@@ -984,11 +1244,11 @@ export function InventarioForm({
             <Label htmlFor="proveedor">Proveedor</Label>
             <Select
               value={watch("proveedorId") || "none"}
-              onValueChange={(value) =>
+              onValueChange={onSelectValueChange((value) =>
                 setValue("proveedorId", value === "none" ? null : value, {
                   shouldDirty: true,
                 })
-              }
+              )}
             >
               <SelectTrigger id="proveedor">
                 <SelectValue placeholder="Sin proveedor" />
@@ -1218,7 +1478,9 @@ export function InventarioForm({
                   <Label className="text-xs">Tipo de kit</Label>
                   <Select
                     value={watch("tipoKit") ?? "ENSAMBLADO"}
-                    onValueChange={(v) => setValue("tipoKit", v as "ENSAMBLADO" | "VIRTUAL", { shouldDirty: true })}
+                    onValueChange={onSelectValueChange((v) =>
+                      setValue("tipoKit", v as "ENSAMBLADO" | "VIRTUAL", { shouldDirty: true })
+                    )}
                   >
                     <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>

@@ -1,10 +1,23 @@
 "use client"
 
+import type { ReactNode } from "react"
 import { X } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
 
 interface DraftRestoredNoticeProps {
   onDiscard: () => void
+  /**
+   * Lo que el borrador NO pudo traer de vuelta, cuando lo hay.
+   *
+   * "Se restauró un borrador" es una promesa completa, y en los formularios que
+   * cargan un archivo no lo es: un `File` no se puede serializar y su base64 no
+   * entra en la cuota de localStorage, asi que la planilla o la foto se quedan
+   * afuera a proposito (ver el limite de persistencia en
+   * hooks/use-form-draft.ts). Sin esta linea el operador da por hecho que esta
+   * todo y descubre lo que falta recien al guardar. Se pasa solo cuando el
+   * borrador restaurado efectivamente traia uno.
+   */
+  detail?: ReactNode
 }
 
 /**
@@ -14,7 +27,7 @@ interface DraftRestoredNoticeProps {
  * components/subscription/usage-warning-banner.tsx -- pero vive inline en
  * el formulario en vez de fijo en el header.
  */
-export function DraftRestoredNotice({ onDiscard }: DraftRestoredNoticeProps) {
+export function DraftRestoredNotice({ onDiscard, detail }: DraftRestoredNoticeProps) {
   const { confirm } = useModal()
 
   /**
@@ -43,16 +56,19 @@ export function DraftRestoredNotice({ onDiscard }: DraftRestoredNoticeProps) {
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-blue-200 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-950/20 px-3 py-2 text-sm text-blue-900 dark:text-blue-200">
-      <span>Se restauró un borrador no guardado.</span>
-      <button
-        type="button"
-        onClick={handleDiscard}
-        className="inline-flex items-center gap-1 shrink-0 font-medium underline-offset-2 hover:underline"
-      >
-        <X className="h-3.5 w-3.5" />
-        Descartar
-      </button>
+    <div className="rounded-md border border-blue-200 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-950/20 px-3 py-2 text-sm text-blue-900 dark:text-blue-200">
+      <div className="flex items-center justify-between gap-3">
+        <span>Se restauró un borrador no guardado.</span>
+        <button
+          type="button"
+          onClick={handleDiscard}
+          className="inline-flex items-center gap-1 shrink-0 font-medium underline-offset-2 hover:underline"
+        >
+          <X className="h-3.5 w-3.5" />
+          Descartar
+        </button>
+      </div>
+      {detail && <p className="mt-1 text-xs text-blue-800/90 dark:text-blue-300/90">{detail}</p>}
     </div>
   )
 }
