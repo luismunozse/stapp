@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { RubroPicker } from "@/components/registro/rubro-picker"
+import { DEFAULT_RUBRO_ID } from "@/lib/rubros"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,6 +25,7 @@ import { getStoredUtmParams } from "@/lib/utm"
 interface FormData {
   orgNombre: string
   orgSlug: string
+  rubro: string
   nombre: string
   email: string
   password: string
@@ -47,6 +50,7 @@ function RegistroForm() {
   const [formData, setFormData] = useState<FormData>({
     orgNombre: "",
     orgSlug: "",
+    rubro: DEFAULT_RUBRO_ID,
     nombre: "",
     email: "",
     password: "",
@@ -213,6 +217,7 @@ function RegistroForm() {
       action: "register",
       orgNombre: formData.orgNombre,
       orgSlug: cleanSlug,
+      rubro: formData.rubro,
       userName: formData.nombre || "",
     })
     // Pasar UTMs al flujo de Google auth
@@ -242,6 +247,7 @@ function RegistroForm() {
           organizacion: {
             nombre: formData.orgNombre,
             slug: cleanSlug,
+            rubro: formData.rubro,
           },
           usuario: {
             nombre: formData.nombre,
@@ -366,6 +372,20 @@ function RegistroForm() {
                 <span className="font-medium text-primary">
                   {formData.orgSlug || "tu-negocio"}.{rootDomain}
                 </span>
+              </p>
+            </div>
+
+            {/* Rubro del negocio */}
+            <div className="space-y-2">
+              <Label>¿Qué reparás?</Label>
+              <RubroPicker
+                value={formData.rubro}
+                onChange={(rubro) => updateForm("rubro", rubro)}
+                disabled={loading}
+              />
+              <p className="text-xs text-muted-foreground">
+                Preparamos tus tipos de equipo, el checklist de recepción y el
+                vocabulario del sistema. Podés cambiar todo después.
               </p>
             </div>
 
