@@ -111,7 +111,7 @@ export function InventarioForm({
   onSuccess,
   onEditExisting,
 }: InventarioFormProps) {
-  const { showError, showWarning } = useModal()
+  const { showError, showWarning, confirm } = useModal()
   const { tipos: tiposDispositivo, loading: tiposLoading, error: tiposError, refetch: refetchTipos } = useTiposDispositivo({ incluirTodos: true })
   const [loading, setLoading] = useState(false)
   const [generatedCode, setGeneratedCode] = useState<string>("")
@@ -146,7 +146,7 @@ export function InventarioForm({
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isDirty },
     reset,
     watch,
     setValue,
@@ -339,6 +339,18 @@ export function InventarioForm({
       await showError("Ingresá una cantidad de stock mayor a 0 para sumar al existente.")
       return
     }
+    // Consolidar cierra el formulario (onSuccess), así que del producto nuevo
+    // sobrevive únicamente el stock: nombre, precios, ubicación e imagen
+    // pendiente se descartan. Mismo criterio que el botón de al lado.
+    const confirmado = await confirm({
+      title: "Sumar el stock al producto existente",
+      description:
+        `Se van a sumar ${stockToAdd} al stock de "${match.nombre}" y este formulario se va a cerrar: se pierde el resto de lo que cargaste para el producto nuevo. No se puede deshacer.`,
+      confirmText: "Sumar stock",
+      cancelText: "Seguir con el nuevo",
+      variant: "danger",
+    })
+    if (!confirmado) return
     setConsolidating(match.id)
     try {
       const res = await fetch(`/api/inventario/${match.id}/stock`, {
@@ -363,6 +375,33 @@ export function InventarioForm({
     } finally {
       setConsolidating(null)
     }
+  }
+
+  // Abrir el duplicado existente reemplaza este formulario: el padre carga ese
+  // item y lo pasa como `item`, lo que dispara el reset() de más arriba y pisa
+  // todos los campos cargados para el producto nuevo. Un solo click era
+  // irreversible —el inventario todavía no persiste borradores, así que no hay
+  // nada que recuperar—, y el aviso de duplicados aparece justo después de
+  // escribir el nombre, o sea con trabajo en pantalla por definición.
+  //
+  // Misma decisión que en DraftRestoredNotice: lo destructivo se confirma. La
+  // confirmación vive acá, en el formulario, porque es el único que sabe si hay
+  // algo que perder (react-hook-form más la imagen pendiente, que vive fuera).
+  const handleEditExisting = async (match: DuplicateMatch) => {
+    if (!onEditExisting) return
+    const hayTrabajoSinGuardar = isDirty || pendingFile !== null
+    if (hayTrabajoSinGuardar) {
+      const confirmado = await confirm({
+        title: "Abrir el producto existente",
+        description:
+          `Se va a cargar "${match.nombre}" en este formulario y vas a perder lo que cargaste para el producto nuevo. No se puede deshacer.`,
+        confirmText: "Abrir el existente",
+        cancelText: "Seguir con el nuevo",
+        variant: "danger",
+      })
+      if (!confirmado) return
+    }
+    onEditExisting(match.id)
   }
 
   const handleAddTipo = async () => {
@@ -715,7 +754,7 @@ export function InventarioForm({
                           size="sm"
                           variant="outline"
                           className="h-8 gap-1"
-                          onClick={() => onEditExisting(match.id)}
+                          onClick={() => handleEditExisting(match)}
                           disabled={consolidating !== null}
                         >
                           <Pencil className="h-3.5 w-3.5" />

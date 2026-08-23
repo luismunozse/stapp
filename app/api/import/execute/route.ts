@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, denyIfNoInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { parseCSV, parseExcel } from "@/lib/csv-parser"
 import { validateClienteRow, validateInventarioRow, validateCSVHeaders, normalizeHeaders, normalizeRow, resolveTipoDispositivo, generateCodigo } from "@/lib/csv-validator"
 import { uploadImportFile, base64ToBuffer } from "@/lib/storage"
 import { enforcePlanLimit } from "@/lib/plan-limits"
+import { excedeTechoDeImportacion, MAX_IMPORT_FILE_LABEL } from "@/lib/import-limits"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { z } from "zod"
 
@@ -68,8 +69,34 @@ async function batchInsert(
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId } = await requireAuth()
+    const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
+
+    // Antes de `request.json()`, que es lo que materializa el base64 entero en
+    // memoria. Ver lib/import-limits.ts.
+    if (excedeTechoDeImportacion(request)) {
+      return NextResponse.json(
+        { error: `Archivo demasiado grande (máx ${MAX_IMPORT_FILE_LABEL})` },
+        { status: 413 },
+      )
+    }
+
+    const body = await request.json()
+    const data = executeSchema.parse(body)
+
+    // Importar inventario ES escribir inventario, así que pasa por el mismo
+    // permiso que el resto de /api/inventario.
+    //
+    // Va lo más arriba que el handler permite, que NO es arriba de todo: el
+    // discriminador (`entityType`) viaja en el body, así que hay que leerlo
+    // primero. Lo que sí queda por debajo es el chequeo de plan, y ese orden
+    // importa — al revés, a un vendedor que jamás va a poder importar
+    // inventario se le contestaba "necesitás el plan Profesional", y un admin
+    // persiguiendo ese mensaje puede pagar un upgrade que no cambia nada.
+    if (data.entityType === 'INVENTARIO') {
+      const denied = await denyIfNoInventarioAccess(role, organizationId!)
+      if (denied) return denied
+    }
 
     const hasImport = await hasPlanFeature(organizationId!, "import_export")
     if (!hasImport) {
@@ -78,9 +105,6 @@ export async function POST(request: Request) {
         { status: 403 }
       )
     }
-
-    const body = await request.json()
-    const data = executeSchema.parse(body)
 
     // Detect by filename + mime. Excel 97-2003 (.xls) no soportado por ExcelJS.
     const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

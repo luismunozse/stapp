@@ -187,6 +187,31 @@ export async function requireInventarioAccess() {
   return result
 }
 
+// Mismo permiso que requireInventarioAccess, para handlers que YA resolvieron
+// la sesión y solo lo necesitan para PARTE de su trabajo. Devuelve la respuesta
+// 403 a retornar, o null si el actor pasa.
+//
+// Existe por /api/import: un solo handler atiende CLIENTES e INVENTARIO
+// (`entityType`), y solo la segunda es una escritura de inventario. Ahí el
+// guard no puede ir arriba de todo —denegaría la importación de clientes, que
+// es otro permiso— y tampoco puede resolverse llamando de nuevo a
+// requireInventarioAccess, que volvería a pedir la sesión entera.
+//
+// Fail-closed igual que el guard: si el flag no se puede leer, el VENDEDOR
+// queda denegado (ver resolveVendedoresHabilitados).
+export async function denyIfNoInventarioAccess(
+  role: string | null,
+  organizationId: string
+): Promise<NextResponse | null> {
+  // El ADMIN no necesita el round-trip: hasInventarioAccess ya lo aprueba.
+  const vendedoresHabilitados = role === "VENDEDOR"
+    ? await resolveVendedoresHabilitados(organizationId)
+    : false
+
+  if (hasInventarioAccess(role, vendedoresHabilitados)) return null
+  return NextResponse.json({ error: "Acceso denegado" }, { status: 403 })
+}
+
 // Regla pura de acceso a costo/margen de cotizaciones (costoUnitario,
 // "Ganancia bruta"). ADMIN unicamente, de forma uniforme — VENDEDOR queda
 // afuera aunque tenga acceso a inventario, porque hoy no tiene navegación a

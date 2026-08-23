@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, denyIfNoInventarioAccess } from "@/lib/auth-utils"
 import { parseCSV, parseExcel } from "@/lib/csv-parser"
 import { validateClienteRow, validateInventarioRow, validateCSVHeaders, normalizeHeaders, normalizeRow } from "@/lib/csv-validator"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { excedeTechoDeImportacion, MAX_IMPORT_FILE_LABEL } from "@/lib/import-limits"
 import { z } from "zod"
 
 const previewSchema = z.object({
@@ -16,8 +17,32 @@ const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.s
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
+
+    // Antes de `request.json()`, que es lo que materializa el base64 entero en
+    // memoria. Ver lib/import-limits.ts.
+    if (excedeTechoDeImportacion(request)) {
+      return NextResponse.json(
+        { error: `Archivo demasiado grande (máx ${MAX_IMPORT_FILE_LABEL})` },
+        { status: 413 },
+      )
+    }
+
+    const body = await request.json()
+    const data = previewSchema.parse(body)
+
+    // Mismo permiso, y en el mismo orden, que el execute que viene después (ver
+    // la nota de allá sobre por qué el gate de entidad va arriba del de plan).
+    //
+    // El preview no revela nada de la organización —solo parsea el archivo que
+    // subió quien llama—, así que esto no cierra una filtración: corta el flujo
+    // en el primer paso en vez de dejar que alguien suba y mapee un archivo
+    // entero para comerse un 403 al final.
+    if (data.entityType === 'INVENTARIO') {
+      const denied = await denyIfNoInventarioAccess(role, organizationId!)
+      if (denied) return denied
+    }
 
     const hasImport = await hasPlanFeature(organizationId!, "import_export")
     if (!hasImport) {
@@ -26,9 +51,6 @@ export async function POST(request: Request) {
         { status: 403 }
       )
     }
-
-    const body = await request.json()
-    const data = previewSchema.parse(body)
 
     // Detect by filename + mime. Excel 97-2003 (.xls) no soportado por ExcelJS.
     const lowerName = (data.filename ?? '').toLowerCase()

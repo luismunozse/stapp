@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { X, Upload, Download, AlertCircle, CheckCircle2, FileSpreadsheet } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import type { EntityImportType } from "@/types"
+import { MAX_IMPORT_FILE_BYTES, MAX_IMPORT_FILE_LABEL } from "@/lib/import-limits"
 
 interface ImportModalProps {
   entityType: EntityImportType
@@ -72,10 +73,11 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
       return
     }
 
-    // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024
-    if (selectedFile.size > maxSize) {
-      setError('El archivo excede el tamaño máximo de 5MB')
+    // Mismo techo que aplica el servidor, del mismo lugar: ver
+    // lib/import-limits.ts. Antes eran dos números distintos y el navegador
+    // frenaba archivos que la API habría aceptado.
+    if (selectedFile.size > MAX_IMPORT_FILE_BYTES) {
+      setError(`El archivo excede el tamaño máximo de ${MAX_IMPORT_FILE_LABEL}`)
       return
     }
 
