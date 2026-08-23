@@ -45,8 +45,14 @@ vi.mock("next/navigation", () => ({
   useRouter: () => routerMock,
 }))
 
+// Sin default a propósito: el atributo dice EXACTAMENTE qué le pasa la página,
+// así que "undefined" (no le pasó nada) falla igual que un true indebido.
 vi.mock("@/components/inventario/inventario-list", () => ({
-  InventarioList: () => <div data-testid="lista">lista</div>,
+  InventarioList: ({ allowImport }: { allowImport?: boolean }) => (
+    <div data-testid="lista" data-allow-import={String(allowImport)}>
+      lista
+    </div>
+  ),
 }))
 
 vi.mock("@/components/inventario/inventario-analytics", () => ({
@@ -170,5 +176,136 @@ describe("InventarioPage — chequeo de acceso del VENDEDOR", () => {
     expect(screen.getByTestId("lista")).toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalled()
     expect(replaceMock).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * El veredicto del chequeo pertenece al usuario sobre el que se emitió.
+ *
+ * Ni `accesoVendedor` ni el estado de fallo se limpiaban al re-correr el
+ * efecto, así que un permiso concedido a u1 seguía en pie mientras se
+ * verificaba a u2: el inventario completo se renderizaba para alguien a quien
+ * nadie habilitó todavía, y si ADEMÁS ese chequeo fallaba, el aviso quedaba
+ * suprimido por el guard `accesoVendedor !== true` — acceso sin verificar y sin
+ * advertencia, heredado de otra persona.
+ *
+ * La otra mitad es el reintento: ahí el veredicto viejo es "no pude verificar",
+ * que es conservador, y la pantalla NO puede blanquearse mientras se
+ * reintenta — desmontar la lista es exactamente lo que #273 arregló (se lleva
+ * el modal de importación con el archivo ya elegido).
+ */
+describe("InventarioPage — el veredicto no sobrevive a un cambio de usuario", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  const pendienteParaSiempre = () => new Promise<Response>(() => {})
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    sessionState = sesionVendedor()
+    fetchMock = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => ({ vendedoresAdministranInventario: true }),
+      } as Response),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("no le presta a u2 el permiso que se le concedió a u1", async () => {
+    const { rerender } = render(<InventarioPage />)
+    await waitFor(() => expect(screen.getByTestId("lista")).toBeInTheDocument())
+
+    // Entra otro usuario y su chequeo queda en vuelo.
+    fetchMock.mockImplementation(pendienteParaSiempre)
+    sessionState = sesionVendedor("u2")
+    rerender(<InventarioPage />)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(screen.queryByTestId("lista")).not.toBeInTheDocument()
+  })
+
+  it("avisa cuando el chequeo del usuario nuevo falla, en vez de heredar el permiso", async () => {
+    const { rerender } = render(<InventarioPage />)
+    await waitFor(() => expect(screen.getByTestId("lista")).toBeInTheDocument())
+
+    fetchMock.mockImplementation(() => Promise.reject(new TypeError("Failed to fetch")))
+    sessionState = sesionVendedor("u2")
+    rerender(<InventarioPage />)
+
+    await waitFor(() => expect(screen.getByText(/no se pudo verificar/i)).toBeInTheDocument())
+    expect(replaceMock).not.toHaveBeenCalled()
+  })
+
+  it("no desmonta la lista mientras se reintenta el chequeo", async () => {
+    fetchMock.mockImplementationOnce(() => Promise.reject(new TypeError("Failed to fetch")))
+
+    render(<InventarioPage />)
+    const reintentar = await screen.findByRole("button", { name: /reintentar/i })
+    expect(screen.getByTestId("lista")).toBeInTheDocument()
+
+    // El reintento queda en vuelo: la lista tiene que seguir montada, con el
+    // aviso todavía puesto. Blanquear acá se lleva el trabajo en pantalla.
+    fetchMock.mockImplementation(pendienteParaSiempre)
+    fireEvent.click(reintentar)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(screen.getByTestId("lista")).toBeInTheDocument()
+    expect(screen.getByText(/no se pudo verificar/i)).toBeInTheDocument()
+  })
+})
+
+/**
+ * Defensa en profundidad para el agujero de escritura que abrió sostener la
+ * pantalla ante un chequeo fallido: la lista ofrece importación masiva, que
+ * crea items de inventario por /api/import. El servidor ya lo gatea
+ * (import-inventario-gating.test.ts); la pantalla, además, no ofrece una acción
+ * que no puede justificar.
+ */
+describe("InventarioPage — la importación masiva sigue al permiso", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    sessionState = sesionVendedor()
+    fetchMock = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => ({ vendedoresAdministranInventario: true }),
+      } as Response),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("se la ofrece al vendedor habilitado", async () => {
+    render(<InventarioPage />)
+
+    await waitFor(() =>
+      expect(screen.getByTestId("lista")).toHaveAttribute("data-allow-import", "true"),
+    )
+  })
+
+  it("no se la ofrece mientras el permiso no pudo verificarse", async () => {
+    fetchMock.mockImplementation(() => Promise.reject(new TypeError("Failed to fetch")))
+
+    render(<InventarioPage />)
+
+    await waitFor(() => expect(screen.getByText(/no se pudo verificar/i)).toBeInTheDocument())
+    expect(screen.getByTestId("lista")).toHaveAttribute("data-allow-import", "false")
+  })
+
+  it("no se la saca al ADMIN, que no pasa por este chequeo", () => {
+    sessionState = { data: { user: { id: "a1", role: "ADMIN" } }, status: "authenticated" }
+
+    render(<InventarioPage />)
+
+    expect(screen.getByTestId("lista")).toHaveAttribute("data-allow-import", "true")
   })
 })
