@@ -188,54 +188,11 @@ export const CHECKLIST_PRESETS: ChecklistPreset[] = [
 ]
 
 /**
- * Instala los checklist presets en una organización.
- * Busca el tipo_dispositivo correspondiente por código para vincular el template.
+ * NOTA: `installChecklistPresets()` vivia aca y no la llamaba nadie (241 lineas
+ * de codigo muerto). Su logica, generalizada a cualquier rubro, esta ahora en
+ * `lib/rubros/seed.ts`, que ademas normaliza `opciones` a JSON array — el
+ * formato que espera la UI y que estos presets nunca respetaron.
+ *
+ * `CHECKLIST_PRESETS` sigue vivo: lo consumen los packs de electronica y
+ * electrodomesticos en `lib/rubros/packs/`.
  */
-export async function installChecklistPresets(
-  organizationId: string,
-  supabaseAdmin: any
-): Promise<string[]> {
-  const createdIds: string[] = []
-
-  // Cargar tipos de dispositivo de la organización para vincular por código
-  const { data: tiposDispositivo } = await supabaseAdmin
-    .from("tipos_dispositivo")
-    .select("id, codigo")
-    .eq("organization_id", organizationId)
-
-  const tipoMap = new Map<string, string>()
-  for (const tipo of tiposDispositivo || []) {
-    tipoMap.set(tipo.codigo, tipo.id)
-  }
-
-  for (const preset of CHECKLIST_PRESETS) {
-    const tipoDispositivoId = tipoMap.get(preset.tipoDispositivo) || null
-
-    // Crear template vinculado al tipo de dispositivo
-    const { data: template } = await supabaseAdmin
-      .from("checklist_templates")
-      .insert({
-        organization_id: organizationId,
-        nombre: preset.nombre,
-        activo: true,
-        tipo_dispositivo_id: tipoDispositivoId,
-      })
-      .select("id")
-      .single()
-
-    if (!template) continue
-    createdIds.push(template.id)
-
-    // Crear items
-    const items = preset.items.map((item) => ({
-      template_id: template.id,
-      ...item,
-    }))
-
-    await supabaseAdmin
-      .from("checklist_template_items")
-      .insert(items)
-  }
-
-  return createdIds
-}
