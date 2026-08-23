@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { RubroPicker } from "@/components/registro/rubro-picker"
-import { DEFAULT_RUBRO_ID } from "@/lib/rubros"
+import { validarSeleccionRubro } from "@/lib/rubros/seleccion"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -51,7 +51,7 @@ function RegistroForm() {
   const [formData, setFormData] = useState<FormData>({
     orgNombre: "",
     orgSlug: "",
-    rubro: DEFAULT_RUBRO_ID,
+    rubro: "",
     rubroDetalle: "",
     nombre: "",
     email: "",
@@ -170,6 +170,11 @@ function RegistroForm() {
       setError("Espera mientras verificamos el subdominio")
       return false
     }
+    const errorRubro = validarSeleccionRubro(formData.rubro, formData.rubroDetalle)
+    if (errorRubro) {
+      setError(errorRubro)
+      return false
+    }
     if (!formData.nombre.trim()) {
       setError("Tu nombre es requerido")
       return false
@@ -211,6 +216,13 @@ function RegistroForm() {
     }
     if (slugStatus === "checking") {
       setError("Esperá mientras verificamos el subdominio")
+      return
+    }
+    // El alta con Google se va del formulario y vuelve por /google-auth, asi
+    // que el rubro tiene que quedar resuelto antes de salir.
+    const errorRubro = validarSeleccionRubro(formData.rubro, formData.rubroDetalle)
+    if (errorRubro) {
+      setError(errorRubro)
       return
     }
 
