@@ -12,9 +12,12 @@ import {
   Cabecera,
   BandaCliente,
   Firmas,
+  Tabla,
+  type ColumnaTabla,
 } from "@/lib/pdf-react-shell"
 import { helveticaMetrics } from "@/lib/pdf-react-shared"
 import { extractReactPdfText, extractReactPdfTextPositions } from "./pdf-text-helper-react"
+import { dumpGraphics } from "./pdf-golden-helper"
 
 const render = (children: React.ReactNode) =>
   renderToBuffer(
@@ -290,5 +293,109 @@ describe("Firmas", () => {
     )
     expect(text).toContain("Cliente (quien recibe)")
     expect(text).toContain("Encargado (quien entrega)")
+  })
+})
+
+const COLS: ColumnaTabla[] = [
+  { key: "fecha", titulo: "FECHA", ancho: 58 },
+  { key: "concepto", titulo: "CONCEPTO", flex: true },
+  { key: "monto", titulo: "MONTO", ancho: 74, alinear: "right", bold: true },
+]
+
+const muchasFilas = Array.from({ length: 60 }, (_, i) => ({
+  fecha: "01/08/2026",
+  concepto: `Movimiento ${i}`,
+  monto: "$ 100,00",
+}))
+
+describe("Tabla", () => {
+  it("renders the header and every row", async () => {
+    const text = await extractReactPdfText(
+      await render(
+        <Tabla
+          columnas={COLS}
+          filas={[{ fecha: "01/08/2026", concepto: "Depósito", monto: "$ 1.000,00" }]}
+        />
+      )
+    )
+    expect(text).toContain("FECHA")
+    expect(text).toContain("CONCEPTO")
+    expect(text).toContain("Depósito")
+    expect(text).toContain("$ 1.000,00")
+  })
+
+  it("repeats the header on later pages when headerFijo is set", async () => {
+    const buffer = await render(<Tabla columnas={COLS} filas={muchasFilas} headerFijo />)
+    const items = await extractReactPdfTextPositions(buffer)
+    const paginas = new Set(items.filter((i) => i.text === "CONCEPTO").map((i) => i.page))
+    expect(paginas.has(1)).toBe(true)
+    expect(paginas.has(2)).toBe(true)
+  })
+
+  it("does not repeat the header when headerFijo is not set", async () => {
+    const buffer = await render(<Tabla columnas={COLS} filas={muchasFilas} />)
+    const items = await extractReactPdfTextPositions(buffer)
+    const paginas = new Set(items.filter((i) => i.text === "CONCEPTO").map((i) => i.page))
+    expect(paginas).toEqual(new Set([1]))
+  })
+
+  it("renders a non-string cell as-is, so a row can stack a note under its value", async () => {
+    // The remito's pagos rows and the resumen's movimientos both do this —
+    // it is why `filas` takes React.ReactNode instead of plain strings.
+    const text = await extractReactPdfText(
+      await render(
+        <Tabla
+          columnas={COLS}
+          filas={[
+            {
+              fecha: "01/08/2026",
+              concepto: (
+                <>
+                  <Text>Pago de cuenta corriente</Text>
+                  <Text>3 cuotas · 10% recargo</Text>
+                </>
+              ),
+              monto: "$ 100,00",
+            },
+          ]}
+        />
+      )
+    )
+    expect(text).toContain("Pago de cuenta corriente")
+    expect(text).toContain("3 cuotas · 10% recargo")
+  })
+
+  it("insets a left-aligned column by sangriaIzquierda, defaulting to 6", async () => {
+    // The remito's CANT./DESCRIPCIÓN and pagos FECHA sit at 8, everything
+    // else at 6. Collapsing the two onto one house value moved the remito's
+    // header text 2pt left — invisible to every content assertion, caught by
+    // the golden harness. This pins the axis so it cannot drift back.
+    const columnas: ColumnaTabla[] = [
+      { key: "a", titulo: "SEIS", ancho: 100 },
+      { key: "b", titulo: "OCHO", ancho: 100, sangriaIzquierda: 8 },
+    ]
+    const items = await extractReactPdfTextPositions(
+      await render(<Tabla columnas={columnas} filas={[{ a: "x", b: "y" }]} />)
+    )
+    const seis = items.find((i) => i.text === "SEIS")
+    const ocho = items.find((i) => i.text === "OCHO")
+    expect(seis).toBeDefined()
+    expect(ocho).toBeDefined()
+    // Column B starts 100pt after column A, then insets 2pt further.
+    expect(Math.round((ocho!.x - seis!.x) * 100) / 100).toBe(102)
+  })
+
+  it("shades the header band only when headerSombreado is set", async () => {
+    // MONO.totalBg (#f2f2f2) is a filled rect behind the header row; it draws
+    // no text at all, so the only way to see it from a test is the content
+    // stream. 0.95 == 242/255.
+    const conFondo = await dumpGraphics(
+      await render(<Tabla columnas={COLS} filas={[{ fecha: "a", concepto: "b", monto: "c" }]} headerSombreado />)
+    )
+    const sinFondo = await dumpGraphics(
+      await render(<Tabla columnas={COLS} filas={[{ fecha: "a", concepto: "b", monto: "c" }]} />)
+    )
+    expect(conFondo.some((op) => op.includes("scn 0.95 0.95 0.95"))).toBe(true)
+    expect(sinFondo.some((op) => op.includes("scn 0.95 0.95 0.95"))).toBe(false)
   })
 })

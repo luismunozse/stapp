@@ -23,7 +23,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 import { generateFacturaPDFReact } from "@/lib/remito-react-pdf"
 import { generateReciboCCPDF, generateResumenCCPDF } from "@/lib/cuenta-corriente-react-pdf"
-import { dumpPositions, diffDumps, type GoldenDump } from "./lib/pdf-golden-helper"
+import { dumpPositions, dumpGraphics, diffDumps, type GoldenDump } from "./lib/pdf-golden-helper"
 
 const OUT = process.env.PDF_GOLDEN_OUT ?? ".tmp-preview/golden-head.json"
 const BASE = process.env.PDF_GOLDEN_BASE
@@ -149,6 +149,32 @@ const remitoFixtures: Record<string, unknown> = {
   },
   // A declared-but-blank número still owns its row's 2pt margin.
   "14-empty-numero": { ...baseData, numeroFactura: "" },
+  // BOTH tables overflow, so their repeating headers interleave across four
+  // pages. Added in task 7: "11-many-items" only ever paginates one table, and
+  // a table header that repeats correctly on its own can still leak onto the
+  // other table's pages — the exact failure mode `headerFijo` is accused of.
+  // The pagos rows carry the cuotas/recargo note, which is the taller row
+  // shape and moves every page break.
+  "15-both-tables-overflow": {
+    ...baseData,
+    items: Array.from({ length: 60 }, (_, i) => ({
+      descripcion: `Item ${i + 1}`,
+      cantidad: 1,
+      precioUnitario: 100,
+      subtotal: 100,
+    })),
+    subtotal: 6000,
+    total: 6000,
+    montoAbonado: 6000,
+    pagos: Array.from({ length: 60 }, (_, i) => ({
+      monto: 100,
+      metodoPago: "TARJETA_CREDITO",
+      fecha: new Date("2026-08-17"),
+      referencia: `REF-${String(i + 1).padStart(3, "0")}`,
+      cuotas: 3,
+      recargoPorcentaje: 10,
+    })),
+  },
 }
 
 const reciboBase = {
@@ -239,14 +265,23 @@ describe.runIf(process.env.PDF_GOLDEN === "1")("pdf golden positions", () => {
   it("renders every fixture and, given a baseline, matches it exactly", async () => {
     const dump: GoldenDump = {}
 
+    // Two slots per fixture: the text-item positions and, since task 7, the
+    // page content streams' graphics operators. Tables are ruled rectangles
+    // and borders that emit no text at all, so the "[gfx]" slot is the only
+    // one that can see a shifted column divider or a changed border colour.
+    const registrar = async (slot: string, buffer: Buffer) => {
+      dump[slot] = await dumpPositions(buffer)
+      dump[`${slot} [gfx]`] = await dumpGraphics(buffer)
+    }
+
     for (const [name, data] of Object.entries(remitoFixtures)) {
-      dump[`remito/${name}`] = await dumpPositions(await generateFacturaPDFReact(data as never))
+      await registrar(`remito/${name}`, await generateFacturaPDFReact(data as never))
     }
     for (const [name, data] of Object.entries(reciboFixtures)) {
-      dump[`recibo/${name}`] = await dumpPositions(await generateReciboCCPDF(data as never))
+      await registrar(`recibo/${name}`, await generateReciboCCPDF(data as never))
     }
     for (const [name, data] of Object.entries(resumenFixtures)) {
-      dump[`resumen/${name}`] = await dumpPositions(await generateResumenCCPDF(data as never))
+      await registrar(`resumen/${name}`, await generateResumenCCPDF(data as never))
     }
 
     mkdirSync(dirname(OUT), { recursive: true })

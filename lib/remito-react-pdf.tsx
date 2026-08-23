@@ -25,8 +25,32 @@ import {
   Cabecera,
   BandaCliente,
   Firmas,
+  Tabla,
+  type ColumnaTabla,
 } from "./pdf-react-shell"
 import type { FacturaPDFData } from "./pdf"
+
+/**
+ * This document's two tables. `sangriaIzquierda: 8` on CANT., DESCRIPCIÓN and
+ * the pagos FECHA is the remito's own pre-existing inset — the shell's default
+ * is 6, which every other column here already used. It is stated per column
+ * rather than folded into the shared default because the two are a genuine
+ * 2pt difference in where the text starts, not a rounding artefact.
+ */
+const COLUMNAS_ITEMS: ColumnaTabla[] = [
+  { key: "cantidad", titulo: "CANT.", ancho: 45, sangriaIzquierda: 8 },
+  { key: "descripcion", titulo: "DESCRIPCIÓN", ancho: 260, sangriaIzquierda: 8 },
+  { key: "precio", titulo: "PRECIO", ancho: 105, alinear: "right" },
+  { key: "subtotal", titulo: "SUBTOTAL", ancho: 105, alinear: "right" },
+]
+
+const COLUMNAS_PAGOS: ColumnaTabla[] = [
+  { key: "fecha", titulo: "FECHA", ancho: 80, sangriaIzquierda: 8 },
+  { key: "metodo", titulo: "MÉTODO", ancho: 85 },
+  { key: "referencia", titulo: "REFERENCIA", ancho: 130 },
+  { key: "monto", titulo: "MONTO", ancho: 90, alinear: "right", bold: true },
+  { key: "saldo", titulo: "SALDO", flex: true, alinear: "right", bold: true },
+]
 
 const estadoPagoLabels: Record<string, string> = {
   PENDIENTE: "PENDIENTE",
@@ -69,23 +93,11 @@ const styles = StyleSheet.create({
   condicionesRule: { borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.rule, marginTop: 3, marginBottom: 5 },
   condicionesLine: { fontSize: TYPE.small, marginTop: 2 },
 
+  // The table frames, header bands, row rules and column cells are drawn by
+  // <Tabla> (lib/pdf-react-shell.tsx) now; this document only declares its own
+  // columns (COLUMNAS_ITEMS / COLUMNAS_PAGOS below). Neither of its headers
+  // carries the resumen's grey band, which is why `headerSombreado` is a prop.
   tableSection: { marginTop: 14 },
-  tableFrame: { borderWidth: RULE_WIDTH, borderColor: MONO.ink, marginTop: 8 },
-  itemsHeaderRow: { flexDirection: "row", borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.ink, paddingVertical: 5 },
-  itemsRow: { flexDirection: "row", borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.rule, paddingVertical: 4 },
-  colCant: { width: 45, paddingLeft: 8, borderRightWidth: RULE_WIDTH, borderRightColor: MONO.ink, fontSize: TYPE.small },
-  colDesc: { width: 260, paddingLeft: 8, borderRightWidth: RULE_WIDTH, borderRightColor: MONO.ink, fontSize: TYPE.small },
-  colPrecio: { width: 105, paddingRight: 6, borderRightWidth: RULE_WIDTH, borderRightColor: MONO.ink, fontSize: TYPE.small, textAlign: "right" },
-  colSubtotal: { width: 105, paddingRight: 6, fontSize: TYPE.small, textAlign: "right" },
-  headerCellLabel: { fontFamily: "Helvetica-Bold", fontSize: TYPE.small, color: MONO.label },
-
-  pagosHeaderRow: { flexDirection: "row", borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.ink, paddingVertical: 5 },
-  pagosRow: { flexDirection: "row", borderBottomWidth: RULE_WIDTH, borderBottomColor: MONO.rule, paddingVertical: 4 },
-  colFecha: { width: 80, paddingLeft: 8, borderRightWidth: RULE_WIDTH, borderRightColor: MONO.ink, fontSize: TYPE.small },
-  colMetodo: { width: 85, paddingLeft: 6, borderRightWidth: RULE_WIDTH, borderRightColor: MONO.ink, fontSize: TYPE.small },
-  colRef: { width: 130, paddingLeft: 6, borderRightWidth: RULE_WIDTH, borderRightColor: MONO.ink, fontSize: TYPE.small },
-  colMonto: { width: 90, paddingRight: 6, borderRightWidth: RULE_WIDTH, borderRightColor: MONO.ink, fontSize: TYPE.small, textAlign: "right", fontFamily: "Helvetica-Bold" },
-  colSaldo: { flex: 1, paddingRight: 6, fontSize: TYPE.small, textAlign: "right", fontFamily: "Helvetica-Bold" },
   pagoNote: { fontSize: TYPE.fine, color: MONO.label, marginTop: 2 },
 
   detalleBlock: { marginTop: 8 },
@@ -140,13 +152,17 @@ export function RemitoDocument({
   return (
     <Document>
       <Page size="A4" style={styles.page} wrap>
-        {/* PAIN POINT: `fixed` is document-global, not scoped to a
-            sub-table's own page span (see remito.tsx header comment above
-            and the spike report) — so the continuation title is safe to
-            mark fixed+gated by pageNumber (it's meant to show on every page
-            after the first, document-wide), but the same trick can NOT be
-            used for the items/pagos table headers without also leaking
-            them onto unrelated pages. */}
+        {/* `fixed` on a DIRECT child of Page is document-global: this title
+            shows on every page, so it gates itself on pageNumber.
+            It is NOT document-global further down the tree, contrary to what
+            this comment used to claim (a spike-era belief the code itself
+            never followed — both table headers have shipped `fixed` since
+            this engine landed). @react-pdf/layout's splitNodes pushes a fixed
+            child into both the current and the next copy of ITS OWN parent,
+            so a table header repeats only across the pages that table spans
+            and stops when the frame stops splitting. That is what
+            <Tabla headerFijo> relies on below, and dropping it measurably
+            deletes the header row from page 2 of a 60-item remito. */}
         <Text
           fixed
           style={styles.continuationTitle}
@@ -207,22 +223,16 @@ export function RemitoDocument({
         {data.items && data.items.length > 0 ? (
           <View style={styles.tableSection}>
             <Text style={styles.sectionLabel}>DETALLE DE ITEMS</Text>
-            <View style={styles.tableFrame}>
-              <View style={styles.itemsHeaderRow} fixed>
-                <Text style={[styles.colCant, styles.headerCellLabel]}>CANT.</Text>
-                <Text style={[styles.colDesc, styles.headerCellLabel]}>DESCRIPCIÓN</Text>
-                <Text style={[styles.colPrecio, styles.headerCellLabel]}>PRECIO</Text>
-                <Text style={[styles.colSubtotal, styles.headerCellLabel]}>SUBTOTAL</Text>
-              </View>
-              {data.items.map((item, i) => (
-                <View key={i} style={styles.itemsRow} wrap={false}>
-                  <Text style={styles.colCant}>{item.cantidad}</Text>
-                  <Text style={styles.colDesc}>{safe(item.descripcion).substring(0, 40)}</Text>
-                  <Text style={styles.colPrecio}>{fmt(item.precioUnitario)}</Text>
-                  <Text style={styles.colSubtotal}>{fmt(item.subtotal)}</Text>
-                </View>
-              ))}
-            </View>
+            <Tabla
+              columnas={COLUMNAS_ITEMS}
+              headerFijo
+              filas={data.items.map((item) => ({
+                cantidad: String(item.cantidad),
+                descripcion: safe(item.descripcion).substring(0, 40),
+                precio: fmt(item.precioUnitario),
+                subtotal: fmt(item.subtotal),
+              }))}
+            />
           </View>
         ) : null}
 
@@ -269,37 +279,30 @@ export function RemitoDocument({
         {pagosWithSaldo.length > 0 ? (
           <View style={styles.tableSection}>
             <Text style={styles.sectionLabel}>HISTORIAL DE PAGOS</Text>
-            <View style={styles.tableFrame}>
-              <View style={styles.pagosHeaderRow} fixed>
-                <Text style={[styles.colFecha, styles.headerCellLabel]}>FECHA</Text>
-                <Text style={[styles.colMetodo, styles.headerCellLabel]}>MÉTODO</Text>
-                <Text style={[styles.colRef, styles.headerCellLabel]}>REFERENCIA</Text>
-                <Text style={[styles.colMonto, styles.headerCellLabel]}>MONTO</Text>
-                <Text style={[styles.colSaldo, styles.headerCellLabel]}>SALDO</Text>
-              </View>
-              {pagosWithSaldo.map((pago, i) => {
+            <Tabla
+              columnas={COLUMNAS_PAGOS}
+              headerFijo
+              filas={pagosWithSaldo.map((pago) => {
                 const noteParts: string[] = []
                 if (pago.cuotas && pago.cuotas > 1) noteParts.push(`${pago.cuotas} cuotas`)
                 if (pago.recargoPorcentaje && pago.recargoPorcentaje > 0) noteParts.push(`${pago.recargoPorcentaje}% recargo`)
                 const note = noteParts.join(" · ")
-                return (
-                  <View key={i} style={styles.pagosRow} wrap={false}>
-                    <View style={styles.colFecha}>
-                      <Text>{fmtDate(pago.fecha)}</Text>
-                    </View>
-                    <View style={styles.colMetodo}>
-                      <Text>{metodoPagoFacturaLabels[pago.metodoPago] || pago.metodoPago}</Text>
-                    </View>
-                    <View style={styles.colRef}>
+                return {
+                  fecha: fmtDate(pago.fecha),
+                  metodo: metodoPagoFacturaLabels[pago.metodoPago] || pago.metodoPago,
+                  // The note line under the reference is why Tabla's `filas`
+                  // takes React.ReactNode rather than plain strings.
+                  referencia: (
+                    <>
                       <Text>{safe(pago.referencia).substring(0, 16)}</Text>
                       {note ? <Text style={styles.pagoNote}>{note}</Text> : null}
-                    </View>
-                    <Text style={styles.colMonto}>{fmt(pago.monto)}</Text>
-                    <Text style={styles.colSaldo}>{fmt(pago.saldoCorrido)}</Text>
-                  </View>
-                )
+                    </>
+                  ),
+                  monto: fmt(pago.monto),
+                  saldo: fmt(pago.saldoCorrido),
+                }
               })}
-            </View>
+            />
           </View>
         ) : null}
 

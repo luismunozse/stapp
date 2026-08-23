@@ -340,6 +340,27 @@ export const estilosShell = StyleSheet.create({
   clienteLeft: { flex: 1 },
   clienteRight: { alignItems: "flex-end" },
   clienteNombre: { fontFamily: "Helvetica-Bold", fontSize: TYPE.body, marginTop: 3 },
+
+  // === Ruled table ===
+  // The frame and the two row shapes were byte-identical across the three
+  // tables that adopted <Tabla> (the remito's items and pagos, the resumen's
+  // movimientos), so they are plain shared entries. The header's grey band
+  // was NOT — see `headerSombreado` on Tabla.
+  tablaFrame: { borderWidth: RULE_WIDTH, borderColor: MONO.ink, marginTop: 8 },
+  tablaHeader: {
+    flexDirection: "row",
+    borderBottomWidth: RULE_WIDTH,
+    borderBottomColor: MONO.ink,
+    paddingVertical: 5,
+  },
+  tablaHeaderFondo: { backgroundColor: MONO.totalBg },
+  tablaHeaderCell: { fontFamily: "Helvetica-Bold", color: MONO.label },
+  tablaFila: {
+    flexDirection: "row",
+    borderBottomWidth: RULE_WIDTH,
+    borderBottomColor: MONO.rule,
+    paddingVertical: 4,
+  },
 })
 
 /**
@@ -605,6 +626,131 @@ export function Firmas({
           </View>
         ))}
       </View>
+    </View>
+  )
+}
+
+// === Ruled table ===
+//
+// Default horizontal inset for a cell, in points. Every right-aligned column
+// across the three adopting tables reserves exactly this much on its right and
+// nothing on its left, so that side is not configurable; the left-aligned ones
+// genuinely disagree (the remito insets its first item column and its pagos
+// FECHA by 8, everything else by 6), hence `sangriaIzquierda`.
+const SANGRIA_CELDA = 6
+
+/**
+ * One column of a <Tabla>.
+ *
+ * `sangriaIzquierda`/`sangriaDerecha` exist because the three tables that
+ * adopted this component do NOT share a single inset pair, and the difference
+ * is visible: collapsing them onto one house value moved the remito's CANT. and
+ * DESCRIPCIÓN text 2pt left (caught by the golden harness, __tests__/
+ * pdf-golden.test.ts). They only apply to a left-aligned column — a
+ * right-aligned one always insets SANGRIA_CELDA on the right and 0 on the left,
+ * which all seven right-aligned columns already did.
+ */
+export type ColumnaTabla = {
+  key: string
+  titulo: string
+  /** Fixed width in points. Ignored when `flex` is set. */
+  ancho?: number
+  /** Takes the leftover width. At most one column per table. */
+  flex?: boolean
+  alinear?: "left" | "right"
+  bold?: boolean
+  /** Left inset for a left-aligned column. Defaults to SANGRIA_CELDA. */
+  sangriaIzquierda?: number
+  /** Right inset for a left-aligned column. Defaults to none. */
+  sangriaDerecha?: number
+}
+
+function celdaTabla(col: ColumnaTabla, ultima: boolean) {
+  const derecha = col.alinear === "right"
+  return {
+    ...(col.flex ? { flex: 1 } : { width: col.ancho }),
+    paddingLeft: derecha ? 0 : col.sangriaIzquierda ?? SANGRIA_CELDA,
+    paddingRight: derecha ? SANGRIA_CELDA : col.sangriaDerecha ?? 0,
+    // The frame already draws the outer border, so the last column must not
+    // add a second rule on top of it.
+    ...(ultima ? {} : { borderRightWidth: RULE_WIDTH, borderRightColor: MONO.ink }),
+    fontSize: TYPE.small,
+    textAlign: col.alinear ?? "left",
+    ...(col.bold ? { fontFamily: "Helvetica-Bold" } : {}),
+  }
+}
+
+/**
+ * Ruled table with a header row that can repeat across page breaks.
+ *
+ * `filas` values are `React.ReactNode`, not strings: the remito's pagos rows
+ * carry a note line under the reference and the resumen's movimientos carry
+ * the payment method under the concept, so a cell is sometimes two stacked
+ * Texts. A plain string is wrapped in a <Text> for the caller.
+ *
+ * `pie` renders as the last child INSIDE the frame — that is where the
+ * resumen's "Totales del período" row lives, and closing the frame before it
+ * would leave it outside the border.
+ *
+ * `headerFijo` — react-pdf's `fixed` repeats the row on every page its own
+ * parent chain spans (@react-pdf/layout's splitNodes pushes a fixed child into
+ * both the current and the next page's copy of its parent). Both the remito
+ * and the resumen want that on their tables today. It is a prop rather than
+ * always-on because `fixed` is NOT free: @react-pdf/layout's `shouldBreak`
+ * tests `'fixed' in props`, not its value, so the flag is spread in
+ * conditionally below — passing `fixed={false}` is measurably different from
+ * omitting it and would suppress page breaks the table needs.
+ *
+ * `headerSombreado` — the resumen's header carries a MONO.totalBg band, the
+ * remito's two do not. Same reasoning as Firmas' required spacings: the
+ * documents disagree, and neither value is more "natural" than the other.
+ */
+export function Tabla({
+  columnas,
+  filas,
+  headerFijo = false,
+  headerSombreado = false,
+  pie,
+}: {
+  columnas: ColumnaTabla[]
+  filas: Array<Record<string, React.ReactNode>>
+  /** Repeat the header row on the pages the table spans. */
+  headerFijo?: boolean
+  /** Grey band behind the header row. */
+  headerSombreado?: boolean
+  /** Extra row rendered inside the frame, under the last data row. */
+  pie?: React.ReactNode
+}) {
+  const esUltima = (i: number) => i === columnas.length - 1
+
+  return (
+    <View style={estilosShell.tablaFrame}>
+      <View
+        style={
+          headerSombreado
+            ? [estilosShell.tablaHeader, estilosShell.tablaHeaderFondo]
+            : estilosShell.tablaHeader
+        }
+        {...(headerFijo ? { fixed: true } : {})}
+      >
+        {columnas.map((col, i) => (
+          <Text key={col.key} style={[celdaTabla(col, esUltima(i)), estilosShell.tablaHeaderCell]}>
+            {col.titulo}
+          </Text>
+        ))}
+      </View>
+
+      {filas.map((fila, f) => (
+        <View key={f} style={estilosShell.tablaFila} wrap={false}>
+          {columnas.map((col, i) => (
+            <View key={col.key} style={celdaTabla(col, esUltima(i))}>
+              {typeof fila[col.key] === "string" ? <Text>{fila[col.key]}</Text> : fila[col.key]}
+            </View>
+          ))}
+        </View>
+      ))}
+
+      {pie}
     </View>
   )
 }

@@ -29,6 +29,8 @@ import {
   Cabecera,
   BandaCliente,
   Firmas,
+  Tabla,
+  type ColumnaTabla,
   type DocumentoBase,
 } from "./pdf-react-shell"
 
@@ -120,64 +122,11 @@ const styles = StyleSheet.create({
   obsText: { fontSize: TYPE.small, marginTop: 4 },
 
   // === Statement table ===
-  // Widths are absolute so the header cells and the data cells cannot drift
-  // apart. They sum to the table frame's inner width, with CONCEPTO taking
-  // whatever is left over (flex: 1).
-  tablaFrame: { borderWidth: RULE_WIDTH, borderColor: MONO.ink, marginTop: 8 },
-  tablaHeaderRow: {
-    flexDirection: "row",
-    borderBottomWidth: RULE_WIDTH,
-    borderBottomColor: MONO.ink,
-    backgroundColor: MONO.totalBg,
-    paddingVertical: 5,
-  },
-  tablaRow: {
-    flexDirection: "row",
-    borderBottomWidth: RULE_WIDTH,
-    borderBottomColor: MONO.rule,
-    paddingVertical: 4,
-  },
-  colFecha: {
-    width: 58,
-    paddingLeft: 6,
-    borderRightWidth: RULE_WIDTH,
-    borderRightColor: MONO.ink,
-    fontSize: TYPE.small,
-  },
-  colConcepto: {
-    flex: 1,
-    paddingLeft: 6,
-    paddingRight: 4,
-    borderRightWidth: RULE_WIDTH,
-    borderRightColor: MONO.ink,
-    fontSize: TYPE.small,
-  },
-  colComprobante: {
-    width: 86,
-    paddingLeft: 6,
-    paddingRight: 4,
-    borderRightWidth: RULE_WIDTH,
-    borderRightColor: MONO.ink,
-    fontSize: TYPE.small,
-  },
-  colDebe: {
-    width: 68,
-    paddingRight: 6,
-    borderRightWidth: RULE_WIDTH,
-    borderRightColor: MONO.ink,
-    fontSize: TYPE.small,
-    textAlign: "right",
-  },
-  colHaber: {
-    width: 68,
-    paddingRight: 6,
-    borderRightWidth: RULE_WIDTH,
-    borderRightColor: MONO.ink,
-    fontSize: TYPE.small,
-    textAlign: "right",
-  },
-  colSaldo: { width: 74, paddingRight: 6, fontSize: TYPE.small, textAlign: "right", fontFamily: "Helvetica-Bold" },
-  headerCellLabel: { fontFamily: "Helvetica-Bold", fontSize: TYPE.small, color: MONO.label },
+  // The frame, the header band, the row rule and the column cells are drawn
+  // by <Tabla> (lib/pdf-react-shell.tsx) now; this document only declares its
+  // own columns (COLUMNAS_MOVIMIENTOS below) and the totals row it pins under
+  // them. Widths stay absolute so the header cells and the data cells cannot
+  // drift apart, with CONCEPTO taking whatever is left over (flex).
   conceptoNote: { fontSize: TYPE.fine, color: MONO.label, marginTop: 1 },
   totalesRow: { flexDirection: "row", borderTopWidth: RULE_WIDTH, borderTopColor: MONO.ink, paddingVertical: 5 },
   totalesLabel: { flex: 1, paddingLeft: 6, fontSize: TYPE.small, fontFamily: "Helvetica-Bold" },
@@ -214,6 +163,20 @@ function derechaSucursal(data: DocumentoBase): React.ReactNode {
     </>
   )
 }
+
+/**
+ * Statement columns. `sangriaDerecha` on the two free-text columns is this
+ * document's own pre-existing 4pt right inset — the other four never had one,
+ * so it is stated per column instead of being a house default.
+ */
+const COLUMNAS_MOVIMIENTOS: ColumnaTabla[] = [
+  { key: "fecha", titulo: "FECHA", ancho: 58 },
+  { key: "concepto", titulo: "CONCEPTO", flex: true, sangriaDerecha: 4 },
+  { key: "comprobante", titulo: "COMPROBANTE", ancho: 86, sangriaDerecha: 4 },
+  { key: "debe", titulo: "DEBE", ancho: 68, alinear: "right" },
+  { key: "haber", titulo: "HABER", ancho: 68, alinear: "right" },
+  { key: "saldo", titulo: "SALDO", ancho: 74, alinear: "right", bold: true },
+]
 
 /**
  * Closing-balance headline. A negative saldo means the client owes, so the
@@ -378,45 +341,39 @@ export function ResumenCCDocument({
           {movimientos.length === 0 ? (
             <Text style={styles.vacio}>Sin movimientos en el período.</Text>
           ) : (
-            <View style={styles.tablaFrame}>
-              {/* `fixed` repeats this row at the top of every page. Safe here
-                  in a way it is not on the remito: this table is the
-                  document's only body block, so there is no later section a
-                  document-global repeat could leak onto. */}
-              <View style={styles.tablaHeaderRow} fixed>
-                <Text style={[styles.colFecha, styles.headerCellLabel]}>FECHA</Text>
-                <Text style={[styles.colConcepto, styles.headerCellLabel]}>CONCEPTO</Text>
-                <Text style={[styles.colComprobante, styles.headerCellLabel]}>COMPROBANTE</Text>
-                <Text style={[styles.colDebe, styles.headerCellLabel]}>DEBE</Text>
-                <Text style={[styles.colHaber, styles.headerCellLabel]}>HABER</Text>
-                <Text style={[styles.colSaldo, styles.headerCellLabel]}>SALDO</Text>
-              </View>
-
-              {movimientos.map((mov, i) => {
+            /* headerFijo repeats the header row across the pages the table
+               spans, and headerSombreado draws the grey band behind it — this
+               document's own look; the remito's two tables share the component
+               but not the band. */
+            <Tabla
+              columnas={COLUMNAS_MOVIMIENTOS}
+              headerFijo
+              headerSombreado
+              filas={movimientos.map((mov) => {
                 const metodo = mov.metodoPago ? metodoPagoLabels[mov.metodoPago] || mov.metodoPago : ""
-                const comprobante = safe(mov.numeroReferencia) || safe(mov.referenciaTipo)
-                return (
-                  <View key={i} style={styles.tablaRow} wrap={false}>
-                    <Text style={styles.colFecha}>{formatDateValue(mov.fecha, tz)}</Text>
-                    <View style={styles.colConcepto}>
+                return {
+                  fecha: formatDateValue(mov.fecha, tz),
+                  concepto: (
+                    <>
                       <Text>{conceptoLabels[mov.tipo] || mov.tipo}</Text>
                       {metodo ? <Text style={styles.conceptoNote}>{metodo}</Text> : null}
-                    </View>
-                    <Text style={styles.colComprobante}>{comprobante}</Text>
-                    <Text style={styles.colDebe}>{mov.monto < 0 ? fmt(Math.abs(mov.monto)) : ""}</Text>
-                    <Text style={styles.colHaber}>{mov.monto > 0 ? fmt(mov.monto) : ""}</Text>
-                    <Text style={styles.colSaldo}>{fmt(mov.saldoPosterior)}</Text>
-                  </View>
-                )
+                    </>
+                  ),
+                  comprobante: safe(mov.numeroReferencia) || safe(mov.referenciaTipo),
+                  debe: mov.monto < 0 ? fmt(Math.abs(mov.monto)) : "",
+                  haber: mov.monto > 0 ? fmt(mov.monto) : "",
+                  saldo: fmt(mov.saldoPosterior),
+                }
               })}
-
-              <View style={styles.totalesRow} wrap={false}>
-                <Text style={styles.totalesLabel}>Totales del período</Text>
-                <Text style={styles.totalesCell}>{fmt(totalDebe)}</Text>
-                <Text style={styles.totalesCell}>{fmt(totalHaber)}</Text>
-                <Text style={styles.totalesSaldo}>{fmt(data.saldoFinal)}</Text>
-              </View>
-            </View>
+              pie={
+                <View style={styles.totalesRow} wrap={false}>
+                  <Text style={styles.totalesLabel}>Totales del período</Text>
+                  <Text style={styles.totalesCell}>{fmt(totalDebe)}</Text>
+                  <Text style={styles.totalesCell}>{fmt(totalHaber)}</Text>
+                  <Text style={styles.totalesSaldo}>{fmt(data.saldoFinal)}</Text>
+                </View>
+              }
+            />
           )}
 
           <BarraTotal label={saldoLabel} valor={fmt(saldoValor)} />
