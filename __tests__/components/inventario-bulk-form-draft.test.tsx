@@ -127,6 +127,39 @@ describe("InventarioBulkForm — borrador local", () => {
     expect(screen.getByDisplayValue("Fila B")).toBeInTheDocument()
   })
 
+  it("no rellena las filas que el operador dejó vacías a propósito", async () => {
+    // `validate` no mira los tres campos de defaults, asi que un borrador puede
+    // llegar sin ellos o con otro tipo. Los setters normalizan ("0" / ""), pero
+    // la referencia contra la que el efecto de propagacion compara guardaba lo
+    // crudo: en el commit siguiente veia un cambio de defaults donde no lo hubo
+    // y pisaba toda fila con el campo vacio -- justo las que alguien blanqueo a
+    // mano.
+    seedDraft(
+      draftDeLote({
+        defaultStock: 5,
+        rows: [
+          {
+            nombre: "Sin stock cargado",
+            stock: "",
+            precioCompra: "100",
+            precioVenta: "250",
+            barcode: "",
+          },
+        ],
+      }),
+    )
+
+    renderBulk()
+    await screen.findByText(/se restauró un borrador no guardado/i)
+
+    const fila = screen.getByDisplayValue("Sin stock cargado").closest("tr")!
+    const inputs = fila.querySelectorAll("input")
+    // [0] nombre, [1] stock, [2] p.compra, [3] p.venta, [4] barcode
+    expect((inputs[1] as HTMLInputElement).value).toBe("")
+    // El campo de arriba si queda normalizado, que es lo que el input necesita.
+    expect(screen.getByLabelText("Stock por defecto")).toHaveValue(0)
+  })
+
   it("descarta un borrador cuya forma ya no es la de esta pantalla", async () => {
     seedDraft({ tipoDispositivo: "CELULAR", rows: "no soy un array" })
 

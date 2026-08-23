@@ -285,23 +285,30 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
     setTipoDispositivo(draft.tipoDispositivo)
     setCategoria(draft.categoria)
     setProveedorId(typeof draft.proveedorId === "string" ? draft.proveedorId : "")
-    setDefaultStock(typeof draft.defaultStock === "string" ? draft.defaultStock : "0")
-    setDefaultPrecioCompra(
+    // Normalizados UNA vez y usados para las dos cosas: el estado y la
+    // referencia de comparacion. `validate` no mira estos tres campos, asi que
+    // un borrador puede llegar sin ellos o con otro tipo; guardar lo crudo en la
+    // referencia mientras el estado va normalizado deja a las dos discrepando
+    // desde el arranque.
+    const defaultStockRestaurado =
+      typeof draft.defaultStock === "string" ? draft.defaultStock : "0"
+    const defaultCompraRestaurado =
       typeof draft.defaultPrecioCompra === "string" ? draft.defaultPrecioCompra : ""
-    )
-    setDefaultPrecioVenta(
+    const defaultVentaRestaurado =
       typeof draft.defaultPrecioVenta === "string" ? draft.defaultPrecioVenta : ""
-    )
+    setDefaultStock(defaultStockRestaurado)
+    setDefaultPrecioCompra(defaultCompraRestaurado)
+    setDefaultPrecioVenta(defaultVentaRestaurado)
     setRows(draft.rows.map((row) => newRow(row)))
     // Los defaults restaurados NO son un cambio de defaults: sin esto, el efecto
     // de propagacion de mas arriba los compara contra los iniciales, ve una
-    // diferencia y pisa toda fila cuyo valor coincida con el default viejo --
-    // una fila que el operador habia puesto en 0 a proposito vuelve con el stock
-    // por defecto del lote.
+    // diferencia y pisa toda fila cuyo valor coincida con el default viejo o
+    // este vacio -- una fila que el operador habia blanqueado a proposito vuelve
+    // con el stock por defecto del lote.
     prevDefaultsRef.current = {
-      stock: draft.defaultStock,
-      precioCompra: draft.defaultPrecioCompra,
-      precioVenta: draft.defaultPrecioVenta,
+      stock: defaultStockRestaurado,
+      precioCompra: defaultCompraRestaurado,
+      precioVenta: defaultVentaRestaurado,
     }
     setAppliedDraft(draft)
     notifyChange()
