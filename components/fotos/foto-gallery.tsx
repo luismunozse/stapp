@@ -21,7 +21,7 @@ import {
 } from "lucide-react"
 import { FotoUpload } from "./foto-upload"
 import { useModal } from "@/contexts/modal-context"
-import { useCurrency } from "@/contexts/currency-context"
+import { useCurrency, useTerminologia } from "@/contexts/currency-context"
 
 interface Foto {
   id: string
@@ -45,6 +45,7 @@ const tipoConfig: Record<string, { label: string; icon: typeof Package; color: s
 }
 
 export function FotoGallery({ ordenId }: FotoGalleryProps) {
+  const term = useTerminologia()
   const [fotos, setFotos] = useState<Foto[]>([])
   const [loading, setLoading] = useState(true)
   const [showUpload, setShowUpload] = useState(false)
@@ -154,7 +155,7 @@ export function FotoGallery({ ordenId }: FotoGalleryProps) {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Camera className="h-5 w-5" />
-              Fotos del Equipo ({fotos.length})
+              Fotos del {term("equipo")} ({fotos.length})
             </CardTitle>
             {!showUpload && (
               <Button size="sm" onClick={() => setShowUpload(true)}>
@@ -212,7 +213,7 @@ export function FotoGallery({ ordenId }: FotoGalleryProps) {
                           {foto.url ? (
                             <img
                               src={foto.url}
-                              alt={foto.descripcion || "Foto del equipo"}
+                              alt={foto.descripcion || `Foto del ${term("equipo").toLowerCase()}`}
                               className="absolute inset-0 w-full h-full object-cover"
                               loading="lazy"
                             />
@@ -289,7 +290,7 @@ export function FotoGallery({ ordenId }: FotoGalleryProps) {
               return (
                 <img
                   src={foto.url}
-                  alt={foto.descripcion || "Foto del equipo"}
+                  alt={foto.descripcion || `Foto del ${term("equipo").toLowerCase()}`}
                   className="max-w-full max-h-[80vh] object-contain rounded-lg"
                 />
               )
