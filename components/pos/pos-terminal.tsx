@@ -22,7 +22,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import { PosProductSearch, type PosProductSearchRef } from "./pos-product-search"
+import { PosProductSearch, type PosProductSearchRef, type VentaSucursalInfo } from "./pos-product-search"
 import { PosCart } from "./pos-cart"
 import { PosCheckoutDialog } from "./pos-checkout-dialog"
 import { PosHeldSales } from "./pos-held-sales"
@@ -112,6 +112,15 @@ export function PosTerminal() {
   const scanSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [fiscal, setFiscal] = useState<FiscalConfig | null>(null)
   const [orgGarantiaDefault, setOrgGarantiaDefault] = useState<number>(0)
+
+  // Sucursal the current sale will actually draw stock from — resolved server-side
+  // (search/route.ts, scope=venta) so it always matches the ventas write path, even
+  // when an ADMIN has "todas las sucursales" selected. Drives the cart's "selling
+  // from" indicator.
+  const [ventaSucursal, setVentaSucursal] = useState<VentaSucursalInfo | null>(null)
+  const handleVentaSucursal = useCallback((info: VentaSucursalInfo) => {
+    setVentaSucursal(info)
+  }, [])
 
   // Facturación electrónica: emitir comprobante desde el overlay de venta exitosa
   const [facturacionDisponible, setFacturacionDisponible] = useState(false)
@@ -621,7 +630,7 @@ export function PosTerminal() {
       const code = barcode.trim()
       if (!code) return
       try {
-        const res = await fetch(`/api/inventario/barcode?code=${encodeURIComponent(code)}`)
+        const res = await fetch(`/api/inventario/barcode?code=${encodeURIComponent(code)}&scope=venta`)
         if (!res.ok) return
         const data = await res.json()
         if (data.found && data.item) {
@@ -846,7 +855,7 @@ export function PosTerminal() {
       <div className="hidden lg:flex flex-1 overflow-hidden">
         {/* Left: Product search */}
         <div className="w-[60%] border-r overflow-hidden flex flex-col">
-          <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} />
+          <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} onVentaSucursal={handleVentaSucursal} />
         </div>
         {/* Right: Cart */}
         <div className="w-[40%] overflow-hidden flex flex-col">
@@ -873,6 +882,8 @@ export function PosTerminal() {
             onSetDescuentoMotivo={setDescuentoMotivo}
             onSetPrecio={setItemPrecio}
             fiscal={fiscal}
+            ventaSucursalNombre={ventaSucursal?.nombre ?? null}
+            ventaAlcanceOrg={ventaSucursal?.alcanceOrg ?? false}
           />
         </div>
       </div>
@@ -885,7 +896,7 @@ export function PosTerminal() {
             style={{ display: mobileTab === "products" ? "block" : "none" }}
             className="absolute inset-0 overflow-hidden"
           >
-            <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} />
+            <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} onVentaSucursal={handleVentaSucursal} />
           </div>
           <div
             style={{ display: mobileTab === "cart" ? "block" : "none" }}
@@ -914,6 +925,8 @@ export function PosTerminal() {
               onSetDescuentoMotivo={setDescuentoMotivo}
               onSetPrecio={setItemPrecio}
               fiscal={fiscal}
+              ventaSucursalNombre={ventaSucursal?.nombre ?? null}
+              ventaAlcanceOrg={ventaSucursal?.alcanceOrg ?? false}
             />
           </div>
         </div>
@@ -1025,6 +1038,7 @@ export function PosTerminal() {
       <BarcodeScanner
         open={scannerOpen}
         onOpenChange={setScannerOpen}
+        scopeVenta
         onResult={async (result) => {
           // Scanner ya consultó la API; reusar resultado en vez de re-fetchear.
           if (result.found && result.item) {

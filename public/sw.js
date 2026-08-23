@@ -1,6 +1,14 @@
 // Service Worker para PWA - Optimizado para móviles con soporte offline completo
 const CACHE_NAME = 'stapp-v8'
-const API_CACHE_NAME = 'stapp-api-v2'
+// v3: el caché de API pasó a llevar sello de tiempo y dejó de guardar
+// /api/inventario. Renombrarlo hace que `activate` borre las entradas viejas
+// (sin sello, y posiblemente con inventario de otro rol o sucursal).
+// v4: se intentó escopear el caché limpiándolo al cambiar la identidad.
+// v5: se revirtió — limpiar es una carrera por construcción (ver
+// CACHEABLE_API_ROUTES). Los caches v3/v4 alcanzaron a guardar /api/clientes y
+// /api/inventario bajo la regla permisiva; renombrar es lo que los saca de
+// encima al actualizar, porque en un equipo compartido son de otra sesión.
+const API_CACHE_NAME = 'stapp-api-v5'
 const STATIC_CACHE_NAME = 'stapp-static-v3'
 const DB_NAME = 'stapp-offline'
 const DB_VERSION = 2
@@ -21,17 +29,75 @@ const EXCLUDED_ROUTES = [
   '/landing',
 ]
 
-// Rutas de API que se pueden cachear temporalmente (lectura)
-const CACHEABLE_API_ROUTES = [
-  '/api/clientes',
-  '/api/inventario',
-  '/api/servicios',
-  '/api/configuracion',
-  '/api/tipos-dispositivo',
-]
+// Rutas de API que se pueden cachear temporalmente (lectura).
+//
+// ESTÁ VACÍA, Y NO ES UN DESCUIDO. Hoy NINGUNA respuesta de API se cachea.
+//
+// LA REGLA: acá no entra ninguna ruta cuya respuesta dependa de la identidad
+// —usuario, rol, org o sucursal activa—. No "se cachea y después se limpia":
+// no se guarda. El motivo es que este caché es del navegador, no de la sesión:
+// la clave es la URL y nada más, sin cookie, sin usuario, sin rol, sin org. Una
+// respuesta guardada acá no sabe de quién es, así que puede devolverse a otra
+// sesión del mismo equipo — el mostrador compartido donde el usuario A de la
+// org 1 cierra sesión y entra el usuario B de la org 2.
+//
+// Aplicada de verdad, en una app multi-tenant esa regla no deja NADA:
+//   - /api/inventario — bajo scope=venta trae el stock de una sucursal concreta
+//     (más los headers X-Venta-Sucursal-*) y, para un ADMIN, precioCompra.
+//   - /api/clientes — la lista es de UNA org, y lo que cuelga abajo
+//     (deuda-sucursal, ordenes-pendientes) corre sucursalParaLectura. Dejar
+//     afuera el prefijo cubre todo lo anidado sin listas de excepciones.
+//   - /api/configuracion — es requireAdmin() y filtra por org. Peor todavía:
+//     acá solo se guardan respuestas 200, así que toda entrada suya es una
+//     respuesta de ADMIN, y un VENDEDOR pidiendo esa misma URL la recibiría del
+//     caché sin que salga un solo request a la red.
+//   - /api/tipos-dispositivo — filtra por organization_id, misma forma.
+//   - /api/servicios — no existe; era una entrada muerta.
+//
+// Ya se intentó sostenerlo limpiando el caché al cambiar la identidad de sesión
+// (ApiCacheSessionGuard). No alcanza, y no por cómo esté escrito: limpiar es
+// una carrera por construcción. Tiene que haber TERMINADO antes de que algo
+// lea, y la primera pantalla lee en el mismo commit en que monta el guard
+// (CurrencyProvider pide /api/configuracion ahí mismo); además no puede
+// demostrar que corrió: sin `controller` el mensaje se pierde en silencio y el
+// borrado del worker es asincrónico. El guard sigue vivo como defensa en
+// profundidad — por si alguien agrega una ruta acá — pero no es una garantía.
+//
+// El costo, explícito: NO hay datos de API offline. El POS no tiene catálogo
+// offline y la app depende de la red para todo lo que no sea el shell.
+//
+// Para recuperarlo hace falta cambiar el modelo, no la lista: un caché KEYEADO
+// POR IDENTIDAD (un nombre de caché por sesión, p. ej. `stapp-api-v5-<hash de
+// usuario+org+rol+sucursal>`), donde otra identidad simplemente lee otro caché.
+// Ahí no hay nada que limpiar ni nada que pueda llegar tarde, y estas rutas
+// vuelven a ser cacheables sin carrera. Es otro cambio, no este.
+//
+// La maquinaria de abajo (sello de tiempo, stale-while-revalidate, presupuesto,
+// waitUntil) queda como andamiaje para ese cambio y hoy es inalcanzable: con la
+// lista vacía, `cacheable` siempre da false y todo /api/ cae en
+// networkOnlyWithError. Los tests la siguen cubriendo inyectando una ruta.
+// OJO si alguna vez vuelve a entrar una ruta escopeada por SUCURSAL: el guard
+// mira la sesión, no la cookie de sucursal activa, así que haría falta volver a
+// limpiar desde SucursalSwitcher (o meter la sucursal en la clave del caché).
+const CACHEABLE_API_ROUTES = []
 
-// Tiempo de vida del caché de API (5 minutos)
+// Tiempo de vida del caché de API (5 minutos). Se aplica con el sello
+// CACHED_AT_HEADER que se escribe al guardar: pasado el TTL la entrada deja de
+// servirse mientras haya red, pero sigue siendo el fallback offline.
 const API_CACHE_TTL = 5 * 60 * 1000
+const CACHED_AT_HEADER = 'x-sw-cached-at'
+
+// Cuánto se espera a la red antes de servir una copia vencida que igual sirve.
+//
+// "Mientras haya red" no puede significar "esperemos el connect timeout del
+// sistema operativo". Un enlace a medias — portal cautivo, celda muerta, el
+// estado normal de un mostrador — no rechaza el fetch: lo cuelga decenas de
+// segundos, y sin este presupuesto el operador mira un spinner mientras la
+// respuesta que necesita ya está en el caché. Pasado el presupuesto se sirve la
+// copia vencida y la revalidación sigue en segundo plano, así que la próxima
+// lectura ya encuentra la fresca. Con red sana la red gana igual y el TTL sigue
+// mandando: este límite solo decide cuánto se espera, no qué se prefiere.
+const STALE_REVALIDATE_BUDGET = 1500
 
 // Todos los stores de IndexedDB para operaciones offline
 const ALL_STORES = [
@@ -90,11 +156,19 @@ self.addEventListener('activate', (event) => {
 // Manejar mensajes del cliente
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'CLEAR_CACHE') {
+    // `cache: 'api'` borra SOLO el caché de API (todas sus versiones). Lo manda
+    // quien limpia por un cambio de identidad o de sucursal, que ocurre seguido
+    // en un mostrador que rota operadores: borrar además el shell de navegación
+    // (CACHE_NAME) y los assets (STATIC_CACHE_NAME) le sacaría a ese equipo la
+    // capacidad de arrancar offline, que no tiene nada que ver con la sesión.
+    // Sin `cache` se borra todo: es la recuperación manual (pull-to-refresh,
+    // pantallas de error), donde justamente se quiere empezar de cero.
+    const soloApi = event.data.cache === 'api'
     event.waitUntil(
       caches.keys().then((cacheNames) => {
         return Promise.all(
           cacheNames
-            .filter((name) => name.startsWith('stapp-'))
+            .filter((name) => soloApi ? name.startsWith('stapp-api-') : name.startsWith('stapp-'))
             .map((name) => caches.delete(name))
         )
       }).then(() => {
@@ -149,8 +223,9 @@ self.addEventListener('fetch', (event) => {
   // Estrategia para API calls
   if (url.pathname.startsWith('/api/')) {
     // Para API que puede cachearse, usar stale-while-revalidate
-    if (CACHEABLE_API_ROUTES.some(route => url.pathname.startsWith(route)) && request.method === 'GET') {
-      event.respondWith(staleWhileRevalidate(request, API_CACHE_NAME))
+    const cacheable = CACHEABLE_API_ROUTES.some(route => url.pathname.startsWith(route))
+    if (cacheable && request.method === 'GET') {
+      event.respondWith(staleWhileRevalidate(request, API_CACHE_NAME, event))
     } else {
       // Para otras APIs, network only con fallback a error
       event.respondWith(networkOnlyWithError(request))
@@ -209,25 +284,96 @@ async function cacheFirst(request, cacheName) {
   }
 }
 
+// Sella la respuesta con la hora de guardado. Los headers de una respuesta de
+// red son inmutables, así que hay que reconstruirla.
+async function conSelloDeCache(response) {
+  const headers = new Headers(response.headers)
+  headers.set(CACHED_AT_HEADER, String(Date.now()))
+  const body = await response.arrayBuffer()
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  })
+}
+
+// Una entrada sin sello viene de una versión anterior del SW: se trata como
+// vencida (se revalida) en vez de asumir que es fresca.
+function cacheVencido(response) {
+  const sello = response.headers.get(CACHED_AT_HEADER)
+  if (!sello) return true
+  return Date.now() - Number(sello) > API_CACHE_TTL
+}
+
+// Espera una promesa hasta `ms` y resuelve a null si no llegó a tiempo (o si
+// falló). La promesa original sigue viva: acá solo se deja de esperarla.
+function conTiempoLimite(promise, ms) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), ms)
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value) },
+      () => { clearTimeout(timer); resolve(null) }
+    )
+  })
+}
+
 // Estrategia: Stale-while-revalidate para APIs cacheables
-async function staleWhileRevalidate(request, cacheName) {
+async function staleWhileRevalidate(request, cacheName, event) {
   const cache = await caches.open(cacheName)
   const cached = await cache.match(request)
 
-  const fetchPromise = fetch(request).then((response) => {
-    if (response.ok) {
-      cache.put(request, response.clone())
-    }
-    return response
-  }).catch(() => null)
+  const fetchPromise = fetch(request).catch(() => null)
 
-  if (cached) {
+  // Guardar es un efecto de responder, NUNCA parte de responder. Mientras el put
+  // vivía dentro de esta cadena, la página recibía su respuesta recién después
+  // de bufferear el body entero y escribirlo: en un miss eso es la descarga
+  // completa antes de empezar a mostrar nada, y en el camino de la copia vencida
+  // esa escritura se le cobraba a STALE_REVALIDATE_BUDGET, así que un
+  // almacenamiento lento podía hacer que una red rápida no llegue a tiempo.
+  // Ahora `fetchPromise` resuelve con la respuesta y el guardado corre aparte.
+  const guardado = fetchPromise.then((response) => {
+    if (!response || !response.ok) return null
+    // El clone tiene que salir ANTES de que la página empiece a consumir el
+    // body; por eso es lo primero del callback y no hay ningún await antes.
+    const copia = response.clone()
+    return conSelloDeCache(copia)
+      .then((sellada) => cache.put(request, sellada))
+      .catch((error) => {
+        // Un QuotaExceededError en un teléfono al límite ya no puede degradar
+        // una respuesta 200 buena: acá no está en el camino de la respuesta.
+        console.log('[SW] No se pudo cachear la respuesta de API:', request.url, error.message)
+        return null
+      })
+  })
+
+  // Dejar de ESPERAR la revalidación no es renunciar a ella. Servida la
+  // respuesta, el navegador puede terminar el worker cuando quiera: sin esto el
+  // guardado nunca llega a correr y, en un enlace a medias, cada request paga el
+  // presupuesto y vuelve a servir la MISMA copia vencida para siempre. waitUntil
+  // es lo que mantiene vivo al worker hasta guardarla (y `guardado` depende de
+  // `fetchPromise`, así que también cubre la revalidación en sí).
+  if (event) {
+    event.waitUntil(guardado)
+  }
+
+  if (cached && !cacheVencido(cached)) {
     return cached
   }
 
-  const response = await fetchPromise
+  // Con una copia vencida en mano la revalidación tiene presupuesto: si la red
+  // no contesta a tiempo se sirve esa copia y la revalidación sigue sola. Sin
+  // copia no hay nada mejor que esperar, así que el presupuesto no aplica.
+  const response = cached
+    ? await conTiempoLimite(fetchPromise, STALE_REVALIDATE_BUDGET)
+    : await fetchPromise
   if (response) {
     return response
+  }
+
+  // Sin red: una copia vencida sigue siendo mejor que nada (es el caso que la
+  // PWA offline existe para cubrir).
+  if (cached) {
+    return cached
   }
 
   return new Response(JSON.stringify({ error: 'No data available' }), {

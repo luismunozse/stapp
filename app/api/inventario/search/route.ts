@@ -1,13 +1,30 @@
 import { NextResponse } from "next/server"
 import { requireAuth, lazyInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getCookieSucursalId, resolveSucursalLectura, getDepositoDeSucursal } from "@/lib/sucursal"
+import {
+  getCookieSucursalId,
+  resolveSucursalLectura,
+  getDepositoDeSucursal,
+  resolverDestinoVentaCacheado,
+  derivarLecturaVenta,
+  derivarAvisoAlcanceOrg,
+  resolverIndicadorVentaCacheado,
+} from "@/lib/sucursal"
 
 // GET /api/inventario/search?q=term&limit=10
 // Server-side search for inventory items (used by sale form)
 // Returns minimal payload: id, codigo, nombre, stock, precioVenta
 // If VENDEDOR (or ADMIN with sucursal cookie): filters to items with stock in that
 // sucursal's principal deposito. ADMIN "ver todas" returns aggregate stock (original behavior).
+// scope=venta (POS-only opt-in): ignores the "ver todas" selector and always scopes stock
+// to the sucursal/deposito the sale will actually draw from (same resolution as the ventas
+// write path), so what POS shows always matches what a sale can decrement. The resolved
+// sucursal id is echoed back via the X-Venta-Sucursal-Id response header so the POS UI can show
+// a "selling from" indicator without a second round trip; ventaInfo=true additionally resolves
+// its name into X-Venta-Sucursal-Nombre (an extra query — only the POS mount fetch asks for it).
+// That name is only emitted when the indicator is actually meaningful (resolverIndicadorVenta):
+// an empty header means "do not show the indicator", which is a server-side decision because the
+// browser can read neither the httpOnly sucursal cookie nor the org's sucursal count.
 export async function GET(request: Request) {
   try {
     const { error, organizationId, role, session } = await requireAuth()
@@ -27,15 +44,75 @@ export async function GET(request: Request) {
     const q = searchParams.get("q") || ""
     const limit = Math.min(parseInt(searchParams.get("limit") || "10"), 50)
     const includeZeroStock = searchParams.get("includeZeroStock") === "true"
+    const scopeVenta = searchParams.get("scope") === "venta"
+    // Resolving the sucursal NAME costs an extra query, and only the POS mount
+    // fetch consumes the X-Venta-Sucursal-Nombre header — the debounced
+    // per-keystroke search does not. Opt in instead of paying it every time.
+    const ventaInfo = searchParams.get("ventaInfo") === "true"
 
-    // Resolve sucursal scope
+    // Resolve sucursal scope. Under scope=venta, ignore the reader's "ver
+    // todas" cookie state entirely and resolve the concrete sale target
+    // instead — this is what makes POS reads agree with the ventas write path.
     const cookieSucursalId = await getCookieSucursalId()
     const userSucursalId = session?.user?.sucursalId ?? null
-    const { sucursalId, verTodas } = resolveSucursalLectura({
-      role,
-      userSucursalId,
-      cookieSucursalId,
-    })
+
+    let sucursalId: string | null
+    let verTodas: boolean
+    let depositoIdPrefetched: string | null = null
+    let ventaSucursalId: string | null = null
+    let ventaSucursalNombre: string | null = null
+    let avisoAlcanceOrg = false
+
+    if (scopeVenta) {
+      // Cached: this route is the debounced per-keystroke search (see
+      // lib/sucursal.ts for why the read path caches and the write path does not).
+      const destino = await resolverDestinoVentaCacheado({
+        role,
+        organizationId: organizationId!,
+        userSucursalId,
+        cookieSucursalId,
+      })
+      const lectura = derivarLecturaVenta(destino)
+      ventaSucursalId = lectura.ventaSucursalId
+      sucursalId = lectura.sucursalId
+      depositoIdPrefetched = lectura.depositoId
+      verTodas = lectura.verTodas
+      // Gratis (puro): el header sale en toda respuesta scope=venta, no solo
+      // en la que pide ventaInfo.
+      avisoAlcanceOrg = derivarAvisoAlcanceOrg({ role, cookieSucursalId, lectura })
+      if (ventaInfo) {
+        // The name doubles as the "should this indicator exist at all" signal:
+        // the client cannot read the httpOnly cookie or count sucursales, so
+        // the whole gate lives in resolverIndicadorVenta (see lib/sucursal.ts).
+        ventaSucursalNombre = await resolverIndicadorVentaCacheado({
+          role,
+          organizationId: organizationId!,
+          cookieSucursalId,
+          ventaSucursalId: lectura.ventaSucursalId,
+        })
+      }
+    } else {
+      const resolved = resolveSucursalLectura({ role, userSucursalId, cookieSucursalId })
+      sucursalId = resolved.sucursalId
+      verTodas = resolved.verTodas
+    }
+
+    const withVentaHeaders = (res: NextResponse) => {
+      if (scopeVenta) {
+        res.headers.set("X-Venta-Sucursal-Id", ventaSucursalId ?? "")
+        res.headers.set(
+          "X-Venta-Sucursal-Nombre",
+          ventaSucursalNombre ? encodeURIComponent(ventaSucursalNombre) : ""
+        )
+        // "org" => la lectura (y la venta) abarcan toda la organización pese a
+        // haber una sucursal concreta elegida en el selector. El POS lo dice en
+        // pantalla porque nada más ahí puede explicarlo: el nombre viene vacío
+        // justamente porque no hay una sola sucursal que nombrar sin mentir
+        // (ver derivarAvisoAlcanceOrg en lib/sucursal.ts).
+        res.headers.set("X-Venta-Alcance", avisoAlcanceOrg ? "org" : "")
+      }
+      return res
+    }
 
     // Sanitize query terms for ILIKE filter
     const terms = q
@@ -81,15 +158,16 @@ export async function GET(request: Request) {
         diasGarantiaDefault: (item as any).dias_garantia_default ?? null,
       }))
 
-      return NextResponse.json(formatted)
+      return withVentaHeaders(NextResponse.json(formatted))
     }
 
     // Sucursal-scoped: resolve the principal deposito of this sucursal
-    const depId = await getDepositoDeSucursal(organizationId!, sucursalId)
+    // (already resolved above under scope=venta — avoid a duplicate query).
+    const depId = scopeVenta ? depositoIdPrefetched : await getDepositoDeSucursal(organizationId!, sucursalId)
 
     if (!depId) {
       // No principal deposito configured for this sucursal — return empty
-      return NextResponse.json([])
+      return withVentaHeaders(NextResponse.json([]))
     }
 
     // Query inventario joined with inventario_depositos for this specific deposito.
@@ -140,7 +218,7 @@ export async function GET(request: Request) {
       }
     })
 
-    return NextResponse.json(formatted)
+    return withVentaHeaders(NextResponse.json(formatted))
   } catch (error) {
     console.error("Error searching inventario:", error)
     return NextResponse.json(

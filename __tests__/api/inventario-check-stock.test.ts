@@ -1,12 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { mockAuthSuccess, mockAuthError, createChainMock, mockSupabaseFrom, parseResponse } from "./helpers"
 
-vi.mock("@/lib/sucursal", () => ({
+// Only the async/DB-backed resolvers are stubbed; derivarLecturaVenta stays
+// real so this suite exercises the shared read-scope derivation.
+vi.mock("@/lib/sucursal", async (importActual) => ({
+  ...(await importActual<typeof import("@/lib/sucursal")>()),
   getCookieSucursalId: vi.fn().mockResolvedValue(null),
   resolveSucursalLectura: vi.fn(() => ({ sucursalId: null, verTodas: true })),
   getDepositoDeSucursal: vi.fn().mockResolvedValue(null),
+  resolverDestinoVenta: vi.fn(),
+  resolverDestinoVentaCacheado: vi.fn(),
 }))
 
+import { resolverDestinoVenta, resolverDestinoVentaCacheado } from "@/lib/sucursal"
 import { POST } from "@/app/api/inventario/check-stock/route"
 
 function req(body: unknown) {
@@ -48,4 +54,134 @@ describe("POST /api/inventario/check-stock", () => {
     expect(status).toBe(200)
     expect(body.stock).toEqual({ a: 5, b: 0, c: 0 })
   })
+
+  it("scope=venta resuelve SIN cache: la revalidación previa al cobro no puede ir 30s atrasada", async () => {
+    // Esta ruta corre una vez por checkout, no por tecla: el cache no le ahorra
+    // nada y sí le puede mentir. Con el resolvedor cacheado, durante 30s después
+    // de que un admin cambia qué depósito es principal, el diálogo valida contra
+    // el depósito A y dice "hay stock" mientras crear_venta_atomica descuenta
+    // del B y vuelve con P0010 — justo el error que este chequeo evita.
+    mockAuthSuccess({ role: "ADMIN" })
+    vi.mocked(resolverDestinoVenta).mockResolvedValue({
+      sucursalId: "suc-1",
+      depositoId: "dep-1",
+      unassignedSucursal: false,
+      branchScoped: false,
+    })
+    mockSupabaseFrom({
+      inventario_depositos: createChainMock([{ inventario_id: "a", stock: 2 }]),
+    })
+
+    await POST(
+      new Request("http://localhost:3000/api/inventario/check-stock?scope=venta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: ["a"] }),
+      })
+    )
+
+    expect(resolverDestinoVenta).toHaveBeenCalled()
+    expect(resolverDestinoVentaCacheado).not.toHaveBeenCalled()
+  })
+
+  it("scope=venta: ignora verTodas (mocked true) y usa el depósito resuelto por resolverDestinoVenta", async () => {
+    mockAuthSuccess({ role: "ADMIN" }) // resolveSucursalLectura sigue mockeado en "todas"
+    vi.mocked(resolverDestinoVenta).mockResolvedValue({ sucursalId: "suc-1", depositoId: "dep-1", unassignedSucursal: false, branchScoped: false })
+    mockSupabaseFrom({
+      inventario_depositos: createChainMock([{ inventario_id: "a", stock: 2 }]),
+    })
+
+    const res = await POST(
+      new Request("http://localhost:3000/api/inventario/check-stock?scope=venta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: ["a", "b"] }),
+      })
+    )
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    // Scoped stock (2), not the aggregate value that verTodas:true would otherwise return
+    expect(body.stock).toEqual({ a: 2, b: 0 })
+  })
+
+  it("scope=venta en modo drenaje (sucursal sin depósito): reporta el stock agregado, no 0", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    // Sucursal resolved but no principal deposito: the write path passes
+    // p_deposito_id = null and drains org-wide, so the sale WOULD succeed.
+    vi.mocked(resolverDestinoVenta).mockResolvedValue({ sucursalId: "suc-1", depositoId: null, unassignedSucursal: false, branchScoped: false })
+    mockSupabaseFrom({
+      inventario: createChainMock([{ id: "a", stock: 4 }]),
+    })
+
+    const res = await POST(
+      new Request("http://localhost:3000/api/inventario/check-stock?scope=venta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: ["a", "b"] }),
+      })
+    )
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(body.stock).toEqual({ a: 4, b: 0 })
+  })
+
+  it("scope=venta con usuario sin sucursal asignada: sigue fail-closed (todo en 0)", async () => {
+    mockAuthSuccess({ role: "VENDEDOR" })
+    // The write path still falls back to the principal sucursal/deposito, but
+    // a non-ADMIN with no assigned sucursal must keep reading nothing.
+    vi.mocked(resolverDestinoVenta).mockResolvedValue({
+      sucursalId: "suc-principal",
+      depositoId: "dep-principal",
+      unassignedSucursal: true,
+      branchScoped: true,
+    })
+    const invChain = createChainMock([{ id: "a", stock: 9 }])
+    const depChain = createChainMock([{ inventario_id: "a", stock: 6 }])
+    mockSupabaseFrom({ inventario: invChain, inventario_depositos: depChain })
+
+    const res = await POST(
+      new Request("http://localhost:3000/api/inventario/check-stock?scope=venta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: ["a", "b"] }),
+      })
+    )
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(body.stock).toEqual({ a: 0, b: 0 })
+    expect(invChain.select).not.toHaveBeenCalled()
+    expect(depChain.select).not.toHaveBeenCalled()
+  })
+
+  it.each(["VENDEDOR", "TECNICO"])(
+    "scope=venta con %s cuya sucursal no tiene depósito: fail-closed (todo en 0), NO el agregado de la org",
+    async (role) => {
+      mockAuthSuccess({ role })
+      vi.mocked(resolverDestinoVenta).mockResolvedValue({
+        sucursalId: "suc-B",
+        depositoId: null,
+        unassignedSucursal: false,
+        branchScoped: true,
+      })
+      const invChain = createChainMock([{ id: "a", stock: 9 }])
+      mockSupabaseFrom({ inventario: invChain })
+
+      const res = await POST(
+        new Request("http://localhost:3000/api/inventario/check-stock?scope=venta", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: ["a", "b"] }),
+        })
+      )
+      const { status, body } = await parseResponse(res)
+
+      expect(status).toBe(200)
+      // The aggregate would green-light a checkout backed by another branch's units.
+      expect(body.stock).toEqual({ a: 0, b: 0 })
+      expect(invChain.select).not.toHaveBeenCalled()
+    }
+  )
 })

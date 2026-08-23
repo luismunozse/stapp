@@ -56,6 +56,15 @@ export function SucursalSwitcher() {
         setActiva(id)
         if (typeof window !== "undefined") {
           window.localStorage.setItem("sucursal-activa-ui", id)
+          // Acá hubo una limpieza del caché del service worker, esperando su
+          // confirmación antes de recargar. Ya no hace falta: CACHEABLE_API_ROUTES
+          // quedó vacía, así que no hay respuesta de API guardada —mucho menos
+          // una escopeada por sucursal— y esperar al worker le costaba al
+          // operador hasta 1500 ms en cada cambio, en un equipo lento, para no
+          // borrar nada. Si alguna vez vuelve a entrar una ruta escopeada por
+          // sucursal a esa lista hay que volver a limpiar acá; está anotado
+          // arriba de la constante, en public/sw.js.
+          //
           // Recarga completa: el scope de sucursal afecta datos que se cargan
           // client-side (fetch en useEffect), que router.refresh() no re-dispara.
           // Un reload garantiza que todo se re-fetchee con la nueva sucursal.

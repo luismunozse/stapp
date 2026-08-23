@@ -20,6 +20,7 @@ import {
   Shield,
   WifiOff,
   Pencil,
+  Store,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
@@ -52,6 +53,15 @@ interface PosCartProps {
   onSetDescuentoMotivo: (m: string) => void
   onSetPrecio: (lineId: string, precio: number) => void
   fiscal?: FiscalConfig | null
+  /** Sucursal the sale will actually draw stock from, when resolved (see pos-terminal.tsx). */
+  ventaSucursalNombre?: string | null
+  /**
+   * True when the sale spans the whole org despite a concrete sucursal being
+   * selected — see derivarAvisoAlcanceOrg in lib/sucursal.ts. Mutually
+   * exclusive with a resolved `ventaSucursalNombre`: in this state there is no
+   * single sucursal to name.
+   */
+  ventaAlcanceOrg?: boolean
 }
 
 interface ClienteResult {
@@ -83,8 +93,15 @@ export function PosCart({
   onSetDescuentoMotivo,
   onSetPrecio,
   fiscal,
+  ventaSucursalNombre = null,
+  ventaAlcanceOrg = false,
 }: PosCartProps) {
   const { formatPrice } = useCurrency()
+  // No gating here on purpose: whether this indicator disambiguates anything
+  // depends on the httpOnly sucursal cookie and the org's sucursal count, neither
+  // of which the browser can see. The server sends a name only when it is worth
+  // showing (resolverIndicadorVenta in lib/sucursal.ts), so a name is the signal.
+  const showVentaSucursal = !!ventaSucursalNombre
   const [clienteQuery, setClienteQuery] = useState("")
   const [clienteResults, setClienteResults] = useState<ClienteResult[]>([])
   const [clienteLoading, setClienteLoading] = useState(false)
@@ -195,6 +212,27 @@ export function PosCart({
             )}
           </div>
         </div>
+
+        {/* Selling-from indicator — only when "todas las sucursales" would otherwise hide it */}
+        {showVentaSucursal && (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Store className="h-3.5 w-3.5 shrink-0" />
+            Vendiendo desde: <span className="font-medium text-foreground">{ventaSucursalNombre}</span>
+          </p>
+        )}
+
+        {/* Alcance ensanchado: el selector muestra una sucursal, pero la venta
+            toma stock de toda la organización. Sin esto, la única explicación
+            en pantalla sería el chip del selector, que dice lo contrario. */}
+        {ventaAlcanceOrg && (
+          <p className="flex items-start gap-1.5 text-xs text-warning">
+            <Store className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            <span>
+              Vendiendo desde <span className="font-medium">todas las sucursales</span>: la
+              sucursal seleccionada no tiene depósito principal.
+            </span>
+          </p>
+        )}
 
         {/* Cliente */}
         <div className="flex items-center gap-2">

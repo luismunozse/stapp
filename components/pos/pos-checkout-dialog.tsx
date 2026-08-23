@@ -236,7 +236,10 @@ export function PosCheckoutDialog({
     if (invItems.length > 0) {
       const ids = invItems.map((i) => i.inventarioId!)
       try {
-        const stockRes = await fetch("/api/inventario/check-stock", {
+        // scope=venta: validate against the sucursal/deposito the sale will
+        // actually draw from (same resolution as the ventas write path),
+        // not the aggregate/"todas" view an ADMIN might be looking at.
+        const stockRes = await fetch("/api/inventario/check-stock?scope=venta", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ids }),

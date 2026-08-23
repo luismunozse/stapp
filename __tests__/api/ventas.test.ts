@@ -476,6 +476,86 @@ describe("POST /api/ventas — depositoId server-resolved (T4)", () => {
     expect(body.error).toContain("Stock insuficiente en el depósito")
   })
 
+  it("mapea P0010 nombrando la sucursal cuando la venta salió de SU depósito", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null,
+      error: { code: "P0010", message: "STOCK_INSUFICIENTE_DEPOSITO: deposito dep-2" },
+    } as any)
+    mockSupabaseFrom({
+      sucursales: createChainMock({ id: "suc-p", nombre: "Sucursal Centro" }),
+      depositos: (() => {
+        const c: any = {}
+        for (const m of ["select", "eq", "is"]) c[m] = vi.fn().mockReturnValue(c)
+        c.maybeSingle = vi.fn().mockResolvedValue({ data: { id: "dep-1" }, error: null })
+        return c
+      })(),
+    })
+
+    const res = await POST(createPostRequest(baseBody))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(400)
+    expect(body.error).toBe("Stock insuficiente en el depósito de Sucursal Centro")
+  })
+
+  it("P0010 en modo drenaje (sucursal sin depósito principal): NO nombra una sucursal", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null,
+      error: { code: "P0010", message: "STOCK_INSUFICIENTE_DEPOSITO: deposito dep-2" },
+    } as any)
+    mockSupabaseFrom({
+      sucursales: createChainMock({ id: "suc-p", nombre: "Sucursal Centro" }),
+      depositos: (() => {
+        const c: any = {}
+        for (const m of ["select", "eq", "is"]) c[m] = vi.fn().mockReturnValue(c)
+        c.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+        return c
+      })(),
+    })
+
+    const res = await POST(createPostRequest(baseBody))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(400)
+    // The RPC ran with p_deposito_id = null and drained org-wide, so the
+    // shortfall is org-wide and the named sucursal has no deposito at all.
+    expect(body.error).toBe("Stock insuficiente en el depósito seleccionado")
+    // The name query must not even run: only getPrincipalId reads `sucursales`.
+    const sucursalesReads = vi
+      .mocked(supabaseAdmin.from)
+      .mock.calls.filter((call) => call[0] === "sucursales")
+    expect(sucursalesReads).toHaveLength(1)
+  })
+
+  it("camino feliz: no paga la query del nombre de sucursal (solo la del error P0010)", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      sucursales: createChainMock({ id: "suc-p", nombre: "Sucursal Centro" }),
+      depositos: (() => {
+        const c: any = {}
+        for (const m of ["select", "eq", "is"]) c[m] = vi.fn().mockReturnValue(c)
+        c.maybeSingle = vi.fn().mockResolvedValue({ data: { id: "dep-1" }, error: null })
+        return c
+      })(),
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
+      organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+    })
+
+    const res = await POST(createPostRequest(baseBody))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    // Only getPrincipalId hits `sucursales`; getNombreSucursal is lazy and
+    // must stay inside the P0010 branch.
+    const sucursalesReads = vi
+      .mocked(supabaseAdmin.from)
+      .mock.calls.filter((call) => call[0] === "sucursales")
+    expect(sucursalesReads).toHaveLength(1)
+  })
+
   it("mapea P0011 a 400 con mensaje claro", async () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
