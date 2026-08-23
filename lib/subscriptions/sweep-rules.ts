@@ -43,3 +43,23 @@ export function esAdhesionSinCobro(input: {
 
   return diasDesde(input.createdAt, input.ahora) > DIAS_GRACIA_PREAPPROVAL
 }
+
+/**
+ * Si corresponde marcar PAST_DUE a una suscripcion con la fecha vencida.
+ *
+ * Con pago manual la fecha vencida significa exactamente eso: no pago. Con
+ * debito automatico no, porque MercadoPago puede estar reintentando un cobro
+ * que va a prosperar — y el 80% de los pagos salen de saldo, asi que el rebote
+ * no es la excepcion. Bloquear ahi es cortarle el sistema a alguien que si te
+ * va a pagar.
+ */
+export function venceLaGracia(input: {
+  tienePreapproval: boolean
+  currentPeriodEnd: string | null
+  ahora: Date
+}): boolean {
+  if (input.currentPeriodEnd === null) return false
+  if (!input.tienePreapproval) return true
+
+  return diasDesde(input.currentPeriodEnd, input.ahora) > DIAS_GRACIA_PREAPPROVAL
+}
