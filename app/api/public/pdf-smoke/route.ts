@@ -24,7 +24,11 @@ const FECHA = new Date("2026-08-20T15:00:00Z")
 const LOGO_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 
-const EMISOR = {
+// Exported (only) so the route's own test can pin the fixture: assert this
+// object really carries a logoUrl and prove that a generator called with it
+// renders a bigger buffer than the same call without it. Not meant for reuse
+// outside this route.
+export const EMISOR = {
   nombreEmpresa: "Smoke Test SRL",
   telefonoEmpresa: "+54 11 4000-0000",
   direccionEmpresa: "Av. Siempreviva 742",
