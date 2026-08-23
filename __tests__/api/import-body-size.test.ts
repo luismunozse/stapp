@@ -12,7 +12,11 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { mockAuthSuccess, mockSupabaseFrom, createChainMock, parseResponse } from "./helpers"
-import { MAX_IMPORT_BODY_BYTES } from "@/lib/import-limits"
+import {
+  MAX_IMPORT_BODY_BYTES,
+  MAX_IMPORT_FILE_BYTES,
+  MAX_IMPORT_FILE_LABEL,
+} from "@/lib/import-limits"
 
 vi.mock("@/lib/subscriptions", () => ({
   hasPlanFeature: vi.fn().mockResolvedValue(true),
@@ -58,6 +62,31 @@ describe("/api/import — techo de tamaño del cuerpo", () => {
 
     expect(status).toBe(413)
     expect(body.error).toMatch(/demasiado grande/i)
+  })
+
+  /**
+   * Un solo techo, dicho en dos unidades.
+   *
+   * Eran tres números que no coincidían: el navegador cortaba en 5 MB de
+   * archivo, el servidor en 8 MB de base64 (≈6 MB de archivo) y el 413 decía
+   * "máx 6MB". Un CSV de 5,5 MB lo frenaba el navegador citando un límite que el
+   * servidor no tenía.
+   */
+  it("el techo del cuerpo es el del archivo inflado por base64", () => {
+    const inflacionBase64 = Math.ceil((MAX_IMPORT_FILE_BYTES * 4) / 3)
+
+    expect(MAX_IMPORT_BODY_BYTES).toBeGreaterThanOrEqual(inflacionBase64)
+    // Solo el sobre JSON de más (mime, filename, entityType), no otro límite.
+    expect(MAX_IMPORT_BODY_BYTES - inflacionBase64).toBeLessThan(64 * 1024)
+  })
+
+  it("el 413 nombra el mismo techo que le muestra el navegador al usuario", async () => {
+    const { POST } = await import("@/app/api/import/execute/route")
+    const { body } = await parseResponse(
+      await POST(requestConTamano(MAX_IMPORT_BODY_BYTES + 1, CUERPO_VALIDO)),
+    )
+
+    expect(body.error).toContain(MAX_IMPORT_FILE_LABEL)
   })
 
   /**

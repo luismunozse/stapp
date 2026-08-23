@@ -3,7 +3,7 @@ import { requireAuth, denyIfNoInventarioAccess } from "@/lib/auth-utils"
 import { parseCSV, parseExcel } from "@/lib/csv-parser"
 import { validateClienteRow, validateInventarioRow, validateCSVHeaders, normalizeHeaders, normalizeRow } from "@/lib/csv-validator"
 import { hasPlanFeature } from "@/lib/subscriptions"
-import { rejectOversizedImportBody } from "@/lib/import-limits"
+import { excedeTechoDeImportacion, MAX_IMPORT_FILE_LABEL } from "@/lib/import-limits"
 import { z } from "zod"
 
 const previewSchema = z.object({
@@ -22,8 +22,12 @@ export async function POST(request: Request) {
 
     // Antes de `request.json()`, que es lo que materializa el base64 entero en
     // memoria. Ver lib/import-limits.ts.
-    const toobig = rejectOversizedImportBody(request)
-    if (toobig) return toobig
+    if (excedeTechoDeImportacion(request)) {
+      return NextResponse.json(
+        { error: `Archivo demasiado grande (máx ${MAX_IMPORT_FILE_LABEL})` },
+        { status: 413 },
+      )
+    }
 
     const body = await request.json()
     const data = previewSchema.parse(body)
