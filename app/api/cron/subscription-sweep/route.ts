@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { requireCronAuth } from "@/lib/cron-auth"
+import { esAdhesionSinCobro } from "@/lib/subscriptions/sweep-rules"
 
 // Cron diario: barre subscriptions ACTIVE con current_period_end vencido.
 //   - MANUAL  → downgrade plan a Free (admin no renovó → asumimos churn)
@@ -151,6 +152,72 @@ export async function GET(request: Request) {
       } else {
         results.skipped++
       }
+    }
+
+    // Segunda pasada: adhesiones al debito automatico cuyo primer cobro nunca
+    // llego. La consulta de arriba no las ve porque filtra current_period_end
+    // IS NOT NULL, y estas lo tienen en NULL desde que se autorizaron.
+    const { data: adhesiones } = await supabaseAdmin
+      .from("subscriptions")
+      .select(`
+        id, organization_id, created_at, current_period_end,
+        mercadopago_preapproval_id,
+        organizations!inner ( slug ),
+        plans!inner ( tipo )
+      `)
+      .eq("status", "ACTIVE")
+      .eq("plans.tipo", "PREMIUM")
+      .is("current_period_end", null)
+      .not("mercadopago_preapproval_id", "is", null)
+      .neq("organizations.slug", "superadmin")
+
+    for (const ad of (adhesiones || []) as any[]) {
+      const { count, error: countError } = await supabaseAdmin
+        .from("subscription_payments")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", ad.organization_id)
+        .eq("status", "SUCCEEDED")
+
+      // Si esta consulta falla no sabemos cuantos pagos tiene la org: un
+      // error de infraestructura no puede leerse como "cero pagos exitosos",
+      // porque eso terminaria bloqueando a un taller que si esta pagando.
+      // Ante la duda, no se toca la organizacion y se reintenta la proxima
+      // corrida del cron.
+      if (countError) {
+        console.error(
+          `[subscription-sweep] FAIL conteo de pagos org ${ad.organization_id}:`,
+          countError.message
+        )
+        results.failed++
+        continue
+      }
+
+      const marcar = esAdhesionSinCobro({
+        tienePreapproval: true,
+        currentPeriodEnd: ad.current_period_end,
+        createdAt: ad.created_at,
+        pagosExitosos: count ?? 0,
+        ahora: new Date(nowIso),
+      })
+
+      if (!marcar) continue
+
+      await supabaseAdmin
+        .from("subscriptions")
+        .update({ status: "PAST_DUE", updated_at: nowIso })
+        .eq("id", ad.id)
+
+      await supabaseAdmin.from("subscription_history").insert({
+        subscription_id: ad.id,
+        organization_id: ad.organization_id,
+        action: "MARKED_PAST_DUE",
+        previous_status: "ACTIVE",
+        new_status: "PAST_DUE",
+        details: { reason: "adhesion_sin_primer_cobro" },
+        performed_by: "system:cron",
+      })
+
+      results.markedPastDue++
     }
 
     // ============================================

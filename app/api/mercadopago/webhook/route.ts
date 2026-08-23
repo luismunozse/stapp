@@ -599,7 +599,7 @@ export async function handlePaymentNotification(
   }
 }
 
-async function handlePreApprovalNotification(
+export async function handlePreApprovalNotification(
   preApprovalId: string
 ): Promise<HandleResult> {
   if (!preApprovalId) {
@@ -622,7 +622,11 @@ async function handlePreApprovalNotification(
 
   const preApproval = await response.json()
 
-  let externalRef: { organization_id?: string }
+  let externalRef: {
+    organization_id?: string
+    plan_id?: string
+    billing_period?: "MONTHLY" | "YEARLY"
+  }
   try {
     externalRef = JSON.parse(preApproval.external_reference || "{}")
   } catch {
@@ -638,12 +642,29 @@ async function handlePreApprovalNotification(
     cancelled: "CANCELED",
   }
 
-  const status = statusMap[preApproval.status] || "ACTIVE"
+  const status = statusMap[preApproval.status]
 
+  // Un estado que no conocemos no se traduce a ACTIVE por default: activar una
+  // suscripcion por un estado que no entendemos es regalar el plan pago.
+  if (!status) {
+    console.log(`[MP webhook] PreApproval ${preApprovalId} en estado ${preApproval.status} - sin accion`)
+    return { status: "SKIPPED", reason: `preapproval_status_${preApproval.status}`, organizationId }
+  }
+
+  // Se escribe el plan de la adhesion: sin esto la organizacion queda ACTIVE
+  // sobre el plan que tuviera antes — adhiere al Profesional y sigue con los
+  // limites del Free.
+  //
+  // NO se escribe current_period_start/end: el periodo lo fija el primer cobro,
+  // que llega como subscription_authorized_payment. El guard de la Task 4 cubre
+  // la adhesion cuyo cobro nunca llega.
   await supabaseAdmin
     .from("subscriptions")
     .update({
       status,
+      plan_id: externalRef.plan_id ?? undefined,
+      billing_period: externalRef.billing_period ?? undefined,
+      payment_provider: "MERCADOPAGO",
       mercadopago_preapproval_id: preApprovalId,
     })
     .eq("organization_id", organizationId)
