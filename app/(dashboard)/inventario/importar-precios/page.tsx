@@ -104,9 +104,15 @@ interface ImportarPreciosDraft {
   teniaExclusiones: boolean
 }
 
-/** True si el mapeo guardado todavia significa algo en la planilla que se acaba
- *  de subir. Un indice que apunta a una columna que ya no existe no es un mapeo
- *  a medias: es un mapeo que le manda basura a la API. */
+/** True si el mapeo guardado todavia ENTRA en la planilla que se acaba de subir.
+ *  Un indice que apunta a una columna que ya no existe no es un mapeo a medias:
+ *  es un mapeo que le manda basura a la API.
+ *
+ *  Ojo con lo que esto NO dice: que el mapeo siga SIGNIFICANDO lo mismo. Un
+ *  indice solo significa algo dentro de la hoja y la fila de encabezados con las
+ *  que se eligio; movida cualquiera de las dos, los mismos numeros entran en
+ *  rango igual y apuntan a otras columnas. Por eso esta funcion es la segunda
+ *  condicion y nunca la unica -- ver `mapeoElegido`. */
 function mapeoEntraEnLaPlanilla(mapping: ColumnMapping, columnas: number): boolean {
   const indices = [
     mapping.codigo,
@@ -154,6 +160,18 @@ export default function ImportarPreciosPage() {
   const [selectedSheet, setSelectedSheet] = useState<string>("")
   const [headerRow, setHeaderRow] = useState<number>(0)
   const [mapping, setMapping] = useState<ColumnMapping>({})
+  /**
+   * El mapeo que hay en `mapping` lo eligio una persona: lo restauro el borrador
+   * (donde llego porque alguien lo reviso) o lo toco a mano en el paso 3.
+   *
+   * Es lo que separa "este mapeo hay que respetarlo" de "estos indices quedaron
+   * dando vueltas". Que entren en rango no alcanza: los indices de una hoja
+   * entran en rango en casi cualquier otra, y ahi apuntan a las columnas
+   * equivocadas de un cambio masivo de precios. Se apaga en cuanto cambia el
+   * contexto que les da sentido -- otra hoja, otra fila de encabezados -- junto
+   * con el mapeo mismo.
+   */
+  const [mapeoElegido, setMapeoElegido] = useState(false)
   const [onlyIncrease, setOnlyIncrease] = useState(false)
   const [motivo, setMotivo] = useState("")
   const [preview, setPreview] = useState<PreviewResponse | null>(null)
@@ -223,6 +241,9 @@ export default function ImportarPreciosPage() {
     setSelectedSheet(draft.selectedSheet)
     setHeaderRow(Number.isInteger(draft.headerRow) ? draft.headerRow : 0)
     setMapping(draft.mapping)
+    // Viene con su hoja y su fila de encabezados, o sea con el contexto que le
+    // da sentido: es un mapeo elegido, no indices sueltos.
+    setMapeoElegido(true)
     setOnlyIncrease(draft.onlyIncrease === true)
     setMotivo(draft.motivo)
     setAppliedDraft(draft)
@@ -236,11 +257,40 @@ export default function ImportarPreciosPage() {
     setSelectedSheet("")
     setHeaderRow(0)
     setMapping({})
+    setMapeoElegido(false)
     setOnlyIncrease(false)
     setMotivo("")
     setPreview(null)
     setExcludedIds(new Set())
     setStep("upload")
+  }
+
+  /** Cambiar de hoja o de fila de encabezados deja el mapeo sin el contexto en
+   *  el que se eligio: los indices siguen entrando en rango pero ya no apuntan a
+   *  las mismas columnas. Se descarta y el paso 3 vuelve a proponer uno. */
+  const elegirHoja = (nombre: string) => {
+    setSelectedSheet(nombre)
+    setHeaderRow(0)
+    setMapping({})
+    setMapeoElegido(false)
+  }
+
+  const elegirFilaEncabezados = (idx: number) => {
+    if (idx === headerRow) return
+    setHeaderRow(idx)
+    setMapping({})
+    setMapeoElegido(false)
+  }
+
+  /** Un cambio a mano en el paso 3 convierte al mapeo en uno elegido: de ahi en
+   *  mas el auto-detect no vuelve a pisarlo, ni siquiera pasando otra vez por el
+   *  paso 2 (ver goToMapping). */
+  const elegirColumna = (campo: keyof ColumnMapping, valor: string) => {
+    setMapping((m) => ({
+      ...m,
+      [campo]: valor === NONE_VALUE ? undefined : Number(valor),
+    }))
+    setMapeoElegido(true)
   }
 
   const discardDraft = () => {
@@ -275,11 +325,15 @@ export default function ImportarPreciosPage() {
       const hojaGuardada = hojas.find((s) => s.name === selectedSheet)
       if (hojaGuardada) {
         // Solo cuando la fila sigue existiendo en esa hoja: una planilla mas
-        // corta dejaria el encabezado apuntando a la nada.
-        if (headerRow >= hojaGuardada.rows.length) setHeaderRow(0)
+        // corta dejaria el encabezado apuntando a la nada. Y si hay que moverla,
+        // el mapeo pierde el contexto en el que se eligio (ver elegirHoja).
+        if (headerRow >= hojaGuardada.rows.length) {
+          setHeaderRow(0)
+          setMapping({})
+          setMapeoElegido(false)
+        }
       } else {
-        setSelectedSheet(hojas[0]?.name || "")
-        setHeaderRow(0)
+        elegirHoja(hojas[0]?.name || "")
       }
       setStep("sheet")
     } catch (e) {
@@ -311,13 +365,18 @@ export default function ImportarPreciosPage() {
       }
       return undefined
     }
-    // El auto-detect es una PRIMERA propuesta, no una correccion: si el
-    // borrador trajo un mapeo que todavia entra en esta planilla, ese es el que
-    // el operador ya reviso a mano y el que hay que respetar. Correrlo igual
-    // volvia a mapear columnas que alguien habia desmapeado a proposito, que es
-    // justo el trabajo que el borrador existe para no repetir.
+    // El auto-detect es una PRIMERA propuesta, no una correccion: un mapeo que
+    // ELIGIO una persona -- el que restauro el borrador, o el que toco a mano en
+    // el paso 3 -- es el que hay que respetar. Correrlo igual volvia a mapear
+    // columnas que alguien habia desmapeado a proposito.
+    //
+    // Las dos condiciones, y en este orden. Preguntar solo si los indices entran
+    // en rango deja pasar los que quedaron de OTRA hoja u otra fila de
+    // encabezados: entran igual, y ahi "Codigo" y "Precio venta" apuntan a
+    // cualquier cosa. Por eso `mapeoElegido` se apaga con el contexto que les da
+    // sentido, y de esa combinacion sale un cambio masivo de precios.
     setMapping((actual) =>
-      mapeoEntraEnLaPlanilla(actual, hs.length)
+      mapeoElegido && mapeoEntraEnLaPlanilla(actual, hs.length)
         ? actual
         : {
             codigo: detect([/^c[oó]digo$/i, /^codigo$/i, /^cod\.?$/i, /^sku$/i]),
@@ -540,10 +599,7 @@ export default function ImportarPreciosPage() {
                 <Label>Hoja</Label>
                 <Select
                   value={selectedSheet}
-                  onValueChange={ignoreSelectEcho((v) => {
-                    setSelectedSheet(v)
-                    setHeaderRow(0)
-                  })}
+                  onValueChange={ignoreSelectEcho(elegirHoja)}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -573,7 +629,7 @@ export default function ImportarPreciosPage() {
                     return (
                       <tr
                         key={idx}
-                        onClick={() => setHeaderRow(idx)}
+                        onClick={() => elegirFilaEncabezados(idx)}
                         className={`cursor-pointer border-b ${
                           isHeader
                             ? "bg-primary/15 font-semibold"
@@ -620,9 +676,7 @@ export default function ImportarPreciosPage() {
                 <Label>Código <span className="text-red-500">*</span></Label>
                 <Select
                   value={mapping.codigo != null ? String(mapping.codigo) : NONE_VALUE}
-                  onValueChange={ignoreSelectEcho((v) =>
-                    setMapping((m) => ({ ...m, codigo: v === NONE_VALUE ? undefined : Number(v) }))
-                  )}
+                  onValueChange={ignoreSelectEcho((v) => elegirColumna("codigo", v))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Elegí columna..." />
@@ -642,9 +696,7 @@ export default function ImportarPreciosPage() {
                 <Label>Nombre (informativo)</Label>
                 <Select
                   value={mapping.nombre != null ? String(mapping.nombre) : NONE_VALUE}
-                  onValueChange={ignoreSelectEcho((v) =>
-                    setMapping((m) => ({ ...m, nombre: v === NONE_VALUE ? undefined : Number(v) }))
-                  )}
+                  onValueChange={ignoreSelectEcho((v) => elegirColumna("nombre", v))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Elegí columna..." />
@@ -664,12 +716,7 @@ export default function ImportarPreciosPage() {
                 <Label>Precio compra / costo</Label>
                 <Select
                   value={mapping.precioCompra != null ? String(mapping.precioCompra) : NONE_VALUE}
-                  onValueChange={ignoreSelectEcho((v) =>
-                    setMapping((m) => ({
-                      ...m,
-                      precioCompra: v === NONE_VALUE ? undefined : Number(v),
-                    }))
-                  )}
+                  onValueChange={ignoreSelectEcho((v) => elegirColumna("precioCompra", v))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Elegí columna..." />
@@ -689,12 +736,7 @@ export default function ImportarPreciosPage() {
                 <Label>Precio venta</Label>
                 <Select
                   value={mapping.precioVenta != null ? String(mapping.precioVenta) : NONE_VALUE}
-                  onValueChange={ignoreSelectEcho((v) =>
-                    setMapping((m) => ({
-                      ...m,
-                      precioVenta: v === NONE_VALUE ? undefined : Number(v),
-                    }))
-                  )}
+                  onValueChange={ignoreSelectEcho((v) => elegirColumna("precioVenta", v))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Elegí columna..." />

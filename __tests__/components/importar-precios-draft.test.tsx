@@ -225,6 +225,11 @@ describe("ImportarPreciosPage — borrador local", () => {
     await screen.findByText(/se restauró un borrador no guardado/i)
     await subirArchivo()
 
+    // La hoja cambio, asi que el mapeo guardado ya no significa nada y se
+    // descarta (ver el describe de mas abajo). Hay que elegir la fila de
+    // encabezados real de Hoja1 -- la 1 es el titulo del proveedor -- para que el
+    // auto-detect encuentre la columna de codigo y la vista previa pueda correr.
+    fireEvent.click(screen.getByText("Codigo").closest("tr")!)
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }))
     fireEvent.click(await screen.findByRole("button", { name: /ver cambios/i }))
 
@@ -322,6 +327,127 @@ describe("ImportarPreciosPage — borrador local", () => {
     )
     expect(pushMock).not.toHaveBeenCalled()
     expect(window.localStorage.getItem(KEY)).not.toBeNull()
+  })
+})
+
+/**
+ * Un mapeo de columnas son INDICES, y un indice solo significa algo dentro de la
+ * hoja y la fila de encabezados con las que se eligio. Cambiar cualquiera de las
+ * dos y conservar los indices no rompe nada a la vista -- los numeros siguen
+ * entrando en rango -- pero "Codigo" y "Precio venta" pasan a apuntar a lo que
+ * la posicion tenga en la combinacion nueva, y eso alimenta un cambio masivo de
+ * precios.
+ */
+describe("ImportarPreciosPage — el mapeo no sobrevive al cambio de contexto", () => {
+  /** Dos bandas de encabezados con las columnas en distinto orden: es lo que
+   *  hace visible el problema, porque los cuatro indices siguen existiendo en
+   *  las dos. */
+  const DOS_BANDAS = [
+    {
+      name: "Hoja1",
+      totalRows: 3,
+      rows: [
+        ["Codigo", "Nombre", "Costo", "Venta"],
+        ["Venta 2026", "Costo 2026", "Nombre", "Codigo"],
+        ["A1", "Producto A", "10", "20"],
+      ],
+    },
+  ]
+
+  function stubParse(sheets: unknown) {
+    const fetchMock = vi.fn((url: unknown) => {
+      const href = String(url)
+      if (href.includes("/precios/parse")) {
+        return Promise.resolve({ ok: true, json: async () => ({ sheets }) } as Response)
+      }
+      if (href.includes("/precios/preview")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            summary: { totalRows: 1, matched: 0, sinCambios: 0, unmatched: 0, errors: 0 },
+            updates: [],
+            unmatched: [],
+            errors: [],
+          }),
+        } as Response)
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as unknown as Response)
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    return fetchMock
+  }
+
+  async function mapeoEnviadoAlPreview(fetchMock: ReturnType<typeof vi.fn>) {
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith("/api/inventario/precios/preview", expect.anything()),
+    )
+    const call = fetchMock.mock.calls.find((c) => String(c[0]).includes("/precios/preview"))!
+    return JSON.parse((call[1] as RequestInit).body as string)
+  }
+
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("vuelve a proponer las columnas cuando cambia la fila de encabezados", async () => {
+    const fetchMock = stubParse(DOS_BANDAS)
+
+    renderPage()
+    await subirArchivo()
+
+    // Primera pasada con la banda de arriba: el auto-detect mapea 0/1/2/3.
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }))
+    await screen.findByText("Mapear columnas")
+
+    // El operador se da cuenta de que la fila buena es la de abajo, donde las
+    // mismas cuatro columnas estan al reves.
+    fireEvent.click(screen.getByRole("button", { name: "Atrás" }))
+    fireEvent.click(screen.getByText("Venta 2026").closest("tr")!)
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }))
+    fireEvent.click(await screen.findByRole("button", { name: /ver cambios/i }))
+
+    const body = await mapeoEnviadoAlPreview(fetchMock)
+    expect(body.headerRow).toBe(1)
+    expect(body.mapping).toEqual({ codigo: 3, nombre: 2, precioCompra: 1, precioVenta: 0 })
+  })
+
+  it("descarta el mapeo del borrador cuando su hoja no esta en la planilla nueva", async () => {
+    // El borrador mapeo esas columnas sobre otra hoja. Al no encontrarla, el
+    // asistente cae en la primera de la planilla nueva: los indices entran en
+    // rango igual, pero ahi significan otra cosa.
+    seedDraft({
+      selectedSheet: "La hoja del proveedor viejo",
+      headerRow: 0,
+      mapping: { codigo: 0, nombre: 1, precioCompra: 2, precioVenta: 3 },
+      onlyIncrease: false,
+      motivo: "",
+      teniaExclusiones: false,
+    })
+    const fetchMock = stubParse([
+      {
+        name: "Otra",
+        totalRows: 2,
+        rows: [
+          ["Venta 2026", "Costo 2026", "Nombre", "Codigo"],
+          ["A1", "Producto A", "10", "20"],
+        ],
+      },
+    ])
+
+    renderPage()
+    await screen.findByText(/se restauró un borrador no guardado/i)
+    await subirArchivo()
+
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }))
+    fireEvent.click(await screen.findByRole("button", { name: /ver cambios/i }))
+
+    const body = await mapeoEnviadoAlPreview(fetchMock)
+    expect(body.sheet).toBe("Otra")
+    expect(body.mapping).toEqual({ codigo: 3, nombre: 2, precioCompra: 1, precioVenta: 0 })
   })
 })
 
