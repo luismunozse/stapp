@@ -12,7 +12,7 @@ import { useModal } from "@/contexts/modal-context"
 import { NotificationSettings } from "@/components/configuracion/notification-settings"
 import { CURRENCY_OPTIONS } from "@/lib/currency"
 import { TIMEZONE_OPTIONS } from "@/lib/timezone"
-import { COUNTRY_OPTIONS, getCountryConfig } from "@/lib/countries"
+import { COUNTRY_OPTIONS, getCountryConfig, getIvaGeneral } from "@/lib/countries"
 
 // Condición frente al IVA del emisor: texto libre (organizations.condicion_iva
 // es TEXT, sin enum en DB) impreso tal cual en el remito — a diferencia de
@@ -68,7 +68,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [vendedoresAdministranInventario, setVendedoresAdministranInventario] = useState(false)
   const [comisionAplicaSinReparacion, setComisionAplicaSinReparacion] = useState(false)
   const [ivaRegimen, setIvaRegimen] = useState<"EXENTO" | "INCLUIDO" | "ADITIVO">("EXENTO")
-  const [ivaTasa, setIvaTasa] = useState("21")
+  const [ivaTasa, setIvaTasa] = useState("")
   const [redondeoEfectivo, setRedondeoEfectivo] = useState("0")
   // Datos fiscales y de cobro (migración 295) — alimentan el remito.
   const [cuit, setCuit] = useState("")
@@ -124,7 +124,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setVendedoresAdministranInventario(!!data.vendedoresAdministranInventario)
         setComisionAplicaSinReparacion(!!data.comisionAplicaSinReparacion)
         setIvaRegimen(data.ivaRegimen ?? "EXENTO")
-        setIvaTasa(String(data.ivaTasa ?? 21))
+        setIvaTasa(String(data.ivaTasa ?? getIvaGeneral(data.pais)))
         setRedondeoEfectivo(String(data.redondeoEfectivo ?? 0))
         setCuit(data.cuit || "")
         setCondicionIva(data.condicionIva || "")
@@ -676,7 +676,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
                 step="0.01"
                 value={ivaTasa}
                 onChange={(e) => setIvaTasa(e.target.value)}
-                placeholder="21"
+                placeholder={String(getIvaGeneral(pais))}
                 disabled={!allowEdit}
               />
             </div>

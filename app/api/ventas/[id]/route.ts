@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { formatVenta } from "@/lib/db-utils"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { getIvaGeneral } from "@/lib/countries"
 
 export async function GET(
   request: Request,
@@ -215,7 +216,9 @@ export async function PUT(
         .eq("id", organizationId!)
         .single()
       const ivaRegimen: string = orgFiscal?.iva_regimen ?? "EXENTO"
-      const ivaTasa = Number(orgFiscal?.iva_tasa ?? 0)
+      // iva_tasa en NULL significa "sin tasa propia: usar la del pais"
+      // (migracion 310). Con regimen EXENTO no se aplica ninguna igual.
+      const ivaTasa = Number(orgFiscal?.iva_tasa ?? getIvaGeneral(orgFiscal?.pais))
       const redondeoUnidad = Number(orgFiscal?.redondeo_efectivo ?? 0)
 
       // IVA by regime (mirrors POST)

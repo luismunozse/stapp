@@ -25,6 +25,12 @@ export interface CountryConfig {
   taxIdPlaceholder: string
   /** Opciones de IVA comunes del país */
   ivaOptions: number[]
+  /**
+   * Tasa general de IVA del país, usada como valor por defecto cuando la org
+   * todavía no configuró la suya. No es el máximo de `ivaOptions`: Argentina
+   * ofrece 27% para servicios regulados pero su tasa general es 21%.
+   */
+  ivaGeneral: number
 }
 
 export const COUNTRIES: Record<CountryCode, CountryConfig> = {
@@ -42,6 +48,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^(\d{2}-?\d{8}-?\d{1})?$/,
     taxIdPlaceholder: "20-12345678-9",
     ivaOptions: [0, 10.5, 21, 27],
+    ivaGeneral: 21,
   },
   MX: {
     code: "MX",
@@ -57,6 +64,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^[A-ZÑ&]{0,4}\d{0,6}[A-Z0-9]{0,3}$/,
     taxIdPlaceholder: "XAXX010101000",
     ivaOptions: [0, 8, 16],
+    ivaGeneral: 16,
   },
   CL: {
     code: "CL",
@@ -72,6 +80,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^(\d{1,2}\.?\d{3}\.?\d{3}-?[0-9kK])?$/,
     taxIdPlaceholder: "76.123.456-7",
     ivaOptions: [0, 19],
+    ivaGeneral: 19,
   },
   CO: {
     code: "CO",
@@ -87,6 +96,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^(\d{9}-?\d{1})?$/,
     taxIdPlaceholder: "900123456-7",
     ivaOptions: [0, 5, 19],
+    ivaGeneral: 19,
   },
   PE: {
     code: "PE",
@@ -102,6 +112,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^(\d{11})?$/,
     taxIdPlaceholder: "20123456789",
     ivaOptions: [0, 18],
+    ivaGeneral: 18,
   },
   UY: {
     code: "UY",
@@ -117,6 +128,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^(\d{12})?$/,
     taxIdPlaceholder: "211234560019",
     ivaOptions: [0, 10, 22],
+    ivaGeneral: 22,
   },
   BR: {
     code: "BR",
@@ -132,6 +144,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})?$/,
     taxIdPlaceholder: "12.345.678/0001-90",
     ivaOptions: [0],
+    ivaGeneral: 0,
   },
   BO: {
     code: "BO",
@@ -147,6 +160,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^(\d{1,15})?$/,
     taxIdPlaceholder: "123456789",
     ivaOptions: [0, 13],
+    ivaGeneral: 13,
   },
   PY: {
     code: "PY",
@@ -162,6 +176,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^[0-9-]{0,15}$/,
     taxIdPlaceholder: "80012345-6",
     ivaOptions: [0, 5, 10],
+    ivaGeneral: 10,
   },
   VE: {
     code: "VE",
@@ -177,6 +192,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^[JGVEPjgvep]-?\d{8}-?\d{1}$/,
     taxIdPlaceholder: "J-12345678-9",
     ivaOptions: [0, 16],
+    ivaGeneral: 16,
   },
   EC: {
     code: "EC",
@@ -192,6 +208,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^(\d{13})?$/,
     taxIdPlaceholder: "1234567890001",
     ivaOptions: [0, 12, 15],
+    ivaGeneral: 15,
   },
   CR: {
     code: "CR",
@@ -207,6 +224,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^(\d{10,12})?$/,
     taxIdPlaceholder: "3101234567",
     ivaOptions: [0, 13],
+    ivaGeneral: 13,
   },
   PA: {
     code: "PA",
@@ -222,6 +240,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^[0-9-DV]{0,20}$/,
     taxIdPlaceholder: "12345-67-890123",
     ivaOptions: [0, 7],
+    ivaGeneral: 7,
   },
   DO: {
     code: "DO",
@@ -237,6 +256,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^(\d{9})?$/,
     taxIdPlaceholder: "123456789",
     ivaOptions: [0, 18],
+    ivaGeneral: 18,
   },
   GT: {
     code: "GT",
@@ -252,6 +272,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^[0-9-]{0,12}$/,
     taxIdPlaceholder: "1234567-8",
     ivaOptions: [0, 12],
+    ivaGeneral: 12,
   },
   HN: {
     code: "HN",
@@ -267,6 +288,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^(\d{14})?$/,
     taxIdPlaceholder: "01011990123456",
     ivaOptions: [0, 15],
+    ivaGeneral: 15,
   },
   SV: {
     code: "SV",
@@ -282,6 +304,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^(\d{4}-?\d{6}-?\d{3}-?\d{1})?$/,
     taxIdPlaceholder: "0614-123456-001-2",
     ivaOptions: [0, 13],
+    ivaGeneral: 13,
   },
   NI: {
     code: "NI",
@@ -297,6 +320,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^[0-9A-Z]{0,14}$/,
     taxIdPlaceholder: "J0310000012345",
     ivaOptions: [0, 15],
+    ivaGeneral: 15,
   },
   CU: {
     code: "CU",
@@ -312,6 +336,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdRegex: /^(\d{11})?$/,
     taxIdPlaceholder: "90010112345",
     ivaOptions: [0],
+    ivaGeneral: 0,
   },
 }
 
@@ -320,6 +345,15 @@ export const DEFAULT_COUNTRY: CountryCode = "AR"
 export const COUNTRY_OPTIONS = Object.values(COUNTRIES)
   .sort((a, b) => a.name.localeCompare(b.name, "es"))
   .map((c) => ({ value: c.code, label: `${c.name} (+${c.phoneCode})` }))
+
+/**
+ * Tasa general de IVA del país indicado. Es el default correcto cuando una org
+ * no tiene tasa propia guardada; usar un literal fijo le cobraría a un cliente
+ * chileno la alícuota argentina.
+ */
+export function getIvaGeneral(code?: string | null): number {
+  return getCountryConfig(code).ivaGeneral
+}
 
 export function getCountryConfig(code?: string | null): CountryConfig {
   if (code && code in COUNTRIES) {
