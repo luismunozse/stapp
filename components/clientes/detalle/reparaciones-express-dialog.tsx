@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useRef } from "react"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -54,6 +54,15 @@ function filaVacia(key: string): Fila {
   }
 }
 
+// Fresh key on every reset (mirrors the "add row" key at line ~297): reusing
+// the literal "f0" key would leave the surviving row's key unchanged, so
+// React would update its <Select> in place instead of remounting it — the
+// same "set from outside while closed" trigger as the documented Radix
+// gotcha, just reached through a reset instead of an effect.
+function filaVaciaFresca(): Fila {
+  return filaVacia(`f0-${Date.now()}`)
+}
+
 interface ReparacionesExpressDialogProps {
   cliente: Cliente
   // Live balance from the parent's own cuenta-corriente fetch (ccData.saldo),
@@ -80,6 +89,13 @@ export function ReparacionesExpressDialog({
   // client-side: the RPC is the single source of truth for saldo_cuenta.
   const [saldoTrasLote, setSaldoTrasLote] = useState<number | null>(null)
   const [revertirOpen, setRevertirOpen] = useState(false)
+  // Stable across retries of the SAME batch: minted lazily on the first
+  // click and reused on every subsequent click until the batch either
+  // succeeds or the dialog is closed. If it were regenerated per click, a
+  // retry after an ambiguous failure (request landed server-side, response
+  // lost client-side) would send a different key, miss the server's
+  // unique_violation barrier, and double-charge the client.
+  const idempotencyKeyRef = useRef<string | null>(null)
   const { data: tipos } = useSWR<Array<{ codigo: string; nombre: string }>>(
     open ? "/api/tipos-dispositivo" : null,
     fetcher,
@@ -106,12 +122,22 @@ export function ReparacionesExpressDialog({
       diasGarantia: parseInt(f.diasGarantia, 10) || 0,
     }))
 
-    const incompleta = reparaciones.find(
+    const filaIncompletaIndex = reparaciones.findIndex(
       (r) => !r.dispositivo || !r.tipoDispositivo || !r.trabajoRealizado || r.precio <= 0
     )
-    if (incompleta) {
-      toast.error("Completá equipo, tipo, trabajo y precio en todas las filas")
+    if (filaIncompletaIndex !== -1) {
+      const r = reparaciones[filaIncompletaIndex]
+      const faltantes: string[] = []
+      if (!r.dispositivo) faltantes.push("equipo")
+      if (!r.tipoDispositivo) faltantes.push("tipo")
+      if (!r.trabajoRealizado) faltantes.push("trabajo realizado")
+      if (r.precio <= 0) faltantes.push("precio")
+      toast.error(`Fila ${filaIncompletaIndex + 1}: falta ${faltantes.join(", ")}`)
       return
+    }
+
+    if (!idempotencyKeyRef.current) {
+      idempotencyKeyRef.current = crypto.randomUUID()
     }
 
     setLoading(true)
@@ -122,9 +148,7 @@ export function ReparacionesExpressDialog({
         body: JSON.stringify({
           clienteId: cliente.id,
           reparaciones,
-          // One stable key per submit attempt: an offline retry reuses it and
-          // the barrier replays instead of charging the client twice.
-          idempotencyKey: crypto.randomUUID(),
+          idempotencyKey: idempotencyKeyRef.current,
         }),
       })
       const json = await res.json()
@@ -133,9 +157,11 @@ export function ReparacionesExpressDialog({
       toast.success(
         `${result.ordenes.length} ${result.ordenes.length === 1 ? "reparación cargada" : "reparaciones cargadas"} · ${formatPrice(result.totalCargado)}`
       )
-      setFilas([filaVacia("f0")])
+      setFilas([filaVaciaFresca()])
       setCreadas(result.ordenes)
       setSaldoTrasLote(result.saldoNuevo)
+      // Batch landed: the next submit (a brand-new batch) needs its own key.
+      idempotencyKeyRef.current = null
       onDone()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al cargar las reparaciones")
@@ -147,7 +173,8 @@ export function ReparacionesExpressDialog({
   function cerrar() {
     setCreadas([])
     setSaldoTrasLote(null)
-    setFilas([filaVacia("f0")])
+    setFilas([filaVaciaFresca()])
+    idempotencyKeyRef.current = null
     onOpenChange(false)
   }
 
