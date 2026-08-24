@@ -22,7 +22,16 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 interface OrdenPendiente { id: string; pendiente: number }
 
-export function ClienteDetalle({ clienteId }: { clienteId: string }) {
+interface ClienteDetalleProps {
+  clienteId: string
+  // Server-resolved plan gate (hasPlanFeature, "reparaciones_express") — see
+  // app/(dashboard)/clientes/[id]/page.tsx. Mirrors how canRecepcionMultiple
+  // is threaded into OrdenesList: hide the entry point client-side, the API
+  // route is the real enforcement (app/api/reparaciones-express/route.ts).
+  canReparacionesExpress?: boolean
+}
+
+export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: ClienteDetalleProps) {
   const [showEdit, setShowEdit] = useState(false)
   const [showWhatsApp, setShowWhatsApp] = useState(false)
   const [showExpress, setShowExpress] = useState(false)
@@ -85,9 +94,11 @@ export function ClienteDetalle({ clienteId }: { clienteId: string }) {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Cuenta corriente</CardTitle>
-            <Button variant="outline" size="sm" onClick={() => setShowExpress(true)} className="gap-1.5">
-              <Wrench className="h-4 w-4" /> Cargar reparaciones
-            </Button>
+            {canReparacionesExpress && (
+              <Button variant="outline" size="sm" onClick={() => setShowExpress(true)} className="gap-1.5">
+                <Wrench className="h-4 w-4" /> Cargar reparaciones
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             <CuentaCorrientePanel cliente={cliente} onDeposito={() => mutateCC()} />
