@@ -89,12 +89,18 @@ export function ReparacionesExpressDialog({
   // client-side: the RPC is the single source of truth for saldo_cuenta.
   const [saldoTrasLote, setSaldoTrasLote] = useState<number | null>(null)
   const [revertirOpen, setRevertirOpen] = useState(false)
-  // Stable across retries of the SAME batch: minted lazily on the first
-  // click and reused on every subsequent click until the batch either
-  // succeeds or the dialog is closed. If it were regenerated per click, a
-  // retry after an ambiguous failure (request landed server-side, response
-  // lost client-side) would send a different key, miss the server's
-  // unique_violation barrier, and double-charge the client.
+  // Tied to PAYLOAD identity, not to the dialog's lifecycle: minted lazily on
+  // the first submit of a given set of filas and reused on a retry of that
+  // exact batch, so a lost-response retry replays server-side instead of
+  // double-charging. Any edit to filas after an attempt (actualizar, add
+  // row, remove row) clears it, because the server's replay-on-repeated-key
+  // barrier returns attempt #1's stored response verbatim with no payload
+  // comparison (migration 312) — if the key survived an edit, a resubmit of
+  // genuinely different data would come back as a false "success" for the
+  // OLD batch while the edited data was silently never charged. Deliberately
+  // NOT cleared on Cancelar/ESC/overlay-close: that would let an unedited
+  // retry after a dropped response mint a fresh key, miss the barrier, and
+  // create a real duplicate charge instead.
   const idempotencyKeyRef = useRef<string | null>(null)
   const { data: tipos } = useSWR<Array<{ codigo: string; nombre: string }>>(
     open ? "/api/tipos-dispositivo" : null,
@@ -108,7 +114,20 @@ export function ReparacionesExpressDialog({
   )
 
   function actualizar(key: string, campo: keyof Fila, valor: string) {
+    // The batch just changed: a stale key here would let a resubmit replay
+    // as attempt #1's response instead of actually charging the new data.
+    idempotencyKeyRef.current = null
     setFilas((prev) => prev.map((f) => (f.key === key ? { ...f, [campo]: valor } : f)))
+  }
+
+  function agregarFila() {
+    idempotencyKeyRef.current = null
+    setFilas((prev) => [...prev, filaVacia(`f${prev.length}-${Date.now()}`)])
+  }
+
+  function quitarFila(key: string) {
+    idempotencyKeyRef.current = null
+    setFilas((prev) => prev.filter((f) => f.key !== key))
   }
 
   async function handleGuardar() {
@@ -295,7 +314,7 @@ export function ReparacionesExpressDialog({
                   size="icon"
                   disabled={filas.length === 1}
                   aria-label="Quitar reparación"
-                  onClick={() => setFilas((prev) => prev.filter((f) => f.key !== fila.key))}
+                  onClick={() => quitarFila(fila.key)}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -321,7 +340,7 @@ export function ReparacionesExpressDialog({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setFilas((prev) => [...prev, filaVacia(`f${prev.length}-${Date.now()}`)])}
+            onClick={agregarFila}
           >
             <Plus className="h-4 w-4" /> Agregar reparación
           </Button>
