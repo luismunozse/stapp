@@ -67,6 +67,7 @@ export async function POST(request: Request) {
         repuestos_orden (
           cantidad,
           precio_unitario,
+          precio_venta_unitario,
           nombre,
           inventario_id
         ),
