@@ -116,6 +116,14 @@ export async function POST(request: Request) {
 
     if (rpcError) {
       if (isPlanLimitError(rpcError)) return planLimitErrorResponse(rpcError)
+      // cargar_deuda_cuenta_corriente (mig 234) raises this exact message when
+      // p_cliente_id doesn't exist for the org. The whole batch already rolled
+      // back (transaction), so there is no cross-tenant write to worry about —
+      // this is message quality, matching the 404 the sibling cliente routes
+      // return (e.g. app/api/clientes/[id]/route.ts).
+      if (rpcError.message === "Cliente no encontrado") {
+        return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 })
+      }
       console.error("Error en crear_reparaciones_express:", rpcError)
       return NextResponse.json({ error: "Error al cargar las reparaciones" }, { status: 500 })
     }

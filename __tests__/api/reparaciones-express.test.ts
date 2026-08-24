@@ -142,6 +142,20 @@ describe("reparaciones express", () => {
     expect(call.p_reparaciones[0].fechaVencimientoGarantia).toBeTruthy()
   })
 
+  it("mapea 'Cliente no encontrado' de la RPC a 404, no a un 500 generico", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null,
+      error: { message: "Cliente no encontrado" },
+    } as any)
+
+    const res = await expressPOST(createPostRequest(body(), url))
+    const json = await res.json()
+
+    expect(res.status).toBe(404)
+    expect(json.error).toBe("Cliente no encontrado")
+  })
+
   it("devuelve la respuesta original cuando la RPC informa un replay", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     const originalResponse = {
