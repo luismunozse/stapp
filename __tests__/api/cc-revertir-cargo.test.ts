@@ -25,7 +25,13 @@ describe("revertir cargos de fiado", () => {
 
   it("revierte un CARGO de orden y llama a la RPC con el motivo", async () => {
     mockAuthSuccess({ role: "ADMIN" })
-    mockSupabaseFrom({ cuenta_corriente: createChainMock([movimientoRow()]) })
+    mockSupabaseFrom({
+      cuenta_corriente: createChainMock([movimientoRow()]),
+      // audit.update() inserts into audit_logs once per reverted movement.
+      // Without this mock the default "No mock for table" error makes logAudit
+      // print a console.error, and the GREEN run must be free of stderr noise.
+      audit_logs: createChainMock(null, null),
+    })
 
     const res = await revertirPOST(
       createPostRequest({ movimientoIds: ["mov1"], motivo: "Cargado por error" }, url),
