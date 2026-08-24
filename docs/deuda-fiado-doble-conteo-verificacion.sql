@@ -17,6 +17,14 @@
 -- de pago por WhatsApp (app/api/clientes/[id]/deuda-sucursal/route.ts): a
 -- estos clientes se les está pidiendo el doble de lo que deben.
 --
+-- El RPC hoy en producción (mig 273) ya filtra deuda_ordenes por
+-- `o.estado IN ('REPARADO', 'ENTREGADO')` — no cualquier orden PENDIENTE/
+-- PARCIAL cuenta, solo las cobrables. Los subqueries `ordenes_hoy` y
+-- `ordenes_fix` de abajo modelan exactamente eso, filtro de estado incluido,
+-- para que `deuda_reportada_hoy` coincida con lo que el RPC devuelve hoy de
+-- verdad y `duplicado` no infle el impacto con órdenes que 273 ya excluye
+-- (EN_REPARACION, CANCELADO, ENTREGADO_SIN_COBRO).
+--
 -- Corre contra TODAS las organizaciones (no hace falta editar nada ni
 -- reemplazar ningún parámetro): scripts/db-run.mjs no interpola variables
 -- psql, así que un placeholder tipo :'org_id' simplemente no funciona acá.
@@ -63,6 +71,7 @@ JOIN cuenta_corriente cc
   AND cc.referencia_tipo = 'ORDEN'
   AND cc.referencia_id   = o.id
 WHERE o.estado_cobro IN ('PENDIENTE', 'PARCIAL')
+  AND o.estado IN ('REPARADO', 'ENTREGADO')
 ORDER BY org.nombre, o.numero_orden DESC;
 
 -- ---------------------------------------------------------------------------
@@ -95,6 +104,7 @@ CROSS JOIN LATERAL (
   WHERE o.organization_id = c.organization_id
     AND o.cliente_id = c.id
     AND o.estado_cobro IN ('PENDIENTE', 'PARCIAL')
+    AND o.estado IN ('REPARADO', 'ENTREGADO')
 ) ordenes_hoy
 CROSS JOIN LATERAL (
   SELECT COALESCE(SUM(GREATEST(
@@ -104,6 +114,7 @@ CROSS JOIN LATERAL (
   WHERE o.organization_id = c.organization_id
     AND o.cliente_id = c.id
     AND o.estado_cobro IN ('PENDIENTE', 'PARCIAL')
+    AND o.estado IN ('REPARADO', 'ENTREGADO')
     AND NOT EXISTS (
       SELECT 1 FROM cuenta_corriente cc2
       WHERE cc2.organization_id = o.organization_id
@@ -135,6 +146,7 @@ WITH impacto AS (
     WHERE o.organization_id = c.organization_id
       AND o.cliente_id = c.id
       AND o.estado_cobro IN ('PENDIENTE', 'PARCIAL')
+      AND o.estado IN ('REPARADO', 'ENTREGADO')
   ) ordenes_hoy
   CROSS JOIN LATERAL (
     SELECT COALESCE(SUM(GREATEST(
@@ -144,6 +156,7 @@ WITH impacto AS (
     WHERE o.organization_id = c.organization_id
       AND o.cliente_id = c.id
       AND o.estado_cobro IN ('PENDIENTE', 'PARCIAL')
+      AND o.estado IN ('REPARADO', 'ENTREGADO')
       AND NOT EXISTS (
         SELECT 1 FROM cuenta_corriente cc2
         WHERE cc2.organization_id = o.organization_id
@@ -179,6 +192,7 @@ WITH impacto AS (
     WHERE o.organization_id = c.organization_id
       AND o.cliente_id = c.id
       AND o.estado_cobro IN ('PENDIENTE', 'PARCIAL')
+      AND o.estado IN ('REPARADO', 'ENTREGADO')
   ) ordenes_hoy
   CROSS JOIN LATERAL (
     SELECT COALESCE(SUM(GREATEST(
@@ -188,6 +202,7 @@ WITH impacto AS (
     WHERE o.organization_id = c.organization_id
       AND o.cliente_id = c.id
       AND o.estado_cobro IN ('PENDIENTE', 'PARCIAL')
+      AND o.estado IN ('REPARADO', 'ENTREGADO')
       AND NOT EXISTS (
         SELECT 1 FROM cuenta_corriente cc2
         WHERE cc2.organization_id = o.organization_id

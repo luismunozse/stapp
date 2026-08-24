@@ -29,10 +29,17 @@
 -- the delivery (entregar/route.ts:199-202), so orders with a pending balance and
 -- no CARGO exist. Those keep counting in deuda_ordenes, which is correct.
 --
--- Everything else is byte-identical to mig 267, including the REVOKE/GRANT
--- block: the function is SECURITY DEFINER and ignores RLS, so without it any
--- anon key (shipped in the browser bundle) could read any client's debt in any
--- organization through PostgREST.
+-- Everything else is byte-identical to mig 273 (which itself narrowed mig 267
+-- to only count COBRABLE orders, estado IN ('REPARADO','ENTREGADO')), including
+-- the REVOKE/GRANT block: the function is SECURITY DEFINER and ignores RLS, so
+-- without it any anon key (shipped in the browser bundle) could read any
+-- client's debt in any organization through PostgREST.
+--
+-- The `o.estado IN ('REPARADO', 'ENTREGADO')` filter below is inherited from
+-- 273 and deliberately preserved: without it, orders in EN_REPARACION (not yet
+-- collectable), CANCELADO (with a leftover costo_final) or
+-- ENTREGADO_SIN_COBRO (delivered without charging, by definition not owed)
+-- would count as debt again.
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION get_deuda_cliente_sucursal(
@@ -72,6 +79,7 @@ AS $$
     WHERE o.organization_id = p_org_id
       AND o.cliente_id = p_cliente_id
       AND o.estado_cobro IN ('PENDIENTE', 'PARCIAL')
+      AND o.estado IN ('REPARADO', 'ENTREGADO')
       AND (p_sucursal_id IS NULL OR o.sucursal_id = p_sucursal_id)
       AND NOT EXISTS (
         SELECT 1
@@ -95,4 +103,4 @@ COMMENT ON FUNCTION get_deuda_cliente_sucursal(TEXT, TEXT, TEXT) IS
   'p_sucursal_id NULL = sum across all branches (ADMIN verTodas). '
   'An order whose debt already moved to cuenta corriente (CARGO with '
   'referencia_tipo=ORDEN) is excluded from deuda_ordenes — reverted or not — '
-  'so the same money is never counted twice. Supersedes migration 267.';
+  'so the same money is never counted twice. Supersedes migration 273.';
