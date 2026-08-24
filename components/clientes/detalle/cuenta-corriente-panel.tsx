@@ -11,13 +11,14 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import {
   PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, Banknote,
-  ArrowRightLeft, CreditCard, Wallet, MoreHorizontal, Loader2, Printer, FileText,
+  ArrowRightLeft, CreditCard, Wallet, MoreHorizontal, Loader2, Printer, FileText, Undo2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { EmptyState } from "@/components/ui/empty-state"
 import { useCurrency } from "@/contexts/currency-context"
 import { todayInTimeZone } from "@/lib/timezone"
 import { useModal } from "@/contexts/modal-context"
+import { RevertirCargoDialog } from "./revertir-cargo-dialog"
 import type { Cliente } from "@/types"
 
 const METODOS_DEPOSITO = [
@@ -42,6 +43,8 @@ interface Movimiento {
   numeroReferencia: string | null
   observaciones: string | null
   createdAt: string
+  revertidoAt: string | null
+  revertidoMovimientoId: string | null
 }
 
 // CARGO and PAGO come from migration 234 (fiado). Without them the badge
@@ -54,6 +57,12 @@ const tipoLabels: Record<string, string> = {
 // A recibo acknowledges money received, so only the two movement types that
 // bring money in can be emitted — same rule the API and migration 306 enforce.
 const TIPOS_CON_RECIBO = ["DEPOSITO", "PAGO"]
+
+// A fiado charge tied to an order is the only movement kind that can be
+// reverted (see the revertir_cargos_orden RPC).
+function esCargoReversible(mov: Movimiento): boolean {
+  return mov.tipo === "CARGO" && mov.referenciaTipo === "ORDEN" && mov.revertidoAt == null
+}
 
 const metodoPagoLabels: Record<string, string> = {
   EFECTIVO: "Efectivo", TRANSFERENCIA: "Transferencia", TARJETA_DEBITO: "Tarjeta Débito",
@@ -84,6 +93,7 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
   const [depositoMetodo, setDepositoMetodo] = useState<MetodoDeposito>("EFECTIVO")
   const [depositoReferencia, setDepositoReferencia] = useState("")
   const [depositoObservaciones, setDepositoObservaciones] = useState("")
+  const [revertirTarget, setRevertirTarget] = useState<Movimiento | null>(null)
 
   const { data, isLoading: loading, mutate } = useSWR<{ saldo: number; movimientos: Movimiento[] }>(
     `/api/clientes/${cliente.id}/cuenta-corriente?limit=50`,
@@ -277,6 +287,11 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                         {tipoLabels[mov.tipo] || mov.tipo}
                       </Badge>
+                      {mov.revertidoAt && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                          Revertido
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {formatDate(mov.createdAt)}
@@ -314,12 +329,35 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
                       <Printer className="h-3.5 w-3.5" />
                     </Button>
                   )}
+                  {esCargoReversible(mov) && esAdmin && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      title="Revertir cargo"
+                      aria-label={`Revertir cargo por ${formatPrice(Math.abs(mov.monto))}`}
+                      onClick={() => setRevertirTarget(mov)}
+                    >
+                      <Undo2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {revertirTarget && (
+        <RevertirCargoDialog
+          clienteId={cliente.id}
+          movimientos={[{ id: revertirTarget.id, monto: revertirTarget.monto }]}
+          saldoActual={saldo}
+          open={!!revertirTarget}
+          onOpenChange={(v) => !v && setRevertirTarget(null)}
+          onDone={() => mutate()}
+        />
+      )}
     </div>
   )
 }

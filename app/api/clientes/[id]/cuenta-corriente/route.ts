@@ -57,6 +57,8 @@ export async function GET(
         numeroReferencia: m.numero_referencia,
         observaciones: m.observaciones,
         createdAt: m.created_at,
+        revertidoAt: m.revertido_at,
+        revertidoMovimientoId: m.revertido_movimiento_id,
       })),
       total: count || 0,
       page,
