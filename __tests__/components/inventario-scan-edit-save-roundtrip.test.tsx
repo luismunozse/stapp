@@ -18,6 +18,15 @@ import type { Inventario } from "@/types"
  * halves cannot drift apart.
  */
 
+// El formulario persiste borradores (hooks/use-form-draft.ts) y el hook arma la
+// key con la sesion.
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({
+    data: { user: { id: "user-1", organizationId: "org-1", role: "ADMIN" } },
+    status: "authenticated",
+  }),
+}))
+
 vi.mock("@/contexts/modal-context", () => ({
   useModal: () => ({
     confirm: vi.fn().mockResolvedValue(false),
@@ -90,6 +99,9 @@ describe("ADMIN scans a barcode, edits the item and saves", () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // Un borrador escrito por un test anterior se restauraria sobre el
+    // siguiente y lo haria medir otra cosa.
+    window.localStorage.clear()
     fetchMock = vi.fn((url: string) => {
       if (typeof url === "string" && url.includes("/api/proveedores")) {
         return Promise.resolve({ ok: true, json: async () => [] } as Response)

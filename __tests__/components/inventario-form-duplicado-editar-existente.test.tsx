@@ -9,14 +9,20 @@ import { InventarioForm } from "@/components/inventario/inventario-form"
  * The button asks the parent to load the existing product, and the parent
  * answers by flipping this form's `item` prop from null to an object -- which
  * fires the reset() effect and replaces every field the operator had typed for
- * the NEW product. No confirmation, no undo, and inventory has no draft
- * persistence to recover from. The warning itself only appears AFTER a name has
- * been typed and blurred, so by construction there is always work on screen
- * when that button is reachable.
+ * the NEW product. No confirmation, no undo. The warning itself only appears
+ * AFTER a name has been typed and blurred, so by construction there is always
+ * work on screen when that button is reachable.
  *
  * The repo already treats this shape of action as destructive and confirms it
  * (DraftRestoredNotice / useModal().confirm), so this one does too: the
- * operator either keeps what they typed or discards it knowingly.
+ * operator either keeps what they typed or hands the screen over knowingly.
+ *
+ * Since the form persists drafts (hooks/use-form-draft.ts), handing the screen
+ * over is no longer a loss: the flip changes the draft key from `new` to
+ * `edit:{id}` and the hook flushes what is pending BEFORE switching, so the
+ * half-loaded product stays in its own entry. The confirmation stays -- the
+ * screen still changes under the operator's hands -- but it now says what
+ * actually happens. See inventario-form-draft.test.tsx for the persistence side.
  */
 
 const { confirmMock, showErrorMock } = vi.hoisted(() => ({
@@ -32,6 +38,14 @@ vi.mock("@/contexts/modal-context", () => ({
     showError: showErrorMock,
     showWarning: vi.fn().mockResolvedValue(undefined),
     showInfo: vi.fn().mockResolvedValue(undefined),
+  }),
+}))
+
+// El formulario persiste borradores y el hook arma la key con la sesion.
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({
+    data: { user: { id: "user-1", organizationId: "org-1", role: "ADMIN" } },
+    status: "authenticated",
   }),
 }))
 
@@ -62,6 +76,9 @@ describe("InventarioForm — 'Editar este' sobre un duplicado detectado", () => 
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // El formulario persiste borradores: sin esto, uno escrito por un test
+    // anterior se restaura sobre el siguiente y lo hace medir otra cosa.
+    window.localStorage.clear()
     fetchMock = vi.fn((url: string) => {
       if (typeof url === "string" && url.includes("/api/inventario/check-duplicate")) {
         return Promise.resolve({ ok: true, json: async () => ({ matches: [MATCH] }) } as Response)
@@ -110,7 +127,7 @@ describe("InventarioForm — 'Editar este' sobre un duplicado detectado", () => 
     expect(screen.getByLabelText("Nombre *")).toHaveValue("Bateria iPhone 12 original")
   })
 
-  it("abre el existente cuando el operador acepta perder lo escrito", async () => {
+  it("abre el existente cuando el operador acepta entregar la pantalla", async () => {
     confirmMock.mockResolvedValue(true)
     const onEditExisting = vi.fn()
 
@@ -120,7 +137,56 @@ describe("InventarioForm — 'Editar este' sobre un duplicado detectado", () => 
     await waitFor(() => expect(onEditExisting).toHaveBeenCalledWith("existente-1"))
   })
 
-  it("avisa en el diálogo que se pierde lo cargado para el producto nuevo", async () => {
+  it("pregunta también cuando el trabajo en pantalla vino de un borrador", async () => {
+    // El caso exacto para el que existe la confirmación: la pantalla está llena
+    // de trabajo sin guardar. Pero ese trabajo lo puso `reset()` al aplicar el
+    // borrador, y reset() deja `isDirty` en false — con lo que la única señal
+    // que miraba la confirmación decía "no hay nada que perder" justo cuando la
+    // pantalla estaba más llena. Se pregunta por el mismo signo que usa el hook
+    // (`hasUnsavedWork`), que cuenta también el borrador restaurado.
+    confirmMock.mockResolvedValue(false)
+    const onEditExisting = vi.fn()
+    window.localStorage.setItem(
+      "draft:v3:inventario-form:org-1:user-1:new",
+      JSON.stringify({
+        version: 3,
+        savedAt: Date.now(),
+        data: {
+          values: {
+            nombre: "Bateria iPhone 12 original",
+            categoria: "Baterías",
+            tipoDispositivo: "CELULAR",
+            stock: 2,
+            precioVenta: 250,
+            proveedorId: null,
+            barcode: null,
+          },
+          ui: {
+            showStockConfig: false,
+            showNewTipo: false,
+            newTipo: "",
+            showNewCategoria: false,
+            newCategoria: "",
+            imagenPendiente: false,
+          },
+        },
+      }),
+    )
+
+    render(
+      <InventarioForm onClose={vi.fn()} onSuccess={vi.fn()} onEditExisting={onEditExisting} />,
+    )
+    await screen.findByText(/se restauró un borrador no guardado/i)
+    // Sin tocar una sola tecla: el nombre ya vino del borrador.
+    fireEvent.blur(screen.getByLabelText("Nombre *"))
+
+    fireEvent.click(await screen.findByRole("button", { name: /editar este/i }))
+
+    await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1))
+    expect(onEditExisting).not.toHaveBeenCalled()
+  })
+
+  it("dice en el diálogo qué pasa con lo cargado para el producto nuevo", async () => {
     confirmMock.mockResolvedValue(false)
 
     const boton = await mostrarDuplicado(vi.fn())
@@ -128,7 +194,10 @@ describe("InventarioForm — 'Editar este' sobre un duplicado detectado", () => 
 
     await waitFor(() => expect(confirmMock).toHaveBeenCalled())
     const opciones = confirmMock.mock.calls[0][0]
-    expect(opciones.description).toMatch(/perder/i)
+    // Prometer una pérdida que ya no ocurre es tan malo como ocultarla: enseña
+    // a desconfiar del resto de los avisos. Lo cargado queda como borrador.
+    expect(opciones.description).toMatch(/borrador/i)
+    expect(opciones.description).not.toMatch(/perder/i)
     // Cancelar tiene que ser la salida obvia, no un "Cancelar" genérico.
     expect(opciones.cancelText).toBeTruthy()
     expect(opciones.confirmText).toBeTruthy()
