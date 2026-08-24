@@ -1,0 +1,322 @@
+"use client"
+
+import { useState, useMemo } from "react"
+import useSWR from "swr"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select"
+import { Plus, Trash2, Loader2, Wrench } from "lucide-react"
+import { useCurrency } from "@/contexts/currency-context"
+import { toast } from "sonner"
+import type { Cliente } from "@/types"
+import { RevertirCargoDialog } from "./revertir-cargo-dialog"
+
+// This app has no global SWR fetcher: every component declares its own
+// (see cliente-detalle.tsx). useSWR(key) with no fetcher would throw.
+const fetcher = (url: string) => fetch(url).then((r) => r.json())
+
+interface OrdenCreada {
+  id: string
+  numeroOrden: number
+  codigoOrden: string
+  dispositivo: string
+  precio: number
+  movimientoId: string
+}
+
+interface LoteResponse {
+  ordenes: OrdenCreada[]
+  totalCargado: number
+  saldoNuevo: number
+}
+
+interface Fila {
+  key: string
+  dispositivo: string
+  tipoDispositivo: string
+  marca: string
+  imei: string
+  trabajoRealizado: string
+  precio: string
+  diasGarantia: string
+}
+
+function filaVacia(key: string): Fila {
+  return {
+    key, dispositivo: "", tipoDispositivo: "", marca: "", imei: "",
+    trabajoRealizado: "", precio: "", diasGarantia: "0",
+  }
+}
+
+interface ReparacionesExpressDialogProps {
+  cliente: Cliente
+  // Live balance from the parent's own cuenta-corriente fetch (ccData.saldo),
+  // not cliente.saldoCuenta: a deposit/reversal done elsewhere on this page
+  // only revalidates that cuenta-corriente key, so cliente.saldoCuenta can be
+  // stale while this number stays correct. This is the number the user reads
+  // before confirming a charge with no undo but the reversal flow.
+  saldoActual: number
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onDone: () => void
+}
+
+export function ReparacionesExpressDialog({
+  cliente, saldoActual, open, onOpenChange, onDone,
+}: ReparacionesExpressDialogProps) {
+  const { formatPrice } = useCurrency()
+  const [filas, setFilas] = useState<Fila[]>([filaVacia("f0")])
+  const [loading, setLoading] = useState(false)
+  // Success state: the batch just landed. Keeping it on screen is what makes
+  // "Revertir lote" reachable exactly when the mistake is still in sight.
+  const [creadas, setCreadas] = useState<OrdenCreada[]>([])
+  // Authoritative post-charge balance from the API response, not recomputed
+  // client-side: the RPC is the single source of truth for saldo_cuenta.
+  const [saldoTrasLote, setSaldoTrasLote] = useState<number | null>(null)
+  const [revertirOpen, setRevertirOpen] = useState(false)
+  const { data: tipos } = useSWR<Array<{ codigo: string; nombre: string }>>(
+    open ? "/api/tipos-dispositivo" : null,
+    fetcher,
+    { revalidateOnFocus: false }
+  )
+
+  const total = useMemo(
+    () => filas.reduce((sum, f) => sum + (parseFloat(f.precio) || 0), 0),
+    [filas]
+  )
+
+  function actualizar(key: string, campo: keyof Fila, valor: string) {
+    setFilas((prev) => prev.map((f) => (f.key === key ? { ...f, [campo]: valor } : f)))
+  }
+
+  async function handleGuardar() {
+    const reparaciones = filas.map((f) => ({
+      dispositivo: f.dispositivo.trim(),
+      tipoDispositivo: f.tipoDispositivo,
+      marca: f.marca.trim() || undefined,
+      imei: f.imei.trim() || undefined,
+      trabajoRealizado: f.trabajoRealizado.trim(),
+      precio: parseFloat(f.precio) || 0,
+      diasGarantia: parseInt(f.diasGarantia, 10) || 0,
+    }))
+
+    const incompleta = reparaciones.find(
+      (r) => !r.dispositivo || !r.tipoDispositivo || !r.trabajoRealizado || r.precio <= 0
+    )
+    if (incompleta) {
+      toast.error("Completá equipo, tipo, trabajo y precio en todas las filas")
+      return
+    }
+
+    setLoading(true)
+    try {
+      const res = await fetch("/api/reparaciones-express", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clienteId: cliente.id,
+          reparaciones,
+          // One stable key per submit attempt: an offline retry reuses it and
+          // the barrier replays instead of charging the client twice.
+          idempotencyKey: crypto.randomUUID(),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Error al cargar las reparaciones")
+      const result = json as LoteResponse
+      toast.success(
+        `${result.ordenes.length} ${result.ordenes.length === 1 ? "reparación cargada" : "reparaciones cargadas"} · ${formatPrice(result.totalCargado)}`
+      )
+      setFilas([filaVacia("f0")])
+      setCreadas(result.ordenes)
+      setSaldoTrasLote(result.saldoNuevo)
+      onDone()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al cargar las reparaciones")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function cerrar() {
+    setCreadas([])
+    setSaldoTrasLote(null)
+    setFilas([filaVacia("f0")])
+    onOpenChange(false)
+  }
+
+  if (creadas.length > 0) {
+    return (
+      <>
+        <Dialog open={open} onOpenChange={(v) => !v && cerrar()}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reparaciones cargadas</DialogTitle>
+              <DialogDescription>
+                Quedaron en la cuenta corriente de {cliente.nombre}.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-1 text-sm max-h-[40vh] overflow-y-auto">
+              {creadas.map((o) => (
+                <div key={o.id} className="flex items-center justify-between rounded-lg bg-muted/50 p-2">
+                  <a
+                    href={`/ordenes/${o.id}`}
+                    className="underline underline-offset-2"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {o.codigoOrden} · {o.dispositivo}
+                  </a>
+                  <span>{formatPrice(o.precio)}</span>
+                </div>
+              ))}
+            </div>
+
+            <DialogFooter>
+              <Button variant="destructive" onClick={() => setRevertirOpen(true)}>
+                Revertir lote
+              </Button>
+              <Button onClick={cerrar}>Listo</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <RevertirCargoDialog
+          clienteId={cliente.id}
+          movimientos={creadas.map((o) => ({ id: o.movimientoId, monto: o.precio }))}
+          saldoActual={saldoTrasLote ?? saldoActual}
+          open={revertirOpen}
+          onOpenChange={setRevertirOpen}
+          onDone={() => { onDone(); cerrar() }}
+        />
+      </>
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Cargar reparaciones</DialogTitle>
+          <DialogDescription>
+            Se cargan como deuda en la cuenta corriente de {cliente.nombre}. No se cobra nada ahora.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 max-h-[50vh] overflow-y-auto">
+          {filas.map((fila) => (
+            <div key={fila.key} className="grid grid-cols-12 gap-2 items-end border-b pb-3">
+              <div className="col-span-3 space-y-1">
+                <Label className="text-xs">Equipo</Label>
+                <Input
+                  value={fila.dispositivo}
+                  onChange={(e) => actualizar(fila.key, "dispositivo", e.target.value)}
+                  placeholder="iPhone 11 Pro"
+                />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <Label className="text-xs">Tipo</Label>
+                {/* Radix Select set only by user interaction: setting it from
+                    outside while the dropdown is closed wipes the value. */}
+                <Select
+                  value={fila.tipoDispositivo}
+                  onValueChange={(v) => actualizar(fila.key, "tipoDispositivo", v)}
+                >
+                  <SelectTrigger><SelectValue placeholder="Tipo" /></SelectTrigger>
+                  <SelectContent>
+                    {(tipos || []).map((t) => (
+                      <SelectItem key={t.codigo} value={t.codigo}>{t.nombre}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-3 space-y-1">
+                <Label className="text-xs">Trabajo realizado</Label>
+                <Input
+                  value={fila.trabajoRealizado}
+                  onChange={(e) => actualizar(fila.key, "trabajoRealizado", e.target.value)}
+                  placeholder="Cambio de pantalla"
+                />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <Label className="text-xs">Precio</Label>
+                <Input
+                  inputMode="decimal"
+                  value={fila.precio}
+                  onChange={(e) => actualizar(fila.key, "precio", e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <div className="col-span-1 space-y-1">
+                <Label className="text-xs">Gar.</Label>
+                <Input
+                  inputMode="numeric"
+                  value={fila.diasGarantia}
+                  onChange={(e) => actualizar(fila.key, "diasGarantia", e.target.value)}
+                />
+              </div>
+              <div className="col-span-1 flex justify-end">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={filas.length === 1}
+                  aria-label="Quitar reparación"
+                  onClick={() => setFilas((prev) => prev.filter((f) => f.key !== fila.key))}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="col-span-6 space-y-1">
+                <Label className="text-xs">Marca</Label>
+                <Input
+                  value={fila.marca}
+                  onChange={(e) => actualizar(fila.key, "marca", e.target.value)}
+                  placeholder="Apple"
+                />
+              </div>
+              <div className="col-span-6 space-y-1">
+                <Label className="text-xs">IMEI / N° de serie</Label>
+                <Input
+                  value={fila.imei}
+                  onChange={(e) => actualizar(fila.key, "imei", e.target.value)}
+                />
+              </div>
+            </div>
+          ))}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setFilas((prev) => [...prev, filaVacia(`f${prev.length}-${Date.now()}`)])}
+          >
+            <Plus className="h-4 w-4" /> Agregar reparación
+          </Button>
+        </div>
+
+        <div className="flex items-center justify-between rounded-lg bg-muted/50 p-3 text-sm">
+          <span>Total a cargar: <strong>{formatPrice(total)}</strong></span>
+          <span className="text-muted-foreground">
+            Saldo del cliente: {formatPrice(saldoActual)} → {formatPrice(saldoActual - total)}
+          </span>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            Cancelar
+          </Button>
+          <Button onClick={handleGuardar} disabled={loading || total <= 0}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+            Cargar a cuenta corriente
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
