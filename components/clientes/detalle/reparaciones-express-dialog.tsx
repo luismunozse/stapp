@@ -265,6 +265,7 @@ export function ReparacionesExpressDialog({
                   value={fila.dispositivo}
                   onChange={(e) => actualizar(fila.key, "dispositivo", e.target.value)}
                   placeholder="iPhone 11 Pro"
+                  disabled={loading}
                 />
               </div>
               <div className="col-span-2 space-y-1">
@@ -274,6 +275,7 @@ export function ReparacionesExpressDialog({
                 <Select
                   value={fila.tipoDispositivo}
                   onValueChange={(v) => actualizar(fila.key, "tipoDispositivo", v)}
+                  disabled={loading}
                 >
                   <SelectTrigger><SelectValue placeholder="Tipo" /></SelectTrigger>
                   <SelectContent>
@@ -289,6 +291,7 @@ export function ReparacionesExpressDialog({
                   value={fila.trabajoRealizado}
                   onChange={(e) => actualizar(fila.key, "trabajoRealizado", e.target.value)}
                   placeholder="Cambio de pantalla"
+                  disabled={loading}
                 />
               </div>
               <div className="col-span-2 space-y-1">
@@ -298,6 +301,7 @@ export function ReparacionesExpressDialog({
                   value={fila.precio}
                   onChange={(e) => actualizar(fila.key, "precio", e.target.value)}
                   placeholder="0"
+                  disabled={loading}
                 />
               </div>
               <div className="col-span-1 space-y-1">
@@ -306,13 +310,14 @@ export function ReparacionesExpressDialog({
                   inputMode="numeric"
                   value={fila.diasGarantia}
                   onChange={(e) => actualizar(fila.key, "diasGarantia", e.target.value)}
+                  disabled={loading}
                 />
               </div>
               <div className="col-span-1 flex justify-end">
                 <Button
                   variant="ghost"
                   size="icon"
-                  disabled={filas.length === 1}
+                  disabled={loading || filas.length === 1}
                   aria-label="Quitar reparación"
                   onClick={() => quitarFila(fila.key)}
                 >
@@ -325,6 +330,7 @@ export function ReparacionesExpressDialog({
                   value={fila.marca}
                   onChange={(e) => actualizar(fila.key, "marca", e.target.value)}
                   placeholder="Apple"
+                  disabled={loading}
                 />
               </div>
               <div className="col-span-6 space-y-1">
@@ -332,6 +338,7 @@ export function ReparacionesExpressDialog({
                 <Input
                   value={fila.imei}
                   onChange={(e) => actualizar(fila.key, "imei", e.target.value)}
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -340,6 +347,7 @@ export function ReparacionesExpressDialog({
           <Button
             variant="outline"
             size="sm"
+            disabled={loading}
             onClick={agregarFila}
           >
             <Plus className="h-4 w-4" /> Agregar reparación
