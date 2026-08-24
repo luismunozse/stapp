@@ -141,7 +141,9 @@ export function PosTerminal() {
         if (data) {
           setFiscal({
             regimen: data.ivaRegimen ?? "EXENTO",
-            tasa: data.ivaTasa ?? 21,
+            // Sin tasa en la respuesta no se inventa una: cobrar la alicuota
+            // argentina en una org de otro pais es peor que no discriminar IVA.
+            tasa: data.ivaTasa ?? 0,
             redondeoEfectivo: data.redondeoEfectivo ?? 0,
           })
           setOrgGarantiaDefault(Number(data.garantiaDiasDefault) || 0)

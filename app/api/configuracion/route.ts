@@ -2,7 +2,7 @@
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { uploadLogo, deleteLogo, dataUrlToBuffer } from "@/lib/storage"
-import { COUNTRIES } from "@/lib/countries"
+import { COUNTRIES, getIvaGeneral } from "@/lib/countries"
 import { resolveTerminologia, sanitizeTerminologia } from "@/lib/terminologia"
 import { isMissingColumnError } from "@/lib/db-errors"
 import { hasPlanFeature } from "@/lib/subscriptions"
@@ -161,7 +161,7 @@ export async function GET() {
       moduloAgenda: !!organization.modulo_agenda,
       vendedoresAdministranInventario: !!organization.vendedores_administran_inventario,
       ivaRegimen: organization.iva_regimen ?? "EXENTO",
-      ivaTasa: organization.iva_tasa ?? 21,
+      ivaTasa: organization.iva_tasa ?? getIvaGeneral(organization.pais),
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
       comisionAplicaSinReparacion: organization.comision_aplica_sin_reparacion ?? false,
       terminologia: resolveTerminologia(organization.terminologia),
@@ -508,7 +508,7 @@ export async function PUT(request: Request) {
         moduloAgenda: !!org?.modulo_agenda,
         vendedoresAdministranInventario: !!org?.vendedores_administran_inventario,
         ivaRegimen: org?.iva_regimen ?? "EXENTO",
-        ivaTasa: org?.iva_tasa ?? 21,
+        ivaTasa: org?.iva_tasa ?? getIvaGeneral(org?.pais),
         redondeoEfectivo: org?.redondeo_efectivo ?? 0,
         comisionAplicaSinReparacion: org?.comision_aplica_sin_reparacion ?? false,
         terminologia: resolveTerminologia(org?.terminologia),
@@ -642,7 +642,7 @@ export async function PUT(request: Request) {
       moduloAgenda: !!organization.modulo_agenda,
       vendedoresAdministranInventario: !!organization.vendedores_administran_inventario,
       ivaRegimen: organization.iva_regimen ?? "EXENTO",
-      ivaTasa: organization.iva_tasa ?? 21,
+      ivaTasa: organization.iva_tasa ?? getIvaGeneral(organization.pais),
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
       comisionAplicaSinReparacion: organization.comision_aplica_sin_reparacion ?? false,
       terminologia: resolveTerminologia(organization.terminologia),
