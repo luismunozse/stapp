@@ -8,6 +8,7 @@ import { sucursalParaLectura, resolverDestinoVenta, getNombreSucursal } from "@/
 import { getRecargosMetodo, factorRecargo, metodoCondicion } from "@/lib/recargos"
 import { resolveOperador } from "@/lib/operadores"
 import { z } from "zod"
+import { getIvaGeneral } from "@/lib/countries"
 
 const itemSchema = z.object({
   inventarioId: z.string().nullable().optional(),
@@ -228,7 +229,9 @@ export async function POST(request: Request) {
       .eq("id", organizationId!)
       .single()
     const ivaRegimen: string = orgFiscal?.iva_regimen ?? "EXENTO"
-    const ivaTasa = Number(orgFiscal?.iva_tasa ?? 0)
+    // iva_tasa en NULL significa "sin tasa propia: usar la del pais"
+    // (migracion 310). Con regimen EXENTO no se aplica ninguna igual.
+    const ivaTasa = Number(orgFiscal?.iva_tasa ?? getIvaGeneral(orgFiscal?.pais))
     const redondeoUnidad = Number(orgFiscal?.redondeo_efectivo ?? 0)
 
     // ¿Pago 100% en efectivo? (para redondeo)
