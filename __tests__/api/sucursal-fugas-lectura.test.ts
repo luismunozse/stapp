@@ -62,7 +62,10 @@ describe("LEAK 1 — GET /api/clientes/[id]/ordenes-pendientes — branch filter
     mockCookie(null)
 
     const ordenesChain = createChainMock([])
-    mockSupabaseFrom({ ordenes_servicio: ordenesChain })
+    mockSupabaseFrom({
+      ordenes_servicio: ordenesChain,
+      cuenta_corriente: createChainMock([]),
+    })
 
     const req = createGetRequest("http://localhost:3000/api/clientes/cliente-1/ordenes-pendientes")
     const res = await getOrdenesPendientes(req, {
@@ -79,7 +82,10 @@ describe("LEAK 1 — GET /api/clientes/[id]/ordenes-pendientes — branch filter
     mockCookie(null)
 
     const ordenesChain = createChainMock([])
-    mockSupabaseFrom({ ordenes_servicio: ordenesChain })
+    mockSupabaseFrom({
+      ordenes_servicio: ordenesChain,
+      cuenta_corriente: createChainMock([]),
+    })
 
     const req = createGetRequest("http://localhost:3000/api/clientes/cliente-1/ordenes-pendientes")
     const res = await getOrdenesPendientes(req, {
