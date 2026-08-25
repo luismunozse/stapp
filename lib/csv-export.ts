@@ -228,6 +228,94 @@ export function inventarioColumns(includeCost: boolean): CSVColumn<any>[] {
   )
 }
 
+/**
+ * Cantidad sugerida a pedir para reponer un item.
+ *
+ * Espeja el target_stock del RPC de reposición (migración 171) sin su parte de
+ * demanda: acá el usuario eligió los items a mano, así que no hay ventana de
+ * ventas que consultar ni items que descartar por no necesitar reposición.
+ *
+ * umbral = punto_reorden ?? stock_minimo ?? umbral de la org
+ * target = max(stock_maximo, umbral * 2)
+ *
+ * Da 0 cuando el stock ya cubre el target: es una sugerencia editable en la
+ * planilla, no una cantidad inventada para que la fila no quede vacía.
+ */
+export function calcularCantidadPedido(
+  item: {
+    stock?: number | null
+    stock_minimo?: number | null
+    punto_reorden?: number | null
+    stock_maximo?: number | null
+  },
+  umbralOrg: number
+): number {
+  const stock = item.stock ?? 0
+  const umbral = item.punto_reorden ?? item.stock_minimo ?? umbralOrg
+  const target = Math.max(item.stock_maximo ?? 0, umbral * 2)
+  return Math.max(target - stock, 0)
+}
+
+// Columnas de PEDIDO que exponen costo de compra, con el mismo criterio que
+// INVENTARIO_COST_KEYS. El subtotal es cantidad * precio_compra, así que
+// filtrar solo el precio dejaría el costo deducible.
+const PEDIDO_COST_KEYS: string[] = ["precio_compra", "subtotal"]
+
+/**
+ * Columnas para la planilla de pedido a proveedor.
+ *
+ * No es el export de inventario filtrado: se cae el precio de venta (dato
+ * nuestro que no va al proveedor) y aparece "Cantidad a Pedir", precargada
+ * con la sugerencia para que la planilla sirva tal cual sale.
+ */
+export function pedidoColumns(
+  includeCost: boolean,
+  umbralOrg: number
+): CSVColumn<any>[] {
+  const columns: CSVColumn<any>[] = [
+    { key: "codigo", header: "Código" },
+    { key: "nombre", header: "Nombre" },
+    { key: "categoria", header: "Categoría" },
+    {
+      key: "proveedores.nombre",
+      header: "Proveedor",
+      // proveedor_id es la FK real desde la migración 105; `proveedor` quedó
+      // como texto libre de los items que nunca se migraron.
+      transform: (v, row) => v || row?.proveedor || "",
+    },
+    { key: "stock", header: "Stock Actual" },
+    {
+      key: "stock_minimo",
+      header: "Stock Mínimo",
+      transform: (v, row) => {
+        const umbral = row?.punto_reorden ?? v
+        return umbral === null || umbral === undefined ? "" : String(umbral)
+      },
+    },
+    {
+      key: "cantidad_pedido",
+      header: "Cantidad a Pedir",
+      transform: (_v, row) => String(calcularCantidadPedido(row || {}, umbralOrg)),
+    },
+    {
+      key: "precio_compra",
+      header: "Precio Compra",
+      transform: (v) => formatCurrencyCSV(v),
+    },
+    {
+      key: "subtotal",
+      header: "Subtotal",
+      transform: (_v, row) =>
+        formatCurrencyCSV(
+          calcularCantidadPedido(row || {}, umbralOrg) * (row?.precio_compra ?? 0)
+        ),
+    },
+  ]
+
+  if (includeCost) return columns
+  return columns.filter((col) => !PEDIDO_COST_KEYS.includes(col.key.toString()))
+}
+
 export const MOVIMIENTOS_COLUMNS: CSVColumn<any>[] = [
   {
     key: "created_at",
