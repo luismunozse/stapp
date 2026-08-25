@@ -24,7 +24,7 @@ export class NotificationService {
 
     const { data: org } = await supabaseAdmin
       .from("organizations")
-      .select("notificaciones_email, notificaciones_whatsapp, dias_recordatorio")
+      .select("notificaciones_email, notificaciones_whatsapp, dias_recordatorio, pais")
       .eq("id", this.organizationId)
       .single()
 
@@ -32,6 +32,7 @@ export class NotificationService {
       emailEnabled: org?.notificaciones_email ?? true,
       whatsappEnabled: org?.notificaciones_whatsapp ?? true,
       diasRecordatorio: org?.dias_recordatorio ?? 3,
+      pais: org?.pais ?? null,
     }
 
     return this.config
@@ -187,7 +188,8 @@ export class NotificationService {
 
     const whatsappUrl = generateWhatsAppUrl(
       context.cliente.telefonoContacto || context.cliente.telefono,
-      template.mensaje
+      template.mensaje,
+      (await this.getConfig()).pais
     )
 
     // Registrar como pendiente (se marca enviado cuando el usuario hace click)

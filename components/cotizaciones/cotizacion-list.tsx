@@ -25,6 +25,7 @@ import {
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { precioVentaRepuesto } from "@/lib/db-utils"
 import { useCurrency } from "@/contexts/currency-context"
+import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 import { useHasFeature } from "@/hooks/use-subscription"
 import { CotizacionForm } from "./cotizacion-form"
 import { CotizacionApprovalDialog } from "./cotizacion-approval-dialog"
@@ -92,7 +93,7 @@ const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: s
 }
 
 export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repuestos = [], mostrarCostos, onOrdenChanged }: CotizacionListProps) {
-  const { formatPrice, formatDate } = useCurrency()
+  const { formatPrice, formatDate, pais } = useCurrency()
   const [showForm, setShowForm] = useState(false)
   const [prefillFromRepuestos, setPrefillFromRepuestos] = useState(false)
   const [editingCotizacion, setEditingCotizacion] = useState<Cotizacion | null>(null)
@@ -291,8 +292,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
     const telefono = (cotizacion.clienteTelefono || "").replace(/\D/g, "")
     let waUrl: string
     if (telefono) {
-      const normalized = telefono.startsWith("54") ? telefono : `54${telefono}`
-      waUrl = `https://wa.me/${normalized}?text=${encodeURIComponent(mensaje)}`
+      waUrl = generateWhatsAppUrl(telefono, mensaje, pais)
     } else {
       waUrl = `https://wa.me/?text=${encodeURIComponent(mensaje)}`
     }
