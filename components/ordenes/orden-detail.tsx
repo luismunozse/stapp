@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import Link from "next/link"
 import { useCurrency, useTerminologia } from "@/contexts/currency-context"
+import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 import { CotizacionList } from "@/components/cotizaciones/cotizacion-list"
 import { GarantiaCard } from "@/components/garantias/garantia-card"
 import { FotoGallery } from "@/components/fotos/foto-gallery"
@@ -106,7 +107,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const { data: session } = useSession()
   const { confirm, alert } = useModal()
   const term = useTerminologia()
-  const { formatPrice, formatDate, currency, timezone } = useCurrency()
+  const { formatPrice, formatDate, currency, timezone, pais } = useCurrency()
   const [orden, setOrden] = useState<OrdenServicio | null>(null)
   const [tecnicos, setTecnicos] = useState<UserType[]>([])
   const [loading, setLoading] = useState(true)
@@ -229,8 +230,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       message = `Hola ${orden.cliente?.nombre}, desde acá podés seguir el estado de tu equipo (Orden ${codigoDisplay}):\n${seguimientoUrl}`
     }
 
-    const phone = contactPhone.replace(/\D/g, "")
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank")
+    window.open(generateWhatsAppUrl(contactPhone, message, pais), "_blank")
   }
 
   const fetchOrden = useCallback(async () => {

@@ -140,4 +140,6 @@ export interface NotificationConfig {
   emailEnabled: boolean
   whatsappEnabled: boolean
   diasRecordatorio: number
+  /** País de la organización: decide el código telefónico del link de WhatsApp. */
+  pais: string | null
 }

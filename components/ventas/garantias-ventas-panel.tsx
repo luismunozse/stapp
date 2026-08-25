@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { useCurrency } from "@/contexts/currency-context"
+import { formatPhoneForWhatsApp } from "@/lib/notifications/whatsapp-templates"
 import { EmptyState } from "@/components/ui/empty-state"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
@@ -29,7 +30,7 @@ interface Props {
 }
 
 export function GarantiasVentasPanel({ open, onOpenChange }: Props) {
-  const { formatDate } = useCurrency()
+  const { formatDate, pais } = useCurrency()
 
   const { data, isLoading } = useSWR(
     open ? "/api/reportes/garantias-ventas" : null,
@@ -37,10 +38,8 @@ export function GarantiasVentasPanel({ open, onOpenChange }: Props) {
     { revalidateOnFocus: false, dedupingInterval: 30000 }
   )
 
-  const formatWhatsAppLink = (telefono: string) => {
-    const clean = telefono.replace(/\D/g, "")
-    return `https://wa.me/549${clean}`
-  }
+  const formatWhatsAppLink = (telefono: string) =>
+    `https://wa.me/${formatPhoneForWhatsApp(telefono, pais)}`
 
   const porVencer7 = data?.porVencer?.filter((g: any) => g.diasRestantes <= 7) || []
   const porVencer15 = data?.porVencer?.filter((g: any) => g.diasRestantes > 7 && g.diasRestantes <= 15) || []
