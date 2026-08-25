@@ -730,7 +730,7 @@ export default function CotizacionesPage() {
                     {cotizaciones.map((cotizacion) => {
                       const config = estadoConfig[cotizacion.estado] || estadoConfig.BORRADOR
                       const Icon = config.icon
-                      const canEdit = cotizacion.estado === "BORRADOR"
+                      const canEdit = !["ACEPTADA", "RECHAZADA"].includes(cotizacion.estado)
                       const canSend = ["BORRADOR", "ENVIADA"].includes(cotizacion.estado)
                       const canDelete = cotizacion.estado !== "ACEPTADA"
                       return (
@@ -913,7 +913,7 @@ export default function CotizacionesPage() {
             {cotizaciones.map((cotizacion) => {
               const config = estadoConfig[cotizacion.estado] || estadoConfig.BORRADOR
               const Icon = config.icon
-              const canEdit = cotizacion.estado === "BORRADOR"
+              const canEdit = !["ACEPTADA", "RECHAZADA"].includes(cotizacion.estado)
               const canSend = ["BORRADOR", "ENVIADA"].includes(cotizacion.estado)
               const canDelete = cotizacion.estado !== "ACEPTADA"
 
