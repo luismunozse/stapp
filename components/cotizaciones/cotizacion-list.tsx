@@ -427,7 +427,13 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
           {cotizaciones.map((cotizacion) => {
             const config = estadoConfig[cotizacion.estado] || estadoConfig.BORRADOR
             const Icon = config.icon
-            const canEdit = cotizacion.estado === "BORRADOR"
+            // Espeja la regla del servidor (app/api/cotizaciones/[id]/route.ts):
+            // los items se pueden cambiar salvo con la cotizacion ACEPTADA o
+            // RECHAZADA. En ACEPTADA hay firma del cliente y stock reservado
+            // contra esos items, asi que editarla no es un permiso de UI.
+            // Al guardar, el PUT recalcula presupuesto y costo_final de la
+            // orden vinculada, asi que una ENVIADA editada no la deja stale.
+            const canEdit = !["ACEPTADA", "RECHAZADA"].includes(cotizacion.estado)
             const canSend = ["BORRADOR", "ENVIADA"].includes(cotizacion.estado)
             const canDelete = cotizacion.estado !== "ACEPTADA"
 
