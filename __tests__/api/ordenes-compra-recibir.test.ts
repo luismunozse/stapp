@@ -21,6 +21,9 @@ function createRecibirRequest(body: any, id = "oc-1"): [Request, { params: Promi
 
 const validBody = {
   items: [{ itemId: "item-1", cantidadRecibida: 3 }],
+  // Obligatorio desde la migración 313: sin clave de idempotencia un reintento
+  // no se distingue de una segunda recepción real.
+  requestId: "req-test-1",
 }
 
 describe("POST /api/ordenes-compra/[id]/recibir", () => {
