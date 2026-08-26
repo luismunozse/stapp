@@ -130,6 +130,19 @@ export async function POST(
     // Actualizar estado a ENVIADA
     await supabaseAdmin.from("cotizaciones").update({ estado: "ENVIADA" }).eq("id", id)
 
+    // Una revision reemplaza a su original recien cuando se envia. Antes de eso
+    // es un borrador que se puede abandonar sin dejar huerfana a la aceptada.
+    // Tiene que ir ANTES del recalculo de abajo: si quedara despues, la suma
+    // contaria la aceptada Y su revision, y el presupuesto de la orden se
+    // duplicaria.
+    if (cotizacion.revision_de) {
+      await supabaseAdmin
+        .from("cotizaciones")
+        .update({ reemplazada_por: cotizacion.id })
+        .eq("id", cotizacion.revision_de)
+        .eq("organization_id", organizationId!)
+    }
+
     // Si la cotización está vinculada a una orden, transicionar a PRESUPUESTADO automáticamente
     if (orden && orden.id) {
       const validStates = ["RECIBIDO", "EN_DIAGNOSTICO"]
