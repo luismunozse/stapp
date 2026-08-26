@@ -112,6 +112,8 @@ function formatCotizacion(c: any, includeCosts: boolean) {
     equipo: c.equipo_snapshot || null,
     checklist: c.checklist_snapshot || null,
     convertidaAOrdenId: c.convertida_a_orden_id || null,
+    reemplazadaPor: c.reemplazada_por,
+    revisionDe: c.revision_de,
     clienteNombre: cliente?.nombre || null,
     clienteEmail: cliente?.email || null,
     clienteTelefono: cliente?.telefono || null,

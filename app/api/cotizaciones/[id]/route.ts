@@ -185,6 +185,8 @@ function formatCotizacion(c: any, includeCosts: boolean) {
     equipo: c.equipo_snapshot || null,
     checklist: c.checklist_snapshot || null,
     convertidaAOrdenId: c.convertida_a_orden_id || null,
+    reemplazadaPor: c.reemplazada_por,
+    revisionDe: c.revision_de,
     orden: orden ? {
       id: orden.id,
       numeroOrden: orden.numero_orden,
