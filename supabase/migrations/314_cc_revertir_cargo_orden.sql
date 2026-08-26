@@ -1,5 +1,5 @@
 -- ============================================================================
--- 311: revert a fiado CARGO back out of a client's cuenta corriente
+-- 314: revert a fiado CARGO back out of a client's cuenta corriente
 -- ============================================================================
 -- The reversal primitive already exists: devolver_cuenta_corriente (type
 -- DEVOLUCION, positive amount, no balance validation), signature in mig

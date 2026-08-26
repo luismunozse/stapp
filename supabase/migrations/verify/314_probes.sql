@@ -1,9 +1,9 @@
 -- =============================================================================
--- Verificación de la migración 311 — revertir_cargos_orden y columnas de
+-- Verificación de la migración 314 — revertir_cargos_orden y columnas de
 -- reversa en cuenta_corriente.
 --
 -- CÓMO CORRERLO (ver verify/README.md):
---   - SQL editor de Supabase Studio, DESPUES de aplicar 311.
+--   - SQL editor de Supabase Studio, DESPUES de aplicar 314.
 --   - SIN RLS. cuenta_corriente/clientes/sucursales tienen policies FOR ALL TO
 --     authenticated sobre auth.uid(); en el editor no hay JWT, así que con RLS
 --     encendido el setup de este probe no vería ninguna fila propia. Correr
@@ -12,7 +12,7 @@
 --
 -- Todo corre dentro de BEGIN/ROLLBACK: no persiste ningún dato. En particular
 -- este archivo CREA organización/sucursales/clientes de prueba (con slugs y
--- teléfonos claramente namespaceados 'probe-311-...') porque el RPC bajo
+-- teléfonos claramente namespaceados 'probe-314-...') porque el RPC bajo
 -- prueba necesita estados muy puntuales (saldo previo exacto, sucursal_id
 -- distinguible, choque entre clientes/orgs) que no se pueden pedir prestados
 -- de forma confiable a filas reales existentes. Nada de esto se necesita real:
@@ -80,21 +80,21 @@ DECLARE
   v_cli_1 TEXT; v_cli_2 TEXT; v_cli_b TEXT;
 BEGIN
   INSERT INTO organizations (nombre, slug)
-    VALUES ('Probe 311 Org A', 'probe-311-org-a') RETURNING id INTO v_org_a;
+    VALUES ('Probe 314 Org A', 'probe-314-org-a') RETURNING id INTO v_org_a;
   INSERT INTO organizations (nombre, slug)
-    VALUES ('Probe 311 Org B', 'probe-311-org-b') RETURNING id INTO v_org_b;
+    VALUES ('Probe 314 Org B', 'probe-314-org-b') RETURNING id INTO v_org_b;
 
   INSERT INTO sucursales (organization_id, nombre)
-    VALUES (v_org_a, 'Probe 311 Sucursal 1') RETURNING id INTO v_suc_1;
+    VALUES (v_org_a, 'Probe 314 Sucursal 1') RETURNING id INTO v_suc_1;
   INSERT INTO sucursales (organization_id, nombre)
-    VALUES (v_org_a, 'Probe 311 Sucursal 2') RETURNING id INTO v_suc_2;
+    VALUES (v_org_a, 'Probe 314 Sucursal 2') RETURNING id INTO v_suc_2;
 
   INSERT INTO clientes (nombre, telefono, organization_id)
-    VALUES ('Probe 311 Cliente 1', '3110000001', v_org_a) RETURNING id INTO v_cli_1;
+    VALUES ('Probe 314 Cliente 1', '3110000001', v_org_a) RETURNING id INTO v_cli_1;
   INSERT INTO clientes (nombre, telefono, organization_id)
-    VALUES ('Probe 311 Cliente 2', '3110000002', v_org_a) RETURNING id INTO v_cli_2;
+    VALUES ('Probe 314 Cliente 2', '3110000002', v_org_a) RETURNING id INTO v_cli_2;
   INSERT INTO clientes (nombre, telefono, organization_id)
-    VALUES ('Probe 311 Cliente B', '3110000003', v_org_b) RETURNING id INTO v_cli_b;
+    VALUES ('Probe 314 Cliente B', '3110000003', v_org_b) RETURNING id INTO v_cli_b;
 
   INSERT INTO _setup VALUES (v_org_a, v_org_b, v_suc_1, v_suc_2, v_cli_1, v_cli_2, v_cli_b);
 END $$;

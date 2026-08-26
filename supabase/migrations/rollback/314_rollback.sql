@@ -1,11 +1,11 @@
--- Rollback de la migracion 311.
+-- Rollback de la migracion 314.
 --
 -- Elimina la funcion revertir_cargos_orden, el indice parcial
 -- idx_cuenta_corriente_revertido y las tres columnas de marca de reversa en
 -- cuenta_corriente (revertido_at, revertido_por, revertido_movimiento_id).
 --
 -- PERDIDA DE DATOS: si para el momento de este rollback ya se revirtio algun
--- CARGO con la RPC de la 311, las tres columnas que lo marcan se pierden junto
+-- CARGO con la RPC de la 314, las tres columnas que lo marcan se pierden junto
 -- con la columna. El movimiento DEVOLUCION que la reversa generó (via
 -- devolver_cuenta_corriente) NO se borra -- sigue siendo una fila mas de
 -- cuenta_corriente y el saldo del cliente ya la tiene incorporada -- pero se
