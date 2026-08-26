@@ -22,7 +22,20 @@ export async function cotizacionesVigentesDeOrden(
   // sacarse a sí misma de la cuenta. Restarle uno al resultado no sirve: si la
   // fila que se borra ya está rechazada o reemplazada, no estaba en la lista.
   if (excluirId) q = q.neq("id", excluirId)
-  const { data } = await q
+  const { data, error } = await q
+  // Un error acá NO puede degradarse a "esta orden no tiene cotizaciones".
+  // Esa respuesta es indistinguible de la verdadera, y los seis llamadores la
+  // usan para escribir plata: con cantidad 0 la orden vuelve a EN_DIAGNOSTICO
+  // y su `presupuesto`/`costo_final` quedan en NULL. El caso concreto que lo
+  // dispara: contra una base sin la migración 311 la columna
+  // `reemplazada_por` no existe y Postgres devuelve 42703 (undefined_column)
+  // en CADA recálculo — el presupuesto de toda orden tocada se borraría en
+  // silencio. Fallar fuerte deja la fila como está y el error a la vista.
+  if (error) {
+    throw new Error(
+      `No se pudieron leer las cotizaciones vigentes de la orden ${ordenId}: ${error.message}`
+    )
+  }
   return (data || []) as Array<{ total: number }>
 }
 
