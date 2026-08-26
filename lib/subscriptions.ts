@@ -11,7 +11,7 @@ export interface SubscriptionInfo {
   tierOrder: number
   status: "ACTIVE" | "CANCELED" | "PAST_DUE" | "TRIALING"
   billingPeriod: "MONTHLY" | "YEARLY" | null
-  paymentProvider: "MERCADOPAGO" | "REBILL" | "MANUAL" | null
+  paymentProvider: "MERCADOPAGO" | "CREEM" | "REBILL" | "MANUAL" | null
   /** Si la suscripcion se cobra sola. Es un booleano y no el id del preapproval:
    *  el identificador del proveedor no tiene por que viajar al browser. */
   autoDebito: boolean
