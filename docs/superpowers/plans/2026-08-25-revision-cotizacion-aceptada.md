@@ -49,7 +49,7 @@ Six places ask which cotizaciones count for an orden. Five copied the query inli
 **Interfaces:**
 - Consumes: `supabaseAdmin` from `@/lib/supabase`.
 - Produces:
-  - `cotizacionesVigentesDeOrden(ordenId: string): Promise<Array<{ total: number }>>`
+  - `cotizacionesVigentesDeOrden(ordenId: string, excluirId?: string): Promise<Array<{ total: number }>>`
   - `totalPresupuestoDeOrden(ordenId: string): Promise<{ total: number; cantidad: number }>`
 
 - [ ] **Step 1: Write the failing test**
@@ -113,14 +113,20 @@ import { supabaseAdmin } from "@/lib/supabase"
  * a los seis. Con una sola definición, el criterio se cambia una vez.
  */
 export async function cotizacionesVigentesDeOrden(
-  ordenId: string
+  ordenId: string,
+  excluirId?: string
 ): Promise<Array<{ total: number }>> {
-  const { data } = await supabaseAdmin
+  let q = supabaseAdmin
     .from("cotizaciones")
     .select("total")
     .eq("orden_id", ordenId)
     .is("deleted_at", null)
     .neq("estado", "RECHAZADA")
+  // El camino de borrado pregunta "¿queda alguna OTRA?", así que necesita
+  // sacarse a sí misma de la cuenta. Restarle uno al resultado no sirve: si la
+  // fila que se borra ya está rechazada o reemplazada, no estaba en la lista.
+  if (excluirId) q = q.neq("id", excluirId)
+  const { data } = await q
   return (data || []) as Array<{ total: number }>
 }
 
@@ -249,9 +255,8 @@ At ~636-642 (the ENVIADA → PRESUPUESTADO transition), replace the query and `r
 At ~750-755 (the delete guard that asks whether any other cotización remains), the site excludes the row being deleted, so it keeps its own query but must not duplicate the criterion. Replace with:
 
 ```ts
-      const vigentes = await cotizacionesVigentesDeOrden(cotizacion.orden_id)
-      const otrasCots = vigentes.length - 1 // la que se esta borrando sigue vigente en la lectura
-      if (otrasCots <= 0) {
+      const otrasCots = await cotizacionesVigentesDeOrden(cotizacion.orden_id, id)
+      if (otrasCots.length === 0) {
 ```
 
 At ~793-799 (recalculation after delete), replace the query and `reduce` with:
@@ -561,7 +566,7 @@ Read `app/api/cotizaciones/route.ts`'s POST first to copy its item-insert shape 
 
 - Load the source row; 404 if missing or not in the caller's org.
 - 400 unless `estado === "ACEPTADA"`.
-- Insert a new cotización copying `orden_id`, `cliente_id`, `n`, `terminos`, `iva_porcentaje`, `descuento_global_tipo`, `descuento_global_valor`, with `estado: "BORRADOR"`.
+- Insert a new cotización copying `orden_id`, `cliente_id`, `n`, `terminos`, `iva_porcentaje`, `descuento_global_tipo`, `descuento_global_valor`, with `estado: "BORRADOR"` and **`revision_de: <source id>`** — Task 5 reads that column to know which row to mark as superseded, so omitting it silently breaks the next task.
 - Never copy `firma_aprobacion`, `firma_mime`, `fecha_aprobacion`, `public_token`.
 - Copy the source's `items_cotizacion` rows to the new id.
 - Do **not** write `reemplazada_por` yet — that happens on send (Task 5), so an abandoned draft never orphans the accepted row.
