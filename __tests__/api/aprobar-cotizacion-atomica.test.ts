@@ -185,9 +185,7 @@ describe("POST /api/cotizaciones/[id]/aprobar — atomic RPC path", () => {
     let capturedRpcParams: any = null
     vi.mocked(supabaseAdmin.rpc).mockImplementation((fn: string, params?: any) => {
       if (fn === "aprobar_cotizacion_atomica") capturedRpcParams = params
-      // El resultado incluye 'liberadas' a modo informativo: la ruta no lo lee
-      // (ver rpcResult sin uso posterior), asi que no es lo que este test prueba.
-      return Promise.resolve({ data: { ok: true, liberadas: ["cot-1"] }, error: null }) as any
+      return Promise.resolve({ data: { ok: true }, error: null }) as any
     })
 
     const response = await POST(createPostRequest(validBody), createParams("rev-1"))

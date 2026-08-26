@@ -62,7 +62,15 @@ BEGIN
   -- pieza presente en las dos versiones quedaria contada dos veces aunque sea
   -- por un instante, y cualquier error posterior la dejaria inflada.
   -- Mismo patron que convertir_cotizacion_venta_atomica (migracion 246).
-  IF v_cot.revision_de IS NOT NULL THEN
+  --
+  -- El chequeo de tipo espeja al del bloque de reserva de abajo: un
+  -- PRESUPUESTO nunca reserva stock al aprobarse (ver el IF de mas abajo), asi
+  -- que la cotizacion que reemplaza -- si tambien era PRESUPUESTO -- nunca
+  -- tuvo nada reservado. Liberar igual no es un no-op inofensivo: como
+  -- stock_reservado es un contador global por item, liberar_items_cotizacion
+  -- restaria de otras reservas legitimas de ese mismo item (subreserva, la
+  -- imagen espejo del bug fantasma que esta migracion previene).
+  IF v_cot.revision_de IS NOT NULL AND v_cot.tipo::TEXT <> 'PRESUPUESTO' THEN
     PERFORM liberar_items_cotizacion(
       v_cot.revision_de,
       COALESCE(p_user_id, 'system'),
@@ -87,7 +95,8 @@ $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION aprobar_cotizacion_atomica(TEXT, TEXT, TEXT, TEXT, TEXT) IS
   'Atomically approves a cotizacion (ENVIADA → ACEPTADA), reserves inventory, '
-  'and — when the row is a revision (revision_de IS NOT NULL) — releases the '
-  'superseded cotizacion''s reservations first, in the same transaction. '
+  'and — when the row is a non-PRESUPUESTO revision (revision_de IS NOT NULL) — '
+  'releases the superseded cotizacion''s reservations first, in the same '
+  'transaction. A PRESUPUESTO never reserves, so its revision never releases. '
   'Uses FOR UPDATE to prevent concurrent double-approve. '
   'Stock reservation failure rolls back the entire approval. Migrations 246, 312.';
