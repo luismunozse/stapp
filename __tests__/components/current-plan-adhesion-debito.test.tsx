@@ -72,8 +72,26 @@ describe("CurrentPlan — adhesion al debito automatico", () => {
     expect(screen.queryByRole("button", { name: BOTON })).toBeNull()
   })
 
+  it("quien fue activado a mano desde superadmin tambien puede adherirse", () => {
+    // MANUAL no significa "sin medio de pago": la adhesion de MercadoPago pide
+    // una tarjeta en su propio link, no reutiliza ninguna. El cajon MANUAL
+    // mezcla orgs con el plan regalado y clientes reales reactivados a mano, y
+    // a los segundos es justamente a quienes queremos ofrecerles el debito.
+    const onActivarDebito = renderPlan({ paymentProvider: "MANUAL" })
+
+    fireEvent.click(screen.getByRole("button", { name: BOTON }))
+
+    expect(onActivarDebito).toHaveBeenCalledTimes(1)
+  })
+
   it("quien paga por Creem no ve el boton: Creem ya cobra solo", () => {
     renderPlan({ paymentProvider: "CREEM" })
+
+    expect(screen.queryByRole("button", { name: BOTON })).toBeNull()
+  })
+
+  it("un proveedor viejo como Rebill queda afuera: la lista es cerrada", () => {
+    renderPlan({ paymentProvider: "REBILL" })
 
     expect(screen.queryByRole("button", { name: BOTON })).toBeNull()
   })

@@ -8,6 +8,19 @@ import { Crown, Calendar, AlertCircle, Clock, Sparkles } from "lucide-react"
 import type { SubscriptionInfo } from "@/lib/subscriptions"
 import { useCurrency } from "@/contexts/currency-context"
 
+/**
+ * Proveedores a los que se les puede ofrecer la adhesión al débito automático
+ * de MercadoPago.
+ *
+ * Creem queda afuera porque ya cobra solo, y Rebill porque es un rail muerto.
+ * MANUAL sí entra: la adhesión pide una tarjeta en su propio link, no reutiliza
+ * ninguna, así que "activado a mano" no implica "sin medio de pago". El cajón
+ * MANUAL mezcla orgs con el plan regalado y clientes reales reactivados a mano
+ * desde superadmin, y a los segundos es justamente a quienes más nos interesa
+ * ofrecerles la recurrencia.
+ */
+const PROVEEDORES_ADHERIBLES = ["MERCADOPAGO", "MANUAL"]
+
 interface CurrentPlanProps {
   subscription: SubscriptionInfo | null
   onUpgrade: () => void
@@ -40,14 +53,12 @@ export function CurrentPlan({
   const isCanceled = subscription.cancelAtPeriodEnd
   const isPaid = subscription.paymentProvider !== null
 
-  // Solo MercadoPago: Creem ya cobra solo, y una suscripción activada a mano
-  // desde superadmin (MANUAL) no tiene medio de pago al que adherir.
   const puedeAdherirse =
     isPremium &&
     isPaid &&
     !isCanceled &&
     !subscription.autoDebito &&
-    subscription.paymentProvider === "MERCADOPAGO"
+    PROVEEDORES_ADHERIBLES.includes(subscription.paymentProvider as string)
 
   // Calcular días restantes de trial
   const trialEnd = subscription.trialEnd ? new Date(subscription.trialEnd) : null
