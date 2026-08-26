@@ -55,10 +55,6 @@
       "schedule": "0 4 * * *"
     },
     {
-      "path": "/api/cron/catalogo-reservas-vencidas",
-      "schedule": "0 5 * * *"
-    },
-    {
       "path": "/api/cron/auto-archive-dormant",
       "schedule": "0 5 * * *"
     }

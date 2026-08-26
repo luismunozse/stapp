@@ -61,6 +61,14 @@
 --   * No hay backfill del stock que las solicitudes viejas ya se comieron: no
 --     hay forma de distinguir las que terminaron en venta (descuento correcto)
 --     de las abandonadas (espurio). Es ajuste manual, caso por caso.
+--   * La restitución de B/C rutea por el snapshot items_cotizacion.inventario_id,
+--     que es la decisión que se tomó al reservar. Si un admin RE-VINCULA la
+--     línea a otro producto en la misma edición (el PUT lo permite), el
+--     snapshot se pisa y esa línea queda ruteada por el link nuevo. Es un caso
+--     estrecho y deliberado: respetar el link elegido por el admin es lo
+--     esperable, y la alternativa sería congelar la procedencia contra su
+--     voluntad.
+--   * El vencimiento automático. Ver la sección siguiente.
 --
 -- ============================================================
 -- EL ARREGLO
@@ -76,11 +84,7 @@
 --      mayor — idempotente y sin poder comerse la reserva de otra cotización;
 --      para B y C restituye la columna una sola vez. Las rutas la llaman al
 --      rechazar (desde CUALQUIER estado, no sólo ACEPTADA) y al borrar en soft.
---   3. El abandono deja de ser permanente: expirar_reservas_catalogo (parte 6)
---      corre por cron sobre las tres clases, y además levanta las cotizaciones
---      que quedaron en estado terminal con saldo vivo (si la liberación del
---      rechazo o del borrado falló, nadie más volvía a pasar por ellas).
---   4. El camino catálogo → orden → venta ya no reserva dos veces:
+--   3. El camino catálogo → orden → venta ya no reserva dos veces:
 --      reservar_items_cotizacion (parte 5) reserva el FALTANTE por producto.
 --
 -- La conversión a venta libera la reserva (liberar_items_cotizacion) y
@@ -94,9 +98,33 @@
 --   * Las reservas de clase A aparecen en el historial del producto como
 --     movimiento RESERVA con referencia_tipo COTIZACION, y su devolución como
 --     LIBERACION_RESERVA.
---   * Una solicitud sin responder deja de retener stock a los 7 días (default
---     de expirar_reservas_catalogo; ver la nota de decisión de producto en la
---     parte 6).
+--
+-- ============================================================
+-- LO QUE ESTA MIGRACIÓN **NO** CIERRA: EL ABANDONO
+-- ============================================================
+-- Una solicitud del catálogo que NADIE responde retiene stock por tiempo
+-- indefinido. No hay vencimiento: nada la barre, y `fecha_vencimiento` sigue
+-- siendo un campo de display. La liberación existe pero es reactiva — alguien
+-- tiene que rechazar o borrar la solicitud para que dispare.
+--
+-- Es decir: un visitante anónimo todavía puede llenar el carrito, no volver
+-- nunca, y dejar ese stock retenido hasta que un humano limpie la cotización a
+-- mano.
+--
+-- Esto sigue siendo estrictamente mejor que lo que hay hoy — hoy es un
+-- descuento DURO que tampoco se libera nunca, y encima invisible: el stock
+-- desaparece de inventario.stock sin dejar rastro, y no hay ninguna acción que
+-- lo devuelva. Después de esta migración, al menos, el stock sigue estando (lo
+-- retenido es visible como stock_reservado), rechazar o borrar lo devuelve, y
+-- el movimiento RESERVA dice de qué cotización vino. Pero el agujero del
+-- abandono no está cerrado, y no hay que leer esta migración como si lo
+-- estuviera.
+--
+-- El vencimiento automático va en una rama aparte
+-- (feat/catalogo-expiracion-reservas): tiene superficie de diseño propia
+-- —barrera para no acreditar cotizaciones históricas, lotes para no morir por
+-- timeout, y no soltarle la reserva a una orden en curso— y merece revisarse
+-- por separado, no de arrastre.
 --
 -- REGRESIÓN CONOCIDA, a cambio de lo anterior:
 --   Antes, el catálogo descontaba inventario.stock duro, así que una venta del
@@ -109,11 +137,6 @@
 --   comprador del catálogo. Hacer que el POS respete reservas es un cambio de
 --   política que afecta a todo el sistema, no sólo al catálogo, y no se hace
 --   acá.
---
--- REQUIERE además, del lado de la app: el cron
--- /api/cron/catalogo-reservas-vencidas dado de alta en vercel.json. Sin el
--- cron, las partes 1 a 5 siguen siendo correctas pero el abandono vuelve a
--- retener stock indefinidamente.
 
 -- ============================================================
 -- Parte 1: reservar_stock_catalogo
@@ -461,6 +484,10 @@ $$ LANGUAGE sql STABLE;
 COMMENT ON FUNCTION reserva_cotizacion_pendiente(TEXT) IS
   'Reserva viva de una cotización por item, neteando RESERVA contra LIBERACION_RESERVA en movimientos_inventario. v314.';
 
+REVOKE EXECUTE ON FUNCTION reserva_cotizacion_pendiente(TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION reserva_cotizacion_pendiente(TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION reserva_cotizacion_pendiente(TEXT) TO service_role;
+
 -- ============================================================
 -- Parte 4: liberar_reserva_catalogo
 -- ============================================================
@@ -554,12 +581,20 @@ BEGIN
   -- Estas columnas no tienen fila en inventario, así que su movimiento no
   -- puede vivir en movimientos_inventario (inventario_id es NOT NULL con FK).
   -- No hay libro que netear: la idempotencia sale de la marca de un solo uso.
-  -- El ruteo espeja EXACTAMENTE el de reservar_stock_catalogo:
-  -- variante > inventario (si el ITEM está linkeado) > catalogo_items.stock.
-  -- Ojo: no se puede filtrar por items_cotizacion.inventario_id — el route del
-  -- catálogo lo completa con el inventario_id del item aunque la línea sea de
-  -- una variante (cotizar/route.ts), así que una línea de variante puede
-  -- tenerlo cargado sin que su stock haya salido de inventario.
+  -- El ruteo espeja el de reservar_stock_catalogo: variante > inventario (si
+  -- el ITEM estaba linkeado) > catalogo_items.stock.
+  --
+  -- Para la rama de inventario se usa el SNAPSHOT items_cotizacion.inventario_id
+  -- y no el catalogo_items.inventario_id actual: el route del catálogo copia el
+  -- link del item a la línea en el mismo momento en que decide por dónde
+  -- descontar (cotizar/route.ts), así que la línea guarda la decisión que
+  -- realmente se tomó. Leer el link de hoy hace que desvincular un ítem después
+  -- de que entró el pedido acredite por los dos lados, y vincularlo deje el
+  -- descuento de catalogo_items varado sin vuelta.
+  --
+  -- La variante se chequea PRIMERO y sin mirar inventario_id, porque el route
+  -- completa la línea con el inventario_id del ítem aunque el stock haya salido
+  -- de catalogo_variantes.
   IF v_restaurado IS NULL THEN
     FOR v_linea IN
       SELECT
@@ -567,11 +602,10 @@ BEGIN
         ic.catalogo_item_id,
         SUM(ic.cantidad)::INTEGER AS cantidad
       FROM items_cotizacion ic
-      LEFT JOIN catalogo_items ci ON ci.id = ic.catalogo_item_id
       WHERE ic.cotizacion_id = p_cotizacion_id
         AND (
           ic.variante_id IS NOT NULL
-          OR (ic.catalogo_item_id IS NOT NULL AND ci.inventario_id IS NULL)
+          OR (ic.catalogo_item_id IS NOT NULL AND ic.inventario_id IS NULL)
         )
       GROUP BY ic.variante_id, ic.catalogo_item_id
     LOOP
@@ -593,9 +627,16 @@ BEGIN
       END IF;
     END LOOP;
 
-    UPDATE cotizaciones
-      SET catalogo_stock_restaurado_at = NOW()
-      WHERE id = p_cotizacion_id;
+    -- La marca se pone SÓLO si se restituyó algo. Estamparla igual cuando no
+    -- matcheó nada deja el stock sin devolver Y marcado como devuelto, sin
+    -- ningún camino de recuperación: si la cotización perdió su procedencia
+    -- (por ejemplo una edición vieja de admin que borró catalogo_item_id o
+    -- variante_id), así una liberación posterior todavía puede arreglarlo.
+    IF v_catalogo > 0 THEN
+      UPDATE cotizaciones
+        SET catalogo_stock_restaurado_at = NOW()
+        WHERE id = p_cotizacion_id;
+    END IF;
   END IF;
 
   RETURN jsonb_build_object(
@@ -731,98 +772,3 @@ $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION reservar_items_cotizacion(TEXT, TEXT, TEXT) IS
   'Reserva stock de los items de una cotización. Idempotente por (cotización, item) contra movimientos_inventario: no re-reserva lo que esa cotización ya tiene tomado. v314.';
-
--- ============================================================
--- Parte 6: expirar_reservas_catalogo
--- ============================================================
--- El abandono es el caso más común: el visitante pide, nadie contesta, la
--- cotización se queda ENVIADA para siempre y la reserva con ella. Sin esto, un
--- anónimo puede dejar el catálogo entero en "Agotado" sin comprar nada.
---
--- Se resuelve con cron (el repo ya tiene infraestructura: vercel.json crons +
--- lib/cron-auth, e incluso un cron de catálogo, catalogo-pii-purge) en vez de
--- liberación perezosa al leer, porque la lectura del catálogo es SSR cacheada
--- con unstable_cache: colgar escrituras de ahí las haría correr de forma
--- impredecible, o no correr en absoluto mientras el cache esté caliente.
---
--- p_dias: ventana de retención cuando la cotización no tiene fecha_vencimiento
--- (las del catálogo no la traen). Default 7 días.
--- DECISIÓN DE PRODUCTO PENDIENTE: 7 es un default razonable para e-commerce,
--- no un número validado con el negocio. Si tiene que ser configurable por org,
--- va como columna en catalogo_config.
-
-CREATE OR REPLACE FUNCTION expirar_reservas_catalogo(p_dias INTEGER DEFAULT 7)
-RETURNS JSONB AS $$
-DECLARE
-  v_cot          RECORD;
-  v_cotizaciones INTEGER := 0;
-  v_items        INTEGER := 0;
-  v_fallidas     INTEGER := 0;
-  v_errores      TEXT[]  := ARRAY[]::TEXT[];
-  v_res          JSONB;
-BEGIN
-  FOR v_cot IN
-    SELECT c.id
-    FROM cotizaciones c
-    WHERE c.origen = 'CATALOGO_PUBLICO'
-      -- Nunca ACEPTADA: esa retiene stock legítimamente, va camino a la venta.
-      AND (
-        -- Vencida y todavía esperando respuesta.
-        (
-          c.estado = 'ENVIADA'
-          AND c.deleted_at IS NULL
-          AND COALESCE(c.fecha_vencimiento, c.created_at + (p_dias || ' days')::INTERVAL) < NOW()
-        )
-        -- Red de seguridad: terminada pero con saldo vivo. Si la liberación
-        -- falló al rechazar o al borrar, la cotización quedó RECHAZADA o con
-        -- deleted_at puesto y ningún otro camino vuelve a pasar por ella: ese
-        -- stock quedaría filtrado para siempre y sin señal.
-        OR c.estado = 'RECHAZADA'
-        OR c.deleted_at IS NOT NULL
-      )
-      AND (
-        EXISTS (SELECT 1 FROM reserva_cotizacion_pendiente(c.id))
-        -- Las cotizaciones hechas sólo de variantes o de items sin link no
-        -- tienen movimientos: sin esta rama el barrido no las ve nunca.
-        OR c.catalogo_stock_restaurado_at IS NULL
-      )
-  LOOP
-    -- Una org sin depósito principal hace que liberar_reserva_deposito levante
-    -- P0011. Sin este bloque, ese solo inquilino roto revierte la transacción
-    -- entera y no se expira nada de nadie, todas las noches, en silencio.
-    BEGIN
-      v_res := liberar_reserva_catalogo(
-        v_cot.id, 'Reserva vencida: solicitud del catálogo sin respuesta');
-
-      v_cotizaciones := v_cotizaciones + 1;
-      v_items        := v_items
-                        + COALESCE((v_res->>'itemsLiberados')::INTEGER, 0)
-                        + COALESCE((v_res->>'itemsCatalogoRestaurados')::INTEGER, 0);
-    EXCEPTION WHEN OTHERS THEN
-      v_fallidas := v_fallidas + 1;
-      IF array_length(v_errores, 1) IS NULL OR array_length(v_errores, 1) < 20 THEN
-        v_errores := v_errores || (v_cot.id || ': ' || SQLSTATE || ' ' || SQLERRM);
-      END IF;
-      RAISE WARNING 'expirar_reservas_catalogo: cotización % falló (% %)',
-        v_cot.id, SQLSTATE, SQLERRM;
-    END;
-  END LOOP;
-
-  RETURN jsonb_build_object(
-    'ok', true,
-    'cotizaciones', v_cotizaciones,
-    'items', v_items,
-    'fallidas', v_fallidas,
-    'errores', to_jsonb(v_errores),
-    'dias', p_dias,
-    'ran_at', NOW()
-  );
-END;
-$$ LANGUAGE plpgsql;
-
-COMMENT ON FUNCTION expirar_reservas_catalogo(INTEGER) IS
-  'Libera las reservas de solicitudes del catálogo que quedaron ENVIADA más allá de su vencimiento. Deja el estado intacto: la cotización se puede aprobar después y ahí vuelve a reservar. v314.';
-
-REVOKE EXECUTE ON FUNCTION expirar_reservas_catalogo(INTEGER) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION expirar_reservas_catalogo(INTEGER) FROM anon;
-GRANT EXECUTE ON FUNCTION expirar_reservas_catalogo(INTEGER) TO service_role;

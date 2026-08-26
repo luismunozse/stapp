@@ -341,14 +341,6 @@ SELECT 17, 'la marca de restitucion queda puesta', 'marcada',
         FROM cotizaciones WHERE id = current_setting('probe314.cot3', TRUE))
 WHERE COALESCE(current_setting('probe314.cot3', TRUE), '') <> '';
 
--- El barrido tiene que ver la cotizacion de variantes (no tiene movimientos).
-INSERT INTO _r
-SELECT 18, 'expirar no explota y devuelve conteos', 'ok sin fallidas',
-       (SELECT CASE WHEN (r->>'ok') = 'true' AND COALESCE((r->>'fallidas')::INT, 0) = 0
-                    THEN 'ok sin fallidas'
-                    ELSE 'FALLO: ' || r::TEXT END
-        FROM (SELECT expirar_reservas_catalogo(0) AS r) s);
-
 SELECT orden, probe, esperado, obtenido FROM _r ORDER BY orden, probe;
 
 ROLLBACK;

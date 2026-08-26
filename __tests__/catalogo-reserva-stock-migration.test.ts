@@ -200,53 +200,6 @@ describe("reservar_items_cotizacion — no reserva dos veces la misma cotizació
   })
 })
 
-describe("expirar_reservas_catalogo — el abandono deja de ser permanente", () => {
-  const { cuerpo } = ultimaDefinicion("expirar_reservas_catalogo")
-
-  it("only touches catalog quotes still sitting in ENVIADA", () => {
-    expect(cuerpo).toMatch(/'CATALOGO_PUBLICO'/)
-    expect(cuerpo).toMatch(/'ENVIADA'/)
-  })
-
-  it("honours fecha_vencimiento and falls back to a creation-age window", () => {
-    expect(cuerpo).toMatch(/fecha_vencimiento/i)
-    expect(cuerpo).toMatch(/created_at/i)
-  })
-
-  it("releases through liberar_reserva_catalogo instead of duplicating the logic", () => {
-    expect(cuerpo).toMatch(/liberar_reserva_catalogo\s*\(/i)
-  })
-
-  it("survives one broken tenant instead of aborting the whole nightly sweep", () => {
-    // liberar_reserva_deposito levanta P0011 si la org no tiene deposito
-    // principal. Sin bloque de excepcion por cotizacion, una sola org rota
-    // revierte la transaccion entera y no se expira nada de nadie, todas las
-    // noches, en silencio.
-    expect(cuerpo).toMatch(/EXCEPTION\s+WHEN\s+OTHERS/i)
-    expect(cuerpo).toMatch(/fallidas|errores/i)
-  })
-
-  it("also sweeps terminal quotes that still show a live balance", () => {
-    // Una liberacion que falla al rechazar deja la cotizacion RECHAZADA; una
-    // que falla al borrar deja deleted_at puesto. Filtrando solo por
-    // ENVIADA + deleted_at IS NULL, el cron nunca las puede levantar y ese
-    // stock queda filtrado para siempre sin señal.
-    expect(cuerpo).toMatch(/'RECHAZADA'/)
-    expect(cuerpo).toMatch(/deleted_at\s+IS\s+NOT\s+NULL/i)
-  })
-
-  it("never sweeps an accepted quote", () => {
-    // ACEPTADA retiene stock legitimamente: esta en vuelo hacia la venta.
-    expect(cuerpo).not.toMatch(/'ACEPTADA'/)
-  })
-
-  it("picks up quotes whose only stock is in the catalog-only columns", () => {
-    // Esas no tienen movimientos, asi que un filtro basado solo en el libro
-    // mayor las deja afuera del barrido para siempre.
-    expect(cuerpo).toMatch(/catalogo_stock_restaurado_at/)
-  })
-})
-
 describe("crear_cotizacion_publica_atomica — la reserva queda trazable", () => {
   const { archivo, cuerpo } = ultimaDefinicion("crear_cotizacion_publica_atomica")
 

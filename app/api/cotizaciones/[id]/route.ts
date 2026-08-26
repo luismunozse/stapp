@@ -458,35 +458,89 @@ export async function PUT(
       // Guard en __tests__/source-nul-bytes.test.ts.
       const naturalKey = (descripcion: string | null, inventarioId: string | null) =>
         `${(descripcion || "").trim().toLowerCase()}\u0000${inventarioId ?? ""}`
+      // Procedencia del catálogo. Se rastrea SIEMPRE (no sólo cuando el rol no
+      // ve costos) porque el borrar-y-reinsertar de acá perdía
+      // catalogo_item_id / variante_id / variante_etiqueta en cada PUT: después
+      // de una edición de admin, liberar_reserva_catalogo no encontraba las
+      // líneas de variante y ese stock quedaba sin devolver.
+      type StoredItemOrigen = {
+        catalogoItemId: string | null
+        varianteId: string | null
+        varianteEtiqueta: string | null
+      }
+      const origenById = new Map<string, StoredItemOrigen>()
+      const origenByNaturalKey = new Map<string, StoredItemOrigen | null>()
+
       const existingItemsById = new Map<string, StoredItemCost>()
       // null marks an ambiguous key: several rows share it and disagree.
       const existingItemsByNaturalKey = new Map<string, StoredItemCost | null>()
       const inventarioCostoById = new Map<string, number | null>()
-      if (!canViewCosts) {
-        const { data: existingItemRows, error: existingItemsError } = await supabaseAdmin
-          .from("items_cotizacion")
-          .select("id, descripcion, costo_unitario, inventario_id")
-          .eq("cotizacion_id", id)
-        if (existingItemsError) throw existingItemsError
-        for (const row of existingItemRows || []) {
-          const stored: StoredItemCost = {
-            costoUnitario: row.costo_unitario != null ? Number(row.costo_unitario) : null,
-            inventarioId: row.inventario_id ?? null,
-          }
-          existingItemsById.set(row.id, stored)
 
-          const key = naturalKey(row.descripcion, stored.inventarioId)
-          if (existingItemsByNaturalKey.has(key)) {
-            // Duplicated lines that agree on cost resolve to the same answer
-            // either way, so only a disagreement makes the key unusable.
-            const previous = existingItemsByNaturalKey.get(key)
-            if (!previous || previous.costoUnitario !== stored.costoUnitario) {
-              existingItemsByNaturalKey.set(key, null)
-            }
-          } else {
-            existingItemsByNaturalKey.set(key, stored)
-          }
+      const { data: existingItemRows, error: existingItemsError } = await supabaseAdmin
+        .from("items_cotizacion")
+        .select(
+          "id, descripcion, costo_unitario, inventario_id, catalogo_item_id, variante_id, variante_etiqueta"
+        )
+        .eq("cotizacion_id", id)
+      if (existingItemsError) throw existingItemsError
+
+      for (const row of existingItemRows || []) {
+        const stored: StoredItemCost = {
+          costoUnitario: row.costo_unitario != null ? Number(row.costo_unitario) : null,
+          inventarioId: row.inventario_id ?? null,
         }
+        const origen: StoredItemOrigen = {
+          catalogoItemId: row.catalogo_item_id ?? null,
+          varianteId: row.variante_id ?? null,
+          varianteEtiqueta: row.variante_etiqueta ?? null,
+        }
+        const key = naturalKey(row.descripcion, stored.inventarioId)
+
+        origenById.set(row.id, origen)
+        if (origenByNaturalKey.has(key)) {
+          // Misma regla que para el costo: sólo un desacuerdo inutiliza la
+          // clave. Dos líneas iguales que apuntan al mismo item/variante dan la
+          // misma respuesta por cualquier camino.
+          const previo = origenByNaturalKey.get(key)
+          if (
+            !previo ||
+            previo.catalogoItemId !== origen.catalogoItemId ||
+            previo.varianteId !== origen.varianteId
+          ) {
+            origenByNaturalKey.set(key, null)
+          }
+        } else {
+          origenByNaturalKey.set(key, origen)
+        }
+
+        if (canViewCosts) continue
+
+        existingItemsById.set(row.id, stored)
+        if (existingItemsByNaturalKey.has(key)) {
+          // Duplicated lines that agree on cost resolve to the same answer
+          // either way, so only a disagreement makes the key unusable.
+          const previous = existingItemsByNaturalKey.get(key)
+          if (!previous || previous.costoUnitario !== stored.costoUnitario) {
+            existingItemsByNaturalKey.set(key, null)
+          }
+        } else {
+          existingItemsByNaturalKey.set(key, stored)
+        }
+      }
+
+      const SIN_ORIGEN: StoredItemOrigen = {
+        catalogoItemId: null,
+        varianteId: null,
+        varianteEtiqueta: null,
+      }
+      const findOrigen = (item: (typeof data.items)[number]): StoredItemOrigen => {
+        if (!item.id) return SIN_ORIGEN
+        const byId = origenById.get(item.id)
+        if (byId) return byId
+        return (
+          origenByNaturalKey.get(naturalKey(item.descripcion, item.inventarioId ?? null)) ??
+          SIN_ORIGEN
+        )
       }
 
       const findStoredItem = (item: (typeof data.items)[number]): StoredItemCost | undefined => {
@@ -535,6 +589,7 @@ export async function PUT(
         ...item,
         subtotal: calcItemNeto(item),
         costoUnitario: resolveCostoUnitario(item),
+        origen: findOrigen(item),
       }))
       const subtotalNeto = items.reduce((sum, item) => sum + item.subtotal, 0)
 
@@ -575,6 +630,12 @@ export async function PUT(
             inventario_id: item.inventarioId || null,
             servicio_id: item.servicioId || null,
             tipo_repuesto: item.tipoRepuesto || "NO_APLICA",
+            // Procedencia del catálogo: se repone tal cual estaba. Sin esto,
+            // editar una solicitud del catálogo la desvincula de su ítem y de
+            // su variante, y su stock ya no se puede devolver.
+            catalogo_item_id: item.origen.catalogoItemId,
+            variante_id: item.origen.varianteId,
+            variante_etiqueta: item.origen.varianteEtiqueta,
           }))
         )
     }

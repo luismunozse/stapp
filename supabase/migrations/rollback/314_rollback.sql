@@ -29,10 +29,11 @@
 --   * lib/catalogo/stock-disponible.ts y sus consumidores: el storefront
 --     calcula stock - stock_reservado. Con el descuento directo de vuelta, esa
 --     resta descuenta dos veces lo que ya salio del stock.
---   * El cron /api/cron/catalogo-reservas-vencidas y su entrada en vercel.json:
---     sin expirar_reservas_catalogo, cada corrida devuelve 500.
 --   * Las llamadas a liberar_reserva_catalogo en app/api/cotizaciones/[id]/route.ts
 --     (PUT y DELETE) y en app/api/public/cotizaciones/[token]/rechazar/route.ts.
+--   * La reposicion de catalogo_item_id / variante_id / variante_etiqueta en el
+--     PUT de cotizaciones: es correcta por si sola, pero se agrego para que la
+--     restitucion de variantes funcione.
 
 -- Paso 2b: las cotizaciones de variantes / items sin link no aparecen en
 -- reserva_cotizacion_pendiente (no dejan movimientos). Su restitucion se
@@ -44,7 +45,6 @@
 --   WHERE c.origen = 'CATALOGO_PUBLICO'
 --     AND c.catalogo_stock_restaurado_at IS NULL;
 
-DROP FUNCTION IF EXISTS expirar_reservas_catalogo(INTEGER);
 DROP FUNCTION IF EXISTS liberar_reserva_catalogo(TEXT, TEXT);
 DROP FUNCTION IF EXISTS reserva_cotizacion_pendiente(TEXT);
 

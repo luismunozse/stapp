@@ -48,20 +48,29 @@ export async function GET(req: Request) {
       ? stockVariantesTotal
       : stockDisponibleCatalogo(it)
 
+    // El embed puede venir vacío aunque inventario_id esté cargado: el producto
+    // fue borrado en soft, o el link quedó apuntando a una fila que ya no está.
+    // Guardarse sólo por inventario_id tiraba TypeError y devolvía 500 — justo
+    // el caso que esta herramienta existe para explicar.
+    const inv = it.inventario ?? null
+    const reservado = inv?.stock_reservado ?? 0
+
     return {
       id: it.id,
       nombre: it.nombre,
       activo: it.activo,
       catalogo_items_stock: it.stock,
       inventario_linked: it.inventario_id
-        ? {
-            id: it.inventario.id,
-            nombre: it.inventario.nombre,
-            // Desglose: el público ve stock - reservado, así que hace falta ver
-            // las dos mitades para entender de dónde sale el número.
-            stock_fisico: it.inventario.stock,
-            stock_reservado: it.inventario.stock_reservado ?? 0,
-          }
+        ? inv
+          ? {
+              id: inv.id,
+              nombre: inv.nombre,
+              // Desglose: el público ve stock - reservado, así que hace falta
+              // ver las dos mitades para entender de dónde sale el número.
+              stock_fisico: inv.stock,
+              stock_reservado: reservado,
+            }
+          : { id: it.inventario_id, roto: "el producto vinculado no existe o fue borrado" }
         : null,
       variantes_activas: variantesActivas.map((v) => ({
         id: v.id,
@@ -78,8 +87,8 @@ export async function GET(req: Request) {
       // Causa mas comun de "el stock fisico no es cero pero el catalogo dice
       // agotado": hay reservas tomadas y todavia sin liberar.
       nota_reservas:
-        !tieneVariantes && it.inventario_id && (it.inventario.stock_reservado ?? 0) > 0
-          ? `${it.inventario.stock_reservado} unidad(es) reservadas por cotizaciones sin cerrar`
+        !tieneVariantes && reservado > 0
+          ? `${reservado} unidad(es) reservadas por cotizaciones sin cerrar`
           : null,
     }
   })
