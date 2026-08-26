@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { mockAuthSuccess, createChainMock, mockSupabaseFrom, parseResponse } from "./helpers"
-import { supabaseAdmin } from "@/lib/supabase"
+import { mockAuthSuccess, createChainMock, mockSupabaseFrom } from "./helpers"
 
 vi.mock("@/lib/subscriptions", () => ({
   hasPlanFeature: vi.fn().mockResolvedValue(true),
@@ -48,13 +47,17 @@ describe("PUT /api/cotizaciones/[id] — presupuesto de la orden", () => {
       orden_eventos: createChainMock(null),
     })
 
+    // El item que se edita vale 999, no 150: si la implementación escribiera
+    // el total de ESTA cotización (999) en vez de la suma de las vigentes
+    // (100 + 50 = 150), el assert de abajo lo detectaría. No cambiar estos
+    // números para que "combinen" — la diferencia es lo que hace la prueba.
     const { PUT } = await import("@/app/api/cotizaciones/[id]/route")
     await PUT(
       new Request("http://localhost:3000/api/cotizaciones/cot-1", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: [{ descripcion: "X", cantidad: 1, precioUnitario: 150 }],
+          items: [{ descripcion: "X", cantidad: 1, precioUnitario: 999 }],
         }),
       }) as any,
       { params: Promise.resolve({ id: "cot-1" }) } as any
