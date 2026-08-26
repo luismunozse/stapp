@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useSession } from "next-auth/react"
 import {
   ResponsiveDialog,
@@ -112,17 +112,24 @@ export function PosCheckoutDialog({
     return Math.max(0, montoRecibido - totalEfectivo)
   }, [isCashOnly, montoRecibido, totalEfectivo])
 
-  // Update pagos amount when total or effective total changes
+  // Reset the form only when the dialog actually opens. Keying this on `total`
+  // instead used to wipe `pagoParcial` whenever the total moved mid-checkout —
+  // the fiscal config landing late, a global discount, or the cash-rounding flip
+  // that follows switching payment method — so a sale the cashier had just marked
+  // as fiado silently went out fully paid. Re-seeding the amount on a total change
+  // is the next effect's job, and that one respects `pagoParcial`.
+  const wasOpen = useRef(false)
   useEffect(() => {
-    if (open && total > 0) {
-      setPagosLines([createPagoLine(totalEfectivo)])
-      setMontoRecibido("")
-      setObservaciones("")
-      setPagoParcial(false)
-      setIdempotencyKey(crypto.randomUUID())
-    }
+    const justOpened = open && !wasOpen.current
+    wasOpen.current = open
+    if (!justOpened) return
+    setPagosLines([createPagoLine(totalEfectivo)])
+    setMontoRecibido("")
+    setObservaciones("")
+    setPagoParcial(false)
+    setIdempotencyKey(crypto.randomUUID())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, total])
+  }, [open])
 
   // Re-seed the single payment line's monto when the effective total changes due to
   // a method switch — only for the common non-partial single-line case.
