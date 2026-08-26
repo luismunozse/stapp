@@ -150,13 +150,7 @@ export function OrdenesCompraList() {
       header: "",
       className: "text-right",
       render: (oc) => (
-        // DataTable solo frena la propagación en la celda del checkbox, así que
-        // sin esto cada botón de acción abre además el detalle. Se frena acá y
-        // no botón por botón para que el próximo que se agregue quede cubierto.
-        <div
-          className="flex items-center justify-end gap-1"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="flex items-center justify-end gap-1">
           {oc.estado === "BORRADOR" && (
             <>
               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleChangeEstado(oc, "ENVIADA")}>
