@@ -26,27 +26,33 @@
 -- ------------------------------------------------------------
 -- 1. Registro de idempotencia
 -- ------------------------------------------------------------
+-- Misma forma que pago_idempotency (233), que resuelve lo mismo para los pagos
+-- de una venta: la PK compuesta ES la barrera de idempotencia. El segundo
+-- INSERT con el mismo request_id espera a que la primera transacción commitee
+-- y después choca, en vez de aplicar el movimiento dos veces.
 CREATE TABLE IF NOT EXISTS recepciones_oc_idempotencia (
-  id               TEXT PRIMARY KEY DEFAULT generate_cuid(),
-  organization_id  TEXT NOT NULL,
-  orden_compra_id  TEXT NOT NULL REFERENCES ordenes_compra(id) ON DELETE CASCADE,
-  request_id       TEXT NOT NULL,
-  resultado        JSONB NOT NULL,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  organization_id  TEXT        NOT NULL,
+  request_id       TEXT        NOT NULL,
+  orden_compra_id  TEXT        NOT NULL REFERENCES ordenes_compra(id) ON DELETE CASCADE,
+  resultado        JSONB       NOT NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (organization_id, request_id)
 );
-
--- El UNIQUE es el corazón de la idempotencia: el segundo INSERT con el mismo
--- request_id espera a que la primera transacción commitee y después choca, en
--- vez de aplicar el movimiento dos veces.
-CREATE UNIQUE INDEX IF NOT EXISTS recepciones_oc_idem_unq
-  ON recepciones_oc_idempotencia (organization_id, request_id);
 
 CREATE INDEX IF NOT EXISTS recepciones_oc_idem_oc_idx
   ON recepciones_oc_idempotencia (orden_compra_id);
 
 COMMENT ON TABLE recepciones_oc_idempotencia IS
   'Una fila por recepción aceptada. Permite que un reintento devuelva el '
-  'resultado original en vez de volver a sumar stock.';
+  'resultado original en vez de volver a sumar stock. Se accede únicamente '
+  'desde el cliente service-role (supabaseAdmin): RLS queda habilitado y a '
+  'propósito SIN políticas, así ningún rol anon/authenticated la lee ni la '
+  'escribe. Mismo criterio que pago_idempotency (233).';
+
+-- RLS habilitado sin políticas: el service-role la saltea automáticamente y
+-- cualquier otro rol queda sin acceso. Todas las tablas creadas desde la 201
+-- (rls_hardening) habilitan RLS; esta no es la excepción.
+ALTER TABLE recepciones_oc_idempotencia ENABLE ROW LEVEL SECURITY;
 
 -- ------------------------------------------------------------
 -- 2. RPC
