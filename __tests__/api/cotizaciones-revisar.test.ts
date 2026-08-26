@@ -57,6 +57,8 @@ describe("POST /api/cotizaciones/[id]/revisar", () => {
       organization_id: "org-1",
       orden_id: "orden-1",
       numero_cotizacion: "COT-0001",
+      notas: "Nota original",
+      equipo_snapshot: { dispositivo: "iPhone 12" },
       total: 100,
     })
     mockSupabaseFrom({
@@ -68,9 +70,36 @@ describe("POST /api/cotizaciones/[id]/revisar", () => {
 
     const insertado = cotChain.insert.mock.calls[0][0]
     expect(insertado).toEqual(
-      expect.objectContaining({ estado: "BORRADOR", numero_cotizacion: "COT-0001", orden_id: "orden-1" })
+      expect.objectContaining({
+        estado: "BORRADOR",
+        numero_cotizacion: "COT-0001",
+        orden_id: "orden-1",
+        notas: "Nota original",
+        equipo_snapshot: { dispositivo: "iPhone 12" },
+      })
     )
     // La firma es de la original y no se hereda: la revision se firma de nuevo.
     expect(insertado.firma_aprobacion ?? null).toBeNull()
+  })
+
+  it("la revision de un presupuesto sigue siendo un presupuesto", async () => {
+    const cotChain = createChainMock({
+      id: "cot-1",
+      estado: "ACEPTADA",
+      organization_id: "org-1",
+      orden_id: null,
+      numero_cotizacion: "COT-0002",
+      tipo: "PRESUPUESTO",
+      total: 100,
+    })
+    mockSupabaseFrom({
+      cotizaciones: cotChain,
+      items_cotizacion: createChainMock([{ descripcion: "X", cantidad: 1, precio_unitario: 100 }]),
+    })
+
+    await call()
+
+    const insertado = cotChain.insert.mock.calls[0][0]
+    expect(insertado.tipo).toBe("PRESUPUESTO")
   })
 })

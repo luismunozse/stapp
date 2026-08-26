@@ -49,19 +49,33 @@ export async function POST(
 
     // No se copian firma_aprobacion, firma_mime, fecha_aprobacion ni
     // public_token: la revision esta sin firmar y consigue su propio link
-    // al enviarse (Task 5).
+    // al enviarse (Task 5). Tampoco fecha_vencimiento: es una oferta nueva,
+    // heredar el vencimiento de la original podria crearla ya vencida; la
+    // consigue al enviarse, igual que cualquier cotizacion.
+    //
+    // Si copia tipo, notas, sector_id, equipo_snapshot, checklist_snapshot y
+    // tipo_cambio: una revision es el mismo trabajo re-cotizado, asi que todo
+    // lo que describe QUE se esta cotizando tiene que sobrevivir. tipo es el
+    // campo critico aca — la columna tiene DEFAULT 'ORDEN', asi que omitirlo
+    // convierte en silencio la revision de un PRESUPUESTO en una ORDEN.
     const { data: revision, error: createError } = await supabaseAdmin
       .from("cotizaciones")
       .insert({
         organization_id: organizationId,
         orden_id: source.orden_id,
         cliente_id: source.cliente_id,
+        sector_id: source.sector_id,
         numero_cotizacion: source.numero_cotizacion,
         estado: "BORRADOR",
+        tipo: source.tipo,
+        notas: source.notas,
         terminos: source.terminos,
         iva_porcentaje: source.iva_porcentaje,
         descuento_global_tipo: source.descuento_global_tipo,
         descuento_global_valor: source.descuento_global_valor,
+        tipo_cambio: source.tipo_cambio,
+        equipo_snapshot: source.equipo_snapshot,
+        checklist_snapshot: source.checklist_snapshot,
         subtotal: source.subtotal,
         iva: source.iva,
         total: source.total,
