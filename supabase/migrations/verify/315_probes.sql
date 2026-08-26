@@ -1,9 +1,9 @@
 -- =============================================================================
--- Verificación de la migración 312 — crear_reparaciones_express, columna
+-- Verificación de la migración 315 — crear_reparaciones_express, columna
 -- pago_idempotency.cliente_id y feature flag reparaciones_express.
 --
 -- CÓMO CORRERLO (ver verify/README.md):
---   - SQL editor de Supabase Studio, DESPUES de aplicar 312.
+--   - SQL editor de Supabase Studio, DESPUES de aplicar 315.
 --   - SIN RLS. ordenes_servicio/clientes/cuenta_corriente/plans tienen policies
 --     FOR ALL TO authenticated sobre auth.uid(); en el editor no hay JWT, así
 --     que con RLS encendido el setup de este probe no vería ninguna fila
@@ -12,7 +12,7 @@
 --
 -- Todo corre dentro de BEGIN/ROLLBACK: no persiste ningún dato. Este archivo
 -- CREA una organización/sucursal/cliente de prueba (namespaceados
--- 'probe-312-...') porque el RPC necesita un cliente con saldo_cuenta
+-- 'probe-315-...') porque el RPC necesita un cliente con saldo_cuenta
 -- conocido y una organización sin otras órdenes que contaminen los conteos.
 --
 -- crear_reparaciones_express, igual que revertir_cargos_orden (311), levanta
@@ -66,13 +66,13 @@ DECLARE
   v_org TEXT; v_suc TEXT; v_cli TEXT;
 BEGIN
   INSERT INTO organizations (nombre, slug)
-    VALUES ('Probe 312 Org', 'probe-312-org') RETURNING id INTO v_org;
+    VALUES ('Probe 315 Org', 'probe-315-org') RETURNING id INTO v_org;
 
   INSERT INTO sucursales (organization_id, nombre)
-    VALUES (v_org, 'Probe 312 Sucursal') RETURNING id INTO v_suc;
+    VALUES (v_org, 'Probe 315 Sucursal') RETURNING id INTO v_suc;
 
   INSERT INTO clientes (nombre, telefono, organization_id)
-    VALUES ('Probe 312 Cliente', '3120000001', v_org) RETURNING id INTO v_cli;
+    VALUES ('Probe 315 Cliente', '3120000001', v_org) RETURNING id INTO v_cli;
 
   INSERT INTO _setup VALUES (v_org, v_suc, v_cli);
 END $$;
@@ -110,13 +110,13 @@ BEGIN
     jsonb_build_object(
       'dispositivo', 'iPhone 12', 'tipoDispositivo', 'CELULAR', 'marca', 'Apple',
       'precio', v_precio1, 'trabajoRealizado', 'Cambio de pantalla',
-      'publicToken', 'probe-312-tok-1', 'diasGarantia', 30,
+      'publicToken', 'probe-315-tok-1', 'diasGarantia', 30,
       'fechaVencimientoGarantia', '2027-01-01T00:00:00Z'
     ),
     jsonb_build_object(
       'dispositivo', 'Notebook Lenovo', 'tipoDispositivo', 'COMPUTADORA', 'marca', 'Lenovo',
       'precio', v_precio2, 'trabajoRealizado', 'Cambio de teclado',
-      'publicToken', 'probe-312-tok-2'
+      'publicToken', 'probe-315-tok-2'
     )
   );
 
@@ -193,11 +193,11 @@ BEGIN
 
   v_reparaciones := jsonb_build_array(
     jsonb_build_object('dispositivo', 'TV Samsung', 'tipoDispositivo', 'OTRO', 'precio', 5000.00,
-      'trabajoRealizado', 'Cambio de fuente', 'publicToken', 'probe-312-tok-atomic-1'),
+      'trabajoRealizado', 'Cambio de fuente', 'publicToken', 'probe-315-tok-atomic-1'),
     jsonb_build_object('dispositivo', 'Parlante JBL', 'tipoDispositivo', 'OTRO', 'precio', 3000.00,
-      'trabajoRealizado', 'Cambio de bateria', 'publicToken', 'probe-312-tok-atomic-2'),
+      'trabajoRealizado', 'Cambio de bateria', 'publicToken', 'probe-315-tok-atomic-2'),
     jsonb_build_object('dispositivo', 'Mouse Logitech', 'tipoDispositivo', 'OTRO', 'precio', -1,
-      'trabajoRealizado', 'Reparacion de click', 'publicToken', 'probe-312-tok-atomic-3')
+      'trabajoRealizado', 'Reparacion de click', 'publicToken', 'probe-315-tok-atomic-3')
   );
 
   BEGIN
@@ -230,7 +230,7 @@ DECLARE
   v_org TEXT; v_suc TEXT; v_cli TEXT;
   v_precio DECIMAL(10,2) := 4000.00;
   v_reparaciones JSONB;
-  v_key TEXT := 'probe-312-idem-1';
+  v_key TEXT := 'probe-315-idem-1';
   v_resultado1 JSONB; v_resultado2 JSONB;
   v_saldo_pre DECIMAL(10,2); v_saldo_post1 DECIMAL(10,2); v_saldo_post2 DECIMAL(10,2);
   v_cnt_ordenes_pre INT; v_cnt_ordenes_post INT;
@@ -242,7 +242,7 @@ BEGIN
 
   v_reparaciones := jsonb_build_array(
     jsonb_build_object('dispositivo', 'Tablet Samsung', 'tipoDispositivo', 'TABLET', 'precio', v_precio,
-      'trabajoRealizado', 'Cambio de vidrio', 'publicToken', 'probe-312-tok-idem')
+      'trabajoRealizado', 'Cambio de vidrio', 'publicToken', 'probe-315-tok-idem')
   );
 
   SELECT crear_reparaciones_express(v_org, v_suc, v_cli, v_reparaciones, NULL, NULL, v_key)
@@ -280,7 +280,7 @@ BEGIN
 
   v_reparaciones := jsonb_build_array(
     jsonb_build_object('dispositivo', 'Consola PS5', 'tipoDispositivo', 'CONSOLA', 'precio', 0,
-      'trabajoRealizado', 'Limpieza', 'publicToken', 'probe-312-tok-precio-cero')
+      'trabajoRealizado', 'Limpieza', 'publicToken', 'probe-315-tok-precio-cero')
   );
 
   BEGIN

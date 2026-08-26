@@ -1,4 +1,4 @@
--- Rollback de la migracion 312.
+-- Rollback de la migracion 315.
 --
 -- Elimina la funcion crear_reparaciones_express, la columna
 -- pago_idempotency.cliente_id y la clave "reparaciones_express" de

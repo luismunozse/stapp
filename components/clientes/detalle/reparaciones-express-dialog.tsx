@@ -95,7 +95,7 @@ export function ReparacionesExpressDialog({
   // double-charging. Any edit to filas after an attempt (actualizar, add
   // row, remove row) clears it, because the server's replay-on-repeated-key
   // barrier returns attempt #1's stored response verbatim with no payload
-  // comparison (migration 312) — if the key survived an edit, a resubmit of
+  // comparison (migration 315) — if the key survived an edit, a resubmit of
   // genuinely different data would come back as a false "success" for the
   // OLD batch while the edited data was silently never charged. Deliberately
   // NOT cleared on Cancelar/ESC/overlay-close: that would let an unedited
