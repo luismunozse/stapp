@@ -16,6 +16,7 @@ export async function cotizacionesVigentesDeOrden(
     .select("total")
     .eq("orden_id", ordenId)
     .is("deleted_at", null)
+    .is("reemplazada_por", null)
     .neq("estado", "RECHAZADA")
   // El camino de borrado pregunta "¿queda alguna OTRA?", así que necesita
   // sacarse a sí misma de la cuenta. Restarle uno al resultado no sirve: si la

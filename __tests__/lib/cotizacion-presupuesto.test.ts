@@ -33,4 +33,15 @@ describe("cotizacion-presupuesto — cotizaciones vigentes de una orden", () => 
     mockSupabaseFrom({ cotizaciones: createChainMock([{ total: 10 }]) })
     expect(await cotizacionesVigentesDeOrden("orden-1")).toHaveLength(1)
   })
+
+  it("no cuenta las cotizaciones que ya fueron reemplazadas por una revision", async () => {
+    const chain = createChainMock([{ total: 150 }])
+    mockSupabaseFrom({ cotizaciones: chain })
+
+    await totalPresupuestoDeOrden("orden-1")
+
+    // La aceptada reemplazada y su revision conviven en la orden. Si el filtro
+    // no esta, el presupuesto suma las dos y la orden cobra de mas.
+    expect(chain.is).toHaveBeenCalledWith("reemplazada_por", null)
+  })
 })
