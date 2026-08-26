@@ -296,11 +296,7 @@ BEGIN
   INSERT INTO catalogo_variantes (organization_id, item_id, etiqueta, stock, activo)
   VALUES (v_org, v_cat, 'Rojo', 10, TRUE) RETURNING id INTO v_var;
 
-  PERFORM reservar_stock_catalogo(
-    v_org,
-    jsonb_build_array(jsonb_build_object('item_id', v_cat, 'variante_id', v_var, 'cantidad', 4)),
-    NULL);
-
+  -- La cotizacion va PRIMERO: la reserva se anota contra ella (FK NOT NULL).
   SELECT id INTO v_cli FROM clientes WHERE organization_id = v_org LIMIT 1;
   INSERT INTO cotizaciones (organization_id, cliente_id, numero_cotizacion,
                             tipo, estado, origen, subtotal, iva, total)
@@ -311,6 +307,16 @@ BEGIN
   INSERT INTO items_cotizacion (cotizacion_id, descripcion, cantidad, precio_unitario,
                                 subtotal, unidad, catalogo_item_id, variante_id, tipo_repuesto)
   VALUES (v_cot, 'PROBE-314 Rojo', 4, 25, 100, 'Unidad', v_cat, v_var, 'NO_APLICA');
+
+  PERFORM reservar_stock_catalogo(
+    v_org,
+    jsonb_build_array(jsonb_build_object('item_id', v_cat, 'variante_id', v_var, 'cantidad', 4)),
+    v_cot);
+
+  -- El admin edita la cantidad DESPUES de que entro el pedido: la restitucion
+  -- no puede mirar esto, tiene que devolver los 4 que se tomaron.
+  UPDATE items_cotizacion SET cantidad = 10
+    WHERE cotizacion_id = v_cot AND variante_id = v_var;
 
   PERFORM set_config('probe314.var', v_var, TRUE);
   PERFORM set_config('probe314.cot3', v_cot, TRUE);
@@ -335,11 +341,71 @@ SELECT 16, 'la variante se restituye al liberar (y solo una vez)', '10',
 WHERE COALESCE(current_setting('probe314.var', TRUE), '') <> '';
 
 INSERT INTO _r
-SELECT 17, 'la marca de restitucion queda puesta', 'marcada',
-       (SELECT CASE WHEN catalogo_stock_restaurado_at IS NULL
-                    THEN 'FALLO: sin marcar' ELSE 'marcada' END
-        FROM cotizaciones WHERE id = current_setting('probe314.cot3', TRUE))
+SELECT 17, 'la reserva del catalogo queda cerrada', 'sin abiertas',
+       (SELECT CASE WHEN COUNT(*) = 0 THEN 'sin abiertas'
+                    ELSE 'FALLO: quedan ' || COUNT(*)::TEXT END
+        FROM catalogo_reservas_cotizacion
+        WHERE cotizacion_id = current_setting('probe314.cot3', TRUE)
+          AND liberada_at IS NULL)
 WHERE COALESCE(current_setting('probe314.cot3', TRUE), '') <> '';
+
+-- El caso que la marca booleana no podia expresar: el admin edita la cantidad
+-- despues de pedir. Se devuelve lo RESERVADO (4), no lo que la linea pide hoy.
+INSERT INTO _r
+SELECT 18, 'devuelve lo reservado, no la cantidad editada', '4',
+       (SELECT cantidad::TEXT FROM catalogo_reservas_cotizacion
+        WHERE cotizacion_id = current_setting('probe314.cot3', TRUE)
+        LIMIT 1)
+WHERE COALESCE(current_setting('probe314.cot3', TRUE), '') <> '';
+
+-- La venta cierra la reserva SIN devolver: la mercaderia ya salio.
+DO $$
+DECLARE
+  v_org TEXT := current_setting('probe314.org', TRUE);
+  v_cat TEXT;
+  v_var TEXT;
+  v_cot TEXT;
+  v_cli TEXT;
+BEGIN
+  IF v_org IS NULL OR v_org = '' THEN RETURN; END IF;
+
+  INSERT INTO catalogo_items (organization_id, nombre, precio, activo, tipo)
+  VALUES (v_org, 'PROBE-314 vendida', 100, TRUE, 'PRODUCTO') RETURNING id INTO v_cat;
+  INSERT INTO catalogo_variantes (organization_id, item_id, etiqueta, stock, activo)
+  VALUES (v_org, v_cat, 'Azul', 10, TRUE) RETURNING id INTO v_var;
+
+  SELECT id INTO v_cli FROM clientes WHERE organization_id = v_org LIMIT 1;
+  INSERT INTO cotizaciones (organization_id, cliente_id, numero_cotizacion,
+                            tipo, estado, origen, subtotal, iva, total)
+  VALUES (v_org, v_cli, 'PROBE-314-E', 'PRESUPUESTO', 'ENVIADA',
+          'CATALOGO_PUBLICO', 100, 0, 100)
+  RETURNING id INTO v_cot;
+
+  PERFORM reservar_stock_catalogo(
+    v_org,
+    jsonb_build_array(jsonb_build_object('item_id', v_cat, 'variante_id', v_var, 'cantidad', 3)),
+    v_cot);
+
+  -- La venta consume, y despues alguien rechaza la cotizacion.
+  PERFORM consumir_reserva_catalogo(v_cot, 'probe venta');
+  UPDATE cotizaciones SET estado = 'RECHAZADA' WHERE id = v_cot;
+
+  PERFORM set_config('probe314.var2', v_var, TRUE);
+END $$;
+
+INSERT INTO _r
+SELECT 19, 'rechazar despues de vender NO acredita de vuelta', '7',
+       (SELECT stock::TEXT FROM catalogo_variantes WHERE id = current_setting('probe314.var2', TRUE))
+WHERE COALESCE(current_setting('probe314.var2', TRUE), '') <> '';
+
+-- El trigger: el UPDATE de estado de arriba tuvo que disparar la liberacion
+-- sin que nadie llamara a la funcion a mano.
+INSERT INTO _r
+SELECT 20, 'el trigger existe sobre cotizaciones', 'presente',
+       (SELECT CASE WHEN COUNT(*) > 0 THEN 'presente' ELSE 'FALLO: no esta' END
+        FROM pg_trigger
+        WHERE tgname = 'cotizaciones_liberar_reserva_catalogo'
+          AND NOT tgisinternal);
 
 SELECT orden, probe, esperado, obtenido FROM _r ORDER BY orden, probe;
 

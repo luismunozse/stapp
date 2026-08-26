@@ -5,7 +5,6 @@ import { createAuditLogger } from "@/lib/audit"
 import { transicionarOrden } from "@/lib/orden-transicion"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { dateOnlyToNoonUtcISO } from "@/lib/timezone"
-import { liberarReservaCatalogo } from "@/lib/catalogo/liberar-reserva"
 import { z } from "zod"
 
 const itemSchema = z.object({
@@ -293,7 +292,7 @@ export async function PUT(
     // Verify cotizacion exists and belongs to org
     const { data: existing, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, tipo, organization_id, created_by, iva_porcentaje, descuento_global_tipo, descuento_global_valor, orden_id")
+      .select("id, estado, tipo, origen, organization_id, created_by, iva_porcentaje, descuento_global_tipo, descuento_global_valor, orden_id")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .single()
@@ -310,6 +309,25 @@ export async function PUT(
       return NextResponse.json(
         { error: "No autorizado para editar esta cotización" },
         { status: 403 }
+      )
+    }
+
+    // Rechazar una solicitud del catálogo devuelve su stock (trigger de la
+    // migración 314). Reabrirla dejaría una solicitud viva que no retiene nada:
+    // el storefront ofrece las unidades y esta cotización cree tenerlas. Para
+    // el catálogo lo correcto es una solicitud nueva, no resucitar la muerta.
+    if (
+      existing.origen === "CATALOGO_PUBLICO" &&
+      existing.estado === "RECHAZADA" &&
+      data.estado !== undefined &&
+      data.estado !== "RECHAZADA"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Una solicitud del catálogo rechazada no se puede reabrir: su stock ya se devolvió. Creá una solicitud nueva.",
+        },
+        { status: 400 }
       )
     }
 
@@ -677,14 +695,10 @@ export async function PUT(
       }
     }
 
-    // Las cotizaciones del catálogo público nacen ENVIADA con la reserva ya
-    // tomada, así que el release de arriba (sólo ACEPTADA → RECHAZADA) nunca
-    // las alcanzaba: rechazarlas dejaba el stock retenido para siempre.
-    // liberar_reserva_catalogo es idempotente y no-op sobre cotizaciones de
-    // otro origen, así que es seguro llamarla en todo rechazo.
-    if (data.estado === "RECHAZADA") {
-      await liberarReservaCatalogo(id, "Solicitud del catálogo rechazada")
-    }
+    // La reserva del catálogo la devuelve el trigger
+    // cotizaciones_liberar_reserva_catalogo (migración 314) al entrar en estado
+    // terminal. Va en la tabla y no acá porque son cuatro las rutas que matan
+    // una cotización y una ya se había olvidado de llamar.
 
     // Si cambió a ENVIADA y está vinculada a una orden, transicionar a PRESUPUESTADO
     if (data.estado === "ENVIADA") {
@@ -851,10 +865,8 @@ export async function DELETE(
       throw deleteError
     }
 
-    // Borrar una solicitud del catálogo tiene que devolver su reserva: si no,
-    // el stock queda retenido por una cotización que ya no existe y no hay
-    // forma de llegar a ella para liberarla.
-    await liberarReservaCatalogo(id, "Solicitud del catálogo eliminada")
+    // El soft-delete de arriba dispara cotizaciones_liberar_reserva_catalogo,
+    // que devuelve la reserva. Ver migración 314, parte 7.
 
     // Si la cotización estaba vinculada a una orden, recalcular presupuesto con cotizaciones restantes
     if (cotizacion.orden_id) {

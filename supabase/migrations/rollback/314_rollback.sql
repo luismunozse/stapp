@@ -35,24 +35,64 @@
 --     PUT de cotizaciones: es correcta por si sola, pero se agrego para que la
 --     restitucion de variantes funcione.
 
--- Paso 2b: las cotizaciones de variantes / items sin link no aparecen en
--- reserva_cotizacion_pendiente (no dejan movimientos). Su restitucion se
--- rastrea con la marca, asi que hay que barrerlas por separado ANTES de
--- dropear las funciones:
+-- Paso 2b: las reservas de variantes / items sin link no aparecen en
+-- reserva_cotizacion_pendiente (no dejan movimientos de inventario). Viven en
+-- catalogo_reservas_cotizacion y hay que cerrarlas por separado ANTES de
+-- dropear las funciones. Ojo: SOLO las abiertas — las cerradas ya se
+-- restituyeron o se consumieron en una venta, y volver a acreditarlas infla el
+-- stock con mercaderia que salio por la puerta:
 --
 --   SELECT liberar_reserva_catalogo(c.id, 'Rollback 314')
 --   FROM cotizaciones c
 --   WHERE c.origen = 'CATALOGO_PUBLICO'
---     AND c.catalogo_stock_restaurado_at IS NULL;
+--     AND EXISTS (
+--       SELECT 1 FROM catalogo_reservas_cotizacion r
+--       WHERE r.cotizacion_id = c.id AND r.liberada_at IS NULL
+--     );
 
+DROP TRIGGER IF EXISTS cotizaciones_liberar_reserva_catalogo ON cotizaciones;
+DROP FUNCTION IF EXISTS trg_liberar_reserva_catalogo();
+DROP FUNCTION IF EXISTS consumir_reserva_catalogo(TEXT, TEXT);
 DROP FUNCTION IF EXISTS liberar_reserva_catalogo(TEXT, TEXT);
 DROP FUNCTION IF EXISTS reserva_cotizacion_pendiente(TEXT);
 
--- La columna NO se dropea: es el unico registro de que esas restituciones ya
--- se hicieron. Dropearla y volver a aplicar la 314 restituiria todo de nuevo,
--- inflando el stock. Queda huerfana y es inofensiva.
+-- convertir_cotizacion_venta_atomica vuelve a la version de la 246 (sin el
+-- consumo de la reserva del catalogo).
+CREATE OR REPLACE FUNCTION convertir_cotizacion_venta_atomica(
+  p_org_id TEXT, p_vendedor_id TEXT, p_cliente_id TEXT, p_cliente_nombre TEXT,
+  p_cliente_telefono TEXT, p_subtotal DECIMAL, p_descuento DECIMAL,
+  p_tipo_descuento TEXT, p_porcentaje_descuento DECIMAL, p_total DECIMAL,
+  p_metodo_pago TEXT, p_observaciones TEXT, p_numero_referencia TEXT,
+  p_cuotas INTEGER, p_recargo_porcentaje DECIMAL, p_monto_original DECIMAL,
+  p_items JSONB, p_pagos JSONB DEFAULT NULL, p_idempotency_key TEXT DEFAULT NULL,
+  p_deposito_id TEXT DEFAULT NULL, p_sucursal_id TEXT DEFAULT NULL,
+  p_cotizacion_id TEXT DEFAULT NULL
+) RETURNS JSONB AS $$
+DECLARE
+  v_result JSONB;
+BEGIN
+  v_result := crear_venta_atomica(
+    p_org_id, p_vendedor_id, p_cliente_id, p_cliente_nombre, p_cliente_telefono,
+    p_subtotal, p_descuento, p_tipo_descuento, p_porcentaje_descuento, p_total,
+    p_metodo_pago, p_observaciones, p_numero_referencia, p_cuotas,
+    p_recargo_porcentaje, p_monto_original, p_items, p_pagos,
+    p_idempotency_key, p_deposito_id, p_sucursal_id
+  );
+
+  IF p_cotizacion_id IS NOT NULL THEN
+    PERFORM liberar_items_cotizacion(
+      p_cotizacion_id, p_vendedor_id, 'Reserva consumida por conversión a venta');
+  END IF;
+
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- La tabla NO se dropea: es el unico registro de que esas restituciones ya se
+-- hicieron. Dropearla y volver a aplicar la 314 no reconstruye nada, pero
+-- perder el historial impide auditar que se devolvio y que se vendio.
 -- Si de verdad hace falta sacarla:
---   ALTER TABLE cotizaciones DROP COLUMN IF EXISTS catalogo_stock_restaurado_at;
+--   DROP TABLE IF EXISTS catalogo_reservas_cotizacion;
 
 -- reservar_items_cotizacion vuelve a la definicion de la 206 (sin el guard de
 -- idempotencia). Ojo: con esto vuelve el doble-reserva del camino

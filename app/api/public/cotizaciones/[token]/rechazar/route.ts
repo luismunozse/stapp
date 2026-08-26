@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { transicionarOrden } from "@/lib/orden-transicion"
-import { liberarReservaCatalogo } from "@/lib/catalogo/liberar-reserva"
 
 export async function POST(
   request: Request,
@@ -61,13 +60,8 @@ export async function POST(
 
     if (updateError) throw updateError
 
-    // El comprador rechaza desde el link público con la cotización todavía en
-    // ENVIADA: si no se libera acá, la reserva que tomó su propia solicitud
-    // queda retenida para siempre.
-    await liberarReservaCatalogo(
-      cotizacion.id,
-      "Solicitud del catálogo rechazada por el cliente"
-    )
+    // El UPDATE de arriba dispara cotizaciones_liberar_reserva_catalogo, que
+    // devuelve la reserva que tomó esta solicitud. Ver migración 314, parte 7.
 
     // If linked to an order in PRESUPUESTADO, revert
     if (cotizacion.orden_id) {

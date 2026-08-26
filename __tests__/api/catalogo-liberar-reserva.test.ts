@@ -12,8 +12,11 @@ import { supabaseAdmin } from "@/lib/supabase"
 // devolverla, cambiar "descuento" por "reserva" no arregla nada: el stock
 // queda inmovilizado para siempre y el comprador sigue viendo "Agotado".
 //
-// Los tres caminos por los que una solicitud del catálogo muere sin venta son
-// rechazo, borrado y abandono. Los tres tienen que liberar.
+// La devolución la dispara el trigger cotizaciones_liberar_reserva_catalogo
+// (migración 314) sobre la transición a estado terminal, así que ninguna de las
+// cuatro rutas que matan una cotización tiene que acordarse de llamar. Lo que
+// se prueba acá es lo que el trigger NO puede cubrir: que esas rutas sigan
+// escribiendo la transición, y las reglas que viven en la app.
 
 vi.mock("@/lib/orden-transicion", () => ({ transicionarOrden: vi.fn() }))
 vi.mock("@/lib/audit", () => ({
@@ -36,17 +39,18 @@ describe("liberación de la reserva del catálogo", () => {
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ok: true }, error: null } as any)
   })
 
-  it("releases when a catalog quote is rejected straight from ENVIADA", async () => {
-    // El camino real: la cotización del catálogo nace ENVIADA con la reserva ya
-    // tomada. El release viejo sólo corría en ACEPTADA → RECHAZADA, así que
-    // rechazar desde ENVIADA no liberaba nada.
+  it("refuses to walk a rejected catalog quote back to a live state", async () => {
+    // Al rechazar se devolvio el stock. Reabrirla deja una solicitud viva
+    // reteniendo cero: el storefront ofrece unidades que esa solicitud cree
+    // tener. Para el catalogo lo correcto es una solicitud nueva.
     const { PUT } = await import("@/app/api/cotizaciones/[id]/route")
 
     mockSupabaseFrom({
       cotizaciones: createChainMock({
         id: "cot-1",
-        estado: "ENVIADA",
+        estado: "RECHAZADA",
         tipo: "PRESUPUESTO",
+        origen: "CATALOGO_PUBLICO",
         organization_id: "org-1",
         created_by: "user-1",
         orden_id: null,
@@ -59,48 +63,37 @@ describe("liberación de la reserva del catálogo", () => {
     const req = new Request("http://localhost/api/cotizaciones/cot-1", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ estado: "RECHAZADA" }),
+      body: JSON.stringify({ estado: "ENVIADA" }),
     })
 
-    await PUT(req, { params: Promise.resolve({ id: "cot-1" }) })
+    const res = await PUT(req, { params: Promise.resolve({ id: "cot-1" }) })
+    const { status, body } = await parseResponse(res)
 
-    expect(rpcNames()).toContain("liberar_reserva_catalogo")
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/rechazada/i)
   })
 
-  it("releases when a catalog quote is soft-deleted", async () => {
-    const { DELETE } = await import("@/app/api/cotizaciones/[id]/route")
-
-    mockSupabaseFrom({
-      cotizaciones: createChainMock({
-        id: "cot-1",
-        estado: "ENVIADA",
-        organization_id: "org-1",
-        orden_id: null,
-      }),
-    })
-
-    const req = new Request("http://localhost/api/cotizaciones/cot-1", { method: "DELETE" })
-    await DELETE(req, { params: Promise.resolve({ id: "cot-1" }) })
-
-    expect(rpcNames()).toContain("liberar_reserva_catalogo")
-  })
-
-  it("releases when the buyer rejects from the public link", async () => {
+  it("still rejects from the public link (the release rides on the estado write)", async () => {
+    // La liberación la hace el trigger de la migración 314 sobre el UPDATE de
+    // estado, así que acá sólo se verifica que ese UPDATE siga ocurriendo: si
+    // esta ruta dejara de escribir RECHAZADA, el trigger no tendría de qué
+    // colgarse.
     const { POST } = await import("@/app/api/public/cotizaciones/[token]/rechazar/route")
 
-    mockSupabaseFrom({
-      cotizaciones: createChainMock({
-        id: "cot-1",
-        estado: "ENVIADA",
-        orden_id: null,
-        organization_id: "org-1",
-      }),
+    const cotChain = createChainMock({
+      id: "cot-1",
+      estado: "ENVIADA",
+      orden_id: null,
+      organization_id: "org-1",
     })
+    mockSupabaseFrom({ cotizaciones: cotChain })
 
     const req = createPostRequest({ motivo: "no me sirve" })
-    await POST(req, { params: Promise.resolve({ token: "a".repeat(32) }) })
+    const res = await POST(req, { params: Promise.resolve({ token: "a".repeat(32) }) })
 
-    expect(rpcNames()).toContain("liberar_reserva_catalogo")
+    expect(res.status).toBe(200)
+    const updates = cotChain.update.mock.calls.map((c) => c[0])
+    expect(updates.some((u: any) => u?.estado === "RECHAZADA")).toBe(true)
   })
 })
 

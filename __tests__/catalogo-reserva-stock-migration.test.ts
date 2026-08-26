@@ -155,16 +155,63 @@ describe("liberar_reserva_catalogo — devuelve lo que el catálogo tomó", () =
 
   it("restores the catalog-only stock columns too", () => {
     // Variantes e items sueltos no tienen fila de inventario, asi que su
-    // descuento no vive en el libro mayor. Sin esto, un catalogo con variantes
-    // sigue teniendo el drenaje anonimo irreversible.
+    // descuento no vive en movimientos_inventario. Sin esto, un catalogo con
+    // variantes sigue teniendo el drenaje anonimo irreversible.
     expect(cuerpo).toMatch(/UPDATE\s+catalogo_variantes\s+SET\s+stock\s*=\s*stock\s*\+/i)
     expect(cuerpo).toMatch(/UPDATE\s+catalogo_items\s+SET\s+stock\s*=\s*stock\s*\+/i)
   })
 
-  it("guards the catalog-column restore with a one-shot flag", () => {
-    // Esos UPDATE no dejan asiento, asi que no hay libro que netear: sin una
-    // marca, liberar dos veces devolveria el stock dos veces.
-    expect(cuerpo).toMatch(/catalogo_stock_restaurado_at/)
+  it("restores the amount that was reserved, not the amount currently requested", () => {
+    // Sumar ic.cantidad devolvia lo que la linea pide HOY: pedir 2, que el
+    // admin edite a 10 y rechazar acreditaba 10 (+8 fantasma); borrar la linea
+    // no devolvia nada. Lo que se devuelve sale del registro de la reserva.
+    expect(cuerpo).toMatch(/catalogo_reservas_cotizacion/)
+    expect(cuerpo).not.toMatch(/SUM\s*\(\s*ic\.cantidad\s*\)/i)
+  })
+
+  it("closes each reservation row instead of relying on a quote-level flag", () => {
+    // Un booleano por cotizacion no puede responder "cuanto" ni "de que linea".
+    expect(cuerpo).toMatch(/liberada_at\s*=\s*NOW\(\)/i)
+    expect(cuerpo).not.toMatch(/catalogo_stock_restaurado_at/)
+  })
+})
+
+describe("consumir_reserva_catalogo — la venta se queda el stock", () => {
+  const { cuerpo } = ultimaDefinicion("consumir_reserva_catalogo")
+
+  it("closes the reservation WITHOUT giving stock back", () => {
+    // En variantes/items sueltos el descuento del pedido ES el de la venta:
+    // crear_venta_atomica no las toca. Si la venta no cierra la reserva, un
+    // rechazo posterior acredita mercaderia que ya salio por la puerta.
+    expect(cuerpo).toMatch(/liberada_at\s*=\s*NOW\(\)/i)
+    expect(cuerpo).not.toMatch(/stock\s*=\s*stock\s*\+/i)
+  })
+})
+
+describe("convertir_cotizacion_venta_atomica — consume la reserva del catálogo", () => {
+  const { cuerpo } = ultimaDefinicion("convertir_cotizacion_venta_atomica")
+
+  it("marks the catalog reservation consumed as part of the sale", () => {
+    expect(cuerpo).toMatch(/consumir_reserva_catalogo\s*\(/i)
+  })
+})
+
+describe("trigger de liberación — ninguna superficie se puede olvidar", () => {
+  const { archivo } = ultimaDefinicion("liberar_reserva_catalogo")
+  const sql = readFileSync(join(MIGRATIONS_DIR, archivo), "utf8")
+
+  it("fires on the transition into a terminal state", () => {
+    // Hay cuatro rutas que matan una cotizacion y una (reject-budget) se nos
+    // paso: hace un UPDATE masivo por orden_id. Con el trigger, cualquier
+    // camino — incluido SQL a mano — libera.
+    expect(sql).toMatch(/CREATE\s+TRIGGER/i)
+    expect(sql).toMatch(/AFTER\s+UPDATE\s+ON\s+cotizaciones/i)
+    expect(sql).toMatch(/'RECHAZADA'/)
+    expect(sql).toMatch(/deleted_at/)
+  })
+
+  it("guards the WHEN clause so the release cannot re-fire itself", () => {
+    expect(sql).toMatch(/WHEN\s*\(/i)
   })
 })
 
@@ -187,6 +234,15 @@ describe("reservar_items_cotizacion — no reserva dos veces la misma cotizació
     expect(loop).not.toBeNull()
     expect(loop![0]).toMatch(/GROUP\s+BY\s+ic\.inventario_id/i)
     expect(loop![0]).toMatch(/SUM\s*\(\s*ic\.cantidad\s*\)/i)
+  })
+
+  it("releases the excess when the quote shrank below what it holds", () => {
+    // El guard `faltante <= 0 → CONTINUE` cubria la sobre-reserva pero nunca la
+    // sobre-cobertura: catalogo reserva 5, el admin edita a 2, la aprobacion
+    // saltea, la venta libera LEAST(2,...) y quedan 3 tomadas para siempre —
+    // inalcanzables, porque el DELETE rechaza cotizaciones ACEPTADA.
+    expect(cuerpo).toMatch(/v_faltante\s*<\s*0/)
+    expect(cuerpo).toMatch(/'LIBERACION_RESERVA'/)
   })
 
   it("reserves only the shortfall, never the full amount on top", () => {
