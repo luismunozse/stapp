@@ -91,6 +91,22 @@ export async function POST(
       )
     }
 
+    // Una cotizacion reemplazada por una revision sigue ACEPTADA (migracion
+    // 311: es un hecho historico firmado, no se pisa el estado), pero ya no
+    // es el documento vigente -- la revision lo es. Convertirla igual usaria
+    // items de una version superada y, si la revision ya fue aprobada,
+    // liberaria una segunda vez las reservas que la migracion 312 ya liberó
+    // al aprobar esa revision.
+    if (cotizacion.reemplazada_por) {
+      return NextResponse.json(
+        {
+          error:
+            "Esta cotización fue reemplazada por una revisión; convertí la revisión vigente en su lugar",
+        },
+        { status: 400 }
+      )
+    }
+
     if (cotizacion.tipo === "PRESUPUESTO") {
       return NextResponse.json(
         { error: "Los presupuestos planos deben convertirse primero a orden de servicio" },

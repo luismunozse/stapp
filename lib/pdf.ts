@@ -133,7 +133,9 @@ interface CotizacionItem {
 interface CotizacionPDFData {
   numeroCotizacion: string
   fecha: Date
-  fechaVencimiento?: Date | null
+  // Llega como el string ISO de Postgres, no como Date; `fmtDate` acepta las
+  // dos formas desde siempre y el tipo se quedó atrás.
+  fechaVencimiento?: Date | string | null
   cliente: {
     nombre: string
     telefono: string
