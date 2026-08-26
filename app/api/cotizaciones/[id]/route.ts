@@ -5,6 +5,7 @@ import { createAuditLogger } from "@/lib/audit"
 import { transicionarOrden } from "@/lib/orden-transicion"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { dateOnlyToNoonUtcISO } from "@/lib/timezone"
+import { totalPresupuestoDeOrden, cotizacionesVigentesDeOrden } from "@/lib/cotizacion-presupuesto"
 import { z } from "zod"
 
 const itemSchema = z.object({
@@ -117,15 +118,9 @@ async function revertirOrdenSinPresupuestoActivo(
 }
 
 async function recalcPresupuestoOrden(ordenId: string, organizationId: string, userId?: string | null) {
-  const { data: allCots } = await supabaseAdmin
-    .from("cotizaciones")
-    .select("total")
-    .eq("orden_id", ordenId)
-    .is("deleted_at", null)
-    .neq("estado", "RECHAZADA")
-  const total = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
+  const { total, cantidad } = await totalPresupuestoDeOrden(ordenId)
 
-  if ((allCots?.length || 0) > 0) {
+  if (cantidad > 0) {
     await supabaseAdmin
       .from("ordenes_servicio")
       .update({ presupuesto: total, costo_final: total })
@@ -633,13 +628,7 @@ export async function PUT(
 
         if (ordenActual && validStates.includes(ordenActual.estado)) {
           const estadoAnterior = ordenActual.estado
-          const { data: allCots } = await supabaseAdmin
-            .from("cotizaciones")
-            .select("total")
-            .eq("orden_id", cotWithOrder.orden_id)
-            .is("deleted_at", null)
-            .neq("estado", "RECHAZADA")
-          const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
+          const { total: totalPresupuesto } = await totalPresupuestoDeOrden(cotWithOrder.orden_id)
           await supabaseAdmin
             .from("ordenes_servicio")
             .update({
@@ -745,14 +734,8 @@ export async function DELETE(
     // APROBADA (dejaría la orden sin presupuesto y forzaría un regreso inválido
     // APROBADO -> EN_DIAGNOSTICO). El staff debe cancelar o mover la orden primero.
     if (cotizacion.orden_id) {
-      const { data: otrasCots } = await supabaseAdmin
-        .from("cotizaciones")
-        .select("id")
-        .eq("orden_id", cotizacion.orden_id)
-        .neq("id", id)
-        .is("deleted_at", null)
-        .neq("estado", "RECHAZADA")
-      if (!otrasCots || otrasCots.length === 0) {
+      const otrasCots = await cotizacionesVigentesDeOrden(cotizacion.orden_id, id)
+      if (otrasCots.length === 0) {
         const { data: ordenAprob } = await supabaseAdmin
           .from("ordenes_servicio")
           .select("estado")
@@ -789,16 +772,9 @@ export async function DELETE(
         .single()
 
       if (orden) {
-        const { data: remaining } = await supabaseAdmin
-          .from("cotizaciones")
-          .select("total")
-          .eq("orden_id", cotizacion.orden_id)
-          .is("deleted_at", null)
-          .neq("estado", "RECHAZADA")
+        const { total: totalPresupuesto, cantidad } = await totalPresupuestoDeOrden(cotizacion.orden_id)
 
-        const totalPresupuesto = (remaining || []).reduce((sum, c) => sum + Number(c.total), 0)
-
-        if (remaining && remaining.length > 0) {
+        if (cantidad > 0) {
           await supabaseAdmin
             .from("ordenes_servicio")
             .update({ presupuesto: totalPresupuesto, costo_final: totalPresupuesto })

@@ -5,6 +5,7 @@ import { generateCotizacionPDF } from "@/lib/pdf"
 import { buildCotizacionPdfExtras } from "@/lib/cotizacion-pdf"
 import { sendCotizacionEmail } from "@/lib/email"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { totalPresupuestoDeOrden } from "@/lib/cotizacion-presupuesto"
 
 export async function POST(
   request: Request,
@@ -140,13 +141,7 @@ export async function POST(
 
       if (ordenActual && validStates.includes(ordenActual.estado)) {
         const estadoAnterior = ordenActual.estado
-        const { data: allCots } = await supabaseAdmin
-          .from("cotizaciones")
-          .select("total")
-          .eq("orden_id", orden.id)
-          .is("deleted_at", null)
-          .neq("estado", "RECHAZADA")
-        const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
+        const { total: totalPresupuesto } = await totalPresupuestoDeOrden(orden.id)
         await supabaseAdmin
           .from("ordenes_servicio")
           .update({
