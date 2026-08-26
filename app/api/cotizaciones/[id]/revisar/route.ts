@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { randomBytes } from "crypto"
 
 // Crea una revision de una cotizacion ACEPTADA: la firma del cliente queda
 // atada a esa fila exacta (y a la reserva de stock hecha sobre sus items),
@@ -8,8 +9,8 @@ import { supabaseAdmin } from "@/lib/supabase"
 // distinto del que se firmo. En vez de eso, esta ruta clona los datos en una
 // cotizacion nueva en BORRADOR y jamas escribe sobre la original: ni su
 // `estado`, ni su firma, ni (todavia) `reemplazada_por` — esa columna la
-// escribe el envio de la revision (Task 5), para que un borrador abandonado
-// nunca deje huerfana a la cotizacion aceptada.
+// escribe el envio de la revision, para que un borrador abandonado nunca deje
+// huerfana a la cotizacion aceptada.
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -21,11 +22,14 @@ export async function POST(
     const { id } = await params
 
     // Cargar la cotizacion origen, scopeada a la organizacion del caller.
+    // `deleted_at IS NULL` va en la query, como en enviar/ y aprobar/: una fila
+    // borrada no existe para el caller, y 404 es la respuesta correcta.
     const { data: source, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
       .select("*")
       .eq("id", id)
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (fetchError || !source) {
@@ -39,6 +43,26 @@ export async function POST(
       )
     }
 
+    // Una fila ya reemplazada sigue en ACEPTADA a proposito (migracion 311: es
+    // un hecho historico firmado, no se pisa el estado), asi que el guard de
+    // arriba la deja pasar. La UI esconde el boton, pero eso no es enforcement:
+    // revisar dos veces la misma original crea dos revisiones que apuntan a
+    // ella, y al aprobar la segunda la migracion 312 llama
+    // `liberar_items_cotizacion` por segunda vez sobre la original. Como
+    // `stock_reservado` es un contador global por item, esa segunda liberacion
+    // le come la reserva a OTRAS cotizaciones del mismo item (subreserva),
+    // mientras las dos revisiones suman al presupuesto de la orden.
+    // Mismo guard que convertir-venta/route.ts.
+    if (source.reemplazada_por) {
+      return NextResponse.json(
+        {
+          error:
+            "Esta cotización ya fue reemplazada por una revisión; revisá la revisión vigente en su lugar",
+        },
+        { status: 400 }
+      )
+    }
+
     // Items de la cotizacion origen, a copiar tal cual en la revision.
     const { data: sourceItems, error: itemsFetchError } = await supabaseAdmin
       .from("items_cotizacion")
@@ -47,11 +71,20 @@ export async function POST(
 
     if (itemsFetchError) throw itemsFetchError
 
-    // No se copian firma_aprobacion, firma_mime, fecha_aprobacion ni
-    // public_token: la revision esta sin firmar y consigue su propio link
-    // al enviarse (Task 5). Tampoco fecha_vencimiento: es una oferta nueva,
-    // heredar el vencimiento de la original podria crearla ya vencida; la
-    // consigue al enviarse, igual que cualquier cotizacion.
+    // El link publico por el que el cliente firma. Se genera aca, igual que en
+    // POST /api/cotizaciones y en duplicar/: la columna no tiene DEFAULT ni
+    // trigger, y `enviar` no la escribe. Sin token, la revision no se puede
+    // compartir (los botones Compartir/WhatsApp cortan mudos si publicToken es
+    // null) y las paginas publicas de firma y rechazo son inalcanzables — o
+    // sea, la revision no se puede firmar nunca, que es todo el punto.
+    // 16 bytes -> 32 caracteres hex, el largo exacto que validan las rutas
+    // publicas (`token.length !== 32`).
+    const publicToken = randomBytes(16).toString("hex")
+
+    // No se copian firma_aprobacion, firma_mime ni fecha_aprobacion: la
+    // revision esta sin firmar y se firma de nuevo. Tampoco fecha_vencimiento:
+    // es una oferta nueva, heredar el vencimiento de la original podria crearla
+    // ya vencida; la consigue al enviarse, igual que cualquier cotizacion.
     //
     // Si copia tipo, notas, sector_id, equipo_snapshot, checklist_snapshot y
     // tipo_cambio: una revision es el mismo trabajo re-cotizado, asi que todo
@@ -66,6 +99,7 @@ export async function POST(
         cliente_id: source.cliente_id,
         sector_id: source.sector_id,
         numero_cotizacion: source.numero_cotizacion,
+        public_token: publicToken,
         estado: "BORRADOR",
         tipo: source.tipo,
         notas: source.notas,

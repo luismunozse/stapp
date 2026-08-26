@@ -96,6 +96,92 @@ describe("POST /api/cotizaciones/[id]/revisar", () => {
     expect(insertado.firma_aprobacion ?? null).toBeNull()
   })
 
+  it("la revision nace con su propio link publico para que el cliente pueda firmarla", async () => {
+    // Sin `public_token` la revision no se puede compartir (los botones
+    // Compartir/WhatsApp cortan mudos) y las paginas publicas de firma y
+    // rechazo son inalcanzables: la revision no se firmaria nunca, que es
+    // justamente lo que la revision existe para permitir. La columna no tiene
+    // DEFAULT ni trigger (migracion 029) y `enviar` no la escribe, asi que si
+    // no sale de aca no sale de ningun lado.
+    const cotChain = createChainMock({
+      id: "cot-1",
+      estado: "ACEPTADA",
+      organization_id: "org-1",
+      orden_id: "orden-1",
+      numero_cotizacion: "COT-0001",
+      public_token: "a".repeat(32),
+      total: 100,
+    })
+    mockSupabaseFrom({
+      cotizaciones: cotChain,
+      items_cotizacion: createChainMock([{ descripcion: "X", cantidad: 1, precio_unitario: 100 }]),
+    })
+
+    await call()
+
+    const insertado = cotChain.insert.mock.calls[0][0]
+    // 32 hex: el largo exacto que validan las rutas publicas (`token.length !== 32`).
+    expect(insertado.public_token).toMatch(/^[0-9a-f]{32}$/)
+    // Y es propio: heredar el de la original haria que el link viejo del
+    // cliente mostrara la version nueva sin avisar.
+    expect(insertado.public_token).not.toBe("a".repeat(32))
+  })
+
+  it("no revisa una cotizacion que ya fue reemplazada por otra revision", async () => {
+    // Una reemplazada sigue en ACEPTADA a proposito, asi que el guard de estado
+    // no la frena. Revisarla otra vez crea una segunda revision sobre la misma
+    // original: al aprobarla, la migracion 312 libera las reservas de la
+    // original por segunda vez y le come la reserva a otras cotizaciones.
+    mockSupabaseFrom({
+      cotizaciones: createChainMock({
+        id: "cot-1",
+        estado: "ACEPTADA",
+        organization_id: "org-1",
+        reemplazada_por: "rev-1",
+        total: 100,
+      }),
+    })
+
+    const { status, body } = await parseResponse(await call())
+
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/reemplazada/i)
+  })
+
+  it("excluye de la busqueda las cotizaciones borradas", async () => {
+    const cotChain = createChainMock({
+      id: "cot-1",
+      estado: "ACEPTADA",
+      organization_id: "org-1",
+      total: 100,
+    })
+    mockSupabaseFrom({
+      cotizaciones: cotChain,
+      items_cotizacion: createChainMock([]),
+    })
+
+    await call()
+
+    expect(cotChain.is).toHaveBeenCalledWith("deleted_at", null)
+  })
+
+  it("una cotizacion de otra organizacion no se puede revisar", async () => {
+    mockAuthSuccess({ organizationId: "org-1" })
+    // La fila existe, pero es de org-2: el filtro por organizacion la deja
+    // fuera y .single() no devuelve nada.
+    const cotChain = createChainMock(null, { code: "PGRST116", message: "no rows returned" })
+    mockSupabaseFrom({ cotizaciones: cotChain })
+
+    const { status, body } = await parseResponse(await call("cot-de-org-2"))
+
+    expect(status).toBe(404)
+    expect(body.error).toBe("Cotización no encontrada")
+    // El 404 tiene que venir del scope, no de que la fila no exista: sin este
+    // filtro, cualquier taller podria revisar la cotizacion de otro.
+    expect(cotChain.eq.mock.calls).toContainEqual(["organization_id", "org-1"])
+    expect(cotChain.insert).not.toHaveBeenCalled()
+  })
+
   it("la revision de un presupuesto sigue siendo un presupuesto", async () => {
     const cotChain = createChainMock({
       id: "cot-1",
@@ -196,6 +282,80 @@ describe("POST /api/cotizaciones/[id]/enviar — revision reemplaza a la origina
     const ordenMarca = cotizacionesChain.update.mock.invocationCallOrder[marcaIdx]
     const ordenRecalculo = ordenesChain.update.mock.invocationCallOrder[recalculoIdx]
     expect(ordenMarca).toBeLessThan(ordenRecalculo)
+  })
+
+  it("al enviarla le asigna una validez, para que el PDF no salga con la fecha en blanco", async () => {
+    // La revision nace sin fecha_vencimiento a proposito (heredar la de la
+    // original podria crearla ya vencida), pero el cliente recibe el PDF y la
+    // pantalla de seguimiento: sin vencimiento le llega un "válida hasta" vacio.
+    const cotizacionRow = {
+      id: "rev-1",
+      estado: "BORRADOR",
+      organization_id: "org-1",
+      orden_id: null,
+      revision_de: "cot-1",
+      fecha_vencimiento: null,
+      total: 120,
+      numero_cotizacion: "COT-0001",
+      ordenes_servicio: null,
+      clientes: { email: "cliente@test.com", nombre: "Cliente Test", telefono: null, direccion: null },
+      sectores_cliente: null,
+      items_cotizacion: [],
+    }
+    const cotChain = createChainMock(cotizacionRow)
+    // La validez configurada por la organizacion: 15 dias, no el default de 30,
+    // para que el assert distinga "leyo la config" de "puso cualquier cosa".
+    const orgChain = createChainMock({ cotizacion_validez_dias: 15 })
+
+    mockSupabaseFrom({ cotizaciones: cotChain, organizations: orgChain })
+
+    const { POST } = await import("@/app/api/cotizaciones/[id]/enviar/route")
+    const response = await POST(
+      new Request("http://localhost:3000/api/cotizaciones/rev-1/enviar", { method: "POST" }) as any,
+      { params: Promise.resolve({ id: "rev-1" }) } as any
+    )
+
+    expect(response.status).toBe(200)
+
+    const conVencimiento = cotChain.update.mock.calls
+      .map((c: any[]) => c[0])
+      .find((u: any) => u && "fecha_vencimiento" in u)
+    expect(conVencimiento).toBeDefined()
+
+    const dias = Math.round(
+      (new Date(conVencimiento.fecha_vencimiento).getTime() - Date.now()) / 86_400_000
+    )
+    expect(dias).toBe(15)
+  })
+
+  it("no le pisa el vencimiento a una revision que ya tiene uno puesto a mano", async () => {
+    const vencimientoElegido = new Date("2030-01-01T12:00:00.000Z").toISOString()
+    const cotizacionRow = {
+      id: "rev-2",
+      estado: "BORRADOR",
+      organization_id: "org-1",
+      orden_id: null,
+      revision_de: "cot-1",
+      fecha_vencimiento: vencimientoElegido,
+      total: 120,
+      numero_cotizacion: "COT-0001",
+      ordenes_servicio: null,
+      clientes: { email: "cliente@test.com", nombre: "Cliente Test", telefono: null, direccion: null },
+      sectores_cliente: null,
+      items_cotizacion: [],
+    }
+    const cotChain = createChainMock(cotizacionRow)
+    mockSupabaseFrom({ cotizaciones: cotChain, organizations: createChainMock({ cotizacion_validez_dias: 15 }) })
+
+    const { POST } = await import("@/app/api/cotizaciones/[id]/enviar/route")
+    const response = await POST(
+      new Request("http://localhost:3000/api/cotizaciones/rev-2/enviar", { method: "POST" }) as any,
+      { params: Promise.resolve({ id: "rev-2" }) } as any
+    )
+
+    expect(response.status).toBe(200)
+    const updates = cotChain.update.mock.calls.map((c: any[]) => c[0])
+    expect(updates.some((u: any) => u && "fecha_vencimiento" in u)).toBe(false)
   })
 
   it("una cotizacion normal (sin revision_de) no toca reemplazada_por de nadie", async () => {
