@@ -113,6 +113,101 @@ EXCEPTION WHEN OTHERS THEN
   INSERT INTO _r VALUES (6, 'valida contra stock - reservado', 'error P0003', 'OK: ' || SQLSTATE || ' ' || SQLERRM);
 END $$;
 
+-- ── Liberar: la reserva vuelve entera ──
+-- Se crea una cotizacion del catalogo de verdad para poder referenciar los
+-- movimientos: liberar_reserva_catalogo trabaja sobre el libro mayor.
+DO $$
+DECLARE
+  v_org TEXT := current_setting('probe314.org', TRUE);
+  v_inv TEXT := current_setting('probe314.inv', TRUE);
+  v_cot TEXT;
+  v_cli TEXT;
+BEGIN
+  IF v_org IS NULL OR v_org = '' THEN RETURN; END IF;
+
+  SELECT id INTO v_cli FROM clientes WHERE organization_id = v_org LIMIT 1;
+
+  INSERT INTO cotizaciones (organization_id, cliente_id, numero_cotizacion,
+                            tipo, estado, origen, subtotal, iva, total)
+  VALUES (v_org, v_cli, 'PROBE-314', 'PRESUPUESTO', 'ENVIADA',
+          'CATALOGO_PUBLICO', 100, 0, 100)
+  RETURNING id INTO v_cot;
+
+  -- Movimiento de reserva referenciado a esa cotizacion (lo que hace la parte 1).
+  INSERT INTO movimientos_inventario (
+    inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
+    referencia_id, referencia_tipo, usuario_id, organization_id
+  ) VALUES (v_inv, 'RESERVA', 3, 10, 10, v_cot, 'COTIZACION', NULL, v_org);
+
+  PERFORM set_config('probe314.cot', v_cot, TRUE);
+END $$;
+
+INSERT INTO _r
+SELECT 7, 'reserva_cotizacion_pendiente ve la reserva', '3',
+       (SELECT cantidad::TEXT FROM reserva_cotizacion_pendiente(current_setting('probe314.cot', TRUE)))
+WHERE COALESCE(current_setting('probe314.cot', TRUE), '') <> '';
+
+DO $$
+DECLARE v_cot TEXT := current_setting('probe314.cot', TRUE);
+BEGIN
+  IF v_cot IS NULL OR v_cot = '' THEN RETURN; END IF;
+  PERFORM liberar_reserva_catalogo(v_cot, 'probe');
+END $$;
+
+INSERT INTO _r
+SELECT 8, 'liberar devuelve stock_reservado a 0', '0',
+       (SELECT stock_reservado::TEXT FROM inventario WHERE id = current_setting('probe314.inv', TRUE))
+WHERE COALESCE(current_setting('probe314.cot', TRUE), '') <> '';
+
+INSERT INTO _r
+SELECT 9, 'el libro mayor queda saldado', 'sin reserva viva',
+       (SELECT CASE WHEN COUNT(*) = 0 THEN 'sin reserva viva'
+                    ELSE 'FALLO: quedan ' || COUNT(*)::TEXT END
+        FROM reserva_cotizacion_pendiente(current_setting('probe314.cot', TRUE)))
+WHERE COALESCE(current_setting('probe314.cot', TRUE), '') <> '';
+
+-- Idempotencia: liberar dos veces no puede devolver de mas.
+DO $$
+DECLARE v_cot TEXT := current_setting('probe314.cot', TRUE);
+BEGIN
+  IF v_cot IS NULL OR v_cot = '' THEN RETURN; END IF;
+  PERFORM liberar_reserva_catalogo(v_cot, 'probe repetido');
+END $$;
+
+INSERT INTO _r
+SELECT 10, 'liberar dos veces no devuelve de mas', '0',
+       (SELECT stock_reservado::TEXT FROM inventario WHERE id = current_setting('probe314.inv', TRUE))
+WHERE COALESCE(current_setting('probe314.cot', TRUE), '') <> '';
+
+-- Aislamiento: una cotizacion que NUNCA reservo no puede comerse reserva ajena.
+DO $$
+DECLARE
+  v_org TEXT := current_setting('probe314.org', TRUE);
+  v_inv TEXT := current_setting('probe314.inv', TRUE);
+  v_otra TEXT;
+  v_cli TEXT;
+BEGIN
+  IF v_org IS NULL OR v_org = '' THEN RETURN; END IF;
+
+  -- Reserva viva de OTRO (simula una cotizacion interna aprobada).
+  UPDATE inventario SET stock_reservado = 4 WHERE id = v_inv;
+
+  SELECT id INTO v_cli FROM clientes WHERE organization_id = v_org LIMIT 1;
+  INSERT INTO cotizaciones (organization_id, cliente_id, numero_cotizacion,
+                            tipo, estado, origen, subtotal, iva, total)
+  VALUES (v_org, v_cli, 'PROBE-314-B', 'PRESUPUESTO', 'ENVIADA',
+          'CATALOGO_PUBLICO', 100, 0, 100)
+  RETURNING id INTO v_otra;
+
+  PERFORM liberar_reserva_catalogo(v_otra, 'probe sin reserva propia');
+  PERFORM set_config('probe314.otra', v_otra, TRUE);
+END $$;
+
+INSERT INTO _r
+SELECT 11, 'no toca la reserva de otra cotizacion', '4',
+       (SELECT stock_reservado::TEXT FROM inventario WHERE id = current_setting('probe314.inv', TRUE))
+WHERE COALESCE(current_setting('probe314.otra', TRUE), '') <> '';
+
 SELECT orden, probe, esperado, obtenido FROM _r ORDER BY orden, probe;
 
 ROLLBACK;

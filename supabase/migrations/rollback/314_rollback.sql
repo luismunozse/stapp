@@ -1,28 +1,114 @@
 -- Rollback de la migracion 314.
 --
 -- Devuelve el catalogo publico al descuento directo de inventario.stock
--- (definiciones de las migraciones 239 y 240, tal cual estaban).
+-- (definiciones de las migraciones 239 y 240) y reservar_items_cotizacion a la
+-- version de la 206, sin el guard de idempotencia.
 --
 -- CUIDADO: no es un rollback limpio de DATOS. Las reservas que la 314 ya haya
 -- creado quedan vivas en inventario.stock_reservado y en inventario_depositos,
--- con su asiento RESERVA en movimientos_inventario, y nadie las va a liberar:
--- el codigo viejo no sabe que existen. Antes de correr esto hay que decidir
--- que hacer con ellas, listandolas asi:
+-- y despues de esto ningun camino las libera. HAY QUE LIBERARLAS ANTES.
 --
---   SELECT mi.id, mi.inventario_id, mi.cantidad, mi.referencia_id, mi.created_at
---   FROM movimientos_inventario mi
---   WHERE mi.tipo = 'RESERVA'
---     AND mi.referencia_tipo = 'COTIZACION'
---     AND mi.usuario_id IS NULL          -- marca del flujo publico anonimo
---   ORDER BY mi.created_at DESC;
+-- 1. Listar las cotizaciones del catalogo con reserva viva:
 --
--- Para cada cotizacion todavia abierta, liberar_items_cotizacion(id, <user>,
--- 'Rollback 314') devuelve la reserva. Recien despues correr lo de abajo.
+--      SELECT c.id, c.numero_cotizacion, c.estado, c.created_at
+--      FROM cotizaciones c
+--      WHERE c.origen = 'CATALOGO_PUBLICO'
+--        AND EXISTS (SELECT 1 FROM reserva_cotizacion_pendiente(c.id))
+--      ORDER BY c.created_at;
 --
--- Tambien hay que revertir el codigo de la app: el storefront calcula
--- disponibilidad como stock - stock_reservado (lib/catalogo/stock-disponible.ts).
--- Con el descuento directo de vuelta, esa resta descuenta dos veces lo que ya
--- salio del stock.
+-- 2. Liberarlas TODAS mientras las funciones de la 314 siguen vivas:
+--
+--      SELECT liberar_reserva_catalogo(c.id, 'Rollback 314')
+--      FROM cotizaciones c
+--      WHERE c.origen = 'CATALOGO_PUBLICO'
+--        AND EXISTS (SELECT 1 FROM reserva_cotizacion_pendiente(c.id));
+--
+-- 3. Recien ahi correr el resto de este archivo.
+--
+-- Del lado de la app hay que revertir tambien:
+--   * lib/catalogo/stock-disponible.ts y sus consumidores: el storefront
+--     calcula stock - stock_reservado. Con el descuento directo de vuelta, esa
+--     resta descuenta dos veces lo que ya salio del stock.
+--   * El cron /api/cron/catalogo-reservas-vencidas y su entrada en vercel.json:
+--     sin expirar_reservas_catalogo, cada corrida devuelve 500.
+--   * Las llamadas a liberar_reserva_catalogo en app/api/cotizaciones/[id]/route.ts
+--     (PUT y DELETE) y en app/api/public/cotizaciones/[token]/rechazar/route.ts.
+
+DROP FUNCTION IF EXISTS expirar_reservas_catalogo(INTEGER);
+DROP FUNCTION IF EXISTS liberar_reserva_catalogo(TEXT, TEXT);
+DROP FUNCTION IF EXISTS reserva_cotizacion_pendiente(TEXT);
+
+-- reservar_items_cotizacion vuelve a la definicion de la 206 (sin el guard de
+-- idempotencia). Ojo: con esto vuelve el doble-reserva del camino
+-- catalogo -> convertir-orden -> aprobar.
+CREATE OR REPLACE FUNCTION reservar_items_cotizacion(
+  p_cotizacion_id TEXT,
+  p_user_id       TEXT,
+  p_deposito_id   TEXT DEFAULT NULL
+) RETURNS JSONB AS $$
+DECLARE
+  v_item              RECORD;
+  v_stock             INTEGER;
+  v_stock_reservado   INTEGER;
+  v_org_id            TEXT;
+  v_disponible        INTEGER;
+  v_count             INTEGER := 0;
+  v_deposito_efectivo TEXT;
+BEGIN
+  SELECT organization_id INTO v_org_id
+  FROM cotizaciones WHERE id = p_cotizacion_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Cotización no encontrada';
+  END IF;
+
+  FOR v_item IN
+    SELECT ic.id, ic.inventario_id, ic.cantidad, ic.descripcion
+    FROM items_cotizacion ic
+    WHERE ic.cotizacion_id = p_cotizacion_id
+      AND ic.inventario_id IS NOT NULL
+  LOOP
+    SELECT stock, stock_reservado INTO v_stock, v_stock_reservado
+    FROM inventario
+    WHERE id = v_item.inventario_id AND deleted_at IS NULL
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Producto no encontrado para item "%"', v_item.descripcion;
+    END IF;
+
+    v_disponible := v_stock - v_stock_reservado;
+
+    IF v_disponible < v_item.cantidad THEN
+      RAISE EXCEPTION 'Stock insuficiente para "%". Disponible: %, Solicitado: %',
+        v_item.descripcion, v_disponible, v_item.cantidad;
+    END IF;
+
+    UPDATE inventario
+    SET stock_reservado = stock_reservado + v_item.cantidad
+    WHERE id = v_item.inventario_id;
+
+    v_deposito_efectivo := reservar_stock_deposito(
+      v_item.inventario_id, v_org_id, p_deposito_id, v_item.cantidad, false);
+
+    INSERT INTO movimientos_inventario (
+      inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
+      referencia_id, referencia_tipo, usuario_id, organization_id,
+      observaciones, deposito_id
+    ) VALUES (
+      v_item.inventario_id, 'RESERVA', v_item.cantidad,
+      v_stock, v_stock,
+      p_cotizacion_id, 'COTIZACION', p_user_id, v_org_id,
+      'Reserva por aprobación de cotización',
+      v_deposito_efectivo
+    );
+
+    v_count := v_count + 1;
+  END LOOP;
+
+  RETURN jsonb_build_object('success', true, 'itemsReservados', v_count);
+END;
+$$ LANGUAGE plpgsql;
 
 DROP FUNCTION IF EXISTS reservar_stock_catalogo(TEXT, JSONB, TEXT);
 

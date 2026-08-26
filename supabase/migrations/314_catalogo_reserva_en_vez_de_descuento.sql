@@ -25,10 +25,25 @@
 --      internet podía vaciar el stock declarado de un local sin comprar nada,
 --      de forma irreversible.
 --
--- Arreglo: el catálogo RESERVA en vez de descontar, igual que el flujo interno
--- (reservar_items_cotizacion, migración 206). La conversión a venta libera la
--- reserva (liberar_items_cotizacion) y descuenta UNA sola vez por el camino de
--- siempre, heredando el descuento por depósito y el asiento contable.
+-- Arreglo, en cuatro partes — cambiar descuento por reserva SIN camino de
+-- liberación sería puramente cosmético: el stock quedaría igual de
+-- inmovilizado, sólo que en otra columna.
+--
+--   1. El catálogo RESERVA en vez de descontar (parte 1), igual que el flujo
+--      interno (reservar_items_cotizacion, migración 206), con réplica por
+--      depósito y asiento contable.
+--   2. Toda reserva del catálogo se puede DEVOLVER: liberar_reserva_catalogo
+--      (partes 3 y 4) calcula lo que esa cotización tomó desde el libro mayor
+--      de movimientos, así que es idempotente y nunca se come la reserva de
+--      otra cotización. Las rutas la llaman al rechazar (desde CUALQUIER
+--      estado, no sólo ACEPTADA) y al borrar en soft.
+--   3. El abandono deja de ser permanente: expirar_reservas_catalogo (parte 6)
+--      corre por cron y libera lo que quedó ENVIADA pasado el vencimiento.
+--   4. El camino catálogo → orden → venta ya no reserva dos veces:
+--      reservar_items_cotizacion (parte 5) es idempotente por cotización.
+--
+-- La conversión a venta libera la reserva (liberar_items_cotizacion) y
+-- descuenta UNA sola vez por el camino de siempre.
 --
 -- Qué cambia para el usuario:
 --   * inventario.stock deja de bajar cuando entra una solicitud del catálogo.
@@ -36,7 +51,16 @@
 --     internas y liberable a mano. El stock "disponible" que ve el comprador NO
 --     cambia: el storefront ya pasó a calcular stock - stock_reservado.
 --   * Las reservas del catálogo aparecen en el historial del producto como
---     movimiento RESERVA con referencia_tipo COTIZACION.
+--     movimiento RESERVA con referencia_tipo COTIZACION, y su devolución como
+--     LIBERACION_RESERVA.
+--   * Una solicitud sin responder deja de retener stock a los 7 días (default
+--     de expirar_reservas_catalogo; ver la nota de decisión de producto en la
+--     parte 6).
+--
+-- REQUIERE además, del lado de la app: el cron
+-- /api/cron/catalogo-reservas-vencidas dado de alta en vercel.json. Sin el
+-- cron, las partes 1 a 5 siguen siendo correctas pero el abandono vuelve a
+-- retener stock indefinidamente.
 --
 -- NO se hace backfill del stock que las solicitudes viejas ya se comieron:
 -- no hay forma de distinguir las que terminaron en venta (descuento correcto)
@@ -129,13 +153,18 @@ BEGIN
     -- Fuente de verdad única (239): inventario si está linkeado, si no
     -- catalogo_items.stock.
     IF v_inv_id IS NOT NULL THEN
+      -- `deleted_at IS NULL` es obligatorio: liberar_items_cotizacion filtra
+      -- igual y hace CONTINUE si no encuentra (206:1450). Si la reserva
+      -- aceptara filas muertas, crearia una reserva que ningun camino puede
+      -- liberar jamas.
       SELECT stock, stock_reservado INTO v_inv_stock, v_inv_reserv
         FROM inventario
         WHERE id = v_inv_id
+          AND deleted_at IS NULL
         FOR UPDATE;
 
       IF NOT FOUND THEN
-        RAISE EXCEPTION 'Producto no encontrado para "%"', v_nombre
+        RAISE EXCEPTION 'El producto vinculado a "%" ya no existe', v_nombre
           USING ERRCODE = 'P0002';
       END IF;
 
@@ -338,3 +367,275 @@ $$;
 REVOKE EXECUTE ON FUNCTION crear_cotizacion_publica_atomica(JSONB, JSONB, JSONB, TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION crear_cotizacion_publica_atomica(JSONB, JSONB, JSONB, TEXT) FROM anon;
 GRANT EXECUTE ON FUNCTION crear_cotizacion_publica_atomica(JSONB, JSONB, JSONB, TEXT) TO service_role;
+
+-- ============================================================
+-- Parte 3: reserva_cotizacion_pendiente
+-- ============================================================
+-- Cuánto tiene reservado HOY una cotización, según el libro mayor de
+-- movimientos referenciados a ella.
+--
+-- Hace falta porque liberar_items_cotizacion libera
+-- LEAST(item.cantidad, inventario.stock_reservado) mirando la fila de
+-- inventario: sobre una cotización que nunca reservó, se comería la reserva de
+-- OTRA cotización. Los movimientos referenciados son lo único que dice cuánto
+-- tomó ESTA cotización, y hacen la liberación idempotente: después de liberar,
+-- el asiento LIBERACION_RESERVA baja el neto a 0 y una segunda llamada no
+-- devuelve nada.
+
+CREATE OR REPLACE FUNCTION reserva_cotizacion_pendiente(p_cotizacion_id TEXT)
+RETURNS TABLE (inventario_id TEXT, cantidad INTEGER) AS $$
+  SELECT
+    mi.inventario_id,
+    SUM(CASE WHEN mi.tipo = 'RESERVA' THEN mi.cantidad ELSE -mi.cantidad END)::INTEGER
+  FROM movimientos_inventario mi
+  WHERE mi.referencia_id   = p_cotizacion_id
+    AND mi.referencia_tipo = 'COTIZACION'
+    AND mi.tipo IN ('RESERVA', 'LIBERACION_RESERVA')
+  GROUP BY mi.inventario_id
+  HAVING SUM(CASE WHEN mi.tipo = 'RESERVA' THEN mi.cantidad ELSE -mi.cantidad END) > 0;
+$$ LANGUAGE sql STABLE;
+
+COMMENT ON FUNCTION reserva_cotizacion_pendiente(TEXT) IS
+  'Reserva viva de una cotización por item, neteando RESERVA contra LIBERACION_RESERVA en movimientos_inventario. v314.';
+
+-- ============================================================
+-- Parte 4: liberar_reserva_catalogo
+-- ============================================================
+-- Devuelve la reserva que tomó una solicitud del catálogo. Se llama al
+-- rechazar (desde CUALQUIER estado), al borrar en soft y al vencer.
+--
+-- No filtra `deleted_at` sobre inventario a propósito: si el producto se
+-- borró en soft después de la reserva, esa reserva igual tiene que volver.
+
+CREATE OR REPLACE FUNCTION liberar_reserva_catalogo(
+  p_cotizacion_id TEXT,
+  p_motivo        TEXT DEFAULT 'Reserva del catálogo liberada'
+) RETURNS JSONB AS $$
+DECLARE
+  v_org_id   TEXT;
+  v_origen   TEXT;
+  v_row      RECORD;
+  v_stock    INTEGER;
+  v_deposito TEXT;
+  v_count    INTEGER := 0;
+BEGIN
+  SELECT organization_id, origen INTO v_org_id, v_origen
+    FROM cotizaciones
+    WHERE id = p_cotizacion_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', true, 'itemsLiberados', 0);
+  END IF;
+
+  -- Sólo cotizaciones nacidas del catálogo. Las internas ya tienen su propio
+  -- ciclo de reserva/liberación y no hay que tocarlo.
+  IF v_origen IS DISTINCT FROM 'CATALOGO_PUBLICO' THEN
+    RETURN jsonb_build_object('ok', true, 'itemsLiberados', 0);
+  END IF;
+
+  FOR v_row IN SELECT * FROM reserva_cotizacion_pendiente(p_cotizacion_id)
+  LOOP
+    SELECT stock INTO v_stock
+      FROM inventario
+      WHERE id = v_row.inventario_id
+      FOR UPDATE;
+
+    IF NOT FOUND THEN
+      CONTINUE;
+    END IF;
+
+    UPDATE inventario
+      SET stock_reservado = GREATEST(0, stock_reservado - v_row.cantidad)
+      WHERE id = v_row.inventario_id;
+
+    v_deposito := liberar_reserva_deposito(
+      v_row.inventario_id, v_org_id, NULL, v_row.cantidad);
+
+    INSERT INTO movimientos_inventario (
+      inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
+      referencia_id, referencia_tipo, usuario_id, organization_id,
+      observaciones, deposito_id
+    ) VALUES (
+      v_row.inventario_id, 'LIBERACION_RESERVA', v_row.cantidad,
+      v_stock, v_stock,
+      p_cotizacion_id, 'COTIZACION', NULL, v_org_id,
+      p_motivo, v_deposito
+    );
+
+    v_count := v_count + 1;
+  END LOOP;
+
+  RETURN jsonb_build_object('ok', true, 'itemsLiberados', v_count);
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION liberar_reserva_catalogo(TEXT, TEXT) IS
+  'Devuelve la reserva viva de una cotización del catálogo público. Idempotente (se apoya en reserva_cotizacion_pendiente). No-op sobre cotizaciones de otro origen. v314.';
+
+REVOKE EXECUTE ON FUNCTION liberar_reserva_catalogo(TEXT, TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION liberar_reserva_catalogo(TEXT, TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION liberar_reserva_catalogo(TEXT, TEXT) TO service_role;
+
+-- ============================================================
+-- Parte 5: reservar_items_cotizacion idempotente por cotización
+-- ============================================================
+-- Cierra el doble-reserva del camino catálogo → venta:
+--   catálogo reserva 1x  →  convertir-orden pone tipo='ORDEN' (deja ENVIADA)
+--   →  aprobar reserva OTRA VEZ, porque aprobar_cotizacion_atomica reserva
+--      siempre que tipo <> 'PRESUPUESTO'  →  2x reservado
+--   →  la venta descuenta 1x y libera 1x  →  queda 1x reservado PARA SIEMPRE.
+--
+-- Se elige saltear la reserva de aprobación (en vez de liberar la del catálogo
+-- en convertir-orden) para que la unidad quede retenida de punta a punta: la
+-- otra opción abre una ventana entre convertir-orden y aprobar donde otro
+-- comprador puede llevarse el stock y la aprobación falla.
+--
+-- El guard es por (cotización, item) contra el libro mayor y no por
+-- `origen = 'CATALOGO_PUBLICO'`: así protege también al fallback JS de la ruta
+-- de aprobar y a la aprobación desde el portal público, sin cambiar en nada el
+-- comportamiento de una cotización que todavía no reservó (libro vacío).
+--
+-- Copia de la definición de la migración 206 + el guard.
+
+CREATE OR REPLACE FUNCTION reservar_items_cotizacion(
+  p_cotizacion_id TEXT,
+  p_user_id       TEXT,
+  p_deposito_id   TEXT DEFAULT NULL
+) RETURNS JSONB AS $$
+DECLARE
+  v_item              RECORD;
+  v_stock             INTEGER;
+  v_stock_reservado   INTEGER;
+  v_org_id            TEXT;
+  v_disponible        INTEGER;
+  v_count             INTEGER := 0;
+  v_deposito_efectivo TEXT;
+  v_ya_reservado      INTEGER;
+BEGIN
+  SELECT organization_id INTO v_org_id
+  FROM cotizaciones WHERE id = p_cotizacion_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Cotización no encontrada';
+  END IF;
+
+  FOR v_item IN
+    SELECT ic.id, ic.inventario_id, ic.cantidad, ic.descripcion
+    FROM items_cotizacion ic
+    WHERE ic.cotizacion_id = p_cotizacion_id
+      AND ic.inventario_id IS NOT NULL
+  LOOP
+    -- Guard de idempotencia: si esta cotización ya tiene reserva viva sobre
+    -- este item, no se reserva de nuevo.
+    SELECT cantidad INTO v_ya_reservado
+      FROM reserva_cotizacion_pendiente(p_cotizacion_id)
+      WHERE inventario_id = v_item.inventario_id;
+
+    IF COALESCE(v_ya_reservado, 0) >= v_item.cantidad THEN
+      CONTINUE;
+    END IF;
+
+    SELECT stock, stock_reservado INTO v_stock, v_stock_reservado
+    FROM inventario
+    WHERE id = v_item.inventario_id AND deleted_at IS NULL
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Producto no encontrado para item "%"', v_item.descripcion;
+    END IF;
+
+    v_disponible := v_stock - v_stock_reservado;
+
+    IF v_disponible < v_item.cantidad THEN
+      RAISE EXCEPTION 'Stock insuficiente para "%". Disponible: %, Solicitado: %',
+        v_item.descripcion, v_disponible, v_item.cantidad;
+    END IF;
+
+    UPDATE inventario
+    SET stock_reservado = stock_reservado + v_item.cantidad
+    WHERE id = v_item.inventario_id;
+
+    v_deposito_efectivo := reservar_stock_deposito(
+      v_item.inventario_id, v_org_id, p_deposito_id, v_item.cantidad, false);
+
+    INSERT INTO movimientos_inventario (
+      inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
+      referencia_id, referencia_tipo, usuario_id, organization_id,
+      observaciones, deposito_id
+    ) VALUES (
+      v_item.inventario_id, 'RESERVA', v_item.cantidad,
+      v_stock, v_stock,
+      p_cotizacion_id, 'COTIZACION', p_user_id, v_org_id,
+      'Reserva por aprobación de cotización',
+      v_deposito_efectivo
+    );
+
+    v_count := v_count + 1;
+  END LOOP;
+
+  RETURN jsonb_build_object('success', true, 'itemsReservados', v_count);
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION reservar_items_cotizacion(TEXT, TEXT, TEXT) IS
+  'Reserva stock de los items de una cotización. Idempotente por (cotización, item) contra movimientos_inventario: no re-reserva lo que esa cotización ya tiene tomado. v314.';
+
+-- ============================================================
+-- Parte 6: expirar_reservas_catalogo
+-- ============================================================
+-- El abandono es el caso más común: el visitante pide, nadie contesta, la
+-- cotización se queda ENVIADA para siempre y la reserva con ella. Sin esto, un
+-- anónimo puede dejar el catálogo entero en "Agotado" sin comprar nada.
+--
+-- Se resuelve con cron (el repo ya tiene infraestructura: vercel.json crons +
+-- lib/cron-auth, e incluso un cron de catálogo, catalogo-pii-purge) en vez de
+-- liberación perezosa al leer, porque la lectura del catálogo es SSR cacheada
+-- con unstable_cache: colgar escrituras de ahí las haría correr de forma
+-- impredecible, o no correr en absoluto mientras el cache esté caliente.
+--
+-- p_dias: ventana de retención cuando la cotización no tiene fecha_vencimiento
+-- (las del catálogo no la traen). Default 7 días.
+-- DECISIÓN DE PRODUCTO PENDIENTE: 7 es un default razonable para e-commerce,
+-- no un número validado con el negocio. Si tiene que ser configurable por org,
+-- va como columna en catalogo_config.
+
+CREATE OR REPLACE FUNCTION expirar_reservas_catalogo(p_dias INTEGER DEFAULT 7)
+RETURNS JSONB AS $$
+DECLARE
+  v_cot          RECORD;
+  v_cotizaciones INTEGER := 0;
+  v_items        INTEGER := 0;
+  v_res          JSONB;
+BEGIN
+  FOR v_cot IN
+    SELECT c.id
+    FROM cotizaciones c
+    WHERE c.origen = 'CATALOGO_PUBLICO'
+      AND c.estado = 'ENVIADA'
+      AND c.deleted_at IS NULL
+      AND COALESCE(c.fecha_vencimiento, c.created_at + (p_dias || ' days')::INTERVAL) < NOW()
+      AND EXISTS (SELECT 1 FROM reserva_cotizacion_pendiente(c.id))
+  LOOP
+    v_res := liberar_reserva_catalogo(
+      v_cot.id, 'Reserva vencida: solicitud del catálogo sin respuesta');
+
+    v_cotizaciones := v_cotizaciones + 1;
+    v_items        := v_items + COALESCE((v_res->>'itemsLiberados')::INTEGER, 0);
+  END LOOP;
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'cotizaciones', v_cotizaciones,
+    'items', v_items,
+    'dias', p_dias,
+    'ran_at', NOW()
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION expirar_reservas_catalogo(INTEGER) IS
+  'Libera las reservas de solicitudes del catálogo que quedaron ENVIADA más allá de su vencimiento. Deja el estado intacto: la cotización se puede aprobar después y ahí vuelve a reservar. v314.';
+
+REVOKE EXECUTE ON FUNCTION expirar_reservas_catalogo(INTEGER) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION expirar_reservas_catalogo(INTEGER) FROM anon;
+GRANT EXECUTE ON FUNCTION expirar_reservas_catalogo(INTEGER) TO service_role;

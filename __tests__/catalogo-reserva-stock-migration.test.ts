@@ -83,6 +83,75 @@ describe("reservar_stock_catalogo — reserva, no descuenta", () => {
   })
 })
 
+describe("reservar_stock_catalogo — no crea reservas imposibles de liberar", () => {
+  const { cuerpo } = ultimaDefinicion("reservar_stock_catalogo")
+
+  it("skips soft-deleted inventory rows", () => {
+    // La liberación filtra `deleted_at IS NULL` y hace CONTINUE si no encuentra
+    // (206:1450). Si la reserva no filtra igual, una fila muerta se puede
+    // reservar y despues NINGUN camino la libera.
+    const lecturaInventario = cuerpo.match(/FROM\s+inventario[\s\S]{0,120}?FOR UPDATE/i)
+    expect(lecturaInventario).not.toBeNull()
+    expect(lecturaInventario![0]).toMatch(/deleted_at\s+IS\s+NULL/i)
+  })
+})
+
+describe("liberar_reserva_catalogo — devuelve lo que el catálogo tomó", () => {
+  const { cuerpo } = ultimaDefinicion("liberar_reserva_catalogo")
+
+  it("computes what to release from the movement ledger, not from the item rows", () => {
+    // liberar_items_cotizacion libera LEAST(cantidad, stock_reservado) mirando
+    // la fila de inventario, asi que sobre una cotizacion que nunca reservo se
+    // comeria la reserva de OTRA. El libro mayor de movimientos referenciados a
+    // esta cotizacion es lo unico que dice cuanto tomo esta cotizacion.
+    expect(cuerpo).toMatch(/reserva_cotizacion_pendiente|movimientos_inventario/i)
+  })
+
+  it("writes the LIBERACION_RESERVA counter-entry so it is idempotent", () => {
+    // Sin el asiento inverso, el neto del libro no baja y una segunda llamada
+    // volveria a liberar.
+    expect(cuerpo).toMatch(/'LIBERACION_RESERVA'/)
+  })
+
+  it("gives the reservation back on the aggregate and on the per-deposit detail", () => {
+    expect(cuerpo).toMatch(/stock_reservado\s*-/i)
+    expect(cuerpo).toMatch(/liberar_reserva_deposito\s*\(/i)
+  })
+
+  it("is scoped to catalog-born quotes", () => {
+    expect(cuerpo).toMatch(/'CATALOGO_PUBLICO'/)
+  })
+})
+
+describe("reservar_items_cotizacion — no reserva dos veces la misma cotización", () => {
+  const { cuerpo } = ultimaDefinicion("reservar_items_cotizacion")
+
+  it("skips items this quote already holds a reservation for", () => {
+    // Camino real del doble descuento: catalogo reserva -> convertir-orden pone
+    // tipo=ORDEN -> aprobar reserva OTRA VEZ porque tipo <> 'PRESUPUESTO'.
+    // Quedaba 2x reservado y la venta solo liberaba 1x.
+    expect(cuerpo).toMatch(/reserva_cotizacion_pendiente/i)
+  })
+})
+
+describe("expirar_reservas_catalogo — el abandono deja de ser permanente", () => {
+  const { cuerpo } = ultimaDefinicion("expirar_reservas_catalogo")
+
+  it("only touches catalog quotes still sitting in ENVIADA", () => {
+    expect(cuerpo).toMatch(/'CATALOGO_PUBLICO'/)
+    expect(cuerpo).toMatch(/'ENVIADA'/)
+  })
+
+  it("honours fecha_vencimiento and falls back to a creation-age window", () => {
+    expect(cuerpo).toMatch(/fecha_vencimiento/i)
+    expect(cuerpo).toMatch(/created_at/i)
+  })
+
+  it("releases through liberar_reserva_catalogo instead of duplicating the logic", () => {
+    expect(cuerpo).toMatch(/liberar_reserva_catalogo\s*\(/i)
+  })
+})
+
 describe("crear_cotizacion_publica_atomica — la reserva queda trazable", () => {
   const { archivo, cuerpo } = ultimaDefinicion("crear_cotizacion_publica_atomica")
 

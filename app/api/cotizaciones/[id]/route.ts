@@ -5,6 +5,7 @@ import { createAuditLogger } from "@/lib/audit"
 import { transicionarOrden } from "@/lib/orden-transicion"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { dateOnlyToNoonUtcISO } from "@/lib/timezone"
+import { liberarReservaCatalogo } from "@/lib/catalogo/liberar-reserva"
 import { z } from "zod"
 
 const itemSchema = z.object({
@@ -615,6 +616,15 @@ export async function PUT(
       }
     }
 
+    // Las cotizaciones del catálogo público nacen ENVIADA con la reserva ya
+    // tomada, así que el release de arriba (sólo ACEPTADA → RECHAZADA) nunca
+    // las alcanzaba: rechazarlas dejaba el stock retenido para siempre.
+    // liberar_reserva_catalogo es idempotente y no-op sobre cotizaciones de
+    // otro origen, así que es seguro llamarla en todo rechazo.
+    if (data.estado === "RECHAZADA") {
+      await liberarReservaCatalogo(id, "Solicitud del catálogo rechazada")
+    }
+
     // Si cambió a ENVIADA y está vinculada a una orden, transicionar a PRESUPUESTADO
     if (data.estado === "ENVIADA") {
       const { data: cotWithOrder } = await supabaseAdmin
@@ -779,6 +789,11 @@ export async function DELETE(
     if (deleteError) {
       throw deleteError
     }
+
+    // Borrar una solicitud del catálogo tiene que devolver su reserva: si no,
+    // el stock queda retenido por una cotización que ya no existe y no hay
+    // forma de llegar a ella para liberarla.
+    await liberarReservaCatalogo(id, "Solicitud del catálogo eliminada")
 
     // Si la cotización estaba vinculada a una orden, recalcular presupuesto con cotizaciones restantes
     if (cotizacion.orden_id) {
