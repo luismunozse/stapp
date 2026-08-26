@@ -50,8 +50,13 @@ function inventarioVivo(inv: NonNullable<ItemConStock["inventario"]>): boolean {
  * original del catálogo.
  */
 export function stockFisicoCatalogo(item: ItemConStock): number | null {
-  if (item.inventario_id && item.inventario) {
-    return item.inventario.stock ?? null
+  if (item.inventario_id) {
+    // Link roto (producto borrado, o apuntando a una fila que ya no está):
+    // `null`, no el valor viejo de catalogo_items.stock. La migración 239
+    // declaró esa columna sin sentido cuando hay link, así que mostrarla —y
+    // encima etiquetada "(inv.)"— sería inventar un número. Es el mismo caso
+    // que /api/catalogo/diagnose reporta como `roto`.
+    return item.inventario?.stock ?? null
   }
   return item.stock ?? null
 }

@@ -27,7 +27,7 @@ export async function GET(req: Request) {
     .from("catalogo_items")
     .select(`
       id, nombre, activo, stock, inventario_id,
-      inventario:inventario(id, nombre, stock, stock_reservado),
+      inventario:inventario(id, nombre, stock, stock_reservado, deleted_at),
       variantes:catalogo_variantes(id, etiqueta, stock, activo)
     `)
     .eq("organization_id", auth.organizationId!)
@@ -69,6 +69,10 @@ export async function GET(req: Request) {
               // ver las dos mitades para entender de dónde sale el número.
               stock_fisico: inv.stock,
               stock_reservado: reservado,
+              // PostgREST devuelve igual las filas borradas en soft, así que
+              // sin este dato el diagnóstico reportaría un producto sano
+              // mientras el checkout lo rechaza con P0002.
+              borrado_at: inv.deleted_at ?? null,
             }
           : { id: it.inventario_id, roto: "el producto vinculado no existe o fue borrado" }
         : null,
@@ -84,12 +88,14 @@ export async function GET(req: Request) {
           : it.inventario_id
             ? "EN_INVENTARIO (item linkeado a inventario)"
             : "EN_ITEM (stock propio)",
-      // Causa mas comun de "el stock fisico no es cero pero el catalogo dice
-      // agotado": hay reservas tomadas y todavia sin liberar.
+      // Las dos causas de "el stock fisico no es cero pero el catalogo dice
+      // agotado": el producto esta borrado, o hay reservas sin liberar.
       nota_reservas:
-        !tieneVariantes && reservado > 0
-          ? `${reservado} unidad(es) reservadas por cotizaciones sin cerrar`
-          : null,
+        !tieneVariantes && inv?.deleted_at
+          ? "el producto vinculado esta borrado: el catalogo lo muestra agotado y el checkout lo rechaza"
+          : !tieneVariantes && reservado > 0
+            ? `${reservado} unidad(es) reservadas por cotizaciones sin cerrar`
+            : null,
     }
   })
 

@@ -133,10 +133,14 @@ describe("disponibilidad del catálogo: un solo cálculo", () => {
     expect(infractores).toEqual([])
   })
 
-  it("every inventario embed feeding the helper also selects stock_reservado", () => {
-    // Sin la columna, PostgREST omite la clave, el helper la lee como 0 y el
-    // bug de stock crudo vuelve en silencio. Los mocks no lo detectan porque no
-    // ejecutan SQL.
+  it("every inventario embed feeding the helper selects both columns it needs", () => {
+    // El helper necesita DOS columnas: `stock_reservado` para restar reservas y
+    // `deleted_at` para devolver 0 en un producto borrado. Si falta cualquiera,
+    // PostgREST omite la clave, el helper la lee como 0 / vivo, y el bug vuelve
+    // en silencio. Los mocks no lo detectan porque no ejecutan SQL.
+    //
+    // El guard verificaba sólo la primera, y por eso /api/catalogo/diagnose
+    // quedó reportando como sano un producto que el checkout rechaza.
     const fallas: string[] = []
 
     for (const { rel, src } of FUENTES) {
@@ -145,7 +149,9 @@ describe("disponibilidad del catálogo: un solo cálculo", () => {
 
       const embeds = src.match(/inventario:inventario\([^)]*\)/g) ?? []
       for (const embed of embeds) {
-        if (!embed.includes("stock_reservado")) fallas.push(`${rel} → ${embed}`)
+        for (const columna of ["stock_reservado", "deleted_at"]) {
+          if (!embed.includes(columna)) fallas.push(`${rel} → falta ${columna} en ${embed}`)
+        }
       }
     }
 

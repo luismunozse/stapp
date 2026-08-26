@@ -296,30 +296,26 @@ export async function POST(
 
     const ventaId = fallbackResult?.ventaId || fallbackResult
 
-    // Release reservations (best-effort in fallback — cannot be atomic here)
-    try {
-      await supabaseAdmin.rpc("liberar_items_cotizacion", {
-        p_cotizacion_id: id,
-        p_user_id: userId,
-        p_motivo: "Reserva consumida por conversión a venta",
-      })
-    } catch (releaseErr) {
+    // Release reservations (best-effort in fallback — cannot be atomic here).
+    //
+    // No se agrega acá el consumo de la reserva del catálogo (clases B y C de
+    // la migración 314): este camino sólo corre cuando falta
+    // convertir_cotizacion_venta_atomica, y la 314 REDEFINE esa función. Una
+    // base que cae en el fallback tampoco tiene la 314, ni
+    // consumir_reserva_catalogo, ni la tabla de reservas — la llamada sería
+    // siempre un no-op. Los dos hechos van juntos: si alguna vez se aplica la
+    // 314, este fallback deja de alcanzarse.
+    //
+    // El error se mira explícitamente: supabaseAdmin.rpc() resuelve con
+    // { error } en vez de tirar, así que un try/catch acá nunca dispara y el
+    // fallo se perdería sin siquiera loguearse.
+    const { error: releaseErr } = await supabaseAdmin.rpc("liberar_items_cotizacion", {
+      p_cotizacion_id: id,
+      p_user_id: userId,
+      p_motivo: "Reserva consumida por conversión a venta",
+    })
+    if (releaseErr) {
       console.error("Error releasing cotizacion reservations after sale:", releaseErr)
-    }
-
-    // Cerrar la reserva del catálogo para variantes e items sin link (clases B
-    // y C de la migración 314). Ahí el descuento del pedido ES el de la venta,
-    // así que se cierra SIN devolver stock. Si no, la reserva queda abierta y un
-    // cambio posterior a RECHAZADA dispara el trigger y acredita mercadería ya
-    // despachada. La RPC atómica lo hace adentro; este camino tiene que hacerlo
-    // a mano, que es justo el que corre sobre una base sin migrar.
-    try {
-      await supabaseAdmin.rpc("consumir_reserva_catalogo", {
-        p_cotizacion_id: id,
-        p_motivo: "Reserva consumida por conversión a venta",
-      })
-    } catch (consumeErr) {
-      console.error("Error consuming catalog reservation after sale:", consumeErr)
     }
 
     const { data: venta } = await supabaseAdmin

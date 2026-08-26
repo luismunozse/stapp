@@ -7,6 +7,24 @@ import { hasPlanFeature } from "@/lib/subscriptions"
 import { dateOnlyToNoonUtcISO } from "@/lib/timezone"
 import { z } from "zod"
 
+// Detecta el error de "la función no existe todavía", que acá significa
+// "la migración 314 no se corrió a mano aún". Mismo helper que las rutas de
+// aprobar y convertir-venta; se repite en vez de compartirse para no tocar esos
+// archivos en este cambio.
+function isFunctionMissingError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false
+  const e = err as Record<string, unknown>
+  const code = String(e.code ?? "")
+  const msg = String(e.message ?? "").toLowerCase()
+  return (
+    code === "PGRST202" ||
+    code === "42883" ||
+    msg.includes("could not find the function") ||
+    msg.includes("does not exist") ||
+    msg.includes("schema cache")
+  )
+}
+
 const itemSchema = z.object({
   id: z.string().optional(),
   descripcion: z.string().min(1, "Descripción requerida"),
@@ -689,31 +707,59 @@ export async function PUT(
 
     // Liberar reservas al rechazar una cotización ACEPTADA.
     //
-    // Sólo para las INTERNAS: las del catálogo ya las liberó el trigger
+    // Con la migración 314 aplicada, las del catálogo ya las liberó el trigger
     // cotizaciones_liberar_reserva_catalogo, que devuelve exactamente lo que
-    // dice el libro de movimientos. liberar_items_cotizacion no mira ese libro
-    // — libera LEAST(item.cantidad, inventario.stock_reservado) leyendo la fila
-    // del producto — así que correr las dos sobre la misma cotización libera de
-    // más y se come la reserva de OTRA cotización que esté reteniendo ese
-    // producto. El HAVING > 0 de reserva_cotizacion_pendiente esconde el
-    // negativo resultante, así que además falla en silencio.
-    if (
-      data.estado === "RECHAZADA" &&
-      existing.estado === "ACEPTADA" &&
-      existing.origen !== "CATALOGO_PUBLICO"
-    ) {
-      try {
-        await supabaseAdmin.rpc("liberar_items_cotizacion", {
+    // dice el libro de movimientos. liberar_items_cotizacion NO mira ese libro:
+    // libera LEAST(item.cantidad, inventario.stock_reservado) leyendo la fila
+    // del producto, y ese stock_reservado es el global de todas las
+    // cotizaciones. Correr las dos sobre la misma cotización libera de más y se
+    // come la reserva de OTRA que esté reteniendo ese producto — y el
+    // HAVING > 0 de reserva_cotizacion_pendiente esconde el negativo, así que
+    // falla en silencio. Por eso no alcanza con dejarla como respaldo ciego:
+    // no es idempotente.
+    //
+    // Pero el código llega a producción al mergear y la migración se corre A
+    // MANO después. En esa ventana el trigger no existe, y si la ruta tampoco
+    // libera, rechazar una cotización del catálogo ACEPTADA deja stock_reservado
+    // inflado sin camino de vuelta (esta rama no trae barrido de rescate).
+    //
+    // Se resuelve detectando el estado del mundo en vez de asumirlo: se intenta
+    // la RPC nueva y, si la función no existe, estamos antes de la migración y
+    // corresponde el camino viejo. Mismo patrón que ya usan las rutas de
+    // aprobar y convertir-venta.
+    if (data.estado === "RECHAZADA" && existing.estado === "ACEPTADA") {
+      let usarCaminoLegacy = existing.origen !== "CATALOGO_PUBLICO"
+
+      if (!usarCaminoLegacy) {
+        // Post-migración esto es un no-op real: el trigger ya neteó el libro a
+        // cero. Sirve sólo como sonda de si la 314 está aplicada.
+        const { error: rpcError } = await supabaseAdmin.rpc("liberar_reserva_catalogo", {
+          p_cotizacion_id: id,
+          p_motivo: "Cotización rechazada",
+        })
+        if (rpcError) {
+          if (isFunctionMissingError(rpcError)) {
+            usarCaminoLegacy = true
+          } else {
+            console.error("Error liberando reserva del catálogo:", rpcError)
+          }
+        }
+      }
+
+      if (usarCaminoLegacy) {
+        const { error: releaseErr } = await supabaseAdmin.rpc("liberar_items_cotizacion", {
           p_cotizacion_id: id,
           p_user_id: userId,
           p_motivo: "Cotización rechazada",
         })
-      } catch (releaseErr) {
-        console.error("Error releasing stock reservations:", releaseErr)
+        if (releaseErr) {
+          console.error("Error releasing stock reservations:", releaseErr)
+        }
       }
     }
 
-    // La reserva del catálogo la devuelve el trigger
+    // Para el resto de los finales (borrado, rechazo desde los portales
+    // públicos) la reserva del catálogo la devuelve el trigger
     // cotizaciones_liberar_reserva_catalogo (migración 314) al entrar en estado
     // terminal. Va en la tabla y no acá porque son cuatro las rutas que matan
     // una cotización y una ya se había olvidado de llamar.

@@ -39,6 +39,91 @@ describe("liberación de la reserva del catálogo", () => {
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ok: true }, error: null } as any)
   })
 
+  // El codigo llega a produccion al mergear y la migracion 314 se corre A MANO
+  // despues. Los dos estados del mundo tienen que liberar.
+  describe("rechazo de una cotización ACEPTADA del catálogo", () => {
+    function mockCotAceptadaCatalogo() {
+      mockSupabaseFrom({
+        cotizaciones: createChainMock({
+          id: "cot-1",
+          estado: "ACEPTADA",
+          tipo: "ORDEN",
+          origen: "CATALOGO_PUBLICO",
+          organization_id: "org-1",
+          created_by: "user-1",
+          orden_id: null,
+          iva_porcentaje: 0,
+          descuento_global_tipo: "porcentaje",
+          descuento_global_valor: 0,
+        }),
+      })
+    }
+
+    function reqRechazo() {
+      return new Request("http://localhost/api/cotizaciones/cot-1", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estado: "RECHAZADA" }),
+      })
+    }
+
+    it("con la 314 aplicada deja que libere el trigger, sin tocar el camino viejo", async () => {
+      // liberar_items_cotizacion libera LEAST(cantidad, stock_reservado) sobre
+      // el global de la fila: correrla despues del trigger se come la reserva
+      // de OTRA cotizacion. No es idempotente, por eso no puede ser respaldo
+      // ciego.
+      const { PUT } = await import("@/app/api/cotizaciones/[id]/route")
+      mockCotAceptadaCatalogo()
+      vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ok: true }, error: null } as any)
+
+      await PUT(reqRechazo(), { params: Promise.resolve({ id: "cot-1" }) })
+
+      expect(rpcNames()).not.toContain("liberar_items_cotizacion")
+    })
+
+    it("sin la 314 todavía aplicada cae al camino viejo y libera igual", async () => {
+      const { PUT } = await import("@/app/api/cotizaciones/[id]/route")
+      mockCotAceptadaCatalogo()
+      vi.mocked(supabaseAdmin.rpc).mockImplementation((fn: string) => {
+        if (fn === "liberar_reserva_catalogo") {
+          return Promise.resolve({
+            data: null,
+            error: { code: "PGRST202", message: "Could not find the function" },
+          }) as any
+        }
+        return Promise.resolve({ data: { ok: true }, error: null }) as any
+      })
+
+      await PUT(reqRechazo(), { params: Promise.resolve({ id: "cot-1" }) })
+
+      expect(rpcNames()).toContain("liberar_items_cotizacion")
+    })
+
+    it("una cotización interna siempre usa el camino viejo, sin sondear", async () => {
+      const { PUT } = await import("@/app/api/cotizaciones/[id]/route")
+      mockSupabaseFrom({
+        cotizaciones: createChainMock({
+          id: "cot-2",
+          estado: "ACEPTADA",
+          tipo: "ORDEN",
+          origen: null,
+          organization_id: "org-1",
+          created_by: "user-1",
+          orden_id: null,
+          iva_porcentaje: 0,
+          descuento_global_tipo: "porcentaje",
+          descuento_global_valor: 0,
+        }),
+      })
+      vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ok: true }, error: null } as any)
+
+      await PUT(reqRechazo(), { params: Promise.resolve({ id: "cot-2" }) })
+
+      expect(rpcNames()).toContain("liberar_items_cotizacion")
+      expect(rpcNames()).not.toContain("liberar_reserva_catalogo")
+    })
+  })
+
   it("refuses to walk a rejected catalog quote back to a live state", async () => {
     // Al rechazar se devolvio el stock. Reabrirla deja una solicitud viva
     // reteniendo cero: el storefront ofrece unidades que esa solicitud cree

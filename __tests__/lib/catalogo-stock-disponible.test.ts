@@ -138,4 +138,12 @@ describe("stockFisicoCatalogo / stockReservadoCatalogo", () => {
     expect(stockFisicoCatalogo(suelto)).toBe(7)
     expect(stockReservadoCatalogo(suelto)).toBe(0)
   })
+
+  it("reports null for a broken link instead of the stale catalog number", () => {
+    // Con link roto, catalogo_items.stock es un número que la migración 239
+    // declaró sin sentido. Mostrarlo etiquetado "(inv.)" sería inventarlo.
+    const roto = { stock: 42, inventario_id: "inv-borrado", inventario: null }
+    expect(stockFisicoCatalogo(roto)).toBeNull()
+    expect(stockReservadoCatalogo(roto)).toBe(0)
+  })
 })
