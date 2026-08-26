@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { stockDisponibleCatalogo } from "@/lib/catalogo/stock-disponible"
 
 export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
@@ -28,7 +29,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     .select(`
       id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta,
       imagen_url, imagenes, etiquetas, stock, destacado, inventario_id, orden,
-      inventario:inventario(stock)
+      inventario:inventario(stock, stock_reservado)
     `)
     .eq("organization_id", config.organization_id)
     .eq("activo", true)
@@ -42,12 +43,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Resolver stock real: si linkeado a inventario, source = inventario.stock
+  // Resolver disponibilidad: si linkeado a inventario, source = inventario
+  // neto de reservas (stock - stock_reservado).
   const items = (data ?? []).map((it: any) => {
-    const stockReal =
-      it.inventario_id && it.inventario
-        ? it.inventario.stock
-        : it.stock
+    const stockReal = stockDisponibleCatalogo(it)
     const { inventario, ...rest } = it
     return { ...rest, stock_disponible: stockReal }
   })

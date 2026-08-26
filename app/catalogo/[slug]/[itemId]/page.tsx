@@ -3,6 +3,7 @@ import Link from "next/link"
 import { unstable_cache } from "next/cache"
 import { supabaseAdmin } from "@/lib/supabase"
 import { CatalogoItemView } from "@/components/catalogo-public/catalogo-item-view"
+import { stockDisponibleCatalogo } from "@/lib/catalogo/stock-disponible"
 import type { Metadata, Viewport } from "next"
 
 type PageProps = { params: Promise<{ slug: string; itemId: string }> }
@@ -42,7 +43,7 @@ async function _fetchItem(slug: string, itemId: string) {
       .select(`
         id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
         imagen_url, imagenes, etiquetas, stock, destacado, inventario_id,
-        inventario:inventario(stock),
+        inventario:inventario(stock, stock_reservado),
         variantes:catalogo_variantes(id, etiqueta, sku, precio, stock, imagen_url, activo, orden)
       `)
       .eq("id", itemId)
@@ -98,9 +99,7 @@ async function _fetchItem(slug: string, itemId: string) {
     : null
   const stockReal = tieneVariantes
     ? stockVariantes
-    : itemRaw.inventario_id && (itemRaw as any).inventario
-      ? (itemRaw as any).inventario.stock
-      : itemRaw.stock
+    : stockDisponibleCatalogo(itemRaw as any)
   const precioMin = tieneVariantes
     ? variantesActivas.reduce((m: number | null, v: any) => {
         if (v.precio == null) return m
@@ -131,7 +130,7 @@ async function _fetchItem(slug: string, itemId: string) {
       .select(`
         id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
         imagen_url, imagenes, etiquetas, stock, destacado, inventario_id,
-        inventario:inventario(stock)
+        inventario:inventario(stock, stock_reservado)
       `)
       .eq("organization_id", config.organization_id)
       .eq("activo", true)
@@ -141,7 +140,7 @@ async function _fetchItem(slug: string, itemId: string) {
       .order("precio", { ascending: false, nullsFirst: false })
       .limit(8)
     relacionados = (data ?? []).map((it: any) => {
-      const stk = it.inventario_id && it.inventario ? it.inventario.stock : it.stock
+      const stk = stockDisponibleCatalogo(it)
       const { inventario: _i, ...rs } = it
       return { ...rs, stock_disponible: stk }
     })
@@ -174,14 +173,14 @@ async function _fetchItem(slug: string, itemId: string) {
         .select(`
           id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
           imagen_url, imagenes, etiquetas, stock, destacado, inventario_id,
-          inventario:inventario(stock)
+          inventario:inventario(stock, stock_reservado)
         `)
         .in("id", topIds)
         .eq("organization_id", config.organization_id)
         .eq("activo", true)
       bundle = (bItems ?? [])
         .map((it: any) => {
-          const stk = it.inventario_id && it.inventario ? it.inventario.stock : it.stock
+          const stk = stockDisponibleCatalogo(it)
           const { inventario: _i, ...rs } = it
           return { ...rs, stock_disponible: stk, co_count: counts.get(it.id) ?? 0 }
         })
