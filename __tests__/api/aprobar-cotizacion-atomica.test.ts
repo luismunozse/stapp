@@ -380,6 +380,50 @@ describe("POST /api/cotizaciones/[id]/aprobar — function-missing fallback", ()
     expect(hasEstadoEnviadaLock).toBe(true)
   })
 
+  it("se niega a aprobar una revision por el camino de compatibilidad", async () => {
+    // La reconciliacion de reservas de una revision —liberar las de la version
+    // reemplazada antes de tomar las nuevas— vive DENTRO de
+    // aprobar_cotizacion_atomica (migracion 312), y este camino existe
+    // justamente para cuando esa funcion no esta. Reservar los items de la
+    // revision sin liberar los de la original deja contada dos veces cada pieza
+    // que aparece en las dos versiones: el bug de stock fantasma que la
+    // migracion 246 existe para prevenir. Negarse es ruidoso y reversible;
+    // reservar de mas corrompe `stock_reservado` en silencio y para siempre.
+    mockAuthSuccess()
+
+    const mockRevision = { ...mockCotizacionEnviada, id: "rev-1", revision_de: "cot-1" }
+    const fetchChain = createChainMock(mockRevision)
+    const updateChain = createChainMock(mockCotizacionAceptada)
+
+    let cotizacionCallCount = 0
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "cotizaciones") {
+        cotizacionCallCount++
+        return (cotizacionCallCount === 1 ? fetchChain : updateChain) as any
+      }
+      return createChainMock(null) as any
+    })
+
+    const rpcsLlamados: string[] = []
+    vi.mocked(supabaseAdmin.rpc).mockImplementation((fn: string) => {
+      rpcsLlamados.push(fn)
+      if (fn === "aprobar_cotizacion_atomica") {
+        return Promise.resolve({
+          data: null,
+          error: { code: "PGRST202", message: "Could not find the function" },
+        }) as any
+      }
+      return Promise.resolve({ data: { success: true }, error: null }) as any
+    })
+
+    const response = await POST(createPostRequest(validBody), createParams("rev-1"))
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(503)
+    expect(updateChain.update).not.toHaveBeenCalled()
+    expect(rpcsLlamados).not.toContain("reservar_items_cotizacion")
+  })
+
   it("returns 400 if fallback update returns no rows (double-approve prevented)", async () => {
     mockAuthSuccess()
 
