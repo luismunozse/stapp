@@ -30,6 +30,15 @@ interface OCItem {
   precioUnitario: number
 }
 
+// crypto.randomUUID no está en contextos inseguros ni en WebViews viejas, y
+// esta app corre también empaquetada con Capacitor.
+function nuevoRequestId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID()
+  }
+  return `rec-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
+}
+
 export function RecibirOCDialog({ open, onOpenChange, ordenCompraId, numeroOC, onReceived }: Props) {
   const { showError } = useModal()
   const [items, setItems] = useState<OCItem[]>([])
@@ -41,9 +50,16 @@ export function RecibirOCDialog({ open, onOpenChange, ordenCompraId, numeroOC, o
   const [searchingItem, setSearchingItem] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<any[]>([])
+  // Clave de idempotencia de ESTA recepción. Se genera una vez por apertura del
+  // diálogo, así un reintento (red que se corta, doble submit, la app que
+  // reintenta sola) reusa la misma clave y el servidor devuelve el resultado
+  // original en vez de volver a sumar stock. Se renueva al cerrar y reabrir,
+  // que es cuando el usuario sí quiere registrar una recepción distinta.
+  const [requestId, setRequestId] = useState<string>("")
 
   useEffect(() => {
     if (!open) return
+    setRequestId(nuevoRequestId())
     setLoading(true)
     fetch(`/api/ordenes-compra/${ordenCompraId}`)
       .then(r => r.json())
@@ -121,7 +137,7 @@ export function RecibirOCDialog({ open, onOpenChange, ordenCompraId, numeroOC, o
       const res = await fetch(`/api/ordenes-compra/${ordenCompraId}/recibir`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: itemsToReceive }),
+        body: JSON.stringify({ items: itemsToReceive, requestId }),
       })
       if (!res.ok) {
         const err = await res.json()
