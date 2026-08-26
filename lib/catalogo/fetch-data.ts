@@ -10,6 +10,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase"
 import { SLUG_REGEX } from "@/lib/catalogo-validators"
+import { stockDisponibleCatalogo } from "./stock-disponible"
 import type {
   CatalogoPublicData,
   CatalogoPublicItem,
@@ -51,7 +52,7 @@ export async function fetchCatalogoBaseData(slug: string): Promise<CatalogoPubli
       .select(`
         id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
         imagen_url, imagenes, etiquetas, stock, destacado, inventario_id, orden,
-        inventario:inventario(stock),
+        inventario:inventario(stock, stock_reservado),
         variantes:catalogo_variantes(id, etiqueta, sku, precio, stock, imagen_url, activo, orden)
       `)
       .eq("organization_id", config.organization_id)
@@ -132,7 +133,7 @@ export async function fetchCatalogoBaseData(slug: string): Promise<CatalogoPubli
       : null
     const stockReal: number | null = tieneVariantes
       ? stockVariantes
-      : it.inventario_id && it.inventario ? it.inventario.stock : it.stock
+      : stockDisponibleCatalogo(it)
     const precioMin = tieneVariantes
       ? variantesActivas.reduce((m: number | null, v: any) => {
           if (v.precio == null) return m

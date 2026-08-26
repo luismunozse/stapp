@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { stockDisponibleCatalogo } from "@/lib/catalogo/stock-disponible"
 
 /**
  * Diagnóstico de stock de un item del catálogo público.
@@ -26,7 +27,7 @@ export async function GET(req: Request) {
     .from("catalogo_items")
     .select(`
       id, nombre, activo, stock, inventario_id,
-      inventario:inventario(id, nombre, stock),
+      inventario:inventario(id, nombre, stock, stock_reservado),
       variantes:catalogo_variantes(id, etiqueta, stock, activo)
     `)
     .eq("organization_id", auth.organizationId!)
@@ -41,11 +42,11 @@ export async function GET(req: Request) {
     const stockVariantesTotal = tieneVariantes
       ? variantesActivas.reduce((s, v) => (v.stock == null ? s : s + v.stock), 0)
       : null
+    // Mismo helper que el storefront: si esto no coincidiera con la página, la
+    // herramienta hecha para explicar discrepancias produciría una.
     const stockEfectivo = tieneVariantes
       ? stockVariantesTotal
-      : it.inventario_id && it.inventario
-        ? it.inventario.stock
-        : it.stock
+      : stockDisponibleCatalogo(it)
 
     return {
       id: it.id,
@@ -53,7 +54,14 @@ export async function GET(req: Request) {
       activo: it.activo,
       catalogo_items_stock: it.stock,
       inventario_linked: it.inventario_id
-        ? { id: it.inventario.id, nombre: it.inventario.nombre, stock: it.inventario.stock }
+        ? {
+            id: it.inventario.id,
+            nombre: it.inventario.nombre,
+            // Desglose: el público ve stock - reservado, así que hace falta ver
+            // las dos mitades para entender de dónde sale el número.
+            stock_fisico: it.inventario.stock,
+            stock_reservado: it.inventario.stock_reservado ?? 0,
+          }
         : null,
       variantes_activas: variantesActivas.map((v) => ({
         id: v.id,
@@ -67,6 +75,12 @@ export async function GET(req: Request) {
           : it.inventario_id
             ? "EN_INVENTARIO (item linkeado a inventario)"
             : "EN_ITEM (stock propio)",
+      // Causa mas comun de "el stock fisico no es cero pero el catalogo dice
+      // agotado": hay reservas tomadas y todavia sin liberar.
+      nota_reservas:
+        !tieneVariantes && it.inventario_id && (it.inventario.stock_reservado ?? 0) > 0
+          ? `${it.inventario.stock_reservado} unidad(es) reservadas por cotizaciones sin cerrar`
+          : null,
     }
   })
 

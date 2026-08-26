@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og"
 import { supabaseAdmin } from "@/lib/supabase"
+import { stockDisponibleCatalogo } from "@/lib/catalogo/stock-disponible"
 
 export const runtime = "nodejs"
 export const alt = "Item del catálogo"
@@ -41,7 +42,7 @@ export default async function Image({ params }: { params: { slug: string; itemId
   const [{ data: item }, { data: org }] = await Promise.all([
     supabaseAdmin
       .from("catalogo_items")
-      .select("nombre, descripcion, tipo, precio, precio_hasta, imagen_url, stock, inventario_id, inventario:inventario(stock)")
+      .select("nombre, descripcion, tipo, precio, precio_hasta, imagen_url, stock, inventario_id, inventario:inventario(stock, stock_reservado)")
       .eq("id", itemId)
       .eq("organization_id", config.organization_id)
       .eq("activo", true)
@@ -58,8 +59,9 @@ export default async function Image({ params }: { params: { slug: string; itemId
   const color = config.color_primary || FALLBACK_COLOR
   const moneda = org?.moneda || "ARS"
   const orgName = org?.nombre_mostrar || org?.nombre || "Catálogo"
-  const stockReal =
-    item.inventario_id && (item as any).inventario ? (item as any).inventario.stock : item.stock
+  // Mismo cálculo que la página del item: si la card compartida dice "quedan
+  // unidades" y la página dice "Agotado", el link llega desmintiéndose solo.
+  const stockReal = stockDisponibleCatalogo(item as any)
   const agotado = stockReal === 0
   const nombre = clip(item.nombre, 80)
   const descripcion = clip(item.descripcion, 140)

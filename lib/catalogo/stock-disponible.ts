@@ -12,6 +12,12 @@
  *
  * `null` significa "sin límite declarado" (el item no lleva control de stock)
  * y se propaga tal cual: los consumidores tratan `null` distinto de `0`.
+ *
+ * Esta es la ÚNICA lectura permitida de `inventario.stock` en el repo; el resto
+ * pasa por acá. Lo fija un guard de fuente en
+ * `__tests__/api/catalogo-stock-reservado.test.ts`, porque cuando el cálculo
+ * estaba copiado inline se migraron unos lugares y otros no, y el catálogo
+ * terminó ofreciendo stock que el checkout después rechazaba.
  */
 
 export type ItemConStock = {
@@ -29,11 +35,3 @@ export function stockDisponibleCatalogo(item: ItemConStock): number | null {
   }
   return item.stock ?? null
 }
-
-/**
- * Fragmento del embed PostgREST para los SELECT del catálogo público.
- * Centralizado para que ninguna consulta se olvide de `stock_reservado`:
- * sin esa columna el cálculo de arriba lee `undefined`, lo toma como 0 y
- * vuelve en silencio a mostrar stock crudo.
- */
-export const INVENTARIO_STOCK_EMBED = "inventario:inventario(stock, stock_reservado)"
