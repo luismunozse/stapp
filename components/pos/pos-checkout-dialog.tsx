@@ -412,7 +412,9 @@ export function PosCheckoutDialog({
             )}
           </div>
 
-          {/* Quick action: Paga despues */}
+          {/* Quick action: fiar. The label says "cuenta corriente" because that is
+              what the cashier calls a credit sale; the CUENTA_CORRIENTE payment
+              method below spends existing credit instead, so it cannot serve here. */}
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2.5 cursor-pointer">
               <input
@@ -432,18 +434,26 @@ export function PosCheckoutDialog({
               </span>
             </label>
             {!pagoParcial && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs text-warning border-warning/40 hover:bg-warning-50"
-                onClick={() => {
-                  setPagoParcial(true)
-                  setPagosLines([createPagoLine(0)])
-                }}
-              >
-                Paga después ({formatPrice(0)})
-              </Button>
+              <div className="flex flex-col gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!cliente.id}
+                  className="h-7 text-xs text-warning border-warning/40 hover:bg-warning-50"
+                  onClick={() => {
+                    setPagoParcial(true)
+                    setPagosLines([createPagoLine(0)])
+                  }}
+                >
+                  Fiar / Cuenta corriente
+                </Button>
+                {!cliente.id && (
+                  <span className="text-xs text-muted-foreground">
+                    Seleccioná un cliente para fiar
+                  </span>
+                )}
+              </div>
             )}
           </div>
 
