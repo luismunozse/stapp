@@ -43,7 +43,7 @@ async function _fetchItem(slug: string, itemId: string) {
       .select(`
         id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
         imagen_url, imagenes, etiquetas, stock, destacado, inventario_id,
-        inventario:inventario(stock, stock_reservado),
+        inventario:inventario(stock, stock_reservado, deleted_at),
         variantes:catalogo_variantes(id, etiqueta, sku, precio, stock, imagen_url, activo, orden)
       `)
       .eq("id", itemId)
@@ -130,7 +130,7 @@ async function _fetchItem(slug: string, itemId: string) {
       .select(`
         id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
         imagen_url, imagenes, etiquetas, stock, destacado, inventario_id,
-        inventario:inventario(stock, stock_reservado)
+        inventario:inventario(stock, stock_reservado, deleted_at)
       `)
       .eq("organization_id", config.organization_id)
       .eq("activo", true)
@@ -173,7 +173,7 @@ async function _fetchItem(slug: string, itemId: string) {
         .select(`
           id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
           imagen_url, imagenes, etiquetas, stock, destacado, inventario_id,
-          inventario:inventario(stock, stock_reservado)
+          inventario:inventario(stock, stock_reservado, deleted_at)
         `)
         .in("id", topIds)
         .eq("organization_id", config.organization_id)

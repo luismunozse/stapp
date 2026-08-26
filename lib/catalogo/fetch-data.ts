@@ -52,7 +52,7 @@ export async function fetchCatalogoBaseData(slug: string): Promise<CatalogoPubli
       .select(`
         id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
         imagen_url, imagenes, etiquetas, stock, destacado, inventario_id, orden,
-        inventario:inventario(stock, stock_reservado),
+        inventario:inventario(stock, stock_reservado, deleted_at),
         variantes:catalogo_variantes(id, etiqueta, sku, precio, stock, imagen_url, activo, orden)
       `)
       .eq("organization_id", config.organization_id)

@@ -66,7 +66,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     .select(`
       id, tipo, nombre, precio, precio_lista, imagen_url,
       stock, inventario_id, activo, organization_id,
-      inventario:inventario(stock, stock_reservado)
+      inventario:inventario(stock, stock_reservado, deleted_at)
     `)
     .in("id", topIds)
     .eq("organization_id", config.organization_id)

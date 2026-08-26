@@ -200,6 +200,12 @@ COMMENT ON TABLE catalogo_reservas_cotizacion IS
 
 ALTER TABLE catalogo_reservas_cotizacion ENABLE ROW LEVEL SECURITY;
 
+-- OJO: esta política es, en la práctica, MUERTA. `app.organization_id` es un
+-- GUC que la app nunca setea — las migraciones 287, 292 y 300 de este mismo
+-- repo ya lo documentan. Toda la app escribe y lee con supabaseAdmin
+-- (service_role), que saltea RLS. Se deja por consistencia con el resto de las
+-- tablas del proyecto, no porque aísle nada: el aislamiento real lo dan los
+-- filtros por organization_id en las rutas.
 DROP POLICY IF EXISTS catalogo_reservas_select ON catalogo_reservas_cotizacion;
 CREATE POLICY catalogo_reservas_select ON catalogo_reservas_cotizacion
   FOR SELECT USING (organization_id = current_setting('app.organization_id', true));
@@ -682,7 +688,13 @@ BEGIN
     'itemsCatalogoRestaurados', v_catalogo
   );
 END;
-$$ LANGUAGE plpgsql;
+-- SECURITY DEFINER: la dispara un trigger sobre cotizaciones, así que corre con
+-- el rol de quien haga el UPDATE. Hoy todo escribe con service_role (que saltea
+-- RLS) y no cambiaría nada, pero cualquier UPDATE futuro con otro rol haría que
+-- el UPDATE sobre catalogo_reservas_cotizacion afecte 0 filas SIN error: las
+-- reservas quedarían abiertas en silencio y el stock no volvería.
+-- search_path fijo para que el cuerpo no dependa del search_path del llamador.
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 COMMENT ON FUNCTION liberar_reserva_catalogo(TEXT, TEXT) IS
   'Devuelve la reserva viva de una cotización del catálogo público. Idempotente (se apoya en reserva_cotizacion_pendiente). No-op sobre cotizaciones de otro origen. v314.';
@@ -838,25 +850,42 @@ BEGIN
     RAISE EXCEPTION 'Cotización no encontrada';
   END IF;
 
-  -- Se agrupa por producto porque reserva_cotizacion_pendiente también agrupa
-  -- por inventario_id: comparar ese agregado contra la cantidad de UNA línea
-  -- sub-reserva las cotizaciones con el mismo producto repetido (dos líneas de
-  -- 3 reservaban 3 en vez de 6), y el formulario de cotización agrega líneas
-  -- sin deduplicar por inventario. Los dos lados tienen que estar agregados.
+  -- Se recorre la UNIÓN de lo que la cotización pide HOY y lo que tiene TOMADO
+  -- según el libro, no sólo lo primero.
+  --
+  --   * Agrupado por producto en los dos lados, porque
+  --     reserva_cotizacion_pendiente agrupa por inventario_id: comparar ese
+  --     agregado contra la cantidad de UNA línea sub-reserva las cotizaciones
+  --     con el mismo producto repetido (dos líneas de 3 reservaban 3 en vez de
+  --     6), y el formulario agrega líneas sin deduplicar por inventario.
+  --
+  --   * FULL OUTER JOIN y no sólo las líneas vivas: si el admin BORRA la línea
+  --     de un producto, esa fila deja de existir y un loop sobre
+  --     items_cotizacion no vuelve a visitarlo nunca — ni acá, ni en
+  --     liberar_items_cotizacion, que también itera las líneas. La reserva
+  --     quedaba tomada para siempre. Del lado del libro, un producto sin línea
+  --     entra con cantidad 0 y cae solo en la rama de exceso, que lo devuelve
+  --     entero.
   FOR v_item IN
     SELECT
-      ic.inventario_id,
-      SUM(ic.cantidad)::INTEGER AS cantidad,
-      MIN(ic.descripcion)       AS descripcion
-    FROM items_cotizacion ic
-    WHERE ic.cotizacion_id = p_cotizacion_id
-      AND ic.inventario_id IS NOT NULL
-    GROUP BY ic.inventario_id
+      COALESCE(li.inventario_id, lib.inventario_id)   AS inventario_id,
+      COALESCE(li.cantidad, 0)                        AS cantidad,
+      COALESCE(li.descripcion, '(línea eliminada)')   AS descripcion,
+      COALESCE(lib.cantidad, 0)                       AS ya_reservado
+    FROM (
+      SELECT
+        ic.inventario_id,
+        SUM(ic.cantidad)::INTEGER AS cantidad,
+        MIN(ic.descripcion)       AS descripcion
+      FROM items_cotizacion ic
+      WHERE ic.cotizacion_id = p_cotizacion_id
+        AND ic.inventario_id IS NOT NULL
+      GROUP BY ic.inventario_id
+    ) li
+    FULL OUTER JOIN reserva_cotizacion_pendiente(p_cotizacion_id) lib
+      ON lib.inventario_id = li.inventario_id
   LOOP
-    -- Cuánto de lo que pide esta cotización ya está reservado por ella misma.
-    SELECT cantidad INTO v_ya_reservado
-      FROM reserva_cotizacion_pendiente(p_cotizacion_id)
-      WHERE inventario_id = v_item.inventario_id;
+    v_ya_reservado := v_item.ya_reservado;
 
     -- Se reserva el FALTANTE, no la cantidad entera encima de lo que había:
     -- con cobertura parcial (la solicitud reservó 2 y después un admin editó
@@ -865,10 +894,11 @@ BEGIN
     v_faltante := v_item.cantidad - COALESCE(v_ya_reservado, 0);
 
     -- Sobre-cobertura: la cotización tiene tomado MÁS de lo que pide ahora
-    -- (el catálogo reservó 5 y el admin la editó a 2). Saltear dejaba ese
-    -- excedente colgado para siempre: la venta libera LEAST(cantidad_actual, …)
-    -- y liberar_reserva_catalogo sólo corre en rechazo o borrado, que el DELETE
-    -- ni siquiera permite sobre una cotización ACEPTADA. Hay que devolverlo acá.
+    -- (el catálogo reservó 5 y el admin la editó a 2, o borró la línea entera
+    -- y ahora pide 0). Saltear dejaba ese excedente colgado para siempre: la
+    -- venta libera LEAST(cantidad_actual, …) y liberar_reserva_catalogo sólo
+    -- corre en rechazo o borrado, que el DELETE ni siquiera permite sobre una
+    -- cotización ACEPTADA. Hay que devolverlo acá.
     IF v_faltante < 0 THEN
       SELECT stock, stock_reservado INTO v_stock, v_stock_reservado
       FROM inventario

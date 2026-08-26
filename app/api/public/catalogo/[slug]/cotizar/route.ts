@@ -78,7 +78,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     .from("catalogo_items")
     .select(`
       id, nombre, precio, stock, inventario_id, activo, tipo,
-      inventario:inventario(id, stock, stock_reservado, nombre),
+      inventario:inventario(id, stock, stock_reservado, deleted_at, nombre),
       variantes:catalogo_variantes(id, etiqueta, sku, precio, stock, activo)
     `)
     .in("id", itemIds)

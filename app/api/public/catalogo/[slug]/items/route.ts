@@ -29,7 +29,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     .select(`
       id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta,
       imagen_url, imagenes, etiquetas, stock, destacado, inventario_id, orden,
-      inventario:inventario(stock, stock_reservado)
+      inventario:inventario(stock, stock_reservado, deleted_at)
     `)
     .eq("organization_id", config.organization_id)
     .eq("activo", true)

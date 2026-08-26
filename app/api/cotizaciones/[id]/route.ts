@@ -478,9 +478,14 @@ export async function PUT(
         `${(descripcion || "").trim().toLowerCase()}\u0000${inventarioId ?? ""}`
       // Procedencia del catálogo. Se rastrea SIEMPRE (no sólo cuando el rol no
       // ve costos) porque el borrar-y-reinsertar de acá perdía
-      // catalogo_item_id / variante_id / variante_etiqueta en cada PUT: después
-      // de una edición de admin, liberar_reserva_catalogo no encontraba las
-      // líneas de variante y ese stock quedaba sin devolver.
+      // catalogo_item_id / variante_id / variante_etiqueta en cada PUT, y esas
+      // columnas son lo que vincula la línea con el ítem del catálogo que la
+      // originó: sin ellas la cotización queda huérfana de su procedencia en el
+      // PDF, en el analytics de "comprados juntos" y en cualquier lectura que
+      // parta del catálogo.
+      //
+      // (La restitución de stock NO depende de esto: vive en
+      // catalogo_reservas_cotizacion, que el PUT no toca. Ver migración 314.)
       type StoredItemOrigen = {
         catalogoItemId: string | null
         varianteId: string | null
@@ -682,8 +687,21 @@ export async function PUT(
       await recalcPresupuestoOrden(oid, organizationId!, userId)
     }
 
-    // If changing to RECHAZADA from ACEPTADA, release reservations
-    if (data.estado === "RECHAZADA" && existing.estado === "ACEPTADA") {
+    // Liberar reservas al rechazar una cotización ACEPTADA.
+    //
+    // Sólo para las INTERNAS: las del catálogo ya las liberó el trigger
+    // cotizaciones_liberar_reserva_catalogo, que devuelve exactamente lo que
+    // dice el libro de movimientos. liberar_items_cotizacion no mira ese libro
+    // — libera LEAST(item.cantidad, inventario.stock_reservado) leyendo la fila
+    // del producto — así que correr las dos sobre la misma cotización libera de
+    // más y se come la reserva de OTRA cotización que esté reteniendo ese
+    // producto. El HAVING > 0 de reserva_cotizacion_pendiente esconde el
+    // negativo resultante, así que además falla en silencio.
+    if (
+      data.estado === "RECHAZADA" &&
+      existing.estado === "ACEPTADA" &&
+      existing.origen !== "CATALOGO_PUBLICO"
+    ) {
       try {
         await supabaseAdmin.rpc("liberar_items_cotizacion", {
           p_cotizacion_id: id,

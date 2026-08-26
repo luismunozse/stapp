@@ -136,6 +136,15 @@ describe("liberar_reserva_catalogo — devuelve lo que el catálogo tomó", () =
     expect(cuerpo).toMatch(/'CATALOGO_PUBLICO'/)
   })
 
+  it("runs as SECURITY DEFINER with a pinned search_path", () => {
+    // La dispara un trigger, asi que corre con el rol de quien haga el UPDATE.
+    // Sin DEFINER, un UPDATE que no sea service_role hace que el cierre de las
+    // reservas afecte 0 filas SIN error y el stock no vuelva.
+    const { archivo } = ultimaDefinicion("liberar_reserva_catalogo")
+    const sql = readFileSync(join(MIGRATIONS_DIR, archivo), "utf8")
+    expect(sql).toMatch(/SECURITY DEFINER\s+SET\s+search_path\s*=/i)
+  })
+
   it("locks the cotizacion row so two releases cannot race", () => {
     // El pendiente se calcula ANTES del lock sobre inventario. Si el cron de
     // expiracion y un rechazo pegan a la vez, los dos leen el mismo pendiente,
@@ -225,6 +234,16 @@ describe("reservar_items_cotizacion — no reserva dos veces la misma cotizació
     expect(cuerpo).toMatch(/reserva_cotizacion_pendiente/i)
   })
 
+  it("walks the ledger too, not only the lines that still exist", () => {
+    // Si el admin BORRA la linea de un producto, un loop sobre
+    // items_cotizacion no vuelve a visitarlo nunca — ni aca ni en
+    // liberar_items_cotizacion, que tambien itera lineas. La reserva quedaba
+    // tomada para siempre. Del lado del libro entra con cantidad 0 y cae en la
+    // rama de exceso.
+    expect(cuerpo).toMatch(/FULL\s+OUTER\s+JOIN\s+reserva_cotizacion_pendiente/i)
+    expect(cuerpo).toMatch(/COALESCE\(\s*li\.cantidad\s*,\s*0\s*\)/i)
+  })
+
   it("aggregates the required quantity per product, like the ledger does", () => {
     // reserva_cotizacion_pendiente agrupa por inventario_id. Comparar ese
     // agregado contra la cantidad de UNA linea sub-reserva las cotizaciones con
@@ -249,7 +268,7 @@ describe("reservar_items_cotizacion — no reserva dos veces la misma cotizació
     // Con cobertura parcial (la solicitud reservo 2, un admin edito la linea a
     // 5) el guard todo-o-nada reservaba 5 encima de 2: 7 reservado para una
     // cotizacion de 5, y la venta liberaba 5 dejando 2 colgadas para siempre.
-    expect(cuerpo).toMatch(/v_faltante\s*:?=\s*v_item\.cantidad\s*-\s*COALESCE\(\s*v_ya_reservado/i)
+    expect(cuerpo).toMatch(/v_faltante\s*:=\s*v_item\.cantidad\s*-\s*COALESCE\(\s*v_ya_reservado/i)
     // Lo que se reserva es el faltante, no la cantidad entera.
     expect(cuerpo).toMatch(/stock_reservado\s*=\s*stock_reservado\s*\+\s*v_faltante/i)
     expect(cuerpo).not.toMatch(/stock_reservado\s*=\s*stock_reservado\s*\+\s*v_item\.cantidad/i)

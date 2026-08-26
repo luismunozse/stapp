@@ -29,11 +29,18 @@
 --   * lib/catalogo/stock-disponible.ts y sus consumidores: el storefront
 --     calcula stock - stock_reservado. Con el descuento directo de vuelta, esa
 --     resta descuenta dos veces lo que ya salio del stock.
---   * Las llamadas a liberar_reserva_catalogo en app/api/cotizaciones/[id]/route.ts
---     (PUT y DELETE) y en app/api/public/cotizaciones/[token]/rechazar/route.ts.
+--   * El guard del PUT de cotizaciones que impide reabrir una solicitud del
+--     catalogo RECHAZADA: sin liberacion, reabrirla vuelve a ser inocuo.
+--   * El guard `existing.origen !== "CATALOGO_PUBLICO"` que rodea la llamada a
+--     liberar_items_cotizacion en el PUT: existe porque el trigger ya liberaba,
+--     y sin trigger esa llamada tiene que volver a correr para TODAS.
+--   * La llamada a consumir_reserva_catalogo en el fallback JS de
+--     convertir-venta.
+--
+-- NO hace falta revertir (son correctas por si mismas y no dependen de la 314):
 --   * La reposicion de catalogo_item_id / variante_id / variante_etiqueta en el
---     PUT de cotizaciones: es correcta por si sola, pero se agrego para que la
---     restitucion de variantes funcione.
+--     PUT de cotizaciones.
+--   * stockFisicoCatalogo / stockReservadoCatalogo en la grilla del admin.
 
 -- Paso 2b: las reservas de variantes / items sin link no aparecen en
 -- reserva_cotizacion_pendiente (no dejan movimientos de inventario). Viven en

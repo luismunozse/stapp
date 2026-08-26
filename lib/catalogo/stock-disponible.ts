@@ -23,11 +23,52 @@
 export type ItemConStock = {
   stock?: number | null
   inventario_id?: string | null
-  inventario?: { stock?: number | null; stock_reservado?: number | null } | null
+  inventario?: {
+    stock?: number | null
+    stock_reservado?: number | null
+    deleted_at?: string | null
+  } | null
+}
+
+/**
+ * Un producto borrado en soft no se puede vender: `reservar_stock_catalogo`
+ * filtra `deleted_at IS NULL` y levanta P0002 si el link apunta a uno.
+ * El storefront tiene que decir lo mismo — si lo sigue ofreciendo, el comprador
+ * se entera recién al confirmar y con el carrito entero rechazado.
+ */
+function inventarioVivo(inv: NonNullable<ItemConStock["inventario"]>): boolean {
+  return inv.deleted_at == null
+}
+
+/**
+ * Stock FÍSICO del ítem: lo que hay en el estante, sin descontar reservas.
+ *
+ * Es lo que corresponde mostrar en las pantallas de administración, donde el
+ * dueño necesita el número real y no la disponibilidad pública. Existe como
+ * función con nombre —y no como ternario suelto— para que las dos preguntas
+ * queden separadas y ninguna se confunda con la otra: mezclarlas fue el bug
+ * original del catálogo.
+ */
+export function stockFisicoCatalogo(item: ItemConStock): number | null {
+  if (item.inventario_id && item.inventario) {
+    return item.inventario.stock ?? null
+  }
+  return item.stock ?? null
+}
+
+/** Unidades comprometidas por cotizaciones sin cerrar. 0 si no hay link. */
+export function stockReservadoCatalogo(item: ItemConStock): number {
+  if (item.inventario_id && item.inventario) {
+    return item.inventario.stock_reservado ?? 0
+  }
+  return 0
 }
 
 export function stockDisponibleCatalogo(item: ItemConStock): number | null {
   if (item.inventario_id && item.inventario) {
+    // Producto borrado: 0 disponible, no "sin límite". Es lo mismo que va a
+    // contestar el RPC al confirmar el pedido.
+    if (!inventarioVivo(item.inventario)) return 0
     const stock = item.inventario.stock
     if (stock == null) return null
     const reservado = item.inventario.stock_reservado ?? 0

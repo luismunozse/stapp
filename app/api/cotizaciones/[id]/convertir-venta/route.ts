@@ -307,6 +307,21 @@ export async function POST(
       console.error("Error releasing cotizacion reservations after sale:", releaseErr)
     }
 
+    // Cerrar la reserva del catálogo para variantes e items sin link (clases B
+    // y C de la migración 314). Ahí el descuento del pedido ES el de la venta,
+    // así que se cierra SIN devolver stock. Si no, la reserva queda abierta y un
+    // cambio posterior a RECHAZADA dispara el trigger y acredita mercadería ya
+    // despachada. La RPC atómica lo hace adentro; este camino tiene que hacerlo
+    // a mano, que es justo el que corre sobre una base sin migrar.
+    try {
+      await supabaseAdmin.rpc("consumir_reserva_catalogo", {
+        p_cotizacion_id: id,
+        p_motivo: "Reserva consumida por conversión a venta",
+      })
+    } catch (consumeErr) {
+      console.error("Error consuming catalog reservation after sale:", consumeErr)
+    }
+
     const { data: venta } = await supabaseAdmin
       .from("ventas")
       .select("numero_venta")

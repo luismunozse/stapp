@@ -97,7 +97,14 @@ function archivosFuente(dir: string, acc: string[] = []): string[] {
   return acc
 }
 
-const FUENTES = [...archivosFuente("app"), ...archivosFuente("lib")].map((rel) => ({
+// `components/` estaba fuera del barrido y ahí se escondía un call site sin
+// migrar (la grilla del admin). Un guard que no recorre todo el árbol da una
+// garantía que no tiene.
+const FUENTES = [
+  ...archivosFuente("app"),
+  ...archivosFuente("lib"),
+  ...archivosFuente("components"),
+].map((rel) => ({
   rel,
   src: readFileSync(join(process.cwd(), rel), "utf8"),
 }))
@@ -113,7 +120,11 @@ describe("disponibilidad del catálogo: un solo cálculo", () => {
     // Se prohíbe la FORMA, no el token `inventario.stock`: leer el stock físico
     // es legítimo fuera del catálogo (app/api/inventario, ordenes-compra) y en
     // el desglose de /api/catalogo/diagnose.
-    const TERNARIO_VIEJO = /\.inventario\s*\?\s*[^?:]*\.inventario\.stock\s*:/
+    // Cubre las dos formas de preguntar por el link (`.inventario` y
+    // `.inventario_id`) y la lectura con optional chaining (`.inventario?.stock`).
+    // La version anterior solo veia una de las cuatro combinaciones, y por eso
+    // la grilla del admin paso el guard leyendo stock crudo.
+    const TERNARIO_VIEJO = /\.inventario(_id)?\s*\?\s*[^?:]*\.inventario\??\.stock/
 
     const infractores = FUENTES.filter(
       (f) => f.rel !== HELPER && TERNARIO_VIEJO.test(f.src.replace(/\s+/g, " "))
