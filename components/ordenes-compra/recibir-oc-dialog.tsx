@@ -9,8 +9,9 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { PackageCheck, Search, Link2, X } from "lucide-react"
+import { PackageCheck, Link2, X } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
+import { BuscadorInventario, type ArticuloInventario } from "./buscador-inventario"
 
 interface Props {
   open: boolean
@@ -46,10 +47,10 @@ export function RecibirOCDialog({ open, onOpenChange, ordenCompraId, numeroOC, o
   const [inventarioLinks, setInventarioLinks] = useState<Record<string, { id: string; codigo: string; nombre: string } | null>>({})
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  // Search state per item
+  // Qué fila tiene el buscador abierto. El término de búsqueda y los
+  // resultados viven dentro de BuscadorInventario, compartido con el alta de OC.
   const [searchingItem, setSearchingItem] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [searchResults, setSearchResults] = useState<any[]>([])
   // Clave de idempotencia de ESTA recepción. Se genera una vez por apertura del
   // diálogo, así un reintento (red que se corta, doble submit, la app que
   // reintenta sola) reusa la misma clave y el servidor devuelve el resultado
@@ -80,29 +81,15 @@ export function RecibirOCDialog({ open, onOpenChange, ordenCompraId, numeroOC, o
       .finally(() => setLoading(false))
   }, [open, ordenCompraId])
 
-  // Debounced inventory search
-  useEffect(() => {
-    if (!searchQuery || searchQuery.length < 2) { setSearchResults([]); return }
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/inventario/search?q=${encodeURIComponent(searchQuery)}&limit=8&includeZeroStock=true`)
-        if (res.ok) setSearchResults(await res.json())
-      } catch { /* ignore */ }
-    }, 300)
-    return () => clearTimeout(t)
-  }, [searchQuery])
-
   const openSearch = (itemId: string) => {
     setSearchingItem(itemId)
     setSearchQuery("")
-    setSearchResults([])
   }
 
-  const linkInventario = (itemId: string, inv: { id: string; codigo: string; nombre: string }) => {
-    setInventarioLinks(prev => ({ ...prev, [itemId]: inv }))
+  const linkInventario = (itemId: string, inv: ArticuloInventario) => {
+    setInventarioLinks(prev => ({ ...prev, [itemId]: { id: inv.id, codigo: inv.codigo, nombre: inv.nombre } }))
     setSearchingItem(null)
     setSearchQuery("")
-    setSearchResults([])
   }
 
   const unlinkInventario = (itemId: string) => {
@@ -196,36 +183,26 @@ export function RecibirOCDialog({ open, onOpenChange, ordenCompraId, numeroOC, o
                                 <span className="font-medium">{linked.nombre}</span>
                                 <span className="text-muted-foreground ml-1">{linked.codigo}</span>
                               </div>
-                              <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={() => unlinkInventario(item.id)}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label="Desvincular artículo"
+                                className="h-5 w-5 shrink-0"
+                                onClick={() => unlinkInventario(item.id)}
+                              >
                                 <X className="h-3 w-3" />
                               </Button>
                             </div>
                           ) : isSearching ? (
-                            <div className="relative">
-                              <Input
-                                autoFocus
-                                placeholder="Buscar producto..."
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                                onBlur={() => setTimeout(() => setSearchingItem(null), 200)}
-                                className="h-7 text-xs"
-                              />
-                              {searchResults.length > 0 && (
-                                <div className="absolute z-50 w-64 mt-1 bg-popover border rounded-md shadow-md max-h-36 overflow-y-auto">
-                                  {searchResults.map((inv) => (
-                                    <button
-                                      key={inv.id}
-                                      type="button"
-                                      className="w-full text-left px-2 py-1.5 text-xs hover:bg-accent"
-                                      onMouseDown={() => linkInventario(item.id, { id: inv.id, codigo: inv.codigo, nombre: inv.nombre })}
-                                    >
-                                      <span className="font-medium">{inv.nombre}</span>
-                                      <span className="ml-1 text-muted-foreground">{inv.codigo}</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
+                            <BuscadorInventario
+                              autoFocus
+                              valor={searchQuery}
+                              onValorChange={setSearchQuery}
+                              onSeleccionar={(inv) => linkInventario(item.id, inv)}
+                              onCancelar={() => setSearchingItem(null)}
+                              placeholder="Buscar producto..."
+                              className="h-7 text-xs"
+                            />
                           ) : (
                             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => openSearch(item.id)}>
                               <Link2 className="h-3 w-3" /> Vincular
