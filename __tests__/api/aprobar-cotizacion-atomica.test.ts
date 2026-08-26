@@ -158,6 +158,46 @@ describe("POST /api/cotizaciones/[id]/aprobar — atomic RPC path", () => {
     expect(capturedRpcParams.p_firma_mime).toBe(validBody.firmaMime)
   })
 
+  it("al aprobar una revision, delega en el RPC atomico bajo el id de la revision", async () => {
+    // La aceptada original reservo stock contra SUS items (migracion 246). Si la
+    // revision reserva los suyos sin liberar aquellos primero, stock_reservado
+    // queda inflado para siempre -- el bug fantasma que la migracion 246
+    // documenta. Esa liberacion vive dentro de aprobar_cotizacion_atomica
+    // (plpgsql, migracion 312) y no es observable desde un test de la capa API:
+    // el RPC esta mockeado aca. Lo que este test SI fija es que aprobar una
+    // revision no bifurca a un camino JS distinto -- sigue yendo al mismo RPC
+    // atomico, con el id de la revision, que es lo unico que hace que la
+    // liberacion del lado SQL pueda dispararse.
+    mockAuthSuccess()
+
+    const mockRevision = { ...mockCotizacionEnviada, id: "rev-1" }
+    const mockRevisionAceptada = { ...mockRevision, estado: "ACEPTADA" }
+
+    let callCount = 0
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "cotizaciones") {
+        callCount++
+        return (callCount === 1 ? createChainMock(mockRevision) : createChainMock(mockRevisionAceptada)) as any
+      }
+      return createChainMock(null) as any
+    })
+
+    let capturedRpcParams: any = null
+    vi.mocked(supabaseAdmin.rpc).mockImplementation((fn: string, params?: any) => {
+      if (fn === "aprobar_cotizacion_atomica") capturedRpcParams = params
+      // El resultado incluye 'liberadas' a modo informativo: la ruta no lo lee
+      // (ver rpcResult sin uso posterior), asi que no es lo que este test prueba.
+      return Promise.resolve({ data: { ok: true, liberadas: ["cot-1"] }, error: null }) as any
+    })
+
+    const response = await POST(createPostRequest(validBody), createParams("rev-1"))
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(200)
+    expect(capturedRpcParams).not.toBeNull()
+    expect(capturedRpcParams.p_cotizacion_id).toBe("rev-1")
+  })
+
   it("returns 400 when rpc error message contains 'enviadas'", async () => {
     mockAuthSuccess()
     const fetchChain = createChainMock(mockCotizacionEnviada)
