@@ -6,6 +6,7 @@ import { transicionarOrden } from "@/lib/orden-transicion"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { dateOnlyToNoonUtcISO } from "@/lib/timezone"
 import { totalPresupuestoDeOrden, cotizacionesVigentesDeOrden } from "@/lib/cotizacion-presupuesto"
+import { marcarOriginalReemplazada, restaurarOriginalDeRevision } from "@/lib/cotizacion-revision"
 import { z } from "zod"
 
 const itemSchema = z.object({
@@ -289,7 +290,7 @@ export async function PUT(
     // Verify cotizacion exists and belongs to org
     const { data: existing, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, tipo, organization_id, created_by, iva_porcentaje, descuento_global_tipo, descuento_global_valor, orden_id")
+      .select("id, estado, tipo, organization_id, created_by, iva_porcentaje, descuento_global_tipo, descuento_global_valor, orden_id, revision_de")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .single()
@@ -585,8 +586,43 @@ export async function PUT(
       throw updateError
     }
 
+    // ── El puntero `reemplazada_por` de la original, en las dos direcciones ──
+    //
+    // Este PUT es la otra puerta por la que una revisión se envía: el botón
+    // "Enviar y compartir" de la lista no pasa por /enviar (eso manda el mail),
+    // manda `estado: "ENVIADA"` acá. Si la marca sólo viviera en /enviar, una
+    // revisión compartida por link nunca reemplazaría a su original y la orden
+    // contaría las dos versiones.
+    //
+    // Y al revés: rechazar la revisión la saca del presupuesto por RECHAZADA,
+    // pero la original sigue apuntada como reemplazada — quedan las dos fuera y
+    // el próximo recálculo deja la orden en 0 aunque la firma de la original
+    // siga siendo el acuerdo vigente.
+    //
+    // Ambas van ANTES del recálculo de abajo: al revés, la suma es la de antes.
+    let originalRestaurada: string | null = null
+    if (existing.revision_de) {
+      if (data.estado === "ENVIADA") {
+        await marcarOriginalReemplazada(
+          { id, revision_de: existing.revision_de },
+          organizationId!
+        )
+      } else if (data.estado === "RECHAZADA") {
+        originalRestaurada = await restaurarOriginalDeRevision(
+          { id, revision_de: existing.revision_de },
+          organizationId!
+        )
+      }
+    }
+
     // Recalc presupuesto en órdenes afectadas (items o reasignación de orden_id)
     const ordenesARecalcular = new Set<string>()
+    // Un cambio pelado de estado no recalcula nada (a propósito). Pero si acá se
+    // restauró una original, la cifra restaurada no aparece sola: hay que
+    // recalcular para que el presupuesto de la orden vuelva a valer lo firmado.
+    if (originalRestaurada && existing.orden_id) {
+      ordenesARecalcular.add(existing.orden_id)
+    }
     if (ordenIdChanged) {
       if (oldOrdenId) ordenesARecalcular.add(oldOrdenId)
       if (newOrdenId) ordenesARecalcular.add(newOrdenId)
@@ -713,7 +749,7 @@ export async function DELETE(
     // Verify cotizacion via organization_id
     const { data: cotizacion, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, organization_id, orden_id")
+      .select("id, estado, organization_id, orden_id, revision_de")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .single()
@@ -764,6 +800,16 @@ export async function DELETE(
     if (deleteError) {
       throw deleteError
     }
+
+    // Borrar una revisión es la tercera forma de matarla (las otras dos son el
+    // rechazo del staff y el del cliente desde el link público), y deja el mismo
+    // agujero: la original quedaría apuntada como reemplazada por una fila que
+    // ya no existe, fuera del presupuesto para siempre. Va antes del recálculo
+    // de abajo, que es el que hace aterrizar la cifra restaurada.
+    await restaurarOriginalDeRevision(
+      { id, revision_de: cotizacion.revision_de },
+      organizationId!
+    )
 
     // Si la cotización estaba vinculada a una orden, recalcular presupuesto con cotizaciones restantes
     if (cotizacion.orden_id) {
