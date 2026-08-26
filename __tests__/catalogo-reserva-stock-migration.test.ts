@@ -86,6 +86,20 @@ describe("reservar_stock_catalogo — reserva, no descuenta", () => {
 describe("reservar_stock_catalogo — no crea reservas imposibles de liberar", () => {
   const { cuerpo } = ultimaDefinicion("reservar_stock_catalogo")
 
+  it("requires the cotizacion id — no silently unreleasable reservations", () => {
+    // Con `p_cotizacion_id TEXT DEFAULT NULL`, una llamada vieja de 2 args
+    // seguia resolviendo y asentaba el movimiento con referencia_id NULL, que
+    // ningun camino de liberacion puede encontrar. Sin default, falla fuerte.
+    const { archivo } = ultimaDefinicion("reservar_stock_catalogo")
+    const sql = readFileSync(join(MIGRATIONS_DIR, archivo), "utf8")
+    const firma = sql.slice(
+      sql.lastIndexOf("CREATE OR REPLACE FUNCTION reservar_stock_catalogo"),
+      sql.lastIndexOf("CREATE OR REPLACE FUNCTION reservar_stock_catalogo") + 260
+    )
+    expect(firma).toMatch(/p_cotizacion_id\s+TEXT/i)
+    expect(firma).not.toMatch(/p_cotizacion_id\s+TEXT\s+DEFAULT/i)
+  })
+
   it("skips soft-deleted inventory rows", () => {
     // La liberación filtra `deleted_at IS NULL` y hace CONTINUE si no encuentra
     // (206:1450). Si la reserva no filtra igual, una fila muerta se puede
@@ -121,6 +135,37 @@ describe("liberar_reserva_catalogo — devuelve lo que el catálogo tomó", () =
   it("is scoped to catalog-born quotes", () => {
     expect(cuerpo).toMatch(/'CATALOGO_PUBLICO'/)
   })
+
+  it("locks the cotizacion row so two releases cannot race", () => {
+    // El pendiente se calcula ANTES del lock sobre inventario. Si el cron de
+    // expiracion y un rechazo pegan a la vez, los dos leen el mismo pendiente,
+    // serializan en el lock de inventario y cada uno descuenta: stock_reservado
+    // se clampea comiendose reserva ajena y el libro se va a negativo.
+    const cabecera = cuerpo.slice(0, cuerpo.indexOf("FOR v_row"))
+    expect(cabecera).toMatch(/FROM\s+cotizaciones[\s\S]{0,120}?FOR\s+UPDATE/i)
+  })
+
+  it("records the amount actually released, not the amount it wanted to release", () => {
+    // El UPDATE clampea con GREATEST(0, ...) pero el asiento registraba la
+    // cantidad entera: el libro netea a 0 mientras la columna libero menos, y
+    // la diferencia queda irrecuperable y muda.
+    expect(cuerpo).toMatch(/v_delta/)
+    expect(cuerpo).toMatch(/'LIBERACION_RESERVA',\s*v_delta/)
+  })
+
+  it("restores the catalog-only stock columns too", () => {
+    // Variantes e items sueltos no tienen fila de inventario, asi que su
+    // descuento no vive en el libro mayor. Sin esto, un catalogo con variantes
+    // sigue teniendo el drenaje anonimo irreversible.
+    expect(cuerpo).toMatch(/UPDATE\s+catalogo_variantes\s+SET\s+stock\s*=\s*stock\s*\+/i)
+    expect(cuerpo).toMatch(/UPDATE\s+catalogo_items\s+SET\s+stock\s*=\s*stock\s*\+/i)
+  })
+
+  it("guards the catalog-column restore with a one-shot flag", () => {
+    // Esos UPDATE no dejan asiento, asi que no hay libro que netear: sin una
+    // marca, liberar dos veces devolveria el stock dos veces.
+    expect(cuerpo).toMatch(/catalogo_stock_restaurado_at/)
+  })
 })
 
 describe("reservar_items_cotizacion — no reserva dos veces la misma cotización", () => {
@@ -131,6 +176,27 @@ describe("reservar_items_cotizacion — no reserva dos veces la misma cotizació
     // tipo=ORDEN -> aprobar reserva OTRA VEZ porque tipo <> 'PRESUPUESTO'.
     // Quedaba 2x reservado y la venta solo liberaba 1x.
     expect(cuerpo).toMatch(/reserva_cotizacion_pendiente/i)
+  })
+
+  it("aggregates the required quantity per product, like the ledger does", () => {
+    // reserva_cotizacion_pendiente agrupa por inventario_id. Comparar ese
+    // agregado contra la cantidad de UNA linea sub-reserva las cotizaciones con
+    // el mismo producto repetido (dos lineas de 3 reservaban 3, no 6), y
+    // cotizacion-form.tsx agrega lineas sin deduplicar por inventarioId.
+    const loop = cuerpo.match(/FOR\s+v_item\s+IN[\s\S]*?LOOP/i)
+    expect(loop).not.toBeNull()
+    expect(loop![0]).toMatch(/GROUP\s+BY\s+ic\.inventario_id/i)
+    expect(loop![0]).toMatch(/SUM\s*\(\s*ic\.cantidad\s*\)/i)
+  })
+
+  it("reserves only the shortfall, never the full amount on top", () => {
+    // Con cobertura parcial (la solicitud reservo 2, un admin edito la linea a
+    // 5) el guard todo-o-nada reservaba 5 encima de 2: 7 reservado para una
+    // cotizacion de 5, y la venta liberaba 5 dejando 2 colgadas para siempre.
+    expect(cuerpo).toMatch(/v_faltante\s*:?=\s*v_item\.cantidad\s*-\s*COALESCE\(\s*v_ya_reservado/i)
+    // Lo que se reserva es el faltante, no la cantidad entera.
+    expect(cuerpo).toMatch(/stock_reservado\s*=\s*stock_reservado\s*\+\s*v_faltante/i)
+    expect(cuerpo).not.toMatch(/stock_reservado\s*=\s*stock_reservado\s*\+\s*v_item\.cantidad/i)
   })
 })
 
@@ -149,6 +215,35 @@ describe("expirar_reservas_catalogo — el abandono deja de ser permanente", () 
 
   it("releases through liberar_reserva_catalogo instead of duplicating the logic", () => {
     expect(cuerpo).toMatch(/liberar_reserva_catalogo\s*\(/i)
+  })
+
+  it("survives one broken tenant instead of aborting the whole nightly sweep", () => {
+    // liberar_reserva_deposito levanta P0011 si la org no tiene deposito
+    // principal. Sin bloque de excepcion por cotizacion, una sola org rota
+    // revierte la transaccion entera y no se expira nada de nadie, todas las
+    // noches, en silencio.
+    expect(cuerpo).toMatch(/EXCEPTION\s+WHEN\s+OTHERS/i)
+    expect(cuerpo).toMatch(/fallidas|errores/i)
+  })
+
+  it("also sweeps terminal quotes that still show a live balance", () => {
+    // Una liberacion que falla al rechazar deja la cotizacion RECHAZADA; una
+    // que falla al borrar deja deleted_at puesto. Filtrando solo por
+    // ENVIADA + deleted_at IS NULL, el cron nunca las puede levantar y ese
+    // stock queda filtrado para siempre sin señal.
+    expect(cuerpo).toMatch(/'RECHAZADA'/)
+    expect(cuerpo).toMatch(/deleted_at\s+IS\s+NOT\s+NULL/i)
+  })
+
+  it("never sweeps an accepted quote", () => {
+    // ACEPTADA retiene stock legitimamente: esta en vuelo hacia la venta.
+    expect(cuerpo).not.toMatch(/'ACEPTADA'/)
+  })
+
+  it("picks up quotes whose only stock is in the catalog-only columns", () => {
+    // Esas no tienen movimientos, asi que un filtro basado solo en el libro
+    // mayor las deja afuera del barrido para siempre.
+    expect(cuerpo).toMatch(/catalogo_stock_restaurado_at/)
   })
 })
 

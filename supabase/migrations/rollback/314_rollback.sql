@@ -34,9 +34,25 @@
 --   * Las llamadas a liberar_reserva_catalogo en app/api/cotizaciones/[id]/route.ts
 --     (PUT y DELETE) y en app/api/public/cotizaciones/[token]/rechazar/route.ts.
 
+-- Paso 2b: las cotizaciones de variantes / items sin link no aparecen en
+-- reserva_cotizacion_pendiente (no dejan movimientos). Su restitucion se
+-- rastrea con la marca, asi que hay que barrerlas por separado ANTES de
+-- dropear las funciones:
+--
+--   SELECT liberar_reserva_catalogo(c.id, 'Rollback 314')
+--   FROM cotizaciones c
+--   WHERE c.origen = 'CATALOGO_PUBLICO'
+--     AND c.catalogo_stock_restaurado_at IS NULL;
+
 DROP FUNCTION IF EXISTS expirar_reservas_catalogo(INTEGER);
 DROP FUNCTION IF EXISTS liberar_reserva_catalogo(TEXT, TEXT);
 DROP FUNCTION IF EXISTS reserva_cotizacion_pendiente(TEXT);
+
+-- La columna NO se dropea: es el unico registro de que esas restituciones ya
+-- se hicieron. Dropearla y volver a aplicar la 314 restituiria todo de nuevo,
+-- inflando el stock. Queda huerfana y es inofensiva.
+-- Si de verdad hace falta sacarla:
+--   ALTER TABLE cotizaciones DROP COLUMN IF EXISTS catalogo_stock_restaurado_at;
 
 -- reservar_items_cotizacion vuelve a la definicion de la 206 (sin el guard de
 -- idempotencia). Ojo: con esto vuelve el doble-reserva del camino

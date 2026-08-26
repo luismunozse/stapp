@@ -23,49 +23,97 @@
 --      devolución, y liberar_items_cotizacion solo toca stock_reservado —
 --      una columna que el catálogo nunca escribía. O sea: cualquiera desde
 --      internet podía vaciar el stock declarado de un local sin comprar nada,
---      de forma irreversible.
+--      de forma irreversible. Esto valía para las TRES clases de ítem que el
+--      catálogo maneja (ver abajo), no sólo para las linkeadas a inventario.
 --
--- Arreglo, en cuatro partes — cambiar descuento por reserva SIN camino de
--- liberación sería puramente cosmético: el stock quedaría igual de
--- inmovilizado, sólo que en otra columna.
+-- ============================================================
+-- QUÉ HACE ESTA MIGRACIÓN, POR CLASE DE ÍTEM
+-- ============================================================
+-- El catálogo maneja tres clases de ítem y NO se comportan igual. Esto importa
+-- para saber qué queda cubierto y qué no:
 --
---   1. El catálogo RESERVA en vez de descontar (parte 1), igual que el flujo
---      interno (reservar_items_cotizacion, migración 206), con réplica por
---      depósito y asiento contable.
---   2. Toda reserva del catálogo se puede DEVOLVER: liberar_reserva_catalogo
---      (partes 3 y 4) calcula lo que esa cotización tomó desde el libro mayor
---      de movimientos, así que es idempotente y nunca se come la reserva de
---      otra cotización. Las rutas la llaman al rechazar (desde CUALQUIER
---      estado, no sólo ACEPTADA) y al borrar en soft.
+--   A. Ítem linkeado a inventario (catalogo_items.inventario_id NOT NULL,
+--      sin variantes). Es el único que la venta también toca.
+--      → Pasa a RESERVAR (inventario.stock_reservado) en vez de descontar,
+--        con réplica por depósito y asiento RESERVA/LIBERACION_RESERVA.
+--        La devolución se netea contra el libro mayor de movimientos.
+--
+--   B. Variante (catalogo_variantes.stock).
+--   C. Ítem sin link (catalogo_items.stock).
+--      → SIGUEN DESCONTANDO DIRECTO. No tienen fila en inventario, así que no
+--        pueden tener stock_reservado ni asiento (movimientos_inventario.
+--        inventario_id es NOT NULL con FK), y crear_venta_atomica no las toca
+--        nunca, así que NO corren riesgo de doble descuento. Lo que sí les
+--        faltaba era la vuelta atrás: ahora liberar_reserva_catalogo las
+--        RESTITUYE (stock = stock + cantidad), con idempotencia por la marca
+--        cotizaciones.catalogo_stock_restaurado_at.
+--      → Para B y C el número que ve el comprador ya era el correcto (baja al
+--        pedir); no se les agrega columna de reservas a propósito: obligaría a
+--        cambiar todas las lecturas de variantes del storefront sin arreglar
+--        ningún bug real.
+--
+-- LO QUE QUEDA EXPLÍCITAMENTE FUERA DE ALCANCE:
+--   * B y C no muestran sus reservas como "reservado" en ningún lado: su stock
+--     simplemente baja. Es visibilidad, no corrección.
+--   * Un ítem con inventario_id Y variantes activas descuenta la variante pero
+--     igual guarda inventario_id en items_cotizacion (cotizar/route.ts). Esa
+--     inconsistencia es anterior a esta migración y sigue acá.
+--   * No hay backfill del stock que las solicitudes viejas ya se comieron: no
+--     hay forma de distinguir las que terminaron en venta (descuento correcto)
+--     de las abandonadas (espurio). Es ajuste manual, caso por caso.
+--
+-- ============================================================
+-- EL ARREGLO
+-- ============================================================
+-- Cambiar descuento por reserva SIN camino de liberación sería cosmético: el
+-- stock quedaría igual de inmovilizado, sólo que en otra columna. Por eso van
+-- juntas:
+--
+--   1. Clase A reserva en vez de descontar (parte 1), igual que el flujo
+--      interno (reservar_items_cotizacion, migración 206).
+--   2. Toda solicitud del catálogo se puede DEVOLVER, en las tres clases:
+--      liberar_reserva_catalogo (partes 3 y 4). Para A netea contra el libro
+--      mayor — idempotente y sin poder comerse la reserva de otra cotización;
+--      para B y C restituye la columna una sola vez. Las rutas la llaman al
+--      rechazar (desde CUALQUIER estado, no sólo ACEPTADA) y al borrar en soft.
 --   3. El abandono deja de ser permanente: expirar_reservas_catalogo (parte 6)
---      corre por cron y libera lo que quedó ENVIADA pasado el vencimiento.
+--      corre por cron sobre las tres clases, y además levanta las cotizaciones
+--      que quedaron en estado terminal con saldo vivo (si la liberación del
+--      rechazo o del borrado falló, nadie más volvía a pasar por ellas).
 --   4. El camino catálogo → orden → venta ya no reserva dos veces:
---      reservar_items_cotizacion (parte 5) es idempotente por cotización.
+--      reservar_items_cotizacion (parte 5) reserva el FALTANTE por producto.
 --
 -- La conversión a venta libera la reserva (liberar_items_cotizacion) y
 -- descuenta UNA sola vez por el camino de siempre.
 --
 -- Qué cambia para el usuario:
---   * inventario.stock deja de bajar cuando entra una solicitud del catálogo.
---     Lo que sube ahora es stock_reservado, visible como reserva igual que las
---     internas y liberable a mano. El stock "disponible" que ve el comprador NO
---     cambia: el storefront ya pasó a calcular stock - stock_reservado.
---   * Las reservas del catálogo aparecen en el historial del producto como
+--   * inventario.stock deja de bajar cuando entra una solicitud del catálogo
+--     de clase A. Lo que sube ahora es stock_reservado, visible como reserva
+--     igual que las internas y liberable a mano. El stock "disponible" que ve
+--     el comprador NO cambia: el storefront ya calcula stock - stock_reservado.
+--   * Las reservas de clase A aparecen en el historial del producto como
 --     movimiento RESERVA con referencia_tipo COTIZACION, y su devolución como
 --     LIBERACION_RESERVA.
 --   * Una solicitud sin responder deja de retener stock a los 7 días (default
 --     de expirar_reservas_catalogo; ver la nota de decisión de producto en la
 --     parte 6).
 --
+-- REGRESIÓN CONOCIDA, a cambio de lo anterior:
+--   Antes, el catálogo descontaba inventario.stock duro, así que una venta del
+--   POS físicamente no podía llevarse esa unidad. Ahora sólo sube
+--   stock_reservado, y crear_venta_atomica (269:119) valida contra el stock sin
+--   mirar reservas. Última unidad: el comprador la pide por el catálogo, el POS
+--   la vende igual, y al aprobar la cotización salta "Stock insuficiente" y la
+--   aprobación revierte. Es exactamente cómo se comportan hoy las reservas
+--   internas — consistente, pero es PÉRDIDA NETA de protección para el
+--   comprador del catálogo. Hacer que el POS respete reservas es un cambio de
+--   política que afecta a todo el sistema, no sólo al catálogo, y no se hace
+--   acá.
+--
 -- REQUIERE además, del lado de la app: el cron
 -- /api/cron/catalogo-reservas-vencidas dado de alta en vercel.json. Sin el
 -- cron, las partes 1 a 5 siguen siendo correctas pero el abandono vuelve a
 -- retener stock indefinidamente.
---
--- NO se hace backfill del stock que las solicitudes viejas ya se comieron:
--- no hay forma de distinguir las que terminaron en venta (descuento correcto)
--- de las abandonadas (descuento espurio). Corregirlo es un ajuste manual de
--- inventario, caso por caso.
 
 -- ============================================================
 -- Parte 1: reservar_stock_catalogo
@@ -73,13 +121,28 @@
 -- Se agrega p_cotizacion_id para que el movimiento quede referenciado a la
 -- solicitud. Cambia la aridad, así que hay que soltar la firma vieja: con las
 -- dos vivas, una llamada de 2 argumentos sería ambigua.
+--
+-- p_cotizacion_id va SIN DEFAULT a propósito. Con `DEFAULT NULL`, una llamada
+-- vieja de 2 argumentos seguiría resolviendo y asentaría el movimiento con
+-- referencia_id NULL — una reserva que ningún camino de liberación puede
+-- encontrar. Sin default, esa llamada falla fuerte y a la vista.
+
+-- Marca de un solo uso para la restitución de las columnas de stock propias
+-- del catálogo (variantes e items sin link). Esas no dejan asiento en
+-- movimientos_inventario, así que no hay libro mayor que netear y sin esta
+-- marca liberar dos veces devolvería el stock dos veces.
+ALTER TABLE cotizaciones
+  ADD COLUMN IF NOT EXISTS catalogo_stock_restaurado_at TIMESTAMPTZ;
+
+COMMENT ON COLUMN cotizaciones.catalogo_stock_restaurado_at IS
+  'Cuándo se devolvió el stock que esta solicitud del catálogo descontó de catalogo_variantes.stock / catalogo_items.stock. NULL = todavía descontado. Los items linkeados a inventario no usan esta marca: se netean contra movimientos_inventario.';
 
 DROP FUNCTION IF EXISTS reservar_stock_catalogo(TEXT, JSONB);
 
 CREATE OR REPLACE FUNCTION reservar_stock_catalogo(
   p_organization_id TEXT,
   p_items           JSONB,
-  p_cotizacion_id   TEXT DEFAULT NULL
+  p_cotizacion_id   TEXT
 ) RETURNS BOOLEAN AS $$
 DECLARE
   v_item        JSONB;
@@ -412,16 +475,28 @@ CREATE OR REPLACE FUNCTION liberar_reserva_catalogo(
   p_motivo        TEXT DEFAULT 'Reserva del catálogo liberada'
 ) RETURNS JSONB AS $$
 DECLARE
-  v_org_id   TEXT;
-  v_origen   TEXT;
-  v_row      RECORD;
-  v_stock    INTEGER;
-  v_deposito TEXT;
-  v_count    INTEGER := 0;
+  v_org_id     TEXT;
+  v_origen     TEXT;
+  v_restaurado TIMESTAMPTZ;
+  v_row        RECORD;
+  v_linea      RECORD;
+  v_stock      INTEGER;
+  v_reservado  INTEGER;
+  v_delta      INTEGER;
+  v_deposito   TEXT;
+  v_count      INTEGER := 0;
+  v_catalogo   INTEGER := 0;
 BEGIN
-  SELECT organization_id, origen INTO v_org_id, v_origen
+  -- FOR UPDATE sobre la cotización serializa las liberaciones concurrentes.
+  -- Sin esto, el cron de expiración y un rechazo del admin pegando a la vez
+  -- leen el mismo pendiente, serializan recién en el lock de inventario y cada
+  -- uno descuenta: stock_reservado se clampea (comiéndose reserva ajena) y el
+  -- libro de esta cotización se va a negativo.
+  SELECT organization_id, origen, catalogo_stock_restaurado_at
+    INTO v_org_id, v_origen, v_restaurado
     FROM cotizaciones
-    WHERE id = p_cotizacion_id;
+    WHERE id = p_cotizacion_id
+    FOR UPDATE;
 
   IF NOT FOUND THEN
     RETURN jsonb_build_object('ok', true, 'itemsLiberados', 0);
@@ -433,9 +508,10 @@ BEGIN
     RETURN jsonb_build_object('ok', true, 'itemsLiberados', 0);
   END IF;
 
+  -- ── Items linkeados a inventario: reserva, se netea contra el libro ──
   FOR v_row IN SELECT * FROM reserva_cotizacion_pendiente(p_cotizacion_id)
   LOOP
-    SELECT stock INTO v_stock
+    SELECT stock, stock_reservado INTO v_stock, v_reservado
       FROM inventario
       WHERE id = v_row.inventario_id
       FOR UPDATE;
@@ -444,19 +520,28 @@ BEGIN
       CONTINUE;
     END IF;
 
+    -- Se libera (y se asienta) lo que REALMENTE se puede devolver. Registrar
+    -- la cantidad entera cuando la columna sólo alcanzó para menos dejaba el
+    -- libro en 0 y la diferencia perdida en silencio.
+    v_delta := LEAST(v_row.cantidad, GREATEST(0, COALESCE(v_reservado, 0)));
+
+    IF v_delta <= 0 THEN
+      CONTINUE;
+    END IF;
+
     UPDATE inventario
-      SET stock_reservado = GREATEST(0, stock_reservado - v_row.cantidad)
+      SET stock_reservado = stock_reservado - v_delta
       WHERE id = v_row.inventario_id;
 
     v_deposito := liberar_reserva_deposito(
-      v_row.inventario_id, v_org_id, NULL, v_row.cantidad);
+      v_row.inventario_id, v_org_id, NULL, v_delta);
 
     INSERT INTO movimientos_inventario (
       inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
       referencia_id, referencia_tipo, usuario_id, organization_id,
       observaciones, deposito_id
     ) VALUES (
-      v_row.inventario_id, 'LIBERACION_RESERVA', v_row.cantidad,
+      v_row.inventario_id, 'LIBERACION_RESERVA', v_delta,
       v_stock, v_stock,
       p_cotizacion_id, 'COTIZACION', NULL, v_org_id,
       p_motivo, v_deposito
@@ -465,7 +550,59 @@ BEGIN
     v_count := v_count + 1;
   END LOOP;
 
-  RETURN jsonb_build_object('ok', true, 'itemsLiberados', v_count);
+  -- ── Variantes e items sin link: descuento directo, se restituye ──
+  -- Estas columnas no tienen fila en inventario, así que su movimiento no
+  -- puede vivir en movimientos_inventario (inventario_id es NOT NULL con FK).
+  -- No hay libro que netear: la idempotencia sale de la marca de un solo uso.
+  -- El ruteo espeja EXACTAMENTE el de reservar_stock_catalogo:
+  -- variante > inventario (si el ITEM está linkeado) > catalogo_items.stock.
+  -- Ojo: no se puede filtrar por items_cotizacion.inventario_id — el route del
+  -- catálogo lo completa con el inventario_id del item aunque la línea sea de
+  -- una variante (cotizar/route.ts), así que una línea de variante puede
+  -- tenerlo cargado sin que su stock haya salido de inventario.
+  IF v_restaurado IS NULL THEN
+    FOR v_linea IN
+      SELECT
+        ic.variante_id,
+        ic.catalogo_item_id,
+        SUM(ic.cantidad)::INTEGER AS cantidad
+      FROM items_cotizacion ic
+      LEFT JOIN catalogo_items ci ON ci.id = ic.catalogo_item_id
+      WHERE ic.cotizacion_id = p_cotizacion_id
+        AND (
+          ic.variante_id IS NOT NULL
+          OR (ic.catalogo_item_id IS NOT NULL AND ci.inventario_id IS NULL)
+        )
+      GROUP BY ic.variante_id, ic.catalogo_item_id
+    LOOP
+      IF v_linea.variante_id IS NOT NULL THEN
+        UPDATE catalogo_variantes
+          SET stock = stock + v_linea.cantidad
+          WHERE id = v_linea.variante_id
+            AND stock IS NOT NULL;
+      ELSE
+        UPDATE catalogo_items
+          SET stock = stock + v_linea.cantidad
+          WHERE id = v_linea.catalogo_item_id
+            AND stock IS NOT NULL
+            AND inventario_id IS NULL;
+      END IF;
+
+      IF FOUND THEN
+        v_catalogo := v_catalogo + 1;
+      END IF;
+    END LOOP;
+
+    UPDATE cotizaciones
+      SET catalogo_stock_restaurado_at = NOW()
+      WHERE id = p_cotizacion_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'itemsLiberados', v_count,
+    'itemsCatalogoRestaurados', v_catalogo
+  );
 END;
 $$ LANGUAGE plpgsql;
 
@@ -511,6 +648,7 @@ DECLARE
   v_count             INTEGER := 0;
   v_deposito_efectivo TEXT;
   v_ya_reservado      INTEGER;
+  v_faltante          INTEGER;
 BEGIN
   SELECT organization_id INTO v_org_id
   FROM cotizaciones WHERE id = p_cotizacion_id;
@@ -519,19 +657,33 @@ BEGIN
     RAISE EXCEPTION 'Cotización no encontrada';
   END IF;
 
+  -- Se agrupa por producto porque reserva_cotizacion_pendiente también agrupa
+  -- por inventario_id: comparar ese agregado contra la cantidad de UNA línea
+  -- sub-reserva las cotizaciones con el mismo producto repetido (dos líneas de
+  -- 3 reservaban 3 en vez de 6), y el formulario de cotización agrega líneas
+  -- sin deduplicar por inventario. Los dos lados tienen que estar agregados.
   FOR v_item IN
-    SELECT ic.id, ic.inventario_id, ic.cantidad, ic.descripcion
+    SELECT
+      ic.inventario_id,
+      SUM(ic.cantidad)::INTEGER AS cantidad,
+      MIN(ic.descripcion)       AS descripcion
     FROM items_cotizacion ic
     WHERE ic.cotizacion_id = p_cotizacion_id
       AND ic.inventario_id IS NOT NULL
+    GROUP BY ic.inventario_id
   LOOP
-    -- Guard de idempotencia: si esta cotización ya tiene reserva viva sobre
-    -- este item, no se reserva de nuevo.
+    -- Cuánto de lo que pide esta cotización ya está reservado por ella misma.
     SELECT cantidad INTO v_ya_reservado
       FROM reserva_cotizacion_pendiente(p_cotizacion_id)
       WHERE inventario_id = v_item.inventario_id;
 
-    IF COALESCE(v_ya_reservado, 0) >= v_item.cantidad THEN
+    -- Se reserva el FALTANTE, no la cantidad entera encima de lo que había:
+    -- con cobertura parcial (la solicitud reservó 2 y después un admin editó
+    -- la línea a 5) reservar 5 dejaba 7 tomadas para una cotización de 5, y la
+    -- venta liberaba 5 dejando 2 colgadas para siempre.
+    v_faltante := v_item.cantidad - COALESCE(v_ya_reservado, 0);
+
+    IF v_faltante <= 0 THEN
       CONTINUE;
     END IF;
 
@@ -546,24 +698,24 @@ BEGIN
 
     v_disponible := v_stock - v_stock_reservado;
 
-    IF v_disponible < v_item.cantidad THEN
+    IF v_disponible < v_faltante THEN
       RAISE EXCEPTION 'Stock insuficiente para "%". Disponible: %, Solicitado: %',
-        v_item.descripcion, v_disponible, v_item.cantidad;
+        v_item.descripcion, v_disponible, v_faltante;
     END IF;
 
     UPDATE inventario
-    SET stock_reservado = stock_reservado + v_item.cantidad
+    SET stock_reservado = stock_reservado + v_faltante
     WHERE id = v_item.inventario_id;
 
     v_deposito_efectivo := reservar_stock_deposito(
-      v_item.inventario_id, v_org_id, p_deposito_id, v_item.cantidad, false);
+      v_item.inventario_id, v_org_id, p_deposito_id, v_faltante, false);
 
     INSERT INTO movimientos_inventario (
       inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
       referencia_id, referencia_tipo, usuario_id, organization_id,
       observaciones, deposito_id
     ) VALUES (
-      v_item.inventario_id, 'RESERVA', v_item.cantidad,
+      v_item.inventario_id, 'RESERVA', v_faltante,
       v_stock, v_stock,
       p_cotizacion_id, 'COTIZACION', p_user_id, v_org_id,
       'Reserva por aprobación de cotización',
@@ -605,28 +757,63 @@ DECLARE
   v_cot          RECORD;
   v_cotizaciones INTEGER := 0;
   v_items        INTEGER := 0;
+  v_fallidas     INTEGER := 0;
+  v_errores      TEXT[]  := ARRAY[]::TEXT[];
   v_res          JSONB;
 BEGIN
   FOR v_cot IN
     SELECT c.id
     FROM cotizaciones c
     WHERE c.origen = 'CATALOGO_PUBLICO'
-      AND c.estado = 'ENVIADA'
-      AND c.deleted_at IS NULL
-      AND COALESCE(c.fecha_vencimiento, c.created_at + (p_dias || ' days')::INTERVAL) < NOW()
-      AND EXISTS (SELECT 1 FROM reserva_cotizacion_pendiente(c.id))
+      -- Nunca ACEPTADA: esa retiene stock legítimamente, va camino a la venta.
+      AND (
+        -- Vencida y todavía esperando respuesta.
+        (
+          c.estado = 'ENVIADA'
+          AND c.deleted_at IS NULL
+          AND COALESCE(c.fecha_vencimiento, c.created_at + (p_dias || ' days')::INTERVAL) < NOW()
+        )
+        -- Red de seguridad: terminada pero con saldo vivo. Si la liberación
+        -- falló al rechazar o al borrar, la cotización quedó RECHAZADA o con
+        -- deleted_at puesto y ningún otro camino vuelve a pasar por ella: ese
+        -- stock quedaría filtrado para siempre y sin señal.
+        OR c.estado = 'RECHAZADA'
+        OR c.deleted_at IS NOT NULL
+      )
+      AND (
+        EXISTS (SELECT 1 FROM reserva_cotizacion_pendiente(c.id))
+        -- Las cotizaciones hechas sólo de variantes o de items sin link no
+        -- tienen movimientos: sin esta rama el barrido no las ve nunca.
+        OR c.catalogo_stock_restaurado_at IS NULL
+      )
   LOOP
-    v_res := liberar_reserva_catalogo(
-      v_cot.id, 'Reserva vencida: solicitud del catálogo sin respuesta');
+    -- Una org sin depósito principal hace que liberar_reserva_deposito levante
+    -- P0011. Sin este bloque, ese solo inquilino roto revierte la transacción
+    -- entera y no se expira nada de nadie, todas las noches, en silencio.
+    BEGIN
+      v_res := liberar_reserva_catalogo(
+        v_cot.id, 'Reserva vencida: solicitud del catálogo sin respuesta');
 
-    v_cotizaciones := v_cotizaciones + 1;
-    v_items        := v_items + COALESCE((v_res->>'itemsLiberados')::INTEGER, 0);
+      v_cotizaciones := v_cotizaciones + 1;
+      v_items        := v_items
+                        + COALESCE((v_res->>'itemsLiberados')::INTEGER, 0)
+                        + COALESCE((v_res->>'itemsCatalogoRestaurados')::INTEGER, 0);
+    EXCEPTION WHEN OTHERS THEN
+      v_fallidas := v_fallidas + 1;
+      IF array_length(v_errores, 1) IS NULL OR array_length(v_errores, 1) < 20 THEN
+        v_errores := v_errores || (v_cot.id || ': ' || SQLSTATE || ' ' || SQLERRM);
+      END IF;
+      RAISE WARNING 'expirar_reservas_catalogo: cotización % falló (% %)',
+        v_cot.id, SQLSTATE, SQLERRM;
+    END;
   END LOOP;
 
   RETURN jsonb_build_object(
     'ok', true,
     'cotizaciones', v_cotizaciones,
     'items', v_items,
+    'fallidas', v_fallidas,
+    'errores', to_jsonb(v_errores),
     'dias', p_dias,
     'ran_at', NOW()
   );
