@@ -41,6 +41,13 @@ function BillingContent() {
   const [plans, setPlans] = useState<Plan[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
+  // Con qué intención se abre el modal. Contratar el plan arranca en pago único
+  // (el default deliberado) y deja que el modal resuelva el plan; activar el
+  // débito automático arranca ya en ese modo y sobre el plan que la org tiene.
+  const [modalIntent, setModalIntent] = useState<{
+    modo: "unico" | "automatico"
+    planSlug?: string
+  }>({ modo: "unico" })
   const [cancelLoading, setCancelLoading] = useState(false)
   const [rejectionInfo, setRejectionInfo] = useState<MpRejectionInfo | null>(null)
 
@@ -74,6 +81,16 @@ function BillingContent() {
       cancelled = true
     }
   }, [mpFailure, mpPaymentId])
+
+  const abrirContratacion = () => {
+    setModalIntent({ modo: "unico" })
+    setUpgradeModalOpen(true)
+  }
+
+  const abrirAdhesion = () => {
+    setModalIntent({ modo: "automatico", planSlug: subscription?.planSlug })
+    setUpgradeModalOpen(true)
+  }
 
   const loadData = async () => {
     setLoading(true)
@@ -187,7 +204,7 @@ function BillingContent() {
                 size="sm"
                 variant="outline"
                 className="mt-2 h-8 border-red-300 dark:border-red-800"
-                onClick={() => setUpgradeModalOpen(true)}
+                onClick={abrirContratacion}
               >
                 Reintentar pago
               </Button>
@@ -200,9 +217,10 @@ function BillingContent() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         <CurrentPlan
           subscription={subscription}
-          onUpgrade={() => setUpgradeModalOpen(true)}
+          onUpgrade={abrirContratacion}
           onManage={() => {}}
           onCancel={handleCancelSubscription}
+          onActivarDebito={abrirAdhesion}
         />
 
         {subscription && usage && (
@@ -221,6 +239,8 @@ function BillingContent() {
       <UpgradeModal
         open={upgradeModalOpen}
         onClose={() => setUpgradeModalOpen(false)}
+        modoCobroInicial={modalIntent.modo}
+        {...(modalIntent.planSlug ? { planSlug: modalIntent.planSlug } : {})}
       />
     </div>
   )

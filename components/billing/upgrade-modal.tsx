@@ -21,20 +21,40 @@ interface UpgradeModalProps {
   onClose: () => void
   /** Slug del plan seleccionado. Default: 'profesional' */
   planSlug?: string
+  /**
+   * Modo de cobro con el que abre el modal. El default es "unico" a propósito
+   * (ver abajo). Se pasa "automatico" solo cuando el taller ya eligió adherirse
+   * antes de abrirlo — desde el plan vigente —, así que preseleccionarlo no
+   * empuja nada: refleja la decisión que ya tomó.
+   */
+  modoCobroInicial?: "unico" | "automatico"
 }
 
-export function UpgradeModal({ open, onClose, planSlug = "profesional" }: UpgradeModalProps) {
+export function UpgradeModal({
+  open,
+  onClose,
+  planSlug = "profesional",
+  modoCobroInicial = "unico",
+}: UpgradeModalProps) {
   const { showError } = useModal()
   const [billingPeriod, setBillingPeriod] = useState<"MONTHLY" | "YEARLY">("MONTHLY")
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("mercadopago")
   // Pago único es el DEFAULT a proposito: el debito automatico es una
   // autorizacion permanente sobre el medio de pago del taller, y que venga
   // preseleccionada empuja a darla sin decidirlo. Ver spec §3.2.
-  const [modoCobro, setModoCobro] = useState<"unico" | "automatico">("unico")
+  const [modoCobro, setModoCobro] = useState<"unico" | "automatico">(modoCobroInicial)
   const [loading, setLoading] = useState(false)
   const [planName, setPlanName] = useState("Profesional")
   const [pricesArs, setPricesArs] = useState({ MONTHLY: 19999, YEARLY: 149999 })
   const [pricesUsd, setPricesUsd] = useState({ MONTHLY: 14, YEARLY: 107 })
+
+  // El modal queda montado entre aperturas: sin este reseteo, el modo elegido
+  // la vez anterior sigue puesto al reabrirlo y el default deliberado deja de
+  // aplicar. Las dependencias son el flag de apertura y una prop estable, así
+  // que no puede pisar lo que el usuario elija con el modal ya abierto.
+  useEffect(() => {
+    if (open) setModoCobro(modoCobroInicial)
+  }, [open, modoCobroInicial])
 
   useEffect(() => {
     if (!open) return

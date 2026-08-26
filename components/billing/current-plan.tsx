@@ -13,9 +13,16 @@ interface CurrentPlanProps {
   onUpgrade: () => void
   onManage: () => void
   onCancel: () => void
+  onActivarDebito: () => void
 }
 
-export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: CurrentPlanProps) {
+export function CurrentPlan({
+  subscription,
+  onUpgrade,
+  onManage,
+  onCancel,
+  onActivarDebito,
+}: CurrentPlanProps) {
   const { timezone } = useCurrency()
   if (!subscription) {
     return (
@@ -32,6 +39,15 @@ export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: Cur
   const isTrialing = subscription.status === "TRIALING"
   const isCanceled = subscription.cancelAtPeriodEnd
   const isPaid = subscription.paymentProvider !== null
+
+  // Solo MercadoPago: Creem ya cobra solo, y una suscripción activada a mano
+  // desde superadmin (MANUAL) no tiene medio de pago al que adherir.
+  const puedeAdherirse =
+    isPremium &&
+    isPaid &&
+    !isCanceled &&
+    !subscription.autoDebito &&
+    subscription.paymentProvider === "MERCADOPAGO"
 
   // Calcular días restantes de trial
   const trialEnd = subscription.trialEnd ? new Date(subscription.trialEnd) : null
@@ -159,6 +175,12 @@ export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: Cur
             <Button onClick={onUpgrade} size="sm">
               <Crown className="h-4 w-4 mr-2" />
               Actualizar a Profesional
+            </Button>
+          )}
+          {puedeAdherirse && (
+            <Button onClick={onActivarDebito} size="sm">
+              <Calendar className="h-4 w-4 mr-2" />
+              Activar débito automático
             </Button>
           )}
           {isPremium && isPaid && !isCanceled && (
