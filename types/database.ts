@@ -82,7 +82,9 @@ export type MetodoPagoVenta = "EFECTIVO" | "TRANSFERENCIA" | "TARJETA" | "TARJET
 
 export type EstadoVenta = "COMPLETADA" | "ANULADA"
 
-export type EstadoGarantiaVenta = "ACTIVA" | "VENCIDA" | "RECLAMADA"
+// ANULADA: cancelada porque la línea vendida se devolvió entera. No es lo mismo
+// que VENCIDA (cumplió su plazo) — el reporte de garantías necesita distinguirlas.
+export type EstadoGarantiaVenta = "ACTIVA" | "VENCIDA" | "RECLAMADA" | "ANULADA"
 
 // ========================================
 // TABLE TYPES
