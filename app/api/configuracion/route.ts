@@ -43,6 +43,7 @@ export async function GET() {
         pais,
         modulo_agenda,
         vendedores_administran_inventario,
+        tecnicos_operan_pos,
         iva_regimen,
         iva_tasa,
         redondeo_efectivo,
@@ -160,6 +161,7 @@ export async function GET() {
       pais: organization.pais || "AR",
       moduloAgenda: !!organization.modulo_agenda,
       vendedoresAdministranInventario: !!organization.vendedores_administran_inventario,
+      tecnicosOperanPos: !!organization.tecnicos_operan_pos,
       ivaRegimen: organization.iva_regimen ?? "EXENTO",
       ivaTasa: organization.iva_tasa ?? getIvaGeneral(organization.pais),
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
@@ -199,7 +201,7 @@ export async function PUT(request: Request) {
         { status: 413 }
       )
     }
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada, ingresosBrutos, inicioActividades } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada, ingresosBrutos, inicioActividades } = body
 
     const updateData: Record<string, any> = {}
 
@@ -340,6 +342,10 @@ export async function PUT(request: Request) {
       updateData.vendedores_administran_inventario = !!vendedoresAdministranInventario
     }
 
+    if (tecnicosOperanPos !== undefined) {
+      updateData.tecnicos_operan_pos = !!tecnicosOperanPos
+    }
+
     if (ivaRegimen !== undefined) {
       const validRegimen = ["EXENTO", "INCLUIDO", "ADITIVO"]
       if (validRegimen.includes(ivaRegimen)) {
@@ -419,7 +425,7 @@ export async function PUT(request: Request) {
       updateData.facturacion_electronica_habilitada = !!facturacionElectronicaHabilitada
     }
 
-    const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda, vendedores_administran_inventario, iva_regimen, iva_tasa, redondeo_efectivo, comision_aplica_sin_reparacion, terminologia"
+    const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda, vendedores_administran_inventario, tecnicos_operan_pos, iva_regimen, iva_tasa, redondeo_efectivo, comision_aplica_sin_reparacion, terminologia"
     // Pre-295: lo que ya persistÃ­a antes de esta migraciÃ³n. Se usa como
     // segundo intento (ver PGRST204 abajo) para que un 295 sin aplicar
     // solo tumbe los 6 campos fiscales nuevos, no recepcion_terminos/
@@ -507,6 +513,7 @@ export async function PUT(request: Request) {
         pais: org?.pais || "AR",
         moduloAgenda: !!org?.modulo_agenda,
         vendedoresAdministranInventario: !!org?.vendedores_administran_inventario,
+        tecnicosOperanPos: !!org?.tecnicos_operan_pos,
         ivaRegimen: org?.iva_regimen ?? "EXENTO",
         ivaTasa: org?.iva_tasa ?? getIvaGeneral(org?.pais),
         redondeoEfectivo: org?.redondeo_efectivo ?? 0,
@@ -597,6 +604,8 @@ export async function PUT(request: Request) {
       delete updateData.comision_aplica_sin_reparacion
       // Strip vendedor inventory flag (migration 275) in case it doesn't exist yet
       delete updateData.vendedores_administran_inventario
+      // Strip tecnico POS flag (migration 314) in case it doesn't exist yet
+      delete updateData.tecnicos_operan_pos
       // Strip facturacion electronica flag (migration 296) in case it doesn't exist yet
       delete updateData.facturacion_electronica_habilitada
       const selectColsNoFiscal = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda"
@@ -641,6 +650,7 @@ export async function PUT(request: Request) {
       pais: organization.pais || "AR",
       moduloAgenda: !!organization.modulo_agenda,
       vendedoresAdministranInventario: !!organization.vendedores_administran_inventario,
+      tecnicosOperanPos: !!organization.tecnicos_operan_pos,
       ivaRegimen: organization.iva_regimen ?? "EXENTO",
       ivaTasa: organization.iva_tasa ?? getIvaGeneral(organization.pais),
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
