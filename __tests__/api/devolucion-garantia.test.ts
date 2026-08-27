@@ -72,15 +72,19 @@ function setup(venta: any) {
   return { devChain, garantiasChain, seriesChain }
 }
 
-const VENTA = {
+const ventaConGarantia = (diasGarantia: number) => ({
   id: "v1",
   estado: "COMPLETADA",
   cliente_id: null,
   organization_id: "org-1",
   sucursal_id: null,
   total: 30,
-  items_venta: [{ id: "iv1", cantidad: 3, descripcion: "Item", inventario_id: "inv1", precio_unitario: 10 }],
-}
+  items_venta: [
+    { id: "iv1", cantidad: 3, descripcion: "Item", inventario_id: "inv1", precio_unitario: 10, dias_garantia: diasGarantia },
+  ],
+})
+
+const VENTA = ventaConGarantia(30)
 
 async function post(items: any[]) {
   return POST(
@@ -136,6 +140,25 @@ describe("POST /api/ventas/[id]/devolucion — warranty retirement", () => {
 
     expect(seriesChain.update).toHaveBeenCalledWith(
       expect.objectContaining({ estado: "DEVUELTO", fecha_garantia_vence: null })
+    )
+  })
+
+  it("keeps fecha_garantia_vence when the line was sold with no warranty", async () => {
+    // `fecha_garantia_vence` is overloaded: registrar_series_ingreso
+    // (175_lotes_series.sql:431) stamps the SUPPLIER's warranty on intake, and a
+    // sale only overwrites it when the line carried warranty days
+    // (`ELSE fecha_garantia_vence` in the sale RPC). Selling with 0 days and
+    // returning must not erase the supplier's date — it was never the buyer's.
+    const { seriesChain } = setup(ventaConGarantia(0))
+
+    await post([{ itemVentaId: "iv1", inventarioId: "inv1", cantidad: 3, precioUnitario: 10, restaurarStock: true }])
+
+    expect(seriesChain.update).toHaveBeenCalledWith(
+      expect.not.objectContaining({ fecha_garantia_vence: null })
+    )
+    // The serial still goes back to stock — only the date survives.
+    expect(seriesChain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ estado: "DISPONIBLE" })
     )
   })
 

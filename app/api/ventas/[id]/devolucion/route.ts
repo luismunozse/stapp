@@ -44,10 +44,16 @@ function isFunctionMissingError(err: unknown): boolean {
 /**
  * Retira las series que la venta había entregado.
  *
- * `fecha_garantia_vence` SIEMPRE se limpia: si la serie vuelve al stock con la
- * fecha del comprador anterior, `marcar_serie_vendida` (175_lotes_series.sql)
- * la relee al revenderla y la marca GARANTIA_ACTIVA heredando una garantía que
- * el nuevo cliente nunca compró.
+ * `fecha_garantia_vence` está sobrecargado: `registrar_series_ingreso`
+ * (175_lotes_series.sql:431) lo estampa en el ALTA con la garantía del
+ * PROVEEDOR, y la venta solo lo pisa si la línea llevaba días de garantía
+ * (`ELSE fecha_garantia_vence` en el RPC de venta). Por eso solo se limpia
+ * cuando la fecha era del comprador (`limpiarGarantia`): si la línea se vendió
+ * con 0 días, lo que hay ahí es del proveedor y borrarlo destruye dato bueno.
+ *
+ * Cuando sí era del comprador hay que limpiarla, porque `marcar_serie_vendida`
+ * (175:535) la relee al revender la serie y la marca GARANTIA_ACTIVA heredando
+ * una garantía que el nuevo cliente nunca compró.
  */
 async function retirarSeriesDeVenta(args: {
   organizationId: string
@@ -55,6 +61,7 @@ async function retirarSeriesDeVenta(args: {
   ventaId: string
   cantidad: number
   vuelveAStock: boolean
+  limpiarGarantia: boolean
 }): Promise<void> {
   const { data: series } = await supabaseAdmin
     .from("inventario_series")
@@ -73,20 +80,20 @@ async function retirarSeriesDeVenta(args: {
   // Al volver a stock se corta el vínculo con la venta (si no, una devolución
   // posterior de otra línea podría re-elegir la misma serie). Al quedar
   // DEVUELTO se conserva, que es el rastro de de dónde salió.
-  const payload = args.vuelveAStock
+  const payload: Record<string, unknown> = args.vuelveAStock
     ? {
         estado: "DISPONIBLE",
         fecha_venta: null,
         venta_id: null,
         cliente_id: null,
-        fecha_garantia_vence: null,
         updated_at: new Date().toISOString(),
       }
     : {
         estado: "DEVUELTO",
-        fecha_garantia_vence: null,
         updated_at: new Date().toISOString(),
       }
+
+  if (args.limpiarGarantia) payload.fecha_garantia_vence = null
 
   await supabaseAdmin.from("inventario_series").update(payload).in("id", ids)
 }
@@ -489,6 +496,9 @@ async function jsDevolucionFallback(
       // que además evita que una devolución posterior de la misma línea la
       // vuelva a elegir.
       vuelveAStock: item.restaurarStock,
+      // Solo si la fecha la puso esta venta. Con 0 días la línea nunca la pisó,
+      // así que lo que hay es la garantía del proveedor.
+      limpiarGarantia: Number(originalItemsMap[item.itemVentaId]?.dias_garantia ?? 0) > 0,
     })
   }
 
