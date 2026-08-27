@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requirePosAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { z } from "zod"
@@ -83,7 +83,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role, session } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role, session } = await requirePosAccess()
     if (error) return error
 
     if (role !== "ADMIN") {
