@@ -74,6 +74,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Si la organizacion ya pago y tiene periodo vigente, la adhesion arranca a
+    // cobrar cuando ese periodo termine. Sin esto MercadoPago cobra al
+    // autorizar: el periodo no se pierde (el webhook apila sobre
+    // current_period_end) pero el cobro se le adelanta sin motivo, y es
+    // justamente el pagador al dia el que mas nos interesa adherir.
+    const { data: subActual } = await supabaseAdmin
+      .from("subscriptions")
+      .select("current_period_end")
+      .eq("organization_id", organizationId)
+      .single()
+
+    const periodoVigente =
+      subActual?.current_period_end &&
+      new Date(subActual.current_period_end) > new Date()
+        ? subActual.current_period_end
+        : null
+
     const preApproval = await createSubscription({
       organizationId: org.id,
       organizationName: org.nombre,
@@ -81,6 +98,7 @@ export async function POST(request: NextRequest) {
       billingPeriod: billingPeriod as "MONTHLY" | "YEARLY",
       backUrl: `${baseUrl}/configuracion/billing?mp_adhesion=true`,
       planSlug,
+      ...(periodoVigente ? { startDate: periodoVigente } : {}),
     })
 
     return NextResponse.json({

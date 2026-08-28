@@ -178,6 +178,15 @@ describe("liberar_reserva_catalogo — devuelve lo que el catálogo tomó", () =
     expect(cuerpo).not.toMatch(/SUM\s*\(\s*ic\.cantidad\s*\)/i)
   })
 
+  it("does not give back the reservation of a superseded quote", () => {
+    // Interaccion con la migracion 312: al aprobar una revision, esa libera la
+    // reserva de la reemplazada con liberar_items_cotizacion — que solo toca
+    // inventario. Las clases B y C quedan tomadas por la original, pero el
+    // compromiso ahora vive en la revision. Restituirlas al rechazar la
+    // original devolveria stock que la revision todavia espera entregar.
+    expect(cuerpo).toMatch(/reemplazada_por/)
+  })
+
   it("closes each reservation row instead of relying on a quote-level flag", () => {
     // Un booleano por cotizacion no puede responder "cuanto" ni "de que linea".
     expect(cuerpo).toMatch(/liberada_at\s*=\s*NOW\(\)/i)
@@ -194,6 +203,12 @@ describe("consumir_reserva_catalogo — la venta se queda el stock", () => {
     // rechazo posterior acredita mercaderia que ya salio por la puerta.
     expect(cuerpo).toMatch(/liberada_at\s*=\s*NOW\(\)/i)
     expect(cuerpo).not.toMatch(/stock\s*=\s*stock\s*\+/i)
+  })
+
+  it("also closes the rows still attached to the quote this one revises", () => {
+    // Si la que se vende es una revision, las filas quedaron en la original
+    // (la 312 no las mueve). Sin este salto quedan abiertas para siempre.
+    expect(cuerpo).toMatch(/revision_de/)
   })
 })
 

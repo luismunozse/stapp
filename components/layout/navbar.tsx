@@ -60,7 +60,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 
-type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[]; featureFlag?: "moduloAgenda"; vendedorFeatureFlag?: "vendedoresAdministranInventario" }
+type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[]; featureFlag?: "moduloAgenda"; vendedorFeatureFlag?: "vendedoresAdministranInventario"; tecnicoFeatureFlag?: "tecnicosOperanPos" }
 
 type NavSection = { label: string; items: NavItem[] }
 
@@ -74,8 +74,8 @@ const navItems: NavItem[] = [
   { href: "/tecnicos", label: "Mi desempeño", icon: TrendingUp, roles: ["TECNICO"] },
   { href: "/comisiones", label: "Comisiones", icon: Percent, roles: ["ADMIN"] },
   { href: "/vendedores", label: "Vendedores", icon: TrendingUp, roles: ["ADMIN"] },
-  { href: "/ventas", label: "Ventas", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"] },
-  { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"] },
+  { href: "/ventas", label: "Ventas", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"], tecnicoFeatureFlag: "tecnicosOperanPos" },
+  { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"], tecnicoFeatureFlag: "tecnicosOperanPos" },
   { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt, roles: ["ADMIN", "TECNICO"] },
   { href: "/catalogo", label: "Catálogo público", icon: BookMarked, roles: ["ADMIN"] },
   { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN", "VENDEDOR"], vendedorFeatureFlag: "vendedoresAdministranInventario" },
@@ -102,14 +102,14 @@ const navSections: NavSection[] = [
       { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
       { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN", "VENDEDOR"], vendedorFeatureFlag: "vendedoresAdministranInventario" },
       { href: "/servicios", label: "Servicios", icon: Hammer, roles: ["ADMIN"] },
-      { href: "/ventas", label: "Ventas / POS", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"] },
+      { href: "/ventas", label: "Ventas / POS", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"], tecnicoFeatureFlag: "tecnicosOperanPos" },
       { href: "/finanzas", label: "Finanzas", icon: Wallet, roles: ["ADMIN"] },
     ],
   },
   {
     label: "Ventas",
     items: [
-      { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"] },
+      { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"], tecnicoFeatureFlag: "tecnicosOperanPos" },
       { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt, roles: ["ADMIN", "TECNICO"] },
       { href: "/catalogo", label: "Catálogo público", icon: BookMarked, roles: ["ADMIN"] },
     ],
@@ -175,9 +175,10 @@ export function Navbar() {
   // disparado desde /perfil después de un cambio.
   const [liveName, setLiveName] = useState<string | null>(null)
   const [liveAvatar, setLiveAvatar] = useState<string | null>(null)
-  const [orgFeatures, setOrgFeatures] = useState<{ moduloAgenda: boolean; vendedoresAdministranInventario: boolean }>({
+  const [orgFeatures, setOrgFeatures] = useState<{ moduloAgenda: boolean; vendedoresAdministranInventario: boolean; tecnicosOperanPos: boolean }>({
     moduloAgenda: false,
     vendedoresAdministranInventario: false,
+    tecnicosOperanPos: false,
   })
 
   useEffect(() => {
@@ -190,6 +191,7 @@ export function Navbar() {
           setOrgFeatures({
             moduloAgenda: !!d.moduloAgenda,
             vendedoresAdministranInventario: !!d.vendedoresAdministranInventario,
+            tecnicosOperanPos: !!d.tecnicosOperanPos,
           })
         })
         .catch(() => {})
@@ -214,6 +216,15 @@ export function Navbar() {
   const vendedorAllowed = useCallback((item: NavItem) => (
     userRole !== "VENDEDOR" || !item.vendedorFeatureFlag || !!orgFeatures[item.vendedorFeatureFlag]
   ), [userRole, orgFeatures])
+
+  // Inverso de vendedorFeatureFlag: en vez de SACARLE el módulo a un rol que ya
+  // está en `roles`, se lo AGREGA a uno que no está. El técnico habilitado ve
+  // el POS sin dejar de ser TECNICO — sigue siendo asignable a órdenes y
+  // conserva "Mi desempeño".
+  const rolePermitido = useCallback((item: NavItem) => {
+    if (!item.roles || item.roles.includes(userRole)) return true
+    return userRole === "TECNICO" && !!item.tecnicoFeatureFlag && !!orgFeatures[item.tecnicoFeatureFlag]
+  }, [userRole, orgFeatures])
 
   useEffect(() => {
     let cancelled = false
@@ -262,7 +273,7 @@ export function Navbar() {
 
   const allNavItems = [
     ...navItems.filter(item =>
-      (!item.roles || item.roles.includes(userRole)) && isFeatureEnabled(item.featureFlag) && vendedorAllowed(item),
+      rolePermitido(item) && isFeatureEnabled(item.featureFlag) && vendedorAllowed(item),
     ),
     ...(userRole === "ADMIN" || userRole === "VENDEDOR" ? [
       { href: "/proveedores", label: "Proveedores", icon: Store }
@@ -276,7 +287,7 @@ export function Navbar() {
   const filteredSections = navSections.map(section => ({
     ...section,
     items: section.items.filter(item =>
-      (!item.roles || item.roles.includes(userRole)) && isFeatureEnabled(item.featureFlag) && vendedorAllowed(item),
+      rolePermitido(item) && isFeatureEnabled(item.featureFlag) && vendedorAllowed(item),
     ),
   })).filter(section => section.items.length > 0)
 

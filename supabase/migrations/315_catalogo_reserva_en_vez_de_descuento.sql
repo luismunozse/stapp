@@ -1,4 +1,4 @@
--- 314_catalogo_reserva_en_vez_de_descuento.sql
+-- 315_catalogo_reserva_en_vez_de_descuento.sql
 --
 -- El catálogo público llevaba contabilidad de stock PARALELA. Al crear una
 -- solicitud, reservar_stock_catalogo hacía (239:99-101):
@@ -68,6 +68,32 @@
 --     de cotizaciones): al rechazarla se devolvió su stock, y reabrirla dejaría
 --     una solicitud viva que no retiene nada. Lo correcto es una solicitud
 --     nueva.
+--
+-- INTERACCIÓN CON LA MIGRACIÓN 312 (revisiones de cotización):
+--   La 312 resuelve el mismo tipo de problema desde el otro extremo: al aprobar
+--   una revisión, libera la reserva de la cotización que reemplaza para que una
+--   pieza presente en las dos versiones no quede contada dos veces. Llegó al
+--   mismo hallazgo que esta migración —que `stock_reservado` es un contador
+--   global por item y liberar de más le come la reserva a otro— y por eso acota
+--   su llamada a `revision_de IS NOT NULL AND tipo <> 'PRESUPUESTO'`.
+--
+--   Las dos son complementarias y NO se pisan:
+--     * Clase A: la 312 usa liberar_items_cotizacion, que escribe su asiento
+--       LIBERACION_RESERVA en el mismo libro de movimientos que lee
+--       reserva_cotizacion_pendiente. El neteo da cero solo y no hay doble
+--       liberación. Nada que coordinar.
+--     * Clases B y C: viven en catalogo_reservas_cotizacion, que la 312 no
+--       conoce. Se resuelve del lado de acá (parte 4): una cotización con
+--       `reemplazada_por` no restituye, porque su stock lo debe la revisión.
+--
+--   Es ALCANZABLE hoy: revisar/route.ts sólo exige estado ACEPTADA y no filtra
+--   por origen ni por tipo, así que una solicitud del catálogo convertida a
+--   orden y aprobada se puede revisar. (Con tipo PRESUPUESTO la 312 ni siquiera
+--   libera, así que ese camino nunca choca.)
+--
+--   No se toca aprobar_cotizacion_atomica: esta migración se aplica DESPUÉS de
+--   la 312, así que redefinirla la pisaría y habría que reproducir su lógica.
+--   Dejarla intacta es una interacción menos.
 --   * El vencimiento automático. Ver la sección siguiente.
 --
 -- ============================================================
@@ -196,7 +222,7 @@ CREATE INDEX IF NOT EXISTS catalogo_reservas_abiertas_idx
   WHERE liberada_at IS NULL;
 
 COMMENT ON TABLE catalogo_reservas_cotizacion IS
-  'Libro de reservas del catálogo público para stock que NO vive en inventario (variantes e items sin link). Una fila por descuento efectivo, cerrada con liberada_at al restituir o al consumirse en una venta. Es a las clases B y C lo que movimientos_inventario es a la clase A. v314.';
+  'Libro de reservas del catálogo público para stock que NO vive en inventario (variantes e items sin link). Una fila por descuento efectivo, cerrada con liberada_at al restituir o al consumirse en una venta. Es a las clases B y C lo que movimientos_inventario es a la clase A. v315.';
 
 ALTER TABLE catalogo_reservas_cotizacion ENABLE ROW LEVEL SECURITY;
 
@@ -370,7 +396,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION reservar_stock_catalogo(TEXT, JSONB, TEXT) IS
-  'Reserva stock para una solicitud del catálogo público. Fuente única por item: variante > inventario (si linkeado) > catalogo_items.stock. Sobre inventario RESERVA (stock_reservado) con réplica por depósito y asiento RESERVA en movimientos_inventario; nunca descuenta inventario.stock. v314.';
+  'Reserva stock para una solicitud del catálogo público. Fuente única por item: variante > inventario (si linkeado) > catalogo_items.stock. Sobre inventario RESERVA (stock_reservado) con réplica por depósito y asiento RESERVA en movimientos_inventario; nunca descuenta inventario.stock. v315.';
 
 REVOKE EXECUTE ON FUNCTION reservar_stock_catalogo(TEXT, JSONB, TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION reservar_stock_catalogo(TEXT, JSONB, TEXT) FROM anon;
@@ -546,7 +572,7 @@ RETURNS TABLE (inventario_id TEXT, cantidad INTEGER) AS $$
 $$ LANGUAGE sql STABLE;
 
 COMMENT ON FUNCTION reserva_cotizacion_pendiente(TEXT) IS
-  'Reserva viva de una cotización por item, neteando RESERVA contra LIBERACION_RESERVA en movimientos_inventario. v314.';
+  'Reserva viva de una cotización por item, neteando RESERVA contra LIBERACION_RESERVA en movimientos_inventario. v315.';
 
 REVOKE EXECUTE ON FUNCTION reserva_cotizacion_pendiente(TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION reserva_cotizacion_pendiente(TEXT) FROM anon;
@@ -566,24 +592,25 @@ CREATE OR REPLACE FUNCTION liberar_reserva_catalogo(
   p_motivo        TEXT DEFAULT 'Reserva del catálogo liberada'
 ) RETURNS JSONB AS $$
 DECLARE
-  v_org_id     TEXT;
-  v_origen     TEXT;
-  v_row        RECORD;
-  v_linea      RECORD;
-  v_stock      INTEGER;
-  v_reservado  INTEGER;
-  v_delta      INTEGER;
-  v_deposito   TEXT;
-  v_count      INTEGER := 0;
-  v_catalogo   INTEGER := 0;
+  v_org_id      TEXT;
+  v_origen      TEXT;
+  v_reemplazada TEXT;
+  v_row         RECORD;
+  v_linea       RECORD;
+  v_stock       INTEGER;
+  v_reservado   INTEGER;
+  v_delta       INTEGER;
+  v_deposito    TEXT;
+  v_count       INTEGER := 0;
+  v_catalogo    INTEGER := 0;
 BEGIN
   -- FOR UPDATE sobre la cotización serializa las liberaciones concurrentes.
   -- Sin esto, el cron de expiración y un rechazo del admin pegando a la vez
   -- leen el mismo pendiente, serializan recién en el lock de inventario y cada
   -- uno descuenta: stock_reservado se clampea (comiéndose reserva ajena) y el
   -- libro de esta cotización se va a negativo.
-  SELECT organization_id, origen
-    INTO v_org_id, v_origen
+  SELECT organization_id, origen, reemplazada_por
+    INTO v_org_id, v_origen, v_reemplazada
     FROM cotizaciones
     WHERE id = p_cotizacion_id
     FOR UPDATE;
@@ -652,6 +679,31 @@ BEGIN
   --
   -- Cada fila se cierra por separado: la idempotencia es por construcción, no
   -- por una marca aparte.
+  --
+  -- INTERACCIÓN CON LA MIGRACIÓN 312 (revisiones). Al aprobar una revisión, la
+  -- 312 libera la reserva de la cotización que reemplaza llamando a
+  -- liberar_items_cotizacion — que sólo toca `inventario`. Para la clase A eso
+  -- compone bien: esa función escribe su LIBERACION_RESERVA en el mismo libro
+  -- de movimientos, así que el neteo de arriba ya da cero y no se libera dos
+  -- veces. Pero las clases B y C no viven en ese libro: sus filas quedan
+  -- abiertas en la original aunque el compromiso ya pasó a la revisión.
+  --
+  -- Por eso una cotización REEMPLAZADA no restituye: el stock sigue debido,
+  -- sólo que por su revisión. Devolverlo acá lo pondría de vuelta en el estante
+  -- mientras la revisión todavía espera entregarlo.
+  --
+  -- Si la revisión muere, restaurarOriginalDeRevision limpia `reemplazada_por`
+  -- y la original vuelve a ser la vigente: desde ahí sí restituye, que es lo
+  -- correcto porque ahí sí murieron las dos.
+  IF v_reemplazada IS NOT NULL THEN
+    RETURN jsonb_build_object(
+      'ok', true,
+      'itemsLiberados', v_count,
+      'itemsCatalogoRestaurados', 0,
+      'omitido', 'cotización reemplazada por una revisión: el stock lo debe la revisión'
+    );
+  END IF;
+
   FOR v_linea IN
     SELECT r.id, r.catalogo_item_id, r.variante_id, r.cantidad
     FROM catalogo_reservas_cotizacion r
@@ -697,7 +749,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 COMMENT ON FUNCTION liberar_reserva_catalogo(TEXT, TEXT) IS
-  'Devuelve la reserva viva de una cotización del catálogo público. Idempotente (se apoya en reserva_cotizacion_pendiente). No-op sobre cotizaciones de otro origen. v314.';
+  'Devuelve la reserva viva de una cotización del catálogo público. Idempotente (se apoya en reserva_cotizacion_pendiente). No-op sobre cotizaciones de otro origen. v315.';
 
 REVOKE EXECUTE ON FUNCTION liberar_reserva_catalogo(TEXT, TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION liberar_reserva_catalogo(TEXT, TEXT) FROM anon;
@@ -725,11 +777,21 @@ CREATE OR REPLACE FUNCTION consumir_reserva_catalogo(
 DECLARE
   v_count INTEGER;
 BEGIN
-  UPDATE catalogo_reservas_cotizacion
+  -- Se cierran también las filas de la cotización que ésta revisa. Si lo que se
+  -- vende es una revisión, la reserva del catálogo quedó tomada por la original
+  -- —la 312 mueve la de inventario pero no ésta— y sin este salto quedaría
+  -- abierta para siempre. Un solo salto alcanza: revisar/ rechaza revisar una
+  -- cotización ya reemplazada, así que la cadena nunca pasa de dos.
+  UPDATE catalogo_reservas_cotizacion r
     SET liberada_at = NOW(),
         motivo      = p_motivo
-    WHERE cotizacion_id = p_cotizacion_id
-      AND liberada_at IS NULL;
+    WHERE r.liberada_at IS NULL
+      AND r.cotizacion_id IN (
+        SELECT p_cotizacion_id
+        UNION
+        SELECT c.revision_de FROM cotizaciones c
+          WHERE c.id = p_cotizacion_id AND c.revision_de IS NOT NULL
+      );
 
   GET DIAGNOSTICS v_count = ROW_COUNT;
 
@@ -738,7 +800,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION consumir_reserva_catalogo(TEXT, TEXT) IS
-  'Cierra las reservas de catálogo (clases B y C) de una cotización SIN devolver stock: la venta se quedó la mercadería. v314.';
+  'Cierra las reservas de catálogo (clases B y C) de una cotización SIN devolver stock: la venta se quedó la mercadería. v315.';
 
 REVOKE EXECUTE ON FUNCTION consumir_reserva_catalogo(TEXT, TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION consumir_reserva_catalogo(TEXT, TEXT) FROM anon;
@@ -803,7 +865,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION convertir_cotizacion_venta_atomica(TEXT,TEXT,TEXT,TEXT,TEXT,DECIMAL,DECIMAL,TEXT,DECIMAL,DECIMAL,TEXT,TEXT,TEXT,INTEGER,DECIMAL,DECIMAL,JSONB,JSONB,TEXT,TEXT,TEXT,TEXT) IS
-  'crear_venta_atomica + liberar_items_cotizacion + consumir_reserva_catalogo en una transacción. v314 (extiende la 246).';
+  'crear_venta_atomica + liberar_items_cotizacion + consumir_reserva_catalogo en una transacción. v315 (extiende la 246).';
 
 -- ============================================================
 -- Parte 5: reservar_items_cotizacion idempotente por cotización
@@ -982,7 +1044,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION reservar_items_cotizacion(TEXT, TEXT, TEXT) IS
-  'Reserva stock de los items de una cotización. Idempotente por (cotización, item) contra movimientos_inventario: no re-reserva lo que esa cotización ya tiene tomado, y devuelve el excedente si la cotización se redujo. v314.';
+  'Reserva stock de los items de una cotización. Idempotente por (cotización, item) contra movimientos_inventario: no re-reserva lo que esa cotización ya tiene tomado, y devuelve el excedente si la cotización se redujo. v315.';
 
 -- ============================================================
 -- Parte 7: trigger de liberación
@@ -1036,4 +1098,4 @@ CREATE TRIGGER cotizaciones_liberar_reserva_catalogo
   EXECUTE FUNCTION trg_liberar_reserva_catalogo();
 
 COMMENT ON FUNCTION trg_liberar_reserva_catalogo() IS
-  'Libera la reserva del catálogo cuando una cotización entra en estado terminal. Existe para que ninguna de las cuatro superficies de rechazo/borrado tenga que acordarse de llamar. v314.';
+  'Libera la reserva del catálogo cuando una cotización entra en estado terminal. Existe para que ninguna de las cuatro superficies de rechazo/borrado tenga que acordarse de llamar. v315.';

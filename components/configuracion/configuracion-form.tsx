@@ -66,6 +66,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [anticipoPorcentajeDefault, setAnticipoPorcentajeDefault] = useState("50")
   const [moduloAgenda, setModuloAgenda] = useState(false)
   const [vendedoresAdministranInventario, setVendedoresAdministranInventario] = useState(false)
+  const [tecnicosOperanPos, setTecnicosOperanPos] = useState(false)
   const [comisionAplicaSinReparacion, setComisionAplicaSinReparacion] = useState(false)
   const [ivaRegimen, setIvaRegimen] = useState<"EXENTO" | "INCLUIDO" | "ADITIVO">("EXENTO")
   const [ivaTasa, setIvaTasa] = useState("")
@@ -122,6 +123,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setAnticipoPorcentajeDefault(String(data.anticipoPorcentajeDefault ?? 50))
         setModuloAgenda(!!data.moduloAgenda)
         setVendedoresAdministranInventario(!!data.vendedoresAdministranInventario)
+        setTecnicosOperanPos(!!data.tecnicosOperanPos)
         setComisionAplicaSinReparacion(!!data.comisionAplicaSinReparacion)
         setIvaRegimen(data.ivaRegimen ?? "EXENTO")
         setIvaTasa(String(data.ivaTasa ?? getIvaGeneral(data.pais)))
@@ -275,7 +277,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada: facturacionHabilitada }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada: facturacionHabilitada }),
       })
 
       if (res.ok) {
@@ -631,6 +633,21 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
               <div className="text-sm font-medium">Los vendedores pueden administrar inventario</div>
               <div className="text-xs text-muted-foreground mt-0.5">
                 Permite a los usuarios con rol Vendedor gestionar productos, stock, depósitos, ajustes y conteos. Apagado, solo los administradores acceden.
+              </div>
+            </div>
+          </label>
+          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+            <input
+              type="checkbox"
+              checked={tecnicosOperanPos}
+              onChange={(e) => setTecnicosOperanPos(e.target.checked)}
+              disabled={!allowEdit}
+              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+            />
+            <div className="flex-1">
+              <div className="text-sm font-medium">Los técnicos pueden operar el POS</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Permite a los usuarios con rol Técnico vender desde el Punto de Venta y ver sus propias ventas, sin dejar de ser técnicos: siguen recibiendo órdenes asignadas y conservando sus comisiones. No incluye anular ni editar ventas, registrar pagos ni crear devoluciones, que siguen siendo solo de administradores.
               </div>
             </div>
           </label>

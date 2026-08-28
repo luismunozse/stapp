@@ -158,6 +158,44 @@ describe("POST /api/cotizaciones/[id]/aprobar — atomic RPC path", () => {
     expect(capturedRpcParams.p_firma_mime).toBe(validBody.firmaMime)
   })
 
+  it("al aprobar una revision, delega en el RPC atomico bajo el id de la revision", async () => {
+    // La aceptada original reservo stock contra SUS items (migracion 246). Si la
+    // revision reserva los suyos sin liberar aquellos primero, stock_reservado
+    // queda inflado para siempre -- el bug fantasma que la migracion 246
+    // documenta. Esa liberacion vive dentro de aprobar_cotizacion_atomica
+    // (plpgsql, migracion 312) y no es observable desde un test de la capa API:
+    // el RPC esta mockeado aca. Lo que este test SI fija es que aprobar una
+    // revision no bifurca a un camino JS distinto -- sigue yendo al mismo RPC
+    // atomico, con el id de la revision, que es lo unico que hace que la
+    // liberacion del lado SQL pueda dispararse.
+    mockAuthSuccess()
+
+    const mockRevision = { ...mockCotizacionEnviada, id: "rev-1" }
+    const mockRevisionAceptada = { ...mockRevision, estado: "ACEPTADA" }
+
+    let callCount = 0
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "cotizaciones") {
+        callCount++
+        return (callCount === 1 ? createChainMock(mockRevision) : createChainMock(mockRevisionAceptada)) as any
+      }
+      return createChainMock(null) as any
+    })
+
+    let capturedRpcParams: any = null
+    vi.mocked(supabaseAdmin.rpc).mockImplementation((fn: string, params?: any) => {
+      if (fn === "aprobar_cotizacion_atomica") capturedRpcParams = params
+      return Promise.resolve({ data: { ok: true }, error: null }) as any
+    })
+
+    const response = await POST(createPostRequest(validBody), createParams("rev-1"))
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(200)
+    expect(capturedRpcParams).not.toBeNull()
+    expect(capturedRpcParams.p_cotizacion_id).toBe("rev-1")
+  })
+
   it("returns 400 when rpc error message contains 'enviadas'", async () => {
     mockAuthSuccess()
     const fetchChain = createChainMock(mockCotizacionEnviada)
@@ -340,6 +378,50 @@ describe("POST /api/cotizaciones/[id]/aprobar — function-missing fallback", ()
       (call: any[]) => call[0] === "estado" && call[1] === "ENVIADA"
     )
     expect(hasEstadoEnviadaLock).toBe(true)
+  })
+
+  it("se niega a aprobar una revision por el camino de compatibilidad", async () => {
+    // La reconciliacion de reservas de una revision —liberar las de la version
+    // reemplazada antes de tomar las nuevas— vive DENTRO de
+    // aprobar_cotizacion_atomica (migracion 312), y este camino existe
+    // justamente para cuando esa funcion no esta. Reservar los items de la
+    // revision sin liberar los de la original deja contada dos veces cada pieza
+    // que aparece en las dos versiones: el bug de stock fantasma que la
+    // migracion 246 existe para prevenir. Negarse es ruidoso y reversible;
+    // reservar de mas corrompe `stock_reservado` en silencio y para siempre.
+    mockAuthSuccess()
+
+    const mockRevision = { ...mockCotizacionEnviada, id: "rev-1", revision_de: "cot-1" }
+    const fetchChain = createChainMock(mockRevision)
+    const updateChain = createChainMock(mockCotizacionAceptada)
+
+    let cotizacionCallCount = 0
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "cotizaciones") {
+        cotizacionCallCount++
+        return (cotizacionCallCount === 1 ? fetchChain : updateChain) as any
+      }
+      return createChainMock(null) as any
+    })
+
+    const rpcsLlamados: string[] = []
+    vi.mocked(supabaseAdmin.rpc).mockImplementation((fn: string) => {
+      rpcsLlamados.push(fn)
+      if (fn === "aprobar_cotizacion_atomica") {
+        return Promise.resolve({
+          data: null,
+          error: { code: "PGRST202", message: "Could not find the function" },
+        }) as any
+      }
+      return Promise.resolve({ data: { success: true }, error: null }) as any
+    })
+
+    const response = await POST(createPostRequest(validBody), createParams("rev-1"))
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(503)
+    expect(updateChain.update).not.toHaveBeenCalled()
+    expect(rpcsLlamados).not.toContain("reservar_items_cotizacion")
   })
 
   it("returns 400 if fallback update returns no rows (double-approve prevented)", async () => {

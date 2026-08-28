@@ -13,7 +13,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 // queda inmovilizado para siempre y el comprador sigue viendo "Agotado".
 //
 // La devolución la dispara el trigger cotizaciones_liberar_reserva_catalogo
-// (migración 314) sobre la transición a estado terminal, así que ninguna de las
+// (migración 315) sobre la transición a estado terminal, así que ninguna de las
 // cuatro rutas que matan una cotización tiene que acordarse de llamar. Lo que
 // se prueba acá es lo que el trigger NO puede cubrir: que esas rutas sigan
 // escribiendo la transición, y las reglas que viven en la app.
@@ -39,7 +39,7 @@ describe("liberación de la reserva del catálogo", () => {
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ok: true }, error: null } as any)
   })
 
-  // El codigo llega a produccion al mergear y la migracion 314 se corre A MANO
+  // El codigo llega a produccion al mergear y la migracion 315 se corre A MANO
   // despues. Los dos estados del mundo tienen que liberar.
   describe("rechazo de una cotización ACEPTADA del catálogo", () => {
     function mockCotAceptadaCatalogo() {
@@ -67,7 +67,7 @@ describe("liberación de la reserva del catálogo", () => {
       })
     }
 
-    it("con la 314 aplicada deja que libere el trigger, sin tocar el camino viejo", async () => {
+    it("con la 315 aplicada deja que libere el trigger, sin tocar el camino viejo", async () => {
       // liberar_items_cotizacion libera LEAST(cantidad, stock_reservado) sobre
       // el global de la fila: correrla despues del trigger se come la reserva
       // de OTRA cotizacion. No es idempotente, por eso no puede ser respaldo
@@ -81,7 +81,7 @@ describe("liberación de la reserva del catálogo", () => {
       expect(rpcNames()).not.toContain("liberar_items_cotizacion")
     })
 
-    it("sin la 314 todavía aplicada cae al camino viejo y libera igual", async () => {
+    it("sin la 315 todavía aplicada cae al camino viejo y libera igual", async () => {
       const { PUT } = await import("@/app/api/cotizaciones/[id]/route")
       mockCotAceptadaCatalogo()
       vi.mocked(supabaseAdmin.rpc).mockImplementation((fn: string) => {
@@ -159,7 +159,7 @@ describe("liberación de la reserva del catálogo", () => {
   })
 
   it("still rejects from the public link (the release rides on the estado write)", async () => {
-    // La liberación la hace el trigger de la migración 314 sobre el UPDATE de
+    // La liberación la hace el trigger de la migración 315 sobre el UPDATE de
     // estado, así que acá sólo se verifica que ese UPDATE siga ocurriendo: si
     // esta ruta dejara de escribir RECHAZADA, el trigger no tendría de qué
     // colgarse.

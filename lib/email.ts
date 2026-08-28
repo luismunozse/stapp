@@ -572,7 +572,9 @@ interface SendCotizacionEmailParams {
   numeroCotizacion: string
   numeroOrden: number
   total: number
-  fechaVencimiento?: Date | null
+  // Llega como el string ISO de Postgres, no como Date; `formatDateValue`
+  // acepta las dos formas desde siempre y el tipo se quedó atrás.
+  fechaVencimiento?: Date | string | null
   pdfBuffer: Buffer
   moneda?: string
   zonaHoraria?: string

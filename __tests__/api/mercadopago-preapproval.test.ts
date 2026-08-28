@@ -92,6 +92,66 @@ describe("POST /api/mercadopago/preapproval", () => {
     expect(vi.mocked(createSubscription)).not.toHaveBeenCalled()
   })
 
+  it("la adhesion de un pagador vigente arranca recien cuando vence lo ya pagado", async () => {
+    // Sin start_date MercadoPago cobra al autorizar: el taller al dia pagaria
+    // dos veces el mismo mes. El periodo no se pierde (el webhook apila sobre
+    // current_period_end), pero el cobro se le adelanta sin motivo.
+    const enUnMes = new Date(Date.now() + 30 * 86400000).toISOString()
+    mockAuthSuccess()
+    mockSupabaseFrom({
+      organizations: createChainMock({
+        id: "org-1",
+        nombre: "Taller",
+        email: "taller@test.com",
+        activo: true,
+      }),
+      subscriptions: createChainMock({ current_period_end: enUnMes }),
+    })
+
+    await POST(createPostRequest({}) as never)
+
+    expect(vi.mocked(createSubscription)).toHaveBeenCalledWith(
+      expect.objectContaining({ startDate: enUnMes })
+    )
+  })
+
+  it("con el periodo ya vencido la adhesion arranca ya: no se manda fecha de inicio", async () => {
+    const ayer = new Date(Date.now() - 86400000).toISOString()
+    mockAuthSuccess()
+    mockSupabaseFrom({
+      organizations: createChainMock({
+        id: "org-1",
+        nombre: "Taller",
+        email: "taller@test.com",
+        activo: true,
+      }),
+      subscriptions: createChainMock({ current_period_end: ayer }),
+    })
+
+    await POST(createPostRequest({}) as never)
+
+    expect(vi.mocked(createSubscription).mock.calls[0][0]).not.toHaveProperty("startDate")
+  })
+
+  it("sin suscripcion previa la adhesion arranca ya", async () => {
+    mockAuthSuccess()
+    mockSupabaseFrom({
+      organizations: createChainMock({
+        id: "org-1",
+        nombre: "Taller",
+        email: "taller@test.com",
+        activo: true,
+      }),
+      subscriptions: createChainMock(null, { message: "no rows" }),
+    })
+
+    const res = await POST(createPostRequest({}) as never)
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(vi.mocked(createSubscription).mock.calls[0][0]).not.toHaveProperty("startDate")
+  })
+
   it("le pasa a MercadoPago la organizacion del usuario, no la del request", async () => {
     mockAuthSuccess({ organizationId: "org-1" })
     mockSupabaseFrom({

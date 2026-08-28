@@ -116,6 +116,84 @@ export function hasInventarioAccess(
   return false
 }
 
+// Regla pura de acceso al POS y a las ventas de mostrador. ADMIN y VENDEDOR
+// siempre: vender ES su rol. TECNICO solo si la org habilitó el permiso
+// (opt-in, default apagado); cualquier otro rol, nunca.
+//
+// El flag NO cambia el rol del técnico: sigue siendo TECNICO, así que sigue
+// apareciendo en la lista de asignables a órdenes y conserva "Mi desempeño" y
+// sus comisiones de reparación. Es exactamente el motivo por el que esto es un
+// permiso y no un cambio de rol a VENDEDOR, que sería un canje y no una suma.
+export function hasPosAccess(
+  role: string | null,
+  tecnicosHabilitados: boolean
+): boolean {
+  if (role === "ADMIN") return true
+  if (role === "VENDEDOR") return true
+  if (role === "TECNICO") return tecnicosHabilitados
+  return false
+}
+
+// Alcance de lectura de ventas: ¿el actor ve solo las suyas, o las de toda la
+// sucursal? Solo el ADMIN ve las del resto.
+//
+// Existe como regla con nombre porque las rutas preguntaban `role ===
+// "VENDEDOR"`, que era un sinónimo correcto de "no es admin" mientras el POS
+// tenía exactamente dos roles. Con el técnico habilitado adentro dejó de
+// serlo: el técnico caía en el `else` y veía las ventas de TODA la sucursal.
+// Preguntar por lo que la regla es —no ser ADMIN— la deja bien ante el
+// próximo rol también.
+export function soloVeSusVentas(role: string | null): boolean {
+  return role !== "ADMIN"
+}
+
+// Resuelve el flag `tecnicos_operan_pos` de la org. Solo hace falta cuando el
+// actor es TECNICO (ver hasPosAccess); llamarlo para ADMIN o VENDEDOR es un
+// round-trip al pedo, porque ninguno de los dos depende del flag.
+//
+// Fail-closed: si la columna todavía no existe o la lectura falla, devuelve
+// false y el TECNICO queda afuera — idéntico al comportamiento histórico. En
+// este proyecto las migraciones se aplican A MANO y después del merge, así que
+// siempre hay una ventana en la que el deploy va adelante de su migración;
+// durante esa ventana el permiso simplemente todavía no está.
+export async function resolveTecnicosOperanPos(organizationId: string): Promise<boolean> {
+  try {
+    const { data } = await supabaseAdmin
+      .from("organizations")
+      .select("tecnicos_operan_pos")
+      .eq("id", organizationId)
+      .single()
+    return data?.tecnicos_operan_pos === true
+  } catch {
+    return false
+  }
+}
+
+// Guard de los endpoints del POS y de ventas de mostrador. Mismo contrato que
+// requireAdminOrVendedor() para swap 1:1, más `tecnicosOperanPos` para los
+// handlers que necesitan saber si el permiso está prendido (p. ej. quién es
+// acreditable como operador de la venta).
+export async function requirePosAccess() {
+  const result = await requireAuth()
+  if (result.error) return { ...result, tecnicosOperanPos: false }
+
+  const tecnicosOperanPos = result.role === "TECNICO"
+    ? await resolveTecnicosOperanPos(result.organizationId!)
+    : false
+
+  if (!hasPosAccess(result.role, tecnicosOperanPos)) {
+    return {
+      error: NextResponse.json({ error: "Acceso denegado" }, { status: 403 }),
+      session: null,
+      organizationId: null,
+      userId: null,
+      role: null,
+      tecnicosOperanPos: false,
+    }
+  }
+  return { ...result, tecnicosOperanPos }
+}
+
 // Resuelve el flag `vendedores_administran_inventario` de la org. Solo hace
 // falta cuando el actor es VENDEDOR (ver hasInventarioAccess); llamarlo para
 // otros roles es un round-trip innecesario. Fail-closed: si la columna no

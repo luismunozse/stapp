@@ -19,6 +19,7 @@
     "test:e2e:firefox": "cross-env PW_FIREFOX=1 playwright test",
     "test:e2e:install": "playwright install --with-deps chromium",
     "test:e2e:install:all": "playwright install --with-deps chromium firefox",
+    "pdf:smoke": "node scripts/pdf-smoke.mjs",
     "cap:sync": "npx cap sync",
     "cap:open:android": "npx cap open android",
     "cap:build:apk": "cd android && gradlew assembleDebug",
