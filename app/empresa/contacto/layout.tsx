@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { LocalBusinessJsonLd, BreadcrumbJsonLd } from "@/components/seo/json-ld"
+import { BreadcrumbJsonLd } from "@/components/seo/json-ld"
 
 export const metadata: Metadata = {
   title: "Contacto - Soporte para Software de Servicio T\u00e9cnico",
@@ -30,7 +30,6 @@ export default function ContactoLayout({
 }) {
   return (
     <>
-      <LocalBusinessJsonLd />
       <BreadcrumbJsonLd
         items={[
           { name: "Inicio", url: "https://stapp.com.ar" },
