@@ -202,8 +202,13 @@ export function PosCheckoutDialog({
   // puede volver a dispararse antes de que React repinte con `loading` en
   // true — leer el state acá adentro vería el valor stale del render
   // anterior. El `finally` único de abajo cubre TODOS los retornos
-  // tempranos (validaciones, stock insuficiente, error de red), así que no
-  // hace falta repetir la liberación en cada `return`.
+  // tempranos (validaciones, stock insuficiente, error de red) para
+  // `submittingRef`, así que no hace falta repetir su liberación en cada
+  // `return`. `loading` es otra historia: las validaciones puramente
+  // sincrónicas de más abajo lo liberan ANTES de mostrar el error (ver
+  // ISSUE 3) para no dejar el botón diciendo "Procesando..." mientras la
+  // alerta, que no depende de nada async, sigue en pantalla. El guard de
+  // reentrada sigue siendo `submittingRef`, no `loading`.
   const submittingRef = useRef(false)
 
   const handleSubmit = async () => {
@@ -216,6 +221,13 @@ export function PosCheckoutDialog({
 
       // Sin pago parcial, los pagos deben coincidir con el total efectivo
       if (!pagoParcial && Math.abs(totalPagosBase - totalEfectivo) > 0.01) {
+        // Validación 100% sincrónica: no hay nada async en vuelo, así que se
+        // libera `loading` ANTES de esperar a que el cajero cierre la alerta
+        // (si no, el botón queda diciendo "Procesando..." mientras la propia
+        // alerta dice que hubo un error — contradictorio). `submittingRef`
+        // sigue en true hasta el `return`, así que un segundo click durante
+        // la alerta no reentra.
+        setLoading(false)
         await showError(
           `El total de pagos (${formatPrice(totalPagosBase)}) no coincide con el total a cobrar (${formatPrice(totalEfectivo)}). Active "Pago parcial" para dejar saldo pendiente.`
         )
@@ -223,6 +235,7 @@ export function PosCheckoutDialog({
       }
       // Con pago parcial, los pagos no pueden exceder el total efectivo
       if (pagoParcial && totalPagosBase > totalEfectivo + 0.01) {
+        setLoading(false)
         await showError("El total de pagos no puede exceder el total de la venta")
         return
       }
@@ -230,6 +243,7 @@ export function PosCheckoutDialog({
       // Una venta con saldo pendiente requiere un cliente registrado
       const saldoPendiente = totalEfectivo - totalPagosBase
       if (pagoParcial && saldoPendiente > 0.01 && !cliente.id) {
+        setLoading(false)
         await showError("Seleccioná un cliente para dejar saldo pendiente / fiar")
         return
       }
@@ -237,10 +251,12 @@ export function PosCheckoutDialog({
       // Validate cuenta corriente
       const pagoCC = pagosLines.find((p) => p.metodo === "CUENTA_CORRIENTE")
       if (pagoCC && pagoCC.monto > saldoCuenta) {
+        setLoading(false)
         await showError(`Saldo insuficiente en cuenta corriente (${formatPrice(saldoCuenta)})`)
         return
       }
       if (pagoCC && !cliente.id) {
+        setLoading(false)
         await showError("Seleccione un cliente registrado para usar cuenta corriente")
         return
       }
@@ -250,6 +266,7 @@ export function PosCheckoutDialog({
         (it) => it.trackeaSeries && it.serieIds.length !== it.cantidad
       )
       if (itemSinSeries) {
+        setLoading(false)
         await showError(
           `Seleccioná ${itemSinSeries.cantidad} serie(s) para "${itemSinSeries.nombre}" antes de cobrar`
         )
