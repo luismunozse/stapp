@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
+import { useEffect, useState } from "react"
 import { describe, it, expect, vi } from "vitest"
-import { render, screen, fireEvent } from "@testing-library/react"
+import { render, screen, fireEvent, act } from "@testing-library/react"
 import { PosCart } from "@/components/pos/pos-cart"
 import type { PosCartItem, DescuentoConfig } from "@/components/pos/pos-types"
 
@@ -68,12 +69,70 @@ describe("PosCart — el descuento global no arrastra el valor del cliente anter
     expect(screen.getByRole("button", { name: "$" })).toHaveClass("bg-primary")
   })
 
-  it("escribir en el campo mientras el prop no cambia no se pisa solo", () => {
-    render(<PosCart {...(baseProps({ tipo: "PORCENTAJE", valor: 10 }) as any)} />)
-    const input = descuentoInput()
+})
 
-    fireEvent.change(input, { target: { value: "15" } })
+// ---------------------------------------------------------------------------
+// Arnés con estado real: reproduce cómo pos-terminal.tsx cablea el carrito
+// (`onSetDescuentoGlobal={setDescuentoGlobal}` apunta a un useState real),
+// a diferencia de baseProps() de arriba, donde ese callback es un vi.fn()
+// que nunca hace que `descuentoGlobal` cambie. Sin un prop que de verdad
+// vuelva a bajar no hay feedback loop que probar: el bug de ISSUE 1 depende
+// exactamente de eso.
+// ---------------------------------------------------------------------------
+function DescuentoHarness({
+  initial,
+  externalSetterRef,
+}: {
+  initial: DescuentoConfig | null
+  externalSetterRef?: { current: ((d: DescuentoConfig | null) => void) | null }
+}) {
+  const [descuentoGlobal, setDescuentoGlobal] = useState<DescuentoConfig | null>(initial)
+  useEffect(() => {
+    if (externalSetterRef) externalSetterRef.current = setDescuentoGlobal
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return (
+    <PosCart
+      {...(baseProps(descuentoGlobal) as any)}
+      onSetDescuentoGlobal={setDescuentoGlobal}
+    />
+  )
+}
 
-    expect(descuentoInput().value).toBe("15")
+describe("PosCart — el resync no pisa la propia escritura del cajero (feedback loop con el padre)", () => {
+  it("reemplazar un 10% existente tipeando 0 (primer paso hacia 0.5) no borra el 0 recién tipeado", () => {
+    render(<DescuentoHarness initial={{ tipo: "PORCENTAJE", valor: 10 }} />)
+    expect(descuentoInput().value).toBe("10")
+
+    // Cajero selecciona todo y tipea "0" (va camino a "0.5"). No se prueba el
+    // paso intermedio "0." porque un <input type="number"> sanea ese valor a
+    // "" a nivel DOM (no matchea la regexp de número válido de la spec de
+    // HTML5) — es una restricción de jsdom/navegador, no del componente.
+    fireEvent.change(descuentoInput(), { target: { value: "0" } })
+    expect(descuentoInput().value).toBe("0")
+
+    fireEvent.change(descuentoInput(), { target: { value: "0.5" } })
+    expect(descuentoInput().value).toBe("0.5")
+  })
+
+  it("un reset externo real (no producido por este componente, ej. venta completada) sí limpia el draft", () => {
+    const externalSetterRef: { current: ((d: DescuentoConfig | null) => void) | null } = { current: null }
+    render(
+      <DescuentoHarness
+        initial={{ tipo: "MONTO", valor: 500 }}
+        externalSetterRef={externalSetterRef}
+      />
+    )
+    expect(descuentoInput().value).toBe("500")
+
+    // Simula lo que hace pos-terminal.tsx tras completar la venta / vaciar
+    // el carrito / F2 / recuperar un apartado: llama a setDescuentoGlobal
+    // directamente, sin pasar por el onChange del propio PosCart.
+    act(() => {
+      externalSetterRef.current?.(null)
+    })
+
+    expect(descuentoInput().value).toBe("")
+    expect(screen.getByRole("button", { name: "%" })).toHaveClass("bg-primary")
   })
 })

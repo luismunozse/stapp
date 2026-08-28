@@ -120,17 +120,37 @@ export function PosCart({
   const [globalDescTipo, setGlobalDescTipo] = useState<TipoDescuento>(descuentoGlobal?.tipo ?? "PORCENTAJE")
   const [globalDescValor, setGlobalDescValor] = useState<string>(descuentoGlobal ? String(descuentoGlobal.valor) : "")
 
+  // Último valor que ESTE componente subió al padre (null incluido). Se usa
+  // para distinguir un cambio externo real de `descuentoGlobal` (venta
+  // completada, vaciar carrito, F2, recuperar apartado) de la vuelta como
+  // prop de algo que el propio cajero acaba de tipear.
+  const lastEmittedDescuentoRef = useRef<DescuentoConfig | null>(descuentoGlobal)
+
+  const emitDescuentoGlobal = (d: DescuentoConfig | null) => {
+    lastEmittedDescuentoRef.current = d
+    onSetDescuentoGlobal(d)
+  }
+
   // Resincroniza el draft cuando el padre cambia `descuentoGlobal` desde
   // afuera (venta completada, vaciar carrito): sin esto, el toggle %/$ y el
   // valor quedaban mostrando el descuento del cliente anterior hasta que
   // alguien tocaba el campo, y ahí reaplicaba ese descuento viejo sobre la
   // venta nueva.
-  // Depende de tipo/valor, no del objeto `descuentoGlobal` en sí: cada tecla
-  // que el cajero tipea llama a onSetDescuentoGlobal, que sube un objeto
-  // NUEVO (misma tipo/valor) y lo hace bajar de nuevo como prop. Si el efecto
-  // dependiera de esa referencia, se re-ejecutaría en cada tecla y pisaría
-  // "10.50" con "10.5" a mitad de tipeo.
+  // No alcanza con no depender de la referencia del objeto: aun comparando
+  // tipo/valor, cada tecla que el cajero tipea sube un `descuentoGlobal`
+  // NUEVO (por ejemplo `null` al borrar el dígito para reemplazarlo) y ese
+  // valor sí es un cambio real de tipo/valor, así que el efecto se
+  // reejecutaría y pisaría lo que el cajero recién tipeó antes de que
+  // termine de escribir el siguiente carácter. Por eso comparamos contra lo
+  // último que ESTE componente emitió: si el prop que bajó coincide con eso,
+  // es un eco de nuestra propia escritura y no hay que resincronizar.
   useEffect(() => {
+    const last = lastEmittedDescuentoRef.current
+    const isEcho =
+      last === descuentoGlobal ||
+      (last?.tipo === descuentoGlobal?.tipo && last?.valor === descuentoGlobal?.valor)
+    if (isEcho) return
+    lastEmittedDescuentoRef.current = descuentoGlobal
     setGlobalDescTipo(descuentoGlobal?.tipo ?? "PORCENTAJE")
     setGlobalDescValor(descuentoGlobal ? String(descuentoGlobal.valor) : "")
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -638,7 +658,7 @@ export function PosCart({
                     onClick={() => {
                       setGlobalDescTipo(t)
                       const val = parseFloat(globalDescValor) || 0
-                      if (val > 0) onSetDescuentoGlobal({ tipo: t, valor: val })
+                      if (val > 0) emitDescuentoGlobal({ tipo: t, valor: val })
                     }}
                     className={cn(
                       "px-2 h-full text-[10px] font-medium transition-colors",
@@ -661,9 +681,9 @@ export function PosCart({
                   setGlobalDescValor(raw)
                   const val = parseFloat(raw) || 0
                   if (val > 0) {
-                    onSetDescuentoGlobal({ tipo: globalDescTipo, valor: val })
+                    emitDescuentoGlobal({ tipo: globalDescTipo, valor: val })
                   } else {
-                    onSetDescuentoGlobal(null)
+                    emitDescuentoGlobal(null)
                   }
                 }}
                 className="h-7 w-20 text-xs text-center"
