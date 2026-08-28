@@ -4,6 +4,7 @@ import { unstable_cache } from "next/cache"
 import { supabaseAdmin } from "@/lib/supabase"
 import { CatalogoItemView } from "@/components/catalogo-public/catalogo-item-view"
 import { stockDisponibleCatalogo } from "@/lib/catalogo/stock-disponible"
+import { buildItemDescription, buildItemTitle } from "@/lib/catalogo/item-meta"
 import type { Metadata, Viewport } from "next"
 
 type PageProps = { params: Promise<{ slug: string; itemId: string }> }
@@ -215,8 +216,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!data) return { title: "Item no encontrado" }
 
   const orgName = data.organizacion.nombre_mostrar || data.organizacion.nombre
-  const titulo = `${data.item.nombre} — ${orgName}`
-  const desc = data.item.descripcion?.slice(0, 200) || `${data.item.nombre} disponible en el catálogo de ${orgName}`
+  const titulo = buildItemTitle(data.item.nombre, orgName)
+  const desc = buildItemDescription({
+    nombre: data.item.nombre,
+    descripcion: data.item.descripcion,
+    etiquetas: data.item.etiquetas,
+    precio: data.item.precio,
+    precioHasta: data.item.precio_hasta,
+    moneda: data.organizacion.moneda,
+    stockDisponible: data.item.stock_disponible,
+    orgName,
+  })
 
   return {
     title: titulo,

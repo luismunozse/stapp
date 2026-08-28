@@ -3,8 +3,24 @@ import { blogPosts } from "@/lib/blog-data"
 import { useCases } from "@/lib/use-cases-data"
 import { supabaseAdmin } from "@/lib/supabase"
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = "https://stapp.com.ar"
+export const SITE_URL = "https://stapp.com.ar"
+
+/**
+ * El sitemap esta partido en dos poblaciones porque son cosas distintas y
+ * conviene medirlas por separado en Search Console.
+ *
+ * De las ~180 URLs que se publicaban juntas, 146 eran catalogos de clientes
+ * (101 de un solo taller) contra 34 paginas propias. Mirando un unico sitemap
+ * las metricas de indexacion son un promedio que no dice nada: no se puede
+ * distinguir "no indexan mis paginas de marketing" de "no indexan los items
+ * de un taller". Separados, cada sitemap se sube y se mide solo.
+ *
+ * Partirlos no agrega crawl budget. Lo que agrega es poder ver donde se va.
+ */
+
+/** Paginas propias: landing, precios, blog, casos de uso, legales, ayuda. */
+export function marketingUrls(): MetadataRoute.Sitemap {
+  const baseUrl = SITE_URL
 
   // URLs estaticas
   const staticUrls: MetadataRoute.Sitemap = [
@@ -119,8 +135,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })),
   ]
 
+  return [...staticUrls, ...blogUrls, ...useCaseUrls]
+}
+
+/** Catalogos publicos de los talleres: raiz, items y categorias. */
+export async function catalogoUrls(): Promise<MetadataRoute.Sitemap> {
+  const baseUrl = SITE_URL
+
   // Catálogos públicos activos (1 query catálogos + 1 query items en batch)
-  const catalogoUrls: MetadataRoute.Sitemap = []
+  const urls: MetadataRoute.Sitemap = []
   try {
     const { data: catalogos } = await supabaseAdmin
       .from("catalogo_config")
@@ -132,7 +155,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const slugByOrg = new Map(cats.map((c) => [c.organization_id, c.slug]))
 
     for (const cat of cats) {
-      catalogoUrls.push({
+      urls.push({
         url: `${baseUrl}/catalogo/${cat.slug}`,
         lastModified: new Date(cat.updated_at),
         changeFrequency: "weekly",
@@ -151,7 +174,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       for (const it of items ?? []) {
         const slug = slugByOrg.get(it.organization_id)
         if (!slug) continue
-        catalogoUrls.push({
+        urls.push({
           url: `${baseUrl}/catalogo/${slug}/${it.id}`,
           lastModified: new Date(it.updated_at),
           changeFrequency: "weekly",
@@ -171,7 +194,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       for (const c of cats ?? []) {
         const orgSlug = slugByOrg.get(c.organization_id)
         if (!orgSlug || !c.slug) continue
-        catalogoUrls.push({
+        urls.push({
           url: `${baseUrl}/catalogo/${orgSlug}/c/${c.slug}`,
           lastModified: new Date(c.updated_at),
           changeFrequency: "weekly",
@@ -183,5 +206,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.error("sitemap: error fetching catalogs", err)
   }
 
-  return [...staticUrls, ...blogUrls, ...useCaseUrls, ...catalogoUrls]
+  return urls
 }
