@@ -1,12 +1,11 @@
 "use client"
 
 import { cn } from "@/lib/utils"
+import { whatsAppUrl } from "@/lib/contact"
 
-const WHATSAPP_NUMBER = "5491169625733"
-const WHATSAPP_MESSAGE = encodeURIComponent(
+const WHATSAPP_URL = whatsAppUrl(
   "Hola! Me interesa saber más sobre STApp para mi taller de reparación."
 )
-const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MESSAGE}`
 
 export function WhatsAppButton() {
   return (

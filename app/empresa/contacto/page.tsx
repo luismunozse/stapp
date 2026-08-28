@@ -18,6 +18,12 @@ import {
 } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { WhatsAppFloat } from "@/components/marketing/whatsapp-float"
+import {
+  CONTACT_EMAIL,
+  CONTACT_PHONE_DISPLAY,
+  CONTACT_PHONE_E164,
+  whatsAppUrl,
+} from "@/lib/contact"
 
 export default function ContactoPage() {
   const [formData, setFormData] = useState({
@@ -65,8 +71,8 @@ export default function ContactoPage() {
       icon: Mail,
       title: "Email",
       description: "Nuestro equipo de soporte",
-      value: "soporte@stapp.com",
-      href: "mailto:soporte@stapp.com",
+      value: CONTACT_EMAIL,
+      href: `mailto:${CONTACT_EMAIL}`,
       color: "text-blue-600 dark:text-blue-400",
       bgColor: "bg-blue-50 dark:bg-blue-950/50",
     },
@@ -74,8 +80,8 @@ export default function ContactoPage() {
       icon: Phone,
       title: "Teléfono",
       description: "Lun a Vie, 9am - 6pm",
-      value: "+54 9 11 6962-5733",
-      href: "tel:+5491169625733",
+      value: CONTACT_PHONE_DISPLAY,
+      href: `tel:${CONTACT_PHONE_E164}`,
       color: "text-green-600 dark:text-green-400",
       bgColor: "bg-green-50 dark:bg-green-950/50",
     },
@@ -83,8 +89,8 @@ export default function ContactoPage() {
       icon: WhatsAppIcon,
       title: "WhatsApp",
       description: "Respuesta rápida",
-      value: "+54 9 11 6962-5733",
-      href: "https://wa.me/5491169625733?text=Hola!%20Necesito%20ayuda%20con%20STApp.",
+      value: CONTACT_PHONE_DISPLAY,
+      href: whatsAppUrl("Hola! Necesito ayuda con STApp."),
       color: "text-emerald-600 dark:text-emerald-400",
       bgColor: "bg-emerald-50 dark:bg-emerald-950/50",
     },
