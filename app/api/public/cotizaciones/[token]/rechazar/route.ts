@@ -62,6 +62,9 @@ export async function POST(
 
     if (updateError) throw updateError
 
+    // El UPDATE de arriba dispara cotizaciones_liberar_reserva_catalogo, que
+    // devuelve la reserva que tomó esta solicitud. Ver migración 315, parte 7.
+
     // Rechazar una revisión no puede borrar el presupuesto de la original.
     // Este es el camino principal por el que una revisión muere: el cliente
     // abre el link, ve el nuevo total y dice que no. Si la original queda

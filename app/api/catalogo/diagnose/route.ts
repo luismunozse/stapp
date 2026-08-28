@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { stockDisponibleCatalogo } from "@/lib/catalogo/stock-disponible"
 
 /**
  * Diagnóstico de stock de un item del catálogo público.
@@ -26,7 +27,7 @@ export async function GET(req: Request) {
     .from("catalogo_items")
     .select(`
       id, nombre, activo, stock, inventario_id,
-      inventario:inventario(id, nombre, stock),
+      inventario:inventario(id, nombre, stock, stock_reservado, deleted_at),
       variantes:catalogo_variantes(id, etiqueta, stock, activo)
     `)
     .eq("organization_id", auth.organizationId!)
@@ -41,11 +42,18 @@ export async function GET(req: Request) {
     const stockVariantesTotal = tieneVariantes
       ? variantesActivas.reduce((s, v) => (v.stock == null ? s : s + v.stock), 0)
       : null
+    // Mismo helper que el storefront: si esto no coincidiera con la página, la
+    // herramienta hecha para explicar discrepancias produciría una.
     const stockEfectivo = tieneVariantes
       ? stockVariantesTotal
-      : it.inventario_id && it.inventario
-        ? it.inventario.stock
-        : it.stock
+      : stockDisponibleCatalogo(it)
+
+    // El embed puede venir vacío aunque inventario_id esté cargado: el producto
+    // fue borrado en soft, o el link quedó apuntando a una fila que ya no está.
+    // Guardarse sólo por inventario_id tiraba TypeError y devolvía 500 — justo
+    // el caso que esta herramienta existe para explicar.
+    const inv = it.inventario ?? null
+    const reservado = inv?.stock_reservado ?? 0
 
     return {
       id: it.id,
@@ -53,7 +61,20 @@ export async function GET(req: Request) {
       activo: it.activo,
       catalogo_items_stock: it.stock,
       inventario_linked: it.inventario_id
-        ? { id: it.inventario.id, nombre: it.inventario.nombre, stock: it.inventario.stock }
+        ? inv
+          ? {
+              id: inv.id,
+              nombre: inv.nombre,
+              // Desglose: el público ve stock - reservado, así que hace falta
+              // ver las dos mitades para entender de dónde sale el número.
+              stock_fisico: inv.stock,
+              stock_reservado: reservado,
+              // PostgREST devuelve igual las filas borradas en soft, así que
+              // sin este dato el diagnóstico reportaría un producto sano
+              // mientras el checkout lo rechaza con P0002.
+              borrado_at: inv.deleted_at ?? null,
+            }
+          : { id: it.inventario_id, roto: "el producto vinculado no existe o fue borrado" }
         : null,
       variantes_activas: variantesActivas.map((v) => ({
         id: v.id,
@@ -67,6 +88,14 @@ export async function GET(req: Request) {
           : it.inventario_id
             ? "EN_INVENTARIO (item linkeado a inventario)"
             : "EN_ITEM (stock propio)",
+      // Las dos causas de "el stock fisico no es cero pero el catalogo dice
+      // agotado": el producto esta borrado, o hay reservas sin liberar.
+      nota_reservas:
+        !tieneVariantes && inv?.deleted_at
+          ? "el producto vinculado esta borrado: el catalogo lo muestra agotado y el checkout lo rechaza"
+          : !tieneVariantes && reservado > 0
+            ? `${reservado} unidad(es) reservadas por cotizaciones sin cerrar`
+            : null,
     }
   })
 
