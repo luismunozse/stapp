@@ -95,7 +95,7 @@ export const metadata: Metadata = {
     description: "Sistema de gestión para servicio técnico de dispositivos electrónicos. Administra órdenes de trabajo, clientes, inventario y facturación.",
     images: [
       {
-        url: "/api/og?v=3",
+        url: "/api/og?v=4",
         width: 1200,
         height: 630,
         alt: "STApp - Software de Gestión para Talleres de Reparación de Celulares",
@@ -107,7 +107,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "STApp - Gestión de Servicio Técnico",
     description: "Sistema de gestión para servicio técnico de dispositivos electrónicos. Administra órdenes, clientes e inventario.",
-    images: ["/api/og?v=3"],
+    images: ["/api/og?v=4"],
   },
   // Robots
   robots: {
