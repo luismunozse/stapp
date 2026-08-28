@@ -3,72 +3,81 @@ import { readFileSync, existsSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 
 /**
- * Guarda contra una trampa de Next que no se ve leyendo el codigo.
+ * Guarda contra dos trampas de Next que no se ven leyendo el codigo, y que
+ * juntas dejaron al sitio sin `og:image`.
  *
- * `openGraph` NO se mergea en profundidad: una pagina que declara su propio
- * bloque `openGraph` sin `images` pierde la imagen del layout raiz. Hay once
- * paginas asi, y lo unico que las cubre es la convencion
- * `app/opengraph-image.tsx`, que se aplica al segmento y a todos sus hijos.
+ * 1. `openGraph` NO se mergea en profundidad. Una pagina que declara su propio
+ *    bloque pierde entero el del layout raiz, `images` incluido.
  *
- * Al borrar ese archivo en #364 el sitio entero quedo sin og:image y el
- * preview de WhatsApp paso a no tener imagen. Los tipos no lo ven, el build no
- * lo ve y los tests de la tarjeta tampoco: solo se detecta pidiendo el HTML.
+ * 2. La convencion `opengraph-image.*` NO cascadea a las rutas hijas: cubre
+ *    unicamente el segmento donde vive.
+ *
+ * La segunda se verifico en produccion. Una version anterior de este test daba
+ * verde asumiendo que si cascadeaba, y por eso no atrapo que `/precios`,
+ * `/ayuda`, `/empresa/blog`, `/registro`, `/empresa/contacto` y
+ * `/descargar/android` seguian sin imagen. El test estaba en verde y el sitio
+ * roto.
  */
 const RAIZ = join(__dirname, "..", "..")
+const APP = join(RAIZ, "app")
+
+/** Paginas que declaran `openGraph:` sin `images:` dentro del bloque. */
+function paginasSinImages(): string[] {
+  const sueltas: string[] = []
+
+  const recorrer = (dir: string) => {
+    for (const entrada of readdirSync(dir)) {
+      const ruta = join(dir, entrada)
+      if (statSync(ruta).isDirectory()) {
+        recorrer(ruta)
+        continue
+      }
+      if (!entrada.endsWith(".tsx")) continue
+      if (entrada.startsWith("opengraph-image")) continue
+
+      const src = readFileSync(ruta, "utf8")
+      const i = src.indexOf("openGraph:")
+      if (i < 0) continue
+      if (src.slice(i, i + 700).includes("images")) continue
+
+      // Solo la salva una convencion en SU MISMO segmento. No hay cascada.
+      const cubiertaAca = readdirSync(dir).some((f) =>
+        /^opengraph-image\./.test(f)
+      )
+      if (!cubiertaAca) sueltas.push(ruta.replace(RAIZ, "").replace(/\\/g, "/"))
+    }
+  }
+
+  recorrer(APP)
+  return sueltas
+}
 
 describe("cobertura de og:image", () => {
+  it("ninguna pagina que declara openGraph se queda sin imagen", () => {
+    expect(paginasSinImages()).toEqual([])
+  })
+
   it("existe el opengraph-image de la raiz", () => {
-    expect(existsSync(join(RAIZ, "app", "opengraph-image.tsx"))).toBe(true)
+    // Cubre `/`, que es la pagina que mas se comparte.
+    expect(existsSync(join(APP, "opengraph-image.tsx"))).toBe(true)
   })
 
-  it("la raiz y /api/og dibujan la MISMA tarjeta", () => {
-    // El bug original no era que el archivo existiera, sino que dibujaba una
-    // tarjeta distinta a la de /api/og. Los dos tienen que salir de OgCard.
-    const conv = readFileSync(join(RAIZ, "app", "opengraph-image.tsx"), "utf8")
-    const ruta = readFileSync(join(RAIZ, "app", "api", "og", "route.tsx"), "utf8")
+  it("la convencion y /api/og dibujan la MISMA tarjeta", () => {
+    // El bug original no era que la convencion existiera, sino que dibujaba una
+    // tarjeta distinta a la de /api/og: og:image servia una y twitter:image
+    // otra. Mientras las dos salgan de OgCard, no pueden divergir.
+    const conv = readFileSync(join(APP, "opengraph-image.tsx"), "utf8")
+    const ruta = readFileSync(join(APP, "api", "og", "route.tsx"), "utf8")
 
-    expect(conv).toContain("@/lib/og/card")
-    expect(conv).toContain("OgCard")
-    expect(ruta).toContain("@/lib/og/card")
-    expect(ruta).toContain("OgCard")
-  })
-
-  it("ninguna pagina se queda sin og:image", () => {
-    // Una pagina que define openGraph sin images depende de una convencion
-    // opengraph-image en su segmento o en alguno superior. Si no hay ninguna,
-    // esa pagina no tiene og:image y nadie se entera.
-    const huerfanas: string[] = []
-
-    const recorrer = (dir: string) => {
-      for (const entrada of readdirSync(dir)) {
-        const ruta = join(dir, entrada)
-        if (statSync(ruta).isDirectory()) {
-          recorrer(ruta)
-          continue
-        }
-        if (!/\.tsx$/.test(entrada)) continue
-        if (/^opengraph-image/.test(entrada)) continue
-
-        const src = readFileSync(ruta, "utf8")
-        const i = src.indexOf("openGraph:")
-        if (i < 0) continue
-        if (src.slice(i, i + 700).includes("images")) continue
-
-        // Busca una convencion en este segmento o en cualquier padre hasta app/.
-        let cur = dir
-        let cubierta = false
-        while (cur.length >= join(RAIZ, "app").length) {
-          if (readdirSync(cur).some((f) => /^opengraph-image\./.test(f))) {
-            cubierta = true
-            break
-          }
-          cur = join(cur, "..")
-        }
-        if (!cubierta) huerfanas.push(ruta.replace(RAIZ, "").replace(/\\/g, "/"))
-      }
+    for (const src of [conv, ruta]) {
+      expect(src).toContain("@/lib/og/card")
+      expect(src).toContain("OgCard")
     }
+  })
 
-    recorrer(join(RAIZ, "app"))
-    expect(huerfanas).toEqual([])
+  it("todas las paginas apuntan a la misma imagen", () => {
+    // Si alguien hardcodea otra URL, la tarjeta se bifurca de nuevo.
+    const metadata = readFileSync(join(RAIZ, "lib", "og", "metadata.ts"), "utf8")
+    expect(metadata).toContain("/api/og?v=")
   })
 })
