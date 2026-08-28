@@ -39,6 +39,12 @@ export default function robots(): MetadataRoute.Robots {
         ],
       },
     ],
-    sitemap: `${baseUrl}/sitemap.xml`,
+    // El indice alcanza para que Google descubra los dos hijos, pero se
+    // listan igual: algunos rastreadores no siguen un sitemapindex.
+    sitemap: [
+      `${baseUrl}/sitemap.xml`,
+      `${baseUrl}/sitemap-marketing.xml`,
+      `${baseUrl}/sitemap-catalogos.xml`,
+    ],
   }
 }
