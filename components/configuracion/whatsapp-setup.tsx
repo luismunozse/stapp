@@ -7,6 +7,13 @@ import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 
 type Status = "loading" | "disconnected" | "pairing" | "connected"
 
+/** Cada cuánto consultamos el estado de vinculación. */
+const POLL_MS = 3_000
+/** Vida útil que le damos al QR en pantalla antes de pedir el siguiente. */
+const QR_TTL_MS = 15_000
+/** Techo para no pollear para siempre una pestaña que quedó abierta. */
+const MAX_VINCULACION_MS = 10 * 60_000
+
 export function WhatsAppSetup() {
   const [status, setStatus] = useState<Status>("loading")
   const [qr, setQr] = useState<string | null>(null)
@@ -43,26 +50,38 @@ export function WhatsAppSetup() {
   const startPolling = useCallback(() => {
     stopPolling()
     const started = Date.now()
+    let ultimoQrAt = Date.now()
     pollRef.current = setInterval(async () => {
-      if (Date.now() - started > 90_000) {
+      if (Date.now() - started > MAX_VINCULACION_MS) {
         stopPolling()
-        setError("Tiempo agotado. Probá de nuevo.")
+        setError("Se agotó el tiempo de vinculación. Probá de nuevo.")
         setStatus("disconnected")
         return
       }
+      // El QR del server vence solo; pedimos el vigente en vez de dejar en
+      // pantalla uno que el teléfono ya va a rechazar.
+      const tocaQr = Date.now() - ultimoQrAt >= QR_TTL_MS
       try {
-        const res = await fetch("/api/whatsapp/evolution/qr")
+        const res = await fetch(`/api/whatsapp/evolution/qr${tocaQr ? "?refresh=1" : ""}`)
         const data = await res.json().catch(() => ({}))
         if (data?.state === "open") {
           stopPolling()
           setQr(null)
           setPairingCode(null)
           setStatus("connected")
+          return
+        }
+        if (tocaQr) {
+          ultimoQrAt = Date.now()
+          if (data?.qrBase64) {
+            setQr(data.qrBase64)
+            setPairingCode(data.pairingCode ?? null)
+          }
         }
       } catch {
         /* sigue intentando */
       }
-    }, 3000)
+    }, POLL_MS)
   }, [stopPolling])
 
   const handleConnect = async () => {
