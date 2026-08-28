@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { OG_IMAGES } from "@/lib/og/metadata"
 
 // This route renders a client component, which cannot export metadata, so the
 // metadata lives in this pass-through layout.
@@ -19,6 +20,7 @@ export const metadata: Metadata = {
     "software servicio técnico celular",
   ],
   openGraph: {
+    images: OG_IMAGES,
     title: "STApp para Android",
     description:
       "Instalá STApp en tu celular y gestioná tu taller desde donde estés. Compatible con Android 8.0 o superior.",

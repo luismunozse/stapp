@@ -17,6 +17,7 @@ import { ReducedMotionProvider } from "@/components/landing/reduced-motion-provi
 import { getPremiumPrices, getAllPlanPrices } from "@/lib/pricing"
 import { SkipLinks } from "@/components/shared/skip-links"
 import { FAQPageJsonLd, HowToJsonLd, UseCasesListJsonLd } from "@/components/seo/json-ld"
+import { OG_IMAGES } from "@/lib/og/metadata"
 
 export const metadata: Metadata = {
   // Título absoluto: el template "%s | STApp" del layout raíz NO aplica a la
@@ -54,6 +55,7 @@ export const metadata: Metadata = {
     "gestión financiera taller",
   ],
   openGraph: {
+    images: OG_IMAGES,
     title: "STApp - Software de Gestión para Talleres de Celulares",
     description:
       "Gestión completa de tu taller: órdenes, inventario, ventas y finanzas. Probá 30 días gratis, sin tarjeta de crédito.",
