@@ -66,6 +66,9 @@ export async function GET() {
       totalActivas: todas.filter(g => g.estado === "ACTIVA").length,
       totalVencidas: todas.filter(g => g.estado === "VENCIDA").length,
       totalReclamadas: todas.filter(g => g.estado === "RECLAMADA").length,
+      // Retiradas por devolución (migración 316). Sin este bucket los otros tres
+      // no cierran contra totalGarantias y la diferencia no la explica nadie.
+      totalAnuladas: todas.filter(g => g.estado === "ANULADA").length,
       totalGarantias: todas.length,
     }
 
@@ -92,6 +95,9 @@ export async function GET() {
     const todasGarantias = todasGarantiasResult.data || []
     const productoMap: Record<string, { producto: string; totalGarantias: number; totalReclamadas: number }> = {}
     todasGarantias.forEach((g: any) => {
+      // Una garantía ANULADA se retiró al devolverse el producto: nunca pudo
+      // reclamarse, así que en el denominador solo diluye la tasa real.
+      if (g.estado === "ANULADA") return
       const prod = (g.items_venta as any)?.descripcion || "Sin descripción"
       if (!productoMap[prod]) productoMap[prod] = { producto: prod, totalGarantias: 0, totalReclamadas: 0 }
       productoMap[prod].totalGarantias++
