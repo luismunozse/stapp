@@ -1,6 +1,7 @@
 import Script from "next/script"
 import { getAllPlanPrices } from "@/lib/pricing"
 import { blogPostingSchema, type BlogPostingSchemaInput } from "@/lib/blog-seo"
+import { CONTACT_EMAIL, CONTACT_PHONE_E164 } from "@/lib/contact"
 
 const siteUrl = "https://stapp.com.ar"
 
@@ -63,14 +64,14 @@ export function OrganizationJsonLd() {
       {
         "@type": "ContactPoint",
         contactType: "Customer Support",
-        email: "soporte@stapp.com",
+        email: CONTACT_EMAIL,
         availableLanguage: ["Spanish"],
         areaServed: "Latin America",
       },
       {
         "@type": "ContactPoint",
         contactType: "Sales",
-        email: "soporte@stapp.com",
+        email: CONTACT_EMAIL,
         availableLanguage: ["Spanish"],
       },
     ],
@@ -252,12 +253,8 @@ export function LocalBusinessJsonLd() {
     name: "STApp",
     image: `${siteUrl}/icon-512.png`,
     url: siteUrl,
-    // E.164, matching the number the contact page and the WhatsApp button
-    // already publish. The previous value here was "+54 11 1234-5678", which
-    // is the placeholder attribute of the phone input on the contact form —
-    // it was copied into the markup and shipped as if it were real.
-    telephone: "+5491169625733",
-    email: "soporte@stapp.com",
+    telephone: CONTACT_PHONE_E164,
+    email: CONTACT_EMAIL,
     address: {
       "@type": "PostalAddress",
       addressLocality: "Buenos Aires",
