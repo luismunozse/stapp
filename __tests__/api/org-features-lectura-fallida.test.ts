@@ -173,3 +173,41 @@ describe("GET /api/org/features", () => {
     expect(status).toBe(503)
   })
 })
+
+describe("GET /api/org/features — permiso de POS para técnicos", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAuthSuccess({ role: "TECNICO" })
+  })
+
+  it("expone tecnicosOperanPos prendido", async () => {
+    mockSupabaseFrom({
+      organizations: createChainMock({
+        modulo_agenda: false,
+        vendedores_administran_inventario: false,
+        tecnicos_operan_pos: true,
+      }),
+    })
+
+    const { GET } = await import("@/app/api/org/features/route")
+    const { status, body } = await parseResponse(await GET())
+
+    expect(status).toBe(200)
+    expect(body.tecnicosOperanPos).toBe(true)
+  })
+
+  it("responde false cuando la columna todavía no existe (migración sin aplicar)", async () => {
+    // Mismo criterio que ya rige para los otros flags: una columna ausente SÍ
+    // es una respuesta —la feature todavía no está— y degrada a 200 con el
+    // flag apagado, en vez de clavar al técnico en un 503 irrecuperable.
+    mockSupabaseFrom({
+      organizations: createChainMock(null, { code: "42703", message: "column does not exist" }),
+    })
+
+    const { GET } = await import("@/app/api/org/features/route")
+    const { status, body } = await parseResponse(await GET())
+
+    expect(status).toBe(200)
+    expect(body.tecnicosOperanPos).toBe(false)
+  })
+})

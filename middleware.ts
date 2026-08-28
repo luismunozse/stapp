@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { redirigirPorRol } from "@/lib/rutas-por-rol"
 import { getToken } from "next-auth/jwt"
 import {
   rateLimit,
@@ -506,21 +507,13 @@ export async function middleware(request: NextRequest) {
     requestHeaders.set("x-impersonating", "true")
   }
 
-  // Protección de rutas por rol
-  const userRole = token.role as string
-  const adminOnlyRoutes = ["/tecnicos", "/vendedores", "/configuracion", "/emails", "/facturacion", "/finanzas"]
-  // /inventario admite VENDEDOR a nivel de ruta; el permiso fino por
-  // organización (opt-in) lo resuelven el gate de la página y la API
-  // (requireInventarioAccess), que sí pueden leer el flag en la BD.
-  const adminOrVendedorRoutes = ["/ventas", "/pos", "/reportes", "/proveedores", "/inventario"]
-
-  const isAdminOnly = adminOnlyRoutes.some(r => pathname === r || pathname.startsWith(r + "/"))
-  const isAdminOrVendedor = adminOrVendedorRoutes.some(r => pathname === r || pathname.startsWith(r + "/"))
-
-  if (isAdminOnly && userRole !== "ADMIN") {
-    return NextResponse.redirect(new URL("/dashboard", request.url))
-  }
-  if (isAdminOrVendedor && userRole !== "ADMIN" && userRole !== "VENDEDOR") {
+  // Protección de rutas por rol. La tabla vive en lib/rutas-por-rol, aparte y
+  // sin dependencias, para poder testearla: acá adentro no se puede.
+  //
+  // Es un gate GRUESO. Los permisos finos por organización (los toggles opt-in
+  // como vendedores_administran_inventario y tecnicos_operan_pos) están en la
+  // BD, que el Edge no lee: los resuelven la página y la API.
+  if (redirigirPorRol(pathname, token.role as string)) {
     return NextResponse.redirect(new URL("/dashboard", request.url))
   }
 

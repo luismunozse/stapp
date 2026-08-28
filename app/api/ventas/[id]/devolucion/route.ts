@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requirePosAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatDevolucion } from "@/lib/db-utils"
 import { getNextReturnNumber } from "@/lib/counters"
@@ -47,7 +47,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, role, session } = await requireAdminOrVendedor()
+    const { error, organizationId, role, session } = await requirePosAccess()
     if (error) return error
 
     const { id } = await params
@@ -97,7 +97,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role, session } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role, session } = await requirePosAccess()
     if (error) return error
 
     // Only ADMIN can create returns

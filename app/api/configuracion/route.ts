@@ -66,12 +66,30 @@ export async function GET() {
     // (puede pasar sin que 296 lo esté, ya que las migraciones se aplican a
     // mano en orden — ver reintento sin ellas más abajo).
     const settingsSelect = `${facturacionSelect}, ingresos_brutos, inicio_actividades`
+    // Permiso de POS para tecnicos (migracion 314). Escalon propio, arriba de
+    // todo, por el mismo motivo que 296 y 297 tienen el suyo: si viajara
+    // dentro de baseSelect estaria en TODOS los escalones, su 42703 los
+    // tumbaria a todos y la cascada caeria hasta el fallback minimo. El admin
+    // recibiria la configuracion mutilada —sin terminologia, sin regimen de
+    // IVA, sin datos fiscales— y el primer guardado escribiria esos vacios
+    // encima de lo que habia.
+    const posSelect = `${settingsSelect}, tecnicos_operan_pos`
 
     let result = await supabaseAdmin
       .from("organizations")
-      .select(settingsSelect)
+      .select(posSelect)
       .eq("id", organizationId!)
       .single()
+
+    if (isMissingColumnError(result.error)) {
+      // Migracion 314 no aplicada todavia: reintentar sin el permiso de POS,
+      // conservando todo lo demas.
+      result = await supabaseAdmin
+        .from("organizations")
+        .select(settingsSelect)
+        .eq("id", organizationId!)
+        .single()
+    }
 
     if (isMissingColumnError(result.error)) {
       // Migración 297 no aplicada todavía: reintentar sin ingresos_brutos /
@@ -160,6 +178,7 @@ export async function GET() {
       pais: organization.pais || "AR",
       moduloAgenda: !!organization.modulo_agenda,
       vendedoresAdministranInventario: !!organization.vendedores_administran_inventario,
+      tecnicosOperanPos: !!organization.tecnicos_operan_pos,
       ivaRegimen: organization.iva_regimen ?? "EXENTO",
       ivaTasa: organization.iva_tasa ?? getIvaGeneral(organization.pais),
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
@@ -199,7 +218,7 @@ export async function PUT(request: Request) {
         { status: 413 }
       )
     }
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada, ingresosBrutos, inicioActividades } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada, ingresosBrutos, inicioActividades } = body
 
     const updateData: Record<string, any> = {}
 
@@ -340,6 +359,10 @@ export async function PUT(request: Request) {
       updateData.vendedores_administran_inventario = !!vendedoresAdministranInventario
     }
 
+    if (tecnicosOperanPos !== undefined) {
+      updateData.tecnicos_operan_pos = !!tecnicosOperanPos
+    }
+
     if (ivaRegimen !== undefined) {
       const validRegimen = ["EXENTO", "INCLUIDO", "ADITIVO"]
       if (validRegimen.includes(ivaRegimen)) {
@@ -440,6 +463,13 @@ export async function PUT(request: Request) {
     // sin que 296 lo esté, ya que las migraciones se aplican a mano en
     // orden — ver reintentos abajo).
     const selectColsFull297 = selectColsFull296 + ", ingresos_brutos, inicio_actividades"
+    // Permiso de POS para tecnicos (migracion 314). Escalon propio y arriba
+    // de todo: los demas se construyen encima de `selectCols`, asi que una
+    // columna metida ahi viaja en TODOS y su 42703 los tumba a todos. La
+    // cascada caeria hasta el ultimo escalon, que borra de updateData el
+    // regimen de IVA, la terminologia y el flag de inventario del vendedor —
+    // el admin guarda y esos campos se pierden sin un error en pantalla.
+    const selectColsPos = selectColsFull297 + ", tecnicos_operan_pos"
 
     // Solo actualizar si hay cambios
     if (Object.keys(updateData).length === 0) {
@@ -450,9 +480,18 @@ export async function PUT(request: Request) {
       // estuvieran cargados en la DB.
       let { data, error: selectError } = await supabaseAdmin
         .from("organizations")
-        .select(selectColsFull297)
+        .select(selectColsPos)
         .eq("id", organizationId!)
         .single()
+      if (isMissingColumnError(selectError)) {
+        // Migracion 314 no aplicada: reintentar sin el permiso de POS,
+        // conservando todo lo demas.
+        ;({ data, error: selectError } = await supabaseAdmin
+          .from("organizations")
+          .select(selectColsFull297)
+          .eq("id", organizationId!)
+          .single())
+      }
       if (isMissingColumnError(selectError)) {
         // Migración 297 no aplicada: reintentar sin ingresos_brutos /
         // inicio_actividades, conservando los 6 campos fiscales de 295 y el
@@ -507,6 +546,7 @@ export async function PUT(request: Request) {
         pais: org?.pais || "AR",
         moduloAgenda: !!org?.modulo_agenda,
         vendedoresAdministranInventario: !!org?.vendedores_administran_inventario,
+        tecnicosOperanPos: !!org?.tecnicos_operan_pos,
         ivaRegimen: org?.iva_regimen ?? "EXENTO",
         ivaTasa: org?.iva_tasa ?? getIvaGeneral(org?.pais),
         redondeoEfectivo: org?.redondeo_efectivo ?? 0,
@@ -530,8 +570,20 @@ export async function PUT(request: Request) {
       .from("organizations")
       .update(updateData)
       .eq("id", organizationId!)
-      .select(selectColsFull297)
+      .select(selectColsPos)
       .single()
+
+    if (isMissingColumnError(result2.error)) {
+      // Migracion 314 no aplicada todavia: reintentar sin el permiso de POS,
+      // conservando el resto de updateData.
+      delete updateData.tecnicos_operan_pos
+      result2 = await supabaseAdmin
+        .from("organizations")
+        .update(updateData)
+        .eq("id", organizationId!)
+        .select(selectColsFull297)
+        .single() as any
+    }
 
     if (isMissingColumnError(result2.error)) {
       // Migración 297 no aplicada todavía: reintentar sin ingresos_brutos /
@@ -597,6 +649,8 @@ export async function PUT(request: Request) {
       delete updateData.comision_aplica_sin_reparacion
       // Strip vendedor inventory flag (migration 275) in case it doesn't exist yet
       delete updateData.vendedores_administran_inventario
+      // Strip tecnico POS flag (migration 314) in case it doesn't exist yet
+      delete updateData.tecnicos_operan_pos
       // Strip facturacion electronica flag (migration 296) in case it doesn't exist yet
       delete updateData.facturacion_electronica_habilitada
       const selectColsNoFiscal = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda"
@@ -641,6 +695,7 @@ export async function PUT(request: Request) {
       pais: organization.pais || "AR",
       moduloAgenda: !!organization.modulo_agenda,
       vendedoresAdministranInventario: !!organization.vendedores_administran_inventario,
+      tecnicosOperanPos: !!organization.tecnicos_operan_pos,
       ivaRegimen: organization.iva_regimen ?? "EXENTO",
       ivaTasa: organization.iva_tasa ?? getIvaGeneral(organization.pais),
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
