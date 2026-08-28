@@ -66,6 +66,20 @@ export async function GET(
       )
     }
 
+    // Una garantía ANULADA se retiró al devolverse el producto (migración 316):
+    // emitir su certificado entregaría un papel que dice que la garantía vale
+    // cuando la venta ya se reembolsó. 410 y no 404 porque el documento existió
+    // y se retiró a propósito — no es un id inventado.
+    //
+    // VENCIDA y RECLAMADA sí siguen emitiendo: esas garantías existieron y
+    // corrieron su plazo, y el cliente conserva el derecho al comprobante.
+    if (garantia.estado === "ANULADA") {
+      return NextResponse.json(
+        { error: "La garantía fue anulada por una devolución y ya no emite comprobante" },
+        { status: 410 }
+      )
+    }
+
     // Obtener firma del encargado desde la última orden entregada de esta organización
     let firmaEncargado: string | null = null
     let firmaEncargadoMime: string | null = null
