@@ -56,7 +56,13 @@ describe("robots.txt", () => {
     expect(allowed.some((p) => p.startsWith("/api/auth"))).toBe(false)
   })
 
-  it("sigue publicando el sitemap", () => {
-    expect(robots().sitemap).toBe("https://stapp.com.ar/sitemap.xml")
+  it("publica el indice de sitemaps y sus dos hijos", () => {
+    // El indice alcanza para que Google descubra los hijos, pero se listan
+    // los tres porque no todos los rastreadores siguen un sitemapindex.
+    const sitemaps = asArray(robots().sitemap)
+
+    expect(sitemaps).toContain("https://stapp.com.ar/sitemap.xml")
+    expect(sitemaps).toContain("https://stapp.com.ar/sitemap-marketing.xml")
+    expect(sitemaps).toContain("https://stapp.com.ar/sitemap-catalogos.xml")
   })
 })
