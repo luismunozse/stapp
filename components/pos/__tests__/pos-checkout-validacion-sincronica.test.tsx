@@ -10,8 +10,8 @@ vi.mock("@/contexts/currency-context", () => ({
 
 // showError queda pendiente hasta que el test la resuelve — así se puede
 // aserciones sobre el estado del diálogo MIENTRAS la alerta sigue abierta
-// (que es exactamente lo que ISSUE 3 dice que está mal: loading en true sin
-// nada async en vuelo).
+// (que es exactamente lo que se quiere evitar: loading en true sin nada
+// async en vuelo).
 let resolveShowError: () => void = () => {}
 const showError = vi.fn(
   (_message: string) =>
@@ -46,7 +46,7 @@ function stubFetch() {
   )
 }
 
-describe("PosCheckoutDialog — una validación puramente sincrónica no finge estar procesando (ISSUE 3)", () => {
+describe("PosCheckoutDialog — una validación puramente sincrónica no finge estar procesando", () => {
   beforeEach(() => {
     showError.mockClear()
     vi.unstubAllGlobals()

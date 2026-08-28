@@ -76,7 +76,8 @@ describe("PosCart — el descuento global no arrastra el valor del cliente anter
 // (`onSetDescuentoGlobal={setDescuentoGlobal}` apunta a un useState real),
 // a diferencia de baseProps() de arriba, donde ese callback es un vi.fn()
 // que nunca hace que `descuentoGlobal` cambie. Sin un prop que de verdad
-// vuelva a bajar no hay feedback loop que probar: el bug de ISSUE 1 depende
+// vuelva a bajar no hay feedback loop que probar, y el bug que este archivo
+// cubre (el resync pisando lo que el cajero acaba de tipear) depende
 // exactamente de eso.
 // ---------------------------------------------------------------------------
 function DescuentoHarness({

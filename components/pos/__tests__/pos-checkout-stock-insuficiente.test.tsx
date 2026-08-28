@@ -59,7 +59,7 @@ function stubFetch() {
   )
 }
 
-describe("PosCheckoutDialog — stock insuficiente detectado en el pre-chequeo no finge estar procesando (ISSUE 3)", () => {
+describe("PosCheckoutDialog — stock insuficiente detectado en el pre-chequeo no finge estar procesando", () => {
   beforeEach(() => {
     showError.mockClear()
   })
@@ -71,7 +71,6 @@ describe("PosCheckoutDialog — stock insuficiente detectado en el pre-chequeo n
       <PosCheckoutDialog
         open onClose={onClose} items={[buildItem()]}
         cliente={CLIENTE as any} onComplete={() => {}}
-        idempotencyKey="k1"
       />
     )
 
@@ -99,7 +98,6 @@ describe("PosCheckoutDialog — stock insuficiente detectado en el pre-chequeo n
       <PosCheckoutDialog
         open onClose={() => {}} items={[buildItem()]}
         cliente={CLIENTE as any} onComplete={() => {}}
-        idempotencyKey="k1"
       />
     )
 

@@ -205,8 +205,8 @@ export function PosCheckoutDialog({
   // tempranos (validaciones, stock insuficiente, error de red) para
   // `submittingRef`, así que no hace falta repetir su liberación en cada
   // `return`. `loading` es otra historia: las validaciones puramente
-  // sincrónicas de más abajo lo liberan ANTES de mostrar el error (ver
-  // ISSUE 3) para no dejar el botón diciendo "Procesando..." mientras la
+  // sincrónicas de más abajo lo liberan ANTES de mostrar el error, para
+  // no dejar el botón diciendo "Procesando..." mientras la
   // alerta, que no depende de nada async, sigue en pantalla. El guard de
   // reentrada sigue siendo `submittingRef`, no `loading`.
   const submittingRef = useRef(false)
@@ -305,8 +305,8 @@ export function PosCheckoutDialog({
               }
             }
             if (conflicts.length > 0) {
-              // Igual que las seis validaciones sincrónicas de más arriba (ver
-              // ISSUE 3): para cuando se llega acá, `fetchConTimeout` ya
+              // Igual que las seis validaciones sincrónicas de más arriba:
+              // para cuando se llega acá, el `fetch` del pre-chequeo ya
               // resolvió y no queda nada async en vuelo, así que `loading` se
               // libera ANTES de esperar a que el cajero cierre la alerta. Sin
               // esto el botón seguía diciendo "Procesando..." con la alerta
