@@ -252,7 +252,11 @@ export function LocalBusinessJsonLd() {
     name: "STApp",
     image: `${siteUrl}/icon-512.png`,
     url: siteUrl,
-    telephone: "+54 11 1234-5678",
+    // E.164, matching the number the contact page and the WhatsApp button
+    // already publish. The previous value here was "+54 11 1234-5678", which
+    // is the placeholder attribute of the phone input on the contact form —
+    // it was copied into the markup and shipped as if it were real.
+    telephone: "+5491169625733",
     email: "soporte@stapp.com",
     address: {
       "@type": "PostalAddress",
