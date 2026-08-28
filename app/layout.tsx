@@ -127,10 +127,17 @@ export const metadata: Metadata = {
       "x-default": siteUrl,
     },
   },
-  // Verification (agregar IDs cuando est\u00e9n disponibles)
-  // verification: {
-  //   google: "google-site-verification-id",
-  // },
+  // Search Console. Se resuelve por variable de entorno para que activarlo no
+  // requiera tocar codigo: alcanza con setear GOOGLE_SITE_VERIFICATION en
+  // Vercel y redeployar. Si no esta seteada, Next omite la meta tag entera.
+  //
+  // Nota: verificar el dominio por DNS en Search Console no necesita esta meta
+  // tag en absoluto, y cubre el dominio completo incluidos los subdominios de
+  // tenant. Esta via es la alternativa para cuando se verifica por prefijo de
+  // URL.
+  verification: process.env.GOOGLE_SITE_VERIFICATION
+    ? { google: process.env.GOOGLE_SITE_VERIFICATION }
+    : undefined,
 }
 
 export const viewport: Viewport = {

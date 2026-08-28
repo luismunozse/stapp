@@ -36,7 +36,7 @@ export function OrganizationJsonLd() {
     image: `${siteUrl}/icon-512.png`,
     description:
       "STApp es el software líder de gestión para talleres de servicio técnico y reparación de celulares en Argentina y Latinoamérica. Plataforma integral para órdenes de trabajo, clientes, inventario, facturación electrónica y notificaciones por WhatsApp.",
-    foundingDate: "2024",
+    foundingDate: "2025",
     foundingLocation: {
       "@type": "Place",
       name: "Buenos Aires, Argentina",
@@ -56,7 +56,7 @@ export function OrganizationJsonLd() {
       "Reparación de celulares",
       "Gestión de órdenes de trabajo",
       "Inventario de repuestos electrónicos",
-      "Facturación electrónica Argentina",
+      "Facturación con IVA discriminado para talleres",
       "Notificaciones WhatsApp para talleres",
     ],
     slogan: "El software que tu taller necesita",
@@ -80,11 +80,6 @@ export function OrganizationJsonLd() {
       addressCountry: "AR",
       addressLocality: "Buenos Aires",
       addressRegion: "Buenos Aires",
-    },
-    numberOfEmployees: {
-      "@type": "QuantitativeValue",
-      minValue: 2,
-      maxValue: 10,
     },
   }
 
@@ -132,14 +127,14 @@ export async function SoftwareApplicationJsonLd() {
     downloadUrl: `${siteUrl}/registro`,
     screenshot: `${siteUrl}/api/og`,
     softwareVersion: "2.0",
-    releaseNotes: "Incluye facturación electrónica, notificaciones WhatsApp y app móvil",
+    releaseNotes: "Incluye notificaciones WhatsApp, catálogo online y app móvil",
     description:
       "STApp es un software de gestión integral para talleres de reparación de celulares y dispositivos electrónicos. Permite administrar órdenes de trabajo, clientes, inventario de repuestos, facturación electrónica y notificaciones automáticas por WhatsApp desde una sola plataforma web y móvil.",
     featureList: [
       "Gestión de órdenes de trabajo con estados en tiempo real",
       "Administración de clientes con historial completo",
       "Control de inventario de repuestos con alertas de stock",
-      "Facturación electrónica integrada",
+      "Facturación con numeración automática e IVA discriminado, exportable a PDF",
       "Notificaciones automáticas por WhatsApp",
       "Seguimiento de reparaciones para clientes",
       "Reportes y estadísticas de rendimiento",
