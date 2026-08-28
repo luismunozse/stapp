@@ -25,7 +25,8 @@ export function OrganizationJsonLd() {
     "@type": "Organization",
     "@id": `${siteUrl}/#organization`,
     name: "STApp",
-    legalName: "STApp Software",
+    // Sin legalName: no hay una razon social registrada con ese nombre. El
+    // campo es opcional y `name` ya identifica a la organizacion.
     url: siteUrl,
     logo: {
       "@type": "ImageObject",
@@ -35,12 +36,8 @@ export function OrganizationJsonLd() {
     },
     image: `${siteUrl}/icon-512.png`,
     description:
-      "STApp es el software líder de gestión para talleres de servicio técnico y reparación de celulares en Argentina y Latinoamérica. Plataforma integral para órdenes de trabajo, clientes, inventario, facturación electrónica y notificaciones por WhatsApp.",
-    foundingDate: "2024",
-    foundingLocation: {
-      "@type": "Place",
-      name: "Buenos Aires, Argentina",
-    },
+      "STApp es el software líder de gestión para talleres de servicio técnico y reparación de celulares en Argentina y Latinoamérica. Plataforma integral para órdenes de trabajo, clientes, inventario, facturación y notificaciones por WhatsApp.",
+    foundingDate: "2025",
     areaServed: [
       { "@type": "Country", name: "Argentina" },
       { "@type": "Country", name: "México" },
@@ -50,13 +47,12 @@ export function OrganizationJsonLd() {
       { "@type": "Country", name: "Uruguay" },
       { "@type": "Country", name: "Ecuador" },
     ],
-    sameAs: ["https://twitter.com/stapp_ar"],
     knowsAbout: [
       "Software de gestión para servicio técnico",
       "Reparación de celulares",
       "Gestión de órdenes de trabajo",
       "Inventario de repuestos electrónicos",
-      "Facturación electrónica Argentina",
+      "Facturación con IVA discriminado para talleres",
       "Notificaciones WhatsApp para talleres",
     ],
     slogan: "El software que tu taller necesita",
@@ -65,6 +61,7 @@ export function OrganizationJsonLd() {
         "@type": "ContactPoint",
         contactType: "Customer Support",
         email: CONTACT_EMAIL,
+        telephone: CONTACT_PHONE_E164,
         availableLanguage: ["Spanish"],
         areaServed: "Latin America",
       },
@@ -75,17 +72,6 @@ export function OrganizationJsonLd() {
         availableLanguage: ["Spanish"],
       },
     ],
-    address: {
-      "@type": "PostalAddress",
-      addressCountry: "AR",
-      addressLocality: "Buenos Aires",
-      addressRegion: "Buenos Aires",
-    },
-    numberOfEmployees: {
-      "@type": "QuantitativeValue",
-      minValue: 2,
-      maxValue: 10,
-    },
   }
 
   return (
@@ -132,14 +118,14 @@ export async function SoftwareApplicationJsonLd() {
     downloadUrl: `${siteUrl}/registro`,
     screenshot: `${siteUrl}/api/og`,
     softwareVersion: "2.0",
-    releaseNotes: "Incluye facturación electrónica, notificaciones WhatsApp y app móvil",
+    releaseNotes: "Incluye notificaciones WhatsApp, catálogo online y app móvil",
     description:
-      "STApp es un software de gestión integral para talleres de reparación de celulares y dispositivos electrónicos. Permite administrar órdenes de trabajo, clientes, inventario de repuestos, facturación electrónica y notificaciones automáticas por WhatsApp desde una sola plataforma web y móvil.",
+      "STApp es un software de gestión integral para talleres de reparación de celulares y dispositivos electrónicos. Permite administrar órdenes de trabajo, clientes, inventario de repuestos, facturación y notificaciones automáticas por WhatsApp desde una sola plataforma web y móvil.",
     featureList: [
       "Gestión de órdenes de trabajo con estados en tiempo real",
       "Administración de clientes con historial completo",
       "Control de inventario de repuestos con alertas de stock",
-      "Facturación electrónica integrada",
+      "Facturación con numeración automática e IVA discriminado, exportable a PDF",
       "Notificaciones automáticas por WhatsApp",
       "Seguimiento de reparaciones para clientes",
       "Reportes y estadísticas de rendimiento",
@@ -239,39 +225,6 @@ export function FAQPageJsonLd({ faqs }: { faqs: FAQItem[] }) {
   return (
     <Script
       id="jsonld-faq"
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
-    />
-  )
-}
-
-// LocalBusiness Schema (para página de contacto)
-export function LocalBusinessJsonLd() {
-  const schema = {
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    name: "STApp",
-    image: `${siteUrl}/icon-512.png`,
-    url: siteUrl,
-    telephone: CONTACT_PHONE_E164,
-    email: CONTACT_EMAIL,
-    address: {
-      "@type": "PostalAddress",
-      addressLocality: "Buenos Aires",
-      addressCountry: "AR",
-    },
-    openingHoursSpecification: {
-      "@type": "OpeningHoursSpecification",
-      dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
-      opens: "09:00",
-      closes: "18:00",
-    },
-    priceRange: "$$",
-  }
-
-  return (
-    <Script
-      id="jsonld-local-business"
       type="application/ld+json"
       dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
     />
