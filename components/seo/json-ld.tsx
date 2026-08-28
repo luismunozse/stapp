@@ -1,5 +1,5 @@
 import Script from "next/script"
-import { getPremiumPrices } from "@/lib/pricing"
+import { getAllPlanPrices } from "@/lib/pricing"
 import { blogPostingSchema, type BlogPostingSchemaInput } from "@/lib/blog-seo"
 
 const siteUrl = "https://stapp.com.ar"
@@ -96,36 +96,90 @@ export function OrganizationJsonLd() {
   )
 }
 
-// SoftwareApplication Schema
+// SoftwareApplication Schema — the single canonical entity for the product.
+//
+// This used to be split across two competing SoftwareApplication schemas
+// (this one and a "ServiceJsonLd"), both emitted from the root layout with
+// different offers. Search engines had to pick one at random, so they are
+// merged here behind a stable @id.
+//
+// NOTE: do NOT add aggregateRating/review markup until there are real,
+// verifiable reviews collected from customers. Rating markup that is not
+// backed by actual reviews violates Google's structured data policies and
+// puts the whole domain at risk of a manual action. Same project rule as the
+// testimonials section: never fabricate social proof.
 export async function SoftwareApplicationJsonLd() {
-  const prices = await getPremiumPrices()
+  const allPlans = await getAllPlanPrices()
+  const plans = Object.values(allPlans).sort((a, b) => a.tierOrder - b.tierOrder)
+  const monthlyPrices = plans.map((plan) => plan.ars.monthly)
+
+  // Offers are quoted for a year from render time, so the markup never goes
+  // stale on a hardcoded date.
+  const priceValidUntil = new Date()
+  priceValidUntil.setFullYear(priceValidUntil.getFullYear() + 1)
+
   const schema = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
+    "@id": `${siteUrl}/#software`,
     name: "STApp",
+    alternateName: ["STApp Software", "STApp Gestión", "STApp Servicio Técnico"],
     applicationCategory: "BusinessApplication",
-    operatingSystem: "Web",
-    offers: {
-      "@type": "Offer",
-      price: String(prices.ars.monthly),
-      priceCurrency: "ARS",
-      priceValidUntil: "2026-12-31",
-    },
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: "4.8",
-      ratingCount: "150",
-    },
+    applicationSubCategory: "Service Management Software",
+    operatingSystem: "Web, Android",
+    url: siteUrl,
+    downloadUrl: `${siteUrl}/registro`,
+    screenshot: `${siteUrl}/api/og`,
+    softwareVersion: "2.0",
+    releaseNotes: "Incluye facturación electrónica, notificaciones WhatsApp y app móvil",
     description:
-      "Software de gestión para talleres de reparación de dispositivos electrónicos. Incluye órdenes de trabajo, clientes, inventario y facturación.",
+      "STApp es un software de gestión integral para talleres de reparación de celulares y dispositivos electrónicos. Permite administrar órdenes de trabajo, clientes, inventario de repuestos, facturación electrónica y notificaciones automáticas por WhatsApp desde una sola plataforma web y móvil.",
     featureList: [
-      "Gestión de órdenes de trabajo",
-      "Administración de clientes",
-      "Control de inventario",
-      "Facturación electrónica",
-      "Reportes y estadísticas",
-      "Multi-técnico",
+      "Gestión de órdenes de trabajo con estados en tiempo real",
+      "Administración de clientes con historial completo",
+      "Control de inventario de repuestos con alertas de stock",
+      "Facturación electrónica integrada",
+      "Notificaciones automáticas por WhatsApp",
+      "Seguimiento de reparaciones para clientes",
+      "Reportes y estadísticas de rendimiento",
+      "Gestión multi-técnico con roles y permisos",
+      "Módulo de ventas de accesorios y repuestos",
+      "App móvil nativa para Android",
+      "Autenticación de dos factores (2FA)",
+      "Exportación de datos a Excel y PDF",
     ],
+    audience: {
+      "@type": "BusinessAudience",
+      audienceType: "Talleres de reparación de celulares y electrónica",
+    },
+    availableOnDevice: ["Desktop", "Mobile", "Tablet"],
+    countriesSupported: ["AR", "MX", "CO", "CL", "PE", "UY", "EC", "VE"],
+    inLanguage: "es",
+    // There is a genuinely free tier, so this stays true.
+    isAccessibleForFree: monthlyPrices.some((price) => price === 0),
+    // Built from the live plan table instead of hardcoded counts, so the
+    // offer count and price range can never drift from what we actually sell.
+    offers: {
+      "@type": "AggregateOffer",
+      priceCurrency: "ARS",
+      lowPrice: String(Math.min(...monthlyPrices)),
+      highPrice: String(Math.max(...monthlyPrices)),
+      offerCount: String(plans.length),
+      offers: plans.map((plan) => ({
+        "@type": "Offer",
+        name: `Plan ${plan.nombre}`,
+        price: String(plan.ars.monthly),
+        priceCurrency: "ARS",
+        priceValidUntil: priceValidUntil.toISOString().split("T")[0],
+        url: `${siteUrl}/precios`,
+      })),
+    },
+    provider: {
+      "@type": "Organization",
+      "@id": `${siteUrl}/#organization`,
+      name: "STApp",
+      url: siteUrl,
+    },
   }
 
   return (
@@ -217,84 +271,6 @@ export function LocalBusinessJsonLd() {
   return (
     <Script
       id="jsonld-local-business"
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
-    />
-  )
-}
-
-// SaaS Service Schema - Critical for GEO (Generative Engine Optimization)
-export function ServiceJsonLd() {
-  const schema = {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "@id": `${siteUrl}/#software`,
-    name: "STApp",
-    alternateName: ["STApp Software", "STApp Gestión", "STApp Servicio Técnico"],
-    applicationCategory: "BusinessApplication",
-    applicationSubCategory: "Service Management Software",
-    operatingSystem: "Web, Android",
-    url: siteUrl,
-    downloadUrl: `${siteUrl}/registro`,
-    screenshot: `${siteUrl}/api/og`,
-    softwareVersion: "2.0",
-    releaseNotes: "Incluye facturación electrónica, notificaciones WhatsApp y app móvil",
-    description:
-      "STApp es un software de gestión integral para talleres de reparación de celulares y dispositivos electrónicos. Permite administrar órdenes de trabajo, clientes, inventario de repuestos, facturación electrónica y notificaciones automáticas por WhatsApp desde una sola plataforma web y móvil.",
-    featureList: [
-      "Gestión de órdenes de trabajo con estados en tiempo real",
-      "Administración de clientes con historial completo",
-      "Control de inventario de repuestos con alertas de stock",
-      "Facturación electrónica integrada",
-      "Notificaciones automáticas por WhatsApp",
-      "Seguimiento de reparaciones para clientes",
-      "Reportes y estadísticas de rendimiento",
-      "Gestión multi-técnico con roles y permisos",
-      "Módulo de ventas de accesorios y repuestos",
-      "App móvil nativa para Android",
-      "Autenticación de dos factores (2FA)",
-      "Exportación de datos a Excel y PDF",
-    ],
-    audience: {
-      "@type": "BusinessAudience",
-      audienceType: "Talleres de reparación de celulares y electrónica",
-    },
-    availableOnDevice: ["Desktop", "Mobile", "Tablet"],
-    countriesSupported: ["AR", "MX", "CO", "CL", "PE", "UY", "EC", "VE"],
-    inLanguage: "es",
-    isAccessibleForFree: true,
-    offers: {
-      "@type": "AggregateOffer",
-      priceCurrency: "ARS",
-      lowPrice: "0",
-      offerCount: "3",
-      offers: [
-        {
-          "@type": "Offer",
-          name: "Plan Gratuito - 30 días",
-          price: "0",
-          priceCurrency: "ARS",
-          description: "Prueba gratuita de 30 días con acceso completo a todas las funciones",
-        },
-      ],
-    },
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: "4.8",
-      bestRating: "5",
-      ratingCount: "150",
-      reviewCount: "87",
-    },
-    provider: {
-      "@type": "Organization",
-      name: "STApp",
-      url: siteUrl,
-    },
-  }
-
-  return (
-    <Script
-      id="jsonld-service"
       type="application/ld+json"
       dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
     />

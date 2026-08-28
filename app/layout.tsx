@@ -12,7 +12,6 @@ import {
   OrganizationJsonLd,
   SoftwareApplicationJsonLd,
   WebSiteJsonLd,
-  ServiceJsonLd,
 } from "@/components/seo/json-ld"
 import { GoogleAnalytics } from "@/components/seo/google-analytics"
 
@@ -222,7 +221,6 @@ export default async function RootLayout({
         <OrganizationJsonLd />
         <SoftwareApplicationJsonLd />
         <WebSiteJsonLd />
-        <ServiceJsonLd />
 
         {/* Google Analytics */}
         <GoogleAnalytics />
