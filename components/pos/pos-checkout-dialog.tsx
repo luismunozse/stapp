@@ -30,6 +30,7 @@ import {
   ChevronUp,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { parseMoneyInput } from "@/lib/parse-money"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { MultiPagoInput, createPagoLine, type PagoLineItem } from "@/components/pagos/multi-pago-input"
@@ -75,8 +76,13 @@ export function PosCheckoutDialog({
   // Item 7: line items breakdown toggle
   const [showItems, setShowItems] = useState(false)
 
-  // Cash change calculation
-  const [montoRecibido, setMontoRecibido] = useState<number | "">("")
+  // Cash change calculation. El texto crudo vive en su propio estado para que
+  // la coma decimal es-AR no se borre en cada tecleo (ver montoRecibido más
+  // abajo); parseMoneyInput normaliza "1.500,50" y similares, y devuelve NaN
+  // para vacío/inválido — que acá se colapsa al mismo estado "" que antes.
+  const [montoRecibidoTexto, setMontoRecibidoTexto] = useState("")
+  const montoRecibidoParsed = parseMoneyInput(montoRecibidoTexto)
+  const montoRecibido: number | "" = Number.isNaN(montoRecibidoParsed) ? "" : montoRecibidoParsed
 
   // Método que fija el precio: el pago de mayor monto (empate => primero).
   // Replicado aquí para no importar @/lib/recargos (usa supabaseAdmin, server-only).
@@ -124,7 +130,7 @@ export function PosCheckoutDialog({
     wasOpen.current = open
     if (!justOpened) return
     setPagosLines([createPagoLine(totalEfectivo)])
-    setMontoRecibido("")
+    setMontoRecibidoTexto("")
     setObservaciones("")
     setPagoParcial(false)
     setIdempotencyKey(crypto.randomUUID())
@@ -530,7 +536,7 @@ export function PosCheckoutDialog({
                     variant={montoRecibido === amount ? "default" : "outline"}
                     size="sm"
                     className="h-8 text-xs"
-                    onClick={() => setMontoRecibido(amount)}
+                    onClick={() => setMontoRecibidoTexto(String(amount))}
                   >
                     {formatPrice(amount)}
                   </Button>
@@ -544,8 +550,8 @@ export function PosCheckoutDialog({
                     inputMode="decimal"
                     min={0}
                     step="0.01"
-                    value={montoRecibido}
-                    onChange={(e) => setMontoRecibido(e.target.value ? parseFloat(e.target.value) : "")}
+                    value={montoRecibidoTexto}
+                    onChange={(e) => setMontoRecibidoTexto(e.target.value)}
                     placeholder="Monto recibido"
                     className="h-10 text-lg font-medium"
                     autoFocus
