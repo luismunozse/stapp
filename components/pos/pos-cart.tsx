@@ -120,6 +120,22 @@ export function PosCart({
   const [globalDescTipo, setGlobalDescTipo] = useState<TipoDescuento>(descuentoGlobal?.tipo ?? "PORCENTAJE")
   const [globalDescValor, setGlobalDescValor] = useState<string>(descuentoGlobal ? String(descuentoGlobal.valor) : "")
 
+  // Resincroniza el draft cuando el padre cambia `descuentoGlobal` desde
+  // afuera (venta completada, vaciar carrito): sin esto, el toggle %/$ y el
+  // valor quedaban mostrando el descuento del cliente anterior hasta que
+  // alguien tocaba el campo, y ahí reaplicaba ese descuento viejo sobre la
+  // venta nueva.
+  // Depende de tipo/valor, no del objeto `descuentoGlobal` en sí: cada tecla
+  // que el cajero tipea llama a onSetDescuentoGlobal, que sube un objeto
+  // NUEVO (misma tipo/valor) y lo hace bajar de nuevo como prop. Si el efecto
+  // dependiera de esa referencia, se re-ejecutaría en cada tecla y pisaría
+  // "10.50" con "10.5" a mitad de tipeo.
+  useEffect(() => {
+    setGlobalDescTipo(descuentoGlobal?.tipo ?? "PORCENTAJE")
+    setGlobalDescValor(descuentoGlobal ? String(descuentoGlobal.valor) : "")
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [descuentoGlobal?.tipo, descuentoGlobal?.valor])
+
   // Focus client search when toggled
   useEffect(() => {
     if (showClienteSearch) {
