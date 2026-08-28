@@ -50,7 +50,6 @@ export function OrganizationJsonLd() {
       { "@type": "Country", name: "Uruguay" },
       { "@type": "Country", name: "Ecuador" },
     ],
-    sameAs: ["https://twitter.com/stapp_ar"],
     knowsAbout: [
       "Software de gestión para servicio técnico",
       "Reparación de celulares",
