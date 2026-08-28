@@ -305,6 +305,14 @@ export function PosCheckoutDialog({
               }
             }
             if (conflicts.length > 0) {
+              // Igual que las seis validaciones sincrónicas de más arriba (ver
+              // ISSUE 3): para cuando se llega acá, `fetchConTimeout` ya
+              // resolvió y no queda nada async en vuelo, así que `loading` se
+              // libera ANTES de esperar a que el cajero cierre la alerta. Sin
+              // esto el botón seguía diciendo "Procesando..." con la alerta
+              // de "Stock insuficiente" ya en pantalla — insuficiente stock al
+              // cobrar es rutinario en este rubro, no un caso raro.
+              setLoading(false)
               await showError(`Stock insuficiente:\n${conflicts.join("\n")}`)
               return
             }
