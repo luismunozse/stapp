@@ -1,5 +1,5 @@
 -- ============================================================================
--- 319: permiso opcional para que los VENDEDORES manejen la caja
+-- 320: permiso opcional para que los VENDEDORES manejen la caja
 -- ============================================================================
 -- Toggle por organizacion (default apagado), mismo patron que la 275
 -- (vendedores_administran_inventario) y la 314 (tecnicos_operan_pos):
