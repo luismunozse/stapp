@@ -2,7 +2,7 @@
 -- Deuda de fiado contada dos veces — reporte de impacto (solo lectura)
 -- =============================================================================
 -- SOLO LECTURA. No modifica una sola fila. Correr en el SQL editor de
--- Supabase Studio ANTES de aplicar la migración 309, para saber a cuántos
+-- Supabase Studio ANTES de aplicar la migración 318, para saber a cuántos
 -- clientes hay que avisar y por cuánta plata. Precedente: docs/305-pagos-
 -- duplicados-dryrun.sql, docs/cc-backfill-fase3-dryrun.sql.
 --
@@ -39,9 +39,9 @@
 --   (4) El número para la descripción del PR: total de clientes afectados y
 --       plata contada de más, agregado en toda la base.
 --
--- Después de aplicar 309, volver a correr (3) y (4): tienen que dar 0 filas /
+-- Después de aplicar 318, volver a correr (3) y (4): tienen que dar 0 filas /
 -- 0 clientes. Eso es el verde en datos reales — el chequeo reproducible con
--- fixtures sintéticas vive en supabase/migrations/verify/309_probes.sql.
+-- fixtures sintéticas vive en supabase/migrations/verify/318_probes.sql.
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
