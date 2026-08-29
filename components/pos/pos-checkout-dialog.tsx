@@ -30,6 +30,7 @@ import {
   ChevronUp,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { parseMoneyInput } from "@/lib/parse-money"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { MultiPagoInput, createPagoLine, type PagoLineItem } from "@/components/pagos/multi-pago-input"
@@ -75,8 +76,13 @@ export function PosCheckoutDialog({
   // Item 7: line items breakdown toggle
   const [showItems, setShowItems] = useState(false)
 
-  // Cash change calculation
-  const [montoRecibido, setMontoRecibido] = useState<number | "">("")
+  // Cash change calculation. El texto crudo vive en su propio estado para que
+  // la coma decimal es-AR no se borre en cada tecleo (ver montoRecibido más
+  // abajo); parseMoneyInput normaliza "1.500,50" y similares, y devuelve NaN
+  // para vacío/inválido — que acá se colapsa al mismo estado "" que antes.
+  const [montoRecibidoTexto, setMontoRecibidoTexto] = useState("")
+  const montoRecibidoParsed = parseMoneyInput(montoRecibidoTexto)
+  const montoRecibido: number | "" = Number.isNaN(montoRecibidoParsed) ? "" : montoRecibidoParsed
 
   // Método que fija el precio: el pago de mayor monto (empate => primero).
   // Replicado aquí para no importar @/lib/recargos (usa supabaseAdmin, server-only).
@@ -124,7 +130,7 @@ export function PosCheckoutDialog({
     wasOpen.current = open
     if (!justOpened) return
     setPagosLines([createPagoLine(totalEfectivo)])
-    setMontoRecibido("")
+    setMontoRecibidoTexto("")
     setObservaciones("")
     setPagoParcial(false)
     setIdempotencyKey(crypto.randomUUID())
@@ -192,97 +198,131 @@ export function PosCheckoutDialog({
       .catch(() => setVendedores([]))
   }, [open, session?.user?.id])
 
+  // Re-entrancy guard: un ref (no el state `loading`) porque el callback
+  // puede volver a dispararse antes de que React repinte con `loading` en
+  // true — leer el state acá adentro vería el valor stale del render
+  // anterior. El `finally` único de abajo cubre TODOS los retornos
+  // tempranos (validaciones, stock insuficiente, error de red) para
+  // `submittingRef`, así que no hace falta repetir su liberación en cada
+  // `return`. `loading` es otra historia: las validaciones puramente
+  // sincrónicas de más abajo lo liberan ANTES de mostrar el error, para
+  // no dejar el botón diciendo "Procesando..." mientras la
+  // alerta, que no depende de nada async, sigue en pantalla. El guard de
+  // reentrada sigue siendo `submittingRef`, no `loading`.
+  const submittingRef = useRef(false)
+
   const handleSubmit = async () => {
-    // Validar contra el total efectivo (precio base × factor del método)
-    const totalPagosBase = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
-
-    // Sin pago parcial, los pagos deben coincidir con el total efectivo
-    if (!pagoParcial && Math.abs(totalPagosBase - totalEfectivo) > 0.01) {
-      await showError(
-        `El total de pagos (${formatPrice(totalPagosBase)}) no coincide con el total a cobrar (${formatPrice(totalEfectivo)}). Active "Pago parcial" para dejar saldo pendiente.`
-      )
-      return
-    }
-    // Con pago parcial, los pagos no pueden exceder el total efectivo
-    if (pagoParcial && totalPagosBase > totalEfectivo + 0.01) {
-      await showError("El total de pagos no puede exceder el total de la venta")
-      return
-    }
-
-    // Una venta con saldo pendiente requiere un cliente registrado
-    const saldoPendiente = totalEfectivo - totalPagosBase
-    if (pagoParcial && saldoPendiente > 0.01 && !cliente.id) {
-      await showError("Seleccioná un cliente para dejar saldo pendiente / fiar")
-      return
-    }
-
-    // Validate cuenta corriente
-    const pagoCC = pagosLines.find((p) => p.metodo === "CUENTA_CORRIENTE")
-    if (pagoCC && pagoCC.monto > saldoCuenta) {
-      await showError(`Saldo insuficiente en cuenta corriente (${formatPrice(saldoCuenta)})`)
-      return
-    }
-    if (pagoCC && !cliente.id) {
-      await showError("Seleccione un cliente registrado para usar cuenta corriente")
-      return
-    }
-
-    // Validar selección de series para items serializados
-    const itemSinSeries = items.find(
-      (it) => it.trackeaSeries && it.serieIds.length !== it.cantidad
-    )
-    if (itemSinSeries) {
-      await showError(
-        `Seleccioná ${itemSinSeries.cantidad} serie(s) para "${itemSinSeries.nombre}" antes de cobrar`
-      )
-      return
-    }
-
-    // Pre-checkout stock re-validation (fail-open: RPC is the real guard)
-    const invItems = items.filter((i) => i.inventarioId)
-    if (invItems.length > 0) {
-      const ids = invItems.map((i) => i.inventarioId!)
-      try {
-        // scope=venta: validate against the sucursal/deposito the sale will
-        // actually draw from (same resolution as the ventas write path),
-        // not the aggregate/"todas" view an ADMIN might be looking at.
-        const stockRes = await fetch("/api/inventario/check-stock?scope=venta", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ids }),
-        })
-        if (stockRes.ok) {
-          const stockData = await stockRes.json()
-          const stock: Record<string, number> = stockData.stock ?? {}
-          // Sum requested quantities per inventarioId
-          const pedidoPorId: Record<string, number> = {}
-          const nombrePorId: Record<string, string> = {}
-          for (const item of invItems) {
-            const id = item.inventarioId!
-            pedidoPorId[id] = (pedidoPorId[id] ?? 0) + item.cantidad
-            nombrePorId[id] = item.nombre
-          }
-          const conflicts: string[] = []
-          for (const [id, pedido] of Object.entries(pedidoPorId)) {
-            const disponible = stock[id] ?? 0
-            if (pedido > disponible) {
-              conflicts.push(`${nombrePorId[id]}: pedís ${pedido}, hay ${disponible}`)
-            }
-          }
-          if (conflicts.length > 0) {
-            setLoading(false)
-            await showError(`Stock insuficiente:\n${conflicts.join("\n")}`)
-            return
-          }
-        }
-        // If !stockRes.ok → fail open, continue with sale
-      } catch {
-        // Network/fetch error → fail open, continue with sale
-      }
-    }
-
+    if (submittingRef.current) return
+    submittingRef.current = true
     setLoading(true)
     try {
+      // Validar contra el total efectivo (precio base × factor del método)
+      const totalPagosBase = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
+
+      // Sin pago parcial, los pagos deben coincidir con el total efectivo
+      if (!pagoParcial && Math.abs(totalPagosBase - totalEfectivo) > 0.01) {
+        // Validación 100% sincrónica: no hay nada async en vuelo, así que se
+        // libera `loading` ANTES de esperar a que el cajero cierre la alerta
+        // (si no, el botón queda diciendo "Procesando..." mientras la propia
+        // alerta dice que hubo un error — contradictorio). `submittingRef`
+        // sigue en true hasta el `return`, así que un segundo click durante
+        // la alerta no reentra.
+        setLoading(false)
+        await showError(
+          `El total de pagos (${formatPrice(totalPagosBase)}) no coincide con el total a cobrar (${formatPrice(totalEfectivo)}). Active "Pago parcial" para dejar saldo pendiente.`
+        )
+        return
+      }
+      // Con pago parcial, los pagos no pueden exceder el total efectivo
+      if (pagoParcial && totalPagosBase > totalEfectivo + 0.01) {
+        setLoading(false)
+        await showError("El total de pagos no puede exceder el total de la venta")
+        return
+      }
+
+      // Una venta con saldo pendiente requiere un cliente registrado
+      const saldoPendiente = totalEfectivo - totalPagosBase
+      if (pagoParcial && saldoPendiente > 0.01 && !cliente.id) {
+        setLoading(false)
+        await showError("Seleccioná un cliente para dejar saldo pendiente / fiar")
+        return
+      }
+
+      // Validate cuenta corriente
+      const pagoCC = pagosLines.find((p) => p.metodo === "CUENTA_CORRIENTE")
+      if (pagoCC && pagoCC.monto > saldoCuenta) {
+        setLoading(false)
+        await showError(`Saldo insuficiente en cuenta corriente (${formatPrice(saldoCuenta)})`)
+        return
+      }
+      if (pagoCC && !cliente.id) {
+        setLoading(false)
+        await showError("Seleccione un cliente registrado para usar cuenta corriente")
+        return
+      }
+
+      // Validar selección de series para items serializados
+      const itemSinSeries = items.find(
+        (it) => it.trackeaSeries && it.serieIds.length !== it.cantidad
+      )
+      if (itemSinSeries) {
+        setLoading(false)
+        await showError(
+          `Seleccioná ${itemSinSeries.cantidad} serie(s) para "${itemSinSeries.nombre}" antes de cobrar`
+        )
+        return
+      }
+
+      // Pre-checkout stock re-validation (fail-open: RPC is the real guard)
+      const invItems = items.filter((i) => i.inventarioId)
+      if (invItems.length > 0) {
+        const ids = invItems.map((i) => i.inventarioId!)
+        try {
+          // scope=venta: validate against the sucursal/deposito the sale will
+          // actually draw from (same resolution as the ventas write path),
+          // not the aggregate/"todas" view an ADMIN might be looking at.
+          const stockRes = await fetch("/api/inventario/check-stock?scope=venta", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids }),
+          })
+          if (stockRes.ok) {
+            const stockData = await stockRes.json()
+            const stock: Record<string, number> = stockData.stock ?? {}
+            // Sum requested quantities per inventarioId
+            const pedidoPorId: Record<string, number> = {}
+            const nombrePorId: Record<string, string> = {}
+            for (const item of invItems) {
+              const id = item.inventarioId!
+              pedidoPorId[id] = (pedidoPorId[id] ?? 0) + item.cantidad
+              nombrePorId[id] = item.nombre
+            }
+            const conflicts: string[] = []
+            for (const [id, pedido] of Object.entries(pedidoPorId)) {
+              const disponible = stock[id] ?? 0
+              if (pedido > disponible) {
+                conflicts.push(`${nombrePorId[id]}: pedís ${pedido}, hay ${disponible}`)
+              }
+            }
+            if (conflicts.length > 0) {
+              // Igual que las seis validaciones sincrónicas de más arriba:
+              // para cuando se llega acá, el `fetch` del pre-chequeo ya
+              // resolvió y no queda nada async en vuelo, así que `loading` se
+              // libera ANTES de esperar a que el cajero cierre la alerta. Sin
+              // esto el botón seguía diciendo "Procesando..." con la alerta
+              // de "Stock insuficiente" ya en pantalla — insuficiente stock al
+              // cobrar es rutinario en este rubro, no un caso raro.
+              setLoading(false)
+              await showError(`Stock insuficiente:\n${conflicts.join("\n")}`)
+              return
+            }
+          }
+          // If !stockRes.ok → fail open, continue with sale
+        } catch {
+          // Network/fetch error → fail open, continue with sale
+        }
+      }
+
       const payload = buildVentaPayload({
         items,
         cliente,
@@ -313,6 +353,7 @@ export function PosCheckoutDialog({
       console.error("Error creating venta:", error)
       await showError("Error al crear la venta")
     } finally {
+      submittingRef.current = false
       setLoading(false)
     }
   }
@@ -530,7 +571,7 @@ export function PosCheckoutDialog({
                     variant={montoRecibido === amount ? "default" : "outline"}
                     size="sm"
                     className="h-8 text-xs"
-                    onClick={() => setMontoRecibido(amount)}
+                    onClick={() => setMontoRecibidoTexto(String(amount))}
                   >
                     {formatPrice(amount)}
                   </Button>
@@ -544,8 +585,8 @@ export function PosCheckoutDialog({
                     inputMode="decimal"
                     min={0}
                     step="0.01"
-                    value={montoRecibido}
-                    onChange={(e) => setMontoRecibido(e.target.value ? parseFloat(e.target.value) : "")}
+                    value={montoRecibidoTexto}
+                    onChange={(e) => setMontoRecibidoTexto(e.target.value)}
                     placeholder="Monto recibido"
                     className="h-10 text-lg font-medium"
                     autoFocus
