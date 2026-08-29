@@ -3,7 +3,17 @@ import nextConfig from "eslint-config-next";
 const eslintConfig = [
   ...nextConfig,
   {
-    ignores: ["android/**"],
+    // Los worktrees son checkouts completos de la app: sin ignorarlos, `eslint .`
+    // desde la raiz lintea el proyecto entero una vez por worktree y en la
+    // practica nunca termina. Cada worktree se lintea a si mismo cuando se corre
+    // el script desde adentro.
+    ignores: [
+      "android/**",
+      ".worktrees/**",
+      ".claude/worktrees/**",
+      "playwright-report/**",
+      "test-results/**",
+    ],
   },
   {
     // Playwright fixtures receive a `use` callback parameter (test.extend API);
