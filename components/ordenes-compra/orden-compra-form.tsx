@@ -10,15 +10,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Plus, Trash2 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
+import { InventarioPicker, type ArticuloVinculado } from "./inventario-picker"
 
 interface OCItem {
   tempId: string
   descripcion: string
   cantidadPedida: number
   precioUnitario: number
-  // Optional: when coming from inventory (e.g. "Generar OC")
+  // Optional: when coming from inventory (e.g. "Generar OC") or linked from the picker
   inventarioId?: string
   codigo?: string
+  nombreArticulo?: string
 }
 
 interface Props {
@@ -69,6 +71,44 @@ export function OrdenCompraForm({ onClose, onCreated, initialItems, initialProve
 
   const removeItem = (index: number) => {
     setItems(items.filter((_, i) => i !== index))
+  }
+
+  // Vincular pisa la descripción con el nombre del artículo para que la OC y el
+  // inventario digan lo mismo, y trae el costo de compra como precio del ítem.
+  // Si el rol no ve costos, precioCompra viene null y se respeta lo cargado.
+  const vincularArticulo = (index: number, articulo: ArticuloVinculado) => {
+    const newItems = [...items]
+    const actual = newItems[index]
+    newItems[index] = {
+      ...actual,
+      descripcion: articulo.nombre,
+      inventarioId: articulo.id,
+      codigo: articulo.codigo,
+      nombreArticulo: articulo.nombre,
+      precioUnitario:
+        articulo.precioCompra != null ? articulo.precioCompra : actual.precioUnitario,
+    }
+    setItems(newItems)
+    if (articulo.precioCompra != null) {
+      setNumDrafts((prev) => {
+        const next = { ...prev }
+        delete next[`${actual.tempId}:precioUnitario`]
+        return next
+      })
+    }
+  }
+
+  // Desvincular deja la descripción: se escribió para pedir ese producto y
+  // sigue siendo válida como texto libre.
+  const desvincularArticulo = (index: number) => {
+    const newItems = [...items]
+    newItems[index] = {
+      ...newItems[index],
+      inventarioId: undefined,
+      codigo: undefined,
+      nombreArticulo: undefined,
+    }
+    setItems(newItems)
   }
 
   // Updates the raw draft string (so the field can show empty) while pushing the parsed
@@ -196,17 +236,21 @@ export function OrdenCompraForm({ onClose, onCreated, initialItems, initialProve
                   {items.map((item, idx) => (
                     <tr key={item.tempId} className="border-t">
                       <td className="px-3 py-2">
-                        <Input
-                          placeholder="Ej: Pantalla Samsung A55, Flex carga iPhone 13..."
-                          value={item.descripcion}
-                          onChange={e => updateItem(idx, "descripcion", e.target.value)}
-                          className="h-8"
+                        <InventarioPicker
+                          descripcion={item.descripcion}
+                          vinculado={
+                            item.inventarioId
+                              ? {
+                                  id: item.inventarioId,
+                                  codigo: item.codigo || "",
+                                  nombre: item.nombreArticulo || item.descripcion,
+                                }
+                              : null
+                          }
+                          onDescripcionChange={(v) => updateItem(idx, "descripcion", v)}
+                          onVincular={(art) => vincularArticulo(idx, art)}
+                          onDesvincular={() => desvincularArticulo(idx)}
                         />
-                        {item.inventarioId && item.codigo && (
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            Vinculado: {item.codigo}
-                          </div>
-                        )}
                       </td>
                       <td className="px-3 py-2">
                         <Input

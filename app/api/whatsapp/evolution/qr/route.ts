@@ -63,8 +63,17 @@ export async function POST() {
   }
 }
 
-/** GET: poll de estado. Activa notificaciones al quedar open. */
-export async function GET() {
+/**
+ * GET: poll de estado. Activa notificaciones al quedar open.
+ *
+ * Con `?refresh=1` devuelve ademas un QR nuevo. Los QR de Baileys expiran en
+ * segundos y Evolution los rota, asi que la pantalla tiene que ir a buscar el
+ * vigente: mostrar el primero de forma indefinida deja al usuario escaneando
+ * un codigo muerto. Va detras de un flag porque `/instance/connect` es mas
+ * caro que `/instance/connectionState` y el estado se pollea mucho mas seguido
+ * que lo que tarda el QR en vencer.
+ */
+export async function GET(request: Request) {
   try {
     const { error, organizationId } = await requireAdmin()
     if (error) return error
@@ -77,7 +86,25 @@ export async function GET() {
     const state = await getConnectionState(creds)
     await persistState(organizationId!, state.state)
 
-    return NextResponse.json({ state: state.state, error: state.error || null })
+    const wantsQr = new URL(request.url).searchParams.get("refresh") === "1"
+    if (!wantsQr || state.state === "open") {
+      return NextResponse.json({
+        state: state.state,
+        qrBase64: null,
+        pairingCode: null,
+        error: state.error || null,
+      })
+    }
+
+    const refreshed = await connectInstance(creds)
+    await persistState(organizationId!, refreshed.state, !!refreshed.qrBase64)
+
+    return NextResponse.json({
+      state: refreshed.state,
+      qrBase64: refreshed.qrBase64 || null,
+      pairingCode: refreshed.pairingCode || null,
+      error: refreshed.error || null,
+    })
   } catch (err) {
     console.error("Error polling Evolution state:", err)
     return NextResponse.json({ error: "Error interno" }, { status: 500 })

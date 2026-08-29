@@ -141,7 +141,9 @@ export function PosTerminal() {
         if (data) {
           setFiscal({
             regimen: data.ivaRegimen ?? "EXENTO",
-            tasa: data.ivaTasa ?? 21,
+            // Sin tasa en la respuesta no se inventa una: cobrar la alicuota
+            // argentina en una org de otro pais es peor que no discriminar IVA.
+            tasa: data.ivaTasa ?? 0,
             redondeoEfectivo: data.redondeoEfectivo ?? 0,
           })
           setOrgGarantiaDefault(Number(data.garantiaDiasDefault) || 0)
@@ -218,6 +220,16 @@ export function PosTerminal() {
     setPrinterWidth(w)
     localStorage.setItem("pos_printer_width", String(w))
   }
+
+  // Etiqueta del botón de impresora: se usa tanto para el texto visible (oculto
+  // en mobile vía `hidden sm:inline`) como para su aria-label, así el nombre
+  // accesible no queda pisado por el `title` (más largo/distinto) en ningún
+  // ancho de pantalla.
+  const printerLabel = printer.connecting
+    ? "Conectando..."
+    : printer.connected
+      ? (printer.device?.name?.substring(0, 15) ?? "Impresora")
+      : "Impresora"
 
   // Computed values
   const cartCount = cartItems.reduce((sum, i) => sum + i.cantidad, 0)
@@ -689,7 +701,7 @@ export function PosTerminal() {
       setMobileTab("cart")
       setShowClienteSearch((prev) => !prev)
     },
-    enabled: !checkoutOpen && !heldSalesOpen && !successData && !devolucionOpen && !devolucionVenta && !holdNoteOpen,
+    enabled: !checkoutOpen && !heldSalesOpen && !successData && !scannerOpen && !devolucionOpen && !devolucionVenta && !holdNoteOpen,
   })
 
   return (
@@ -702,6 +714,7 @@ export function PosTerminal() {
             size="sm"
             className="h-8 gap-1.5"
             onClick={() => router.push("/ventas")}
+            aria-label="Salir"
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="hidden sm:inline">Salir</span>
@@ -730,6 +743,7 @@ export function PosTerminal() {
                   ? `Conectada: ${printer.device?.name} (click para desconectar)`
                   : "Conectar impresora térmica"
               }
+              aria-label={printerLabel}
             >
               {printer.connecting ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -738,9 +752,7 @@ export function PosTerminal() {
               ) : (
                 <Unplug className="h-3.5 w-3.5" />
               )}
-              <span className="hidden sm:inline">
-                {printer.connecting ? "Conectando..." : printer.connected ? printer.device?.name?.substring(0, 15) : "Impresora"}
-              </span>
+              <span className="hidden sm:inline">{printerLabel}</span>
             </Button>
           )}
 
@@ -789,6 +801,7 @@ export function PosTerminal() {
               }}
               disabled={printing}
               title={`Reimprimir venta #${lastSaleData.numeroVenta}`}
+              aria-label="Reimprimir"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Reimprimir</span>
@@ -802,6 +815,7 @@ export function PosTerminal() {
             className="h-8 gap-1.5 text-xs"
             onClick={() => setDevolucionOpen(true)}
             title="Procesar devolución"
+            aria-label="Devolución"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Devolución</span>

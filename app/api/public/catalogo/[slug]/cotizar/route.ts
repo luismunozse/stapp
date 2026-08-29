@@ -5,6 +5,7 @@ import { randomBytes } from "crypto"
 import { z } from "zod"
 import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { stockDisponibleCatalogo } from "@/lib/catalogo/stock-disponible"
 
 const cotizarSchema = z.object({
   cliente: z.object({
@@ -77,7 +78,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     .from("catalogo_items")
     .select(`
       id, nombre, precio, stock, inventario_id, activo, tipo,
-      inventario:inventario(id, stock, nombre),
+      inventario:inventario(id, stock, stock_reservado, deleted_at, nombre),
       variantes:catalogo_variantes(id, etiqueta, sku, precio, stock, activo)
     `)
     .in("id", itemIds)
@@ -130,10 +131,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       continue
     }
 
-    // Sin variantes: validar stock + precio del item base
-    const stockReal = item.inventario_id && item.inventario
-      ? item.inventario.stock
-      : item.stock
+    // Sin variantes: validar disponibilidad + precio del item base.
+    // Disponibilidad = stock - stock_reservado sobre inventario: el chequeo
+    // previo tiene que mirar lo mismo que el storefront y lo mismo que la RPC,
+    // o el comprador ve "disponible" y recién falla al confirmar.
+    const stockReal = stockDisponibleCatalogo(item)
     if (stockReal != null && stockReal < cartItem.cantidad) {
       return NextResponse.json({
         error: `Stock insuficiente para "${item.nombre}" (disponible: ${stockReal})`,

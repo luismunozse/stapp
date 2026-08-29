@@ -1,5 +1,5 @@
 -- ============================================================================
--- 309: get_deuda_cliente_sucursal — end of the fiado double-count
+-- 318: get_deuda_cliente_sucursal — end of the fiado double-count
 -- ============================================================================
 -- BUG (pre-existing, introduced with mig 267): a fiado order was counted twice.
 --

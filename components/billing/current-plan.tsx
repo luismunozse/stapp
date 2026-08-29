@@ -8,14 +8,34 @@ import { Crown, Calendar, AlertCircle, Clock, Sparkles } from "lucide-react"
 import type { SubscriptionInfo } from "@/lib/subscriptions"
 import { useCurrency } from "@/contexts/currency-context"
 
+/**
+ * Proveedores a los que se les puede ofrecer la adhesión al débito automático
+ * de MercadoPago.
+ *
+ * Creem queda afuera porque ya cobra solo, y Rebill porque es un rail muerto.
+ * MANUAL sí entra: la adhesión pide una tarjeta en su propio link, no reutiliza
+ * ninguna, así que "activado a mano" no implica "sin medio de pago". El cajón
+ * MANUAL mezcla orgs con el plan regalado y clientes reales reactivados a mano
+ * desde superadmin, y a los segundos es justamente a quienes más nos interesa
+ * ofrecerles la recurrencia.
+ */
+const PROVEEDORES_ADHERIBLES = ["MERCADOPAGO", "MANUAL"]
+
 interface CurrentPlanProps {
   subscription: SubscriptionInfo | null
   onUpgrade: () => void
   onManage: () => void
   onCancel: () => void
+  onActivarDebito: () => void
 }
 
-export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: CurrentPlanProps) {
+export function CurrentPlan({
+  subscription,
+  onUpgrade,
+  onManage,
+  onCancel,
+  onActivarDebito,
+}: CurrentPlanProps) {
   const { timezone } = useCurrency()
   if (!subscription) {
     return (
@@ -32,6 +52,13 @@ export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: Cur
   const isTrialing = subscription.status === "TRIALING"
   const isCanceled = subscription.cancelAtPeriodEnd
   const isPaid = subscription.paymentProvider !== null
+
+  const puedeAdherirse =
+    isPremium &&
+    isPaid &&
+    !isCanceled &&
+    !subscription.autoDebito &&
+    PROVEEDORES_ADHERIBLES.includes(subscription.paymentProvider as string)
 
   // Calcular días restantes de trial
   const trialEnd = subscription.trialEnd ? new Date(subscription.trialEnd) : null
@@ -159,6 +186,12 @@ export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: Cur
             <Button onClick={onUpgrade} size="sm">
               <Crown className="h-4 w-4 mr-2" />
               Actualizar a Profesional
+            </Button>
+          )}
+          {puedeAdherirse && (
+            <Button onClick={onActivarDebito} size="sm">
+              <Calendar className="h-4 w-4 mr-2" />
+              Activar débito automático
             </Button>
           )}
           {isPremium && isPaid && !isCanceled && (

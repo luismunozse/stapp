@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requirePosAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatDevolucion } from "@/lib/db-utils"
 import { getNextReturnNumber } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
 import { sucursalParaLectura } from "@/lib/sucursal"
-import { computeDevolucionMonto, effectivePaidUnitPrice, saleNetTotal, aggregateReturnItems } from "@/lib/devolucion-refund"
+import { computeDevolucionMonto, effectivePaidUnitPrice, saleNetTotal, aggregateReturnItems, fullyReturnedItemIds } from "@/lib/devolucion-refund"
 import { registrarEgresoCajaEfectivo } from "@/lib/caja-utils"
 import { z } from "zod"
 
@@ -41,13 +41,97 @@ function isFunctionMissingError(err: unknown): boolean {
   )
 }
 
+/**
+ * Retira las series que la venta había entregado.
+ *
+ * `fecha_garantia_vence` está sobrecargado: `registrar_series_ingreso`
+ * (175_lotes_series.sql:431) lo estampa en el ALTA con la garantía del
+ * PROVEEDOR, y la venta solo lo pisa si la línea llevaba días de garantía
+ * (`ELSE fecha_garantia_vence` en el RPC de venta). Por eso solo se limpia
+ * cuando la fecha era del comprador (`limpiarGarantia`): si la línea se vendió
+ * con 0 días, lo que hay ahí es del proveedor y borrarlo destruye dato bueno.
+ *
+ * Cuando sí era del comprador hay que limpiarla, porque `marcar_serie_vendida`
+ * (175:535) la relee al revender la serie y la marca GARANTIA_ACTIVA heredando
+ * una garantía que el nuevo cliente nunca compró.
+ */
+async function retirarSeriesDeVenta(args: {
+  organizationId: string
+  inventarioId: string
+  ventaId: string
+  cantidad: number
+  vuelveAStock: boolean
+  limpiarGarantia: boolean
+}): Promise<void> {
+  const { data: series } = await supabaseAdmin
+    .from("inventario_series")
+    .select("id")
+    .eq("organization_id", args.organizationId)
+    .eq("inventario_id", args.inventarioId)
+    .eq("venta_id", args.ventaId)
+    .in("estado", ["VENDIDO", "GARANTIA_ACTIVA"])
+    .order("fecha_venta", { ascending: false })
+    .limit(args.cantidad)
+
+  if (!series || series.length === 0) return
+
+  const ids = series.map((s: { id: string }) => s.id)
+
+  // Al volver a stock se corta el vínculo con la venta (si no, una devolución
+  // posterior de otra línea podría re-elegir la misma serie). Al quedar
+  // DEVUELTO se conserva, que es el rastro de de dónde salió.
+  const payload: Record<string, unknown> = args.vuelveAStock
+    ? {
+        estado: "DISPONIBLE",
+        fecha_venta: null,
+        venta_id: null,
+        cliente_id: null,
+        updated_at: new Date().toISOString(),
+      }
+    : {
+        estado: "DEVUELTO",
+        updated_at: new Date().toISOString(),
+      }
+
+  if (args.limpiarGarantia) payload.fecha_garantia_vence = null
+
+  await supabaseAdmin.from("inventario_series").update(payload).in("id", ids)
+}
+
+/**
+ * Marca ANULADA la garantía de cada línea totalmente devuelta.
+ *
+ * Solo toca las ACTIVA: una RECLAMADA ya tiene historia propia y una VENCIDA
+ * cumplió su plazo — reescribirlas borraría por qué terminaron así.
+ *
+ * No propaga el error: la plata ya se movió y la mercadería ya cambió de manos;
+ * un fallo de contabilidad de garantías no puede tirar abajo la devolución.
+ */
+async function anularGarantiasDeLineas(
+  organizationId: string,
+  itemVentaIds: string[]
+): Promise<void> {
+  if (itemVentaIds.length === 0) return
+
+  const { error } = await supabaseAdmin
+    .from("garantias_venta")
+    .update({ estado: "ANULADA" })
+    .eq("organization_id", organizationId)
+    .eq("estado", "ACTIVA")
+    .in("item_venta_id", itemVentaIds)
+
+  if (error) {
+    console.error("Error anulando garantias de venta devuelta:", error)
+  }
+}
+
 // GET: Get all returns for a sale
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, role, session } = await requireAdminOrVendedor()
+    const { error, organizationId, role, session } = await requirePosAccess()
     if (error) return error
 
     const { id } = await params
@@ -97,7 +181,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role, session } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role, session } = await requirePosAccess()
     if (error) return error
 
     // Only ADMIN can create returns
@@ -373,7 +457,9 @@ async function jsDevolucionFallback(
 
   // 7. Stock restoration
   for (const item of data.items) {
-    if (item.restaurarStock && item.inventarioId) {
+    if (!item.inventarioId) continue
+
+    if (item.restaurarStock) {
       const { error: rpcError } = await supabaseAdmin.rpc(
         "registrar_devolucion_stock",
         {
@@ -396,31 +482,33 @@ async function jsDevolucionFallback(
           throw rpcError
         }
       }
-
-      const { data: seriesToReset } = await supabaseAdmin
-        .from("inventario_series")
-        .select("id")
-        .eq("organization_id", organizationId)
-        .eq("inventario_id", item.inventarioId)
-        .eq("venta_id", id)
-        .in("estado", ["VENDIDO", "GARANTIA_ACTIVA"])
-        .order("fecha_venta", { ascending: false })
-        .limit(item.cantidad)
-
-      if (seriesToReset && seriesToReset.length > 0) {
-        await supabaseAdmin
-          .from("inventario_series")
-          .update({
-            estado: "DISPONIBLE",
-            fecha_venta: null,
-            venta_id: null,
-            cliente_id: null,
-            updated_at: new Date().toISOString(),
-          })
-          .in("id", seriesToReset.map((s: { id: string }) => s.id))
-      }
     }
+
+    // Retirar las series de la venta con o sin reposición: la unidad dejó de
+    // estar en manos del cliente en ambos casos, y dejarla en VENDIDO /
+    // GARANTIA_ACTIVA la seguía contando como cubierta.
+    await retirarSeriesDeVenta({
+      organizationId,
+      inventarioId: item.inventarioId,
+      ventaId: id,
+      cantidad: item.cantidad,
+      // Sin reposición la unidad no vuelve al stock vendible: queda DEVUELTO,
+      // que además evita que una devolución posterior de la misma línea la
+      // vuelva a elegir.
+      vuelveAStock: item.restaurarStock,
+      // Solo si la fecha la puso esta venta. Con 0 días la línea nunca la pisó,
+      // así que lo que hay es la garantía del proveedor.
+      limpiarGarantia: Number(originalItemsMap[item.itemVentaId]?.dias_garantia ?? 0) > 0,
+    })
   }
+
+  // 7b. Retirar las garantías de las líneas que quedaron 100% devueltas.
+  const lineasCerradas = fullyReturnedItemIds(
+    (venta.items_venta || []) as any,
+    returnedMap,
+    data.items.map((i) => ({ itemVentaId: i.itemVentaId, cantidad: i.cantidad }))
+  )
+  await anularGarantiasDeLineas(organizationId, lineasCerradas)
 
   // 8b. Reembolso a cuenta corriente
   if (data.metodoReembolso === "CUENTA_CORRIENTE" && venta.cliente_id) {

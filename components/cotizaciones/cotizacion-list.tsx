@@ -20,11 +20,14 @@ import {
   Share2,
   Link2,
   Copy,
+  History,
+  AlertTriangle,
 } from "lucide-react"
 
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { precioVentaRepuesto } from "@/lib/db-utils"
 import { useCurrency } from "@/contexts/currency-context"
+import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 import { useHasFeature } from "@/hooks/use-subscription"
 import { CotizacionForm } from "./cotizacion-form"
 import { CotizacionApprovalDialog } from "./cotizacion-approval-dialog"
@@ -48,6 +51,10 @@ interface Cotizacion {
   fechaAprobacion: string | null
   clienteNombre?: string | null
   clienteTelefono?: string | null
+  /** No nulo: esta fila fue reemplazada por la revision con este id. */
+  reemplazadaPor?: string | null
+  /** No nulo: esta fila es una revision de la cotizacion con este id. */
+  revisionDe?: string | null
   items: {
     id: string
     descripcion: string
@@ -92,13 +99,14 @@ const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: s
 }
 
 export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repuestos = [], mostrarCostos, onOrdenChanged }: CotizacionListProps) {
-  const { formatPrice, formatDate } = useCurrency()
+  const { formatPrice, formatDate, pais } = useCurrency()
   const [showForm, setShowForm] = useState(false)
   const [prefillFromRepuestos, setPrefillFromRepuestos] = useState(false)
   const [editingCotizacion, setEditingCotizacion] = useState<Cotizacion | null>(null)
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [approvingCotizacion, setApprovingCotizacion] = useState<Cotizacion | null>(null)
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
+  const [revisingId, setRevisingId] = useState<string | null>(null)
   const { confirm, showError, showSuccess, showWarning } = useModal()
   const { hasFeature: hasCotizaciones, loading: cotizacionesLoading } = useHasFeature("cotizaciones_online")
   const canCrear = cotizacionesLoading || hasCotizaciones
@@ -291,8 +299,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
     const telefono = (cotizacion.clienteTelefono || "").replace(/\D/g, "")
     let waUrl: string
     if (telefono) {
-      const normalized = telefono.startsWith("54") ? telefono : `54${telefono}`
-      waUrl = `https://wa.me/${normalized}?text=${encodeURIComponent(mensaje)}`
+      waUrl = generateWhatsAppUrl(telefono, mensaje, pais)
     } else {
       waUrl = `https://wa.me/?text=${encodeURIComponent(mensaje)}`
     }
@@ -334,6 +341,50 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
     }
   }
 
+  // Revisar crea una cotizacion nueva (POST /api/cotizaciones/[id]/revisar):
+  // la aceptada original queda intacta, con su firma y su stock reservado, y
+  // el cliente tiene que firmar la revision de nuevo porque cambia lo que se
+  // le esta cobrando. Por eso el aviso va antes de crearla, no despues.
+  const handleRevisar = async (cotizacion: Cotizacion) => {
+    const confirmed = await confirm({
+      title: "Revisar Cotización",
+      description:
+        "Se va a crear una nueva versión de esta cotización con los mismos items. " +
+        "La versión aceptada queda como está, con la firma del cliente; la nueva " +
+        "versión va a necesitar que el cliente la firme de nuevo antes de valer.",
+      confirmText: "Revisar",
+      cancelText: "Cancelar",
+      variant: "info",
+    })
+
+    if (!confirmed) return
+
+    setRevisingId(cotizacion.id)
+    try {
+      const res = await fetch(`/api/cotizaciones/${cotizacion.id}/revisar`, {
+        method: "POST",
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        await showError(error.error || "Error al crear la revisión")
+        return
+      }
+
+      const { id: revisionId } = await res.json()
+      const actualizadas = await mutate()
+      const revision = actualizadas?.find((c) => c.id === revisionId)
+      if (revision) {
+        setEditingCotizacion(revision)
+      }
+    } catch (error) {
+      console.error("Error:", error)
+      await showError("Error al crear la revisión")
+    } finally {
+      setRevisingId(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-3">
@@ -350,6 +401,14 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
       </div>
     )
   }
+
+  // La orden sigue avanzando mientras una revision espera firma (ver diseño
+  // en docs/superpowers/specs/2026-08-25-revision-cotizacion-aceptada-design.md):
+  // no cambia de estado ni pierde reservas, pero necesita un aviso visible de
+  // que hay una version sin firmar.
+  const revisionPendiente = cotizaciones.some(
+    (c) => c.reemplazadaPor && cotizaciones.find((r) => r.id === c.reemplazadaPor)?.estado === "ENVIADA"
+  )
 
   return (
     <div className="space-y-4">
@@ -373,6 +432,18 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
           </div>
         )}
       </div>
+
+      {revisionPendiente && (
+        <Card className="border-warning/30 bg-warning-50 dark:bg-warning/15">
+          <CardContent className="flex items-center gap-3 py-4">
+            <AlertTriangle className="h-5 w-5 text-warning-600 flex-shrink-0" />
+            <p className="text-sm text-warning-700">
+              Hay una revisión pendiente de firma del cliente. La orden sigue su curso con lo ya
+              aceptado hasta que la nueva versión se firme.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {!readOnly && !showForm && !editingCotizacion && canCrear && repuestosSinPrecio > 0 && (
         <p className="text-xs text-muted-foreground">
@@ -427,9 +498,55 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
           {cotizaciones.map((cotizacion) => {
             const config = estadoConfig[cotizacion.estado] || estadoConfig.BORRADOR
             const Icon = config.icon
-            const canEdit = cotizacion.estado === "BORRADOR"
+            // Espeja la regla del servidor (app/api/cotizaciones/[id]/route.ts):
+            // los items se pueden cambiar salvo con la cotizacion ACEPTADA o
+            // RECHAZADA. En ACEPTADA hay firma del cliente y stock reservado
+            // contra esos items, asi que editarla no es un permiso de UI.
+            // Al guardar, el PUT recalcula presupuesto y costo_final de la
+            // orden vinculada, asi que una ENVIADA editada no la deja stale.
+            const canEdit = !["ACEPTADA", "RECHAZADA"].includes(cotizacion.estado)
+            // Una aceptada no se edita: se revisa. La revision es una cotizacion nueva y
+            // la firmada queda congelada — ver el diseño en docs/superpowers/specs/
+            // 2026-08-25-revision-cotizacion-aceptada-design.md
+            const canRevisar = cotizacion.estado === "ACEPTADA" && !cotizacion.reemplazadaPor
             const canSend = ["BORRADOR", "ENVIADA"].includes(cotizacion.estado)
             const canDelete = cotizacion.estado !== "ACEPTADA"
+            const isSuperseded = !!cotizacion.reemplazadaPor
+
+            // Una fila reemplazada ya no es la version vigente: se muestra
+            // colapsada, sin acciones, solo como registro de lo que se firmo.
+            if (isSuperseded) {
+              return (
+                <Card key={cotizacion.id} className="opacity-75">
+                  <CardHeader className="py-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <CardTitle className="text-base text-muted-foreground">
+                          {cotizacion.numeroCotizacion}
+                        </CardTitle>
+                        <Badge variant="outline">
+                          <History className="mr-1 h-3 w-3" />
+                          Versión anterior
+                        </Badge>
+                      </div>
+                      <div className="text-lg font-bold text-muted-foreground">
+                        {formatPrice(cotizacion.total)}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  {cotizacion.firmaAprobacion && cotizacion.firmaMime && (
+                    <CardContent className="py-3">
+                      <SignatureDisplay
+                        signature={cotizacion.firmaAprobacion}
+                        mime={cotizacion.firmaMime}
+                        label="Firma de Aprobacion"
+                        date={cotizacion.fechaAprobacion}
+                      />
+                    </CardContent>
+                  )}
+                </Card>
+              )
+            }
 
             return (
               <Card key={cotizacion.id}>
@@ -519,6 +636,18 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                       >
                         <Edit className="mr-2 h-3 w-3" />
                         Editar
+                      </Button>
+                    )}
+                    {!readOnly && canRevisar && canCrear && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleRevisar(cotizacion)}
+                        disabled={revisingId === cotizacion.id}
+                        title="Crea una nueva versión que el cliente tiene que volver a firmar"
+                      >
+                        <History className="mr-2 h-3 w-3" />
+                        {revisingId === cotizacion.id ? "Creando revisión..." : "Revisar"}
                       </Button>
                     )}
                     {!readOnly && cotizacion.estado === "ENVIADA" && (

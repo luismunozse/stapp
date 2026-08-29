@@ -918,3 +918,67 @@ describe("POST /api/ventas — descuentos por línea + global", () => {
     expect((vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any).p_total).toBe(100)
   })
 })
+
+describe("POST /api/ventas — IVA sin tasa propia: la resuelve el pais de la org", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+  })
+
+  const venderPor100 = async (org: Record<string, unknown>) => {
+    mockSupabaseFrom({
+      organizations: createChainMock(org),
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 0 }),
+    })
+    const res = await POST(
+      createPostRequest({
+        clienteNombre: "CF",
+        metodoPago: "EFECTIVO",
+        items: [{ inventarioId: "i1", descripcion: "X", cantidad: 1, precioUnitario: 100, diasGarantia: 0 }],
+      })
+    )
+    expect((await parseResponse(res)).status).toBe(201)
+    return vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any
+  }
+
+  it("ADITIVO en org chilena sin tasa guardada: aplica 19% (100 → 119)", async () => {
+    const args = await venderPor100({
+      pais: "CL",
+      iva_regimen: "ADITIVO",
+      iva_tasa: null,
+      redondeo_efectivo: 0,
+    })
+    expect(args.p_total).toBe(119)
+  })
+
+  it("ADITIVO en org argentina sin tasa guardada: sigue en 21% (100 → 121)", async () => {
+    const args = await venderPor100({
+      pais: "AR",
+      iva_regimen: "ADITIVO",
+      iva_tasa: null,
+      redondeo_efectivo: 0,
+    })
+    expect(args.p_total).toBe(121)
+  })
+
+  it("la tasa guardada por la org le gana al default del pais", async () => {
+    const args = await venderPor100({
+      pais: "CL",
+      iva_regimen: "ADITIVO",
+      iva_tasa: 10,
+      redondeo_efectivo: 0,
+    })
+    expect(args.p_total).toBe(110)
+  })
+
+  it("EXENTO no cobra IVA aunque el pais tenga tasa general", async () => {
+    const args = await venderPor100({
+      pais: "CL",
+      iva_regimen: "EXENTO",
+      iva_tasa: null,
+      redondeo_efectivo: 0,
+    })
+    expect(args.p_total).toBe(100)
+  })
+})

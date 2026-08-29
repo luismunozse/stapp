@@ -3,28 +3,14 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { aplicarAprobacionCotizacionAOrden } from "@/lib/cotizacion-aprobar-orden"
+// Compartido con la ruta pública de aprobación, que usa el mismo RPC atómico.
+import { isFunctionMissingError } from "@/lib/rpc-errors"
 import { z } from "zod"
 
 const aprobarSchema = z.object({
   firmaAprobacion: z.string().optional().nullable(),
   firmaMime: z.string().optional().nullable(),
 })
-
-// Returns true when the RPC error indicates the function does not exist yet
-// (migration 246 not applied). Falls back to hardened JS path.
-function isFunctionMissingError(err: unknown): boolean {
-  if (!err || typeof err !== "object") return false
-  const e = err as Record<string, unknown>
-  const code = String(e.code ?? "")
-  const msg = String(e.message ?? "").toLowerCase()
-  return (
-    code === "PGRST202" ||
-    code === "42883" ||
-    msg.includes("could not find the function") ||
-    msg.includes("does not exist") ||
-    msg.includes("schema cache")
-  )
-}
 
 // Joined SELECT used both in the fallback and for re-fetching after the RPC.
 const COTIZACION_SELECT = `
@@ -202,6 +188,27 @@ export async function POST(
 
     // --- Hardened JS fallback (pre-migration 246) ---
     console.warn("[aprobar] aprobar_cotizacion_atomica not found; falling back to JS path")
+
+    // Una revisión no puede aprobarse por acá. La reconciliación de reservas
+    // —liberar las de la cotización reemplazada antes de tomar las nuevas— vive
+    // dentro de `aprobar_cotizacion_atomica` (migración 312), y este camino
+    // existe justamente para cuando esa función no está. Reservar los items de
+    // la revisión sin liberar los de la original deja contada dos veces cada
+    // pieza que aparece en ambas versiones: el bug de stock fantasma que la
+    // migración 246 existe para prevenir. Negarse es ruidoso y reversible;
+    // reservar de más corrompe `stock_reservado` en silencio y para siempre.
+    if (cotizacion.revision_de && !esPresupuesto) {
+      console.error(
+        "[aprobar] Revisión no aprobable sin aprobar_cotizacion_atomica: falta la migración 312"
+      )
+      return NextResponse.json(
+        {
+          error:
+            "No se puede aprobar una revisión en esta base de datos: falta aplicar la migración de reservas. Avisá al administrador del sistema.",
+        },
+        { status: 503 }
+      )
+    }
 
     // Optimistic lock: update only if still ENVIADA (prevents double-approve)
     const { data: updatedCotizacion, error: updateError } = await supabaseAdmin

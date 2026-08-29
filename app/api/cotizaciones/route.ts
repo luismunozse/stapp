@@ -6,6 +6,7 @@ import { parsePagination } from "@/lib/api-utils"
 import { createAuditLogger } from "@/lib/audit"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { dateOnlyToNoonUtcISO, dateNumberInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { totalPresupuestoDeOrden } from "@/lib/cotizacion-presupuesto"
 import { randomBytes } from "crypto"
 import { z } from "zod"
 
@@ -111,6 +112,8 @@ function formatCotizacion(c: any, includeCosts: boolean) {
     equipo: c.equipo_snapshot || null,
     checklist: c.checklist_snapshot || null,
     convertidaAOrdenId: c.convertida_a_orden_id || null,
+    reemplazadaPor: c.reemplazada_por,
+    revisionDe: c.revision_de,
     clienteNombre: cliente?.nombre || null,
     clienteEmail: cliente?.email || null,
     clienteTelefono: cliente?.telefono || null,
@@ -476,13 +479,7 @@ export async function POST(request: Request) {
 
     // Auto-fill presupuesto on the linked order — sum non-rejected cotizaciones for this orden
     if (data.ordenId) {
-      const { data: allCots } = await supabaseAdmin
-        .from("cotizaciones")
-        .select("total")
-        .eq("orden_id", data.ordenId)
-        .is("deleted_at", null)
-        .neq("estado", "RECHAZADA")
-      const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
+      const { total: totalPresupuesto } = await totalPresupuestoDeOrden(data.ordenId)
       await supabaseAdmin
         .from("ordenes_servicio")
         .update({ presupuesto: totalPresupuesto, costo_final: totalPresupuesto })

@@ -15,7 +15,9 @@ const METODOS_PAGO = [
   { value: "TARJETA_DEBITO", label: "T. Débito", icon: CreditCard },
   { value: "TARJETA_CREDITO", label: "T. Crédito", icon: CreditCard },
   { value: "MERCADOPAGO", label: "MercadoPago", icon: Wallet },
-  { value: "CUENTA_CORRIENTE", label: "Cuenta", icon: PiggyBank },
+  // Spends the credit the client already deposited — every consumer routes it to
+  // usar_cuenta_corriente, which refuses to overdraw. It is not a way to fiar.
+  { value: "CUENTA_CORRIENTE", label: "Saldo a favor", icon: PiggyBank },
   { value: "OTRO", label: "Otro", icon: MoreHorizontal },
 ] as const
 
