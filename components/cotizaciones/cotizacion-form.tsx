@@ -18,6 +18,7 @@ import {
 import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2, BookOpen, Smartphone, Wrench } from "lucide-react"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { useCurrency, useTerminologia } from "@/contexts/currency-context"
+import { getCountryConfig } from "@/lib/countries"
 import { useModal } from "@/contexts/modal-context"
 import { ItemRow, calcItemNeto } from "./item-row"
 import { ClienteSelector } from "./cliente-selector"
@@ -130,7 +131,7 @@ export function CotizacionForm({
 }: CotizacionFormProps) {
   const isPresupuesto = tipo === "PRESUPUESTO"
   const [loading, setLoading] = useState(false)
-  const { formatPrice } = useCurrency()
+  const { formatPrice, pais } = useCurrency()
   const t = useTerminologia()
   const { showError, showWarning } = useModal()
   const [items, setItems] = useState<CotizacionItem[]>(
@@ -148,6 +149,13 @@ export function CotizacionForm({
   )
   const descuentoGlobalValor = parseFloat(descuentoGlobalValorStr) || 0
   const [ivaPorcentaje, setIvaPorcentaje] = useState(initialData?.ivaPorcentaje ?? 0)
+  // Las alicuotas disponibles dependen del pais de la org (AR: 0/10.5/21/27,
+  // CL: 0/19, ...). El valor guardado se suma a la lista aunque no pertenezca
+  // al pais actual: sin un SelectItem que lo matchee, Radix deja el trigger
+  // vacio y el primer cambio de foco borraria el IVA de la cotizacion.
+  const ivaOptions = Array.from(
+    new Set([...getCountryConfig(pais).ivaOptions, ivaPorcentaje])
+  ).sort((a, b) => a - b)
   const [tipoCambio, setTipoCambio] = useState<number | null>((initialData as any)?.tipoCambio || null)
   const [clienteId, setClienteId] = useState<string | null>(initialData?.clienteId || initialClienteId || null)
   const [clienteObj, setClienteObj] = useState<{ tipoCliente?: string | null; razonSocial?: string | null } | null>(null)
@@ -898,20 +906,21 @@ export function CotizacionForm({
                 </div>
               </div>
               <div>
-                <Label className="text-sm">IVA</Label>
+                <Label htmlFor="cotizacion-iva" className="text-sm">IVA</Label>
                 <Select
                   value={String(ivaPorcentaje)}
                   onValueChange={(v) => setIvaPorcentaje(parseFloat(v))}
                   disabled={loading}
                 >
-                  <SelectTrigger className="w-32 mt-1">
+                  <SelectTrigger id="cotizacion-iva" className="w-32 mt-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="0">0%</SelectItem>
-                    <SelectItem value="10.5">10.5%</SelectItem>
-                    <SelectItem value="21">21%</SelectItem>
-                    <SelectItem value="27">27%</SelectItem>
+                    {ivaOptions.map((opt) => (
+                      <SelectItem key={opt} value={String(opt)}>
+                        {opt}%
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

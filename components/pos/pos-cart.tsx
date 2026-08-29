@@ -120,6 +120,51 @@ export function PosCart({
   const [globalDescTipo, setGlobalDescTipo] = useState<TipoDescuento>(descuentoGlobal?.tipo ?? "PORCENTAJE")
   const [globalDescValor, setGlobalDescValor] = useState<string>(descuentoGlobal ? String(descuentoGlobal.valor) : "")
 
+  // Último valor que ESTE componente subió al padre (null incluido). Se usa
+  // para distinguir un cambio externo real de `descuentoGlobal` (venta
+  // completada, vaciar carrito, F2) de la vuelta como prop de algo que el
+  // propio cajero acaba de tipear.
+  // "Recuperar apartado" NO es un caso de restaurar el descuento del
+  // apartado: `recallSale` pisa `descuentoGlobal` a `null` sin condición y
+  // `HeldSale` ni siquiera lo persiste, así que llega acá como un reset más
+  // (mismo camino que vaciar carrito), no como un valor externo distinto.
+  const lastEmittedDescuentoRef = useRef<DescuentoConfig | null>(descuentoGlobal)
+
+  const emitDescuentoGlobal = (d: DescuentoConfig | null) => {
+    lastEmittedDescuentoRef.current = d
+    onSetDescuentoGlobal(d)
+  }
+
+  // Resincroniza el draft cuando el padre cambia `descuentoGlobal` desde
+  // afuera (venta completada, vaciar carrito): sin esto, el toggle %/$ y el
+  // valor quedaban mostrando el descuento del cliente anterior hasta que
+  // alguien tocaba el campo, y ahí reaplicaba ese descuento viejo sobre la
+  // venta nueva.
+  // No alcanza con comparar el prop entrante contra el draft actual: cada
+  // tecla que el cajero tipea sube un `descuentoGlobal` NUEVO (por ejemplo
+  // `null` al borrar el dígito para reemplazarlo) y ese valor sí es un
+  // cambio real, así que el efecto se reejecutaría y pisaría lo que el
+  // cajero recién tipeó antes de que termine de escribir el siguiente
+  // carácter. Por eso comparamos por REFERENCIA con lo último que ESTE
+  // componente emitió: `onSetDescuentoGlobal` baja exactamente el mismo
+  // objeto que subimos (el padre lo guarda en un `useState` y lo devuelve
+  // tal cual, sin clonarlo), así que la identidad ya detecta cualquier eco
+  // genuino. No se compara tipo/valor a propósito: eso ensancharía "eco" a
+  // cualquier escritura externa que coincida en valor con la última emitida
+  // (hoy inalcanzable porque todo escritor externo manda `null`, pero sería
+  // una trampa para la próxima feature que setee un descuento no nulo desde
+  // afuera) y, en ese caso, el efecto se saltearía tanto la resincronización
+  // como la actualización de esta ref.
+  useEffect(() => {
+    const last = lastEmittedDescuentoRef.current
+    const isEcho = last === descuentoGlobal
+    if (isEcho) return
+    lastEmittedDescuentoRef.current = descuentoGlobal
+    setGlobalDescTipo(descuentoGlobal?.tipo ?? "PORCENTAJE")
+    setGlobalDescValor(descuentoGlobal ? String(descuentoGlobal.valor) : "")
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [descuentoGlobal?.tipo, descuentoGlobal?.valor])
+
   // Focus client search when toggled
   useEffect(() => {
     if (showClienteSearch) {
@@ -622,7 +667,7 @@ export function PosCart({
                     onClick={() => {
                       setGlobalDescTipo(t)
                       const val = parseFloat(globalDescValor) || 0
-                      if (val > 0) onSetDescuentoGlobal({ tipo: t, valor: val })
+                      if (val > 0) emitDescuentoGlobal({ tipo: t, valor: val })
                     }}
                     className={cn(
                       "px-2 h-full text-[10px] font-medium transition-colors",
@@ -645,9 +690,9 @@ export function PosCart({
                   setGlobalDescValor(raw)
                   const val = parseFloat(raw) || 0
                   if (val > 0) {
-                    onSetDescuentoGlobal({ tipo: globalDescTipo, valor: val })
+                    emitDescuentoGlobal({ tipo: globalDescTipo, valor: val })
                   } else {
-                    onSetDescuentoGlobal(null)
+                    emitDescuentoGlobal(null)
                   }
                 }}
                 className="h-7 w-20 text-xs text-center"

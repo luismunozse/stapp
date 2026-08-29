@@ -91,6 +91,22 @@ export async function POST(
       )
     }
 
+    // Una cotizacion reemplazada por una revision sigue ACEPTADA (migracion
+    // 311: es un hecho historico firmado, no se pisa el estado), pero ya no
+    // es el documento vigente -- la revision lo es. Convertirla igual usaria
+    // items de una version superada y, si la revision ya fue aprobada,
+    // liberaria una segunda vez las reservas que la migracion 312 ya liberó
+    // al aprobar esa revision.
+    if (cotizacion.reemplazada_por) {
+      return NextResponse.json(
+        {
+          error:
+            "Esta cotización fue reemplazada por una revisión; convertí la revisión vigente en su lugar",
+        },
+        { status: 400 }
+      )
+    }
+
     if (cotizacion.tipo === "PRESUPUESTO") {
       return NextResponse.json(
         { error: "Los presupuestos planos deben convertirse primero a orden de servicio" },
@@ -296,14 +312,25 @@ export async function POST(
 
     const ventaId = fallbackResult?.ventaId || fallbackResult
 
-    // Release reservations (best-effort in fallback — cannot be atomic here)
-    try {
-      await supabaseAdmin.rpc("liberar_items_cotizacion", {
-        p_cotizacion_id: id,
-        p_user_id: userId,
-        p_motivo: "Reserva consumida por conversión a venta",
-      })
-    } catch (releaseErr) {
+    // Release reservations (best-effort in fallback — cannot be atomic here).
+    //
+    // No se agrega acá el consumo de la reserva del catálogo (clases B y C de
+    // la migración 315): este camino sólo corre cuando falta
+    // convertir_cotizacion_venta_atomica, y la 315 REDEFINE esa función. Una
+    // base que cae en el fallback tampoco tiene la 315, ni
+    // consumir_reserva_catalogo, ni la tabla de reservas — la llamada sería
+    // siempre un no-op. Los dos hechos van juntos: si alguna vez se aplica la
+    // 315, este fallback deja de alcanzarse.
+    //
+    // El error se mira explícitamente: supabaseAdmin.rpc() resuelve con
+    // { error } en vez de tirar, así que un try/catch acá nunca dispara y el
+    // fallo se perdería sin siquiera loguearse.
+    const { error: releaseErr } = await supabaseAdmin.rpc("liberar_items_cotizacion", {
+      p_cotizacion_id: id,
+      p_user_id: userId,
+      p_motivo: "Reserva consumida por conversión a venta",
+    })
+    if (releaseErr) {
       console.error("Error releasing cotizacion reservations after sale:", releaseErr)
     }
 

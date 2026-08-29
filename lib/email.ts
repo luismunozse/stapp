@@ -1,5 +1,6 @@
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
 import { formatDateValue } from "@/lib/timezone"
+import { CONTACT_EMAIL } from "@/lib/contact"
 
 const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
@@ -572,7 +573,9 @@ interface SendCotizacionEmailParams {
   numeroCotizacion: string
   numeroOrden: number
   total: number
-  fechaVencimiento?: Date | null
+  // Llega como el string ISO de Postgres, no como Date; `formatDateValue`
+  // acepta las dos formas desde siempre y el tipo se quedó atrás.
+  fechaVencimiento?: Date | string | null
   pdfBuffer: Buffer
   moneda?: string
   zonaHoraria?: string
@@ -795,7 +798,9 @@ export async function sendNewLeadNotification({
   origen,
 }: SendNewLeadNotificationParams) {
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
-  const adminEmail = process.env.LEAD_NOTIFICATION_EMAIL || process.env.EMAIL_FROM || "contacto@stapp.com.ar"
+  // Cae a la casilla real, no a EMAIL_FROM: esa es la direccion desde la
+  // que se envia (noreply@), nadie lee lo que llega ahi.
+  const adminEmail = process.env.LEAD_NOTIFICATION_EMAIL || CONTACT_EMAIL
   const leadsUrl = `https://${rootDomain}/leads`
 
   const contactDetails = [

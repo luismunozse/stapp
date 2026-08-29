@@ -45,6 +45,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useCurrency } from "@/contexts/currency-context"
+import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 import { CotizacionForm } from "@/components/cotizaciones/cotizacion-form"
 import { CotizacionApprovalDialog } from "@/components/cotizaciones/cotizacion-approval-dialog"
 import { ConvertirVentaDialog } from "@/components/cotizaciones/convertir-venta-dialog"
@@ -134,7 +135,7 @@ const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: s
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 export default function CotizacionesPage() {
-  const { formatPrice, formatDate } = useCurrency()
+  const { formatPrice, formatDate, pais } = useCurrency()
   const { data: session } = useSession()
   // Cost/margin data is ADMIN-only (see components/ordenes/orden-detail.tsx's isAdmin gate).
   const mostrarCostos = session?.user?.role === "ADMIN"
@@ -384,8 +385,7 @@ export default function CotizacionesPage() {
     const telefono = (cotizacion.clienteTelefono || "").replace(/\D/g, "")
     let waUrl: string
     if (telefono) {
-      const normalized = telefono.startsWith("54") ? telefono : `54${telefono}`
-      waUrl = `https://wa.me/${normalized}?text=${encodeURIComponent(mensaje)}`
+      waUrl = generateWhatsAppUrl(telefono, mensaje, pais)
     } else {
       waUrl = `https://wa.me/?text=${encodeURIComponent(mensaje)}`
     }
@@ -730,7 +730,7 @@ export default function CotizacionesPage() {
                     {cotizaciones.map((cotizacion) => {
                       const config = estadoConfig[cotizacion.estado] || estadoConfig.BORRADOR
                       const Icon = config.icon
-                      const canEdit = cotizacion.estado === "BORRADOR"
+                      const canEdit = !["ACEPTADA", "RECHAZADA"].includes(cotizacion.estado)
                       const canSend = ["BORRADOR", "ENVIADA"].includes(cotizacion.estado)
                       const canDelete = cotizacion.estado !== "ACEPTADA"
                       return (
@@ -913,7 +913,7 @@ export default function CotizacionesPage() {
             {cotizaciones.map((cotizacion) => {
               const config = estadoConfig[cotizacion.estado] || estadoConfig.BORRADOR
               const Icon = config.icon
-              const canEdit = cotizacion.estado === "BORRADOR"
+              const canEdit = !["ACEPTADA", "RECHAZADA"].includes(cotizacion.estado)
               const canSend = ["BORRADOR", "ENVIADA"].includes(cotizacion.estado)
               const canDelete = cotizacion.estado !== "ACEPTADA"
 

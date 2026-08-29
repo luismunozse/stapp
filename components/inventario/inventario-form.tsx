@@ -235,12 +235,25 @@ const categoriasPorTipo: Record<string, string[]> = {
   TODOS: ["Pantallas", "Baterías", "Fundas", "Teclados", "Memorias", "Cargadores", "Otros"],
 }
 
+export interface ItemGuardado {
+  id: string
+  codigo: string
+  nombre: string
+  precioCompra?: number | null
+}
+
 interface InventarioFormProps {
   item?: Inventario | null
   // Barcode pre-cargado (p.ej. desde scanner cuando se crea un item nuevo)
   initialBarcode?: string | null
   onClose: () => void
-  onSuccess: () => void
+  /**
+   * Se dispara al guardar. Recibe el item resultante cuando se lo puede
+   * identificar, para que el llamador lo vincule sin volver a buscarlo (lo usa
+   * el picker del alta de orden de compra). Los llamadores que solo refrescan
+   * una lista pueden ignorar el argumento.
+   */
+  onSuccess: (saved?: ItemGuardado) => void
   // Disparado al pedir editar un duplicado detectado. El padre debe cargar
   // ese item y reabrir el form en modo edición.
   onEditExisting?: (id: string) => void
@@ -644,7 +657,14 @@ export function InventarioForm({
       // item existente. Dejar el borrador vivo reabriria "Nuevo Item" con ese
       // mismo producto y el operador lo cargaria dos veces.
       clearDraft()
-      onSuccess()
+      // El alta se resolvió contra el item existente, así que el llamador que
+      // esperaba vincular algo se queda con ese, no con uno nuevo.
+      onSuccess({
+        id: match.id,
+        codigo: match.codigo,
+        nombre: match.nombre,
+        precioCompra: null,
+      })
     } catch (err) {
       console.error("Error consolidando stock:", err)
       await showError(err instanceof Error ? err.message : "Error al sumar stock")
@@ -901,7 +921,12 @@ export function InventarioForm({
       // codigo duplicado a reintentar) dejan el borrador donde esta: es lo unico
       // irrecuperable de los dos lados.
       clearDraft()
-      onSuccess()
+      onSuccess({
+        id: savedId,
+        codigo: savedItem?.codigo ?? item?.codigo ?? "",
+        nombre: savedItem?.nombre ?? item?.nombre ?? "",
+        precioCompra: savedItem?.precioCompra ?? null,
+      })
     } catch (error) {
       console.error("Error saving item:", error)
       await showError("Error al guardar item")

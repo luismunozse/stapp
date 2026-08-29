@@ -12,7 +12,7 @@ import { useModal } from "@/contexts/modal-context"
 import { NotificationSettings } from "@/components/configuracion/notification-settings"
 import { CURRENCY_OPTIONS } from "@/lib/currency"
 import { TIMEZONE_OPTIONS } from "@/lib/timezone"
-import { COUNTRY_OPTIONS, getCountryConfig } from "@/lib/countries"
+import { COUNTRY_OPTIONS, getCountryConfig, getIvaGeneral } from "@/lib/countries"
 
 // Condición frente al IVA del emisor: texto libre (organizations.condicion_iva
 // es TEXT, sin enum en DB) impreso tal cual en el remito — a diferencia de
@@ -66,9 +66,10 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [anticipoPorcentajeDefault, setAnticipoPorcentajeDefault] = useState("50")
   const [moduloAgenda, setModuloAgenda] = useState(false)
   const [vendedoresAdministranInventario, setVendedoresAdministranInventario] = useState(false)
+  const [tecnicosOperanPos, setTecnicosOperanPos] = useState(false)
   const [comisionAplicaSinReparacion, setComisionAplicaSinReparacion] = useState(false)
   const [ivaRegimen, setIvaRegimen] = useState<"EXENTO" | "INCLUIDO" | "ADITIVO">("EXENTO")
-  const [ivaTasa, setIvaTasa] = useState("21")
+  const [ivaTasa, setIvaTasa] = useState("")
   const [redondeoEfectivo, setRedondeoEfectivo] = useState("0")
   // Datos fiscales y de cobro (migración 295) — alimentan el remito.
   const [cuit, setCuit] = useState("")
@@ -122,9 +123,10 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setAnticipoPorcentajeDefault(String(data.anticipoPorcentajeDefault ?? 50))
         setModuloAgenda(!!data.moduloAgenda)
         setVendedoresAdministranInventario(!!data.vendedoresAdministranInventario)
+        setTecnicosOperanPos(!!data.tecnicosOperanPos)
         setComisionAplicaSinReparacion(!!data.comisionAplicaSinReparacion)
         setIvaRegimen(data.ivaRegimen ?? "EXENTO")
-        setIvaTasa(String(data.ivaTasa ?? 21))
+        setIvaTasa(String(data.ivaTasa ?? getIvaGeneral(data.pais)))
         setRedondeoEfectivo(String(data.redondeoEfectivo ?? 0))
         setCuit(data.cuit || "")
         setCondicionIva(data.condicionIva || "")
@@ -275,7 +277,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada: facturacionHabilitada }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada: facturacionHabilitada }),
       })
 
       if (res.ok) {
@@ -634,6 +636,21 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
               </div>
             </div>
           </label>
+          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+            <input
+              type="checkbox"
+              checked={tecnicosOperanPos}
+              onChange={(e) => setTecnicosOperanPos(e.target.checked)}
+              disabled={!allowEdit}
+              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+            />
+            <div className="flex-1">
+              <div className="text-sm font-medium">Los técnicos pueden operar el POS</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Permite a los usuarios con rol Técnico vender desde el Punto de Venta y ver sus propias ventas, sin dejar de ser técnicos: siguen recibiendo órdenes asignadas y conservando sus comisiones. No incluye anular ni editar ventas, registrar pagos ni crear devoluciones, que siguen siendo solo de administradores.
+              </div>
+            </div>
+          </label>
         </CardContent>
       </Card>
 
@@ -676,7 +693,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
                 step="0.01"
                 value={ivaTasa}
                 onChange={(e) => setIvaTasa(e.target.value)}
-                placeholder="21"
+                placeholder={String(getIvaGeneral(pais))}
                 disabled={!allowEdit}
               />
             </div>

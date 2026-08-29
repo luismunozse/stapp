@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requirePosAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib"
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
@@ -10,7 +10,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string; devolucionId: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role } = await requirePosAccess()
     if (error) return error
 
     const { id, devolucionId } = await params
