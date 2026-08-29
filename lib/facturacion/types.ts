@@ -56,7 +56,20 @@ export interface FacturacionProvider<C = FacturacionCredenciales> {
 // ============================================================================
 
 export interface ArcaCredenciales {
+  /** Dueño de la fila de credenciales — parte de la clave del ticket WSAA y del lease. */
+  organizationId: string
+  /**
+   * CUIT del CERTIFICADO, es decir la identidad con la que se hace el login
+   * WSAA. AFIP la deriva del subject del certificado, no del `Auth.Cuit`, así
+   * que es esta —y no `cuitRepresentado`— la que keyea el cache del ticket.
+   */
   cuit: string
+  /**
+   * Modelo de delegación: CUIT del contribuyente representado, el que va en
+   * `Auth.Cuit` y figura como emisor del comprobante. Ausente en el modelo
+   * BYO, donde el titular del certificado emite por sí mismo.
+   */
+  cuitRepresentado?: string
   certPem: string
   keyPem: string
   puntoVenta: number
