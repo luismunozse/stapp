@@ -211,3 +211,55 @@ describe("GET /api/org/features — permiso de POS para técnicos", () => {
     expect(body.tecnicosOperanPos).toBe(false)
   })
 })
+
+describe("GET /api/org/features — permiso de caja para vendedores", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAuthSuccess({ role: "VENDEDOR" })
+  })
+
+  it("expone vendedoresManejanCaja prendido", async () => {
+    // El navbar lo usa para mostrar /caja al vendedor habilitado, y la propia
+    // pantalla de caja para decidir si dibuja apertura, cierre y movimientos.
+    mockSupabaseFrom({
+      organizations: createChainMock({
+        modulo_agenda: false,
+        vendedores_administran_inventario: false,
+        tecnicos_operan_pos: false,
+        vendedores_manejan_caja: true,
+      }),
+    })
+
+    const { GET } = await import("@/app/api/org/features/route")
+    const { status, body } = await parseResponse(await GET())
+
+    expect(status).toBe(200)
+    expect(body.vendedoresManejanCaja).toBe(true)
+  })
+
+  it("responde false cuando la columna todavía no existe (migración sin aplicar)", async () => {
+    mockSupabaseFrom({
+      organizations: createChainMock(null, { code: "42703", message: "column does not exist" }),
+    })
+
+    const { GET } = await import("@/app/api/org/features/route")
+    const { status, body } = await parseResponse(await GET())
+
+    expect(status).toBe(200)
+    expect(body.vendedoresManejanCaja).toBe(false)
+  })
+
+  it("un error de transporte sigue siendo 503, no un flag apagado", async () => {
+    // "No pude leer" no es "el permiso está apagado": esconder /caja por un
+    // blip de red saca al vendedor de la pantalla en la que está trabajando.
+    mockSupabaseFrom({
+      organizations: createChainMock(null, { message: "connection reset" }),
+    })
+
+    const { GET } = await import("@/app/api/org/features/route")
+    const { status, body } = await parseResponse(await GET())
+
+    expect(status).toBe(503)
+    expect(body.vendedoresManejanCaja).toBeUndefined()
+  })
+})

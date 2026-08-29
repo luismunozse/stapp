@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchMovimientosDia, computeTotales } from "@/lib/caja-utils"
 import { sucursalParaLectura } from "@/lib/sucursal"
@@ -10,7 +10,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, role, session } = await requireAuth()
+    // Detalle de un cierre ya hecho: es histórico financiero, del mismo
+    // lado del corte que el historial y el export CSV. El vendedor opera su
+    // turno, no audita los cerrados.
+    const { error, organizationId, role, session } = await requireAdmin()
     if (error) return error
 
     const { id } = await params

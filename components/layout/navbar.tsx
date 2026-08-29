@@ -60,7 +60,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 
-type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[]; featureFlag?: "moduloAgenda"; vendedorFeatureFlag?: "vendedoresAdministranInventario"; tecnicoFeatureFlag?: "tecnicosOperanPos" }
+type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[]; featureFlag?: "moduloAgenda"; vendedorFeatureFlag?: "vendedoresAdministranInventario" | "vendedoresManejanCaja"; tecnicoFeatureFlag?: "tecnicosOperanPos" }
 
 type NavSection = { label: string; items: NavItem[] }
 
@@ -81,7 +81,7 @@ const navItems: NavItem[] = [
   { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN", "VENDEDOR"], vendedorFeatureFlag: "vendedoresAdministranInventario" },
   { href: "/servicios", label: "Servicios", icon: Hammer, roles: ["ADMIN"] },
   { href: "/ordenes-compra", label: "Compras", icon: Truck, roles: ["ADMIN"] },
-  { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN"] },
+  { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN", "VENDEDOR"], vendedorFeatureFlag: "vendedoresManejanCaja" },
   { href: "/finanzas", label: "Finanzas", icon: Wallet, roles: ["ADMIN"] },
   { href: "/facturacion", label: "Comprobantes", icon: FileText, roles: ["ADMIN"] },
   { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "VENDEDOR"] },
@@ -117,7 +117,7 @@ const navSections: NavSection[] = [
   {
     label: "Finanzas",
     items: [
-      { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN"] },
+      { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN", "VENDEDOR"], vendedorFeatureFlag: "vendedoresManejanCaja" },
       { href: "/facturacion", label: "Comprobantes", icon: FileText, roles: ["ADMIN"] },
       { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "VENDEDOR"] },
     ],
@@ -175,10 +175,11 @@ export function Navbar() {
   // disparado desde /perfil después de un cambio.
   const [liveName, setLiveName] = useState<string | null>(null)
   const [liveAvatar, setLiveAvatar] = useState<string | null>(null)
-  const [orgFeatures, setOrgFeatures] = useState<{ moduloAgenda: boolean; vendedoresAdministranInventario: boolean; tecnicosOperanPos: boolean }>({
+  const [orgFeatures, setOrgFeatures] = useState<{ moduloAgenda: boolean; vendedoresAdministranInventario: boolean; tecnicosOperanPos: boolean; vendedoresManejanCaja: boolean }>({
     moduloAgenda: false,
     vendedoresAdministranInventario: false,
     tecnicosOperanPos: false,
+    vendedoresManejanCaja: false,
   })
 
   useEffect(() => {
@@ -192,6 +193,7 @@ export function Navbar() {
             moduloAgenda: !!d.moduloAgenda,
             vendedoresAdministranInventario: !!d.vendedoresAdministranInventario,
             tecnicosOperanPos: !!d.tecnicosOperanPos,
+            vendedoresManejanCaja: !!d.vendedoresManejanCaja,
           })
         })
         .catch(() => {})
