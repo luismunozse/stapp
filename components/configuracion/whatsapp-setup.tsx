@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Loader2, CheckCircle2, RefreshCw } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Loader2, CheckCircle2, RefreshCw, Send } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 
 type Status = "loading" | "disconnected" | "pairing" | "connected"
@@ -20,6 +22,9 @@ export function WhatsAppSetup() {
   const [pairingCode, setPairingCode] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [testPhone, setTestPhone] = useState("")
+  const [testSending, setTestSending] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null)
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -108,6 +113,31 @@ export function WhatsAppSetup() {
     }
   }
 
+  const handleTestSend = async () => {
+    if (!testPhone.trim()) return
+    setTestSending(true)
+    setTestResult(null)
+    try {
+      const res = await fetch("/api/whatsapp/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phoneNumber: testPhone }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data?.success) {
+        // El proveedor se muestra a proposito: es el dato que dice si el
+        // mensaje salio por Evolution o por Meta cuando hay que diagnosticar.
+        setTestResult({ ok: true, text: `Enviado por ${data.provider ?? "el proveedor configurado"}. Revisá el teléfono.` })
+      } else {
+        setTestResult({ ok: false, text: data?.error || "No se pudo enviar el mensaje de prueba" })
+      }
+    } catch {
+      setTestResult({ ok: false, text: "Error de red al enviar la prueba" })
+    } finally {
+      setTestSending(false)
+    }
+  }
+
   const handleDisconnect = async () => {
     setError(null)
     try {
@@ -141,6 +171,35 @@ export function WhatsAppSetup() {
           <div className="flex items-center gap-2 text-sm text-success-600">
             <CheckCircle2 className="h-4 w-4" /> WhatsApp conectado — los mensajes salen del número vinculado.
           </div>
+          <div className="space-y-2 rounded-md border bg-muted/40 p-3">
+            <Label htmlFor="wa-test-phone" className="text-sm font-medium">
+              Probar el envío
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Mandate un mensaje a tu propio teléfono para confirmar que llega, y que llega completo.
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                id="wa-test-phone"
+                type="tel"
+                inputMode="tel"
+                placeholder="+54 9 11 2233-4455"
+                value={testPhone}
+                onChange={(e) => setTestPhone(e.target.value)}
+                className="sm:flex-1"
+              />
+              <Button size="sm" onClick={handleTestSend} disabled={testSending || !testPhone.trim()}>
+                {testSending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                Enviar prueba
+              </Button>
+            </div>
+            {testResult && (
+              <p className={testResult.ok ? "text-sm text-success-600" : "text-sm text-destructive"}>
+                {testResult.text}
+              </p>
+            )}
+          </div>
+
           <Button variant="outline" size="sm" onClick={handleDisconnect}>
             Desconectar
           </Button>
