@@ -20,7 +20,7 @@ function ordenRow(over: Partial<any> = {}) {
 
 // Regression test for the "cobrar todo" credit-minting bug: an order whose
 // debt already migrated to cuenta_corriente as a CARGO (referencia_tipo=ORDEN)
-// must not be listed here as pending, the same rule migration 309 applies to
+// must not be listed here as pending, the same rule migration 318 applies to
 // get_deuda_cliente_sucursal. Without it, cobrar-multiple-dialog.tsx posts a
 // cobro for an order the client's fiado balance no longer owes, minting
 // spendable credit — see app/api/clientes/[id]/ordenes-pendientes/route.ts.
@@ -70,7 +70,7 @@ describe("GET /api/clientes/[id]/ordenes-pendientes", () => {
   })
 
   it("excluye la orden aunque el CARGO ya haya sido revertido", async () => {
-    // Mismo criterio que migracion 309: excluida "reverted or not". El
+    // Mismo criterio que migracion 318: excluida "reverted or not". El
     // endpoint no filtra por revertido_at porque la query ni lo pide.
     mockAuthSuccess({ role: "ADMIN" })
     mockSupabaseFrom({

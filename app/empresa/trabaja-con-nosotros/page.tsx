@@ -14,6 +14,7 @@ import {
   Coffee,
   GraduationCap,
 } from "lucide-react"
+import { CONTACT_EMAIL } from "@/lib/contact"
 
 export const metadata = {
   title: "Trabaja con Nosotros - STApp",
@@ -195,8 +196,8 @@ export default function TrabajaConNosotrosPage() {
                 </p>
                 <p className="text-muted-foreground">
                   ¡Pero siempre estamos buscando talento excepcional! Envíanos tu CV a{" "}
-                  <a href="mailto:jobs@stapp.com" className="text-primary hover:underline">
-                    jobs@stapp.com
+                  <a href={`mailto:${CONTACT_EMAIL}`} className="text-primary hover:underline">
+                    {CONTACT_EMAIL}
                   </a>
                 </p>
               </div>
@@ -255,7 +256,7 @@ export default function TrabajaConNosotrosPage() {
               talentosas y apasionadas.
             </p>
             <Button size="lg" variant="outline" asChild>
-              <a href="mailto:jobs@stapp.com">Enviar CV</a>
+              <a href={`mailto:${CONTACT_EMAIL}`}>Enviar CV</a>
             </Button>
           </div>
         </div>

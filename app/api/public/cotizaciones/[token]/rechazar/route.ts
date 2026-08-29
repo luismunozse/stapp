@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { transicionarOrden } from "@/lib/orden-transicion"
+import { restaurarOriginalDeRevision } from "@/lib/cotizacion-revision"
+import { totalPresupuestoDeOrden } from "@/lib/cotizacion-presupuesto"
 
 export async function POST(
   request: Request,
@@ -29,7 +31,7 @@ export async function POST(
     // tokens vacíos, pero esto blinda contra cualquier sorpresa de Supabase).
     const { data: cotizacion, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, orden_id, organization_id")
+      .select("id, estado, orden_id, organization_id, revision_de")
       .eq("public_token", token)
       .not("public_token", "is", null)
       .is("deleted_at", null)
@@ -60,8 +62,33 @@ export async function POST(
 
     if (updateError) throw updateError
 
+    // El UPDATE de arriba dispara cotizaciones_liberar_reserva_catalogo, que
+    // devuelve la reserva que tomó esta solicitud. Ver migración 315, parte 7.
+
+    // Rechazar una revisión no puede borrar el presupuesto de la original.
+    // Este es el camino principal por el que una revisión muere: el cliente
+    // abre el link, ve el nuevo total y dice que no. Si la original queda
+    // apuntada como reemplazada, las dos quedan fuera del presupuesto y el
+    // próximo recálculo deja la orden en 0 — mientras la firma de la original
+    // sigue siendo el acuerdo vigente y su stock sigue reservado.
+    const originalRestaurada = await restaurarOriginalDeRevision(
+      cotizacion,
+      cotizacion.organization_id
+    )
+
+    if (originalRestaurada && cotizacion.orden_id) {
+      // La orden NO perdió su presupuesto: volvió al de la versión firmada
+      // antes. Por eso acá se recalcula en vez de revertir el estado de la
+      // orden como en el rechazo de una cotización común.
+      const { total } = await totalPresupuestoDeOrden(cotizacion.orden_id)
+      await supabaseAdmin
+        .from("ordenes_servicio")
+        .update({ presupuesto: total, costo_final: total })
+        .eq("id", cotizacion.orden_id)
+    }
+
     // If linked to an order in PRESUPUESTADO, revert
-    if (cotizacion.orden_id) {
+    if (!originalRestaurada && cotizacion.orden_id) {
       const { data: orden } = await supabaseAdmin
         .from("ordenes_servicio")
         .select("id, estado")

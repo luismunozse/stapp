@@ -5,6 +5,7 @@ import { getNextInvoiceNumber } from "@/lib/counters"
 import { toArray } from "@/lib/db-utils"
 import { z } from "zod"
 import { construirItemsFactura } from "@/lib/facturacion/items-factura"
+import { getIvaGeneral } from "@/lib/countries"
 
 const generarFacturaSchema = z.union([
   z.object({ ordenId: z.string().min(1, "La orden es requerida") }).strict(),
@@ -146,7 +147,9 @@ export async function POST(request: Request) {
       .eq("id", organizationId!)
       .single()
     const ivaRegimen: string = orgFiscal?.iva_regimen ?? "EXENTO"
-    const ivaTasa = Number(orgFiscal?.iva_tasa ?? 0)
+    // iva_tasa en NULL significa "sin tasa propia: usar la del pais"
+    // (migracion 310). Con regimen EXENTO no se aplica ninguna igual.
+    const ivaTasa = Number(orgFiscal?.iva_tasa ?? getIvaGeneral(orgFiscal?.pais))
 
     const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
 

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateGarantiaVentaPDF } from "@/lib/pdf"
 
@@ -8,7 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string; garantiaId: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role } = await requirePosAccess()
     if (error) return error
 
     const { id, garantiaId } = await params
@@ -31,7 +31,7 @@ export async function GET(
       .eq("id", id)
       .eq("organization_id", organizationId!)
 
-    if (role === "VENDEDOR") {
+    if (soloVeSusVentas(role)) {
       ventaQuery = ventaQuery.eq("vendedor_id", userId!)
     }
 
@@ -63,6 +63,20 @@ export async function GET(
       return NextResponse.json(
         { error: "Garantía no encontrada" },
         { status: 404 }
+      )
+    }
+
+    // Una garantía ANULADA se retiró al devolverse el producto (migración 316):
+    // emitir su certificado entregaría un papel que dice que la garantía vale
+    // cuando la venta ya se reembolsó. 410 y no 404 porque el documento existió
+    // y se retiró a propósito — no es un id inventado.
+    //
+    // VENCIDA y RECLAMADA sí siguen emitiendo: esas garantías existieron y
+    // corrieron su plazo, y el cliente conserva el derecho al comprobante.
+    if (garantia.estado === "ANULADA") {
+      return NextResponse.json(
+        { error: "La garantía fue anulada por una devolución y ya no emite comprobante" },
+        { status: 410 }
       )
     }
 

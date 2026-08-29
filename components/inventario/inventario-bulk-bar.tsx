@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Archive, Tag, Percent, X, Printer, Truck, Trash2 } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
+import { ExportButton } from "@/components/export/export-button"
 
 interface ProveedorLite {
   id: string
@@ -305,6 +306,16 @@ export function InventarioBulkBar({
             </Button>
           </PopoverContent>
         </Popover>
+
+        {/* Pedido a proveedor: solo lo seleccionado, con cantidad sugerida */}
+        <ExportButton
+          entity="inventario"
+          ids={selectedIds}
+          preset="pedido"
+          label="Pedido"
+          variant="outline"
+          size="sm"
+        />
 
         {/* Etiquetas */}
         {onGenerateLabels && (

@@ -53,3 +53,58 @@ describe("/api/sucursales/[id]/whatsapp/qr", () => {
     expect(upsertSucursalWhatsAppState).not.toHaveBeenCalled()
   })
 })
+
+describe("GET /api/sucursales/[id]/whatsapp/qr — QR fresco (fix del QR congelado)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubEnv("EVOLUTION_BASE_URL", "https://evo.stapp.com.ar")
+    vi.stubEnv("EVOLUTION_API_KEY", "platform-key")
+    mockAuthSuccess({ organizationId: "org-1" })
+    vi.mocked(hasPlanFeature).mockResolvedValue(true)
+    mockSupabaseFrom({
+      sucursales: createChainMock({ id: "suc-1", organization_id: "org-1" }),
+      sucursal_whatsapp_config: createChainMock({ evolution_instance_name: "stapp-org-org-1-suc-suc-1" }),
+      organizations: createChainMock(null),
+    })
+  })
+  afterEach(() => vi.unstubAllEnvs())
+
+  it("devuelve un QR nuevo cuando se pide refresh y la sucursal sigue sin vincular", async () => {
+    vi.mocked(getConnectionState).mockResolvedValue({ state: "connecting" } as any)
+    vi.mocked(connectInstance).mockResolvedValue({
+      state: "qr",
+      qrBase64: "data:image/png;base64,SUC-QR-FRESCO",
+      pairingCode: null,
+    } as any)
+
+    const res = await GET(
+      new Request("http://localhost:3000/api/sucursales/suc-1/whatsapp/qr?refresh=1"),
+      { params }
+    )
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(connectInstance).toHaveBeenCalledTimes(1)
+    expect(body.qrBase64).toBe("data:image/png;base64,SUC-QR-FRESCO")
+  })
+
+  it("el poll de estado sin refresh no golpea /instance/connect", async () => {
+    vi.mocked(getConnectionState).mockResolvedValue({ state: "connecting" } as any)
+
+    const res = await GET(req, { params })
+    const { body } = await parseResponse(res)
+
+    expect(connectInstance).not.toHaveBeenCalled()
+    expect(body.state).toBe("connecting")
+  })
+
+  it("refrescar el QR no crea filas en sucursal_whatsapp_config", async () => {
+    vi.mocked(getConnectionState).mockResolvedValue({ state: "connecting" } as any)
+    vi.mocked(connectInstance).mockResolvedValue({ state: "qr", qrBase64: "data:image/png;base64,X" } as any)
+
+    await GET(new Request("http://localhost:3000/api/sucursales/suc-1/whatsapp/qr?refresh=1"), { params })
+
+    expect(upsertSucursalWhatsAppState).not.toHaveBeenCalled()
+    expect(updateSucursalWhatsAppState).toHaveBeenCalled()
+  })
+})

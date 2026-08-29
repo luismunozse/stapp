@@ -8,7 +8,12 @@ vi.mock("@/contexts/currency-context", () => ({
 
 // CurrentPlan exige cuatro props; los tres callbacks no participan de lo que
 // se prueba acá, pero sin ellos no compila.
-const CALLBACKS = { onUpgrade: () => {}, onManage: () => {}, onCancel: () => {} }
+const CALLBACKS = {
+  onUpgrade: () => {},
+  onManage: () => {},
+  onCancel: () => {},
+  onActivarDebito: () => {},
+}
 
 const BASE = {
   id: "sub-1",

@@ -38,7 +38,7 @@ export async function GET(
 
     // Una orden cuya deuda ya migró a la cuenta corriente (CARGO con
     // referencia_tipo=ORDEN) no debe listarse como pendiente de cobro acá:
-    // get_deuda_cliente_sucursal (mig 309) ya la excluye de deuda_ordenes,
+    // get_deuda_cliente_sucursal (mig 318) ya la excluye de deuda_ordenes,
     // reverted or not. Sin este mismo filtro, "Cobrar todo" vuelve a cobrar
     // una deuda que ya vive (o vivió) en cuenta_corriente y acredita plata
     // que el cliente nunca pagó.

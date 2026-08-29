@@ -327,7 +327,10 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   cantidad: item.cantidad,
                   diasGarantia: item.diasGarantia,
                 })),
-                garantias: venta.garantias.map((g) => ({
+                // Una garantia ANULADA se retiro al devolverse el producto: su
+                // certificado ya no se emite (410), asi que ofrecer el link solo
+                // le manda al cliente una descarga muerta.
+                garantias: venta.garantias.filter((g) => g.estado !== "ANULADA").map((g) => ({
                   id: g.id,
                   numeroGarantia: g.numeroGarantia,
                   diasValidez: g.diasValidez,
@@ -634,7 +637,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                     </span>
                     <span className="font-medium">{formatPrice(item.subtotal)}</span>
                   </div>
-                  {garantia && (
+                  {garantia && garantia.estado !== "ANULADA" && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -712,7 +715,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                           )}
                         </td>
                         <td className="py-3 text-right">
-                          {garantia && (
+                          {garantia && garantia.estado !== "ANULADA" && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -783,7 +786,11 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                 return (
                   <div
                     key={garantia.id}
-                    className="rounded-lg border bg-success-50 p-4 dark:bg-success/10"
+                    className={
+                      garantia.estado === "ANULADA"
+                        ? "rounded-lg border bg-muted p-4"
+                        : "rounded-lg border bg-success-50 p-4 dark:bg-success/10"
+                    }
                   >
                     <div className="mb-2 flex items-center justify-between">
                       <span className="font-mono text-sm font-medium text-success-700 dark:text-success-500">
@@ -810,20 +817,26 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                         Vence: {formatDate(garantia.fechaVencimiento)}
                       </p>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3 w-full"
-                      onClick={() =>
-                        window.open(
-                          `/api/ventas/${ventaId}/garantia/${garantia.id}/pdf`,
-                          "_blank"
-                        )
-                      }
-                    >
-                      <Download className="mr-2 h-4 w-4" />
-                      Descargar PDF
-                    </Button>
+                    {garantia.estado === "ANULADA" ? (
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Retirada por una devolución: ya no emite comprobante.
+                      </p>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 w-full"
+                        onClick={() =>
+                          window.open(
+                            `/api/ventas/${ventaId}/garantia/${garantia.id}/pdf`,
+                            "_blank"
+                          )
+                        }
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Descargar PDF
+                      </Button>
+                    )}
                   </div>
                 )
               })}

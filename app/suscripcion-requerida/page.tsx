@@ -1,9 +1,15 @@
+import type { Metadata } from "next"
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { getSubscriptionInfo, hasValidAccess, getTrialInfo } from "@/lib/subscriptions"
 import { SubscriptionRequiredView } from "@/components/subscription/subscription-required-view"
 
 export const dynamic = "force-dynamic"
+
+export const metadata: Metadata = {
+  title: "Suscripcion requerida | STApp",
+  robots: { index: false, follow: false },
+}
 
 interface PageProps {
   searchParams: Promise<{ reason?: string }>

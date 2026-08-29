@@ -12,6 +12,7 @@ import { Plus, Package, Send, PackageCheck, X, Truck } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { OrdenCompraForm } from "./orden-compra-form"
 import { RecibirOCDialog } from "./recibir-oc-dialog"
+import { estadoBadge } from "./estado-badge"
 import { useModal } from "@/contexts/modal-context"
 
 const fetcher = (url: string) => fetch(url, { cache: "no-store" }).then(res => res.json())
@@ -31,13 +32,6 @@ interface OrdenCompra {
   items?: any[]
 }
 
-const ESTADO_BADGE: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
-  BORRADOR: { label: "Borrador", variant: "secondary" },
-  ENVIADA: { label: "Enviada", variant: "default" },
-  RECIBIDA_PARCIAL: { label: "Parcial", variant: "outline" },
-  RECIBIDA: { label: "Recibida", variant: "default" },
-  CANCELADA: { label: "Cancelada", variant: "destructive" },
-}
 
 export function OrdenesCompraList() {
   const router = useRouter()
@@ -129,7 +123,7 @@ export function OrdenesCompraList() {
       key: "estado",
       header: "Estado",
       render: (oc) => {
-        const badge = ESTADO_BADGE[oc.estado] || { label: oc.estado, variant: "secondary" as const }
+        const badge = estadoBadge(oc.estado)
         return <Badge variant={badge.variant}>{badge.label}</Badge>
       },
     },
@@ -234,6 +228,9 @@ export function OrdenesCompraList() {
           data={items}
           columns={columns}
           keyExtractor={(oc) => oc.id}
+          // DataTable ya frena la propagación en la celda de acciones, así que
+          // Enviar/Recibir/Cancelar no abren el detalle.
+          onRowClick={(oc) => router.push(`/ordenes-compra/${oc.id}`)}
         />
       )}
 

@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { formatVenta } from "@/lib/db-utils"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { getIvaGeneral } from "@/lib/countries"
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role, session } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role, session } = await requirePosAccess()
     if (error) return error
 
     const { id } = await params
@@ -33,7 +34,7 @@ export async function GET(
       .eq("organization_id", organizationId!)
 
     // Vendedores solo pueden ver sus propias ventas
-    if (role === "VENDEDOR") {
+    if (soloVeSusVentas(role)) {
       query = query.eq("vendedor_id", userId!)
     }
 
@@ -69,7 +70,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role, session } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role, session } = await requirePosAccess()
     if (error) return error
 
     const { id } = await params
@@ -215,7 +216,9 @@ export async function PUT(
         .eq("id", organizationId!)
         .single()
       const ivaRegimen: string = orgFiscal?.iva_regimen ?? "EXENTO"
-      const ivaTasa = Number(orgFiscal?.iva_tasa ?? 0)
+      // iva_tasa en NULL significa "sin tasa propia: usar la del pais"
+      // (migracion 310). Con regimen EXENTO no se aplica ninguna igual.
+      const ivaTasa = Number(orgFiscal?.iva_tasa ?? getIvaGeneral(orgFiscal?.pais))
       const redondeoUnidad = Number(orgFiscal?.redondeo_efectivo ?? 0)
 
       // IVA by regime (mirrors POST)
@@ -366,7 +369,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role, session } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role, session } = await requirePosAccess()
     if (error) return error
 
     if (role !== "ADMIN") {

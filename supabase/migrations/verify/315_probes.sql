@@ -1,298 +1,481 @@
--- =============================================================================
--- Verificación de la migración 315 — crear_reparaciones_express, columna
--- pago_idempotency.cliente_id y feature flag reparaciones_express.
+-- Probes de la migracion 315: el catalogo publico reserva, no descuenta.
 --
--- CÓMO CORRERLO (ver verify/README.md):
---   - SQL editor de Supabase Studio, DESPUES de aplicar 315.
---   - SIN RLS. ordenes_servicio/clientes/cuenta_corriente/plans tienen policies
---     FOR ALL TO authenticated sobre auth.uid(); en el editor no hay JWT, así
---     que con RLS encendido el setup de este probe no vería ninguna fila
---     propia. Correr sin RLS es además fiel a producción: las rutas usan
---     supabaseAdmin (service_role).
+-- Correr en el SQL editor de Supabase Studio, SIN RLS, tal cual (el BEGIN /
+-- ROLLBACK esta incluido: nada de lo que crea queda).
 --
--- Todo corre dentro de BEGIN/ROLLBACK: no persiste ningún dato. Este archivo
--- CREA una organización/sucursal/cliente de prueba (namespaceados
--- 'probe-315-...') porque el RPC necesita un cliente con saldo_cuenta
--- conocido y una organización sin otras órdenes que contaminen los conteos.
---
--- crear_reparaciones_express, igual que revertir_cargos_orden (311), levanta
--- con RAISE EXCEPTION simple (SQLSTATE P0001, no check_violation), así que los
--- bloques que esperan rechazo usan EXCEPTION WHEN OTHERS, no WHEN check_violation.
---
--- Los resultados se acumulan en _r y salen en UN solo SELECT al final, porque
--- el editor muestra únicamente el último statement que devuelve filas.
---
--- Pendiente de correr contra la base real (no se ejecutó SQL como parte de
--- este trabajo).
--- =============================================================================
+-- Verde = `esperado` igual a `obtenido` en cada fila.
 
 BEGIN;
 
 CREATE TEMP TABLE _r (orden INT, probe TEXT, esperado TEXT, obtenido TEXT);
 
--- ---------------------------------------------------------------------------
--- PROBE 0 — La función, sus permisos, la columna nueva y la feature flag
--- existen tal como los describe la migración.
--- ---------------------------------------------------------------------------
-INSERT INTO _r SELECT 0, 'una sola funcion crear_reparaciones_express', '1', COUNT(*)::TEXT
-FROM pg_proc WHERE proname = 'crear_reparaciones_express';
-
-INSERT INTO _r SELECT 0, 'PUBLIC sin EXECUTE', 'false',
-  has_function_privilege('public', 'crear_reparaciones_express(text, text, text, jsonb, text, text, text)', 'EXECUTE')::TEXT;
-INSERT INTO _r SELECT 0, 'anon sin EXECUTE', 'false',
-  has_function_privilege('anon', 'crear_reparaciones_express(text, text, text, jsonb, text, text, text)', 'EXECUTE')::TEXT;
-INSERT INTO _r SELECT 0, 'authenticated sin EXECUTE', 'false',
-  has_function_privilege('authenticated', 'crear_reparaciones_express(text, text, text, jsonb, text, text, text)', 'EXECUTE')::TEXT;
-INSERT INTO _r SELECT 0, 'service_role con EXECUTE', 'true',
-  has_function_privilege('service_role', 'crear_reparaciones_express(text, text, text, jsonb, text, text, text)', 'EXECUTE')::TEXT;
-
-INSERT INTO _r SELECT 0, 'columna pago_idempotency.cliente_id', 'text',
-  COALESCE((SELECT data_type FROM information_schema.columns
-            WHERE table_name = 'pago_idempotency' AND column_name = 'cliente_id'), 'FALTA');
-
-INSERT INTO _r SELECT 0, 'feature flag reparaciones_express en plan profesional', 'true',
-  COALESCE((SELECT (feature_flags->>'reparaciones_express') FROM plans WHERE slug = 'profesional'), 'FALTA');
-INSERT INTO _r SELECT 0, 'feature flag reparaciones_express en plan pro', 'true',
-  COALESCE((SELECT (feature_flags->>'reparaciones_express') FROM plans WHERE slug = 'pro'), 'FALTA');
-
--- ---------------------------------------------------------------------------
--- Setup — org/sucursal/cliente de prueba, sin otras órdenes que contaminen
--- los conteos por cliente usados más abajo.
--- ---------------------------------------------------------------------------
-CREATE TEMP TABLE _setup (org_id TEXT, sucursal_id TEXT, cliente_id TEXT);
-
+-- ── Setup: org + deposito + producto + item de catalogo linkeado ──
 DO $$
 DECLARE
-  v_org TEXT; v_suc TEXT; v_cli TEXT;
+  v_org  TEXT;
+  v_dep  TEXT;
+  v_inv  TEXT;
+  v_cat  TEXT;
 BEGIN
-  INSERT INTO organizations (nombre, slug)
-    VALUES ('Probe 315 Org', 'probe-315-org') RETURNING id INTO v_org;
+  SELECT id INTO v_org FROM organizations ORDER BY created_at LIMIT 1;
+  IF v_org IS NULL THEN
+    INSERT INTO _r VALUES (0, 'setup', 'una org', 'SALTEADO: la base no tiene organizations');
+    RETURN;
+  END IF;
 
-  INSERT INTO sucursales (organization_id, nombre)
-    VALUES (v_org, 'Probe 315 Sucursal') RETURNING id INTO v_suc;
+  SELECT get_deposito_principal(v_org) INTO v_dep;
+  IF v_dep IS NULL THEN
+    INSERT INTO _r VALUES (0, 'setup', 'deposito principal', 'SALTEADO: la org no tiene deposito principal');
+    RETURN;
+  END IF;
 
-  INSERT INTO clientes (nombre, telefono, organization_id)
-    VALUES ('Probe 315 Cliente', '3120000001', v_org) RETURNING id INTO v_cli;
+  INSERT INTO inventario (organization_id, nombre, stock, stock_reservado, precio_venta)
+  VALUES (v_org, 'PROBE-315 producto', 10, 0, 100)
+  RETURNING id INTO v_inv;
 
-  INSERT INTO _setup VALUES (v_org, v_suc, v_cli);
+  INSERT INTO inventario_depositos (inventario_id, deposito_id, stock, stock_reservado, organization_id)
+  VALUES (v_inv, v_dep, 10, 0, v_org)
+  ON CONFLICT (inventario_id, deposito_id) DO UPDATE SET stock = 10, stock_reservado = 0;
+
+  INSERT INTO catalogo_items (organization_id, nombre, precio, activo, inventario_id, tipo)
+  VALUES (v_org, 'PROBE-315 item', 100, TRUE, v_inv, 'PRODUCTO')
+  RETURNING id INTO v_cat;
+
+  PERFORM set_config('probe315.org', v_org, TRUE);
+  PERFORM set_config('probe315.inv', v_inv, TRUE);
+  PERFORM set_config('probe315.cat', v_cat, TRUE);
+  PERFORM set_config('probe315.dep', v_dep, TRUE);
+
+  INSERT INTO _r VALUES (0, 'setup', 'ok', 'ok');
 END $$;
 
-INSERT INTO _r SELECT 0, 'setup: org/sucursal/cliente de prueba creados', '1', COUNT(*)::TEXT FROM _setup;
-
--- ---------------------------------------------------------------------------
--- PROBES 1 a 4 — Camino feliz: 2 reparaciones en un solo lote.
--- 1: N ordenes nacen ENTREGADO con su costo_final.
--- 2: exactamente N CARGO, uno por orden, cada uno apuntando a su propia orden.
--- 3: el saldo del cliente baja exactamente el total del lote, encadenado.
--- 4: la garantia se crea solo para la reparacion que trae diasGarantia > 0.
--- ---------------------------------------------------------------------------
+-- ── Reservar 3 unidades ──
 DO $$
 DECLARE
-  v_org TEXT; v_suc TEXT; v_cli TEXT;
-  v_precio1 DECIMAL(10,2) := 15000.00;
-  v_precio2 DECIMAL(10,2) := 8000.00;
-  v_reparaciones JSONB;
-  v_resultado JSONB;
-  v_orden1_id TEXT; v_orden2_id TEXT;
-  v_saldo_pre DECIMAL(10,2); v_saldo_post DECIMAL(10,2);
-  v_cargo1_id TEXT; v_cargo2_id TEXT;
-  v_cargo1_ref TEXT; v_cargo2_ref TEXT;
-  v_cargo1_saldo_post DECIMAL(10,2); v_cargo2_saldo_post DECIMAL(10,2);
-  v_cnt_entregado INT;
-  v_cnt_cargo INT;
-  v_cnt_garantia1 INT; v_cnt_garantia2 INT;
+  v_org TEXT := current_setting('probe315.org', TRUE);
+  v_cat TEXT := current_setting('probe315.cat', TRUE);
 BEGIN
-  SELECT org_id, sucursal_id, cliente_id INTO v_org, v_suc, v_cli FROM _setup;
+  IF v_org IS NULL OR v_org = '' THEN RETURN; END IF;
 
-  SELECT saldo_cuenta INTO v_saldo_pre FROM clientes WHERE id = v_cli;
-
-  v_reparaciones := jsonb_build_array(
-    jsonb_build_object(
-      'dispositivo', 'iPhone 12', 'tipoDispositivo', 'CELULAR', 'marca', 'Apple',
-      'precio', v_precio1, 'trabajoRealizado', 'Cambio de pantalla',
-      'publicToken', 'probe-315-tok-1', 'diasGarantia', 30,
-      'fechaVencimientoGarantia', '2027-01-01T00:00:00Z'
-    ),
-    jsonb_build_object(
-      'dispositivo', 'Notebook Lenovo', 'tipoDispositivo', 'COMPUTADORA', 'marca', 'Lenovo',
-      'precio', v_precio2, 'trabajoRealizado', 'Cambio de teclado',
-      'publicToken', 'probe-315-tok-2'
-    )
+  PERFORM reservar_stock_catalogo(
+    v_org,
+    jsonb_build_array(jsonb_build_object('item_id', v_cat, 'cantidad', 3)),
+    NULL
   );
-
-  SELECT crear_reparaciones_express(v_org, v_suc, v_cli, v_reparaciones, NULL, NULL, NULL)
-    INTO v_resultado;
-
-  v_orden1_id := v_resultado->'ordenes'->0->>'id';
-  v_orden2_id := v_resultado->'ordenes'->1->>'id';
-  v_cargo1_id := v_resultado->'ordenes'->0->>'movimientoId';
-  v_cargo2_id := v_resultado->'ordenes'->1->>'movimientoId';
-
-  -- PROBE 1
-  INSERT INTO _r VALUES (1, 'cantidad de ordenes en la respuesta', '2',
-    jsonb_array_length(v_resultado->'ordenes')::TEXT);
-
-  SELECT COUNT(*) INTO v_cnt_entregado FROM ordenes_servicio
-    WHERE id IN (v_orden1_id, v_orden2_id) AND estado = 'ENTREGADO';
-  INSERT INTO _r VALUES (1, 'ambas ordenes nacen en ENTREGADO', '2', v_cnt_entregado::TEXT);
-
-  INSERT INTO _r SELECT 1, 'costo_final de la orden 1 = precio', v_precio1::TEXT,
-    (SELECT costo_final FROM ordenes_servicio WHERE id = v_orden1_id)::TEXT;
-  INSERT INTO _r SELECT 1, 'costo_final de la orden 2 = precio', v_precio2::TEXT,
-    (SELECT costo_final FROM ordenes_servicio WHERE id = v_orden2_id)::TEXT;
-
-  -- PROBE 2
-  SELECT COUNT(*) INTO v_cnt_cargo FROM cuenta_corriente
-    WHERE cliente_id = v_cli AND tipo = 'CARGO' AND referencia_tipo = 'ORDEN';
-  INSERT INTO _r VALUES (2, 'cantidad de movimientos CARGO = N', '2', v_cnt_cargo::TEXT);
-
-  SELECT referencia_id INTO v_cargo1_ref FROM cuenta_corriente WHERE id = v_cargo1_id;
-  INSERT INTO _r VALUES (2, 'CARGO de la orden 1 referencia a su propia orden', v_orden1_id, v_cargo1_ref);
-  SELECT referencia_id INTO v_cargo2_ref FROM cuenta_corriente WHERE id = v_cargo2_id;
-  INSERT INTO _r VALUES (2, 'CARGO de la orden 2 referencia a su propia orden', v_orden2_id, v_cargo2_ref);
-
-  -- PROBE 3
-  SELECT saldo_cuenta INTO v_saldo_post FROM clientes WHERE id = v_cli;
-  INSERT INTO _r VALUES (3, 'saldo baja exactamente el total del lote',
-    (v_saldo_pre - v_precio1 - v_precio2)::TEXT, v_saldo_post::TEXT);
-
-  SELECT saldo_posterior INTO v_cargo1_saldo_post FROM cuenta_corriente WHERE id = v_cargo1_id;
-  INSERT INTO _r VALUES (3, 'saldo_posterior encadena tras el primer CARGO',
-    (v_saldo_pre - v_precio1)::TEXT, v_cargo1_saldo_post::TEXT);
-
-  SELECT saldo_posterior INTO v_cargo2_saldo_post FROM cuenta_corriente WHERE id = v_cargo2_id;
-  INSERT INTO _r VALUES (3, 'saldo_posterior encadena tras el segundo CARGO',
-    (v_saldo_pre - v_precio1 - v_precio2)::TEXT, v_cargo2_saldo_post::TEXT);
-
-  -- PROBE 4
-  SELECT COUNT(*) INTO v_cnt_garantia1 FROM garantias WHERE orden_id = v_orden1_id;
-  INSERT INTO _r VALUES (4, 'garantia creada para la reparacion con diasGarantia', '1', v_cnt_garantia1::TEXT);
-  SELECT COUNT(*) INTO v_cnt_garantia2 FROM garantias WHERE orden_id = v_orden2_id;
-  INSERT INTO _r VALUES (4, 'sin garantia para la reparacion sin diasGarantia', '0', v_cnt_garantia2::TEXT);
 END $$;
 
--- ---------------------------------------------------------------------------
--- PROBE 5 — Atomicidad: un lote de 3 reparaciones donde la tercera tiene
--- precio <= 0 levanta excepcion y NO deja sobrevivir ni las 2 ordenes ni sus
--- CARGO que ya se habian insertado antes de llegar a la invalida dentro del
--- loop.
--- ---------------------------------------------------------------------------
+INSERT INTO _r
+SELECT 1, 'inventario.stock NO se toca', '10',
+       (SELECT stock::TEXT FROM inventario WHERE id = current_setting('probe315.inv', TRUE))
+WHERE current_setting('probe315.inv', TRUE) <> '';
+
+INSERT INTO _r
+SELECT 2, 'inventario.stock_reservado sube', '3',
+       (SELECT stock_reservado::TEXT FROM inventario WHERE id = current_setting('probe315.inv', TRUE))
+WHERE current_setting('probe315.inv', TRUE) <> '';
+
+INSERT INTO _r
+SELECT 3, 'detalle por deposito replica la reserva', '3',
+       (SELECT COALESCE(SUM(stock_reservado), 0)::TEXT FROM inventario_depositos
+        WHERE inventario_id = current_setting('probe315.inv', TRUE))
+WHERE current_setting('probe315.inv', TRUE) <> '';
+
+INSERT INTO _r
+SELECT 4, 'asiento RESERVA en movimientos_inventario', '1 x RESERVA/COTIZACION',
+       (SELECT COUNT(*)::TEXT || ' x ' || COALESCE(MAX(tipo), '?') || '/' || COALESCE(MAX(referencia_tipo), '?')
+        FROM movimientos_inventario
+        WHERE inventario_id = current_setting('probe315.inv', TRUE))
+WHERE current_setting('probe315.inv', TRUE) <> '';
+
+INSERT INTO _r
+SELECT 5, 'el movimiento tiene deposito asignado', 'con deposito',
+       (SELECT CASE WHEN deposito_id IS NULL THEN 'FALLO: deposito_id NULL' ELSE 'con deposito' END
+        FROM movimientos_inventario
+        WHERE inventario_id = current_setting('probe315.inv', TRUE)
+        LIMIT 1)
+WHERE current_setting('probe315.inv', TRUE) <> '';
+
+-- ── Disponibilidad = stock - reservado: 8 mas no entran (quedan 7) ──
 DO $$
 DECLARE
-  v_org TEXT; v_suc TEXT; v_cli TEXT;
-  v_reparaciones JSONB;
-  v_cnt_ordenes_pre INT; v_cnt_ordenes_post INT;
-  v_cnt_cargo_pre INT; v_cnt_cargo_post INT;
-  v_saldo_pre DECIMAL(10,2); v_saldo_post DECIMAL(10,2);
+  v_org TEXT := current_setting('probe315.org', TRUE);
+  v_cat TEXT := current_setting('probe315.cat', TRUE);
 BEGIN
-  SELECT org_id, sucursal_id, cliente_id INTO v_org, v_suc, v_cli FROM _setup;
+  IF v_org IS NULL OR v_org = '' THEN RETURN; END IF;
 
-  SELECT COUNT(*) INTO v_cnt_ordenes_pre FROM ordenes_servicio WHERE cliente_id = v_cli;
-  SELECT COUNT(*) INTO v_cnt_cargo_pre FROM cuenta_corriente WHERE cliente_id = v_cli AND tipo = 'CARGO';
-  SELECT saldo_cuenta INTO v_saldo_pre FROM clientes WHERE id = v_cli;
-
-  v_reparaciones := jsonb_build_array(
-    jsonb_build_object('dispositivo', 'TV Samsung', 'tipoDispositivo', 'OTRO', 'precio', 5000.00,
-      'trabajoRealizado', 'Cambio de fuente', 'publicToken', 'probe-315-tok-atomic-1'),
-    jsonb_build_object('dispositivo', 'Parlante JBL', 'tipoDispositivo', 'OTRO', 'precio', 3000.00,
-      'trabajoRealizado', 'Cambio de bateria', 'publicToken', 'probe-315-tok-atomic-2'),
-    jsonb_build_object('dispositivo', 'Mouse Logitech', 'tipoDispositivo', 'OTRO', 'precio', -1,
-      'trabajoRealizado', 'Reparacion de click', 'publicToken', 'probe-315-tok-atomic-3')
+  PERFORM reservar_stock_catalogo(
+    v_org,
+    jsonb_build_array(jsonb_build_object('item_id', v_cat, 'cantidad', 8)),
+    NULL
   );
-
-  BEGIN
-    PERFORM crear_reparaciones_express(v_org, v_suc, v_cli, v_reparaciones, NULL, NULL, NULL);
-    INSERT INTO _r VALUES (5, 'lote con un precio invalido levanta excepcion', 'error', 'FALLO: no levanto excepcion');
-  EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _r VALUES (5, 'lote con un precio invalido levanta excepcion', 'error', 'OK: ' || SQLERRM);
-  END;
-
-  SELECT COUNT(*) INTO v_cnt_ordenes_post FROM ordenes_servicio WHERE cliente_id = v_cli;
-  INSERT INTO _r VALUES (5, 'lote invalido: ninguna orden sobrevive',
-    v_cnt_ordenes_pre::TEXT, v_cnt_ordenes_post::TEXT);
-
-  SELECT COUNT(*) INTO v_cnt_cargo_post FROM cuenta_corriente WHERE cliente_id = v_cli AND tipo = 'CARGO';
-  INSERT INTO _r VALUES (5, 'lote invalido: ningun CARGO sobrevive',
-    v_cnt_cargo_pre::TEXT, v_cnt_cargo_post::TEXT);
-
-  SELECT saldo_cuenta INTO v_saldo_post FROM clientes WHERE id = v_cli;
-  INSERT INTO _r VALUES (5, 'lote invalido: saldo del cliente sin cambios',
-    v_saldo_pre::TEXT, v_saldo_post::TEXT);
+  INSERT INTO _r VALUES (6, 'valida contra stock - reservado', 'error P0003', 'FALLO: dejo reservar 8 sobre 7 disponibles');
+EXCEPTION WHEN OTHERS THEN
+  INSERT INTO _r VALUES (6, 'valida contra stock - reservado', 'error P0003', 'OK: ' || SQLSTATE || ' ' || SQLERRM);
 END $$;
 
--- ---------------------------------------------------------------------------
--- PROBE 6 — Idempotencia: la misma idempotencyKey dos veces no cobra doble.
--- La segunda llamada replica la respuesta de la primera sin volver a correr
--- el loop.
--- ---------------------------------------------------------------------------
+-- ── Liberar: la reserva vuelve entera ──
+-- Se crea una cotizacion del catalogo de verdad para poder referenciar los
+-- movimientos: liberar_reserva_catalogo trabaja sobre el libro mayor.
 DO $$
 DECLARE
-  v_org TEXT; v_suc TEXT; v_cli TEXT;
-  v_precio DECIMAL(10,2) := 4000.00;
-  v_reparaciones JSONB;
-  v_key TEXT := 'probe-315-idem-1';
-  v_resultado1 JSONB; v_resultado2 JSONB;
-  v_saldo_pre DECIMAL(10,2); v_saldo_post1 DECIMAL(10,2); v_saldo_post2 DECIMAL(10,2);
-  v_cnt_ordenes_pre INT; v_cnt_ordenes_post INT;
+  v_org TEXT := current_setting('probe315.org', TRUE);
+  v_inv TEXT := current_setting('probe315.inv', TRUE);
+  v_cot TEXT;
+  v_cli TEXT;
 BEGIN
-  SELECT org_id, sucursal_id, cliente_id INTO v_org, v_suc, v_cli FROM _setup;
+  IF v_org IS NULL OR v_org = '' THEN RETURN; END IF;
 
-  SELECT saldo_cuenta INTO v_saldo_pre FROM clientes WHERE id = v_cli;
-  SELECT COUNT(*) INTO v_cnt_ordenes_pre FROM ordenes_servicio WHERE cliente_id = v_cli;
+  SELECT id INTO v_cli FROM clientes WHERE organization_id = v_org LIMIT 1;
 
-  v_reparaciones := jsonb_build_array(
-    jsonb_build_object('dispositivo', 'Tablet Samsung', 'tipoDispositivo', 'TABLET', 'precio', v_precio,
-      'trabajoRealizado', 'Cambio de vidrio', 'publicToken', 'probe-315-tok-idem')
-  );
+  INSERT INTO cotizaciones (organization_id, cliente_id, numero_cotizacion,
+                            tipo, estado, origen, subtotal, iva, total)
+  VALUES (v_org, v_cli, 'PROBE-315', 'PRESUPUESTO', 'ENVIADA',
+          'CATALOGO_PUBLICO', 100, 0, 100)
+  RETURNING id INTO v_cot;
 
-  SELECT crear_reparaciones_express(v_org, v_suc, v_cli, v_reparaciones, NULL, NULL, v_key)
-    INTO v_resultado1;
-  INSERT INTO _r VALUES (6, 'primera llamada no viene replayed', 'false',
-    COALESCE((v_resultado1->>'replayed'), 'false'));
+  -- Movimiento de reserva referenciado a esa cotizacion (lo que hace la parte 1).
+  INSERT INTO movimientos_inventario (
+    inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
+    referencia_id, referencia_tipo, usuario_id, organization_id
+  ) VALUES (v_inv, 'RESERVA', 3, 10, 10, v_cot, 'COTIZACION', NULL, v_org);
 
-  SELECT saldo_cuenta INTO v_saldo_post1 FROM clientes WHERE id = v_cli;
-
-  SELECT crear_reparaciones_express(v_org, v_suc, v_cli, v_reparaciones, NULL, NULL, v_key)
-    INTO v_resultado2;
-  INSERT INTO _r VALUES (6, 'segunda llamada con la misma key viene replayed', 'true',
-    (v_resultado2->>'replayed'));
-
-  INSERT INTO _r VALUES (6, 'segunda llamada replica la respuesta de la primera',
-    (v_resultado1->'ordenes')::TEXT, (v_resultado2->'response'->'ordenes')::TEXT);
-
-  SELECT saldo_cuenta INTO v_saldo_post2 FROM clientes WHERE id = v_cli;
-  INSERT INTO _r VALUES (6, 'la segunda llamada no vuelve a cobrar', v_saldo_post1::TEXT, v_saldo_post2::TEXT);
-
-  SELECT COUNT(*) INTO v_cnt_ordenes_post FROM ordenes_servicio WHERE cliente_id = v_cli;
-  INSERT INTO _r VALUES (6, 'la segunda llamada no crea una segunda orden',
-    (v_cnt_ordenes_pre + 1)::TEXT, v_cnt_ordenes_post::TEXT);
+  PERFORM set_config('probe315.cot', v_cot, TRUE);
 END $$;
 
--- ---------------------------------------------------------------------------
--- PROBE 7 — Una reparacion con precio <= 0, sola en el lote, se rechaza.
--- ---------------------------------------------------------------------------
+INSERT INTO _r
+SELECT 7, 'reserva_cotizacion_pendiente ve la reserva', '3',
+       (SELECT cantidad::TEXT FROM reserva_cotizacion_pendiente(current_setting('probe315.cot', TRUE)))
+WHERE COALESCE(current_setting('probe315.cot', TRUE), '') <> '';
+
+DO $$
+DECLARE v_cot TEXT := current_setting('probe315.cot', TRUE);
+BEGIN
+  IF v_cot IS NULL OR v_cot = '' THEN RETURN; END IF;
+  PERFORM liberar_reserva_catalogo(v_cot, 'probe');
+END $$;
+
+INSERT INTO _r
+SELECT 8, 'liberar devuelve stock_reservado a 0', '0',
+       (SELECT stock_reservado::TEXT FROM inventario WHERE id = current_setting('probe315.inv', TRUE))
+WHERE COALESCE(current_setting('probe315.cot', TRUE), '') <> '';
+
+INSERT INTO _r
+SELECT 9, 'el libro mayor queda saldado', 'sin reserva viva',
+       (SELECT CASE WHEN COUNT(*) = 0 THEN 'sin reserva viva'
+                    ELSE 'FALLO: quedan ' || COUNT(*)::TEXT END
+        FROM reserva_cotizacion_pendiente(current_setting('probe315.cot', TRUE)))
+WHERE COALESCE(current_setting('probe315.cot', TRUE), '') <> '';
+
+-- Idempotencia: liberar dos veces no puede devolver de mas.
+DO $$
+DECLARE v_cot TEXT := current_setting('probe315.cot', TRUE);
+BEGIN
+  IF v_cot IS NULL OR v_cot = '' THEN RETURN; END IF;
+  PERFORM liberar_reserva_catalogo(v_cot, 'probe repetido');
+END $$;
+
+INSERT INTO _r
+SELECT 10, 'liberar dos veces no devuelve de mas', '0',
+       (SELECT stock_reservado::TEXT FROM inventario WHERE id = current_setting('probe315.inv', TRUE))
+WHERE COALESCE(current_setting('probe315.cot', TRUE), '') <> '';
+
+-- Aislamiento: una cotizacion que NUNCA reservo no puede comerse reserva ajena.
 DO $$
 DECLARE
-  v_org TEXT; v_suc TEXT; v_cli TEXT;
-  v_reparaciones JSONB;
+  v_org TEXT := current_setting('probe315.org', TRUE);
+  v_inv TEXT := current_setting('probe315.inv', TRUE);
+  v_otra TEXT;
+  v_cli TEXT;
 BEGIN
-  SELECT org_id, sucursal_id, cliente_id INTO v_org, v_suc, v_cli FROM _setup;
+  IF v_org IS NULL OR v_org = '' THEN RETURN; END IF;
 
-  v_reparaciones := jsonb_build_array(
-    jsonb_build_object('dispositivo', 'Consola PS5', 'tipoDispositivo', 'CONSOLA', 'precio', 0,
-      'trabajoRealizado', 'Limpieza', 'publicToken', 'probe-315-tok-precio-cero')
-  );
+  -- Reserva viva de OTRO (simula una cotizacion interna aprobada).
+  UPDATE inventario SET stock_reservado = 4 WHERE id = v_inv;
 
-  BEGIN
-    PERFORM crear_reparaciones_express(v_org, v_suc, v_cli, v_reparaciones, NULL, NULL, NULL);
-    INSERT INTO _r VALUES (7, 'precio <= 0 se rechaza', 'error', 'FALLO: no levanto excepcion');
-  EXCEPTION WHEN OTHERS THEN
-    INSERT INTO _r VALUES (7, 'precio <= 0 se rechaza', 'error', 'OK: ' || SQLERRM);
-  END;
+  SELECT id INTO v_cli FROM clientes WHERE organization_id = v_org LIMIT 1;
+  INSERT INTO cotizaciones (organization_id, cliente_id, numero_cotizacion,
+                            tipo, estado, origen, subtotal, iva, total)
+  VALUES (v_org, v_cli, 'PROBE-315-B', 'PRESUPUESTO', 'ENVIADA',
+          'CATALOGO_PUBLICO', 100, 0, 100)
+  RETURNING id INTO v_otra;
+
+  PERFORM liberar_reserva_catalogo(v_otra, 'probe sin reserva propia');
+  PERFORM set_config('probe315.otra', v_otra, TRUE);
 END $$;
 
--- Resultado único. Verde = `esperado` coincide con `obtenido`, y `obtenido`
--- arranca con "OK:" en las probes que esperan un error.
+INSERT INTO _r
+SELECT 11, 'no toca la reserva de otra cotizacion', '4',
+       (SELECT stock_reservado::TEXT FROM inventario WHERE id = current_setting('probe315.inv', TRUE))
+WHERE COALESCE(current_setting('probe315.otra', TRUE), '') <> '';
+
+-- ── Aritmetica del guard de reservar_items_cotizacion ──
+-- Dos lineas del MISMO producto (3 y 3) sobre una cotizacion interna: tienen
+-- que reservarse 6, no 3. El guard comparaba el agregado del libro contra una
+-- sola linea y sub-reservaba.
+DO $$
+DECLARE
+  v_org TEXT := current_setting('probe315.org', TRUE);
+  v_inv TEXT;
+  v_cot TEXT;
+  v_cli TEXT;
+  v_dep TEXT := current_setting('probe315.dep', TRUE);
+BEGIN
+  IF v_org IS NULL OR v_org = '' THEN RETURN; END IF;
+
+  INSERT INTO inventario (organization_id, nombre, stock, stock_reservado, precio_venta)
+  VALUES (v_org, 'PROBE-315 doble linea', 20, 0, 100) RETURNING id INTO v_inv;
+  INSERT INTO inventario_depositos (inventario_id, deposito_id, stock, stock_reservado, organization_id)
+  VALUES (v_inv, v_dep, 20, 0, v_org)
+  ON CONFLICT (inventario_id, deposito_id) DO UPDATE SET stock = 20, stock_reservado = 0;
+
+  SELECT id INTO v_cli FROM clientes WHERE organization_id = v_org LIMIT 1;
+  INSERT INTO cotizaciones (organization_id, cliente_id, numero_cotizacion,
+                            tipo, estado, origen, subtotal, iva, total)
+  VALUES (v_org, v_cli, 'PROBE-315-C', 'ORDEN', 'ENVIADA', NULL, 100, 0, 100)
+  RETURNING id INTO v_cot;
+
+  INSERT INTO items_cotizacion (cotizacion_id, descripcion, cantidad, precio_unitario,
+                                subtotal, unidad, inventario_id, tipo_repuesto)
+  VALUES (v_cot, 'linea 1', 3, 10, 30, 'Unidad', v_inv, 'NO_APLICA'),
+         (v_cot, 'linea 2', 3, 10, 30, 'Unidad', v_inv, 'NO_APLICA');
+
+  PERFORM reservar_items_cotizacion(v_cot, 'system');
+  PERFORM set_config('probe315.inv2', v_inv, TRUE);
+  PERFORM set_config('probe315.cot2', v_cot, TRUE);
+END $$;
+
+INSERT INTO _r
+SELECT 12, 'dos lineas del mismo producto reservan la suma', '6',
+       (SELECT stock_reservado::TEXT FROM inventario WHERE id = current_setting('probe315.inv2', TRUE))
+WHERE COALESCE(current_setting('probe315.inv2', TRUE), '') <> '';
+
+-- Re-reservar la misma cotizacion no puede sumar nada (idempotencia).
+DO $$
+DECLARE v_cot TEXT := current_setting('probe315.cot2', TRUE);
+BEGIN
+  IF v_cot IS NULL OR v_cot = '' THEN RETURN; END IF;
+  PERFORM reservar_items_cotizacion(v_cot, 'system');
+END $$;
+
+INSERT INTO _r
+SELECT 13, 'reservar dos veces no suma de mas', '6',
+       (SELECT stock_reservado::TEXT FROM inventario WHERE id = current_setting('probe315.inv2', TRUE))
+WHERE COALESCE(current_setting('probe315.inv2', TRUE), '') <> '';
+
+-- Cobertura parcial: se sube la linea a 5+3=8 y se re-reserva. Tiene que
+-- quedar 8, no 6+8=14.
+DO $$
+DECLARE v_cot TEXT := current_setting('probe315.cot2', TRUE);
+BEGIN
+  IF v_cot IS NULL OR v_cot = '' THEN RETURN; END IF;
+  UPDATE items_cotizacion SET cantidad = 5
+    WHERE cotizacion_id = v_cot AND descripcion = 'linea 1';
+  PERFORM reservar_items_cotizacion(v_cot, 'system');
+END $$;
+
+INSERT INTO _r
+SELECT 14, 'cobertura parcial reserva solo el faltante', '8',
+       (SELECT stock_reservado::TEXT FROM inventario WHERE id = current_setting('probe315.inv2', TRUE))
+WHERE COALESCE(current_setting('probe315.inv2', TRUE), '') <> '';
+
+-- ── Variantes: descuento directo, restitucion al liberar ──
+DO $$
+DECLARE
+  v_org TEXT := current_setting('probe315.org', TRUE);
+  v_cat TEXT;
+  v_var TEXT;
+  v_cot TEXT;
+  v_cli TEXT;
+BEGIN
+  IF v_org IS NULL OR v_org = '' THEN RETURN; END IF;
+
+  INSERT INTO catalogo_items (organization_id, nombre, precio, activo, tipo)
+  VALUES (v_org, 'PROBE-315 con variantes', 100, TRUE, 'PRODUCTO')
+  RETURNING id INTO v_cat;
+
+  INSERT INTO catalogo_variantes (organization_id, item_id, etiqueta, stock, activo)
+  VALUES (v_org, v_cat, 'Rojo', 10, TRUE) RETURNING id INTO v_var;
+
+  -- La cotizacion va PRIMERO: la reserva se anota contra ella (FK NOT NULL).
+  SELECT id INTO v_cli FROM clientes WHERE organization_id = v_org LIMIT 1;
+  INSERT INTO cotizaciones (organization_id, cliente_id, numero_cotizacion,
+                            tipo, estado, origen, subtotal, iva, total)
+  VALUES (v_org, v_cli, 'PROBE-315-D', 'PRESUPUESTO', 'ENVIADA',
+          'CATALOGO_PUBLICO', 100, 0, 100)
+  RETURNING id INTO v_cot;
+
+  INSERT INTO items_cotizacion (cotizacion_id, descripcion, cantidad, precio_unitario,
+                                subtotal, unidad, catalogo_item_id, variante_id, tipo_repuesto)
+  VALUES (v_cot, 'PROBE-315 Rojo', 4, 25, 100, 'Unidad', v_cat, v_var, 'NO_APLICA');
+
+  PERFORM reservar_stock_catalogo(
+    v_org,
+    jsonb_build_array(jsonb_build_object('item_id', v_cat, 'variante_id', v_var, 'cantidad', 4)),
+    v_cot);
+
+  -- El admin edita la cantidad DESPUES de que entro el pedido: la restitucion
+  -- no puede mirar esto, tiene que devolver los 4 que se tomaron.
+  UPDATE items_cotizacion SET cantidad = 10
+    WHERE cotizacion_id = v_cot AND variante_id = v_var;
+
+  PERFORM set_config('probe315.var', v_var, TRUE);
+  PERFORM set_config('probe315.cot3', v_cot, TRUE);
+END $$;
+
+INSERT INTO _r
+SELECT 15, 'la variante se descuenta al pedir', '6',
+       (SELECT stock::TEXT FROM catalogo_variantes WHERE id = current_setting('probe315.var', TRUE))
+WHERE COALESCE(current_setting('probe315.var', TRUE), '') <> '';
+
+DO $$
+DECLARE v_cot TEXT := current_setting('probe315.cot3', TRUE);
+BEGIN
+  IF v_cot IS NULL OR v_cot = '' THEN RETURN; END IF;
+  PERFORM liberar_reserva_catalogo(v_cot, 'probe variante');
+  PERFORM liberar_reserva_catalogo(v_cot, 'probe variante repetido');
+END $$;
+
+INSERT INTO _r
+SELECT 16, 'la variante se restituye al liberar (y solo una vez)', '10',
+       (SELECT stock::TEXT FROM catalogo_variantes WHERE id = current_setting('probe315.var', TRUE))
+WHERE COALESCE(current_setting('probe315.var', TRUE), '') <> '';
+
+INSERT INTO _r
+SELECT 17, 'la reserva del catalogo queda cerrada', 'sin abiertas',
+       (SELECT CASE WHEN COUNT(*) = 0 THEN 'sin abiertas'
+                    ELSE 'FALLO: quedan ' || COUNT(*)::TEXT END
+        FROM catalogo_reservas_cotizacion
+        WHERE cotizacion_id = current_setting('probe315.cot3', TRUE)
+          AND liberada_at IS NULL)
+WHERE COALESCE(current_setting('probe315.cot3', TRUE), '') <> '';
+
+-- El caso que la marca booleana no podia expresar: el admin edita la cantidad
+-- despues de pedir. Se devuelve lo RESERVADO (4), no lo que la linea pide hoy.
+INSERT INTO _r
+SELECT 18, 'devuelve lo reservado, no la cantidad editada', '4',
+       (SELECT cantidad::TEXT FROM catalogo_reservas_cotizacion
+        WHERE cotizacion_id = current_setting('probe315.cot3', TRUE)
+        LIMIT 1)
+WHERE COALESCE(current_setting('probe315.cot3', TRUE), '') <> '';
+
+-- La venta cierra la reserva SIN devolver: la mercaderia ya salio.
+DO $$
+DECLARE
+  v_org TEXT := current_setting('probe315.org', TRUE);
+  v_cat TEXT;
+  v_var TEXT;
+  v_cot TEXT;
+  v_cli TEXT;
+BEGIN
+  IF v_org IS NULL OR v_org = '' THEN RETURN; END IF;
+
+  INSERT INTO catalogo_items (organization_id, nombre, precio, activo, tipo)
+  VALUES (v_org, 'PROBE-315 vendida', 100, TRUE, 'PRODUCTO') RETURNING id INTO v_cat;
+  INSERT INTO catalogo_variantes (organization_id, item_id, etiqueta, stock, activo)
+  VALUES (v_org, v_cat, 'Azul', 10, TRUE) RETURNING id INTO v_var;
+
+  SELECT id INTO v_cli FROM clientes WHERE organization_id = v_org LIMIT 1;
+  INSERT INTO cotizaciones (organization_id, cliente_id, numero_cotizacion,
+                            tipo, estado, origen, subtotal, iva, total)
+  VALUES (v_org, v_cli, 'PROBE-315-E', 'PRESUPUESTO', 'ENVIADA',
+          'CATALOGO_PUBLICO', 100, 0, 100)
+  RETURNING id INTO v_cot;
+
+  PERFORM reservar_stock_catalogo(
+    v_org,
+    jsonb_build_array(jsonb_build_object('item_id', v_cat, 'variante_id', v_var, 'cantidad', 3)),
+    v_cot);
+
+  -- La venta consume, y despues alguien rechaza la cotizacion.
+  PERFORM consumir_reserva_catalogo(v_cot, 'probe venta');
+  UPDATE cotizaciones SET estado = 'RECHAZADA' WHERE id = v_cot;
+
+  PERFORM set_config('probe315.var2', v_var, TRUE);
+END $$;
+
+INSERT INTO _r
+SELECT 19, 'rechazar despues de vender NO acredita de vuelta', '7',
+       (SELECT stock::TEXT FROM catalogo_variantes WHERE id = current_setting('probe315.var2', TRUE))
+WHERE COALESCE(current_setting('probe315.var2', TRUE), '') <> '';
+
+-- El trigger: el UPDATE de estado de arriba tuvo que disparar la liberacion
+-- sin que nadie llamara a la funcion a mano.
+INSERT INTO _r
+SELECT 20, 'el trigger existe sobre cotizaciones', 'presente',
+       (SELECT CASE WHEN COUNT(*) > 0 THEN 'presente' ELSE 'FALLO: no esta' END
+        FROM pg_trigger
+        WHERE tgname = 'cotizaciones_liberar_reserva_catalogo'
+          AND NOT tgisinternal);
+
+-- Interaccion con la 312: una cotizacion REEMPLAZADA por una revision no
+-- restituye su stock de catalogo — lo debe la revision.
+DO $$
+DECLARE
+  v_org  TEXT := current_setting('probe315.org', TRUE);
+  v_cat  TEXT;
+  v_var  TEXT;
+  v_orig TEXT;
+  v_rev  TEXT;
+  v_cli  TEXT;
+BEGIN
+  IF v_org IS NULL OR v_org = '' THEN RETURN; END IF;
+
+  INSERT INTO catalogo_items (organization_id, nombre, precio, activo, tipo)
+  VALUES (v_org, 'PROBE-315 revisada', 100, TRUE, 'PRODUCTO') RETURNING id INTO v_cat;
+  INSERT INTO catalogo_variantes (organization_id, item_id, etiqueta, stock, activo)
+  VALUES (v_org, v_cat, 'Verde', 10, TRUE) RETURNING id INTO v_var;
+
+  SELECT id INTO v_cli FROM clientes WHERE organization_id = v_org LIMIT 1;
+
+  INSERT INTO cotizaciones (organization_id, cliente_id, numero_cotizacion,
+                            tipo, estado, origen, subtotal, iva, total)
+  VALUES (v_org, v_cli, 'PROBE-315-F', 'ORDEN', 'ACEPTADA',
+          'CATALOGO_PUBLICO', 100, 0, 100)
+  RETURNING id INTO v_orig;
+
+  PERFORM reservar_stock_catalogo(
+    v_org,
+    jsonb_build_array(jsonb_build_object('item_id', v_cat, 'variante_id', v_var, 'cantidad', 4)),
+    v_orig);
+
+  -- Nace la revision y marca la original como reemplazada (migracion 311).
+  INSERT INTO cotizaciones (organization_id, cliente_id, numero_cotizacion,
+                            tipo, estado, subtotal, iva, total, revision_de)
+  VALUES (v_org, v_cli, 'PROBE-315-G', 'ORDEN', 'ENVIADA', 100, 0, 100, v_orig)
+  RETURNING id INTO v_rev;
+
+  UPDATE cotizaciones SET reemplazada_por = v_rev WHERE id = v_orig;
+
+  -- Ahora se rechaza la ORIGINAL: el trigger corre, pero no debe restituir.
+  UPDATE cotizaciones SET estado = 'RECHAZADA' WHERE id = v_orig;
+
+  PERFORM set_config('probe315.var3', v_var, TRUE);
+  PERFORM set_config('probe315.rev', v_rev, TRUE);
+END $$;
+
+INSERT INTO _r
+SELECT 21, 'rechazar la reemplazada NO devuelve el stock', '6',
+       (SELECT stock::TEXT FROM catalogo_variantes WHERE id = current_setting('probe315.var3', TRUE))
+WHERE COALESCE(current_setting('probe315.var3', TRUE), '') <> '';
+
+-- Y la venta de la revision cierra las filas que quedaron en la original.
+DO $$
+DECLARE v_rev TEXT := current_setting('probe315.rev', TRUE);
+BEGIN
+  IF v_rev IS NULL OR v_rev = '' THEN RETURN; END IF;
+  PERFORM consumir_reserva_catalogo(v_rev, 'probe venta de revision');
+END $$;
+
+INSERT INTO _r
+SELECT 22, 'vender la revision cierra la reserva de la original', 'sin abiertas',
+       (SELECT CASE WHEN COUNT(*) = 0 THEN 'sin abiertas'
+                    ELSE 'FALLO: quedan ' || COUNT(*)::TEXT END
+        FROM catalogo_reservas_cotizacion r
+        JOIN cotizaciones c ON c.id = r.cotizacion_id
+        WHERE c.reemplazada_por = current_setting('probe315.rev', TRUE)
+          AND r.liberada_at IS NULL)
+WHERE COALESCE(current_setting('probe315.rev', TRUE), '') <> '';
+
 SELECT orden, probe, esperado, obtenido FROM _r ORDER BY orden, probe;
 
 ROLLBACK;

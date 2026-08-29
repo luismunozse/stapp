@@ -909,29 +909,17 @@ Puede responder este mensaje si desea que revisemos otras opciones.${appendOrden
 ${ctx.organizationName}`
 }
 
-export function formatPhoneForWhatsApp(phone: string, countryCode?: string | null): string {
-  // Si se proporciona país, usar la función multi-país
-  if (countryCode) {
-    return formatPhoneForCountry(phone, countryCode)
-  }
-
-  // Fallback: comportamiento original (Argentina)
-  let cleaned = phone.replace(/\D/g, "")
-
-  // Si empieza con 0, removemos y agregamos 54 (Argentina)
-  if (cleaned.startsWith("0")) {
-    cleaned = "54" + cleaned.substring(1)
-  }
-
-  // Si no tiene codigo de pais, agregar 54
-  if (!cleaned.startsWith("54") && cleaned.length <= 10) {
-    cleaned = "54" + cleaned
-  }
-
-  return cleaned
+/**
+ * El país es obligatorio a propósito. Antes era opcional y caía en Argentina en
+ * silencio, así que cada call site que se lo olvidaba le mandaba un +54 a un
+ * cliente de otro país — un destinatario inexistente, sin error visible. Ahora
+ * el olvido no compila. `getCountryConfig` ya resuelve un código desconocido.
+ */
+export function formatPhoneForWhatsApp(phone: string, countryCode: string | null | undefined): string {
+  return formatPhoneForCountry(phone, countryCode)
 }
 
-export function generateWhatsAppUrl(phone: string, message: string, countryCode?: string | null): string {
+export function generateWhatsAppUrl(phone: string, message: string, countryCode: string | null | undefined): string {
   const formattedPhone = formatPhoneForWhatsApp(phone, countryCode)
   const encodedMessage = encodeURIComponent(message)
   return `https://wa.me/${formattedPhone}?text=${encodedMessage}`

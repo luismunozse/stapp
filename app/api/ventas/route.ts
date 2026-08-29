@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
@@ -8,6 +8,7 @@ import { sucursalParaLectura, resolverDestinoVenta, getNombreSucursal } from "@/
 import { getRecargosMetodo, factorRecargo, metodoCondicion } from "@/lib/recargos"
 import { resolveOperador } from "@/lib/operadores"
 import { z } from "zod"
+import { getIvaGeneral } from "@/lib/countries"
 
 const itemSchema = z.object({
   inventarioId: z.string().nullable().optional(),
@@ -54,7 +55,7 @@ const ventaSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId, userId, role, session } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role, session } = await requirePosAccess()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -100,7 +101,7 @@ export async function GET(request: Request) {
       .order(sortBy, { ascending: sortOrder })
 
     // Vendedores solo ven sus ventas
-    if (role === "VENDEDOR") {
+    if (soloVeSusVentas(role)) {
       query = query.eq("vendedor_id", userId!)
     }
 
@@ -168,16 +169,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId, role, session } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role, session, tecnicosOperanPos } = await requirePosAccess()
     if (error) return error
-
-    // Solo ADMIN o VENDEDOR pueden crear ventas
-    if (role !== "ADMIN" && role !== "VENDEDOR") {
-      return NextResponse.json(
-        { error: "No autorizado para crear ventas" },
-        { status: 403 }
-      )
-    }
 
     const body = await request.json()
     const data = ventaSchema.parse(body)
@@ -228,7 +221,9 @@ export async function POST(request: Request) {
       .eq("id", organizationId!)
       .single()
     const ivaRegimen: string = orgFiscal?.iva_regimen ?? "EXENTO"
-    const ivaTasa = Number(orgFiscal?.iva_tasa ?? 0)
+    // iva_tasa en NULL significa "sin tasa propia: usar la del pais"
+    // (migracion 310). Con regimen EXENTO no se aplica ninguna igual.
+    const ivaTasa = Number(orgFiscal?.iva_tasa ?? getIvaGeneral(orgFiscal?.pais))
     const redondeoUnidad = Number(orgFiscal?.redondeo_efectivo ?? 0)
 
     // ¿Pago 100% en efectivo? (para redondeo)
@@ -289,11 +284,15 @@ export async function POST(request: Request) {
     const resolvedDepositoId = destinoVenta.depositoId
 
     // Resolver vendedor (server-authoritative: valida que pertenezca a la org con rol válido)
+    // Quién puede quedar ACREDITADO como operador de la venta. Con el permiso
+    // prendido el técnico también: si no está en la lista, resolveOperador lo
+    // descarta en silencio y cae al fallback, y la venta que hizo el técnico
+    // termina atribuida a otro.
     const vendedorId = await resolveOperador(
       organizationId!,
       data.vendedorId,
       userId!,
-      { roles: ["VENDEDOR", "ADMIN"] }
+      { roles: tecnicosOperanPos ? ["VENDEDOR", "ADMIN", "TECNICO"] : ["VENDEDOR", "ADMIN"] }
     )
 
     // Crear venta atómicamente
