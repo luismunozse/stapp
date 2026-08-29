@@ -8,6 +8,13 @@ export interface CountryConfig {
   code: CountryCode
   name: string
   phoneCode: string
+  /**
+   * Digitos nacionales minimos (sin codigo de pais) para que el numero sea
+   * alcanzable por WhatsApp. Es un piso conservador: sirve para descartar el
+   * numero al que le falta el codigo de area, no para validar la numeracion
+   * completa del pais.
+   */
+  phoneNationalMinDigits: number
   defaultCurrency: CurrencyCode
   defaultTimezone: string
   locale: string
@@ -38,6 +45,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "AR",
     name: "Argentina",
     phoneCode: "54",
+    phoneNationalMinDigits: 10,
     defaultCurrency: "ARS",
     defaultTimezone: "America/Argentina/Buenos_Aires",
     locale: "es-AR",
@@ -54,6 +62,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "MX",
     name: "México",
     phoneCode: "52",
+    phoneNationalMinDigits: 10,
     defaultCurrency: "MXN",
     defaultTimezone: "America/Mexico_City",
     locale: "es-MX",
@@ -70,6 +79,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "CL",
     name: "Chile",
     phoneCode: "56",
+    phoneNationalMinDigits: 9,
     defaultCurrency: "CLP",
     defaultTimezone: "America/Santiago",
     locale: "es-CL",
@@ -86,6 +96,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "CO",
     name: "Colombia",
     phoneCode: "57",
+    phoneNationalMinDigits: 10,
     defaultCurrency: "COP",
     defaultTimezone: "America/Bogota",
     locale: "es-CO",
@@ -102,6 +113,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "PE",
     name: "Perú",
     phoneCode: "51",
+    phoneNationalMinDigits: 9,
     defaultCurrency: "PEN",
     defaultTimezone: "America/Lima",
     locale: "es-PE",
@@ -118,6 +130,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "UY",
     name: "Uruguay",
     phoneCode: "598",
+    phoneNationalMinDigits: 8,
     defaultCurrency: "UYU",
     defaultTimezone: "America/Montevideo",
     locale: "es-UY",
@@ -134,6 +147,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "BR",
     name: "Brasil",
     phoneCode: "55",
+    phoneNationalMinDigits: 10,
     defaultCurrency: "BRL",
     defaultTimezone: "America/Sao_Paulo",
     locale: "pt-BR",
@@ -150,6 +164,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "BO",
     name: "Bolivia",
     phoneCode: "591",
+    phoneNationalMinDigits: 8,
     defaultCurrency: "BOB",
     defaultTimezone: "America/La_Paz",
     locale: "es-BO",
@@ -166,6 +181,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "PY",
     name: "Paraguay",
     phoneCode: "595",
+    phoneNationalMinDigits: 9,
     defaultCurrency: "PYG",
     defaultTimezone: "America/Asuncion",
     locale: "es-PY",
@@ -182,6 +198,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "VE",
     name: "Venezuela",
     phoneCode: "58",
+    phoneNationalMinDigits: 10,
     defaultCurrency: "USD",
     defaultTimezone: "America/Caracas",
     locale: "es-VE",
@@ -198,6 +215,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "EC",
     name: "Ecuador",
     phoneCode: "593",
+    phoneNationalMinDigits: 9,
     defaultCurrency: "USD",
     defaultTimezone: "America/Guayaquil",
     locale: "es-EC",
@@ -214,6 +232,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "CR",
     name: "Costa Rica",
     phoneCode: "506",
+    phoneNationalMinDigits: 8,
     defaultCurrency: "USD",
     defaultTimezone: "America/Costa_Rica",
     locale: "es-CR",
@@ -230,6 +249,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "PA",
     name: "Panamá",
     phoneCode: "507",
+    phoneNationalMinDigits: 8,
     defaultCurrency: "USD",
     defaultTimezone: "America/Panama",
     locale: "es-PA",
@@ -246,6 +266,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "DO",
     name: "República Dominicana",
     phoneCode: "1",
+    phoneNationalMinDigits: 10,
     defaultCurrency: "USD",
     defaultTimezone: "America/Santo_Domingo",
     locale: "es-DO",
@@ -262,6 +283,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "GT",
     name: "Guatemala",
     phoneCode: "502",
+    phoneNationalMinDigits: 8,
     defaultCurrency: "USD",
     defaultTimezone: "America/Guatemala",
     locale: "es-GT",
@@ -278,6 +300,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "HN",
     name: "Honduras",
     phoneCode: "504",
+    phoneNationalMinDigits: 8,
     defaultCurrency: "USD",
     defaultTimezone: "America/Tegucigalpa",
     locale: "es-HN",
@@ -294,6 +317,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "SV",
     name: "El Salvador",
     phoneCode: "503",
+    phoneNationalMinDigits: 8,
     defaultCurrency: "USD",
     defaultTimezone: "America/El_Salvador",
     locale: "es-SV",
@@ -310,6 +334,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "NI",
     name: "Nicaragua",
     phoneCode: "505",
+    phoneNationalMinDigits: 8,
     defaultCurrency: "USD",
     defaultTimezone: "America/Managua",
     locale: "es-NI",
@@ -326,6 +351,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     code: "CU",
     name: "Cuba",
     phoneCode: "53",
+    phoneNationalMinDigits: 8,
     defaultCurrency: "USD",
     defaultTimezone: "America/Havana",
     locale: "es-CU",

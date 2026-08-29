@@ -25,9 +25,11 @@ describe('sendWhatsAppText con instanceNameOverride', () => {
     } as any)
   })
 
+  // El numero va completo a proposito: sendWhatsAppText descarta los destinos
+  // a los que les falta el codigo de area antes de llegar al proveedor.
   it('usa la instancia override sin leer whatsapp_config', async () => {
     const { sendWhatsAppText } = await import('../providers')
-    const res = await sendWhatsAppText('org1', '+5491111', 'hola', {
+    const res = await sendWhatsAppText('org1', '+5491160351282', 'hola', {
       instanceNameOverride: 'stapp-org-org1-suc-suc9',
     })
     expect(res.success).toBe(true)
