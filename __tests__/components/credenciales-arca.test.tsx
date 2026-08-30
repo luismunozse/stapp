@@ -21,6 +21,7 @@ global.fetch = mockFetch as any
 const ESTADO_VACIO = {
   conectado: false,
   cuit: null,
+  puntoVenta: null,
   certSubject: null,
   certNotAfter: null,
   estado: null,
@@ -74,6 +75,7 @@ describe("CredencialesArca", () => {
       certPem: CERT,
       keyPem: KEY,
       cuit: "23944498389",
+      puntoVenta: 1,
       condicionFiscal: "MONOTRIBUTO",
     })
   })
@@ -96,6 +98,7 @@ describe("CredencialesArca", () => {
         estadoInicial={{
           conectado: true,
           cuit: "23944498389",
+          puntoVenta: 3,
           certSubject: "CN=stapp, serialNumber=CUIT 23944498389",
           certNotAfter: "2028-08-28T22:56:47.000Z",
           estado: "conectado",
@@ -121,6 +124,7 @@ describe("CredencialesArca", () => {
         estadoInicial={{
           conectado: true,
           cuit: "23944498389",
+          puntoVenta: 1,
           certSubject: "CN=stapp",
           certNotAfter: "2020-01-01T00:00:00.000Z",
           estado: "cert_vencido",
@@ -130,5 +134,43 @@ describe("CredencialesArca", () => {
     )
 
     expect(screen.getByText(/vencido/i)).toBeInTheDocument()
+  })
+
+  /**
+   * El punto de venta lo da de alta el contribuyente en ARCA y rara vez es
+   * el 1. Emitir contra uno que no existe lo rechaza AFIP.
+   */
+  it("manda el punto de venta elegido", async () => {
+    render(<CredencialesArca allowEdit estadoInicial={ESTADO_VACIO} />)
+
+    subirArchivo("Certificado (.crt)", CERT, "stapp-homo.crt")
+    subirArchivo("Clave privada (.key)", KEY, "stapp-homo.key")
+    fireEvent.change(screen.getByLabelText(/CUIT/i), { target: { value: "23944498389" } })
+    fireEvent.change(screen.getByLabelText(/punto de venta/i), { target: { value: "4" } })
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /conectar/i })).toBeEnabled())
+    fireEvent.click(screen.getByRole("button", { name: /conectar/i }))
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1))
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body).puntoVenta).toBe(4)
+  })
+
+  it("precarga el punto de venta ya guardado", () => {
+    render(
+      <CredencialesArca
+        allowEdit
+        estadoInicial={{
+          conectado: true,
+          cuit: "23944498389",
+          puntoVenta: 7,
+          certSubject: null,
+          certNotAfter: "2028-08-28T22:56:47.000Z",
+          estado: "conectado",
+          condicionFiscal: "MONOTRIBUTO",
+        }}
+      />
+    )
+
+    expect(screen.getByLabelText(/punto de venta/i)).toHaveValue(7)
   })
 })

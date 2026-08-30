@@ -133,7 +133,7 @@ export async function PUT(request: Request) {
 }
 
 async function putArca(organizationId: string, body: any) {
-  const { certPem, keyPem, cuit, condicionFiscal } = body
+  const { certPem, keyPem, cuit, condicionFiscal, puntoVenta } = body
 
   if (!certPem || !keyPem || !cuit) {
     return NextResponse.json({ error: "Faltan certPem, keyPem o cuit" }, { status: 400 })
@@ -146,6 +146,18 @@ async function putArca(organizationId: string, body: any) {
   const cuitNormalizado = String(cuit).replace(/\D/g, "")
   if (!CUIT_FORMAT.test(cuitNormalizado)) {
     return NextResponse.json({ error: "CUIT inválido (deben ser 11 dígitos)" }, { status: 400 })
+  }
+
+  // El punto de venta lo da de alta el contribuyente en ARCA y no tiene por
+  // qué ser el 1; emitir contra uno que no existe rebota. ARCA los numera con
+  // 5 dígitos, así que 99999 es el techo real.
+  let puntoVentaValidado = 1
+  if (puntoVenta !== undefined) {
+    const n = Number(puntoVenta)
+    if (!Number.isInteger(n) || n <= 0 || n > 99999) {
+      return NextResponse.json({ error: "Punto de venta inválido" }, { status: 400 })
+    }
+    puntoVentaValidado = n
   }
 
   let validated
@@ -182,6 +194,7 @@ async function putArca(organizationId: string, body: any) {
     cert_fingerprint: validated.fingerprint,
     cert_not_before: validated.notBefore,
     cert_not_after: validated.notAfter,
+    punto_venta: puntoVentaValidado,
     condicion_fiscal: cond,
     estado: "conectado",
     updated_at: new Date().toISOString(),
@@ -205,6 +218,7 @@ async function putArca(organizationId: string, body: any) {
     certNotBefore: validated.notBefore,
     certNotAfter: validated.notAfter,
     certFingerprint: validated.fingerprint,
+    puntoVenta: puntoVentaValidado,
     condicionFiscal: cond,
   })
 }
