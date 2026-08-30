@@ -134,6 +134,26 @@ export function hasPosAccess(
   return false
 }
 
+// Regla pura de acceso a la operativa de caja: abrir el turno, cerrarlo con
+// arqueo y cargar movimientos manuales. ADMIN siempre. VENDEDOR solo si la org
+// habilitó el permiso (opt-in, default apagado), mismo patrón que
+// `vendedores_administran_inventario` y `tecnicos_operan_pos`.
+//
+// El TECNICO queda afuera incluso con el flag prendido: este permiso habilita
+// al VENDEDOR y a nadie más. `tecnicos_operan_pos` lo deja vender, que no es lo
+// mismo que arquear la caja del local.
+//
+// NO cubre el histórico financiero —export CSV e historial de cierres siguen
+// siendo del ADMIN—: el vendedor opera SU turno, el dueño audita todos.
+export function hasCajaAccess(
+  role: string | null,
+  vendedoresHabilitados: boolean
+): boolean {
+  if (role === "ADMIN") return true
+  if (role === "VENDEDOR") return vendedoresHabilitados
+  return false
+}
+
 // Alcance de lectura de ventas: ¿el actor ve solo las suyas, o las de toda la
 // sucursal? Solo el ADMIN ve las del resto.
 //
@@ -192,6 +212,57 @@ export async function requirePosAccess() {
     }
   }
   return { ...result, tecnicosOperanPos }
+}
+
+// Resuelve el flag `vendedores_manejan_caja` de la org. Solo hace falta cuando
+// el actor es VENDEDOR (ver hasCajaAccess); llamarlo para ADMIN es un
+// round-trip al pedo, porque no depende del flag.
+//
+// Fail-closed: si la columna todavía no existe o la lectura falla, devuelve
+// false y el VENDEDOR queda afuera — idéntico al comportamiento histórico. En
+// este proyecto las migraciones se aplican A MANO y después del merge, así que
+// siempre hay una ventana en la que el deploy va adelante de su migración;
+// durante esa ventana el permiso simplemente todavía no está.
+export async function resolveVendedoresManejanCaja(organizationId: string): Promise<boolean> {
+  try {
+    const { data } = await supabaseAdmin
+      .from("organizations")
+      .select("vendedores_manejan_caja")
+      .eq("id", organizationId)
+      .single()
+    return data?.vendedores_manejan_caja === true
+  } catch {
+    return false
+  }
+}
+
+// Guard de la operativa de caja: apertura, cierre con arqueo y movimientos
+// manuales. Mismo contrato que requireAdmin() para swap 1:1, más
+// `vendedoresManejanCaja` para los handlers que necesiten saber si el permiso
+// está prendido.
+//
+// El export CSV y el historial de cierres NO pasan por acá: siguen en
+// requireAdmin(). El vendedor opera su turno; el histórico financiero de la
+// organización es del dueño.
+export async function requireCajaAccess() {
+  const result = await requireAuth()
+  if (result.error) return { ...result, vendedoresManejanCaja: false }
+
+  const vendedoresManejanCaja = result.role === "VENDEDOR"
+    ? await resolveVendedoresManejanCaja(result.organizationId!)
+    : false
+
+  if (!hasCajaAccess(result.role, vendedoresManejanCaja)) {
+    return {
+      error: NextResponse.json({ error: "Acceso denegado" }, { status: 403 }),
+      session: null,
+      organizationId: null,
+      userId: null,
+      role: null,
+      vendedoresManejanCaja: false,
+    }
+  }
+  return { ...result, vendedoresManejanCaja }
 }
 
 // Resuelve el flag `vendedores_administran_inventario` de la org. Solo hace

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdmin, requireAuth } from "@/lib/auth-utils"
+import { requireAdmin, requirePosAccess, requireCajaAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 import { z } from "zod"
@@ -9,17 +9,33 @@ const aperturaSchema = z.object({
 })
 
 // GET - Obtener sesión actual o historial
+//
+// Un handler, dos permisos, porque son dos lecturas distintas con dos públicos
+// distintos:
+//
+//   ?current=true  -> ¿hay caja abierta en mi sucursal? La pide el POS
+//                     (components/pos/pos-terminal.tsx) para enganchar la venta
+//                     a la sesión. Va por requirePosAccess: si la cerráramos
+//                     detrás del permiso de caja, el vendedor no podría vender.
+//
+//   sin ?current   -> historial de sesiones CERRADAS. Es histórico financiero
+//                     de la organización, del mismo lado del corte que el
+//                     export CSV: requireAdmin.
+//
+// Antes las dos iban por requireAuth, así que cualquier rol autenticado leía
+// el historial completo de cierres.
 export async function GET(request: Request) {
   try {
-    const { error, organizationId, role, session } = await requireAuth()
-    if (error) return error
-
-    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
-
     const { searchParams } = new URL(request.url)
     const current = searchParams.get("current")
     const desde = searchParams.get("desde")
     const hasta = searchParams.get("hasta")
+
+    const { error, organizationId, role, session } =
+      current === "true" ? await requirePosAccess() : await requireAdmin()
+    if (error) return error
+
+    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
     if (current === "true") {
       let currentQuery = supabaseAdmin
@@ -103,7 +119,7 @@ export async function GET(request: Request) {
 // POST - Abrir nueva sesión de caja
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId, role, session } = await requireAdmin()
+    const { error, organizationId, userId, role, session } = await requireCajaAccess()
     if (error) return error
 
     const body = await request.json()
