@@ -53,6 +53,23 @@ describe('redirigirPorRol', () => {
     expect(redirigirPorRol('/comisiones', 'ADMIN')).toBe(false)
   })
 
+  it('/caja ya no es tierra de nadie: el tecnico y un rol desconocido quedan afuera', () => {
+    // Hueco preexistente: el navbar mostraba Caja solo al ADMIN pero el
+    // middleware nunca freno la ruta, asi que cualquier rol autenticado que
+    // escribiera /caja en la URL entraba y veia los totales del dia.
+    expect(redirigirPorRol('/caja', 'TECNICO')).toBe(true)
+    expect(redirigirPorRol('/caja', 'GERENTE')).toBe(true)
+    expect(redirigirPorRol('/caja', null)).toBe(true)
+  })
+
+  it('el vendedor llega a /caja: el flag lo chequea el servidor, no el Edge', () => {
+    // Mismo reparto que /pos y /inventario: el Edge abre la puerta gruesa
+    // porque no puede leer `vendedores_manejan_caja`, y la pagina y la API
+    // deciden de verdad.
+    expect(redirigirPorRol('/caja', 'VENDEDOR')).toBe(false)
+    expect(redirigirPorRol('/caja', 'ADMIN')).toBe(false)
+  })
+
   it('matchea por segmento, no por prefijo de string', () => {
     // /posventa no es /pos. Un prefijo crudo lo trataria como tal.
     expect(redirigirPorRol('/posventa', 'TECNICO')).toBe(false)

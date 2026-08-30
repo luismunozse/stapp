@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireCajaAccess } from "@/lib/auth-utils"
 import { supabaseAdmin, STORAGE_BUCKETS, getPublicUrl } from "@/lib/supabase"
 
 /**
@@ -10,7 +10,7 @@ import { supabaseAdmin, STORAGE_BUCKETS, getPublicUrl } from "@/lib/supabase"
  */
 export async function POST(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId } = await requireCajaAccess()
     if (error) return error
 
     const formData = await request.formData()

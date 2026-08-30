@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireCajaAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 import { esMovimientoCogsAutomatico } from "@/lib/caja-utils"
@@ -20,7 +20,7 @@ const movimientoSchema = z.object({
 // GET - Lista movimientos manuales del día
 export async function GET(request: Request) {
   try {
-    const { error, organizationId, role, session } = await requireAdmin()
+    const { error, organizationId, role, session } = await requireCajaAccess()
     if (error) return error
 
     const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
@@ -88,7 +88,7 @@ export async function GET(request: Request) {
 // POST - Crear movimiento manual
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId, role, session } = await requireAdmin()
+    const { error, organizationId, userId, role, session } = await requireCajaAccess()
     if (error) return error
 
     const body = await request.json()

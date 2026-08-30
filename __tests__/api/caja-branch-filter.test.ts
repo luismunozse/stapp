@@ -64,6 +64,10 @@ function mockCajaTables(
     ordenes_servicio: sinCobrarChain,
     sesiones_caja: sesionChain,
     users: createChainMock({ id: "user-1", nombre: "Test User" }, null),
+    organizations: createChainMock({
+      zona_horaria: "America/Argentina/Buenos_Aires",
+      vendedores_manejan_caja: true,
+    }, null),
   })
 }
 
@@ -76,8 +80,8 @@ describe("GET /api/caja — fetchMovimientosDia sucursalId arg", () => {
     vi.clearAllMocks()
   })
 
-  it("TECNICO with sucursalId suc-A → 5th arg is 'suc-A'", async () => {
-    mockAuthWithSucursal({ role: "TECNICO", sucursalId: "suc-A" })
+  it("VENDEDOR habilitado with sucursalId suc-A → 5th arg is 'suc-A'", async () => {
+    mockAuthWithSucursal({ role: "VENDEDOR", sucursalId: "suc-A" })
     mockCookie(null)
     mockCajaTables()
 
@@ -146,8 +150,8 @@ describe("GET /api/caja — sinCobrar (ordenes_servicio) sucursal_id filter", ()
     vi.clearAllMocks()
   })
 
-  it("TECNICO suc-A → ordenes_servicio query gets .eq('sucursal_id', 'suc-A')", async () => {
-    mockAuthWithSucursal({ role: "TECNICO", sucursalId: "suc-A" })
+  it("VENDEDOR habilitado suc-A → ordenes_servicio query gets .eq('sucursal_id', 'suc-A')", async () => {
+    mockAuthWithSucursal({ role: "VENDEDOR", sucursalId: "suc-A" })
     mockCookie(null)
 
     const sinCobrarChain = createChainMock([], null, 0)
@@ -155,6 +159,10 @@ describe("GET /api/caja — sinCobrar (ordenes_servicio) sucursal_id filter", ()
       ordenes_servicio: sinCobrarChain,
       sesiones_caja: createChainMock(null, null),
       users: createChainMock({ id: "user-1", nombre: "Test" }, null),
+    organizations: createChainMock({
+      zona_horaria: "America/Argentina/Buenos_Aires",
+      vendedores_manejan_caja: true,
+    }, null),
     })
 
     await GET(createGetRequest("http://localhost:3000/api/caja"))
@@ -190,8 +198,8 @@ describe("GET /api/caja — sesionActual (sesiones_caja) sucursal_id filter", ()
     vi.clearAllMocks()
   })
 
-  it("TECNICO suc-A → sesiones_caja query gets .eq('sucursal_id', 'suc-A')", async () => {
-    mockAuthWithSucursal({ role: "TECNICO", sucursalId: "suc-A" })
+  it("VENDEDOR habilitado suc-A → sesiones_caja query gets .eq('sucursal_id', 'suc-A')", async () => {
+    mockAuthWithSucursal({ role: "VENDEDOR", sucursalId: "suc-A" })
     mockCookie(null)
 
     const sesionChain = createChainMock(null, null)
@@ -199,6 +207,10 @@ describe("GET /api/caja — sesionActual (sesiones_caja) sucursal_id filter", ()
       ordenes_servicio: createChainMock([], null, 0),
       sesiones_caja: sesionChain,
       users: createChainMock({ id: "user-1", nombre: "Test" }, null),
+    organizations: createChainMock({
+      zona_horaria: "America/Argentina/Buenos_Aires",
+      vendedores_manejan_caja: true,
+    }, null),
     })
 
     await GET(createGetRequest("http://localhost:3000/api/caja"))
