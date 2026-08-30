@@ -99,6 +99,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [feEstadoArca, setFeEstadoArca] = useState<EstadoCredencialesArca>({
     conectado: false,
     cuit: null,
+    puntoVenta: null,
     certSubject: null,
     certNotAfter: null,
     estado: null,
@@ -178,6 +179,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setFeEstadoArca({
           conectado: !!data.conectado,
           cuit: data.cuit ?? null,
+          puntoVenta: data.puntoVenta ?? null,
           certSubject: data.certSubject ?? null,
           certNotAfter: data.certNotAfter ?? null,
           estado: data.estado ?? null,
