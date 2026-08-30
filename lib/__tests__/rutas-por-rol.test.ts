@@ -64,6 +64,16 @@ describe('redirigirPorRol', () => {
     expect(redirigirPorRol('/tecnicos', null)).toBe(true)
   })
 
+  it('/comisiones es admin-only: el navbar ya lo trataba asi, el middleware no', () => {
+    // La pantalla es la liquidacion de comisiones de tecnicos y vendedores.
+    // El navbar la mostraba solo al ADMIN, pero cualquier rol entraba
+    // escribiendo la URL y desde ahi pegaba a las APIs de vendedores.
+    expect(redirigirPorRol('/comisiones', 'TECNICO')).toBe(true)
+    expect(redirigirPorRol('/comisiones', 'VENDEDOR')).toBe(true)
+    expect(redirigirPorRol('/comisiones', 'GERENTE')).toBe(true)
+    expect(redirigirPorRol('/comisiones', 'ADMIN')).toBe(false)
+  })
+
   it('/caja ya no es tierra de nadie: el tecnico y un rol desconocido quedan afuera', () => {
     // Hueco preexistente: el navbar mostraba Caja solo al ADMIN pero el
     // middleware nunca freno la ruta, asi que cualquier rol autenticado que
