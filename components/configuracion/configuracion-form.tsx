@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { CredencialesArca, type EstadoCredencialesArca } from "@/components/configuracion/credenciales-arca"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -91,6 +92,18 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [fePuntoVentaGuardado, setFePuntoVentaGuardado] = useState<number | null>(null)
   const [feConectando, setFeConectando] = useState(false)
   const [feMessage, setFeMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  // `provider` decide que formulario se muestra. Una fila existente de
+  // TusFacturas sigue viendo el suyo; todo lo demas (sin configurar o ya en
+  // ARCA) usa la carga de certificado.
+  const [feProvider, setFeProvider] = useState<"arca" | "tusfacturas" | null>(null)
+  const [feEstadoArca, setFeEstadoArca] = useState<EstadoCredencialesArca>({
+    conectado: false,
+    cuit: null,
+    certSubject: null,
+    certNotAfter: null,
+    estado: null,
+    condicionFiscal: null,
+  })
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -161,6 +174,15 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       if (res.ok) {
         const data = await res.json()
         setFeConectado(!!data.conectado)
+        setFeProvider(data.provider ?? null)
+        setFeEstadoArca({
+          conectado: !!data.conectado,
+          cuit: data.cuit ?? null,
+          certSubject: data.certSubject ?? null,
+          certNotAfter: data.certNotAfter ?? null,
+          estado: data.estado ?? null,
+          condicionFiscal: data.condicionFiscal ?? null,
+        })
         setFePuntoVentaGuardado(data.puntoVenta ?? null)
         if (data.puntoVenta) setFePuntoVenta(String(data.puntoVenta))
         if (data.condicionFiscal) setFeCondicionFiscal(data.condicionFiscal)
@@ -749,6 +771,8 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
 
             {facturacionHabilitada && (
               <div className="space-y-4 pt-2 border-t">
+                {feProvider === "tusfacturas" ? (
+                  <>
                 <p className="text-xs sm:text-sm text-muted-foreground">
                   Ingresá tus credenciales para conectar la cuenta. Se guardan cifradas y no vuelven a mostrarse.
                 </p>
@@ -850,6 +874,18 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
                       : "No conectado"}
                   </span>
                 </div>
+                  </>
+                ) : (
+                  <CredencialesArca
+                    allowEdit={allowEdit}
+                    estadoInicial={feEstadoArca}
+                    onConectado={(nuevo) => {
+                      setFeEstadoArca(nuevo)
+                      setFeConectado(nuevo.conectado)
+                      setFeProvider("arca")
+                    }}
+                  />
+                )}
               </div>
             )}
           </CardContent>
