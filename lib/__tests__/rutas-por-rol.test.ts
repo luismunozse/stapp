@@ -17,7 +17,8 @@ describe('redirigirPorRol', () => {
   })
 
   it('las rutas admin-only siguen siendo admin-only', () => {
-    for (const ruta of ['/configuracion', '/finanzas', '/emails', '/tecnicos', '/vendedores', '/facturacion']) {
+    // /tecnicos salio de esta lista: ver el caso de "Mi desempeño" mas abajo.
+    for (const ruta of ['/configuracion', '/finanzas', '/emails', '/vendedores', '/facturacion']) {
       expect(redirigirPorRol(ruta, 'TECNICO')).toBe(true)
       expect(redirigirPorRol(ruta, 'VENDEDOR')).toBe(true)
       expect(redirigirPorRol(ruta, 'ADMIN')).toBe(false)
@@ -41,6 +42,26 @@ describe('redirigirPorRol', () => {
       expect(redirigirPorRol(ruta, 'VENDEDOR')).toBe(false)
       expect(redirigirPorRol(ruta, 'ADMIN')).toBe(false)
     }
+  })
+
+  it('el tecnico entra a /tecnicos: es su propia pantalla de "Mi desempeño"', () => {
+    // El navbar le ofrece "Mi desempeño" apuntando a /tecnicos, y toda la
+    // pantalla existe: app/(dashboard)/tecnicos/page.tsx lo redirige a
+    // /tecnicos/<su-id>, la ficha calcula `isSelf`/`canView` y saca al que mira
+    // una ajena, y GET /api/tecnicos/[id] va por requireAdminOrSelf.
+    //
+    // Estaba TODO muerto en produccion porque /tecnicos vivia en RUTAS_ADMIN:
+    // el middleware lo rebotaba al panel antes de que nada de eso corriera.
+    expect(redirigirPorRol('/tecnicos', 'TECNICO')).toBe(false)
+    expect(redirigirPorRol('/tecnicos/abc123', 'TECNICO')).toBe(false)
+    expect(redirigirPorRol('/tecnicos', 'ADMIN')).toBe(false)
+  })
+
+  it('abrirle /tecnicos al tecnico no se lo abre a nadie mas', () => {
+    // El VENDEDOR no tiene pantalla propia ahi y el rol desconocido tampoco.
+    expect(redirigirPorRol('/tecnicos', 'VENDEDOR')).toBe(true)
+    expect(redirigirPorRol('/tecnicos', 'GERENTE')).toBe(true)
+    expect(redirigirPorRol('/tecnicos', null)).toBe(true)
   })
 
   it('/comisiones es admin-only: el navbar ya lo trataba asi, el middleware no', () => {

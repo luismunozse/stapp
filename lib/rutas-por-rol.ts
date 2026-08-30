@@ -14,7 +14,6 @@
 
 /** Solo ADMIN. */
 const RUTAS_ADMIN = [
-  "/tecnicos",
   "/vendedores",
   // Liquidacion de comisiones de tecnicos y vendedores. El navbar ya la
   // mostraba solo al ADMIN; el middleware no la frenaba, asi que cualquier rol
@@ -25,6 +24,24 @@ const RUTAS_ADMIN = [
   "/facturacion",
   "/finanzas",
 ]
+
+/**
+ * ADMIN y TECNICO.
+ *
+ * /tecnicos es DOS pantallas segun quien mire. Para el ADMIN es la
+ * administracion del equipo; para el TECNICO es "Mi desempeño", que el navbar
+ * ya le ofrecia y que estaba entera pero MUERTA: vivia en RUTAS_ADMIN, asi que
+ * el middleware lo rebotaba al panel antes de que corriera una sola linea.
+ *
+ * El alcance no lo decide esta lista, que es un gate grueso por ruta. Lo
+ * deciden las tres capas que ya estaban escritas:
+ *   - app/(dashboard)/tecnicos/page.tsx redirige al TECNICO a /tecnicos/<su-id>
+ *   - la ficha calcula `canView` y saca al que abre una ajena
+ *   - GET /api/tecnicos/[id] va por requireAdminOrSelf()
+ *
+ * El VENDEDOR no entra: no tiene pantalla propia aca.
+ */
+const RUTAS_TECNICO = ["/tecnicos"]
 
 /**
  * ADMIN y VENDEDOR.
@@ -63,6 +80,7 @@ export function redirigirPorRol(pathname: string, role: string | null): boolean 
   if (role === "ADMIN") return false
 
   if (alguna(pathname, RUTAS_ADMIN)) return true
+  if (alguna(pathname, RUTAS_TECNICO)) return role !== "TECNICO"
   if (alguna(pathname, RUTAS_VENDEDOR)) return role !== "VENDEDOR"
   if (alguna(pathname, RUTAS_POS)) return role !== "VENDEDOR" && role !== "TECNICO"
 
