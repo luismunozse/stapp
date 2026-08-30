@@ -14,9 +14,9 @@ function ctx(id = "prov-1") {
   return { params: Promise.resolve({ id }) }
 }
 
-function mockTecnico() {
+function mockVendedorSinInventario() {
   vi.mocked(auth).mockResolvedValue({
-    user: { id: "tecnico-1", organizationId: "org-1", role: "TECNICO", email: "t@t.com" },
+    user: { id: "vendedor-1", organizationId: "org-1", role: "VENDEDOR", email: "v@v.com" },
     expires: new Date(Date.now() + 86400000).toISOString(),
   } as any)
 }
@@ -68,8 +68,13 @@ describe("GET /api/proveedores/[id]/comparativa — cost visibility gated by has
     expect(body.items[0].minPrecioCompra).toBe(280)
   })
 
-  it("strips precioCompra comparison for TECNICO", async () => {
-    mockTecnico()
+  it("strips precioCompra comparison for VENDEDOR without inventario opt-in", async () => {
+    // El actor era TECNICO, pero desde que las lecturas de proveedores van
+    // por requireAdminOrVendedor el tecnico no llega hasta aca: recibe 403,
+    // cubierto en proveedores-acceso.test.ts. Lo que este test fija es OTRO
+    // eje —ocultar el costo a quien no tiene el permiso 275— y el actor que
+    // lo representa ahora es un VENDEDOR sin opt-in.
+    mockVendedorSinInventario()
     wireSupabase()
 
     const res = await GET(createGetRequest(), ctx())

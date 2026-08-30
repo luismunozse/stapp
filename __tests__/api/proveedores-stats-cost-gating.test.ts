@@ -58,8 +58,13 @@ describe("GET /api/proveedores/stats purchase-spend gating", () => {
     expect(body.p1.totalComprado).toBe(1500)
   })
 
-  it("nulls totalComprado for TECNICO", async () => {
-    mockAuthSuccess({ role: "TECNICO" })
+  it("nulls totalComprado for VENDEDOR without inventario opt-in", async () => {
+    // El actor era TECNICO, pero desde que las lecturas de proveedores van
+    // por requireAdminOrVendedor el tecnico no llega hasta aca: recibe 403,
+    // cubierto en proveedores-acceso.test.ts. Lo que este test fija es OTRO
+    // eje —ocultar el costo a quien no tiene el permiso 275— y el actor que
+    // lo representa ahora es un VENDEDOR sin opt-in.
+    mockAuthSuccess({ role: "VENDEDOR" })
     seedGlobal()
     const { status, body } = await parseResponse(await GET_GLOBAL())
     expect(status).toBe(200)
@@ -83,8 +88,13 @@ describe("GET /api/proveedores/[id]/stats purchase-spend gating", () => {
     expect(body.totalComprado).toBe(1000)
   })
 
-  it("nulls totalComprado alongside valorCostoStock for TECNICO", async () => {
-    mockAuthSuccess({ role: "TECNICO" })
+  it("nulls totalComprado alongside valorCostoStock for VENDEDOR without inventario opt-in", async () => {
+    // El actor era TECNICO, pero desde que las lecturas de proveedores van
+    // por requireAdminOrVendedor el tecnico no llega hasta aca: recibe 403,
+    // cubierto en proveedores-acceso.test.ts. Lo que este test fija es OTRO
+    // eje —ocultar el costo a quien no tiene el permiso 275— y el actor que
+    // lo representa ahora es un VENDEDOR sin opt-in.
+    mockAuthSuccess({ role: "VENDEDOR" })
     seedById()
     const { status, body } = await parseResponse(await GET_BY_ID(byIdReq(), byIdParams))
     expect(status).toBe(200)

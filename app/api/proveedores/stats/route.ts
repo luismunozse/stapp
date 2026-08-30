@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
+import { requireAdminOrVendedor, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 // GET /api/proveedores/stats
@@ -11,7 +11,9 @@ import { supabaseAdmin } from "@/lib/supabase"
 // - ultimaCompra: fecha de la última OC (emisión)
 export async function GET() {
   try {
-    const { error, organizationId, role } = await requireAuth()
+    // Mismo eje que el resto del namespace: ver el comentario en
+    // app/api/proveedores/route.ts.
+    const { error, organizationId, role } = await requireAdminOrVendedor()
     if (error) return error
 
     const [invRes, ocRes] = await Promise.all([
