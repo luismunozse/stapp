@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAdmin } from "@/lib/auth-utils"
 import { getSubscriptionInfo, isPremium, getTrialInfo } from "@/lib/subscriptions"
 
 /**
@@ -9,7 +9,9 @@ import { getSubscriptionInfo, isPremium, getTrialInfo } from "@/lib/subscription
  */
 export async function GET() {
   try {
-    const { error, organizationId } = await requireAuth()
+    // Hoy no lo consume nadie en la app. Se cierra ahora, antes de que alguien
+    // lo cablee a una pantalla y cerrarlo pase a ser un cambio de conducta.
+    const { error, organizationId } = await requireAdmin()
     if (error) return error
 
     const [subscription, premium, trialInfo] = await Promise.all([
