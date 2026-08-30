@@ -22,6 +22,10 @@
 const RUTAS_ADMIN = [
   "/tecnicos",
   "/vendedores",
+  // Liquidacion de comisiones de tecnicos y vendedores. El navbar ya la
+  // mostraba solo al ADMIN; el middleware no la frenaba, asi que cualquier rol
+  // entraba por URL y desde ahi leia lo que gana el resto.
+  "/comisiones",
   "/configuracion",
   "/emails",
   "/facturacion",

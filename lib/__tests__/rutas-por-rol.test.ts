@@ -43,6 +43,16 @@ describe('redirigirPorRol', () => {
     }
   })
 
+  it('/comisiones es admin-only: el navbar ya lo trataba asi, el middleware no', () => {
+    // La pantalla es la liquidacion de comisiones de tecnicos y vendedores.
+    // El navbar la mostraba solo al ADMIN, pero cualquier rol entraba
+    // escribiendo la URL y desde ahi pegaba a las APIs de vendedores.
+    expect(redirigirPorRol('/comisiones', 'TECNICO')).toBe(true)
+    expect(redirigirPorRol('/comisiones', 'VENDEDOR')).toBe(true)
+    expect(redirigirPorRol('/comisiones', 'GERENTE')).toBe(true)
+    expect(redirigirPorRol('/comisiones', 'ADMIN')).toBe(false)
+  })
+
   it('matchea por segmento, no por prefijo de string', () => {
     // /posventa no es /pos. Un prefijo crudo lo trataria como tal.
     expect(redirigirPorRol('/posventa', 'TECNICO')).toBe(false)
