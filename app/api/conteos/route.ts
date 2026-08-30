@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireAdmin } from "@/lib/auth-utils"
+import { requireAdmin, requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 
@@ -48,7 +48,11 @@ function formatConteo(row: any) {
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+        // Los conteos son inventario: la pantalla vive en
+    // app/(dashboard)/inventario/conteos y el namespace ya esta detras del
+    // permiso 275. Con requireAuth entraba tambien un TECNICO y un VENDEDOR
+    // SIN el permiso, ninguno de los dos con nada que hacer en inventario.
+const { error, organizationId } = await requireInventarioAccess()
     if (error) return error
 
     const { searchParams } = new URL(request.url)

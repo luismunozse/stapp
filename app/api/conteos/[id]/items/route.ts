@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 // GET /api/conteos/[id]/items?soloPendientes=true|false&soloDiferencia=true|false&search=...
@@ -8,7 +8,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+        // Mismo criterio que el listado: los conteos son inventario.
+const { error, organizationId } = await requireInventarioAccess()
     if (error) return error
 
     const { id } = await params
