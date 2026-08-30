@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireCajaAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchMovimientosDia, computeTotales } from "@/lib/caja-utils"
 import { sucursalParaLectura } from "@/lib/sucursal"
@@ -7,7 +7,10 @@ import { todayInTimeZone, dayRangeUtc, DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 export async function GET(request: Request) {
   try {
-    const { error, session, role, organizationId } = await requireAuth()
+    // Los totales del día son de quien opera la caja. Con requireAuth()
+    // cualquier rol autenticado que pegara acá —o escribiera /caja en la
+    // URL— leía la facturación del día de toda la organización.
+    const { error, session, role, organizationId } = await requireCajaAccess()
     if (error) return error
 
     const filtro = await sucursalParaLectura({

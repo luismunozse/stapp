@@ -12,13 +12,7 @@
  * un flag se abre acá y se decide allá.
  */
 
-/**
- * Solo ADMIN.
- *
- * NO incluye /caja, que el navbar sí muestra solo al ADMIN pero el middleware
- * nunca frenó: es un hueco preexistente, ajeno a este cambio, y taparlo acá lo
- * escondería en un PR sobre otra cosa.
- */
+/** Solo ADMIN. */
 const RUTAS_ADMIN = [
   "/vendedores",
   "/configuracion",
@@ -45,8 +39,19 @@ const RUTAS_ADMIN = [
  */
 const RUTAS_TECNICO = ["/tecnicos"]
 
-/** ADMIN y VENDEDOR. */
-const RUTAS_VENDEDOR = ["/reportes", "/proveedores", "/inventario"]
+/**
+ * ADMIN y VENDEDOR.
+ *
+ * /caja entra acá igual que /inventario: el VENDEDOR pasa la puerta gruesa y
+ * el permiso fino —`vendedores_manejan_caja`, opt-in por organización— lo
+ * resuelven la página y la API, que sí leen la BD. Sin el permiso el servidor
+ * le contesta 403 y la pantalla no le dibuja ni la apertura ni el cierre.
+ *
+ * Hasta acá el middleware no frenaba /caja para NADIE: el navbar la mostraba
+ * solo al ADMIN, pero cualquier rol autenticado que escribiera la URL entraba
+ * y veía los totales del día de la organización.
+ */
+const RUTAS_VENDEDOR = ["/reportes", "/proveedores", "/inventario", "/caja"]
 
 /**
  * ADMIN, VENDEDOR y —a nivel de ruta— TECNICO.

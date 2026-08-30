@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,9 +24,52 @@ import { useCurrency } from "@/contexts/currency-context"
 import { todayInTimeZone } from "@/lib/timezone"
 
 export default function CajaPage() {
+  const router = useRouter()
   const { data: session } = useSession()
   const { timezone } = useCurrency()
-  const isAdmin = session?.user?.role === "ADMIN"
+  const role = session?.user?.role
+  const isAdmin = role === "ADMIN"
+
+  // Permiso opt-in por organización para que el VENDEDOR opere su turno.
+  // `null` = todavía no se sabe, y NO es lo mismo que `false`.
+  //
+  // Para dibujar: fail-closed. Mientras no se sepa no se muestran controles
+  // que el servidor va a rechazar con 403.
+  //
+  // Para expulsar: solo un `false` EXPLÍCITO rebota al panel. Un chequeo que
+  // no se pudo completar —503, enlace caído, la columna sin migrar— no es una
+  // negativa, y tratarlo como tal saca de la pantalla a alguien que sí tiene
+  // el permiso. Dejarlo pasar no abre nada: las lecturas y escrituras de caja
+  // son fail-closed del lado del servidor. Mismo criterio que PosAccessGate.
+  const [permisoCaja, setPermisoCaja] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (role !== "VENDEDOR") return
+    let cancelado = false
+    fetch("/api/org/features", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelado || !d) return
+        setPermisoCaja(!!d.vendedoresManejanCaja)
+      })
+      .catch(() => {})
+    return () => {
+      cancelado = true
+    }
+  }, [role])
+
+  // El middleware deja entrar al VENDEDOR a /caja a propósito: corre en el
+  // Edge y ahí no se puede leer el flag. El rebote es acá.
+  useEffect(() => {
+    if (role === "VENDEDOR" && permisoCaja === false) {
+      router.replace("/dashboard")
+    }
+  }, [role, permisoCaja, router])
+
+  // Operativa del turno: abrir, cerrar con arqueo y movimientos manuales.
+  // El histórico financiero —export CSV e historial de cierres— sigue detrás
+  // de `isAdmin`: el vendedor opera SU turno, el dueño audita todos.
+  const puedeOperarCaja = isAdmin || (role === "VENDEDOR" && permisoCaja === true)
 
   // Día de caja por defecto = hoy en la tz de la org (no el día UTC, que a las
   // 21:00 local en UTC-3 ya salta al día siguiente y muestra caja vacía).
@@ -78,10 +122,10 @@ export default function CajaPage() {
     <PageShell
       title="Caja Diaria"
       description="Resumen de ingresos y egresos del día"
-      actions={<ExportButton fecha={fecha} />}
+      actions={isAdmin ? <ExportButton fecha={fecha} /> : null}
     >
       {/* Banner de sesión */}
-      {isAdmin && (
+      {puedeOperarCaja && (
         <CajaSessionBanner
           sesion={sesionActual}
           loading={loading}
@@ -138,7 +182,7 @@ export default function CajaPage() {
         <Tabs defaultValue="resumen">
           <TabsList>
             <TabsTrigger value="resumen">Resumen</TabsTrigger>
-            {isAdmin && <TabsTrigger value="movimientos">Movimientos Manuales</TabsTrigger>}
+            {puedeOperarCaja && <TabsTrigger value="movimientos">Movimientos Manuales</TabsTrigger>}
             {isAdmin && <TabsTrigger value="historial">Historial de Cierres</TabsTrigger>}
           </TabsList>
 
@@ -152,7 +196,7 @@ export default function CajaPage() {
             />
           </TabsContent>
 
-          {isAdmin && (
+          {puedeOperarCaja && (
             <TabsContent value="movimientos">
               <div className="space-y-4">
                 <MovimientoManualForm
