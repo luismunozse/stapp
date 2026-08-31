@@ -262,11 +262,14 @@ describe("F4 — GET /api/caja/sesiones/[id]: sucursal scope + movements wiring"
     usuario_cierre: null,
   }
 
-  it("branch user: sesion fetch gets .eq('sucursal_id', sucursalId)", async () => {
+  // El detalle de un cierre pasó a ser admin-only: es histórico financiero,
+  // del mismo lado del corte que el export CSV. El filtro por sucursal sigue
+  // vivo igual — ahora lo gobierna el selector de sucursal del ADMIN.
+  it("ADMIN con el selector en una sucursal: sesion fetch gets .eq('sucursal_id', ...)", async () => {
     const { GET } = await import("@/app/api/caja/sesiones/[id]/route")
 
-    mockAuthWithSucursal({ role: "TECNICO", sucursalId: "suc-A" })
-    mockCookie(null)
+    mockAuthWithSucursal({ role: "ADMIN", sucursalId: null })
+    mockCookie("suc-A")
 
     const sesionesChain = createChainMock(mockSesion, null)
     mockSupabaseFrom({
@@ -324,12 +327,12 @@ describe("F4 — GET /api/caja/sesiones/[id]: sucursal scope + movements wiring"
     expect(fetchCall[4]).toBe("suc-A") // sesion.sucursal_id
   })
 
-  it("branch user accessing different-branch session → 404", async () => {
+  it("ADMIN con el selector en otra sucursal → 404", async () => {
     const { GET } = await import("@/app/api/caja/sesiones/[id]/route")
 
-    // Branch user is on suc-B, but the session belongs to suc-A
-    mockAuthWithSucursal({ role: "TECNICO", sucursalId: "suc-B" })
-    mockCookie(null)
+    // El selector está en suc-B, pero la sesión es de suc-A
+    mockAuthWithSucursal({ role: "ADMIN", sucursalId: null })
+    mockCookie("suc-B")
 
     // When sucursal filter is applied, no session is found
     mockSupabaseFrom({
@@ -343,6 +346,25 @@ describe("F4 — GET /api/caja/sesiones/[id]: sucursal scope + movements wiring"
     const { status } = await parseResponse(response)
 
     expect(status).toBe(404)
+  })
+
+  it("un rol atado a sucursal ya no llega al detalle: 403, no 404", async () => {
+    // Antes era requireAuth: cualquier rol autenticado leía el detalle de
+    // cualquier cierre de su organización, y el único freno era el filtro por
+    // sucursal. Ahora ni entra.
+    const { GET } = await import("@/app/api/caja/sesiones/[id]/route")
+
+    mockAuthWithSucursal({ role: "VENDEDOR", sucursalId: "suc-A" })
+    mockCookie(null)
+    mockSupabaseFrom({ sesiones_caja: createChainMock(mockSesion, null) })
+
+    const response = await GET(
+      createGetRequest("http://localhost:3000/api/caja/sesiones/ses-1"),
+      createParams("ses-1")
+    )
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(403)
   })
 })
 

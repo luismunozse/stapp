@@ -100,9 +100,11 @@ describe("/api/configuracion — permiso de POS para técnicos", () => {
     expect(status).toBe(200)
     expect(body.tecnicosOperanPos).toBe(false)
 
-    // Exactamente dos intentos: el flag es su propio escalón y el segundo ya
-    // acierta. Tres o más significa que arrastró a otra migración con él.
-    expect(chain.single).toHaveBeenCalledTimes(2)
+    // Tres intentos: los escalones son acumulativos, así que la columna
+    // ausente viaja también en el escalón de arriba (el permiso de caja para
+    // vendedores) y ese primero cae con ella. El tercero ya acierta. Cuatro o
+    // más significa que arrastró a una migración que sí está aplicada.
+    expect(chain.single).toHaveBeenCalledTimes(3)
 
     // Y nada de lo que sí existe se perdió en el camino.
     expect(body.ivaRegimen).toBe("ADITIVO")

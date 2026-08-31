@@ -264,9 +264,14 @@ describe("GET /api/proveedores/[id]/stats — stock cost gated", () => {
 
   // With a single product, valorCostoStock / (productosCount * stock) is that
   // item's exact precio_compra — the number the rest of the branch hides.
-  it("TECNICO — valorCostoStock stripped, counts and sale value intact", async () => {
-    mockRole("TECNICO")
-    wire()
+  it("VENDEDOR sin opt-in — valorCostoStock stripped, counts and sale value intact", async () => {
+    // El actor era TECNICO, pero desde que las lecturas de proveedores van
+    // por requireAdminOrVendedor el tecnico no llega hasta aca: recibe 403,
+    // cubierto en proveedores-acceso.test.ts. Lo que este test fija es OTRO
+    // eje —ocultar el costo a quien no tiene el permiso 275— y el actor que
+    // lo representa ahora es un VENDEDOR sin opt-in.
+    mockRole("VENDEDOR")
+    wire(false)
 
     const { status, body } = await parseResponse(await getProveedorStats(createGetRequest(), ctx()))
 

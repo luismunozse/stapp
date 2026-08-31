@@ -80,20 +80,18 @@ describe("GET /api/proveedores/[id]/catalogo — reference price gated by hasInv
     expect(body.items[0].precioReferencia).toBe(4500)
   })
 
-  it("strips precioReferencia for TECNICO", async () => {
+  it("TECNICO no llega al catalogo: 403", async () => {
+    // Antes este test verificaba que al TECNICO se le ocultara el precio de
+    // referencia. Desde que las lecturas de proveedores van por
+    // requireAdminOrVendedor no llega al handler, y la version "sin permiso
+    // 275 no ve el costo" ya la cubre el test de VENDEDOR de aca abajo.
     mockRole("TECNICO")
     wireSupabase()
 
     const res = await GET(createGetRequest(), ctx())
-    const { status, body } = await parseResponse(res)
+    const { status } = await parseResponse(res)
 
-    expect(status).toBe(200)
-    expect(body.canViewCost).toBe(false)
-    expect(body.items[0].precioReferencia).toBeNull()
-    // Identity data (not cost) stays visible: the tab is still usable.
-    expect(body.items[0].nombre).toBe("Pantalla iPhone 12")
-    expect(body.items[0].codigoProveedor).toBe("SKU-1")
-    expect(body.items[0].inventarioId).toBe("inv-1")
+    expect(status).toBe(403)
   })
 
   it("strips precioReferencia for VENDEDOR when the org did not opt in", async () => {

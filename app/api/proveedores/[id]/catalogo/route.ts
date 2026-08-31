@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import {
-  requireAuth,
   requireAdminOrVendedor,
   hasInventarioAccess,
   resolveVendedoresHabilitados,
@@ -35,7 +34,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, role } = await requireAuth()
+    // Mismo eje que el resto del namespace: ver el comentario en
+    // app/api/proveedores/route.ts.
+    const { error, organizationId, role } = await requireAdminOrVendedor()
     if (error) return error
     const { id } = await params
     const search = new URL(request.url).searchParams.get("q")?.trim().toLowerCase() || ""

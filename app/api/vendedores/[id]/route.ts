@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireAdmin } from "@/lib/auth-utils"
+import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
@@ -22,7 +22,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    // Ficha de un vendedor. Mismo caso que el listado: el POST/PUT de este
+    // archivo ya era de ADMIN y nadie volvio por el GET.
+    const { error, organizationId } = await requireAdmin()
     if (error) return error
 
     const { id } = await params

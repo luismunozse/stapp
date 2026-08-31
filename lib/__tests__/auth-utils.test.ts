@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { hasInventarioAccess, hasPosAccess, soloVeSusVentas, canCreateOrders } from '../auth-utils'
+import { hasCajaAccess, hasInventarioAccess, hasPosAccess, soloVeSusVentas, canCreateOrders } from '../auth-utils'
 
 describe('hasInventarioAccess', () => {
   it('ADMIN accede siempre, con flag apagado o prendido', () => {
@@ -81,5 +81,31 @@ describe('soloVeSusVentas', () => {
     // Fail-closed ante un rol futuro: el default es ver menos, no ver todo.
     expect(soloVeSusVentas('GERENTE')).toBe(true)
     expect(soloVeSusVentas(null)).toBe(true)
+  })
+})
+
+describe('hasCajaAccess', () => {
+  it('ADMIN entra siempre, prendido o apagado el flag', () => {
+    expect(hasCajaAccess('ADMIN', false)).toBe(true)
+    expect(hasCajaAccess('ADMIN', true)).toBe(true)
+  })
+
+  it('VENDEDOR entra solo si la org lo habilito', () => {
+    expect(hasCajaAccess('VENDEDOR', true)).toBe(true)
+    expect(hasCajaAccess('VENDEDOR', false)).toBe(false)
+  })
+
+  it('TECNICO nunca, ni con el flag prendido', () => {
+    // El flag habilita al VENDEDOR y a nadie mas: `tecnicos_operan_pos` es
+    // otro permiso, y vender no es arquear.
+    expect(hasCajaAccess('TECNICO', true)).toBe(false)
+    expect(hasCajaAccess('TECNICO', false)).toBe(false)
+  })
+
+  it('rol ausente, vacio o desconocido queda afuera', () => {
+    expect(hasCajaAccess(null, true)).toBe(false)
+    expect(hasCajaAccess('', true)).toBe(false)
+    expect(hasCajaAccess('vendedor', true)).toBe(false) // case sensitive
+    expect(hasCajaAccess('GERENTE', true)).toBe(false)
   })
 })
