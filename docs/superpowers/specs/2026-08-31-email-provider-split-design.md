@@ -155,18 +155,26 @@ proteger. El orden es: consultar supresión, luego elegir proveedor.
 
 El 320 lo ocupa `vendedores_manejan_caja`, aplicada el 2026-08-30.
 
-**a) Enum `estado_notificacion`.** Hoy `('ENVIADO','FALLIDO','PENDIENTE')`.
-Agrega `ENTREGADO`, `REBOTADO`, `QUEJA`.
+**a) El enum `estado_notificacion` no se toca.** Se evaluó extenderlo con
+`ENTREGADO`, `REBOTADO` y `QUEJA`, y se descartó por dos razones:
 
-> El `ALTER TYPE ... ADD VALUE` va en una query separada, y el valor nuevo no
-> puede *usarse* en la misma transacción que lo declara. Si se agrupa con el
-> resto del archivo, el enum no queda. Mismo problema que apareció en la 316/317.
+1. `scripts/db-run.mjs` envía el archivo como multi-command string, y
+   PostgreSQL rechaza `ALTER TYPE ... ADD` en ese contexto. Es el mismo footgun
+   que apareció en la 316/317.
+2. Son **dos hechos distintos**. `estado` responde "¿el proveedor lo aceptó?";
+   el estado de entrega responde "¿qué pasó después?". Fundirlos en un enum
+   obliga además a actualizar todos los consumidores TypeScript de
+   `estado_notificacion` sin que ninguno lo necesite.
+
+En su lugar va una columna `estado_entrega TEXT` con `CHECK`. `estado` conserva
+su semántica intacta y ningún consumidor existente se rompe.
 
 **b) Columnas nuevas en `notification_logs`:**
 
 ```sql
 provider_message_id TEXT           -- clave de correlación con el webhook
 proveedor           TEXT NOT NULL DEFAULT 'envialosimple'
+estado_entrega      TEXT           -- ENTREGADO | REBOTADO | QUEJA | NULL
 delivered_at        TIMESTAMPTZ
 bounced_at          TIMESTAMPTZ
 bounce_tipo         TEXT           -- HARD | SOFT | QUEJA
@@ -187,15 +195,20 @@ activo, la misma tabla contiene filas de ambos proveedores. `send-direct.ts:112`
 ya escribe `provider: "envialosimple"` dentro de `metadata`, así que la columna
 formaliza un dato preexistente.
 
-**c) Máquina de estados.** Los webhooks llegan desordenados. La transición sólo
-avanza, nunca retrocede:
+**c) Máquina de estados.** Los webhooks llegan desordenados. La transición de
+`estado_entrega` sólo avanza, nunca retrocede:
 
 ```
-FALLIDO     (el proveedor nunca lo aceptó; estado terminal)
-PENDIENTE -> ENVIADO -> ENTREGADO -> REBOTADO(hard) -> QUEJA
+NULL -> ENTREGADO -> REBOTADO(hard) -> QUEJA
 ```
 
-Un evento se aplica sólo si su precedencia es mayor que la del estado actual.
+Un evento se aplica sólo si su precedencia es mayor que la del valor actual. El
+guard va en el `WHERE` del `UPDATE` —acotando los estados previos permitidos— y
+no en una lectura previa seguida de escritura, para que sea atómico frente a
+eventos concurrentes.
+
+`estado` sigue siendo un eje aparte: `ENVIADO` cuando el proveedor aceptó el
+POST, `FALLIDO` cuando no. Nunca lo mueve el webhook.
 
 El **soft bounce no modifica `estado`**: escribe `bounced_at` y
 `bounce_tipo='SOFT'` y nada más, porque tras un rebote blando la entrega suele
@@ -324,8 +337,9 @@ el defecto vivía en el bundle.
   configurado, todo pasa verde y el correo va a spam.
 - **Payload real.** El mock siempre responde ok. Que Resend acepte el cuerpo que
   se arma sólo se comprueba enviando.
-- **La migración.** El mock no inspecciona el esquema. Si el `ALTER TYPE` queda
-  agrupado con el resto, el enum no se crea y los tests pasan igual.
+- **La migración.** El mock no inspecciona el esquema. Si las columnas nuevas no
+  existen, el insert falla en runtime y los tests pasan igual. Para eso están los
+  probes de `supabase/migrations/verify/321_probes.sql`.
 
 ### Verificación manual obligatoria
 
@@ -351,8 +365,8 @@ que no caiga en spam.
 3. Endurecer la política DMARC una vez que el flujo esté limpio.
 4. Configurar el endpoint de webhook en Resend y guardar
    `RESEND_WEBHOOK_SECRET`.
-5. Aplicar la migración 321 con `scripts/db-run.mjs` (dry-run primero; el
-   `ALTER TYPE` en query separada).
+5. Aplicar la migración 321 con `scripts/db-run.mjs` (dry-run primero), y
+   después correr `supabase/migrations/verify/321_probes.sql`.
 6. Cargar `RESEND_API_KEY` en Vercel — este es el acto de activación.
 
 Sin los pasos 1 a 3 no hay aislamiento de reputación, con independencia de que
