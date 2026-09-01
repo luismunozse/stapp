@@ -222,7 +222,11 @@ export class NotificationService {
     subject?: string
   }): Promise<void> {
     try {
-      await supabaseAdmin.from("notification_logs").insert({
+      // supabase-js devuelve los errores de PostgREST como valor, no los
+      // lanza: sin destructurar `error` acá, un insert que falla (por
+      // ejemplo por una migracion pendiente) no dispara el catch y la
+      // entrada del timeline se pierde sin ningun otro sintoma.
+      const { error } = await supabaseAdmin.from("notification_logs").insert({
         organization_id: this.organizationId,
         orden_id: params.context.orden?.id || null,
         garantia_id: params.context.garantia?.id || null,
@@ -244,6 +248,9 @@ export class NotificationService {
           ordenNumero: params.context.orden?.numeroOrden,
         }),
       })
+      if (error) {
+        console.error("logNotification: no se pudo registrar el envio", error.message)
+      }
     } catch (err) {
       console.error("Error logging notification:", err)
     }

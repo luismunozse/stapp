@@ -96,7 +96,10 @@ export async function sendNotificationDirect(params: NotificationParams) {
         fromName: context.organizationName,
       })
 
-      await supabaseAdmin.from("notification_logs").insert({
+      // Un error silencioso aca no lanza excepcion: el correo ya salio, pero
+      // la linea del timeline nunca se registra y no queda ningun otro
+      // sintoma visible (ver migracion 321 y el hazard de orden de despliegue).
+      const { error: logError } = await supabaseAdmin.from("notification_logs").insert({
         organization_id: organizationId,
         orden_id: ordenId,
         garantia_id: garantiaId,
@@ -112,10 +115,13 @@ export async function sendNotificationDirect(params: NotificationParams) {
         proveedor: result.proveedor,
         metadata: JSON.stringify({ messageId: result.id, provider: result.proveedor }),
       })
+      if (logError) {
+        console.error("sendNotificationDirect: no se pudo registrar el envio de email", logError.message)
+      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error"
       console.error("sendNotificationDirect: Email error", errorMsg)
-      await supabaseAdmin.from("notification_logs").insert({
+      const { error: logError } = await supabaseAdmin.from("notification_logs").insert({
         organization_id: organizationId,
         orden_id: ordenId,
         garantia_id: garantiaId,
@@ -129,6 +135,9 @@ export async function sendNotificationDirect(params: NotificationParams) {
         error_message: errorMsg,
         proveedor: proveedorCliente(),
       })
+      if (logError) {
+        console.error("sendNotificationDirect: no se pudo registrar el envio fallido de email", logError.message)
+      }
     }
   }
 
@@ -181,7 +190,7 @@ export async function sendNotificationDirect(params: NotificationParams) {
           sender.scope === "sucursal" ? { instanceNameOverride: sender.instanceName } : undefined
         )
 
-        await supabaseAdmin.from("notification_logs").insert({
+        const { error: logError } = await supabaseAdmin.from("notification_logs").insert({
           organization_id: organizationId,
           orden_id: ordenId,
           garantia_id: garantiaId,
@@ -194,6 +203,9 @@ export async function sendNotificationDirect(params: NotificationParams) {
           metadata: JSON.stringify({ messageId: result.messageId, viaApi: true, provider: result.provider, senderScope: sender.scope }),
           error_message: result.error || null,
         })
+        if (logError) {
+          console.error("sendNotificationDirect: no se pudo registrar el envio de WhatsApp", logError.message)
+        }
 
         if (result.success) {
           await supabaseAdmin.from("whatsapp_messages").insert({
@@ -211,7 +223,7 @@ export async function sendNotificationDirect(params: NotificationParams) {
         const formattedPhone = formatPhoneForWhatsApp(context.cliente.telefono, orgConfig.pais)
         const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`
 
-        await supabaseAdmin.from("notification_logs").insert({
+        const { error: logError } = await supabaseAdmin.from("notification_logs").insert({
           organization_id: organizationId,
           orden_id: ordenId,
           garantia_id: garantiaId,
@@ -223,6 +235,9 @@ export async function sendNotificationDirect(params: NotificationParams) {
           contenido: message,
           metadata: JSON.stringify({ whatsappUrl }),
         })
+        if (logError) {
+          console.error("sendNotificationDirect: no se pudo registrar el envio pendiente de WhatsApp", logError.message)
+        }
       }
     } catch (error) {
       console.error("sendNotificationDirect: WhatsApp error", error)
