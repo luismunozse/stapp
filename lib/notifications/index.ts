@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { sendEmail } from "@/lib/email"
+import { sendCustomer } from "@/lib/email/index"
 import {
   NotificationType,
   NotificationChannel,
@@ -93,7 +93,7 @@ export class NotificationService {
     }
 
     try {
-      const result = await sendEmail({
+      const result = await sendCustomer({
         to: context.cliente.email,
         subject: emailContent.subject,
         html: emailContent.html,

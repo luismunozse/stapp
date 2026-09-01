@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { sendEmail } from "@/lib/email"
+import { sendCustomer } from "@/lib/email/index"
 import { formatDateValue } from "@/lib/timezone"
 import { sendPushToUsers } from "@/lib/push/send"
 import { generateWhatsAppMessage, formatEstado, resolvePlantillaForTipo } from "@/lib/notifications/whatsapp-message"
@@ -89,7 +89,7 @@ export async function sendNotificationDirect(params: NotificationParams) {
     try {
       const { subject, html } = generateEmailContent(tipo, context)
 
-      const result = await sendEmail({
+      const result = await sendCustomer({
         to: context.cliente.email,
         subject,
         html,
