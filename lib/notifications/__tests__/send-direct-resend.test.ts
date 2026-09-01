@@ -86,6 +86,15 @@ describe('sendNotificationDirect via Resend (kill switch)', () => {
       context: baseContext as any,
     })
 
+    // proveedorCliente() re-lee RESEND_API_KEY de forma independiente al
+    // fetch real de sendCustomer: si alguien revirtiera sendCustomer a pegarle
+    // siempre a EnvialoSimple, esta aserción por si sola seguiría en verde.
+    // La URL real que golpeó el fetch es la única prueba de que el intento
+    // fallido efectivamente paso por Resend.
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+    const [url] = vi.mocked(global.fetch).mock.calls[0]
+    expect(url).toBe('https://api.resend.com/emails')
+
     const logInsert = inserts.find((i) => i.table === 'notification_logs')
     expect(logInsert).toBeDefined()
     expect(logInsert!.payload.estado).toBe('FALLIDO')

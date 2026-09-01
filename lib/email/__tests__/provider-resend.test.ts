@@ -54,6 +54,20 @@ describe("resendProvider", () => {
     expect(global.fetch).not.toHaveBeenCalled()
   })
 
+  it("tira si le pasan attachments, que este canal no manda", async () => {
+    const { resendProvider } = await import("../providers/resend")
+
+    await expect(
+      resendProvider.send({
+        to: "a@b.com",
+        subject: "s",
+        html: "h",
+        attachments: [{ filename: "a.pdf", content: "YmFzZTY0", type: "application/pdf" }],
+      })
+    ).rejects.toThrow("attachments")
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
   it("tira si falta la API key", async () => {
     delete process.env.RESEND_API_KEY
     const { resendProvider } = await import("../providers/resend")
