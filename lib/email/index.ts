@@ -1,8 +1,10 @@
 import { envialoSimpleProvider } from "./providers/envialosimple"
 import { resendProvider } from "./providers/resend"
+import { estaSuprimido, EmailSuprimidoError } from "./suppression"
 import type { EmailMessage, NombreProveedor, SendResult } from "./types"
 
 export type { EmailMessage, EmailAttachment, SendResult, EmailProvider } from "./types"
+export { EmailSuprimidoError } from "./suppression"
 
 /**
  * Proveedor que resuelve hoy para el canal de cliente. Existe para que el
@@ -32,6 +34,15 @@ export async function sendPlatform(msg: EmailMessage): Promise<SendResult> {
  * exactamente lo que esta separacion evita.
  */
 export async function sendCustomer(msg: EmailMessage): Promise<SendResult> {
+  // El chequeo de supresion va ANTES de elegir proveedor, y por lo tanto corre
+  // tambien durante el fallback: la supresion es un hecho del destinatario, no
+  // del proveedor. Enviar a una casilla suprimida por EnvialoSimple degradaria
+  // el dominio de plataforma, que es justo lo que esta separacion protege.
+  const motivo = await estaSuprimido(msg.to)
+  if (motivo) {
+    throw new EmailSuprimidoError(motivo)
+  }
+
   // KILL SWITCH: la caida a EnvialoSimple ocurre SOLO por configuracion
   // ausente, NUNCA por un envio fallido. Un fallback en runtime romperia dos
   // cosas a la vez: mandaria correo de taller por el dominio que se quiere
