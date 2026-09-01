@@ -34,7 +34,9 @@ ALTER TABLE notification_logs
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'notification_logs_estado_entrega_check'
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'notification_logs_estado_entrega_check'
+      AND conrelid = 'notification_logs'::regclass
   ) THEN
     ALTER TABLE notification_logs
       ADD CONSTRAINT notification_logs_estado_entrega_check
@@ -42,7 +44,9 @@ BEGIN
   END IF;
 
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'notification_logs_bounce_tipo_check'
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'notification_logs_bounce_tipo_check'
+      AND conrelid = 'notification_logs'::regclass
   ) THEN
     ALTER TABLE notification_logs
       ADD CONSTRAINT notification_logs_bounce_tipo_check

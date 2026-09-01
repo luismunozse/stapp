@@ -11,21 +11,36 @@ ORDER BY column_name;
 
 -- 2. El CHECK de estado_entrega rechaza un valor invalido
 DO $$
+DECLARE
+  fila_id TEXT;
 BEGIN
-  BEGIN
-    UPDATE notification_logs SET estado_entrega = 'CUALQUIERA' WHERE id = (SELECT id FROM notification_logs LIMIT 1);
-    RAISE EXCEPTION 'FALLO: el CHECK de estado_entrega no rechazo un valor invalido';
-  EXCEPTION WHEN check_violation THEN
-    RAISE NOTICE 'OK: CHECK de estado_entrega activo';
-  END;
+  SELECT id INTO fila_id FROM notification_logs LIMIT 1;
+
+  IF fila_id IS NULL THEN
+    RAISE NOTICE 'SIN DATOS: notification_logs esta vacia, no se pudo ejercitar el CHECK de estado_entrega';
+  ELSE
+    BEGIN
+      UPDATE notification_logs SET estado_entrega = 'CUALQUIERA' WHERE id = fila_id;
+      RAISE EXCEPTION 'FALLO: el CHECK de estado_entrega no rechazo un valor invalido';
+    EXCEPTION WHEN check_violation THEN
+      RAISE NOTICE 'OK: CHECK de estado_entrega activo';
+    END;
+  END IF;
 END $$;
 
 -- 3. El indice unico de supresion es case-insensitive
-INSERT INTO email_suprimidos (email, motivo) VALUES ('Test@Example.com', 'MANUAL');
+-- Direccion en el TLD reservado .invalid (RFC 2606): no puede existir de verdad.
+DO $$
+BEGIN
+  INSERT INTO email_suprimidos (email, motivo) VALUES ('probe-321@example.invalid', 'MANUAL');
+EXCEPTION WHEN unique_violation THEN
+  RAISE NOTICE 'AVISO: probe-321@example.invalid ya estaba suprimida; se reutiliza para la prueba';
+END $$;
+
 DO $$
 BEGIN
   BEGIN
-    INSERT INTO email_suprimidos (email, motivo) VALUES ('test@example.com', 'MANUAL');
+    INSERT INTO email_suprimidos (email, motivo) VALUES ('PROBE-321@EXAMPLE.INVALID', 'MANUAL');
     RAISE EXCEPTION 'FALLO: el unique index no es case-insensitive';
   EXCEPTION WHEN unique_violation THEN
     RAISE NOTICE 'OK: unique index case-insensitive activo';
