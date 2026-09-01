@@ -229,10 +229,26 @@ CREATE TABLE email_suprimidos (
   proveedor           TEXT,
   organization_id     TEXT REFERENCES organizations(id) ON DELETE SET NULL,
   notification_log_id TEXT REFERENCES notification_logs(id) ON DELETE SET NULL,
-  created_at          TIMESTAMPTZ DEFAULT NOW()
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+
+  CHECK (email = lower(btrim(email, E' \t\n\r')))
 );
-CREATE UNIQUE INDEX email_suprimidos_email_idx ON email_suprimidos(lower(email));
+CREATE UNIQUE INDEX email_suprimidos_email_idx ON email_suprimidos(email);
 ```
+
+`email` se guarda siempre normalizado: minúsculas y sin espacio en blanco al
+borde (incluye tab, salto de línea y retorno de carro, la misma clase que
+recorta el `trim()` de JavaScript en `normalizar()`). El `CHECK` lo hace
+explícito, así que una fila cargada a mano con mayúsculas o un espacio colado
+nunca pasa desapercibida.
+
+El unique index es sobre la **columna** `email`, no sobre `lower(email)`. Un
+índice de expresión no puede ser destino de `ON CONFLICT` desde PostgREST
+—que sólo acepta nombres de columna, no expresiones— y tampoco lo usaría la
+consulta `.eq("email", ...)` del path de envío, que quedaría en *seq scan*
+sobre una tabla que sólo crece. El `CHECK` de normalización es lo que
+garantiza que este índice de columna siga siendo case-insensitive en la
+práctica: todo lo que entra ya está en minúsculas.
 
 **La supresión es global, no por organización.** Es consecuencia directa de
 haber descartado el remitente propio por taller: las organizaciones comparten
