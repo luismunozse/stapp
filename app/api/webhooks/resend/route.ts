@@ -48,15 +48,16 @@ export async function POST(request: Request) {
 
   let evento: EventoResend
   try {
-    // El tipo publicado de svix 2.2.0 declara `verify()` como `undefined`
-    // (bug de su .d.mts); en runtime devuelve el payload verificado. El paso
-    // por `unknown` es el propio escape hatch que sugiere TS ante un tipo
-    // publicado insuficiente, no una forma de eludir la verificacion.
-    evento = new Webhook(secret).verify(raw, {
+    // verify() valida y TIRA si la firma no coincide; no devuelve el payload
+    // (llama al verificador interno con jsonParse:false, asi que su unica
+    // funcion es la excepcion). El evento se parsea del cuerpo crudo, que es
+    // el mismo string que se acaba de verificar.
+    new Webhook(secret).verify(raw, {
       "svix-id": request.headers.get("svix-id") ?? "",
       "svix-timestamp": request.headers.get("svix-timestamp") ?? "",
       "svix-signature": request.headers.get("svix-signature") ?? "",
-    }) as unknown as EventoResend
+    })
+    evento = JSON.parse(raw) as EventoResend
   } catch (err) {
     console.error("webhook resend: firma invalida", err instanceof Error ? err.message : err)
     return NextResponse.json({ error: "firma invalida" }, { status: 401 })
