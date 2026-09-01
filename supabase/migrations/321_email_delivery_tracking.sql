@@ -84,13 +84,17 @@ CREATE TABLE IF NOT EXISTS email_suprimidos (
   CONSTRAINT email_suprimidos_motivo_check
     CHECK (motivo IN ('HARD_BOUNCE', 'QUEJA', 'MANUAL')),
 
-  -- La direccion se guarda SIEMPRE normalizada a minusculas y sin espacios al
-  -- borde. El CHECK lo hace explicito: una fila con mayusculas o con un
-  -- espacio colado (una carga manual, un futuro script) nunca coincidiria con
-  -- la consulta de envio y quedaria suprimida de mentira, sin que nadie se
-  -- entere.
+  -- La direccion se guarda SIEMPRE normalizada a minusculas y sin espacios en
+  -- blanco al borde. El CHECK lo hace explicito: una fila con mayusculas o
+  -- con espacio en blanco colado (una carga manual, un futuro script) nunca
+  -- coincidiria con la consulta de envio y quedaria suprimida de mentira, sin
+  -- que nadie se entere. btrim(email) a secas solo recorta el caracter
+  -- espacio; normalizar() en lib/email/suppression.ts usa el trim() de
+  -- JavaScript, que tambien recorta tab, salto de linea y retorno de carro.
+  -- Se pasa el segundo argumento a btrim para igualar esa clase de caracteres
+  -- y que el CHECK no deje pasar lo que el codigo ya considera "espacio".
   CONSTRAINT email_suprimidos_email_normalizado_check
-    CHECK (email = lower(btrim(email)))
+    CHECK (email = lower(btrim(email, E' \t\n\r')))
 );
 
 -- Unique sobre la COLUMNA, no sobre lower(email). Un indice de expresion no

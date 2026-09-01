@@ -69,7 +69,22 @@ BEGIN
   END;
 END $$;
 
--- 6. RLS habilitado en email_suprimidos
+-- 6. El CHECK de normalizacion rechaza un tab final
+-- btrim(email) a secas solo recorta el caracter espacio; normalizar() en
+-- lib/email/suppression.ts usa el trim() de JavaScript, que tambien recorta
+-- tab. Esta prueba verifica que el CHECK cubra esa misma clase de caracteres
+-- (ver btrim(email, E' \t\n\r') en la definicion de la tabla).
+DO $$
+BEGIN
+  BEGIN
+    INSERT INTO email_suprimidos (email, motivo) VALUES (E'probe-tab@example.invalid\t', 'MANUAL');
+    RAISE EXCEPTION 'FALLO: el CHECK de normalizacion no rechazo el tab final';
+  EXCEPTION WHEN check_violation THEN
+    RAISE NOTICE 'OK: CHECK de normalizacion rechaza tab al borde';
+  END;
+END $$;
+
+-- 7. RLS habilitado en email_suprimidos
 SELECT 'rls email_suprimidos' AS probe,
        CASE WHEN relrowsecurity THEN 'OK' ELSE 'FALLO' END AS resultado
 FROM pg_class WHERE relname = 'email_suprimidos';
