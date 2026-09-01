@@ -18,6 +18,10 @@ function wireSupabase(overrides: Record<string, any>, insertSpy?: (table: string
       }),
       update: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      // sendCustomer consulta email_suprimidos (ilike + maybeSingle) antes de
+      // elegir proveedor. Sin overrides para esa tabla, row queda en null: la
+      // direccion no esta suprimida y el envio sigue por el camino normal.
+      ilike: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: row, error: null }),
       maybeSingle: vi.fn().mockResolvedValue({ data: row, error: null }),
     } as any

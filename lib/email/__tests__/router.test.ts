@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
+import { createChainMock, mockSupabaseFrom } from "@/__tests__/api/helpers"
 
 const ENV_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 
 describe("router de email", () => {
   beforeEach(() => {
     vi.resetModules()
+    vi.clearAllMocks()
     process.env.ENVIALOSIMPLE_API_KEY = "key-test"
     process.env.EMAIL_FROM = "noreply@stapp.com.ar"
     delete process.env.RESEND_API_KEY
@@ -12,6 +14,11 @@ describe("router de email", () => {
       ok: true,
       json: async () => ({ id: "es-1" }),
     }) as any
+    // Estos tests prueban ruteo de proveedor, no supresion: ninguna direccion
+    // esta suprimida aca a proposito, para que sendCustomer siga de largo.
+    mockSupabaseFrom({
+      email_suprimidos: createChainMock(null),
+    })
   })
 
   it("sendPlatform sale por EnvialoSimple", async () => {
