@@ -19,7 +19,7 @@ import {
   ThermalPrintRecepcion,
   type RecepcionReceiptData,
 } from "@/components/ordenes/thermal-print-recepcion"
-import { anchoToPx } from "@/lib/thermal-paper"
+import { anchoToPx, readAncho } from "@/lib/thermal-paper"
 
 const baseData: RecepcionReceiptData = {
   codigo: "REC-0007",
@@ -79,6 +79,6 @@ describe("ThermalPrintRecepcion — ancho de rollo termico (58/80mm)", () => {
 
     preview = document.getElementById("recepcion-receipt-print-area")
     expect(preview).toHaveStyle({ width: `${anchoToPx(58)}px` })
-    expect(localStorage.getItem("stapp:comprobante-ancho")).toBe("58")
+    expect(readAncho()).toBe(58)
   })
 })

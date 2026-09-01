@@ -1,15 +1,13 @@
 /**
- * ESC/POS command generator for 58mm thermal printers
+ * ESC/POS command generator for thermal printers
  * Generates raw byte commands for silent printing via WebUSB
  *
- * 58mm printer = ~32 chars per line (normal font)
- * 80mm printer = ~48 chars per line (normal font)
+ * Ancho de columnas variable segun el perfil de la impresora: 58mm ronda 32
+ * columnas, 80mm entre 42 y 48 segun el firmware (ver lib/thermal-paper.ts).
  */
 
 import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
-
-const CHARS_PER_LINE_58 = 32
-const CHARS_PER_LINE_80 = 48
+import type { Codepage, Corte, PrinterProfile } from "@/lib/thermal-paper"
 
 // ESC/POS command constants
 const ESC = 0x1b
@@ -18,7 +16,6 @@ const LF = 0x0a
 
 const CMD = {
   INIT: [ESC, 0x40], // Initialize printer
-  CHARSET_LATIN: [ESC, 0x74, 0x13], // Code page 858 (Latin with €)
   ALIGN_LEFT: [ESC, 0x61, 0x00],
   ALIGN_CENTER: [ESC, 0x61, 0x01],
   ALIGN_RIGHT: [ESC, 0x61, 0x02],
@@ -28,46 +25,92 @@ const CMD = {
   DOUBLE_OFF: [ESC, 0x21, 0x00],
   UNDERLINE_ON: [ESC, 0x2d, 0x01],
   UNDERLINE_OFF: [ESC, 0x2d, 0x00],
-  CUT: [GS, 0x56, 0x41, 0x03], // Partial cut with minimal feed for cutter clearance
   FEED_1: [ESC, 0x64, 0x01], // Feed 1 line
   FEED_2: [ESC, 0x64, 0x02], // Feed 2 lines
   FEED_3: [ESC, 0x64, 0x03], // Feed 3 lines
   FEED_5: [ESC, 0x64, 0x05], // Feed 5 lines
 }
 
-// Mapa Unicode → byte de code page 858 (la page en la que se inicializa la
-// impresora, ver CMD.CHARSET_LATIN). Antes se emitían los code points Latin-1
-// crudos (á=0xE1…), que en CP858 son otros glifos (0xE1='ß'), así que los
-// acentos salían garabateados. CP858 = CP850 + € en 0xD5.
-const CP858: Record<string, number> = {
+// Mapa base compartido CP437/CP850/CP858 (idéntico en 0x80-0xAF para el set
+// español). CP850 agrega Á Í Ó Ú; CP858 = CP850 + € en 0xD5.
+const MAP_BASE: Record<string, number> = {
   "á": 0xa0, "é": 0x82, "í": 0xa1, "ó": 0xa2, "ú": 0xa3, "ñ": 0xa4, "Ñ": 0xa5,
-  "Á": 0xb5, "É": 0x90, "Í": 0xd6, "Ó": 0xe0, "Ú": 0xe9,
+  "É": 0x90,
   "ü": 0x81, "Ü": 0x9a, "ç": 0x87, "Ç": 0x80,
-  "¿": 0xa8, "¡": 0xad, "°": 0xf8, "º": 0xa7, "ª": 0xa6, "€": 0xd5,
+  "¿": 0xa8, "¡": 0xad, "°": 0xf8, "º": 0xa7, "ª": 0xa6,
   "à": 0x85, "è": 0x8a, "ì": 0x8d, "ò": 0x95, "ù": 0x97,
   "â": 0x83, "ê": 0x88, "î": 0x8c, "ô": 0x93, "û": 0x96,
   "ä": 0x84, "ë": 0x89, "ï": 0x8b, "ö": 0x94,
   "«": 0xae, "»": 0xaf,
 }
+const MAP_CP850: Record<string, number> = {
+  ...MAP_BASE,
+  "Á": 0xb5, "Í": 0xd6, "Ó": 0xe0, "Ú": 0xe9,
+}
+const MAP_CP858: Record<string, number> = { ...MAP_CP850, "€": 0xd5 }
+// CP437 no tiene estas: caen a un reemplazo legible, no a '?'.
+const CP437_FALLBACK: Record<string, string> = {
+  "Á": "A", "Í": "I", "Ó": "O", "Ú": "U", "€": "E",
+}
 
-// Convierte texto a bytes de code page 858 (los acentos españoles mapean a su
-// byte de CP858; el ASCII pasa igual; lo no mapeado se reemplaza por '?').
-export function textToBytes(text: string): number[] {
+// Número de tabla de ESC t según el estándar Epson. Si un firmware mapea
+// distinto, el wizard de calibración igual encuentra el par que funciona
+// porque cada línea del test se imprime tras seleccionar SU tabla.
+const CODEPAGE_TABLE: Record<Codepage, number> = {
+  cp437: 0, cp850: 2, cp858: 19, win1252: 16,
+}
+
+export function charsetCommand(cp: Codepage): number[] {
+  return [ESC, 0x74, CODEPAGE_TABLE[cp]]
+}
+
+export function cutCommands(corte: Corte): number[] {
+  switch (corte) {
+    case "gsv": return [GS, 0x56, 0x41, 0x03] // corte parcial con feed de despeje
+    case "esci": return [ESC, 0x64, 0x03, ESC, 0x69] // legacy: ESC i no alimenta, feed manual antes
+    case "none": return [ESC, 0x64, 0x05] // sin cortador: feed largo para poder rasgar
+  }
+}
+
+// Convierte texto a bytes del codepage indicado (default cp858, compat con
+// call sites viejos). Los acentos españoles mapean a su byte de la tabla;
+// el ASCII pasa igual; lo no mapeado se reemplaza por '?'.
+export function textToBytes(text: string, codepage: Codepage = "cp858"): number[] {
   const bytes: number[] = []
   for (const ch of text) {
-    const mapped = CP858[ch]
-    if (mapped !== undefined) {
-      bytes.push(mapped)
+    if (codepage === "win1252") {
+      if (ch === "€") { bytes.push(0x80); continue }
+      const code = ch.charCodeAt(0)
+      bytes.push(code <= 0xff ? code : 0x3f)
+      continue
+    }
+    const map = codepage === "cp437" ? MAP_BASE : codepage === "cp850" ? MAP_CP850 : MAP_CP858
+    const mapped = map[ch]
+    if (mapped !== undefined) { bytes.push(mapped); continue }
+    if (codepage === "cp437" && CP437_FALLBACK[ch]) {
+      bytes.push(CP437_FALLBACK[ch].charCodeAt(0))
       continue
     }
     const code = ch.charCodeAt(0)
-    if (code <= 0x7f) {
-      bytes.push(code) // ASCII == CP858
-    } else {
-      bytes.push(0x3f) // '?' para lo no mapeado
-    }
+    bytes.push(code <= 0x7f ? code : 0x3f)
   }
   return bytes
+}
+
+// Helpers de texto ligados a una codepage. Dentro de los generadores SHADOWEAN
+// a los module-level homónimos, así el cuerpo de los generadores no cambia.
+function makeTextHelpers(cp: Codepage) {
+  const line = (text: string): number[] => [...textToBytes(text, cp), LF]
+  const columns = (left: string, right: string, width: number): number[] => {
+    const gap = width - left.length - right.length
+    if (gap <= 0) return line(left.substring(0, width - right.length - 1) + " " + right)
+    return line(left + " ".repeat(gap) + right)
+  }
+  const rightAlign = (text: string, width: number): number[] => {
+    const pad = Math.max(0, width - text.length)
+    return line(" ".repeat(pad) + text)
+  }
+  return { line, columns, rightAlign }
 }
 
 function line(text: string): number[] {
@@ -209,16 +252,17 @@ export interface OrdenTicketData {
 
 export function generateOrdenTicketCommands(
   data: OrdenTicketData,
-  printerWidth: 58 | 80 = 80,
+  profile: PrinterProfile,
   terminologia?: Terminologia,
 ): Uint8Array {
   const term = terminologia ?? resolveTerminologia(null)
-  const W = printerWidth === 58 ? CHARS_PER_LINE_58 : CHARS_PER_LINE_80
+  const W = profile.columnas
+  const { line, columns } = makeTextHelpers(profile.codepage)
   const buf: number[] = []
 
   const add = (...cmds: number[][]) => { for (const cmd of cmds) buf.push(...cmd) }
 
-  add(CMD.INIT, CMD.CHARSET_LATIN)
+  add(CMD.INIT, charsetCommand(profile.codepage))
 
   // === LOGO (optional) ===
   if (data.logoRaster && data.logoRaster.length > 0) {
@@ -342,12 +386,13 @@ export function generateOrdenTicketCommands(
   add(CMD.BOLD_OFF)
   if (data.telefonoEmpresa) add(line(`Consultas: ${data.telefonoEmpresa}`))
 
-  add(CMD.CUT)
+  add(cutCommands(profile.corte))
   return new Uint8Array(buf)
 }
 
-export function generateTicketCommands(data: TicketData, printerWidth: 58 | 80 = 58): Uint8Array {
-  const W = printerWidth === 58 ? CHARS_PER_LINE_58 : CHARS_PER_LINE_80
+export function generateTicketCommands(data: TicketData, profile: PrinterProfile): Uint8Array {
+  const W = profile.columnas
+  const { line, columns } = makeTextHelpers(profile.codepage)
   const buf: number[] = []
 
   const add = (...cmds: number[][]) => {
@@ -355,7 +400,7 @@ export function generateTicketCommands(data: TicketData, printerWidth: 58 | 80 =
   }
 
   // Initialize
-  add(CMD.INIT, CMD.CHARSET_LATIN)
+  add(CMD.INIT, charsetCommand(profile.codepage))
 
   // === HEADER: Empresa ===
   add(CMD.ALIGN_CENTER, CMD.BOLD_ON, CMD.DOUBLE_ON)
@@ -441,8 +486,8 @@ export function generateTicketCommands(data: TicketData, printerWidth: 58 | 80 =
   add(line("Conserve este ticket"))
   add(line("como comprobante"))
 
-  // Cut (cut command provides minimal feed for cutter clearance)
-  add(CMD.CUT)
+  // Corte segun el perfil de la impresora
+  add(cutCommands(profile.corte))
 
   return new Uint8Array(buf)
 }

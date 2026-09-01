@@ -62,6 +62,24 @@ interface ThermalPrinterState {
 }
 
 /**
+ * Traduce errores de WebUSB a mensajes accionables. El caso clave: en Windows
+ * usbprint.sys se apropia de la impresora cuando su driver está instalado y el
+ * claim falla — la salida correcta para el usuario es imprimir por navegador
+ * (que usa justamente ese driver), no pelear contra el sistema.
+ */
+export function describeUsbError(err: unknown): string {
+  const e = err as { name?: string; message?: string } | null
+  const msg = e?.message ?? ""
+  if (e?.name === "SecurityError" || /claim|protected class/i.test(msg)) {
+    return 'Windows está usando el driver de esta impresora y bloquea la conexión USB directa. Use "Imprimir (navegador)": imprime a través de ese mismo driver.'
+  }
+  if (e?.name === "NetworkError") {
+    return "La impresora se desconectó o no responde. Verifique el cable USB."
+  }
+  return msg || "Error al conectar impresora"
+}
+
+/**
  * Hook for managing a thermal printer connection via WebUSB.
  * Provides connect, disconnect, and print functions.
  *
@@ -201,7 +219,7 @@ export function useThermalPrinter() {
         connected: false,
         device: null,
         connecting: false,
-        error: err.message || "Error al conectar impresora",
+        error: describeUsbError(err),
       })
     }
   }, [isSupported])

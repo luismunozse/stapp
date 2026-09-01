@@ -17,12 +17,13 @@ import { fitPrintPageToContent } from "@/lib/print-fit-page"
 import { generateOrdenTicketCommands, type OrdenTicketData } from "@/lib/escpos"
 import { imageUrlToRaster, imageUrlToBinarizedDataUrl } from "@/lib/escpos-image"
 import {
-  readAncho,
+  readProfile,
   saveAncho,
   anchoToPx,
   anchoLogoDots,
   ANCHOS_TERMICOS,
-  DEFAULT_ANCHO,
+  defaultProfile,
+  type PrinterProfile,
   type AnchoTermico,
 } from "@/lib/thermal-paper"
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
@@ -74,10 +75,10 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
   const { timezone, terminologia } = useCurrency()
   const [open, setOpen] = useState(false)
   const [printingThermal, setPrintingThermal] = useState(false)
-  const [ancho, setAncho] = useState<AnchoTermico>(DEFAULT_ANCHO)
+  const [profile, setProfile] = useState<PrinterProfile>(defaultProfile())
 
   useEffect(() => {
-    setAncho(readAncho())
+    setProfile(readProfile())
   }, [])
 
   const preview: PreviewData = useMemo(() => {
@@ -121,7 +122,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
   const buildTicketData = async (): Promise<OrdenTicketData> => {
     let logoRaster: Uint8Array | null = null
     if (preview.logoUrl) {
-      logoRaster = await imageUrlToRaster(preview.logoUrl, { maxWidth: anchoLogoDots(ancho) })
+      logoRaster = await imageUrlToRaster(preview.logoUrl, { maxWidth: anchoLogoDots(profile.ancho) })
     }
     return {
       numeroOrden: orden.numeroOrden,
@@ -157,7 +158,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
     setPrintingThermal(true)
     try {
       const ticketData = await buildTicketData()
-      const commands = generateOrdenTicketCommands(ticketData, ancho, terminologia)
+      const commands = generateOrdenTicketCommands(ticketData, profile, terminologia)
       const ok = await print(commands)
       if (ok) toast.success("Comprobante impreso")
       else toast.error("Error al imprimir")
@@ -178,7 +179,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
     // Pre-binarize logo so driver receives pure B/W (no grays to crush)
     let logoDataUrl: string | null = null
     if (preview.logoUrl) {
-      logoDataUrl = await imageUrlToBinarizedDataUrl(preview.logoUrl, { maxWidth: anchoLogoDots(ancho) })
+      logoDataUrl = await imageUrlToBinarizedDataUrl(preview.logoUrl, { maxWidth: anchoLogoDots(profile.ancho) })
     }
 
     const clone = source.cloneNode(true) as HTMLElement
@@ -214,10 +215,10 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
 <meta charset="utf-8" />
 ${styles}
 <style>
-  @page { size: ${ancho}mm auto; margin: 0; }
+  @page { size: ${profile.ancho}mm auto; margin: 0; }
   html, body { margin: 0; padding: 0; background: #fff; }
-  body { width: ${ancho}mm; }
-  #thermal-receipt-print-area { width: ${ancho}mm !important; padding: 2mm; box-sizing: border-box; }
+  body { width: ${profile.ancho}mm; }
+  #thermal-receipt-print-area { width: ${profile.ancho}mm !important; padding: 2mm; box-sizing: border-box; }
   img { max-width: 100%; image-rendering: pixelated; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 </style>
 </head>
@@ -249,7 +250,7 @@ ${styles}
       try {
         await waitForImages()
         try { await doc.fonts.ready } catch { /* measurement falls back to current metrics */ }
-        fitPrintPageToContent(doc, doc.getElementById("thermal-receipt-print-area"), ancho)
+        fitPrintPageToContent(doc, doc.getElementById("thermal-receipt-print-area"), profile.ancho)
         iframe.contentWindow?.focus()
         iframe.contentWindow?.print()
       } finally {
@@ -270,7 +271,7 @@ ${styles}
         variant="outline"
         size="sm"
         onClick={() => setOpen(true)}
-        title={`Comprobante térmico ${ancho}mm`}
+        title={`Comprobante térmico ${profile.ancho}mm`}
       >
         <Receipt className="h-4 w-4 mr-2" />
         Térmica
@@ -281,7 +282,7 @@ ${styles}
           <DialogHeader>
             <DialogTitle>Comprobante térmico</DialogTitle>
             <DialogDescription>
-              Vista previa del comprobante {ancho}mm. Imprimí en impresora térmica USB o por navegador.
+              Vista previa del comprobante {profile.ancho}mm. Imprimí en impresora térmica USB o por navegador.
             </DialogDescription>
           </DialogHeader>
 
@@ -292,11 +293,11 @@ ${styles}
                 key={a}
                 type="button"
                 onClick={() => {
-                  setAncho(a)
                   saveAncho(a)
+                  setProfile(readProfile())
                 }}
                 className={`px-3 py-1 rounded-md border text-xs transition-colors ${
-                  ancho === a
+                  profile.ancho === a
                     ? "bg-primary text-primary-foreground border-primary"
                     : "bg-background hover:bg-muted"
                 }`}
@@ -307,7 +308,7 @@ ${styles}
           </div>
 
           <div className="flex justify-center bg-muted/40 rounded-md p-4 max-h-[60vh] overflow-y-auto">
-            <ReceiptPreview data={preview} ancho={ancho} />
+            <ReceiptPreview data={preview} ancho={profile.ancho} />
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 pt-2">
