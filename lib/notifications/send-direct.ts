@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { sendCustomer } from "@/lib/email/index"
+import { sendCustomer, proveedorCliente } from "@/lib/email/index"
 import { formatDateValue } from "@/lib/timezone"
 import { sendPushToUsers } from "@/lib/push/send"
 import { generateWhatsAppMessage, formatEstado, resolvePlantillaForTipo } from "@/lib/notifications/whatsapp-message"
@@ -127,6 +127,7 @@ export async function sendNotificationDirect(params: NotificationParams) {
         asunto: generateEmailContent(tipo, context).subject,
         contenido: "",
         error_message: errorMsg,
+        proveedor: proveedorCliente(),
       })
     }
   }

@@ -7,12 +7,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // sendCustomer llega efectivamente a un proveedor distinto al de plataforma.
 import { supabaseAdmin } from '@/lib/supabase'
 
-function wireSupabase(overrides: Record<string, any>) {
+function wireSupabase(overrides: Record<string, any>, insertSpy?: (table: string, payload: any) => void) {
   vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
     const row = overrides[table] ?? null
     return {
       select: vi.fn().mockReturnThis(),
-      insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+      insert: vi.fn().mockImplementation((payload: any) => {
+        insertSpy?.(table, payload)
+        return Promise.resolve({ data: null, error: null })
+      }),
       update: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: row, error: null }),
@@ -56,5 +59,39 @@ describe('sendNotificationDirect via Resend (kill switch)', () => {
     expect(global.fetch).toHaveBeenCalledTimes(1)
     const [url] = vi.mocked(global.fetch).mock.calls[0]
     expect(url).toBe('https://api.resend.com/emails')
+  })
+
+  it('con RESEND_API_KEY seteada y Resend respondiendo no-ok, el log FALLIDO atribuye el intento a resend', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: async () => 'server error',
+    }) as any
+
+    const inserts: Array<{ table: string; payload: any }> = []
+    wireSupabase(
+      {
+        organizations: { notificaciones_email: true, notificaciones_whatsapp: false, plantillas_whatsapp: null, pais: 'AR' },
+        clientes: { acepta_whatsapp: true },
+        users: null,
+      },
+      (table, payload) => inserts.push({ table, payload })
+    )
+
+    const { sendNotificationDirect } = await import('../send-direct')
+    await sendNotificationDirect({
+      organizationId: 'org1',
+      clienteId: 'c1',
+      tipo: 'CAMBIO_ESTADO',
+      context: baseContext as any,
+    })
+
+    const logInsert = inserts.find((i) => i.table === 'notification_logs')
+    expect(logInsert).toBeDefined()
+    expect(logInsert!.payload.estado).toBe('FALLIDO')
+    // El intento fallido fue por Resend (RESEND_API_KEY estaba seteada): el
+    // log NO debe atribuirlo a EnvialoSimple, que es el default de la columna
+    // y lo que se registraba antes de este fix.
+    expect(logInsert!.payload.proveedor).toBe('resend')
   })
 })

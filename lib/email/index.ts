@@ -1,8 +1,17 @@
 import { envialoSimpleProvider } from "./providers/envialosimple"
 import { resendProvider } from "./providers/resend"
-import type { EmailMessage, SendResult } from "./types"
+import type { EmailMessage, NombreProveedor, SendResult } from "./types"
 
 export type { EmailMessage, EmailAttachment, SendResult, EmailProvider } from "./types"
+
+/**
+ * Proveedor que resuelve hoy para el canal de cliente. Existe para que el
+ * registro del path de error pueda atribuir el intento sin repetir la regla
+ * del kill switch: la decision de ruteo vive en un solo lugar.
+ */
+export function proveedorCliente(): NombreProveedor {
+  return process.env.RESEND_API_KEY ? "resend" : "envialosimple"
+}
 
 /**
  * Correo de plataforma: verificacion de cuenta, reset de contrasena,
@@ -27,6 +36,6 @@ export async function sendCustomer(msg: EmailMessage): Promise<SendResult> {
   // ausente, NUNCA por un envio fallido. Un fallback en runtime romperia dos
   // cosas a la vez: mandaria correo de taller por el dominio que se quiere
   // aislar, y ocultaria la config rota detras de un "todo funciona".
-  const provider = process.env.RESEND_API_KEY ? resendProvider : envialoSimpleProvider
+  const provider = proveedorCliente() === "resend" ? resendProvider : envialoSimpleProvider
   return provider.send(msg)
 }

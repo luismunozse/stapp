@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { sendCustomer } from "@/lib/email/index"
+import { sendCustomer, proveedorCliente } from "@/lib/email/index"
 import {
   NotificationType,
   NotificationChannel,
@@ -127,6 +127,7 @@ export class NotificationService {
         context,
         success: false,
         error: errorMessage,
+        proveedor: proveedorCliente(),
         content: emailContent.html,
         subject: emailContent.subject,
       })
