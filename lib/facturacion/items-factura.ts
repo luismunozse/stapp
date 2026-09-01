@@ -31,7 +31,10 @@
 interface LineaRepuesto {
   nombre?: string | null
   cantidad?: number | null
+  /** COSTO. Solo se usa como fallback en filas anteriores a la migracion 286. */
   precio_unitario?: number | string | null
+  /** Lo que se le cobra al cliente (migracion 286). NULL en filas viejas. */
+  precio_venta_unitario?: number | string | null
 }
 
 interface LineaServicio {
@@ -62,6 +65,57 @@ function numero(valor: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
+
+/**
+ * Escala los renglones para que sumen exactamente el total cobrado.
+ *
+ * Hace falta porque `costo_final` es un campo manual: nada impide cobrar menos
+ * que la suma de los repuestos a precio de venta. Un comprobante cuyos renglones
+ * no cierran con el total no se puede emitir, y la salida obvia —un renglon
+ * negativo de descuento— es la que AFIP no acepta: para eso existe la nota de
+ * credito.
+ *
+ * El redondeo a dos decimales no suma exacto, asi que la diferencia se ajusta en
+ * el renglon MAS GRANDE: ahi el centavo pesa proporcionalmente menos.
+ */
+function prorratear(lineas: ItemFactura[], total: number): ItemFactura[] {
+  const suma = lineas.reduce((s, i) => s + i.subtotal, 0)
+  if (suma <= 0 || lineas.length === 0) return lineas
+
+  const factor = total / suma
+
+  const escaladas = lineas.map((l) => {
+    const subtotal = Math.max(0, Math.round(l.subtotal * factor * 100) / 100)
+    const cantidad = l.cantidad || 1
+    return {
+      ...l,
+      subtotal,
+      // El unitario se recalcula desde el subtotal: AFIP recibe los dos y
+      // tienen que ser coherentes entre si.
+      precioUnitario: Math.round((subtotal / cantidad) * 100) / 100,
+    }
+  })
+
+  const sumaEscalada = escaladas.reduce((s, i) => s + i.subtotal, 0)
+  const diferencia = Math.round((total - sumaEscalada) * 100) / 100
+
+  if (diferencia !== 0) {
+    let idx = 0
+    for (let i = 1; i < escaladas.length; i++) {
+      if (escaladas[i].subtotal > escaladas[idx].subtotal) idx = i
+    }
+    const ajustado = Math.max(0, Math.round((escaladas[idx].subtotal + diferencia) * 100) / 100)
+    const cantidad = escaladas[idx].cantidad || 1
+    escaladas[idx] = {
+      ...escaladas[idx],
+      subtotal: ajustado,
+      precioUnitario: Math.round((ajustado / cantidad) * 100) / 100,
+    }
+  }
+
+  return escaladas
+}
+
 export function construirItemsFactura(input: {
   cotizacion?: { total: number | string; items?: ItemCotizacion[] | null } | null
   costoFinal?: number | string | null
@@ -88,7 +142,18 @@ export function construirItemsFactura(input: {
   const lineas: ItemFactura[] = [
     ...(input.repuestos || []).map((r) => {
       const cantidad = numero(r.cantidad)
-      const precioUnitario = numero(r.precio_unitario)
+      // Precio de VENTA, no costo. Los renglones viajan a AFIP
+      // (tusfacturas-provider.ts:26 los manda como `detalle` con precio
+      // unitario e importe), asi que facturar el costo es declarar mal.
+      //
+      // Fallback al costo SOLO en las filas anteriores a la migracion 286, que
+      // no tienen precio de venta registrado y no hay de donde sacarlo.
+      const precioUnitario =
+        r.precio_venta_unitario !== null &&
+        r.precio_venta_unitario !== undefined &&
+        r.precio_venta_unitario !== ""
+          ? numero(r.precio_venta_unitario)
+          : numero(r.precio_unitario)
       return {
         descripcion: r.nombre || "Repuesto",
         cantidad,
@@ -115,6 +180,11 @@ export function construirItemsFactura(input: {
   if (input.costoFinal != null && numero(input.costoFinal) > 0) {
     const subtotal = numero(input.costoFinal)
     const residual = Math.round((subtotal - totalLineas) * 100) / 100
+
+    // Los renglones se pasan de lo cobrado: se escalan para que cierren.
+    if (residual < 0) {
+      return { items: prorratear(lineas, subtotal), subtotal }
+    }
 
     if (residual > 0) {
       lineas.push({
