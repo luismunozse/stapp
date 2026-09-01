@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { sendEmail } from "@/lib/email"
+import { sendCustomer } from "@/lib/email/index"
 import { renderTemplate, getPlantilla } from "@/lib/whatsapp/plantillas-catalog"
 
 const TURNO_TIPO_TO_CATALOG_KEY: Record<string, string> = {
@@ -243,7 +243,7 @@ export async function sendTurnoNotification(
   // Email
   if (usarEmail && orgConfig?.notificaciones_email !== false && ctx.destinatarioEmail) {
     try {
-      await sendEmail({
+      await sendCustomer({
         to: ctx.destinatarioEmail,
         subject: tpl.subject,
         html: tpl.html,
