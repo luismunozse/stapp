@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Check, ExternalLink, Loader2, Tag } from "lucide-react"
+import { Check, ExternalLink, Loader2, Tag, Layers } from "lucide-react"
+import Link from "next/link"
 import { printDeviceLabel } from "./print-label"
 import { ThermalPrintRecepcion, type RecepcionReceiptEquipo } from "./thermal-print-recepcion"
 import { construirMensajeRecepcion } from "@/lib/recepcion-whatsapp"
@@ -225,6 +226,13 @@ export function RecepcionCreadaModal({
               Etiquetas ({resultado.ordenes.length})
             </Button>
           </div>
+
+          <Button variant="outline" className="w-full" asChild>
+            <Link href={`/ordenes/recepcion/${resultado.recepcion.id}`}>
+              <Layers className="mr-2 h-4 w-4" />
+              Ver lote
+            </Link>
+          </Button>
 
           <div>
             <Label className="flex items-center gap-2 mb-2">
