@@ -58,7 +58,18 @@ BEGIN
   END;
 END $$;
 
--- 5. RLS habilitado en email_suprimidos
+-- 5. El CHECK de normalizacion rechaza un espacio final
+DO $$
+BEGIN
+  BEGIN
+    INSERT INTO email_suprimidos (email, motivo) VALUES ('probe-espacio@example.invalid ', 'MANUAL');
+    RAISE EXCEPTION 'FALLO: el CHECK de normalizacion no rechazo el espacio final';
+  EXCEPTION WHEN check_violation THEN
+    RAISE NOTICE 'OK: CHECK de normalizacion rechaza espacios al borde';
+  END;
+END $$;
+
+-- 6. RLS habilitado en email_suprimidos
 SELECT 'rls email_suprimidos' AS probe,
        CASE WHEN relrowsecurity THEN 'OK' ELSE 'FALLO' END AS resultado
 FROM pg_class WHERE relname = 'email_suprimidos';
