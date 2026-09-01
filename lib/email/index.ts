@@ -1,4 +1,5 @@
 import { envialoSimpleProvider } from "./providers/envialosimple"
+import { resendProvider } from "./providers/resend"
 import type { EmailMessage, SendResult } from "./types"
 
 export type { EmailMessage, EmailAttachment, SendResult, EmailProvider } from "./types"
@@ -22,5 +23,10 @@ export async function sendPlatform(msg: EmailMessage): Promise<SendResult> {
  * exactamente lo que esta separacion evita.
  */
 export async function sendCustomer(msg: EmailMessage): Promise<SendResult> {
-  return envialoSimpleProvider.send(msg)
+  // KILL SWITCH: la caida a EnvialoSimple ocurre SOLO por configuracion
+  // ausente, NUNCA por un envio fallido. Un fallback en runtime romperia dos
+  // cosas a la vez: mandaria correo de taller por el dominio que se quiere
+  // aislar, y ocultaria la config rota detras de un "todo funciona".
+  const provider = process.env.RESEND_API_KEY ? resendProvider : envialoSimpleProvider
+  return provider.send(msg)
 }

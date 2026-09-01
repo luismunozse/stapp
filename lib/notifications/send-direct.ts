@@ -108,7 +108,9 @@ export async function sendNotificationDirect(params: NotificationParams) {
         asunto: subject,
         contenido: html,
         error_message: null,
-        metadata: JSON.stringify({ messageId: (result as { id?: string } | null)?.id ?? null, provider: "envialosimple" }),
+        provider_message_id: result.id,
+        proveedor: result.proveedor,
+        metadata: JSON.stringify({ messageId: result.id, provider: result.proveedor }),
       })
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error"

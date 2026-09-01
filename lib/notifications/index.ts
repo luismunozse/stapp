@@ -107,6 +107,7 @@ export class NotificationService {
         context,
         success: true,
         messageId,
+        proveedor: result.proveedor,
         content: emailContent.html,
         subject: emailContent.subject,
       })
@@ -214,6 +215,7 @@ export class NotificationService {
     context: NotificationContext
     success: boolean
     messageId?: string
+    proveedor?: string
     error?: string
     content: string
     subject?: string
@@ -234,6 +236,8 @@ export class NotificationService {
         asunto: params.subject || null,
         contenido: params.content,
         error_message: params.error || null,
+        provider_message_id: params.messageId || null,
+        proveedor: params.proveedor || "envialosimple",
         metadata: JSON.stringify({
           messageId: params.messageId,
           ordenNumero: params.context.orden?.numeroOrden,
