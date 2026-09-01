@@ -28,7 +28,7 @@ BEGIN
   END IF;
 END $$;
 
--- 3. El indice unico de supresion es case-insensitive
+-- 3. El unique sobre la columna rechaza la direccion repetida
 -- Direccion en el TLD reservado .invalid (RFC 2606): no puede existir de verdad.
 DO $$
 BEGIN
@@ -40,14 +40,25 @@ END $$;
 DO $$
 BEGIN
   BEGIN
-    INSERT INTO email_suprimidos (email, motivo) VALUES ('PROBE-321@EXAMPLE.INVALID', 'MANUAL');
-    RAISE EXCEPTION 'FALLO: el unique index no es case-insensitive';
+    INSERT INTO email_suprimidos (email, motivo) VALUES ('probe-321@example.invalid', 'MANUAL');
+    RAISE EXCEPTION 'FALLO: el unique index no rechazo la direccion repetida';
   EXCEPTION WHEN unique_violation THEN
-    RAISE NOTICE 'OK: unique index case-insensitive activo';
+    RAISE NOTICE 'OK: unique index sobre email activo';
   END;
 END $$;
 
--- 4. RLS habilitado en email_suprimidos
+-- 4. El CHECK de normalizacion rechaza mayusculas
+DO $$
+BEGIN
+  BEGIN
+    INSERT INTO email_suprimidos (email, motivo) VALUES ('PROBE-MAYUS@EXAMPLE.INVALID', 'MANUAL');
+    RAISE EXCEPTION 'FALLO: el CHECK de normalizacion no rechazo mayusculas';
+  EXCEPTION WHEN check_violation THEN
+    RAISE NOTICE 'OK: CHECK de normalizacion activo';
+  END;
+END $$;
+
+-- 5. RLS habilitado en email_suprimidos
 SELECT 'rls email_suprimidos' AS probe,
        CASE WHEN relrowsecurity THEN 'OK' ELSE 'FALLO' END AS resultado
 FROM pg_class WHERE relname = 'email_suprimidos';

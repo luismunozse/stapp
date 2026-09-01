@@ -11,7 +11,22 @@ export class EmailSuprimidoError extends Error {
 }
 
 /**
+ * Normaliza una direccion antes de tocar la tabla. Unica fuente de la regla:
+ * tanto la lectura como la escritura pasan por aca, igual que
+ * `proveedorCliente()` centraliza la decision del kill switch. La tabla
+ * ademas la hace cumplir con `email_suprimidos_email_normalizado_check`.
+ */
+function normalizar(email: string): string {
+  return email.trim().toLowerCase()
+}
+
+/**
  * Devuelve el motivo de supresion, o null si la direccion puede recibir correo.
+ *
+ * Consulta por igualdad sobre la columna normalizada: el unique index de la
+ * migracion 321 es sobre `email` (no sobre `lower(email)`), asi que un `.eq`
+ * usa ese indice. Un `.ilike` haria seq scan en cada envio, sobre el path
+ * caliente y una tabla que solo crece.
  *
  * FAIL OPEN: si la consulta falla, devuelve null y el envio sigue. Fallar
  * cerrado dejaria mudas a todas las organizaciones ante un hipo transitorio de
@@ -23,7 +38,7 @@ export async function estaSuprimido(email: string): Promise<string | null> {
     const { data, error } = await supabaseAdmin
       .from("email_suprimidos")
       .select("motivo")
-      .ilike("email", email)
+      .eq("email", normalizar(email))
       .maybeSingle()
 
     if (error) {
@@ -39,16 +54,11 @@ export async function estaSuprimido(email: string): Promise<string | null> {
 }
 
 /**
- * Da de baja una direccion. Idempotente ante reintentos del webhook: si ya
- * esta suprimida, es un no-op.
- *
- * No usamos `.upsert(..., { onConflict: "email" })`: el indice unico de la
- * migracion 321 es sobre la EXPRESION `lower(email)`, no sobre la columna
- * `email`. Un ON CONFLICT que no matchea un indice real hace fallar TODOS los
- * inserts (no solo los duplicados), no solamente los que colisionan. Mismo
- * patron de lookup manual que
- * `app/api/public/catalogo/[slug]/abandono/route.ts` usa para su indice
- * parcial: se busca primero y se inserta solo si no existe.
+ * Da de baja una direccion. Idempotente ante reintentos del webhook: el
+ * unique index sobre `email` (columna, normalizada) absorbe el duplicado via
+ * `ignoreDuplicates`, en un solo round trip atomico. Dos webhooks concurrentes
+ * para la misma direccion (ej. bounce y queja llegando juntos) no compiten por
+ * un lookup-then-insert: el conflicto lo resuelve la base.
  */
 export async function suprimirEmail(params: {
   email: string
@@ -57,28 +67,18 @@ export async function suprimirEmail(params: {
   organizationId?: string | null
   notificationLogId?: string | null
 }): Promise<void> {
-  const { data: existing, error: lookupError } = await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from("email_suprimidos")
-    .select("id")
-    .ilike("email", params.email)
-    .maybeSingle()
-
-  if (lookupError) {
-    console.error("suprimirEmail: fallo el lookup previo", params.email, lookupError.message)
-    return
-  }
-
-  if (existing) {
-    return
-  }
-
-  const { error } = await supabaseAdmin.from("email_suprimidos").insert({
-    email: params.email,
-    motivo: params.motivo,
-    proveedor: params.proveedor ?? null,
-    organization_id: params.organizationId ?? null,
-    notification_log_id: params.notificationLogId ?? null,
-  })
+    .upsert(
+      {
+        email: normalizar(params.email),
+        motivo: params.motivo,
+        proveedor: params.proveedor ?? null,
+        organization_id: params.organizationId ?? null,
+        notification_log_id: params.notificationLogId ?? null,
+      },
+      { onConflict: "email", ignoreDuplicates: true }
+    )
 
   if (error) {
     console.error("suprimirEmail: no se pudo suprimir", params.email, error.message)

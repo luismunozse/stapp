@@ -82,16 +82,26 @@ CREATE TABLE IF NOT EXISTS email_suprimidos (
   created_at          TIMESTAMPTZ DEFAULT NOW(),
 
   CONSTRAINT email_suprimidos_motivo_check
-    CHECK (motivo IN ('HARD_BOUNCE', 'QUEJA', 'MANUAL'))
+    CHECK (motivo IN ('HARD_BOUNCE', 'QUEJA', 'MANUAL')),
+
+  -- La direccion se guarda SIEMPRE normalizada a minusculas. El CHECK lo hace
+  -- explicito: una fila con mayusculas nunca coincidiria con la consulta de
+  -- envio y quedaria suprimida de mentira, sin que nadie se entere.
+  CONSTRAINT email_suprimidos_email_normalizado_check
+    CHECK (email = lower(email))
 );
 
--- La consulta del envio es por email, case-insensitive. El unique tambien
--- hace idempotente el ON CONFLICT DO NOTHING del webhook ante reintentos.
+-- Unique sobre la COLUMNA, no sobre lower(email). Un indice de expresion no
+-- sirve como destino de ON CONFLICT desde PostgREST (que solo acepta nombres de
+-- columna) y ademas no lo usaria la consulta de envio, que quedaria en seq scan
+-- sobre el path caliente. El CHECK de normalizacion de arriba es lo que
+-- garantiza que este unique de columna siga siendo case-insensitive en la
+-- practica: todo lo que entra ya esta en minusculas.
 CREATE UNIQUE INDEX IF NOT EXISTS email_suprimidos_email_idx
-  ON email_suprimidos (lower(email));
+  ON email_suprimidos (email);
 
 COMMENT ON TABLE email_suprimidos IS
-  'Direcciones a las que no se envia mas correo al cliente. GLOBAL, no por organizacion: todas comparten el subdominio avisos.stapp.com.ar y por lo tanto la reputacion. organization_id es solo auditoria de quien la origino.';
+  'Direcciones a las que no se envia mas correo al cliente. GLOBAL, no por organizacion: todas comparten el subdominio avisos.stapp.com.ar y por lo tanto la reputacion. organization_id es solo auditoria de quien la origino. email se guarda siempre normalizado a minusculas (ver email_suprimidos_email_normalizado_check); el unique index es sobre la columna, no sobre lower(email).';
 
 -- Tabla global sin organization_id obligatorio: expuesta via PostgREST
 -- filtraria direcciones de clientes de TODAS las organizaciones. Solo la

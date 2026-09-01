@@ -66,4 +66,46 @@ describe("supresion de email", () => {
 
     expect(global.fetch).not.toHaveBeenCalled()
   })
+
+  it("la supresion es case-insensitive: normaliza antes de consultar", async () => {
+    const chain = createChainMock({ motivo: "HARD_BOUNCE" })
+    mockSupabaseFrom({
+      email_suprimidos: chain,
+    })
+
+    const { sendCustomer } = await import("../index")
+
+    // La fila esta guardada en minusculas (email_suprimidos_email_normalizado_check
+    // lo garantiza); el envio se dirige a la misma direccion con mayusculas.
+    await expect(
+      sendCustomer({ to: "Cliente@Example.COM", subject: "s", html: "h" })
+    ).rejects.toThrow("email suprimido: HARD_BOUNCE")
+
+    // El unique index es sobre la columna `email`, no sobre lower(email): la
+    // consulta tiene que normalizar ANTES del .eq para poder usarlo.
+    expect(chain.eq).toHaveBeenCalledWith("email", "cliente@example.com")
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it("suprimirEmail escribe la direccion normalizada a minusculas", async () => {
+    const upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null })
+    mockSupabaseFrom({
+      email_suprimidos: { upsert: upsertSpy } as any,
+    })
+
+    const { suprimirEmail } = await import("../suppression")
+
+    await suprimirEmail({
+      email: "Muerta@EXAMPLE.com",
+      motivo: "HARD_BOUNCE",
+      proveedor: "resend",
+      organizationId: null,
+      notificationLogId: null,
+    })
+
+    expect(upsertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "muerta@example.com" }),
+      { onConflict: "email", ignoreDuplicates: true }
+    )
+  })
 })
