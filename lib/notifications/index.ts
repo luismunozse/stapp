@@ -254,7 +254,8 @@ export class NotificationService {
     let query = supabaseAdmin
       .from("notification_logs")
       .select(`
-        *,
+        id, tipo, canal, estado, destinatario, asunto, error_message, created_at,
+        estado_entrega, delivered_at, bounced_at, bounce_tipo, proveedor,
         ordenes_servicio (numero_orden),
         clientes (nombre)
       `)
