@@ -7,6 +7,7 @@ import { hasPlanFeature } from "@/lib/subscriptions"
 import { dateOnlyToNoonUtcISO } from "@/lib/timezone"
 import { totalPresupuestoDeOrden, cotizacionesVigentesDeOrden } from "@/lib/cotizacion-presupuesto"
 import { marcarOriginalReemplazada, restaurarOriginalDeRevision } from "@/lib/cotizacion-revision"
+import { validarInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizacion-informe"
 import { z } from "zod"
 
 // Detecta el error de "la función no existe todavía", que acá significa
@@ -85,6 +86,10 @@ const updateCotizacionSchema = z.object({
   ordenId: z.string().nullable().optional(),
   equipo: equipoSchema.optional(),
   checklist: checklistSchema.nullable().optional(),
+  veredicto: veredictoSchema.nullable().optional(),
+  diagnosticoTecnico: z.string().max(4000).nullable().optional(),
+  causaDano: causaDanoSchema.nullable().optional(),
+  presentadoAnte: z.string().max(200).nullable().optional(),
 })
 
 // Revierte una orden a EN_DIAGNOSTICO cuando deja de tener un presupuesto
@@ -308,7 +313,7 @@ export async function PUT(
     // Verify cotizacion exists and belongs to org
     const { data: existing, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, tipo, origen, organization_id, created_by, iva_porcentaje, descuento_global_tipo, descuento_global_valor, orden_id, revision_de")
+      .select("id, estado, tipo, origen, organization_id, created_by, iva_porcentaje, descuento_global_tipo, descuento_global_valor, orden_id, revision_de, veredicto, diagnostico_tecnico, causa_dano, presentado_ante, items_cotizacion(id)")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .single()
@@ -382,6 +387,33 @@ export async function PUT(
     if (data.ivaPorcentaje !== undefined) updateData.iva_porcentaje = data.ivaPorcentaje
     if (data.tipoCambio !== undefined) updateData.tipo_cambio = data.tipoCambio
     if (data.sectorId !== undefined) updateData.sector_id = data.sectorId
+
+    if (data.veredicto !== undefined) updateData.veredicto = data.veredicto
+    if (data.diagnosticoTecnico !== undefined) {
+      updateData.diagnostico_tecnico = data.diagnosticoTecnico?.trim() || null
+    }
+    if (data.causaDano !== undefined) updateData.causa_dano = data.causaDano
+    if (data.presentadoAnte !== undefined) {
+      updateData.presentado_ante = data.presentadoAnte?.trim() || null
+    }
+
+    // La regla del informe mira el estado RESULTANTE, no el payload: un pedido
+    // puede cambiar el veredicto sin mandar items, y viceversa. Por eso se
+    // fusiona contra la fila existente en vez de vivir en un refine de Zod.
+    const itemsResultantes = data.items !== undefined
+      ? data.items
+      : (existing.items_cotizacion || [])
+    const mensajeInforme = validarInforme({
+      cantidadItems: itemsResultantes.length,
+      veredicto: data.veredicto !== undefined ? data.veredicto : existing.veredicto,
+      diagnosticoTecnico: data.diagnosticoTecnico !== undefined
+        ? data.diagnosticoTecnico
+        : existing.diagnostico_tecnico,
+      causaDano: data.causaDano !== undefined ? data.causaDano : existing.causa_dano,
+    })
+    if (mensajeInforme) {
+      return NextResponse.json({ error: mensajeInforme }, { status: 400 })
+    }
 
     // Reasignación de orden (vincular/desvincular). Solo tipo ORDEN.
     let ordenIdChanged = false

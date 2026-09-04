@@ -44,6 +44,10 @@ const revisionEnviada = {
   descuento_global_valor: 0,
   orden_id: "orden-1",
   revision_de: "cot-1",
+  // Cotización real con ítems: sin esto, la validación del informe técnico
+  // (Task 4) la confunde con un dictamen vacío y corta con 400 antes de llegar
+  // a la lógica de reemplazo de revisión que estos tests prueban.
+  items_cotizacion: [{ id: "it-1" }],
 }
 
 function putRechazar(id = "rev-1", body: any = { estado: "RECHAZADA" }) {

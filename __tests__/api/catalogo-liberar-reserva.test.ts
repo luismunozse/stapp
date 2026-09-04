@@ -55,6 +55,10 @@ describe("liberación de la reserva del catálogo", () => {
           iva_porcentaje: 0,
           descuento_global_tipo: "porcentaje",
           descuento_global_valor: 0,
+          // Cotización real con ítems: sin esto, la validación del informe
+          // técnico (Task 4) la confunde con un dictamen vacío y corta con 400
+          // antes de llegar a la liberación de la reserva que este test prueba.
+          items_cotizacion: [{ id: "it-1" }],
         }),
       })
     }
@@ -113,6 +117,7 @@ describe("liberación de la reserva del catálogo", () => {
           iva_porcentaje: 0,
           descuento_global_tipo: "porcentaje",
           descuento_global_valor: 0,
+          items_cotizacion: [{ id: "it-1" }],
         }),
       })
       vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ok: true }, error: null } as any)
