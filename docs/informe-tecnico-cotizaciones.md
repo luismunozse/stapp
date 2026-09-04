@@ -1,7 +1,7 @@
 # Informe técnico para seguros (cotizaciones)
 
 Fecha: 2026-09-04
-Estado: diseño aprobado, pendiente de plan de implementación
+Estado: diseño aprobado. Plan de implementación en `docs/informe-tecnico-cotizaciones-plan.md`
 
 ## 1. Problema
 
@@ -40,10 +40,10 @@ Migración nueva, cuatro columnas en `cotizaciones`. Sin tablas nuevas.
 
 ```sql
 ALTER TABLE cotizaciones
-  ADD COLUMN veredicto        TEXT,
-  ADD COLUMN diagnostico      TEXT,
-  ADD COLUMN causa_dano       TEXT,
-  ADD COLUMN presentado_ante  TEXT;
+  ADD COLUMN veredicto            TEXT,
+  ADD COLUMN diagnostico_tecnico  TEXT,
+  ADD COLUMN causa_dano           TEXT,
+  ADD COLUMN presentado_ante      TEXT;
 
 ALTER TABLE cotizaciones ADD CONSTRAINT cotizaciones_veredicto_check
   CHECK (veredicto IS NULL OR veredicto IN ('REPARABLE','IRREPARABLE','SIN_FALLA'));
@@ -81,10 +81,17 @@ dos ejes y obligaría a productos cruzados imposibles de expresar.
 
 El informe no es un tipo: es la consecuencia de un veredicto que no admite ítems.
 
-### 3.2 Por qué `diagnostico` se duplica
+### 3.2 Por qué la columna se llama `diagnostico_tecnico` y no `diagnostico`
 
-`ordenes_servicio.diagnostico TEXT` ya existe (`supabase/migrations/001_schema.sql:199`).
-La cotización guarda igual su propia copia, por dos razones:
+El nombre corto **ya está tomado**. `condicionesSchema` (`app/api/cotizaciones/route.ts:27`)
+tiene un campo `diagnostico` que se guarda dentro del JSONB `equipo_snapshot`
+—y **sólo** para `tipo = 'PRESUPUESTO'`, así que en una cotización colgada de
+una orden ese JSONB es `null`. Son dos campos distintos con dos alcances
+distintos; reusar el nombre los condena a que alguien los fusione.
+
+`ordenes_servicio.diagnostico TEXT` también existe
+(`supabase/migrations/001_schema.sql:199`). La cotización guarda igual su propia
+copia, por dos razones:
 
 1. El diagnóstico de la orden sigue mutando después de emitido el documento. Un
    informe presentado ante una aseguradora no puede cambiar a espaldas de nadie.
@@ -96,7 +103,9 @@ a tipear dos veces. Lo que se persiste es la copia congelada.
 
 ### 3.3 Autocompletado de `presentado_ante`
 
-Endpoint nuevo `GET /api/cotizaciones/entidades`:
+Endpoint nuevo `GET /api/cotizaciones/entidades` → `{ entidades: string[] }`.
+
+Semánticamente es esto:
 
 ```sql
 SELECT DISTINCT presentado_ante
@@ -105,28 +114,41 @@ WHERE organization_id = $1
   AND presentado_ante IS NOT NULL
   AND deleted_at IS NULL
 ORDER BY 1
-LIMIT 50
 ```
 
-Alimenta un `<datalist>` en el formulario. Sin tabla, sin ABM, sin migración
-adicional. Evita que la misma aseguradora quede escrita de cinco formas
-distintas sin obligar a nadie a dar de alta nada.
+**Pero PostgREST no expone `SELECT DISTINCT`.** La ruta trae hasta 500 filas de
+la columna y deduplica en JavaScript. El límite acota el costo: un taller no
+trabaja con 500 aseguradoras, y si alguna quedara afuera el campo sigue siendo
+escribible a mano. Un índice parcial sobre `(organization_id, presentado_ante)`
+evita el scan completo.
+
+Alimenta un `<datalist>` en el formulario. Sin tabla, sin ABM. Evita que la
+misma aseguradora quede escrita de cinco formas distintas sin obligar a nadie a
+dar de alta nada.
 
 Guard: `requireAuth()` + scope por `organization_id`. Devuelve sólo strings.
 
 ## 4. Reglas de validación
 
-El `.min(1)` de `app/api/cotizaciones/route.ts:61` se reemplaza por un
-`superRefine` compartido entre POST y PUT.
+El `.min(1)` de `app/api/cotizaciones/route.ts:61` se reemplaza por una función
+pura, `validarInforme`, en un módulo compartido (`lib/cotizacion-informe.ts`).
 
 | Ítems | Veredicto | Resultado |
 |---|---|---|
 | ≥ 1 | cualquiera, o ausente | Válido (comportamiento actual, sin cambios) |
-| 0 | `IRREPARABLE` o `SIN_FALLA` | Válido, pero `diagnostico` y `causa_dano` pasan a obligatorios |
+| 0 | `IRREPARABLE` o `SIN_FALLA` | Válido, pero `diagnostico_tecnico` y `causa_dano` pasan a obligatorios |
 | 0 | ausente | Rechazado: `"Una cotización sin ítems necesita un veredicto técnico"` |
 | 0 | `REPARABLE` | Rechazado: `"Si el equipo es reparable, el presupuesto necesita al menos un ítem"` |
 
-`diagnostico` obligatorio significa no vacío después de `trim()`.
+`diagnostico_tecnico` obligatorio significa no vacío después de `trim()`.
+
+**Por qué una función pura y no un `superRefine` en los dos schemas.** El POST
+recibe el documento entero y puede validar el payload: ahí `validarInforme` se
+envuelve en un `superRefine`. El PUT no: arma su `updateData` campo por campo, y
+un pedido puede cambiar el veredicto **sin mandar `items`**. Un refine sólo ve el
+payload y no podría distinguir "no mandó ítems" de "no tiene ítems". Por eso el
+PUT llama a la misma función después de fusionar el payload con la fila
+existente, y valida el estado **resultante**.
 
 Los totales (`subtotal`, `iva`, `total`) son `NOT NULL` desde la migración 001 y
 quedan en `0` para un informe sin ítems. No requieren cambio de esquema.
@@ -271,10 +293,19 @@ el documento (interna, envío por mail, pública, y JSON público).
 
 Se agrega la variante informe:
 
-- Línea "Para ser presentado ante: {entidad}" bajo los datos del cliente, siempre
-  que el campo tenga valor
-- Bloque Veredicto / Diagnóstico / Causa probable del daño, siempre que haya
-  veredicto
+Se agrega **un solo bloque**, "DICTAMEN TÉCNICO", justo antes de la tabla de
+ítems: en un informe es el cuerpo del documento, y en un presupuesto con
+dictamen es el encabezado del detalle. Contiene, cada uno si tiene valor:
+
+- "Para ser presentado ante: {entidad}"
+- Veredicto
+- Causa probable del daño
+- Diagnóstico (con corte de línea al ancho útil)
+
+El bloque se dibuja si hay veredicto **o** hay entidad destinataria; con sólo
+entidad, el rótulo pasa a "PRESENTACIÓN". La entidad va acá y no bajo los datos
+del cliente para no editar quirúrgicamente el card del cliente, que es la parte
+del layout con más coordenadas calculadas a mano.
 
 El título y el cuerpo dependen sólo del conteo de ítems:
 
