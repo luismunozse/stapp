@@ -509,9 +509,9 @@ describe("POST /api/cotizaciones — informe tecnico sin items", () => {
     mockAuthSuccess()
 
     const res = await POST(createPostRequest({ clienteId: "cli-1", items: [] }))
-    const body = await parseResponse(res)
+    const { status, body } = await parseResponse(res)
 
-    expect(res.status).toBe(400)
+    expect(status).toBe(400)
     expect(body.error).toContain("veredicto")
   })
 
@@ -521,9 +521,9 @@ describe("POST /api/cotizaciones — informe tecnico sin items", () => {
     const res = await POST(
       createPostRequest({ clienteId: "cli-1", items: [], ...DICTAMEN, veredicto: "REPARABLE" })
     )
-    const body = await parseResponse(res)
+    const { status, body } = await parseResponse(res)
 
-    expect(res.status).toBe(400)
+    expect(status).toBe(400)
     expect(body.error).toContain("al menos un ítem")
   })
 
@@ -760,9 +760,9 @@ describe("PUT /api/cotizaciones/[id] — informe tecnico", () => {
     })
 
     const res = await PUT(createPostRequest({ items: [] }), params)
-    const body = await parseResponse(res)
+    const { status, body } = await parseResponse(res)
 
-    expect(res.status).toBe(400)
+    expect(status).toBe(400)
     expect(body.error).toContain("veredicto")
   })
 
@@ -780,9 +780,9 @@ describe("PUT /api/cotizaciones/[id] — informe tecnico", () => {
 
     // No manda `items`: la validacion tiene que mirar la fila existente.
     const res = await PUT(createPostRequest({ veredicto: "REPARABLE" }), params)
-    const body = await parseResponse(res)
+    const { status, body } = await parseResponse(res)
 
-    expect(res.status).toBe(400)
+    expect(status).toBe(400)
     expect(body.error).toContain("al menos un ítem")
   })
 
@@ -1141,7 +1141,7 @@ describe("GET /api/cotizaciones/entidades", () => {
     })
 
     const res = await GET()
-    const body = await parseResponse(res)
+    const { body } = await parseResponse(res)
 
     expect(body.entidades).toEqual(["La Segunda ART", "Provincia Seguros"])
   })
@@ -1157,7 +1157,7 @@ describe("GET /api/cotizaciones/entidades", () => {
     })
 
     const res = await GET()
-    const body = await parseResponse(res)
+    const { body } = await parseResponse(res)
 
     expect(body.entidades).toEqual(["Sancor"])
   })
@@ -1539,7 +1539,7 @@ describe("GET /api/cotizaciones/[id] — DTO del dictamen", () => {
       new Request("http://localhost/api/cotizaciones/cot-1") as any,
       { params: Promise.resolve({ id: "cot-1" }) }
     )
-    const body = await parseResponse(res)
+    const { status, body } = await parseResponse(res)
 
     expect(body.veredicto).toBe("IRREPARABLE")
     expect(body.diagnosticoTecnico).toBe("Sin reparacion posible.")
@@ -1651,9 +1651,9 @@ describe("aprobar un informe tecnico", () => {
     })
 
     const res = await aprobarInterna(createPostRequest({}), params)
-    const body = await parseResponse(res)
+    const { status, body } = await parseResponse(res)
 
-    expect(res.status).toBe(400)
+    expect(status).toBe(400)
     expect(body.error).toContain("informe")
   })
 })
