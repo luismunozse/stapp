@@ -82,6 +82,7 @@ export async function validateRefreshToken(refreshToken: string) {
       nombre,
       rol,
       organization_id,
+      sucursal_id,
       refresh_token_expires,
       organizations (id, activo)
     `)
@@ -508,6 +509,35 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           // el JWT termina sincronizándose solo dentro de las próximas 6 horas
           // sin requerir re-login.
           token.name = (validUser as { nombre?: string }).nombre || token.name
+
+          // El rol y la sucursal también, y por un motivo más serio que el
+          // nombre: `token.role` se firma UNA vez, al iniciar sesión, y este
+          // refresh extiende `exp` un día más cada vez que corre. Con la
+          // cookie a 30 días, un usuario activo arrastraba el rol que tenía al
+          // loguearse durante semanas — y el rol es lo que leen requireAdmin()
+          // y todos los guards de la API.
+          //
+          // Mientras el rol solo se fijaba al crear el usuario esto no se
+          // notaba. Dejó de ser así: /api/usuarios/[id]/rol lo cambia desde el
+          // panel del taller, y /api/superadmin/users/[userId]/change-role ya
+          // lo hacía desde antes. `validateRefreshToken` ya traía `rol` en su
+          // SELECT sin usarlo, así que esto no agrega una consulta.
+          //
+          // Van los dos juntos a propósito: un rol nuevo con la sucursal vieja
+          // deja al usuario fuera del invariante que protege el CHECK de la
+          // 241 (`rol = 'ADMIN' OR sucursal_id IS NOT NULL`) — por ejemplo un
+          // ex-ADMIN que ya es TECNICO en la BD pero sigue con sucursalId null
+          // en su token, y por lo tanto sin alcance de sucursal.
+          // Se comparan los tres valores en vez de castear: un rol que no sea
+          // uno de ellos deja el token como estaba en lugar de firmar
+          // cualquier cosa. No deberia pasar —`user_role` es un enum de la
+          // BD— pero esto termina dentro de un JWT que los guards leen como
+          // verdad, y ahi conviene no confiar.
+          const fresco = validUser as { rol?: string; sucursal_id?: string | null }
+          if (fresco.rol === "ADMIN" || fresco.rol === "TECNICO" || fresco.rol === "VENDEDOR") {
+            token.role = fresco.rol
+          }
+          token.sucursalId = fresco.sucursal_id ?? null
 
           console.log(`[Auth] JWT extended for user ${validUser.id}`)
         } else {
