@@ -582,6 +582,19 @@ import { validarInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizaci
 
 - [ ] **Step 4: Cambiar el schema**
 
+**Chequear primero si el schema se deriva en otro lado.** `.superRefine()`
+devuelve un `ZodEffects`, que pierde `.partial()`, `.extend()`, `.pick()` y
+`.omit()`:
+
+```bash
+rg -n "cotizacionSchema" app lib components
+```
+
+Si aparece sólo dentro de `app/api/cotizaciones/route.ts`, seguir. Si algún
+otro archivo lo deriva, no envolver el schema: dejar el `z.object` como está y
+llamar a `validarInforme` en el handler justo después del `.parse()`,
+devolviendo `NextResponse.json({ error: mensaje }, { status: 400 })`.
+
 Reemplazar el bloque de las líneas 56-71 (`const cotizacionSchema = z.object({ ... })`) por:
 
 ```ts
@@ -1258,9 +1271,13 @@ describe("generateCotizacionPDF — informe tecnico", () => {
     const text = await extraerTexto(buffer)
 
     expect(text).toContain("INFORME TÉCNICO")
-    expect(text).not.toContain("COTIZACIÓN")
+    // "DETALLE DE ITEMS" y "SUBTOTAL" son rotulos que existen SOLO dentro del
+    // bloque 447-569 que se saltea. No usar not.toContain("COTIZACIÓN"): el
+    // banner de validez vive fuera del bloque y probablemente diga "Esta
+    // cotización es válida hasta...". Tampoco not.toContain("TOTAL"), que
+    // matchea de más.
     expect(text).not.toContain("DETALLE DE ITEMS")
-    expect(text).not.toContain("TOTAL")
+    expect(text).not.toContain("SUBTOTAL")
   })
 
   it("imprime veredicto, causa, diagnostico y destinatario", async () => {
