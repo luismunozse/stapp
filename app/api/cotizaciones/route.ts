@@ -7,6 +7,7 @@ import { createAuditLogger } from "@/lib/audit"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { dateOnlyToNoonUtcISO, dateNumberInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { totalPresupuestoDeOrden } from "@/lib/cotizacion-presupuesto"
+import { validarInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizacion-informe"
 import { randomBytes } from "crypto"
 import { z } from "zod"
 
@@ -58,7 +59,9 @@ const cotizacionSchema = z.object({
   ordenId: z.string().optional(),
   clienteId: z.string().optional(),
   sectorId: z.string().optional(),
-  items: z.array(itemSchema).min(1, "Debe tener al menos un item"),
+  // Sin .min(1): una cotizacion sin items es un informe tecnico. La regla que
+  // decide cuando eso es valido vive en validarInforme (lib/cotizacion-informe).
+  items: z.array(itemSchema),
   notas: z.string().optional(),
   fechaVencimiento: z.string().optional(),
   terminos: z.string().optional(),
@@ -68,6 +71,20 @@ const cotizacionSchema = z.object({
   tipoCambio: z.number().positive().optional(),
   equipo: equipoSchema.optional(),
   checklist: checklistSchema.optional(),
+  veredicto: veredictoSchema.nullable().optional(),
+  diagnosticoTecnico: z.string().max(4000).nullable().optional(),
+  causaDano: causaDanoSchema.nullable().optional(),
+  presentadoAnte: z.string().max(200).nullable().optional(),
+}).superRefine((data, ctx) => {
+  const mensaje = validarInforme({
+    cantidadItems: data.items.length,
+    veredicto: data.veredicto,
+    diagnosticoTecnico: data.diagnosticoTecnico,
+    causaDano: data.causaDano,
+  })
+  if (mensaje) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: mensaje, path: ["items"] })
+  }
 })
 
 function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuentoTipo?: string; descuentoValor?: number }) {
@@ -444,6 +461,10 @@ export async function POST(request: Request) {
         tipo: data.tipo,
         equipo_snapshot: data.tipo === "PRESUPUESTO" ? data.equipo : null,
         checklist_snapshot: data.tipo === "PRESUPUESTO" ? data.checklist || null : null,
+        veredicto: data.veredicto || null,
+        diagnostico_tecnico: data.diagnosticoTecnico?.trim() || null,
+        causa_dano: data.causaDano || null,
+        presentado_ante: data.presentadoAnte?.trim() || null,
       })
       .select()
       .single()
