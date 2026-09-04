@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireCotizacionCobroAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura } from "@/lib/sucursal"
 import { z } from "zod"
@@ -38,15 +38,13 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, session, organizationId, userId, role } = await requireAuth()
+    // ADMIN siempre; TECNICO solo si la org habilitó `tecnicos_cobran_
+    // cotizaciones` (migración 322, opt-in y default apagado). El guard es
+    // fail-closed: con la columna sin migrar el técnico recibe el mismo 403
+    // que recibía antes.
+    const { error, session, organizationId, userId, role } =
+      await requireCotizacionCobroAccess()
     if (error) return error
-
-    if (role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "Solo administradores pueden convertir cotizaciones a venta" },
-        { status: 403 }
-      )
-    }
 
     const sucursalId = await sucursalParaEscritura({
       role,
@@ -82,6 +80,14 @@ export async function POST(
         { error: "Cotizacion no encontrada" },
         { status: 404 }
       )
+    }
+
+    // TECNICO ownership check. El permiso de la 322 lo habilita a cerrar SU
+    // trabajo, no el del resto del equipo: mismo alcance que ya tenían aprobar,
+    // enviar, duplicar y el PUT. Sin esto, prender el toggle le abriría de
+    // paso el cobro de las cotizaciones de todos los demás técnicos.
+    if (role === "TECNICO" && cotizacion.created_by !== userId) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 })
     }
 
     if (cotizacion.estado !== "ACEPTADA") {

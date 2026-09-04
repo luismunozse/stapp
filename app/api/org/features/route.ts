@@ -11,7 +11,7 @@ export async function GET() {
 
     const { data, error: readError } = await supabaseAdmin
       .from("organizations")
-      .select("modulo_agenda, vendedores_administran_inventario, tecnicos_operan_pos, vendedores_manejan_caja")
+      .select("modulo_agenda, vendedores_administran_inventario, tecnicos_operan_pos, vendedores_manejan_caja, tecnicos_cobran_cotizaciones")
       .eq("id", organizationId!)
       .single()
 
@@ -66,6 +66,7 @@ export async function GET() {
         vendedoresAdministranInventario: !!data?.vendedores_administran_inventario,
         tecnicosOperanPos: !!data?.tecnicos_operan_pos,
         vendedoresManejanCaja: !!data?.vendedores_manejan_caja,
+        tecnicosCobranCotizaciones: !!data?.tecnicos_cobran_cotizaciones,
       },
       {
         headers: {

@@ -68,6 +68,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [vendedoresAdministranInventario, setVendedoresAdministranInventario] = useState(false)
   const [tecnicosOperanPos, setTecnicosOperanPos] = useState(false)
   const [vendedoresManejanCaja, setVendedoresManejanCaja] = useState(false)
+  const [tecnicosCobranCotizaciones, setTecnicosCobranCotizaciones] = useState(false)
   const [comisionAplicaSinReparacion, setComisionAplicaSinReparacion] = useState(false)
   const [ivaRegimen, setIvaRegimen] = useState<"EXENTO" | "INCLUIDO" | "ADITIVO">("EXENTO")
   const [ivaTasa, setIvaTasa] = useState("")
@@ -126,6 +127,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setVendedoresAdministranInventario(!!data.vendedoresAdministranInventario)
         setTecnicosOperanPos(!!data.tecnicosOperanPos)
         setVendedoresManejanCaja(!!data.vendedoresManejanCaja)
+        setTecnicosCobranCotizaciones(!!data.tecnicosCobranCotizaciones)
         setComisionAplicaSinReparacion(!!data.comisionAplicaSinReparacion)
         setIvaRegimen(data.ivaRegimen ?? "EXENTO")
         setIvaTasa(String(data.ivaTasa ?? getIvaGeneral(data.pais)))
@@ -279,7 +281,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada: facturacionHabilitada }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, tecnicosCobranCotizaciones, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada: facturacionHabilitada }),
       })
 
       if (res.ok) {
@@ -665,6 +667,21 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
               <div className="text-sm font-medium">Los vendedores pueden manejar la caja</div>
               <div className="text-xs text-muted-foreground mt-0.5">
                 Permite a los usuarios con rol Vendedor abrir la caja de su sucursal, cerrarla con arqueo y cargar movimientos manuales. No incluye el historial de cierres ni la exportación, que siguen siendo solo de administradores.
+              </div>
+            </div>
+          </label>
+          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+            <input
+              type="checkbox"
+              checked={tecnicosCobranCotizaciones}
+              onChange={(e) => setTecnicosCobranCotizaciones(e.target.checked)}
+              disabled={!allowEdit}
+              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+            />
+            <div className="flex-1">
+              <div className="text-sm font-medium">Los técnicos pueden cobrar sus cotizaciones</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Permite a los usuarios con rol Técnico convertir en venta las cotizaciones aceptadas que ellos mismos crearon, sin depender de un administrador para cerrar el cobro. La venta se les acredita como vendedor. No incluye eliminar cotizaciones, revisarlas ni convertirlas en orden de servicio, que siguen siendo solo de administradores, ni las cotizaciones de otros técnicos. Para que además vean esa venta en la sección Ventas hace falta el permiso <strong>Los técnicos pueden operar el POS</strong>.
               </div>
             </div>
           </label>
