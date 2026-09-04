@@ -143,20 +143,28 @@ de ofrecer esas acciones (§7.1).
 
 ### 5.2 Estado de la orden vinculada
 
-Hallazgo que evita rediseñar nada: `estado_orden` **ya modela** los dos
-desenlaces sin reparación.
-
-- `SIN_REPARACION` — definido en `supabase/migrations/005_update_estados_orden.sql:20`,
-  documentado como "No se puede reparar o cliente rechazó".
-- `SIN_FALLA_DETECTADA` — agregado por `supabase/migrations/262_estado_sin_falla_detectada.sql`.
-
-El veredicto mapea uno a uno:
+**Emitir un informe no cambia el estado de la orden.** La orden se queda donde
+está hasta la entrega.
 
 | Veredicto | Orden pasa a |
 |---|---|
-| `REPARABLE` (o ausente) | `PRESUPUESTADO` — comportamiento actual |
-| `IRREPARABLE` | `SIN_REPARACION` |
-| `SIN_FALLA` | `SIN_FALLA_DETECTADA` |
+| `REPARABLE` (o ausente) | `PRESUPUESTADO` — comportamiento actual, sin cambios |
+| `IRREPARABLE` | no se toca |
+| `SIN_FALLA` | no se toca |
+
+El motivo es físico, no técnico: cuando el técnico dictamina que el equipo es
+irreparable, el equipo **sigue en el mostrador** esperando que el cliente lo
+retire. Marcar la orden como `SIN_REPARACION` en ese momento adelanta un hecho
+que todavía no ocurrió y le tapa al taller el estado real, que es el que necesita
+para saber que tiene un equipo ahí esperando.
+
+`estado_orden` ya tiene los estados terminales para este desenlace —
+`SIN_REPARACION` (`supabase/migrations/005_update_estados_orden.sql:20`),
+`SIN_FALLA_DETECTADA` (migración 262) y `ENTREGADO_SIN_REPARACION`
+(migración 080)— pero los pone el flujo de entrega que ya existe, cuando el
+cliente efectivamente retira. El informe no los toca.
+
+Consecuencia: emitir el informe no deja rastro en la lista de órdenes. Ver §11.
 
 ### 5.3 Bug a evitar antes de escribirlo
 
@@ -169,13 +177,13 @@ incondicional al pasar la cotización a `ENVIADA`:
 
 Sin tocar los dos, emitir un informe irreparable dejaría la orden en
 `PRESUPUESTADO`, esperando la respuesta a un presupuesto que no existe. Ambos
-deben ramificar por veredicto.
+deben saltear la transición cuando el veredicto es `IRREPARABLE` o `SIN_FALLA`.
 
-Corolario: cualquier código que hoy asuma "cotización `ENVIADA` ⇒ orden
-`PRESUPUESTADO`" queda inválido. Verificar en particular
-`revertirOrdenSinPresupuestoActivo` (`app/api/cotizaciones/[id]/route.ts:94-137`),
-que sólo revierte desde `PRESUPUESTADO`: al borrar o rechazar un informe, la
-orden puede estar en `SIN_REPARACION` y no debe revertirse silenciosamente.
+Que la transición se saltee en vez de redirigirse tiene un efecto secundario
+bueno: `revertirOrdenSinPresupuestoActivo`
+(`app/api/cotizaciones/[id]/route.ts:94-137`) sólo revierte desde
+`PRESUPUESTADO`, así que al borrar o rechazar un informe no encuentra nada que
+revertir y no hace nada. Es el comportamiento correcto sin escribir una línea.
 
 ## 6. API
 
@@ -282,9 +290,10 @@ técnico, ese scope es el correcto y no se amplía.
 Automatizadas:
 
 1. `superRefine` — los cuatro casos de la tabla de §4.
-2. Transición de orden por veredicto: `IRREPARABLE` deja la orden en
-   `SIN_REPARACION`, no en `PRESUPUESTADO`. Cubrir los **dos** caminos de envío
-   (`/enviar` y el PUT).
+2. Transición de orden por veredicto: enviar un informe `IRREPARABLE` deja la
+   orden **en el estado que ya tenía**, no en `PRESUPUESTADO`. El test parte de
+   una orden en `EN_DIAGNOSTICO` y afirma que sigue en `EN_DIAGNOSTICO`. Cubrir
+   los **dos** caminos de envío (`/enviar` y el PUT).
 3. Aprobación pública de un documento sin ítems: rechazada por los tres caminos.
 4. PDF: un informe no dibuja tabla de ítems ni totales; un presupuesto con
    diagnóstico dibuja ambas cosas.
@@ -305,6 +314,12 @@ Manuales:
   concurrencia entero a cambio de un beneficio cosmético, y estos números ya son
   únicos por organización, no globales. Si una aseguradora exige un prefijo
   visible, se resuelve en el render del PDF sin tocar la base.
+- Señalizar en la lista de órdenes cuáles ya tienen dictamen emitido y esperan
+  que el cliente retire. Como el informe no cambia el estado de la orden (§5.2),
+  esas órdenes se quedan en `EN_DIAGNOSTICO` mezcladas con las que todavía no se
+  revisaron. Hoy el dato se ve entrando a la orden, en su pestaña de
+  cotizaciones. Si al taller le molesta, se resuelve después con una columna o un
+  filtro; no justifica ensuciar la máquina de estados ahora.
 - Unificar el selector de ítems de órdenes con el de cotizaciones. Son contratos
   de API distintos (órdenes reserva stock y persiste por ítem; cotizaciones no
   reserva y persiste al guardar el documento entero). Fusionarlos es un refactor
@@ -315,7 +330,8 @@ Manuales:
 | Riesgo | Mitigación |
 |---|---|
 | La regla de validación no está en la base (§4.1) | Aceptado. Enforce en API, test de los cuatro casos |
-| Código existente que asume `ENVIADA ⇒ PRESUPUESTADO` | Auditar los consumidores de la transición, en particular `revertirOrdenSinPresupuestoActivo` |
+| Código existente que asume `ENVIADA ⇒ PRESUPUESTADO` | Auditar los consumidores de la transición. `revertirOrdenSinPresupuestoActivo` queda cubierto solo (§5.3); el riesgo vivo son reportes o filtros que cuenten "órdenes presupuestadas" para medir trabajo del técnico |
+| El informe no deja rastro en la lista de órdenes (§5.2) | Aceptado y declarado fuera de alcance (§11). Se resuelve con una columna si el taller lo pide |
 | Tres caminos de aprobación distintos | Cerrar los tres del lado del servidor, no sólo la UI |
 | Invertir el default del selector confunde a quien ya lo aprendió | El enlace "Escribir a mano" queda visible, no escondido |
 | El número de migración se lo lleva otra rama | Confirmar el número al mergear, no al crear la rama |
