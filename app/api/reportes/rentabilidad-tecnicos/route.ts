@@ -89,7 +89,7 @@ export async function GET(request: Request) {
         horas_trabajadas, costo_mano_obra,
         tecnico:users!tecnico_id(nombre),
         repuestos_orden (cantidad, precio_unitario),
-        cotizaciones (
+        cotizaciones!cotizaciones_orden_id_fkey (
           estado, deleted_at,
           items_cotizacion (cantidad, costo_unitario, inventario:inventario_id(precio_compra))
         )
