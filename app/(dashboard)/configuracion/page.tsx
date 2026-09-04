@@ -19,6 +19,7 @@ import {
   Printer,
   Store,
   Type,
+  Users,
   type LucideIcon,
 } from "lucide-react"
 import { canEditConfiguration } from "@/lib/auth-utils"
@@ -89,6 +90,20 @@ const SECTIONS: SettingSection[] = [
         labelShort: "Vocabulario",
         desc: "Personalizá los términos según tu rubro",
         descShort: "Términos por rubro",
+      },
+    ],
+  },
+  {
+    title: "Equipo",
+    accent: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+    cards: [
+      {
+        href: "/configuracion/roles",
+        icon: Users,
+        label: "Roles y permisos",
+        labelShort: "Roles",
+        desc: "Quién es cada uno y qué puede hacer",
+        descShort: "Quién hace qué",
       },
     ],
   },
