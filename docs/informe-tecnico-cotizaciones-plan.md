@@ -1772,7 +1772,27 @@ WHERE table_name = 'cotizaciones'
 
 Esperado: cuatro filas.
 
-**Este paso va antes del merge, no después.** Si el código llega a producción sin las columnas, PostgREST devuelve `PGRST204`, el deploy queda verde y las escrituras se pierden en silencio.
+**Este paso va antes del merge, no después.** Si el código llega a producción sin
+las columnas el daño es peor que un `PGRST204` en la escritura: el `.select()` del
+PUT (`app/api/cotizaciones/[id]/route.ts:316`) ahora nombra las cuatro columnas
+nuevas, así que el fetch falla, cae en `if (fetchError || !existing)` y **todo PUT
+de cotizaciones devuelve 404 "Cotización no encontrada"**. El deploy queda verde y
+la pantalla de cotizaciones deja de guardar. Aplicar la 324 primero; si el error
+aparece igual, refrescar el schema cache de PostgREST.
+
+- [ ] **Step 3b: Contar las cotizaciones de cero ítems que ya existen**
+
+```sql
+SELECT count(*) FROM cotizaciones c
+WHERE c.deleted_at IS NULL
+  AND c.veredicto IS NULL
+  AND NOT EXISTS (SELECT 1 FROM items_cotizacion i WHERE i.cotizacion_id = c.id);
+```
+
+El PUT viejo aceptaba `items: []` sin mínimo, así que estas filas pueden existir.
+El fix round 1 de la Task 4 ya las protege: un PUT que no toca ítems ni dictamen
+las deja pasar. Este conteo es para saber si hay que avisarle a algún taller, no
+para bloquear el merge.
 
 - [ ] **Step 4: Abrir el PR**
 
