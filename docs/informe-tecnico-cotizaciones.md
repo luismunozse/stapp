@@ -54,9 +54,13 @@ ALTER TABLE cotizaciones ADD CONSTRAINT cotizaciones_causa_dano_check
 ```
 
 Numeración: la migración más alta **en `main`** es la
-`321_email_delivery_tracking.sql`, pero el **322 ya está tomado** por
-`322_tecnicos_cobran_cotizaciones.sql` en la rama sin mergear
-`feat/tecnicos-cobran-cotizaciones`. El número libre es el **323**.
+`321_email_delivery_tracking.sql`, pero 322 y 323 ya están tomados por ramas sin
+mergear — `feat/tecnicos-cobran-cotizaciones` y `feat/usuarios-cambio-de-rol`.
+El número libre es el **324**.
+
+El 323 apareció **mientras se escribía este plan**: otra sesión lo commiteó en
+las horas del medio. Es la demostración de por qué el número se confirma al
+mergear y no al crear la rama.
 
 El número definitivo se confirma **al mergear, no al crear la rama**. Antes de
 abrir el PR, volver a correr:

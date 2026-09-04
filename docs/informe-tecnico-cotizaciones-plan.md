@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - **Worktree:** todo el trabajo va en `C:\Users\LUIS\Desktop\stapp\.worktrees\informe-tecnico`, rama `feat/informe-tecnico-cotizaciones`. No trabajar en el clon principal: otros agentes hacen `checkout` sobre él.
-- **Migración:** el número es **323**. El **322 ya está tomado** por `feat/tecnicos-cobran-cotizaciones` (rama sin mergear). Reverificar antes de abrir el PR con el comando de §3 del spec.
+- **Migración:** el número es **324**. El **322 ya está tomado** por `feat/tecnicos-cobran-cotizaciones` (rama sin mergear). Reverificar antes de abrir el PR con el comando de §3 del spec.
 - **Aplicar la migración ANTES de mergear.** Si el código llega a producción sin la columna, PostgREST devuelve `PGRST204` y el fallo es **mudo**: el deploy queda verde y las escrituras se pierden en silencio.
 - **Migraciones a mano:** no hay Supabase CLI ni CI de migraciones. Se corre `node scripts/db-run.mjs <archivo>`, un archivo por vez, dry-run por default.
 - **Idempotencia SQL:** `ADD COLUMN IF NOT EXISTS` para columnas; los `CHECK` con nombre van envueltos en `DO $$ ... END $$` con guarda sobre `pg_constraint`, porque `ADD CONSTRAINT` no tiene `IF NOT EXISTS` en Postgres.
@@ -31,8 +31,8 @@
 
 | Archivo | Responsabilidad | Acción |
 |---|---|---|
-| `supabase/migrations/323_informe_tecnico_cotizacion.sql` | Cuatro columnas + dos CHECK + índice del autocompletado | Crear |
-| `supabase/migrations/rollback/323_rollback.sql` | Deshacer lo anterior | Crear |
+| `supabase/migrations/324_informe_tecnico_cotizacion.sql` | Cuatro columnas + dos CHECK + índice del autocompletado | Crear |
+| `supabase/migrations/rollback/324_rollback.sql` | Deshacer lo anterior | Crear |
 | `lib/cotizacion-informe.ts` | Vocabulario del dominio (veredictos, causas) y la regla de validación como función pura | Crear |
 | `__tests__/lib/cotizacion-informe.test.ts` | Tests unitarios de la regla | Crear |
 | `app/api/cotizaciones/route.ts` | POST: schema + refine + insert | Modificar |
@@ -79,32 +79,32 @@ Esperado: PASS. Si falla por dependencias faltantes, `npm ci` no terminó bien �
 
 ---
 
-### Task 1: Migración 323 y su rollback
+### Task 1: Migración 324 y su rollback
 
 **Files:**
-- Create: `supabase/migrations/323_informe_tecnico_cotizacion.sql`
-- Create: `supabase/migrations/rollback/323_rollback.sql`
+- Create: `supabase/migrations/324_informe_tecnico_cotizacion.sql`
+- Create: `supabase/migrations/rollback/324_rollback.sql`
 
 **Interfaces:**
 - Consumes: nada
 - Produces: columnas `cotizaciones.veredicto`, `cotizaciones.diagnostico_tecnico`, `cotizaciones.causa_dano`, `cotizaciones.presentado_ante` (todas `TEXT NULL`)
 
-- [ ] **Step 1: Confirmar que el 323 sigue libre**
+- [ ] **Step 1: Confirmar que el numero sigue libre**
 
 ```bash
 cd C:/Users/LUIS/Desktop/stapp/.worktrees/informe-tecnico
 git log --all --diff-filter=A --name-only --pretty=format: -- 'supabase/migrations/32*' | rg -v '^$' - | sort -u
 ```
 
-Esperado: aparecen `321_email_delivery_tracking.sql` y `322_tecnicos_cobran_cotizaciones.sql`, y **no** un 323. Si apareció un 323, usar el siguiente número libre y ajustar los dos nombres de archivo.
+Esperado: aparecen `321_email_delivery_tracking.sql` y `322_tecnicos_cobran_cotizaciones.sql`, y un 323 (`323_tecnicos_count_cambio_de_rol.sql`), pero **no** un 324. Si apareció un 324, usar el siguiente número libre y ajustar los dos nombres de archivo.
 
 - [ ] **Step 2: Escribir la migración**
 
-Crear `supabase/migrations/323_informe_tecnico_cotizacion.sql`:
+Crear `supabase/migrations/324_informe_tecnico_cotizacion.sql`:
 
 ```sql
 -- ============================================================================
--- 323: informe tecnico para aseguradoras sobre la cotizacion
+-- 324: informe tecnico para aseguradoras sobre la cotizacion
 -- ============================================================================
 -- Contexto: los talleres que trabajan con seguros necesitan emitir un documento
 -- que acredite que un tecnico reviso el equipo y dictamino si tiene reparacion.
@@ -180,10 +180,10 @@ CREATE INDEX IF NOT EXISTS cotizaciones_presentado_ante_idx
 
 - [ ] **Step 3: Escribir el rollback**
 
-Crear `supabase/migrations/rollback/323_rollback.sql`:
+Crear `supabase/migrations/rollback/324_rollback.sql`:
 
 ```sql
--- Rollback de la migracion 323.
+-- Rollback de la migracion 324.
 --
 -- Saca las cuatro columnas del informe tecnico. Se PIERDE el contenido de todo
 -- informe ya emitido: veredicto, diagnostico, causa del dano y entidad
@@ -213,7 +213,7 @@ ALTER TABLE cotizaciones
 - [ ] **Step 4: Dry-run de la migración**
 
 ```bash
-node scripts/db-run.mjs supabase/migrations/323_informe_tecnico_cotizacion.sql
+node scripts/db-run.mjs supabase/migrations/324_informe_tecnico_cotizacion.sql
 ```
 
 Esperado: el script corre en dry-run por default e imprime el SQL sin aplicarlo. Verificar que no reporte error de parseo. **No aplicar todavía** — la aplicación real va justo antes de mergear (ver Task 10).
@@ -221,8 +221,8 @@ Esperado: el script corre en dry-run por default e imprime el SQL sin aplicarlo.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add supabase/migrations/323_informe_tecnico_cotizacion.sql supabase/migrations/rollback/323_rollback.sql
-git commit -m "feat(cotizaciones): migracion 323 para el informe tecnico"
+git add supabase/migrations/324_informe_tecnico_cotizacion.sql supabase/migrations/rollback/324_rollback.sql
+git commit -m "feat(cotizaciones): migracion 324 para el informe tecnico"
 ```
 
 ---
@@ -1752,12 +1752,12 @@ git fetch origin
 git log --all --diff-filter=A --name-only --pretty=format: -- 'supabase/migrations/32*' | rg -v '^$' - | sort -u
 ```
 
-Si apareció otro 323, renombrar los dos archivos al siguiente libre y volver al paso 1.
+Si apareció otro 324, renombrar los dos archivos al siguiente libre y volver al paso 1.
 
 - [ ] **Step 3: Aplicar la migración en producción ANTES de mergear**
 
 ```bash
-node scripts/db-run.mjs supabase/migrations/323_informe_tecnico_cotizacion.sql --apply
+node scripts/db-run.mjs supabase/migrations/324_informe_tecnico_cotizacion.sql --apply
 ```
 
 Confirmar el flag real con `node scripts/db-run.mjs --help` — el script corre en dry-run por default.
@@ -1781,7 +1781,7 @@ git push -u origin feat/informe-tecnico-cotizaciones
 gh pr create --title "feat(cotizaciones): informe tecnico para seguros (dominio)" --body "..."
 ```
 
-En el cuerpo: qué hace, que la migración 323 **ya está aplicada**, que no hay cambio visible todavía, y la lista de lo que encontró el barrido de `PRESUPUESTADO` del Task 5 Step 6.
+En el cuerpo: qué hace, que la migración 324 **ya está aplicada**, que no hay cambio visible todavía, y la lista de lo que encontró el barrido de `PRESUPUESTADO` del Task 5 Step 6.
 
 - [ ] **Step 5: Confirmar que el CI arrancó**
 
