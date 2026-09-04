@@ -53,10 +53,22 @@ ALTER TABLE cotizaciones ADD CONSTRAINT cotizaciones_causa_dano_check
     ('CAIDA','LIQUIDO','SOBRETENSION','DESGASTE','USO_INDEBIDO','FALLA_FABRICA','DESCONOCIDA'));
 ```
 
-Numeración: al momento de escribir este diseño la migración más alta en
-`supabase/migrations/` es la `321_email_delivery_tracking.sql`, con lo que el
-número libre es el **322**. El número definitivo se confirma al mergear, no al
-crear la rama: otra rama en vuelo puede tomarlo antes.
+Numeración: la migración más alta **en `main`** es la
+`321_email_delivery_tracking.sql`, pero el **322 ya está tomado** por
+`322_tecnicos_cobran_cotizaciones.sql` en la rama sin mergear
+`feat/tecnicos-cobran-cotizaciones`. El número libre es el **323**.
+
+El número definitivo se confirma **al mergear, no al crear la rama**. Antes de
+abrir el PR, volver a correr:
+
+```bash
+git log --all --diff-filter=A --name-only --pretty=format: -- 'supabase/migrations/32*' \
+  | rg -v '^$' - | sort -u
+```
+
+Si para entonces `feat/tecnicos-cobran-cotizaciones` sigue sin mergear, renumerar
+esta migración por encima de la más alta ya aplicada. Dejar huecos está
+permitido; lo que no se puede es aplicar un número por debajo de uno ya aplicado.
 
 ### 3.1 Por qué no se toca `tipo`
 
