@@ -9,6 +9,7 @@ import QRCode from "qrcode"
 import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
 import { MONO, TYPE, RULE_WIDTH, drawRule, drawSectionLabel, drawOutlinedBadge, measureBadgeWidth } from "@/lib/pdf-style"
 import { ESTADO_FLOW, ESTADOS_COMPLETADOS, MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
+import { esInforme } from "@/lib/cotizacion-informe"
 
 // Compatibilidad: algunos bundlers ponen el default dentro de .default
 const fontkit = (fontkitModule as any).default || fontkitModule
@@ -343,9 +344,14 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
 
   // Doc-title block (right side): título / número / fecha, como en los
   // demás comprobantes monocromos (REMITO / VENTA / NOTA DE CRÉDITO).
-  // El titulo depende SOLO del conteo de items: cero items es un informe.
-  // Un presupuesto con dictamen sigue siendo COTIZACIÓN.
-  const esInformeTecnico = (Array.isArray(data.items) ? data.items.length : 0) === 0 && !!data.veredicto
+  // El titulo depende de la misma regla que usa la API (lib/cotizacion-informe):
+  // cero items y un veredicto que cierra el caso sin presupuesto (IRREPARABLE /
+  // SIN_FALLA). Un REPARABLE sin items, o un presupuesto con dictamen, sigue
+  // siendo COTIZACIÓN.
+  const esInformeTecnico = esInforme({
+    cantidadItems: Array.isArray(data.items) ? data.items.length : 0,
+    veredicto: data.veredicto,
+  })
   const docTitleText = esInformeTecnico ? "INFORME TÉCNICO" : "COTIZACIÓN"
   const docTitleWidth = helveticaBold.widthOfTextAtSize(docTitleText, TYPE.docTitle)
   page.drawText(docTitleText, { x: pageW - marginR - docTitleWidth, y: pageH - 40, size: TYPE.docTitle, font: helveticaBold, color: MONO.ink })

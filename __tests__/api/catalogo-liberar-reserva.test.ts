@@ -55,9 +55,11 @@ describe("liberación de la reserva del catálogo", () => {
           iva_porcentaje: 0,
           descuento_global_tipo: "porcentaje",
           descuento_global_valor: 0,
-          // Cotización real con ítems: sin esto, la validación del informe
-          // técnico (Task 4) la confunde con un dictamen vacío y corta con 400
-          // antes de llegar a la liberación de la reserva que este test prueba.
+          // Cotización real con ítems. El guard `tocaElInforme` (route.ts) solo
+          // corre cuando el PUT manda items/veredicto/diagnosticoTecnico/
+          // causaDano, y este test manda solo `estado`, así que no lo dispara
+          // igual — se deja este valor porque modela una cotización real mejor
+          // que un mock vacío.
           items_cotizacion: [{ id: "it-1" }],
         }),
       })

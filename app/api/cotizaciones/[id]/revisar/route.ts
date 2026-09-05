@@ -110,6 +110,14 @@ export async function POST(
         tipo_cambio: source.tipo_cambio,
         equipo_snapshot: source.equipo_snapshot,
         checklist_snapshot: source.checklist_snapshot,
+        // Igual que tipo: una revision de un informe tecnico tiene que seguir
+        // siendo un informe. Sin estas cuatro columnas la revision queda con
+        // 0 items y veredicto NULL, un documento que no se puede volver a
+        // guardar pero si se puede enviar en blanco.
+        veredicto: source.veredicto,
+        diagnostico_tecnico: source.diagnostico_tecnico,
+        causa_dano: source.causa_dano,
+        presentado_ante: source.presentado_ante,
         subtotal: source.subtotal,
         iva: source.iva,
         total: source.total,

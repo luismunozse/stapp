@@ -33,7 +33,7 @@ describe("aprobar un informe tecnico", () => {
         veredicto: "IRREPARABLE",
         items_cotizacion: [],
       }),
-      items_cotizacion: createChainMock([], null),
+      items_cotizacion: createChainMock([], null, 0),
     })
 
     const res = await aprobarInterna(createPostRequest({}), params)
@@ -41,5 +41,27 @@ describe("aprobar un informe tecnico", () => {
 
     expect(status).toBe(400)
     expect(body.error).toContain("informe")
+  })
+
+  it("una cotización con ítems Y veredicto se aprueba normalmente (reparable con diagnóstico)", async () => {
+    mockAuthSuccess()
+    mockSupabaseFrom({
+      cotizaciones: createChainMock({
+        id: "cot-1",
+        estado: "ENVIADA",
+        organization_id: "org-1",
+        orden_id: null,
+        tipo: "PRESUPUESTO",
+        veredicto: "REPARABLE",
+        total: 100,
+        items_cotizacion: [{ id: "it-1" }, { id: "it-2" }, { id: "it-3" }],
+      }),
+      items_cotizacion: createChainMock([], null, 3),
+    })
+
+    const res = await aprobarInterna(createPostRequest({}), params)
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
   })
 })

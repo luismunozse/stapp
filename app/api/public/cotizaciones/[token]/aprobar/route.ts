@@ -58,10 +58,17 @@ export async function POST(
       )
     }
 
-    const { count: itemsCount } = await supabaseAdmin
+    const { count: itemsCount, error: itemsCountError } = await supabaseAdmin
       .from("items_cotizacion")
       .select("id", { count: "exact", head: true })
       .eq("cotizacion_id", cotizacion.id)
+
+    if (itemsCountError) {
+      // Sin el conteo real, `itemsCount || 0` disfrazaria un error de DB de
+      // "cero items" y el guard de abajo rechazaria una cotizacion normal.
+      console.error("[public aprobar] Error counting items_cotizacion:", itemsCountError)
+      return NextResponse.json({ error: "Error al aprobar cotizacion" }, { status: 500 })
+    }
 
     // Un informe tecnico se emite, no se aprueba. Hay tres caminos de
     // aprobacion distintos y esconder el boton en la UI no cierra ninguno.
