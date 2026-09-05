@@ -13,6 +13,7 @@ vi.mock("@/lib/subscriptions", () => ({
 
 import { supabaseAdmin } from "@/lib/supabase"
 import { POST } from "@/app/api/cotizaciones/route"
+import { GET as getCotizacion } from "@/app/api/cotizaciones/[id]/route"
 
 const DICTAMEN = {
   veredicto: "IRREPARABLE",
@@ -121,5 +122,39 @@ describe("POST /api/cotizaciones — informe tecnico sin items", () => {
     expect(fila.diagnostico_tecnico).toBeNull()
     expect(fila.causa_dano).toBeNull()
     expect(fila.presentado_ante).toBeNull()
+  })
+})
+
+describe("GET /api/cotizaciones/[id] — DTO del dictamen", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: 1, error: null } as any)
+  })
+
+  it("expone el dictamen en camelCase", async () => {
+    mockAuthSuccess()
+    mockSupabaseFrom({
+      cotizaciones: createChainMock({
+        id: "cot-1",
+        organization_id: "org-1",
+        estado: "ENVIADA",
+        veredicto: "IRREPARABLE",
+        diagnostico_tecnico: "Sin reparacion posible.",
+        causa_dano: "LIQUIDO",
+        presentado_ante: "La Segunda ART",
+        items_cotizacion: [],
+      }),
+    })
+
+    const res = await getCotizacion(
+      new Request("http://localhost/api/cotizaciones/cot-1") as any,
+      { params: Promise.resolve({ id: "cot-1" }) }
+    )
+    const { status, body } = await parseResponse(res)
+
+    expect(body.veredicto).toBe("IRREPARABLE")
+    expect(body.diagnosticoTecnico).toBe("Sin reparacion posible.")
+    expect(body.causaDano).toBe("LIQUIDO")
+    expect(body.presentadoAnte).toBe("La Segunda ART")
   })
 })
