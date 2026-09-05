@@ -526,6 +526,18 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
       page.drawText("Diagnóstico", { x: labelX, y: cursor, size: TYPE.small, font: helvetica, color: MONO.label })
       cursor -= 15
       for (const linea of wrap(data.diagnosticoTecnico, contentWidth - 20)) {
+        // Mismo idiom de paginado que la tabla de items (linea ~577): nueva
+        // pagina, se registra en `pages` para el footer, y se resetea el
+        // cursor al mismo piso (pageH - 30) contra el mismo limite (minY) que
+        // usa el resto del archivo. Sin esto, un diagnostico largo (hasta
+        // 4000 caracteres segun el schema) se dibuja fuera de la hoja y
+        // desaparece en silencio en cuanto el texto no entra debajo de las
+        // tarjetas — sin este chequeo no habia ningun piso.
+        if (cursor - 13 < minY) {
+          page = pdfDoc.addPage([pageW, pageH])
+          pages.push(page)
+          cursor = pageH - 30
+        }
         page.drawText(linea, { x: labelX, y: cursor, size: TYPE.body, font: helvetica, color: MONO.ink })
         cursor -= 13
       }

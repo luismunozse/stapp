@@ -17,6 +17,7 @@
  * uppercase/stable in the current implementation.
  */
 import { describe, it, expect } from "vitest"
+import { PDFDocument } from "pdf-lib"
 import { generateCotizacionPDF } from "@/lib/pdf"
 import { extractPdfText } from "./pdf-text-helper"
 import { buildCotizacionOrdenFixture, buildCotizacionPresupuestoFixture } from "./cotizacion-fixture"
@@ -119,5 +120,39 @@ describe("generateCotizacionPDF — informe tecnico", () => {
     expect(text).toContain("COTIZACIÓN")
     expect(text).toContain("DETALLE DE ITEMS")
     expect(text).toContain("Reparable")
+  })
+
+  it("un diagnostico largo no se pierde: pagina el informe", async () => {
+    // diagnostico_tecnico es TEXT en la DB y el schema lo acepta hasta 4000
+    // caracteres (app/api/cotizaciones/route.ts, .max(4000)). Medido
+    // empiricamente contra este fixture (con presentadoAnte + veredicto +
+    // causaDano ya ocupando cursor, el peor caso real): 4000 caracteres de
+    // esta frase corta y repetitiva envuelven en ~37 lineas, que SI entran en
+    // una sola pagina con este ancho de fuente — el limite practico del
+    // schema no alcanza a romper la pagina con texto tan compacto. Se generan
+    // 5000 caracteres a proposito (por encima del limite del schema) para
+    // forzar el desborde de forma determinista: el bug de origen (el loop no
+    // tenia salto de pagina en absoluto) es agnostico al largo, y un
+    // diagnostico con palabras mas largas o menos compresibles perderia texto
+    // bastante antes de los 4000 caracteres reales. Lo que este test verifica
+    // es que, superado el limite de la pagina, el contenido se pagina en vez
+    // de perderse — no que 4000 caracteres exactos disparen el corte.
+    const FRASE = "Corrosion generalizada en la placa madre por contacto con liquido. "
+    let diagnosticoLargo = ""
+    while (diagnosticoLargo.length < 5000) diagnosticoLargo += FRASE
+    const marcaDeCierre = "MARCA-DE-CIERRE-DEL-DIAGNOSTICO"
+    diagnosticoLargo += marcaDeCierre
+
+    const buffer = await generateCotizacionPDF({
+      ...BASE_INFORME,
+      diagnosticoTecnico: diagnosticoLargo,
+    } as any)
+
+    const pdfDoc = await PDFDocument.load(buffer)
+    expect(pdfDoc.getPageCount()).toBeGreaterThan(1)
+
+    const text = await extractPdfText(buffer)
+    // Prueba que el FINAL del diagnostico llegó al PDF, no solo el principio.
+    expect(text).toContain(marcaDeCierre)
   })
 })
