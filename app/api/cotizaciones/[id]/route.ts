@@ -7,7 +7,7 @@ import { hasPlanFeature } from "@/lib/subscriptions"
 import { dateOnlyToNoonUtcISO } from "@/lib/timezone"
 import { totalPresupuestoDeOrden, cotizacionesVigentesDeOrden } from "@/lib/cotizacion-presupuesto"
 import { marcarOriginalReemplazada, restaurarOriginalDeRevision } from "@/lib/cotizacion-revision"
-import { validarInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizacion-informe"
+import { validarInforme, esInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizacion-informe"
 import { z } from "zod"
 
 // Detecta el error de "la función no existe todavía", que acá significa
@@ -842,15 +842,27 @@ export async function PUT(
     // terminal. Va en la tabla y no acá porque son cuatro las rutas que matan
     // una cotización y una ya se había olvidado de llamar.
 
-    // Si cambió a ENVIADA y está vinculada a una orden, transicionar a PRESUPUESTADO
+    // Si cambió a ENVIADA y está vinculada a una orden, transicionar a PRESUPUESTADO.
+    // Un informe tecnico es la excepcion: no hay presupuesto que esperar, asi que
+    // la orden se queda donde esta hasta que el cliente retire el equipo.
     if (data.estado === "ENVIADA") {
       const { data: cotWithOrder } = await supabaseAdmin
         .from("cotizaciones")
-        .select("orden_id, total")
+        .select("orden_id, total, veredicto")
         .eq("id", id)
         .single()
 
-      if (cotWithOrder?.orden_id) {
+      const { count: itemsCount } = await supabaseAdmin
+        .from("items_cotizacion")
+        .select("id", { count: "exact", head: true })
+        .eq("cotizacion_id", id)
+
+      const emiteInforme = esInforme({
+        cantidadItems: itemsCount || 0,
+        veredicto: cotWithOrder?.veredicto,
+      })
+
+      if (cotWithOrder?.orden_id && !emiteInforme) {
         const validStates = ["RECIBIDO", "EN_DIAGNOSTICO"]
         const { data: ordenActual } = await supabaseAdmin
           .from("ordenes_servicio")
