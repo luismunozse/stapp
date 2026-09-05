@@ -5,6 +5,7 @@ import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { aplicarAprobacionCotizacionAOrden } from "@/lib/cotizacion-aprobar-orden"
 // Compartido con la ruta pública de aprobación, que usa el mismo RPC atómico.
 import { isFunctionMissingError } from "@/lib/rpc-errors"
+import { esInforme } from "@/lib/cotizacion-informe"
 import { z } from "zod"
 
 const aprobarSchema = z.object({
@@ -124,6 +125,20 @@ export async function POST(
     if (cotizacion.estado !== "ENVIADA") {
       return NextResponse.json(
         { error: "Solo se pueden aprobar cotizaciones enviadas" },
+        { status: 400 }
+      )
+    }
+
+    const { count: itemsCount } = await supabaseAdmin
+      .from("items_cotizacion")
+      .select("id", { count: "exact", head: true })
+      .eq("cotizacion_id", id)
+
+    // Un informe tecnico se emite, no se aprueba. Hay tres caminos de
+    // aprobacion distintos y esconder el boton en la UI no cierra ninguno.
+    if (esInforme({ cantidadItems: itemsCount || 0, veredicto: cotizacion.veredicto })) {
+      return NextResponse.json(
+        { error: "Un informe técnico no se aprueba: es un dictamen, no un presupuesto." },
         { status: 400 }
       )
     }
