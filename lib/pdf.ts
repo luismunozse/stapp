@@ -176,6 +176,13 @@ interface CotizacionPDFData {
     garantiaAlcance: string
     politicaAbandonoDias: number | null
   } | null
+  // Dictamen tecnico. Con `items` vacio el documento se dibuja como informe:
+  // sin tabla de items ni totales. Con items, el bloque se imprime igual, sobre
+  // la tabla — es un presupuesto con dictamen.
+  veredicto?: string | null
+  diagnosticoTecnico?: string | null
+  causaDano?: string | null
+  presentadoAnte?: string | null
   items: CotizacionItem[]
   subtotal: number
   iva: number
@@ -277,6 +284,10 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
 
   // ====== PAGE 1 ======
   let page = pdfDoc.addPage([pageW, pageH])
+  // Declarado aca (no dentro del bloque de items, que ahora es condicional en
+  // el informe tecnico) porque el checklist, las condiciones y el footer lo
+  // siguen usando mas abajo esté o no la tabla de items.
+  const pages: (typeof page)[] = [page]
 
   let cursor = pageH - 35
   let logoOffset = 0
@@ -332,7 +343,10 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
 
   // Doc-title block (right side): título / número / fecha, como en los
   // demás comprobantes monocromos (REMITO / VENTA / NOTA DE CRÉDITO).
-  const docTitleText = "COTIZACIÓN"
+  // El titulo depende SOLO del conteo de items: cero items es un informe.
+  // Un presupuesto con dictamen sigue siendo COTIZACIÓN.
+  const esInformeTecnico = (Array.isArray(data.items) ? data.items.length : 0) === 0 && !!data.veredicto
+  const docTitleText = esInformeTecnico ? "INFORME TÉCNICO" : "COTIZACIÓN"
   const docTitleWidth = helveticaBold.widthOfTextAtSize(docTitleText, TYPE.docTitle)
   page.drawText(docTitleText, { x: pageW - marginR - docTitleWidth, y: pageH - 40, size: TYPE.docTitle, font: helveticaBold, color: MONO.ink })
   drawTextRight(page, cotizacionNumber, pageW - marginR, pageH - 62, TYPE.docNumber, helveticaBold, MONO.ink)
@@ -444,129 +458,206 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
   drawRule(page, marginL, pageW - marginR, cursor, { dotted: true })
   cursor -= 12
 
-  // ====== ITEMS TABLE ======
-  // Table column positions (right edge for right-aligned columns)
-  const colDesc = marginL + 10
-  const colCantR = marginL + 310
-  const colUnitR = marginL + 400
-  const colSubR = pageW - marginR - 10
+  // ====== DICTAMEN TÉCNICO ======
+  // Va antes de la tabla porque en un informe es el cuerpo del documento, y en
+  // un presupuesto con dictamen es el encabezado del detalle.
+  const tieneDictamen = !!data.veredicto
+  if (tieneDictamen || data.presentadoAnte) {
+    const VEREDICTO_LABEL: Record<string, string> = {
+      REPARABLE: "Reparable",
+      IRREPARABLE: "Irreparable",
+      SIN_FALLA: "Sin falla detectada",
+    }
+    const CAUSA_LABEL: Record<string, string> = {
+      CAIDA: "Caída",
+      LIQUIDO: "Contacto con líquido",
+      SOBRETENSION: "Sobretensión eléctrica",
+      DESGASTE: "Desgaste por uso",
+      USO_INDEBIDO: "Uso indebido",
+      FALLA_FABRICA: "Falla de fábrica",
+      DESCONOCIDA: "Desconocida",
+    }
 
-  // Header row (sin fill, mayusculas, MONO.label) — factorizado porque se
-  // vuelve a dibujar al inicio de cada página de continuación de la tabla.
-  const drawItemsTableHeader = (pg: typeof page, yPos: number) => {
-    pg.drawText("DESCRIPCIÓN", { x: colDesc, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    drawTextRight(pg, "CANT.", colCantR, yPos, TYPE.small, helveticaBold, MONO.label)
-    drawTextRight(pg, "P. UNITARIO", colUnitR, yPos, TYPE.small, helveticaBold, MONO.label)
-    drawTextRight(pg, "SUBTOTAL", colSubR, yPos, TYPE.small, helveticaBold, MONO.label)
-  }
+    // Corta el texto en lineas que entren en el ancho util. Si mas adelante se
+    // factoriza un wrapper compartido en este archivo, reemplazar por ese.
+    const wrap = (texto: string, maxW: number): string[] => {
+      const salida: string[] = []
+      let linea = ""
+      for (const palabra of texto.split(/\s+/)) {
+        const tentativa = linea ? `${linea} ${palabra}` : palabra
+        if (helvetica.widthOfTextAtSize(tentativa, TYPE.body) > maxW && linea) {
+          salida.push(linea)
+          linea = palabra
+        } else {
+          linea = tentativa
+        }
+      }
+      if (linea) salida.push(linea)
+      return salida
+    }
 
-  drawSectionLabel(page, helveticaBold, "DETALLE DE ITEMS", colDesc, cursor)
-  cursor -= 4
-  drawRule(page, marginL, pageW - marginR, cursor)
-  cursor -= 20
-  drawItemsTableHeader(page, cursor)
-  cursor -= 8
-  drawRule(page, marginL, pageW - marginR, cursor)
-  cursor -= 17
+    const labelX = marginL + 10
+    const valorX = marginL + 130
 
-  // Table rows with multi-page support
-  const items = Array.isArray(data.items) ? data.items : []
-  // 26pt (vs. the 18pt used by simpler tables elsewhere) to leave room for
-  // the optional per-item discount tag on a second line below the
-  // description without crowding the hairline separator.
-  const rowH = 26
-  let pageCount = 1
-  const pages = [page]
+    drawSectionLabel(page, helveticaBold, tieneDictamen ? "DICTAMEN TÉCNICO" : "PRESENTACIÓN", marginL, cursor)
+    cursor -= 4
+    drawRule(page, marginL, pageW - marginR, cursor)
+    cursor -= 20
 
-  for (let i = 0; i < items.length; i++) {
-    // Check if we need a new page
-    if (cursor - rowH < minY + 180) { // 180 reserved for totals/notes on last items
-      // Only add new page if there are more items AND we'd run out of space for totals
-      if (cursor - rowH < minY) {
-        pageCount++
-        page = pdfDoc.addPage([pageW, pageH])
-        pages.push(page)
-        cursor = pageH - 30
+    if (data.presentadoAnte) {
+      page.drawText("Para ser presentado ante", { x: labelX, y: cursor, size: TYPE.small, font: helvetica, color: MONO.label })
+      page.drawText(data.presentadoAnte, { x: valorX, y: cursor, size: TYPE.body, font: helveticaBold, color: MONO.ink })
+      cursor -= 17
+    }
 
-        // Re-draw table header on new page
-        drawItemsTableHeader(page, cursor)
-        cursor -= 8
-        drawRule(page, marginL, pageW - marginR, cursor)
-        cursor -= 17
+    if (data.veredicto) {
+      page.drawText("Veredicto", { x: labelX, y: cursor, size: TYPE.small, font: helvetica, color: MONO.label })
+      page.drawText(VEREDICTO_LABEL[data.veredicto] || data.veredicto, { x: valorX, y: cursor, size: TYPE.body, font: helveticaBold, color: MONO.ink })
+      cursor -= 17
+    }
+
+    if (data.causaDano) {
+      page.drawText("Causa probable del daño", { x: labelX, y: cursor, size: TYPE.small, font: helvetica, color: MONO.label })
+      page.drawText(CAUSA_LABEL[data.causaDano] || data.causaDano, { x: valorX, y: cursor, size: TYPE.body, font: helvetica, color: MONO.ink })
+      cursor -= 17
+    }
+
+    if (data.diagnosticoTecnico) {
+      page.drawText("Diagnóstico", { x: labelX, y: cursor, size: TYPE.small, font: helvetica, color: MONO.label })
+      cursor -= 15
+      for (const linea of wrap(data.diagnosticoTecnico, contentWidth - 20)) {
+        page.drawText(linea, { x: labelX, y: cursor, size: TYPE.body, font: helvetica, color: MONO.ink })
+        cursor -= 13
       }
     }
 
-    const item = items[i]
-    const unitPrice = Number(item.precioUnitario || item.precio_unitario) || 0
-    const unidad = safe(item.unidad) || "Unidad"
-    const cantLabel = `${String(item.cantidad || 0)}${unidad !== "Unidad" ? ` ${unidad}` : ""}`.trim()
-    const itemSubtotal = Number(item.subtotal) || 0
+    cursor -= 14
+  }
 
-    // Description - allow longer text
-    const tipoRep = safe(item.tipo_repuesto || item.tipoRepuesto)
-    const tipoRepLabel = tipoRep && tipoRep !== "NO_APLICA"
-      ? ` [${tipoRep === "ALTERNATIVO" ? "ALT" : tipoRep === "RECICLADO" ? "REC" : "ORIG"}]`
-      : ""
-    const descText = (safe(item.descripcion) + tipoRepLabel).substring(0, 60)
-    page.drawText(descText, { x: colDesc, y: cursor, size: TYPE.body, font: helvetica, color: MONO.ink })
+  if (!esInformeTecnico) {
+    // ====== ITEMS TABLE ======
+    // Table column positions (right edge for right-aligned columns)
+    const colDesc = marginL + 10
+    const colCantR = marginL + 310
+    const colUnitR = marginL + 400
+    const colSubR = pageW - marginR - 10
 
-    // Item discount indicator
-    const itemDescTipo = safe(item.descuento_tipo || item.descuentoTipo)
-    const itemDescValor = Number(item.descuento_valor || item.descuentoValor) || 0
-    if (itemDescValor > 0) {
-      const discText = itemDescTipo === "porcentaje" ? `(-${String(itemDescValor)}%)` : `(-${fmtCurrency(itemDescValor)})`
-      page.drawText(discText, { x: colDesc, y: cursor - 12, size: TYPE.fine, font: helvetica, color: MONO.label })
+    // Header row (sin fill, mayusculas, MONO.label) — factorizado porque se
+    // vuelve a dibujar al inicio de cada página de continuación de la tabla.
+    const drawItemsTableHeader = (pg: typeof page, yPos: number) => {
+      pg.drawText("DESCRIPCIÓN", { x: colDesc, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+      drawTextRight(pg, "CANT.", colCantR, yPos, TYPE.small, helveticaBold, MONO.label)
+      drawTextRight(pg, "P. UNITARIO", colUnitR, yPos, TYPE.small, helveticaBold, MONO.label)
+      drawTextRight(pg, "SUBTOTAL", colSubR, yPos, TYPE.small, helveticaBold, MONO.label)
     }
 
-    // Right-aligned numeric columns
-    drawTextRight(page, cantLabel, colCantR, cursor, TYPE.body, helvetica, MONO.ink)
-    drawTextRight(page, fmtCurrency(unitPrice), colUnitR, cursor, TYPE.body, helvetica, MONO.ink)
-    drawTextRight(page, fmtCurrency(itemSubtotal), colSubR, cursor, TYPE.body, helveticaBold, MONO.ink)
+    drawSectionLabel(page, helveticaBold, "DETALLE DE ITEMS", colDesc, cursor)
+    cursor -= 4
+    drawRule(page, marginL, pageW - marginR, cursor)
+    cursor -= 20
+    drawItemsTableHeader(page, cursor)
+    cursor -= 8
+    drawRule(page, marginL, pageW - marginR, cursor)
+    cursor -= 17
 
-    cursor -= rowH
-    // Row separator (+10, not +5 — Task 1 established this offset so the
-    // hairline clears 9pt text descenders instead of striking through it).
-    drawRule(page, marginL, pageW - marginR, cursor + 10)
-  }
+    // Table rows with multi-page support
+    const items = Array.isArray(data.items) ? data.items : []
+    // 26pt (vs. the 18pt used by simpler tables elsewhere) to leave room for
+    // the optional per-item discount tag on a second line below the
+    // description without crowding the hairline separator.
+    const rowH = 26
+    let pageCount = 1
 
-  cursor -= 12
+    for (let i = 0; i < items.length; i++) {
+      // Check if we need a new page
+      if (cursor - rowH < minY + 180) { // 180 reserved for totals/notes on last items
+        // Only add new page if there are more items AND we'd run out of space for totals
+        if (cursor - rowH < minY) {
+          pageCount++
+          page = pdfDoc.addPage([pageW, pageH])
+          pages.push(page)
+          cursor = pageH - 30
 
-  // ====== DETALLE / TOTALES ======
-  // Full-width label:value rows with hairlines, closing in the sole
-  // allowed fill (MONO.totalBg) — same treatment as factura/venta/devolución.
-  drawSectionLabel(page, helveticaBold, "DETALLE", marginL, cursor)
-  cursor -= 4
-  drawRule(page, marginL, pageW - marginR, cursor)
-  cursor -= 20
+          // Re-draw table header on new page
+          drawItemsTableHeader(page, cursor)
+          cursor -= 8
+          drawRule(page, marginL, pageW - marginR, cursor)
+          cursor -= 17
+        }
+      }
 
-  page.drawText("Subtotal", { x: marginL + 10, y: cursor, size: TYPE.body, font: helvetica, color: MONO.label })
-  drawTextRight(page, fmtCurrency(subtotalNum), pageW - marginR - 10, cursor, TYPE.body, helvetica, MONO.ink)
-  cursor -= 18
-  drawRule(page, marginL, pageW - marginR, cursor + 10)
+      const item = items[i]
+      const unitPrice = Number(item.precioUnitario || item.precio_unitario) || 0
+      const unidad = safe(item.unidad) || "Unidad"
+      const cantLabel = `${String(item.cantidad || 0)}${unidad !== "Unidad" ? ` ${unidad}` : ""}`.trim()
+      const itemSubtotal = Number(item.subtotal) || 0
 
-  if (descGlobalAmount > 0) {
-    const descLabel = descGlobalTipo === "porcentaje" ? `Descuento (${String(descGlobalValor)}%)` : "Descuento"
-    page.drawText(descLabel, { x: marginL + 10, y: cursor, size: TYPE.body, font: helvetica, color: MONO.label })
-    drawTextRight(page, `-${fmtCurrency(descGlobalAmount)}`, pageW - marginR - 10, cursor, TYPE.body, helvetica, MONO.ink)
+      // Description - allow longer text
+      const tipoRep = safe(item.tipo_repuesto || item.tipoRepuesto)
+      const tipoRepLabel = tipoRep && tipoRep !== "NO_APLICA"
+        ? ` [${tipoRep === "ALTERNATIVO" ? "ALT" : tipoRep === "RECICLADO" ? "REC" : "ORIG"}]`
+        : ""
+      const descText = (safe(item.descripcion) + tipoRepLabel).substring(0, 60)
+      page.drawText(descText, { x: colDesc, y: cursor, size: TYPE.body, font: helvetica, color: MONO.ink })
+
+      // Item discount indicator
+      const itemDescTipo = safe(item.descuento_tipo || item.descuentoTipo)
+      const itemDescValor = Number(item.descuento_valor || item.descuentoValor) || 0
+      if (itemDescValor > 0) {
+        const discText = itemDescTipo === "porcentaje" ? `(-${String(itemDescValor)}%)` : `(-${fmtCurrency(itemDescValor)})`
+        page.drawText(discText, { x: colDesc, y: cursor - 12, size: TYPE.fine, font: helvetica, color: MONO.label })
+      }
+
+      // Right-aligned numeric columns
+      drawTextRight(page, cantLabel, colCantR, cursor, TYPE.body, helvetica, MONO.ink)
+      drawTextRight(page, fmtCurrency(unitPrice), colUnitR, cursor, TYPE.body, helvetica, MONO.ink)
+      drawTextRight(page, fmtCurrency(itemSubtotal), colSubR, cursor, TYPE.body, helveticaBold, MONO.ink)
+
+      cursor -= rowH
+      // Row separator (+10, not +5 — Task 1 established this offset so the
+      // hairline clears 9pt text descenders instead of striking through it).
+      drawRule(page, marginL, pageW - marginR, cursor + 10)
+    }
+
+    cursor -= 12
+
+    // ====== DETALLE / TOTALES ======
+    // Full-width label:value rows with hairlines, closing in the sole
+    // allowed fill (MONO.totalBg) — same treatment as factura/venta/devolución.
+    drawSectionLabel(page, helveticaBold, "DETALLE", marginL, cursor)
+    cursor -= 4
+    drawRule(page, marginL, pageW - marginR, cursor)
+    cursor -= 20
+
+    page.drawText("Subtotal", { x: marginL + 10, y: cursor, size: TYPE.body, font: helvetica, color: MONO.label })
+    drawTextRight(page, fmtCurrency(subtotalNum), pageW - marginR - 10, cursor, TYPE.body, helvetica, MONO.ink)
     cursor -= 18
     drawRule(page, marginL, pageW - marginR, cursor + 10)
+
+    if (descGlobalAmount > 0) {
+      const descLabel = descGlobalTipo === "porcentaje" ? `Descuento (${String(descGlobalValor)}%)` : "Descuento"
+      page.drawText(descLabel, { x: marginL + 10, y: cursor, size: TYPE.body, font: helvetica, color: MONO.label })
+      drawTextRight(page, `-${fmtCurrency(descGlobalAmount)}`, pageW - marginR - 10, cursor, TYPE.body, helvetica, MONO.ink)
+      cursor -= 18
+      drawRule(page, marginL, pageW - marginR, cursor + 10)
+    }
+
+    if (ivaPct > 0) {
+      page.drawText(`IVA (${String(ivaPct)}%)`, { x: marginL + 10, y: cursor, size: TYPE.body, font: helvetica, color: MONO.label })
+      drawTextRight(page, fmtCurrency(ivaNum), pageW - marginR - 10, cursor, TYPE.body, helvetica, MONO.ink)
+      cursor -= 18
+      drawRule(page, marginL, pageW - marginR, cursor + 10)
+    }
+
+    cursor -= 5
+
+    // Total (barra MONO.totalBg — la única área con relleno permitida)
+    page.drawRectangle({ x: marginL, y: cursor - 8, width: contentWidth, height: 28, color: MONO.totalBg })
+    page.drawText("TOTAL", { x: marginL + 10, y: cursor, size: TYPE.total, font: helveticaBold, color: MONO.ink })
+    drawTextRight(page, fmtCurrency(totalNum), pageW - marginR - 10, cursor, TYPE.total, helveticaBold, MONO.ink)
+
+    cursor -= 35
   }
-
-  if (ivaPct > 0) {
-    page.drawText(`IVA (${String(ivaPct)}%)`, { x: marginL + 10, y: cursor, size: TYPE.body, font: helvetica, color: MONO.label })
-    drawTextRight(page, fmtCurrency(ivaNum), pageW - marginR - 10, cursor, TYPE.body, helvetica, MONO.ink)
-    cursor -= 18
-    drawRule(page, marginL, pageW - marginR, cursor + 10)
-  }
-
-  cursor -= 5
-
-  // Total (barra MONO.totalBg — la única área con relleno permitida)
-  page.drawRectangle({ x: marginL, y: cursor - 8, width: contentWidth, height: 28, color: MONO.totalBg })
-  page.drawText("TOTAL", { x: marginL + 10, y: cursor, size: TYPE.total, font: helveticaBold, color: MONO.ink })
-  drawTextRight(page, fmtCurrency(totalNum), pageW - marginR - 10, cursor, TYPE.total, helveticaBold, MONO.ink)
-
-  cursor -= 35
 
   // ====== VALIDITY BANNER ======
   // Outlined callout (no fill available besides MONO.totalBg, which is

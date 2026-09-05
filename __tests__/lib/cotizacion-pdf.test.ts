@@ -66,3 +66,58 @@ describe("generateCotizacionPDF — tipo PRESUPUESTO", () => {
     expect(buffer.length).toBeGreaterThan(1000)
   })
 })
+
+describe("generateCotizacionPDF — informe tecnico", () => {
+  const BASE_INFORME = {
+    numeroCotizacion: "COT-0042",
+    fecha: new Date("2026-09-04T12:00:00Z"),
+    cliente: { nombre: "Ana Gomez", telefono: "1122334455" },
+    items: [],
+    subtotal: 0,
+    iva: 0,
+    total: 0,
+    veredicto: "IRREPARABLE",
+    diagnosticoTecnico: "Corrosion generalizada en la placa madre por contacto con liquido.",
+    causaDano: "LIQUIDO",
+    presentadoAnte: "La Segunda ART",
+  }
+
+  it("titula INFORME TECNICO y no dibuja la tabla de items", async () => {
+    const buffer = await generateCotizacionPDF(BASE_INFORME as any)
+    const text = await extractPdfText(buffer)
+
+    expect(text).toContain("INFORME TÉCNICO")
+    // "DETALLE DE ITEMS" y "SUBTOTAL" son rotulos que existen SOLO dentro del
+    // bloque 447-569 que se saltea. No usar not.toContain("COTIZACIÓN"): el
+    // banner de validez vive fuera del bloque y probablemente diga "Esta
+    // cotización es válida hasta...". Tampoco not.toContain("TOTAL"), que
+    // matchea de más.
+    expect(text).not.toContain("DETALLE DE ITEMS")
+    expect(text).not.toContain("SUBTOTAL")
+  })
+
+  it("imprime veredicto, causa, diagnostico y destinatario", async () => {
+    const buffer = await generateCotizacionPDF(BASE_INFORME as any)
+    const text = await extractPdfText(buffer)
+
+    expect(text).toContain("Irreparable")
+    expect(text).toContain("Contacto con líquido")
+    expect(text).toContain("Corrosion generalizada")
+    expect(text).toContain("La Segunda ART")
+  })
+
+  it("con items mantiene el titulo COTIZACION y dibuja la tabla", async () => {
+    const buffer = await generateCotizacionPDF({
+      ...BASE_INFORME,
+      veredicto: "REPARABLE",
+      items: [{ descripcion: "Cambio de pantalla", cantidad: 1, precioUnitario: 50000, subtotal: 50000 }],
+      subtotal: 50000,
+      total: 50000,
+    } as any)
+    const text = await extractPdfText(buffer)
+
+    expect(text).toContain("COTIZACIÓN")
+    expect(text).toContain("DETALLE DE ITEMS")
+    expect(text).toContain("Reparable")
+  })
+})
