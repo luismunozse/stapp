@@ -97,6 +97,35 @@ describe("PUT /api/cotizaciones/[id] — informe tecnico", () => {
     expect(body.error).toContain("al menos un ítem")
   })
 
+  it("deja pasar un PUT que no toca el informe sobre una cotizacion de cero items sin veredicto", async () => {
+    mockAuthSuccess()
+    const cotizaciones = mockCotizacionExistente({
+      veredicto: null,
+      items_cotizacion: [],
+    })
+    mockSupabaseFrom({ cotizaciones, items_cotizacion: createChainMock(null, null) })
+
+    const res = await PUT(createPostRequest({ notas: "Retira el martes" }), params)
+
+    expect(res.status).not.toBe(400)
+    expect(cotizaciones.update).toHaveBeenCalled()
+  })
+
+  it("deja rechazar una cotizacion vieja de cero items sin veredicto", async () => {
+    mockAuthSuccess()
+    mockSupabaseFrom({
+      cotizaciones: mockCotizacionExistente({
+        veredicto: null,
+        items_cotizacion: [],
+      }),
+      items_cotizacion: createChainMock(null, null),
+    })
+
+    const res = await PUT(createPostRequest({ estado: "RECHAZADA" }), params)
+
+    expect(res.status).not.toBe(400)
+  })
+
   it("no toca las columnas del dictamen cuando el pedido no las menciona", async () => {
     mockAuthSuccess()
     const cotizaciones = mockCotizacionExistente({

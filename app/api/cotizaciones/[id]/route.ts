@@ -397,22 +397,35 @@ export async function PUT(
       updateData.presentado_ante = data.presentadoAnte?.trim() || null
     }
 
-    // La regla del informe mira el estado RESULTANTE, no el payload: un pedido
-    // puede cambiar el veredicto sin mandar items, y viceversa. Por eso se
-    // fusiona contra la fila existente en vez de vivir en un refine de Zod.
-    const itemsResultantes = data.items !== undefined
-      ? data.items
-      : (existing.items_cotizacion || [])
-    const mensajeInforme = validarInforme({
-      cantidadItems: itemsResultantes.length,
-      veredicto: data.veredicto !== undefined ? data.veredicto : existing.veredicto,
-      diagnosticoTecnico: data.diagnosticoTecnico !== undefined
-        ? data.diagnosticoTecnico
-        : existing.diagnostico_tecnico,
-      causaDano: data.causaDano !== undefined ? data.causaDano : existing.causa_dano,
-    })
-    if (mensajeInforme) {
-      return NextResponse.json({ error: mensajeInforme }, { status: 400 })
+    // La regla solo corre si el pedido toca el estado que le importa. Un PUT que
+    // solo cambia notas o fecha no empeora nada: frenarlo dejaria inservible a
+    // toda cotizacion vieja de cero items y veredicto NULL, que ni siquiera se
+    // podria rechazar. El PUT viejo aceptaba `items: []` sin minimo, asi que esas
+    // filas pueden existir.
+    const tocaElInforme =
+      data.items !== undefined ||
+      data.veredicto !== undefined ||
+      data.diagnosticoTecnico !== undefined ||
+      data.causaDano !== undefined
+
+    if (tocaElInforme) {
+      // La regla mira el estado RESULTANTE, no el payload: un pedido puede
+      // cambiar el veredicto sin mandar items, y viceversa. Por eso se fusiona
+      // contra la fila existente en vez de vivir en un refine de Zod.
+      const itemsResultantes = data.items !== undefined
+        ? data.items
+        : (existing.items_cotizacion || [])
+      const mensajeInforme = validarInforme({
+        cantidadItems: itemsResultantes.length,
+        veredicto: data.veredicto !== undefined ? data.veredicto : existing.veredicto,
+        diagnosticoTecnico: data.diagnosticoTecnico !== undefined
+          ? data.diagnosticoTecnico
+          : existing.diagnostico_tecnico,
+        causaDano: data.causaDano !== undefined ? data.causaDano : existing.causa_dano,
+      })
+      if (mensajeInforme) {
+        return NextResponse.json({ error: mensajeInforme }, { status: 400 })
+      }
     }
 
     // Reasignación de orden (vincular/desvincular). Solo tipo ORDEN.

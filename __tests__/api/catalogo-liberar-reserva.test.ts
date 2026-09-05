@@ -82,6 +82,7 @@ describe("liberación de la reserva del catálogo", () => {
 
       await PUT(reqRechazo(), { params: Promise.resolve({ id: "cot-1" }) })
 
+      expect(rpcNames()).toContain("liberar_reserva_catalogo")
       expect(rpcNames()).not.toContain("liberar_items_cotizacion")
     })
 
