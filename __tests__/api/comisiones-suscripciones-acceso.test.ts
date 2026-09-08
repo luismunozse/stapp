@@ -143,18 +143,26 @@ describe("GET /api/subscriptions/payments", () => {
   })
 })
 
-describe("GET /api/subscription/status", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockTablas()
-  })
-
-  it.each(NO_ADMIN)("%s no lo lee", async (rol) => {
-    // Hoy no lo consume nadie en la app. Se cierra ahora, antes de que alguien
-    // lo cablee a una pantalla y cerrarlo pase a ser un cambio de conducta.
-    mockRole(rol)
-    const { GET } = await import("@/app/api/subscription/status/route")
-
-    expect(await statusDe(GET())).toBe(403)
-  })
-})
+// GET /api/subscription/status ya NO se cierra, y su contrato de acceso vive
+// ahora en __tests__/api/subscription-status-acceso.test.ts.
+//
+// Acá había un `it.each(NO_ADMIN)` que exigía 403, con esta justificación:
+// "Hoy no lo consume nadie en la app. Se cierra ahora, antes de que alguien lo
+// cablee a una pantalla". La premisa era falsa: lo consumen seis lugares del
+// cliente vía el hook `useSubscription` — /cotizaciones, cotizacion-list, las
+// dos listas de clientes, el header del detalle y plan-badge.
+//
+// Y el 403 no se veía: `useSubscription` lo atrapa y cae a un fallback "FREE
+// con featureFlags vacío", así que al TECNICO y al VENDEDOR la app les pintaba
+// su organización como si estuviera en Free — sin botón "Nueva Cotización" y
+// con el cartel de "las cotizaciones son parte del plan Profesional"— dentro
+// de organizaciones que estaban pagando Profesional.
+//
+// Esto no afloja el criterio de este archivo: lo aplica. El encabezado de acá
+// arriba ya dejaba abiertos /api/subscriptions y /api/subscriptions/usage
+// porque los consumen banners montados para todos los roles. El plan de la
+// organización es el mismo dato para todos los que trabajan adentro.
+//
+// Lo que SÍ sigue cerrado, y es lo que de verdad importaba: el historial de
+// facturación (/api/subscriptions/payments), con montos, fechas y medio de
+// pago. Ese describe sigue arriba, intacto.
