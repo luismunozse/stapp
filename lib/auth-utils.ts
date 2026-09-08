@@ -214,6 +214,80 @@ export async function requirePosAccess() {
   return { ...result, tecnicosOperanPos }
 }
 
+// Regla pura de acceso al cobro de una cotización: convertir una cotización
+// ACEPTADA en venta. ADMIN siempre. TECNICO solo si la org habilitó el permiso
+// (opt-in, default apagado), mismo patrón que `tecnicos_operan_pos`.
+//
+// El VENDEDOR queda afuera, como estaba: este permiso habilita al TECNICO y a
+// nadie más. Abrirle la puerta al vendedor de paso sería un cambio de conducta
+// que nadie pidió, y no es lo que dice el nombre del flag.
+//
+// Ojo con lo que esta regla NO decide: CUÁLES cotizaciones. El técnico
+// habilitado cierra las que él creó y ninguna más, y ese alcance lo pone el
+// handler con `created_by`, igual que ya lo hacen aprobar, enviar y duplicar.
+// Meterlo acá sería mentir sobre lo que la función mira: recibe un rol y un
+// flag, no una cotización.
+export function hasCotizacionCobroAccess(
+  role: string | null,
+  tecnicosHabilitados: boolean
+): boolean {
+  if (role === "ADMIN") return true
+  if (role === "TECNICO") return tecnicosHabilitados
+  return false
+}
+
+// Resuelve el flag `tecnicos_cobran_cotizaciones` de la org. Solo hace falta
+// cuando el actor es TECNICO (ver hasCotizacionCobroAccess); llamarlo para
+// ADMIN es un round-trip al pedo, porque no depende del flag.
+//
+// Fail-closed: si la columna todavía no existe o la lectura falla, devuelve
+// false y el TECNICO queda afuera — idéntico al comportamiento histórico. En
+// este proyecto las migraciones se aplican A MANO y después del merge, así que
+// siempre hay una ventana en la que el deploy va adelante de su migración;
+// durante esa ventana el permiso simplemente todavía no está.
+export async function resolveTecnicosCobranCotizaciones(organizationId: string): Promise<boolean> {
+  try {
+    const { data } = await supabaseAdmin
+      .from("organizations")
+      .select("tecnicos_cobran_cotizaciones")
+      .eq("id", organizationId)
+      .single()
+    return data?.tecnicos_cobran_cotizaciones === true
+  } catch {
+    return false
+  }
+}
+
+// Guard del cobro de cotizaciones. Mismo contrato que requireAdmin() para swap
+// 1:1, más `tecnicosCobranCotizaciones` para que el handler sepa si entró por
+// el permiso y tenga que acotar por `created_by`.
+//
+// Eliminar, revisar y convertir a orden de servicio NO pasan por acá: siguen en
+// requireAdmin()/`role !== "ADMIN"`. Este permiso es el cobro y nada más.
+export async function requireCotizacionCobroAccess() {
+  const result = await requireAuth()
+  if (result.error) return { ...result, tecnicosCobranCotizaciones: false }
+
+  const tecnicosCobranCotizaciones = result.role === "TECNICO"
+    ? await resolveTecnicosCobranCotizaciones(result.organizationId!)
+    : false
+
+  if (!hasCotizacionCobroAccess(result.role, tecnicosCobranCotizaciones)) {
+    return {
+      error: NextResponse.json(
+        { error: "Solo administradores pueden convertir cotizaciones a venta" },
+        { status: 403 }
+      ),
+      session: null,
+      organizationId: null,
+      userId: null,
+      role: null,
+      tecnicosCobranCotizaciones: false,
+    }
+  }
+  return { ...result, tecnicosCobranCotizaciones }
+}
+
 // Resuelve el flag `vendedores_manejan_caja` de la org. Solo hace falta cuando
 // el actor es VENDEDOR (ver hasCajaAccess); llamarlo para ADMIN es un
 // round-trip al pedo, porque no depende del flag.

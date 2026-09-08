@@ -104,7 +104,7 @@ describe("/api/configuracion — permiso de POS para técnicos", () => {
     // ausente viaja también en el escalón de arriba (el permiso de caja para
     // vendedores) y ese primero cae con ella. El tercero ya acierta. Cuatro o
     // más significa que arrastró a una migración que sí está aplicada.
-    expect(chain.single).toHaveBeenCalledTimes(3)
+    expect(chain.single).toHaveBeenCalledTimes(4)
 
     // Y nada de lo que sí existe se perdió en el camino.
     expect(body.ivaRegimen).toBe("ADITIVO")
