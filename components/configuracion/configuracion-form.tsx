@@ -681,7 +681,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
             <div className="flex-1">
               <div className="text-sm font-medium">Los técnicos pueden cobrar sus cotizaciones</div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                Permite a los usuarios con rol Técnico convertir en venta las cotizaciones aceptadas que ellos mismos crearon, sin depender de un administrador para cerrar el cobro. La venta se les acredita como vendedor. No incluye eliminar cotizaciones, revisarlas ni convertirlas en orden de servicio, que siguen siendo solo de administradores, ni las cotizaciones de otros técnicos. Para que además vean esa venta en la sección Ventas hace falta el permiso <strong>Los técnicos pueden operar el POS</strong>.
+                Permite a los usuarios con rol Técnico convertir en venta las cotizaciones aceptadas que ellos mismos crearon, sin depender de un administrador para cerrar el cobro. No incluye eliminar cotizaciones, revisarlas ni convertirlas en orden de servicio, que siguen siendo solo de administradores, ni las cotizaciones de otros técnicos. La venta se les acredita como vendedor; para que además la vean listada en Ventas necesitan también el permiso de POS de acá arriba.
               </div>
             </div>
           </label>
