@@ -77,7 +77,7 @@ export async function POST(request: Request) {
           nombre
         ),
         facturas (id),
-        cotizaciones (
+        cotizaciones!cotizaciones_orden_id_fkey (
           id,
           estado,
           total,
@@ -95,6 +95,18 @@ export async function POST(request: Request) {
       .single()
 
     if (ordenError || !orden) {
+      // PGRST116 is `.single()` reporting zero rows: the ordinary 404, not a
+      // failure. Any other code means the query itself broke (missing column,
+      // ambiguous embed) and would otherwise reach the user as a plain "not
+      // found" - which is what kept the ambiguous cotizaciones embed
+      // (PGRST201) invisible for as long as it was broken.
+      if (ordenError && ordenError.code !== "PGRST116") {
+        console.error("[facturacion] orden query failed", {
+          ordenId,
+          code: ordenError.code,
+          message: ordenError.message,
+        })
+      }
       return NextResponse.json(
         { error: "Orden no encontrada" },
         { status: 404 }
