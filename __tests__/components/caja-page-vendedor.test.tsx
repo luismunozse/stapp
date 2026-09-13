@@ -83,8 +83,15 @@ describe("Pantalla de caja — vendedor habilitado", () => {
 
     render(<CajaPage />)
 
-    await waitFor(() => expect(screen.getByTestId("session-banner")).toBeTruthy())
-    expect(screen.getByText("Movimientos Manuales")).toBeTruthy()
+    // Las dos assertions van DENTRO del waitFor. El banner y los movimientos
+    // salen de fetches distintos, asi que esperar solo al banner y despues
+    // preguntar por los movimientos de forma sincrona es una carrera: en una
+    // maquina cargada gana el banner y el getByText falla sobre un DOM que
+    // todavia no termino de pintar. Adentro del waitFor las dos reintentan.
+    await waitFor(() => {
+      expect(screen.getByTestId("session-banner")).toBeTruthy()
+      expect(screen.getByText("Movimientos Manuales")).toBeTruthy()
+    })
   })
 
   it("con el flag prendido NO ve el histórico financiero", async () => {
@@ -137,10 +144,13 @@ describe("Pantalla de caja — vendedor habilitado", () => {
 
     render(<CajaPage />)
 
-    await waitFor(() => expect(screen.getByTestId("session-banner")).toBeTruthy())
-    expect(screen.getByText("Movimientos Manuales")).toBeTruthy()
-    expect(screen.getByText("Historial de Cierres")).toBeTruthy()
-    expect(screen.getByTestId("export")).toBeTruthy()
+    // Misma carrera que arriba, y esta es la que fallo de verdad en CI.
+    await waitFor(() => {
+      expect(screen.getByTestId("session-banner")).toBeTruthy()
+      expect(screen.getByText("Movimientos Manuales")).toBeTruthy()
+      expect(screen.getByText("Historial de Cierres")).toBeTruthy()
+      expect(screen.getByTestId("export")).toBeTruthy()
+    })
   })
 
   it("con el flag apagado lo saca de la pantalla", async () => {
