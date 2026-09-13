@@ -31,7 +31,13 @@ vi.mock("@/lib/facturacion/arca/cert", async () => {
 })
 
 import { encryptSecret } from "@/lib/facturacion/crypto"
+vi.mock("@/lib/facturacion/arca/stapp-cert", () => ({
+  getCertificadoStapp: vi.fn(),
+  ArcaStappCertError: class ArcaStappCertError extends Error {},
+}))
+
 import { validateCertKeyPair, CertValidationError } from "@/lib/facturacion/arca/cert"
+import { getCertificadoStapp, ArcaStappCertError } from "@/lib/facturacion/arca/stapp-cert"
 import { GET, PUT } from "@/app/api/facturacion-electronica/credenciales/route"
 
 const VALID_RESULT = {
@@ -433,6 +439,100 @@ describe("facturacion-electronica/credenciales", () => {
       expect(upsertSpy).toHaveBeenCalledTimes(2)
       expect(upsertSpy.mock.calls[0][0]).toHaveProperty("provider", "tusfacturas")
       expect(upsertSpy.mock.calls[1][0]).not.toHaveProperty("provider")
+    })
+  })
+
+  /**
+   * Modelo de DELEGACION: la fila del taller no guarda certificado. Aporta su
+   * CUIT (el que viaja en Auth.Cuit) y su punto de venta; el certificado es el
+   * de la plataforma y vive en variables de entorno.
+   */
+  describe("PUT — forma delegada", () => {
+    function putDelegado(overrides: any = {}) {
+      return createPostRequest({
+        modo: "delegado",
+        cuit: "30-71095505-7",
+        puntoVenta: 3,
+        condicionFiscal: "RESPONSABLE_INSCRIPTO",
+        ...overrides,
+      })
+    }
+
+    it("guarda provider=arca_delegado con el CUIT del taller y SIN certificado", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+      const upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null })
+      mockSupabaseFrom({ facturacion_credenciales: { upsert: upsertSpy } as any })
+
+      const { status, body } = await parseResponse(await PUT(putDelegado()))
+
+      expect(status).toBe(200)
+      expect(upsertSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organization_id: "o1",
+          provider: "arca_delegado",
+          cuit: "30710955057",
+          punto_venta: 3,
+          condicion_fiscal: "RESPONSABLE_INSCRIPTO",
+          cert_pem_enc: null,
+          key_pem_enc: null,
+        })
+      )
+      expect(body.provider).toBe("arca_delegado")
+      expect(body.cuit).toBe("30710955057")
+    })
+
+    it("400 cuando falta el CUIT del taller", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+      const { status } = await parseResponse(await PUT(putDelegado({ cuit: undefined })))
+      expect(status).toBe(400)
+    })
+
+    it("400 cuando el CUIT no tiene 11 dígitos", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+      const { status } = await parseResponse(await PUT(putDelegado({ cuit: "123" })))
+      expect(status).toBe(400)
+    })
+
+    it("400 ambiguo si mezcla la forma delegada con un certificado", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+      const { status } = await parseResponse(await PUT(putDelegado({ certPem: "x", keyPem: "y" })))
+      expect(status).toBe(400)
+    })
+  })
+
+  /**
+   * El taller necesita ver A QUE CUIT delegar antes de poder hacer el tramite.
+   * Sale del certificado de plataforma para no duplicar la fuente de verdad.
+   */
+  describe("GET — CUIT de la plataforma", () => {
+    it("expone el CUIT al que hay que delegar el servicio", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+      ;(getCertificadoStapp as any).mockReturnValue({
+        cuit: "23944498389",
+        certPem: "C",
+        keyPem: "K",
+        notAfter: "2028-09-12T22:16:31.000Z",
+        subject: "CN=stapp-prod",
+      })
+      mockSupabaseFrom({ facturacion_credenciales: createChainMock(null) })
+
+      const { status, body } = await parseResponse(await GET())
+
+      expect(status).toBe(200)
+      expect(body.cuitPlataforma).toBe("23944498389")
+    })
+
+    it("devuelve cuitPlataforma null si el certificado de plataforma no está configurado", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+      ;(getCertificadoStapp as any).mockImplementation(() => {
+        throw new ArcaStappCertError("ARCA_STAPP_CERT_B64 no configurada")
+      })
+      mockSupabaseFrom({ facturacion_credenciales: createChainMock(null) })
+
+      const { status, body } = await parseResponse(await GET())
+
+      expect(status).toBe(200)
+      expect(body.cuitPlataforma).toBeNull()
     })
   })
 })
