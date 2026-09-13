@@ -30,7 +30,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 
-import { Arca } from "@arcasdk/core"
+import { Arca, FileSystemTicketStorage } from "@arcasdk/core"
 import { buildVoucher } from "@/lib/facturacion/arca/voucher"
 import { toLoginCredentials, wsaaLogin } from "@/lib/facturacion/arca/wsaa-login"
 import type { ArcaCredenciales, EmitirInput } from "@/lib/facturacion/types"
@@ -112,6 +112,7 @@ describe.skipIf(!configurado)("facturación ARCA — homologación real", () => 
       key: creds.keyPem,
       handleTicket: true,
       credentials: toLoginCredentials(ticket),
+      useHttpsAgent: true,
     })
 
     const fecha = new Intl.DateTimeFormat("en-CA", {
@@ -133,3 +134,55 @@ describe.skipIf(!configurado)("facturación ARCA — homologación real", () => 
     expect(resultado.caeFchVto).toMatch(/^\d{8}$/)
   }, 120_000)
 })
+
+/**
+ * Chequeo de PRODUCCION, solo lecturas: NUNCA emite un comprobante.
+ *
+ * Existe porque hay un fallo que homologacion no puede mostrar. Los
+ * servidores de produccion de AFIP negocian TLS con una clave
+ * Diffie-Hellman debil y el OpenSSL de Node los rechaza:
+ *
+ *   error:0A00018A:SSL routines:tls_process_ske_dhe:dh key too small
+ *
+ * El SDK trae un agente legacy para eso detras de `useHttpsAgent`, que viene
+ * en false. Con toda la suite en verde contra homologacion, el primer
+ * sintoma habria sido la primera factura real fallando.
+ *
+ *   ARCA_PROD_CERT_PATH=... ARCA_PROD_KEY_PATH=... ARCA_PROD_CUIT=...  *     npx vitest run __tests__/integration/facturacion-arca-homologacion.test.ts
+ */
+const PROD_CERT = process.env.ARCA_PROD_CERT_PATH
+const PROD_KEY = process.env.ARCA_PROD_KEY_PATH
+const PROD_CUIT = process.env.ARCA_PROD_CUIT
+
+describe.skipIf(!PROD_CERT || !PROD_KEY || !PROD_CUIT)(
+  "facturacion ARCA - produccion (solo lecturas)",
+  () => {
+    function arcaProd() {
+      return new Arca({
+        production: true,
+        cuit: Number(PROD_CUIT),
+        cert: readFileSync(PROD_CERT!, "utf8"),
+        key: readFileSync(PROD_KEY!, "utf8"),
+        useHttpsAgent: true,
+        ticketStorage: new FileSystemTicketStorage({
+          ticketPath: process.env.ARCA_PROD_TICKET_DIR ?? join(tmpdir(), "arca-prod-ta"),
+          cuit: Number(PROD_CUIT),
+          production: true,
+        }),
+      })
+    }
+
+    it("negocia TLS con produccion sin morir en dh key too small", async () => {
+      const estado = await arcaProd().electronicBillingService.getServerStatus()
+      expect(estado.appServer).toBe("OK")
+      expect(estado.authServer).toBe("OK")
+    }, 120_000)
+
+    it("autentica y lee los puntos de venta habilitados", async () => {
+      const res = await arcaProd().electronicBillingService.getSalesPoints()
+      const puntos = res.resultGet?.ptoVenta ?? []
+      expect(puntos.length).toBeGreaterThan(0)
+      expect(puntos.every((p: any) => p.bloqueado === "N")).toBe(true)
+    }, 120_000)
+  }
+)

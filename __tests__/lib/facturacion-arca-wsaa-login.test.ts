@@ -59,6 +59,28 @@ describe("wsaaLogin", () => {
     })
   })
 
+  /**
+   * Los servidores de PRODUCCION de AFIP negocian TLS con una clave
+   * Diffie-Hellman debil que el OpenSSL de Node rechaza por default:
+   * `tls_process_ske_dhe: dh key too small`. El SDK trae un agente legacy
+   * (`DEFAULT@SECLEVEL=1`) para eso, pero `useHttpsAgent` viene en false.
+   * Homologacion NO tiene el problema, asi que sin este test el fallo solo
+   * aparece en la primera emision real.
+   */
+  it("prende el agente HTTPS legacy que produccion de AFIP necesita", async () => {
+    const recibido: Array<Record<string, unknown>> = []
+    await wsaaLogin(
+      { cuit: "23944498389", certPem: "CERT", keyPem: "KEY", production: true, service: "wsfe" },
+      {
+        createAuthRepository: (config) => {
+          recibido.push(config)
+          return { requestLogin: async () => fakeAccessTicket }
+        },
+      }
+    )
+    expect(recibido[0].useHttpsAgent).toBe(true)
+  })
+
   it("le pasa al SDK el cert y la key del certificado, y el ambiente pedido", async () => {
     const recibido: Array<Record<string, unknown>> = []
 
@@ -73,7 +95,7 @@ describe("wsaaLogin", () => {
     )
 
     expect(recibido).toEqual([
-      { cert: "CERT", key: "KEY", cuit: 23944498389, production: true },
+      { cert: "CERT", key: "KEY", cuit: 23944498389, production: true, useHttpsAgent: true },
     ])
   })
 })

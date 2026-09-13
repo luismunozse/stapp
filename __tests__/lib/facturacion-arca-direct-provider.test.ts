@@ -118,6 +118,8 @@ describe("arcaDirectProvider.emitir", () => {
 
     expect(sdk.contextos[0].cuit).toBe(30710955057)
     expect(sdk.contextos[0].handleTicket).toBe(true)
+    // Sin esto, produccion falla con "dh key too small" (ver wsaa-login.test).
+    expect(sdk.contextos[0].useHttpsAgent).toBe(true)
     expect(sdk.contextos[0].credentials.credentials).toEqual({ token: "TOK", sign: "SIG" })
   })
 })
