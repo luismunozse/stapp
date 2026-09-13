@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { encryptSecret } from "@/lib/facturacion/crypto"
 import { isMissingColumnError } from "@/lib/db-errors"
 import { validateCertKeyPair, CertValidationError } from "@/lib/facturacion/arca/cert"
+import { getCertificadoStapp } from "@/lib/facturacion/arca/stapp-cert"
 
 /**
  * Credenciales fiscales — proveedor ARCA directo (migración 299, design
@@ -43,9 +44,25 @@ function computeEstado(row: CredRow | null): string {
   return row.estado ?? "conectado"
 }
 
+/**
+ * El taller necesita ver a QUÉ CUIT delegar antes de poder hacer el trámite en
+ * Administrador de Relaciones. Sale del certificado de plataforma para no
+ * duplicar la fuente de verdad; si no está configurado devuelve null en vez de
+ * romper la pantalla entera de Configuración.
+ */
+function cuitDeLaPlataforma(): string | null {
+  try {
+    return getCertificadoStapp().cuit
+  } catch {
+    return null
+  }
+}
+
 export async function GET() {
   const { error, organizationId } = await requireAdmin()
   if (error) return error
+
+  const cuitPlataforma = cuitDeLaPlataforma()
 
   const result = await supabaseAdmin
     .from("facturacion_credenciales")
@@ -70,6 +87,7 @@ export async function GET() {
       condicionFiscal: null,
       updatedAt: null,
       migracionPendiente: true,
+      cuitPlataforma,
     })
   }
 
@@ -87,6 +105,7 @@ export async function GET() {
     puntoVenta: data?.punto_venta ?? null,
     condicionFiscal: data?.condicion_fiscal ?? null,
     updatedAt: data?.updated_at ?? null,
+    cuitPlataforma,
   })
 }
 
@@ -117,6 +136,20 @@ export async function PUT(request: Request) {
 
   const hasArcaShape = "certPem" in body || "keyPem" in body
   const hasLegacyShape = "apitoken" in body || "apikey" in body || "usertoken" in body
+  const hasDelegadoShape = body.modo === "delegado"
+
+  // Una fila delegada NO tiene certificado (lo prohíbe el CHECK de la
+  // migración 325): mezclar las dos formas es un payload sin sentido.
+  if (hasDelegadoShape && (hasArcaShape || hasLegacyShape)) {
+    return NextResponse.json(
+      { error: "Payload ambiguo: el modo delegado no lleva certificado ni tokens" },
+      { status: 400 }
+    )
+  }
+
+  if (hasDelegadoShape) {
+    return putArcaDelegado(organizationId!, body)
+  }
 
   if (hasArcaShape && hasLegacyShape) {
     return NextResponse.json(
@@ -130,6 +163,66 @@ export async function PUT(request: Request) {
   }
 
   return putArca(organizationId!, body)
+}
+
+/**
+ * Modelo de delegación: el taller aporta su identidad fiscal y nada más. El
+ * certificado es el de la plataforma y vive en variables de entorno, así que
+ * acá no hay material sensible que cifrar.
+ */
+async function putArcaDelegado(organizationId: string, body: any) {
+  const { cuit, puntoVenta, condicionFiscal } = body
+
+  const cuitNormalizado = String(cuit ?? "").replace(/\D/g, "")
+  if (!CUIT_FORMAT.test(cuitNormalizado)) {
+    return NextResponse.json({ error: "CUIT inválido (deben ser 11 dígitos)" }, { status: 400 })
+  }
+
+  let puntoVentaValidado = 1
+  if (puntoVenta !== undefined) {
+    const n = Number(puntoVenta)
+    if (!Number.isInteger(n) || n <= 0 || n > 99999) {
+      return NextResponse.json({ error: "Punto de venta inválido" }, { status: 400 })
+    }
+    puntoVentaValidado = n
+  }
+
+  const cond = condicionFiscal === "RESPONSABLE_INSCRIPTO" ? "RESPONSABLE_INSCRIPTO" : "MONOTRIBUTO"
+
+  const { error: dbError } = await supabaseAdmin.from("facturacion_credenciales").upsert({
+    organization_id: organizationId,
+    provider: "arca_delegado",
+    cuit: cuitNormalizado,
+    punto_venta: puntoVentaValidado,
+    condicion_fiscal: cond,
+    // Explícitamente en NULL: si la org venía de BYO, su clave privada deja de
+    // cumplir función y el CHECK de la 321 no la deja quedarse ahí.
+    cert_pem_enc: null,
+    key_pem_enc: null,
+    cert_subject: null,
+    cert_fingerprint: null,
+    cert_not_before: null,
+    cert_not_after: null,
+    estado: "conectado",
+    updated_at: new Date().toISOString(),
+  })
+
+  if (dbError) {
+    if (isMissingColumnError(dbError)) {
+      return NextResponse.json({ error: "Migración pendiente: contactar soporte" }, { status: 503 })
+    }
+    return NextResponse.json({ error: "No se pudo guardar" }, { status: 500 })
+  }
+
+  return NextResponse.json({
+    conectado: true,
+    provider: "arca_delegado",
+    estado: "conectado",
+    cuit: cuitNormalizado,
+    puntoVenta: puntoVentaValidado,
+    condicionFiscal: cond,
+    cuitPlataforma: cuitDeLaPlataforma(),
+  })
 }
 
 async function putArca(organizationId: string, body: any) {
