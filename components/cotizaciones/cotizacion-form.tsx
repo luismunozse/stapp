@@ -19,6 +19,7 @@ import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2, BookOpen, 
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { useCurrency, useTerminologia } from "@/contexts/currency-context"
 import { getCountryConfig } from "@/lib/countries"
+import { VEREDICTOS, CAUSAS_DANO } from "@/lib/cotizacion-informe"
 import { useModal } from "@/contexts/modal-context"
 import { ItemRow, calcItemNeto } from "./item-row"
 import { ClienteSelector } from "./cliente-selector"
@@ -73,6 +74,25 @@ export function toItemPayload(item: CotizacionItem) {
   }
 }
 
+// Etiquetas en castellano para el dictamen del informe tecnico. Los valores
+// (VEREDICTOS/CAUSAS_DANO) vienen de lib/cotizacion-informe para no duplicar el
+// enum; el texto mostrado no tiene otra fuente y debe coincidir con el que
+// dibuja el PDF (lib/pdf.ts).
+const VEREDICTO_LABELS: Record<string, string> = {
+  REPARABLE: "Reparable",
+  IRREPARABLE: "Irreparable",
+  SIN_FALLA: "Sin falla detectada",
+}
+const CAUSA_DANO_LABELS: Record<string, string> = {
+  CAIDA: "Caída",
+  LIQUIDO: "Contacto con líquido",
+  SOBRETENSION: "Sobretensión eléctrica",
+  DESGASTE: "Desgaste por uso",
+  USO_INDEBIDO: "Uso indebido",
+  FALLA_FABRICA: "Falla de fábrica",
+  DESCONOCIDA: "Desconocida",
+}
+
 interface CondicionesTecnicas {
   diagnostico: string | null
   plazoEstimadoDias: number | null
@@ -117,6 +137,10 @@ interface CotizacionFormProps {
     sectorId?: string | null
     equipo?: EquipoData | null
     checklist?: ChecklistPickerValue | null
+    veredicto?: string | null
+    diagnosticoTecnico?: string | null
+    causaDano?: string | null
+    presentadoAnte?: string | null
   }
 }
 
@@ -205,9 +229,45 @@ export function CotizacionForm({
   )
   const [tiposDispositivo, setTiposDispositivo] = useState<Array<{ id: string; codigo: string; nombre: string }>>([])
 
+  const [veredicto, setVeredicto] = useState<string | null>(initialData?.veredicto ?? null)
+  const [diagnosticoTecnico, setDiagnosticoTecnico] = useState(initialData?.diagnosticoTecnico ?? "")
+  const [causaDano, setCausaDano] = useState<string | null>(initialData?.causaDano ?? null)
+  const [presentadoAnte, setPresentadoAnte] = useState(initialData?.presentadoAnte ?? "")
+  const [entidades, setEntidades] = useState<string[]>([])
+
   const isEditing = !!initialData?.id
   const [linkedOrdenId, setLinkedOrdenId] = useState<string | null>(ordenId || null)
   const isStandalone = !linkedOrdenId
+
+  // Sin items no hay presupuesto: el documento se emite como informe tecnico.
+  const sinPresupuesto = veredicto === "IRREPARABLE" || veredicto === "SIN_FALLA"
+
+  // El diagnostico de la orden se PRECARGA una sola vez, en un documento nuevo
+  // y solo si el campo esta vacio. Lo que se persiste es la copia congelada: la
+  // orden sigue mutando despues, y un documento presentado ante una aseguradora
+  // no puede cambiar solo. Por eso no es un efecto que sincronice, es un
+  // arranque. Nunca pisar lo que el tecnico ya escribio.
+  useEffect(() => {
+    if (isEditing || !linkedOrdenId || diagnosticoTecnico) return
+    let vivo = true
+    fetch(`/api/ordenes/${linkedOrdenId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (vivo && d?.diagnostico) setDiagnosticoTecnico(d.diagnostico)
+      })
+      .catch(() => {})
+    return () => { vivo = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedOrdenId])
+
+  useEffect(() => {
+    let vivo = true
+    fetch("/api/cotizaciones/entidades")
+      .then((r) => (r.ok ? r.json() : { entidades: [] }))
+      .then((d) => { if (vivo) setEntidades(d.entidades || []) })
+      .catch(() => {})
+    return () => { vivo = false }
+  }, [])
 
   // Cargar tipos de dispositivo (solo para PRESUPUESTO)
   useEffect(() => {
@@ -377,10 +437,14 @@ export function CotizacionForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    const validItems = items.filter(
-      (item) => item.descripcion && item.cantidad > 0 && item.precioUnitario > 0
-    )
-    if (validItems.length === 0) {
+    // Sin presupuesto (veredicto IRREPARABLE o SIN_FALLA) el documento se emite
+    // como informe tecnico: no hay items que validar ni que mandar.
+    const validItems = sinPresupuesto
+      ? []
+      : items.filter(
+          (item) => item.descripcion && item.cantidad > 0 && item.precioUnitario > 0
+        )
+    if (!sinPresupuesto && validItems.length === 0) {
       await showWarning("Debe agregar al menos un item válido")
       return
     }
@@ -430,6 +494,10 @@ export function CotizacionForm({
         descuentoGlobalValor,
         ivaPorcentaje,
         tipoCambio: tipoCambio || undefined,
+        veredicto: veredicto || undefined,
+        diagnosticoTecnico: diagnosticoTecnico.trim() || undefined,
+        causaDano: causaDano || undefined,
+        presentadoAnte: presentadoAnte.trim() || undefined,
       }
 
       if (linkedOrdenId) payload.ordenId = linkedOrdenId
@@ -799,7 +867,90 @@ export function CotizacionForm({
             </CollapsibleSection>
           )}
 
+          {/* Informe técnico: dictamen para talleres que trabajan con aseguradoras.
+              Elegir Irreparable o Sin falla detectada emite el documento sin
+              items (ver `sinPresupuesto`). Visible siempre, no solo en
+              PRESUPUESTO: una cotización de ORDEN también puede terminar en
+              informe. */}
+          <CollapsibleSection title="Informe técnico" icon={FileText} defaultOpen>
+            <div>
+              <Label>Veredicto</Label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {VEREDICTOS.map((v) => (
+                  <Button
+                    key={v}
+                    type="button"
+                    variant={veredicto === v ? "default" : "outline"}
+                    size="sm"
+                    aria-pressed={veredicto === v}
+                    onClick={() => setVeredicto(v)}
+                    disabled={loading}
+                  >
+                    {VEREDICTO_LABELS[v]}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="informe-diagnostico">Diagnóstico del informe técnico</Label>
+              <Textarea
+                id="informe-diagnostico"
+                value={diagnosticoTecnico}
+                onChange={(e) => setDiagnosticoTecnico(e.target.value)}
+                placeholder="Qué encontró el técnico: el texto que se imprime en el informe presentado ante la entidad"
+                rows={3}
+                disabled={loading}
+                className="mt-1"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="informe-causa-dano">Causa probable del daño</Label>
+                <Select
+                  value={causaDano ?? undefined}
+                  onValueChange={(v) => setCausaDano(v)}
+                  disabled={loading}
+                >
+                  <SelectTrigger id="informe-causa-dano" className="mt-1">
+                    <SelectValue placeholder="Seleccionar..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CAUSAS_DANO.map((c) => (
+                      <SelectItem key={c} value={c}>{CAUSA_DANO_LABELS[c]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="informe-presentado-ante">Para ser presentado ante</Label>
+                <Input
+                  id="informe-presentado-ante"
+                  list="entidades-informe"
+                  value={presentadoAnte}
+                  onChange={(e) => setPresentadoAnte(e.target.value)}
+                  placeholder="Ej: La Segunda ART"
+                  disabled={loading}
+                  className="mt-1"
+                />
+                <datalist id="entidades-informe">
+                  {entidades.map((ent) => (
+                    <option key={ent} value={ent} />
+                  ))}
+                </datalist>
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          {sinPresupuesto && (
+            <p className="text-sm text-muted-foreground border rounded-md p-3">
+              Este documento se va a emitir como informe técnico, sin presupuesto ni ítems.
+            </p>
+          )}
+
           {/* Ítems */}
+          {!sinPresupuesto && (
           <CollapsibleSection title="Ítems" icon={FileText} defaultOpen>
             {/* Items Header - Hidden on mobile */}
             <div className="hidden sm:grid gap-2 text-sm font-medium text-muted-foreground border-b pb-2" style={{ gridTemplateColumns: "4fr 1fr 1.5fr 1.5fr 1.5fr 2fr 0.5fr" }}>
@@ -874,6 +1025,7 @@ export function CotizacionForm({
               </div>
             )}
           </CollapsibleSection>
+          )}
 
           {/* Descuentos y totales */}
           <CollapsibleSection title="Descuentos y totales" icon={Calculator} defaultOpen>
