@@ -28,6 +28,11 @@ vi.mock("@/lib/facturacion/tusfacturas-provider", () => ({
   tusFacturasProvider: { emitir: vi.fn() },
 }))
 
+vi.mock("@/lib/facturacion/arca/stapp-cert", () => ({
+  getCertificadoStapp: vi.fn(),
+  ArcaStappCertError: class ArcaStappCertError extends Error {},
+}))
+
 vi.mock("@/lib/facturacion/arca/arca-direct-provider", () => ({
   arcaDirectProvider: { emitir: vi.fn() },
 }))
@@ -39,6 +44,7 @@ vi.mock("@/lib/facturacion/map-venta", () => ({
 import { canEmitirFacturaElectronica } from "@/lib/facturacion/access"
 import { tusFacturasProvider } from "@/lib/facturacion/tusfacturas-provider"
 import { arcaDirectProvider } from "@/lib/facturacion/arca/arca-direct-provider"
+import { getCertificadoStapp, ArcaStappCertError } from "@/lib/facturacion/arca/stapp-cert"
 import { mapVentaToEmitirInput } from "@/lib/facturacion/map-venta"
 import { POST } from "@/app/api/facturacion-electronica/emitir/route"
 
@@ -83,6 +89,18 @@ const CREDENCIALES_ARCA = {
   usertoken_enc: null,
   punto_venta: 3,
   condicion_fiscal: "MONOTRIBUTO",
+}
+const CREDENCIALES_DELEGADO = {
+  organization_id: "org-1",
+  provider: "arca_delegado",
+  cuit: "30710955057",
+  cert_pem_enc: null,
+  key_pem_enc: null,
+  apitoken_enc: null,
+  apikey_enc: null,
+  usertoken_enc: null,
+  punto_venta: 2,
+  condicion_fiscal: "RESPONSABLE_INSCRIPTO",
 }
 const MAPPED_INPUT = {
   ventaId: "venta-1",
@@ -453,5 +471,64 @@ describe("POST /api/facturacion-electronica/emitir", () => {
       }),
       expect.anything()
     )
+  })
+
+  /**
+   * Una fila delegada no tiene tokens legacy. Si el despacho la mandara al
+   * proveedor equivocado, la ruta moriria descifrando un NULL.
+   */
+  it("despacha al proveedor ARCA cuando la fila es provider='arca_delegado'", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    vi.mocked(getCertificadoStapp).mockReturnValue({
+      cuit: "23944498389",
+      certPem: "CERT-PLATAFORMA",
+      keyPem: "KEY-PLATAFORMA",
+      notAfter: "2028-09-12T22:16:31.000Z",
+      subject: "CN=stapp-prod",
+    } as any)
+    vi.mocked(arcaDirectProvider.emitir).mockResolvedValue({
+      ok: true, cae: "1", numero: "0002-00000001", tipo: "B", raw: {},
+    } as any)
+    const insertChain = createChainMock({ id: "cmp-1" })
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [createChainMock(null), insertChain, createChainMock({ id: "cmp-1", estado: "emitido" })],
+      ventas: [createChainMock(VENTA)],
+      items_venta: [createChainMock(ITEMS)],
+      facturacion_credenciales: [createChainMock(CREDENCIALES_DELEGADO)],
+    })
+
+    const { status } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+    expect(status).toBe(200)
+    expect(arcaDirectProvider.emitir).toHaveBeenCalledTimes(1)
+    expect(tusFacturasProvider.emitir).not.toHaveBeenCalled()
+    expect(insertChain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "arca_delegado", punto_venta: 2 })
+    )
+  })
+
+  /**
+   * Si faltan las env vars del certificado de plataforma, TODAS las orgs
+   * delegadas dejan de facturar a la vez. Un 500 generico manda a leer logs;
+   * el mensaje propio dice que es configuracion y no un problema del taller.
+   */
+  it("500 con mensaje propio cuando falta el certificado de plataforma", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    vi.mocked(getCertificadoStapp).mockImplementation(() => {
+      throw new ArcaStappCertError("ARCA_STAPP_CERT_B64 no configurada")
+    })
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [createChainMock(null)],
+      ventas: [createChainMock(VENTA)],
+      items_venta: [createChainMock(ITEMS)],
+      facturacion_credenciales: [createChainMock(CREDENCIALES_DELEGADO)],
+    })
+
+    const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+    expect(status).toBe(500)
+    expect(body.error).toMatch(/certificado de plataforma/i)
   })
 })

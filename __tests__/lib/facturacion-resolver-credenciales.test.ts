@@ -1,4 +1,14 @@
-import { describe, it, expect, beforeAll } from "vitest"
+import { describe, it, expect, beforeAll, vi } from "vitest"
+
+vi.mock("@/lib/facturacion/arca/stapp-cert", () => ({
+  getCertificadoStapp: vi.fn(() => ({
+    cuit: "23944498389",
+    certPem: "CERT-PLATAFORMA",
+    keyPem: "KEY-PLATAFORMA",
+    notAfter: "2028-09-12T22:16:31.000Z",
+    subject: "CN=stapp-prod",
+  })),
+}))
 
 import { encryptSecret } from "@/lib/facturacion/crypto"
 import {
@@ -120,6 +130,51 @@ describe("resolverCredenciales", () => {
           punto_venta: 1,
           condicion_fiscal: "MONOTRIBUTO",
         },
+      })
+    ).toThrow(CredencialesIncompletasError)
+  })
+
+  /**
+   * Modelo de delegación: un único certificado —el de la plataforma— emite en
+   * nombre de N talleres. La fila del taller NO tiene certificado: aporta su
+   * CUIT, que viaja en `Auth.Cuit`, mientras la identidad del WSAA sale del
+   * subject del certificado de STApp.
+   */
+  it("arma las credenciales delegadas partiendo la identidad en dos", () => {
+    const resuelto = resolverCredenciales({
+      organizationId: "org-1",
+      production: true,
+      row: {
+        provider: "arca_delegado",
+        cuit: "30710955057",
+        cert_pem_enc: null,
+        key_pem_enc: null,
+        punto_venta: 4,
+        condicion_fiscal: "RESPONSABLE_INSCRIPTO",
+      },
+    })
+
+    expect(resuelto).toEqual({
+      provider: "arca_delegado",
+      creds: {
+        organizationId: "org-1",
+        cuit: "23944498389",
+        cuitRepresentado: "30710955057",
+        certPem: "CERT-PLATAFORMA",
+        keyPem: "KEY-PLATAFORMA",
+        puntoVenta: 4,
+        condicionFiscal: "RESPONSABLE_INSCRIPTO",
+        production: true,
+      },
+    })
+  })
+
+  it("falla si la fila delegada no trae el CUIT del taller", () => {
+    expect(() =>
+      resolverCredenciales({
+        organizationId: "org-1",
+        production: true,
+        row: { provider: "arca_delegado", cuit: null, punto_venta: 1, condicion_fiscal: "MONOTRIBUTO" },
       })
     ).toThrow(CredencialesIncompletasError)
   })

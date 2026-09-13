@@ -9,6 +9,7 @@
  */
 
 import { decryptSecret } from "@/lib/facturacion/crypto"
+import { getCertificadoStapp } from "@/lib/facturacion/arca/stapp-cert"
 import type {
   ArcaCredenciales,
   CondicionFiscalEmisor,
@@ -24,6 +25,7 @@ export class CredencialesIncompletasError extends Error {
 
 export type CredencialesResueltas =
   | { provider: "arca"; creds: ArcaCredenciales }
+  | { provider: "arca_delegado"; creds: ArcaCredenciales }
   | { provider: "tusfacturas"; creds: FacturacionCredenciales }
 
 interface CredencialesRow {
@@ -56,6 +58,28 @@ export function resolverCredenciales(params: ResolverCredencialesParams): Creden
   const { row, organizationId, production } = params
   const condicionFiscal = (row.condicion_fiscal ?? "MONOTRIBUTO") as CondicionFiscalEmisor
   const puntoVenta = row.punto_venta ?? 1
+
+  // Delegación: el certificado es el de la PLATAFORMA y la fila del taller
+  // solo aporta su CUIT. La identidad queda partida en dos a propósito —
+  // AFIP deriva la del WSAA del subject del certificado, no del Auth.Cuit.
+  if (row.provider === "arca_delegado") {
+    exigir(row, ["cuit"], "ARCA delegado")
+    const plataforma = getCertificadoStapp()
+
+    return {
+      provider: "arca_delegado",
+      creds: {
+        organizationId,
+        cuit: plataforma.cuit,
+        cuitRepresentado: row.cuit as string,
+        certPem: plataforma.certPem,
+        keyPem: plataforma.keyPem,
+        puntoVenta,
+        condicionFiscal,
+        production,
+      },
+    }
+  }
 
   if (row.provider === "arca") {
     exigir(row, ["cuit", "cert_pem_enc", "key_pem_enc"], "ARCA")

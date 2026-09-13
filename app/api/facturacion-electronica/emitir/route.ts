@@ -5,6 +5,7 @@ import { canEmitirFacturaElectronica } from "@/lib/facturacion/access"
 import { tusFacturasProvider } from "@/lib/facturacion/tusfacturas-provider"
 import { arcaDirectProvider } from "@/lib/facturacion/arca/arca-direct-provider"
 import { isArcaProduction } from "@/lib/facturacion/arca/env"
+import { ArcaStappCertError } from "@/lib/facturacion/arca/stapp-cert"
 import {
   resolverCredenciales,
   CredencialesIncompletasError,
@@ -78,8 +79,9 @@ export async function POST(request: Request) {
   // El ambiente ARCA se resuelve SOLO para filas 'arca': `isArcaProduction()`
   // tira si NODE_ENV=production y ARCA_ENV no está seteada, y una org que
   // factura por TusFacturas no tiene por qué quedar bloqueada por eso.
+  const esArca = cred.provider === "arca" || cred.provider === "arca_delegado"
   let production = false
-  if (cred.provider === "arca") {
+  if (esArca) {
     try {
       production = isArcaProduction()
     } catch {
@@ -95,6 +97,16 @@ export async function POST(request: Request) {
   } catch (e) {
     if (e instanceof CredencialesIncompletasError) {
       return NextResponse.json({ error: e.message }, { status: 400 })
+    }
+    if (e instanceof ArcaStappCertError) {
+      // Configuración de la PLATAFORMA, no del taller: si falta, todas las
+      // orgs delegadas dejan de facturar a la vez. Se nombra para que el
+      // mensaje no mande a leer logs.
+      console.error("[facturacion] certificado de plataforma mal configurado", e.message)
+      return NextResponse.json(
+        { error: "Certificado de plataforma no configurado — contactar soporte" },
+        { status: 500 }
+      )
     }
     return NextResponse.json({ error: "No se pudieron leer las credenciales" }, { status: 500 })
   }
@@ -147,10 +159,14 @@ export async function POST(request: Request) {
 
   let result
   try {
+    // La condición se escribe por TusFacturas y no por ARCA a propósito: así
+    // TypeScript estrecha la rama `else` a las DOS variantes ARCA (directa y
+    // delegada) y agregar una tercera no puede caer en silencio del lado
+    // equivocado.
     result =
-      resuelto.provider === "arca"
-        ? await arcaDirectProvider.emitir(resuelto.creds, input)
-        : await tusFacturasProvider.emitir(resuelto.creds, input)
+      resuelto.provider === "tusfacturas"
+        ? await tusFacturasProvider.emitir(resuelto.creds, input)
+        : await arcaDirectProvider.emitir(resuelto.creds, input)
   } catch (err) {
     // No dejamos un comprobante "pendiente" colgado: si el proveedor tira
     // una excepción (timeout, red, etc.), lo marcamos rechazado para que se

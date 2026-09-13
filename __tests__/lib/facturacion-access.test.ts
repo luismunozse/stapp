@@ -2,9 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 vi.mock("@/lib/subscriptions", () => ({ hasPlanFeature: vi.fn() }))
 vi.mock("@/lib/supabase", () => ({ supabaseAdmin: { from: vi.fn() } }))
+vi.mock("@/lib/facturacion/arca/stapp-cert", () => ({
+  getCertificadoStapp: vi.fn(),
+  ArcaStappCertError: class ArcaStappCertError extends Error {},
+}))
 
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { supabaseAdmin } from "@/lib/supabase"
+import { getCertificadoStapp, ArcaStappCertError } from "@/lib/facturacion/arca/stapp-cert"
 import { canEmitirFacturaElectronica } from "@/lib/facturacion/access"
 
 function orgRow(row: any) {
@@ -109,6 +114,40 @@ describe("canEmitirFacturaElectronica", () => {
       .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
       .mockReturnValueOnce(credRowError({ code: "PGRST204", message: "schema cache" }))
       .mockReturnValueOnce(credRow(null))
+    expect(await canEmitirFacturaElectronica("o1")).toBe(false)
+  })
+
+  /**
+   * Delegacion: la fila del taller NO tiene certificado, asi que el gate de
+   * vencimiento mira el de la PLATAFORMA. Si mirara cert_not_after de la fila
+   * (siempre NULL aca) ninguna org delegada podria facturar nunca.
+   */
+  it("true when provider='arca_delegado' and the platform certificate is valid", async () => {
+    ;(hasPlanFeature as any).mockResolvedValue(true)
+    ;(getCertificadoStapp as any).mockReturnValue({ notAfter: "2099-01-01T00:00:00Z" })
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
+      .mockReturnValueOnce(credRow({ organization_id: "o1", provider: "arca_delegado", cert_not_after: null }))
+    expect(await canEmitirFacturaElectronica("o1")).toBe(true)
+  })
+
+  it("false when provider='arca_delegado' and the platform certificate expired", async () => {
+    ;(hasPlanFeature as any).mockResolvedValue(true)
+    ;(getCertificadoStapp as any).mockReturnValue({ notAfter: "2020-01-01T00:00:00Z" })
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
+      .mockReturnValueOnce(credRow({ organization_id: "o1", provider: "arca_delegado" }))
+    expect(await canEmitirFacturaElectronica("o1")).toBe(false)
+  })
+
+  it("false when provider='arca_delegado' and the platform certificate is not configured", async () => {
+    ;(hasPlanFeature as any).mockResolvedValue(true)
+    ;(getCertificadoStapp as any).mockImplementation(() => {
+      throw new ArcaStappCertError("ARCA_STAPP_CERT_B64 no configurada")
+    })
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
+      .mockReturnValueOnce(credRow({ organization_id: "o1", provider: "arca_delegado" }))
     expect(await canEmitirFacturaElectronica("o1")).toBe(false)
   })
 })
