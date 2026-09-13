@@ -77,7 +77,13 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
   const neto = calcItemNeto(item)
   const [invSearch, setInvSearch] = useState("")
   const [invResults, setInvResults] = useState<any[]>([])
-  const [showInvSearch, setShowInvSearch] = useState(false)
+  // La fila nueva arranca en modo busqueda. La capacidad de traer del catalogo
+  // ya existia, pero vivia detras de un boton icono sin etiqueta y el taller no
+  // se enteraba. Una fila que ya tiene descripcion NO abre el buscador: las
+  // cotizaciones en BORRADOR que ya existen se siguen editando como siempre.
+  const [showInvSearch, setShowInvSearch] = useState(
+    !item.descripcion && !item.inventarioId && !item.servicioId
+  )
   const searchRef = useRef<HTMLDivElement>(null)
 
   // Local string state for numeric fields so the user can clear & retype freely.
@@ -250,6 +256,16 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
                       )
                     })}
                   </div>
+                )}
+                {!vinculado && (
+                  <button
+                    type="button"
+                    className="mt-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                    onClick={() => { setShowInvSearch(false); setInvSearch(""); setInvResults([]) }}
+                    disabled={disabled}
+                  >
+                    Escribir a mano
+                  </button>
                 )}
               </div>
             ) : (
@@ -470,6 +486,16 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
                 )
               })}
             </div>
+          )}
+          {showInvSearch && !vinculado && (
+            <button
+              type="button"
+              className="mt-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              onClick={() => { setShowInvSearch(false); setInvSearch(""); setInvResults([]) }}
+              disabled={disabled}
+            >
+              Escribir a mano
+            </button>
           )}
           {showCostInfo && (
             <div className="text-[11px] text-muted-foreground mt-1 flex justify-between gap-2">

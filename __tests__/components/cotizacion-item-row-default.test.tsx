@@ -1,0 +1,73 @@
+// __tests__/components/cotizacion-item-row-default.test.tsx
+//
+// La busqueda de los dos catalogos (inventario + servicios) ya existia en
+// ItemRow, pero vivia detras de un boton icono sin etiqueta y el taller nunca
+// se enteraba. Esta suite cubre la inversion del default: una fila NUEVA
+// arranca en modo busqueda, pero una fila que ya tiene descripcion cargada
+// (las cotizaciones en BORRADOR que ya existen) sigue mostrando el input de
+// texto libre tal cual estaba, sin abrir el buscador encima.
+import { describe, it, expect, vi } from "vitest"
+import { render, screen, fireEvent } from "@testing-library/react"
+import { ModalProvider } from "@/contexts/modal-context"
+import { ItemRow } from "@/components/cotizaciones/item-row"
+
+vi.mock("@/contexts/currency-context", () => ({
+  useCurrency: () => ({ formatPrice: (n: number) => `$${n}` }),
+}))
+
+const baseItem = {
+  descripcion: "",
+  cantidad: 1,
+  precioUnitario: 0,
+}
+
+function renderItemRow(item: Record<string, unknown>) {
+  return render(
+    <ModalProvider>
+      <ItemRow item={item as any} index={0} onUpdate={vi.fn()} onRemove={vi.fn()} />
+    </ModalProvider>
+  )
+}
+
+describe("ItemRow — default de la fila nueva", () => {
+  it("una fila vacia (sin descripcion, sin vinculo a catalogo) arranca en modo busqueda", () => {
+    renderItemRow({ ...baseItem })
+
+    // Los dos layouts (movil y escritorio) se montan siempre en jsdom; ambos
+    // comparten el mismo estado, asi que el buscador aparece en los dos.
+    const buscadores = screen.getAllByPlaceholderText("Buscar producto o servicio...")
+    expect(buscadores.length).toBeGreaterThan(0)
+    expect(screen.queryAllByPlaceholderText("Descripción del item")).toHaveLength(0)
+  })
+
+  it("una fila con descripcion ya guardada renderiza el input de descripcion, no el buscador (guard de BORRADOR)", () => {
+    // Este es el caso que protege a las cotizaciones en BORRADOR que ya
+    // existen: reabrirlas para editar no puede tapar el dato guardado con un
+    // buscador vacio.
+    renderItemRow({ ...baseItem, descripcion: "Cambio de pantalla" })
+
+    expect(screen.getAllByDisplayValue("Cambio de pantalla").length).toBeGreaterThan(0)
+    expect(screen.queryAllByPlaceholderText("Buscar producto o servicio...")).toHaveLength(0)
+  })
+
+  it("una fila ya vinculada a inventario (con descripcion) tampoco abre el buscador", () => {
+    renderItemRow({ ...baseItem, descripcion: "Pantalla iPhone 12", inventarioId: "inv-1" })
+
+    expect(screen.queryAllByPlaceholderText("Buscar producto o servicio...")).toHaveLength(0)
+    expect(screen.getAllByDisplayValue("Pantalla iPhone 12").length).toBeGreaterThan(0)
+  })
+
+  it("el enlace 'Escribir a mano' cambia la fila vacia a texto libre", () => {
+    renderItemRow({ ...baseItem })
+
+    const enlaces = screen.getAllByRole("button", { name: "Escribir a mano" })
+    expect(enlaces.length).toBeGreaterThan(0)
+
+    fireEvent.click(enlaces[0])
+
+    // El estado showInvSearch es unico y compartido por los dos layouts: un
+    // solo click alcanza para que ambos vuelvan a texto libre.
+    expect(screen.queryAllByPlaceholderText("Buscar producto o servicio...")).toHaveLength(0)
+    expect(screen.getAllByPlaceholderText("Descripción del item").length).toBeGreaterThan(0)
+  })
+})
