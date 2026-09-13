@@ -28,12 +28,17 @@ vi.mock("@/lib/facturacion/tusfacturas-provider", () => ({
   tusFacturasProvider: { emitir: vi.fn() },
 }))
 
+vi.mock("@/lib/facturacion/arca/arca-direct-provider", () => ({
+  arcaDirectProvider: { emitir: vi.fn() },
+}))
+
 vi.mock("@/lib/facturacion/map-venta", () => ({
   mapVentaToEmitirInput: vi.fn(),
 }))
 
 import { canEmitirFacturaElectronica } from "@/lib/facturacion/access"
 import { tusFacturasProvider } from "@/lib/facturacion/tusfacturas-provider"
+import { arcaDirectProvider } from "@/lib/facturacion/arca/arca-direct-provider"
 import { mapVentaToEmitirInput } from "@/lib/facturacion/map-venta"
 import { POST } from "@/app/api/facturacion-electronica/emitir/route"
 
@@ -64,6 +69,18 @@ const CREDENCIALES = {
   apitoken_enc: "tok-enc",
   apikey_enc: "key-enc",
   usertoken_enc: "user-enc",
+  punto_venta: 3,
+  condicion_fiscal: "MONOTRIBUTO",
+}
+const CREDENCIALES_ARCA = {
+  organization_id: "org-1",
+  provider: "arca",
+  cuit: "23944498389",
+  cert_pem_enc: "cert-enc",
+  key_pem_enc: "key-enc",
+  apitoken_enc: null,
+  apikey_enc: null,
+  usertoken_enc: null,
   punto_venta: 3,
   condicion_fiscal: "MONOTRIBUTO",
 }
@@ -369,5 +386,72 @@ describe("POST /api/facturacion-electronica/emitir", () => {
       expect.objectContaining({ cae: "cae-123", numero: "0003-1" })
     )
     consoleSpy.mockRestore()
+  })
+
+  /**
+   * La fila de credenciales decide el proveedor. Una fila `arca` tiene los
+   * tokens legacy en NULL, así que si el despacho se equivocara la ruta
+   * moriría en `decryptSecret(null)` en vez de emitir.
+   */
+  it("despacha al proveedor ARCA cuando la fila de credenciales es provider='arca'", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    vi.mocked(arcaDirectProvider.emitir).mockResolvedValue({
+      ok: true,
+      cae: "75123456789012",
+      caeVencimiento: "20260908",
+      numero: "0003-00000007",
+      tipo: "C",
+      raw: {},
+    } as any)
+    const insertChain = createChainMock({ id: "cmp-1" })
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [
+        createChainMock(null),
+        insertChain,
+        createChainMock({ id: "cmp-1", estado: "emitido", cae: "75123456789012" }),
+      ],
+      ventas: [createChainMock(VENTA)],
+      items_venta: [createChainMock(ITEMS)],
+      facturacion_credenciales: [createChainMock(CREDENCIALES_ARCA)],
+    })
+
+    const { status } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+    expect(status).toBe(200)
+    expect(arcaDirectProvider.emitir).toHaveBeenCalledTimes(1)
+    expect(tusFacturasProvider.emitir).not.toHaveBeenCalled()
+    expect(insertChain.insert).toHaveBeenCalledWith(expect.objectContaining({ provider: "arca" }))
+  })
+
+  it("le pasa al proveedor ARCA el CUIT y los PEM descifrados de la fila", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    vi.mocked(arcaDirectProvider.emitir).mockResolvedValue({ ok: true, cae: "1", numero: "0003-00000001", tipo: "C", raw: {} } as any)
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [
+        createChainMock(null),
+        createChainMock({ id: "cmp-1" }),
+        createChainMock({ id: "cmp-1", estado: "emitido" }),
+      ],
+      ventas: [createChainMock(VENTA)],
+      items_venta: [createChainMock(ITEMS)],
+      facturacion_credenciales: [createChainMock(CREDENCIALES_ARCA)],
+    })
+
+    await POST(createPostRequest({ ventaId: "venta-1" }))
+
+    expect(arcaDirectProvider.emitir).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org-1",
+        cuit: "23944498389",
+        certPem: "cert-enc",
+        keyPem: "key-enc",
+        puntoVenta: 3,
+        condicionFiscal: "MONOTRIBUTO",
+        production: false,
+      }),
+      expect.anything()
+    )
   })
 })

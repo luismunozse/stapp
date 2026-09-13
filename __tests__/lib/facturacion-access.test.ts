@@ -52,38 +52,39 @@ describe("canEmitirFacturaElectronica", () => {
     expect(await canEmitirFacturaElectronica("o1")).toBe(false)
   })
 
-  // P1a regression (review PR2, engram #1125): emission is only implemented
-  // for the tusfacturas provider until Phase 4 ships ArcaDirectProvider. An
-  // `arca`-provider row has NULL legacy token columns (migration 299 made
-  // them nullable specifically for arca-only rows) — if this function
-  // returned true for it, app/api/facturacion-electronica/emitir/route.ts
-  // would reach `decryptSecret(cred.apitoken_enc)` with `apitoken_enc: null`
-  // and throw an unhandled TypeError. This is the ONLY thing standing
-  // between an admin saving arca credentials and that crash: emitir/route.ts
-  // is not touched, it just trusts this gate.
-  it("false when provider='arca' (emission not wired for arca until Phase 4 — prevents the decryptSecret(null) crash)", async () => {
-    ;(hasPlanFeature as any).mockResolvedValue(true)
-    ;(supabaseAdmin.from as any)
-      .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
-      .mockReturnValueOnce(
-        credRow({
-          organization_id: "o1",
-          provider: "arca",
-          apitoken_enc: null,
-          apikey_enc: null,
-          usertoken_enc: null,
-        })
-      )
-    expect(await canEmitirFacturaElectronica("o1")).toBe(false)
-  })
-
-  it("false when provider='arca' even with a certificate that has not expired (provider gate wins, not a cert check)", async () => {
+  // Fase 4: ArcaDirectProvider ya emite, asi que una fila `arca` completa
+  // habilita la emision. El gate que queda es el del certificado: `estado`
+  // puede haber quedado 'conectado' del ultimo guardado mientras el
+  // certificado vencia, asi que la vigencia se deriva en lectura y no se
+  // confia en la columna.
+  it("true when provider='arca' and the certificate has not expired", async () => {
     ;(hasPlanFeature as any).mockResolvedValue(true)
     ;(supabaseAdmin.from as any)
       .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
       .mockReturnValueOnce(
         credRow({ organization_id: "o1", provider: "arca", cert_not_after: "2099-01-01T00:00:00Z" })
       )
+    expect(await canEmitirFacturaElectronica("o1")).toBe(true)
+  })
+
+  it("false when provider='arca' and the certificate already expired", async () => {
+    ;(hasPlanFeature as any).mockResolvedValue(true)
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
+      .mockReturnValueOnce(
+        credRow({ organization_id: "o1", provider: "arca", cert_not_after: "2020-01-01T00:00:00Z" })
+      )
+    expect(await canEmitirFacturaElectronica("o1")).toBe(false)
+  })
+
+  // Fail-closed: sin fecha de vencimiento no se puede afirmar que el
+  // certificado sirva. La fila deberia venir siempre con cert_not_after (lo
+  // escribe el PUT de credenciales), asi que un NULL aca es una fila rara.
+  it("false when provider='arca' and cert_not_after is missing", async () => {
+    ;(hasPlanFeature as any).mockResolvedValue(true)
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
+      .mockReturnValueOnce(credRow({ organization_id: "o1", provider: "arca", cert_not_after: null }))
     expect(await canEmitirFacturaElectronica("o1")).toBe(false)
   })
 

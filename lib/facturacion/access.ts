@@ -14,7 +14,7 @@ export async function canEmitirFacturaElectronica(organizationId: string): Promi
 
     let result = await supabaseAdmin
       .from("facturacion_credenciales")
-      .select("organization_id, provider")
+      .select("organization_id, provider, cert_not_after")
       .eq("organization_id", organizationId)
       .maybeSingle()
 
@@ -31,18 +31,23 @@ export async function canEmitirFacturaElectronica(organizationId: string): Promi
       return !!result.data
     }
 
-    const cred = result.data as { organization_id: string; provider?: string | null } | null
+    const cred = result.data as {
+      organization_id: string
+      provider?: string | null
+      cert_not_after?: string | null
+    } | null
     if (!cred) return false
 
-    // P1a (review PR2, engram #1125): emisión implementada SOLO para
-    // 'tusfacturas' hasta que la Fase 4 conecte ArcaDirectProvider. Una fila
-    // 'arca' tiene las columnas legacy de token en NULL (migración 299 las
-    // hizo nullable justamente para esto) — si esta función devolviera true,
-    // emitir/route.ts llegaría a decryptSecret(cred.apitoken_enc) con
-    // apitoken_enc=null y explotaría con un TypeError sin manejar. El gate
-    // de certificado vencido queda sin efecto mientras tanto (no hay nada
-    // que emitir con él todavía); se reintroduce cuando Fase 4 habilite
-    // 'arca' acá.
+    // El proveedor ARCA directo ya emite (Fase 4, ArcaDirectProvider). Lo
+    // que queda es el gate del certificado: `estado` puede haber quedado en
+    // 'conectado' desde el ultimo guardado mientras el certificado vencia,
+    // asi que la vigencia se deriva en lectura. Sin `cert_not_after` no se
+    // puede afirmar nada -> fail closed.
+    if (cred.provider === "arca") {
+      if (!cred.cert_not_after) return false
+      return new Date(cred.cert_not_after).getTime() > Date.now()
+    }
+
     return cred.provider === "tusfacturas"
   } catch {
     return false // fail closed
