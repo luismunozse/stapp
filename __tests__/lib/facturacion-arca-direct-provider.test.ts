@@ -45,7 +45,7 @@ function respuestaAprobada(cbteDesde = 7) {
 }
 
 /** Doble del SDK: registra el contexto recibido y la request enviada. */
-function fakeSdk(resultado: unknown = respuestaAprobada()) {
+function fakeSdk(resultado: unknown = respuestaAprobada(), puntosVenta?: unknown) {
   const contextos: any[] = []
   const requests: any[] = []
   return {
@@ -58,6 +58,10 @@ function fakeSdk(resultado: unknown = respuestaAprobada()) {
           createNextVoucher: async (req: any) => {
             requests.push(req)
             return resultado
+          },
+          getSalesPoints: async () => {
+            if (puntosVenta instanceof Error) throw puntosVenta
+            return puntosVenta
           },
         },
       }
@@ -172,5 +176,80 @@ describe("arcaDirectProvider.emitir — caminos de error", () => {
     expect(result.ok).toBe(false)
     expect(result.errores).toEqual(["lease ocupado"])
     expect(sdk.contextos).toHaveLength(0)
+  })
+})
+
+/**
+ * En BYO el error de configuracion se detecta al subir el certificado: el PUT
+ * valida el par contra el CUIT declarado. En DELEGACION no hay nada que
+ * validar localmente — la delegacion vive del lado de AFIP. La unica forma de
+ * saber si el tramite quedo bien es preguntarle a AFIP, y sin este diagnostico
+ * el taller se entera cuando le falla una factura con un cliente esperando.
+ */
+describe("arcaDirectProvider.probarConexion", () => {
+  it("devuelve los puntos de venta habilitados", async () => {
+    const sdk = fakeSdk(respuestaAprobada(), {
+      resultGet: {
+        ptoVenta: [
+          { nro: 1, emisionTipo: "CAE - Monotributo", bloqueado: "N", fechaBaja: "NULL" },
+          { nro: 5, emisionTipo: "CAE", bloqueado: "S", fechaBaja: "NULL" },
+        ],
+      },
+    })
+    const provider = createArcaDirectProvider({ renewTicket: async () => ticket, createArca: sdk.createArca })
+
+    const res = await provider.probarConexion(creds)
+
+    expect(res.ok).toBe(true)
+    expect(res.puntosVenta).toEqual([
+      { numero: 1, bloqueado: false },
+      { numero: 5, bloqueado: true },
+    ])
+  })
+
+  /**
+   * 602 "Sin Resultados" NO es un fallo de delegacion: significa que AFIP nos
+   * atendio en nombre de ese CUIT y no encontro puntos de venta. El taller
+   * tiene que darlos de alta, que es un problema distinto y accionable.
+   */
+  it("trata el 602 como conexion OK sin puntos de venta", async () => {
+    const sdk = fakeSdk(respuestaAprobada(), {
+      resultGet: { ptoVenta: [] },
+      errors: { err: [{ code: 602, msg: "Sin Resultados" }] },
+    })
+    const provider = createArcaDirectProvider({ renewTicket: async () => ticket, createArca: sdk.createArca })
+
+    const res = await provider.probarConexion(creds)
+
+    expect(res.ok).toBe(true)
+    expect(res.puntosVenta).toEqual([])
+  })
+
+  it("reporta el error de AFIP cuando la delegación no está hecha", async () => {
+    const sdk = fakeSdk(respuestaAprobada(), {
+      errors: { err: [{ code: 600, msg: "CUIT representada no autorizada" }] },
+    })
+    const provider = createArcaDirectProvider({ renewTicket: async () => ticket, createArca: sdk.createArca })
+
+    const res = await provider.probarConexion(creds)
+
+    expect(res.ok).toBe(false)
+    expect(res.error).toContain("600")
+    expect(res.error).toContain("no autorizada")
+  })
+
+  it("no propaga la excepción si falla la renovación del ticket", async () => {
+    const sdk = fakeSdk()
+    const provider = createArcaDirectProvider({
+      renewTicket: async () => {
+        throw new Error("lease ocupado")
+      },
+      createArca: sdk.createArca,
+    })
+
+    const res = await provider.probarConexion(creds)
+
+    expect(res.ok).toBe(false)
+    expect(res.error).toBe("lease ocupado")
   })
 })

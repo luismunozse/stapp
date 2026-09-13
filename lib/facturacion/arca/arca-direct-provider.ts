@@ -31,8 +31,11 @@ import { deriveTipo } from "@/lib/facturacion/derive"
 import type {
   ArcaCredenciales,
   ComprobanteResult,
+  DiagnosticoResult,
   EmitirInput,
   FacturacionProvider,
+  PuntoVenta,
+  SoportaDiagnostico,
 } from "@/lib/facturacion/types"
 
 const SERVICE: ArcaServiceName = "wsfe"
@@ -40,8 +43,16 @@ const SERVICE: ArcaServiceName = "wsfe"
 interface ArcaLike {
   electronicBillingService: {
     createNextVoucher(request: INextVoucher): Promise<any>
+    getSalesPoints(): Promise<any>
   }
 }
+
+/**
+ * `FEParamGetPtosVenta` devuelve este código cuando el CUIT no tiene puntos de
+ * venta dados de alta. NO es un fallo de delegación: significa que AFIP nos
+ * atendió en nombre de ese contribuyente y no encontró nada que listar.
+ */
+const AFIP_SIN_RESULTADOS = 602
 
 export interface ArcaDirectProviderDeps {
   renewTicket?: (options: RenewWsaaTicketOptions) => Promise<WsaaTicket>
@@ -87,48 +98,90 @@ function extraerErrores(response: any): string[] {
   return errores.length > 0 ? errores : ["ARCA rechazó el comprobante sin detallar el motivo"]
 }
 
+function erroresDeAfip(respuesta: any): Array<{ code?: number; msg?: string }> {
+  return respuesta?.errors?.err ?? []
+}
+
 export function createArcaDirectProvider(
   deps: ArcaDirectProviderDeps = {}
-): FacturacionProvider<ArcaCredenciales> {
+): FacturacionProvider<ArcaCredenciales> & SoportaDiagnostico<ArcaCredenciales> {
   const renewTicket = deps.renewTicket ?? renewWsaaTicket
   const createArca = deps.createArca ?? ((context) => new Arca(context) as ArcaLike)
   const now = deps.now ?? (() => new Date())
 
+  /**
+   * Renueva el ticket bajo el lease y devuelve un cliente con el TA ya
+   * inyectado. Es el único lugar que arma el `Context`, así que emisión y
+   * diagnóstico no pueden divergir en cómo se autentican.
+   */
+  async function clienteAutenticado(creds: ArcaCredenciales): Promise<ArcaLike> {
+    const ticket = await renewTicket({
+      key: {
+        organizationId: creds.organizationId,
+        cuit: creds.cuit,
+        service: SERVICE,
+        production: creds.production,
+      },
+      login: () =>
+        wsaaLogin({
+          cuit: creds.cuit,
+          certPem: creds.certPem,
+          keyPem: creds.keyPem,
+          production: creds.production,
+          service: SERVICE,
+        }),
+    })
+
+    return createArca({
+      production: creds.production,
+      // El emisor del comprobante es el representado cuando la org delegó
+      // el servicio; en BYO es el propio titular del certificado.
+      cuit: Number(creds.cuitRepresentado ?? creds.cuit),
+      cert: creds.certPem,
+      key: creds.keyPem,
+      handleTicket: true,
+      credentials: toLoginCredentials(ticket),
+      // Ver wsaa-login.ts: sin el agente legacy, produccion falla con
+      // `dh key too small` antes de llegar a AFIP.
+      useHttpsAgent: true,
+    })
+  }
+
   return {
+    /**
+     * Le pregunta a AFIP si puede operar en nombre de este contribuyente.
+     * En delegación es la ÚNICA verificación posible: el trámite vive del
+     * lado de AFIP y no hay nada que validar localmente.
+     */
+    async probarConexion(creds: ArcaCredenciales): Promise<DiagnosticoResult> {
+      try {
+        const arca = await clienteAutenticado(creds)
+        const respuesta = await arca.electronicBillingService.getSalesPoints()
+
+        const errores = erroresDeAfip(respuesta)
+        const soloSinResultados =
+          errores.length > 0 && errores.every((e) => e.code === AFIP_SIN_RESULTADOS)
+
+        if (errores.length > 0 && !soloSinResultados) {
+          return { ok: false, error: errores.map((e) => `${e.code ?? "?"}: ${e.msg ?? ""}`).join("; ") }
+        }
+
+        const puntosVenta: PuntoVenta[] = (respuesta?.resultGet?.ptoVenta ?? []).map((p: any) => ({
+          numero: Number(p.nro),
+          bloqueado: p.bloqueado === "S",
+        }))
+
+        return { ok: true, puntosVenta }
+      } catch (e: any) {
+        return { ok: false, error: e?.message ?? "No se pudo contactar a ARCA" }
+      }
+    },
+
     async emitir(creds: ArcaCredenciales, input: EmitirInput): Promise<ComprobanteResult> {
       const tipo = deriveTipo(creds.condicionFiscal)
 
       try {
-        const ticket = await renewTicket({
-          key: {
-            organizationId: creds.organizationId,
-            cuit: creds.cuit,
-            service: SERVICE,
-            production: creds.production,
-          },
-          login: () =>
-            wsaaLogin({
-              cuit: creds.cuit,
-              certPem: creds.certPem,
-              keyPem: creds.keyPem,
-              production: creds.production,
-              service: SERVICE,
-            }),
-        })
-
-        const arca = createArca({
-          production: creds.production,
-          // El emisor del comprobante es el representado cuando la org delegó
-          // el servicio; en BYO es el propio titular del certificado.
-          cuit: Number(creds.cuitRepresentado ?? creds.cuit),
-          cert: creds.certPem,
-          key: creds.keyPem,
-          handleTicket: true,
-          credentials: toLoginCredentials(ticket),
-          // Ver wsaa-login.ts: sin el agente legacy, produccion falla con
-          // `dh key too small` antes de llegar a AFIP.
-          useHttpsAgent: true,
-        })
+        const arca = await clienteAutenticado(creds)
 
         const voucher = buildVoucher(creds, input, { cbteFch: fechaComprobante(now()) })
         const resultado = await arca.electronicBillingService.createNextVoucher(voucher)
