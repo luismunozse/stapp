@@ -25,6 +25,7 @@ import {
 } from "lucide-react"
 import { formatCurrencyValue, type CurrencyCode } from "@/lib/currency"
 import { formatDateValue, dateNumberInTimeZone } from "@/lib/timezone"
+import { esInforme } from "@/lib/cotizacion-informe"
 
 interface CotizacionData {
   id: string
@@ -47,6 +48,10 @@ interface CotizacionData {
   ivaPorcentaje?: number | null
   terminos?: string | null
   tipo?: "ORDEN" | "PRESUPUESTO"
+  veredicto?: string | null
+  diagnosticoTecnico?: string | null
+  causaDano?: string | null
+  presentadoAnte?: string | null
   equipo?: {
     dispositivo: string
     tipoDispositivo?: string | null
@@ -109,6 +114,30 @@ const estadoConfig: Record<string, { label: string; color: string }> = {
   ENVIADA: { label: "Pendiente de aprobacion", color: "bg-info-50 text-info-700 dark:bg-info/15 dark:text-info-500" },
   ACEPTADA: { label: "Aprobada", color: "bg-success-50 text-success-700 dark:bg-success/15 dark:text-success-500" },
   RECHAZADA: { label: "Rechazada", color: "bg-destructive/10 text-destructive" },
+}
+
+// Etiquetas en castellano para el dictamen del informe tecnico. Los valores
+// (VEREDICTOS/CAUSAS_DANO) vienen de lib/cotizacion-informe para no duplicar el
+// enum; el texto mostrado no tiene otra fuente y debe coincidir con el que
+// dibuja el PDF (lib/pdf.ts) y con components/cotizaciones/cotizacion-form.tsx.
+const VEREDICTO_LABELS: Record<string, string> = {
+  REPARABLE: "Reparable",
+  IRREPARABLE: "Irreparable",
+  SIN_FALLA: "Sin falla detectada",
+}
+const CAUSA_DANO_LABELS: Record<string, string> = {
+  CAIDA: "Caída",
+  LIQUIDO: "Contacto con líquido",
+  SOBRETENSION: "Sobretensión eléctrica",
+  DESGASTE: "Desgaste por uso",
+  USO_INDEBIDO: "Uso indebido",
+  FALLA_FABRICA: "Falla de fábrica",
+  DESCONOCIDA: "Desconocida",
+}
+const veredictoColor: Record<string, string> = {
+  REPARABLE: "bg-success-50 text-success-700 dark:bg-success/15 dark:text-success-500",
+  IRREPARABLE: "bg-destructive/10 text-destructive",
+  SIN_FALLA: "bg-warning-50 text-warning-700 dark:bg-warning/15 dark:text-warning-500",
 }
 
 export function CotizacionPublica({ token }: { token: string }) {
@@ -246,6 +275,17 @@ export function CotizacionPublica({ token }: { token: string }) {
 
   const hasGlobalDiscount = (data.descuentoGlobalValor || 0) > 0
   const hasIVA = (data.ivaPorcentaje || 0) > 0
+
+  // Un informe tecnico es una cotizacion sin items con un veredicto que cierra
+  // el caso (IRREPARABLE / SIN_FALLA). No se hand-rollea: REPARABLE con cero
+  // items NO es un informe (esInforme lo excluye), a diferencia de la formula
+  // ingenua `items.length === 0 && !!veredicto` que el PDF tuvo que dejar de
+  // usar. Un informe no se aprueba ni se rechaza: se emite.
+  const esInformeTecnico = esInforme({ cantidadItems: data.items.length, veredicto: data.veredicto })
+  // El dictamen puede aparecer aunque el documento no sea un informe (p.ej.
+  // REPARABLE con items, o solo la entidad cargada): mismo criterio que
+  // lib/pdf.ts para que la web y el PDF muestren lo mismo.
+  const tieneDictamen = !!data.veredicto || !!data.presentadoAnte
 
   // Calculate global discount amount for display
   const itemsSubtotal = data.items.reduce((sum, i) => sum + i.subtotal, 0)
@@ -533,7 +573,58 @@ export function CotizacionPublica({ token }: { token: string }) {
         )
       })()}
 
-      {/* Items / Detalle del presupuesto */}
+      {/* Dictamen tecnico - veredicto, causa, diagnostico y entidad. Se
+          muestra siempre que haya algo que leer, sea o no un informe (mismo
+          criterio que lib/pdf.ts): el objetivo es que el veredicto y la
+          entidad ante la que se presenta sean obvios, no que queden
+          escondidos entre el resto de las tarjetas. */}
+      {tieneDictamen && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <ClipboardCheck className="h-5 w-5" />
+              {data.veredicto ? "Dictamen técnico" : "Presentación"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm space-y-3">
+            {data.presentadoAnte && (
+              <div>
+                <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">
+                  Para ser presentado ante
+                </p>
+                <p className="font-medium">{data.presentadoAnte}</p>
+              </div>
+            )}
+            {data.veredicto && (
+              <div>
+                <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Veredicto</p>
+                <Badge className={veredictoColor[data.veredicto] || "bg-muted text-muted-foreground"}>
+                  {VEREDICTO_LABELS[data.veredicto] || data.veredicto}
+                </Badge>
+              </div>
+            )}
+            {data.causaDano && (
+              <div>
+                <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">
+                  Causa probable del daño
+                </p>
+                <p className="font-medium">{CAUSA_DANO_LABELS[data.causaDano] || data.causaDano}</p>
+              </div>
+            )}
+            {data.diagnosticoTecnico && (
+              <div className="pt-2 border-t">
+                <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Diagnóstico</p>
+                <p className="whitespace-pre-wrap">{data.diagnosticoTecnico}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Items / Detalle del presupuesto - un informe tecnico no tiene items:
+          mostrar la tarjeta con la tabla vacia y el total en $0 confundiria al
+          asegurador que la lee, asi que se omite (mismo gate que lib/pdf.ts). */}
+      {!esInformeTecnico && (
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">Detalle del presupuesto</CardTitle>
@@ -626,6 +717,7 @@ export function CotizacionPublica({ token }: { token: string }) {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Notas */}
       {data.notas && (
@@ -729,8 +821,11 @@ export function CotizacionPublica({ token }: { token: string }) {
           </Button>
         </a>
 
-        {/* Aprobar/Rechazar - solo si ENVIADA y no vencida */}
-        {data.estado === "ENVIADA" && !isExpired && !showApproval && !showReject && (
+        {/* Aprobar/Rechazar - solo si ENVIADA, no vencida, y no es un informe
+            tecnico: un informe se emite, no se aprueba ni se rechaza. Esto es
+            UX, no el guard: los tres endpoints de aprobacion ya rechazan una
+            cotizacion sin items en el servidor. */}
+        {data.estado === "ENVIADA" && !isExpired && !showApproval && !showReject && !esInformeTecnico && (
           <>
             <Button
               className="w-full"
@@ -751,8 +846,11 @@ export function CotizacionPublica({ token }: { token: string }) {
         )}
       </div>
 
-      {/* Panel de rechazo */}
-      {showReject && (
+      {/* Panel de rechazo - guard redundante con el boton que lo dispara,
+          para que el panel tampoco se muestre si esInformeTecnico cambia por
+          debajo mientras estaba abierto (p.ej. al refrescar data tras el
+          fetch inicial). */}
+      {showReject && !esInformeTecnico && (
         <Card className="border-destructive/25">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg text-destructive">Rechazar cotizacion</CardTitle>
@@ -798,8 +896,10 @@ export function CotizacionPublica({ token }: { token: string }) {
         </Card>
       )}
 
-      {/* Panel de aprobacion con firma */}
-      {showApproval && (
+      {/* Panel de aprobacion con firma - incluye el SignaturePad, que un
+          informe no puede ofrecer: no hay nada que firmar. Mismo guard
+          redundante que el panel de rechazo. */}
+      {showApproval && !esInformeTecnico && (
         <Card className="border-primary">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">
