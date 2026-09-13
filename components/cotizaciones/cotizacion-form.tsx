@@ -494,26 +494,27 @@ export function CotizacionForm({
         descuentoGlobalValor,
         ivaPorcentaje,
         tipoCambio: tipoCambio || undefined,
-        // veredicto/causaDano: `?? null`, no `|| undefined`. El PUT trata la
-        // clave ausente ("undefined" -> se borra al serializar) como "no
-        // tocar" y `null` como "borralo". Con `|| undefined`, deseleccionar el
-        // veredicto en la UI nunca llegaba al servidor: quedaba grabado para
-        // siempre y lib/pdf.ts lo seguía imprimiendo en cotizaciones futuras.
+        // Los cuatro campos del dictamen mandan `?? null` / `|| null`, nunca
+        // `|| undefined`. El PUT usa `data.X !== undefined` para decidir si
+        // toca la columna: una clave ausente (JSON.stringify borra los
+        // `undefined`) significa "no tocar" y deja el valor viejo tal cual;
+        // solo `null` explícito la limpia. Con `|| undefined`, borrar el
+        // veredicto/diagnóstico/entidad en la UI nunca llegaba al servidor.
+        // Encadenado con el fix del veredicto deseleccionable: un taller puede
+        // deseleccionar el veredicto (se guarda null, ok) y despues vaciar
+        // diagnostico/entidad esperando que tambien se borren. Si esos dos
+        // quedaran con `|| undefined`, el texto viejo sobrevive en la fila y
+        // lib/pdf.ts sigue dibujando el bloque de dictamen (arranca con
+        // `if (tieneDictamen || data.presentadoAnte)`) con una entidad y un
+        // diagnostico que el usuario quiso borrar, sin veredicto: el mismo
+        // "el PDF miente" que el veredicto permanente, solo que via un campo
+        // distinto. El insert del POST no se ve afectado: `data.X?.trim() ||
+        // null` da `null` para undefined, null o "" por igual (ver
+        // app/api/cotizaciones/route.ts:468-471).
         veredicto: veredicto ?? null,
         causaDano: causaDano ?? null,
-        // diagnosticoTecnico/presentadoAnte: se dejan con `|| undefined` a
-        // propósito. En el POST no cambia nada (el insert normaliza a null
-        // igual). En el PUT, el handler ya calcula
-        // `diagnostico_tecnico = data.diagnosticoTecnico?.trim() || null`,
-        // asi que un string vacio explicito da el mismo resultado que uno
-        // ausente EXCEPTO que un ausente no toca el valor existente. La unica
-        // diferencia practica es: si el tecnico borra un diagnostico ya
-        // guardado sin escribir nada nuevo y guarda, hoy el texto viejo
-        // sobrevive en vez de limpiarse. No es el bug critico de esta review
-        // (no hay dato incorrecto grabado, ni un PDF futuro miente), asi que
-        // se documenta y se deja para otra pasada en vez de tocarlo aca.
-        diagnosticoTecnico: diagnosticoTecnico.trim() || undefined,
-        presentadoAnte: presentadoAnte.trim() || undefined,
+        diagnosticoTecnico: diagnosticoTecnico.trim() || null,
+        presentadoAnte: presentadoAnte.trim() || null,
       }
 
       if (linkedOrdenId) payload.ordenId = linkedOrdenId

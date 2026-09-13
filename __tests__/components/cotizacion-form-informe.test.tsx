@@ -123,6 +123,50 @@ describe("CotizacionForm — seccion Informe técnico", () => {
     })
   })
 
+  it("vaciar un diagnostico y una entidad ya guardados manda null explicito, no undefined ni ausente", async () => {
+    // El PUT decide con `!== undefined` si toca la columna: una clave AUSENTE
+    // (lo que hace `JSON.stringify` con `undefined`) significa "no tocar" y
+    // deja el valor viejo. Solo `null` explicito limpia. Si esto quedara como
+    // `|| undefined`, un taller que borra el diagnostico/entidad los ve
+    // "borrados" en pantalla pero el PDF sigue imprimiendo los valores viejos.
+    const fetchMock = stubFetch()
+    renderForm({
+      initialData: {
+        id: "cot-1",
+        items: [
+          { id: "item-1", descripcion: "Cambio de pantalla", cantidad: 1, precioUnitario: 50000 },
+        ],
+        diagnosticoTecnico: "Diagnóstico previo del técnico.",
+        presentadoAnte: "La Segunda ART",
+      },
+    })
+
+    fireEvent.change(screen.getByLabelText("Diagnóstico del informe técnico"), {
+      target: { value: "" },
+    })
+    fireEvent.change(screen.getByLabelText("Para ser presentado ante"), {
+      target: { value: "" },
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: "Actualizar Cotización" }))
+
+    await waitFor(() => {
+      const putCall = (fetchMock as any).mock.calls.find(
+        ([, opts]: [string, RequestInit]) => opts?.method === "PUT"
+      )
+      expect(putCall).toBeDefined()
+      const body = JSON.parse((putCall as any)[1].body)
+      // La diferencia entre las tres cosas (valor, null, ausente) es
+      // exactamente el bug: `toBeNull` no alcanza sola, porque `undefined`
+      // tambien fallaria esa aserción distinto según cómo lo compare Jest —
+      // se verifica también que la clave sobrevivió al JSON.stringify.
+      expect("diagnosticoTecnico" in body).toBe(true)
+      expect("presentadoAnte" in body).toBe(true)
+      expect(body.diagnosticoTecnico).toBeNull()
+      expect(body.presentadoAnte).toBeNull()
+    })
+  })
+
   it("una cotizacion normal (sin veredicto) sin items validos sigue avisando y bloqueando el envio", async () => {
     const fetchMock = stubFetch()
     renderForm()
