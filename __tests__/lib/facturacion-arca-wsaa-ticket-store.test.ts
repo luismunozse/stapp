@@ -23,6 +23,8 @@ function selectChain(result: { data: any; error: any }) {
   const chain: any = {}
   chain.select = vi.fn(() => chain)
   chain.eq = vi.fn(() => chain)
+  chain.order = vi.fn(() => chain)
+  chain.limit = vi.fn(() => chain)
   chain.maybeSingle = vi.fn(async () => result)
   return chain
 }
@@ -55,6 +57,8 @@ function createFakeWsaaTable() {
   const chain: any = {}
   chain.select = vi.fn(() => chain)
   chain.eq = vi.fn(() => chain)
+  chain.order = vi.fn(() => chain)
+  chain.limit = vi.fn(() => chain)
   chain.maybeSingle = vi.fn(async () => ({ data: row, error: null }))
   chain.upsert = vi.fn(async (payload: any) => {
     row = { ...(row ?? {}), ...payload }
@@ -108,11 +112,16 @@ describe("readWsaaTicket", () => {
     expect(ticket).toEqual({ token: "tok", sign: "sig", expiresAt: later, generatedAt: "2026-01-01T00:00:00.000Z" })
   })
 
-  it("scopes the lookup by organization, cuit, service and production", async () => {
+  /**
+   * La identidad del ticket es el CERTIFICADO: (cuit, service, production).
+   * NO se filtra por organización — en delegación un mismo certificado sirve
+   * a N talleres y filtrar por org haría que cada uno pidiera su propio login.
+   */
+  it("scopes the lookup by certificate (cuit, service, production) and NOT by organization", async () => {
     const chain = selectChain({ data: null, error: null })
     ;(supabaseAdmin.from as any).mockReturnValueOnce(chain)
     await readWsaaTicket(key)
-    expect(chain.eq).toHaveBeenCalledWith("organization_id", "org1")
+    expect(chain.eq).not.toHaveBeenCalledWith("organization_id", expect.anything())
     expect(chain.eq).toHaveBeenCalledWith("cuit", "20111111112")
     expect(chain.eq).toHaveBeenCalledWith("service", "wsfe")
     expect(chain.eq).toHaveBeenCalledWith("production", false)
@@ -373,3 +382,113 @@ describe("error classes", () => {
     expect(new WsaaLoginUnavailableError(key)).not.toBeInstanceOf(LeaseAcquisitionError)
   })
 })
+
+/**
+ * DELEGACION: un unico certificado de plataforma emite en nombre de N
+ * talleres. AFIP entrega UN TA por certificado y servicio, asi que el ticket
+ * pertenece al CERTIFICADO, no al tenant.
+ *
+ * Si la identidad del cache o del lease incluyera la organizacion, cada
+ * taller buscaria en su propia fila, no encontraria nada, tomaria un lease
+ * distinto y pediria SU PROPIO login del mismo certificado. El primero gana y
+ * todos los demas se comen `coe.alreadyAuthenticated`: sin facturar hasta 12
+ * horas. No es ineficiencia, es caida total para todos menos uno.
+ */
+describe("renewWsaaTicket — delegación (un certificado, N organizaciones)", () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  const CUIT_PLATAFORMA = "23944498389"
+  const ORGS = ["org-a", "org-b", "org-c", "org-d", "org-e"]
+
+  /** Fake con estado: filas indexadas por certificado, leases por lock_key. */
+  function fakeInfra() {
+    const filas = new Map<string, Record<string, any>>()
+    const tomados = new Set<string>()
+    const lockKeys: string[] = []
+
+    const idFila = (r: Record<string, any>) => `${r.cuit}|${r.service}|${r.production}`
+
+    ;(supabaseAdmin.from as any).mockImplementation(() => {
+      const filtros: Record<string, any> = {}
+      const chain: any = {}
+      chain.select = vi.fn(() => chain)
+      chain.eq = vi.fn((col: string, val: any) => {
+        filtros[col] = val
+        return chain
+      })
+      chain.order = vi.fn(() => chain)
+      chain.limit = vi.fn(() => chain)
+      chain.maybeSingle = vi.fn(async () => {
+        await Promise.resolve()
+        return { data: filas.get(idFila(filtros)) ?? null, error: null }
+      })
+      chain.upsert = vi.fn(async (payload: Record<string, any>) => {
+        await Promise.resolve()
+        const k = idFila(payload)
+        filas.set(k, { ...(filas.get(k) ?? {}), ...payload })
+        return { error: null }
+      })
+      return chain
+    })
+
+    mockRpc({
+      facturacion_lease_acquire: (args: any) => {
+        lockKeys.push(args.p_lock_key)
+        if (tomados.has(args.p_lock_key)) return { data: false, error: null }
+        tomados.add(args.p_lock_key)
+        return { data: true, error: null }
+      },
+      facturacion_lease_release: (args: any) => {
+        tomados.delete(args.p_lock_key)
+        return { data: true, error: null }
+      },
+    })
+
+    return { lockKeys }
+  }
+
+  /** Cede un macrotask: deja que el ganador termine su login antes del reintento. */
+  const sleepReal = () => new Promise<void>((r) => setTimeout(r, 0))
+
+  it("N organizaciones concurrentes disparan UN SOLO login WSAA", async () => {
+    const { lockKeys } = fakeInfra()
+    let logins = 0
+    const expiresAt = new Date(Date.now() + 11 * 60 * 60 * 1000).toISOString()
+    const login = async () => {
+      logins++
+      await Promise.resolve()
+      return { token: "TOKEN-COMPARTIDO", sign: "SIGN-COMPARTIDO", expiresAt }
+    }
+
+    const tickets = await Promise.all(
+      ORGS.map((organizationId) =>
+        renewWsaaTicket({
+          key: { organizationId, cuit: CUIT_PLATAFORMA, service: "wsfe", production: true },
+          login,
+          sleep: sleepReal,
+        })
+      )
+    )
+
+    expect(logins).toBe(1)
+    expect(tickets.every((t) => t.token === "TOKEN-COMPARTIDO")).toBe(true)
+  })
+
+  it("todas las organizaciones compiten por el MISMO lease", async () => {
+    const { lockKeys } = fakeInfra()
+    const expiresAt = new Date(Date.now() + 11 * 60 * 60 * 1000).toISOString()
+
+    await Promise.all(
+      ORGS.map((organizationId) =>
+        renewWsaaTicket({
+          key: { organizationId, cuit: CUIT_PLATAFORMA, service: "wsfe", production: true },
+          login: async () => ({ token: "T", sign: "S", expiresAt }),
+          sleep: sleepReal,
+        })
+      )
+    )
+
+    expect(new Set(lockKeys).size).toBe(1)
+  })
+})
+
