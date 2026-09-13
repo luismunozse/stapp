@@ -46,6 +46,10 @@ export async function GET(
         tipo,
         equipo_snapshot,
         checklist_snapshot,
+        veredicto,
+        diagnostico_tecnico,
+        causa_dano,
+        presentado_ante,
         ordenes_servicio!cotizaciones_orden_id_fkey (
           id,
           numero_orden,
@@ -121,10 +125,7 @@ export async function GET(
       ivaPorcentaje: cotizacion.iva_porcentaje,
       terminos: cotizacion.terminos,
       motivoRechazo: cotizacion.motivo_rechazo || null,
-      tipo: pdfExtras.tipo,
-      equipo: pdfExtras.equipo,
-      checklist: pdfExtras.checklist,
-      condiciones: pdfExtras.condiciones,
+      ...pdfExtras,
       orden: orden ? {
         numeroOrden: orden.numero_orden,
         dispositivo: orden.dispositivo,

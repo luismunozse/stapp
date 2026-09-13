@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { aplicarAprobacionCotizacionAOrden } from "@/lib/cotizacion-aprobar-orden"
 import { isFunctionMissingError } from "@/lib/rpc-errors"
+import { esInforme } from "@/lib/cotizacion-informe"
 import { z } from "zod"
 
 // El cliente aprueba desde el portal como "system-public": no hay usuario
@@ -37,7 +38,7 @@ export async function POST(
     // motivo el query recibiera un valor falsy que pasara el length check.
     const { data: cotizacion, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, orden_id, total, tipo, organization_id, revision_de")
+      .select("id, estado, orden_id, total, tipo, organization_id, revision_de, veredicto")
       .eq("public_token", token)
       .not("public_token", "is", null)
       .is("deleted_at", null)
@@ -53,6 +54,27 @@ export async function POST(
     if (cotizacion.estado !== "ENVIADA") {
       return NextResponse.json(
         { error: "Solo se pueden aprobar cotizaciones enviadas" },
+        { status: 400 }
+      )
+    }
+
+    const { count: itemsCount, error: itemsCountError } = await supabaseAdmin
+      .from("items_cotizacion")
+      .select("id", { count: "exact", head: true })
+      .eq("cotizacion_id", cotizacion.id)
+
+    if (itemsCountError) {
+      // Sin el conteo real, `itemsCount || 0` disfrazaria un error de DB de
+      // "cero items" y el guard de abajo rechazaria una cotizacion normal.
+      console.error("[public aprobar] Error counting items_cotizacion:", itemsCountError)
+      return NextResponse.json({ error: "Error al aprobar cotizacion" }, { status: 500 })
+    }
+
+    // Un informe tecnico se emite, no se aprueba. Hay tres caminos de
+    // aprobacion distintos y esconder el boton en la UI no cierra ninguno.
+    if (esInforme({ cantidadItems: itemsCount || 0, veredicto: cotizacion.veredicto })) {
+      return NextResponse.json(
+        { error: "Un informe técnico no se aprueba: es un dictamen, no un presupuesto." },
         { status: 400 }
       )
     }

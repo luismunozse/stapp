@@ -44,6 +44,11 @@ const revisionEnviada = {
   descuento_global_valor: 0,
   orden_id: "orden-1",
   revision_de: "cot-1",
+  // Cotización real con ítems. El guard `tocaElInforme` (route.ts) solo corre
+  // cuando el PUT manda items/veredicto/diagnosticoTecnico/causaDano, y estos
+  // tests mandan solo `estado`, así que no lo dispara igual — se deja este
+  // valor porque modela una cotización real mejor que un mock vacío.
+  items_cotizacion: [{ id: "it-1" }],
 }
 
 function putRechazar(id = "rev-1", body: any = { estado: "RECHAZADA" }) {

@@ -7,6 +7,7 @@ import { sendCotizacionEmail } from "@/lib/email"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { totalPresupuestoDeOrden } from "@/lib/cotizacion-presupuesto"
 import { marcarOriginalReemplazada } from "@/lib/cotizacion-revision"
+import { esInforme } from "@/lib/cotizacion-informe"
 
 export async function POST(
   request: Request,
@@ -169,8 +170,20 @@ export async function POST(
     // duplicaria.
     await marcarOriginalReemplazada(cotizacion, organizationId!)
 
-    // Si la cotización está vinculada a una orden, transicionar a PRESUPUESTADO automáticamente
-    if (orden && orden.id) {
+    // Si la cotización está vinculada a una orden, transicionar a PRESUPUESTADO
+    // automáticamente. Un informe tecnico no: no hay presupuesto que esperar y
+    // el equipo sigue en el mostrador hasta que el cliente lo retire.
+    const { count: itemsCount } = await supabaseAdmin
+      .from("items_cotizacion")
+      .select("id", { count: "exact", head: true })
+      .eq("cotizacion_id", id)
+
+    const emiteInforme = esInforme({
+      cantidadItems: itemsCount || 0,
+      veredicto: (cotizacion as any).veredicto,
+    })
+
+    if (orden && orden.id && !emiteInforme) {
       const validStates = ["RECIBIDO", "EN_DIAGNOSTICO"]
       const { data: ordenActual } = await supabaseAdmin
         .from("ordenes_servicio")

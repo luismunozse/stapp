@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin, STORAGE_BUCKETS } from "@/lib/supabase"
 import { aplicarAprobacionCotizacionAOrden } from "@/lib/cotizacion-aprobar-orden"
+import { esInforme } from "@/lib/cotizacion-informe"
 import { z } from "zod"
 import { getOrderByPublicToken } from "@/lib/public-token"
 
@@ -39,7 +40,7 @@ export async function POST(
     // Verify cotizacion belongs to this order and is ENVIADA
     const { data: cotizacion, error: cotError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, total, public_token")
+      .select("id, estado, total, public_token, veredicto")
       .eq("id", data.cotizacionId)
       .eq("orden_id", orden.id)
       .single()
@@ -54,6 +55,27 @@ export async function POST(
     if (cotizacion.estado !== "ENVIADA") {
       return NextResponse.json(
         { error: "Solo se pueden aprobar cotizaciones en estado enviada" },
+        { status: 400 }
+      )
+    }
+
+    const { count: itemsCount, error: itemsCountError } = await supabaseAdmin
+      .from("items_cotizacion")
+      .select("id", { count: "exact", head: true })
+      .eq("cotizacion_id", cotizacion.id)
+
+    if (itemsCountError) {
+      // Sin el conteo real, `itemsCount || 0` disfrazaria un error de DB de
+      // "cero items" y el guard de abajo rechazaria una cotizacion normal.
+      console.error("Error counting items_cotizacion:", itemsCountError)
+      return NextResponse.json({ error: "Error interno" }, { status: 500 })
+    }
+
+    // Un informe tecnico se emite, no se aprueba. Hay tres caminos de
+    // aprobacion distintos y esconder el boton en la UI no cierra ninguno.
+    if (esInforme({ cantidadItems: itemsCount || 0, veredicto: cotizacion.veredicto })) {
+      return NextResponse.json(
+        { error: "Un informe técnico no se aprueba: es un dictamen, no un presupuesto." },
         { status: 400 }
       )
     }
