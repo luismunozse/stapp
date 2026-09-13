@@ -125,6 +125,9 @@ export function createArcaDirectProvider(
           key: creds.keyPem,
           handleTicket: true,
           credentials: toLoginCredentials(ticket),
+          // Ver wsaa-login.ts: sin el agente legacy, produccion falla con
+          // `dh key too small` antes de llegar a AFIP.
+          useHttpsAgent: true,
         })
 
         const voucher = buildVoucher(creds, input, { cbteFch: fechaComprobante(now()) })

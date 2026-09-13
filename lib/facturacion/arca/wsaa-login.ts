@@ -92,6 +92,7 @@ export interface WsaaLoginDeps {
     key: string
     cuit: number
     production: boolean
+    useHttpsAgent: boolean
   }) => AuthRepositoryLike
 }
 
@@ -118,6 +119,14 @@ export async function wsaaLogin(
     key: params.keyPem,
     cuit: Number(params.cuit),
     production: params.production,
+    // Los servidores de PRODUCCION de AFIP negocian TLS con una clave
+    // Diffie-Hellman debil y el OpenSSL de Node los rechaza de entrada:
+    // `tls_process_ske_dhe: dh key too small`. El SDK trae un agente legacy
+    // (`DEFAULT@SECLEVEL=1`, con rejectUnauthorized intacto) justo para eso,
+    // pero `useHttpsAgent` viene en false. Se prende SIEMPRE, no solo en
+    // produccion: homologacion funciona igual y una sola configuracion evita
+    // que el camino que de verdad importa sea el unico sin probar.
+    useHttpsAgent: true,
   })
 
   const ticket = await repository.requestLogin(params.service)
