@@ -79,12 +79,28 @@ export async function GET() {
     // escalones y su 42703 los tumbaria a todos, dejando al admin con la
     // configuracion mutilada y un guardado que la pisa.
     const cajaSelect = `${posSelect}, vendedores_manejan_caja`
+    // Permiso de cobro de cotizaciones para tecnicos (migracion 322). Escalon
+    // propio y arriba de todo, por el mismo motivo que los de arriba: si
+    // viajara dentro de baseSelect estaria en TODOS los escalones y su 42703
+    // los tumbaria a todos, dejando al admin con la configuracion mutilada y
+    // un guardado que la pisa.
+    const cotizacionCobroSelect = `${cajaSelect}, tecnicos_cobran_cotizaciones`
 
     let result = await supabaseAdmin
       .from("organizations")
-      .select(cajaSelect)
+      .select(cotizacionCobroSelect)
       .eq("id", organizationId!)
       .single()
+
+    if (isMissingColumnError(result.error)) {
+      // Migracion 322 no aplicada todavia: reintentar sin el permiso de cobro
+      // de cotizaciones, conservando todo lo demas.
+      result = await supabaseAdmin
+        .from("organizations")
+        .select(cajaSelect)
+        .eq("id", organizationId!)
+        .single()
+    }
 
     if (isMissingColumnError(result.error)) {
       // Migracion del permiso de caja no aplicada todavia: reintentar sin el
@@ -195,6 +211,7 @@ export async function GET() {
       vendedoresAdministranInventario: !!organization.vendedores_administran_inventario,
       tecnicosOperanPos: !!organization.tecnicos_operan_pos,
       vendedoresManejanCaja: !!organization.vendedores_manejan_caja,
+      tecnicosCobranCotizaciones: !!organization.tecnicos_cobran_cotizaciones,
       ivaRegimen: organization.iva_regimen ?? "EXENTO",
       ivaTasa: organization.iva_tasa ?? getIvaGeneral(organization.pais),
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
@@ -234,7 +251,7 @@ export async function PUT(request: Request) {
         { status: 413 }
       )
     }
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada, ingresosBrutos, inicioActividades } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, tecnicosCobranCotizaciones, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada, ingresosBrutos, inicioActividades } = body
 
     const updateData: Record<string, any> = {}
 
@@ -383,6 +400,10 @@ export async function PUT(request: Request) {
       updateData.vendedores_manejan_caja = !!vendedoresManejanCaja
     }
 
+    if (tecnicosCobranCotizaciones !== undefined) {
+      updateData.tecnicos_cobran_cotizaciones = !!tecnicosCobranCotizaciones
+    }
+
     if (ivaRegimen !== undefined) {
       const validRegimen = ["EXENTO", "INCLUIDO", "ADITIVO"]
       if (validRegimen.includes(ivaRegimen)) {
@@ -494,6 +515,11 @@ export async function PUT(request: Request) {
     // que el de la 314: los demas se construyen encima de `selectCols`, asi
     // que una columna metida ahi viaja en TODOS y su 42703 los tumba a todos.
     const selectColsCaja = selectColsPos + ", vendedores_manejan_caja"
+    // Permiso de cobro de cotizaciones para tecnicos (migracion 322). Escalon
+    // propio y arriba de todo, igual que el de la 314 y el de la caja: los
+    // demas se construyen encima de `selectCols`, asi que una columna metida
+    // ahi viaja en TODOS y su 42703 los tumba a todos.
+    const selectColsCotizacionCobro = selectColsCaja + ", tecnicos_cobran_cotizaciones"
 
     // Solo actualizar si hay cambios
     if (Object.keys(updateData).length === 0) {
@@ -504,9 +530,18 @@ export async function PUT(request: Request) {
       // estuvieran cargados en la DB.
       let { data, error: selectError } = await supabaseAdmin
         .from("organizations")
-        .select(selectColsCaja)
+        .select(selectColsCotizacionCobro)
         .eq("id", organizationId!)
         .single()
+      if (isMissingColumnError(selectError)) {
+        // Migracion 322 no aplicada: reintentar sin el permiso de cobro de
+        // cotizaciones, conservando todo lo demas.
+        ;({ data, error: selectError } = await supabaseAdmin
+          .from("organizations")
+          .select(selectColsCaja)
+          .eq("id", organizationId!)
+          .single())
+      }
       if (isMissingColumnError(selectError)) {
         // Migracion del permiso de caja no aplicada: reintentar sin el flag,
         // conservando todo lo demas.
@@ -581,6 +616,7 @@ export async function PUT(request: Request) {
         vendedoresAdministranInventario: !!org?.vendedores_administran_inventario,
         tecnicosOperanPos: !!org?.tecnicos_operan_pos,
         vendedoresManejanCaja: !!org?.vendedores_manejan_caja,
+        tecnicosCobranCotizaciones: !!org?.tecnicos_cobran_cotizaciones,
         ivaRegimen: org?.iva_regimen ?? "EXENTO",
         ivaTasa: org?.iva_tasa ?? getIvaGeneral(org?.pais),
         redondeoEfectivo: org?.redondeo_efectivo ?? 0,
@@ -604,8 +640,20 @@ export async function PUT(request: Request) {
       .from("organizations")
       .update(updateData)
       .eq("id", organizationId!)
-      .select(selectColsCaja)
+      .select(selectColsCotizacionCobro)
       .single()
+
+    if (isMissingColumnError(result2.error)) {
+      // Migracion 322 no aplicada todavia: reintentar sin el permiso de cobro
+      // de cotizaciones, conservando el resto de updateData.
+      delete updateData.tecnicos_cobran_cotizaciones
+      result2 = await supabaseAdmin
+        .from("organizations")
+        .update(updateData)
+        .eq("id", organizationId!)
+        .select(selectColsCaja)
+        .single() as any
+    }
 
     if (isMissingColumnError(result2.error)) {
       // Migracion del permiso de caja no aplicada todavia: reintentar sin el
@@ -699,6 +747,8 @@ export async function PUT(request: Request) {
       delete updateData.tecnicos_operan_pos
       // Strip vendedor caja flag in case it doesn't exist yet
       delete updateData.vendedores_manejan_caja
+      // Strip tecnico cotizacion-cobro flag (migration 322) in case it doesn't exist yet
+      delete updateData.tecnicos_cobran_cotizaciones
       // Strip facturacion electronica flag (migration 296) in case it doesn't exist yet
       delete updateData.facturacion_electronica_habilitada
       const selectColsNoFiscal = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda"
@@ -745,6 +795,7 @@ export async function PUT(request: Request) {
       vendedoresAdministranInventario: !!organization.vendedores_administran_inventario,
       tecnicosOperanPos: !!organization.tecnicos_operan_pos,
       vendedoresManejanCaja: !!organization.vendedores_manejan_caja,
+      tecnicosCobranCotizaciones: !!organization.tecnicos_cobran_cotizaciones,
       ivaRegimen: organization.iva_regimen ?? "EXENTO",
       ivaTasa: organization.iva_tasa ?? getIvaGeneral(organization.pais),
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
