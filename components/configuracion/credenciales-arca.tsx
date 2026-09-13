@@ -18,6 +18,7 @@ type CondicionFiscal = "MONOTRIBUTO" | "RESPONSABLE_INSCRIPTO"
 export interface EstadoCredencialesArca {
   conectado: boolean
   cuit: string | null
+  puntoVenta: number | null
   certSubject: string | null
   certNotAfter: string | null
   estado: string | null
@@ -71,6 +72,7 @@ export function CredencialesArca({ allowEdit, estadoInicial, onConectado }: Cred
   const [certNombre, setCertNombre] = useState("")
   const [keyNombre, setKeyNombre] = useState("")
   const [cuit, setCuit] = useState(estadoInicial.cuit ?? "")
+  const [puntoVenta, setPuntoVenta] = useState(String(estadoInicial.puntoVenta ?? 1))
   const [condicionFiscal, setCondicionFiscal] = useState<CondicionFiscal>(
     estadoInicial.condicionFiscal ?? "MONOTRIBUTO"
   )
@@ -78,7 +80,13 @@ export function CredencialesArca({ allowEdit, estadoInicial, onConectado }: Cred
   const [mensaje, setMensaje] = useState<Mensaje | null>(null)
 
   const cuitDigitos = cuit.replace(/\D/g, "")
-  const puedeConectar = !!certPem && !!keyPem && cuitDigitos.length === 11 && allowEdit
+  // ARCA numera los puntos de venta con 5 dígitos; el servidor valida igual,
+  // esto solo evita el viaje.
+  const puntoVentaNumero = Number(puntoVenta)
+  const puntoVentaValido =
+    Number.isInteger(puntoVentaNumero) && puntoVentaNumero > 0 && puntoVentaNumero <= 99999
+  const puedeConectar =
+    !!certPem && !!keyPem && cuitDigitos.length === 11 && puntoVentaValido && allowEdit
   const certVencido = estado.estado === "cert_vencido"
 
   async function handleArchivo(
@@ -123,7 +131,13 @@ export function CredencialesArca({ allowEdit, estadoInicial, onConectado }: Cred
       const res = await fetch("/api/facturacion-electronica/credenciales", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ certPem, keyPem, cuit: cuitDigitos, condicionFiscal }),
+        body: JSON.stringify({
+          certPem,
+          keyPem,
+          cuit: cuitDigitos,
+          puntoVenta: puntoVentaNumero,
+          condicionFiscal,
+        }),
       })
       const data = await res.json()
 
@@ -135,6 +149,7 @@ export function CredencialesArca({ allowEdit, estadoInicial, onConectado }: Cred
       const nuevo: EstadoCredencialesArca = {
         conectado: !!data.conectado,
         cuit: data.cuit ?? cuitDigitos,
+        puntoVenta: data.puntoVenta ?? puntoVentaNumero,
         certSubject: data.certSubject ?? null,
         certNotAfter: data.certNotAfter ?? null,
         estado: data.estado ?? "conectado",
@@ -206,6 +221,21 @@ export function CredencialesArca({ allowEdit, estadoInicial, onConectado }: Cred
           </p>
         </div>
         <div>
+          <Label htmlFor="arcaPuntoVenta" className="text-sm">Punto de venta</Label>
+          <Input
+            id="arcaPuntoVenta"
+            type="number"
+            min="1"
+            max="99999"
+            value={puntoVenta}
+            onChange={(e) => setPuntoVenta(e.target.value)}
+            disabled={!allowEdit}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            El que diste de alta en ARCA para facturación electrónica.
+          </p>
+        </div>
+        <div>
           <Label htmlFor="arcaCondicionFiscal" className="text-sm">Condición fiscal</Label>
           <Select
             value={condicionFiscal}
@@ -249,6 +279,7 @@ export function CredencialesArca({ allowEdit, estadoInicial, onConectado }: Cred
         {estado.conectado && !certVencido && (
           <span className="text-sm text-success-600 dark:text-success-500">
             Conectado · CUIT {estado.cuit}
+            {estado.puntoVenta ? ` · Punto de venta ${estado.puntoVenta}` : ""}
             {estado.certNotAfter ? ` · Vence el ${formatearFecha(estado.certNotAfter)}` : ""}
           </span>
         )}

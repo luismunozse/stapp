@@ -247,6 +247,47 @@ describe("facturacion-electronica/credenciales", () => {
       expect(body.keyPem).toBeUndefined()
     })
 
+    /**
+     * El punto de venta lo da de alta el contribuyente en ARCA y no tiene por
+     * que ser el 1: emitir contra un punto de venta que no existe rebota.
+     * Antes de esto putArca ni siquiera lo persistia y toda fila nueva
+     * quedaba con el default 1 del schema.
+     */
+    it("persists the punto de venta sent with the certificate", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+      const upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null })
+      mockSupabaseFrom({ facturacion_credenciales: { upsert: upsertSpy } as any })
+
+      const { status, body } = await parseResponse(await PUT(putBody({ puntoVenta: 3 })))
+
+      expect(status).toBe(200)
+      expect(upsertSpy).toHaveBeenCalledWith(expect.objectContaining({ punto_venta: 3 }))
+      expect(body.puntoVenta).toBe(3)
+    })
+
+    it("defaults the punto de venta to 1 when it is not sent", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+      const upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null })
+      mockSupabaseFrom({ facturacion_credenciales: { upsert: upsertSpy } as any })
+
+      await PUT(putBody())
+
+      expect(upsertSpy).toHaveBeenCalledWith(expect.objectContaining({ punto_venta: 1 }))
+    })
+
+    it("400 when the punto de venta is not a positive integer", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+      const { status } = await parseResponse(await PUT(putBody({ puntoVenta: 0 })))
+      expect(status).toBe(400)
+    })
+
+    // ARCA numera los puntos de venta con 5 digitos: 99999 es el techo real.
+    it("400 when the punto de venta exceeds the 5-digit ARCA range", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+      const { status } = await parseResponse(await PUT(putBody({ puntoVenta: 100000 })))
+      expect(status).toBe(400)
+    })
+
     it("500 'cifrado no configurado' when FACTURACION_ENCRYPTION_KEY is unset (encryptSecret throws)", async () => {
       mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
       ;(encryptSecret as any).mockImplementation(() => {
