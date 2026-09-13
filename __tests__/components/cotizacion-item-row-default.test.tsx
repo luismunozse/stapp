@@ -70,4 +70,35 @@ describe("ItemRow — default de la fila nueva", () => {
     expect(screen.queryAllByPlaceholderText("Buscar producto o servicio...")).toHaveLength(0)
     expect(screen.getAllByPlaceholderText("Descripción del item").length).toBeGreaterThan(0)
   })
+
+  // Fix round 1: los dos layouts (movil y escritorio) estan montados a la vez
+  // (se alternan por CSS, no por render condicional). Con un unico ref
+  // compartido, el ultimo layout en asignarse (escritorio, por orden de
+  // documento) se lo quedaba, y el listener de "click afuera" leia un toque
+  // DENTRO del buscador movil como un click afuera — la busqueda se cerraba
+  // sola apenas el usuario la tocaba en el celular.
+  it("un mousedown adentro del buscador del layout movil no lo cierra", () => {
+    const { container } = renderItemRow({ ...baseItem })
+
+    const buscadorMovil = container.querySelector(
+      '.sm\\:hidden input[placeholder="Buscar producto o servicio..."]'
+    )
+    expect(buscadorMovil).not.toBeNull()
+
+    fireEvent.mouseDown(buscadorMovil as Element)
+
+    // Sigue abierto: el buscador (en los dos layouts, que comparten estado)
+    // no se cerro por un toque que cayo adentro suyo.
+    expect(screen.getAllByPlaceholderText("Buscar producto o servicio...").length).toBeGreaterThan(0)
+    expect(screen.queryAllByPlaceholderText("Descripción del item")).toHaveLength(0)
+  })
+
+  it("un mousedown genuinamente afuera de los dos layouts si cierra el buscador", () => {
+    renderItemRow({ ...baseItem })
+
+    fireEvent.mouseDown(document.body)
+
+    expect(screen.queryAllByPlaceholderText("Buscar producto o servicio...")).toHaveLength(0)
+    expect(screen.getAllByPlaceholderText("Descripción del item").length).toBeGreaterThan(0)
+  })
 })

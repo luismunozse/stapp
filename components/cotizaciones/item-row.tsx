@@ -84,7 +84,14 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
   const [showInvSearch, setShowInvSearch] = useState(
     !item.descripcion && !item.inventarioId && !item.servicioId
   )
-  const searchRef = useRef<HTMLDivElement>(null)
+  // Refs separados por layout: los dos layouts (movil y escritorio) existen
+  // siempre en el DOM a la vez (se alternan por CSS, no por render
+  // condicional), asi que un unico ref quedaria pisado por el ultimo de los
+  // dos en asignarse (el de escritorio, por orden de documento) y el click
+  // afuera-cierra-el-buscador confundiria un toque DENTRO del buscador movil
+  // con un click afuera.
+  const mobileSearchRef = useRef<HTMLDivElement>(null)
+  const desktopSearchRef = useRef<HTMLDivElement>(null)
 
   // Local string state for numeric fields so the user can clear & retype freely.
   // The numeric value pushed to onUpdate (and thus to totals) is unchanged.
@@ -138,7 +145,13 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      // Cierra solo si el click cae afuera de LOS DOS contenedores: en un
+      // momento dado nada mas que uno esta visible, pero el otro sigue
+      // montado (oculto por CSS) y su ref sigue vivo.
+      const dentroDeMobile = !!mobileSearchRef.current?.contains(target)
+      const dentroDeDesktop = !!desktopSearchRef.current?.contains(target)
+      if (!dentroDeMobile && !dentroDeDesktop) {
         setShowInvSearch(false)
       }
     }
@@ -212,7 +225,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
       {/* Mobile Layout */}
       <div className="sm:hidden space-y-2 py-3 border-b">
         <div className="flex justify-between items-start gap-2">
-          <div className="flex-1 relative" ref={showInvSearch ? searchRef : undefined}>
+          <div className="flex-1 relative" ref={showInvSearch ? mobileSearchRef : undefined}>
             {showInvSearch ? (
               <div>
                 <Input
@@ -416,7 +429,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
 
       {/* Desktop Layout */}
       <div className="hidden sm:grid grid-cols-16 gap-2 items-center py-2 border-b" style={{ gridTemplateColumns: "4fr 1fr 1.5fr 1.5fr 1.5fr 2fr 0.5fr" }}>
-        <div className="relative" ref={!showInvSearch ? undefined : searchRef}>
+        <div className="relative" ref={!showInvSearch ? undefined : desktopSearchRef}>
           <div className="flex gap-1">
             {showInvSearch ? (
               <Input
