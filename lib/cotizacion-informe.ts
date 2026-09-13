@@ -17,6 +17,30 @@ export type CausaDano = (typeof CAUSAS_DANO)[number]
 export const veredictoSchema = z.enum(VEREDICTOS)
 export const causaDanoSchema = z.enum(CAUSAS_DANO)
 
+/**
+ * Etiquetas en castellano para el dictamen del informe tecnico. Fuente unica:
+ * antes vivian duplicadas en lib/pdf.ts, cotizacion-form.tsx y
+ * cotizacion-publica.tsx, con el riesgo de que el taller vea un texto en
+ * pantalla y el asegurador reciba otro en el PDF sobre el mismo equipo. El
+ * tipado por `Veredicto`/`CausaDano` hace que agregar un valor a VEREDICTOS o
+ * CAUSAS_DANO sin sumarle etiqueta sea un error de compilacion, no un
+ * documento mudo en produccion.
+ */
+export const VEREDICTO_LABELS: Record<Veredicto, string> = {
+  REPARABLE: "Reparable",
+  IRREPARABLE: "Irreparable",
+  SIN_FALLA: "Sin falla detectada",
+}
+export const CAUSA_DANO_LABELS: Record<CausaDano, string> = {
+  CAIDA: "Caída",
+  LIQUIDO: "Contacto con líquido",
+  SOBRETENSION: "Sobretensión eléctrica",
+  DESGASTE: "Desgaste por uso",
+  USO_INDEBIDO: "Uso indebido",
+  FALLA_FABRICA: "Falla de fábrica",
+  DESCONOCIDA: "Desconocida",
+}
+
 /** Los dos veredictos que hacen que no haya nada que presupuestar. */
 const SIN_PRESUPUESTO: readonly string[] = ["IRREPARABLE", "SIN_FALLA"]
 

@@ -19,7 +19,7 @@ import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2, BookOpen, 
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { useCurrency, useTerminologia } from "@/contexts/currency-context"
 import { getCountryConfig } from "@/lib/countries"
-import { VEREDICTOS, CAUSAS_DANO } from "@/lib/cotizacion-informe"
+import { VEREDICTOS, CAUSAS_DANO, VEREDICTO_LABELS, CAUSA_DANO_LABELS } from "@/lib/cotizacion-informe"
 import { useModal } from "@/contexts/modal-context"
 import { ItemRow, calcItemNeto } from "./item-row"
 import { ClienteSelector } from "./cliente-selector"
@@ -72,25 +72,6 @@ export function toItemPayload(item: CotizacionItem) {
     servicioId: item.servicioId || null,
     tipoRepuesto: item.tipoRepuesto || "NO_APLICA",
   }
-}
-
-// Etiquetas en castellano para el dictamen del informe tecnico. Los valores
-// (VEREDICTOS/CAUSAS_DANO) vienen de lib/cotizacion-informe para no duplicar el
-// enum; el texto mostrado no tiene otra fuente y debe coincidir con el que
-// dibuja el PDF (lib/pdf.ts).
-const VEREDICTO_LABELS: Record<string, string> = {
-  REPARABLE: "Reparable",
-  IRREPARABLE: "Irreparable",
-  SIN_FALLA: "Sin falla detectada",
-}
-const CAUSA_DANO_LABELS: Record<string, string> = {
-  CAIDA: "Caída",
-  LIQUIDO: "Contacto con líquido",
-  SOBRETENSION: "Sobretensión eléctrica",
-  DESGASTE: "Desgaste por uso",
-  USO_INDEBIDO: "Uso indebido",
-  FALLA_FABRICA: "Falla de fábrica",
-  DESCONOCIDA: "Desconocida",
 }
 
 interface CondicionesTecnicas {

@@ -9,7 +9,7 @@ import QRCode from "qrcode"
 import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
 import { MONO, TYPE, RULE_WIDTH, drawRule, drawSectionLabel, drawOutlinedBadge, measureBadgeWidth } from "@/lib/pdf-style"
 import { ESTADO_FLOW, ESTADOS_COMPLETADOS, MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
-import { esInforme } from "@/lib/cotizacion-informe"
+import { esInforme, VEREDICTO_LABELS, CAUSA_DANO_LABELS, type Veredicto, type CausaDano } from "@/lib/cotizacion-informe"
 
 // Compatibilidad: algunos bundlers ponen el default dentro de .default
 const fontkit = (fontkitModule as any).default || fontkitModule
@@ -469,20 +469,9 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
   // un presupuesto con dictamen es el encabezado del detalle.
   const tieneDictamen = !!data.veredicto
   if (tieneDictamen || data.presentadoAnte) {
-    const VEREDICTO_LABEL: Record<string, string> = {
-      REPARABLE: "Reparable",
-      IRREPARABLE: "Irreparable",
-      SIN_FALLA: "Sin falla detectada",
-    }
-    const CAUSA_LABEL: Record<string, string> = {
-      CAIDA: "Caída",
-      LIQUIDO: "Contacto con líquido",
-      SOBRETENSION: "Sobretensión eléctrica",
-      DESGASTE: "Desgaste por uso",
-      USO_INDEBIDO: "Uso indebido",
-      FALLA_FABRICA: "Falla de fábrica",
-      DESCONOCIDA: "Desconocida",
-    }
+    // Etiquetas en castellano: fuente unica en lib/cotizacion-informe para no
+    // divergir de lo que ve el taller (cotizacion-form.tsx) ni de lo que lee
+    // el asegurador en el link publico (cotizacion-publica.tsx).
 
     // Corta el texto en lineas que entren en el ancho util. Si mas adelante se
     // factoriza un wrapper compartido en este archivo, reemplazar por ese.
@@ -518,13 +507,13 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
 
     if (data.veredicto) {
       page.drawText("Veredicto", { x: labelX, y: cursor, size: TYPE.small, font: helvetica, color: MONO.label })
-      page.drawText(VEREDICTO_LABEL[data.veredicto] || data.veredicto, { x: valorX, y: cursor, size: TYPE.body, font: helveticaBold, color: MONO.ink })
+      page.drawText(VEREDICTO_LABELS[data.veredicto as Veredicto] || data.veredicto, { x: valorX, y: cursor, size: TYPE.body, font: helveticaBold, color: MONO.ink })
       cursor -= 17
     }
 
     if (data.causaDano) {
       page.drawText("Causa probable del daño", { x: labelX, y: cursor, size: TYPE.small, font: helvetica, color: MONO.label })
-      page.drawText(CAUSA_LABEL[data.causaDano] || data.causaDano, { x: valorX, y: cursor, size: TYPE.body, font: helvetica, color: MONO.ink })
+      page.drawText(CAUSA_DANO_LABELS[data.causaDano as CausaDano] || data.causaDano, { x: valorX, y: cursor, size: TYPE.body, font: helvetica, color: MONO.ink })
       cursor -= 17
     }
 

@@ -25,7 +25,7 @@ import {
 } from "lucide-react"
 import { formatCurrencyValue, type CurrencyCode } from "@/lib/currency"
 import { formatDateValue, dateNumberInTimeZone } from "@/lib/timezone"
-import { esInforme } from "@/lib/cotizacion-informe"
+import { esInforme, VEREDICTO_LABELS, CAUSA_DANO_LABELS, type Veredicto, type CausaDano } from "@/lib/cotizacion-informe"
 
 interface CotizacionData {
   id: string
@@ -116,24 +116,6 @@ const estadoConfig: Record<string, { label: string; color: string }> = {
   RECHAZADA: { label: "Rechazada", color: "bg-destructive/10 text-destructive" },
 }
 
-// Etiquetas en castellano para el dictamen del informe tecnico. Los valores
-// (VEREDICTOS/CAUSAS_DANO) vienen de lib/cotizacion-informe para no duplicar el
-// enum; el texto mostrado no tiene otra fuente y debe coincidir con el que
-// dibuja el PDF (lib/pdf.ts) y con components/cotizaciones/cotizacion-form.tsx.
-const VEREDICTO_LABELS: Record<string, string> = {
-  REPARABLE: "Reparable",
-  IRREPARABLE: "Irreparable",
-  SIN_FALLA: "Sin falla detectada",
-}
-const CAUSA_DANO_LABELS: Record<string, string> = {
-  CAIDA: "Caída",
-  LIQUIDO: "Contacto con líquido",
-  SOBRETENSION: "Sobretensión eléctrica",
-  DESGASTE: "Desgaste por uso",
-  USO_INDEBIDO: "Uso indebido",
-  FALLA_FABRICA: "Falla de fábrica",
-  DESCONOCIDA: "Desconocida",
-}
 const veredictoColor: Record<string, string> = {
   REPARABLE: "bg-success-50 text-success-700 dark:bg-success/15 dark:text-success-500",
   IRREPARABLE: "bg-destructive/10 text-destructive",
@@ -599,7 +581,7 @@ export function CotizacionPublica({ token }: { token: string }) {
               <div>
                 <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Veredicto</p>
                 <Badge className={veredictoColor[data.veredicto] || "bg-muted text-muted-foreground"}>
-                  {VEREDICTO_LABELS[data.veredicto] || data.veredicto}
+                  {VEREDICTO_LABELS[data.veredicto as Veredicto] || data.veredicto}
                 </Badge>
               </div>
             )}
@@ -608,7 +590,7 @@ export function CotizacionPublica({ token }: { token: string }) {
                 <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">
                   Causa probable del daño
                 </p>
-                <p className="font-medium">{CAUSA_DANO_LABELS[data.causaDano] || data.causaDano}</p>
+                <p className="font-medium">{CAUSA_DANO_LABELS[data.causaDano as CausaDano] || data.causaDano}</p>
               </div>
             )}
             {data.diagnosticoTecnico && (
