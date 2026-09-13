@@ -1,6 +1,7 @@
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { supabaseAdmin } from "@/lib/supabase"
 import { isMissingColumnError } from "@/lib/db-errors"
+import { getCertificadoStapp } from "@/lib/facturacion/arca/stapp-cert"
 
 export async function canEmitirFacturaElectronica(organizationId: string): Promise<boolean> {
   try {
@@ -43,6 +44,14 @@ export async function canEmitirFacturaElectronica(organizationId: string): Promi
     // 'conectado' desde el ultimo guardado mientras el certificado vencia,
     // asi que la vigencia se deriva en lectura. Sin `cert_not_after` no se
     // puede afirmar nada -> fail closed.
+    // Delegación: la fila del taller no tiene certificado propio — el que
+    // vence (o falta) es el de la PLATAFORMA. Mirar `cert_not_after` de la
+    // fila, siempre NULL acá, dejaría a toda org delegada sin facturar.
+    if (cred.provider === "arca_delegado") {
+      const plataforma = getCertificadoStapp()
+      return new Date(plataforma.notAfter).getTime() > Date.now()
+    }
+
     if (cred.provider === "arca") {
       if (!cred.cert_not_after) return false
       return new Date(cred.cert_not_after).getTime() > Date.now()
