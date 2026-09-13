@@ -167,6 +167,37 @@ describe("CotizacionForm — seccion Informe técnico", () => {
     })
   })
 
+  it("volver la causa del daño a 'Sin especificar' manda causaDano: null", async () => {
+    // Mismo patron que el veredicto y el diagnostico/entidad: una vez elegida
+    // la causa, la UI tiene que poder volver a vacío, y ese vacío tiene que
+    // llegar al servidor como null (no quedarse pegado el valor viejo).
+    const fetchMock = stubFetch()
+    renderForm({
+      initialData: {
+        id: "cot-1",
+        items: [
+          { id: "item-1", descripcion: "Cambio de pantalla", cantidad: 1, precioUnitario: 50000 },
+        ],
+        causaDano: "LIQUIDO",
+      },
+    })
+
+    fireEvent.click(screen.getByLabelText("Causa probable del daño"))
+    fireEvent.click(await screen.findByRole("option", { name: "Sin especificar" }))
+
+    fireEvent.click(screen.getByRole("button", { name: "Actualizar Cotización" }))
+
+    await waitFor(() => {
+      const putCall = (fetchMock as any).mock.calls.find(
+        ([, opts]: [string, RequestInit]) => opts?.method === "PUT"
+      )
+      expect(putCall).toBeDefined()
+      const body = JSON.parse((putCall as any)[1].body)
+      expect("causaDano" in body).toBe(true)
+      expect(body.causaDano).toBeNull()
+    })
+  })
+
   it("una cotizacion normal (sin veredicto) sin items validos sigue avisando y bloqueando el envio", async () => {
     const fetchMock = stubFetch()
     renderForm()

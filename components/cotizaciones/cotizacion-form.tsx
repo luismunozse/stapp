@@ -928,15 +928,22 @@ export function CotizacionForm({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="informe-causa-dano">Causa probable del daño</Label>
+                {/* Radix no acepta value="" en un SelectItem, asi que "sin
+                    causa" usa el centinela "none" y se traduce a null al
+                    guardar (mismo patron que components/ordenes/orden-tecnico-card.tsx
+                    y components/proveedores/proveedor-form.tsx). Sin esta
+                    opcion, una causa elegida por error queda pegada para
+                    siempre: mismo bug que el veredicto y el diagnostico. */}
                 <Select
-                  value={causaDano ?? undefined}
-                  onValueChange={(v) => setCausaDano(v)}
+                  value={causaDano || "none"}
+                  onValueChange={(v) => setCausaDano(v === "none" ? null : v)}
                   disabled={loading}
                 >
                   <SelectTrigger id="informe-causa-dano" className="mt-1">
-                    <SelectValue placeholder="Seleccionar..." />
+                    <SelectValue placeholder="Sin especificar" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Sin especificar</SelectItem>
                     {CAUSAS_DANO.map((c) => (
                       <SelectItem key={c} value={c}>{CAUSA_DANO_LABELS[c]}</SelectItem>
                     ))}
