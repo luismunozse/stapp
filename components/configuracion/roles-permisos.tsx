@@ -91,6 +91,13 @@ const PERMISOS: { rol: Rol; campo: string; titulo: string; detalle: string }[] =
   },
   {
     rol: "VENDEDOR",
+    campo: "vendedoresVenIngresos",
+    titulo: "Ver los ingresos del taller",
+    detalle:
+      "Viene activado. Desactivalo para que dejen de ver en Reportes la facturación del taller y cuánto gastó cada cliente. Siguen viendo los reportes operativos —tiempos, fallas, desempeño, inventario— y sus propias ventas. Los precios de compra y los márgenes ya eran solo de administradores.",
+  },
+  {
+    rol: "VENDEDOR",
     campo: "vendedoresManejanCaja",
     titulo: "Abrir y cerrar la caja",
     detalle:

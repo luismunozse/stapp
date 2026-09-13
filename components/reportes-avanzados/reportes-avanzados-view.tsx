@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useSession } from "next-auth/react"
 import dynamic from "next/dynamic"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Users, Package, BarChart3, Clock, AlertTriangle, DollarSign, Boxes, ShoppingCart } from "lucide-react"
@@ -82,6 +83,36 @@ const RentabilidadTecnicos = dynamic(
 export function ReportesAvanzadosView() {
   const [activeTab, setActiveTab] = useState("tecnicos")
 
+  // "Clientes" es Top clientes: cuánto gastó cada uno. Un taller puede apagarle
+  // eso al vendedor con `vendedores_ven_ingresos` (migración 325). El flag vive
+  // en la BD, así que hay que ir a buscarlo; para el ADMIN no hay nada que
+  // preguntar y no paga el fetch. El TECNICO no llega acá: lo frena el
+  // middleware.
+  //
+  // Sólo un `false` EXPLÍCITO esconde la pestaña. Un chequeo que no se pudo
+  // completar no es una negativa —misma regla que el gate del POS—, y del lado
+  // del servidor requireIngresosAccess() decide de verdad.
+  const { data: session } = useSession()
+  const esVendedor = session?.user?.role === "VENDEDOR"
+  const [veIngresos, setVeIngresos] = useState(true)
+
+  useEffect(() => {
+    if (!esVendedor) return
+    let cancelado = false
+    fetch("/api/org/features", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelado || !d) return
+        setVeIngresos(d.vendedoresVenIngresos !== false)
+      })
+      .catch(() => {})
+    return () => {
+      cancelado = true
+    }
+  }, [esVendedor])
+
+  const verTopClientes = !esVendedor || veIngresos
+
   // Map tab values to report types for export
   const exportableReports: Record<string, string> = {
     "tiempo-reparacion": "tiempo-reparacion",
@@ -120,10 +151,12 @@ export function ReportesAvanzadosView() {
               <ShoppingCart className="h-4 w-4" />
               <span className="hidden sm:inline">Vendedores</span>
             </TabsTrigger>
-            <TabsTrigger value="clientes" className="gap-2">
-              <Users className="h-4 w-4" />
-              <span className="hidden sm:inline">Clientes</span>
-            </TabsTrigger>
+            {verTopClientes && (
+              <TabsTrigger value="clientes" className="gap-2">
+                <Users className="h-4 w-4" />
+                <span className="hidden sm:inline">Clientes</span>
+              </TabsTrigger>
+            )}
             <TabsTrigger value="inventario" className="gap-2">
               <Package className="h-4 w-4" />
               <span className="hidden sm:inline">Inventario</span>
@@ -163,9 +196,11 @@ export function ReportesAvanzadosView() {
           <PerformanceVendedores />
         </TabsContent>
 
-        <TabsContent value="clientes" className="mt-6">
-          <TopClientes />
-        </TabsContent>
+        {verTopClientes && (
+          <TabsContent value="clientes" className="mt-6">
+            <TopClientes />
+          </TabsContent>
+        )}
 
         <TabsContent value="inventario" className="mt-6">
           <AnalisisInventario />

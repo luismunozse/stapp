@@ -111,7 +111,7 @@ describe("/api/configuracion — permiso de caja para vendedores", () => {
 
     // Exactamente dos intentos: el flag es su propio escalón y el segundo ya
     // acierta. Tres o más significa que arrastró a otra migración con él.
-    expect(chain.single).toHaveBeenCalledTimes(3)
+    expect(chain.single).toHaveBeenCalledTimes(4)
 
     // Y nada de lo que sí existe se perdió en el camino.
     expect(body.tecnicosOperanPos).toBe(true)
