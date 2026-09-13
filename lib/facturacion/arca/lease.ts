@@ -123,14 +123,18 @@ export async function withLease<T>(options: WithLeaseOptions, fn: () => Promise<
   }
 }
 
-/** Clave de lease para la renovación del ticket WSAA (design ADR-02). */
-export function wsaaLockKey(
-  organizationId: string,
-  cuit: string,
-  service: string,
-  production: boolean
-): string {
-  return `wsaa:${organizationId}:${cuit}:${service}:${production ? "p" : "h"}`
+/**
+ * Clave de lease para la renovación del ticket WSAA (design ADR-02).
+ *
+ * NO lleva la organización a propósito. AFIP entrega UN TA por certificado y
+ * servicio, así que el lease tiene que ser del CERTIFICADO: en el modelo de
+ * delegación un mismo certificado emite para N talleres, y un lease por
+ * organización les daría a todos vía libre para pedir su propio login del
+ * mismo certificado. El primero gana y el resto se come
+ * `coe.alreadyAuthenticated` — sin facturar hasta 12 h.
+ */
+export function wsaaLockKey(cuit: string, service: string, production: boolean): string {
+  return `wsaa:${cuit}:${service}:${production ? "p" : "h"}`
 }
 
 /** Clave de lease para la línea de numeración de emisión (design ADR-02). */
