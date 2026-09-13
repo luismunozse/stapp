@@ -69,10 +69,20 @@ describe("CotizacionForm — seccion Informe técnico", () => {
     expect(screen.getByText("Ítems")).toBeInTheDocument()
     expect(screen.queryByText(AVISO_INFORME)).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole("button", { name: "Irreparable" }))
+    const botonIrreparable = screen.getByRole("button", { name: "Irreparable" })
+    fireEvent.click(botonIrreparable)
 
     expect(screen.queryByText("Ítems")).not.toBeInTheDocument()
     expect(screen.getByText(AVISO_INFORME)).toBeInTheDocument()
+    expect(botonIrreparable).toHaveAttribute("aria-pressed", "true")
+
+    // Clickear el mismo boton lo deselecciona: un click accidental no puede
+    // quedar pegado para siempre sin forma de corregirlo desde la UI.
+    fireEvent.click(botonIrreparable)
+
+    expect(botonIrreparable).toHaveAttribute("aria-pressed", "false")
+    expect(screen.getByText("Ítems")).toBeInTheDocument()
+    expect(screen.queryByText(AVISO_INFORME)).not.toBeInTheDocument()
   })
 
   it("el payload enviado incluye veredicto, diagnosticoTecnico, causaDano y presentadoAnte", async () => {
@@ -111,6 +121,45 @@ describe("CotizacionForm — seccion Informe técnico", () => {
       expect(body.presentadoAnte).toBe("La Segunda ART")
       expect(body.items).toEqual([])
     })
+  })
+
+  it("una cotizacion normal (sin veredicto) sin items validos sigue avisando y bloqueando el envio", async () => {
+    const fetchMock = stubFetch()
+    renderForm()
+
+    // No se toca el veredicto: sinPresupuesto es false y el item por defecto
+    // (descripcion vacia, precio 0) no es valido. El guard que se toco en el
+    // fix del informe (`!sinPresupuesto && validItems.length === 0`) tiene que
+    // seguir bloqueando este caso exactamente como antes.
+    fireEvent.click(screen.getByRole("button", { name: "Crear Cotización" }))
+
+    expect(await screen.findByText("Debe agregar al menos un item válido")).toBeInTheDocument()
+    expect(
+      (fetchMock as any).mock.calls.some(([, opts]: [string, RequestInit]) => opts?.method === "POST")
+    ).toBe(false)
+  })
+
+  it("elegir IRREPARABLE y volver a REPARABLE restaura los items cargados", () => {
+    stubFetch()
+    renderForm({
+      initialData: {
+        id: "cot-1",
+        items: [
+          { id: "item-1", descripcion: "Cambio de pantalla", cantidad: 1, precioUnitario: 50000 },
+        ],
+      },
+    })
+
+    // El item cargado esta visible antes de tocar el veredicto.
+    expect(screen.getAllByDisplayValue("Cambio de pantalla").length).toBeGreaterThan(0)
+
+    fireEvent.click(screen.getByRole("button", { name: "Irreparable" }))
+    expect(screen.queryAllByDisplayValue("Cambio de pantalla")).toHaveLength(0)
+
+    // Volver a un veredicto reparable no descarta `items`: el estado nunca se
+    // tocó, solo se dejó de mostrar la tabla.
+    fireEvent.click(screen.getByRole("button", { name: "Reparable" }))
+    expect(screen.getAllByDisplayValue("Cambio de pantalla").length).toBeGreaterThan(0)
   })
 
   it("con initialData que trae el dictamen, los campos aparecen precargados", () => {
@@ -156,7 +205,7 @@ describe("CotizacionForm — seccion Informe técnico", () => {
     })
   })
 
-  it("en un documento en edicion, el diagnostico guardado no se pisa con el de la orden", async () => {
+  it("en un documento en edicion con diagnostico ya guardado, no se pisa con el de la orden", async () => {
     const fetchMock = stubFetch({
       "/api/ordenes/orden-1": { diagnostico: "Diagnóstico distinto que vino de la orden." },
     })
@@ -186,5 +235,30 @@ describe("CotizacionForm — seccion Informe técnico", () => {
     expect(screen.getByLabelText("Diagnóstico del informe técnico")).toHaveValue(
       "Diagnóstico ya guardado por el técnico."
     )
+  })
+
+  it("en un documento en edicion con diagnostico vacio, tampoco resincroniza desde la orden", () => {
+    // Este caso aisla la causa real: si solo importara que el campo esta
+    // vacio (y no `isEditing`), este test fallaria igual que fallaria borrar
+    // el guard de `isEditing` sin que el anterior lo notara. Un documento ya
+    // emitido no puede autosincronizarse, tenga o no diagnostico cargado.
+    const fetchMock = stubFetch({
+      "/api/ordenes/orden-1": { diagnostico: "Diagnóstico que vendría de la orden." },
+    })
+
+    renderForm({
+      initialData: {
+        id: "cot-1",
+        items: [],
+        diagnosticoTecnico: "",
+      },
+    })
+
+    expect(
+      (fetchMock as any).mock.calls.some(([url]: [string]) =>
+        String(url).includes("/api/ordenes/orden-1")
+      )
+    ).toBe(false)
+    expect(screen.getByLabelText("Diagnóstico del informe técnico")).toHaveValue("")
   })
 })

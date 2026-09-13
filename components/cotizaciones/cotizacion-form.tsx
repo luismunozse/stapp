@@ -494,9 +494,25 @@ export function CotizacionForm({
         descuentoGlobalValor,
         ivaPorcentaje,
         tipoCambio: tipoCambio || undefined,
-        veredicto: veredicto || undefined,
+        // veredicto/causaDano: `?? null`, no `|| undefined`. El PUT trata la
+        // clave ausente ("undefined" -> se borra al serializar) como "no
+        // tocar" y `null` como "borralo". Con `|| undefined`, deseleccionar el
+        // veredicto en la UI nunca llegaba al servidor: quedaba grabado para
+        // siempre y lib/pdf.ts lo seguía imprimiendo en cotizaciones futuras.
+        veredicto: veredicto ?? null,
+        causaDano: causaDano ?? null,
+        // diagnosticoTecnico/presentadoAnte: se dejan con `|| undefined` a
+        // propósito. En el POST no cambia nada (el insert normaliza a null
+        // igual). En el PUT, el handler ya calcula
+        // `diagnostico_tecnico = data.diagnosticoTecnico?.trim() || null`,
+        // asi que un string vacio explicito da el mismo resultado que uno
+        // ausente EXCEPTO que un ausente no toca el valor existente. La unica
+        // diferencia practica es: si el tecnico borra un diagnostico ya
+        // guardado sin escribir nada nuevo y guarda, hoy el texto viejo
+        // sobrevive en vez de limpiarse. No es el bug critico de esta review
+        // (no hay dato incorrecto grabado, ni un PDF futuro miente), asi que
+        // se documenta y se deja para otra pasada en vez de tocarlo aca.
         diagnosticoTecnico: diagnosticoTecnico.trim() || undefined,
-        causaDano: causaDano || undefined,
         presentadoAnte: presentadoAnte.trim() || undefined,
       }
 
@@ -883,7 +899,10 @@ export function CotizacionForm({
                     variant={veredicto === v ? "default" : "outline"}
                     size="sm"
                     aria-pressed={veredicto === v}
-                    onClick={() => setVeredicto(v)}
+                    // Clickear el botón ya activo lo deselecciona. Sin esto, un
+                    // click accidental queda grabado para siempre: el payload
+                    // no tiene otra forma de volver a null.
+                    onClick={() => setVeredicto(veredicto === v ? null : v)}
                     disabled={loading}
                   >
                     {VEREDICTO_LABELS[v]}
@@ -1027,7 +1046,11 @@ export function CotizacionForm({
           </CollapsibleSection>
           )}
 
-          {/* Descuentos y totales */}
+          {/* Descuentos y totales: sin items no hay nada que descontar ni total
+              que mostrar. Sin este guard, el recuadro sigue calculando desde
+              `items` (que siguen en el estado) y muestra un total que el POST
+              nunca manda (va con items: []). */}
+          {!sinPresupuesto && (
           <CollapsibleSection title="Descuentos y totales" icon={Calculator} defaultOpen>
             {/* Descuento Global + IVA */}
             <div className="flex flex-col sm:flex-row sm:items-end gap-3 p-3 bg-muted/50 rounded-lg">
@@ -1142,6 +1165,7 @@ export function CotizacionForm({
               </div>
             </div>
           </CollapsibleSection>
+          )}
 
           {/* Detalles y notas */}
           <CollapsibleSection title="Detalles y notas" icon={FileText} defaultOpen={false}>
