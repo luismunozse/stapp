@@ -87,9 +87,9 @@ const updateCotizacionSchema = z.object({
   equipo: equipoSchema.optional(),
   checklist: checklistSchema.nullable().optional(),
   veredicto: veredictoSchema.nullable().optional(),
-  diagnosticoTecnico: z.string().max(4000).nullable().optional(),
+  diagnosticoTecnico: z.string().max(4000, "El diagnóstico no puede superar los 4000 caracteres").nullable().optional(),
   causaDano: causaDanoSchema.nullable().optional(),
-  presentadoAnte: z.string().max(200).nullable().optional(),
+  presentadoAnte: z.string().max(200, "La entidad no puede superar los 200 caracteres").nullable().optional(),
 })
 
 // Revierte una orden a EN_DIAGNOSTICO cuando deja de tener un presupuesto

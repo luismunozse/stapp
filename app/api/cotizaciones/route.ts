@@ -72,9 +72,9 @@ const cotizacionSchema = z.object({
   equipo: equipoSchema.optional(),
   checklist: checklistSchema.optional(),
   veredicto: veredictoSchema.nullable().optional(),
-  diagnosticoTecnico: z.string().max(4000).nullable().optional(),
+  diagnosticoTecnico: z.string().max(4000, "El diagnóstico no puede superar los 4000 caracteres").nullable().optional(),
   causaDano: causaDanoSchema.nullable().optional(),
-  presentadoAnte: z.string().max(200).nullable().optional(),
+  presentadoAnte: z.string().max(200, "La entidad no puede superar los 200 caracteres").nullable().optional(),
 }).superRefine((data, ctx) => {
   const mensaje = validarInforme({
     cantidadItems: data.items.length,
