@@ -55,6 +55,10 @@ interface Cotizacion {
   reemplazadaPor?: string | null
   /** No nulo: esta fila es una revision de la cotizacion con este id. */
   revisionDe?: string | null
+  veredicto?: string | null
+  diagnosticoTecnico?: string | null
+  causaDano?: string | null
+  presentadoAnte?: string | null
   items: {
     id: string
     descripcion: string
@@ -478,6 +482,10 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
             items: editingCotizacion.items,
             notas: editingCotizacion.notas,
             fechaVencimiento: editingCotizacion.fechaVencimiento,
+            veredicto: editingCotizacion.veredicto ?? null,
+            diagnosticoTecnico: editingCotizacion.diagnosticoTecnico ?? null,
+            causaDano: editingCotizacion.causaDano ?? null,
+            presentadoAnte: editingCotizacion.presentadoAnte ?? null,
           }}
           onClose={() => setEditingCotizacion(null)}
           onSuccess={() => {
