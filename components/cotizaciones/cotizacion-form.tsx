@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2, BookOpen, Smartphone, Wrench } from "lucide-react"
+import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2, BookOpen, Smartphone, Wrench, AlertTriangle } from "lucide-react"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { useCurrency, useTerminologia } from "@/contexts/currency-context"
 import { getCountryConfig } from "@/lib/countries"
@@ -223,6 +223,16 @@ export function CotizacionForm({
   // Sin items no hay presupuesto: el documento se emite como informe tecnico.
   const sinPresupuesto = veredicto === "IRREPARABLE" || veredicto === "SIN_FALLA"
 
+  // Misma regla que decide que items son "reales" al enviar (handleSubmit).
+  // Calculada tambien en el render para poder avisar, ANTES de guardar,
+  // cuantas filas se van a borrar: dentro de la misma sesion `items` nunca se
+  // toca (deseleccionar el veredicto restaura la tabla tal cual estaba), pero
+  // el PUT borra y reinserta todas las filas de items_cotizacion en cada
+  // guardado — así que un Guardar con el veredicto puesto sí las pierde.
+  const itemsValidos = items.filter(
+    (item) => item.descripcion && item.cantidad > 0 && item.precioUnitario > 0
+  )
+
   // El diagnostico de la orden se PRECARGA una sola vez, en un documento nuevo
   // y solo si el campo esta vacio. Lo que se persiste es la copia congelada: la
   // orden sigue mutando despues, y un documento presentado ante una aseguradora
@@ -420,11 +430,7 @@ export function CotizacionForm({
 
     // Sin presupuesto (veredicto IRREPARABLE o SIN_FALLA) el documento se emite
     // como informe tecnico: no hay items que validar ni que mandar.
-    const validItems = sinPresupuesto
-      ? []
-      : items.filter(
-          (item) => item.descripcion && item.cantidad > 0 && item.precioUnitario > 0
-        )
+    const validItems = sinPresupuesto ? [] : itemsValidos
     if (!sinPresupuesto && validItems.length === 0) {
       await showWarning("Debe agregar al menos un item válido")
       return
@@ -869,8 +875,19 @@ export function CotizacionForm({
               Elegir Irreparable o Sin falla detectada emite el documento sin
               items (ver `sinPresupuesto`). Visible siempre, no solo en
               PRESUPUESTO: una cotización de ORDEN también puede terminar en
-              informe. */}
-          <CollapsibleSection title="Informe técnico" icon={FileText} defaultOpen>
+              informe.
+              defaultOpen solo cuando ya hay algo cargado (las 4 columnas, no
+              solo veredicto/entidad/diagnostico: una causaDano cargada sola
+              -- sin veredicto -- también tiene que seguir siendo visible al
+              reabrir): la mayoría de los talleres no usa este dictamen, y una
+              sección siempre expandida entre "Condiciones técnicas" e
+              "Ítems" les agrega scroll sin dar nada a cambio en cada
+              cotización que crean. */}
+          <CollapsibleSection
+            title="Informe técnico"
+            icon={FileText}
+            defaultOpen={!!veredicto || !!presentadoAnte || !!diagnosticoTecnico || !!causaDano}
+          >
             <div>
               <Label>Veredicto</Label>
               <div className="flex flex-wrap gap-2 mt-1">
@@ -903,6 +920,7 @@ export function CotizacionForm({
                 rows={3}
                 disabled={loading}
                 className="mt-1"
+                maxLength={4000}
               />
             </div>
 
@@ -941,6 +959,7 @@ export function CotizacionForm({
                   placeholder="Ej: La Segunda ART"
                   disabled={loading}
                   className="mt-1"
+                  maxLength={200}
                 />
                 <datalist id="entidades-informe">
                   {entidades.map((ent) => (
@@ -952,9 +971,29 @@ export function CotizacionForm({
           </CollapsibleSection>
 
           {sinPresupuesto && (
-            <p className="text-sm text-muted-foreground border rounded-md p-3">
-              Este documento se va a emitir como informe técnico, sin presupuesto ni ítems.
-            </p>
+            itemsValidos.length > 0 ? (
+              // Items YA CARGADOS (de una cotizacion existente, o tipeados antes
+              // de elegir el veredicto) se pierden de verdad al guardar: el PUT
+              // borra y reinserta items_cotizacion en cada guardado, y esto NO
+              // es reversible como deseleccionar el veredicto. Nombrar la
+              // cantidad es lo que distingue este caso del aviso informativo de
+              // abajo (documento nuevo, nunca tuvo items).
+              <p className="text-sm border rounded-md p-3 border-warning/30 bg-warning-50 text-warning-700 dark:bg-warning/15 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  <span>Este documento se va a emitir como informe técnico, sin presupuesto ni ítems.</span>{" "}
+                  <span>
+                    {itemsValidos.length === 1
+                      ? "Al guardar se va a eliminar el ítem cargado."
+                      : `Al guardar se van a eliminar los ${itemsValidos.length} ítems cargados.`}
+                  </span>
+                </span>
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground border rounded-md p-3">
+                Este documento se va a emitir como informe técnico, sin presupuesto ni ítems.
+              </p>
+            )
           )}
 
           {/* Ítems */}

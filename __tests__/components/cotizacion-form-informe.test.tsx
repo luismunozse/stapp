@@ -56,6 +56,15 @@ const renderForm = (props: Partial<React.ComponentProps<typeof CotizacionForm>> 
 
 const AVISO_INFORME = "Este documento se va a emitir como informe técnico, sin presupuesto ni ítems."
 
+// FIX 4: la sección "Informe técnico" ya no arranca expandida para todos —
+// solo cuando el documento ya trae algo cargado (veredicto, entidad,
+// diagnostico o causa). Un documento nuevo arranca colapsado, asi que los
+// tests que lo tocan sin `initialData` (o con `initialData` que no trae
+// ninguno de esos cuatro campos) tienen que abrirlo a mano primero, igual que
+// haria un usuario real clickeando el encabezado de la sección.
+const abrirSeccionInforme = () =>
+  fireEvent.click(screen.getByRole("button", { name: "Informe técnico" }))
+
 describe("CotizacionForm — seccion Informe técnico", () => {
   beforeEach(() => {
     vi.restoreAllMocks()
@@ -64,6 +73,7 @@ describe("CotizacionForm — seccion Informe técnico", () => {
   it("elegir 'Irreparable' colapsa la tabla de items y muestra el aviso", () => {
     stubFetch()
     renderForm()
+    abrirSeccionInforme()
 
     // Antes de elegir el veredicto la tabla de items esta visible.
     expect(screen.getByText("Ítems")).toBeInTheDocument()
@@ -88,6 +98,7 @@ describe("CotizacionForm — seccion Informe técnico", () => {
   it("el payload enviado incluye veredicto, diagnosticoTecnico, causaDano y presentadoAnte", async () => {
     const fetchMock = stubFetch()
     renderForm()
+    abrirSeccionInforme()
 
     fireEvent.click(screen.getByRole("button", { name: "Irreparable" }))
 
@@ -224,6 +235,7 @@ describe("CotizacionForm — seccion Informe técnico", () => {
         ],
       },
     })
+    abrirSeccionInforme()
 
     // El item cargado esta visible antes de tocar el veredicto.
     expect(screen.getAllByDisplayValue("Cambio de pantalla").length).toBeGreaterThan(0)
@@ -235,6 +247,63 @@ describe("CotizacionForm — seccion Informe técnico", () => {
     // tocó, solo se dejó de mostrar la tabla.
     fireEvent.click(screen.getByRole("button", { name: "Reparable" }))
     expect(screen.getAllByDisplayValue("Cambio de pantalla").length).toBeGreaterThan(0)
+  })
+
+  // FIX 2 (HIGH): dentro de la sesion, `items` nunca se toca (el test de
+  // arriba lo prueba: deseleccionar el veredicto restaura la tabla tal cual
+  // estaba). Pero el PUT borra y reinserta items_cotizacion en CADA guardado,
+  // asi que un Guardar con el veredicto puesto SI las pierde de verdad. El
+  // aviso tiene que nombrar cuantas filas se van a borrar para que la perdida
+  // sea explicita antes de que pase, no solo un "sin presupuesto ni items"
+  // generico que no distingue un documento nuevo de uno con doce lineas.
+  it("con items cargados, el aviso nombra cuantos se van a eliminar al guardar", () => {
+    stubFetch()
+    renderForm({
+      initialData: {
+        id: "cot-1",
+        items: [
+          { id: "item-1", descripcion: "Cambio de pantalla", cantidad: 1, precioUnitario: 50000 },
+          { id: "item-2", descripcion: "Cambio de batería", cantidad: 1, precioUnitario: 30000 },
+        ],
+      },
+    })
+    abrirSeccionInforme()
+
+    fireEvent.click(screen.getByRole("button", { name: "Irreparable" }))
+
+    expect(
+      screen.getByText("Al guardar se van a eliminar los 2 ítems cargados.")
+    ).toBeInTheDocument()
+  })
+
+  it("con un solo item cargado, el aviso usa singular", () => {
+    stubFetch()
+    renderForm({
+      initialData: {
+        id: "cot-1",
+        items: [
+          { id: "item-1", descripcion: "Cambio de pantalla", cantidad: 1, precioUnitario: 50000 },
+        ],
+      },
+    })
+    abrirSeccionInforme()
+
+    fireEvent.click(screen.getByRole("button", { name: "Irreparable" }))
+
+    expect(
+      screen.getByText("Al guardar se va a eliminar el ítem cargado.")
+    ).toBeInTheDocument()
+  })
+
+  it("en un documento nuevo (fila default vacia), el aviso no nombra ninguna cantidad", () => {
+    stubFetch()
+    renderForm()
+    abrirSeccionInforme()
+
+    fireEvent.click(screen.getByRole("button", { name: "Irreparable" }))
+
+    expect(screen.getByText(AVISO_INFORME)).toBeInTheDocument()
+    expect(screen.queryByText(/eliminar/)).not.toBeInTheDocument()
   })
 
   it("con initialData que trae el dictamen, los campos aparecen precargados", () => {
@@ -272,6 +341,11 @@ describe("CotizacionForm — seccion Informe técnico", () => {
     })
 
     renderForm()
+    // La seccion arranca colapsada (documento nuevo, nada cargado todavia): el
+    // fetch que trae el diagnostico de la orden resuelve DESPUES del primer
+    // render, y `defaultOpen` solo se evalua una vez, al montar -- abrirla a
+    // mano es lo que haria un usuario real antes de esperar el valor.
+    abrirSeccionInforme()
 
     await waitFor(() => {
       expect(screen.getByLabelText("Diagnóstico del informe técnico")).toHaveValue(
@@ -328,6 +402,9 @@ describe("CotizacionForm — seccion Informe técnico", () => {
         diagnosticoTecnico: "",
       },
     })
+    // Vacio ("") es falsy: la seccion arranca colapsada igual que un
+    // documento nuevo, aunque el campo ya exista en `initialData`.
+    abrirSeccionInforme()
 
     expect(
       (fetchMock as any).mock.calls.some(([url]: [string]) =>
