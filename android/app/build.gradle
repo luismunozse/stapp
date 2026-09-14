@@ -9,6 +9,18 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
+// Versión del build. Play rechaza un AAB cuyo versionCode ya exista, así que hay
+// que subirlo en cada release. Se puede overridear sin tocar este archivo:
+//   ./gradlew bundleRelease -PstappVersionCode=2 -PstappVersionName=1.1.0
+//   STAPP_VERSION_CODE=2 STAPP_VERSION_NAME=1.1.0 ./gradlew bundleRelease
+// versionName es el string que ve el usuario en la ficha de Play.
+def stappVersionCode = (project.findProperty('stappVersionCode')
+        ?: System.getenv('STAPP_VERSION_CODE')
+        ?: '1') as Integer
+def stappVersionName = (project.findProperty('stappVersionName')
+        ?: System.getenv('STAPP_VERSION_NAME')
+        ?: '1.0.0') as String
+
 android {
     namespace = "ar.com.stapp.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,8 +28,8 @@ android {
         applicationId "ar.com.stapp.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode stappVersionCode
+        versionName stappVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

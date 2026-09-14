@@ -21,6 +21,7 @@
     "test:e2e:install:all": "playwright install --with-deps chromium firefox",
     "pdf:smoke": "node scripts/pdf-smoke.mjs",
     "cap:sync": "npx cap sync",
+    "cap:assets": "capacitor-assets generate --android",
     "cap:open:android": "npx cap open android",
     "cap:build:apk": "cd android && gradlew assembleDebug",
     "cap:build:aab": "npx cap sync && cd android && gradlew bundleRelease",
@@ -66,6 +67,7 @@
     "date-fns": "^3.6.0",
     "driver.js": "^1.4.0",
     "exceljs": "^4.4.0",
+    "firebase-admin": "^13.10.0",
     "framer-motion": "^12.30.0",
     "fuse.js": "^7.3.0",
     "html2canvas": "^1.4.1",
@@ -99,6 +101,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@playwright/test": "^1.58.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",
