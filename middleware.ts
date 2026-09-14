@@ -45,6 +45,10 @@ const RESERVED_SUBDOMAINS = new Set([
   "www",
   "api",
   "app",
+  // Variante que se tipea por error buscando el panel, que vive en "admin".
+  // Sin esto cae en el CASO 4 como slug de tenant y termina en
+  // /tenant-not-found en vez de rebotar a la landing.
+  "superadmin",
   "dashboard",
   "mail",
   "email",

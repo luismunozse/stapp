@@ -17,6 +17,7 @@ export const RESERVED_SUBDOMAINS = new Set([
   "api",
   "app",
   "admin",
+  "superadmin",
   "dashboard",
   "mail",
   "email",
