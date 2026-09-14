@@ -53,7 +53,16 @@ function computeEstado(row: CredRow | null): string {
 function cuitDeLaPlataforma(): string | null {
   try {
     return getCertificadoStapp().cuit
-  } catch {
+  } catch (e) {
+    // Se loguea el motivo SIEMPRE. Devolver null en silencio deja la pantalla
+    // diciendo "no esta disponible" sin ninguna forma de saber si falta una
+    // variable, si el base64 esta mal, o si el par cert/clave no valida:
+    // `ArcaStappCertError` ya trae el detalle, tirarlo a la basura convierte
+    // un problema de 30 segundos en una investigacion.
+    console.error(
+      "[facturacion] certificado de plataforma no disponible:",
+      e instanceof Error ? e.message : e
+    )
     return null
   }
 }
