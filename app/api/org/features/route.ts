@@ -11,7 +11,7 @@ export async function GET() {
 
     const { data, error: readError } = await supabaseAdmin
       .from("organizations")
-      .select("modulo_agenda, vendedores_administran_inventario, tecnicos_operan_pos, vendedores_manejan_caja, tecnicos_cobran_cotizaciones")
+      .select("modulo_agenda, vendedores_administran_inventario, tecnicos_operan_pos, vendedores_manejan_caja, tecnicos_cobran_cotizaciones, vendedores_ven_ingresos")
       .eq("id", organizationId!)
       .single()
 
@@ -67,6 +67,9 @@ export async function GET() {
         tecnicosOperanPos: !!data?.tecnicos_operan_pos,
         vendedoresManejanCaja: !!data?.vendedores_manejan_caja,
         tecnicosCobranCotizaciones: !!data?.tecnicos_cobran_cotizaciones,
+        // Default TRUE, al reves que los demas: este permiso QUITA algo que
+        // todos tienen. Sin fila o sin columna, el vendedor sigue viendo.
+        vendedoresVenIngresos: data?.vendedores_ven_ingresos !== false,
       },
       {
         headers: {

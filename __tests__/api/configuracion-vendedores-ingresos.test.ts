@@ -1,16 +1,15 @@
 // @vitest-environment node
 /**
- * Toggle `tecnicos_cobran_cotizaciones` (migración 322) en /api/configuracion.
+ * Toggle `vendedores_ven_ingresos` (migración 326) en /api/configuracion.
  *
- * Gemelo del de `tecnicos_operan_pos` (314), del de `vendedores_manejan_caja`
- * (320) y del de `vendedores_administran_inventario` (275): preferencia de la
- * organización, opt-in, default apagado, y solo el ADMIN lo mueve — GET/PUT de
- * esta ruta van por requireAdmin().
+ * Va AL REVÉS que sus hermanos (275, 314, 320, 322): nace PRENDIDO, porque
+ * quita algo que el vendedor ya tiene en vez de agregar algo que nadie tenía.
+ * Todo lo que se fija acá sale de esa inversión.
  *
- * Incluye la degradación con la migración sin aplicar: en este proyecto las
- * migraciones se corren A MANO y después del merge, así que siempre hay una
- * ventana con el deploy adelante de su columna. Ahí guardar el resto de la
- * configuración NO puede fallar por este campo.
+ * Incluye la degradación con la migración sin aplicar: acá las migraciones se
+ * corren A MANO y después del merge, así que siempre hay una ventana con el
+ * deploy adelante de su columna. Ahí guardar el resto de la configuración NO
+ * puede fallar por este campo.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { mockAuthSuccess, mockSupabaseFrom, createChainMock, parseResponse } from "./helpers"
@@ -51,12 +50,12 @@ function chainSinColumna(fila: Record<string, any>) {
     return chain
   }) as any
   chain.single = vi.fn(async () =>
-    ultimoSelect.includes("tecnicos_cobran_cotizaciones")
+    ultimoSelect.includes("vendedores_ven_ingresos")
       ? {
           data: null,
           error: {
             code: "42703",
-            message: "column organizations.tecnicos_cobran_cotizaciones does not exist",
+            message: "column organizations.vendedores_ven_ingresos does not exist",
           },
         }
       : { data: fila, error: null },
@@ -64,20 +63,20 @@ function chainSinColumna(fila: Record<string, any>) {
   return chain
 }
 
-describe("/api/configuracion — permiso de cobro de cotizaciones para técnicos", () => {
+describe("/api/configuracion — permiso de ingresos para vendedores", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
   })
 
   it("GET devuelve el flag prendido", async () => {
-    mockSupabaseFrom({ organizations: createChainMock(orgRow({ tecnicos_cobran_cotizaciones: true })) })
+    mockSupabaseFrom({ organizations: createChainMock(orgRow({ vendedores_ven_ingresos: true })) })
 
     const { GET } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse((await GET()) as Response)
 
     expect(status).toBe(200)
-    expect(body.tecnicosCobranCotizaciones).toBe(true)
+    expect(body.vendedoresVenIngresos).toBe(true)
   })
 
   it("GET con la migración sin aplicar degrada SOLO el flag: no se lleva puesta la config", async () => {
@@ -108,11 +107,13 @@ describe("/api/configuracion — permiso de cobro de cotizaciones para técnicos
     const { status, body } = await parseResponse((await GET()) as Response)
 
     expect(status).toBe(200)
-    expect(body.tecnicosCobranCotizaciones).toBe(false)
+    // Sin la columna el vendedor SIGUE VIENDO. Un false acá le sacaría los
+    // reportes a todos los vendedores por una migración que no corrió.
+    expect(body.vendedoresVenIngresos).toBe(true)
 
     // Exactamente dos intentos: el flag es su propio escalón y el segundo ya
     // acierta. Tres o más significa que arrastró a otra migración con él.
-    expect(chain.single).toHaveBeenCalledTimes(3)
+    expect(chain.single).toHaveBeenCalledTimes(2)
 
     // Y nada de lo que sí existe se perdió en el camino.
     expect(body.tecnicosOperanPos).toBe(true)
@@ -126,18 +127,18 @@ describe("/api/configuracion — permiso de cobro de cotizaciones para técnicos
   })
 
   it("PUT lo persiste", async () => {
-    const chain = createChainMock(orgRow({ tecnicos_cobran_cotizaciones: true }))
+    const chain = createChainMock(orgRow({ vendedores_ven_ingresos: true }))
     mockSupabaseFrom({ organizations: chain })
 
     const { PUT } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse(
-      (await PUT(putRequest({ tecnicosCobranCotizaciones: true }))) as Response,
+      (await PUT(putRequest({ vendedoresVenIngresos: true }))) as Response,
     )
 
     expect(status).toBe(200)
-    expect(body.tecnicosCobranCotizaciones).toBe(true)
+    expect(body.vendedoresVenIngresos).toBe(true)
     expect(chain.update).toHaveBeenCalledWith(
-      expect.objectContaining({ tecnicos_cobran_cotizaciones: true }),
+      expect.objectContaining({ vendedores_ven_ingresos: true }),
     )
   })
 
@@ -154,7 +155,7 @@ describe("/api/configuracion — permiso de cobro de cotizaciones para técnicos
     const { PUT } = await import("@/app/api/configuracion/route")
     const res = await PUT(
       putRequest({
-        tecnicosCobranCotizaciones: true,
+        vendedoresVenIngresos: true,
         ivaRegimen: "ADITIVO",
         vendedoresAdministranInventario: true,
         tecnicosOperanPos: true,
@@ -166,22 +167,22 @@ describe("/api/configuracion — permiso de cobro de cotizaciones para técnicos
 
     // El único campo que se cae es el que no tiene columna.
     const escrito = chain.update.mock.calls.at(-1)![0]
-    expect(escrito).not.toHaveProperty("tecnicos_cobran_cotizaciones")
+    expect(escrito).not.toHaveProperty("vendedores_ven_ingresos")
     expect(escrito.iva_regimen).toBe("ADITIVO")
     expect(escrito.vendedores_administran_inventario).toBe(true)
     expect(escrito.tecnicos_operan_pos).toBe(true)
     expect(escrito.vendedores_manejan_caja).toBe(true)
   })
 
-  it("PUT lo apaga cuando llega en false: es un toggle, no un set-once", async () => {
-    const chain = createChainMock(orgRow({ tecnicos_cobran_cotizaciones: false }))
+  it("PUT lo apaga cuando llega en false: apagarlo es justamente el caso de uso", async () => {
+    const chain = createChainMock(orgRow({ vendedores_ven_ingresos: false }))
     mockSupabaseFrom({ organizations: chain })
 
     const { PUT } = await import("@/app/api/configuracion/route")
-    await PUT(putRequest({ tecnicosCobranCotizaciones: false }))
+    await PUT(putRequest({ vendedoresVenIngresos: false }))
 
     expect(chain.update).toHaveBeenCalledWith(
-      expect.objectContaining({ tecnicos_cobran_cotizaciones: false }),
+      expect.objectContaining({ vendedores_ven_ingresos: false }),
     )
   })
 
@@ -190,14 +191,14 @@ describe("/api/configuracion — permiso de cobro de cotizaciones para técnicos
     // SELECT. Si el flag no viaja en ella, la pantalla de configuración
     // muestra el toggle apagado aunque en la DB esté prendido, y el siguiente
     // guardado lo apaga de verdad.
-    const chain = createChainMock(orgRow({ tecnicos_cobran_cotizaciones: true }))
+    const chain = createChainMock(orgRow({ vendedores_ven_ingresos: true }))
     mockSupabaseFrom({ organizations: chain })
 
     const { PUT } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse((await PUT(putRequest({}))) as Response)
 
     expect(status).toBe(200)
-    expect(body.tecnicosCobranCotizaciones).toBe(true)
+    expect(body.vendedoresVenIngresos).toBe(true)
     expect(chain.update).not.toHaveBeenCalled()
   })
 })
