@@ -9,7 +9,7 @@ import QRCode from "qrcode"
 import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
 import { MONO, TYPE, RULE_WIDTH, drawRule, drawSectionLabel, drawOutlinedBadge, measureBadgeWidth } from "@/lib/pdf-style"
 import { ESTADO_FLOW, ESTADOS_COMPLETADOS, MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
-import { esInforme, VEREDICTO_LABELS, CAUSA_DANO_LABELS, type Veredicto, type CausaDano } from "@/lib/cotizacion-informe"
+import { esInforme, tieneDictamenTecnico, VEREDICTO_LABELS, CAUSA_DANO_LABELS, type Veredicto, type CausaDano } from "@/lib/cotizacion-informe"
 
 // Compatibilidad: algunos bundlers ponen el default dentro de .default
 const fontkit = (fontkitModule as any).default || fontkitModule
@@ -467,7 +467,14 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
   // ====== DICTAMEN TÉCNICO ======
   // Va antes de la tabla porque en un informe es el cuerpo del documento, y en
   // un presupuesto con dictamen es el encabezado del detalle.
-  const tieneDictamen = !!data.veredicto
+  // tieneDictamen mira veredicto, diagnostico Y causa (no solo veredicto): una
+  // cotizacion comun con solo diagnostico o solo causa cargados, sin veredicto
+  // ni entidad, tiene que imprimir el bloque igual (ver tieneDictamenTecnico).
+  const tieneDictamen = tieneDictamenTecnico({
+    veredicto: data.veredicto,
+    diagnosticoTecnico: data.diagnosticoTecnico,
+    causaDano: data.causaDano,
+  })
   if (tieneDictamen || data.presentadoAnte) {
     // Etiquetas en castellano: fuente unica en lib/cotizacion-informe para no
     // divergir de lo que ve el taller (cotizacion-form.tsx) ni de lo que lee

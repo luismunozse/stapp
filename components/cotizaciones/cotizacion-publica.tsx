@@ -25,7 +25,7 @@ import {
 } from "lucide-react"
 import { formatCurrencyValue, type CurrencyCode } from "@/lib/currency"
 import { formatDateValue, dateNumberInTimeZone } from "@/lib/timezone"
-import { esInforme, VEREDICTO_LABELS, CAUSA_DANO_LABELS, type Veredicto, type CausaDano } from "@/lib/cotizacion-informe"
+import { esInforme, tieneDictamenTecnico, VEREDICTO_LABELS, CAUSA_DANO_LABELS, type Veredicto, type CausaDano } from "@/lib/cotizacion-informe"
 
 interface CotizacionData {
   id: string
@@ -265,9 +265,15 @@ export function CotizacionPublica({ token }: { token: string }) {
   // usar. Un informe no se aprueba ni se rechaza: se emite.
   const esInformeTecnico = esInforme({ cantidadItems: data.items.length, veredicto: data.veredicto })
   // El dictamen puede aparecer aunque el documento no sea un informe (p.ej.
-  // REPARABLE con items, o solo la entidad cargada): mismo criterio que
-  // lib/pdf.ts para que la web y el PDF muestren lo mismo.
-  const tieneDictamen = !!data.veredicto || !!data.presentadoAnte
+  // REPARABLE con items, o solo el diagnostico/causa/entidad cargados): mismo
+  // criterio que lib/pdf.ts (tieneDictamenTecnico) para que la web y el PDF
+  // muestren lo mismo.
+  const tieneDictamen =
+    tieneDictamenTecnico({
+      veredicto: data.veredicto,
+      diagnosticoTecnico: data.diagnosticoTecnico,
+      causaDano: data.causaDano,
+    }) || !!data.presentadoAnte
 
   // Calculate global discount amount for display
   const itemsSubtotal = data.items.reduce((sum, i) => sum + i.subtotal, 0)
@@ -565,7 +571,13 @@ export function CotizacionPublica({ token }: { token: string }) {
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2">
               <ClipboardCheck className="h-5 w-5" />
-              {data.veredicto ? "Dictamen técnico" : "Presentación"}
+              {tieneDictamenTecnico({
+                veredicto: data.veredicto,
+                diagnosticoTecnico: data.diagnosticoTecnico,
+                causaDano: data.causaDano,
+              })
+                ? "Dictamen técnico"
+                : "Presentación"}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm space-y-3">

@@ -61,6 +61,23 @@ export function esInforme(datos: DatosInforme): boolean {
 }
 
 /**
+ * Hay contenido de dictamen tecnico para mostrar cuando el veredicto, el
+ * diagnostico O la causa del daño estan cargados -- cualquiera de los tres,
+ * no solo el veredicto. Antes lib/pdf.ts y cotizacion-publica.tsx miraban
+ * unicamente `veredicto`, asi que una cotizacion comun con SOLO diagnostico o
+ * SOLO causa (sin veredicto ni entidad) quedaba guardada pero invisible en el
+ * PDF y en el link publico. Fuente unica para que ambos lugares no puedan
+ * volver a divergir.
+ */
+export function tieneDictamenTecnico(datos: {
+  veredicto?: string | null
+  diagnosticoTecnico?: string | null
+  causaDano?: string | null
+}): boolean {
+  return !!datos.veredicto || !!datos.diagnosticoTecnico || !!datos.causaDano
+}
+
+/**
  * Devuelve el mensaje a mostrarle al taller, o null si el documento es valido.
  *
  * Es una funcion pura y no un refine de Zod porque el PUT valida DESPUES de
