@@ -131,6 +131,14 @@ export async function POST(
       .update({
         estado: nuevoEstado,
         fecha_entrega: new Date().toISOString(),
+        // fecha_completado es la fecha de devengo contable (reportes de
+        // resultados, comisiones). Se escribe acá porque las tres transiciones
+        // ENTREGADO* pueden alcanzarse sin pasar por REPARADO (p. ej.
+        // SIN_FALLA_DETECTADA -> ENTREGADO), que es el único otro lugar del
+        // repo que la setea (app/api/ordenes/[id]/route.ts). Condicional para
+        // no pisar el devengo original de una orden reparada en un mes y
+        // entregada en otro (reingreso).
+        ...(!orden.fecha_completado ? { fecha_completado: new Date().toISOString() } : {}),
         ...(costoFinalConfirmado !== null ? { costo_final: costoFinalConfirmado } : {}),
         firma_cliente_entrega: data.firmaClienteEntrega || null,
         firma_cliente_entrega_mime: data.firmaClienteMime || null,
