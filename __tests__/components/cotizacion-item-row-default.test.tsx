@@ -93,8 +93,32 @@ describe("ItemRow — default de la fila nueva", () => {
     expect(screen.queryAllByPlaceholderText("Descripción del item")).toHaveLength(0)
   })
 
-  it("un mousedown genuinamente afuera de los dos layouts si cierra el buscador", () => {
+  // Fix round 2: el buscador de una fila fresca arranca abierto por DEFAULT,
+  // sin que el usuario haya tocado nada todavia. El click-afuera solo tiene
+  // que cerrar una busqueda que el usuario abrio A PROPOSITO (icono Package);
+  // cerrar tambien el default rompia la primera fila de un formulario nuevo,
+  // que se volvia texto libre apenas el usuario clickeaba CUALQUIER otra cosa
+  // de la pantalla (el selector de cliente, por ejemplo) antes de haber
+  // tocado siquiera el buscador.
+  it("un mousedown afuera NO cierra el buscador default de una fila fresca sin tocar", () => {
     renderItemRow({ ...baseItem })
+
+    fireEvent.mouseDown(document.body)
+
+    // Sigue abierto: el estado default no cuenta como "abierto a proposito".
+    expect(screen.getAllByPlaceholderText("Buscar producto o servicio...").length).toBeGreaterThan(0)
+    expect(screen.queryAllByPlaceholderText("Descripción del item")).toHaveLength(0)
+  })
+
+  it("un mousedown afuera SI cierra el buscador que el usuario abrio a proposito con el icono Package", () => {
+    renderItemRow({ ...baseItem })
+
+    // Cierra el default con "Escribir a mano" y lo reabre con el icono: esa
+    // reapertura es la accion deliberada que la correccion distingue del
+    // default sin tocar.
+    fireEvent.click(screen.getAllByRole("button", { name: "Escribir a mano" })[0])
+    fireEvent.click(screen.getAllByTitle("Buscar producto o servicio")[0])
+    expect(screen.getAllByPlaceholderText("Buscar producto o servicio...").length).toBeGreaterThan(0)
 
     fireEvent.mouseDown(document.body)
 
