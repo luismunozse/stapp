@@ -31,6 +31,18 @@ const nextConfig = {
       },
     ],
   },
+  async rewrites() {
+    return [
+      // Digital Asset Links (App Links de Android). Google exige el archivo en
+      // /.well-known/assetlinks.json y sin redirects. El handler vive bajo
+      // /api/public para caer en las rutas que el middleware ya trata como
+      // públicas; el rewrite conserva la URL que verifica Android.
+      {
+        source: '/.well-known/assetlinks.json',
+        destination: '/api/public/assetlinks',
+      },
+    ]
+  },
   // EN → ES redirects para rutas intuitivas del superadmin
   async redirects() {
     return [
