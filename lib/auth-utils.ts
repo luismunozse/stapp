@@ -295,7 +295,7 @@ export async function requireCotizacionCobroAccess() {
 // hasCajaAccess: aquéllas preguntan "¿la org habilitó esto?" sobre algo que
 // nadie tenía. Ésta pregunta "¿la org NO lo deshabilitó?" sobre algo que todos
 // tienen. Por eso el parámetro se llama `habilitado` y llega en true por
-// default, y por eso la columna de la 325 es DEFAULT true.
+// default, y por eso la columna de la 326 es DEFAULT true.
 //
 // El TECNICO queda afuera igual: el middleware no lo deja entrar a /reportes,
 // así que acá no hay nada que decidir para él.

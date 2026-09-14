@@ -167,7 +167,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
       // GET is a pure SELECT (no .update()): a real PostgREST/Postgres
       // missing-column error here is 42703, not PGRST204 — PGRST204 only
       // fires for write payloads naming an unknown column.
-      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 325, permiso de ingresos
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_manejan_caja does not exist" } }) // permiso de caja
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_operan_pos does not exist" } }) // 314
@@ -217,7 +217,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     const chain = createChainMock()
     chain.single = vi
       .fn()
-      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 325, permiso de ingresos
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_manejan_caja does not exist" } }) // permiso de caja
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_operan_pos does not exist" } }) // 314
@@ -268,7 +268,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     const chain = createChainMock()
     chain.single = vi
       .fn()
-      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 325, permiso de ingresos
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_manejan_caja does not exist" } }) // permiso de caja
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_operan_pos does not exist" } }) // 314
@@ -441,7 +441,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
       // Here the write PAYLOAD itself names cuit (an unknown column), so
       // this one genuinely gets PGRST204 from PostgREST's schema-cache
       // precheck — unlike the SELECT-only sites above/below.
-      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 325, permiso de ingresos
+      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_manejan_caja does not exist" } }) // permiso de caja
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_operan_pos does not exist" } }) // 314
@@ -489,7 +489,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     })
     chain.single = vi
       .fn()
-      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 325, permiso de ingresos
+      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_manejan_caja does not exist" } }) // permiso de caja
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_operan_pos does not exist" } }) // 314
@@ -533,7 +533,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     })
     chain.single = vi
       .fn()
-      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 325, permiso de ingresos
+      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_manejan_caja does not exist" } }) // permiso de caja
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_operan_pos does not exist" } }) // 314
@@ -630,7 +630,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     const chain = createChainMock()
     chain.single = vi
       .fn()
-      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 325, permiso de ingresos
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_manejan_caja does not exist" } }) // permiso de caja
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_operan_pos does not exist" } }) // 314
@@ -689,7 +689,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     chain.single = vi
       .fn()
       // No-op branch is a pure SELECT too (no .update()): real error is 42703.
-      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 325, permiso de ingresos
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_manejan_caja does not exist" } }) // permiso de caja
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_operan_pos does not exist" } }) // 314
@@ -731,7 +731,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     const chain = createChainMock()
     chain.single = vi
       .fn()
-      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 325, permiso de ingresos
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_manejan_caja does not exist" } }) // permiso de caja
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_operan_pos does not exist" } }) // 314
@@ -766,7 +766,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     const chain = createChainMock()
     chain.single = vi
       .fn()
-      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 325, permiso de ingresos
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_manejan_caja does not exist" } }) // permiso de caja
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_operan_pos does not exist" } }) // 314
@@ -827,7 +827,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     })
     chain.single = vi
       .fn()
-      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 325, permiso de ingresos
+      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_manejan_caja does not exist" } }) // permiso de caja
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_operan_pos does not exist" } }) // 314
@@ -869,7 +869,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     })
     chain.single = vi
       .fn()
-      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 325, permiso de ingresos
+      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_manejan_caja does not exist" } }) // permiso de caja
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_operan_pos does not exist" } }) // 314
@@ -912,7 +912,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     })
     chain.single = vi
       .fn()
-      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 325, permiso de ingresos
+      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_manejan_caja does not exist" } }) // permiso de caja
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_operan_pos does not exist" } }) // 314

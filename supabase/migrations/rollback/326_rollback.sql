@@ -1,4 +1,4 @@
--- Rollback de la migracion 325.
+-- Rollback de la migracion 326.
 --
 -- Saca la columna. Toda organizacion que lo hubiera APAGADO vuelve a mostrarle
 -- los reportes de ingresos a sus vendedores.

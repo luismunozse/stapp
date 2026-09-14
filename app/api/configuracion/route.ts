@@ -85,7 +85,7 @@ export async function GET() {
     // los tumbaria a todos, dejando al admin con la configuracion mutilada y
     // un guardado que la pisa.
     const cotizacionCobroSelect = `${cajaSelect}, tecnicos_cobran_cotizaciones`
-    // Permiso de ingresos para vendedores (migracion 325). Escalon propio y
+    // Permiso de ingresos para vendedores (migracion 326). Escalon propio y
     // arriba de todo, por el mismo motivo que los de abajo.
     const ingresosSelect = `${cotizacionCobroSelect}, vendedores_ven_ingresos`
 
@@ -96,7 +96,7 @@ export async function GET() {
       .single()
 
     if (isMissingColumnError(result.error)) {
-      // Migracion 325 no aplicada todavia: reintentar sin el permiso de
+      // Migracion 326 no aplicada todavia: reintentar sin el permiso de
       // ingresos, conservando todo lo demas.
       result = await supabaseAdmin
         .from("organizations")
@@ -538,7 +538,7 @@ export async function PUT(request: Request) {
     // demas se construyen encima de `selectCols`, asi que una columna metida
     // ahi viaja en TODOS y su 42703 los tumba a todos.
     const selectColsCotizacionCobro = selectColsCaja + ", tecnicos_cobran_cotizaciones"
-    // Permiso de ingresos (325). Escalon propio y arriba de todo.
+    // Permiso de ingresos (326). Escalon propio y arriba de todo.
     const selectColsIngresos = selectColsCotizacionCobro + ", vendedores_ven_ingresos"
 
     // Solo actualizar si hay cambios
@@ -554,7 +554,7 @@ export async function PUT(request: Request) {
         .eq("id", organizationId!)
         .single()
       if (isMissingColumnError(selectError)) {
-        // Migracion 325 no aplicada: reintentar sin el permiso de ingresos.
+        // Migracion 326 no aplicada: reintentar sin el permiso de ingresos.
         ;({ data, error: selectError } = await supabaseAdmin
           .from("organizations")
           .select(selectColsCotizacionCobro)
@@ -673,7 +673,7 @@ export async function PUT(request: Request) {
       .single()
 
     if (isMissingColumnError(result2.error)) {
-      // Migracion 325 no aplicada todavia: reintentar sin el permiso de
+      // Migracion 326 no aplicada todavia: reintentar sin el permiso de
       // ingresos, conservando el resto de updateData.
       delete updateData.vendedores_ven_ingresos
       result2 = await supabaseAdmin
@@ -790,7 +790,7 @@ export async function PUT(request: Request) {
       delete updateData.vendedores_manejan_caja
       // Strip tecnico cotizacion-cobro flag (migration 322) in case it doesn't exist yet
       delete updateData.tecnicos_cobran_cotizaciones
-      // Strip vendedor ingresos flag (migration 325) in case it doesn't exist yet
+      // Strip vendedor ingresos flag (migration 326) in case it doesn't exist yet
       delete updateData.vendedores_ven_ingresos
       // Strip facturacion electronica flag (migration 296) in case it doesn't exist yet
       delete updateData.facturacion_electronica_habilitada

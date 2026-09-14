@@ -1,5 +1,5 @@
 -- ============================================================================
--- 325: permiso para que los VENDEDORES vean los ingresos del taller
+-- 326: permiso para que los VENDEDORES vean los ingresos del taller
 -- ============================================================================
 -- Preferencia por organizacion, como la 275, 314, 320 y 322. Pero al reves que
 -- todas ellas, y conviene entender por que antes de copiar el patron:

@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * Toggle `vendedores_ven_ingresos` (migración 325) en /api/configuracion.
+ * Toggle `vendedores_ven_ingresos` (migración 326) en /api/configuracion.
  *
  * Va AL REVÉS que sus hermanos (275, 314, 320, 322): nace PRENDIDO, porque
  * quita algo que el vendedor ya tiene en vez de agregar algo que nadie tenía.

@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * Permiso `vendedores_ven_ingresos` (migración 325) sobre los reportes de
+ * Permiso `vendedores_ven_ingresos` (migración 326) sobre los reportes de
  * ingresos.
  *
  * Es el primero de los permisos por organización que va al revés: los otros
@@ -69,7 +69,7 @@ describe("reportes de ingresos — permiso del vendedor", () => {
     expect(status).not.toBe(403)
   })
 
-  it("con la migración 325 sin aplicar el VENDEDOR SIGUE VIENDO (fail-open)", async () => {
+  it("con la migración 326 sin aplicar el VENDEDOR SIGUE VIENDO (fail-open)", async () => {
     // El punto entero de la inversión. Los otros permisos son fail-closed
     // porque negar deja las cosas como estaban; acá negar le sacaría los
     // reportes a todos los vendedores de todas las organizaciones por una

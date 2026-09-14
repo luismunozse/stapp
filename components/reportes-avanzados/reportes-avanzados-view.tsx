@@ -84,7 +84,7 @@ export function ReportesAvanzadosView() {
   const [activeTab, setActiveTab] = useState("tecnicos")
 
   // "Clientes" es Top clientes: cuánto gastó cada uno. Un taller puede apagarle
-  // eso al vendedor con `vendedores_ven_ingresos` (migración 325). El flag vive
+  // eso al vendedor con `vendedores_ven_ingresos` (migración 326). El flag vive
   // en la BD, así que hay que ir a buscarlo; para el ADMIN no hay nada que
   // preguntar y no paga el fetch. El TECNICO no llega acá: lo frena el
   // middleware.
