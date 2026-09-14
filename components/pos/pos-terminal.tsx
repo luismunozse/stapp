@@ -534,12 +534,18 @@ export function PosTerminal() {
     try {
       // Logo es opcional y nunca debe bloquear la impresión: imageUrlToRaster
       // ya degrada a null silenciosamente ante cualquier falla (fetch, CORS,
-      // rasterizado).
+      // rasterizado), pero igual se envuelve en su propio try/catch por si
+      // alguna vez rechaza — un logo faltante nunca debe frenar la venta.
       let logoRaster: Uint8Array | null = null
       if (ventaData.organizationLogoUrl) {
-        logoRaster = await imageUrlToRaster(ventaData.organizationLogoUrl, {
-          maxWidth: anchoLogoDots(printerWidth),
-        })
+        try {
+          logoRaster = await imageUrlToRaster(ventaData.organizationLogoUrl, {
+            maxWidth: anchoLogoDots(printerWidth),
+          })
+        } catch (err) {
+          console.error("Logo raster error:", err)
+          logoRaster = null
+        }
       }
       const ticketData = {
         numeroVenta: ventaData.numeroVenta,
@@ -584,36 +590,52 @@ export function PosTerminal() {
 
   // --- Print ticket via browser print dialog (fallback when no USB printer) ---
   const printTicketHTML = useCallback(async (ventaData: any) => {
+    // Abrir la ventana ANTES de cualquier await: los navegadores que exigen
+    // activación de usuario para window.open (Safari/WebKit siempre, Chrome
+    // sólo dentro de su ventana corta de "transient activation") bloquean el
+    // popup si se abre después de un await. Este es el fallback para quien
+    // NO tiene impresora USB conectada — justo la población de iPad/iPhone
+    // que más depende de este camino.
+    const printWindow = window.open("", "_blank", "width=320,height=600")
+    if (!printWindow) {
+      await showError("No se pudo abrir la ventana de impresión. Verificá que el navegador no esté bloqueando ventanas emergentes.")
+      return
+    }
+
     // Pre-binarizar el logo a un data URL: el driver de impresión recibe
     // blanco/negro puro (sin grises que se pierdan) y evita depender de que
     // el navegador pueda cargar una imagen cross-origin dentro del iframe.
+    // Nunca debe bloquear la impresión: si el helper llegara a rechazar se
+    // degrada a "sin logo", igual que cuando resuelve null.
     let logoDataUrl: string | null = null
     if (ventaData.organizationLogoUrl) {
-      logoDataUrl = await imageUrlToBinarizedDataUrl(ventaData.organizationLogoUrl, {
-        maxWidth: anchoLogoDots(printerWidth),
-      })
+      try {
+        logoDataUrl = await imageUrlToBinarizedDataUrl(ventaData.organizationLogoUrl, {
+          maxWidth: anchoLogoDots(printerWidth),
+        })
+      } catch (err) {
+        console.error("Logo data URL error:", err)
+        logoDataUrl = null
+      }
     }
     const html = buildTicketHTML(ventaData, { timezone, printerWidth, formatPrice, logoDataUrl })
 
-    const printWindow = window.open("", "_blank", "width=320,height=600")
-    if (printWindow) {
-      printWindow.document.write(html)
-      printWindow.document.close()
+    printWindow.document.write(html)
+    printWindow.document.close()
 
-      const doc = printWindow.document
-      const triggerPrint = async () => {
-        try { await doc.fonts.ready } catch { /* fall back to current metrics */ }
-        fitPrintPageToContent(doc, doc.body, printerWidth)
-        printWindow.focus()
-        printWindow.print()
-      }
-      if (doc.readyState === "complete") {
-        void triggerPrint()
-      } else {
-        printWindow.onload = () => { void triggerPrint() }
-      }
+    const doc = printWindow.document
+    const triggerPrint = async () => {
+      try { await doc.fonts.ready } catch { /* fall back to current metrics */ }
+      fitPrintPageToContent(doc, doc.body, printerWidth)
+      printWindow.focus()
+      printWindow.print()
     }
-  }, [timezone, printerWidth, formatPrice])
+    if (doc.readyState === "complete") {
+      void triggerPrint()
+    } else {
+      printWindow.onload = () => { void triggerPrint() }
+    }
+  }, [timezone, printerWidth, formatPrice, showError])
 
   // --- Checkout ---
   const handleCheckoutComplete = useCallback(async (ventaData: any) => {
@@ -682,14 +704,27 @@ export function PosTerminal() {
   // PDF del comprobante A4 (mismo endpoint que usa venta-detail.tsx)
   const handleDownloadVentaPdf = useCallback(async () => {
     if (!successData?.id) return
+    // Igual que printTicketHTML: abrir la pestaña ANTES de cualquier await,
+    // si no Safari/WebKit (y Chrome fuera de su ventana de activación)
+    // bloquean el popup en silencio.
+    const pdfWindow = window.open("", "_blank")
+    if (!pdfWindow) {
+      await showError("No se pudo abrir el PDF: verificá que el navegador no esté bloqueando ventanas emergentes.")
+      return
+    }
     setDownloadingPdf(true)
     try {
       const res = await fetch(`/api/ventas/${successData.id}/pdf`)
       if (!res.ok) throw new Error("Error al generar PDF")
       const blob = await res.blob()
       const url = window.URL.createObjectURL(blob)
-      window.open(url, "_blank")
+      pdfWindow.location.href = url
+      // Revocar recién después de darle tiempo a la pestaña de cargar el
+      // blob: revocar apenas se asigna puede ganarle a la navegación en
+      // algunos navegadores.
+      setTimeout(() => window.URL.revokeObjectURL(url), 60_000)
     } catch {
+      pdfWindow.close()
       await showError("No se pudo abrir el PDF del comprobante")
     } finally {
       setDownloadingPdf(false)
