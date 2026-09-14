@@ -56,10 +56,22 @@
 --                                    el flag comision_aplica_sin_reparacion
 --                                    para ENTREGADO_SIN_REPARACION (mismo gate
 --                                    que estado-resultados/route.ts:178).
+--                                    Ademas exige estado_cobro = 'COBRADO',
+--                                    que es lo que filtra la pantalla real
+--                                    (comisiones/route.ts:57; ver migracion 277,
+--                                    que documenta ese filtro como load-bearing).
+--                                    Sin ese gate una orden entregada a fiado
+--                                    —flujo normal, entregar/route.ts la carga a
+--                                    cuenta corriente— inflaba este numero: no
+--                                    aparece en comisiones hasta que se cobre.
 --         comision_no_reconocida    suma de esas comisiones (ganancia * pct/100,
 --                                    mismo calculo que v_comisiones_ordenes).
 --
 --   [3] Total general (todas las organizaciones), para el titular del reporte.
+--
+--   [4] Desglose por tecnico: es el corte que hace falta para decidir a quien
+--       se le paga retroactivo. El resumen por organizacion dice cuanta plata
+--       hay en juego, pero no a nombre de quien.
 -- ============================================================================
 
 -- [1] Listado detallado.
@@ -72,6 +84,7 @@ SELECT
   o.estado,
   o.tecnico_id,
   o.costo_final,
+  o.estado_cobro,
   o.fecha_ingreso,
   o.fecha_entrega
 FROM ordenes_servicio o
@@ -88,6 +101,7 @@ WITH afectadas AS (
     o.estado,
     o.tecnico_id,
     o.costo_final,
+    o.estado_cobro,
     o.porcentaje_comision,
     COALESCE((
       SELECT SUM(r.cantidad * r.precio_unitario)
@@ -113,6 +127,7 @@ SELECT
       AND COALESCE(a.costo_final, 0) > 0
       AND COALESCE(a.porcentaje_comision, 0) > 0
       AND a.estado <> 'ENTREGADO_SIN_COBRO'
+      AND a.estado_cobro = 'COBRADO'
       AND (a.estado <> 'ENTREGADO_SIN_REPARACION' OR COALESCE(org.comision_aplica_sin_reparacion, false))
   )                                                                     AS filas_comision_afectadas,
   ROUND(SUM(
@@ -122,8 +137,20 @@ SELECT
       AND COALESCE(a.costo_final, 0) > 0
       AND COALESCE(a.porcentaje_comision, 0) > 0
       AND a.estado <> 'ENTREGADO_SIN_COBRO'
+      AND a.estado_cobro = 'COBRADO'
       AND (a.estado <> 'ENTREGADO_SIN_REPARACION' OR COALESCE(org.comision_aplica_sin_reparacion, false))
-  ), 2)                                                                 AS comision_no_reconocida
+  ), 2)                                                                 AS comision_no_reconocida,
+  -- Las que YA estan entregadas pero todavia no cobradas: no generan comision
+  -- hoy, pero la generaran solas cuando se termine de cobrar la orden. Se
+  -- cuentan aparte para que el numero de arriba no las esconda.
+  COUNT(*) FILTER (
+    WHERE a.tecnico_id IS NOT NULL
+      AND COALESCE(a.costo_final, 0) > 0
+      AND COALESCE(a.porcentaje_comision, 0) > 0
+      AND a.estado <> 'ENTREGADO_SIN_COBRO'
+      AND a.estado_cobro <> 'COBRADO'
+      AND (a.estado <> 'ENTREGADO_SIN_REPARACION' OR COALESCE(org.comision_aplica_sin_reparacion, false))
+  )                                                                     AS comision_diferida_sin_cobrar
 FROM afectadas a
 JOIN organizations org ON org.id = a.organization_id
 GROUP BY a.organization_id, org.nombre_mostrar
@@ -140,3 +167,49 @@ SELECT
   COUNT(*)                                                                               AS total_ordenes_afectadas,
   ROUND(SUM(COALESCE(costo_final, 0)) FILTER (WHERE estado <> 'ENTREGADO_SIN_COBRO'), 2) AS total_dinero_no_reconocido
 FROM afectadas;
+
+-- [4] Desglose por tecnico: a quien hay que pagarle y cuanto.
+-- Mismos gates que [2] (incluido estado_cobro = 'COBRADO'), pero agrupando por
+-- tecnico y mostrando el rango de meses involucrado, porque el backfill ancla
+-- cada orden en el mes de su fecha_entrega: si ese mes ya se liquido, esta fila
+-- es una comision retroactiva que hay que conciliar a mano.
+WITH afectadas AS (
+  SELECT
+    o.organization_id,
+    o.estado,
+    o.tecnico_id,
+    o.costo_final,
+    o.estado_cobro,
+    o.porcentaje_comision,
+    o.fecha_entrega,
+    COALESCE((
+      SELECT SUM(r.cantidad * r.precio_unitario)
+      FROM repuestos_orden r
+      WHERE r.orden_id = o.id
+    ), 0) AS costo_repuestos
+  FROM ordenes_servicio o
+  WHERE o.fecha_completado IS NULL
+    AND o.estado IN ('ENTREGADO', 'ENTREGADO_SIN_REPARACION', 'ENTREGADO_SIN_COBRO')
+    AND o.tecnico_id IS NOT NULL
+)
+SELECT
+  a.organization_id,
+  org.nombre_mostrar                                          AS taller,
+  a.tecnico_id,
+  u.nombre                                                    AS tecnico,
+  COUNT(*)                                                    AS ordenes,
+  ROUND(SUM(
+    GREATEST(COALESCE(a.costo_final, 0) - a.costo_repuestos, 0) * COALESCE(a.porcentaje_comision, 0) / 100
+  ), 2)                                                       AS comision_a_reconocer,
+  TO_CHAR(MIN(a.fecha_entrega), 'YYYY-MM')                    AS mes_mas_viejo,
+  TO_CHAR(MAX(a.fecha_entrega), 'YYYY-MM')                    AS mes_mas_nuevo
+FROM afectadas a
+JOIN organizations org ON org.id = a.organization_id
+JOIN users u          ON u.id  = a.tecnico_id
+WHERE COALESCE(a.costo_final, 0) > 0
+  AND COALESCE(a.porcentaje_comision, 0) > 0
+  AND a.estado <> 'ENTREGADO_SIN_COBRO'
+  AND a.estado_cobro = 'COBRADO'
+  AND (a.estado <> 'ENTREGADO_SIN_REPARACION' OR COALESCE(org.comision_aplica_sin_reparacion, false))
+GROUP BY a.organization_id, org.nombre_mostrar, a.tecnico_id, u.nombre
+ORDER BY comision_a_reconocer DESC NULLS LAST;
