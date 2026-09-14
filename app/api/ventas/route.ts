@@ -382,12 +382,15 @@ export async function POST(request: Request) {
         if (existente) {
           const { data: org } = await supabaseAdmin
             .from("organizations")
-            .select("nombre, nombre_mostrar")
+            .select("nombre, nombre_mostrar, logo_url, direccion, telefono")
             .eq("id", organizationId!)
             .single()
           return NextResponse.json({
             ...formatVenta(existente),
             organizationName: org?.nombre_mostrar || org?.nombre || null,
+            organizationLogoUrl: org?.logo_url ?? null,
+            organizationTelefono: org?.telefono ?? null,
+            organizationDireccion: org?.direccion ?? null,
           }, { status: 201 })
         }
 
@@ -500,10 +503,11 @@ export async function POST(request: Request) {
       items: data.items.length,
     })
 
-    // Obtener nombre de la organización para el mensaje de WhatsApp
+    // Obtener nombre/logo/contacto de la organización para el mensaje de
+    // WhatsApp y el ticket de venta (POS)
     const { data: org } = await supabaseAdmin
       .from("organizations")
-      .select("nombre, nombre_mostrar")
+      .select("nombre, nombre_mostrar, logo_url, direccion, telefono")
       .eq("id", organizationId!)
       .single()
 
@@ -521,6 +525,9 @@ export async function POST(request: Request) {
     const response = {
       ...formatVenta(ventaCompleta),
       organizationName: org?.nombre_mostrar || org?.nombre || null,
+      organizationLogoUrl: org?.logo_url ?? null,
+      organizationTelefono: org?.telefono ?? null,
+      organizationDireccion: org?.direccion ?? null,
     }
 
     return NextResponse.json(response, { status: 201 })

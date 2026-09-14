@@ -329,7 +329,13 @@ describe("POST /api/ventas — serieIds + idempotencia", () => {
     } as any)
     mockSupabaseFrom({
       ventas: createChainMock({ id: "v-existing", numero_venta: 7, total: 100 }),
-      organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+      organizations: createChainMock({
+        nombre: "Org",
+        nombre_mostrar: "Org",
+        logo_url: "https://cdn.example.com/logo.png",
+        telefono: "1144556677",
+        direccion: "Av. Siempre Viva 123",
+      }),
     })
 
     const res = await POST(createPostRequest({ ...baseBody, idempotencyKey: "idem-dup" }))
@@ -337,6 +343,11 @@ describe("POST /api/ventas — serieIds + idempotencia", () => {
 
     expect(status).toBe(201)
     expect(body.numeroVenta).toBe(7)
+    // El reintento idempotente pasa por su propia consulta a organizations
+    // (rama separada del camino feliz) — tambien debe traer estos datos.
+    expect(body.organizationLogoUrl).toBe("https://cdn.example.com/logo.png")
+    expect(body.organizationTelefono).toBe("1144556677")
+    expect(body.organizationDireccion).toBe("Av. Siempre Viva 123")
   })
 })
 
@@ -916,6 +927,58 @@ describe("POST /api/ventas — descuentos por línea + global", () => {
     const res = await POST(createPostRequest({ clienteNombre: "CF", metodoPago: "EFECTIVO", items: [{ inventarioId: "i1", descripcion: "X", cantidad: 1, precioUnitario: 100, diasGarantia: 0 }] }))
     expect((await parseResponse(res)).status).toBe(201)
     expect((vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any).p_total).toBe(100)
+  })
+})
+
+describe("POST /api/ventas — datos de organizacion para el ticket", () => {
+  const baseBody = {
+    clienteNombre: "Consumidor Final",
+    items: [{ inventarioId: "i1", descripcion: "Notebook", cantidad: 1, precioUnitario: 100, diasGarantia: 0 }],
+    metodoPago: "EFECTIVO",
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("incluye logo, telefono y direccion de la organizacion en la respuesta", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
+      organizations: createChainMock({
+        nombre: "Org",
+        nombre_mostrar: "Org Mostrar",
+        logo_url: "https://cdn.example.com/logo.png",
+        telefono: "1144556677",
+        direccion: "Av. Siempre Viva 123",
+      }),
+    })
+
+    const res = await POST(createPostRequest(baseBody))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    expect(body.organizationLogoUrl).toBe("https://cdn.example.com/logo.png")
+    expect(body.organizationTelefono).toBe("1144556677")
+    expect(body.organizationDireccion).toBe("Av. Siempre Viva 123")
+  })
+
+  it("degrada a null cuando la organizacion no tiene logo, telefono o direccion", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
+      organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+    })
+
+    const res = await POST(createPostRequest(baseBody))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    expect(body.organizationLogoUrl).toBeNull()
+    expect(body.organizationTelefono).toBeNull()
+    expect(body.organizationDireccion).toBeNull()
   })
 })
 
