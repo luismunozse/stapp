@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   RotateCcw,
   Phone,
+  Download,
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -35,6 +36,8 @@ import { useThermalPrinter } from "./use-thermal-printer"
 import { BarcodeScanner } from "@/components/inventario/barcode-scanner"
 import { useCurrency } from "@/contexts/currency-context"
 import { generateTicketCommands } from "@/lib/escpos"
+import { imageUrlToRaster, imageUrlToBinarizedDataUrl } from "@/lib/escpos-image"
+import { anchoLogoDots } from "@/lib/thermal-paper"
 import { fitPrintPageToContent } from "@/lib/print-fit-page"
 import type {
   PosCartItem,
@@ -208,6 +211,7 @@ export function PosTerminal() {
   // Thermal printer
   const printer = useThermalPrinter()
   const [printing, setPrinting] = useState(false)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
 
   // Printer width setting (58mm or 80mm)
   type PrinterWidth = 58 | 80
@@ -455,6 +459,15 @@ export function PosTerminal() {
     if (!printer.connected) return false
     setPrinting(true)
     try {
+      // Logo es opcional y nunca debe bloquear la impresión: imageUrlToRaster
+      // ya degrada a null silenciosamente ante cualquier falla (fetch, CORS,
+      // rasterizado).
+      let logoRaster: Uint8Array | null = null
+      if (ventaData.organizationLogoUrl) {
+        logoRaster = await imageUrlToRaster(ventaData.organizationLogoUrl, {
+          maxWidth: anchoLogoDots(printerWidth),
+        })
+      }
       const ticketData = {
         numeroVenta: ventaData.numeroVenta,
         fecha: new Date().toLocaleString("es-AR", { timeZone: timezone }),
@@ -475,6 +488,7 @@ export function PosTerminal() {
         total: ventaData.total,
         metodoPago: ventaData.metodoPago,
         nombreEmpresa: ventaData.organizationName,
+        logoRaster,
       }
       const commands = generateTicketCommands(ticketData, printerWidth)
       await printer.print(commands)
@@ -488,7 +502,7 @@ export function PosTerminal() {
   }, [printer])
 
   // --- Print ticket via browser print dialog (fallback when no USB printer) ---
-  const printTicketHTML = useCallback((ventaData: any) => {
+  const printTicketHTML = useCallback(async (ventaData: any) => {
     const items = ventaData.items || []
     const subtotal = ventaData.subtotal ?? items.reduce((s: number, i: any) => s + i.cantidad * i.precioUnitario, 0)
     const descuento = ventaData.descuento || 0
@@ -501,6 +515,19 @@ export function PosTerminal() {
       hour: "2-digit", minute: "2-digit",
     })
     const fmtPrice = (n: number) => "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2 })
+
+    // Pre-binarizar el logo a un data URL: el driver de impresión recibe
+    // blanco/negro puro (sin grises que se pierdan) y evita depender de que
+    // el navegador pueda cargar una imagen cross-origin dentro del iframe.
+    let logoDataUrl: string | null = null
+    if (ventaData.organizationLogoUrl) {
+      logoDataUrl = await imageUrlToBinarizedDataUrl(ventaData.organizationLogoUrl, {
+        maxWidth: anchoLogoDots(printerWidth),
+      })
+    }
+    const logoHTML = logoDataUrl
+      ? `<div class="center" style="margin-bottom:6px"><img src="${logoDataUrl}" alt="" style="max-width:140px;max-height:90px;image-rendering:pixelated" /></div>`
+      : ""
 
     const itemsHTML = items.map((item: any) => `
       <div style="margin-bottom:6px">
@@ -527,6 +554,7 @@ export function PosTerminal() {
   .big { font-size: 16px; }
   .small { font-size: 10px; color: #888; }
 </style></head><body>
+  ${logoHTML}
   <div class="center bold big">${empresa}</div>
   <div class="sep-bold"></div>
   <div class="center bold big">VENTA #${String(ventaData.numeroVenta).padStart(4, "0")}</div>
@@ -628,6 +656,23 @@ export function PosTerminal() {
       setEmitiendoFE(false)
     }
   }, [successData, emitiendoFE, comprobanteFE])
+
+  // PDF del comprobante A4 (mismo endpoint que usa venta-detail.tsx)
+  const handleDownloadVentaPdf = useCallback(async () => {
+    if (!successData?.id) return
+    setDownloadingPdf(true)
+    try {
+      const res = await fetch(`/api/ventas/${successData.id}/pdf`)
+      if (!res.ok) throw new Error("Error al generar PDF")
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      window.open(url, "_blank")
+    } catch {
+      await showError("No se pudo abrir el PDF del comprobante")
+    } finally {
+      setDownloadingPdf(false)
+    }
+  }, [successData, showError])
 
   // Item 2: build WhatsApp URL for manual phone share
   const buildManualWhatsAppUrl = useCallback((phone: string, ventaData: any) => {
@@ -1163,6 +1208,21 @@ export function PosTerminal() {
                   Imprimir ticket
                 </Button>
               )}
+
+              {/* PDF del comprobante A4 */}
+              <Button
+                variant="outline"
+                className="h-11"
+                onClick={handleDownloadVentaPdf}
+                disabled={downloadingPdf}
+              >
+                {downloadingPdf ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="mr-2 h-4 w-4" />
+                )}
+                {downloadingPdf ? "Generando PDF..." : "PDF"}
+              </Button>
 
               {/* WhatsApp share as image + download image */}
               <PosTicketShare ventaData={successData} plantillaCorta={plantillaCorta} countryCode={pais} />
