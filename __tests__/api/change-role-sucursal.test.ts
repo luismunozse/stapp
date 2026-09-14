@@ -6,6 +6,7 @@
  *  CR-2 — TECNICO (sucursal_id "suc-A") → ADMIN: update must set sucursal_id to null
  *  CR-3 — TECNICO (sucursal_id "suc-A") → VENDEDOR: update must NOT change sucursal_id (stays "suc-A")
  *  CR-4 — ADMIN → TECNICO when org has no principal sucursal: must return 400
+ *  CR-5 — promotion rejected by the plan-limit trigger: must surface 403, not 500
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { createChainMock, parseResponse } from "./helpers"
@@ -164,5 +165,51 @@ describe("POST /api/superadmin/users/[userId]/change-role — sucursal_id manage
     expect(body.error).toBeTruthy()
     // update must NOT have been called when org has no principal branch
     expect(usersChain.update).not.toHaveBeenCalled()
+  })
+
+  it("CR-5 — el límite del plan del trigger sale como 403 con motivo, no como 500", async () => {
+    // Desde la migración 323 el trigger de tecnicos_count corre también en
+    // UPDATE, así que promover a alguien por encima del cupo del plan ahora
+    // levanta PLAN_LIMIT_EXCEEDED — algo que antes era imposible, porque el
+    // trigger no veía los cambios de rol.
+    //
+    // El handler hacía `if (updateError) throw updateError`, y el catch de
+    // abajo lo convertía en un 500 "Error al cambiar rol del usuario": el
+    // superadmin veía un fallo del sistema donde en realidad hay una regla de
+    // negocio con nombre y número. Los helpers para contestarlo bien ya
+    // existían en lib/plan-limits.ts; solo no estaban cableados acá.
+    const { chain: usersChain, updateChain } = buildUsersChain({
+      id: "user-5",
+      nombre: "Eva",
+      email: "eva@test.com",
+      rol: "VENDEDOR",
+      organization_id: "org-1",
+      sucursal_id: "suc-A",
+    })
+
+    updateChain.then = (resolve: any, reject?: any) =>
+      Promise.resolve({
+        data: null,
+        error: {
+          code: "P0001",
+          message: "PLAN_LIMIT_EXCEEDED:tecnicos:2:1",
+          details: null,
+          hint: null,
+        },
+      }).then(resolve, reject)
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "users") return usersChain as any
+      return createChainMock(null) as any
+    })
+
+    const res = await POST(postJson("user-5", { rol: "TECNICO" }), ctx("user-5"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(403)
+    expect(body.code).toBe("PLAN_LIMIT_EXCEEDED")
+    expect(body.limitType).toBe("tecnicos")
+    expect(body.limit).toBe(1)
+    expect(body.current).toBe(2)
   })
 })

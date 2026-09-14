@@ -19,6 +19,11 @@ import { encryptSecret, decryptSecret } from "@/lib/facturacion/crypto"
 import { withLease, LeaseAcquisitionError, wsaaLockKey } from "@/lib/facturacion/arca/lease"
 
 export interface WsaaTicketKey {
+  /**
+   * Solo procedencia: queda en la fila por el FK y el ON DELETE CASCADE, pero
+   * NO participa de la identidad del ticket. El TA es del CERTIFICADO (ver
+   * `wsaaLockKey`), y en delegación un certificado sirve a N organizaciones.
+   */
   organizationId: string
   cuit: string
   service: string
@@ -66,14 +71,22 @@ interface RawRow {
   ultimo_login_intento_at?: string | null
 }
 
+/**
+ * Busca por (cuit, service, production) SIN filtrar por organización: la
+ * identidad del ticket es el certificado. En la práctica hay una sola fila por
+ * certificado, porque solo el worker que gana el lease escribe; el `order` +
+ * `limit` cubren el caso de filas heredadas del esquema anterior, donde cada
+ * organización tenía la suya.
+ */
 async function selectRow(key: WsaaTicketKey): Promise<RawRow | null> {
   const { data, error } = await supabaseAdmin
     .from("wsaa_tickets")
     .select("token_enc, sign_enc, expires_at, generated_at, ultimo_login_intento_at")
-    .eq("organization_id", key.organizationId)
     .eq("cuit", key.cuit)
     .eq("service", key.service)
     .eq("production", key.production)
+    .order("expires_at", { ascending: false })
+    .limit(1)
     .maybeSingle()
 
   if (error) {
@@ -218,7 +231,7 @@ export async function renewWsaaTicket(options: RenewWsaaTicketOptions): Promise<
   try {
     return await withLease(
       {
-        lockKey: wsaaLockKey(key.organizationId, key.cuit, key.service, key.production),
+        lockKey: wsaaLockKey(key.cuit, key.service, key.production),
         organizationId: key.organizationId,
         ttlSeconds: leaseTtlSeconds,
         sleep,

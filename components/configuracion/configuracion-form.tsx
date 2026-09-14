@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { CredencialesArca, type EstadoCredencialesArca } from "@/components/configuracion/credenciales-arca"
+import { CredencialesArcaDelegado, type EstadoDelegacion } from "@/components/configuracion/credenciales-arca-delegado"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -68,6 +70,9 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [vendedoresAdministranInventario, setVendedoresAdministranInventario] = useState(false)
   const [tecnicosOperanPos, setTecnicosOperanPos] = useState(false)
   const [vendedoresManejanCaja, setVendedoresManejanCaja] = useState(false)
+  const [tecnicosCobranCotizaciones, setTecnicosCobranCotizaciones] = useState(false)
+  // Arranca en true: este permiso QUITA algo que el vendedor ya tiene.
+  const [vendedoresVenIngresos, setVendedoresVenIngresos] = useState(true)
   const [comisionAplicaSinReparacion, setComisionAplicaSinReparacion] = useState(false)
   const [ivaRegimen, setIvaRegimen] = useState<"EXENTO" | "INCLUIDO" | "ADITIVO">("EXENTO")
   const [ivaTasa, setIvaTasa] = useState("")
@@ -92,6 +97,26 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [fePuntoVentaGuardado, setFePuntoVentaGuardado] = useState<number | null>(null)
   const [feConectando, setFeConectando] = useState(false)
   const [feMessage, setFeMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  // `provider` decide que formulario se muestra. Una fila existente de
+  // TusFacturas sigue viendo el suyo; todo lo demas (sin configurar o ya en
+  // ARCA) usa la carga de certificado.
+  const [feProvider, setFeProvider] = useState<"arca" | "arca_delegado" | "tusfacturas" | null>(null)
+  const [feCuitPlataforma, setFeCuitPlataforma] = useState<string | null>(null)
+  const [feEstadoDelegacion, setFeEstadoDelegacion] = useState<EstadoDelegacion>({
+    conectado: false,
+    cuit: null,
+    puntoVenta: null,
+    condicionFiscal: null,
+  })
+  const [feEstadoArca, setFeEstadoArca] = useState<EstadoCredencialesArca>({
+    conectado: false,
+    cuit: null,
+    puntoVenta: null,
+    certSubject: null,
+    certNotAfter: null,
+    estado: null,
+    condicionFiscal: null,
+  })
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -126,6 +151,8 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setVendedoresAdministranInventario(!!data.vendedoresAdministranInventario)
         setTecnicosOperanPos(!!data.tecnicosOperanPos)
         setVendedoresManejanCaja(!!data.vendedoresManejanCaja)
+        setTecnicosCobranCotizaciones(!!data.tecnicosCobranCotizaciones)
+        setVendedoresVenIngresos(data.vendedoresVenIngresos !== false)
         setComisionAplicaSinReparacion(!!data.comisionAplicaSinReparacion)
         setIvaRegimen(data.ivaRegimen ?? "EXENTO")
         setIvaTasa(String(data.ivaTasa ?? getIvaGeneral(data.pais)))
@@ -163,6 +190,23 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       if (res.ok) {
         const data = await res.json()
         setFeConectado(!!data.conectado)
+        setFeProvider(data.provider ?? null)
+        setFeCuitPlataforma(data.cuitPlataforma ?? null)
+        setFeEstadoDelegacion({
+          conectado: data.provider === "arca_delegado" && !!data.conectado,
+          cuit: data.cuit ?? null,
+          puntoVenta: data.puntoVenta ?? null,
+          condicionFiscal: data.condicionFiscal ?? null,
+        })
+        setFeEstadoArca({
+          conectado: !!data.conectado,
+          cuit: data.cuit ?? null,
+          puntoVenta: data.puntoVenta ?? null,
+          certSubject: data.certSubject ?? null,
+          certNotAfter: data.certNotAfter ?? null,
+          estado: data.estado ?? null,
+          condicionFiscal: data.condicionFiscal ?? null,
+        })
         setFePuntoVentaGuardado(data.puntoVenta ?? null)
         if (data.puntoVenta) setFePuntoVenta(String(data.puntoVenta))
         if (data.condicionFiscal) setFeCondicionFiscal(data.condicionFiscal)
@@ -279,7 +323,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada: facturacionHabilitada }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, tecnicosCobranCotizaciones, vendedoresVenIngresos, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada: facturacionHabilitada }),
       })
 
       if (res.ok) {
@@ -668,6 +712,36 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
               </div>
             </div>
           </label>
+          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+            <input
+              type="checkbox"
+              checked={tecnicosCobranCotizaciones}
+              onChange={(e) => setTecnicosCobranCotizaciones(e.target.checked)}
+              disabled={!allowEdit}
+              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+            />
+            <div className="flex-1">
+              <div className="text-sm font-medium">Los técnicos pueden cobrar sus cotizaciones</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Permite a los usuarios con rol Técnico convertir en venta las cotizaciones aceptadas que ellos mismos crearon, sin depender de un administrador para cerrar el cobro. No incluye eliminar cotizaciones, revisarlas ni convertirlas en orden de servicio, que siguen siendo solo de administradores, ni las cotizaciones de otros técnicos. La venta se les acredita como vendedor; para que además la vean listada en Ventas necesitan también el permiso de POS de acá arriba.
+              </div>
+            </div>
+          </label>
+          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+            <input
+              type="checkbox"
+              checked={vendedoresVenIngresos}
+              onChange={(e) => setVendedoresVenIngresos(e.target.checked)}
+              disabled={!allowEdit}
+              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+            />
+            <div className="flex-1">
+              <div className="text-sm font-medium">Los vendedores pueden ver los ingresos</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Viene activado. Si lo desactivás, los usuarios con rol Vendedor dejan de ver en Reportes la facturación del taller y cuánto gastó cada cliente. Siguen viendo los reportes operativos —tiempos de reparación, fallas comunes, desempeño de técnicos, inventario— y sus propias ventas en el Punto de Venta. Los precios de compra y los márgenes ya estaban reservados a los administradores, con o sin este permiso.
+              </div>
+            </div>
+          </label>
         </CardContent>
       </Card>
 
@@ -766,6 +840,8 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
 
             {facturacionHabilitada && (
               <div className="space-y-4 pt-2 border-t">
+                {feProvider === "tusfacturas" ? (
+                  <>
                 <p className="text-xs sm:text-sm text-muted-foreground">
                   Ingresá tus credenciales para conectar la cuenta. Se guardan cifradas y no vuelven a mostrarse.
                 </p>
@@ -867,6 +943,32 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
                       : "No conectado"}
                   </span>
                 </div>
+                  </>
+                ) : feProvider === "arca" ? (
+                  // BYO: solo para la org que YA tiene su propio certificado
+                  // cargado. Una org nueva no puede elegir este camino — son
+                  // seis pasos tecnicos y la adopcion real tiende a cero.
+                  <CredencialesArca
+                    allowEdit={allowEdit}
+                    estadoInicial={feEstadoArca}
+                    onConectado={(nuevo) => {
+                      setFeEstadoArca(nuevo)
+                      setFeConectado(nuevo.conectado)
+                      setFeProvider("arca")
+                    }}
+                  />
+                ) : (
+                  <CredencialesArcaDelegado
+                    allowEdit={allowEdit}
+                    cuitPlataforma={feCuitPlataforma}
+                    estadoInicial={feEstadoDelegacion}
+                    onGuardado={(nuevo) => {
+                      setFeEstadoDelegacion(nuevo)
+                      setFeConectado(nuevo.conectado)
+                      setFeProvider("arca_delegado")
+                    }}
+                  />
+                )}
               </div>
             )}
           </CardContent>

@@ -2,8 +2,15 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canEmitirFacturaElectronica } from "@/lib/facturacion/access"
-import { decryptSecret } from "@/lib/facturacion/crypto"
 import { tusFacturasProvider } from "@/lib/facturacion/tusfacturas-provider"
+import { arcaDirectProvider } from "@/lib/facturacion/arca/arca-direct-provider"
+import { isArcaProduction } from "@/lib/facturacion/arca/env"
+import { ArcaStappCertError } from "@/lib/facturacion/arca/stapp-cert"
+import {
+  resolverCredenciales,
+  CredencialesIncompletasError,
+  type CredencialesResueltas,
+} from "@/lib/facturacion/resolver-credenciales"
 import { mapVentaToEmitirInput } from "@/lib/facturacion/map-venta"
 
 // Columnas seguras para devolver un comprobante al cliente. NUNCA incluir
@@ -69,15 +76,41 @@ export async function POST(request: Request) {
   if (credErr) return NextResponse.json({ error: "No se pudieron cargar las credenciales" }, { status: 500 })
   if (!cred) return NextResponse.json({ error: "Credenciales no configuradas" }, { status: 400 })
 
+  // El ambiente ARCA se resuelve SOLO para filas 'arca': `isArcaProduction()`
+  // tira si NODE_ENV=production y ARCA_ENV no está seteada, y una org que
+  // factura por TusFacturas no tiene por qué quedar bloqueada por eso.
+  const esArca = cred.provider === "arca" || cred.provider === "arca_delegado"
+  let production = false
+  if (esArca) {
+    try {
+      production = isArcaProduction()
+    } catch {
+      return NextResponse.json({ error: "Ambiente ARCA no configurado" }, { status: 500 })
+    }
+  }
+
   // Los secretos se desencriptan recién acá, en memoria, para llamar al
   // proveedor; nunca se loguean ni se devuelven en la respuesta.
-  const creds = {
-    apitoken: decryptSecret(cred.apitoken_enc),
-    apikey: decryptSecret(cred.apikey_enc),
-    usertoken: decryptSecret(cred.usertoken_enc),
-    puntoVenta: cred.punto_venta,
-    condicionFiscal: cred.condicion_fiscal,
+  let resuelto: CredencialesResueltas
+  try {
+    resuelto = resolverCredenciales({ row: cred, organizationId: organizationId!, production })
+  } catch (e) {
+    if (e instanceof CredencialesIncompletasError) {
+      return NextResponse.json({ error: e.message }, { status: 400 })
+    }
+    if (e instanceof ArcaStappCertError) {
+      // Configuración de la PLATAFORMA, no del taller: si falta, todas las
+      // orgs delegadas dejan de facturar a la vez. Se nombra para que el
+      // mensaje no mande a leer logs.
+      console.error("[facturacion] certificado de plataforma mal configurado", e.message)
+      return NextResponse.json(
+        { error: "Certificado de plataforma no configurado — contactar soporte" },
+        { status: 500 }
+      )
+    }
+    return NextResponse.json({ error: "No se pudieron leer las credenciales" }, { status: 500 })
   }
+  const creds = resuelto.creds
   const input = mapVentaToEmitirInput(venta, items || [])
 
   // El INSERT es el gate real contra la carrera: el índice único parcial
@@ -92,6 +125,7 @@ export async function POST(request: Request) {
       venta_id: ventaId,
       tipo: creds.condicionFiscal === "MONOTRIBUTO" ? "C" : "B",
       punto_venta: creds.puntoVenta,
+      provider: resuelto.provider,
       estado: "pendiente",
       total: venta.total,
       receptor_doc_tipo: input.receptor.documentoTipo,
@@ -125,7 +159,14 @@ export async function POST(request: Request) {
 
   let result
   try {
-    result = await tusFacturasProvider.emitir(creds, input)
+    // La condición se escribe por TusFacturas y no por ARCA a propósito: así
+    // TypeScript estrecha la rama `else` a las DOS variantes ARCA (directa y
+    // delegada) y agregar una tercera no puede caer en silencio del lado
+    // equivocado.
+    result =
+      resuelto.provider === "tusfacturas"
+        ? await tusFacturasProvider.emitir(resuelto.creds, input)
+        : await arcaDirectProvider.emitir(resuelto.creds, input)
   } catch (err) {
     // No dejamos un comprobante "pendiente" colgado: si el proveedor tira
     // una excepción (timeout, red, etc.), lo marcamos rechazado para que se

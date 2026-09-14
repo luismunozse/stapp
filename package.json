@@ -32,6 +32,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",
+    "@arcasdk/core": "2.0.0",
     "@capacitor/android": "^8.1.0",
     "@capacitor/app": "^8.0.1",
     "@capacitor/browser": "^8.0.1",
@@ -89,6 +90,7 @@
     "sharp": "^0.35.3",
     "sonner": "^2.0.7",
     "string-similarity": "^4.0.4",
+    "svix": "^2.2.0",
     "swr": "^2.3.8",
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",

@@ -47,6 +47,11 @@ vi.mock('next/headers', () => ({
 // Mock para @/lib/auth
 vi.mock('@/lib/auth', () => ({
   auth: vi.fn(() => Promise.resolve(null)),
+  // Corta el refresh token de un usuario. Lo usa el cambio de rol para que la
+  // sesion no se siga extendiendo con el rol viejo. Va en el mock global
+  // porque el modulo real arrastra next-auth, que no carga en este entorno:
+  // un importActual sobre @/lib/auth revienta con ERR_MODULE_NOT_FOUND.
+  invalidateRefreshToken: vi.fn(() => Promise.resolve()),
 }))
 
 // Mock para @/lib/supabase (evitar conexiones reales en tests)

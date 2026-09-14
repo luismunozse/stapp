@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { hasCajaAccess, hasInventarioAccess, hasPosAccess, soloVeSusVentas, canCreateOrders } from '../auth-utils'
+import { hasCajaAccess, hasCotizacionCobroAccess, hasIngresosAccess, hasInventarioAccess, hasPosAccess, soloVeSusVentas, canCreateOrders } from '../auth-utils'
 
 describe('hasInventarioAccess', () => {
   it('ADMIN accede siempre, con flag apagado o prendido', () => {
@@ -107,5 +107,55 @@ describe('hasCajaAccess', () => {
     expect(hasCajaAccess('', true)).toBe(false)
     expect(hasCajaAccess('vendedor', true)).toBe(false) // case sensitive
     expect(hasCajaAccess('GERENTE', true)).toBe(false)
+  })
+})
+
+describe('hasCotizacionCobroAccess', () => {
+  it('ADMIN entra siempre, prendido o apagado el flag', () => {
+    expect(hasCotizacionCobroAccess('ADMIN', false)).toBe(true)
+    expect(hasCotizacionCobroAccess('ADMIN', true)).toBe(true)
+  })
+
+  it('TECNICO entra solo si la org lo habilito', () => {
+    expect(hasCotizacionCobroAccess('TECNICO', true)).toBe(true)
+    expect(hasCotizacionCobroAccess('TECNICO', false)).toBe(false)
+  })
+
+  it('VENDEDOR nunca, ni con el flag prendido', () => {
+    // El flag habilita al TECNICO y a nadie mas. Abrirle el cobro al vendedor
+    // de paso seria un cambio de conducta que nadie pidio, y no es lo que dice
+    // el nombre del permiso.
+    expect(hasCotizacionCobroAccess('VENDEDOR', true)).toBe(false)
+    expect(hasCotizacionCobroAccess('VENDEDOR', false)).toBe(false)
+  })
+
+  it('rol nulo/vacio/desconocido nunca entra', () => {
+    expect(hasCotizacionCobroAccess(null, true)).toBe(false)
+    expect(hasCotizacionCobroAccess('', true)).toBe(false)
+    expect(hasCotizacionCobroAccess('tecnico', true)).toBe(false) // case sensitive
+  })
+})
+
+describe('hasIngresosAccess', () => {
+  it('ADMIN entra siempre, prendido o apagado el flag', () => {
+    expect(hasIngresosAccess('ADMIN', false)).toBe(true)
+    expect(hasIngresosAccess('ADMIN', true)).toBe(true)
+  })
+
+  it('VENDEDOR entra salvo que la org lo haya apagado', () => {
+    // Al reves que los demas permisos: este QUITA algo que ya tenia.
+    expect(hasIngresosAccess('VENDEDOR', true)).toBe(true)
+    expect(hasIngresosAccess('VENDEDOR', false)).toBe(false)
+  })
+
+  it('TECNICO nunca: ni siquiera llega a /reportes', () => {
+    expect(hasIngresosAccess('TECNICO', true)).toBe(false)
+    expect(hasIngresosAccess('TECNICO', false)).toBe(false)
+  })
+
+  it('rol nulo/vacio/desconocido nunca entra', () => {
+    expect(hasIngresosAccess(null, true)).toBe(false)
+    expect(hasIngresosAccess('', true)).toBe(false)
+    expect(hasIngresosAccess('vendedor', true)).toBe(false) // case sensitive
   })
 })

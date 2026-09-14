@@ -55,6 +55,12 @@ describe("liberación de la reserva del catálogo", () => {
           iva_porcentaje: 0,
           descuento_global_tipo: "porcentaje",
           descuento_global_valor: 0,
+          // Cotización real con ítems. El guard `tocaElInforme` (route.ts) solo
+          // corre cuando el PUT manda items/veredicto/diagnosticoTecnico/
+          // causaDano, y este test manda solo `estado`, así que no lo dispara
+          // igual — se deja este valor porque modela una cotización real mejor
+          // que un mock vacío.
+          items_cotizacion: [{ id: "it-1" }],
         }),
       })
     }
@@ -78,6 +84,7 @@ describe("liberación de la reserva del catálogo", () => {
 
       await PUT(reqRechazo(), { params: Promise.resolve({ id: "cot-1" }) })
 
+      expect(rpcNames()).toContain("liberar_reserva_catalogo")
       expect(rpcNames()).not.toContain("liberar_items_cotizacion")
     })
 
@@ -113,6 +120,7 @@ describe("liberación de la reserva del catálogo", () => {
           iva_porcentaje: 0,
           descuento_global_tipo: "porcentaje",
           descuento_global_valor: 0,
+          items_cotizacion: [{ id: "it-1" }],
         }),
       })
       vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ok: true }, error: null } as any)

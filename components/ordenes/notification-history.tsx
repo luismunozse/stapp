@@ -26,6 +26,8 @@ interface NotificationLog {
   tipo: string
   canal: string
   estado: string
+  estado_entrega?: string | null
+  bounce_tipo?: string | null
   destinatario: string
   asunto?: string
   createdAt: string
@@ -55,6 +57,7 @@ interface TimelineEntry {
   // notificacion fields
   canal?: string
   estadoEnvio?: string
+  estadoEntrega?: string | null
   destinatario?: string
   asunto?: string
 }
@@ -117,6 +120,7 @@ export function NotificationHistory({ ordenId }: NotificationHistoryProps) {
             date: n.createdAt,
             canal: n.canal,
             estadoEnvio: n.estado,
+            estadoEntrega: n.estado_entrega,
             destinatario: n.destinatario,
             asunto: n.asunto,
             tipo: n.tipo,
@@ -270,6 +274,18 @@ function NotificacionEntry({
           )}
           {entry.estadoEnvio === "ENVIADO" ? "Enviado" : "Fallido"}
         </Badge>
+        {entry.estadoEntrega === "ENTREGADO" && (
+          <Badge variant="outline" className="text-xs font-normal text-green-700 border-green-300">Entregado</Badge>
+        )}
+        {entry.estadoEntrega === "REBOTADO" && (
+          <Badge variant="destructive" className="text-xs font-normal">Rebotó</Badge>
+        )}
+        {entry.estadoEntrega === "QUEJA" && (
+          <Badge variant="destructive" className="text-xs font-normal">Marcado como spam</Badge>
+        )}
+        {entry.estadoEnvio === "ENVIADO" && !entry.estadoEntrega && (
+          <Badge variant="outline" className="text-xs font-normal text-muted-foreground">Sin confirmar</Badge>
+        )}
       </div>
       {entry.destinatario && (
         <p className="text-sm text-muted-foreground mt-0.5">{entry.destinatario}</p>

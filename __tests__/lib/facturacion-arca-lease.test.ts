@@ -159,9 +159,19 @@ describe("withLease", () => {
 })
 
 describe("lock key builders (design ADR-02 key derivation)", () => {
-  it("wsaaLockKey derives per org/cuit/service/environment", () => {
-    expect(wsaaLockKey("org1", "20111111112", "wsfe", false)).toBe("wsaa:org1:20111111112:wsfe:h")
-    expect(wsaaLockKey("org1", "20111111112", "wsfe", true)).toBe("wsaa:org1:20111111112:wsfe:p")
+  /**
+   * El lease del WSAA es del CERTIFICADO, no del tenant: AFIP entrega un TA
+   * por certificado y servicio. En delegación un mismo certificado emite para
+   * N talleres, y una clave por organización les daría vía libre a todos para
+   * pedir su propio login del mismo certificado — el primero gana y el resto
+   * se come `coe.alreadyAuthenticated`.
+   *
+   * `emisionLockKey` SÍ lleva la organización, y está bien: la numeración de
+   * comprobantes es por punto de venta de cada taller.
+   */
+  it("wsaaLockKey derives per cuit/service/environment, NOT per organization", () => {
+    expect(wsaaLockKey("20111111112", "wsfe", false)).toBe("wsaa:20111111112:wsfe:h")
+    expect(wsaaLockKey("20111111112", "wsfe", true)).toBe("wsaa:20111111112:wsfe:p")
   })
 
   it("emisionLockKey derives per org/punto de venta/tipo", () => {

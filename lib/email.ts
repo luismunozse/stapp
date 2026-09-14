@@ -2,9 +2,6 @@ import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/
 import { formatDateValue } from "@/lib/timezone"
 import { CONTACT_EMAIL } from "@/lib/contact"
 
-const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
-const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
-
 // ============================================
 // ESTILOS BASE
 // ============================================
@@ -145,77 +142,17 @@ const getDivider = () => `
 // ============================================
 // ENVÍO DE EMAIL
 // ============================================
-interface SendEmailParams {
-  to: string
-  subject: string
-  html: string
-  /** Nombre a mostrar como remitente (ej. el nombre del taller). La dirección
-   *  sigue siendo la verificada en EMAIL_FROM. */
-  fromName?: string
-  substitutions?: Record<string, string>
-  attachments?: Array<{
-    filename: string
-    content: string // base64
-    type: string
-  }>
-}
+import { sendPlatform, type EmailMessage } from "@/lib/email/index"
 
-/** Extrae la dirección de un from con formato "Nombre <addr>" o "addr". */
-function addressOf(from: string): string {
-  const match = from.match(/<([^>]+)>/)
-  return match ? match[1].trim() : from.trim()
-}
+type SendEmailParams = EmailMessage
 
-export async function sendEmail({ to, subject, html, fromName, substitutions, attachments }: SendEmailParams) {
-  const apiKey = process.env.ENVIALOSIMPLE_API_KEY
-
-  if (!apiKey) {
-    throw new Error("ENVIALOSIMPLE_API_KEY no está configurada")
-  }
-
-  const from = fromName ? `${fromName} <${addressOf(EMAIL_FROM)}>` : EMAIL_FROM
-
-  const payload: Record<string, unknown> = {
-    from,
-    to,
-    subject,
-    html,
-  }
-
-  if (substitutions) {
-    payload.substitutions = substitutions
-  }
-
-  if (attachments && attachments.length > 0) {
-    payload.attachments = attachments.map((att) => ({
-      filename: att.filename,
-      content: att.content,
-      type: att.type,
-      disposition: "attachment",
-    }))
-  }
-
-  const response = await fetch(ENVIALOSIMPLE_API_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  })
-
-  if (!response.ok) {
-    const errorData = await response.text()
-    console.error("EnvialoSimple error:", errorData)
-    console.error("EnvialoSimple status:", response.status)
-    console.error("EnvialoSimple payload keys:", Object.keys(payload))
-    if (attachments && attachments.length > 0) {
-      console.error("EnvialoSimple attachment info:", attachments.map(a => ({ filename: a.filename, type: a.type, contentLength: a.content.length })))
-    }
-    throw new Error(`Error al enviar el correo: ${errorData}`)
-  }
-
-  return await response.json()
+/**
+ * Envio de correo de PLATAFORMA. Para correo dirigido al cliente final del
+ * taller usar `sendCustomer` de "@/lib/email/index": sale por otro proveedor y
+ * otro dominio a proposito.
+ */
+export async function sendEmail(params: SendEmailParams) {
+  return sendPlatform(params)
 }
 
 interface SendVerificationEmailParams {

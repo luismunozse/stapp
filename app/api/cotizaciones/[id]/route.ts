@@ -7,6 +7,7 @@ import { hasPlanFeature } from "@/lib/subscriptions"
 import { dateOnlyToNoonUtcISO } from "@/lib/timezone"
 import { totalPresupuestoDeOrden, cotizacionesVigentesDeOrden } from "@/lib/cotizacion-presupuesto"
 import { marcarOriginalReemplazada, restaurarOriginalDeRevision } from "@/lib/cotizacion-revision"
+import { validarInforme, esInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizacion-informe"
 import { z } from "zod"
 
 // Detecta el error de "la función no existe todavía", que acá significa
@@ -85,6 +86,10 @@ const updateCotizacionSchema = z.object({
   ordenId: z.string().nullable().optional(),
   equipo: equipoSchema.optional(),
   checklist: checklistSchema.nullable().optional(),
+  veredicto: veredictoSchema.nullable().optional(),
+  diagnosticoTecnico: z.string().max(4000).nullable().optional(),
+  causaDano: causaDanoSchema.nullable().optional(),
+  presentadoAnte: z.string().max(200).nullable().optional(),
 })
 
 // Revierte una orden a EN_DIAGNOSTICO cuando deja de tener un presupuesto
@@ -203,6 +208,10 @@ function formatCotizacion(c: any, includeCosts: boolean) {
     tipo: c.tipo || "ORDEN",
     equipo: c.equipo_snapshot || null,
     checklist: c.checklist_snapshot || null,
+    veredicto: c.veredicto ?? null,
+    diagnosticoTecnico: c.diagnostico_tecnico ?? null,
+    causaDano: c.causa_dano ?? null,
+    presentadoAnte: c.presentado_ante ?? null,
     convertidaAOrdenId: c.convertida_a_orden_id || null,
     reemplazadaPor: c.reemplazada_por,
     revisionDe: c.revision_de,
@@ -308,7 +317,7 @@ export async function PUT(
     // Verify cotizacion exists and belongs to org
     const { data: existing, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, tipo, origen, organization_id, created_by, iva_porcentaje, descuento_global_tipo, descuento_global_valor, orden_id, revision_de")
+      .select("id, estado, tipo, origen, organization_id, created_by, iva_porcentaje, descuento_global_tipo, descuento_global_valor, orden_id, revision_de, veredicto, diagnostico_tecnico, causa_dano, presentado_ante, items_cotizacion(id)")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .single()
@@ -382,6 +391,46 @@ export async function PUT(
     if (data.ivaPorcentaje !== undefined) updateData.iva_porcentaje = data.ivaPorcentaje
     if (data.tipoCambio !== undefined) updateData.tipo_cambio = data.tipoCambio
     if (data.sectorId !== undefined) updateData.sector_id = data.sectorId
+
+    if (data.veredicto !== undefined) updateData.veredicto = data.veredicto
+    if (data.diagnosticoTecnico !== undefined) {
+      updateData.diagnostico_tecnico = data.diagnosticoTecnico?.trim() || null
+    }
+    if (data.causaDano !== undefined) updateData.causa_dano = data.causaDano
+    if (data.presentadoAnte !== undefined) {
+      updateData.presentado_ante = data.presentadoAnte?.trim() || null
+    }
+
+    // La regla solo corre si el pedido toca el estado que le importa. Un PUT que
+    // solo cambia notas o fecha no empeora nada: frenarlo dejaria inservible a
+    // toda cotizacion vieja de cero items y veredicto NULL, que ni siquiera se
+    // podria rechazar. El PUT viejo aceptaba `items: []` sin minimo, asi que esas
+    // filas pueden existir.
+    const tocaElInforme =
+      data.items !== undefined ||
+      data.veredicto !== undefined ||
+      data.diagnosticoTecnico !== undefined ||
+      data.causaDano !== undefined
+
+    if (tocaElInforme) {
+      // La regla mira el estado RESULTANTE, no el payload: un pedido puede
+      // cambiar el veredicto sin mandar items, y viceversa. Por eso se fusiona
+      // contra la fila existente en vez de vivir en un refine de Zod.
+      const itemsResultantes = data.items !== undefined
+        ? data.items
+        : (existing.items_cotizacion || [])
+      const mensajeInforme = validarInforme({
+        cantidadItems: itemsResultantes.length,
+        veredicto: data.veredicto !== undefined ? data.veredicto : existing.veredicto,
+        diagnosticoTecnico: data.diagnosticoTecnico !== undefined
+          ? data.diagnosticoTecnico
+          : existing.diagnostico_tecnico,
+        causaDano: data.causaDano !== undefined ? data.causaDano : existing.causa_dano,
+      })
+      if (mensajeInforme) {
+        return NextResponse.json({ error: mensajeInforme }, { status: 400 })
+      }
+    }
 
     // Reasignación de orden (vincular/desvincular). Solo tipo ORDEN.
     let ordenIdChanged = false
@@ -797,15 +846,27 @@ export async function PUT(
     // terminal. Va en la tabla y no acá porque son cuatro las rutas que matan
     // una cotización y una ya se había olvidado de llamar.
 
-    // Si cambió a ENVIADA y está vinculada a una orden, transicionar a PRESUPUESTADO
+    // Si cambió a ENVIADA y está vinculada a una orden, transicionar a PRESUPUESTADO.
+    // Un informe tecnico es la excepcion: no hay presupuesto que esperar, asi que
+    // la orden se queda donde esta hasta que el cliente retire el equipo.
     if (data.estado === "ENVIADA") {
       const { data: cotWithOrder } = await supabaseAdmin
         .from("cotizaciones")
-        .select("orden_id, total")
+        .select("orden_id, total, veredicto")
         .eq("id", id)
         .single()
 
-      if (cotWithOrder?.orden_id) {
+      const { count: itemsCount } = await supabaseAdmin
+        .from("items_cotizacion")
+        .select("id", { count: "exact", head: true })
+        .eq("cotizacion_id", id)
+
+      const emiteInforme = esInforme({
+        cantidadItems: itemsCount || 0,
+        veredicto: cotWithOrder?.veredicto,
+      })
+
+      if (cotWithOrder?.orden_id && !emiteInforme) {
         const validStates = ["RECIBIDO", "EN_DIAGNOSTICO"]
         const { data: ordenActual } = await supabaseAdmin
           .from("ordenes_servicio")

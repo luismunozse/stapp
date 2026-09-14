@@ -45,7 +45,7 @@ describe("POST /api/public/cotizaciones/[token]/aprobar — aprobacion atomica",
 
   it("aprueba por aprobar_cotizacion_atomica, no con un UPDATE suelto", async () => {
     const cotizaciones = createChainMock(cotizacionEnviada)
-    mockSupabaseFrom({ cotizaciones })
+    mockSupabaseFrom({ cotizaciones, items_cotizacion: createChainMock([], null, 1) })
 
     let capturado: any = null
     vi.mocked(supabaseAdmin.rpc).mockImplementation((fn: string, params?: any) => {
@@ -70,7 +70,7 @@ describe("POST /api/public/cotizaciones/[token]/aprobar — aprobacion atomica",
 
   it("una revision se aprueba por el mismo RPC, que es donde vive la reconciliacion", async () => {
     const revision = { ...cotizacionEnviada, id: "rev-1", revision_de: "cot-1" }
-    mockSupabaseFrom({ cotizaciones: createChainMock(revision) })
+    mockSupabaseFrom({ cotizaciones: createChainMock(revision), items_cotizacion: createChainMock([], null, 1) })
 
     const llamados: string[] = []
     vi.mocked(supabaseAdmin.rpc).mockImplementation((fn: string) => {
@@ -87,7 +87,7 @@ describe("POST /api/public/cotizaciones/[token]/aprobar — aprobacion atomica",
   })
 
   it("sin stock no aprueba: la cotizacion no queda ACEPTADA sin reserva", async () => {
-    mockSupabaseFrom({ cotizaciones: createChainMock(cotizacionEnviada) })
+    mockSupabaseFrom({ cotizaciones: createChainMock(cotizacionEnviada), items_cotizacion: createChainMock([], null, 1) })
 
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
       data: null,
@@ -103,7 +103,7 @@ describe("POST /api/public/cotizaciones/[token]/aprobar — aprobacion atomica",
   })
 
   it("mapea el guard de estado del RPC a 400 (doble aprobacion concurrente)", async () => {
-    mockSupabaseFrom({ cotizaciones: createChainMock(cotizacionEnviada) })
+    mockSupabaseFrom({ cotizaciones: createChainMock(cotizacionEnviada), items_cotizacion: createChainMock([], null, 1) })
 
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
       data: null,
@@ -115,7 +115,7 @@ describe("POST /api/public/cotizaciones/[token]/aprobar — aprobacion atomica",
   })
 
   it("sigue exigiendo firma para tipo ORDEN antes de tocar la base", async () => {
-    mockSupabaseFrom({ cotizaciones: createChainMock(cotizacionEnviada) })
+    mockSupabaseFrom({ cotizaciones: createChainMock(cotizacionEnviada), items_cotizacion: createChainMock([], null, 1) })
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ok: true }, error: null } as any)
 
     const { status } = await parseResponse(await POST(createPostRequest({}), createParams(TOKEN)))
@@ -135,7 +135,7 @@ describe("POST /api/public/cotizaciones/[token]/aprobar — base sin la migracio
 
   it("una cotizacion comun sigue aprobandose por el camino JS de compatibilidad", async () => {
     const cotizaciones = createChainMock(cotizacionEnviada)
-    mockSupabaseFrom({ cotizaciones })
+    mockSupabaseFrom({ cotizaciones, items_cotizacion: createChainMock([], null, 1) })
 
     const llamados: string[] = []
     vi.mocked(supabaseAdmin.rpc).mockImplementation((fn: string) => {
@@ -161,7 +161,7 @@ describe("POST /api/public/cotizaciones/[token]/aprobar — base sin la migracio
     // siempre. Negarse es ruidoso y reversible; reservar de mas no lo es.
     const revision = { ...cotizacionEnviada, id: "rev-1", revision_de: "cot-1" }
     const cotizaciones = createChainMock(revision)
-    mockSupabaseFrom({ cotizaciones })
+    mockSupabaseFrom({ cotizaciones, items_cotizacion: createChainMock([], null, 1) })
 
     const llamados: string[] = []
     vi.mocked(supabaseAdmin.rpc).mockImplementation((fn: string) => {
