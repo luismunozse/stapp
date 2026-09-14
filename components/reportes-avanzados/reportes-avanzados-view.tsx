@@ -1,7 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useSession } from "next-auth/react"
+import { useState } from "react"
 import dynamic from "next/dynamic"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Users, Package, BarChart3, Clock, AlertTriangle, DollarSign, Boxes, ShoppingCart } from "lucide-react"
@@ -80,38 +79,24 @@ const RentabilidadTecnicos = dynamic(
   { loading: () => <ReporteSkeleton />, ssr: false }
 )
 
-export function ReportesAvanzadosView() {
+/**
+ * `verTopClientes` — "Clientes" es Top clientes: cuánto gastó cada uno. Un
+ * taller puede apagarle eso al vendedor con `vendedores_ven_ingresos`
+ * (migración 326).
+ *
+ * Llega RESUELTO como prop desde la página, que es un server component y ya
+ * tiene la sesión y el acceso a la BD. Se hizo así y no con useSession() + un
+ * fetch a /api/org/features por tres motivos: no obliga a este componente a
+ * vivir dentro de un <SessionProvider> (sus tests lo montan pelado), no hay
+ * flash de la pestaña apareciendo y desapareciendo, y el valor sale del mismo
+ * resolver que usa la API en vez de una segunda fuente de verdad.
+ *
+ * Default `true`: quien no pase la prop ve la pestaña, que es la conducta
+ * previa a este permiso. Esconder de más sería una denegación fabricada; del
+ * lado del servidor requireIngresosAccess() decide de verdad igual.
+ */
+export function ReportesAvanzadosView({ verTopClientes = true }: { verTopClientes?: boolean }) {
   const [activeTab, setActiveTab] = useState("tecnicos")
-
-  // "Clientes" es Top clientes: cuánto gastó cada uno. Un taller puede apagarle
-  // eso al vendedor con `vendedores_ven_ingresos` (migración 326). El flag vive
-  // en la BD, así que hay que ir a buscarlo; para el ADMIN no hay nada que
-  // preguntar y no paga el fetch. El TECNICO no llega acá: lo frena el
-  // middleware.
-  //
-  // Sólo un `false` EXPLÍCITO esconde la pestaña. Un chequeo que no se pudo
-  // completar no es una negativa —misma regla que el gate del POS—, y del lado
-  // del servidor requireIngresosAccess() decide de verdad.
-  const { data: session } = useSession()
-  const esVendedor = session?.user?.role === "VENDEDOR"
-  const [veIngresos, setVeIngresos] = useState(true)
-
-  useEffect(() => {
-    if (!esVendedor) return
-    let cancelado = false
-    fetch("/api/org/features", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (cancelado || !d) return
-        setVeIngresos(d.vendedoresVenIngresos !== false)
-      })
-      .catch(() => {})
-    return () => {
-      cancelado = true
-    }
-  }, [esVendedor])
-
-  const verTopClientes = !esVendedor || veIngresos
 
   // Map tab values to report types for export
   const exportableReports: Record<string, string> = {
