@@ -105,6 +105,10 @@ interface Cotizacion {
     notas?: string | null
   } | null
   convertidaAOrdenId?: string | null
+  veredicto?: string | null
+  diagnosticoTecnico?: string | null
+  causaDano?: string | null
+  presentadoAnte?: string | null
   items: {
     id: string
     descripcion: string
@@ -701,6 +705,10 @@ export default function CotizacionesPage() {
               sectorId: editingCotizacion.sectorId || undefined,
               equipo: editingCotizacion.equipo || undefined,
               checklist: editingCotizacion.checklist || undefined,
+              veredicto: editingCotizacion.veredicto ?? null,
+              diagnosticoTecnico: editingCotizacion.diagnosticoTecnico ?? null,
+              causaDano: editingCotizacion.causaDano ?? null,
+              presentadoAnte: editingCotizacion.presentadoAnte ?? null,
             }}
             onClose={() => setEditingCotizacion(null)}
             onSuccess={() => {

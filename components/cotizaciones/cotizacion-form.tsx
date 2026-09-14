@@ -15,10 +15,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2, BookOpen, Smartphone, Wrench } from "lucide-react"
+import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2, BookOpen, Smartphone, Wrench, AlertTriangle } from "lucide-react"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { useCurrency, useTerminologia } from "@/contexts/currency-context"
 import { getCountryConfig } from "@/lib/countries"
+import { VEREDICTOS, CAUSAS_DANO, VEREDICTO_LABELS, CAUSA_DANO_LABELS } from "@/lib/cotizacion-informe"
 import { useModal } from "@/contexts/modal-context"
 import { ItemRow, calcItemNeto } from "./item-row"
 import { ClienteSelector } from "./cliente-selector"
@@ -117,6 +118,10 @@ interface CotizacionFormProps {
     sectorId?: string | null
     equipo?: EquipoData | null
     checklist?: ChecklistPickerValue | null
+    veredicto?: string | null
+    diagnosticoTecnico?: string | null
+    causaDano?: string | null
+    presentadoAnte?: string | null
   }
 }
 
@@ -205,9 +210,55 @@ export function CotizacionForm({
   )
   const [tiposDispositivo, setTiposDispositivo] = useState<Array<{ id: string; codigo: string; nombre: string }>>([])
 
+  const [veredicto, setVeredicto] = useState<string | null>(initialData?.veredicto ?? null)
+  const [diagnosticoTecnico, setDiagnosticoTecnico] = useState(initialData?.diagnosticoTecnico ?? "")
+  const [causaDano, setCausaDano] = useState<string | null>(initialData?.causaDano ?? null)
+  const [presentadoAnte, setPresentadoAnte] = useState(initialData?.presentadoAnte ?? "")
+  const [entidades, setEntidades] = useState<string[]>([])
+
   const isEditing = !!initialData?.id
   const [linkedOrdenId, setLinkedOrdenId] = useState<string | null>(ordenId || null)
   const isStandalone = !linkedOrdenId
+
+  // Sin items no hay presupuesto: el documento se emite como informe tecnico.
+  const sinPresupuesto = veredicto === "IRREPARABLE" || veredicto === "SIN_FALLA"
+
+  // Misma regla que decide que items son "reales" al enviar (handleSubmit).
+  // Calculada tambien en el render para poder avisar, ANTES de guardar,
+  // cuantas filas se van a borrar: dentro de la misma sesion `items` nunca se
+  // toca (deseleccionar el veredicto restaura la tabla tal cual estaba), pero
+  // el PUT borra y reinserta todas las filas de items_cotizacion en cada
+  // guardado — así que un Guardar con el veredicto puesto sí las pierde.
+  const itemsValidos = items.filter(
+    (item) => item.descripcion && item.cantidad > 0 && item.precioUnitario > 0
+  )
+
+  // El diagnostico de la orden se PRECARGA una sola vez, en un documento nuevo
+  // y solo si el campo esta vacio. Lo que se persiste es la copia congelada: la
+  // orden sigue mutando despues, y un documento presentado ante una aseguradora
+  // no puede cambiar solo. Por eso no es un efecto que sincronice, es un
+  // arranque. Nunca pisar lo que el tecnico ya escribio.
+  useEffect(() => {
+    if (isEditing || !linkedOrdenId || diagnosticoTecnico) return
+    let vivo = true
+    fetch(`/api/ordenes/${linkedOrdenId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (vivo && d?.diagnostico) setDiagnosticoTecnico(d.diagnostico)
+      })
+      .catch(() => {})
+    return () => { vivo = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedOrdenId])
+
+  useEffect(() => {
+    let vivo = true
+    fetch("/api/cotizaciones/entidades")
+      .then((r) => (r.ok ? r.json() : { entidades: [] }))
+      .then((d) => { if (vivo) setEntidades(d.entidades || []) })
+      .catch(() => {})
+    return () => { vivo = false }
+  }, [])
 
   // Cargar tipos de dispositivo (solo para PRESUPUESTO)
   useEffect(() => {
@@ -377,10 +428,10 @@ export function CotizacionForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    const validItems = items.filter(
-      (item) => item.descripcion && item.cantidad > 0 && item.precioUnitario > 0
-    )
-    if (validItems.length === 0) {
+    // Sin presupuesto (veredicto IRREPARABLE o SIN_FALLA) el documento se emite
+    // como informe tecnico: no hay items que validar ni que mandar.
+    const validItems = sinPresupuesto ? [] : itemsValidos
+    if (!sinPresupuesto && validItems.length === 0) {
       await showWarning("Debe agregar al menos un item válido")
       return
     }
@@ -430,6 +481,27 @@ export function CotizacionForm({
         descuentoGlobalValor,
         ivaPorcentaje,
         tipoCambio: tipoCambio || undefined,
+        // Los cuatro campos del dictamen mandan `?? null` / `|| null`, nunca
+        // `|| undefined`. El PUT usa `data.X !== undefined` para decidir si
+        // toca la columna: una clave ausente (JSON.stringify borra los
+        // `undefined`) significa "no tocar" y deja el valor viejo tal cual;
+        // solo `null` explícito la limpia. Con `|| undefined`, borrar el
+        // veredicto/diagnóstico/entidad en la UI nunca llegaba al servidor.
+        // Encadenado con el fix del veredicto deseleccionable: un taller puede
+        // deseleccionar el veredicto (se guarda null, ok) y despues vaciar
+        // diagnostico/entidad esperando que tambien se borren. Si esos dos
+        // quedaran con `|| undefined`, el texto viejo sobrevive en la fila y
+        // lib/pdf.ts sigue dibujando el bloque de dictamen (arranca con
+        // `if (tieneDictamen || data.presentadoAnte)`) con una entidad y un
+        // diagnostico que el usuario quiso borrar, sin veredicto: el mismo
+        // "el PDF miente" que el veredicto permanente, solo que via un campo
+        // distinto. El insert del POST no se ve afectado: `data.X?.trim() ||
+        // null` da `null` para undefined, null o "" por igual (ver
+        // app/api/cotizaciones/route.ts:468-471).
+        veredicto: veredicto ?? null,
+        causaDano: causaDano ?? null,
+        diagnosticoTecnico: diagnosticoTecnico.trim() || null,
+        presentadoAnte: presentadoAnte.trim() || null,
       }
 
       if (linkedOrdenId) payload.ordenId = linkedOrdenId
@@ -799,7 +871,133 @@ export function CotizacionForm({
             </CollapsibleSection>
           )}
 
+          {/* Informe técnico: dictamen para talleres que trabajan con aseguradoras.
+              Elegir Irreparable o Sin falla detectada emite el documento sin
+              items (ver `sinPresupuesto`). Visible siempre, no solo en
+              PRESUPUESTO: una cotización de ORDEN también puede terminar en
+              informe.
+              defaultOpen solo cuando ya hay algo cargado (las 4 columnas, no
+              solo veredicto/entidad/diagnostico: una causaDano cargada sola
+              -- sin veredicto -- también tiene que seguir siendo visible al
+              reabrir): la mayoría de los talleres no usa este dictamen, y una
+              sección siempre expandida entre "Condiciones técnicas" e
+              "Ítems" les agrega scroll sin dar nada a cambio en cada
+              cotización que crean. */}
+          <CollapsibleSection
+            title="Informe técnico"
+            icon={FileText}
+            defaultOpen={!!veredicto || !!presentadoAnte || !!diagnosticoTecnico || !!causaDano}
+          >
+            <div>
+              <Label>Veredicto</Label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {VEREDICTOS.map((v) => (
+                  <Button
+                    key={v}
+                    type="button"
+                    variant={veredicto === v ? "default" : "outline"}
+                    size="sm"
+                    aria-pressed={veredicto === v}
+                    // Clickear el botón ya activo lo deselecciona. Sin esto, un
+                    // click accidental queda grabado para siempre: el payload
+                    // no tiene otra forma de volver a null.
+                    onClick={() => setVeredicto(veredicto === v ? null : v)}
+                    disabled={loading}
+                  >
+                    {VEREDICTO_LABELS[v]}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="informe-diagnostico">Diagnóstico del informe técnico</Label>
+              <Textarea
+                id="informe-diagnostico"
+                value={diagnosticoTecnico}
+                onChange={(e) => setDiagnosticoTecnico(e.target.value)}
+                placeholder="Qué encontró el técnico: el texto que se imprime en el informe presentado ante la entidad"
+                rows={3}
+                disabled={loading}
+                className="mt-1"
+                maxLength={4000}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="informe-causa-dano">Causa probable del daño</Label>
+                {/* Radix no acepta value="" en un SelectItem, asi que "sin
+                    causa" usa el centinela "none" y se traduce a null al
+                    guardar (mismo patron que components/ordenes/orden-tecnico-card.tsx
+                    y components/proveedores/proveedor-form.tsx). Sin esta
+                    opcion, una causa elegida por error queda pegada para
+                    siempre: mismo bug que el veredicto y el diagnostico. */}
+                <Select
+                  value={causaDano || "none"}
+                  onValueChange={(v) => setCausaDano(v === "none" ? null : v)}
+                  disabled={loading}
+                >
+                  <SelectTrigger id="informe-causa-dano" className="mt-1">
+                    <SelectValue placeholder="Sin especificar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin especificar</SelectItem>
+                    {CAUSAS_DANO.map((c) => (
+                      <SelectItem key={c} value={c}>{CAUSA_DANO_LABELS[c]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="informe-presentado-ante">Para ser presentado ante</Label>
+                <Input
+                  id="informe-presentado-ante"
+                  list="entidades-informe"
+                  value={presentadoAnte}
+                  onChange={(e) => setPresentadoAnte(e.target.value)}
+                  placeholder="Ej: La Segunda ART"
+                  disabled={loading}
+                  className="mt-1"
+                  maxLength={200}
+                />
+                <datalist id="entidades-informe">
+                  {entidades.map((ent) => (
+                    <option key={ent} value={ent} />
+                  ))}
+                </datalist>
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          {sinPresupuesto && (
+            itemsValidos.length > 0 ? (
+              // Items YA CARGADOS (de una cotizacion existente, o tipeados antes
+              // de elegir el veredicto) se pierden de verdad al guardar: el PUT
+              // borra y reinserta items_cotizacion en cada guardado, y esto NO
+              // es reversible como deseleccionar el veredicto. Nombrar la
+              // cantidad es lo que distingue este caso del aviso informativo de
+              // abajo (documento nuevo, nunca tuvo items).
+              <p className="text-sm border rounded-md p-3 border-warning/30 bg-warning-50 text-warning-700 dark:bg-warning/15 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  <span>Este documento se va a emitir como informe técnico, sin presupuesto ni ítems.</span>{" "}
+                  <span>
+                    {itemsValidos.length === 1
+                      ? "Al guardar se va a eliminar el ítem cargado."
+                      : `Al guardar se van a eliminar los ${itemsValidos.length} ítems cargados.`}
+                  </span>
+                </span>
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground border rounded-md p-3">
+                Este documento se va a emitir como informe técnico, sin presupuesto ni ítems.
+              </p>
+            )
+          )}
+
           {/* Ítems */}
+          {!sinPresupuesto && (
           <CollapsibleSection title="Ítems" icon={FileText} defaultOpen>
             {/* Items Header - Hidden on mobile */}
             <div className="hidden sm:grid gap-2 text-sm font-medium text-muted-foreground border-b pb-2" style={{ gridTemplateColumns: "4fr 1fr 1.5fr 1.5fr 1.5fr 2fr 0.5fr" }}>
@@ -874,8 +1072,13 @@ export function CotizacionForm({
               </div>
             )}
           </CollapsibleSection>
+          )}
 
-          {/* Descuentos y totales */}
+          {/* Descuentos y totales: sin items no hay nada que descontar ni total
+              que mostrar. Sin este guard, el recuadro sigue calculando desde
+              `items` (que siguen en el estado) y muestra un total que el POST
+              nunca manda (va con items: []). */}
+          {!sinPresupuesto && (
           <CollapsibleSection title="Descuentos y totales" icon={Calculator} defaultOpen>
             {/* Descuento Global + IVA */}
             <div className="flex flex-col sm:flex-row sm:items-end gap-3 p-3 bg-muted/50 rounded-lg">
@@ -990,6 +1193,7 @@ export function CotizacionForm({
               </div>
             </div>
           </CollapsibleSection>
+          )}
 
           {/* Detalles y notas */}
           <CollapsibleSection title="Detalles y notas" icon={FileText} defaultOpen={false}>

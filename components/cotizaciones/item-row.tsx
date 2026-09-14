@@ -77,8 +77,31 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
   const neto = calcItemNeto(item)
   const [invSearch, setInvSearch] = useState("")
   const [invResults, setInvResults] = useState<any[]>([])
-  const [showInvSearch, setShowInvSearch] = useState(false)
-  const searchRef = useRef<HTMLDivElement>(null)
+  // La fila nueva arranca en modo busqueda. La capacidad de traer del catalogo
+  // ya existia, pero vivia detras de un boton icono sin etiqueta y el taller no
+  // se enteraba. Una fila que ya tiene descripcion NO abre el buscador: las
+  // cotizaciones en BORRADOR que ya existen se siguen editando como siempre.
+  const [showInvSearch, setShowInvSearch] = useState(
+    !item.descripcion && !item.inventarioId && !item.servicioId
+  )
+  // Refs separados por layout: los dos layouts (movil y escritorio) existen
+  // siempre en el DOM a la vez (se alternan por CSS, no por render
+  // condicional), asi que un unico ref quedaria pisado por el ultimo de los
+  // dos en asignarse (el de escritorio, por orden de documento) y el click
+  // afuera-cierra-el-buscador confundiria un toque DENTRO del buscador movil
+  // con un click afuera.
+  const mobileSearchRef = useRef<HTMLDivElement>(null)
+  const desktopSearchRef = useRef<HTMLDivElement>(null)
+  // Distingue "el usuario abrio la busqueda a proposito" (click en el icono
+  // Package) de "la fila arranca en modo busqueda por default, sin que nadie
+  // la haya tocado todavia". El listener de click-afuera solo tiene que cerrar
+  // el primer caso: cerrar tambien el segundo es lo que rompia la primera fila
+  // de un formulario nuevo (arranca con showInvSearch=true) apenas el usuario
+  // clickeaba CUALQUIER otra cosa de la pantalla -- el selector de cliente,
+  // por ejemplo -- antes de haber tocado siquiera el buscador. Las filas que
+  // se agregan con "Agregar item" no sufren esto porque montan DESPUES de ese
+  // primer click ajeno.
+  const openedByUserRef = useRef(false)
 
   // Local string state for numeric fields so the user can clear & retype freely.
   // The numeric value pushed to onUpdate (and thus to totals) is unchanged.
@@ -132,7 +155,17 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      // Cierra solo si el click cae afuera de LOS DOS contenedores: en un
+      // momento dado nada mas que uno esta visible, pero el otro sigue
+      // montado (oculto por CSS) y su ref sigue vivo.
+      const dentroDeMobile = !!mobileSearchRef.current?.contains(target)
+      const dentroDeDesktop = !!desktopSearchRef.current?.contains(target)
+      // Solo cierra si el usuario abrio la busqueda a proposito. El estado
+      // default (fila fresca sin tocar) no cuenta como "abierta": un click en
+      // cualquier otra parte de la pantalla no puede tapar el buscador que el
+      // taller ni siquiera sabe que esta ahi.
+      if (!dentroDeMobile && !dentroDeDesktop && openedByUserRef.current) {
         setShowInvSearch(false)
       }
     }
@@ -192,6 +225,15 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
     onUpdate(index, "costoUnitario", null)
   }
 
+  // Unico punto que ABRE la busqueda a partir de una accion del usuario (el
+  // icono Package). Marca openedByUserRef para que el click-afuera sepa que
+  // esta apertura es real, no el default sin tocar de una fila nueva.
+  const toggleInvSearch = () => {
+    const next = !showInvSearch
+    if (next) openedByUserRef.current = true
+    setShowInvSearch(next)
+  }
+
   const vinculado = !!item.inventarioId || !!item.servicioId
   const hasDiscount = (item.descuentoValor || 0) > 0
   const costoUnit = Number(item.precioCompra) || 0
@@ -206,7 +248,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
       {/* Mobile Layout */}
       <div className="sm:hidden space-y-2 py-3 border-b">
         <div className="flex justify-between items-start gap-2">
-          <div className="flex-1 relative" ref={showInvSearch ? searchRef : undefined}>
+          <div className="flex-1 relative" ref={showInvSearch ? mobileSearchRef : undefined}>
             {showInvSearch ? (
               <div>
                 <Input
@@ -251,6 +293,16 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
                     })}
                   </div>
                 )}
+                {!vinculado && (
+                  <button
+                    type="button"
+                    className="mt-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                    onClick={() => { setShowInvSearch(false); setInvSearch(""); setInvResults([]) }}
+                    disabled={disabled}
+                  >
+                    Escribir a mano
+                  </button>
+                )}
               </div>
             ) : (
               <Input
@@ -261,7 +313,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
               />
             )}
           </div>
-          <Button type="button" variant={vinculado ? "secondary" : "outline"} size="icon" className="h-8 w-8 shrink-0" onClick={() => vinculado ? clearLink() : setShowInvSearch(!showInvSearch)} disabled={disabled} title={vinculado ? "Desvincular del catálogo" : "Buscar producto o servicio"}>
+          <Button type="button" variant={vinculado ? "secondary" : "outline"} size="icon" className="h-8 w-8 shrink-0" onClick={() => vinculado ? clearLink() : toggleInvSearch()} disabled={disabled} title={vinculado ? "Desvincular del catálogo" : "Buscar producto o servicio"}>
             {vinculado ? <X className="h-3.5 w-3.5" /> : <Package className="h-3.5 w-3.5" />}
           </Button>
           <Button
@@ -400,7 +452,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
 
       {/* Desktop Layout */}
       <div className="hidden sm:grid grid-cols-16 gap-2 items-center py-2 border-b" style={{ gridTemplateColumns: "4fr 1fr 1.5fr 1.5fr 1.5fr 2fr 0.5fr" }}>
-        <div className="relative" ref={!showInvSearch ? undefined : searchRef}>
+        <div className="relative" ref={!showInvSearch ? undefined : desktopSearchRef}>
           <div className="flex gap-1">
             {showInvSearch ? (
               <Input
@@ -419,7 +471,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
                 className="flex-1"
               />
             )}
-            <Button type="button" variant={vinculado ? "secondary" : "ghost"} size="icon" className="h-10 w-8 shrink-0" onClick={() => vinculado ? clearLink() : setShowInvSearch(!showInvSearch)} disabled={disabled} title={vinculado ? "Desvincular del catálogo" : "Buscar producto o servicio"}>
+            <Button type="button" variant={vinculado ? "secondary" : "ghost"} size="icon" className="h-10 w-8 shrink-0" onClick={() => vinculado ? clearLink() : toggleInvSearch()} disabled={disabled} title={vinculado ? "Desvincular del catálogo" : "Buscar producto o servicio"}>
               {vinculado ? <X className="h-3.5 w-3.5" /> : <Package className="h-3.5 w-3.5" />}
             </Button>
           </div>
@@ -470,6 +522,16 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
                 )
               })}
             </div>
+          )}
+          {showInvSearch && !vinculado && (
+            <button
+              type="button"
+              className="mt-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              onClick={() => { setShowInvSearch(false); setInvSearch(""); setInvResults([]) }}
+              disabled={disabled}
+            >
+              Escribir a mano
+            </button>
           )}
           {showCostInfo && (
             <div className="text-[11px] text-muted-foreground mt-1 flex justify-between gap-2">
