@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { CredencialesArca, type EstadoCredencialesArca } from "@/components/configuracion/credenciales-arca"
+import { CredencialesArcaDelegado, type EstadoDelegacion } from "@/components/configuracion/credenciales-arca-delegado"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -95,6 +97,26 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [fePuntoVentaGuardado, setFePuntoVentaGuardado] = useState<number | null>(null)
   const [feConectando, setFeConectando] = useState(false)
   const [feMessage, setFeMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  // `provider` decide que formulario se muestra. Una fila existente de
+  // TusFacturas sigue viendo el suyo; todo lo demas (sin configurar o ya en
+  // ARCA) usa la carga de certificado.
+  const [feProvider, setFeProvider] = useState<"arca" | "arca_delegado" | "tusfacturas" | null>(null)
+  const [feCuitPlataforma, setFeCuitPlataforma] = useState<string | null>(null)
+  const [feEstadoDelegacion, setFeEstadoDelegacion] = useState<EstadoDelegacion>({
+    conectado: false,
+    cuit: null,
+    puntoVenta: null,
+    condicionFiscal: null,
+  })
+  const [feEstadoArca, setFeEstadoArca] = useState<EstadoCredencialesArca>({
+    conectado: false,
+    cuit: null,
+    puntoVenta: null,
+    certSubject: null,
+    certNotAfter: null,
+    estado: null,
+    condicionFiscal: null,
+  })
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -168,6 +190,23 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       if (res.ok) {
         const data = await res.json()
         setFeConectado(!!data.conectado)
+        setFeProvider(data.provider ?? null)
+        setFeCuitPlataforma(data.cuitPlataforma ?? null)
+        setFeEstadoDelegacion({
+          conectado: data.provider === "arca_delegado" && !!data.conectado,
+          cuit: data.cuit ?? null,
+          puntoVenta: data.puntoVenta ?? null,
+          condicionFiscal: data.condicionFiscal ?? null,
+        })
+        setFeEstadoArca({
+          conectado: !!data.conectado,
+          cuit: data.cuit ?? null,
+          puntoVenta: data.puntoVenta ?? null,
+          certSubject: data.certSubject ?? null,
+          certNotAfter: data.certNotAfter ?? null,
+          estado: data.estado ?? null,
+          condicionFiscal: data.condicionFiscal ?? null,
+        })
         setFePuntoVentaGuardado(data.puntoVenta ?? null)
         if (data.puntoVenta) setFePuntoVenta(String(data.puntoVenta))
         if (data.condicionFiscal) setFeCondicionFiscal(data.condicionFiscal)
@@ -801,6 +840,8 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
 
             {facturacionHabilitada && (
               <div className="space-y-4 pt-2 border-t">
+                {feProvider === "tusfacturas" ? (
+                  <>
                 <p className="text-xs sm:text-sm text-muted-foreground">
                   Ingresá tus credenciales para conectar la cuenta. Se guardan cifradas y no vuelven a mostrarse.
                 </p>
@@ -902,6 +943,32 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
                       : "No conectado"}
                   </span>
                 </div>
+                  </>
+                ) : feProvider === "arca" ? (
+                  // BYO: solo para la org que YA tiene su propio certificado
+                  // cargado. Una org nueva no puede elegir este camino — son
+                  // seis pasos tecnicos y la adopcion real tiende a cero.
+                  <CredencialesArca
+                    allowEdit={allowEdit}
+                    estadoInicial={feEstadoArca}
+                    onConectado={(nuevo) => {
+                      setFeEstadoArca(nuevo)
+                      setFeConectado(nuevo.conectado)
+                      setFeProvider("arca")
+                    }}
+                  />
+                ) : (
+                  <CredencialesArcaDelegado
+                    allowEdit={allowEdit}
+                    cuitPlataforma={feCuitPlataforma}
+                    estadoInicial={feEstadoDelegacion}
+                    onGuardado={(nuevo) => {
+                      setFeEstadoDelegacion(nuevo)
+                      setFeConectado(nuevo.conectado)
+                      setFeProvider("arca_delegado")
+                    }}
+                  />
+                )}
               </div>
             )}
           </CardContent>

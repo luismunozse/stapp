@@ -1,17 +1,18 @@
 // @vitest-environment node
 /**
- * Regression test for P1a (review PR2, engram #1125): an `arca`-provider
- * credentials row has NULL legacy token columns (migration 299 made them
- * nullable for arca-only rows). Before the fix, `canEmitirFacturaElectronica`
- * returned true for any row regardless of provider, so emitir/route.ts would
- * reach `decryptSecret(cred.apitoken_enc)` with `apitoken_enc: null` and
- * throw an unhandled TypeError.
+ * Regresión de la fila `arca` incompleta. Una fila con provider='arca' tiene
+ * las columnas de token legacy en NULL (la migración 299 las hizo nullable
+ * justamente para eso). Si el gate la dejara pasar sin certificado, la ruta
+ * llegaría a descifrar un NULL y tiraría un TypeError sin manejar.
  *
- * Unlike facturacion-electronica-emitir.test.ts, this file deliberately does
- * NOT mock `@/lib/facturacion/access` — it exercises the REAL
- * `canEmitirFacturaElectronica` together with the REAL `decryptSecret`
- * (also unmocked), so a regression here surfaces as an actual unhandled
- * TypeError, not a mocked-away false positive.
+ * Desde la Fase 4 el proveedor ARCA SÍ emite, así que el gate ya no rechaza
+ * por proveedor: rechaza por certificado. Esta fila no trae `cert_not_after`,
+ * y `canEmitirFacturaElectronica` falla cerrado ante eso.
+ *
+ * A diferencia de facturacion-electronica-emitir.test.ts, este archivo NO
+ * mockea `@/lib/facturacion/access` — ejercita el gate real junto con el
+ * `decryptSecret` real, así que una regresión acá aparece como un TypeError
+ * de verdad y no como un falso verde mockeado.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { mockAuthSuccess, createChainMock, mockSupabaseFrom, createPostRequest, parseResponse } from "./helpers"
@@ -24,7 +25,7 @@ import { POST } from "@/app/api/facturacion-electronica/emitir/route"
 describe("POST /emitir — arca-provider credentials gate (P1a regression)", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("403s cleanly instead of crashing on decryptSecret(null) when credentials are provider='arca'", async () => {
+  it("403s cleanly instead of crashing on decryptSecret(null) when an arca row has no certificate", async () => {
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
     vi.mocked(hasPlanFeature).mockResolvedValue(true)
 
