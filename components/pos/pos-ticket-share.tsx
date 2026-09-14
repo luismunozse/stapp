@@ -59,6 +59,13 @@ export function PosTicketShare({ ventaData, plantillaCorta, countryCode }: Ticke
   const ticketRef = useRef<HTMLDivElement>(null)
   const [generating, setGenerating] = useState(false)
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null)
+  // Gatea compartir/descargar mientras el logo todavía se está binarizando:
+  // sin esto, un cajero que clickea WhatsApp/descarga antes de que termine
+  // el fetch+binarizado comparte un ticket sin logo de forma no
+  // determinística (generateImage lee `logoDataUrl` en el momento del
+  // click, no espera a que se resuelva). Arranca en `true` sólo si hay logo
+  // para buscar; si la org no tiene logo no hay nada que esperar.
+  const [logoLoading, setLogoLoading] = useState(!!ventaData.organizationLogoUrl)
 
   // html2canvas taints the canvas on a cross-origin image (canvas.toBlob()
   // then throws/returns null, silently breaking WhatsApp share + PNG
@@ -70,10 +77,14 @@ export function PosTicketShare({ ventaData, plantillaCorta, countryCode }: Ticke
     let cancelled = false
     if (!ventaData.organizationLogoUrl) {
       setLogoDataUrl(null)
+      setLogoLoading(false)
       return
     }
+    setLogoLoading(true)
     imageUrlToBinarizedDataUrl(ventaData.organizationLogoUrl).then((dataUrl) => {
-      if (!cancelled) setLogoDataUrl(dataUrl)
+      if (cancelled) return
+      setLogoDataUrl(dataUrl)
+      setLogoLoading(false)
     })
     return () => {
       cancelled = true
@@ -333,7 +344,7 @@ export function PosTicketShare({ ventaData, plantillaCorta, countryCode }: Ticke
             variant="outline"
             className="flex-1 h-11 text-green-600 border-green-300"
             onClick={handleShareWhatsApp}
-            disabled={generating}
+            disabled={generating || logoLoading}
           >
             {generating ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -347,7 +358,7 @@ export function PosTicketShare({ ventaData, plantillaCorta, countryCode }: Ticke
           variant="outline"
           className="h-11"
           onClick={handleDownloadImage}
-          disabled={generating}
+          disabled={generating || logoLoading}
           title="Descargar ticket como imagen"
         >
           {generating ? (
