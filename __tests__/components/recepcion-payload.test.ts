@@ -80,6 +80,34 @@ describe("construirEquipoPayload — accesorios", () => {
     const result = construirEquipoPayload(equipoFixture, sideVacio(), tiposFixture)
     expect(result.accesorios).toBeUndefined()
   })
+
+  it("incluye el texto que quedo tipeado en 'Otro accesorio...' sin apretar '+'", () => {
+    // El operador lo escribio y lo ve en pantalla cuando firma la recepcion:
+    // descartarlo dejaba el comprobante sin un accesorio que si se recibio.
+    const side = { ...sideVacio(), otroAccesorio: "Cargador original" }
+    const result = construirEquipoPayload(equipoFixture, side, tiposFixture)
+    expect(result.accesorios).toBe("Cargador original")
+  })
+
+  it("el texto pendiente se suma a lo ya marcado, y no se duplica si ya estaba agregado", () => {
+    const side = {
+      ...sideVacio(),
+      accesoriosSeleccionados: ["cargador"],
+      otroAccesorio: "  Funda a medida  ",
+    }
+    expect(construirEquipoPayload(equipoFixture, side, tiposFixture).accesorios).toBe(
+      "Cargador, Funda a medida",
+    )
+
+    const yaAgregado = {
+      ...sideVacio(),
+      accesoriosSeleccionados: ["cargador", "Funda a medida"],
+      otroAccesorio: "Funda a medida",
+    }
+    expect(construirEquipoPayload(equipoFixture, yaAgregado, tiposFixture).accesorios).toBe(
+      "Cargador, Funda a medida",
+    )
+  })
 })
 
 describe("construirEquipoPayload — fotos", () => {

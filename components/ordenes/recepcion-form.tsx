@@ -24,6 +24,7 @@ import { useOffline } from "@/contexts/offline-context"
 import { useModal } from "@/contexts/modal-context"
 import { STORES } from "@/lib/offline/constants"
 import { FALLBACK_CONFIG } from "@/lib/tipos-dispositivo-defaults"
+import { accesoriosConPendiente } from "@/lib/ordenes/accesorios"
 import type { Cliente, CampoExtra, AccesorioConfig, TipoDispositivoCustom } from "@/types"
 import type { FotoPreview } from "./fotos-ingreso"
 import { RecepcionEquipoCard, equipoFormSchema, type EquipoFormValues } from "./recepcion-equipo-card"
@@ -159,7 +160,13 @@ export function construirEquipoPayload(
   tiposDispositivo: TipoDispositivoCustom[]
 ): EquipoPayload {
   const disponibles = resolverAccesoriosDisponibles(equipo.tipoDispositivo, tiposDispositivo)
-  const accesoriosLabels = side.accesoriosSeleccionados.map((id) => {
+  // El texto libre todavia sin agregar con "+" entra igual: ver
+  // accesoriosConPendiente. Cae en la rama "id no encontrado" del map de abajo,
+  // que devuelve el texto tal cual se escribio.
+  const accesoriosLabels = accesoriosConPendiente(
+    side.accesoriosSeleccionados,
+    side.otroAccesorio,
+  ).map((id) => {
     const acc = disponibles.find((a) => a.id === id)
     return acc ? acc.label : id
   })
@@ -445,6 +452,10 @@ export function RecepcionForm() {
   // --- Handlers por equipo ---------------------------------------------------
 
   const handleTipoChange = (index: number, nuevoTipo: string) => {
+    // Igual que en el alta clasica: volver a tocar el tipo ya elegido no es un
+    // cambio de tipo y no puede vaciar lo que el operador ya cargo para ESTE
+    // equipo.
+    if (nuevoTipo === getValues(`equipos.${index}.tipoDispositivo`)) return
     setValue(`equipos.${index}.tipoDispositivo`, nuevoTipo, { shouldValidate: true })
     // Igual que en el alta clasica: cambiar de tipo limpia accesorios y
     // campos extra, porque pertenecen a la config del tipo anterior.
