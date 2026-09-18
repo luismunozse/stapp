@@ -615,6 +615,11 @@ export function Navbar() {
               </span>
               <PlanBadge />
             </div>
+            {/* The desktop top-right bar is `hidden lg:flex`, so this is the only
+                place the branch switcher reaches a phone. It renders null when
+                there is nothing to switch between, hence no wrapper: the margin
+                lives on the trigger so it collapses with it. */}
+            <SucursalSwitcher variant="block" />
           </div>
           <nav className="flex-1 px-3 py-3 overflow-y-auto">
             {filteredSections.map((section) => (
