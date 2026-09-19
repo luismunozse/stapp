@@ -156,3 +156,36 @@ describe("generateCotizacionPDF — informe tecnico", () => {
     expect(text).toContain(marcaDeCierre)
   })
 })
+
+describe("generateCotizacionPDF — dictamen sin veredicto (FIX 3)", () => {
+  // Antes del fix, el bloque de dictamen se gateaba con
+  // `!!data.veredicto || data.presentadoAnte`: una cotizacion COMUN (con
+  // items, no un informe) donde el tecnico solo cargo el diagnostico o solo
+  // la causa -- sin elegir veredicto ni entidad -- quedaba guardada en la
+  // base pero invisible tanto en el PDF como en el link publico.
+  it("con SOLO diagnostico (sin veredicto, causa ni entidad) igual imprime el bloque de dictamen", async () => {
+    const buffer = await generateCotizacionPDF({
+      ...buildCotizacionOrdenFixture(),
+      diagnosticoTecnico: "Se detecta oxidacion en el conector de carga por exposicion a humedad.",
+    } as any)
+    const text = await extractPdfText(buffer)
+
+    expect(text).toContain("DICTAMEN TÉCNICO")
+    expect(text).toContain("Diagnóstico")
+    expect(text).toContain("Se detecta oxidacion en el conector de carga por exposicion a humedad.")
+
+    // Sigue siendo una cotizacion comun: tiene items y se dibuja la tabla.
+    expect(text).toContain("DETALLE DE ITEMS")
+  })
+
+  it("con SOLO causa del daño (sin veredicto ni diagnostico) tambien imprime el bloque", async () => {
+    const buffer = await generateCotizacionPDF({
+      ...buildCotizacionOrdenFixture(),
+      causaDano: "DESGASTE",
+    } as any)
+    const text = await extractPdfText(buffer)
+
+    expect(text).toContain("DICTAMEN TÉCNICO")
+    expect(text).toContain("Desgaste por uso")
+  })
+})

@@ -17,6 +17,30 @@ export type CausaDano = (typeof CAUSAS_DANO)[number]
 export const veredictoSchema = z.enum(VEREDICTOS)
 export const causaDanoSchema = z.enum(CAUSAS_DANO)
 
+/**
+ * Etiquetas en castellano para el dictamen del informe tecnico. Fuente unica:
+ * antes vivian duplicadas en lib/pdf.ts, cotizacion-form.tsx y
+ * cotizacion-publica.tsx, con el riesgo de que el taller vea un texto en
+ * pantalla y el asegurador reciba otro en el PDF sobre el mismo equipo. El
+ * tipado por `Veredicto`/`CausaDano` hace que agregar un valor a VEREDICTOS o
+ * CAUSAS_DANO sin sumarle etiqueta sea un error de compilacion, no un
+ * documento mudo en produccion.
+ */
+export const VEREDICTO_LABELS: Record<Veredicto, string> = {
+  REPARABLE: "Reparable",
+  IRREPARABLE: "Irreparable",
+  SIN_FALLA: "Sin falla detectada",
+}
+export const CAUSA_DANO_LABELS: Record<CausaDano, string> = {
+  CAIDA: "Caída",
+  LIQUIDO: "Contacto con líquido",
+  SOBRETENSION: "Sobretensión eléctrica",
+  DESGASTE: "Desgaste por uso",
+  USO_INDEBIDO: "Uso indebido",
+  FALLA_FABRICA: "Falla de fábrica",
+  DESCONOCIDA: "Desconocida",
+}
+
 /** Los dos veredictos que hacen que no haya nada que presupuestar. */
 const SIN_PRESUPUESTO: readonly string[] = ["IRREPARABLE", "SIN_FALLA"]
 
@@ -34,6 +58,23 @@ export interface DatosInforme {
  */
 export function esInforme(datos: DatosInforme): boolean {
   return datos.cantidadItems === 0 && !!datos.veredicto && SIN_PRESUPUESTO.includes(datos.veredicto)
+}
+
+/**
+ * Hay contenido de dictamen tecnico para mostrar cuando el veredicto, el
+ * diagnostico O la causa del daño estan cargados -- cualquiera de los tres,
+ * no solo el veredicto. Antes lib/pdf.ts y cotizacion-publica.tsx miraban
+ * unicamente `veredicto`, asi que una cotizacion comun con SOLO diagnostico o
+ * SOLO causa (sin veredicto ni entidad) quedaba guardada pero invisible en el
+ * PDF y en el link publico. Fuente unica para que ambos lugares no puedan
+ * volver a divergir.
+ */
+export function tieneDictamenTecnico(datos: {
+  veredicto?: string | null
+  diagnosticoTecnico?: string | null
+  causaDano?: string | null
+}): boolean {
+  return !!datos.veredicto || !!datos.diagnosticoTecnico || !!datos.causaDano
 }
 
 /**
