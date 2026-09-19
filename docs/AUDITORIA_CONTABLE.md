@@ -6,6 +6,62 @@
 
 ---
 
+## Estado: Etapa 1 completa
+
+Los seis puntos de la Etapa 1 están implementados. Lo que sigue en este
+documento es el informe original; los puntos resueltos quedan marcados.
+
+| # | Qué era | Estado |
+|---|---------|--------|
+| 1.1 | Los reportes cortaban a las 1000 filas | ✅ Resuelto |
+| 1.2 | Los meses arrancaban 3 horas antes | ✅ Resuelto |
+| 1.3 | Las comisiones se restaban dos veces | ✅ Resuelto |
+| 1.5 | Las diferencias de caja no llegaban a ningún reporte | ✅ Resuelto |
+| 1.6 | Un movimiento se borraba sin dejar rastro | ✅ Resuelto |
+| 1.7 | El detector de cuentas corrientes no lo miraba nadie | ✅ Resuelto |
+| 1.4 | Comprar mercadería no mueve plata | ⏳ Etapa 2 |
+| 1.8 | Repuestos a mano sin costo inflan la ganancia | ⏳ Etapa 2 |
+
+### Antes de desplegar
+
+**La migración `327_caja_anulacion_y_origen.sql` va primero, el código después.**
+
+El código nuevo filtra `anulado = false` en los movimientos de caja. Si se
+despliega antes de aplicar la migración, esa columna no existe y se rompen la
+pantalla de Caja y todos los reportes de Finanzas.
+
+```bash
+npm run db:dry   -- supabase/migrations/327_caja_anulacion_y_origen.sql   # prueba, revierte
+npm run db:apply -- supabase/migrations/327_caja_anulacion_y_origen.sql   # aplica de verdad
+```
+
+Al revés no pasa nada: la migración es 100% aditiva y ningún lector cambia de
+resultado hasta que el código la use.
+
+**Pendiente aparte:** la vista `v_cc_drift` (migración 245) puede no estar
+creada, porque esa migración se aplica a mano desde el editor SQL de Supabase.
+El cron nuevo lo detecta y lo reporta en vez de romper, pero hasta que se
+aplique no va a avisar de ningún descuadre. Conviene verificarlo:
+
+```sql
+SELECT count(*) FROM v_cc_drift;
+```
+
+### Qué cambia para el usuario
+
+- **Pagar comisiones** ahora descuenta la plata de la caja automáticamente. Si
+  venías cargando ese gasto a mano, **dejá de hacerlo**: se duplicaría en el
+  arqueo. (El pago acepta `registrarEnCaja: false` si preferís seguir a mano
+  mientras ordenás la operatoria.)
+- **Borrar un movimiento de caja** ahora lo anula: desaparece de la caja y de
+  los reportes igual que antes, pero queda registrado quién lo dio de baja.
+- **Los números de Finanzas van a cambiar** respecto de lo que mostraban ayer,
+  en dos sentidos: los períodos ahora cortan en la hora del taller, y los
+  reportes que antes se comían filas ahora las traen todas. Si un mes cerrado
+  da distinto que antes, el número nuevo es el correcto.
+
+---
+
 ## Cómo leer esto
 
 Está escrito sin términos técnicos. Cada problema tiene:
@@ -57,7 +113,7 @@ Estos no son "falta una función". Son casos donde la pantalla te muestra un nú
 
 ---
 
-### 1.1 🔴 Los reportes cortan a los 1000 registros y no te avisan
+### 1.1 ✅ Los reportes cortan a los 1000 registros y no te avisan *(resuelto)*
 
 **Qué pasa.** Todas las consultas de los reportes de Finanzas piden los datos sin límite. La base de datos, cuando no le pedís paginar, devuelve **como máximo 1000 filas** y se calla la boca. Los reportes suman lo que recibieron y muestran el total como si fuera todo.
 
@@ -77,7 +133,7 @@ Mientras tanto, **mínimo**: detectar cuando la consulta volvió con exactamente
 
 ---
 
-### 1.2 🔴 Los meses no arrancan cuando vos creés
+### 1.2 ✅ Los meses no arrancan cuando vos creés *(resuelto)*
 
 **Qué pasa.** Cuando elegís "mes actual" en Finanzas, la fecha se calcula en **la compu del usuario**, viaja al servidor como texto ("2026-09-01") y el servidor la vuelve a interpretar **con su propio reloj, que está en horario de Londres**.
 
@@ -100,7 +156,7 @@ Lo mismo pasa en la solapa **Tendencia**: agrupa por mes también con el reloj d
 
 ---
 
-### 1.3 🔴 Las comisiones se te restan dos veces
+### 1.3 ✅ Las comisiones se te restan dos veces *(resuelto)*
 
 **Qué pasa.** El Estado de Resultados ya descuenta la comisión del técnico y del vendedor **cuando el trabajo se hizo**, aunque todavía no se la hayas pagado. Está bien: es la forma correcta de medir si el mes fue rentable.
 
@@ -134,7 +190,7 @@ Ahora tenés el mismo problema que con las comisiones: ese medio millón se va a
 
 ---
 
-### 1.5 🟠 Las diferencias de caja no van a ningún lado
+### 1.5 ✅ Las diferencias de caja no van a ningún lado *(resuelto)*
 
 **Qué pasa.** Cuando cerrás la caja, el sistema calcula la diferencia entre lo que debería haber y lo que contaste, y la guarda. **Y ahí queda.** El Estado de Resultados nunca la mira.
 
@@ -148,7 +204,7 @@ Ahora tenés el mismo problema que con las comisiones: ese medio millón se va a
 
 ---
 
-### 1.6 🟠 Un movimiento de caja se borra y no queda rastro
+### 1.6 ✅ Un movimiento de caja se borra y no queda rastro *(resuelto)*
 
 **Qué pasa.** Borrar un movimiento de caja lo **elimina de verdad** de la base de datos. No queda registrado quién lo borró, ni cuándo, ni qué decía.
 
@@ -166,7 +222,7 @@ Para una organización de una sola persona es molesto. Con empleados que manejan
 
 ---
 
-### 1.7 🟠 El detector de cuentas corrientes descuadradas existe, pero nadie lo mira
+### 1.7 ✅ El detector de cuentas corrientes descuadradas existe, pero nadie lo mira *(resuelto)*
 
 **Qué pasa.** Hay varios lugares donde, si falla el registro en la cuenta corriente del cliente, **el sistema sigue adelante como si nada** y sólo anota el error en un log técnico que nadie lee. La entrega se completa, el cobro se registra, pero la deuda del cliente queda mal.
 
@@ -344,7 +400,7 @@ Y sumarle la pantalla de historial de cambios que hoy no existe (ver 1.6).
 
 Ordenado por **dolor que saca dividido por trabajo que cuesta**.
 
-### Etapa 1 — Que los números dejen de mentir (2 a 3 semanas)
+### Etapa 1 — Que los números dejen de mentir ✅ HECHA
 
 Nada nuevo. Arreglar lo que ya está y hoy da mal.
 
