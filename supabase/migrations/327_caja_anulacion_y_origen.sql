@@ -50,8 +50,13 @@ ALTER TABLE movimientos_caja
 --   'COMISION_TECNICO'  -> egreso por pagar comisiones de ordenes
 --   'COMISION_VENDEDOR' -> egreso por pagar comisiones de ventas
 --
--- origen_id es el id del lote de pago (un cuid generado en la ruta), no el de
--- una orden: un pago cubre varias ordenes de una.
+-- origen_id es el id de la PERSONA que cobra (tecnico o vendedor), no el de
+-- una orden: un pago cubre varias ordenes de una. Por eso el pago genera un
+-- movimiento por beneficiario y no uno solo por el total — en la caja se lee
+-- "Pago de comisiones a Juan Perez" y se puede filtrar por quien cobro.
+--
+-- Queda NULL en el caso raro de una orden con comision pero sin tecnico
+-- asignado: la plata salio igual y el movimiento tiene que existir.
 
 ALTER TABLE movimientos_caja
   ADD COLUMN IF NOT EXISTS origen_tipo TEXT,
@@ -98,3 +103,5 @@ COMMENT ON COLUMN movimientos_caja.anulado IS
   'Los movimientos de plata no se borran. Anular conserva la fila y registra quien y cuando (mig 327).';
 COMMENT ON COLUMN movimientos_caja.origen_tipo IS
   'Origen del movimiento automatico: COMISION_TECNICO | COMISION_VENDEDOR. NULL = cargado a mano (mig 327).';
+COMMENT ON COLUMN movimientos_caja.origen_id IS
+  'A quien se le pago: users.id del tecnico o vendedor. NULL si no habia beneficiario asignado (mig 327).';
