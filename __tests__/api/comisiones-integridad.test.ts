@@ -35,6 +35,8 @@ vi.mock("@/lib/audit", () => ({
     update: vi.fn().mockResolvedValue(undefined),
   })),
   diffObjects: vi.fn().mockReturnValue({ before: {}, after: {} }),
+  // El pago de comisiones quedó auditado (punto 1.6 de la auditoría contable).
+  logAudit: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock("@/lib/storage", () => ({
@@ -90,6 +92,23 @@ function createDeleteRequest(body: any, url = "http://localhost:3000/api/test"):
   })
 }
 
+/**
+ * Tablas que toca el egreso de caja del pago de comisiones (auditoría
+ * contable, punto 1.3). Vacías = el pago se marca y no se registra egreso,
+ * que es el caso neutro para los tests de idempotencia.
+ */
+function tablasEgresoComisiones() {
+  return {
+    v_comisiones_ordenes: createChainMock([]),
+    v_comisiones_ventas: createChainMock([]),
+    users: createChainMock([]),
+    sucursales: createChainMock([]),
+    sesiones_caja: createChainMock([]),
+    movimientos_caja: createChainMock([]),
+    audit_logs: createChainMock([]),
+  }
+}
+
 // ─── C1: técnico double-pay idempotency ──────────────────────────────────────
 
 describe("C1 — POST /api/comisiones/pagar — idempotency guard", () => {
@@ -99,7 +118,7 @@ describe("C1 — POST /api/comisiones/pagar — idempotency guard", () => {
     mockAdminAuth()
 
     const ordenesChain = createChainMock([{ id: "o1" }])
-    mockSupabaseFrom({ ordenes_servicio: ordenesChain })
+    mockSupabaseFrom({ ordenes_servicio: ordenesChain, ...tablasEgresoComisiones() })
 
     const res = await pagarTecnicoPost(
       createPostRequest({ ordenIds: ["o1", "o2"] })

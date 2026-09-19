@@ -139,7 +139,9 @@ export function ComisionesVendedoresView() {
     if (selected.size === 0) return
     const ok = await confirm({
       title: "Pagar comisiones",
-      description: `¿Marcar ${selected.size} venta(s) como comisión pagada? Total: ${formatPrice(totalSeleccionado)}`,
+      description:
+        `¿Marcar ${selected.size} venta(s) como comisión pagada? Total: ${formatPrice(totalSeleccionado)}. ` +
+        `Se va a registrar la salida de ${formatPrice(totalSeleccionado)} en la caja, así el arqueo cierra.`,
       confirmText: "Confirmar pago",
       variant: "info",
     })
@@ -153,7 +155,12 @@ export function ComisionesVendedoresView() {
         body: JSON.stringify({ ventaIds: Array.from(selected) }),
       })
       if (!res.ok) throw new Error("Error al pagar")
-      toast.success("Comisiones marcadas como pagadas")
+      const data = await res.json().catch(() => null)
+      toast.success(
+        data?.egresoCaja?.total
+          ? `Comisiones pagadas. Se registró la salida de ${formatPrice(data.egresoCaja.total)} en la caja.`
+          : "Comisiones marcadas como pagadas"
+      )
       setSelected(new Set())
       mutate()
     } catch {

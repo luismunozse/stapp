@@ -20,6 +20,16 @@ export type AuditEntity =
   | "turnos"
   | "recepciones"
   | "cuenta_corriente"
+  // Auditoría contable, punto 1.6: hasta ahora los movimientos de plata eran
+  // el único lugar del sistema sin rastro. Un egreso de caja se borraba
+  // físicamente y la ganancia de un mes ya reportado cambiaba sin que
+  // quedara quién lo hizo.
+  | "movimientos_caja"
+  | "sesiones_caja"
+  | "cobros_orden"
+  | "pagos_venta"
+  | "pagos_parciales"
+  | "comisiones"
 
 interface AuditLogParams {
   organizationId: string
@@ -53,6 +63,12 @@ const ENTITY_DISPLAY: Record<string, string> = {
   turnos: "turno",
   recepciones: "recepción",
   cuenta_corriente: "movimiento de cuenta corriente",
+  movimientos_caja: "movimiento de caja",
+  sesiones_caja: "caja",
+  cobros_orden: "cobro de orden",
+  pagos_venta: "pago de venta",
+  pagos_parciales: "pago de remito",
+  comisiones: "pago de comisiones",
 }
 
 // Campos con labels amigables para diffs
@@ -77,6 +93,15 @@ const FIELD_DISPLAY: Record<string, string> = {
   tipo_equipo: "tipo de equipo",
   fecha_entrega: "fecha de entrega",
   metodo_pago: "método de pago",
+  monto: "monto",
+  concepto: "concepto",
+  anulado: "anulado",
+  anulado_motivo: "motivo de anulación",
+  conteo_fisico: "conteo físico",
+  diferencia: "diferencia de arqueo",
+  saldo_inicial: "saldo inicial",
+  categoria_gasto_id: "categoría",
+  afecta_rentabilidad: "afecta la ganancia",
 }
 
 /**

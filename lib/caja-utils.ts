@@ -172,10 +172,13 @@ export async function fetchMovimientosDia(
   const { data: depositosData } = await depositosQuery
 
   // 5. Movimientos manuales de caja
+  // `anulado = false` (mig 327): un movimiento anulado queda en la tabla para
+  // dejar rastro de quién lo dio de baja, pero no es plata en el cajón.
   let movimientosQuery = supabaseAdmin
     .from("movimientos_caja")
     .select("id, tipo, monto, metodo_pago, concepto, observaciones, fecha, afecta_rentabilidad")
     .eq("organization_id", organizationId)
+    .eq("anulado", false)
     .gte("fecha", fechaDesde)
     .lte("fecha", fechaHasta)
     .order("fecha", { ascending: false })

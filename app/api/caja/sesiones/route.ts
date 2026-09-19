@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin, requirePosAccess, requireCajaAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
+import { logAudit } from "@/lib/audit"
 import { z } from "zod"
 
 const aperturaSchema = z.object({
@@ -173,6 +174,21 @@ export async function POST(request: Request) {
       console.error("Error creating sesion:", insertError)
       return NextResponse.json({ error: "Error al abrir caja" }, { status: 500 })
     }
+
+    // Auditoría contable, punto 1.6: con quién abrió y con cuánto arrancó, el
+    // faltante del cierre deja de ser un número suelto.
+    //
+    // El guard no es decorativo: la auditoría no puede tumbar una caja que ya
+    // quedó abierta. Sin fila no hay nada que auditar, pero el 201 va igual.
+    if (sesion?.id) await logAudit({
+      organizationId: organizationId!,
+      userId: userId!,
+      action: "CREATE",
+      entity: "sesiones_caja",
+      entityId: sesion.id,
+      changes: { after: { estado: "ABIERTA", saldo_inicial: parsed.saldoInicial } },
+      description: `Abrió la caja con ${parsed.saldoInicial} de saldo inicial`,
+    })
 
     return NextResponse.json({ sesion }, { status: 201 })
   } catch (err) {

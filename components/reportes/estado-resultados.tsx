@@ -31,6 +31,12 @@ interface EstadoResultadosData {
   margenBruto: number
   costosFinancieros?: { ventas: number; servicios: number; total: number }
   comisiones?: { tecnicos: number; vendedores: number; total: number }
+  diferenciasCaja?: {
+    faltantes: number
+    sobrantes: number
+    neto: number
+    cierresConDiferencia: number
+  }
   gastos: {
     fijos: number
     variables: number
@@ -52,6 +58,9 @@ interface EstadoResultadosData {
     itemsConCostoConocido: number
     itemsSinCostoConocido: number
     gastosNoComputables: number
+    /** true = faltan datos: el reporte es un piso, no el total real. */
+    incompleto?: boolean
+    fuentesIncompletas?: string[]
   }
 }
 
@@ -150,6 +159,10 @@ export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
             ...(data.comisiones.tecnicos > 0 ? [["Comisión técnicos", `-${fmt(data.comisiones.tecnicos)}`]] : []),
             ...(data.comisiones.vendedores > 0 ? [["Comisión vendedores", `-${fmt(data.comisiones.vendedores)}`]] : []),
           ] : []),
+          ...(data.diferenciasCaja && data.diferenciasCaja.faltantes > 0
+            ? [["Faltantes de caja", `-${fmt(data.diferenciasCaja.faltantes)}`]] : []),
+          ...(data.diferenciasCaja && data.diferenciasCaja.sobrantes > 0
+            ? [["Sobrantes de caja", `+${fmt(data.diferenciasCaja.sobrantes)}`]] : []),
           [
             {
               content: "GANANCIA NETA",
@@ -357,6 +370,23 @@ export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
                     <Row label="Total comisiones" value={`-${formatPrice(data.comisiones.total)}`} bold muted />
                   </>
                 )}
+                {/*
+                  Faltantes y sobrantes de arqueo. Antes la diferencia se
+                  guardaba al cerrar la caja y no la miraba ningún reporte: un
+                  faltante de $2.000 por día eran $60.000 por mes que
+                  desaparecían de la ganancia.
+                */}
+                {data.diferenciasCaja && (data.diferenciasCaja.faltantes > 0 || data.diferenciasCaja.sobrantes > 0) && (
+                  <>
+                    <Divider />
+                    {data.diferenciasCaja.faltantes > 0 && (
+                      <Row label="Faltantes de caja" value={`-${formatPrice(data.diferenciasCaja.faltantes)}`} muted />
+                    )}
+                    {data.diferenciasCaja.sobrantes > 0 && (
+                      <Row label="Sobrantes de caja" value={`+${formatPrice(data.diferenciasCaja.sobrantes)}`} muted />
+                    )}
+                  </>
+                )}
                 <Divider />
                 <Row
                   label="GANANCIA NETA"
@@ -369,6 +399,33 @@ export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
               </CardContent>
             </Card>
           </div>
+
+          {data.meta.incompleto && (
+            <StatusBanner tone="danger" icon={AlertTriangle}>
+              <strong>Este reporte está incompleto.</strong> El período tiene más movimientos de
+              los que se pueden calcular de una vez
+              {data.meta.fuentesIncompletas?.length
+                ? ` (${data.meta.fuentesIncompletas.join(", ")})`
+                : ""}
+              , así que los totales de abajo son un piso: la realidad es mayor. Probá con un
+              período más corto.
+            </StatusBanner>
+          )}
+
+          {data.diferenciasCaja && data.diferenciasCaja.cierresConDiferencia > 0 && (
+            <StatusBanner tone="warning" icon={AlertTriangle}>
+              Hubo <strong>{data.diferenciasCaja.cierresConDiferencia}</strong> cierre(s) de caja
+              con diferencia en el período.
+              {data.diferenciasCaja.faltantes > 0 && (
+                <> Falta <strong>{formatPrice(data.diferenciasCaja.faltantes)}</strong>.</>
+              )}
+              {data.diferenciasCaja.sobrantes > 0 && (
+                <> Sobra <strong>{formatPrice(data.diferenciasCaja.sobrantes)}</strong>.</>
+              )}
+              {" "}Ya está reflejado en la ganancia neta. Si se repite, conviene revisar cómo se
+              cierra la caja.
+            </StatusBanner>
+          )}
 
           {(data.ingresos.serviciosAdelantos ?? 0) > 0 && (
             <StatusBanner tone="info" icon={Info}>

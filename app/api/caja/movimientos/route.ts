@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 import { esMovimientoCogsAutomatico } from "@/lib/caja-utils"
 import { todayInTimeZone, dayRangeUtc, DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { logAudit } from "@/lib/audit"
 import { z } from "zod"
 
 const movimientoSchema = z.object({
@@ -41,6 +42,8 @@ export async function GET(request: Request) {
       .from("movimientos_caja")
       .select("*, users(id, nombre), categorias_gasto(id, nombre, color, icono)")
       .eq("organization_id", organizationId!)
+      // Anulados fuera: la fila queda para la auditoría, no para la lista.
+      .eq("anulado", false)
       .gte("fecha", fechaDesde)
       .lte("fecha", fechaHasta)
       .order("fecha", { ascending: false })
@@ -145,6 +148,29 @@ export async function POST(request: Request) {
       console.error("Error creating movimiento:", insertError)
       return NextResponse.json({ error: "Error al crear movimiento" }, { status: 500 })
     }
+
+    // Auditoría contable, punto 1.6: los movimientos de plata eran lo único
+    // del sistema que no dejaba rastro. Ahora el alta queda registrada igual
+    // que la de una orden o una venta. El guard evita que la auditoría
+    // convierta en 500 un movimiento que ya se registró.
+    if (movimiento?.id) await logAudit({
+      organizationId: organizationId!,
+      userId: userId!,
+      action: "CREATE",
+      entity: "movimientos_caja",
+      entityId: movimiento.id,
+      changes: {
+        after: {
+          tipo: parsed.tipo,
+          monto: parsed.monto,
+          concepto: parsed.concepto,
+          metodo_pago: parsed.metodoPago,
+          categoria_gasto_id: parsed.categoriaGastoId || null,
+          afecta_rentabilidad: afectaRentabilidad ?? true,
+        },
+      },
+      description: `Registró ${parsed.tipo === "EGRESO" ? "un egreso" : "un ingreso"} de caja de ${parsed.monto} (${parsed.concepto})`,
+    })
 
     return NextResponse.json({ movimiento }, { status: 201 })
   } catch (err) {

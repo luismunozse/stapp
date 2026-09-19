@@ -3,6 +3,7 @@ import { requireCajaAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchMovimientosDia, computeTotales } from "@/lib/caja-utils"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { logAudit } from "@/lib/audit"
 import { z } from "zod"
 
 const cierreSchema = z.object({
@@ -105,6 +106,31 @@ export async function POST(
     }
 
     const updated = updatedRows[0]
+
+    // Auditoría contable, punto 1.6: el arqueo es la operación de plata más
+    // delicada del día. Queda registrado quién cerró, cuánto contó y con qué
+    // diferencia — el dato que después permite ver si los faltantes se
+    // repiten con la misma persona.
+    await logAudit({
+      organizationId: organizationId!,
+      userId: userId!,
+      action: "UPDATE",
+      entity: "sesiones_caja",
+      entityId: id,
+      changes: {
+        before: { estado: "ABIERTA", saldo_inicial: saldoInicial },
+        after: {
+          estado: "CERRADA",
+          conteo_fisico: parsed.conteoFisico,
+          diferencia,
+          observaciones: parsed.observaciones || null,
+        },
+      },
+      description:
+        diferencia === 0
+          ? `Cerró la caja sin diferencia (contó ${parsed.conteoFisico})`
+          : `Cerró la caja con ${diferencia < 0 ? "faltante" : "sobrante"} de ${Math.abs(diferencia)} (esperado ${esperado}, contó ${parsed.conteoFisico})`,
+    })
 
     return NextResponse.json({
       sesion: updated,
