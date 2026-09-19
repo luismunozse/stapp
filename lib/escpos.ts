@@ -105,7 +105,7 @@ interface TicketItem {
   diasGarantia: number
 }
 
-interface TicketData {
+export interface TicketData {
   numeroVenta: number
   fecha: string
   cliente: { nombre: string; telefono?: string | null }
@@ -118,6 +118,8 @@ interface TicketData {
   nombreEmpresa?: string
   telefonoEmpresa?: string | null
   direccionEmpresa?: string | null
+  /** Pre-rasterized logo bytes (use imageUrlToRaster from lib/escpos-image.ts) */
+  logoRaster?: Uint8Array | null
 }
 
 const METODO_LABELS: Record<string, string> = {
@@ -356,6 +358,11 @@ export function generateTicketCommands(data: TicketData, printerWidth: 58 | 80 =
 
   // Initialize
   add(CMD.INIT, CMD.CHARSET_LATIN)
+
+  // === LOGO (optional) ===
+  if (data.logoRaster && data.logoRaster.length > 0) {
+    buf.push(...Array.from(data.logoRaster))
+  }
 
   // === HEADER: Empresa ===
   add(CMD.ALIGN_CENTER, CMD.BOLD_ON, CMD.DOUBLE_ON)
