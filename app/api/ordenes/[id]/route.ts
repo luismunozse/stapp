@@ -7,6 +7,8 @@ import { queueNotification } from "@/lib/notifications/queue"
 import { formatOrden } from "@/lib/db-utils"
 import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos, ESTADO_LABELS, ESTADOS_COSTO_FINAL_BLOQUEADO } from "@/lib/orden-state-machine"
 import { z } from "zod"
+import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
+import { isValidImei } from "@/lib/imei"
 
 // Estados que solo se alcanzan por POST /api/ordenes/[id]/entregar. Ese endpoint,
 // además de cambiar el estado, registra la fecha de entrega, las firmas, el cargo
@@ -43,6 +45,20 @@ const updateOrdenSchema = z.object({
   notasInternas: z.string().optional().nullable(),
   diagnostico: z.string().optional().nullable(),
   problemaReportado: z.string().min(1, "El problema reportado no puede estar vacío").optional(),
+  // Datos del equipo: se cargan en el alta y hasta ahora no se podían corregir
+  // por ningún lado. Un modelo mal tipeado, una marca que se eligió sola por
+  // `autoMarca` o un accesorio que no se marcó en el mostrador obligaban a dar
+  // de baja la orden y cargarla de nuevo (con otro número y otro comprobante).
+  // El TIPO de equipo no entra acá a propósito: el código de la orden (PC023,
+  // CEL010) sale del contador de su tipo, así que cambiarlo dejaría el código
+  // impreso en el comprobante apuntando a otro tipo. Eso se corrige dando de
+  // baja y volviendo a cargar.
+  dispositivo: z.string().min(1, "El equipo no puede estar vacío").optional(),
+  marca: z.string().optional().nullable(),
+  color: z.string().optional().nullable(),
+  imei: z.string().optional().nullable(),
+  accesorios: z.string().optional().nullable(),
+  codigoAccesoDispositivo: z.string().optional().nullable(),
   telefonoContacto: z.string().optional().nullable(),
   porcentajeComision: z.number().min(0).max(100).optional().nullable(),
   horasTrabajadas: z.number().min(0).optional().nullable(),
@@ -303,8 +319,27 @@ export async function PUT(
       costoHoraFromTecnico = Number(tecnico.costo_hora ?? 0)
     }
 
+    // Identificador del equipo: se valida con la misma regla del alta (los
+    // tipos configurados como IMEI piden 15 dígitos). Vacío siempre se acepta:
+    // es la forma de borrar un número mal cargado.
+    if (data.imei !== undefined && (data.imei ?? "").trim()) {
+      const validaImei = await tipoValidaImei(organizationId!, orden.tipo_dispositivo)
+      if (validaImei && !isValidImei(data.imei!.trim())) {
+        return NextResponse.json(
+          { error: "El IMEI debe tener exactamente 15 dígitos" },
+          { status: 400 }
+        )
+      }
+    }
+
     // Preparar datos para update
     const updateData: Record<string, any> = {}
+
+    /** Texto opcional del equipo: vacío borra el dato en vez de guardar "". */
+    const textoONull = (valor: string | null | undefined): string | null => {
+      const limpio = (valor ?? "").trim()
+      return limpio === "" ? null : limpio
+    }
 
     if (data.estado !== undefined) updateData.estado = data.estado
     if (data.tecnicoId !== undefined) {
@@ -359,6 +394,14 @@ export async function PUT(
     if (data.notasInternas !== undefined) updateData.notas_internas = data.notasInternas
     if (data.diagnostico !== undefined) updateData.diagnostico = data.diagnostico
     if (data.problemaReportado !== undefined) updateData.problema_reportado = data.problemaReportado
+    if (data.dispositivo !== undefined) updateData.dispositivo = data.dispositivo.trim()
+    if (data.marca !== undefined) updateData.marca = textoONull(data.marca)
+    if (data.color !== undefined) updateData.color = textoONull(data.color)
+    if (data.imei !== undefined) updateData.imei = textoONull(data.imei)
+    if (data.accesorios !== undefined) updateData.accesorios = textoONull(data.accesorios)
+    if (data.codigoAccesoDispositivo !== undefined) {
+      updateData.password_dispositivo = textoONull(data.codigoAccesoDispositivo)
+    }
     if (data.telefonoContacto !== undefined) updateData.telefono_contacto = data.telefonoContacto
     if (data.horasTrabajadas !== undefined) {
       const h = Number(data.horasTrabajadas)

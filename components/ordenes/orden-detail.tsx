@@ -39,6 +39,7 @@ import {
   HandCoins,
   Lock,
   AlertTriangle,
+  Pencil,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -74,6 +75,7 @@ import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
 import { OrdenServiciosTab } from "@/components/ordenes/orden-servicios-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
 import { ConfirmarReparadoDialog } from "@/components/ordenes/confirmar-reparado-dialog"
+import { EditarEquipoDialog, type EquipoEditable } from "@/components/ordenes/editar-equipo-dialog"
 import { NotaCreditoDialog } from "@/components/notas-credito/nota-credito-dialog"
 import { PatternDisplay } from "@/components/ui/pattern-display"
 import { StatusBanner } from "@/components/ui/status-banner"
@@ -121,6 +123,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [showCobrarDialog, setShowCobrarDialog] = useState(false)
   const [showReparadoDialog, setShowReparadoDialog] = useState(false)
   const [showNCDialog, setShowNCDialog] = useState(false)
+  const [showEditarEquipo, setShowEditarEquipo] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [etiquetaSize, setEtiquetaSize] = useState<LabelSize>(DEFAULT_LABEL_SIZE)
 
@@ -190,6 +193,58 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       { notasInternas: value },
       "Notas internas actualizadas"
     )
+  }
+
+  const handleSaveAccesorios = async (next: string): Promise<boolean> => {
+    const value = next.trim() || null
+    if (!orden || (value || "") === (orden.accesorios || "")) return true
+    return saveOrdenField(
+      { accesorios: value },
+      { accesorios: value },
+      "Accesorios actualizados"
+    )
+  }
+
+  const handleSaveObservaciones = async (next: string): Promise<boolean> => {
+    const value = next.trim() || null
+    if (!orden || (value || "") === (orden.observaciones || "")) return true
+    return saveOrdenField(
+      { observaciones: value },
+      { observaciones: value },
+      "Observaciones actualizadas"
+    )
+  }
+
+  /** Datos del equipo. A diferencia de los campos de texto de arriba, el PUT
+   *  puede rechazarlo (el identificador se valida contra la config del tipo),
+   *  así que el error del servidor se muestra tal cual en vez de un
+   *  "Error al guardar" genérico: dice qué formato espera. */
+  const handleSaveEquipo = async (cambios: Partial<EquipoEditable>): Promise<boolean> => {
+    if (!orden) return false
+    try {
+      const res = await fetch(`/api/ordenes/${orden.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cambios),
+      })
+      if (res.ok) {
+        setOrden({
+          ...orden,
+          ...(cambios.dispositivo !== undefined ? { dispositivo: cambios.dispositivo } : {}),
+          ...(cambios.marca !== undefined ? { marca: cambios.marca || null } : {}),
+          ...(cambios.color !== undefined ? { color: cambios.color || null } : {}),
+          ...(cambios.imei !== undefined ? { imei: cambios.imei || null } : {}),
+        } as OrdenServicio)
+        toast.success(`${term("equipo")} actualizado`)
+        return true
+      }
+      const error = await res.json().catch(() => ({}))
+      toast.error(error.error || "Error al guardar")
+      return false
+    } catch {
+      toast.error("Error al guardar")
+      return false
+    }
   }
 
   const handleCopyLink = async () => {
@@ -911,7 +966,18 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
                 {/* Dispositivo */}
                 <div className="space-y-3">
-                  <FieldSectionLabel icon={Smartphone}>{term("equipo")}</FieldSectionLabel>
+                  <div className="flex items-center justify-between">
+                    <FieldSectionLabel icon={Smartphone}>{term("equipo")}</FieldSectionLabel>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowEditarEquipo(true)}
+                      aria-label={`Editar ${term("equipo").toLowerCase()}`}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                  </div>
                   <div className="space-y-2">
                     {orden.marca && (
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{orden.marca}</p>
@@ -975,21 +1041,32 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 </div>
               )}
 
-              {/* Accesorios */}
-              {orden.accesorios && (
-                <div className="mt-4 pt-4 border-t">
-                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Accesorios recibidos</div>
-                  <p className="text-sm text-muted-foreground">{orden.accesorios}</p>
-                </div>
-              )}
+              {/* Accesorios. Editable y SIEMPRE visible: mientras solo se
+                  dibujaba con valor, una orden cargada sin marcar el accesorio
+                  no tenia por donde corregirse y el comprobante salia con un
+                  guion. */}
+              <div className="mt-4 pt-4 border-t">
+                <EditableTextField
+                  icon={Package}
+                  label="Accesorios recibidos"
+                  value={orden.accesorios || ""}
+                  onSave={handleSaveAccesorios}
+                  placeholder="Cargador, funda, cable..."
+                  emptyHint="Sin accesorios registrados. Haz clic en el lapiz para agregar."
+                />
+              </div>
 
               {/* Observaciones */}
-              {orden.observaciones && (
-                <div className="mt-4 pt-4 border-t">
-                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Observaciones</div>
-                  <p className="text-sm whitespace-pre-wrap">{orden.observaciones}</p>
-                </div>
-              )}
+              <div className="mt-4 pt-4 border-t">
+                <EditableTextField
+                  icon={FileText}
+                  label="Observaciones"
+                  value={orden.observaciones || ""}
+                  onSave={handleSaveObservaciones}
+                  placeholder="Observaciones de la recepcion..."
+                  emptyHint="Sin observaciones. Haz clic en el lapiz para agregar."
+                />
+              </div>
 
               {/* Notas internas - solo uso interno, no visible al cliente */}
               <div className="mt-4 pt-4 border-t">
@@ -1285,6 +1362,20 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             fetchOrden()
             toast.success("Orden marcada como reparada")
           }}
+        />
+      )}
+
+      {orden && (
+        <EditarEquipoDialog
+          open={showEditarEquipo}
+          onOpenChange={setShowEditarEquipo}
+          equipo={{
+            dispositivo: orden.dispositivo || "",
+            marca: orden.marca || "",
+            color: orden.color || "",
+            imei: orden.imei || "",
+          }}
+          onSave={handleSaveEquipo}
         />
       )}
 
