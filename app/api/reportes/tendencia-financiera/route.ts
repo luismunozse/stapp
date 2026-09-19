@@ -135,7 +135,7 @@ export async function GET(request: Request) {
         id, costo_final, fecha_completado, estado,
         porcentaje_comision, tecnico_id,
         repuestos_orden (cantidad, precio_unitario),
-        cotizaciones (
+        cotizaciones!cotizaciones_orden_id_fkey (
           estado, deleted_at,
           items_cotizacion (cantidad, costo_unitario, inventario:inventario_id(precio_compra))
         )
