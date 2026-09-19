@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { GET as getEstadoResultados } from "@/app/api/reportes/estado-resultados/route"
+import { supabaseAdmin } from "@/lib/supabase"
 import {
   mockAuthSuccess,
   mockSupabaseFrom,
@@ -7,6 +8,27 @@ import {
   createGetRequest,
   parseResponse,
 } from "./helpers"
+
+/** El chain mock con el que se consultó `tabla`. Falla si nunca se consultó. */
+function chainDe(tabla: string): any {
+  const fromMock = vi.mocked(supabaseAdmin.from)
+  const idx = fromMock.mock.calls.findIndex((c) => c[0] === tabla)
+  if (idx === -1) throw new Error(`El endpoint no consultó la tabla "${tabla}"`)
+  return fromMock.mock.results[idx].value
+}
+
+/**
+ * Los instantes UTC con los que el endpoint acotó `tabla.columna`.
+ * Es la forma de verificar que el período se resolvió en la zona del taller
+ * y no con el reloj del proceso.
+ */
+function rangoConsultado(tabla: string, columna: string): { desde: string; hasta: string } {
+  const chain = chainDe(tabla)
+  const gte = chain.gte.mock.calls.find((c: any[]) => c[0] === columna)
+  const lte = chain.lte.mock.calls.find((c: any[]) => c[0] === columna)
+  if (!gte || !lte) throw new Error(`No se acotó ${tabla}.${columna} por rango`)
+  return { desde: gte[1], hasta: lte[1] }
+}
 
 // Tests fundamentales del modelo híbrido devengado + adelantos + NC + merma.
 // No corre contra DB real — verifica lógica del endpoint con mocks.
@@ -23,6 +45,8 @@ function setupBase(overrides: {
   cobrosCF?: any[]
   notasCredito?: any[]
   ajustes?: any[]
+  sesionesCaja?: any[]
+  organizations?: any
 } = {}) {
   const venta = (extras: any = {}) => ({
     id: extras.id || "v1",
@@ -56,6 +80,15 @@ function setupBase(overrides: {
     facturas: createChainMock([]),
     notas_credito: createChainMock(overrides.notasCredito || []),
     ajustes_inventario: createChainMock(overrides.ajustes || []),
+    // Faltantes/sobrantes de arqueo (auditoría contable 1.5). Sin este mock
+    // el endpoint corta con error: `traerTodo` propaga los fallos de la base
+    // en vez de devolver un reporte a medias.
+    sesiones_caja: createChainMock(overrides.sesionesCaja || []),
+    // `resolverPeriodo` lee la zona horaria de la org. Sin mock cae al
+    // default (Argentina), que es lo que asumen los tests de período.
+    organizations: createChainMock(
+      overrides.organizations ?? { zona_horaria: "America/Argentina/Buenos_Aires" }
+    ),
   })
 }
 
@@ -177,5 +210,175 @@ describe("estado-resultados", () => {
     )
     const { body } = await parseResponse(res)
     expect(body.costos.repuestos).toBe(130) // 2*50 + 1*30
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────
+// Auditoría contable — etapa 1
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("estado-resultados · faltantes y sobrantes de caja (1.5)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAuthSuccess()
+  })
+
+  it("un faltante de arqueo baja la ganancia neta", async () => {
+    setupBase({
+      ventas: [{ id: "v1", total: 1000 }],
+      // diferencia = conteo - esperado. Negativo = falta plata en el cajón.
+      sesionesCaja: [{ id: "s1", diferencia: "-2000", closed_at: "2026-05-10T22:00:00Z" }],
+    })
+
+    const res = await getEstadoResultados(
+      createGetRequest("http://localhost:3000/api/reportes/estado-resultados?desde=2026-05-01&hasta=2026-05-31")
+    )
+    const { body } = await parseResponse(res)
+
+    expect(body.diferenciasCaja.faltantes).toBe(2000)
+    expect(body.diferenciasCaja.sobrantes).toBe(0)
+    expect(body.diferenciasCaja.neto).toBe(-2000)
+    expect(body.diferenciasCaja.cierresConDiferencia).toBe(1)
+    // 1000 de ingresos, sin costos ni gastos, menos el faltante
+    expect(body.gananciaNeta).toBe(-1000)
+  })
+
+  it("faltantes y sobrantes se informan por separado, no compensados", async () => {
+    setupBase({
+      ventas: [{ id: "v1", total: 10000 }],
+      sesionesCaja: [
+        { id: "s1", diferencia: "-5000", closed_at: "2026-05-10T22:00:00Z" },
+        { id: "s2", diferencia: "5000", closed_at: "2026-05-11T22:00:00Z" },
+      ],
+    })
+
+    const res = await getEstadoResultados(
+      createGetRequest("http://localhost:3000/api/reportes/estado-resultados?desde=2026-05-01&hasta=2026-05-31")
+    )
+    const { body } = await parseResponse(res)
+
+    // Un mes con 5000 de faltante y 5000 de sobrante no es un mes prolijo:
+    // el neto da cero pero los dos números tienen que verse.
+    expect(body.diferenciasCaja.faltantes).toBe(5000)
+    expect(body.diferenciasCaja.sobrantes).toBe(5000)
+    expect(body.diferenciasCaja.neto).toBe(0)
+    expect(body.diferenciasCaja.cierresConDiferencia).toBe(2)
+    expect(body.gananciaNeta).toBe(10000)
+  })
+
+  it("los cierres sin diferencia no se cuentan", async () => {
+    setupBase({
+      sesionesCaja: [{ id: "s1", diferencia: "0", closed_at: "2026-05-10T22:00:00Z" }],
+    })
+
+    const res = await getEstadoResultados(
+      createGetRequest("http://localhost:3000/api/reportes/estado-resultados?desde=2026-05-01&hasta=2026-05-31")
+    )
+    const { body } = await parseResponse(res)
+    expect(body.diferenciasCaja.cierresConDiferencia).toBe(0)
+    expect(body.diferenciasCaja.neto).toBe(0)
+  })
+})
+
+describe("estado-resultados · período en la zona horaria del taller (1.2)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAuthSuccess()
+  })
+
+  it("mayo de un taller argentino arranca a las 03:00 UTC del 1, no a las 00:00", async () => {
+    setupBase()
+
+    await getEstadoResultados(
+      createGetRequest("http://localhost:3000/api/reportes/estado-resultados?desde=2026-05-01&hasta=2026-05-31")
+    )
+
+    expect(rangoConsultado("ventas", "created_at")).toEqual({
+      desde: "2026-05-01T03:00:00.000Z",
+      hasta: "2026-06-01T02:59:59.999Z",
+    })
+  })
+
+  it("el mismo período en México usa el offset de México", async () => {
+    setupBase({ organizations: { zona_horaria: "America/Mexico_City" } })
+
+    await getEstadoResultados(
+      createGetRequest("http://localhost:3000/api/reportes/estado-resultados?desde=2026-05-01&hasta=2026-05-31")
+    )
+
+    // UTC-6 en mayo
+    expect(rangoConsultado("ventas", "created_at")).toEqual({
+      desde: "2026-05-01T06:00:00.000Z",
+      hasta: "2026-06-01T05:59:59.999Z",
+    })
+  })
+
+  it("una zona horaria inválida no rompe el reporte: cae al default", async () => {
+    setupBase({ organizations: { zona_horaria: "No/Existe" } })
+
+    const res = await getEstadoResultados(
+      createGetRequest("http://localhost:3000/api/reportes/estado-resultados?desde=2026-05-01&hasta=2026-05-31")
+    )
+    const { status, body } = await parseResponse(res)
+    expect(status).toBe(200)
+    expect(body.periodo.zonaHoraria).toBe("America/Argentina/Buenos_Aires")
+  })
+
+  it("el período informado es el mismo que se usó para consultar", async () => {
+    setupBase()
+
+    const res = await getEstadoResultados(
+      createGetRequest("http://localhost:3000/api/reportes/estado-resultados?desde=2026-05-01&hasta=2026-05-31")
+    )
+    const { body } = await parseResponse(res)
+    const usado = rangoConsultado("ventas", "created_at")
+
+    expect(body.periodo.desde).toBe(usado.desde)
+    expect(body.periodo.hasta).toBe(usado.hasta)
+  })
+})
+
+describe("estado-resultados · completitud del reporte (1.1)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAuthSuccess()
+  })
+
+  it("con pocos datos el reporte no se marca como incompleto", async () => {
+    setupBase({ ventas: [{ id: "v1", total: 1000 }] })
+
+    const res = await getEstadoResultados(
+      createGetRequest("http://localhost:3000/api/reportes/estado-resultados?desde=2026-05-01&hasta=2026-05-31")
+    )
+    const { body } = await parseResponse(res)
+    expect(body.meta.incompleto).toBe(false)
+    expect(body.meta.fuentesIncompletas).toEqual([])
+  })
+
+  it("las consultas piden páginas explícitas en vez de confiar en el tope por defecto", async () => {
+    setupBase({ ventas: [{ id: "v1", total: 1000 }] })
+
+    await getEstadoResultados(
+      createGetRequest("http://localhost:3000/api/reportes/estado-resultados?desde=2026-05-01&hasta=2026-05-31")
+    )
+
+    // El corte silencioso de 1000 filas de PostgREST sólo aplica cuando nadie
+    // pide un rango. Pedirlo es lo que convierte "las primeras 1000" en "todas".
+    expect(chainDe("ventas").range.mock.calls[0]).toEqual([0, 999])
+  })
+
+  it("un error de la base corta el reporte en vez de devolver un total a medias", async () => {
+    // Un fallo de red que devuelve media tabla se lee como un mes flojo de
+    // ventas. Preferimos el 500 visible.
+    setupBase()
+    mockSupabaseFrom({
+      organizations: createChainMock({ zona_horaria: "America/Argentina/Buenos_Aires" }),
+      ventas: createChainMock(null, { message: "connection reset" }),
+    })
+
+    const res = await getEstadoResultados(
+      createGetRequest("http://localhost:3000/api/reportes/estado-resultados?desde=2026-05-01&hasta=2026-05-31")
+    )
+    expect(res.status).toBe(500)
   })
 })

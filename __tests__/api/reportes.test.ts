@@ -226,7 +226,7 @@ describe("GET /api/reportes/resumen-ingresos", () => {
     const cobrosChain = createChainMock([])
     cobrosChain.then = (resolve: any) => resolve({ data: [], error: null })
 
-    mockSupabaseFrom({ facturas: facturasChain, ventas: ventasChain, cobros_orden: cobrosChain })
+    mockSupabaseFrom({ facturas: facturasChain, ventas: ventasChain, cobros_orden: cobrosChain, notas_credito: createChainMock([]) })
 
     const response = await GET(createGetRequest("http://localhost:3000/api/reportes/resumen-ingresos?meses=6"))
     const { status, body } = await parseResponse(response)
@@ -254,7 +254,7 @@ describe("GET /api/reportes/resumen-ingresos", () => {
     const cobrosChain = createChainMock([])
     cobrosChain.then = (resolve: any) => resolve({ data: [], error: null })
 
-    mockSupabaseFrom({ facturas: facturasChain, ventas: ventasChain, cobros_orden: cobrosChain })
+    mockSupabaseFrom({ facturas: facturasChain, ventas: ventasChain, cobros_orden: cobrosChain, notas_credito: createChainMock([]) })
 
     const response = await GET(createGetRequest("http://localhost:3000/api/reportes/resumen-ingresos"))
     const { status, body } = await parseResponse(response)
@@ -298,7 +298,7 @@ describe("GET /api/reportes/resumen-ingresos", () => {
     const cobrosChain = createChainMock(mockCobros)
     cobrosChain.then = (resolve: any) => resolve({ data: mockCobros, error: null })
 
-    mockSupabaseFrom({ facturas: facturasChain, ventas: ventasChain, cobros_orden: cobrosChain })
+    mockSupabaseFrom({ facturas: facturasChain, ventas: ventasChain, cobros_orden: cobrosChain, notas_credito: createChainMock([]) })
 
     const response = await GET(createGetRequest("http://localhost:3000/api/reportes/resumen-ingresos?meses=6"))
     const { status, body } = await parseResponse(response)
@@ -349,7 +349,7 @@ describe("GET /api/reportes/resumen-ingresos", () => {
     const cobrosChain = createChainMock([])
     cobrosChain.then = (resolve: any) => resolve({ data: [], error: null })
 
-    mockSupabaseFrom({ facturas: facturasChain, ventas: ventasChain, cobros_orden: cobrosChain })
+    mockSupabaseFrom({ facturas: facturasChain, ventas: ventasChain, cobros_orden: cobrosChain, notas_credito: createChainMock([]) })
 
     const response = await GET(createGetRequest("http://localhost:3000/api/reportes/resumen-ingresos?meses=6"))
     const { status, body } = await parseResponse(response)
@@ -379,7 +379,7 @@ describe("GET /api/reportes/resumen-ingresos", () => {
     const cobrosChain = createChainMock([])
     cobrosChain.then = (resolve: any) => resolve({ data: [], error: null })
 
-    mockSupabaseFrom({ facturas: facturasChain, ventas: ventasChain, cobros_orden: cobrosChain })
+    mockSupabaseFrom({ facturas: facturasChain, ventas: ventasChain, cobros_orden: cobrosChain, notas_credito: createChainMock([]) })
 
     const response = await GET(
       createGetRequest("http://localhost:3000/api/reportes/resumen-ingresos?desde=2026-05-01&hasta=2026-06-30")

@@ -338,3 +338,65 @@ export function addMonthsToDateOnly(fecha: string, months: number): string {
   const [y, m, d] = fecha.split("-").map(Number)
   return new Date(Date.UTC(y, m - 1 + months, d)).toISOString().split("T")[0]
 }
+
+/**
+ * Instantes UTC que acotan un rango de días calendario `desde`..`hasta`
+ * (ambos "YYYY-MM-DD", inclusive) en `timeZone`.
+ *
+ * Es `dayRangeUtc` extendido a un rango: arranca a la medianoche local de
+ * `desde` y termina en el último milisegundo de `hasta`. Lo usan los reportes
+ * de Finanzas, que reciben el período como dos fechas sin hora.
+ *
+ * El bug que evita: `new Date("2026-09-01T00:00:00")` se resuelve con el reloj
+ * del proceso (UTC en Vercel), así que "septiembre" para una org en UTC-3
+ * arrancaba el 31/08 a las 21:00 locales y terminaba el 30/09 a las 21:00.
+ * Todo lo cobrado después de esa hora caía en el mes siguiente, y los números
+ * no cerraban contra Caja —que sí usa la tz de la org.
+ *
+ * Si alguna de las dos fechas no tiene forma "YYYY-MM-DD" se devuelve null:
+ * el llamador decide el default en vez de comerse un NaN silencioso.
+ */
+export function dateRangeUtc(
+  desde: string | null | undefined,
+  hasta: string | null | undefined,
+  timeZone: string = DEFAULT_TIMEZONE
+): { desde: string; hasta: string } | null {
+  if (!desde || !hasta) return null
+  if (!DATE_ONLY_RE.test(desde) || !DATE_ONLY_RE.test(hasta)) return null
+  return {
+    desde: dayRangeUtc(desde, timeZone).desde,
+    hasta: dayRangeUtc(hasta, timeZone).hasta,
+  }
+}
+
+/**
+ * Clave de mes ("YYYY-MM") del instante `date` evaluada en `timeZone`.
+ *
+ * Para agrupar por mes hay que preguntar en qué mes cayó el instante *para el
+ * taller*, no para el proceso: `new Date(iso).getMonth()` en un server UTC
+ * manda una venta del 30/09 a las 22:00 de Argentina al bucket de octubre.
+ */
+export function monthKeyInTimeZone(
+  date: Date | string,
+  timeZone: string = DEFAULT_TIMEZONE
+): string {
+  const d = typeof date === "string" ? new Date(date) : date
+  const { year, month } = getZonedParts(d, timeZone)
+  return `${year}-${String(month).padStart(2, "0")}`
+}
+
+/**
+ * Zona horaria usable: valida contra `Intl` y cae al default si la fila trae
+ * basura. `configuracion` valida antes de guardar, pero una org cargada por
+ * migración o a mano podría tener cualquier cosa, e `Intl` tira RangeError —
+ * sin este guard un solo dato malo rompe el reporte entero.
+ */
+export function zonaHorariaValida(zonaHoraria: string | null | undefined): string {
+  if (!zonaHoraria) return DEFAULT_TIMEZONE
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: zonaHoraria })
+    return zonaHoraria
+  } catch {
+    return DEFAULT_TIMEZONE
+  }
+}

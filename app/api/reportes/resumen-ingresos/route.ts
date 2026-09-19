@@ -3,9 +3,24 @@ import { requireIngresosAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { getDeviceTypeLabel } from "@/lib/device-types"
-import { DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { getZonedParts, monthKeyInTimeZone, monthRangeUtc } from "@/lib/timezone"
+import { resolverPeriodo, zonaHorariaOrg } from "@/lib/reportes-periodo"
+import { traerTodo } from "@/lib/supabase-paginado"
 import { nombreMesCivil } from "@/lib/finanzas-period"
 
+/**
+ * Resumen de ingresos (solapa Ingresos de Finanzas) — base caja.
+ *
+ * PERÍODO Y MESES EN LA ZONA DEL TALLER (auditoría contable, punto 1.2)
+ *   El rango y el bucket mensual se resuelven en la tz de la org. Antes la tz
+ *   se leía pero sólo alimentaba el NOMBRE del mes: los límites y el bucket
+ *   salían del reloj del proceso (UTC en Vercel). Resultado: la etiqueta decía
+ *   "septiembre" y adentro había cobros del 31/08 a la noche.
+ *
+ * COMPLETITUD (auditoría contable, punto 1.1)
+ *   Las fuentes se leen paginadas, con `.order("id")` para que range() no
+ *   repita ni saltee filas.
+ */
 export async function GET(request: Request) {
   try {
     const { error, organizationId, role, session } = await requireIngresosAccess()
@@ -13,109 +28,109 @@ export async function GET(request: Request) {
 
     const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
-    const { data: orgTz } = await supabaseAdmin
-      .from("organizations")
-      .select("zona_horaria")
-      .eq("id", organizationId!)
-      .single()
-    const tz = orgTz?.zona_horaria ?? DEFAULT_TIMEZONE
-
     const { searchParams } = new URL(request.url)
     const desdeParam = searchParams.get("desde")
     const hastaParam = searchParams.get("hasta")
-    const meses = parseInt(searchParams.get("meses") || "6")
+    const meses = Math.max(1, Math.min(24, parseInt(searchParams.get("meses") || "6")))
 
     const now = new Date()
 
     // Rango explícito (desde/hasta) tiene prioridad sobre `meses`.
     // Sin rango, se usa la ventana de los últimos N meses (default 6).
-    let fechaDesde: Date
-    let fechaHasta: Date
+    let tz: string
+    let desdeISO: string
+    let hastaISO: string
     if (desdeParam && hastaParam) {
-      fechaDesde = new Date(`${desdeParam}T00:00:00`)
-      fechaHasta = new Date(`${hastaParam}T23:59:59.999`)
+      ;({ tz, desdeISO, hastaISO } = await resolverPeriodo(organizationId!, desdeParam, hastaParam))
     } else {
-      fechaDesde = new Date(now.getFullYear(), now.getMonth() - meses + 1, 1)
-      fechaHasta = now
+      tz = await zonaHorariaOrg(organizationId!)
+      const { year, month } = getZonedParts(now, tz)
+      desdeISO = monthRangeUtc(year, month - meses + 1, tz).desde.toISOString()
+      hastaISO = now.toISOString()
     }
 
-    const desdeISO = fechaDesde.toISOString()
-    const hastaISO = fechaHasta.toISOString()
-
-    // Claves de mes (YYYY-MM) que abarca el rango, en orden.
+    // Claves de mes (YYYY-MM) que abarca el rango, en el calendario del taller.
+    // Tienen que salir de la misma tz que los límites, o el primer y el último
+    // mes quedan cortados a medias.
     const monthKeys: string[] = []
     {
-      const cursor = new Date(fechaDesde.getFullYear(), fechaDesde.getMonth(), 1)
-      const end = new Date(fechaHasta.getFullYear(), fechaHasta.getMonth(), 1)
-      while (cursor <= end) {
-        monthKeys.push(
-          `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`
-        )
-        cursor.setMonth(cursor.getMonth() + 1)
+      const inicio = getZonedParts(new Date(desdeISO), tz)
+      const fin = getZonedParts(new Date(hastaISO), tz)
+      const ultimo = fin.year * 12 + (fin.month - 1)
+      for (let i = inicio.year * 12 + (inicio.month - 1); i <= ultimo; i++) {
+        monthKeys.push(`${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}`)
       }
     }
 
-    // Facturas pagadas (branch-filtered via ordenes_servicio!inner)
-    let facturasQuery = supabaseAdmin
-      .from("facturas")
-      .select(`
-        id, total, subtotal, iva, fecha, orden_id,
-        pagos_parciales (monto, metodo_pago),
-        ordenes_servicio!inner (
-          id, organization_id, sucursal_id, tipo_dispositivo, dispositivo,
-          tipos_dispositivo:tipo_dispositivo_id(nombre)
-        )
-      `)
-      .eq("ordenes_servicio.organization_id", organizationId!)
-      .eq("estado_pago", "PAGADO")
-      .gte("fecha", desdeISO)
-      .lte("fecha", hastaISO)
-    if (!filtro.verTodas && filtro.sucursalId) {
-      facturasQuery = facturasQuery.eq("ordenes_servicio.sucursal_id", filtro.sucursalId)
+    const fuentesIncompletas: string[] = []
+    const marcar = (nombre: string, truncado: boolean) => {
+      if (truncado) fuentesIncompletas.push(nombre)
     }
 
-    const { data: facturas, error: facturasError } = await facturasQuery
-    if (facturasError) throw facturasError
+    // Facturas pagadas (branch-filtered via ordenes_servicio!inner)
+    const { filas: facturas, truncado: facturasTrunc } = await traerTodo<any>((desde, hasta) => {
+      let q = supabaseAdmin
+        .from("facturas")
+        .select(`
+          id, total, subtotal, iva, fecha, orden_id,
+          pagos_parciales (monto, metodo_pago),
+          ordenes_servicio!inner (
+            id, organization_id, sucursal_id, tipo_dispositivo, dispositivo,
+            tipos_dispositivo:tipo_dispositivo_id(nombre)
+          )
+        `)
+        .eq("ordenes_servicio.organization_id", organizationId!)
+        .eq("estado_pago", "PAGADO")
+        .gte("fecha", desdeISO)
+        .lte("fecha", hastaISO)
+      if (!filtro.verTodas && filtro.sucursalId) {
+        q = q.eq("ordenes_servicio.sucursal_id", filtro.sucursalId)
+      }
+      return q.order("id", { ascending: true }).range(desde, hasta)
+    })
+    marcar("remitos pagados", facturasTrunc)
 
     // Ventas completadas (branch-filtered directly)
-    let ventasQuery = supabaseAdmin
-      .from("ventas")
-      .select("id, total, iva_neto, iva_monto, metodo_pago, created_at")
-      .eq("organization_id", organizationId!)
-      .eq("estado", "COMPLETADA")
-      .gte("created_at", desdeISO)
-      .lte("created_at", hastaISO)
-    if (!filtro.verTodas && filtro.sucursalId) {
-      ventasQuery = ventasQuery.eq("sucursal_id", filtro.sucursalId)
-    }
-
-    const { data: ventas, error: ventasError } = await ventasQuery
-    if (ventasError) throw ventasError
+    const { filas: ventas, truncado: ventasTrunc } = await traerTodo<any>((desde, hasta) => {
+      let q = supabaseAdmin
+        .from("ventas")
+        .select("id, total, iva_neto, iva_monto, metodo_pago, created_at")
+        .eq("organization_id", organizationId!)
+        .eq("estado", "COMPLETADA")
+        .gte("created_at", desdeISO)
+        .lte("created_at", hastaISO)
+      if (!filtro.verTodas && filtro.sucursalId) {
+        q = q.eq("sucursal_id", filtro.sucursalId)
+      }
+      return q.order("id", { ascending: true }).range(desde, hasta)
+    })
+    marcar("ventas", ventasTrunc)
 
     // Cobros directos a órdenes (branch-filtered via ordenes_servicio!inner)
-    let cobrosQuery = supabaseAdmin
-      .from("cobros_orden")
-      .select(`
-        id, monto, created_at, orden_id, metodo_pago,
-        ordenes_servicio!inner (
-          organization_id, sucursal_id, tipo_dispositivo, dispositivo,
-          tipos_dispositivo:tipo_dispositivo_id(nombre)
-        )
-      `)
-      .eq("organization_id", organizationId!)
-      .eq("ordenes_servicio.organization_id", organizationId!)
-      .neq("anulado", true)
-      .gte("created_at", desdeISO)
-      .lte("created_at", hastaISO)
-    if (!filtro.verTodas && filtro.sucursalId) {
-      cobrosQuery = cobrosQuery.eq("ordenes_servicio.sucursal_id", filtro.sucursalId)
-    }
-
-    const { data: cobros, error: cobrosError } = await cobrosQuery
-    if (cobrosError) throw cobrosError
+    const { filas: cobros, truncado: cobrosTrunc } = await traerTodo<any>((desde, hasta) => {
+      let q = supabaseAdmin
+        .from("cobros_orden")
+        .select(`
+          id, monto, created_at, orden_id, metodo_pago,
+          ordenes_servicio!inner (
+            organization_id, sucursal_id, tipo_dispositivo, dispositivo,
+            tipos_dispositivo:tipo_dispositivo_id(nombre)
+          )
+        `)
+        .eq("organization_id", organizationId!)
+        .eq("ordenes_servicio.organization_id", organizationId!)
+        .neq("anulado", true)
+        .gte("created_at", desdeISO)
+        .lte("created_at", hastaISO)
+      if (!filtro.verTodas && filtro.sucursalId) {
+        q = q.eq("ordenes_servicio.sucursal_id", filtro.sucursalId)
+      }
+      return q.order("id", { ascending: true }).range(desde, hasta)
+    })
+    marcar("cobros de ordenes", cobrosTrunc)
 
     // Set de órdenes con cobro directo — para excluir factura duplicada
-    const ordenesConCobro = new Set((cobros || []).map((c: any) => c.orden_id))
+    const ordenesConCobro = new Set(cobros.map((c: any) => c.orden_id))
 
     // Aggregate por mes
     const ingresosPorMes: Record<string, { servicios: number; ventas: number }> = {}
@@ -131,10 +146,9 @@ export async function GET(request: Request) {
       metodoPorMes[key][metodo] = (metodoPorMes[key][metodo] || 0) + monto
     }
 
-    for (const f of facturas || []) {
+    for (const f of facturas) {
       if (ordenesConCobro.has(f.orden_id)) continue
-      const fecha = new Date(f.fecha)
-      const key = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`
+      const key = monthKeyInTimeZone(f.fecha, tz)
       // NET: subtotal (== total when no IVA — EXENTO no-op)
       const monto = Number((f as any).subtotal || f.total || 0)
       if (ingresosPorMes[key]) ingresosPorMes[key].servicios += monto
@@ -152,18 +166,16 @@ export async function GET(request: Request) {
       }
     }
 
-    for (const c of (cobros || []) as any[]) {
-      const fecha = new Date(c.created_at)
-      const key = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`
+    for (const c of cobros as any[]) {
+      const key = monthKeyInTimeZone(c.created_at, tz)
       // Direct order payments: no IVA breakdown — kept at gross (face value)
       const monto = Number(c.monto || 0)
       if (ingresosPorMes[key]) ingresosPorMes[key].servicios += monto
       addMetodo(key, c.metodo_pago || "EFECTIVO", monto)
     }
 
-    for (const v of ventas || []) {
-      const fecha = new Date(v.created_at)
-      const key = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`
+    for (const v of ventas) {
+      const key = monthKeyInTimeZone(v.created_at, tz)
       // NET: COALESCE(iva_neto, total) — iva_neto is NULL for EXENTO/legacy (no-op)
       const monto = Number((v as any).iva_neto ?? v.total ?? 0)
       if (ingresosPorMes[key]) ingresosPorMes[key].ventas += monto
@@ -205,7 +217,7 @@ export async function GET(request: Request) {
     // Aggregate por tipo de dispositivo (facturas + cobros, dedupe por orden)
     const dispositivoMap = new Map<string, { total: number; cantidad: number }>()
 
-    for (const f of facturas || []) {
+    for (const f of facturas) {
       if (ordenesConCobro.has(f.orden_id)) continue
       const orden = f.ordenes_servicio as any
       const tipo = orden?.tipo_dispositivo || "OTRO"
@@ -218,7 +230,7 @@ export async function GET(request: Request) {
       dispositivoMap.set(label, existing)
     }
 
-    for (const c of (cobros || []) as any[]) {
+    for (const c of cobros as any[]) {
       const orden = c.ordenes_servicio as any
       const tipo = orden?.tipo_dispositivo || "OTRO"
       const tipoDisp = orden?.tipos_dispositivo as any
@@ -234,33 +246,36 @@ export async function GET(request: Request) {
       .sort((a, b) => b.total - a.total)
 
     // NET totals (IVA collected is a fiscal liability, not income)
-    const facturasNetas = (facturas || []).filter((f) => !ordenesConCobro.has(f.orden_id))
-    const totalFacturas = facturasNetas.reduce((sum, f) => sum + Number((f as any).subtotal || f.total || 0), 0)
-    const totalCobros = (cobros || []).reduce((sum: number, c: any) => sum + Number(c.monto || 0), 0)
+    const facturasNetas = facturas.filter((f: any) => !ordenesConCobro.has(f.orden_id))
+    const totalFacturas = facturasNetas.reduce((sum: number, f: any) => sum + Number(f.subtotal || f.total || 0), 0)
+    const totalCobros = cobros.reduce((sum: number, c: any) => sum + Number(c.monto || 0), 0)
     const totalServicios = totalFacturas + totalCobros
-    const totalVentas = (ventas || []).reduce(
-      (sum, v) => sum + Number((v as any).iva_neto ?? v.total ?? 0),
+    const totalVentas = ventas.reduce(
+      (sum: number, v: any) => sum + Number(v.iva_neto ?? v.total ?? 0),
       0
     )
     const cantidadFacturasNetas = facturasNetas.length
     // IVA breakdown: facturas iva + ventas iva_monto; cobros_orden have no breakdown
-    const totalIvaFacturas = facturasNetas.reduce((sum, f) => sum + Number((f as any).iva || 0), 0)
-    const totalIvaVentas = (ventas || []).reduce((sum, v) => sum + Number((v as any).iva_monto || 0), 0)
+    const totalIvaFacturas = facturasNetas.reduce((sum: number, f: any) => sum + Number(f.iva || 0), 0)
+    const totalIvaVentas = ventas.reduce((sum: number, v: any) => sum + Number(v.iva_monto || 0), 0)
     const totalIva = totalIvaFacturas + totalIvaVentas
 
     // Notas de crédito — restan del total del período (no por mes, muy complejo)
-    let notasCreditoQuery = supabaseAdmin
-      .from("notas_credito")
-      .select("monto")
-      .eq("organization_id", organizationId!)
-      .eq("anulada", false)
-      .gte("fecha", desdeISO)
-      .lte("fecha", hastaISO)
-    if (!filtro.verTodas && filtro.sucursalId) {
-      notasCreditoQuery = notasCreditoQuery.eq("sucursal_id", filtro.sucursalId)
-    }
-    const { data: notasCredito } = await notasCreditoQuery
-    const totalNotasCredito = (notasCredito || []).reduce(
+    const { filas: notasCredito, truncado: ncTrunc } = await traerTodo<any>((desde, hasta) => {
+      let q = supabaseAdmin
+        .from("notas_credito")
+        .select("id, monto")
+        .eq("organization_id", organizationId!)
+        .eq("anulada", false)
+        .gte("fecha", desdeISO)
+        .lte("fecha", hastaISO)
+      if (!filtro.verTodas && filtro.sucursalId) {
+        q = q.eq("sucursal_id", filtro.sucursalId)
+      }
+      return q.order("id", { ascending: true }).range(desde, hasta)
+    })
+    marcar("notas de credito", ncTrunc)
+    const totalNotasCredito = notasCredito.reduce(
       (sum: number, n: any) => sum + Number(n.monto || 0),
       0
     )
@@ -273,16 +288,22 @@ export async function GET(request: Request) {
         totalVentas,
         totalIva,
         totalNotasCredito,
-        cantidadServicios: cantidadFacturasNetas + (cobros?.length || 0),
-        cantidadVentas: ventas?.length || 0,
+        cantidadServicios: cantidadFacturasNetas + cobros.length,
+        cantidadVentas: ventas.length,
       },
       porMes,
       porMetodoPago,
       porDispositivo,
       periodo: {
-        desde: fechaDesde.toISOString(),
-        hasta: fechaHasta.toISOString(),
+        desde: desdeISO,
+        hasta: hastaISO,
         meses: monthKeys.length,
+        zonaHoraria: tz,
+      },
+      meta: {
+        // true = el reporte es un piso, no el total real.
+        incompleto: fuentesIncompletas.length > 0,
+        fuentesIncompletas,
       },
     })
   } catch (error) {

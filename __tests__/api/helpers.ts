@@ -66,12 +66,40 @@ export function createChainMock(finalData: any = null, finalError: any = null, c
 }
 
 /**
+ * Tablas "de ambiente" que casi toda ruta lee sin que sean el sujeto del test.
+ *
+ * `organizations`: desde la auditoría contable los reportes resuelven el
+ * período en la zona horaria de la org (lib/reportes-periodo.ts), así que
+ * TODOS la leen. Sin un default, cada test de finanzas tendría que mockearla
+ * para nada.
+ *
+ * `sesiones_caja`: los faltantes y sobrantes de arqueo entran al Estado de
+ * Resultados y a la tendencia. Vacía por default = sin diferencias, que es el
+ * caso neutro.
+ *
+ * Cualquiera de las dos se puede pisar pasándola en el mapa. El resto de las
+ * tablas sigue devolviendo error si no se mockea: es la red que avisa cuando
+ * una ruta empieza a leer algo que el test no modeló.
+ */
+function tablasAmbiente(): Record<string, ChainMock> {
+  return {
+    organizations: createChainMock({
+      zona_horaria: "America/Argentina/Buenos_Aires",
+      comision_aplica_sin_reparacion: false,
+    }),
+    sesiones_caja: createChainMock([]),
+  }
+}
+
+/**
  * Configure supabaseAdmin.from() to return specific chains per table.
- * Tables not in the map return a default error chain.
+ * Tables not in the map return a default error chain, except the ambient
+ * config tables above.
  */
 export function mockSupabaseFrom(tableChains: Record<string, ChainMock>) {
+  const chains = { ...tablasAmbiente(), ...tableChains }
   vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
-    return (tableChains[table] || createChainMock(null, { message: `No mock for table: ${table}` })) as any
+    return (chains[table] || createChainMock(null, { message: `No mock for table: ${table}` })) as any
   })
 }
 

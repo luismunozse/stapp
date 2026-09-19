@@ -185,6 +185,8 @@ describe("Flag comision_aplica_sin_reparacion — estado-resultados commission d
     tableMap.set("facturas", createChainMock([]))
     tableMap.set("ajustes_inventario", createChainMock([]))
     tableMap.set("notas_credito", createChainMock([]))
+    // Faltantes/sobrantes de arqueo: sin cierres, sin diferencias.
+    tableMap.set("sesiones_caja", createChainMock([]))
 
     vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
       return (tableMap.get(table) || createChainMock(null, { message: `No mock for table: ${table}` })) as any

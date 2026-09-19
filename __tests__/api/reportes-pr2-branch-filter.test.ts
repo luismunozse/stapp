@@ -155,6 +155,7 @@ describe("GET /api/reportes/comparativa-ingresos — branch filter on 3 sources"
       ventas: ventasChain,
       facturas: facturasChain,
       cobros_orden: cobrosChain,
+      notas_credito: createChainMock([]),
     })
 
     const response = await GET()
@@ -181,6 +182,7 @@ describe("GET /api/reportes/comparativa-ingresos — branch filter on 3 sources"
       ventas: ventasChain,
       facturas: facturasChain,
       cobros_orden: cobrosChain,
+      notas_credito: createChainMock([]),
     })
 
     await GET()
@@ -205,6 +207,7 @@ describe("GET /api/reportes/comparativa-ingresos — branch filter on 3 sources"
       ventas: ventasChain,
       facturas: facturasChain,
       cobros_orden: cobrosChain,
+      notas_credito: createChainMock([]),
     })
 
     await GET()
@@ -229,6 +232,7 @@ describe("GET /api/reportes/comparativa-ingresos — branch filter on 3 sources"
       ventas: ventasChain,
       facturas: facturasChain,
       cobros_orden: cobrosChain,
+      notas_credito: createChainMock([]),
     })
 
     await GET()
@@ -268,6 +272,7 @@ describe("GET /api/reportes/resumen-ingresos — branch filter on 3 sources", ()
       facturas: facturasChain,
       ventas: ventasChain,
       cobros_orden: cobrosChain,
+      notas_credito: createChainMock([]),
     })
 
     const response = await GET(createGetRequest())
@@ -294,6 +299,7 @@ describe("GET /api/reportes/resumen-ingresos — branch filter on 3 sources", ()
       facturas: facturasChain,
       ventas: ventasChain,
       cobros_orden: cobrosChain,
+      notas_credito: createChainMock([]),
     })
 
     await GET(createGetRequest())
@@ -318,6 +324,7 @@ describe("GET /api/reportes/resumen-ingresos — branch filter on 3 sources", ()
       facturas: facturasChain,
       ventas: ventasChain,
       cobros_orden: cobrosChain,
+      notas_credito: createChainMock([]),
     })
 
     await GET(createGetRequest())
@@ -342,6 +349,7 @@ describe("GET /api/reportes/resumen-ingresos — branch filter on 3 sources", ()
       facturas: facturasChain,
       ventas: ventasChain,
       cobros_orden: cobrosChain,
+      notas_credito: createChainMock([]),
     })
 
     await GET(createGetRequest())
@@ -381,6 +389,7 @@ describe("GET /api/reportes/ingresos-unificados — branch filter on 3 sources",
       ventas: ventasChain,
       facturas: facturasChain,
       cobros_orden: cobrosChain,
+      notas_credito: createChainMock([]),
     })
 
     const response = await GET(createGetRequest())
@@ -407,6 +416,7 @@ describe("GET /api/reportes/ingresos-unificados — branch filter on 3 sources",
       ventas: ventasChain,
       facturas: facturasChain,
       cobros_orden: cobrosChain,
+      notas_credito: createChainMock([]),
     })
 
     await GET(createGetRequest())
@@ -431,6 +441,7 @@ describe("GET /api/reportes/ingresos-unificados — branch filter on 3 sources",
       ventas: ventasChain,
       facturas: facturasChain,
       cobros_orden: cobrosChain,
+      notas_credito: createChainMock([]),
     })
 
     await GET(createGetRequest())
@@ -455,6 +466,7 @@ describe("GET /api/reportes/ingresos-unificados — branch filter on 3 sources",
       ventas: ventasChain,
       facturas: facturasChain,
       cobros_orden: cobrosChain,
+      notas_credito: createChainMock([]),
     })
 
     await GET(createGetRequest())
