@@ -1,5 +1,7 @@
 # Deploy de Evolution API en Oracle Cloud Free Tier
 
+> **Producción no corre acá**: está en Hetzner, con Caddy en vez de Cloudflare Tunnel. Ver `whatsapp-evolution-hetzner-deploy.md`. Este doc queda como alternativa gratuita, y su compose (Parte 3) sigue siendo la base del de Hetzner.
+
 Objetivo: levantar un servidor **Evolution API** siempre-encendido y gratis (Oracle Always Free ARM), con **HTTPS vía Cloudflare Tunnel**, listo para conectar desde STApp (Configuración → WhatsApp → Evolution).
 
 > Always-on es obligatorio: si el proceso se duerme/reinicia, se cae la sesión de WhatsApp. Oracle ARM no se duerme por idle → sirve.
