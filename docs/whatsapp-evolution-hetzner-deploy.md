@@ -12,7 +12,7 @@ La diferencia principal con el doc de Oracle: el HTTPS lo pone **Caddy**, dentro
 |---|---|
 | Server | `ubuntu-4gb-hel1-1` en la consola de Hetzner: **CX23** (x86, 2 vCPU, 4 GB, 40 GB), Helsinki |
 | Dominio | `evo.stapp.com.ar`: registro A directo a la IP del server, sin proxy de Cloudflare |
-| Stack | `/root/evolution/docker-compose.yml` (proyecto `evolution`) |
+| Stack | `/root/evolution/`: `docker-compose.yml` y `Caddyfile` (proyecto `evolution`) |
 | Acceso | `ssh root@evo.stapp.com.ar`, solo con clave SSH |
 
 | Servicio | Imagen | Puertos |
@@ -24,7 +24,7 @@ La diferencia principal con el doc de Oracle: el HTTPS lo pone **Caddy**, dentro
 
 Caddy recibe el tráfico de `evo.stapp.com.ar` y se lo pasa a `evolution-api`; los demás contenedores no quedan expuestos. STApp se conecta con `EVOLUTION_BASE_URL=https://evo.stapp.com.ar` y `EVOLUTION_API_KEY` (el `AUTHENTICATION_API_KEY` del compose) en las variables de entorno de Vercel. Cada taller solo escanea su QR.
 
-La copia que vale del compose es la del server. La receta de "Armarlo de cero" es para reconstruirlo si el server se pierde.
+Los archivos completos están más abajo, en *Configuración del server*.
 
 ---
 
@@ -74,13 +74,98 @@ docker compose ps                            # los 4 contenedores tienen que est
 docker compose logs --tail 50 evolution-api
 ```
 
-- **Cambiar una variable**: `cp docker-compose.yml docker-compose.yml.bak`, editá y corré `docker compose up -d`. Recrea solo el contenedor que cambió. Después confirmá en STApp (Configuración → WhatsApp) que siga conectado.
+- **Cambiar una variable**: `cp docker-compose.yml docker-compose.yml.bak`, editá y corré `docker compose up -d`. Recrea solo el contenedor que cambió. Después confirmá en STApp (Configuración → WhatsApp) que siga conectado, y pasá el cambio a la copia de este doc.
+- **Cambiar el `Caddyfile`**: editalo y corré `docker compose restart caddy`. El `up -d` no alcanza, porque el compose no cambió.
 - **`DATABASE_SAVE_DATA_NEW_MESSAGE=true` es obligatoria**: con `false`, los reintentos de WhatsApp le llegan vacíos al cliente (ver el troubleshooting de `whatsapp-evolution-oracle-deploy.md`). Se corrigió el 2026-09-28.
 - **Firewall**: si activás el de Hetzner, abrí TCP **22** (SSH), **80** y **443** (Caddy). Con solo el 22, `evo.stapp.com.ar` deja de responder y se cortan todos los WhatsApp automáticos.
 - **Actualizar Evolution**: cambiá el tag de la imagen (siempre fijo, nunca `latest`), corré `docker compose pull && docker compose up -d` y verificá que la sesión sobreviva.
-- **Backups**: Hetzner Backups o snapshots manuales. La sesión de WhatsApp vive en los volúmenes de Docker (`docker volume ls`); si el server muere sin backup, hay que reescanear el QR.
+- **Backups**: Hetzner Backups o snapshots manuales. La sesión de WhatsApp vive en los volúmenes `postgres_data` y `evolution_instances`, y los certificados HTTPS en `caddy_data` (en `docker volume ls` aparecen con el prefijo `evolution_`). Si el server muere sin backup, hay que reescanear el QR.
 - **Costo**: fijo mientras el server exista; apagarlo no ahorra. El precio vigente está en la consola de Hetzner.
 - **Riesgo de baneo**: Evolution es WhatsApp no oficial. Para volumen comercial, evaluá **Meta Cloud API** (oficial); STApp ya lo soporta.
+
+---
+
+## Configuración del server
+
+Copia de `/root/evolution/` al 2026-09-28, con los secretos reemplazados por marcadores. Si cambiás algo en el server, actualizá también esta copia.
+
+`docker-compose.yml`:
+
+```yaml
+services:
+  evolution-api:
+    image: atendai/evolution-api:v2.1.1
+    restart: always
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - SERVER_URL=https://evo.stapp.com.ar
+      - AUTHENTICATION_API_KEY=TU_API_KEY_SECRETA
+      - CONFIG_SESSION_PHONE_VERSION=2.3000.1043857760
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://evo:TU_PASSWORD_POSTGRES@postgres:5432/evolution?schema=public
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://redis:6379/0
+      - CACHE_REDIS_PREFIX_KEY=evolution
+      - CACHE_LOCAL_ENABLED=false
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - evolution_instances:/evolution/instances
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    depends_on:
+      - evolution-api
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=evo
+      - POSTGRES_PASSWORD=TU_PASSWORD_POSTGRES
+      - POSTGRES_DB=evolution
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - redis_data:/data
+
+volumes:
+  evolution_instances:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+```
+
+`Caddyfile`:
+
+```
+evo.stapp.com.ar {
+    reverse_proxy evolution-api:8080
+}
+```
+
+- `TU_API_KEY_SECRETA`: la misma que `EVOLUTION_API_KEY` en Vercel. Para generar una nueva: `openssl rand -hex 32`.
+- `TU_PASSWORD_POSTGRES`: va en dos lugares, `DATABASE_CONNECTION_URI` y `POSTGRES_PASSWORD`, y tiene que ser la misma en los dos.
+- `CONFIG_SESSION_PHONE_VERSION`: la versión de WhatsApp Web que presenta Baileys. Si el QR deja de aparecer, está vieja: actualizala como explica el doc de Oracle (comentario del compose y troubleshooting).
+- Caddy saca y renueva solo el certificado HTTPS de `evo.stapp.com.ar`, y lo guarda en `caddy_data`.
 
 ---
 
@@ -88,37 +173,12 @@ docker compose logs --tail 50 evolution-api
 
 1. **Server**: Hetzner Cloud → **Add Server** → Ubuntu LTS, tipo **CX23** (x86, 2 vCPU / 4 GB / 40 GB) o equivalente, cualquier location (hoy es Helsinki). Cargá tu clave SSH al crearlo.
 2. **Docker**: Parte 2 de `whatsapp-evolution-oracle-deploy.md`. Como entrás como `root`, salteá el `usermod -aG docker` / `newgrp`.
-3. **Compose**: el de la Parte 3 del doc de Oracle, en `/root/evolution/docker-compose.yml`, con `SERVER_URL=https://evo.stapp.com.ar`, `DATABASE_SAVE_DATA_NEW_MESSAGE=true`, una `AUTHENTICATION_API_KEY` real (`openssl rand -hex 32`) y una contraseña real en lugar de `evopass`. Además, agregá Caddy dentro de `services:`:
-
-   ```yaml
-     caddy:
-       image: caddy:2-alpine
-       restart: always
-       depends_on:
-         - evolution-api
-       ports:
-         - "80:80"
-         - "443:443"
-       volumes:
-         - ./Caddyfile:/etc/caddy/Caddyfile:ro
-         - caddy_data:/data        # certificados HTTPS: no lo pierdas
-         - caddy_config:/config
-   ```
-
-   Sumá `caddy_data:` y `caddy_config:` a la lista `volumes:` del final. Al lado del compose, el `Caddyfile`:
-
-   ```
-   evo.stapp.com.ar {
-   	reverse_proxy evolution-api:8080
-   }
-   ```
-
-   Caddy saca y renueva solo el certificado HTTPS.
+3. **Archivos**: `mkdir -p /root/evolution` y creá adentro el `docker-compose.yml` y el `Caddyfile` de *Configuración del server*, con los secretos completados.
 4. **DNS y firewall**: registro A de `evo.stapp.com.ar` a la IP nueva (como hoy, sin proxy de Cloudflare) y los puertos 22, 80 y 443 abiertos.
 5. **Levantar y probar**:
    ```bash
    cd /root/evolution && docker compose up -d
-   curl -s https://evo.stapp.com.ar/instance/fetchInstances -H "apikey: TU_API_KEY"
+   curl -s https://evo.stapp.com.ar/instance/fetchInstances -H "apikey: TU_API_KEY_SECRETA"
    ```
    Tiene que devolver JSON (`[]` en un server nuevo), no un error de auth.
 6. **STApp**: si cambió la API key, actualizá `EVOLUTION_API_KEY` en Vercel. Cada taller vuelve a escanear su QR en Configuración → WhatsApp.
