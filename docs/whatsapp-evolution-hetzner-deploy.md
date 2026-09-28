@@ -50,7 +50,8 @@ Resumen de lo que viene (todo igual que el doc de Oracle):
 - **Parte 3** — `~/evolution/docker-compose.yml` con Evolution + Postgres + Redis. **Mismo archivo, sin cambios.** Acordate de:
   - poner una `AUTHENTICATION_API_KEY` real (`openssl rand -hex 32`),
   - cambiar `evopass` por una contraseña real,
-  - dejar `SERVER_URL=https://evo.tudominio.com` (tu hostname del Tunnel).
+  - dejar `SERVER_URL=https://evo.tudominio.com` (tu hostname del Tunnel),
+  - dejar `DATABASE_SAVE_DATA_NEW_MESSAGE=true` (con `false` los reintentos de WhatsApp le llegan vacíos al cliente).
 - **Parte 4** — Cloudflare Tunnel.
   - El binario ARM (`cloudflared-linux-arm64`) sirve para **CAX11**. Si elegiste **CX22 (x86)**, usá `cloudflared-linux-amd64` en vez de `arm64`.
   - En `config.yml`, el `credentials-file` queda bajo `/root/.cloudflared/...` (no `/home/ubuntu/...`), porque entrás como root.

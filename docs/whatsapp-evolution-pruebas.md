@@ -162,6 +162,10 @@ Revisá en orden (de más común a menos):
 
 > Pista de diseño: el envío automático lee el flag de notificaciones WhatsApp de la org en `send-direct.ts`, mientras que el toggle de UI lo escribe vía `/api/notificaciones/config`. Si activaste el toggle y aún así no envía, confirmá en DB que el flag quedó persistido (punto 2) antes de buscar más lejos.
 
+### Si llega VACÍO
+
+Si al cliente le llega el mensaje en blanco pero `notification_logs` lo tiene como `ENVIADO` con el `contenido` completo, STApp mandó bien el texto (Evolution rechaza un texto vacío con 400, así que nunca sale vacío desde acá). El vacío lo arma Evolution al reenviar: el servidor corre con `DATABASE_SAVE_DATA_NEW_MESSAGE` en `false` o sin definir. Arreglo en el troubleshooting de `whatsapp-evolution-oracle-deploy.md`.
+
 ---
 
 ## Resumen
