@@ -24,6 +24,11 @@
 -- que PostgREST no tenga dos candidatas. Sin esta migracion la ruta llama con
 -- la firma vieja.
 
+-- En una transaccion: entre el DROP FUNCTION y el CREATE no queda un instante
+-- sin funcion para una devolucion que entre mientras se aplica, y si algo
+-- falla no queda a medias.
+BEGIN;
+
 ALTER TABLE devoluciones_venta
   ADD COLUMN IF NOT EXISTS monto_aplicado_deuda DECIMAL(12,2) NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
@@ -459,3 +464,5 @@ COMMENT ON FUNCTION public.registrar_devolucion_atomica(TEXT,TEXT,TEXT,TEXT,TEXT
   'Migración 330: lo devuelto descuenta primero el saldo pendiente '
   '(monto_aplicado_deuda) y solo se reembolsa el resto; CREDITO_TIENDA = '
   'cuenta corriente; inventario del item vendido; p_idempotency_key.';
+
+COMMIT;

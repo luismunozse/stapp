@@ -23,6 +23,10 @@
 -- anular una venta con CAE hay que emitir la NC en ARCA y registrar la
 -- devolucion de los productos en el sistema.
 
+-- En una transaccion: entre los DROP y los CREATE/ADD no queda un instante
+-- sin trigger ni FK para una venta que se anule o se borre mientras se aplica.
+BEGIN;
+
 CREATE OR REPLACE FUNCTION proteger_anulacion_venta()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -56,3 +60,5 @@ ALTER TABLE comprobantes_fiscales DROP CONSTRAINT IF EXISTS comprobantes_fiscale
 ALTER TABLE comprobantes_fiscales
   ADD CONSTRAINT comprobantes_fiscales_venta_id_fkey
   FOREIGN KEY (venta_id) REFERENCES ventas(id);
+
+COMMIT;
