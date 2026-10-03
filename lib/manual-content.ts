@@ -277,6 +277,11 @@ export const manualSections: ManualSection[] = [
         seeAlso: ["ordenes", "ventas", "proveedores"],
       },
       {
+        subtitle: "Imprimir etiquetas",
+        body: "Desde el menú de acciones de un item elegí \"Imprimir etiqueta\". Podés imprimir en una impresora térmica de etiquetas adhesivas (tamaños 40×25, 38×25, 50×30 y 60×40 mm, o rollo de 58 y 80 mm) o en una hoja A4 con varias etiquetas. Cada etiqueta puede llevar nombre, código de barras, código y precio. Si un producto no tiene código, se imprime como etiqueta de precio (nombre y precio, sin código de barras). El medio y el tamaño quedan recordados en ese navegador.",
+        tip: "En el driver de la impresora configurá el mismo tamaño de etiqueta y los márgenes en 0. Las plantillas Zebra (ZPL/EPL) requieren que el producto tenga código.",
+      },
+      {
         subtitle: "Importación masiva",
         body: "Si tenés muchos productos, podés importarlos masivamente desde un archivo Excel o CSV. Descargá la plantilla desde Configuración > Importaciones, completala con tus datos y subila al sistema.",
         steps: [
