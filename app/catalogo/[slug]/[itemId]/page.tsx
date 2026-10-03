@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { CatalogoItemView } from "@/components/catalogo-public/catalogo-item-view"
 import { stockDisponibleCatalogo } from "@/lib/catalogo/stock-disponible"
 import { normalizarWhatsAppCatalogo } from "@/lib/catalogo/whatsapp"
+import { hasPlanFeature } from "@/lib/subscriptions"
 import { buildItemDescription, buildItemTitle } from "@/lib/catalogo/item-meta"
 import type { Metadata, Viewport } from "next"
 
@@ -191,6 +192,9 @@ async function _fetchItem(slug: string, itemId: string) {
     }
   }
 
+  // Define si el checkout registra la cotización o arma un mensaje de WhatsApp.
+  const recibePedidos = await hasPlanFeature(config.organization_id, "cotizaciones_online")
+
   // `pais` solo sirve para normalizar el WhatsApp; no se expone al cliente.
   const { pais: _pais, ...orgPublica } = org ?? ({} as NonNullable<typeof org>)
 
@@ -200,6 +204,7 @@ async function _fetchItem(slug: string, itemId: string) {
       titulo: config.titulo,
       color_primary: config.color_primary || "#2563eb",
       whatsapp: normalizarWhatsAppCatalogo(config.whatsapp, org?.pais),
+      recibe_pedidos: recibePedidos,
     },
     organizacion: orgPublica!,
     item,

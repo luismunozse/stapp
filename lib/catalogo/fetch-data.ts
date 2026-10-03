@@ -10,6 +10,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase"
 import { SLUG_REGEX } from "@/lib/catalogo-validators"
+import { hasPlanFeature } from "@/lib/subscriptions"
 import { stockDisponibleCatalogo } from "./stock-disponible"
 import { normalizarWhatsAppCatalogo } from "./whatsapp"
 import type {
@@ -36,6 +37,7 @@ export async function fetchCatalogoBaseData(slug: string): Promise<CatalogoPubli
     { data: categorias },
     { data: itemsRaw },
     { data: viewsRaw },
+    recibePedidos,
   ] = await Promise.all([
     supabaseAdmin
       .from("organizations")
@@ -67,6 +69,9 @@ export async function fetchCatalogoBaseData(slug: string): Promise<CatalogoPubli
       .not("item_id", "is", null)
       .gte("created_at", ago7)
       .limit(10000),
+    // Solo el booleano viaja al cliente: define si el checkout registra la
+    // cotización o arma un mensaje de WhatsApp. Cacheado con la página (ISR).
+    hasPlanFeature(config.organization_id, "cotizaciones_online"),
   ])
 
   // El limit() puede truncar en silencio para orgs con mucho tráfico → vistas
@@ -186,6 +191,7 @@ export async function fetchCatalogoBaseData(slug: string): Promise<CatalogoPubli
       whatsapp: normalizarWhatsAppCatalogo(config.whatsapp, org?.pais),
       banner_url: config.banner_url,
       trust_badges: Array.isArray(config.trust_badges) ? config.trust_badges : [],
+      recibe_pedidos: recibePedidos,
     },
     organizacion: orgPublica!,
     categorias: (categorias ?? []) as any,
