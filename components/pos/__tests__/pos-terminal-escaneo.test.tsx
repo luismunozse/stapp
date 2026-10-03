@@ -49,9 +49,11 @@ function stubFetch(item: Record<string, unknown>) {
   )
 }
 
+// Como un lector real: las teclas salen del documento (no de un input) y
+// suben hasta los listeners de window.
 function escanear(codigo: string) {
-  for (const ch of codigo) fireEvent.keyDown(window, { key: ch, code: `Digit${ch}` })
-  fireEvent.keyDown(window, { key: "Enter", code: "Enter" })
+  for (const ch of codigo) fireEvent.keyDown(document.body, { key: ch, code: `Digit${ch}` })
+  fireEvent.keyDown(document.body, { key: "Enter", code: "Enter" })
 }
 
 function itemsDelCarrito(): any[] {
