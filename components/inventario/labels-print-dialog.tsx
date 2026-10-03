@@ -42,6 +42,7 @@ import {
   type OutputFormat,
 } from "@/lib/labels/label-content"
 import {
+  barcodeBoxMm,
   buildLabelsHtml,
   DIE_CUT_SIZES,
   LABEL_SIZE_CONFIG,
@@ -50,6 +51,13 @@ import {
   type LabelSizeKey,
   type PrintMedium,
 } from "@/lib/labels/build-labels-html"
+import {
+  DEFAULT_MEDIUM,
+  DEFAULT_SIZE,
+  readLabelPrefs,
+  saveLabelPrefs,
+  type LabelPrefs,
+} from "@/lib/labels/label-prefs"
 import { printHtmlViaIframe } from "@/lib/print/print-html-iframe"
 
 interface ApiLabelTemplate {
@@ -79,45 +87,6 @@ interface Props {
   items: LabelItem[]
 }
 
-const STORAGE_KEY = "stapp:etiqueta-inventario"
-const DEFAULT_MEDIUM: PrintMedium = "thermal"
-const DEFAULT_SIZE: LabelSizeKey = "50x30"
-
-interface StoredPrefs {
-  medium: PrintMedium
-  thermalSize: LabelSizeKey
-  sheetSize: LabelSizeKey
-}
-
-/** Medio y tamaños recordados por dispositivo/navegador. Nunca tira. */
-function readPrefs(): StoredPrefs | null {
-  if (typeof window === "undefined") return null
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    const v = JSON.parse(raw) as Partial<StoredPrefs>
-    const medium: PrintMedium = v.medium === "sheet" ? "sheet" : DEFAULT_MEDIUM
-    const thermalSize = THERMAL_SIZES.includes(v.thermalSize as LabelSizeKey)
-      ? (v.thermalSize as LabelSizeKey)
-      : DEFAULT_SIZE
-    const sheetSize = DIE_CUT_SIZES.includes(v.sheetSize as LabelSizeKey)
-      ? (v.sheetSize as LabelSizeKey)
-      : DEFAULT_SIZE
-    return { medium, thermalSize, sheetSize }
-  } catch {
-    return null
-  }
-}
-
-function savePrefs(prefs: StoredPrefs): void {
-  if (typeof window === "undefined") return
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs))
-  } catch {
-    /* localStorage no disponible (modo privado, etc.) */
-  }
-}
-
 const FORMAT_LABELS: Record<BarcodeFormat, string> = {
   AUTO: "Auto-detectar",
   CODE128: "CODE128 (alfanumérico)",
@@ -137,6 +106,7 @@ function generateBarcodeSVG(
   widthMm: number,
   heightMm: number,
   format: BarcodeFormat,
+  box?: { widthMm: number; heightMm: number },
 ): BarcodeResult {
   if (typeof document === "undefined") return { svg: "", error: "SSR sin document" }
 
@@ -162,19 +132,33 @@ function generateBarcodeSVG(
   }
 
   try {
-    const svgNode = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+    let svgNode = document.createElementNS("http://www.w3.org/2000/svg", "svg")
     let jsbErr: string | undefined
-    JsBarcode(svgNode, value, {
-      format: resolved,
-      displayValue: false,
-      margin: 0,
-      height: Math.max(30, heightMm * 2),
-      width: Math.max(1, Math.round(widthMm / 40)),
-      valid: (isValid: boolean) => {
-        if (!isValid) jsbErr = `JsBarcode rechazó ${resolved}: "${value}" (checksum o formato inválido)`
-      },
-    })
+    const render = (node: SVGSVGElement, barHeight: number) =>
+      JsBarcode(node, value, {
+        format: resolved,
+        displayValue: false,
+        margin: 0,
+        height: barHeight,
+        width: Math.max(1, Math.round(widthMm / 40)),
+        valid: (isValid: boolean) => {
+          if (!isValid) jsbErr = `JsBarcode rechazó ${resolved}: "${value}" (checksum o formato inválido)`
+        },
+      })
+    render(svgNode, Math.max(30, heightMm * 2))
     if (jsbErr) return { svg: "", error: jsbErr, resolvedFormat: resolved }
+    if (box && box.widthMm > 0) {
+      // El SVG se escala dentro de la caja del código con su relación de
+      // aspecto: si no coincide con la de la caja las barras quedan achicadas.
+      // Con el ancho natural de las barras calculamos el alto que iguala el
+      // aspecto de la caja y re-renderizamos.
+      const naturalWidth = parseFloat(svgNode.getAttribute("width") || "")
+      if (Number.isFinite(naturalWidth) && naturalWidth > 0) {
+        const fitted = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+        render(fitted, Math.max(10, Math.round((naturalWidth * box.heightMm) / box.widthMm)))
+        if (!jsbErr && fitted.hasChildNodes()) svgNode = fitted
+      }
+    }
     if (!svgNode.hasChildNodes()) {
       return { svg: "", error: `JsBarcode no generó nodos para ${resolved}: "${value}"`, resolvedFormat: resolved }
     }
@@ -216,19 +200,19 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
 
   // Medio y tamaño recordados (se leen una sola vez, después de montar).
   useEffect(() => {
-    const prefs = readPrefs()
+    const prefs = readLabelPrefs()
     if (!prefs) return
     setMedium(prefs.medium)
     setThermalSize(prefs.thermalSize)
     setSheetSize(prefs.sheetSize)
   }, [])
 
-  const updatePrefs = (next: Partial<StoredPrefs>) => {
+  const updatePrefs = (next: Partial<LabelPrefs>) => {
     const merged = { medium, thermalSize, sheetSize, ...next }
     if (next.medium) setMedium(next.medium)
     if (next.thermalSize) setThermalSize(next.thermalSize)
     if (next.sheetSize) setSheetSize(next.sheetSize)
-    savePrefs(merged)
+    saveLabelPrefs(merged)
   }
 
   const size: LabelSizeKey = medium === "thermal" ? thermalSize : sheetSize
@@ -273,7 +257,14 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
       const code = content.code
       let barcodeSvg = ""
       if (content.barcode) {
-        const result = generateBarcodeSVG(code, sizeConfig.widthMm, sizeConfig.heightMm ?? 30, format)
+        // En térmica ajustamos el SVG al aspecto de su caja; la hoja queda como estaba.
+        const result = generateBarcodeSVG(
+          code,
+          sizeConfig.widthMm,
+          sizeConfig.heightMm,
+          format,
+          medium === "thermal" ? barcodeBoxMm(size) : undefined,
+        )
         if (result.svg) {
           barcodeSvg = result.svg
         } else {
@@ -725,7 +716,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Total: <strong>{totalLabels}</strong> etiqueta{totalLabels === 1 ? "" : "s"} — Se imprime en hoja común o rollo térmico. Usá el diálogo de impresión del navegador para elegir la impresora.
+            Total: <strong>{totalLabels}</strong> etiqueta{totalLabels === 1 ? "" : "s"}
           </p>
         </div>
 
