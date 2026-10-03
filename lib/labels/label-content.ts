@@ -72,7 +72,7 @@ export function resolveLabelContent(
   item: LabelContentItem,
   opts: LabelContentOptions,
 ): LabelContent {
-  const code = (item.barcode || item.codigo || "").trim()
+  const code = item.barcode?.trim() || item.codigo?.trim() || ""
   const hasCode = code.length > 0
 
   if (opts.outputFormat !== "PDF") {

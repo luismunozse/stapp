@@ -164,6 +164,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
   const [thermalError, setThermalError] = useState<string>("")
   const [thermalOk, setThermalOk] = useState<string>("")
   const [hasWebUsb, setHasWebUsb] = useState(false)
+  const [noBarcodeItems, setNoBarcodeItems] = useState<string[]>([])
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
@@ -177,27 +178,22 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
     [outputFormat, format, showBarcode, showName, showCode, showPrice],
   )
 
-  // Cero cantidad para items que no se pueden imprimir con las opciones actuales
-  // (hoy, en PDF, solo cuando la etiqueta quedaría vacía). Un item sin código o
-  // con código incompatible NO se zerea: sale como etiqueta de precio.
-  useEffect(() => {
-    if (outputFormat !== "PDF") return
-    setQuantities((prev) => {
-      let changed = false
-      const next = { ...prev }
-      for (const item of items) {
-        if (!resolveLabelContent(item, contentOpts).printable && (next[item.id] ?? 0) > 0) {
-          next[item.id] = 0
-          changed = true
-        }
-      }
-      return changed ? next : prev
-    })
-  }, [contentOpts, items, outputFormat])
+  // Cantidad efectiva: lo que el usuario tipeó, salvo que el item no se pueda
+  // imprimir con las opciones actuales (entonces 0). Derivada, no se persiste:
+  // al volver a activar los switches la cantidad tipeada sigue ahí.
+  const effectiveQty = useMemo(() => {
+    const out: Record<string, number> = {}
+    for (const item of items) {
+      out[item.id] = resolveLabelContent(item, contentOpts).printable
+        ? quantities[item.id] || 0
+        : 0
+    }
+    return out
+  }, [items, quantities, contentOpts])
 
   const totalLabels = useMemo(
-    () => items.reduce((sum, i) => sum + (quantities[i.id] || 0), 0),
-    [items, quantities]
+    () => items.reduce((sum, i) => sum + (effectiveQty[i.id] || 0), 0),
+    [items, effectiveQty]
   )
 
   const updateQty = (id: string, value: string) => {
@@ -207,9 +203,9 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
 
   const handlePrint = useCallback(() => {
     const labelsHTML: string[] = []
-    const skipped: string[] = []
+    const noBarcode: string[] = []
     for (const item of items) {
-      const qty = quantities[item.id] || 0
+      const qty = effectiveQty[item.id] || 0
       if (qty <= 0) continue
       const content = resolveLabelContent(item, contentOpts)
       if (!content.printable) continue
@@ -217,19 +213,22 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
       let barcodeSvg = ""
       if (content.barcode) {
         const result = generateBarcodeSVG(code, sizeConfig.widthMm, sizeConfig.heightMm, format)
-        if (!result.svg) {
+        if (result.svg) {
+          barcodeSvg = result.svg
+        } else {
+          // El código no se pudo codificar (ej. checksum EAN/UPC): la etiqueta
+          // sale igual, como etiqueta de precio.
           const reason = result.error || "motivo desconocido"
           console.error(`[labels-print] item="${item.nombre}" code="${code}" → ${reason}`)
-          skipped.push(`${item.nombre} (${code}): ${reason}`)
-          continue
+          noBarcode.push(`${item.nombre} (${code})`)
         }
-        barcodeSvg = result.svg
       }
+      const withBarcode = !!barcodeSvg
 
       const labelHTML = `
-        <div class="label${content.barcode ? "" : " label--price"}">
+        <div class="label${withBarcode ? "" : " label--price"}">
           ${content.showName ? `<div class="name">${escapeHtml(item.nombre)}</div>` : ""}
-          ${content.barcode ? `<div class="barcode">${barcodeSvg}</div>` : ""}
+          ${withBarcode ? `<div class="barcode">${barcodeSvg}</div>` : ""}
           ${content.showCodeText ? `<div class="code">${escapeHtml(code)}</div>` : ""}
           ${content.showPrice ? `<div class="price">${formatPrice(item.precioVenta)}</div>` : ""}
         </div>
@@ -239,11 +238,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
       }
     }
 
-    if (skipped.length > 0) {
-      alert(
-        `No se pudieron generar ${skipped.length} etiqueta(s):\n\n${skipped.join("\n\n")}\n\nVer consola del navegador para detalle. Verificá que el código coincida con el formato seleccionado.`,
-      )
-    }
+    setNoBarcodeItems(noBarcode)
 
     if (labelsHTML.length === 0) return
 
@@ -313,7 +308,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
     if (!w) return
     w.document.write(html)
     w.document.close()
-  }, [items, quantities, sizeConfig, format, contentOpts, formatPrice])
+  }, [items, effectiveQty, sizeConfig, format, contentOpts, formatPrice])
 
   // ============================================================
   // Térmico (ZPL/EPL): templates desde DB + generación raw + preview
@@ -351,7 +346,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
   const expandedItems = useMemo<ZplLabelItem[]>(() => {
     const out: ZplLabelItem[] = []
     for (const item of items) {
-      const qty = quantities[item.id] || 0
+      const qty = effectiveQty[item.id] || 0
       if (qty <= 0) continue
       const li: ZplLabelItem = {
         codigo: item.codigo || "",
@@ -362,7 +357,16 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
       for (let i = 0; i < qty; i++) out.push(li)
     }
     return out
-  }, [items, quantities])
+  }, [items, effectiveQty])
+
+  // Item para la vista previa: el primero a imprimir, o el primero imprimible.
+  const previewItem = useMemo(
+    () =>
+      expandedItems[0] ||
+      items.find((i) => resolveLabelContent(i, contentOpts).printable) ||
+      null,
+    [expandedItems, items, contentOpts],
+  )
 
   // Generación raw del spool (ZPL o EPL) para descarga e impresión directa.
   const rawSpool = useMemo(() => {
@@ -386,7 +390,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
   // no muestre 200 etiquetas idénticas.
   const previewSpool = useMemo(() => {
     if (!selectedTemplate) return ""
-    const first = expandedItems[0] || items[0]
+    const first = previewItem
     if (!first) return selectedTemplate.template
     const tpl: ZplLabelTemplate = {
       id: selectedTemplate.id,
@@ -405,7 +409,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
     return tpl.formato === "EPL"
       ? generateEpl([li], tpl, "")
       : generateZpl([li], tpl, "")
-  }, [selectedTemplate, expandedItems, items])
+  }, [selectedTemplate, previewItem])
 
   // Render best-effort en canvas — sólo aproxima la disposición. Parsea ^FOx,y
   // / ^FDtexto del ZPL y dibuja a escala. Para EPL parsea coords iniciales.
@@ -426,7 +430,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
     ctx.fillRect(0, 0, canvas.width, canvas.height)
     ctx.fillStyle = "#111111"
 
-    const first = expandedItems[0] || items[0]
+    const first = previewItem
     const vars: Record<string, string> = first
       ? {
           codigo: (first as any).codigo || "",
@@ -491,7 +495,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
     }
     ctx.strokeStyle = "#ddd"
     ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1)
-  }, [selectedTemplate, expandedItems, items, outputFormat])
+  }, [selectedTemplate, previewItem, outputFormat])
 
   const handleDownloadThermal = useCallback(() => {
     if (!selectedTemplate || !rawSpool) return
@@ -589,6 +593,16 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
                   </div>
                 </div>
               </div>
+              {noBarcodeItems.length > 0 && (
+                <div className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                  <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                  <span>
+                    {noBarcodeItems.length} etiqueta{noBarcodeItems.length === 1 ? "" : "s"} se imprimió
+                    sin código de barras porque el código no es válido para el formato elegido:{" "}
+                    {noBarcodeItems.join(", ")}.
+                  </span>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="ZPL" className="space-y-3">
@@ -655,7 +669,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
                       type="number"
                       min={0}
                       max={999}
-                      value={quantities[item.id] ?? 0}
+                      value={effectiveQty[item.id] ?? 0}
                       onChange={(e) => updateQty(item.id, e.target.value)}
                       disabled={!content.printable}
                       className="h-8 text-center"

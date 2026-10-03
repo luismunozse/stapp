@@ -57,6 +57,12 @@ describe("resolveLabelContent en PDF", () => {
     expect(r.code).toBe("999")
   })
 
+  it("un barcode solo con espacios no tapa un codigo valido", () => {
+    const r = resolveLabelContent({ ...withCode, barcode: "  " }, base)
+    expect(r.code).toBe("ABC-1")
+    expect(r.barcode).toBe(true)
+  })
+
   it("código incompatible con el formato imprime sin barras y avisa el motivo", () => {
     const r = resolveLabelContent(withCode, { ...base, barcodeFormat: "EAN13" })
     expect(r.printable).toBe(true)
