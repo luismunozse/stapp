@@ -11,9 +11,11 @@
 -- Solucion: una columna que dice quien escribio la fila. El endpoint de borrado
 -- bloquea las que no son MANUAL ni RECURRENTE.
 --
--- Orden de despliegue: el codigo tolera la columna ausente (reintenta el insert
--- sin `origen` y detecta el origen por el prefijo del concepto), asi que esta
--- migracion puede aplicarse antes o despues del merge.
+-- Orden de despliegue: aplicar DESPUES del merge. El codigo nuevo tolera la
+-- columna ausente (reintenta el insert sin `origen` y detecta el origen por el
+-- prefijo del concepto). Aplicada antes, el codigo viejo que sigue corriendo
+-- graba los egresos de devolucion con el default 'MANUAL' y quedan borrables;
+-- aplicada despues, el backfill los clasifica.
 --
 -- Idempotente: ADD COLUMN IF NOT EXISTS y backfill acotado a origen = 'MANUAL'.
 
