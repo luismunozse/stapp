@@ -21,26 +21,6 @@ export async function getRecargosMetodo(
   return map
 }
 
-/** Factor multiplicador del precio para un método: 1 + %/100. Sin config => 1. */
-export function factorRecargo(
-  recargos: Record<string, number>,
-  metodo: string
-): number {
-  return 1 + (recargos[metodo] ?? 0) / 100
-}
-
-/**
- * Método que fija el precio de la venta: el pago de mayor monto (empate => el
- * primero). Sin pagos => el metodoPago de fallback.
- */
-export function metodoCondicion(
-  pagos: Array<{ metodo: string; monto: number }> | undefined,
-  metodoPagoFallback: string
-): string {
-  if (!pagos || pagos.length === 0) return metodoPagoFallback
-  let elegido = pagos[0]
-  for (const p of pagos) {
-    if (p.monto > elegido.monto) elegido = p
-  }
-  return elegido.metodo
-}
+// Las funciones puras viven en lib/ventas/totales.ts para que el POS (navegador)
+// use exactamente las mismas que el servidor.
+export { factorRecargo, metodoCondicion } from "@/lib/ventas/totales"

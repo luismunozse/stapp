@@ -8,6 +8,7 @@ import {
   parseResponse,
 } from "./helpers"
 import { supabaseAdmin } from "@/lib/supabase"
+import { getRecargosMetodo } from "@/lib/recargos"
 
 vi.mock("@/lib/recargos", async (orig) => {
   const actual = (await orig()) as any
@@ -164,5 +165,126 @@ describe("POST /api/ventas — Task 5: factor de recargo por método de pago", (
     expect(json.error).toMatch(/no coincide/)
     // Must NOT call the RPC when payment is invalid
     expect(vi.mocked(supabaseAdmin.rpc)).not.toHaveBeenCalled()
+  })
+})
+
+describe("POST /api/ventas — mismo total que el POS", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAuthSuccess({ role: "ADMIN" })
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: { ventaId: "v1", numeroVenta: 1, garantias: [], items: ["i1"] },
+      error: null,
+    } as any)
+    buildTableMocks()
+  })
+
+  const item = (precioUnitario: number, extra: Record<string, unknown> = {}) => ({
+    inventarioId: "inv1",
+    descripcion: "X",
+    cantidad: 1,
+    precioUnitario,
+    diasGarantia: 0,
+    ...extra,
+  })
+
+  it("descuento en monto + tarjeta con recargo: acepta lo que cobró el POS ($9.900)", async () => {
+    vi.mocked(getRecargosMetodo).mockResolvedValueOnce({ TARJETA_CREDITO: 10 })
+
+    const res = await POST(
+      createPostRequest(
+        {
+          clienteNombre: "CF",
+          items: [item(10000, { tipoDescuento: "MONTO", descuento: 1000 })],
+          metodoPago: "TARJETA_CREDITO",
+          pagos: [{ metodo: "TARJETA_CREDITO", monto: 9900 }],
+        },
+        "http://localhost/api/ventas"
+      )
+    )
+    const { status, body } = await parseResponse(res)
+
+    expect(status, body?.error).toBe(201)
+    const [, params] = vi.mocked(supabaseAdmin.rpc).mock.calls[0]
+    expect(params.p_total).toBe(9900)
+    expect(params.p_subtotal).toBe(11000)
+    expect(params.p_descuento).toBe(1100)
+    // La línea guardada suma lo mismo que la venta (precio y descuento con recargo)
+    expect(params.p_items[0]).toMatchObject({ precioUnitario: 11000, descuento: 1100 })
+  })
+
+  it("dos pagos que suman el total al centavo no piden cliente (2,86 + 11,45 = 14,31)", async () => {
+    // En binario 2.86 + 11.45 = 14.309999…: antes quedaba "saldo pendiente" y
+    // la venta sin cliente se rechazaba.
+    vi.mocked(getRecargosMetodo).mockResolvedValueOnce({})
+
+    const res = await POST(
+      createPostRequest(
+        {
+          clienteNombre: "CF",
+          items: [item(14.31)],
+          metodoPago: "TRANSFERENCIA",
+          pagos: [
+            { metodo: "TRANSFERENCIA", monto: 2.86 },
+            { metodo: "EFECTIVO", monto: 11.45 },
+          ],
+        },
+        "http://localhost/api/ventas"
+      )
+    )
+    const { status, body } = await parseResponse(res)
+    expect(status, body?.error).toBe(201)
+  })
+
+  it("un centavo de diferencia se ajusta: el SQL recibe pagos que suman exacto el total", async () => {
+    vi.mocked(getRecargosMetodo).mockResolvedValueOnce({})
+
+    const res = await POST(
+      createPostRequest(
+        {
+          clienteNombre: "CF",
+          items: [item(100)],
+          metodoPago: "TRANSFERENCIA",
+          pagos: [
+            { metodo: "TRANSFERENCIA", monto: 59.99 },
+            { metodo: "EFECTIVO", monto: 40 },
+          ],
+        },
+        "http://localhost/api/ventas"
+      )
+    )
+    const { status, body } = await parseResponse(res)
+    expect(status, body?.error).toBe(201)
+
+    const [, params] = vi.mocked(supabaseAdmin.rpc).mock.calls[0]
+    expect(params.p_pagos.map((p: any) => p.monto)).toEqual([60, 40])
+  })
+
+  it("una venta fiada no se redondea como si fuera en efectivo", async () => {
+    vi.mocked(getRecargosMetodo).mockResolvedValueOnce({})
+    mockSupabaseFrom({
+      organizations: createChainMock({ iva_regimen: "EXENTO", redondeo_efectivo: 50 }),
+      sucursales: createChainMock({ id: "suc-principal" }),
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 121 }),
+    })
+
+    const res = await POST(
+      createPostRequest(
+        {
+          clienteId: "c1",
+          clienteNombre: "Juan",
+          items: [item(121)],
+          metodoPago: "EFECTIVO",
+          pagosParcial: true,
+        },
+        "http://localhost/api/ventas"
+      )
+    )
+    const { status, body } = await parseResponse(res)
+    expect(status, body?.error).toBe(201)
+
+    const [, params] = vi.mocked(supabaseAdmin.rpc).mock.calls[0]
+    expect(params.p_total).toBe(121)
+    expect(params.p_pagos).toEqual([])
   })
 })

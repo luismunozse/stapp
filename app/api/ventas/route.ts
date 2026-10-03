@@ -5,7 +5,16 @@ import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { formatVenta } from "@/lib/db-utils"
 import { sucursalParaLectura, resolverDestinoVenta, getNombreSucursal } from "@/lib/sucursal"
-import { getRecargosMetodo, factorRecargo, metodoCondicion } from "@/lib/recargos"
+import { getRecargosMetodo } from "@/lib/recargos"
+import {
+  calcularTotalesVenta,
+  conciliarPagos,
+  condicionDeCobro,
+  lineaConRecargo,
+  type DescuentoConfig,
+  type FiscalConfig,
+  type IvaRegimen,
+} from "@/lib/ventas/totales"
 import { resolveOperador } from "@/lib/operadores"
 import { z } from "zod"
 import { getIvaGeneral } from "@/lib/countries"
@@ -178,39 +187,8 @@ export async function POST(request: Request) {
     // Precio efectivo por método de pago: el método-condición (pago de mayor monto)
     // fija un factor que sube el precio de venta (ingreso real, no recargo bancario).
     const recargosMetodo = await getRecargosMetodo(organizationId!)
-    const condicion = metodoCondicion(data.pagos, data.metodoPago)
-    const factor = factorRecargo(recargosMetodo, condicion)
-
-    // Calcular totales. Convención: venta.subtotal = bruto (Σ cantidad×precio);
-    // venta.descuento = descuento total (por línea + global); venta.total =
-    // bruto − descuento. Los descuentos por línea se restan del neto sobre el
-    // que se aplica el descuento global (% global sobre el neto post-línea).
-    const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
-
-    let subtotalBruto = 0
-    let descuentoItems = 0
-    for (const item of data.items) {
-      const precioEfectivo = round2(item.precioUnitario * factor)
-      const lineaBruto = item.cantidad * precioEfectivo
-      subtotalBruto += lineaBruto
-      const lineaDesc =
-        item.tipoDescuento === "PORCENTAJE"
-          ? lineaBruto * (item.porcentajeDescuento / 100)
-          : Math.min(item.descuento, lineaBruto)
-      descuentoItems += lineaDesc
-    }
-    const subtotalNeto = subtotalBruto - descuentoItems
-
-    let descuentoGlobal = data.descuento
-    if (data.tipoDescuento === "PORCENTAJE") {
-      descuentoGlobal = subtotalNeto * (data.porcentajeDescuento / 100)
-    }
-    // Clamp: el descuento global no puede exceder el neto (total nunca negativo)
-    descuentoGlobal = Math.min(Math.max(descuentoGlobal, 0), subtotalNeto)
-
-    const subtotal = round2(subtotalBruto)
-    const descuentoMonto = round2(descuentoItems + descuentoGlobal)
-    const base = round2(Math.max(subtotalBruto - descuentoItems - descuentoGlobal, 0))
+    const parcial = !!data.pagosParcial
+    const cobro = condicionDeCobro(data.pagos, data.metodoPago, parcial, recargosMetodo)
 
     // Config fiscal de la organización (IVA + redondeo). select("*") es defensivo:
     // si las columnas no existen aún (migración 229 sin aplicar) quedan undefined
@@ -224,52 +202,63 @@ export async function POST(request: Request) {
     // iva_tasa en NULL significa "sin tasa propia: usar la del pais"
     // (migracion 310). Con regimen EXENTO no se aplica ninguna igual.
     const ivaTasa = Number(orgFiscal?.iva_tasa ?? getIvaGeneral(orgFiscal?.pais))
-    const redondeoUnidad = Number(orgFiscal?.redondeo_efectivo ?? 0)
-
-    // ¿Pago 100% en efectivo? (para redondeo)
-    const isCash =
-      data.pagos && data.pagos.length > 0
-        ? data.pagos.every((p) => p.metodo === "EFECTIVO")
-        : data.metodoPago === "EFECTIVO"
-
-    // IVA por régimen (espeja computeVentaTotals del front)
-    let ivaNeto = base
-    let ivaMonto = 0
-    let totalConIva = base
-    if (ivaRegimen === "INCLUIDO" && ivaTasa > 0) {
-      ivaNeto = round2(base / (1 + ivaTasa / 100))
-      ivaMonto = round2(base - ivaNeto)
-      totalConIva = base
-    } else if (ivaRegimen === "ADITIVO" && ivaTasa > 0) {
-      ivaNeto = base
-      ivaMonto = round2(base * (ivaTasa / 100))
-      totalConIva = round2(base + ivaMonto)
+    const fiscal: FiscalConfig = {
+      regimen: ivaRegimen as IvaRegimen,
+      tasa: ivaTasa,
+      redondeoEfectivo: Number(orgFiscal?.redondeo_efectivo ?? 0),
     }
 
-    // Redondeo de efectivo
-    let redondeoMonto = 0
-    let total = totalConIva
-    if (isCash && redondeoUnidad > 0) {
-      const r = Math.round(totalConIva / redondeoUnidad) * redondeoUnidad
-      redondeoMonto = round2(r - totalConIva)
-      total = round2(r)
-    }
+    // Totales con la misma función que muestra el POS (lib/ventas/totales.ts).
+    // Convención: venta.subtotal = bruto (Σ cantidad×precio); venta.descuento =
+    // descuento total (por línea + global); venta.total = bruto − descuento,
+    // más IVA aditivo y redondeo de efectivo.
+    const descuentoGlobal: DescuentoConfig =
+      data.tipoDescuento === "PORCENTAJE"
+        ? { tipo: "PORCENTAJE", valor: data.porcentajeDescuento }
+        : { tipo: "MONTO", valor: data.descuento }
+    const totales = calcularTotalesVenta(data.items, descuentoGlobal, fiscal, cobro.efectivo, cobro.factor)
+    const subtotal = totales.subtotal
+    const descuentoMonto = totales.descuentoTotal
+    const total = totales.total
+    const ivaNeto = totales.neto
+    const ivaMonto = totales.iva
+    const redondeoMonto = totales.redondeo
     const fiscalActivo = ivaRegimen !== "EXENTO" || redondeoMonto !== 0
 
-    // Preparar items para la función atómica. El precioUnitario se persiste con
-    // el factor del método aplicado (precio efectivo = ingreso real).
-    const pItems = data.items.map(item => ({
-      inventarioId: item.inventarioId || null,
-      descripcion: item.descripcion,
-      cantidad: item.cantidad,
-      precioUnitario: round2(item.precioUnitario * factor),
-      diasGarantia: item.diasGarantia,
-      descuento: item.descuento,
-      tipoDescuento: item.tipoDescuento,
-      porcentajeDescuento: item.porcentajeDescuento,
-      ...(item.serieIds && item.serieIds.length > 0 && { serieIds: item.serieIds }),
-      ...(item.costo != null && { costo: item.costo }),
-    }))
+    // Pagos contra el total, al centavo. Los que cubren el total con hasta un
+    // centavo de diferencia se ajustan para sumar exacto: si no, el SQL deja
+    // $0,01 de deuda en la cuenta del cliente (o rechaza la venta sin cliente).
+    const conciliacion = conciliarPagos(data.pagos ?? [], total, parcial)
+
+    // Una venta con saldo pendiente requiere un cliente
+    if (conciliacion.saldoPendiente > 0 && !data.clienteId) {
+      return NextResponse.json(
+        { error: "Para una venta a cuenta corriente (sin cobro total) tenés que seleccionar un cliente." },
+        { status: 400 }
+      )
+    }
+    if (conciliacion.error) {
+      return NextResponse.json({ error: conciliacion.error }, { status: 400 })
+    }
+
+    // Preparar items para la función atómica. Precio y descuento se persisten
+    // con el factor del método aplicado (precio efectivo = ingreso real), así
+    // cada línea suma lo mismo que el total de la venta.
+    const pItems = data.items.map(item => {
+      const linea = lineaConRecargo(item, cobro.factor)
+      return {
+        inventarioId: item.inventarioId || null,
+        descripcion: item.descripcion,
+        cantidad: item.cantidad,
+        precioUnitario: linea.precioUnitario,
+        diasGarantia: item.diasGarantia,
+        descuento: linea.descuento,
+        tipoDescuento: item.tipoDescuento,
+        porcentajeDescuento: item.porcentajeDescuento,
+        ...(item.serieIds && item.serieIds.length > 0 && { serieIds: item.serieIds }),
+        ...(item.costo != null && { costo: item.costo }),
+      }
+    })
 
     // Resolver sucursal + deposito concretos para la escritura (no-ADMIN: la
     // suya; ADMIN: según cookie, fallback a principal). Mismo helper que usan
@@ -319,43 +308,12 @@ export async function POST(request: Request) {
       p_sucursal_id: sucursalId,
     }
 
-    // Pass multi-payment array if provided
     if (data.pagos && data.pagos.length > 0) {
-      rpcParams.p_pagos = data.pagos
-    } else if (data.pagosParcial) {
+      rpcParams.p_pagos = conciliacion.pagos
+    } else if (parcial) {
       // Deferred payment ("paga después"): send empty array
       // RPC distinguishes NULL (legacy full payment) vs empty array (no payments)
       rpcParams.p_pagos = []
-    }
-
-    // Validate: a sale with pending balance requires a cliente_id
-    const montoPagado = data.pagos && data.pagos.length > 0
-      ? data.pagos.reduce((sum, p) => sum + p.monto, 0)
-      : data.pagosParcial ? 0 : total
-    const saldoPendiente = total - montoPagado
-    if (saldoPendiente > 0 && !data.clienteId) {
-      return NextResponse.json(
-        { error: "Para una venta a cuenta corriente (sin cobro total) tenés que seleccionar un cliente." },
-        { status: 400 }
-      )
-    }
-
-    // Server-side payment/total reconciliation — mirrors the client guard in PosCheckoutDialog.
-    // For non-partial sales: pagos must sum to exactly the effective total (tolerance 0.01).
-    if (data.pagos && data.pagos.length > 0 && !data.pagosParcial) {
-      if (Math.abs(saldoPendiente) > 0.01) {
-        return NextResponse.json(
-          { error: "El total de pagos no coincide con el total de la venta." },
-          { status: 400 }
-        )
-      }
-    }
-    // For partial sales: pagos must not exceed the total.
-    if (data.pagosParcial && montoPagado > total + 0.01) {
-      return NextResponse.json(
-        { error: "El total de pagos no puede exceder el total de la venta." },
-        { status: 400 }
-      )
     }
 
     const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc("crear_venta_atomica", rpcParams)

@@ -1,5 +1,6 @@
 import type { PosCartItem, PosCliente, DescuentoConfig, TipoDescuento } from "./pos-types"
 import type { PagoLineItem } from "@/components/pagos/multi-pago-input"
+import { metodoPagoCabecera } from "@/lib/ventas/totales"
 
 export interface BuildVentaPayloadInput {
   items: PosCartItem[]
@@ -84,7 +85,8 @@ export function buildVentaPayload(input: BuildVentaPayloadInput): VentaPayload {
     porcentajeDescuento: globalTipo === "PORCENTAJE" ? globalValor : 0,
     ...(descuentoMotivo ? { descuentoMotivo } : {}),
     ...(vendedorId ? { vendedorId } : {}),
-    metodoPago: pagosConMonto.length > 0 ? pagosConMonto[0].metodo : "EFECTIVO",
+    // El checkout calcula el recargo con este mismo metodoPago (condicionDeCobro).
+    metodoPago: metodoPagoCabecera(pagosLines),
     ...(observaciones ? { observaciones } : {}),
     ...(pagosConMonto.length > 0 && {
       pagos: pagosConMonto.map((p) => ({
