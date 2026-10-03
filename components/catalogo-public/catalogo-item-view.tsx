@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner"
 import { useCart } from "./use-cart"
 import { CartDrawer } from "./cart-drawer"
+import { VariantPicker, type Variante } from "./variant-picker"
 
 interface Item {
   id: string
@@ -31,6 +32,8 @@ interface Item {
   etiquetas: string[]
   stock_disponible: number | null
   destacado: boolean
+  top_variante_id?: string | null
+  variantes?: Variante[]
 }
 
 interface Data {
@@ -57,6 +60,7 @@ export function CatalogoItemView({ data }: { data: Data }) {
   const [cantidad, setCantidad] = useState(1)
   const [imgIdx, setImgIdx] = useState(0)
   const [cartOpen, setCartOpen] = useState(false)
+  const [varianteId, setVarianteId] = useState<string | null>(null)
   const touchStartX = useRef<number | null>(null)
 
   const { item, organizacion, config } = data
@@ -66,9 +70,17 @@ export function CatalogoItemView({ data }: { data: Data }) {
 
   const titulo = config.titulo || organizacion.nombre_mostrar || organizacion.nombre
   const galeria = [item.imagen_url, ...(item.imagenes ?? [])].filter(Boolean) as string[]
-  const agotado = item.stock_disponible === 0
-  const sinPrecio = item.precio == null
-  const stockMax = item.stock_disponible ?? Infinity
+  const variantes = item.variantes ?? []
+  const tieneVariantes = variantes.length > 0
+  const varianteSel = tieneVariantes ? variantes.find((v) => v.id === varianteId) ?? null : null
+  const debeElegirVariante = tieneVariantes && !varianteSel
+  // La variante elegida manda sobre el precio/stock base del item (que es el mínimo/suma).
+  const precioEfectivo =
+    varianteSel?.precio != null ? Number(varianteSel.precio) : item.precio != null ? Number(item.precio) : null
+  const stockEfectivo = tieneVariantes ? varianteSel?.stock ?? null : item.stock_disponible
+  const agotado = stockEfectivo === 0
+  const sinPrecio = precioEfectivo == null
+  const stockMax = stockEfectivo ?? Infinity
 
   const whatsappLink = config.whatsapp
     ? `https://wa.me/${config.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
@@ -77,19 +89,21 @@ export function CatalogoItemView({ data }: { data: Data }) {
     : null
 
   const handleAdd = () => {
-    if (sinPrecio || agotado) return
+    if (sinPrecio || agotado || debeElegirVariante) return
     cart.add({
       id: item.id,
       nombre: item.nombre,
-      precio: Number(item.precio),
-      imagen_url: item.imagen_url,
-      stock_disponible: item.stock_disponible,
+      precio: precioEfectivo!,
+      imagen_url: varianteSel?.imagen_url ?? item.imagen_url,
+      stock_disponible: stockEfectivo,
+      varianteId: varianteSel?.id ?? null,
+      varianteEtiqueta: varianteSel?.etiqueta ?? null,
     }, cantidad)
     toast.success("Agregado al carrito")
   }
 
   const itemUrl = typeof window !== "undefined" ? window.location.href : ""
-  const precioTexto = !sinPrecio ? formatPrecio(Number(item.precio)) : "(consultar precio)"
+  const precioTexto = !sinPrecio ? formatPrecio(precioEfectivo!) : "(consultar precio)"
   const shareText = `Hola! Vi "${item.nombre}" ${precioTexto} en el catálogo: ${itemUrl}`
   const shareWhatsAppUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`
 
@@ -273,20 +287,20 @@ export function CatalogoItemView({ data }: { data: Data }) {
               <div>
                 <div className="flex items-baseline gap-2 flex-wrap">
                   <div className="text-3xl font-bold" style={{ color: config.color_primary }}>
-                    {item.precio_hasta != null ? `Desde ${formatPrecio(Number(item.precio))}` : formatPrecio(Number(item.precio))}
+                    {item.precio_hasta != null && !tieneVariantes ? `Desde ${formatPrecio(precioEfectivo!)}` : formatPrecio(precioEfectivo!)}
                   </div>
-                  {item.precio_lista != null && Number(item.precio_lista) > Number(item.precio) && (
+                  {item.precio_lista != null && Number(item.precio_lista) > precioEfectivo! && (
                     <>
                       <span className="text-base text-muted-foreground line-through">
                         {formatPrecio(Number(item.precio_lista))}
                       </span>
                       <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded">
-                        -{Math.round((1 - Number(item.precio) / Number(item.precio_lista)) * 100)}%
+                        -{Math.round((1 - precioEfectivo! / Number(item.precio_lista)) * 100)}%
                       </span>
                     </>
                   )}
                 </div>
-                {item.precio_hasta != null && (
+                {item.precio_hasta != null && !tieneVariantes && (
                   <p className="text-sm text-muted-foreground">hasta {formatPrecio(Number(item.precio_hasta))}</p>
                 )}
               </div>
@@ -294,6 +308,16 @@ export function CatalogoItemView({ data }: { data: Data }) {
 
             {item.descripcion && (
               <p className="text-muted-foreground whitespace-pre-line">{item.descripcion}</p>
+            )}
+
+            {tieneVariantes && (
+              <VariantPicker
+                variantes={variantes}
+                varianteId={varianteId}
+                onSelect={setVarianteId}
+                topVarianteId={item.top_variante_id}
+                brandColor={config.color_primary}
+              />
             )}
 
             {item.etiquetas.length > 0 && (
@@ -304,12 +328,12 @@ export function CatalogoItemView({ data }: { data: Data }) {
               </div>
             )}
 
-            {item.tipo === "PRODUCTO" && item.stock_disponible != null && (
+            {item.tipo === "PRODUCTO" && stockEfectivo != null && (
               <div className="text-sm">
                 {agotado ? (
                   <Badge variant="secondary">Sin stock</Badge>
-                ) : item.stock_disponible <= 5 ? (
-                  <span className="text-orange-600 font-medium">Quedan {item.stock_disponible} unidades</span>
+                ) : stockEfectivo <= 5 ? (
+                  <span className="text-orange-600 font-medium">Quedan {stockEfectivo} unidades</span>
                 ) : (
                   <span className="text-green-600 font-medium">Stock disponible</span>
                 )}
@@ -337,7 +361,7 @@ export function CatalogoItemView({ data }: { data: Data }) {
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
-                <Button onClick={handleAdd} className="flex-1 gap-2 h-11" style={{ backgroundColor: config.color_primary }}>
+                <Button onClick={handleAdd} disabled={debeElegirVariante} className="flex-1 gap-2 h-11" style={{ backgroundColor: config.color_primary }}>
                   <ShoppingCart className="h-4 w-4" />
                   Agregar
                 </Button>
