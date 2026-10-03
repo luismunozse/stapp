@@ -135,24 +135,47 @@ export function PosTerminal() {
 
   // Fetch fiscal config, org warranty default y disponibilidad de facturación
   // electrónica on mount (una sola llamada, se reutiliza para todo).
+  //
+  // /api/configuracion/operativa y no /api/configuracion: esa es solo ADMIN, y
+  // un VENDEDOR recibía 403 que acá se tragaba en silencio. El POS seguía con
+  // fiscal = null (EXENTO, sin redondeo) y en una org con IVA aditivo cobraba
+  // un total que el server rechazaba. Si la config no carga no se cobra: un
+  // total calculado sin ella no coincide con el del server.
+  const [configEstado, setConfigEstado] = useState<"cargando" | "ok" | "error">("cargando")
   useEffect(() => {
-    fetch("/api/configuracion")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data) {
-          setFiscal({
-            regimen: data.ivaRegimen ?? "EXENTO",
-            // Sin tasa en la respuesta no se inventa una: cobrar la alicuota
-            // argentina en una org de otro pais es peor que no discriminar IVA.
-            tasa: data.ivaTasa ?? 0,
-            redondeoEfectivo: data.redondeoEfectivo ?? 0,
-          })
-          setOrgGarantiaDefault(Number(data.garantiaDiasDefault) || 0)
-          setFacturacionDisponible(!!data.facturacionElectronicaDisponible)
-        }
+    fetch("/api/configuracion/operativa")
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
       })
-      .catch(() => {})
+      .then((data) => {
+        setFiscal({
+          regimen: data.ivaRegimen ?? "EXENTO",
+          // Sin tasa en la respuesta no se inventa una: cobrar la alicuota
+          // argentina en una org de otro pais es peor que no discriminar IVA.
+          tasa: data.ivaTasa ?? 0,
+          redondeoEfectivo: data.redondeoEfectivo ?? 0,
+        })
+        setOrgGarantiaDefault(Number(data.garantiaDiasDefault) || 0)
+        setFacturacionDisponible(!!data.facturacionElectronicaDisponible)
+        setConfigEstado("ok")
+      })
+      .catch((err) => {
+        console.error("[pos] No se pudo cargar la configuración operativa:", err)
+        setConfigEstado("error")
+      })
   }, [])
+
+  const checkoutBloqueo: string | undefined = !isOnline
+    ? "Sin conexión — no se puede cobrar"
+    : configEstado === "cargando"
+      ? "Cargando la configuración del negocio…"
+      : configEstado === "error"
+        ? "No se pudo cargar la configuración del negocio (IVA, redondeo). Recargá la página para cobrar."
+        : undefined
+  const abrirCobro = () => {
+    if (cartItems.length > 0 && !checkoutBloqueo) setCheckoutOpen(true)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -640,9 +663,7 @@ export function PosTerminal() {
     },
     onHoldSale: holdSale,
     onRecallSale: () => setHeldSalesOpen(true),
-    onCheckout: () => {
-      if (cartItems.length > 0 && isOnline) setCheckoutOpen(true)
-    },
+    onCheckout: abrirCobro,
     onToggleClient: () => {
       setMobileTab("cart")
       setShowClienteSearch((prev) => !prev)
@@ -827,8 +848,8 @@ export function PosTerminal() {
             onSetGarantia={setGarantia}
             onSetSerieIds={setSerieIds}
             onSetCliente={setCliente}
-            onCheckout={() => cartItems.length > 0 && isOnline && setCheckoutOpen(true)}
-            checkoutDisabledReason={!isOnline ? "Sin conexión — no se puede cobrar" : undefined}
+            onCheckout={abrirCobro}
+            checkoutDisabledReason={checkoutBloqueo}
             onHoldSale={holdSale}
             onRecallSale={() => setHeldSalesOpen(true)}
             onClearCart={clearCart}
@@ -870,8 +891,8 @@ export function PosTerminal() {
               onSetGarantia={setGarantia}
               onSetSerieIds={setSerieIds}
               onSetCliente={setCliente}
-              onCheckout={() => cartItems.length > 0 && isOnline && setCheckoutOpen(true)}
-            checkoutDisabledReason={!isOnline ? "Sin conexión — no se puede cobrar" : undefined}
+              onCheckout={abrirCobro}
+            checkoutDisabledReason={checkoutBloqueo}
               onHoldSale={holdSale}
               onRecallSale={() => setHeldSalesOpen(true)}
               onClearCart={clearCart}

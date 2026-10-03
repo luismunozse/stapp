@@ -52,7 +52,10 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
 
     const fetchConfig = async () => {
       try {
-        const res = await fetch("/api/configuracion", { signal: controller.signal })
+        // /api/configuracion/operativa la puede leer cualquier rol. Con
+        // /api/configuracion (solo ADMIN) los demás recibían 403 y quedaban con
+        // ARS y hora de Buenos Aires aunque la org fuera de otro país.
+        const res = await fetch("/api/configuracion/operativa", { signal: controller.signal })
         if (!res.ok) return
         const contentType = res.headers.get("content-type") || ""
         if (!contentType.includes("application/json")) return
