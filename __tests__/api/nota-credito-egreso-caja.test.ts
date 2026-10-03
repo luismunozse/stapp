@@ -46,6 +46,7 @@ describe("nota de crédito — egreso de caja en reembolso EFECTIVO (arqueo part
       metodo_pago: "EFECTIVO",
       sucursal_id: "suc-1",
       afecta_rentabilidad: false,
+      origen: "NOTA_CREDITO",
     })
   })
 

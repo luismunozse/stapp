@@ -342,6 +342,7 @@ export async function POST(
       metodoPago: data.metodoReembolso,
       concepto: `Devolución ${numeroDevolucion}`,
       observaciones: "Reembolso en efectivo de devolución de venta",
+      origen: "DEVOLUCION",
     })
 
     return NextResponse.json(formatDevolucion(devolucionCompleta), { status: 201 })
@@ -593,6 +594,7 @@ async function jsDevolucionFallback(
     metodoPago: data.metodoReembolso,
     concepto: `Devolución ${numeroDevolucion}`,
     observaciones: "Reembolso en efectivo de devolución de venta",
+    origen: "DEVOLUCION",
   })
 
   // 9. Audit log

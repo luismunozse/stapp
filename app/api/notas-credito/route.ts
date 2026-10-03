@@ -140,6 +140,7 @@ export async function POST(request: Request) {
       metodoPago: data.metodoDevolucion,
       concepto: `Nota de crédito ${result.numero}`,
       observaciones: "Reembolso en efectivo de nota de crédito",
+    origen: "NOTA_CREDITO",
     })
 
     return NextResponse.json({ success: true, id: result.id, numero: result.numero }, { status: 201 })
