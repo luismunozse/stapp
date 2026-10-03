@@ -36,6 +36,7 @@ import { BarcodeScanner } from "@/components/inventario/barcode-scanner"
 import { useCurrency } from "@/contexts/currency-context"
 import { generateTicketCommands } from "@/lib/escpos"
 import { fitPrintPageToContent } from "@/lib/print-fit-page"
+import { buildTicketHTML } from "./ticket-html"
 import type {
   PosCartItem,
   PosCliente,
@@ -489,62 +490,7 @@ export function PosTerminal() {
 
   // --- Print ticket via browser print dialog (fallback when no USB printer) ---
   const printTicketHTML = useCallback((ventaData: any) => {
-    const items = ventaData.items || []
-    const subtotal = ventaData.subtotal ?? items.reduce((s: number, i: any) => s + i.cantidad * i.precioUnitario, 0)
-    const descuento = ventaData.descuento || 0
-    const total = ventaData.total
-    const empresa = ventaData.organizationName || "Servicio Técnico"
-    const cliente = ventaData.clienteNombre || "Consumidor Final"
-    const fecha = new Date().toLocaleString("es-AR", {
-      timeZone: timezone,
-      day: "2-digit", month: "2-digit", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    })
-    const fmtPrice = (n: number) => "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2 })
-
-    const itemsHTML = items.map((item: any) => `
-      <div style="margin-bottom:6px">
-        <div style="font-weight:bold">${item.descripcion}</div>
-        <div style="display:flex;justify-content:space-between;color:#555">
-          <span>&nbsp;&nbsp;${item.cantidad} x ${fmtPrice(item.precioUnitario)}</span>
-          <span style="font-weight:bold;color:#000">${fmtPrice(item.cantidad * item.precioUnitario)}</span>
-        </div>
-      </div>
-    `).join("")
-
-    const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Ticket Venta #${ventaData.numeroVenta}</title>
-<style>
-  @page { size: ${printerWidth}mm auto; margin: 0; }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Courier New', Courier, monospace; font-size: ${printerWidth === 80 ? 13 : 12}px; width: ${printerWidth}mm; padding: ${printerWidth === 80 ? 10 : 8}px; color: #000; }
-  .center { text-align: center; }
-  .bold { font-weight: bold; }
-  .sep { border-top: 1px dashed #999; margin: 6px 0; }
-  .sep-bold { border-top: 2px solid #000; margin: 6px 0; }
-  .row { display: flex; justify-content: space-between; }
-  .total-box { background: #f5f5f5; padding: 6px; margin: 4px 0; }
-  .big { font-size: 16px; }
-  .small { font-size: 10px; color: #888; }
-</style></head><body>
-  <div class="center bold big">${empresa}</div>
-  <div class="sep-bold"></div>
-  <div class="center bold big">VENTA #${String(ventaData.numeroVenta).padStart(4, "0")}</div>
-  <div class="center small">${fecha}</div>
-  <div class="sep"></div>
-  <div class="row"><span style="color:#666">Cliente:</span><span class="bold">${cliente}</span></div>
-  ${ventaData.clienteTelefono ? `<div class="row"><span style="color:#666">Tel:</span><span>${ventaData.clienteTelefono}</span></div>` : ""}
-  <div class="sep"></div>
-  ${itemsHTML}
-  <div class="sep-bold"></div>
-  <div class="row"><span>Subtotal:</span><span>${fmtPrice(subtotal)}</span></div>
-  ${descuento > 0 ? `<div class="row" style="color:#c00"><span>Descuento:</span><span>-${fmtPrice(descuento)}</span></div>` : ""}
-  <div class="total-box row bold big"><span>TOTAL:</span><span>${fmtPrice(total)}</span></div>
-  <div class="sep-bold"></div>
-  <div class="center bold">¡Gracias por su compra!</div>
-  <div class="center small">Conserve este ticket como comprobante</div>
-  <br><br>
-</body></html>`
+    const html = buildTicketHTML(ventaData, { timezone, printerWidth, formatPrice })
 
     const printWindow = window.open("", "_blank", "width=320,height=600")
     if (printWindow) {
@@ -564,7 +510,7 @@ export function PosTerminal() {
         printWindow.onload = () => { void triggerPrint() }
       }
     }
-  }, [timezone, printerWidth])
+  }, [timezone, printerWidth, formatPrice])
 
   // --- Checkout ---
   const handleCheckoutComplete = useCallback(async (ventaData: any) => {

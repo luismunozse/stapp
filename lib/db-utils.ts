@@ -329,6 +329,13 @@ export function formatVenta(venta: any) {
     tipoDescuento: venta.tipo_descuento || "MONTO",
     porcentajeDescuento: venta.porcentaje_descuento ? parseFloat(venta.porcentaje_descuento) : 0,
     total: parseFloat(venta.total),
+    // Snapshot fiscal (mig 229). NULL en orgs EXENTO sin redondeo y en ventas
+    // previas: el ticket solo agrega las lineas de IVA/redondeo cuando vienen.
+    ivaRegimen: venta.iva_regimen ?? null,
+    ivaTasa: venta.iva_tasa != null ? parseFloat(venta.iva_tasa) : null,
+    ivaNeto: venta.iva_neto != null ? parseFloat(venta.iva_neto) : null,
+    ivaMonto: venta.iva_monto != null ? parseFloat(venta.iva_monto) : null,
+    redondeoMonto: venta.redondeo_monto != null ? parseFloat(venta.redondeo_monto) : null,
     montoAbonado: parseFloat(venta.monto_abonado || "0"),
     estadoPago: venta.estado_pago || "PAGADO",
     metodoPago: venta.metodo_pago,
