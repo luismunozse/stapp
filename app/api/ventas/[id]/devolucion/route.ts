@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requirePosAccess } from "@/lib/auth-utils"
+import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatDevolucion } from "@/lib/db-utils"
 import { getNextReturnNumber } from "@/lib/counters"
@@ -7,11 +7,14 @@ import { createAuditLogger } from "@/lib/audit"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { computeDevolucionMonto, effectivePaidUnitPrice, saleNetTotal, aggregateReturnItems, fullyReturnedItemIds } from "@/lib/devolucion-refund"
 import { registrarEgresoCajaEfectivo } from "@/lib/caja-utils"
+import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { z } from "zod"
 
 const itemDevolucionSchema = z.object({
   itemVentaId: z.string().min(1, "El ID del item de venta es requerido"),
-  inventarioId: z.string().optional(),
+  // Se ignora: el producto a reponer sale del item vendido (mig 330). Se
+  // acepta por compatibilidad con clientes viejos.
+  inventarioId: z.string().nullable().optional(),
   cantidad: z.number().int().positive("La cantidad debe ser mayor a 0"),
   precioUnitario: z.number().min(0, "El precio unitario debe ser mayor o igual a 0"),
   restaurarStock: z.boolean(),
@@ -23,7 +26,19 @@ const devolucionSchema = z.object({
   items: z.array(itemDevolucionSchema).min(1, "Debe incluir al menos un item"),
   metodoReembolso: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "CREDITO_TIENDA", "CUENTA_CORRIENTE", "OTRO"]).optional(),
   reembolsoReferencia: z.string().optional(),
+  idempotencyKey: z.string().max(100).optional(),
 })
+
+type ResultadoDevolucion = {
+  id: string
+  tipo: string
+  montoDevolucion: number
+  /** Desde la mig 330: parte que descontó el saldo pendiente de la venta. */
+  montoAplicadoDeuda?: number
+  /** Desde la mig 330: lo que efectivamente se devuelve al cliente. */
+  montoReembolso?: number
+  replayed?: boolean
+}
 
 // Returns true when the RPC error indicates migration 247 has not been applied yet.
 // Falls back to the JS implementation so the endpoint keeps working pre-migration.
@@ -131,7 +146,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, role, session } = await requirePosAccess()
+    const { error, organizationId, userId, role, session } = await requirePosAccess()
     if (error) return error
 
     const { id } = await params
@@ -142,6 +157,10 @@ export async function GET(
     let ventaQuery = supabaseAdmin.from("ventas").select("id").eq("id", id).eq("organization_id", organizationId!)
     if (!filtro.verTodas && filtro.sucursalId) {
       ventaQuery = ventaQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+    // Igual que el detalle de la venta: el vendedor solo ve las suyas
+    if (soloVeSusVentas(role)) {
+      ventaQuery = ventaQuery.eq("vendedor_id", userId!)
     }
     const { data: venta, error: ventaError } = await ventaQuery.single()
 
@@ -195,7 +214,7 @@ export async function POST(
     const { id } = await params
 
     const filtroP = await sucursalParaLectura({ role, userSucursalId: (session!.user as any).sucursalId ?? null })
-    let ventaCheckQuery = supabaseAdmin.from("ventas").select("id, sucursal_id").eq("id", id).eq("organization_id", organizationId!)
+    let ventaCheckQuery = supabaseAdmin.from("ventas").select("id, sucursal_id, cliente_id").eq("id", id).eq("organization_id", organizationId!)
     if (!filtroP.verTodas && filtroP.sucursalId) {
       ventaCheckQuery = ventaCheckQuery.eq("sucursal_id", filtroP.sucursalId)
     }
@@ -207,6 +226,16 @@ export async function POST(
     const body = await request.json()
     const data = devolucionSchema.parse(body)
 
+    // "Crédito en tienda" es saldo a favor en la cuenta corriente del cliente.
+    // Antes no movía nada: el crédito no quedaba registrado en ningún lado.
+    if (data.metodoReembolso === "CREDITO_TIENDA") data.metodoReembolso = "CUENTA_CORRIENTE"
+    if (data.metodoReembolso === "CUENTA_CORRIENTE" && !(ventaCheck as any).cliente_id) {
+      return NextResponse.json(
+        { error: "Para devolver a cuenta corriente la venta tiene que tener un cliente" },
+        { status: 400 }
+      )
+    }
+
     // Agregar líneas con el mismo itemVentaId: sin esto, entradas duplicadas
     // pasan cada una la validación de máximo devolvible por separado y permiten
     // devolver (y reembolsar) más de lo vendido.
@@ -215,26 +244,31 @@ export async function POST(
     // Get the return number before branching (both paths need it)
     const numeroDevolucion = await getNextReturnNumber(organizationId!)
 
-    // --- Try atomic RPC (migration 247) ---
-    const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc(
-      "registrar_devolucion_atomica",
-      {
-        p_org_id: organizationId!,
-        p_venta_id: id,
-        p_user_id: userId!,
-        p_numero_devolucion: numeroDevolucion,
-        p_motivo: data.motivo,
-        p_observaciones: data.observaciones ?? null,
-        p_metodo_reembolso: data.metodoReembolso ?? null,
-        p_reembolso_referencia: data.reembolsoReferencia ?? null,
-        p_items: data.items.map((i) => ({
-          itemVentaId: i.itemVentaId,
-          inventarioId: i.inventarioId ?? null,
-          cantidad: i.cantidad,
-          restaurarStock: i.restaurarStock,
-        })),
-      }
-    )
+    // --- Try atomic RPC (migration 247, saldo pendiente e idempotencia: 330) ---
+    const rpcParams = {
+      p_org_id: organizationId!,
+      p_venta_id: id,
+      p_user_id: userId!,
+      p_numero_devolucion: numeroDevolucion,
+      p_motivo: data.motivo,
+      p_observaciones: data.observaciones ?? null,
+      p_metodo_reembolso: data.metodoReembolso ?? null,
+      p_reembolso_referencia: data.reembolsoReferencia ?? null,
+      p_items: data.items.map((i) => ({
+        itemVentaId: i.itemVentaId,
+        inventarioId: i.inventarioId ?? null,
+        cantidad: i.cantidad,
+        restaurarStock: i.restaurarStock,
+      })),
+    }
+    let { data: rpcData, error: rpcError } = await supabaseAdmin.rpc("registrar_devolucion_atomica", {
+      ...rpcParams,
+      p_idempotency_key: data.idempotencyKey ?? null,
+    })
+    if (rpcError && isFunctionMissingError(rpcError)) {
+      // Sin la migración 330 la función no tiene p_idempotency_key
+      ;({ data: rpcData, error: rpcError } = await supabaseAdmin.rpc("registrar_devolucion_atomica", rpcParams))
+    }
 
     if (rpcError) {
       // Pre-migration fallback: function doesn't exist yet
@@ -253,15 +287,16 @@ export async function POST(
           { status: 400 }
         )
       }
-      if (msg.includes("excede lo permitido") || msg.includes("no encontrado")) {
+      if (msg.includes("excede lo permitido") || msg.includes("no encontrado") || msg.includes("tiene que tener un cliente")) {
         return NextResponse.json({ error: msg }, { status: 400 })
       }
 
       throw rpcError
     }
 
-    // RPC succeeded — rpcData = { id, tipo, montoDevolucion }
-    const devolucionId = (rpcData as { id: string; tipo: string; montoDevolucion: number }).id
+    // RPC succeeded
+    const resultado = rpcData as ResultadoDevolucion
+    const devolucionId = resultado.id
 
     // Fetch the full record in the same shape the route has always returned
     const { data: devolucionCompleta } = await supabaseAdmin
@@ -270,22 +305,40 @@ export async function POST(
       .eq("id", devolucionId)
       .single()
 
+    // Reintento del mismo pedido: ya se registró (y se auditó y se sacó la
+    // plata de la caja) la primera vez.
+    if (resultado.replayed) {
+      return NextResponse.json(formatDevolucion(devolucionCompleta), { status: 200 })
+    }
+
     // Audit log
     const audit = createAuditLogger(organizationId!, userId!, request)
     await audit.create("devoluciones_venta", devolucionId, {
       numero_devolucion: numeroDevolucion,
       venta_id: id,
-      tipo: (rpcData as any).tipo,
-      monto_devolucion: (rpcData as any).montoDevolucion,
+      tipo: resultado.tipo,
+      monto_devolucion: resultado.montoDevolucion,
+      monto_aplicado_deuda: resultado.montoAplicadoDeuda ?? 0,
       items_count: data.items.length,
     })
 
-    // Reembolso en efectivo → egreso de caja (para que el arqueo cuadre).
+    emitWebhookEvent(organizationId!, "venta.devolucion", {
+      id: devolucionId,
+      ventaId: id,
+      numeroDevolucion,
+      tipo: resultado.tipo,
+      montoDevolucion: resultado.montoDevolucion,
+      montoAplicadoDeuda: resultado.montoAplicadoDeuda ?? 0,
+      metodoReembolso: data.metodoReembolso ?? null,
+    }).catch(() => {})
+
+    // Reembolso en efectivo → egreso de caja (para que el arqueo cuadre). Solo
+    // lo que se devuelve: la parte que descontó el saldo pendiente nunca entró.
     await registrarEgresoCajaEfectivo({
       organizationId: organizationId!,
       userId: userId!,
       sucursalId: (ventaCheck as any).sucursal_id ?? null,
-      monto: (rpcData as any).montoDevolucion,
+      monto: resultado.montoReembolso ?? resultado.montoDevolucion,
       metodoPago: data.metodoReembolso,
       concepto: `Devolución ${numeroDevolucion}`,
       observaciones: "Reembolso en efectivo de devolución de venta",
@@ -437,7 +490,8 @@ async function jsDevolucionFallback(
     return {
       devolucion_id: devolucion.id,
       item_venta_id: item.itemVentaId,
-      inventario_id: item.inventarioId || null,
+      // El producto del item vendido, no el del body
+      inventario_id: original?.inventario_id ?? null,
       cantidad: item.cantidad,
       precio_unitario: round2(precio),
       subtotal: round2(item.cantidad * precio),
@@ -455,8 +509,9 @@ async function jsDevolucionFallback(
     throw itemsError
   }
 
-  // 7. Stock restoration
+  // 7. Stock restoration (siempre del producto del item vendido)
   for (const item of data.items) {
+    item.inventarioId = originalItemsMap[item.itemVentaId]?.inventario_id ?? null
     if (!item.inventarioId) continue
 
     if (item.restaurarStock) {

@@ -55,9 +55,10 @@ export async function GET(request: Request) {
     let ventasQuery = supabaseAdmin
       .from("ventas")
       .select(`
-        id, total, created_at, estado,
-        porcentaje_comision, vendedor_id,
-        items_venta (cantidad, precio_unitario, costo_unitario_snapshot)
+        id, total, iva_neto, created_at, estado,
+        porcentaje_comision, vendedor_id, comision_pagada,
+        items_venta (cantidad, precio_unitario, costo_unitario_snapshot),
+        devoluciones_venta (monto_devolucion)
       `)
       .eq("organization_id", organizationId!)
       .eq("estado", "COMPLETADA")
@@ -86,11 +87,21 @@ export async function GET(request: Request) {
         }
       }
 
-      // Comisión vendedor devengada: total * pct / 100
+      // Comisión vendedor devengada, con la misma base que v_comisiones_ventas
+      // (mig 256/333): neto sin IVA y menos lo devuelto, salvo que ya se
+      // haya liquidado. Antes era total × % (con IVA y sin devoluciones).
       if (v.vendedor_id) {
         const pct = parseFloat(v.porcentaje_comision || "0")
         if (pct > 0) {
-          comisionVendedores += (total * pct) / 100
+          const neto = v.iva_neto != null ? parseFloat(v.iva_neto) : total
+          const devuelto = ((v.devoluciones_venta || []) as any[]).reduce(
+            (s, d) => s + parseFloat(d.monto_devolucion || "0"),
+            0
+          )
+          const base = v.comision_pagada || total <= 0 || devuelto === 0
+            ? neto
+            : Math.max(neto * (1 - devuelto / total), 0)
+          comisionVendedores += (base * pct) / 100
         }
       }
     }
@@ -325,6 +336,40 @@ export async function GET(request: Request) {
     const totalNotasCredito = ncVentas + ncServicios
 
     // ========================================
+    // 4.4b DEVOLUCIONES de ventas en el período → restan ingresos
+    // ========================================
+    // Antes no se restaban: una venta devuelta entera seguía sumando como
+    // ingreso (y su costo como costo de venta). Se toman en la fecha de la
+    // devolución, como las notas de crédito. Solo de ventas vigentes: una
+    // venta anulada ya sale entera de los ingresos. Lo que volvió al stock
+    // deja de ser costo de venta; lo que no (roto, descartado) sigue siéndolo.
+    let devolucionesQuery = supabaseAdmin
+      .from("devoluciones_venta")
+      .select(`
+        monto_devolucion,
+        ventas!inner(estado, sucursal_id),
+        items_devolucion (cantidad, restaurar_stock, items_venta (costo_unitario_snapshot))
+      `)
+      .eq("organization_id", organizationId!)
+      .eq("ventas.estado", "COMPLETADA")
+      .gte("created_at", desdeISO)
+      .lte("created_at", hastaISO)
+    if (sid) devolucionesQuery = devolucionesQuery.eq("ventas.sucursal_id", sid)
+    const { data: devoluciones } = await devolucionesQuery
+
+    let devolucionesVentas = 0
+    let costoDevueltoAStock = 0
+    for (const d of (devoluciones || []) as any[]) {
+      devolucionesVentas += parseFloat(d.monto_devolucion || "0")
+      for (const it of (d.items_devolucion || []) as any[]) {
+        const costo = it.items_venta?.costo_unitario_snapshot
+        if (it.restaurar_stock && costo != null) {
+          costoDevueltoAStock += (it.cantidad || 0) * parseFloat(costo)
+        }
+      }
+    }
+
+    // ========================================
     // 4.5 MERMAS / AJUSTES DE INVENTARIO (SALIDA con afecta_rentabilidad=true)
     // ========================================
     let ajustesQuery = supabaseAdmin
@@ -411,7 +456,8 @@ export async function GET(request: Request) {
     // ========================================
     // Cálculos finales
     // ========================================
-    const ingresosVentasNeto = Math.max(0, ingresosVentas - ncVentas)
+    const ingresosVentasNeto = Math.max(0, ingresosVentas - ncVentas - devolucionesVentas)
+    costoProductos = Math.max(0, costoProductos - costoDevueltoAStock)
     const ingresosServiciosNeto = Math.max(0, ingresosServicios - ncServicios)
     const totalIngresos = ingresosVentasNeto + ingresosServiciosNeto + otrosIngresos
     const totalCostos = costoProductos + costoRepuestos + costoMerma
@@ -441,6 +487,10 @@ export async function GET(request: Request) {
         ventas: round(ncVentas),
         servicios: round(ncServicios),
         total: round(totalNotasCredito),
+      },
+      devoluciones: {
+        ventas: round(devolucionesVentas),
+        costoDevueltoAStock: round(costoDevueltoAStock),
       },
       costos: {
         productos: round(costoProductos),

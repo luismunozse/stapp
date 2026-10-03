@@ -105,6 +105,7 @@ interface Cotizacion {
     notas?: string | null
   } | null
   convertidaAOrdenId?: string | null
+  ventaId?: string | null
   items: {
     id: string
     descripcion: string
@@ -848,7 +849,7 @@ export default function CotizacionesPage() {
                                   </Button>
                                 </>
                               )}
-                              {cotizacion.estado === "ACEPTADA" && cotizacion.tipo !== "PRESUPUESTO" && puedeConvertirAVenta && (
+                              {cotizacion.estado === "ACEPTADA" && cotizacion.tipo !== "PRESUPUESTO" && !cotizacion.ventaId && puedeConvertirAVenta && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -989,6 +990,11 @@ export default function CotizacionesPage() {
                             Convertida a orden
                           </Badge>
                         )}
+                        {cotizacion.ventaId && (
+                          <Badge variant="outline" className="text-xs border-green-300 text-green-700">
+                            Convertida en venta
+                          </Badge>
+                        )}
                         {cotizacion.vistoAt && (
                           <Badge variant="outline" className="text-xs text-blue-600">
                             <Eye className="mr-1 h-3 w-3" />
@@ -1114,7 +1120,7 @@ export default function CotizacionesPage() {
                           {duplicatingId === cotizacion.id ? "Duplicando..." : "Duplicar"}
                         </Button>
                       )}
-                      {cotizacion.estado === "ACEPTADA" && cotizacion.tipo !== "PRESUPUESTO" && puedeConvertirAVenta && (
+                      {cotizacion.estado === "ACEPTADA" && cotizacion.tipo !== "PRESUPUESTO" && !cotizacion.ventaId && puedeConvertirAVenta && (
                         <Button
                           size="sm"
                           variant="outline"

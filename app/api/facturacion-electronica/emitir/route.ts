@@ -60,6 +60,26 @@ export async function POST(request: Request) {
     .single()
   if (ventaErr || !venta) return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
 
+  // Solo ventas vigentes y sin devoluciones: la factura sale por el total y
+  // los items originales, así que con productos devueltos facturaría de más
+  // (y una venta anulada no se factura).
+  if (venta.estado !== "COMPLETADA") {
+    return NextResponse.json({ error: "Solo se pueden facturar ventas completadas" }, { status: 409 })
+  }
+  const { count: devoluciones, error: devErr } = await supabaseAdmin
+    .from("devoluciones_venta")
+    .select("id", { count: "exact", head: true })
+    .eq("venta_id", ventaId)
+  if (devErr) {
+    return NextResponse.json({ error: "No se pudieron verificar las devoluciones de la venta" }, { status: 500 })
+  }
+  if ((devoluciones ?? 0) > 0) {
+    return NextResponse.json(
+      { error: "La venta tiene devoluciones: la factura saldría por el total original." },
+      { status: 409 }
+    )
+  }
+
   const { data: items, error: itemsErr } = await supabaseAdmin
     .from("items_venta")
     .select("*")

@@ -212,6 +212,14 @@ export function MultiPagoInput({
                 }}
                 placeholder="0.00"
               />
+              {/* Con punto o coma el monto se interpreta (1.500 = mil
+                  quinientos, 1500,50 = con centavos): se muestra cómo quedó
+                  antes de cobrar. */}
+              {/[.,]/.test(rawInputs[`${pago.id}:monto`] ?? "") && pago.monto > 0 && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Se registra {formatPrice(pago.monto)}
+                </p>
+              )}
             </div>
 
             {/* Cuotas para tarjeta crédito */}

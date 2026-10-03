@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requirePosAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { saldoPendienteVenta } from "@/lib/db-utils"
 import { z } from "zod"
 
 const pagoLineSchema = z.object({
@@ -26,6 +27,8 @@ const pagoVentaSchema = z.object({
   recargoPorcentaje: z.number().min(0).nullable().optional(),
   montoOriginal: z.number().positive().nullable().optional(),
   observaciones: z.string().optional(),
+  // Se ignora: el cobro siempre va a la cuenta del cliente de la venta (mig
+  // 331). Antes un clienteId distinto descontaba saldo de otro cliente.
   clienteId: z.string().optional(),
   // Request-level idempotency key: one stable UUID per submit attempt.
   // Offline retries reuse the same key so the barrier dedupes instead of
@@ -114,9 +117,29 @@ export async function POST(
       return NextResponse.json({ error: "Debe enviar al menos un pago" }, { status: 400 })
     }
 
-    // Obtener venta y verificar org
+    // Reintento del mismo cobro: si ya se registró, devolver lo que se
+    // respondió la primera vez. Va antes de validar el monto: con el cobro ya
+    // hecho el pendiente bajó y el reintento respondía "excede el pendiente".
+    if (data.idempotencyKey) {
+      const { data: previo, error: previoError } = await supabaseAdmin
+        .from("pago_idempotency")
+        .select("response")
+        .eq("organization_id", organizationId!)
+        .eq("idempotency_key", data.idempotencyKey)
+        .maybeSingle()
+      if (!previoError && previo?.response) {
+        return NextResponse.json(previo.response, { status: 200 })
+      }
+    }
+
+    // Obtener venta y verificar org. devoluciones_venta(*) y no una columna
+    // puntual: sin la migración 330 monto_aplicado_deuda no existe.
     const filtro = await sucursalParaLectura({ role, userSucursalId: (session!.user as any).sucursalId ?? null })
-    let ventaQuery = supabaseAdmin.from("ventas").select("*").eq("id", ventaId).eq("organization_id", organizationId!)
+    let ventaQuery = supabaseAdmin
+      .from("ventas")
+      .select("*, devoluciones_venta(*)")
+      .eq("id", ventaId)
+      .eq("organization_id", organizationId!)
     if (!filtro.verTodas && filtro.sucursalId) {
       ventaQuery = ventaQuery.eq("sucursal_id", filtro.sucursalId)
     }
@@ -133,8 +156,17 @@ export async function POST(
       )
     }
 
-    // Validar que no se pague más del pendiente
-    const pendiente = parseFloat(venta.total) - parseFloat(venta.monto_abonado || "0")
+    // Saldo a favor (CUENTA_CORRIENTE) sin cliente no descuenta de ningún lado
+    if (!venta.cliente_id && pagosToProcess.some((p) => p.metodo === "CUENTA_CORRIENTE")) {
+      return NextResponse.json(
+        { error: "Para cobrar con saldo a favor la venta tiene que tener un cliente" },
+        { status: 400 }
+      )
+    }
+
+    // Validar que no se pague más del pendiente (lo que cancelaron las
+    // devoluciones ya no se debe)
+    const pendiente = saldoPendienteVenta(venta)
     const totalPagos = pagosToProcess.reduce((sum, p) => sum + p.monto, 0)
     if (totalPagos > pendiente + 0.01) {
       return NextResponse.json(
@@ -161,7 +193,8 @@ export async function POST(
         p_org_id: organizationId!,
         p_venta_id: ventaId,
         p_usuario_id: userId!,
-        p_cliente_id: data.clienteId ?? null,
+        // Sin la 331 el RPC usaría p_cliente_id si viniera: null = el de la venta
+        p_cliente_id: null,
         p_observaciones: data.observaciones ?? null,
         p_pagos: pagosRpc,
         p_idempotency_key: data.idempotencyKey ?? null,
@@ -197,6 +230,7 @@ export async function POST(
     if (
       msg.includes("anulada") ||
       msg.includes("excede el pendiente") ||
+      msg.includes("tiene que tener un cliente") ||
       msg.toLowerCase().includes("saldo insuficiente")
     ) {
       return NextResponse.json({ error: msg }, { status: 400 })
@@ -272,7 +306,7 @@ async function runJsFallback(opts: {
     }
   }
 
-  const clienteId = data.clienteId || venta.cliente_id
+  const clienteId = venta.cliente_id
   const pagosCreados: any[] = []
 
   // success flag: set to true immediately before the success return so the

@@ -17,6 +17,11 @@ export const EVENT_TYPES = [
   // ni cron) a costa de no capturar caídas por movimientos creados via SQL directo.
   "inventario.stock_bajo",
   "venta.completada",
+  // Antes solo se avisaba el alta: un sistema externo (contable, e-commerce)
+  // seguía contando ventas anuladas, editadas o devueltas como estaban.
+  "venta.anulada",
+  "venta.editada",
+  "venta.devolucion",
   "orden.estado_cambiado",
   "cotizacion.aceptada",
   // Reservado: el endpoint /test fuerza este evento sin requerir suscripción.
@@ -75,6 +80,31 @@ export interface VentaCompletadaPayload {
   total: number
   metodoPago: string
   items: number
+}
+
+export interface VentaAnuladaPayload {
+  id: string
+  numeroVenta: number | null
+  total: number
+}
+
+export interface VentaEditadaPayload {
+  id: string
+  numeroVenta: number | null
+  totalAnterior: number
+  total: number
+  items: number
+}
+
+export interface VentaDevolucionPayload {
+  id: string
+  ventaId: string
+  numeroDevolucion: string
+  tipo: string
+  montoDevolucion: number
+  /** Parte que descontó saldo pendiente de la venta (no se reembolsó). */
+  montoAplicadoDeuda: number
+  metodoReembolso: string | null
 }
 
 export interface OrdenEstadoCambiadoPayload {

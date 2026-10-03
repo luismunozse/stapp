@@ -247,8 +247,9 @@ export function VentasDashboard() {
                   <div className="text-lg font-bold">{data.descuentosOtorgados.cantidadConDescuento}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-muted-foreground">% sobre ventas totales</div>
-                  <div className="text-lg font-bold">{data.descuentosOtorgados.promedioDescuento.toFixed(1)}%</div>
+                  {/* La API devuelve el monto promedio por venta, no un porcentaje */}
+                  <div className="text-xs text-muted-foreground">Descuento promedio por venta</div>
+                  <div className="text-lg font-bold">{formatPrice(data.descuentosOtorgados.promedioDescuento)}</div>
                 </div>
               </CardContent>
             </Card>

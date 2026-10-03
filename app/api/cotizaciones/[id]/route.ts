@@ -213,6 +213,9 @@ function formatCotizacion(c: any, includeCosts: boolean) {
     causaDano: c.causa_dano ?? null,
     presentadoAnte: c.presentado_ante ?? null,
     convertidaAOrdenId: c.convertida_a_orden_id || null,
+    // Venta que salió de esta cotización (migración 327): con valor, la UI no
+    // ofrece volver a convertirla.
+    ventaId: c.venta_id || null,
     reemplazadaPor: c.reemplazada_por,
     revisionDe: c.revision_de,
     orden: orden ? {

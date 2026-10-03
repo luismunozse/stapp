@@ -9,7 +9,7 @@ import {
   derivarLecturaVenta,
 } from "@/lib/sucursal"
 
-// POST /api/inventario/check-stock?scope=venta  body: { ids: string[] }
+// POST /api/inventario/check-stock?scope=venta  body: { ids: string[], precios?: boolean }
 // Returns the CURRENT available stock per inventory id, scoped to the caller's
 // sucursal (per-deposito) the same way the barcode/search endpoints are — so a
 // POS pre-checkout re-validation sees the real, up-to-the-second stock and can
@@ -31,8 +31,12 @@ export async function POST(request: Request) {
       ? body.ids.filter((x: unknown): x is string => typeof x === "string" && x.length > 0)
       : []
 
+    // precios: true agrega el precio de lista actual de cada id (el POS lo usa
+    // para avisar qué cambió en una venta apartada).
+    const conPrecios = body?.precios === true
+
     if (ids.length === 0) {
-      return NextResponse.json({ stock: {} })
+      return NextResponse.json(conPrecios ? { stock: {}, precios: {} } : { stock: {} })
     }
     const uniqueIds = Array.from(new Set(ids)).slice(0, 200)
 
@@ -101,6 +105,18 @@ export async function POST(request: Request) {
     // Normalize: every requested id present (missing → 0).
     for (const id of uniqueIds) {
       if (!(id in stock)) stock[id] = 0
+    }
+
+    if (conPrecios) {
+      const { data: filas, error: preciosError } = await supabaseAdmin
+        .from("inventario")
+        .select("id, precio_venta")
+        .eq("organization_id", organizationId!)
+        .in("id", uniqueIds)
+      if (preciosError) throw preciosError
+      const precios: Record<string, number> = {}
+      for (const row of filas || []) precios[row.id] = Number(row.precio_venta) || 0
+      return NextResponse.json({ stock, precios })
     }
 
     return NextResponse.json({ stock })
