@@ -6,6 +6,9 @@
  * poder usarla desde el bundle del navegador; la moneda llega por `formatPrecio`.
  */
 
+/** Tope de las notas: el texto viaja url-encoded en el link de wa.me. */
+export const NOTAS_PEDIDO_MAX = 500
+
 export interface PedidoWhatsAppItem {
   nombre: string
   varianteEtiqueta?: string | null
@@ -31,6 +34,6 @@ export function construirMensajePedidoWhatsApp(input: PedidoWhatsAppInput): stri
   const partes = [`Hola${taller ? ` ${taller}` : ""}, quiero hacer este pedido:`]
   if (cliente?.trim()) partes.push(`Nombre: ${cliente.trim()}`)
   partes.push("", ...lineas, "", `Total: ${formatPrecio(total)}`)
-  if (notas?.trim()) partes.push(`Notas: ${notas.trim()}`)
+  if (notas?.trim()) partes.push(`Notas: ${notas.trim().slice(0, NOTAS_PEDIDO_MAX)}`)
   return partes.join("\n")
 }

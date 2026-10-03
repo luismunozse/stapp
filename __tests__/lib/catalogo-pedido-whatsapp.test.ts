@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { construirMensajePedidoWhatsApp } from "@/lib/catalogo/pedido-whatsapp"
+import { construirMensajePedidoWhatsApp, NOTAS_PEDIDO_MAX } from "@/lib/catalogo/pedido-whatsapp"
 
 const fmt = (n: number) => `$${n.toLocaleString("es-AR")}`
 
@@ -38,6 +38,15 @@ describe("construirMensajePedidoWhatsApp", () => {
     const con = construirMensajePedidoWhatsApp({ ...base, cliente: "Ana", notas: "Retiro el sábado" })
     expect(con).toContain("Nombre: Ana")
     expect(con).toContain("Notas: Retiro el sábado")
+  })
+
+  it("recorta las notas largas para que el link de wa.me no explote", () => {
+    const msg = construirMensajePedidoWhatsApp({
+      taller: "T", items: [{ nombre: "A", cantidad: 1, precio: 1 }], total: 1, formatPrecio: fmt,
+      notas: "x".repeat(NOTAS_PEDIDO_MAX + 300),
+    })
+    expect(msg.length).toBeLessThan(NOTAS_PEDIDO_MAX + 200)
+    expect(msg).not.toContain("x".repeat(NOTAS_PEDIDO_MAX + 1))
   })
 
   it("usa el formateador de moneda recibido", () => {

@@ -3,10 +3,12 @@ import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/re
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+import { toast } from "sonner"
 
 import { CartDrawer } from "@/components/catalogo-public/cart-drawer"
 
 const clear = vi.fn()
+const onClose = vi.fn()
 function makeCart() {
   return {
     items: [
@@ -26,7 +28,7 @@ function renderDrawer(props: { recibePedidos?: boolean; whatsapp?: string | null
   render(
     <CartDrawer
       open
-      onClose={vi.fn()}
+      onClose={onClose}
       cart={makeCart() as never}
       slug="taller"
       titulo="Taller Sur"
@@ -43,6 +45,8 @@ describe("CartDrawer — plan sin pedidos online", () => {
 
   beforeEach(() => {
     clear.mockClear()
+    onClose.mockClear()
+    vi.mocked(toast.error).mockClear()
     openSpy = vi.spyOn(window, "open").mockImplementation(() => null)
     fetchMock = vi.fn()
     vi.stubGlobal("fetch", fetchMock)
@@ -53,7 +57,7 @@ describe("CartDrawer — plan sin pedidos online", () => {
     openSpy.mockRestore()
   })
 
-  it("Free + WhatsApp: abre wa.me con el pedido, sin llamar a /cotizar, y vacía el carrito", () => {
+  it("Free + WhatsApp: abre wa.me con el pedido, sin llamar a /cotizar, y no vacía el carrito hasta confirmar", () => {
     renderDrawer({ recibePedidos: false, whatsapp: "5491112345678" })
     fireEvent.click(screen.getByRole("button", { name: /continuar/i }))
     expect(document.getElementById("telefono")).toBeNull()
@@ -69,8 +73,33 @@ describe("CartDrawer — plan sin pedidos online", () => {
     expect(texto).toContain("Celular (256GB)")
     expect(texto).toContain("Total: $93.000")
     expect(texto).toContain("Nombre: Ana")
-    expect(clear).toHaveBeenCalled()
     expect(fetchMock).not.toHaveBeenCalled()
+
+    // El carrito sigue ahí: window.open con noopener no permite saber si abrió.
+    expect(clear).not.toHaveBeenCalled()
+    const reabrir = screen.getByRole("link", { name: /volver a abrir whatsapp/i })
+    expect(reabrir).toHaveAttribute("href", url)
+    expect(reabrir).toHaveAttribute("target", "_blank")
+    expect(reabrir.getAttribute("rel")).toContain("noopener")
+
+    fireEvent.click(screen.getByRole("button", { name: /ya lo envié/i }))
+    expect(clear).toHaveBeenCalledTimes(1)
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it("403 FEATURE_REQUIRED sin WhatsApp del taller: el aviso no manda a enviar a ningún lado", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 403, json: async () => ({ error: "x", code: "FEATURE_REQUIRED" }) })
+    renderDrawer({ recibePedidos: true, whatsapp: null })
+    fireEvent.click(screen.getByRole("button", { name: /continuar/i }))
+    fireEvent.change(document.getElementById("nombre") as HTMLElement, { target: { value: "Ana" } })
+    fireEvent.change(document.getElementById("telefono") as HTMLElement, { target: { value: "1122334455" } })
+    fireEvent.click(screen.getByRole("checkbox"))
+    fireEvent.click(screen.getByRole("button", { name: /enviar solicitud/i }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalled())
+    const msg = String(vi.mocked(toast.error).mock.calls[0][0])
+    expect(msg).toMatch(/no está tomando pedidos/i)
+    expect(msg).not.toMatch(/envialo/i)
+    expect(clear).not.toHaveBeenCalled()
   })
 
   it("Free sin WhatsApp: no deja continuar y explica por qué", () => {
