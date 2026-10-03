@@ -96,7 +96,8 @@ describe("POST /api/ventas/[id]/pagos — atomic RPC + idempotency", () => {
     mockAuthSuccess()
 
     vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
-      if (table === "ventas") return createChainMock(BASE_VENTA, null) as any
+      // Saldo a favor: la venta tiene que tener cliente
+      if (table === "ventas") return createChainMock({ ...BASE_VENTA, cliente_id: "c1" }, null) as any
       return createChainMock(null, null) as any
     })
     vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({
@@ -228,6 +229,10 @@ describe("POST /api/ventas/[id]/pagos — atomic RPC + idempotency", () => {
   it("JS fallback: replays on duplicate idempotency key (23505)", async () => {
     mockAuthSuccess()
 
+    // 1ª consulta: la búsqueda previa de la ruta no encuentra nada (el otro
+    // pedido todavía no selló); 2ª: el insert de la barrera choca; 3ª: el
+    // select lee la respuesta ya sellada.
+    const idemLookupChain = createChainMock(null, null)
     const idemInsertChain = createChainMock(null, { code: "23505", message: "duplicate key value" })
     const idemSelectChain = createChainMock({ response: STORED_RESPONSE }, null)
 
@@ -235,7 +240,7 @@ describe("POST /api/ventas/[id]/pagos — atomic RPC + idempotency", () => {
       if (table === "ventas") return createChainMock(BASE_VENTA, null) as any
       if (table === "pago_idempotency") {
         const callCount = vi.mocked(supabaseAdmin.from).mock.calls.filter(c => c[0] === "pago_idempotency").length
-        return callCount <= 1 ? idemInsertChain as any : idemSelectChain as any
+        return (callCount <= 1 ? idemLookupChain : callCount === 2 ? idemInsertChain : idemSelectChain) as any
       }
       return createChainMock(null, { message: "Should not be called" }) as any
     })
@@ -255,5 +260,87 @@ describe("POST /api/ventas/[id]/pagos — atomic RPC + idempotency", () => {
     // pagos_venta never called (replay)
     const pagosVentaCalls = vi.mocked(supabaseAdmin.from).mock.calls.filter(c => c[0] === "pagos_venta")
     expect(pagosVentaCalls).toHaveLength(0)
+  })
+
+  // ── Reintentos y cliente (mig 331) ───────────────────────────────────────
+
+  it("un reintento de un cobro ya hecho devuelve la respuesta guardada aunque el pendiente haya bajado", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      // El primer envío ya cobró los 1000: no queda pendiente
+      if (table === "ventas") return createChainMock({ ...BASE_VENTA, monto_abonado: "1000" }, null) as any
+      if (table === "pago_idempotency") return createChainMock({ response: STORED_RESPONSE }, null) as any
+      return createChainMock(null, null) as any
+    })
+
+    const req = createPostRequest(
+      { pagos: [{ monto: 1000, metodo: "EFECTIVO" }], idempotencyKey: "k-ya-cobrado" },
+      "http://localhost:3000/api/ventas/v1/pagos"
+    )
+    const { status, body } = await parseResponse(await POST(req, createParams("v1")))
+
+    expect(status).toBe(200)
+    expect(body).toEqual(STORED_RESPONSE)
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it("el cobro va siempre a la cuenta del cliente de la venta (ignora clienteId del body)", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "ventas") return createChainMock({ ...BASE_VENTA, cliente_id: "c1" }, null) as any
+      return createChainMock(null, null) as any
+    })
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({
+      data: { replayed: false, response: STORED_RESPONSE },
+      error: null,
+    } as any)
+
+    const req = createPostRequest(
+      { pagos: [{ monto: 500, metodo: "EFECTIVO" }], clienteId: "otro-cliente" },
+      "http://localhost:3000/api/ventas/v1/pagos"
+    )
+    await POST(req, createParams("v1"))
+
+    expect(vi.mocked(supabaseAdmin.rpc).mock.calls[0][1]).toMatchObject({ p_cliente_id: null })
+  })
+
+  it("saldo a favor en una venta sin cliente: 400 sin llamar al RPC", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "ventas") return createChainMock(BASE_VENTA, null) as any
+      return createChainMock(null, null) as any
+    })
+
+    const req = createPostRequest(
+      { pagos: [{ monto: 500, metodo: "CUENTA_CORRIENTE" }] },
+      "http://localhost:3000/api/ventas/v1/pagos"
+    )
+    const { status, body } = await parseResponse(await POST(req, createParams("v1")))
+
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/tiene que tener un cliente/)
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it("lo que cancelaron las devoluciones no se vuelve a cobrar", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "ventas") {
+        return createChainMock(
+          { ...BASE_VENTA, devoluciones_venta: [{ monto_devolucion: "600", monto_aplicado_deuda: "600" }] },
+          null
+        ) as any
+      }
+      return createChainMock(null, null) as any
+    })
+
+    const req = createPostRequest(
+      { pagos: [{ monto: 1000, metodo: "EFECTIVO" }] },
+      "http://localhost:3000/api/ventas/v1/pagos"
+    )
+    const { status, body } = await parseResponse(await POST(req, createParams("v1")))
+
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/excede el pendiente \(400\.00\)/)
   })
 })

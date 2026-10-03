@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -40,6 +40,11 @@ export function VentaPagoForm({
   const [pagosLines, setPagosLines] = useState<PagoLineItem[]>([createPagoLine(pendiente)])
   const [observaciones, setObservaciones] = useState("")
   const [saldoCuenta, setSaldoCuenta] = useState(0)
+  // Una clave por cobro, no por click: si el primer envío llegó al servidor y
+  // la respuesta se perdió, el reintento del cajero no lo registra dos veces.
+  const [idempotencyKey] = useState(() => crypto.randomUUID())
+  // Guard de reentrada: `loading` llega tarde para un doble click.
+  const submittingRef = useRef(false)
 
   // Fetch saldo cuenta corriente si hay cliente
   useEffect(() => {
@@ -60,6 +65,7 @@ export function VentaPagoForm({
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submittingRef.current) return
 
     const totalPagos = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
     if (totalPagos <= 0) {
@@ -78,13 +84,11 @@ export function VentaPagoForm({
       return
     }
 
+    submittingRef.current = true
     setLoading(true)
     try {
-      // One stable UUID per submit attempt. It travels inside the queued body
-      // so any offline retry reuses the same key — the server barrier dedupes
-      // instead of running CC deductions and pagos_venta inserts twice.
-      const idempotencyKey = crypto.randomUUID()
-
+      // La clave viaja dentro del body encolado: un reintento offline reusa la
+      // misma y el servidor no descuenta saldo ni inserta pagos dos veces.
       const payload = {
         pagos: pagosLines.map(p => ({
           monto: p.monto,
@@ -96,7 +100,6 @@ export function VentaPagoForm({
           costoFinanciero: p.costoFinanciero,
         })),
         observaciones: observaciones || undefined,
-        clienteId: clienteId || undefined,
         idempotencyKey,
       }
 
@@ -123,6 +126,7 @@ export function VentaPagoForm({
       console.error("Error:", error)
       await showError("Error al registrar pago")
     } finally {
+      submittingRef.current = false
       setLoading(false)
     }
   }

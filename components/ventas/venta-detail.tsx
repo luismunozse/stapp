@@ -379,21 +379,27 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                 Editar
               </Button>
             )}
-            <Button
-              variant="outline"
-              onClick={() => setShowDevolucionModal(true)}
-            >
-              <RotateCcw className="mr-2 h-4 w-4" />
-              Devolución
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleAnular}
-              disabled={anulando}
-            >
-              <XCircle className="mr-2 h-4 w-4" />
-              {anulando ? "Anulando..." : "Anular"}
-            </Button>
+            {/* Devolución, anulación y cobro son solo de ADMIN en la API:
+                mostrarlos a otros roles terminaba en un 403. */}
+            {isAdmin && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDevolucionModal(true)}
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Devolución
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleAnular}
+                  disabled={anulando}
+                >
+                  <XCircle className="mr-2 h-4 w-4" />
+                  {anulando ? "Anulando..." : "Anular"}
+                </Button>
+              </>
+            )}
           </>
         )}
       </div>
@@ -578,19 +584,21 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   {formatPrice(saldoPendiente)}
                 </div>
               </div>
-              <Button
-                onClick={() => setShowPagoForm(!showPagoForm)}
-                variant={showPagoForm ? "outline" : "default"}
-                className="w-full sm:w-auto"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Registrar Pago
-              </Button>
+              {isAdmin && (
+                <Button
+                  onClick={() => setShowPagoForm(!showPagoForm)}
+                  variant={showPagoForm ? "outline" : "default"}
+                  className="w-full sm:w-auto"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Registrar Pago
+                </Button>
+              )}
             </div>
           )}
 
           {/* Formulario de pago */}
-          {showPagoForm && (
+          {showPagoForm && isAdmin && (
             <VentaPagoForm
               ventaId={venta.id}
               total={venta.total}
