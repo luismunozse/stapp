@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { mockSupabaseFrom, createChainMock } from "./helpers"
 
-vi.mock("@/lib/subscriptions", () => ({ hasPlanFeature: vi.fn() }))
+vi.mock("@/lib/catalogo/recibe-pedidos", () => ({ catalogoRecibePedidos: vi.fn() }))
 
-import { hasPlanFeature } from "@/lib/subscriptions"
+import { catalogoRecibePedidos } from "@/lib/catalogo/recibe-pedidos"
 import { fetchCatalogoBaseData } from "@/lib/catalogo/fetch-data"
 
 describe("fetchCatalogoBaseData — recibe_pedidos", () => {
@@ -24,9 +24,9 @@ describe("fetchCatalogoBaseData — recibe_pedidos", () => {
   })
 
   it("expone solo un booleano derivado de cotizaciones_online", async () => {
-    vi.mocked(hasPlanFeature).mockResolvedValue(false)
+    vi.mocked(catalogoRecibePedidos).mockResolvedValue(false)
     const data = await fetchCatalogoBaseData("mi-taller")
-    expect(hasPlanFeature).toHaveBeenCalledWith("org-1", "cotizaciones_online")
+    expect(catalogoRecibePedidos).toHaveBeenCalledWith("org-1")
     expect(data?.config.recibe_pedidos).toBe(false)
     expect(Object.keys(data?.config ?? {}).sort()).toEqual(
       ["banner_url", "color_primary", "descripcion", "recibe_pedidos", "slug", "titulo", "trust_badges", "whatsapp"]
@@ -35,7 +35,7 @@ describe("fetchCatalogoBaseData — recibe_pedidos", () => {
   })
 
   it("es true cuando el plan incluye cotizaciones_online", async () => {
-    vi.mocked(hasPlanFeature).mockResolvedValue(true)
+    vi.mocked(catalogoRecibePedidos).mockResolvedValue(true)
     const data = await fetchCatalogoBaseData("mi-taller")
     expect(data?.config.recibe_pedidos).toBe(true)
   })

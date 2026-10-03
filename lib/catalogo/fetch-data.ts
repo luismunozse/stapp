@@ -10,7 +10,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase"
 import { SLUG_REGEX } from "@/lib/catalogo-validators"
-import { hasPlanFeature } from "@/lib/subscriptions"
+import { catalogoRecibePedidos } from "./recibe-pedidos"
 import { stockDisponibleCatalogo } from "./stock-disponible"
 import { normalizarWhatsAppCatalogo } from "./whatsapp"
 import type {
@@ -71,7 +71,7 @@ export async function fetchCatalogoBaseData(slug: string): Promise<CatalogoPubli
       .limit(10000),
     // Solo el booleano viaja al cliente: define si el checkout registra la
     // cotización o arma un mensaje de WhatsApp. Cacheado con la página (ISR).
-    hasPlanFeature(config.organization_id, "cotizaciones_online"),
+    catalogoRecibePedidos(config.organization_id),
   ])
 
   // El limit() puede truncar en silencio para orgs con mucho tráfico → vistas
