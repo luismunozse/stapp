@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { normalizarWhatsAppCatalogo } from "@/lib/catalogo/whatsapp"
 
 export async function GET(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
@@ -22,7 +23,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   const [{ data: org }, { data: categorias }] = await Promise.all([
     supabaseAdmin
       .from("organizations")
-      .select("id, nombre, nombre_mostrar, logo_url, telefono, moneda")
+      .select("id, nombre, nombre_mostrar, logo_url, telefono, moneda, pais")
       .eq("id", config.organization_id)
       .single(),
     supabaseAdmin
@@ -33,15 +34,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
       .order("orden", { ascending: true }),
   ])
 
+  const { pais: _pais, ...orgPublica } = org ?? ({} as NonNullable<typeof org>)
+
   return NextResponse.json({
     config: {
       slug: config.slug,
       titulo: config.titulo,
       descripcion: config.descripcion,
       color_primary: config.color_primary,
-      whatsapp: config.whatsapp,
+      whatsapp: normalizarWhatsAppCatalogo(config.whatsapp, org?.pais),
     },
-    organizacion: org,
+    organizacion: orgPublica,
     categorias: categorias ?? [],
   })
 }

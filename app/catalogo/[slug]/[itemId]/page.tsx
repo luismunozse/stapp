@@ -4,6 +4,7 @@ import { unstable_cache } from "next/cache"
 import { supabaseAdmin } from "@/lib/supabase"
 import { CatalogoItemView } from "@/components/catalogo-public/catalogo-item-view"
 import { stockDisponibleCatalogo } from "@/lib/catalogo/stock-disponible"
+import { normalizarWhatsAppCatalogo } from "@/lib/catalogo/whatsapp"
 import { buildItemDescription, buildItemTitle } from "@/lib/catalogo/item-meta"
 import type { Metadata, Viewport } from "next"
 
@@ -53,7 +54,7 @@ async function _fetchItem(slug: string, itemId: string) {
       .maybeSingle(),
     supabaseAdmin
       .from("organizations")
-      .select("id, nombre, nombre_mostrar, logo_url, telefono, moneda")
+      .select("id, nombre, nombre_mostrar, logo_url, telefono, moneda, pais")
       .eq("id", config.organization_id)
       .single(),
     supabaseAdmin
@@ -190,14 +191,17 @@ async function _fetchItem(slug: string, itemId: string) {
     }
   }
 
+  // `pais` solo sirve para normalizar el WhatsApp; no se expone al cliente.
+  const { pais: _pais, ...orgPublica } = org ?? ({} as NonNullable<typeof org>)
+
   return {
     config: {
       slug: config.slug,
       titulo: config.titulo,
       color_primary: config.color_primary || "#2563eb",
-      whatsapp: config.whatsapp,
+      whatsapp: normalizarWhatsAppCatalogo(config.whatsapp, org?.pais),
     },
-    organizacion: org!,
+    organizacion: orgPublica!,
     item,
     relacionados,
     bundle,
