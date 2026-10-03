@@ -13,6 +13,8 @@ import {
 } from "lucide-react"
 import { useRef } from "react"
 import { toast } from "sonner"
+import Link from "next/link"
+import { useHasFeature } from "@/hooks/use-subscription"
 import QRCode from "qrcode"
 import type { CatalogoConfig, TrustBadge, TrustBadgeIcon } from "@/types/database"
 
@@ -44,6 +46,9 @@ const MAX_TRUST_BADGES = 6
 import { CatalogoStatsCard } from "./catalogo-stats-card"
 
 export function CatalogoCompartirTab() {
+  const { hasFeature: hasCotizaciones, loading: planLoading } = useHasFeature("cotizaciones_online")
+  // Mientras carga el plan no mostramos el aviso: evita un parpadeo falso.
+  const soloWhatsapp = !planLoading && !hasCotizaciones
   const [config, setConfig] = useState<CatalogoConfig | null>(null)
   const [url, setUrl] = useState("")
   const [loading, setLoading] = useState(true)
@@ -179,6 +184,20 @@ export function CatalogoCompartirTab() {
             </div>
             <Switch id="activo" checked={activo} onCheckedChange={setActivo} />
           </div>
+
+          {soloWhatsapp && (
+            <div className="flex items-start gap-3 p-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
+              <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-amber-900 dark:text-amber-200">
+                En tu plan actual los pedidos del catálogo llegan solo por WhatsApp: no se registran como
+                cotización ni reservan stock. Cargá tu WhatsApp más abajo, sin él tus clientes no pueden hacer
+                pedidos. Con un plan que incluya cotizaciones online los pedidos quedan registrados.{" "}
+                <Link href="/configuracion/billing?plan=profesional" className="font-medium underline">
+                  Ver planes
+                </Link>
+              </p>
+            </div>
+          )}
 
           <div>
             <Label htmlFor="slug">URL del catálogo</Label>
