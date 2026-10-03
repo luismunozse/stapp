@@ -262,7 +262,8 @@ export async function POST(
 
     // Bug #3: sin cliente registrado, usar_cuenta_corriente no corre (el RPC lo
     // guardea por p_cliente_id) → la venta quedaría PAGADA sin debitar a nadie.
-    // Mismo criterio que venta-form. Bloquear antes de crear la venta.
+    // Mismo criterio que el alta de ventas (POST /api/ventas). Bloquear antes
+    // de crear la venta.
     if (data.metodoPago === "CUENTA_CORRIENTE" && !clienteId) {
       return NextResponse.json(
         { error: "Debe seleccionar un cliente registrado para usar cuenta corriente" },

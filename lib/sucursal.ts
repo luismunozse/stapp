@@ -223,7 +223,7 @@ export interface DestinoVenta {
  * do not drift apart on which sucursal/deposito a sale actually uses.
  *
  * The guarantee reaches exactly as far as `scope=venta` does — today, POS. The
- * other sale surfaces (venta-form, venta-edit-form, cotizaciones item-row) POST
+ * other sale surfaces (venta-edit-form, cotizaciones item-row) POST
  * to /api/ventas but still read stock unscoped, so the original read/write
  * drift is unchanged there.
  *
