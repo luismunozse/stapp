@@ -314,6 +314,16 @@ export function formatInventario(item: any, includeCost = false) {
   }
 }
 
+/** Saldo que el cliente todavía debe de una venta (fila cruda de ventas). */
+export function saldoPendienteVenta(venta: any): number {
+  const aplicado = toArray(venta?.devoluciones_venta).reduce(
+    (s: number, d: any) => s + (parseFloat(d?.monto_aplicado_deuda ?? "0") || 0),
+    0
+  )
+  const saldo = (parseFloat(venta?.total) || 0) - (parseFloat(venta?.monto_abonado || "0") || 0) - aplicado
+  return Math.max(Math.round(saldo * 100) / 100, 0)
+}
+
 export function formatVenta(venta: any) {
   if (!venta) return null
 
@@ -337,6 +347,9 @@ export function formatVenta(venta: any) {
     ivaMonto: venta.iva_monto != null ? parseFloat(venta.iva_monto) : null,
     redondeoMonto: venta.redondeo_monto != null ? parseFloat(venta.redondeo_monto) : null,
     montoAbonado: parseFloat(venta.monto_abonado || "0"),
+    // Lo que el cliente todavía debe: total − cobrado − lo que las
+    // devoluciones descontaron del saldo (mig 330).
+    saldoPendiente: saldoPendienteVenta(venta),
     estadoPago: venta.estado_pago || "PAGADO",
     metodoPago: venta.metodo_pago,
     estado: venta.estado,
@@ -439,6 +452,11 @@ export function formatDevolucion(d: any) {
     motivo: d.motivo,
     tipo: d.tipo,
     montoDevolucion: parseFloat(d.monto_devolucion),
+    // Mig 330: parte que descontó el saldo pendiente de la venta; el resto es
+    // lo que se le devolvió al cliente.
+    montoAplicadoDeuda: parseFloat(d.monto_aplicado_deuda ?? "0") || 0,
+    montoReembolso:
+      Math.round((parseFloat(d.monto_devolucion) - (parseFloat(d.monto_aplicado_deuda ?? "0") || 0)) * 100) / 100,
     estado: d.estado,
     observaciones: d.observaciones,
     procesadoPor: d.procesado_por,

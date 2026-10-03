@@ -16,6 +16,8 @@ interface VentaPagoFormProps {
   ventaId: string
   total: number
   montoAbonado: number
+  /** Saldo que se puede cobrar (descuenta lo que cubrieron las devoluciones). */
+  pendiente?: number
   clienteId?: string | null
   onClose: () => void
   onSuccess: () => void
@@ -25,6 +27,7 @@ export function VentaPagoForm({
   ventaId,
   total,
   montoAbonado,
+  pendiente: pendienteProp,
   clienteId,
   onClose,
   onSuccess,
@@ -33,7 +36,7 @@ export function VentaPagoForm({
   const { offlineFetch } = useOffline()
   const { showError, showInfo } = useModal()
   const [loading, setLoading] = useState(false)
-  const pendiente = total - montoAbonado
+  const pendiente = pendienteProp ?? total - montoAbonado
   const [pagosLines, setPagosLines] = useState<PagoLineItem[]>([createPagoLine(pendiente)])
   const [observaciones, setObservaciones] = useState("")
   const [saldoCuenta, setSaldoCuenta] = useState(0)

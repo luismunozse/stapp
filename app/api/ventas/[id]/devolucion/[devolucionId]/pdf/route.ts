@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { requirePosAccess } from "@/lib/auth-utils"
+import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
+import { sucursalParaLectura } from "@/lib/sucursal"
 import { supabaseAdmin } from "@/lib/supabase"
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib"
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
@@ -10,13 +11,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string; devolucionId: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requirePosAccess()
+    const { error, organizationId, userId, role, session } = await requirePosAccess()
     if (error) return error
 
     const { id, devolucionId } = await params
+    const filtro = await sucursalParaLectura({ role, userSucursalId: (session!.user as any).sucursalId ?? null })
 
-    // Verify the sale belongs to the organization
-    const { data: venta, error: ventaError } = await supabaseAdmin
+    // Verify the sale belongs to the organization (y, como el detalle de la
+    // venta, a la sucursal del usuario y al vendedor si solo ve las suyas)
+    let ventaQuery = supabaseAdmin
       .from("ventas")
       .select(`
         *,
@@ -32,7 +35,13 @@ export async function GET(
       `)
       .eq("id", id)
       .eq("organization_id", organizationId!)
-      .single()
+    if (soloVeSusVentas(role)) {
+      ventaQuery = ventaQuery.eq("vendedor_id", userId!)
+    }
+    if (!filtro.verTodas && filtro.sucursalId) {
+      ventaQuery = ventaQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+    const { data: venta, error: ventaError } = await ventaQuery.single()
 
     if (ventaError || !venta) {
       return NextResponse.json(
@@ -97,6 +106,8 @@ export async function GET(
     const motivo = safe(devolucion.motivo)
     const observaciones = safe(devolucion.observaciones)
     const montoDevolucion = parseFloat(devolucion.monto_devolucion)
+    // Mig 330: parte que descontó lo que el cliente debía de la venta
+    const montoAplicadoDeuda = parseFloat(devolucion.monto_aplicado_deuda ?? "0") || 0
 
     // Create PDF document
     const pdfDoc = await PDFDocument.create()
@@ -301,6 +312,15 @@ export async function GET(
 
     page.drawText("TOTAL DEVOLUCION:", { x: totalsX, y, size: 12, font: helveticaBold, color: textColor })
     page.drawText(formatCurrencyPDF(montoDevolucion), { x: totalsX + 130, y, size: 12, font: helveticaBold, color: redColor })
+
+    if (montoAplicadoDeuda > 0) {
+      y -= 16
+      page.drawText("Descontado del saldo:", { x: totalsX, y, size: 9, font: helvetica, color: grayColor })
+      page.drawText(formatCurrencyPDF(montoAplicadoDeuda), { x: totalsX + 130, y, size: 9, font: helvetica, color: textColor })
+      y -= 13
+      page.drawText("Reembolsado:", { x: totalsX, y, size: 9, font: helvetica, color: grayColor })
+      page.drawText(formatCurrencyPDF(Math.max(montoDevolucion - montoAplicadoDeuda, 0)), { x: totalsX + 130, y, size: 9, font: helvetica, color: textColor })
+    }
 
     // === FOOTER ===
     const footerY = margin + 60

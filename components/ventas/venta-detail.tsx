@@ -97,6 +97,8 @@ interface Devolucion {
   motivo: string
   tipo: string
   montoDevolucion: number
+  montoAplicadoDeuda?: number
+  montoReembolso?: number
   estado: string
   observaciones: string | null
   items: DevolucionItem[]
@@ -118,6 +120,8 @@ interface VentaDetail {
   porcentajeDescuento?: number
   total: number
   montoAbonado: number
+  /** total − cobrado − lo que las devoluciones descontaron del saldo */
+  saldoPendiente?: number
   estadoPago: string
   metodoPago: string
   estado: string
@@ -286,6 +290,10 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
     )
   }
 
+  // Lo que el cliente todavía debe (las devoluciones pueden haber descontado
+  // parte del saldo); sin el campo, el cálculo de siempre.
+  const saldoPendiente = venta.saldoPendiente ?? Math.max(venta.total - (venta.montoAbonado || 0), 0)
+
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
@@ -436,6 +444,12 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
             id: venta.id,
             numeroVenta: venta.numeroVenta,
             total: venta.total,
+            clienteId: venta.clienteId,
+            saldoPendiente,
+            devoluciones: (venta.devoluciones || []).map((d) => ({
+              montoDevolucion: d.montoDevolucion,
+              items: d.items.map((i) => ({ itemVentaId: i.itemVentaId, cantidad: i.cantidad })),
+            })),
             items: venta.items.map(item => ({
               id: item.id,
               inventarioId: item.inventarioId,
@@ -539,7 +553,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   <div>
                     <div className="text-xs text-muted-foreground">Pendiente</div>
                     <div className="font-medium text-base sm:text-lg text-destructive">
-                      {formatPrice(venta.total - (venta.montoAbonado || 0))}
+                      {formatPrice(saldoPendiente)}
                     </div>
                   </div>
                 </div>
@@ -556,12 +570,12 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
           })()}
 
           {/* Botón registrar pago si hay pendiente */}
-          {venta.estadoPago !== "PAGADO" && venta.estadoPago !== "ANULADA" && venta.estado !== "ANULADA" && (
+          {saldoPendiente > 0 && venta.estadoPago !== "ANULADA" && venta.estado !== "ANULADA" && (
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 border border-dashed rounded-lg">
               <div>
                 <div className="text-sm text-muted-foreground">Pendiente de pago</div>
                 <div className="text-xl font-bold text-destructive">
-                  {formatPrice(venta.total - (venta.montoAbonado || 0))}
+                  {formatPrice(saldoPendiente)}
                 </div>
               </div>
               <Button
@@ -581,6 +595,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
               ventaId={venta.id}
               total={venta.total}
               montoAbonado={venta.montoAbonado || 0}
+              pendiente={saldoPendiente}
               clienteId={venta.clienteId}
               onClose={() => setShowPagoForm(false)}
               onSuccess={() => {
@@ -891,6 +906,12 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   {dev.observaciones && (
                     <div className="text-sm text-muted-foreground">
                       {dev.observaciones}
+                    </div>
+                  )}
+                  {(dev.montoAplicadoDeuda ?? 0) > 0 && (
+                    <div className="text-sm text-muted-foreground">
+                      Descontado del saldo pendiente: {formatPrice(dev.montoAplicadoDeuda ?? 0)}
+                      {" · "}Reembolsado: {formatPrice(dev.montoReembolso ?? 0)}
                     </div>
                   )}
                   <div className="text-xs text-muted-foreground">

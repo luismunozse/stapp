@@ -18,7 +18,7 @@ const DEV_COMPLETA = { id: "d1", venta_id: "v1", monto_devolucion: "900", items_
 function setup(movInsertPayloads: any[]) {
   vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: RPC_SUCCESS, error: null } as any)
   vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
-    if (table === "ventas") return createChainMock({ id: "v1", sucursal_id: "suc-1" }) as any
+    if (table === "ventas") return createChainMock({ id: "v1", sucursal_id: "suc-1", cliente_id: "c1" }) as any
     if (table === "devoluciones_venta") return createChainMock(DEV_COMPLETA) as any
     if (table === "sesiones_caja") return createChainMock({ id: "ses-1" }) as any
     if (table === "movimientos_caja") {
