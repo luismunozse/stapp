@@ -14,6 +14,22 @@
 --
 -- Misma firma que la 269. Requiere la 330 (devoluciones_venta.monto_aplicado_deuda).
 
+-- Sin la 330 la funcion se crearia igual (plpgsql no valida las columnas al
+-- crear) y fallaria en cada cobro. Se frena aca, y la transaccion hace que
+-- no quede nada a medias aunque el cliente siga despues del error.
+BEGIN;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'devoluciones_venta'
+      AND column_name = 'monto_aplicado_deuda'
+  ) THEN
+    RAISE EXCEPTION 'La migracion 331 requiere la 330: aplicá primero 330_devolucion_descuenta_saldo.sql';
+  END IF;
+END $$;
+
 CREATE OR REPLACE FUNCTION registrar_pagos_venta_atomica(
   p_org_id       TEXT,
   p_venta_id     TEXT,
@@ -204,3 +220,5 @@ BEGIN
   RETURN jsonb_build_object('replayed', false, 'response', v_response);
 END;
 $$ LANGUAGE plpgsql;
+
+COMMIT;
