@@ -1,73 +1,117 @@
 import {
-  requireAdminOrVendedor,
+  requireIngresosAccess,
   hasInventarioAccess,
   resolveVendedoresHabilitados,
 } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { NextResponse } from "next/server"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { traerTodas } from "@/lib/supabase-paginar"
+import {
+  DEFAULT_TIMEZONE,
+  dayRangeUtc,
+  getZonedParts,
+  monthRangeUtc,
+  todayInTimeZone,
+} from "@/lib/timezone"
+
+/** Día calendario "YYYY-MM-DD" desplazado `dias` desde `fecha`. */
+function sumarDias(fecha: string, dias: number): string {
+  const [y, m, d] = fecha.split("-").map(Number)
+  return new Date(Date.UTC(y, m - 1, d + dias)).toISOString().split("T")[0]
+}
+
+/** Lo que quedó vendido de cada venta: total menos lo devuelto. */
+function totalNeto(v: any): number {
+  const devuelto = ((v.devoluciones_venta || []) as any[]).reduce(
+    (s, d) => s + (Number(d.monto_devolucion) || 0),
+    0
+  )
+  return Math.max((Number(v.total) || 0) - devuelto, 0)
+}
+
+/** Unidades de un item que no se devolvieron. */
+function cantidadNeta(item: any): number {
+  const devueltas = ((item.items_devolucion || []) as any[]).reduce((s, d) => s + (d.cantidad || 0), 0)
+  return Math.max((item.cantidad || 0) - devueltas, 0)
+}
 
 export async function GET() {
-  const { error, organizationId, role, session } = await requireAdminOrVendedor()
+  // Mismo permiso que el resto de los reportes de ingresos: un vendedor de una
+  // org que apagó "vendedores ven ingresos" veía igual la facturación acá.
+  const { error, organizationId, role, session } = await requireIngresosAccess()
   if (error) return error
-
-  const now = new Date()
-  const hoy = now.toISOString().split("T")[0]
-  const inicioSemana = new Date(now)
-  inicioSemana.setDate(now.getDate() - now.getDay())
-  const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1)
-  const hace30Dias = new Date(now)
-  hace30Dias.setDate(now.getDate() - 30)
 
   try {
     const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
+    const sucursalId = !filtro.verTodas && filtro.sucursalId ? filtro.sucursalId : null
 
-    // Base ventas query for this month, with optional branch filter
-    let ventasMesBaseQuery = supabaseAdmin
-      .from("ventas")
-      .select("id, total, descuento, tipo_descuento, porcentaje_descuento, estado, metodo_pago, vendedor_id, created_at, monto_abonado, estado_pago")
-      .eq("organization_id", organizationId!)
-      .gte("created_at", inicioMes.toISOString())
+    // Días de la organización, no de UTC: a las 22 h de Argentina ya era
+    // "mañana" y las ventas de la noche caían en el día siguiente.
+    const { data: org } = await supabaseAdmin
+      .from("organizations")
+      .select("zona_horaria")
+      .eq("id", organizationId!)
+      .single()
+    const tz: string = org?.zona_horaria || DEFAULT_TIMEZONE
+    const now = new Date()
+    const hoy = todayInTimeZone(tz, now)
+    const { year, month, weekday } = getZonedParts(now, tz)
+    const hoyDesde = dayRangeUtc(hoy, tz).desde
+    const inicioSemana = dayRangeUtc(sumarDias(hoy, -weekday), tz).desde
+    const inicioMes = monthRangeUtc(year, month, tz).desde.toISOString()
+    const hace30Dias = dayRangeUtc(sumarDias(hoy, -29), tz).desde
+    const diaDe = (iso: string) => todayInTimeZone(tz, new Date(iso))
 
-    if (!filtro.verTodas && filtro.sucursalId) {
-      ventasMesBaseQuery = ventasMesBaseQuery.eq("sucursal_id", filtro.sucursalId)
+    const ventasMesQuery = () => {
+      let q = supabaseAdmin
+        .from("ventas")
+        .select("id, total, descuento, tipo_descuento, porcentaje_descuento, estado, metodo_pago, vendedor_id, created_at, monto_abonado, estado_pago, devoluciones_venta(monto_devolucion)")
+        .eq("organization_id", organizationId!)
+        .gte("created_at", inicioMes)
+        .order("id")
+      if (sucursalId) q = q.eq("sucursal_id", sucursalId)
+      return q
     }
 
-    let ventasDiaBaseQuery = supabaseAdmin
-      .from("ventas")
-      .select("total, estado, created_at")
-      .eq("organization_id", organizationId!)
-      .eq("estado", "COMPLETADA")
-      .gte("created_at", hace30Dias.toISOString())
-
-    if (!filtro.verTodas && filtro.sucursalId) {
-      ventasDiaBaseQuery = ventasDiaBaseQuery.eq("sucursal_id", filtro.sucursalId)
+    const ventasDiaQuery = () => {
+      let q = supabaseAdmin
+        .from("ventas")
+        .select("id, total, estado, created_at, devoluciones_venta(monto_devolucion)")
+        .eq("organization_id", organizationId!)
+        .eq("estado", "COMPLETADA")
+        .gte("created_at", hace30Dias)
+        .order("id")
+      if (sucursalId) q = q.eq("sucursal_id", sucursalId)
+      return q
     }
 
     // Items from completed sales this month (for top products), branch-filtered via parent
-    let itemsVentaMesQuery = supabaseAdmin
-      .from("items_venta")
-      .select("descripcion, cantidad, subtotal, inventario_id, precio_unitario, venta_id, ventas!inner(organization_id, estado, created_at, vendedor_id, sucursal_id)")
-      .eq("ventas.organization_id", organizationId!)
-      .eq("ventas.estado", "COMPLETADA")
-      .gte("ventas.created_at", inicioMes.toISOString())
-
-    if (!filtro.verTodas && filtro.sucursalId) {
-      itemsVentaMesQuery = itemsVentaMesQuery.eq("ventas.sucursal_id", filtro.sucursalId)
+    const itemsVentaMesQuery = () => {
+      let q = supabaseAdmin
+        .from("items_venta")
+        .select("id, descripcion, cantidad, subtotal, inventario_id, precio_unitario, venta_id, items_devolucion(cantidad), ventas!inner(organization_id, estado, created_at, vendedor_id, sucursal_id)")
+        .eq("ventas.organization_id", organizationId!)
+        .eq("ventas.estado", "COMPLETADA")
+        .gte("ventas.created_at", inicioMes)
+        .order("id")
+      if (sucursalId) q = q.eq("ventas.sucursal_id", sucursalId)
+      return q
     }
 
     // Margin: items with inventory link for cost calculation, branch-filtered via parent
     // Select costo_unitario_snapshot (cost at sale time) and fallback to inventario.precio_compra
-    let margenQuery = supabaseAdmin
-      .from("items_venta")
-      .select("cantidad, precio_unitario, subtotal, inventario_id, costo_unitario_snapshot, inventario!inner(precio_compra), ventas!inner(organization_id, estado, created_at, sucursal_id)")
-      .eq("ventas.organization_id", organizationId!)
-      .eq("ventas.estado", "COMPLETADA")
-      .gte("ventas.created_at", inicioMes.toISOString())
-      .not("inventario_id", "is", null)
-
-    if (!filtro.verTodas && filtro.sucursalId) {
-      margenQuery = margenQuery.eq("ventas.sucursal_id", filtro.sucursalId)
+    const margenQuery = () => {
+      let q = supabaseAdmin
+        .from("items_venta")
+        .select("id, cantidad, precio_unitario, subtotal, inventario_id, costo_unitario_snapshot, items_devolucion(cantidad), inventario!inner(precio_compra), ventas!inner(organization_id, estado, created_at, sucursal_id)")
+        .eq("ventas.organization_id", organizationId!)
+        .eq("ventas.estado", "COMPLETADA")
+        .gte("ventas.created_at", inicioMes)
+        .not("inventario_id", "is", null)
+        .order("id")
+      if (sucursalId) q = q.eq("ventas.sucursal_id", sucursalId)
+      return q
     }
 
     const [
@@ -76,16 +120,16 @@ export async function GET() {
       ventasPorDiaResult,
       margenResult,
     ] = await Promise.all([
-      ventasMesBaseQuery,
-      itemsVentaMesQuery,
-      ventasDiaBaseQuery,
-      margenQuery,
+      traerTodas(ventasMesQuery),
+      traerTodas(itemsVentaMesQuery),
+      traerTodas(ventasDiaQuery),
+      traerTodas(margenQuery),
     ])
 
     // Fetch vendedor names
-    const ventasMes = ventasDelMesResult.data || []
+    const ventasMes = ventasDelMesResult.data as any[]
     const vendedorIds = [...new Set(ventasMes.filter(v => v.vendedor_id).map(v => v.vendedor_id))]
-    let vendedoresMap: Record<string, string> = {}
+    const vendedoresMap: Record<string, string> = {}
     if (vendedorIds.length > 0) {
       const { data: vendedores } = await supabaseAdmin
         .from("users")
@@ -94,27 +138,17 @@ export async function GET() {
       vendedores?.forEach(v => { vendedoresMap[v.id] = v.nombre })
     }
 
-    // --- Ventas Hoy ---
-    const ventasHoyList = ventasMes.filter(v => v.estado === "COMPLETADA" && v.created_at?.startsWith(hoy))
-    const ventasHoy = {
-      count: ventasHoyList.length,
-      total: ventasHoyList.reduce((s, v) => s + (v.total || 0), 0),
-    }
-
-    // --- Ventas Semana ---
-    const inicioSemanaStr = inicioSemana.toISOString()
-    const ventasSemanaList = ventasMes.filter(v => v.estado === "COMPLETADA" && v.created_at >= inicioSemanaStr)
-    const ventasSemana = {
-      count: ventasSemanaList.length,
-      total: ventasSemanaList.reduce((s, v) => s + (v.total || 0), 0),
-    }
-
-    // --- Ventas Mes ---
+    // Montos netos de devoluciones en todos los indicadores
     const ventasMesCompletadas = ventasMes.filter(v => v.estado === "COMPLETADA")
-    const ventasMesData = {
-      count: ventasMesCompletadas.length,
-      total: ventasMesCompletadas.reduce((s, v) => s + (v.total || 0), 0),
-    }
+    const resumen = (lista: any[]) => ({
+      count: lista.length,
+      total: lista.reduce((s, v) => s + totalNeto(v), 0),
+    })
+
+    // --- Ventas Hoy / Semana / Mes ---
+    const ventasHoy = resumen(ventasMesCompletadas.filter(v => v.created_at >= hoyDesde))
+    const ventasSemana = resumen(ventasMesCompletadas.filter(v => v.created_at >= inicioSemana))
+    const ventasMesData = resumen(ventasMesCompletadas)
 
     // --- Ticket Promedio ---
     const ticketPromedio = ventasMesCompletadas.length > 0
@@ -123,14 +157,16 @@ export async function GET() {
 
     // --- Top Productos ---
     const productosMap: Record<string, { descripcion: string; cantidad: number; totalVentas: number }> = {}
-    const itemsMes = itemsVentaMesResult.data || []
+    const itemsMes = itemsVentaMesResult.data as any[]
     itemsMes.forEach((item: any) => {
+      const neta = cantidadNeta(item)
+      if (neta <= 0) return
       const key = item.descripcion || "Sin descripción"
       if (!productosMap[key]) {
         productosMap[key] = { descripcion: key, cantidad: 0, totalVentas: 0 }
       }
-      productosMap[key].cantidad += item.cantidad || 0
-      productosMap[key].totalVentas += item.subtotal || 0
+      productosMap[key].cantidad += neta
+      productosMap[key].totalVentas += (item.subtotal || 0) * (neta / (item.cantidad || 1))
     })
     const topProductos = Object.values(productosMap)
       .sort((a, b) => b.cantidad - a.cantidad)
@@ -145,7 +181,7 @@ export async function GET() {
         vendedoresStats[vid] = { nombre: vendedoresMap[vid] || "Sin nombre", count: 0, total: 0 }
       }
       vendedoresStats[vid].count++
-      vendedoresStats[vid].total += v.total || 0
+      vendedoresStats[vid].total += totalNeto(v)
     })
     const topVendedores = Object.values(vendedoresStats)
       .sort((a, b) => b.total - a.total)
@@ -157,40 +193,39 @@ export async function GET() {
       const m = v.metodo_pago || "OTRO"
       if (!metodosMap[m]) metodosMap[m] = { metodo: m, count: 0, total: 0 }
       metodosMap[m].count++
-      metodosMap[m].total += v.total || 0
+      metodosMap[m].total += totalNeto(v)
     })
     const ventasPorMetodoPago = Object.values(metodosMap).sort((a, b) => b.total - a.total)
 
-    // --- Ventas por Día (últimos 30 días) ---
+    // --- Ventas por Día (últimos 30 días de la organización) ---
     const diasMap: Record<string, { fecha: string; count: number; total: number }> = {}
     for (let i = 29; i >= 0; i--) {
-      const d = new Date(now)
-      d.setDate(now.getDate() - i)
-      const key = d.toISOString().split("T")[0]
+      const key = sumarDias(hoy, -i)
       diasMap[key] = { fecha: key, count: 0, total: 0 }
     }
-    const ventasDia = ventasPorDiaResult.data || []
-    ventasDia.forEach((v: any) => {
-      const key = v.created_at?.split("T")[0]
+    ;(ventasPorDiaResult.data as any[]).forEach((v: any) => {
+      const key = v.created_at ? diaDe(v.created_at) : null
       if (key && diasMap[key]) {
         diasMap[key].count++
-        diasMap[key].total += v.total || 0
+        diasMap[key].total += totalNeto(v)
       }
     })
     const ventasPorDia = Object.values(diasMap)
 
-    // --- Margen Bruto ---
-    const margenItems = margenResult.data || []
+    // --- Margen Bruto (sobre lo que quedó vendido) ---
+    const margenItems = margenResult.data as any[]
     let totalVentas = 0
     let totalCosto = 0
     margenItems.forEach((item: any) => {
-      totalVentas += item.subtotal || 0
+      const neta = cantidadNeta(item)
+      if (neta <= 0) return
+      totalVentas += (item.subtotal || 0) * (neta / (item.cantidad || 1))
       // Prefer costo_unitario_snapshot (cost captured at sale time) over live precio_compra
       const costoUnitario =
         item.costo_unitario_snapshot != null
           ? item.costo_unitario_snapshot
           : (item.inventario as any)?.precio_compra || 0
-      totalCosto += (item.cantidad || 0) * costoUnitario
+      totalCosto += neta * costoUnitario
     })
     // Mismo gate y misma regla que /api/reportes/analisis-inventario: quien no
     // puede ver el costo de compra por item no recibe NINGUNA cifra derivada

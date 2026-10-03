@@ -183,10 +183,6 @@ describe("BUG-1 — garantias-ventas: distribucionDias uses dias_validez from ga
   })
 
   it("garantia with dias_validez=90 lands in bucket 90, not bucket 0", async () => {
-    // resumenQuery (ventas!inner select)
-    const resumenChain = createChainMock([
-      { id: "g1", estado: "ACTIVA", ventas: { organization_id: "org-1", sucursal_id: null } },
-    ])
     // porVencerQuery — use empty to keep things simple
     const porVencerChain = createChainMock([])
     // todasGarantiasQuery — this is where distribucionDias reads from
@@ -203,14 +199,12 @@ describe("BUG-1 — garantias-ventas: distribucionDias uses dias_validez from ga
       },
     ])
 
-    // garantias_venta is queried three times in the route; rotate mocks per call.
+    // garantias_venta se consulta dos veces: por vencer y después todas.
     let callCount = 0
     vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
       if (table === "garantias_venta") {
         callCount++
-        if (callCount === 1) return resumenChain as any
-        if (callCount === 2) return porVencerChain as any
-        return todasGarantiasChain as any
+        return (callCount === 1 ? porVencerChain : todasGarantiasChain) as any
       }
       return createChainMock([]) as any
     })
@@ -231,9 +225,6 @@ describe("BUG-1 — garantias-ventas: distribucionDias uses dias_validez from ga
   })
 
   it("garantia with dias_validez=30 lands in bucket 30", async () => {
-    const resumenChain = createChainMock([
-      { id: "g2", estado: "ACTIVA", ventas: { organization_id: "org-1", sucursal_id: null } },
-    ])
     const porVencerChain = createChainMock([])
     const todasGarantiasChain = createChainMock([
       {
@@ -252,9 +243,7 @@ describe("BUG-1 — garantias-ventas: distribucionDias uses dias_validez from ga
     vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
       if (table === "garantias_venta") {
         callCount++
-        if (callCount === 1) return resumenChain as any
-        if (callCount === 2) return porVencerChain as any
-        return todasGarantiasChain as any
+        return (callCount === 1 ? porVencerChain : todasGarantiasChain) as any
       }
       return createChainMock([]) as any
     })
