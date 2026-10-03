@@ -59,6 +59,8 @@ function mockSupabaseSequenced(sequence: Record<string, ReturnType<typeof create
   const counters: Record<string, number> = {}
   vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
     const chains = sequence[table]
+    // Sin devoluciones salvo que el test diga otra cosa
+    if (table === "devoluciones_venta" && !chains) return createChainMock(null, null, 0) as any
     if (!chains || chains.length === 0) {
       return createChainMock(null, { message: `No mock for table: ${table}` }) as any
     }
@@ -68,7 +70,7 @@ function mockSupabaseSequenced(sequence: Record<string, ReturnType<typeof create
   })
 }
 
-const VENTA = { id: "venta-1", organization_id: "org-1", total: 100, cliente_nombre: "Juan Perez", iva_tasa: 21 }
+const VENTA = { id: "venta-1", organization_id: "org-1", estado: "COMPLETADA", total: 100, cliente_nombre: "Juan Perez", iva_tasa: 21 }
 const ITEMS = [{ id: "it-1", venta_id: "venta-1", descripcion: "Servicio", cantidad: 1, precio_unitario: 100 }]
 const CREDENCIALES = {
   organization_id: "org-1",
@@ -164,6 +166,37 @@ describe("POST /api/facturacion-electronica/emitir", () => {
     expect(body.yaEmitido).toBe(true)
     expect(body.comprobante).toEqual(existing)
     expect(body.comprobante).not.toHaveProperty("provider_response")
+    expect(tusFacturasProvider.emitir).not.toHaveBeenCalled()
+  })
+
+  it("409 sin emitir cuando la venta está anulada", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [createChainMock(null)],
+      ventas: [createChainMock({ ...VENTA, estado: "ANULADA" })],
+    })
+
+    const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+    expect(status).toBe(409)
+    expect(body.error).toMatch(/completadas/)
+    expect(tusFacturasProvider.emitir).not.toHaveBeenCalled()
+  })
+
+  it("409 sin emitir cuando la venta tiene devoluciones (facturaría el total original)", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [createChainMock(null)],
+      ventas: [createChainMock(VENTA)],
+      devoluciones_venta: [createChainMock(null, null, 1)],
+    })
+
+    const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+    expect(status).toBe(409)
+    expect(body.error).toMatch(/devoluciones/)
     expect(tusFacturasProvider.emitir).not.toHaveBeenCalled()
   })
 

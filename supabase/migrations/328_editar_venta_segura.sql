@@ -99,7 +99,8 @@ BEGIN
     RAISE EXCEPTION 'VENTA_NO_EDITABLE: La venta tiene una factura electrónica emitida.'
       USING ERRCODE = 'P0021';
   END IF;
-  IF EXISTS (SELECT 1 FROM facturas WHERE venta_id = p_venta_id) THEN
+  IF EXISTS (SELECT 1 FROM facturas
+             WHERE venta_id = p_venta_id AND estado_pago::text <> 'ANULADA') THEN
     RAISE EXCEPTION 'VENTA_NO_EDITABLE: La venta tiene un remito generado.'
       USING ERRCODE = 'P0021';
   END IF;

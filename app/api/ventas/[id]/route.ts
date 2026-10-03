@@ -14,7 +14,13 @@ import {
   type FiscalConfig,
   type IvaRegimen,
 } from "@/lib/ventas/totales"
-import { RELACIONES_BLOQUEO_VENTA, mensajeBloqueoSql, motivoNoEditable } from "@/lib/ventas/bloqueos"
+import {
+  RELACIONES_BLOQUEO_VENTA,
+  mensajeBloqueoSql,
+  motivoNoAnulable,
+  motivoNoEditable,
+  motivoNoEliminable,
+} from "@/lib/ventas/bloqueos"
 
 const METODOS_PAGO = [
   "EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO",
@@ -159,6 +165,13 @@ export async function PUT(
         )
       }
 
+      // Con factura electrónica o remito vigente no se anula (el trigger de
+      // la mig 329 lo garantiza; acá se da el motivo antes).
+      const noAnulable = motivoNoAnulable(venta)
+      if (noAnulable) {
+        return NextResponse.json({ error: `No se puede anular: ${noAnulable}` }, { status: 409 })
+      }
+
       // Anular venta (el trigger restaurará el stock y registrará movimientos)
       const { error: updateError } = await supabaseAdmin
         .from("ventas")
@@ -166,6 +179,12 @@ export async function PUT(
         .eq("id", id)
 
       if (updateError) {
+        if (updateError.code === "P0022") {
+          return NextResponse.json(
+            { error: `No se puede anular: ${mensajeBloqueoSql(updateError.message)}` },
+            { status: 409 }
+          )
+        }
         throw updateError
       }
 
@@ -474,7 +493,7 @@ export async function DELETE(
     // Verificar que la venta existe y está anulada
     let ventaDelQuery = supabaseAdmin
       .from("ventas")
-      .select("*")
+      .select(`*, ${RELACIONES_BLOQUEO_VENTA}`)
       .eq("id", id)
       .eq("organization_id", organizationId!)
     if (!filtroD.verTodas && filtroD.sucursalId) {
@@ -496,6 +515,19 @@ export async function DELETE(
       )
     }
 
+    const noEliminable = motivoNoEliminable(venta)
+    if (noEliminable) {
+      return NextResponse.json({ error: `No se puede eliminar: ${noEliminable}` }, { status: 409 })
+    }
+
+    // Los intentos de factura electrónica rechazados no tienen CAE: se van con
+    // la venta (la FK ya no los borra en cascada, mig 329).
+    await supabaseAdmin
+      .from("comprobantes_fiscales")
+      .delete()
+      .eq("venta_id", id)
+      .eq("estado", "rechazado")
+
     // Eliminar venta (CASCADE eliminará items y garantías)
     const { error: deleteError } = await supabaseAdmin
       .from("ventas")
@@ -503,6 +535,12 @@ export async function DELETE(
       .eq("id", id)
 
     if (deleteError) {
+      if (deleteError.code === "23503") {
+        return NextResponse.json(
+          { error: "No se puede eliminar: la venta tiene comprobantes asociados." },
+          { status: 409 }
+        )
+      }
       throw deleteError
     }
 
