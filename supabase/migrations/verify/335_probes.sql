@@ -13,14 +13,17 @@ CREATE TEMP TABLE _r (orden INT, probe TEXT, esperado TEXT, obtenido TEXT);
 INSERT INTO organizations (id, nombre, nombre_mostrar, slug)
 VALUES ('org-probe-335', 'Probe 335', 'Probe 335', 'probe-335');
 
-INSERT INTO movimientos_caja (id, organization_id, tipo, monto, metodo_pago, concepto, afecta_rentabilidad, es_recurrente)
+-- movimientos_caja.sucursal_id es NOT NULL desde la 207. Se usa la sucursal
+-- principal que crea el trigger al dar de alta la org.
+
+INSERT INTO movimientos_caja (id, organization_id, sucursal_id, tipo, monto, metodo_pago, concepto, afecta_rentabilidad, es_recurrente)
 VALUES
-  ('mov-335-dev',  'org-probe-335', 'EGRESO', 100, 'EFECTIVO', 'Devolución DEV-0001',        false, false),
-  ('mov-335-nc',   'org-probe-335', 'EGRESO', 100, 'EFECTIVO', 'Nota de crédito NC-0001',    false, false),
-  ('mov-335-rec',  'org-probe-335', 'EGRESO', 100, 'EFECTIVO', 'Alquiler',                   true,  true),
-  ('mov-335-cogs', 'org-probe-335', 'EGRESO', 100, 'EFECTIVO', 'Costo de mercadería - Venta #1', false, false),
-  ('mov-335-ret',  'org-probe-335', 'EGRESO', 100, 'EFECTIVO', 'Retiro de socio',            false, false),
-  ('mov-335-gto',  'org-probe-335', 'EGRESO', 100, 'EFECTIVO', 'Compra de insumos',          true,  false);
+  ('mov-335-dev',  'org-probe-335', (SELECT id FROM sucursales WHERE organization_id = 'org-probe-335' AND principal), 'EGRESO', 100, 'EFECTIVO', 'Devolución DEV-0001',        false, false),
+  ('mov-335-nc',   'org-probe-335', (SELECT id FROM sucursales WHERE organization_id = 'org-probe-335' AND principal), 'EGRESO', 100, 'EFECTIVO', 'Nota de crédito NC-0001',    false, false),
+  ('mov-335-rec',  'org-probe-335', (SELECT id FROM sucursales WHERE organization_id = 'org-probe-335' AND principal), 'EGRESO', 100, 'EFECTIVO', 'Alquiler',                   true,  true),
+  ('mov-335-cogs', 'org-probe-335', (SELECT id FROM sucursales WHERE organization_id = 'org-probe-335' AND principal), 'EGRESO', 100, 'EFECTIVO', 'Costo de mercadería - Venta #1', false, false),
+  ('mov-335-ret',  'org-probe-335', (SELECT id FROM sucursales WHERE organization_id = 'org-probe-335' AND principal), 'EGRESO', 100, 'EFECTIVO', 'Retiro de socio',            false, false),
+  ('mov-335-gto',  'org-probe-335', (SELECT id FROM sucursales WHERE organization_id = 'org-probe-335' AND principal), 'EGRESO', 100, 'EFECTIVO', 'Compra de insumos',          true,  false);
 
 -- Mismo backfill que la migracion, restringido a las filas de prueba.
 UPDATE movimientos_caja SET origen = 'RECURRENTE'
