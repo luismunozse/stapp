@@ -54,6 +54,9 @@ export interface HeldSale {
   cliente: PosCliente
   items: PosCartItem[]
   nota: string
+  /** Descuento sobre el total (antes se perdía al apartar). */
+  descuentoGlobal?: DescuentoConfig | null
+  descuentoMotivo?: string
 }
 
 export interface InventarioResult {

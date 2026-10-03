@@ -65,4 +65,13 @@ describe("buildTicketHTML", () => {
     expect(html).toContain("Redondeo:")
     expect(html).toContain("-$0.5")
   })
+
+  it("una venta fiada muestra el saldo pendiente", () => {
+    const html = buildTicketHTML(
+      { numeroVenta: 3, total: 500, saldoPendiente: 500, items: [] },
+      { timezone: "America/Argentina/Buenos_Aires", printerWidth: 58, formatPrice: (n) => `$${n}` }
+    )
+    expect(html).toContain("Saldo pendiente:")
+    expect(html).toContain("$500")
+  })
 })

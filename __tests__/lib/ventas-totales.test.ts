@@ -140,6 +140,15 @@ describe("condicionDeCobro", () => {
     )
     expect(metodoPagoCabecera([])).toBe("EFECTIVO")
   })
+
+  it("una venta fiada queda como cuenta corriente, a precio de lista", () => {
+    expect(metodoPagoCabecera([{ metodo: "EFECTIVO", monto: 0 }], true)).toBe("CUENTA_CORRIENTE")
+    // aunque la cuenta corriente tenga recargo configurado, no se cobra nada ahora
+    expect(condicionDeCobro([], "CUENTA_CORRIENTE", true, { CUENTA_CORRIENTE: 10 })).toMatchObject({
+      factor: 1,
+      efectivo: false,
+    })
+  })
 })
 
 describe("conciliarPagos", () => {

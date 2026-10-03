@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { RotateCcw, Trash2, Clock, ShoppingCart, User } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import type { HeldSale } from "./pos-types"
+import { computeVentaTotals } from "./pos-types"
 import { EmptyState } from "@/components/ui/empty-state"
 
 interface PosHeldSalesProps {
@@ -35,8 +36,9 @@ export function PosHeldSales({
     return date.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: timezone })
   }
 
-  const getTotal = (sale: HeldSale) =>
-    sale.items.reduce((sum, item) => sum + item.precioUnitario * item.cantidad, 0)
+  // Con los descuentos (de línea y global): es lo que se va a cobrar al
+  // recuperarla, antes de IVA y redondeo.
+  const getTotal = (sale: HeldSale) => computeVentaTotals(sale.items, sale.descuentoGlobal ?? null).total
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>

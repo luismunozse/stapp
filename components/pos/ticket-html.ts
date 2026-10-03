@@ -29,6 +29,8 @@ export interface TicketHtmlVenta {
   ivaTasa?: number | null
   ivaMonto?: number | null
   redondeoMonto?: number | null
+  /** Lo que queda a pagar (venta fiada o pago parcial). */
+  saldoPendiente?: number | null
 }
 
 export interface TicketHtmlOptions {
@@ -121,6 +123,7 @@ export function buildTicketHTML(venta: TicketHtmlVenta, opts: TicketHtmlOptions)
   ${fiscalHTML}
   <div class="total-box row bold big"><span>TOTAL:</span><span>${escapeHtml(fmt(venta.total))}</span></div>
   ${ivaIncluidoHTML}
+  ${Number(venta.saldoPendiente || 0) > 0 ? `<div class="row bold"><span>Saldo pendiente:</span><span>${escapeHtml(fmt(Number(venta.saldoPendiente)))}</span></div>` : ""}
   <div class="sep-bold"></div>
   <div class="center bold">¡Gracias por su compra!</div>
   <div class="center small">Conserve este ticket como comprobante</div>

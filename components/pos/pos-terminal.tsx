@@ -54,6 +54,7 @@ import {
 } from "@/lib/whatsapp/plantillas-venta"
 import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 import { useOffline } from "@/contexts/offline-context"
+import { useSession } from "next-auth/react"
 
 const HELD_SALES_KEY = "pos_held_sales"
 
@@ -81,10 +82,19 @@ export function PosTerminal() {
   const { formatPrice, pais, timezone } = useCurrency()
   const { confirm, showSuccess, showError } = useModal()
   const { isOnline } = useOffline()
+  const { data: session } = useSession()
+  // Las devoluciones son solo de ADMIN en la API: a otros roles el botón les
+  // terminaba en un 403.
+  const isAdmin = session?.user?.role === "ADMIN"
   const searchRef = useRef<PosProductSearchRef>(null)
 
   // Cart state
   const [cartItems, setCartItems] = useState<PosCartItem[]>([])
+  // Espejo del carrito para leerlo fuera de los setState (tope de stock al escanear)
+  const cartItemsRef = useRef<PosCartItem[]>([])
+  useEffect(() => {
+    cartItemsRef.current = cartItems
+  }, [cartItems])
   const [cliente, setCliente] = useState<PosCliente>({ ...EMPTY_CLIENT })
   const [showClienteSearch, setShowClienteSearch] = useState(false)
   const [descuentoGlobal, setDescuentoGlobal] = useState<DescuentoConfig | null>(null)
@@ -417,6 +427,8 @@ export function PosTerminal() {
       cliente: { ...cliente },
       items: [...cartItems],
       nota,
+      descuentoGlobal,
+      descuentoMotivo,
     }
     const updated = [...heldSales, held]
     setHeldSales(updated)
@@ -427,7 +439,39 @@ export function PosTerminal() {
     setDescuentoGlobal(null)
     setDescuentoMotivo("")
     setMobileTab("products")
-  }, [cartItems, cliente, heldSales])
+  }, [cartItems, cliente, heldSales, descuentoGlobal, descuentoMotivo])
+
+  // Una venta apartada guarda los precios y el stock de cuando se apartó. Al
+  // recuperarla se avisa qué cambió desde entonces (no se pisa nada: el
+  // cajero pudo haber ajustado un precio a mano).
+  const avisarCambiosApartada = useCallback(async (items: PosCartItem[]) => {
+    const deInventario = items.filter((i) => i.inventarioId)
+    if (deInventario.length === 0) return
+    try {
+      const res = await fetch("/api/inventario/check-stock?scope=venta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: deInventario.map((i) => i.inventarioId), precios: true }),
+      })
+      if (!res.ok) return
+      const { stock = {}, precios = {} } = await res.json()
+      const cambios: string[] = []
+      for (const it of deInventario) {
+        const id = it.inventarioId!
+        if (id in precios && precios[id] !== it.precioUnitario) {
+          cambios.push(`${it.nombre}: precio de lista actual ${formatPrice(precios[id])} (en la venta apartada: ${formatPrice(it.precioUnitario)})`)
+        }
+        if (id in stock && stock[id] < it.cantidad) {
+          cambios.push(`${it.nombre}: hay ${stock[id]} en stock y la venta tiene ${it.cantidad}`)
+        }
+      }
+      if (cambios.length > 0) {
+        await showError(`Cambios desde que se apartó la venta:\n${cambios.join("\n")}`)
+      }
+    } catch {
+      // Sin red el aviso no es crítico: la venta igual se valida al cobrar
+    }
+  }, [formatPrice, showError])
 
   const recallSale = useCallback(
     (id: string) => {
@@ -441,6 +485,8 @@ export function PosTerminal() {
           cliente: { ...cliente },
           items: [...cartItems],
           nota: "",
+          descuentoGlobal,
+          descuentoMotivo,
         }
         const withCurrent = [...heldSales, currentHeld]
         const withoutRecalled = withCurrent.filter((s) => s.id !== id)
@@ -458,12 +504,15 @@ export function PosTerminal() {
       )
       setCartItems(restoredItems)
       setCliente(sale.cliente)
-      setDescuentoGlobal(null)
-      setDescuentoMotivo("")
+      setDescuentoGlobal(sale.descuentoGlobal ?? null)
+      setDescuentoMotivo(sale.descuentoMotivo ?? "")
       setMobileTab("cart")
+      void avisarCambiosApartada(restoredItems)
     },
-    [heldSales, cartItems, cliente]
+    [heldSales, cartItems, cliente, descuentoGlobal, descuentoMotivo, avisarCambiosApartada]
   )
+
+
 
   const deleteHeldSale = useCallback(
     (id: string) => {
@@ -481,7 +530,8 @@ export function PosTerminal() {
     try {
       const ticketData = {
         numeroVenta: ventaData.numeroVenta,
-        fecha: new Date().toLocaleString("es-AR", { timeZone: timezone }),
+        // La fecha de la venta: al reimprimir salía la de hoy
+        fecha: new Date(ventaData.createdAt ?? Date.now()).toLocaleString("es-AR", { timeZone: timezone }),
         cliente: {
           nombre: ventaData.clienteNombre || "Consumidor Final",
           telefono: ventaData.clienteTelefono,
@@ -499,17 +549,24 @@ export function PosTerminal() {
         total: ventaData.total,
         metodoPago: ventaData.metodoPago,
         nombreEmpresa: ventaData.organizationName,
+        ivaRegimen: ventaData.ivaRegimen ?? null,
+        ivaTasa: ventaData.ivaTasa ?? null,
+        ivaMonto: ventaData.ivaMonto ?? null,
+        redondeoMonto: ventaData.redondeoMonto ?? null,
+        pagos: (ventaData.pagos || []).map((p: any) => ({ metodoPago: p.metodoPago, monto: Number(p.monto) || 0 })),
+        saldoPendiente: ventaData.saldoPendiente ?? null,
       }
       const commands = generateTicketCommands(ticketData, printerWidth)
-      await printer.print(commands)
-      return true
+      // print() no tira: devuelve false si la impresora falló. Antes se
+      // respondía true igual y el cajero no se enteraba de que no salió.
+      return await printer.print(commands)
     } catch (err) {
       console.error("Print error:", err)
       return false
     } finally {
       setPrinting(false)
     }
-  }, [printer])
+  }, [printer, timezone, printerWidth])
 
   // --- Print ticket via browser print dialog (fallback when no USB printer) ---
   const printTicketHTML = useCallback((ventaData: any) => {
@@ -554,9 +611,10 @@ export function PosTerminal() {
 
     // Auto-print ticket if printer connected
     if (printer.connected) {
-      await printTicket(ventaData)
+      const impreso = await printTicket(ventaData)
+      if (!impreso) await showError("La venta se registró, pero no se pudo imprimir el ticket. Revisá la impresora y usá Reimprimir.")
     }
-  }, [printer.connected, printTicket])
+  }, [printer.connected, printTicket, showError])
 
   const handleSuccessClose = useCallback(() => {
     setSuccessData(null)
@@ -606,6 +664,40 @@ export function PosTerminal() {
   }, [formatPrice, plantillaCorta, pais])
 
   // --- Barcode scanner ---
+  // Lector y cámara agregan igual que el buscador: con series y garantía del
+  // producto (antes un serializado escaneado entraba como si no lo fuera) y
+  // avisando cuando ya no hay más stock (antes se ignoraba la unidad y se
+  // mostraba "agregado" igual).
+  const agregarEscaneado = useCallback(
+    async (item: any) => {
+      if ((item.stock ?? 0) <= 0) {
+        await showError(`"${item.nombre}" sin stock disponible`)
+        return
+      }
+      const enCarrito = cartItemsRef.current
+        .filter((i) => i.inventarioId === item.id)
+        .reduce((s, i) => s + i.cantidad, 0)
+      if (enCarrito >= item.stock) {
+        await showError(`No hay más stock de "${item.nombre}": ya hay ${enCarrito} en el carrito`)
+        return
+      }
+      addProduct({
+        id: item.id,
+        codigo: item.codigo,
+        nombre: item.nombre,
+        stock: item.stock,
+        precioVenta: item.precioVenta,
+        trackeaSeries: item.trackeaSeries ?? false,
+        diasGarantiaDefault: item.diasGarantiaDefault ?? null,
+      })
+      // Item 5: Show brief scan success indicator (~1.2s)
+      if (scanSuccessTimerRef.current) clearTimeout(scanSuccessTimerRef.current)
+      setScanSuccess({ nombre: item.nombre })
+      scanSuccessTimerRef.current = setTimeout(() => setScanSuccess(null), 1200)
+    },
+    [addProduct, showError]
+  )
+
   const handleBarcodeScan = useCallback(
     async (barcode: string) => {
       const code = barcode.trim()
@@ -615,22 +707,7 @@ export function PosTerminal() {
         if (!res.ok) return
         const data = await res.json()
         if (data.found && data.item) {
-          if ((data.item.stock ?? 0) <= 0) {
-            await showError(`"${data.item.nombre}" sin stock disponible`)
-            return
-          }
-          addProduct({
-            id: data.item.id,
-            codigo: data.item.codigo,
-            nombre: data.item.nombre,
-            stock: data.item.stock,
-            precioVenta: data.item.precioVenta,
-            diasGarantiaDefault: data.item.diasGarantiaDefault ?? null,
-          })
-          // Item 5: Show brief scan success indicator (~1.2s)
-          if (scanSuccessTimerRef.current) clearTimeout(scanSuccessTimerRef.current)
-          setScanSuccess({ nombre: data.item.nombre })
-          scanSuccessTimerRef.current = setTimeout(() => setScanSuccess(null), 1200)
+          await agregarEscaneado(data.item)
         } else {
           await showError(`Código "${code}" no encontrado en inventario`)
         }
@@ -638,7 +715,7 @@ export function PosTerminal() {
         await showError("Error al buscar el código de barras")
       }
     },
-    [addProduct, showError]
+    [agregarEscaneado, showError]
   )
 
   useBarcodeScanner({
@@ -759,9 +836,10 @@ export function PosTerminal() {
               variant="outline"
               size="sm"
               className="h-8 gap-1.5 text-xs"
-              onClick={() => {
+              onClick={async () => {
                 if (printer.connected) {
-                  printTicket(lastSaleData)
+                  const impreso = await printTicket(lastSaleData)
+                  if (!impreso) await showError("No se pudo imprimir el ticket. Revisá la impresora.")
                 } else {
                   printTicketHTML(lastSaleData)
                 }
@@ -775,18 +853,20 @@ export function PosTerminal() {
             </Button>
           )}
 
-          {/* Devolucion button */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs"
-            onClick={() => setDevolucionOpen(true)}
-            title="Procesar devolución"
-            aria-label="Devolución"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Devolución</span>
-          </Button>
+          {/* Devolucion button (solo ADMIN: la API rechaza a los demás) */}
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              onClick={() => setDevolucionOpen(true)}
+              title="Procesar devolución"
+              aria-label="Devolución"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Devolución</span>
+            </Button>
+          )}
 
           {/* Shortcuts toggle - desktop only */}
           <Button
@@ -1023,17 +1103,7 @@ export function PosTerminal() {
         onResult={async (result) => {
           // Scanner ya consultó la API; reusar resultado en vez de re-fetchear.
           if (result.found && result.item) {
-            if ((result.item.stock ?? 0) <= 0) {
-              await showError(`"${result.item.nombre}" sin stock disponible`)
-              return
-            }
-            addProduct({
-              id: result.item.id,
-              codigo: result.item.codigo,
-              nombre: result.item.nombre,
-              stock: result.item.stock,
-              precioVenta: result.item.precioVenta,
-            })
+            await agregarEscaneado(result.item)
           } else {
             await showError(`Código "${result.code}" no encontrado en inventario`)
           }

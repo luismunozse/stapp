@@ -96,7 +96,7 @@ export function PosCheckoutDialog({
   // Recargo del método y redondeo de efectivo con las mismas reglas y los
   // mismos datos que usa POST /api/ventas (lib/ventas/totales.ts): los pagos
   // que viajan en el payload, su metodoPago y si es a pagar después.
-  const cobro = condicionDeCobro(pagosLines, metodoPagoCabecera(pagosLines), pagoParcial, recargosMetodo)
+  const cobro = condicionDeCobro(pagosLines, metodoPagoCabecera(pagosLines, pagoParcial), pagoParcial, recargosMetodo)
   const metodoCondicionActual = cobro.metodo
   const porcentajeRecargo = cobro.porcentaje
 

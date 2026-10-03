@@ -55,6 +55,26 @@ describe("POST /api/inventario/check-stock", () => {
     expect(body.stock).toEqual({ a: 5, b: 0, c: 0 })
   })
 
+  it("con precios: true devuelve también el precio de lista (aviso de ventas apartadas)", async () => {
+    mockAuthSuccess()
+    mockSupabaseFrom({
+      inventario: createChainMock([
+        { id: "a", stock: 5, precio_venta: "120.50" },
+      ]),
+    })
+    const { status, body } = await parseResponse(await POST(req({ ids: ["a"], precios: true })))
+    expect(status).toBe(200)
+    expect(body.stock).toEqual({ a: 5 })
+    expect(body.precios).toEqual({ a: 120.5 })
+  })
+
+  it("sin precios la respuesta queda como siempre", async () => {
+    mockAuthSuccess()
+    mockSupabaseFrom({ inventario: createChainMock([{ id: "a", stock: 5 }]) })
+    const { body } = await parseResponse(await POST(req({ ids: ["a"] })))
+    expect(body).toEqual({ stock: { a: 5 } })
+  })
+
   it("scope=venta resuelve SIN cache: la revalidación previa al cobro no puede ir 30s atrasada", async () => {
     // Esta ruta corre una vez por checkout, no por tecla: el cache no le ahorra
     // nada y sí le puede mentir. Con el resolvedor cacheado, durante 30s después

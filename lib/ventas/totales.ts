@@ -101,9 +101,15 @@ export function esCobroEnEfectivo(pagos: PagoMonto[]): boolean {
   return pagos.length > 0 && pagos.every((p) => p.metodo === "EFECTIVO")
 }
 
-/** metodo_pago de la cabecera de la venta: el primer pago cobrado; sin pagos, EFECTIVO. */
-export function metodoPagoCabecera(pagos: PagoMonto[] | undefined | null): string {
-  return pagosCobrados(pagos)[0]?.metodo ?? "EFECTIVO"
+/**
+ * metodo_pago de la cabecera de la venta: el primer pago cobrado. Una venta
+ * fiada (a pagar después, sin cobro ahora) queda como CUENTA_CORRIENTE: antes
+ * quedaba "EFECTIVO" y así salía en el ticket y en los reportes por método.
+ */
+export function metodoPagoCabecera(pagos: PagoMonto[] | undefined | null, parcial = false): string {
+  const primero = pagosCobrados(pagos)[0]?.metodo
+  if (primero) return primero
+  return parcial ? "CUENTA_CORRIENTE" : "EFECTIVO"
 }
 
 /**
@@ -143,6 +149,8 @@ export function condicionDeCobro(
   recargos: Record<string, number>
 ): CondicionCobro {
   const base = pagosDeCondicion(pagos, metodoPago, parcial)
+  // Venta fiada: no se cobra nada ahora, va a precio de lista
+  if (base.length === 0) return { metodo: metodoPago, porcentaje: 0, factor: 1, efectivo: false }
   const metodo = metodoCondicion(base, metodoPago)
   return {
     metodo,
