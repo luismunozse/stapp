@@ -294,3 +294,24 @@ export function conciliarPagos<T extends PagoMonto>(
   }
   return { pagos, saldoPendiente: diferencia }
 }
+
+/**
+ * Descuento global de una venta guardada. venta.descuento es el TOTAL de
+ * descuentos (líneas + global): el global en monto es lo que queda después de
+ * restar los descuentos por línea. Pasarlo entero como global (lo que hacía la
+ * edición) descontaba dos veces los de línea.
+ */
+export function descuentoGlobalDeVenta(venta: {
+  descuento: number
+  tipoDescuento?: TipoDescuento | null
+  porcentajeDescuento?: number | null
+  items: LineaVenta[]
+}): DescuentoConfig | null {
+  if (venta.tipoDescuento === "PORCENTAJE") {
+    const pct = venta.porcentajeDescuento || 0
+    return pct > 0 ? { tipo: "PORCENTAJE", valor: pct } : null
+  }
+  const deLineas = calcularTotalesVenta(venta.items).descuentoItems
+  const global = Math.max(round2((venta.descuento || 0) - deLineas), 0)
+  return global > 0 ? { tipo: "MONTO", valor: global } : null
+}

@@ -41,6 +41,7 @@ import { DevolucionForm } from "@/components/ventas/devolucion-form"
 import { PagosHistorial } from "@/components/facturacion/pagos-historial"
 import { VentaPagoForm } from "@/components/ventas/venta-pago-form"
 import type { MetodoPagoVenta } from "@/lib/notifications/types"
+import { descuentoGlobalDeVenta, esCobroEnEfectivo } from "@/lib/ventas/totales"
 
 interface VentaItem {
   id: string
@@ -113,6 +114,8 @@ interface VentaDetail {
   garantias: Garantia[]
   subtotal: number
   descuento: number
+  tipoDescuento?: "MONTO" | "PORCENTAJE"
+  porcentajeDescuento?: number
   total: number
   montoAbonado: number
   estadoPago: string
@@ -359,13 +362,15 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                 {generandoFactura ? "Generando..." : "Generar remito"}
               </Button>
             )}
-            <Button
-              variant="outline"
-              onClick={() => setShowEditModal(true)}
-            >
-              <Pencil className="mr-2 h-4 w-4" />
-              Editar
-            </Button>
+            {isAdmin && (
+              <Button
+                variant="outline"
+                onClick={() => setShowEditModal(true)}
+              >
+                <Pencil className="mr-2 h-4 w-4" />
+                Editar
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() => setShowDevolucionModal(true)}
@@ -407,9 +412,14 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
               tipoDescuento: item.tipoDescuento,
               porcentajeDescuento: item.porcentajeDescuento,
             })),
-            descuento: venta.descuento,
-            metodoPago: venta.metodoPago,
+            // venta.descuento es el total de descuentos (líneas + global):
+            // el formulario recibe solo el global para no descontar dos veces.
+            descuentoGlobal: descuentoGlobalDeVenta(venta),
             observaciones: venta.observaciones,
+            montoAbonado: venta.montoAbonado || 0,
+            cobroEnEfectivo: esCobroEnEfectivo(
+              venta.pagos.map((p) => ({ metodo: p.metodoPago, monto: p.monto }))
+            ),
           }}
           onSuccess={() => {
             fetchVenta()

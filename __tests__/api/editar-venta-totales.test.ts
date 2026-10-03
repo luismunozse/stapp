@@ -447,7 +447,7 @@ describe("Bug 2 — IVA snapshot recomputed after edit", () => {
     expect(capturedUpdatePayload.iva_regimen).toBe("INCLUIDO")
   })
 
-  it("IVA snapshot UPDATE error → returns 500", async () => {
+  it("IVA snapshot UPDATE error → la edición ya pasó: 200 con advertencia (antes 500)", async () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
 
@@ -494,8 +494,11 @@ describe("Bug 2 — IVA snapshot recomputed after edit", () => {
       ],
     })
     const res = await PUT(req, ctx)
-    const { status } = await parseResponse(res)
-    expect(status).toBe(500)
+    const { status, body } = await parseResponse(res)
+    // editar_venta_atomica ya commiteó: un 500 hacía creer que la edición
+    // había fallado y el reintento editaba de nuevo.
+    expect(status).toBe(200)
+    expect(body.advertencia).toMatch(/no se pudieron guardar/)
   })
 })
 

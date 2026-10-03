@@ -3,6 +3,7 @@ import {
   calcularTotalesVenta,
   condicionDeCobro,
   conciliarPagos,
+  descuentoGlobalDeVenta,
   lineaConRecargo,
   metodoPagoCabecera,
 } from "@/lib/ventas/totales"
@@ -197,5 +198,33 @@ describe("conciliarPagos", () => {
   it("sin pagos: la fiada deja todo pendiente; el camino viejo es pago total", () => {
     expect(conciliarPagos([], 250, true).saldoPendiente).toBe(250)
     expect(conciliarPagos([], 250, false).saldoPendiente).toBe(0)
+  })
+})
+
+describe("descuentoGlobalDeVenta", () => {
+  it("el global en monto es el total de descuentos menos los de línea", () => {
+    expect(
+      descuentoGlobalDeVenta({
+        descuento: 130,
+        tipoDescuento: "MONTO",
+        items: [{ cantidad: 1, precioUnitario: 1000, tipoDescuento: "MONTO", descuento: 100 }],
+      })
+    ).toEqual({ tipo: "MONTO", valor: 30 })
+  })
+
+  it("sin global devuelve null aunque haya descuentos por línea", () => {
+    expect(
+      descuentoGlobalDeVenta({
+        descuento: 100,
+        tipoDescuento: "MONTO",
+        items: [{ cantidad: 1, precioUnitario: 1000, tipoDescuento: "PORCENTAJE", porcentajeDescuento: 10 }],
+      })
+    ).toBeNull()
+  })
+
+  it("el porcentual se toma del porcentaje guardado", () => {
+    expect(
+      descuentoGlobalDeVenta({ descuento: 50, tipoDescuento: "PORCENTAJE", porcentajeDescuento: 5, items: [] })
+    ).toEqual({ tipo: "PORCENTAJE", valor: 5 })
   })
 })
