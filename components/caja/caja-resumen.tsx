@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -18,7 +19,10 @@ import {
   TrendingUp,
   TrendingDown,
   Receipt,
+  Pencil,
 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { CambiarMetodoDialog, type MovimientoEditable } from "@/components/caja/cambiar-metodo-dialog"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { useCurrency } from "@/contexts/currency-context"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -69,6 +73,9 @@ interface CajaResumenProps {
   filtroTipo: string
   onFiltroMetodoChange: (v: string) => void
   onFiltroTipoChange: (v: string) => void
+  /** Habilita corregir el método de pago de cada movimiento. */
+  puedeEditar?: boolean
+  onMovimientoActualizado?: () => void
 }
 
 export function CajaResumen({
@@ -77,8 +84,11 @@ export function CajaResumen({
   filtroTipo,
   onFiltroMetodoChange,
   onFiltroTipoChange,
+  puedeEditar = false,
+  onMovimientoActualizado,
 }: CajaResumenProps) {
   const { formatPrice, timezone } = useCurrency()
+  const [editando, setEditando] = useState<MovimientoEditable | null>(null)
 
   if (!data) return null
 
@@ -273,7 +283,7 @@ export function CajaResumen({
                   : (mov.referencia || tipoInfo.label)
 
                 return (
-                  <div key={i} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div key={mov.id ? `${mov.fuente}-${mov.id}` : i} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                     <div className="flex items-start gap-2">
                       <Icon className={`h-4 w-4 mt-0.5 ${tipoInfo.color}`} />
                       <div className="space-y-0.5">
@@ -297,16 +307,38 @@ export function CajaResumen({
                         )}
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className={`text-sm font-bold ${mov.esEgreso ? "text-destructive" : "text-success-600"}`}>
-                        {mov.esEgreso ? "-" : "+"}
-                        {formatPrice(mov.monto)}
-                      </div>
-                      {mov.costoFinancieroMonto > 0 && (
-                        <div className="text-xs text-destructive">
-                          Terminal: -{formatPrice(mov.costoFinancieroMonto)}
-                          <span className="text-muted-foreground ml-1">({mov.costoFinancieroPorcentaje}%)</span>
+                    <div className="flex items-center gap-1">
+                      <div className="text-right">
+                        <div className={`text-sm font-bold ${mov.esEgreso ? "text-destructive" : "text-success-600"}`}>
+                          {mov.esEgreso ? "-" : "+"}
+                          {formatPrice(mov.monto)}
                         </div>
+                        {mov.costoFinancieroMonto > 0 && (
+                          <div className="text-xs text-destructive">
+                            Terminal: -{formatPrice(mov.costoFinancieroMonto)}
+                            <span className="text-muted-foreground ml-1">({mov.costoFinancieroPorcentaje}%)</span>
+                          </div>
+                        )}
+                      </div>
+                      {puedeEditar && mov.id && mov.metodoPago !== "CUENTA_CORRIENTE" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground"
+                          title="Cambiar método de pago"
+                          aria-label="Cambiar método de pago"
+                          onClick={() =>
+                            setEditando({
+                              id: mov.id,
+                              fuente: mov.fuente,
+                              metodoPago: mov.metodoPago,
+                              monto: mov.monto,
+                              descripcion: displayName,
+                            })
+                          }
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -316,6 +348,12 @@ export function CajaResumen({
           )}
         </CardContent>
       </Card>
+
+      <CambiarMetodoDialog
+        movimiento={editando}
+        onOpenChange={(open) => !open && setEditando(null)}
+        onSuccess={() => onMovimientoActualizado?.()}
+      />
     </div>
   )
 }

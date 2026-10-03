@@ -43,7 +43,18 @@ export async function registrarEgresoCajaEfectivo(opts: {
   if (error) console.error("Error registrando egreso de caja (efectivo):", error)
 }
 
+/** Tabla de la que sale cada movimiento unificado de la caja. */
+export type FuenteMovimiento =
+  | "cobros_orden"
+  | "pagos_parciales"
+  | "pagos_venta"
+  | "cuenta_corriente"
+  | "movimientos_caja"
+
 export interface MovimientoUnificado {
+  /** id de la fila en `fuente`: permite corregir el registro original. */
+  id: string
+  fuente: FuenteMovimiento
   tipo: string
   monto: number
   metodoPago: string
@@ -101,7 +112,7 @@ export async function fetchMovimientosDia(
   // 1. Cobros de órdenes (excluir anulados — no representan ingreso real)
   let cobrosQuery = supabaseAdmin
     .from("cobros_orden")
-    .select("monto, metodo_pago, created_at, orden_id, observaciones, ordenes_servicio:orden_id!inner(numero_orden, sucursal_id)")
+    .select("id, monto, metodo_pago, created_at, orden_id, observaciones, ordenes_servicio:orden_id!inner(numero_orden, sucursal_id)")
     .eq("organization_id", organizationId)
     .eq("anulado", false)
     .gte("created_at", fechaDesde)
@@ -117,7 +128,7 @@ export async function fetchMovimientosDia(
   let pagosFacturasQuery = supabaseAdmin
     .from("pagos_parciales")
     .select(`
-      monto, metodo_pago, fecha, factura_id, observaciones,
+      id, monto, metodo_pago, fecha, factura_id, observaciones,
       costo_financiero_porcentaje, costo_financiero_monto,
       facturas!inner(
         id, numero_factura, estado_pago,
@@ -140,7 +151,7 @@ export async function fetchMovimientosDia(
   let pagosVentasQuery = supabaseAdmin
     .from("pagos_venta")
     .select(`
-      monto, metodo_pago, fecha, venta_id, observaciones,
+      id, monto, metodo_pago, fecha, venta_id, observaciones,
       costo_financiero_porcentaje, costo_financiero_monto,
       ventas!inner(organization_id, numero_venta, estado, sucursal_id)
     `)
@@ -160,7 +171,7 @@ export async function fetchMovimientosDia(
   // incluyen todos los depósitos de la org, como antes.
   let depositosQuery = supabaseAdmin
     .from("cuenta_corriente")
-    .select("monto, metodo_pago, created_at, observaciones, cliente_id")
+    .select("id, monto, metodo_pago, created_at, observaciones, cliente_id")
     .eq("organization_id", organizationId)
     .eq("tipo", "DEPOSITO")
     .gte("created_at", fechaDesde)
@@ -190,6 +201,8 @@ export async function fetchMovimientosDia(
   for (const c of cobrosOrdenes || []) {
     const ordenNum = (c as any).ordenes_servicio?.numero_orden
     movimientos.push({
+      id: c.id,
+      fuente: "cobros_orden",
       tipo: "COBRO_ORDEN",
       monto: parseFloat(c.monto),
       metodoPago: c.metodo_pago,
@@ -206,6 +219,8 @@ export async function fetchMovimientosDia(
     const numFactura = factura?.numero_factura
     const numOrden = factura?.ordenes_servicio?.numero_orden
     movimientos.push({
+      id: p.id,
+      fuente: "pagos_parciales",
       tipo: "PAGO_FACTURA",
       monto: parseFloat(p.monto),
       metodoPago: p.metodo_pago,
@@ -222,6 +237,8 @@ export async function fetchMovimientosDia(
   for (const p of pagosVentas || []) {
     const numVenta = (p as any).ventas?.numero_venta
     movimientos.push({
+      id: p.id,
+      fuente: "pagos_venta",
       tipo: "PAGO_VENTA",
       monto: parseFloat(p.monto),
       metodoPago: p.metodo_pago,
@@ -237,6 +254,8 @@ export async function fetchMovimientosDia(
 
   for (const d of depositosData || []) {
     movimientos.push({
+      id: d.id,
+      fuente: "cuenta_corriente",
       tipo: "DEPOSITO_CUENTA",
       monto: parseFloat(d.monto),
       metodoPago: d.metodo_pago,
@@ -251,6 +270,8 @@ export async function fetchMovimientosDia(
     // El egreso automático de COGS no es efectivo real: se excluye del arqueo.
     if (esMovimientoCogsAutomatico(m)) continue
     movimientos.push({
+      id: m.id,
+      fuente: "movimientos_caja",
       tipo: m.tipo === "INGRESO" ? "INGRESO_MANUAL" : "EGRESO_MANUAL",
       monto: parseFloat(m.monto),
       metodoPago: m.metodo_pago,
