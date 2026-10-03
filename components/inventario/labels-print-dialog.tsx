@@ -41,6 +41,24 @@ import {
   type LabelContentOptions,
   type OutputFormat,
 } from "@/lib/labels/label-content"
+import {
+  barcodeBoxMm,
+  buildLabelsHtml,
+  DIE_CUT_SIZES,
+  LABEL_SIZE_CONFIG,
+  THERMAL_SIZES,
+  type BuiltLabel,
+  type LabelSizeKey,
+  type PrintMedium,
+} from "@/lib/labels/build-labels-html"
+import {
+  DEFAULT_MEDIUM,
+  DEFAULT_SIZE,
+  readLabelPrefs,
+  saveLabelPrefs,
+  type LabelPrefs,
+} from "@/lib/labels/label-prefs"
+import { printHtmlViaIframe } from "@/lib/print/print-html-iframe"
 
 interface ApiLabelTemplate {
   id: string
@@ -69,15 +87,6 @@ interface Props {
   items: LabelItem[]
 }
 
-type LabelSize = "50x30" | "40x25" | "38x25" | "60x40"
-
-const LABEL_SIZES: Record<LabelSize, { label: string; widthMm: number; heightMm: number }> = {
-  "40x25": { label: "40 × 25 mm", widthMm: 40, heightMm: 25 },
-  "38x25": { label: "38 × 25 mm", widthMm: 38, heightMm: 25 },
-  "50x30": { label: "50 × 30 mm", widthMm: 50, heightMm: 30 },
-  "60x40": { label: "60 × 40 mm", widthMm: 60, heightMm: 40 },
-}
-
 const FORMAT_LABELS: Record<BarcodeFormat, string> = {
   AUTO: "Auto-detectar",
   CODE128: "CODE128 (alfanumérico)",
@@ -97,6 +106,7 @@ function generateBarcodeSVG(
   widthMm: number,
   heightMm: number,
   format: BarcodeFormat,
+  box?: { widthMm: number; heightMm: number },
 ): BarcodeResult {
   if (typeof document === "undefined") return { svg: "", error: "SSR sin document" }
 
@@ -122,19 +132,33 @@ function generateBarcodeSVG(
   }
 
   try {
-    const svgNode = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+    let svgNode = document.createElementNS("http://www.w3.org/2000/svg", "svg")
     let jsbErr: string | undefined
-    JsBarcode(svgNode, value, {
-      format: resolved,
-      displayValue: false,
-      margin: 0,
-      height: Math.max(30, heightMm * 2),
-      width: Math.max(1, Math.round(widthMm / 40)),
-      valid: (isValid: boolean) => {
-        if (!isValid) jsbErr = `JsBarcode rechazó ${resolved}: "${value}" (checksum o formato inválido)`
-      },
-    })
+    const render = (node: SVGSVGElement, barHeight: number) =>
+      JsBarcode(node, value, {
+        format: resolved,
+        displayValue: false,
+        margin: 0,
+        height: barHeight,
+        width: Math.max(1, Math.round(widthMm / 40)),
+        valid: (isValid: boolean) => {
+          if (!isValid) jsbErr = `JsBarcode rechazó ${resolved}: "${value}" (checksum o formato inválido)`
+        },
+      })
+    render(svgNode, Math.max(30, heightMm * 2))
     if (jsbErr) return { svg: "", error: jsbErr, resolvedFormat: resolved }
+    if (box && box.widthMm > 0) {
+      // El SVG se escala dentro de la caja del código con su relación de
+      // aspecto: si no coincide con la de la caja las barras quedan achicadas.
+      // Con el ancho natural de las barras calculamos el alto que iguala el
+      // aspecto de la caja y re-renderizamos.
+      const naturalWidth = parseFloat(svgNode.getAttribute("width") || "")
+      if (Number.isFinite(naturalWidth) && naturalWidth > 0) {
+        const fitted = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+        render(fitted, Math.max(10, Math.round((naturalWidth * box.heightMm) / box.widthMm)))
+        if (!jsbErr && fitted.hasChildNodes()) svgNode = fitted
+      }
+    }
     if (!svgNode.hasChildNodes()) {
       return { svg: "", error: `JsBarcode no generó nodos para ${resolved}: "${value}"`, resolvedFormat: resolved }
     }
@@ -151,7 +175,10 @@ function generateBarcodeSVG(
 export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
   const { formatPrice } = useCurrency()
   const [outputFormat, setOutputFormat] = useState<OutputFormat>("PDF")
-  const [size, setSize] = useState<LabelSize>("50x30")
+  const [medium, setMedium] = useState<PrintMedium>(DEFAULT_MEDIUM)
+  const [thermalSize, setThermalSize] = useState<LabelSizeKey>(DEFAULT_SIZE)
+  const [sheetSize, setSheetSize] = useState<LabelSizeKey>(DEFAULT_SIZE)
+  const [printError, setPrintError] = useState("")
   const [format, setFormat] = useState<BarcodeFormat>("AUTO")
   const [showBarcode, setShowBarcode] = useState(true)
   const [showName, setShowName] = useState(true)
@@ -171,7 +198,25 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
     setHasWebUsb(typeof navigator !== "undefined" && !!(navigator as any).usb)
   }, [])
 
-  const sizeConfig = LABEL_SIZES[size]
+  // Medio y tamaño recordados (se leen una sola vez, después de montar).
+  useEffect(() => {
+    const prefs = readLabelPrefs()
+    if (!prefs) return
+    setMedium(prefs.medium)
+    setThermalSize(prefs.thermalSize)
+    setSheetSize(prefs.sheetSize)
+  }, [])
+
+  const updatePrefs = (next: Partial<LabelPrefs>) => {
+    const merged = { medium, thermalSize, sheetSize, ...next }
+    if (next.medium) setMedium(next.medium)
+    if (next.thermalSize) setThermalSize(next.thermalSize)
+    if (next.sheetSize) setSheetSize(next.sheetSize)
+    saveLabelPrefs(merged)
+  }
+
+  const size: LabelSizeKey = medium === "thermal" ? thermalSize : sheetSize
+  const sizeConfig = LABEL_SIZE_CONFIG[size]
 
   const contentOpts = useMemo<LabelContentOptions>(
     () => ({ outputFormat, barcodeFormat: format, showBarcode, showName, showCode, showPrice }),
@@ -201,8 +246,8 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
     setQuantities((prev) => ({ ...prev, [id]: isNaN(n) || n < 0 ? 0 : Math.min(n, 999) }))
   }
 
-  const handlePrint = useCallback(() => {
-    const labelsHTML: string[] = []
+  const handlePrint = useCallback(async () => {
+    const built: BuiltLabel[] = []
     const noBarcode: string[] = []
     for (const item of items) {
       const qty = effectiveQty[item.id] || 0
@@ -212,7 +257,14 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
       const code = content.code
       let barcodeSvg = ""
       if (content.barcode) {
-        const result = generateBarcodeSVG(code, sizeConfig.widthMm, sizeConfig.heightMm, format)
+        // En térmica ajustamos el SVG al aspecto de su caja; la hoja queda como estaba.
+        const result = generateBarcodeSVG(
+          code,
+          sizeConfig.widthMm,
+          sizeConfig.heightMm,
+          format,
+          medium === "thermal" ? barcodeBoxMm(size) : undefined,
+        )
         if (result.svg) {
           barcodeSvg = result.svg
         } else {
@@ -223,92 +275,39 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
           noBarcode.push(`${item.nombre} (${code})`)
         }
       }
-      const withBarcode = !!barcodeSvg
 
-      const labelHTML = `
-        <div class="label${withBarcode ? "" : " label--price"}">
-          ${content.showName ? `<div class="name">${escapeHtml(item.nombre)}</div>` : ""}
-          ${withBarcode ? `<div class="barcode">${barcodeSvg}</div>` : ""}
-          ${content.showCodeText ? `<div class="code">${escapeHtml(code)}</div>` : ""}
-          ${content.showPrice ? `<div class="price">${formatPrice(item.precioVenta)}</div>` : ""}
-        </div>
-      `
-      for (let i = 0; i < qty; i++) {
-        labelsHTML.push(labelHTML)
+      const label: BuiltLabel = {
+        name: content.showName ? item.nombre : undefined,
+        barcodeSvg: barcodeSvg || undefined,
+        code: content.showCodeText ? code : undefined,
+        price: content.showPrice ? formatPrice(item.precioVenta) : undefined,
       }
+      for (let i = 0; i < qty; i++) built.push(label)
     }
 
     setNoBarcodeItems(noBarcode)
+    setPrintError("")
 
-    if (labelsHTML.length === 0) return
+    if (built.length === 0) return
 
-    const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Etiquetas</title>
-<style>
-  @page { size: auto; margin: 5mm; }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; }
-  .sheet {
-    display: flex; flex-wrap: wrap;
-    gap: 2mm;
-  }
-  .label {
-    width: ${sizeConfig.widthMm}mm;
-    height: ${sizeConfig.heightMm}mm;
-    padding: 1mm 1.5mm;
-    border: 1px dashed #ccc;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    overflow: hidden;
-    page-break-inside: avoid;
-    break-inside: avoid;
-  }
-  @media print { .label { border: none; } }
-  .name {
-    font-size: ${sizeConfig.widthMm >= 50 ? 9 : 7}pt;
-    font-weight: 600;
-    text-align: center;
-    width: 100%;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    line-height: 1.1;
-  }
-  .barcode { width: 100%; flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-  .barcode svg { width: 100%; height: 100%; max-height: 100%; }
-  .code {
-    font-size: ${sizeConfig.widthMm >= 50 ? 7 : 6}pt;
-    font-family: 'Courier New', monospace;
-    letter-spacing: 0.5px;
-    line-height: 1;
-  }
-  .label--price .name {
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    font-size: ${sizeConfig.widthMm >= 50 ? 10 : 8}pt;
-  }
-  .label--price .price {
-    font-size: ${sizeConfig.widthMm >= 50 ? 20 : 15}pt;
-    margin-top: 2px;
-  }
-  .price {
-    font-size: ${sizeConfig.widthMm >= 50 ? 11 : 9}pt;
-    font-weight: 700;
-    line-height: 1.1;
-    margin-top: 1px;
-  }
-</style></head><body>
-  <div class="sheet">${labelsHTML.join("")}</div>
-  <script>window.onload=function(){setTimeout(function(){window.print();},100);}<\/script>
-</body></html>`
+    const html = buildLabelsHtml(built, { medium, size })
+
+    if (medium === "thermal") {
+      // Iframe oculto + driver del SO, igual que las etiquetas de órdenes.
+      try {
+        await printHtmlViaIframe(html)
+      } catch (e) {
+        console.error("[labels-print] error al imprimir", e)
+        setPrintError("No se pudo abrir el diálogo de impresión. Probá de nuevo.")
+      }
+      return
+    }
 
     const w = window.open("", "_blank", "width=900,height=700")
     if (!w) return
     w.document.write(html)
     w.document.close()
-  }, [items, effectiveQty, sizeConfig, format, contentOpts, formatPrice])
+  }, [items, effectiveQty, sizeConfig, format, contentOpts, formatPrice, medium, size])
 
   // ============================================================
   // Térmico (ZPL/EPL): templates desde DB + generación raw + preview
@@ -540,15 +539,40 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
             <TabsContent value="PDF" className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label>Tamaño de etiqueta</Label>
-                  <Select value={size} onValueChange={(v) => setSize(v as LabelSize)}>
+                  <Label>Medio de impresión</Label>
+                  <Select
+                    value={medium}
+                    onValueChange={(v) => updatePrefs({ medium: v as PrintMedium })}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {Object.entries(LABEL_SIZES).map(([key, cfg]) => (
+                      <SelectItem value="thermal">Impresora térmica (etiqueta adhesiva)</SelectItem>
+                      <SelectItem value="sheet">Hoja A4 / planchas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Tamaño de etiqueta</Label>
+                  <Select
+                    value={size}
+                    onValueChange={(v) =>
+                      updatePrefs(
+                        medium === "thermal"
+                          ? { thermalSize: v as LabelSizeKey }
+                          : { sheetSize: v as LabelSizeKey },
+                      )
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(medium === "thermal" ? THERMAL_SIZES : DIE_CUT_SIZES).map((key) => (
                         <SelectItem key={key} value={key}>
-                          {cfg.label}
+                          {LABEL_SIZE_CONFIG[key].label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -593,6 +617,17 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
                   </div>
                 </div>
               </div>
+              {medium === "thermal" && (
+                <p className="text-xs text-muted-foreground">
+                  Configurá en el driver el mismo tamaño de etiqueta y márgenes en 0. Si sale
+                  corrida, revisá la calibración de la impresora.
+                </p>
+              )}
+              {printError && (
+                <div className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">
+                  {printError}
+                </div>
+              )}
               {noBarcodeItems.length > 0 && (
                 <div className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                   <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
@@ -681,7 +716,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Total: <strong>{totalLabels}</strong> etiqueta{totalLabels === 1 ? "" : "s"} — Se imprime en hoja común o rollo térmico. Usá el diálogo de impresión del navegador para elegir la impresora.
+            Total: <strong>{totalLabels}</strong> etiqueta{totalLabels === 1 ? "" : "s"}
           </p>
         </div>
 
@@ -823,13 +858,4 @@ function ThermalConfig({
       )}
     </div>
   )
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
 }
