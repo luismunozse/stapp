@@ -101,8 +101,9 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
     keepPreviousData: true,
   })
 
-  // Fetch org name for WhatsApp dialog
-  const { data: configData } = useSWR("/api/configuracion", fetcher, {
+  // Nombre de la org para el diálogo de WhatsApp. /api/configuracion es solo
+  // ADMIN: con otro rol el mensaje salía sin el nombre del negocio.
+  const { data: configData } = useSWR("/api/configuracion/operativa", fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 60000,
   })

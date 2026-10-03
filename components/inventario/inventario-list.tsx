@@ -213,9 +213,10 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     setSelectedKeys([])
   }, [debouncedSearch, categoria, tipoDispositivo, bajoStock, includeArchived, page])
 
-  // Fetch configurable stock threshold
+  // Umbral de stock bajo de la org. operativa y no /api/configuracion (solo
+  // ADMIN): con otro rol quedaba el umbral por defecto.
   useEffect(() => {
-    fetch("/api/configuracion", { cache: "no-store" })
+    fetch("/api/configuracion/operativa", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         if (data.umbralStockBajo != null) setUmbralStockBajo(data.umbralStockBajo)
