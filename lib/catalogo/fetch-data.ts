@@ -11,6 +11,7 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { SLUG_REGEX } from "@/lib/catalogo-validators"
 import { stockDisponibleCatalogo } from "./stock-disponible"
+import { normalizarWhatsAppCatalogo } from "./whatsapp"
 import type {
   CatalogoPublicData,
   CatalogoPublicItem,
@@ -38,7 +39,7 @@ export async function fetchCatalogoBaseData(slug: string): Promise<CatalogoPubli
   ] = await Promise.all([
     supabaseAdmin
       .from("organizations")
-      .select("id, nombre, nombre_mostrar, logo_url, telefono, moneda")
+      .select("id, nombre, nombre_mostrar, logo_url, telefono, moneda, pais")
       .eq("id", config.organization_id)
       .single(),
     supabaseAdmin
@@ -173,17 +174,20 @@ export async function fetchCatalogoBaseData(slug: string): Promise<CatalogoPubli
     }
   })
 
+  // `pais` solo sirve para normalizar el WhatsApp; no se expone al cliente.
+  const { pais: _pais, ...orgPublica } = org ?? ({} as NonNullable<typeof org>)
+
   return {
     config: {
       slug: config.slug,
       titulo: config.titulo,
       descripcion: config.descripcion,
       color_primary: config.color_primary || "#2563eb",
-      whatsapp: config.whatsapp,
+      whatsapp: normalizarWhatsAppCatalogo(config.whatsapp, org?.pais),
       banner_url: config.banner_url,
       trust_badges: Array.isArray(config.trust_badges) ? config.trust_badges : [],
     },
-    organizacion: org!,
+    organizacion: orgPublica!,
     categorias: (categorias ?? []) as any,
     items,
   }

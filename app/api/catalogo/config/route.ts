@@ -3,6 +3,7 @@ import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { normalizarWhatsAppCatalogo } from "@/lib/catalogo/whatsapp"
 
 const slugRegex = /^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/
 
@@ -108,6 +109,26 @@ export async function PUT(req: Request) {
   }
 
   const updates: Record<string, unknown> = { ...parsed.data }
+
+  // El WhatsApp se guarda normalizado (con código de país) para que el link
+  // wa.me del catálogo apunte a un número real.
+  if (parsed.data.whatsapp) {
+    const { data: org } = await supabaseAdmin
+      .from("organizations")
+      .select("pais")
+      .eq("id", organizationId!)
+      .single()
+    const normalizado = normalizarWhatsAppCatalogo(parsed.data.whatsapp, org?.pais as string | null | undefined)
+    if (!normalizado) {
+      return NextResponse.json(
+        { error: "El WhatsApp no es válido. Ingresalo con código de área, por ejemplo 11 1234-5678." },
+        { status: 400 }
+      )
+    }
+    updates.whatsapp = normalizado
+  } else if (parsed.data.whatsapp === "") {
+    updates.whatsapp = null
+  }
 
   if (parsed.data.slug) {
     const { data: clash } = await supabaseAdmin

@@ -17,6 +17,7 @@ import { toast } from "sonner"
 import { useCart } from "./use-cart"
 import { CartDrawer } from "./cart-drawer"
 import { VariantPicker, type Variante } from "./variant-picker"
+import { catalogoWhatsAppUrl } from "@/lib/catalogo/whatsapp"
 
 interface Item {
   id: string
@@ -82,11 +83,10 @@ export function CatalogoItemView({ data }: { data: Data }) {
   const sinPrecio = precioEfectivo == null
   const stockMax = stockEfectivo ?? Infinity
 
-  const whatsappLink = config.whatsapp
-    ? `https://wa.me/${config.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
-        `Hola! Vi "${item.nombre}" en su catálogo. Quería consultar.`
-      )}`
-    : null
+  const whatsappLink = catalogoWhatsAppUrl(
+    config.whatsapp,
+    `Hola! Vi "${item.nombre}" en su catálogo. Quería consultar.`
+  )
 
   const handleAdd = () => {
     if (sinPrecio || agotado || debeElegirVariante) return

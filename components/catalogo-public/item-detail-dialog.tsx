@@ -14,6 +14,7 @@ import { useViewTracking } from "./use-view-tracking"
 import { useItemBundle } from "./use-item-bundle"
 import { CatalogoImagePlaceholder } from "./catalogo-image-placeholder"
 import { VariantPicker, type Variante } from "./variant-picker"
+import { catalogoWhatsAppUrl } from "@/lib/catalogo/whatsapp"
 
 interface Item {
   id: string
@@ -178,11 +179,10 @@ export function ItemDetailDialog({
 
   const shareWhatsAppUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`
 
-  const whatsappLink = whatsapp
-    ? `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
-        `Hola! Me interesa "${item.nombre}" ${precioTexto}. Link: ${itemUrl}`
-      )}`
-    : null
+  const whatsappLink = catalogoWhatsAppUrl(
+    whatsapp,
+    `Hola! Me interesa "${item.nombre}" ${precioTexto}. Link: ${itemUrl}`
+  )
 
   const onTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX

@@ -6,6 +6,7 @@ import { z } from "zod"
 import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { stockDisponibleCatalogo } from "@/lib/catalogo/stock-disponible"
+import { normalizarWhatsAppCatalogo, catalogoWhatsAppUrl } from "@/lib/catalogo/whatsapp"
 
 const cotizarSchema = z.object({
   cliente: z.object({
@@ -331,7 +332,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   // el cliente lo "envíe" desde su WhatsApp. Refuerza que el taller reciba la
   // solicitud en su canal habitual y abra contacto directo con el cliente.
   let whatsappTallerUrl: string | null = null
-  if (config.whatsapp) {
+  const { data: orgRow } = config.whatsapp
+    ? await supabaseAdmin
+        .from("organizations")
+        .select("plantillas_whatsapp, pais")
+        .eq("id", organizationId)
+        .maybeSingle()
+    : { data: null }
+  // Número crudo → con código de país. Si no es entregable no hay link: la
+  // cotización ya está guardada y el taller la ve en el panel.
+  const numeroTaller = normalizarWhatsAppCatalogo(config.whatsapp, orgRow?.pais as string | null | undefined)
+  if (numeroTaller) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || ""
     const linkPublico = appUrl
       ? `${appUrl}/cotizacion/${cotizacion.public_token}`
@@ -347,12 +358,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       ? `\nCupón: ${cuponCodigoAplicado} (− $${cuponDescuento.toLocaleString("es-AR")})`
       : ""
 
-    // Cargar plantillas custom de la org (override sobre defaultText del catálogo).
-    const { data: orgRow } = await supabaseAdmin
-      .from("organizations")
-      .select("plantillas_whatsapp")
-      .eq("id", organizationId)
-      .maybeSingle()
+    // Plantillas custom de la org (override sobre defaultText del catálogo).
     const orgPlantillas = (orgRow?.plantillas_whatsapp as Record<string, string> | null) ?? null
 
     const msg = resolvePlantilla(
@@ -369,8 +375,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       },
       orgPlantillas,
     )
-    const telLimpio = config.whatsapp.replace(/\D/g, "")
-    whatsappTallerUrl = `https://wa.me/${telLimpio}?text=${encodeURIComponent(msg)}`
+    whatsappTallerUrl = catalogoWhatsAppUrl(numeroTaller, msg)
   }
 
   return NextResponse.json({
