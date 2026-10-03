@@ -33,6 +33,107 @@ function isFunctionMissingError(err: unknown): boolean {
   )
 }
 
+// Texto que esta ruta escribe en las observaciones de la venta. Las ventas
+// convertidas antes de que existiera cotizaciones.venta_id solo se pueden
+// reconocer por esto.
+const PREFIJO_OBSERVACION = "Convertida desde "
+
+interface VentaDeCotizacion {
+  id: string
+  numero_venta: number
+  estado: string
+}
+
+function prefijoClave(cotizacionId: string): string {
+  return `cotizacion:${cotizacionId}`
+}
+
+function comoLista<T>(data: unknown): T[] {
+  return Array.isArray(data) ? (data as T[]) : []
+}
+
+/**
+ * Venta no anulada que ya salió de esta cotización, o null. Busca por
+ * cotizaciones.venta_id (lo escriben el RPC desde la migración 327 y esta ruta
+ * al convertir), por la clave de idempotencia, y por la observación para las
+ * conversiones anteriores a este control.
+ */
+async function ventaVigenteDeCotizacion(
+  organizationId: string,
+  cotizacion: { id: string; venta_id?: string | null; numero_cotizacion?: string | null }
+): Promise<VentaDeCotizacion | null> {
+  const candidatas: VentaDeCotizacion[] = []
+
+  if (cotizacion.venta_id) {
+    const { data } = await supabaseAdmin
+      .from("ventas")
+      .select("id, numero_venta, estado")
+      .eq("id", cotizacion.venta_id)
+      .eq("organization_id", organizationId)
+      .maybeSingle()
+    if (data && !Array.isArray(data)) candidatas.push(data as VentaDeCotizacion)
+  }
+
+  const { data: porClave } = await supabaseAdmin
+    .from("ventas")
+    .select("id, numero_venta, estado")
+    .eq("organization_id", organizationId)
+    .ilike("idempotency_key", `${prefijoClave(cotizacion.id)}%`)
+  candidatas.push(...comoLista<VentaDeCotizacion>(porClave))
+
+  if (cotizacion.numero_cotizacion) {
+    const prefijo = `${PREFIJO_OBSERVACION}${cotizacion.numero_cotizacion}`
+    const { data: porObservacion } = await supabaseAdmin
+      .from("ventas")
+      .select("id, numero_venta, estado, observaciones")
+      .eq("organization_id", organizationId)
+      .ilike("observaciones", `${prefijo}%`)
+    for (const v of comoLista<VentaDeCotizacion & { observaciones: string | null }>(porObservacion)) {
+      // ilike es por prefijo: COT-001 no tiene que matchear COT-0010.
+      const obs = v.observaciones || ""
+      if (obs === prefijo || obs.startsWith(`${prefijo}.`)) candidatas.push(v)
+    }
+  }
+
+  return candidatas.find((v) => v.estado !== "ANULADA") ?? null
+}
+
+/** Clave de idempotencia de la próxima conversión de esta cotización. */
+async function claveConversion(organizationId: string, cotizacionId: string): Promise<string> {
+  const { count } = await supabaseAdmin
+    .from("ventas")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .ilike("idempotency_key", `${prefijoClave(cotizacionId)}%`)
+  const previas = count ?? 0
+  return previas === 0 ? prefijoClave(cotizacionId) : `${prefijoClave(cotizacionId)}:${previas}`
+}
+
+function esConversionDuplicada(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false
+  const e = err as Record<string, unknown>
+  const code = String(e.code ?? "")
+  const texto = `${e.message ?? ""} ${e.details ?? ""}`.toLowerCase()
+  if (code === "P0020" || texto.includes("cotizacion_ya_convertida")) return true
+  return code === "23505" && texto.includes("idempotency")
+}
+
+/**
+ * Deja asentado de qué venta salió la cotización. Desde la migración 327 ya lo
+ * hace el RPC en la misma transacción; esto cubre la base sin esa migración.
+ */
+async function marcarCotizacionConvertida(organizationId: string, cotizacionId: string, ventaId: string) {
+  if (!ventaId) return
+  const { error } = await supabaseAdmin
+    .from("cotizaciones")
+    .update({ venta_id: ventaId })
+    .eq("id", cotizacionId)
+    .eq("organization_id", organizationId)
+  if (error) {
+    console.error("[convertir-venta] No se pudo registrar venta_id en la cotización:", error)
+  }
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -117,6 +218,23 @@ export async function POST(
       return NextResponse.json(
         { error: "Los presupuestos planos deben convertirse primero a orden de servicio" },
         { status: 400 }
+      )
+    }
+
+    // Una cotizacion ACEPTADA seguia ACEPTADA despues de convertirse, con el
+    // boton visible: un segundo click, otra pestaña o un reintento creaba otra
+    // venta que volvia a descontar stock, cargar la cuenta corriente y sumar
+    // comision. Si la venta anterior sigue vigente se corta aca; si se anulo,
+    // se permite volver a convertir (la anulacion repuso el stock).
+    const ventaPrevia = await ventaVigenteDeCotizacion(organizationId!, cotizacion)
+    if (ventaPrevia) {
+      return NextResponse.json(
+        {
+          error: `Esta cotización ya se convirtió en la venta #${ventaPrevia.numero_venta}`,
+          ventaId: ventaPrevia.id,
+          numeroVenta: ventaPrevia.numero_venta,
+        },
+        { status: 409 }
       )
     }
 
@@ -265,6 +383,11 @@ export async function POST(
       // en CUENTA_CORRIENTE nunca debitaba la cuenta del cliente. Con p_pagos, el
       // loop del RPC corre usar_cuenta_corriente para el pago en cuenta corriente.
       p_pagos: total > 0 ? [{ metodo: data.metodoPago, monto: total }] : null,
+      // Clave por cotizacion: el indice unico (organization_id, idempotency_key)
+      // de la migracion 200 rechaza una segunda venta para la misma cotizacion
+      // aunque dos requests lleguen a la vez. El sufijo cuenta las conversiones
+      // previas (ya anuladas) para permitir convertir de nuevo despues de anular.
+      p_idempotency_key: await claveConversion(organizationId!, id),
     }
 
     // --- Atomic RPC path (migration 246) ---
@@ -275,6 +398,7 @@ export async function POST(
 
     if (!rpcError) {
       const ventaId = rpcResult?.ventaId || rpcResult
+      await marcarCotizacionConvertida(organizationId!, id, ventaId)
 
       const { data: venta } = await supabaseAdmin
         .from("ventas")
@@ -285,6 +409,19 @@ export async function POST(
       return NextResponse.json(
         { ventaId, numeroVenta: venta?.numero_venta },
         { status: 201 }
+      )
+    }
+
+    if (esConversionDuplicada(rpcError)) {
+      const ventaExistente = await ventaVigenteDeCotizacion(organizationId!, cotizacion)
+      return NextResponse.json(
+        {
+          error: ventaExistente
+            ? `Esta cotización ya se convirtió en la venta #${ventaExistente.numero_venta}`
+            : "Esta cotización ya se está convirtiendo en venta. Actualizá la página.",
+          ...(ventaExistente && { ventaId: ventaExistente.id, numeroVenta: ventaExistente.numero_venta }),
+        },
+        { status: 409 }
       )
     }
 
@@ -309,6 +446,12 @@ export async function POST(
     )
 
     if (fallbackError) {
+      if (esConversionDuplicada(fallbackError)) {
+        return NextResponse.json(
+          { error: "Esta cotización ya se convirtió en venta. Actualizá la página." },
+          { status: 409 }
+        )
+      }
       console.error("Error en crear_venta_atomica:", fallbackError)
       return NextResponse.json(
         { error: fallbackError.message || "Error al crear venta" },
@@ -317,6 +460,7 @@ export async function POST(
     }
 
     const ventaId = fallbackResult?.ventaId || fallbackResult
+    await marcarCotizacionConvertida(organizationId!, id, ventaId)
 
     // Release reservations (best-effort in fallback — cannot be atomic here).
     //
