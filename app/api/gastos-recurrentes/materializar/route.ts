@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura } from "@/lib/sucursal"
+import { esErrorColumnaOrigen, sinOrigen } from "@/lib/caja-utils"
 
 /**
  * Materializa todos los gastos recurrentes vencidos (proximo_vencimiento <= hoy)
@@ -79,26 +80,36 @@ export async function POST() {
         : true
 
       // 1. Insertar movimiento
-      const { data: mov, error: insertError } = await supabaseAdmin
+      const payload = {
+        organization_id: organizationId!,
+        sesion_caja_id: sesionAbierta?.id || null,
+        tipo: "EGRESO",
+        monto: g.monto,
+        metodo_pago: g.metodo_pago,
+        concepto: g.concepto,
+        observaciones: `Generado automáticamente desde gasto recurrente${
+          g.observaciones ? ` · ${g.observaciones}` : ""
+        }`,
+        usuario_id: userId!,
+        categoria_gasto_id: g.categoria_gasto_id,
+        afecta_rentabilidad: afectaRent,
+        es_recurrente: true,
+        origen: "RECURRENTE",
+        sucursal_id: sucursalId,
+      }
+      let { data: mov, error: insertError } = await supabaseAdmin
         .from("movimientos_caja")
-        .insert({
-          organization_id: organizationId!,
-          sesion_caja_id: sesionAbierta?.id || null,
-          tipo: "EGRESO",
-          monto: g.monto,
-          metodo_pago: g.metodo_pago,
-          concepto: g.concepto,
-          observaciones: `Generado automáticamente desde gasto recurrente${
-            g.observaciones ? ` · ${g.observaciones}` : ""
-          }`,
-          usuario_id: userId!,
-          categoria_gasto_id: g.categoria_gasto_id,
-          afecta_rentabilidad: afectaRent,
-          es_recurrente: true,
-          sucursal_id: sucursalId,
-        })
+        .insert(payload)
         .select("id")
         .single()
+      // Mig 335 sin aplicar: reintentar sin la columna para no perder el gasto.
+      if (insertError && esErrorColumnaOrigen(insertError)) {
+        ;({ data: mov, error: insertError } = await supabaseAdmin
+          .from("movimientos_caja")
+          .insert(sinOrigen(payload))
+          .select("id")
+          .single())
+      }
 
       if (insertError || !mov) {
         console.error("Error insertando movimiento recurrente:", insertError)

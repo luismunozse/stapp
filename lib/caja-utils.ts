@@ -1,4 +1,82 @@
 import { supabaseAdmin } from "@/lib/supabase"
+import { isMissingColumnError } from "@/lib/db-errors"
+
+/**
+ * Quien escribio una fila de movimientos_caja (columna `origen`, mig 335).
+ * MANUAL = el usuario desde caja; el resto son filas automaticas.
+ */
+export type OrigenMovimientoCaja =
+  | "MANUAL"
+  | "DEVOLUCION"
+  | "NOTA_CREDITO"
+  | "RECURRENTE"
+  | "COGS"
+
+/**
+ * Origenes que NO se pueden borrar desde caja: borrar el egreso de una
+ * devolucion / nota de credito deja el reembolso registrado pero saca la salida
+ * de efectivo, y el arqueo muestra un sobrante fantasma. RECURRENTE queda
+ * fuera a proposito: cancelar un gasto materializado no desincroniza nada.
+ */
+export const ORIGENES_NO_ELIMINABLES: readonly OrigenMovimientoCaja[] = [
+  "DEVOLUCION",
+  "NOTA_CREDITO",
+  "COGS",
+]
+
+export function esOrigenNoEliminable(origen: string | null | undefined): boolean {
+  return ORIGENES_NO_ELIMINABLES.includes(origen as OrigenMovimientoCaja)
+}
+
+/**
+ * true si el error de PostgREST/Postgres es "falta la columna origen": la
+ * migracion 335 todavia no se aplico. Solo ese caso justifica reintentar sin
+ * la columna; cualquier otro error es real.
+ */
+export function esErrorColumnaOrigen(error: unknown): boolean {
+  if (!isMissingColumnError(error)) return false
+  const msg = String((error as { message?: unknown }).message ?? "").toLowerCase()
+  return msg.includes("origen")
+}
+
+/** Copia del payload sin la columna `origen` (fallback pre-migracion 335). */
+export function sinOrigen<T extends { origen?: unknown }>(payload: T): Omit<T, "origen"> {
+  const { origen: _origen, ...resto } = payload
+  return resto
+}
+
+/**
+ * Deduce el origen de una fila a partir de su concepto. Es el respaldo para
+ * cuando la columna `origen` no existe (mig 335 sin aplicar). Debe coincidir
+ * con el backfill de la migracion: un "Retiro de socio" tambien tiene
+ * afecta_rentabilidad=false y sigue siendo MANUAL.
+ */
+export function origenPorConcepto(row: {
+  tipo?: string | null
+  afecta_rentabilidad?: boolean | null
+  es_recurrente?: boolean | null
+  concepto?: string | null
+}): OrigenMovimientoCaja {
+  if (row.es_recurrente === true) return "RECURRENTE"
+  if (row.tipo !== "EGRESO" || row.afecta_rentabilidad !== false) return "MANUAL"
+  const concepto = typeof row.concepto === "string" ? row.concepto.trim() : ""
+  if (/^devoluci[oó]n\s/i.test(concepto)) return "DEVOLUCION"
+  if (/^nota de cr[eé]dito\s/i.test(concepto)) return "NOTA_CREDITO"
+  if (/^costo de mercader/i.test(concepto)) return "COGS"
+  return "MANUAL"
+}
+
+/** Origen de la fila: la columna si existe, si no el deducido por concepto. */
+export function resolverOrigen(row: {
+  origen?: string | null
+  tipo?: string | null
+  afecta_rentabilidad?: boolean | null
+  es_recurrente?: boolean | null
+  concepto?: string | null
+}): OrigenMovimientoCaja {
+  if (typeof row.origen === "string" && row.origen) return row.origen as OrigenMovimientoCaja
+  return origenPorConcepto(row)
+}
 
 /**
  * Registra un EGRESO de caja por un reembolso en EFECTIVO (devolución de venta o
@@ -17,6 +95,8 @@ export async function registrarEgresoCajaEfectivo(opts: {
   metodoPago?: string | null
   concepto: string
   observaciones?: string
+  /** Obligatorio: es lo que impide borrar este egreso desde caja. */
+  origen: "DEVOLUCION" | "NOTA_CREDITO"
 }): Promise<void> {
   if (opts.metodoPago !== "EFECTIVO" || !opts.monto || opts.monto <= 0) return
 
@@ -28,7 +108,7 @@ export async function registrarEgresoCajaEfectivo(opts: {
   if (opts.sucursalId) sesionQuery = sesionQuery.eq("sucursal_id", opts.sucursalId)
   const { data: sesion } = await sesionQuery.maybeSingle()
 
-  const { error } = await supabaseAdmin.from("movimientos_caja").insert({
+  const payload = {
     organization_id: opts.organizationId,
     sesion_caja_id: sesion?.id || null,
     tipo: "EGRESO",
@@ -39,7 +119,14 @@ export async function registrarEgresoCajaEfectivo(opts: {
     usuario_id: opts.userId,
     afecta_rentabilidad: false,
     sucursal_id: opts.sucursalId,
-  })
+    origen: opts.origen,
+  }
+  let { error } = await supabaseAdmin.from("movimientos_caja").insert(payload)
+  // Mig 335 sin aplicar: PostgREST rechaza el payload entero (PGRST204) y, como
+  // esto es best-effort, el egreso del reembolso se perderia en silencio.
+  if (error && esErrorColumnaOrigen(error)) {
+    ;({ error } = await supabaseAdmin.from("movimientos_caja").insert(sinOrigen(payload)))
+  }
   if (error) console.error("Error registrando egreso de caja (efectivo):", error)
 }
 
