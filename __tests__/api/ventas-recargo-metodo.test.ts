@@ -49,6 +49,8 @@ function buildTableMocks() {
     sucursales: sucursalesChain,
     depositos: depositosChain,
     ventas: ventasChain,
+    // el cliente de la venta es de la organización
+    clientes: createChainMock({ id: "c1" }),
   })
 }
 
@@ -266,6 +268,7 @@ describe("POST /api/ventas — mismo total que el POS", () => {
       organizations: createChainMock({ iva_regimen: "EXENTO", redondeo_efectivo: 50 }),
       sucursales: createChainMock({ id: "suc-principal" }),
       ventas: createChainMock({ id: "v1", numero_venta: 1, total: 121 }),
+      clientes: createChainMock({ id: "c1" }),
     })
 
     const res = await POST(
@@ -286,5 +289,64 @@ describe("POST /api/ventas — mismo total que el POS", () => {
     const [, params] = vi.mocked(supabaseAdmin.rpc).mock.calls[0]
     expect(params.p_total).toBe(121)
     expect(params.p_pagos).toEqual([])
+  })
+
+  it("rechaza un cliente de otra organización", async () => {
+    vi.mocked(getRecargosMetodo).mockResolvedValueOnce({})
+    mockSupabaseFrom({
+      organizations: createChainMock({ iva_regimen: "EXENTO" }),
+      ventas: createChainMock({ id: "v1" }),
+      clientes: createChainMock(null),
+    })
+
+    const res = await POST(
+      createPostRequest(
+        { clienteId: "c-ajeno", clienteNombre: "X", items: [item(100)], metodoPago: "EFECTIVO", pagosParcial: true },
+        "http://localhost/api/ventas"
+      )
+    )
+    const { status, body } = await parseResponse(res)
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/Cliente no encontrado/)
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it("saldo a favor sin cliente: 400 sin llamar al RPC", async () => {
+    vi.mocked(getRecargosMetodo).mockResolvedValueOnce({})
+    const res = await POST(
+      createPostRequest(
+        { clienteNombre: "CF", items: [item(100)], metodoPago: "CUENTA_CORRIENTE", pagos: [{ metodo: "CUENTA_CORRIENTE", monto: 100 }] },
+        "http://localhost/api/ventas"
+      )
+    )
+    const { status, body } = await parseResponse(res)
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/saldo a favor/)
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it("camino viejo con saldo a favor: lo manda como pago para que se descuente de la cuenta", async () => {
+    vi.mocked(getRecargosMetodo).mockResolvedValueOnce({})
+    const res = await POST(
+      createPostRequest(
+        { clienteId: "c1", clienteNombre: "Juan", items: [item(100)], metodoPago: "CUENTA_CORRIENTE" },
+        "http://localhost/api/ventas"
+      )
+    )
+    expect((await parseResponse(res)).status).toBe(201)
+    const [, params] = vi.mocked(supabaseAdmin.rpc).mock.calls[0]
+    expect(params.p_pagos).toEqual([{ metodo: "CUENTA_CORRIENTE", monto: 100 }])
+  })
+
+  it("un método de pago inexistente es 400 de validación", async () => {
+    const res = await POST(
+      createPostRequest(
+        { clienteNombre: "CF", items: [item(100)], metodoPago: "EFECTIVO", pagos: [{ metodo: "BITCOIN", monto: 100 }] },
+        "http://localhost/api/ventas"
+      )
+    )
+    const { status, body } = await parseResponse(res)
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/pagos\.0\.metodo/)
   })
 })

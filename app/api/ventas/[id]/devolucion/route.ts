@@ -7,6 +7,7 @@ import { createAuditLogger } from "@/lib/audit"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { computeDevolucionMonto, effectivePaidUnitPrice, saleNetTotal, aggregateReturnItems, fullyReturnedItemIds } from "@/lib/devolucion-refund"
 import { registrarEgresoCajaEfectivo } from "@/lib/caja-utils"
+import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { z } from "zod"
 
 const itemDevolucionSchema = z.object({
@@ -320,6 +321,16 @@ export async function POST(
       monto_aplicado_deuda: resultado.montoAplicadoDeuda ?? 0,
       items_count: data.items.length,
     })
+
+    emitWebhookEvent(organizationId!, "venta.devolucion", {
+      id: devolucionId,
+      ventaId: id,
+      numeroDevolucion,
+      tipo: resultado.tipo,
+      montoDevolucion: resultado.montoDevolucion,
+      montoAplicadoDeuda: resultado.montoAplicadoDeuda ?? 0,
+      metodoReembolso: data.metodoReembolso ?? null,
+    }).catch(() => {})
 
     // Reembolso en efectivo → egreso de caja (para que el arqueo cuadre). Solo
     // lo que se devuelve: la parte que descontó el saldo pendiente nunca entró.

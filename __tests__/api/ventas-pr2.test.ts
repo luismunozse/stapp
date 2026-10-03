@@ -50,7 +50,7 @@ describe("POST /api/ventas — IVA snapshot error → 500", () => {
     vi.clearAllMocks()
   })
 
-  it("IVA snapshot UPDATE error → 500 when fiscal active", async () => {
+  it("IVA snapshot UPDATE error → la venta ya existe: 201 con advertencia (antes 500)", async () => {
     mockAuthWithSucursal({ role: "ADMIN", sucursalId: null })
 
     // rpc succeeds
@@ -90,9 +90,11 @@ describe("POST /api/ventas — IVA snapshot error → 500", () => {
       items: [{ inventarioId: "i1", descripcion: "Funda", cantidad: 1, precioUnitario: 100, diasGarantia: 0 }],
       metodoPago: "EFECTIVO",
     }))
-    const { status } = await parseResponse(res)
+    const { status, body } = await parseResponse(res)
 
-    expect(status).toBe(500)
+    // crear_venta_atomica ya commiteó: un 500 hacía que el cajero la volviera a cargar
+    expect(status).toBe(201)
+    expect(body.advertencia).toMatch(/IVA/)
   })
 
   it("happy path — 201 when no IVA error (EXENTO)", async () => {

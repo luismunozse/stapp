@@ -9,7 +9,12 @@ vi.mock("@/lib/audit", () => ({
   })),
 }))
 
+vi.mock("@/lib/webhooks/dispatcher", () => ({
+  emitWebhookEvent: vi.fn().mockResolvedValue(undefined),
+}))
+
 import { supabaseAdmin } from "@/lib/supabase"
+import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { PUT, DELETE } from "@/app/api/ventas/[id]/route"
 
 function req(method: string, body?: any): [Request, { params: Promise<{ id: string }> }] {
@@ -48,11 +53,13 @@ describe("PUT /api/ventas/[id] — anular", () => {
     expect(res.status).toBe(409)
     expect(res.body.error).toMatch(/remito vigente/)
 
-    ventas = createChainMock({ ...completada, facturas: [{ id: "f1", estado_pago: "ANULADA" }] })
+    ventas = createChainMock({ ...completada, numero_venta: 8, facturas: [{ id: "f1", estado_pago: "ANULADA" }] })
     mockSupabaseFrom({ ventas })
     res = await parseResponse(await PUT(...req("PUT", { estado: "ANULADA" })))
     expect(res.status).toBe(200)
     expect(ventas.update).toHaveBeenCalledWith({ estado: "ANULADA" })
+    // avisa a los sistemas externos (antes solo existía venta.completada)
+    expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "venta.anulada", { id: "v1", numeroVenta: 8, total: 100 })
   })
 
   it("traduce el P0022 del trigger a 409", async () => {

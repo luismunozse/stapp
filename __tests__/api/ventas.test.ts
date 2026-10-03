@@ -719,6 +719,7 @@ describe("POST /api/ventas — saldo pendiente requiere cliente", () => {
     mockSupabaseFrom({
       ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
       organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+      clientes: createChainMock({ id: "cliente-1" }),
     })
 
     const res = await POST(createPostRequest({

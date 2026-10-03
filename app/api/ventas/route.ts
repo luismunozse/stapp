@@ -18,6 +18,13 @@ import {
 import { resolveOperador } from "@/lib/operadores"
 import { z } from "zod"
 import { getIvaGeneral } from "@/lib/countries"
+import { escapeOrIlikeTerm } from "@/lib/pg-search"
+import { DEFAULT_TIMEZONE, dayRangeUtc } from "@/lib/timezone"
+
+const METODOS_PAGO = [
+  "EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO",
+  "MERCADOPAGO", "CUENTA_CORRIENTE", "OTRO",
+] as const
 
 const itemSchema = z.object({
   inventarioId: z.string().nullable().optional(),
@@ -40,7 +47,7 @@ const ventaSchema = z.object({
   descuento: z.number().min(0).default(0),
   tipoDescuento: z.enum(["MONTO", "PORCENTAJE"]).default("MONTO"),
   porcentajeDescuento: z.number().min(0).max(100).default(0),
-  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO", "MERCADOPAGO", "CUENTA_CORRIENTE", "OTRO"]),
+  metodoPago: z.enum(METODOS_PAGO),
   observaciones: z.string().nullable().optional(),
   cuotas: z.number().int().min(1).nullable().optional(),
   recargoPorcentaje: z.number().min(0).nullable().optional(),
@@ -51,7 +58,9 @@ const ventaSchema = z.object({
   idempotencyKey: z.string().max(100).nullable().optional(),
   depositoId: z.string().min(1).nullable().optional(),
   pagos: z.array(z.object({
-    metodo: z.string(),
+    // Antes z.string(): un método inexistente llegaba al SQL y fallaba el cast
+    // al enum con un 400 críptico.
+    metodo: z.enum(METODOS_PAGO),
     monto: z.number().positive(),
     referencia: z.string().nullable().optional(),
     cuotas: z.number().int().min(1).nullable().optional(),
@@ -124,28 +133,42 @@ export async function GET(request: Request) {
       query = query.eq("estado", estado)
     }
 
-    if (fechaDesde) {
-      query = query.gte("created_at", fechaDesde)
-    }
-
-    if (fechaHasta) {
-      query = query.lte("created_at", fechaHasta + "T23:59:59")
+    // Fechas: días de la organización. "hasta" + "T23:59:59" sin offset se
+    // leía como UTC y en Argentina dejaba afuera las ventas de 21 a 24 h.
+    if (fechaDesde || fechaHasta) {
+      const { data: org } = await supabaseAdmin
+        .from("organizations")
+        .select("zona_horaria")
+        .eq("id", organizationId!)
+        .single()
+      const tz: string = org?.zona_horaria || DEFAULT_TIMEZONE
+      const esDia = (f: string) => /^\d{4}-\d{2}-\d{2}$/.test(f)
+      if (fechaDesde) {
+        query = query.gte("created_at", esDia(fechaDesde) ? dayRangeUtc(fechaDesde, tz).desde : fechaDesde)
+      }
+      if (fechaHasta) {
+        query = query.lte("created_at", esDia(fechaHasta) ? dayRangeUtc(fechaHasta, tz).hasta : fechaHasta)
+      }
     }
 
     if (search) {
-      const filters = [
-        `cliente_nombre.ilike.%${search}%`,
-        `cliente_telefono.ilike.%${search}%`,
-        `observaciones.ilike.%${search}%`,
-      ]
+      // Escapado: una coma o un paréntesis en la búsqueda ("Pérez, Juan")
+      // rompía el filtro .or() de PostgREST y el listado respondía 500.
+      const termino = escapeOrIlikeTerm(search)
+      const filters = termino
+        ? [
+            `cliente_nombre.ilike.%${termino}%`,
+            `cliente_telefono.ilike.%${termino}%`,
+            `observaciones.ilike.%${termino}%`,
+          ]
+        : []
 
-      // Si es numérico, buscar por numero_venta exacto
-      const searchNum = parseInt(search, 10)
-      if (!isNaN(searchNum)) {
-        filters.push(`numero_venta.eq.${searchNum}`)
+      // Si es un número, buscar también por numero_venta exacto
+      if (/^\d+$/.test(search.trim())) {
+        filters.push(`numero_venta.eq.${parseInt(search.trim(), 10)}`)
       }
 
-      query = query.or(filters.join(","))
+      if (filters.length > 0) query = query.or(filters.join(","))
     }
 
     // Aplicar paginación
@@ -183,6 +206,33 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const data = ventaSchema.parse(body)
+
+    // El cliente tiene que ser de la organización (también lo controla
+    // crear_venta_atomica desde la migración 332): si no, la deuda o el saldo
+    // a favor se movían en la cuenta de un cliente ajeno.
+    if (data.clienteId) {
+      const { data: cliente } = await supabaseAdmin
+        .from("clientes")
+        .select("id")
+        .eq("id", data.clienteId)
+        .eq("organization_id", organizationId!)
+        .maybeSingle()
+      if (!cliente) {
+        return NextResponse.json({ error: "Cliente no encontrado" }, { status: 400 })
+      }
+    }
+
+    // "Saldo a favor" (CUENTA_CORRIENTE) descuenta de la cuenta del cliente:
+    // sin cliente la venta quedaba cobrada sin descontar nada de ningún lado.
+    const usaSaldoAFavor =
+      (data.pagos ?? []).some((p) => p.metodo === "CUENTA_CORRIENTE") ||
+      (!data.pagos?.length && !data.pagosParcial && data.metodoPago === "CUENTA_CORRIENTE")
+    if (usaSaldoAFavor && !data.clienteId) {
+      return NextResponse.json(
+        { error: "Para cobrar con saldo a favor la venta tiene que tener un cliente" },
+        { status: 400 }
+      )
+    }
 
     // Precio efectivo por método de pago: el método-condición (pago de mayor monto)
     // fija un factor que sube el precio de venta (ingreso real, no recargo bancario).
@@ -310,6 +360,11 @@ export async function POST(request: Request) {
 
     if (data.pagos && data.pagos.length > 0) {
       rpcParams.p_pagos = conciliacion.pagos
+    } else if (!parcial && data.metodoPago === "CUENTA_CORRIENTE") {
+      // Camino viejo (sin array de pagos) pagando todo con saldo a favor: el
+      // SQL registraba el pago sin descontar el saldo del cliente. Como pago
+      // explícito pasa por usar_cuenta_corriente, que descuenta y valida.
+      rpcParams.p_pagos = [{ metodo: "CUENTA_CORRIENTE", monto: total }]
     } else if (parcial) {
       // Deferred payment ("paga después"): send empty array
       // RPC distinguishes NULL (legacy full payment) vs empty array (no payments)
@@ -397,6 +452,8 @@ export async function POST(request: Request) {
 
     const ventaId = rpcResult?.ventaId || rpcResult
 
+    let advertencia: string | undefined
+
     // Snapshot fiscal en la venta (solo si el régimen está activo o hubo
     // redondeo). Las columnas existen porque fiscalActivo ⇒ la org configuró
     // IVA/redondeo ⇒ migración 229 aplicada (sin hazard de orden de deploy).
@@ -412,11 +469,11 @@ export async function POST(request: Request) {
         })
         .eq("id", ventaId)
       if (ivaError) {
+        // La venta ya está creada (stock descontado, pagos y deuda
+        // registrados): responder 500 hacía creer que falló y el cajero la
+        // volvía a cargar. Se avisa y se sigue.
         console.error("Error al guardar snapshot IVA:", ivaError)
-        return NextResponse.json(
-          { error: "Error al guardar datos fiscales de la venta" },
-          { status: 500 }
-        )
+        advertencia = "La venta se registró, pero no se pudieron guardar los datos de IVA. Revisala en el detalle."
       }
     }
 
@@ -479,6 +536,7 @@ export async function POST(request: Request) {
     const response = {
       ...formatVenta(ventaCompleta),
       organizationName: org?.nombre_mostrar || org?.nombre || null,
+      ...(advertencia ? { advertencia } : {}),
     }
 
     return NextResponse.json(response, { status: 201 })

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
+import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { formatVenta } from "@/lib/db-utils"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { getIvaGeneral } from "@/lib/countries"
@@ -191,6 +192,12 @@ export async function PUT(
       // Registrar en auditoría
       const audit = createAuditLogger(organizationId!, userId!, request)
       await audit.update("ventas", id, { estado: "ANULADA" }, { estado: venta.estado })
+
+      emitWebhookEvent(organizationId!, "venta.anulada", {
+        id,
+        numeroVenta: venta.numero_venta ?? null,
+        total: Number(venta.total) || 0,
+      }).catch(() => {})
 
       // Obtener venta actualizada con relaciones para respuesta
       const { data: ventaActualizada } = await supabaseAdmin
@@ -423,6 +430,14 @@ export async function PUT(
           advertencia = "La venta se editó, pero no se pudieron guardar el IVA y el estado de pago. Volvé a abrirla para revisarla."
         }
       }
+
+      emitWebhookEvent(organizationId!, "venta.editada", {
+        id,
+        numeroVenta: venta.numero_venta ?? null,
+        totalAnterior: Number(venta.total) || 0,
+        total,
+        items: data.items.length,
+      }).catch(() => {})
 
       // Registrar en auditoría
       const audit = createAuditLogger(organizationId!, userId!, request)

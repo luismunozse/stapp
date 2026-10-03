@@ -10,6 +10,11 @@ vi.mock("@/lib/audit", () => ({
   createAuditLogger: vi.fn(() => ({ create: auditCreate })),
 }))
 
+vi.mock("@/lib/webhooks/dispatcher", () => ({
+  emitWebhookEvent: vi.fn().mockResolvedValue(undefined),
+}))
+
+import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { POST, GET } from "@/app/api/ventas/[id]/devolucion/route"
 
 const params = { params: Promise.resolve({ id: "v1" }) }
@@ -61,6 +66,11 @@ describe("POST devolución — saldo pendiente, crédito en tienda e idempotenci
     expect(status).toBe(201)
     expect(egresos).toHaveLength(1)
     expect(egresos[0]).toMatchObject({ tipo: "EGRESO", monto: 50 })
+    expect(emitWebhookEvent).toHaveBeenCalledWith(
+      "org-1",
+      "venta.devolucion",
+      expect.objectContaining({ ventaId: "v1", montoDevolucion: 200, montoAplicadoDeuda: 150 })
+    )
     expect(dev).toMatchObject({ montoDevolucion: 200, montoAplicadoDeuda: 150, montoReembolso: 50 })
   })
 
