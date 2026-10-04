@@ -204,6 +204,12 @@ export async function POST(
           { status: 400 }
         )
       }
+      // Stock insuficiente al reservar (reservar_items_cotizacion) o al retomar
+      // la reserva vencida de una solicitud del catálogo (trigger, P0003): el
+      // mensaje ya viene en español y dice cuánto hay, se muestra tal cual.
+      if (rpcError.code === "P0003" || rpcMsg.toLowerCase().includes("stock insuficiente")) {
+        return NextResponse.json({ error: rpcMsg }, { status: 409 })
+      }
       console.error("[aprobar] Unexpected RPC error:", rpcError)
       return NextResponse.json({ error: "Error al aprobar cotizacion" }, { status: 500 })
     }

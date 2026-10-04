@@ -2,8 +2,8 @@
 --
 -- La 315 dejo explicito que NO cerraba el abandono: una solicitud que nadie
 -- responde retiene stock para siempre. Esta migracion lo cierra siguiendo el
--- diseño que la 315 anticipo: barrera para no acreditar cotizaciones
--- historicas, lotes para no morir por timeout, y no soltarle la reserva a una
+-- diseño que la 315 anticipo: no acreditar cotizaciones historicas (via el gate
+-- del libro, ver abajo), lotes para no morir por timeout, y no soltarle la reserva a una
 -- orden en curso.
 --
 -- Aditiva y re-ejecutable. Sin BEGIN/COMMIT (db-run.mjs hace dry-run en una
@@ -49,6 +49,14 @@
 -- abre una reserva nueva en el libro, de modo que rechazar despues vuelva a
 -- restituir y convertir la consuma.
 --
+-- VENTANA CONOCIDA (clase A, no se cambia): una solicitud del catalogo es tipo
+-- PRESUPUESTO y aprobar_cotizacion_atomica NO reserva para PRESUPUESTO. Si se
+-- acepta DESPUES de vencer, entre la aceptacion y la venta nada retiene el stock
+-- de los items linkeados a inventario. Es el mismo comportamiento de cualquier
+-- presupuesto aceptado; la venta (crear_venta_atomica) valida stock y, si otro
+-- se lo llevo, falla en voz alta y rollbackea. No se agrega reserva en la
+-- aceptacion: seria un cambio de politica para todos los presupuestos.
+--
 -- Rechazar / borrar una solicitud ya vencida: el trigger de la 315 llama a
 -- liberar_reserva_catalogo, que no encuentra nada abierto (A neteado a 0, B/C
 -- con liberada_at) y es no-op: no hay doble acreditacion.
@@ -81,22 +89,25 @@ COMMENT ON COLUMN catalogo_config.reserva_horas IS
 --   * Con reserva abierta: A (reserva_cotizacion_pendiente) o B/C (libro del
 --     catalogo con liberada_at NULL).
 --   * created_at < now() - reserva_horas de SU organizacion (48 si no hay config).
---   * BARRERA: created_at >= v_barrera. Es el instante en que se mergeo la 315
---     (2026-08-28 13:34 -03): antes no existe libro de reservas (el catalogo
---     descontaba stock duro), asi que acreditar esas cotizaciones inventaria
---     stock. Ajustable aca si la 315 se aplico mas tarde.
+--   * SIN barrera de fecha. La 315 anticipaba una, pero es redundante: exigir
+--     una reserva ABIERTA en el libro (catalogo_reservas_cotizacion o
+--     movimientos_inventario) ya excluye las cotizaciones anteriores a la 315,
+--     que descontaban stock duro y no escribian ninguna fila de libro. Una
+--     constante de fecha seria ademas un chiste de mantenimiento: el instante
+--     del merge no es el de aplicacion en produccion.
 -- Lotes: LIMIT p_limite con FOR UPDATE SKIP LOCKED, asi un rechazo del admin en
 -- paralelo no bloquea el barrido ni se pisa con el.
 CREATE OR REPLACE FUNCTION expirar_reservas_catalogo(p_limite INT DEFAULT 200)
 RETURNS JSONB AS $$
 DECLARE
-  v_barrera   CONSTANT TIMESTAMPTZ := '2026-08-28 16:34:12+00';
   v_cot       RECORD;
   v_res       JSONB;
   v_revisadas INT := 0;
   v_liberadas INT := 0;
   v_items     INT := 0;
   v_catalogo  INT := 0;
+  v_cerradas  INT := 0;
+  v_n         INT;
 BEGIN
   IF p_limite IS NULL OR p_limite < 1 THEN
     p_limite := 200;
@@ -112,7 +123,6 @@ BEGIN
       AND c.venta_id IS NULL
       AND c.convertida_a_orden_id IS NULL
       AND c.orden_id IS NULL
-      AND c.created_at >= v_barrera
       AND c.created_at < now() - make_interval(hours => COALESCE(
             (SELECT cc.reserva_horas FROM catalogo_config cc
               WHERE cc.organization_id = c.organization_id), 48))
@@ -126,6 +136,27 @@ BEGIN
     FOR UPDATE OF c SKIP LOCKED
   LOOP
     v_res := liberar_reserva_catalogo(v_cot.id, 'vencida');
+
+    -- Cierre de lo que liberar_reserva_catalogo NO pudo devolver. Si
+    -- stock_reservado ya estaba en 0 (o menos que lo pendiente) liberar salta o
+    -- libera de menos (v_delta <= 0 / LEAST, 315) y no asienta nada: el libro
+    -- seguiria diciendo "pendiente" y la cotizacion seria candidata para
+    -- siempre, llenando cada lote. Se asienta un LIBERACION_RESERVA por lo que
+    -- quede pendiente SIN tocar inventario: no hay nada que devolver, asi que
+    -- ni stock_reservado baja de 0 ni se acredita stock. Despues de esto
+    -- reserva_cotizacion_pendiente devuelve vacio y la cotizacion no vuelve a
+    -- seleccionarse. (No se cambia liberar_reserva_catalogo: sus otros llamadores
+    -- —rechazo, borrado, conversion— conservan su comportamiento.)
+    INSERT INTO movimientos_inventario (
+      inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
+      referencia_id, referencia_tipo, usuario_id, organization_id, observaciones
+    )
+    SELECT p.inventario_id, 'LIBERACION_RESERVA', p.cantidad, i.stock, i.stock,
+           v_cot.id, 'COTIZACION', NULL, i.organization_id, 'vencida-sin-reserva'
+    FROM reserva_cotizacion_pendiente(v_cot.id) p
+    JOIN inventario i ON i.id = p.inventario_id;
+    GET DIAGNOSTICS v_n = ROW_COUNT;
+    v_cerradas := v_cerradas + v_n;
     v_revisadas := v_revisadas + 1;
     v_items     := v_items + COALESCE((v_res->>'itemsLiberados')::INT, 0);
     v_catalogo  := v_catalogo + COALESCE((v_res->>'itemsCatalogoRestaurados')::INT, 0);
@@ -135,15 +166,16 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- revisadas > liberadas = cotizaciones que siguen "abiertas" sin que haya
-  -- nada que devolver (p. ej. stock_reservado ya en 0). Se reintentan en cada
-  -- corrida; el cron lo muestra para detectarlas.
+  -- cerradasSinReserva > 0 = reservas que el libro daba por vivas pero que el
+  -- inventario ya no sostenia (stock_reservado en 0 / menor): se cierran sin
+  -- tocar stock. Vale la pena revisarlas: indican una reserva que se perdio.
   RETURN jsonb_build_object(
     'ok', true,
     'revisadas', v_revisadas,
     'liberadas', v_liberadas,
     'itemsLiberados', v_items,
-    'itemsCatalogoRestaurados', v_catalogo
+    'itemsCatalogoRestaurados', v_catalogo,
+    'cerradasSinReserva', v_cerradas
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
@@ -328,7 +360,9 @@ BEGIN
   PERFORM retomar_reserva_catalogo_vencida(NEW.id);
   RETURN NULL;
 END;
-$$ LANGUAGE plpgsql;
+-- SECURITY DEFINER: retomar_reserva_catalogo_vencida esta revocada para
+-- authenticated; sin esto un UPDATE a ACEPTADA con ese rol fallaria por permisos.
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS cotizaciones_retomar_reserva_catalogo ON cotizaciones;
 

@@ -214,6 +214,24 @@ describe("POST /api/cotizaciones/[id]/aprobar — atomic RPC path", () => {
     expect(status).toBe(400)
   })
 
+  it.each([
+    ["trigger de catalogo vencido (P0003)", "Stock insuficiente: la reserva de esta solicitud del catálogo venció y ya no quedan unidades suficientes (disponible: 1, necesario: 2)", "P0003"],
+    ["reservar_items_cotizacion (P0001)", "Stock insuficiente para \"Funda\". Disponible: 0, Solicitado: 1", "P0001"],
+  ])("returns 409 with the real message on stock error: %s", async (_n, message, code) => {
+    mockAuthSuccess()
+    const fetchChain = createChainMock(mockCotizacionEnviada)
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "cotizaciones") return fetchChain as any
+      return createChainMock(null) as any
+    })
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: { message, code } } as any)
+
+    const response = await POST(createPostRequest(validBody), createParams("cot-1"))
+    const { status, body } = await parseResponse(response)
+    expect(status).toBe(409)
+    expect(body.error).toBe(message)
+  })
+
   it("returns 404 when rpc error message contains 'no encontrada'", async () => {
     mockAuthSuccess()
     const fetchChain = createChainMock(mockCotizacionEnviada)
