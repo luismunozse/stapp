@@ -39,6 +39,7 @@ interface CatalogoData {
     whatsapp: string | null
     banner_url: string | null
     trust_badges: Array<{ icon: string; label: string }>
+    recibe_pedidos?: boolean
   }
   organizacion: {
     id: string
@@ -539,6 +540,8 @@ export function CatalogoView({
         titulo={titulo}
         formatPrecio={formatPrecio}
         brandColor={data.config.color_primary}
+        recibePedidos={data.config.recibe_pedidos}
+        whatsapp={data.config.whatsapp}
       />
     </div>
   )

@@ -43,6 +43,7 @@ interface Data {
     titulo: string | null
     color_primary: string
     whatsapp: string | null
+    recibe_pedidos?: boolean
   }
   organizacion: {
     id: string
@@ -465,6 +466,8 @@ export function CatalogoItemView({ data }: { data: Data }) {
         titulo={titulo}
         formatPrecio={formatPrecio}
         brandColor={config.color_primary}
+        recibePedidos={config.recibe_pedidos}
+        whatsapp={config.whatsapp}
       />
     </div>
   )

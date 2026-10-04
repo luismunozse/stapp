@@ -15,6 +15,8 @@ import { toast } from "sonner"
 import type { useCart } from "./use-cart"
 import { useCupon } from "./use-cupon"
 import { useCatalogoUpload } from "./use-catalogo-upload"
+import { catalogoWhatsAppUrl } from "@/lib/catalogo/whatsapp"
+import { construirMensajePedidoWhatsApp, NOTAS_PEDIDO_MAX } from "@/lib/catalogo/pedido-whatsapp"
 
 interface Props {
   open: boolean
@@ -24,14 +26,27 @@ interface Props {
   titulo: string
   formatPrecio: (n: number) => string
   brandColor: string
+  /** false = el plan no registra pedidos: el checkout solo arma el mensaje de WhatsApp. */
+  recibePedidos?: boolean
+  /** WhatsApp del taller ya normalizado (con código de país), o null. */
+  whatsapp?: string | null
 }
 
 const MAX_ADJUNTOS_POR_ITEM = 3
 
 type ItemExtras = { comentario: string; adjuntos: string[] }
 
-export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, brandColor }: Props) {
+export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, brandColor, recibePedidos = true, whatsapp = null }: Props) {
   const router = useRouter()
+  // El server rechaza /cotizar con FEATURE_REQUIRED si el plan cambió después de
+  // cachear la página: desde ahí el carrito se comporta como el de un plan sin pedidos.
+  const [planSinPedidos, setPlanSinPedidos] = useState(false)
+  const soloWhatsapp = !recibePedidos || planSinPedidos
+  // URL del pedido ya abierto en WhatsApp. El carrito NO se vacía al abrirlo:
+  // window.open con noopener devuelve null siempre, no hay forma de saber si el
+  // popup se bloqueó o si el visitante mandó el mensaje.
+  const [waEnviado, setWaEnviado] = useState<string | null>(null)
+  const sinCanalDePedido = soloWhatsapp && !catalogoWhatsAppUrl(whatsapp)
   const [step, setStep] = useState<"cart" | "checkout">("cart")
   const [submitting, setSubmitting] = useState(false)
 
@@ -70,6 +85,8 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
   // pueda contactarlo por WhatsApp si no termina el flujo.
   useEffect(() => {
     if (!open) return
+    // Sin pedidos registrados no guardamos nada del visitante, tampoco el abandono.
+    if (soloWhatsapp) return
     if (step !== "checkout") return
     if (cart.items.length === 0) return
     // Sin consent explícito no snapshoteamos PII (compliance Ley 25.326).
@@ -109,7 +126,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
     }, 1500)
 
     return () => clearTimeout(timer)
-  }, [open, step, consent, nombre, telefono, email, cart.items, totalConCupon, cuponAplicado, slug])
+  }, [open, soloWhatsapp, step, consent, nombre, telefono, email, cart.items, totalConCupon, cuponAplicado, slug])
 
   const getExtras = (id: string): ItemExtras => extras[id] ?? { comentario: "", adjuntos: [] }
 
@@ -132,7 +149,33 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
     setExtra(itemId, { adjuntos: current.filter((u) => u !== url) })
   }
 
+  // Todo síncrono a propósito: window.open tiene que correr en el mismo tick del
+  // click o Safari/iOS lo bloquea como popup.
+  const handleEnviarWhatsApp = () => {
+    const texto = construirMensajePedidoWhatsApp({
+      taller: titulo,
+      cliente: nombre,
+      items: cart.items,
+      total: cart.total,
+      notas,
+      formatPrecio,
+    })
+    const url = catalogoWhatsAppUrl(whatsapp, texto)
+    if (!url || cart.items.length === 0) return
+    window.open(url, "_blank", "noopener,noreferrer")
+    setWaEnviado(url)
+  }
+
+  const confirmarEnvio = () => {
+    cart.clear()
+    setExtras({})
+    setStep("cart")
+    setWaEnviado(null)
+    onClose()
+  }
+
   const handleSubmit = async () => {
+    if (soloWhatsapp) return handleEnviarWhatsApp()
     if (!nombre.trim() || !telefono.trim()) {
       toast.error("Nombre y teléfono son obligatorios")
       return
@@ -167,6 +210,15 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
         }),
       })
       const data = await res.json()
+      if (res.status === 403 && data.code === "FEATURE_REQUIRED") {
+        setPlanSinPedidos(true)
+        toast.error(
+          catalogoWhatsAppUrl(whatsapp)
+            ? "Este catálogo ahora recibe pedidos solo por WhatsApp. Revisá tu pedido y envialo desde ahí."
+            : "Este catálogo no está tomando pedidos online por el momento."
+        )
+        return
+      }
       if (!res.ok) throw new Error(data.error || "Error al enviar")
       cart.clear()
       setExtras({})
@@ -253,7 +305,24 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
             </header>
 
             <div className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom,1rem)]">
-              {step === "cart" ? (
+              {waEnviado ? (
+                <div className="p-6 text-center space-y-4">
+                  <CheckCircle2 className="h-10 w-10 mx-auto" style={{ color: brandColor }} />
+                  <p className="font-medium">Abrimos WhatsApp con tu pedido</p>
+                  <p className="text-sm text-muted-foreground">
+                    Enviá el mensaje desde WhatsApp. Si no se abrió, tocá el botón. Tu carrito sigue acá hasta que confirmes.
+                  </p>
+                  <Button asChild className="w-full h-12" style={{ backgroundColor: brandColor }}>
+                    <a href={waEnviado} target="_blank" rel="noopener noreferrer">Volver a abrir WhatsApp</a>
+                  </Button>
+                  <Button variant="outline" onClick={confirmarEnvio} className="w-full h-12">
+                    Ya lo envié, vaciar carrito
+                  </Button>
+                  <Button variant="ghost" onClick={() => setWaEnviado(null)} className="w-full">
+                    Modificar pedido
+                  </Button>
+                </div>
+              ) : step === "cart" ? (
                 cart.items.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-6 text-center">
                     <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center mb-4">
@@ -332,7 +401,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                             </button>
                           </div>
 
-                          {!isExpanded ? (
+                          {soloWhatsapp ? null : !isExpanded ? (
                             <button
                               type="button"
                               onClick={() => setExpanded((prev) => ({ ...prev, [k]: true }))}
@@ -438,6 +507,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                     </div>
                   </div>
 
+                  {soloWhatsapp ? null : (
                   <div>
                     <Label htmlFor="cupon" className="flex items-center gap-1.5">
                       <Ticket className="h-3.5 w-3.5" />
@@ -489,9 +559,10 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                       </p>
                     )}
                   </div>
+                  )}
 
                   <div>
-                    <Label htmlFor="nombre">Nombre completo *</Label>
+                    <Label htmlFor="nombre">{soloWhatsapp ? "Tu nombre (opcional)" : "Nombre completo *"}</Label>
                     <Input
                       id="nombre"
                       value={nombre}
@@ -502,6 +573,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                       className="h-11 mt-1"
                     />
                   </div>
+                  {soloWhatsapp ? null : (<>
                   <div>
                     <Label htmlFor="telefono">Teléfono / WhatsApp *</Label>
                     <Input
@@ -529,6 +601,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                       className="h-11 mt-1"
                     />
                   </div>
+                  </>)}
                   <div>
                     <Label htmlFor="notas">Notas (opcional)</Label>
                     <Textarea
@@ -536,12 +609,21 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                       value={notas}
                       onChange={(e) => setNotas(e.target.value)}
                       rows={3}
-                      maxLength={1000}
+                      maxLength={soloWhatsapp ? NOTAS_PEDIDO_MAX : 1000}
                       placeholder="Algún detalle que quieras compartir..."
                       className="mt-1"
                     />
                   </div>
 
+                  {soloWhatsapp ? (
+                    <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 p-3 text-xs text-blue-900 dark:text-blue-200 flex gap-2">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span>
+                        Tu pedido se envía por WhatsApp a {titulo}. No queda registrado en el catálogo ni reserva
+                        stock: confirmá disponibilidad y precio por el chat.
+                      </span>
+                    </div>
+                  ) : (<>
                   <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 p-3 text-xs text-blue-900 dark:text-blue-200 flex gap-2">
                     <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
                     <span>Esta solicitud genera un presupuesto en {titulo}. Te van a contactar para confirmar.</span>
@@ -562,11 +644,12 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                       finalizo la consulta y se eliminan si retiro mi pedido.
                     </span>
                   </label>
+                  </>)}
                 </div>
               )}
             </div>
 
-            {cart.items.length > 0 && (
+            {cart.items.length > 0 && !waEnviado && (
               <footer className="border-t p-4 space-y-2 bg-background/95 backdrop-blur">
                 {step === "cart" ? (
                   <>
@@ -576,11 +659,17 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                         {formatPrecio(totalConCupon)}
                       </span>
                     </div>
+                    {sinCanalDePedido && (
+                      <p className="text-xs text-destructive inline-flex items-start gap-1.5">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                        Este catálogo no está tomando pedidos online por el momento.
+                      </p>
+                    )}
                     <Button
                       onClick={() => setStep("checkout")}
                       className="w-full h-12 text-base font-semibold gap-1.5 shadow-md hover:shadow-lg transition-shadow"
                       style={{ backgroundColor: brandColor }}
-                      disabled={!!uploadingItem}
+                      disabled={!!uploadingItem || sinCanalDePedido}
                     >
                       Continuar
                     </Button>
@@ -597,12 +686,12 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                     </Button>
                     <Button
                       onClick={handleSubmit}
-                      disabled={submitting || !nombre.trim() || !telefono.trim() || !consent}
+                      disabled={submitting || (!soloWhatsapp && (!nombre.trim() || !telefono.trim() || !consent))}
                       className="flex-1 h-12 gap-1.5 text-base font-semibold shadow-md hover:shadow-lg transition-shadow"
                       style={{ backgroundColor: brandColor }}
                     >
                       {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                      Enviar solicitud
+                      {soloWhatsapp ? "Enviar pedido por WhatsApp" : "Enviar solicitud"}
                     </Button>
                   </div>
                 )}
