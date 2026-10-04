@@ -7,6 +7,38 @@ import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { stockDisponibleCatalogo } from "@/lib/catalogo/stock-disponible"
 import { normalizarWhatsAppCatalogo, catalogoWhatsAppUrl } from "@/lib/catalogo/whatsapp"
+import { rateLimitDb } from "@/lib/rate-limit-db"
+
+// Topes por IP + catalogo. Una tienda detras de un mismo NAT (wifi del local)
+// rara vez manda mas de 5 pedidos en 10 minutos; un script si.
+const RATE_LIMIT_SHORT = { max: 5, windowSeconds: 10 * 60 }
+const RATE_LIMIT_DAILY = { max: 20, windowSeconds: 24 * 60 * 60 }
+// Pedidos abiertos (ENVIADA) por telefono. Solo cuentan los de los ultimos
+// OPEN_ORDERS_DAYS dias: sin ese corte un comprador quedaria bloqueado para
+// siempre por cotizaciones viejas que el taller nunca cerro.
+const MAX_OPEN_ORDERS_PER_PHONE = 3
+const OPEN_ORDERS_DAYS = 14
+
+/**
+ * IP del comprador. x-vercel-forwarded-for lo pone el CDN y el cliente no lo
+ * puede falsear; el primer salto de x-forwarded-for es solo el fallback (local /
+ * otros hosts). Sin ninguna, "unknown" es su propia clave.
+ */
+function clientIp(req: Request): string {
+  return (
+    req.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip")?.trim() ||
+    "unknown"
+  )
+}
+
+function tooManyRequests(message: string, code: string, retryAfterSeconds: number) {
+  return NextResponse.json(
+    { error: message, code },
+    { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
+  )
+}
 
 const cotizarSchema = z.object({
   cliente: z.object({
@@ -61,6 +93,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   }
 
   const organizationId = config.organization_id
+
+  // Rate limit por IP + catalogo, ANTES de cualquier escritura (cliente, numero
+  // de cotizacion, RPC). Falla abierto: ver lib/rate-limit-db.ts.
+  const ip = clientIp(req)
+  const [okShort, okDaily] = await Promise.all([
+    rateLimitDb(`cotizar:short:${slug}:${ip}`, RATE_LIMIT_SHORT.max, RATE_LIMIT_SHORT.windowSeconds),
+    rateLimitDb(`cotizar:day:${slug}:${ip}`, RATE_LIMIT_DAILY.max, RATE_LIMIT_DAILY.windowSeconds),
+  ])
+  if (!okShort || !okDaily) {
+    return tooManyRequests(
+      "Enviaste muchas solicitudes seguidas. Esperá unos minutos y volvé a intentar.",
+      "RATE_LIMITED",
+      okShort ? RATE_LIMIT_DAILY.windowSeconds : RATE_LIMIT_SHORT.windowSeconds,
+    )
+  }
 
   // Gate de plan: catálogos de orgs Free no reciben nuevas cotizaciones.
   // Chequeo público (sin auth) — corre ANTES de tocar el carrito para no
@@ -169,6 +216,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   let clienteId: string
   if (clienteExistente) {
     clienteId = clienteExistente.id
+
+    // Tope de pedidos abiertos por cliente (match exacto por telefono, igual que
+    // arriba: el telefono se guarda sin normalizar, asi que "11 2233" y
+    // "112233" cuentan como clientes distintos — limitacion conocida). Corre
+    // antes de tomar numero y de tocar el stock. Un cliente nuevo no tiene
+    // pedidos, por eso solo se chequea en esta rama.
+    const desde = new Date(Date.now() - OPEN_ORDERS_DAYS * 24 * 60 * 60 * 1000).toISOString()
+    const { count: abiertos } = await supabaseAdmin
+      .from("cotizaciones")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .eq("cliente_id", clienteExistente.id)
+      .eq("origen", "CATALOGO_PUBLICO")
+      .eq("estado", "ENVIADA")
+      .is("deleted_at", null)
+      .gte("created_at", desde)
+    if ((abiertos ?? 0) >= MAX_OPEN_ORDERS_PER_PHONE) {
+      return tooManyRequests(
+        "Ya tenés pedidos pendientes con este teléfono. El taller se va a comunicar con vos para coordinarlos antes de recibir uno nuevo.",
+        "OPEN_ORDERS_LIMIT",
+        60 * 60,
+      )
+    }
     const nameDiff = nombreNuevo && nombreNuevo !== clienteExistente.nombre
     const emailDiff = emailNuevo && emailNuevo !== clienteExistente.email
     if (nameDiff || emailDiff) {
@@ -235,6 +305,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   // (fix ERR-02): si cualquier paso falla, el incremento de usos_actuales
   // rollbackea solo — nunca queda un cupón consumido sin cotización. La RPC
   // valida el cupón, calcula descuento + total y los devuelve.
+  // El numero se toma lo mas tarde posible: todo rechazo previo (rate limit,
+  // pedidos abiertos, stock, cliente) ya salio sin gastarlo. Si la RPC falla
+  // despues (P0003 stock / P0004 cupon por carrera), el hueco queda: el contador
+  // vive fuera de la transaccion de la RPC.
   const numeroCotizacion = await getNextQuoteNumber(organizationId)
   const publicToken = randomBytes(16).toString("hex")
 
