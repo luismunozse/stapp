@@ -25,14 +25,17 @@ function call(headers: Record<string, string> = { "x-forwarded-for": "1.2.3.4, 9
   return POST(req, { params: Promise.resolve({ slug: "mi-taller" }) })
 }
 
+let cotizacionesChain: ReturnType<typeof createChainMock>
+
 function mockTables(openOrders: number) {
+  cotizacionesChain = createChainMock(null, null, openOrders)
   mockSupabaseFrom({
     catalogo_config: createChainMock({ organization_id: "org-1", activo: true, whatsapp: null, titulo: "X" }),
     catalogo_items: createChainMock([
       { id: "i1", nombre: "Funda", precio: 100, stock: null, inventario_id: null, activo: true, inventario: null, variantes: [] },
     ]),
     clientes: createChainMock({ id: "cli-1", nombre: "Ana", email: null }),
-    cotizaciones: createChainMock(null, null, openOrders),
+    cotizaciones: cotizacionesChain,
     users: createChainMock([]),
   })
 }
@@ -105,5 +108,61 @@ describe("POST /api/public/catalogo/[slug]/cotizar — rate limit", () => {
     const res = await call()
     expect(res.status).toBe(409)
     expect(getNextQuoteNumber).not.toHaveBeenCalled()
+  })
+
+  it("a stock 409 does not consume any IP quota (retries after a rejection are free)", async () => {
+    mockSupabaseFrom({
+      catalogo_config: createChainMock({ organization_id: "org-1", activo: true, whatsapp: null, titulo: "X" }),
+      catalogo_items: createChainMock([
+        { id: "i1", nombre: "Funda", precio: 100, stock: 0, inventario_id: "inv-1", activo: true,
+          inventario: { id: "inv-1", stock: 0, stock_reservado: 0, deleted_at: null, nombre: "Funda" }, variantes: [] },
+      ]),
+    })
+    const res = await call()
+    expect(res.status).toBe(409)
+    expect(rateLimitDb).not.toHaveBeenCalled()
+  })
+
+  it("an invalid body (400) does not consume quota", async () => {
+    const req = new Request("http://localhost:3000/api/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ consent: true }),
+    })
+    const res = await POST(req, { params: Promise.resolve({ slug: "mi-taller" }) })
+    expect(res.status).toBe(400)
+    expect(rateLimitDb).not.toHaveBeenCalled()
+  })
+
+  it("short window blocked: message + Retry-After of 10 min, and the daily counter is NOT touched", async () => {
+    vi.mocked(rateLimitDb).mockResolvedValueOnce(false)
+    const res = await call()
+    const { status, body } = await parseResponse(res)
+    expect(status).toBe(429)
+    expect(res.headers.get("Retry-After")).toBe("600")
+    expect(body.error).toMatch(/unos minutos/i)
+    expect(rateLimitDb).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(rateLimitDb).mock.calls[0][0]).toContain("short")
+  })
+
+  it("daily window blocked: own message and Retry-After of 24h", async () => {
+    vi.mocked(rateLimitDb).mockResolvedValueOnce(true).mockResolvedValueOnce(false)
+    const res = await call()
+    const { status, body } = await parseResponse(res)
+    expect(status).toBe(429)
+    expect(res.headers.get("Retry-After")).toBe("86400")
+    expect(body.error).toMatch(/por hoy/i)
+    expect(body.error).toMatch(/WhatsApp/)
+    expect(body.code).toBe("RATE_LIMITED")
+  })
+
+  it("open orders only count the last 48 hours", async () => {
+    mockTables(0)
+    await call()
+    const [col, iso] = cotizacionesChain.gte.mock.calls[0]
+    expect(col).toBe("created_at")
+    const horas = (Date.now() - new Date(iso as string).getTime()) / 3_600_000
+    expect(horas).toBeGreaterThan(47.9)
+    expect(horas).toBeLessThan(48.1)
   })
 })

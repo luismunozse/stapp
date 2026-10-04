@@ -13,11 +13,12 @@ import { rateLimitDb } from "@/lib/rate-limit-db"
 // rara vez manda mas de 5 pedidos en 10 minutos; un script si.
 const RATE_LIMIT_SHORT = { max: 5, windowSeconds: 10 * 60 }
 const RATE_LIMIT_DAILY = { max: 20, windowSeconds: 24 * 60 * 60 }
-// Pedidos abiertos (ENVIADA) por telefono. Solo cuentan los de los ultimos
-// OPEN_ORDERS_DAYS dias: sin ese corte un comprador quedaria bloqueado para
-// siempre por cotizaciones viejas que el taller nunca cerro.
+// Pedidos abiertos (ENVIADA) por telefono. El tope existe para frenar el
+// acaparamiento de stock, y la reserva vence a las 48 h por defecto: solo
+// cuentan los pedidos de esa ventana, asi un cliente recurrente no queda
+// bloqueado por dias por cotizaciones que el taller nunca contesto.
 const MAX_OPEN_ORDERS_PER_PHONE = 3
-const OPEN_ORDERS_DAYS = 14
+const OPEN_ORDERS_WINDOW_HOURS = 48
 
 /**
  * IP del comprador. x-vercel-forwarded-for lo pone el CDN y el cliente no lo
@@ -93,21 +94,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   }
 
   const organizationId = config.organization_id
-
-  // Rate limit por IP + catalogo, ANTES de cualquier escritura (cliente, numero
-  // de cotizacion, RPC). Falla abierto: ver lib/rate-limit-db.ts.
-  const ip = clientIp(req)
-  const [okShort, okDaily] = await Promise.all([
-    rateLimitDb(`cotizar:short:${slug}:${ip}`, RATE_LIMIT_SHORT.max, RATE_LIMIT_SHORT.windowSeconds),
-    rateLimitDb(`cotizar:day:${slug}:${ip}`, RATE_LIMIT_DAILY.max, RATE_LIMIT_DAILY.windowSeconds),
-  ])
-  if (!okShort || !okDaily) {
-    return tooManyRequests(
-      "Enviaste muchas solicitudes seguidas. Esperá unos minutos y volvé a intentar.",
-      "RATE_LIMITED",
-      okShort ? RATE_LIMIT_DAILY.windowSeconds : RATE_LIMIT_SHORT.windowSeconds,
-    )
-  }
 
   // Gate de plan: catálogos de orgs Free no reciben nuevas cotizaciones.
   // Chequeo público (sin auth) — corre ANTES de tocar el carrito para no
@@ -196,6 +182,33 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     }
   }
 
+  // Rate limit por IP + catalogo. Cuenta PEDIDOS, no intentos: corre despues de
+  // validar el cuerpo, el plan y el stock (un comprador que reintenta tras un
+  // 400/409 no gasta cupo) y ANTES de cualquier escritura (cliente, numero de
+  // cotizacion, RPC). Primero la ventana corta; la diaria solo se incrementa si
+  // la corta paso. Falla abierto: ver lib/rate-limit-db.ts.
+  const ip = clientIp(req)
+  const okShort = await rateLimitDb(
+    `cotizar:short:${slug}:${ip}`, RATE_LIMIT_SHORT.max, RATE_LIMIT_SHORT.windowSeconds,
+  )
+  if (!okShort) {
+    return tooManyRequests(
+      "Enviaste muchas solicitudes seguidas. Esperá unos minutos y volvé a intentar.",
+      "RATE_LIMITED",
+      RATE_LIMIT_SHORT.windowSeconds,
+    )
+  }
+  const okDaily = await rateLimitDb(
+    `cotizar:day:${slug}:${ip}`, RATE_LIMIT_DAILY.max, RATE_LIMIT_DAILY.windowSeconds,
+  )
+  if (!okDaily) {
+    return tooManyRequests(
+      "Llegaste al máximo de pedidos por hoy desde esta conexión. Probá mañana o escribile al taller por WhatsApp.",
+      "RATE_LIMITED",
+      RATE_LIMIT_DAILY.windowSeconds,
+    )
+  }
+
   // 5. Cliente: buscar por teléfono dentro de la org, o crear.
   // SEGURIDAD: flujo público anónimo. NO sobrescribimos nombre/email de un
   // cliente existente (un atacante con un teléfono conocido podría pisar
@@ -222,7 +235,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     // "112233" cuentan como clientes distintos — limitacion conocida). Corre
     // antes de tomar numero y de tocar el stock. Un cliente nuevo no tiene
     // pedidos, por eso solo se chequea en esta rama.
-    const desde = new Date(Date.now() - OPEN_ORDERS_DAYS * 24 * 60 * 60 * 1000).toISOString()
+    const desde = new Date(Date.now() - OPEN_ORDERS_WINDOW_HOURS * 60 * 60 * 1000).toISOString()
     const { count: abiertos } = await supabaseAdmin
       .from("cotizaciones")
       .select("id", { count: "exact", head: true })

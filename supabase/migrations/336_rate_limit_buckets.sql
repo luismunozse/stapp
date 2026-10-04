@@ -51,6 +51,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 REVOKE EXECUTE ON FUNCTION rate_limit_hit(TEXT, INT, INT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION rate_limit_hit(TEXT, INT, INT) FROM anon;
 REVOKE EXECUTE ON FUNCTION rate_limit_hit(TEXT, INT, INT) FROM authenticated;
+GRANT EXECUTE ON FUNCTION rate_limit_hit(TEXT, INT, INT) TO service_role;
 
 -- Barre buckets de mas de 2 dias (la ventana mas larga en uso es 1 dia).
 -- La llama el cron diario catalogo-pii-purge. Devuelve cuantas filas borro.
@@ -67,6 +68,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 REVOKE EXECUTE ON FUNCTION limpiar_rate_limit_buckets() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION limpiar_rate_limit_buckets() FROM anon;
 REVOKE EXECUTE ON FUNCTION limpiar_rate_limit_buckets() FROM authenticated;
+GRANT EXECUTE ON FUNCTION limpiar_rate_limit_buckets() TO service_role;
 
 COMMENT ON TABLE rate_limit_buckets IS
   'Contadores de rate limit por (key, ventana fija). Solo service role. Barrida diaria por limpiar_rate_limit_buckets(). v336.';

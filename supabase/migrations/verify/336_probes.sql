@@ -3,7 +3,8 @@
 --
 -- Fijan: permite hasta p_max y bloquea el siguiente, las claves son
 -- independientes, una ventana vieja no cuenta, el barrido borra solo lo viejo,
--- parametros invalidos fallan y anon/authenticated no pueden ejecutarla.
+-- parametros invalidos fallan y solo service_role (no anon, authenticated ni PUBLIC)
+-- puede ejecutar rate_limit_hit y limpiar_rate_limit_buckets.
 BEGIN;
 
 CREATE TEMP TABLE _r (orden INT, probe TEXT, esperado TEXT, obtenido TEXT);
@@ -40,11 +41,15 @@ BEGIN
   INSERT INTO _r VALUES (9, 'p_max = 0 se rechaza', 'invalid_parameter_value', v_msg);
 END $$;
 
--- 10-11: anon y authenticated no tienen EXECUTE.
-INSERT INTO _r SELECT 10, 'anon sin EXECUTE en rate_limit_hit', 'false',
-  has_function_privilege('anon', 'rate_limit_hit(text,int,int)', 'EXECUTE')::text;
-INSERT INTO _r SELECT 11, 'authenticated sin EXECUTE en rate_limit_hit', 'false',
-  has_function_privilege('authenticated', 'rate_limit_hit(text,int,int)', 'EXECUTE')::text;
+-- 10-17: solo service_role puede ejecutar ambas funciones.
+INSERT INTO _r
+SELECT 10 + (row_number() OVER (ORDER BY f.fn, r.rol) - 1)::INT,
+       r.rol || ' EXECUTE en ' || f.fn,
+       CASE WHEN r.rol = 'service_role' THEN 'true' ELSE 'false' END,
+       has_function_privilege(r.rol, f.sig, 'EXECUTE')::text
+  FROM (VALUES ('rate_limit_hit', 'rate_limit_hit(text,int,int)'),
+               ('limpiar_rate_limit_buckets', 'limpiar_rate_limit_buckets()')) AS f(fn, sig)
+ CROSS JOIN (VALUES ('service_role'), ('anon'), ('authenticated'), ('public')) AS r(rol);
 
 SELECT orden, probe, esperado, obtenido,
        CASE WHEN esperado = obtenido THEN 'OK' ELSE 'FALLA' END AS resultado
