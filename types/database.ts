@@ -806,6 +806,8 @@ export interface CatalogoConfig {
   banner_url: string | null
   trust_badges: TrustBadge[]
   activo: boolean
+  /** Horas de retención de stock por solicitud pendiente. Ausente hasta aplicar la migración 337. */
+  reserva_horas?: number
   created_at: string
   updated_at: string
 }
