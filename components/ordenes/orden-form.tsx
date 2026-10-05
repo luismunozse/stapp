@@ -38,6 +38,7 @@ import { isValidImei, sanitizeImei } from "@/lib/imei"
 import { parseMoneyInput } from "@/lib/parse-money"
 import { FotosIngreso, type FotoPreview } from "./fotos-ingreso"
 import { AccesoriosPicker } from "./accesorios-picker"
+import { accesoriosConPendiente } from "@/lib/ordenes/accesorios"
 import { TipoDispositivoPicker } from "./tipo-dispositivo-picker"
 import { CamposExtraFields } from "./campos-extra-fields"
 
@@ -741,6 +742,12 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
   // Clear fields when device type changes
   const handleTipoChange = (nuevoTipo: string) => {
+    // Volver a tocar el tipo que ya estaba elegido no es un cambio de tipo:
+    // los accesorios, los campos extra y el checklist que sigue abajo
+    // pertenecen a ESTE tipo. Sin este corte, un toque de mas en la grilla
+    // (o un volver al paso 1 a revisar) vaciaba todo eso sin avisar y la
+    // orden se creaba sin los accesorios que el operador ya habia marcado.
+    if (nuevoTipo === getValues("tipoDispositivo")) return
     setValue("tipoDispositivo", nuevoTipo, { shouldValidate: true })
     if (nuevoTipo) clearErrors("tipoDispositivo")
     setAccesoriosSeleccionados([])
@@ -1080,8 +1087,15 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     }
     setLoading(true)
     try {
-      // Build accessories labels
-      const accesoriosLabels = accesoriosSeleccionados.map((id) => {
+      // Build accessories labels.
+      //
+      // El texto que quedo tipeado en "Otro accesorio..." sin apretar "+"
+      // cuenta como cargado: el operador lo escribio, lo ve en pantalla y
+      // aprieta "Crear Orden". Antes se perdia en silencio y el comprobante
+      // salia con "Accesorios recibidos —" sobre un equipo que si los tenia,
+      // que es justo el papel que firma el cliente al dejarlo.
+      const accesoriosFinal = accesoriosConPendiente(accesoriosSeleccionados, otroAccesorio)
+      const accesoriosLabels = accesoriosFinal.map((id) => {
         const acc = accesoriosDisponibles.find((a) => a.id === id)
         return acc ? acc.label : id
       })
