@@ -171,6 +171,10 @@ export interface OrdenServicio {
   esReingreso?: boolean
   garantiaOrigenId?: string | null
   ordenOrigen?: OrdenServicio | null
+  // Recepcion multiple (lote mayorista): presente solo si la orden se creo
+  // como parte de un lote.
+  recepcionId?: string | null
+  recepcionCodigo?: string | null
 }
 
 export interface Inventario {
