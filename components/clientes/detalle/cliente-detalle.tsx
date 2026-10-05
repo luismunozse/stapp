@@ -3,7 +3,7 @@
 import { useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-import { Loader2 } from "lucide-react"
+import { Loader2, Wrench } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ClienteDetalleHeader } from "./cliente-detalle-header"
 import { ClienteForm } from "@/components/clientes/cliente-form"
@@ -11,6 +11,7 @@ import { ClienteWhatsAppDialog } from "@/components/clientes/cliente-whatsapp-di
 import { ClienteDetalleDatos } from "./cliente-detalle-datos"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CuentaCorrientePanel } from "./cuenta-corriente-panel"
+import { ReparacionesExpressDialog } from "./reparaciones-express-dialog"
 import { ClienteOrdenesPendientes } from "./cliente-ordenes-pendientes"
 import { ClienteOrdenesHistorial } from "./cliente-ordenes-historial"
 import { ClienteCotizaciones } from "./cliente-cotizaciones"
@@ -21,9 +22,19 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 interface OrdenPendiente { id: string; pendiente: number }
 
-export function ClienteDetalle({ clienteId }: { clienteId: string }) {
+interface ClienteDetalleProps {
+  clienteId: string
+  // Server-resolved plan gate (hasPlanFeature, "reparaciones_express") — see
+  // app/(dashboard)/clientes/[id]/page.tsx. Mirrors how canRecepcionMultiple
+  // is threaded into OrdenesList: hide the entry point client-side, the API
+  // route is the real enforcement (app/api/reparaciones-express/route.ts).
+  canReparacionesExpress?: boolean
+}
+
+export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: ClienteDetalleProps) {
   const [showEdit, setShowEdit] = useState(false)
   const [showWhatsApp, setShowWhatsApp] = useState(false)
+  const [showExpress, setShowExpress] = useState(false)
 
   const { data: cliente, error, isLoading, mutate } = useSWR<Cliente>(
     `/api/clientes/${clienteId}`, fetcher, { revalidateOnFocus: false }
@@ -81,7 +92,14 @@ export function ClienteDetalle({ clienteId }: { clienteId: string }) {
       <div className="space-y-6 pt-6">
         <ClienteDetalleDatos cliente={cliente} />
         <Card>
-          <CardHeader><CardTitle className="text-base">Cuenta corriente</CardTitle></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Cuenta corriente</CardTitle>
+            {canReparacionesExpress && (
+              <Button variant="outline" size="sm" onClick={() => setShowExpress(true)} className="gap-1.5">
+                <Wrench className="h-4 w-4" /> Cargar reparaciones
+              </Button>
+            )}
+          </CardHeader>
           <CardContent>
             <CuentaCorrientePanel cliente={cliente} onDeposito={() => mutateCC()} />
           </CardContent>
@@ -103,6 +121,13 @@ export function ClienteDetalle({ clienteId }: { clienteId: string }) {
         cliente={cliente}
         onClose={() => setShowEdit(false)}
         onSuccess={() => { setShowEdit(false); mutate() }}
+      />
+      <ReparacionesExpressDialog
+        cliente={cliente}
+        saldoActual={saldo}
+        open={showExpress}
+        onOpenChange={setShowExpress}
+        onDone={() => { mutate(); mutateCC() }}
       />
       {showWhatsApp && (
         <ClienteWhatsAppDialog
