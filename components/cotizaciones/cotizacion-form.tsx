@@ -223,12 +223,14 @@ export function CotizacionForm({
     })()
   }, [isPresupuesto, tiposDispositivo.length])
 
-  // Fetch org config for defaults (only for new cotizaciones)
+  // Valores por defecto de la org (solo para cotizaciones nuevas). operativa y
+  // no /api/configuracion, que es solo ADMIN: con otro rol respondía 403 y la
+  // cotización arrancaba con IVA 0, sin términos ni vencimiento.
   useEffect(() => {
     if (isEditing || configLoaded) return
     const fetchConfig = async () => {
       try {
-        const res = await fetch("/api/configuracion")
+        const res = await fetch("/api/configuracion/operativa")
         if (res.ok) {
           const data = await res.json()
           setIvaPorcentaje(data.ivaPorcentaje ?? 0)

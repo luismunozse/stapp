@@ -7,7 +7,8 @@ import { hasPlanFeature } from "@/lib/subscriptions"
 
 /**
  * GET /api/configuracion/operativa — lo que cualquier usuario de la org necesita
- * para operar: moneda, zona horaria, país, régimen fiscal y garantía por defecto.
+ * para operar: moneda, zona horaria, país, régimen fiscal, garantía por defecto,
+ * los valores por defecto de las cotizaciones y el umbral de stock bajo.
  *
  * GET /api/configuracion es solo ADMIN y el POS y el CurrencyProvider la usaban
  * para todos. Un VENDEDOR recibía 403 y el POS seguía como si la org fuera
@@ -52,6 +53,16 @@ export async function GET() {
       ivaTasa: org.iva_tasa ?? getIvaGeneral(org.pais),
       redondeoEfectivo: org.redondeo_efectivo ?? 0,
       garantiaDiasDefault: org.garantia_dias_default ?? 30,
+      // Valores por defecto de cotizaciones y presupuestos. Con
+      // /api/configuracion un VENDEDOR recibía 403 y su cotización arrancaba
+      // con IVA 0, sin términos ni vencimiento. Mismos defaults que esa ruta.
+      ivaPorcentaje: org.iva_porcentaje ?? 0,
+      cotizacionValidezDias: org.cotizacion_validez_dias ?? 30,
+      cotizacionTerminos: org.cotizacion_terminos || "",
+      politicaAbandonoDiasDefault: org.politica_abandono_dias_default ?? 60,
+      anticipoPorcentajeDefault: org.anticipo_porcentaje_default ?? 50,
+      // Inventario: desde cuántas unidades se marca un producto con stock bajo.
+      umbralStockBajo: org.umbral_stock_bajo ?? 5,
       facturacionElectronicaDisponible,
     })
   } catch (error) {

@@ -37,7 +37,9 @@ export function ClienteDetalle({ clienteId }: { clienteId: string }) {
   const { data: ordenesData } = useSWR(
     `/api/ordenes?clienteId=${clienteId}&limit=1`, fetcher, { revalidateOnFocus: false }
   )
-  const { data: configData } = useSWR("/api/configuracion", fetcher, {
+  // operativa y no /api/configuracion (solo ADMIN): con otro rol el WhatsApp
+  // salía sin el nombre del negocio.
+  const { data: configData } = useSWR("/api/configuracion/operativa", fetcher, {
     revalidateOnFocus: false, dedupingInterval: 60000,
   })
   const organizationName: string = configData?.nombreEmpresa || ""
