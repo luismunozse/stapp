@@ -18,6 +18,7 @@ import { Eye, EyeOff, AlertTriangle } from "lucide-react"
 import { STAppLogo } from "@/components/shared/stapp-logo"
 import { TwoFactorVerify } from "@/components/auth/two-factor-verify"
 import { extractAuthCode, parseRequires2FA } from "@/lib/auth-client"
+import { safeCallbackPath } from "@/lib/safe-callback-path"
 
 function LoginForm() {
   const router = useRouter()
@@ -31,7 +32,12 @@ function LoginForm() {
   const [pending2FAUserId, setPending2FAUserId] = useState<string | null>(null)
   const [twoFAError, setTwoFAError] = useState("")
 
-  const callbackUrl = searchParams.get("callbackUrl") || "/superadmin/dashboard"
+  // Solo rutas relativas del mismo origen: un `callbackUrl` externo o con
+  // esquema (`javascript:`) seria open redirect / XSS tras autenticar.
+  const callbackUrl = safeCallbackPath(
+    searchParams.get("callbackUrl"),
+    "/superadmin/dashboard"
+  )
 
   const completeLogin = () => {
     window.location.href = callbackUrl
