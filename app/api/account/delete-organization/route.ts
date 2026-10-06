@@ -73,15 +73,14 @@ export async function POST(request: Request) {
   const now = new Date()
   const nowIso = now.toISOString()
 
-  // 2) canceled_at ANTES de archivar. Si falla, el taller sigue activo y el
-  //    reintento es seguro (los proveedores ya cancelados cuentan como éxito).
+  // 2) canceled_at es contabilidad: si falla se loguea y se sigue archivando,
+  //    porque los proveedores ya cancelaron y dejar el taller activo sería peor.
   const { error: subsError } = await supabaseAdmin
     .from("subscriptions")
     .update({ canceled_at: nowIso })
     .eq("organization_id", org.id)
   if (subsError) {
     console.error("[account/delete-organization] subscriptions canceled_at:", subsError)
-    return NextResponse.json({ error: GENERIC_FAILURE }, { status: 500 })
   }
 
   // 3) Archivar: el middleware corta el acceso en <=30 s. Los .is(..., null)
@@ -104,12 +103,16 @@ export async function POST(request: Request) {
   }
   if (!Array.isArray(updated) || updated.length === 0) {
     // 0 filas: o lo archivó otra request (409) o pasó algo inesperado (500).
-    const { data: actual } = await supabaseAdmin
+    const { data: actual, error: rereadError } = await supabaseAdmin
       .from("organizations")
-      .select("deleted_at")
+      .select("deleted_at, deletion_requested_at")
       .eq("id", org.id)
       .single()
-    if (actual?.deleted_at) {
+    if (rereadError) {
+      console.error("[account/delete-organization] re-lectura tras UPDATE sin filas:", rereadError)
+      return NextResponse.json({ error: GENERIC_FAILURE }, { status: 500 })
+    }
+    if (actual?.deleted_at || actual?.deletion_requested_at) {
       return NextResponse.json({ error: ALREADY_PENDING }, { status: 409 })
     }
     console.error("[account/delete-organization] el UPDATE de organizations no afectó filas:", org.id)

@@ -18,13 +18,14 @@ function setup(
   org: Org = { id: "o1", slug: "taller-uno", nombre: "Taller Uno", deleted_at: null, deletion_requested_at: null },
   opts: { subsError?: unknown } = {},
 ) {
+  const updateChain = createChainMock([{ id: "o1" }], null)
   const orgChain = Object.assign(createChainMock(org, null), {
-    update: vi.fn().mockReturnValue(createChainMock([{ id: "o1" }], null)),
+    update: vi.fn().mockReturnValue(updateChain),
   })
   const subs = createChainMock(null, opts.subsError ?? null)
   const audit = createChainMock(null, null)
   mockSupabaseFrom({ organizations: orgChain as never, subscriptions: subs, audit_logs: audit })
-  return { orgChain, subs, audit }
+  return { orgChain, subs, audit, updateChain }
 }
 
 const body = (over: Record<string, unknown> = {}) => createPostRequest({ confirmSlug: "taller-uno", password: "x", ...over })
@@ -56,9 +57,11 @@ describe("POST /api/account/delete-organization", () => {
   })
 
   it("caso feliz: marca el taller, cancela, setea canceled_at, avisa y devuelve la fecha de borrado", async () => {
-    const { orgChain, subs } = setup()
+    const { orgChain, subs, updateChain } = setup()
     const { status, body: b } = await parseResponse(await POST(body()))
     expect(status).toBe(200)
+    expect(updateChain.is).toHaveBeenCalledWith("deleted_at", null)
+    expect(updateChain.is).toHaveBeenCalledWith("deletion_requested_at", null)
     expect(b.success).toBe(true)
     expect(new Date(b.deletionDate).getTime()).toBeGreaterThan(Date.now() + 29 * 86400000)
 
@@ -115,6 +118,7 @@ describe("POST /api/account/delete-organization", () => {
   it("taller ya en proceso de eliminación: 409; org del panel: 403", async () => {
     setup({ id: "o1", slug: "taller-uno", nombre: "T", deleted_at: "2026-10-01", deletion_requested_at: "2026-10-01" })
     expect((await POST(body())).status).toBe(409)
+    expect(cancelOrganizationSubscriptions).not.toHaveBeenCalled()
     setup({ id: "o1", slug: "superadmin", nombre: "Admin", deleted_at: null, deletion_requested_at: null })
     expect((await POST(body({ confirmSlug: "superadmin" }))).status).toBe(403)
   })
@@ -143,11 +147,31 @@ describe("POST /api/account/delete-organization", () => {
     expect(notifyAdminsOrgDeleted).not.toHaveBeenCalled()
   })
 
-  it("error al setear canceled_at: 500, no archiva el taller ni avisa", async () => {
+  it("error al setear canceled_at: se loguea y se archiva igual (200, avisa)", async () => {
     const { orgChain } = setup(undefined, { subsError: { message: "boom" } })
+    expect((await POST(body())).status).toBe(200)
+    expect(console.error).toHaveBeenCalled()
+    expect(orgChain.update).toHaveBeenCalled()
+    expect(notifyAdminsOrgDeleted).toHaveBeenCalled()
+  })
+
+  it("re-lectura tras 0 filas: deletion_requested_at también cuenta como pendiente (409)", async () => {
+    const { orgChain } = setup()
+    orgChain.update.mockReturnValueOnce(createChainMock([], null))
+    orgChain.single
+      .mockResolvedValueOnce({ data: { id: "o1", slug: "taller-uno", nombre: "T", deleted_at: null, deletion_requested_at: null }, error: null })
+      .mockResolvedValueOnce({ data: { deleted_at: null, deletion_requested_at: "2026-10-06" }, error: null })
+    expect((await POST(body())).status).toBe(409)
+  })
+
+  it("re-lectura tras 0 filas con error: 500 y se loguea", async () => {
+    const { orgChain } = setup()
+    orgChain.update.mockReturnValueOnce(createChainMock([], null))
+    orgChain.single
+      .mockResolvedValueOnce({ data: { id: "o1", slug: "taller-uno", nombre: "T", deleted_at: null, deletion_requested_at: null }, error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: "boom" } })
     expect((await POST(body())).status).toBe(500)
-    expect(orgChain.update).not.toHaveBeenCalled()
-    expect(notifyAdminsOrgDeleted).not.toHaveBeenCalled()
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining("re-lectura"), expect.anything())
   })
 
   it("un fallo del audit log no tumba la baja", async () => {
