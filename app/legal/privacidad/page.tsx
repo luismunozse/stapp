@@ -62,7 +62,8 @@ export default function PrivacidadPage() {
           <li>
             <strong>Notificaciones:</strong> si las activa, el dispositivo genera un identificador
             (token de Firebase Cloud Messaging) que guardamos para poder enviarle avisos sobre sus
-            órdenes. El token se desactiva al cerrar sesión o desinstalar la aplicación.
+            órdenes. Dejamos de usarlo cuando el dispositivo lo invalida (por ejemplo, al
+            desinstalar la aplicación) y puede revocar el permiso desde los ajustes del teléfono.
           </li>
           <li>
             <strong>Datos técnicos de la aplicación:</strong> plataforma y versión instalada, para
