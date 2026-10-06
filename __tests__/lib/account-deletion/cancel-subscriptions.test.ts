@@ -65,6 +65,18 @@ describe("cancelOrganizationSubscriptions", () => {
     expect(r).toEqual({ ok: true, canceled: ["MERCADOPAGO"], skipped: false })
   })
 
+  it("rechazo con objeto plano (SDK de MercadoPago) 'ya cancelada' cuenta como éxito", async () => {
+    mockSupabaseFrom({ subscriptions: createChainMock(sub({ mercadopago_preapproval_id: "pre1" })) })
+    vi.mocked(cancelPreApproval).mockRejectedValueOnce({ message: "Cannot modify a cancelled preapproval", status: 400 })
+    expect(await cancelOrganizationSubscriptions("o1")).toEqual({ ok: true, canceled: ["MERCADOPAGO"], skipped: false })
+  })
+
+  it("rechazo con objeto plano que no es 'ya cancelada' es un fallo", async () => {
+    mockSupabaseFrom({ subscriptions: createChainMock(sub({ mercadopago_preapproval_id: "pre1" })) })
+    vi.mocked(cancelPreApproval).mockRejectedValueOnce({ message: "internal error", status: 500 })
+    expect(await cancelOrganizationSubscriptions("o1")).toEqual({ ok: false, failed: ["MERCADOPAGO"], canceled: [] })
+  })
+
   it("un error de lectura de la BD es un fallo, no 'no hay suscripción'", async () => {
     mockSupabaseFrom({ subscriptions: createChainMock(null, { message: "down" }) })
     expect(await cancelOrganizationSubscriptions("o1")).toEqual({ ok: false, failed: ["DB"], canceled: [] })
