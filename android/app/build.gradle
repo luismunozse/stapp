@@ -40,7 +40,9 @@ android {
     signingConfigs {
         release {
             if (keystorePropertiesFile.exists()) {
-                storeFile file(keystoreProperties['storeFile'])
+                // Resolved relative to android/ (rootProject), as documented in
+                // keystore.properties.example. `file()` would resolve against the app module.
+                storeFile rootProject.file(keystoreProperties['storeFile'])
                 storePassword keystoreProperties['storePassword']
                 keyAlias keystoreProperties['keyAlias']
                 keyPassword keystoreProperties['keyPassword']
