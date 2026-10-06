@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Download, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -23,8 +23,14 @@ const ALREADY_PENDING_MESSAGE = "Este taller ya está en proceso de eliminación
 const FORBIDDEN_MESSAGE = "Esta acción no está permitida para tu usuario."
 const NETWORK_MESSAGE = "Error de conexión. Reintentá en unos segundos."
 const GENERIC_MESSAGE = "No pudimos eliminar el taller. Reintentá más tarde."
-const BACKUP_FAILED_MESSAGE =
-  "No pudimos descargar el respaldo. Reintentá, o tildá la casilla si no lo necesitás."
+const BACKUP_FAILED_MESSAGE = "No pudimos descargar el respaldo. Reintentá, o tildá la casilla si no lo necesitás."
+const NATIVE_HINT = "Cuando hayas guardado el archivo, tildá la casilla."
+
+// Nombre del archivo según Content-Disposition (trae la fecha); si no viene, uno genérico.
+function filenameFrom(res: Response, slug: string): string {
+  const match = /filename="?([^";]+)"?/i.exec(res.headers.get("Content-Disposition") ?? "")
+  return match?.[1]?.trim() || `respaldo-${slug}.zip`
+}
 
 // Targets táctiles de 44px en pantallas coarse (WebView de la APK), igual que el Dialog base.
 const TOUCH = "[@media(pointer:coarse)]:h-11"
@@ -37,17 +43,24 @@ export function EliminarTallerDialog({ open, onOpenChange, info }: Props) {
   const [loading, setLoading] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [nativeHint, setNativeHint] = useState(false)
   // El estado llega un render tarde: las refs frenan un segundo clic en el mismo tick.
   const inFlight = useRef(false)
   const downloadInFlight = useRef(false)
+  // Cambia cada vez que el diálogo se abre o se cierra: una descarga vieja no puede tocar el estado nuevo.
+  const generation = useRef(0)
+  useEffect(() => {
+    generation.current += 1
+  }, [open])
 
   const slugOk = slug.trim().toLowerCase() === info.slug.toLowerCase()
   const reauthOk = isReauthComplete(value, info.hasPassword, info.totpEnabled)
-  const canSubmit = !loading && backupHecho && slugOk && reauthOk
+  const canSubmit = !loading && !downloading && backupHecho && slugOk && reauthOk
 
   const handleOpenChange = (next: boolean) => {
-    if (loading) return
+    if (loading || downloading) return
     if (!next) {
+      setNativeHint(false)
       setBackupHecho(false)
       setSlug("")
       setValue(EMPTY_REAUTH)
@@ -60,23 +73,35 @@ export function EliminarTallerDialog({ open, onOpenChange, info }: Props) {
   const descargarRespaldo = async () => {
     if (downloadInFlight.current) return
     downloadInFlight.current = true
+    const gen = generation.current
+    const vigente = () => generation.current === gen
     setDownloading(true)
     setError(null)
+    setNativeHint(false)
     try {
       const res = await fetch("/api/account/export")
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) ?? {}
+        if (!vigente()) return
         const msg = typeof data === "object" && typeof (data as { error?: unknown }).error === "string" ? (data as { error: string }).error : null
         setError(msg ?? BACKUP_FAILED_MESSAGE)
         return
       }
       const blob = await res.blob()
+      if (!vigente()) return
       // Import dinámico: csv-export arrastra exceljs y solo lo necesitamos al descargar.
       const { triggerDownload } = await import("@/lib/csv-export")
-      await triggerDownload(blob, `respaldo-${info.slug}.zip`)
-      setBackupHecho(true)
+      const { Capacitor } = await import("@capacitor/core")
+      await triggerDownload(blob, filenameFrom(res, info.slug))
+      if (!vigente()) return
+      if (Capacitor.isNativePlatform()) {
+        // triggerDownload se traga los errores de escritura nativos y devuelve void: no podemos saber si salió bien.
+        setNativeHint(true)
+      } else {
+        setBackupHecho(true)
+      }
     } catch {
-      setError(BACKUP_FAILED_MESSAGE)
+      if (vigente()) setError(BACKUP_FAILED_MESSAGE)
     } finally {
       downloadInFlight.current = false
       setDownloading(false)
@@ -84,7 +109,7 @@ export function EliminarTallerDialog({ open, onOpenChange, info }: Props) {
   }
 
   const submit = async () => {
-    if (inFlight.current || !backupHecho || !slugOk || !reauthOk) return
+    if (inFlight.current || downloading || !backupHecho || !slugOk || !reauthOk) return
     inFlight.current = true
     setLoading(true)
     setError(null)
@@ -144,6 +169,7 @@ export function EliminarTallerDialog({ open, onOpenChange, info }: Props) {
             {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
             Descargar respaldo
           </Button>
+          {nativeHint ? <p className="text-sm text-muted-foreground">{NATIVE_HINT}</p> : null}
           <div className="flex items-center gap-2 pt-1 [@media(pointer:coarse)]:min-h-11">
             <input
               id="eliminar-taller-backup"
@@ -193,7 +219,7 @@ export function EliminarTallerDialog({ open, onOpenChange, info }: Props) {
         ) : null}
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" className={TOUCH} onClick={() => handleOpenChange(false)} disabled={loading}>
+          <Button variant="outline" className={TOUCH} onClick={() => handleOpenChange(false)} disabled={busy}>
             Cancelar
           </Button>
           <Button variant="destructive" className={TOUCH} onClick={submit} disabled={!canSubmit}>

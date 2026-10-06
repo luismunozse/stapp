@@ -4,6 +4,8 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 vi.mock("@/components/perfil/cerrar-sesion-tras-baja", () => ({ cerrarSesionTrasBaja: vi.fn().mockResolvedValue(undefined) }))
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock("@/lib/csv-export", () => ({ triggerDownload: vi.fn().mockResolvedValue(undefined) }))
+const isNative = vi.hoisted(() => ({ value: false }))
+vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => isNative.value } }))
 
 import { cerrarSesionTrasBaja } from "@/components/perfil/cerrar-sesion-tras-baja"
 import { triggerDownload } from "@/lib/csv-export"
@@ -30,6 +32,7 @@ describe("EliminarTallerDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.unstubAllGlobals()
+    isNative.value = false
   })
 
   it("ofrece el respaldo y recuerda que la documentación fiscal es del taller", () => {
@@ -184,5 +187,62 @@ describe("EliminarTallerDialog", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/conexión/i)
     expect(boton()).toBeEnabled()
     expect(cerrarSesionTrasBaja).not.toHaveBeenCalled()
+  })
+
+  it("nativo: tras un respaldo exitoso NO tilda el checkbox y muestra la pista", async () => {
+    isNative.value = true
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(new Blob(["zip"]), { status: 200 })))
+    renderDialog()
+    fireEvent.click(screen.getByRole("button", { name: /descargar respaldo/i }))
+    expect(await screen.findByText(/cuando hayas guardado el archivo, tildá la casilla/i)).toBeInTheDocument()
+    expect(triggerDownload).toHaveBeenCalledTimes(1)
+    expect(checkbox().checked).toBe(false)
+  })
+
+  it("usa el nombre de Content-Disposition si viene", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(new Blob(["zip"]), {
+      status: 200, headers: { "Content-Disposition": 'attachment; filename="stapp-taller-uno-2026-10-06.zip"' },
+    })))
+    renderDialog()
+    fireEvent.click(screen.getByRole("button", { name: /descargar respaldo/i }))
+    await waitFor(() => expect(triggerDownload).toHaveBeenCalled())
+    expect(vi.mocked(triggerDownload).mock.calls[0][1]).toBe("stapp-taller-uno-2026-10-06.zip")
+  })
+
+  it("respaldo 403: muestra el mensaje del servidor", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(res({ error: "Solo el administrador puede exportar" }, 403)))
+    renderDialog()
+    fireEvent.click(screen.getByRole("button", { name: /descargar respaldo/i }))
+    expect(await screen.findByRole("alert")).toHaveTextContent("Solo el administrador puede exportar")
+    expect(checkbox().checked).toBe(false)
+  })
+
+  it("mientras baja el respaldo: no se puede enviar ni cerrar", async () => {
+    let resolver!: (r: Response) => void
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise<Response>((r) => { resolver = r })))
+    const onOpenChange = vi.fn()
+    render(<EliminarTallerDialog open onOpenChange={onOpenChange} info={info} />)
+    llenar()
+    expect(boton()).toBeEnabled()
+    fireEvent.click(screen.getByRole("button", { name: /descargar respaldo/i }))
+    expect(boton()).toBeDisabled()
+    expect(screen.getByRole("button", { name: /cancelar/i })).toBeDisabled()
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" })
+    expect(onOpenChange).not.toHaveBeenCalled()
+    resolver(new Response(new Blob(["zip"]), { status: 200 }))
+    await waitFor(() => expect(boton()).toBeEnabled())
+  })
+
+  it("una descarga que termina tras cerrar y reabrir no tilda el checkbox", async () => {
+    let resolver!: (r: Response) => void
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise<Response>((r) => { resolver = r })))
+    const { rerender } = render(<EliminarTallerDialog open onOpenChange={() => {}} info={info} />)
+    fireEvent.click(screen.getByRole("button", { name: /descargar respaldo/i }))
+    rerender(<EliminarTallerDialog open={false} onOpenChange={() => {}} info={info} />)
+    rerender(<EliminarTallerDialog open onOpenChange={() => {}} info={info} />)
+    resolver(new Response(new Blob(["zip"]), { status: 200 }))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(checkbox().checked).toBe(false)
+    expect(triggerDownload).not.toHaveBeenCalled()
   })
 })
