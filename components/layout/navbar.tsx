@@ -325,6 +325,7 @@ export function Navbar() {
   }, [])
 
   // Logout que redirige al login del mismo dominio/subdominio
+  // Keep cleanup steps in sync with components/perfil/cerrar-sesion-tras-baja.ts
   const handleLogout = async () => {
     const { clearPWATokens } = await import("@/components/auth/session-refresher")
     await clearPWATokens()

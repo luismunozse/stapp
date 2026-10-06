@@ -39,6 +39,11 @@ describe("reauthErrorMessage", () => {
     }
   })
 
+  it("no confunde claves heredadas con códigos", () => {
+    expect(reauthErrorMessage({ code: "constructor" })).toBeNull()
+    expect(reauthErrorMessage({ code: "toString", error: "x" })).toBeNull()
+  })
+
   it("devuelve null si el código no es de reautenticación", () => {
     expect(reauthErrorMessage({ code: "OTHER", error: "x" })).toBeNull()
     expect(reauthErrorMessage({})).toBeNull()
@@ -79,5 +84,12 @@ describe("<ReauthFields>", () => {
   it("muestra el error en un alert", () => {
     render(<ReauthFields {...base} hasPassword totpEnabled={false} error="Contraseña incorrecta" />)
     expect(screen.getByRole("alert")).toHaveTextContent("Contraseña incorrecta")
+  })
+
+  it("el código TOTP descarta lo que no es dígito y corta en 6", () => {
+    const onChange = vi.fn()
+    render(<ReauthFields value={EMPTY_REAUTH} onChange={onChange} hasPassword totpEnabled />)
+    fireEvent.change(screen.getByLabelText(/código/i), { target: { value: "12a 345678" } })
+    expect(onChange).toHaveBeenCalledWith({ password: "", email: "", totpCode: "123456" })
   })
 })

@@ -36,7 +36,7 @@ const REAUTH_FALLBACKS: Record<string, string> = {
  * Devuelve null si el código no es de reautenticación.
  */
 export function reauthErrorMessage(body: { code?: string; error?: string }): string | null {
-  if (!body.code || !(body.code in REAUTH_FALLBACKS)) return null
+  if (!body.code || !Object.hasOwn(REAUTH_FALLBACKS, body.code)) return null
   return body.error || REAUTH_FALLBACKS[body.code]
 }
 
@@ -88,7 +88,7 @@ export function ReauthFields({ hasPassword, totpEnabled, value, onChange, disabl
             maxLength={6}
             value={value.totpCode}
             disabled={disabled}
-            onChange={(e) => onChange({ ...value, totpCode: e.target.value })}
+            onChange={(e) => onChange({ ...value, totpCode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
           />
         </div>
       )}
