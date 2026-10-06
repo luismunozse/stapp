@@ -76,6 +76,13 @@ export const CRON_JOBS: CronJobDefinition[] = [
     schedule: "4:00 AM",
     description: "Borra carritos abandonados y views viejos (Ley 25.326)",
   },
+  {
+    id: "account-deletion-purge",
+    name: "Account Deletion Purge",
+    path: "/api/cron/account-deletion-purge",
+    schedule: "5:30 AM",
+    description: "Borra talleres y anonimiza usuarios dados de baja hace más de 30 días (dry-run salvo ACCOUNT_DELETION_PURGE_ENABLED=true)",
+  },
 ]
 
 /** Paths válidos para el endpoint run-cron */
