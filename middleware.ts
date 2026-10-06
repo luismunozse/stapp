@@ -351,15 +351,10 @@ export async function middleware(request: NextRequest) {
     }
 
     // Verificar autenticación
-    const adminCookieName =
-      process.env.NODE_ENV === "production"
-        ? "__Secure-next-auth.session-token"
-        : "next-auth.session-token"
-
     const token = await getToken({
       req: request,
       secret: process.env.NEXTAUTH_SECRET,
-      cookieName: adminCookieName,
+      cookieName: sessionCookieName(),
     })
 
     if (!token) {
@@ -465,15 +460,10 @@ export async function middleware(request: NextRequest) {
 
   // Leemos el token una sola vez y lo reutilizamos para los chequeos de
   // ownership, landing y rutas protegidas.
-  const cookieName =
-    process.env.NODE_ENV === "production"
-      ? "__Secure-next-auth.session-token"
-      : "next-auth.session-token"
-
   const token = await getToken({
     req: request,
     secret: process.env.NEXTAUTH_SECRET,
-    cookieName,
+    cookieName: sessionCookieName(),
   })
 
   // Chequeo de pertenencia al tenant. La cookie de sesión está scopeada a
