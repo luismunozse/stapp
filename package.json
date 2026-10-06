@@ -66,6 +66,7 @@
     "date-fns": "^3.6.0",
     "driver.js": "^1.4.0",
     "exceljs": "^4.4.0",
+    "fflate": "^0.8.3",
     "framer-motion": "^12.30.0",
     "fuse.js": "^7.3.0",
     "html2canvas": "^1.4.1",

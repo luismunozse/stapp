@@ -11,6 +11,9 @@
     },
     "app/api/cron/**/*.ts": {
       "maxDuration": 60
+    },
+    "app/api/account/export/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
