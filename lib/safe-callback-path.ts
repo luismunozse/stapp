@@ -40,6 +40,9 @@ export function safeCallbackPath(raw: string | null | undefined, fallback = "/da
     return fallback
   }
   if (url.origin !== BASE) return fallback
+  // Los segmentos punto (`/..//evil.com`) se normalizan a `//evil.com`, que un
+  // navegador interpreta como otro host: se valida el resultado normalizado.
+  if (url.pathname.startsWith("//")) return fallback
 
   let pathname = url.pathname
   try {
@@ -49,5 +52,6 @@ export function safeCallbackPath(raw: string | null | undefined, fallback = "/da
   }
   if (isBlockedPath(pathname)) return fallback
 
-  return raw
+  // Se devuelve la forma normalizada, no la cruda: es la que se valido.
+  return url.pathname + url.search + url.hash
 }
