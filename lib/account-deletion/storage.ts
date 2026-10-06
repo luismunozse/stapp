@@ -30,7 +30,7 @@ const PAGE = 1000
 const REMOVE_CHUNK = 100
 
 function isMissingBucket(message: string): boolean {
-  return /not found/i.test(message)
+  return /bucket not found/i.test(message)
 }
 
 /**
@@ -38,7 +38,19 @@ function isMissingBucket(message: string): boolean {
  * En storage de Supabase las carpetas vienen sin `id` (`id: null`) y `list` no
  * es recursivo: un barrido plano de `{orgId}/` se saltea `{orgId}/{ordenId}/…`.
  */
+/**
+ * Un prefijo vacío, con "/" inicial o con ".." apuntaría a la raíz del bucket
+ * (o fuera de la org): en un borrado masivo es pérdida de datos. Se rechaza
+ * ANTES de cualquier list/remove.
+ */
+function assertSafePrefix(prefix: string): void {
+  if (typeof prefix !== "string" || !prefix.trim() || prefix.startsWith("/") || prefix.includes("..")) {
+    throw new Error(`prefijo de storage inválido: ${JSON.stringify(prefix)}`)
+  }
+}
+
 export async function listAllFiles(bucket: string, prefix: string): Promise<string[]> {
+  assertSafePrefix(prefix)
   const files: string[] = []
   const pending = [prefix]
   while (pending.length > 0) {
@@ -49,7 +61,7 @@ export async function listAllFiles(bucket: string, prefix: string): Promise<stri
       const entries = data ?? []
       for (const entry of entries) {
         const full = `${dir}/${entry.name}`
-        if (entry.id === null) pending.push(full)
+        if (!entry.id) pending.push(full)
         else files.push(full)
       }
       if (entries.length < PAGE) break
@@ -60,6 +72,7 @@ export async function listAllFiles(bucket: string, prefix: string): Promise<stri
 
 /** Borra todo lo que hay bajo `prefix`. Devuelve cuántos archivos borró. */
 export async function removePrefix(bucket: string, prefix: string, deadline?: number): Promise<number> {
+  assertSafePrefix(prefix)
   let files: string[]
   try {
     files = await listAllFiles(bucket, prefix)
@@ -83,6 +96,7 @@ export async function removePrefix(bucket: string, prefix: string, deadline?: nu
 
 /** Todos los (bucket, prefijo) donde una organización puede tener archivos. */
 export async function storageTargets(orgId: string): Promise<Array<{ bucket: string; prefix: string }>> {
+  assertSafePrefix(orgId)
   const targets = PURGE_BUCKETS.map((bucket) => ({ bucket, prefix: orgId }))
   targets.push({ bucket: STORAGE_BUCKETS.LOGOS, prefix: `proveedores/${orgId}` })
   targets.push({ bucket: STORAGE_BUCKETS.CATALOGO, prefix: catalogoOrgHash(orgId) })
@@ -94,7 +108,11 @@ export async function storageTargets(orgId: string): Promise<Array<{ bucket: str
     .select("id")
     .eq("organization_id", orgId)
   if (error) throw new Error(`support_tickets: ${error.message}`)
-  for (const t of tickets ?? []) targets.push({ bucket: STORAGE_BUCKETS.SOPORTE_ATTACHMENTS, prefix: t.id })
+  for (const t of tickets ?? []) {
+    // Un ticket con id vacío tira (consistente con el resto): no se puede garantizar el barrido.
+    assertSafePrefix(t.id)
+    targets.push({ bucket: STORAGE_BUCKETS.SOPORTE_ATTACHMENTS, prefix: t.id })
+  }
 
   return targets
 }

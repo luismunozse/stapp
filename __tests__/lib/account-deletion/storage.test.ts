@@ -1,6 +1,5 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import crypto from "crypto"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createChainMock, mockSupabaseFrom } from "../../api/helpers"
 import {
@@ -23,8 +22,7 @@ function mockStorage(tree: Record<string, Entry[]>, removeFn = vi.fn().mockResol
 describe("catalogoOrgHash", () => {
   it("replica la fórmula del upload público (sha256 de orgId:secret, 16 hex)", () => {
     vi.stubEnv("NEXTAUTH_SECRET", "s3cret")
-    const esperado = crypto.createHash("sha256").update("org-1:s3cret").digest("hex").slice(0, 16)
-    expect(catalogoOrgHash("org-1")).toBe(esperado)
+    expect(catalogoOrgHash("org-1")).toBe("628e3d23f8c0494f")
     expect(catalogoOrgHash("org-1")).toHaveLength(16)
   })
 })
@@ -97,5 +95,29 @@ describe("storageTargets", () => {
   it("si no se pueden leer los tickets tira (no se puede garantizar el barrido)", async () => {
     mockSupabaseFrom({ support_tickets: createChainMock(null, { message: "down" }) })
     await expect(storageTargets("org-1")).rejects.toThrow(/support_tickets/)
+  })
+})
+
+describe("guardas de prefijo vacío o inseguro", () => {
+  it("removePrefix y listAllFiles tiran antes de listar o borrar", async () => {
+    const removeFn = mockStorage({})
+    vi.mocked(supabaseAdmin.storage.from).mockClear()
+    for (const bad of ["", "  ", "/x", "a/../b"]) {
+      await expect(removePrefix("b", bad)).rejects.toThrow(/prefijo/)
+      await expect(listAllFiles("b", bad)).rejects.toThrow(/prefijo/)
+    }
+    expect(removeFn).not.toHaveBeenCalled()
+    expect(supabaseAdmin.storage.from).not.toHaveBeenCalled()
+  })
+
+  it("storageTargets rechaza orgId vacío o en blanco sin consultar nada", async () => {
+    mockSupabaseFrom({ support_tickets: createChainMock([], null) })
+    await expect(storageTargets("")).rejects.toThrow(/prefijo/)
+    await expect(storageTargets("  ")).rejects.toThrow(/prefijo/)
+  })
+
+  it("un ticket con id vacío tira", async () => {
+    mockSupabaseFrom({ support_tickets: createChainMock([{ id: "" }], null) })
+    await expect(storageTargets("org-1")).rejects.toThrow(/prefijo/)
   })
 })
