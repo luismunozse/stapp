@@ -14,6 +14,8 @@ const PREAPPROVAL = {
   }),
 }
 
+const ORG_ACTIVA = createChainMock({ id: "org-1", deleted_at: null }, null)
+
 describe("handlePreApprovalNotification", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -26,7 +28,7 @@ describe("handlePreApprovalNotification", () => {
 
   it("activa la suscripcion CON el plan de la adhesion, no con el que tenia", async () => {
     const subs = createChainMock(null, null)
-    mockSupabaseFrom({ subscriptions: subs })
+    mockSupabaseFrom({ subscriptions: subs, organizations: ORG_ACTIVA })
 
     await handlePreApprovalNotification("pre-1")
 
@@ -43,7 +45,7 @@ describe("handlePreApprovalNotification", () => {
 
   it("no inventa un periodo: eso lo fija el primer cobro", async () => {
     const subs = createChainMock(null, null)
-    mockSupabaseFrom({ subscriptions: subs })
+    mockSupabaseFrom({ subscriptions: subs, organizations: ORG_ACTIVA })
 
     await handlePreApprovalNotification("pre-1")
 
@@ -56,7 +58,7 @@ describe("handlePreApprovalNotification", () => {
       new Response(JSON.stringify({ ...PREAPPROVAL, status: "paused" }), { status: 200 })
     ) as never
     const subs = createChainMock(null, null)
-    mockSupabaseFrom({ subscriptions: subs })
+    mockSupabaseFrom({ subscriptions: subs, organizations: ORG_ACTIVA })
 
     await handlePreApprovalNotification("pre-1")
 
@@ -70,11 +72,22 @@ describe("handlePreApprovalNotification", () => {
       new Response(JSON.stringify({ ...PREAPPROVAL, status: "pending" }), { status: 200 })
     ) as never
     const subs = createChainMock(null, null)
-    mockSupabaseFrom({ subscriptions: subs })
+    mockSupabaseFrom({ subscriptions: subs, organizations: ORG_ACTIVA })
 
     const r = await handlePreApprovalNotification("pre-1")
 
     expect(r.status).toBe("SKIPPED")
+    expect(subs.update).not.toHaveBeenCalled()
+  })
+
+  it("no activa nada si la organizacion esta dada de baja", async () => {
+    const subs = createChainMock(null, null)
+    const orgs = createChainMock({ id: "org-1", deleted_at: "2026-10-01T00:00:00Z" }, null)
+    mockSupabaseFrom({ subscriptions: subs, organizations: orgs })
+
+    const r = await handlePreApprovalNotification("pre-1")
+
+    expect(r).toMatchObject({ status: "SKIPPED", reason: "org_deleted_or_missing" })
     expect(subs.update).not.toHaveBeenCalled()
   })
 })

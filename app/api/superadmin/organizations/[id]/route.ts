@@ -3,6 +3,7 @@ import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin, STORAGE_BUCKETS } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
+import { purgeOrganization } from "@/lib/account-deletion/purge-organization"
 import type { OrganizationDetailResponse, PaymentWithOrg } from "@/types/superadmin"
 
 /**
@@ -297,36 +298,16 @@ export async function DELETE(
       )
     }
 
-    // Limpiar archivos de storage (best effort)
-    const bucketsToClean = [
-      STORAGE_BUCKETS.FOTOS_ORDENES,
-      STORAGE_BUCKETS.FOTOS_INVENTARIO,
-      STORAGE_BUCKETS.LOGOS,
-      STORAGE_BUCKETS.FIRMAS,
-      STORAGE_BUCKETS.AVATARS,
-      STORAGE_BUCKETS.COMPROBANTES_GASTOS,
-    ]
-    await Promise.allSettled(
-      bucketsToClean.map(async (bucket) => {
-        try {
-          const { data: files } = await supabaseAdmin.storage.from(bucket).list(id, { limit: 1000 })
-          if (files && files.length > 0) {
-            await supabaseAdmin.storage.from(bucket).remove(files.map((f) => `${id}/${f.name}`))
-          }
-        } catch {
-          // best effort
-        }
-      })
-    )
-
-    const { error: deleteError } = await supabaseAdmin
-      .from("organizations")
-      .delete()
-      .eq("id", id)
-
-    if (deleteError) {
-      console.error("Error deleting organization:", deleteError)
-      return NextResponse.json({ error: "Error al eliminar la organización" }, { status: 500 })
+    // Cancela la suscripción en el proveedor, vacía storage (recursivo, todos
+    // los buckets) y borra la fila. Antes esto solo barría 6 buckets a un nivel
+    // y no cancelaba el cobro: un taller pago purgado seguía cobrándose.
+    const purge = await purgeOrganization(id)
+    if (!purge.ok) {
+      console.error(`Error purging organization ${id} (paso ${purge.step}):`, purge.error)
+      return NextResponse.json(
+        { error: `Error al eliminar la organización (paso: ${purge.step})`, step: purge.step },
+        { status: purge.step === "subscriptions" ? 502 : 500 }
+      )
     }
 
     try {
