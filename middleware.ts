@@ -11,6 +11,7 @@ import {
 import { getTenantStatusBySlug } from "@/lib/tenant-status-edge"
 import { getUserDeletedStatus } from "@/lib/user-status-edge"
 import { isImpersonationWriteBlocked } from "@/lib/impersonation"
+import { isPublicPath } from "@/lib/public-paths"
 
 // Hashea un string con SHA-256 usando Web Crypto (compatible con Edge Runtime,
 // donde `node:crypto` no está disponible). Devuelve los primeros 16 hex chars,
@@ -110,41 +111,6 @@ async function deletedUserResponse(
     sameSite: "lax",
   })
   return res
-}
-
-// Rutas públicas que no requieren autenticación
-function isPublicPath(pathname: string): boolean {
-  const publicPaths = [
-    "/login",
-    "/registro",
-    "/forgot-password",
-    "/reset-password",
-    "/verificar-email",
-    "/tenant-not-found",
-    "/api/auth",
-    "/api/public",
-    "/api/cron",
-    "/api/mercadopago/webhook",
-    "/api/rebill/webhook",
-    "/api/creem/webhook",
-    "/_next",
-    "/favicon.ico",
-    "/manifest.json",
-    "/sw.js",
-    "/logo.png",
-    "/icons",
-    "/seguimiento",
-    "/cotizacion",
-    "/kiosco",
-    "/api/whatsapp/webhook",
-    "/api/v1",
-    "/api/health",
-    "/app-entry",
-    "/ayuda",
-    "/descargar",
-    "/google-auth",
-  ]
-  return publicPaths.some((path) => pathname.startsWith(path))
 }
 
 // Rutas de landing page (solo para dominio principal)
