@@ -22,6 +22,9 @@ const { showErrorMock } = vi.hoisted(() => ({
   showErrorMock: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({ data: { user: { id: "u1", role: "ADMIN" } } }),
+}))
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))

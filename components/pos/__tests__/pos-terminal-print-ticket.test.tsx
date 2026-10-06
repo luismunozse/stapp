@@ -57,6 +57,9 @@ vi.mock("@/lib/escpos-image", () => ({
   imageUrlToRaster: vi.fn(),
   imageUrlToBinarizedDataUrl: vi.fn(),
 }))
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({ data: { user: { id: "u1", role: "ADMIN" } } }),
+}))
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
