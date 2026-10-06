@@ -18,6 +18,9 @@ describe("isAllowedPdfUrl", () => {
     ["https://tusfacturas.app.evil.com/x.pdf", false],
     ["https://eviltusfacturas.app/x.pdf", false],
     ["https://evil.com/tusfacturas.app", false],
+    ["https://www.tusfacturas.app@evil.com/x.pdf", false],
+    ["https://evil.com/#.tusfacturas.app", false],
+    ["https://www.tusfacturas.app:8443/x.pdf", false],
     ["no es una url", false],
   ])("%s -> %s", (url, esperado) => expect(isAllowedPdfUrl(url)).toBe(esperado))
 })
@@ -109,6 +112,24 @@ describe("collectPdfs", () => {
     expect(r.pending[0].motivo).toMatch(/tiempo/)
   })
 
+  it("un fetch abortado por el deadline informa el presupuesto de tiempo", async () => {
+    const fetchImpl = vi.fn(
+      (_url: unknown, init?: RequestInit) =>
+        new Promise<Response>((_res, rej) => init?.signal?.addEventListener("abort", () => rej(new Error("abort"))))
+    ) as unknown as typeof fetch
+    const r = await collectPdfs([row(1, "https://www.tusfacturas.app/1.pdf")], Date.now() + 30, { fetchImpl })
+    expect(r.pending[0].motivo).toMatch(/tiempo/)
+  })
+
+  it("cancela el cuerpo cuando la respuesta no es ok", async () => {
+    const cancel = vi.fn()
+    const body = new ReadableStream<Uint8Array>({ cancel })
+    const fetchImpl = vi.fn(async () => new Response(body, { status: 500 })) as unknown as typeof fetch
+    const r = await collectPdfs([row(1, "https://www.tusfacturas.app/1.pdf")], deadline(), { fetchImpl })
+    expect(r.pending[0].motivo).toBe("HTTP 500")
+    expect(cancel).toHaveBeenCalled()
+  })
+
   it("un HTTP 404 o un error de red no rompen el respaldo", async () => {
     const fetchImpl = vi
       .fn()
@@ -161,7 +182,13 @@ describe("buildOrganizationExportStream", () => {
     ventas: createChainMock([{ id: "v1", total: 100 }], null),
     items_venta: createChainMock([{ id: "i1", venta_id: "v1" }], null),
     pagos_venta: createChainMock([{ id: "p1", venta_id: "v1", monto: 100 }], null),
-    facturas: createChainMock([{ id: "f1", numero_factura: "A-1", ordenes_servicio: { organization_id: "o1" } }], null),
+    facturas: createChainMock(
+      [
+        { id: "f1", numero_factura: "A-1", orden_id: "ord1", venta_id: null, organization_id: "o1" },
+        { id: "f2", numero_factura: "POS-2", orden_id: null, venta_id: "v1", organization_id: "o1" },
+      ],
+      null
+    ),
     notas_credito: createChainMock([], null),
     cuenta_corriente: createChainMock([], null),
     comprobantes_fiscales: createChainMock([], null),
@@ -199,6 +226,7 @@ describe("buildOrganizationExportStream", () => {
     expect(strFromU8(files["comprobantes_fiscales.csv"])).toContain("-50")
     expect(strFromU8(files["comprobantes_fiscales.csv"])).not.toContain("'-50")
     expect(strFromU8(files["facturas.csv"])).not.toContain("ordenes_servicio")
+    expect(strFromU8(files["facturas.csv"])).toContain("POS-2")
     expect(strFromU8(files["pdfs-pendientes.csv"])).toContain("https://otro.com/2.pdf")
     expect(String(comprobantes.select.mock.calls[0][0])).not.toContain("provider_response")
     expect(strFromU8(files["LEEME.txt"])).toMatch(/obligaci[oó]n del taller/i)
@@ -208,10 +236,10 @@ describe("buildOrganizationExportStream", () => {
     const t = tables()
     mockSupabaseFrom(t)
     await new Response(buildOrganizationExportStream({ id: "o1", nombre: "Taller", slug: "taller" })).arrayBuffer()
-    for (const name of ["clientes", "ventas", "notas_credito", "cuenta_corriente", "comprobantes_fiscales"] as const) {
+    for (const name of ["clientes", "ventas", "facturas", "notas_credito", "cuenta_corriente", "comprobantes_fiscales"] as const) {
       expect(t[name].eq).toHaveBeenCalledWith("organization_id", "o1")
     }
-    expect(t.facturas.eq).toHaveBeenCalledWith("ordenes_servicio.organization_id", "o1")
+    expect(String(t.facturas.select.mock.calls[0][0])).not.toContain("ordenes_servicio")
     expect(t.items_venta.in).toHaveBeenCalledWith("venta_id", ["v1"])
     expect(t.pagos_venta.in).toHaveBeenCalledWith("venta_id", ["v1"])
   })
@@ -226,12 +254,27 @@ describe("buildOrganizationExportStream", () => {
   it("los montos fiscales llegan al CSV como números aunque la BD los devuelva como string", async () => {
     mockSupabaseFrom(
       tables({
-        comprobantes_fiscales: createChainMock([{ id: "c1", numero: "1", estado: "anulado", pdf_url: null, total: "-50.25" }], null),
+        comprobantes_fiscales: createChainMock([{ id: "c1", numero: "1", estado: "rechazado", pdf_url: null, total: "-50.25" }], null),
+        facturas: createChainMock([{ id: "f1", subtotal: "-10.5", iva: "-2.1", total: "-12.6", monto_abonado: "-1.5" }], null),
+        notas_credito: createChainMock([{ id: "n1", monto: "-30.75" }], null),
+        cuenta_corriente: createChainMock([{ id: "m1", monto: "-20.5", saldo_posterior: "-5.25" }], null),
       })
     )
     const bytes = new Uint8Array(await new Response(buildOrganizationExportStream({ id: "o1", nombre: "T", slug: "t" })).arrayBuffer())
-    const csv = strFromU8(unzipSync(bytes)["comprobantes_fiscales.csv"])
-    expect(csv).toContain("-50.25")
-    expect(csv).not.toContain("'-50.25")
+    const files = unzipSync(bytes)
+    for (const [file, valor] of [
+      ["comprobantes_fiscales.csv", "-50.25"],
+      ["facturas.csv", "-12.6"],
+      ["facturas.csv", "-10.5"],
+      ["facturas.csv", "-2.1"],
+      ["facturas.csv", "-1.5"],
+      ["notas_credito.csv", "-30.75"],
+      ["cuenta_corriente.csv", "-20.5"],
+      ["cuenta_corriente.csv", "-5.25"],
+    ]) {
+      const csv = strFromU8(files[file])
+      expect(csv).toContain(valor)
+      expect(csv).not.toContain(`'${valor}`)
+    }
   })
 })

@@ -30,6 +30,9 @@ export function isAllowedPdfUrl(raw: string): boolean {
     const u = new URL(raw)
     return (
       u.protocol === "https:" &&
+      u.port === "" &&
+      u.username === "" &&
+      u.password === "" &&
       PDF_ALLOWED_HOST_SUFFIXES.some((s) => u.hostname === s || u.hostname.endsWith(`.${s}`))
     )
   } catch {
@@ -59,13 +62,18 @@ async function downloadPdf(
   maxBytes: number,
   timeoutMs: number
 ): Promise<Download> {
+  // Si el timeout lo fija el deadline (no el tope por PDF), un abort es falta de tiempo.
+  const boundByDeadline = timeoutMs < PDF_FETCH_TIMEOUT_MS
   if (!isAllowedPdfUrl(url)) return { error: "host no permitido" }
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
     // redirect: "error" — un 30x hacia otro host saltearía la allowlist.
     const res = await fetchImpl(url, { signal: ctrl.signal, redirect: "error" })
-    if (!res.ok) return { error: `HTTP ${res.status}` }
+    if (!res.ok) {
+      await res.body?.cancel().catch(() => {})
+      return { error: `HTTP ${res.status}` }
+    }
 
     const declared = Number(res.headers.get("content-length"))
     if (Number.isFinite(declared) && declared > maxBytes) {
@@ -97,7 +105,7 @@ async function downloadPdf(
     }
     return { bytes }
   } catch {
-    return { error: "no se pudo descargar" }
+    return { error: ctrl.signal.aborted && boundByDeadline ? MOTIVO_TIEMPO : "no se pudo descargar" }
   } finally {
     clearTimeout(timer)
   }
@@ -221,23 +229,18 @@ export function buildOrganizationExportStream(
     zip.addText("ventas_items.csv", rowsToCsv(await fetchByVentaIds("items_venta", ventaIds)))
     zip.addText("ventas_pagos.csv", rowsToCsv(await fetchByVentaIds("pagos_venta", ventaIds)))
 
-    // facturas no tiene organization_id: se une por la orden de servicio.
-    const facturas = await fetchAllRows("facturas", "*, ordenes_servicio!inner(organization_id)", (q) =>
-      q.eq("ordenes_servicio.organization_id", org.id)
-    )
+    // facturas tiene organization_id propio (migración 250); las de venta POS
+    // tienen orden_id NULL, así que unir por ordenes_servicio las perdería.
+    const facturas = await fetchAllRows("facturas", "*", byOrg)
     zip.addText(
       "facturas.csv",
-      rowsToCsv(
-        facturas.map((f) => {
-          const rest = { ...f }
-          delete rest.ordenes_servicio
-          return rest
-        })
-      )
+      rowsToCsv(amountsAsNumbers(facturas, ["subtotal", "iva", "total", "monto_abonado"]))
     )
 
-    zip.addText("notas_credito.csv", rowsToCsv(await fetchAllRows("notas_credito", "*", byOrg)))
-    zip.addText("cuenta_corriente.csv", rowsToCsv(await fetchAllRows("cuenta_corriente", "*", byOrg)))
+    const notas = await fetchAllRows("notas_credito", "*", byOrg)
+    zip.addText("notas_credito.csv", rowsToCsv(amountsAsNumbers(notas, ["monto"])))
+    const cc = await fetchAllRows("cuenta_corriente", "*", byOrg)
+    zip.addText("cuenta_corriente.csv", rowsToCsv(amountsAsNumbers(cc, ["monto", "saldo_posterior"])))
 
     const comprobantes = amountsAsNumbers(
       await fetchAllRows("comprobantes_fiscales", COMPROBANTES_COLUMNS, byOrg),
