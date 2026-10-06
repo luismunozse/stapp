@@ -9,6 +9,11 @@ vi.mock("@/lib/superadmin-auth", () => ({
   requireSuperadmin: vi.fn().mockResolvedValue({ error: null, email: "admin@stapp.com.ar" }),
 }))
 
+vi.mock("@/lib/mercadopago", () => ({ cancelPreApproval: vi.fn() }))
+vi.mock("@/lib/rebill", () => ({ cancelRebillSubscription: vi.fn() }))
+vi.mock("@/lib/creem", () => ({ cancelCreemSubscription: vi.fn() }))
+import { cancelRebillSubscription } from "@/lib/rebill"
+
 import { DELETE } from "@/app/api/superadmin/organizations/[id]/route"
 import { POST as RESTORE } from "@/app/api/superadmin/organizations/[id]/restore/route"
 
@@ -73,7 +78,12 @@ describe("DELETE /api/superadmin/organizations/[id]", () => {
       ...createChainMock({ id: "o1", nombre: "GuruTech", slug: "guru-tech", deleted_at: null }),
       delete: vi.fn().mockReturnValue(createChainMock(null, null)),
     }
-    mockSupabaseFrom({ organizations: orgChain as any, audit_logs: createChainMock(null, null) })
+    mockSupabaseFrom({
+      organizations: orgChain as any,
+      audit_logs: createChainMock(null, null),
+      subscriptions: createChainMock(null, null),
+      support_tickets: createChainMock([], null),
+    })
     const res = await DELETE(
       req("http://localhost/api/superadmin/organizations/o1?hard=true", { confirmSlug: "guru-tech" }),
       ctx("o1")
@@ -82,6 +92,31 @@ describe("DELETE /api/superadmin/organizations/[id]", () => {
     expect(status).toBe(200)
     expect(body.archived).toBe(false)
     expect(orgChain.delete).toHaveBeenCalled()
+  })
+
+  it("la purga hard cancela la suscripción antes de borrar: si el proveedor falla responde 502 y no borra", async () => {
+    const orgChain = {
+      ...createChainMock({ id: "o1", nombre: "GuruTech", slug: "guru-tech", deleted_at: null }),
+      delete: vi.fn().mockReturnValue(createChainMock(null, null)),
+    }
+    // suscripción con id de Rebill; el mock de lib/rebill se define arriba del archivo
+    mockSupabaseFrom({
+      organizations: orgChain as any,
+      audit_logs: createChainMock(null, null),
+      subscriptions: createChainMock({ id: "s1", canceled_at: null, rebill_subscription_id: "rb1" }, null),
+      support_tickets: createChainMock([], null),
+    })
+    vi.mocked(cancelRebillSubscription).mockRejectedValueOnce(new Error("rebill down"))
+    vi.spyOn(console, "error").mockImplementation(() => {})
+
+    const res = await DELETE(
+      req("http://localhost/api/superadmin/organizations/o1?hard=true", { confirmSlug: "guru-tech" }),
+      ctx("o1")
+    )
+    const { status, body } = await parseResponse(res)
+    expect(status).toBe(502)
+    expect(body.step).toBe("subscriptions")
+    expect(orgChain.delete).not.toHaveBeenCalled()
   })
 })
 
@@ -106,7 +141,7 @@ describe("POST /api/superadmin/organizations/[id]/restore", () => {
     expect(body.success).toBe(true)
     const payload = orgChain.update.mock.calls[0][0]
     expect(payload).toEqual(
-      expect.objectContaining({ deleted_at: null, deleted_by: null, archived_reason: null })
+      expect.objectContaining({ deleted_at: null, deleted_by: null, archived_reason: null, deletion_requested_at: null })
     )
   })
 
