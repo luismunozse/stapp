@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { cancelPreApproval } from "@/lib/mercadopago"
-import { cancelRebillSubscription } from "@/lib/rebill"
+import { cancelPreApproval, getPreApproval } from "@/lib/mercadopago"
+import { cancelRebillSubscription, getRebillSubscription } from "@/lib/rebill"
 import { cancelCreemSubscription } from "@/lib/creem"
 
 export type CancelResult =
@@ -44,6 +44,29 @@ export function isAlreadyCanceledError(err: unknown): boolean {
 }
 
 /**
+ * El texto del rechazo no es una base confiable (cada proveedor lo redacta a su
+ * manera). Si el error no se reconoce, se pregunta al proveedor el estado real:
+ * si ya está cancelada, el reintento tras un fallo parcial es un éxito. Si la
+ * consulta también falla, se conserva el fallo original (nunca se asume éxito).
+ * Mismo criterio que `isCreemSubscriptionEnding` en lib/creem.ts.
+ */
+const CANCELED_STATUSES = new Set(["cancelled", "canceled"])
+
+async function providerStatusIsCanceled(
+  proveedor: string,
+  getStatus: () => Promise<{ status?: unknown } | null | undefined>
+): Promise<boolean> {
+  try {
+    const current = await getStatus()
+    const status = typeof current?.status === "string" ? current.status.toLowerCase() : ""
+    return CANCELED_STATUSES.has(status)
+  } catch (err) {
+    console.error(`[account-deletion] no se pudo consultar el estado en ${proveedor}:`, err)
+    return false
+  }
+}
+
+/**
  * Cancela la suscripción de la organización en cada proveedor con id. Aísla
  * fallos (un id viejo de otro proveedor no frena al que cobra) y es idempotente
  * por el lado del proveedor ("ya cancelada" cuenta como éxito). NO usa
@@ -60,19 +83,19 @@ export async function cancelOrganizationSubscriptions(organizationId: string): P
   if (error) return { ok: false, failed: ["DB"], canceled: [] }
   if (!sub) return { ok: true, canceled: [], skipped: true }
 
-  const jobs: Array<[string, () => Promise<unknown>]> = []
-  if (sub.mercadopago_preapproval_id) jobs.push(["MERCADOPAGO", () => cancelPreApproval(sub.mercadopago_preapproval_id)])
-  if (sub.rebill_subscription_id) jobs.push(["REBILL", () => cancelRebillSubscription(sub.rebill_subscription_id)])
+  const jobs: Array<[string, () => Promise<unknown>, (() => Promise<{ status?: unknown } | null | undefined>)?]> = []
+  if (sub.mercadopago_preapproval_id) jobs.push(["MERCADOPAGO", () => cancelPreApproval(sub.mercadopago_preapproval_id), () => getPreApproval(sub.mercadopago_preapproval_id)])
+  if (sub.rebill_subscription_id) jobs.push(["REBILL", () => cancelRebillSubscription(sub.rebill_subscription_id), () => getRebillSubscription(sub.rebill_subscription_id)])
   if (sub.creem_subscription_id) jobs.push(["CREEM", () => cancelCreemSubscription(sub.creem_subscription_id)])
 
   const canceled: string[] = []
   const failed: string[] = []
-  for (const [proveedor, cancelar] of jobs) {
+  for (const [proveedor, cancelar, estado] of jobs) {
     try {
       await cancelar()
       canceled.push(proveedor)
     } catch (err) {
-      if (isAlreadyCanceledError(err)) {
+      if (isAlreadyCanceledError(err) || (estado && (await providerStatusIsCanceled(proveedor, estado)))) {
         canceled.push(proveedor)
       } else {
         console.error(`[account-deletion] error cancelando en ${proveedor}:`, err)

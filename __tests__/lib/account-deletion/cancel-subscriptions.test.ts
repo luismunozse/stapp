@@ -2,12 +2,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { createChainMock, mockSupabaseFrom } from "../../api/helpers"
 
-vi.mock("@/lib/mercadopago", () => ({ cancelPreApproval: vi.fn() }))
-vi.mock("@/lib/rebill", () => ({ cancelRebillSubscription: vi.fn() }))
+vi.mock("@/lib/mercadopago", () => ({ cancelPreApproval: vi.fn(), getPreApproval: vi.fn() }))
+vi.mock("@/lib/rebill", () => ({ cancelRebillSubscription: vi.fn(), getRebillSubscription: vi.fn() }))
 vi.mock("@/lib/creem", () => ({ cancelCreemSubscription: vi.fn() }))
 
-import { cancelPreApproval } from "@/lib/mercadopago"
-import { cancelRebillSubscription } from "@/lib/rebill"
+import { cancelPreApproval, getPreApproval } from "@/lib/mercadopago"
+import { cancelRebillSubscription, getRebillSubscription } from "@/lib/rebill"
 import { cancelCreemSubscription } from "@/lib/creem"
 import { cancelOrganizationSubscriptions, isAlreadyCanceledError } from "@/lib/account-deletion/cancel-subscriptions"
 
@@ -75,6 +75,66 @@ describe("cancelOrganizationSubscriptions", () => {
     mockSupabaseFrom({ subscriptions: createChainMock(sub({ mercadopago_preapproval_id: "pre1" })) })
     vi.mocked(cancelPreApproval).mockRejectedValueOnce({ message: "internal error", status: 500 })
     expect(await cancelOrganizationSubscriptions("o1")).toEqual({ ok: false, failed: ["MERCADOPAGO"], canceled: [] })
+  })
+
+  describe("error no reconocido: se consulta el estado real en el proveedor", () => {
+    it("MercadoPago: estado cancelled => exito", async () => {
+      mockSupabaseFrom({ subscriptions: createChainMock(sub({ mercadopago_preapproval_id: "pre1" })) })
+      vi.mocked(cancelPreApproval).mockRejectedValueOnce({ message: "algo raro", status: 400 })
+      vi.mocked(getPreApproval).mockResolvedValueOnce({ status: "cancelled" } as never)
+      expect(await cancelOrganizationSubscriptions("o1")).toEqual({ ok: true, canceled: ["MERCADOPAGO"], skipped: false })
+      expect(getPreApproval).toHaveBeenCalledWith("pre1")
+    })
+
+    it("MercadoPago: estado authorized => fallo", async () => {
+      mockSupabaseFrom({ subscriptions: createChainMock(sub({ mercadopago_preapproval_id: "pre1" })) })
+      vi.mocked(cancelPreApproval).mockRejectedValueOnce({ message: "algo raro", status: 400 })
+      vi.mocked(getPreApproval).mockResolvedValueOnce({ status: "authorized" } as never)
+      expect(await cancelOrganizationSubscriptions("o1")).toEqual({ ok: false, failed: ["MERCADOPAGO"], canceled: [] })
+    })
+
+    it("MercadoPago: si la consulta de estado falla se conserva el fallo original", async () => {
+      mockSupabaseFrom({ subscriptions: createChainMock(sub({ mercadopago_preapproval_id: "pre1" })) })
+      vi.mocked(cancelPreApproval).mockRejectedValueOnce({ message: "algo raro", status: 400 })
+      vi.mocked(getPreApproval).mockRejectedValueOnce(new Error("timeout"))
+      expect(await cancelOrganizationSubscriptions("o1")).toEqual({ ok: false, failed: ["MERCADOPAGO"], canceled: [] })
+    })
+
+    it("Rebill: estado cancelled => exito", async () => {
+      mockSupabaseFrom({ subscriptions: createChainMock(sub({ rebill_subscription_id: "rb1" })) })
+      vi.mocked(cancelRebillSubscription).mockRejectedValueOnce(new Error("boom"))
+      vi.mocked(getRebillSubscription).mockResolvedValueOnce({ status: "cancelled" })
+      expect(await cancelOrganizationSubscriptions("o1")).toEqual({ ok: true, canceled: ["REBILL"], skipped: false })
+      expect(getRebillSubscription).toHaveBeenCalledWith("rb1")
+    })
+
+    it("Rebill: grafia canceled => exito", async () => {
+      mockSupabaseFrom({ subscriptions: createChainMock(sub({ rebill_subscription_id: "rb1" })) })
+      vi.mocked(cancelRebillSubscription).mockRejectedValueOnce(new Error("boom"))
+      vi.mocked(getRebillSubscription).mockResolvedValueOnce({ status: "canceled" })
+      expect(await cancelOrganizationSubscriptions("o1")).toEqual({ ok: true, canceled: ["REBILL"], skipped: false })
+    })
+
+    it("Rebill: estado active => fallo", async () => {
+      mockSupabaseFrom({ subscriptions: createChainMock(sub({ rebill_subscription_id: "rb1" })) })
+      vi.mocked(cancelRebillSubscription).mockRejectedValueOnce(new Error("boom"))
+      vi.mocked(getRebillSubscription).mockResolvedValueOnce({ status: "active" })
+      expect(await cancelOrganizationSubscriptions("o1")).toEqual({ ok: false, failed: ["REBILL"], canceled: [] })
+    })
+
+    it("Rebill: si la consulta de estado falla se conserva el fallo original", async () => {
+      mockSupabaseFrom({ subscriptions: createChainMock(sub({ rebill_subscription_id: "rb1" })) })
+      vi.mocked(cancelRebillSubscription).mockRejectedValueOnce(new Error("boom"))
+      vi.mocked(getRebillSubscription).mockRejectedValueOnce(new Error("timeout"))
+      expect(await cancelOrganizationSubscriptions("o1")).toEqual({ ok: false, failed: ["REBILL"], canceled: [] })
+    })
+
+    it("un error reconocido como 'ya cancelada' no consulta al proveedor", async () => {
+      mockSupabaseFrom({ subscriptions: createChainMock(sub({ mercadopago_preapproval_id: "pre1" })) })
+      vi.mocked(cancelPreApproval).mockRejectedValueOnce(new Error("Cannot modify a cancelled preapproval"))
+      await cancelOrganizationSubscriptions("o1")
+      expect(getPreApproval).not.toHaveBeenCalled()
+    })
   })
 
   it("un error de lectura de la BD es un fallo, no 'no hay suscripción'", async () => {
