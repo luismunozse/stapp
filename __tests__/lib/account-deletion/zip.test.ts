@@ -78,3 +78,27 @@ describe("buildZipStream", () => {
     expect(Object.keys(unzipSync(await read(buildZipStream(async () => {}))))).toEqual([])
   })
 })
+
+describe("buildZipStream cancelacion", () => {
+  it("si el cliente cancela, el siguiente addText de fill tira y no encola", async () => {
+    let fillError: unknown = null
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    const stream = buildZipStream(async (zip) => {
+      zip.addText("a.txt", "x")
+      await gate
+      try {
+        zip.addText("b.txt", "y")
+      } catch (e) {
+        fillError = e
+        throw e
+      }
+    })
+    const reader = stream.getReader()
+    await reader.read()
+    await reader.cancel()
+    release()
+    await new Promise((r) => setTimeout(r, 10))
+    expect(fillError).toBeInstanceOf(Error)
+  })
+})

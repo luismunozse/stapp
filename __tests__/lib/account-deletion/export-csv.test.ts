@@ -1,13 +1,13 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { rowsToCsv } from "@/lib/account-deletion/export-csv"
+import { BOM, rowsToCsv } from "@/lib/account-deletion/export-csv"
 
-const BOM = "﻿"
-const sinBom = (s: string) => s.replace(/^﻿/, "")
+const sinBom = (s: string) => (s.startsWith(BOM) ? s.slice(BOM.length) : s)
 
 describe("rowsToCsv", () => {
   it("empieza con BOM (Excel abre UTF-8) y usa CRLF", () => {
     const csv = rowsToCsv([{ a: 1 }])
+    expect(csv.charCodeAt(0)).toBe(0xfeff)
     expect(csv.startsWith(BOM)).toBe(true)
     expect(sinBom(csv)).toBe("a\r\n1\r\n")
   })

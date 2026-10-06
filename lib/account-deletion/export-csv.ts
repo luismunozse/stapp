@@ -2,7 +2,8 @@
 // aquél prefija con `'` también los números negativos, y en un respaldo fiscal
 // los negativos son notas de crédito y devoluciones.
 
-const BOM = "﻿"
+// U+FEFF, escrito sin el caracter literal.
+export const BOM = String.fromCharCode(0xfeff)
 
 function escapeCell(value: unknown): string {
   if (value === null || value === undefined) return ""

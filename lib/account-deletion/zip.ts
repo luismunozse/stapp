@@ -13,11 +13,20 @@ export interface ZipWriter {
  * mantienen en ~100 MB más los CSV.
  */
 export function buildZipStream(fill: (zip: ZipWriter) => Promise<void>): ReadableStream<Uint8Array> {
+  // `failed` cubre error de fflate/fill y cancelacion del cliente: tras eso
+  // ningun callback pendiente puede encolar en un stream ya cerrado.
+  let failed = false
   return new ReadableStream<Uint8Array>({
     async start(controller) {
+      const fail = (err: unknown) => {
+        if (failed) return
+        failed = true
+        controller.error(err)
+      }
       const zip = new Zip((err, chunk, final) => {
+        if (failed) return
         if (err) {
-          controller.error(err)
+          fail(err)
           return
         }
         controller.enqueue(chunk)
@@ -25,6 +34,7 @@ export function buildZipStream(fill: (zip: ZipWriter) => Promise<void>): Readabl
       })
 
       const add = (name: string, data: Uint8Array, store: boolean) => {
+        if (failed) throw new Error("ZIP cancelado")
         const file = store ? new ZipPassThrough(name) : new ZipDeflate(name, { level: 6 })
         zip.add(file)
         file.push(data, true)
@@ -37,8 +47,13 @@ export function buildZipStream(fill: (zip: ZipWriter) => Promise<void>): Readabl
         })
         zip.end()
       } catch (err) {
-        controller.error(err)
+        fail(err)
       }
+    },
+    cancel() {
+      // Abort del cliente: `fill` se detiene en su proximo addText/addBytes
+      // (add tira), asi no sigue leyendo PDFs para nadie.
+      failed = true
     },
   })
 }
