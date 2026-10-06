@@ -127,6 +127,8 @@ export interface TicketData {
   pagos?: Array<{ metodoPago: string; monto: number }>
   /** Lo que queda a pagar (venta fiada o pago parcial). */
   saldoPendiente?: number | null
+  /** Pre-rasterized logo bytes (use imageUrlToRaster from lib/escpos-image.ts) */
+  logoRaster?: Uint8Array | null
 }
 
 const METODO_LABELS: Record<string, string> = {
@@ -365,6 +367,11 @@ export function generateTicketCommands(data: TicketData, printerWidth: 58 | 80 =
 
   // Initialize
   add(CMD.INIT, CMD.CHARSET_LATIN)
+
+  // === LOGO (optional) ===
+  if (data.logoRaster && data.logoRaster.length > 0) {
+    buf.push(...Array.from(data.logoRaster))
+  }
 
   // === HEADER: Empresa ===
   add(CMD.ALIGN_CENTER, CMD.BOLD_ON, CMD.DOUBLE_ON)
