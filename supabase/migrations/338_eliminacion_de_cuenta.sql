@@ -48,6 +48,7 @@ RETURNS TEXT AS $$
 DECLARE
   v_org      TEXT;
   v_rol      TEXT;
+  v_rol_actual TEXT;
   v_deleted  TIMESTAMPTZ;
   v_otros    INTEGER;
 BEGIN
@@ -72,10 +73,25 @@ BEGIN
     PERFORM id FROM users WHERE id = p_user_id FOR UPDATE;
   END IF;
 
-  -- Re-lectura DESPUES de tomar el lock: otra sesion pudo marcarlo mientras esperabamos.
-  SELECT deleted_at INTO v_deleted FROM users WHERE id = p_user_id;
+  -- Re-lectura DESPUES de tomar el lock: otra sesion pudo marcarlo (o cambiarle
+  -- el rol) mientras esperabamos. Se usa el rol fresco, nunca el leido antes.
+  SELECT deleted_at, rol::text INTO v_deleted, v_rol_actual FROM users WHERE id = p_user_id;
   IF v_deleted IS NOT NULL THEN
     RETURN 'ALREADY_DELETED';
+  END IF;
+
+  IF v_rol_actual IS DISTINCT FROM v_rol THEN
+    v_rol := v_rol_actual;
+    -- Paso a ADMIN mientras esperabamos: faltaba el lock del conjunto de ADMIN.
+    IF v_rol = 'ADMIN' THEN
+      PERFORM id
+         FROM users
+        WHERE organization_id = v_org
+          AND rol::text = 'ADMIN'
+          AND deleted_at IS NULL
+        ORDER BY id
+          FOR UPDATE;
+    END IF;
   END IF;
 
   IF v_rol = 'ADMIN' THEN

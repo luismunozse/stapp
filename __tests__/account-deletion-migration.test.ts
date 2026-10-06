@@ -21,6 +21,14 @@ describe("migración 338: eliminación de cuenta", () => {
     expect(SQL).toMatch(/rol::text = 'ADMIN'\s+AND deleted_at IS NULL\s+ORDER BY id\s+FOR UPDATE/)
   })
 
+  it("re-lee el rol DESPUES de tomar el lock y usa el valor fresco", () => {
+    const relectura = SQL.indexOf("SELECT deleted_at, rol::text INTO v_deleted, v_rol_actual")
+    expect(relectura).toBeGreaterThan(SQL.indexOf("FOR UPDATE"))
+    expect(SQL).toMatch(/IF v_rol_actual IS DISTINCT FROM v_rol THEN\s+v_rol := v_rol_actual;/)
+    // si pasó a ADMIN mientras esperaba, toma también el lock del conjunto de ADMIN
+    expect(SQL.slice(relectura)).toMatch(/ORDER BY id\s+FOR UPDATE/)
+  })
+
   it("devuelve los cuatro estados y marca al usuario en la misma transacción", () => {
     for (const estado of ["'OK'", "'LAST_ADMIN'", "'ALREADY_DELETED'", "'NOT_FOUND'"]) {
       expect(SQL).toContain(`RETURN ${estado}`)
