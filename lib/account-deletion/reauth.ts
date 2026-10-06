@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { verifyUserTotpCode } from "@/lib/totp"
 import type { ReauthInput } from "./types"
 
-type ReauthCode = "WRONG_CREDENTIAL" | "REQUIRES_2FA" | "INVALID_2FA"
+type ReauthCode = "WRONG_CREDENTIAL" | "REQUIRES_2FA" | "INVALID_2FA" | "ACCOUNT_LOCKED"
 
 export type ReauthResult =
   | { ok: true }
@@ -28,14 +28,26 @@ const fail = (code: ReauthCode, error: string): ReauthResult => ({
 export async function verifyReauth(userId: string, input: ReauthInput): Promise<ReauthResult> {
   const { data: user, error } = await supabaseAdmin
     .from("users")
-    .select("email, password, provider, totp_enabled")
+    .select("email, password, provider, totp_enabled, locked_until")
     .eq("id", userId)
     .single()
   if (error || !user) return fail("WRONG_CREDENTIAL", "No pudimos verificar tu identidad")
 
-  const penalize = () => {
-    Promise.resolve(supabaseAdmin.rpc("handle_failed_login", { p_email: user.email })).catch(() => {})
+  // El lockout se aplica ANTES de evaluar nada: si no, tras 5 fallos una
+  // adivinanza correcta (o un spray de TOTP) igual pasaría.
+  if (user.locked_until && new Date(user.locked_until) > new Date()) {
+    return fail("ACCOUNT_LOCKED", "Demasiados intentos. Probá de nuevo más tarde.")
   }
+
+  // Fire-and-forget como en el login, pero sin tragarse el error del RPC.
+  const callLoginRpc = (name: "handle_failed_login" | "reset_failed_login") => {
+    Promise.resolve(supabaseAdmin.rpc(name, { p_email: user.email }))
+      .then((res) => {
+        if (res?.error) console.error(`[account-deletion] ${name} falló:`, res.error.message)
+      })
+      .catch((err) => console.error(`[account-deletion] ${name} falló:`, err?.message ?? "error"))
+  }
+  const penalize = () => callLoginRpc("handle_failed_login")
 
   const password = typeof input.password === "string" ? input.password : ""
   const typedEmail = typeof input.email === "string" ? input.email : ""
@@ -62,5 +74,6 @@ export async function verifyReauth(userId: string, input: ReauthInput): Promise<
     }
   }
 
+  callLoginRpc("reset_failed_login")
   return { ok: true }
 }

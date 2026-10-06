@@ -83,4 +83,57 @@ describe("verifyReauth", () => {
     mockSupabaseFrom({ users: createChainMock(null, { message: "no rows" }) })
     expect(await verifyReauth("u1", { password: "x" })).toMatchObject({ ok: false, code: "WRONG_CREDENTIAL" })
   })
+
+  it("cuenta bloqueada: falla ACCOUNT_LOCKED aunque la contraseña sea correcta, sin evaluar ni penalizar", async () => {
+    const future = new Date(Date.now() + 60_000).toISOString()
+    mockSupabaseFrom({ users: user({ totp_enabled: true, locked_until: future }) })
+    const compare = vi.spyOn(bcrypt, "compare")
+    expect(await verifyReauth("u1", { password: "secreto123", totpCode: "123456" })).toMatchObject({
+      ok: false,
+      status: 401,
+      code: "ACCOUNT_LOCKED",
+    })
+    expect(compare).not.toHaveBeenCalled()
+    expect(verifyUserTotpCode).not.toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+    compare.mockRestore()
+  })
+
+  it("locked_until vencido: flujo normal", async () => {
+    const past = new Date(Date.now() - 60_000).toISOString()
+    mockSupabaseFrom({ users: user({ locked_until: past }) })
+    expect(await verifyReauth("u1", { password: "secreto123" })).toEqual({ ok: true })
+  })
+
+  it("resetea los intentos fallidos solo al éxito", async () => {
+    mockSupabaseFrom({ users: user() })
+    await verifyReauth("u1", { password: "mala" })
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalledWith("reset_failed_login", expect.anything())
+    expect(supabaseAdmin.rpc).toHaveBeenCalledTimes(1)
+    vi.clearAllMocks()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as never)
+    await verifyReauth("u1", { password: "secreto123" })
+    expect(supabaseAdmin.rpc).toHaveBeenCalledTimes(1)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith("reset_failed_login", { p_email: "Juan@Gmail.com" })
+  })
+
+  it("INVALID_2FA penaliza; REQUIRES_2FA no", async () => {
+    mockSupabaseFrom({ users: user({ totp_enabled: true }) })
+    await verifyReauth("u1", { password: "secreto123" })
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+    vi.mocked(verifyUserTotpCode).mockResolvedValueOnce({ valid: false })
+    await verifyReauth("u1", { password: "secreto123", totpCode: "000000" })
+    expect(supabaseAdmin.rpc).toHaveBeenCalledTimes(1)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith("handle_failed_login", { p_email: "Juan@Gmail.com" })
+  })
+
+  it("loguea el error del RPC sin romper el flujo", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: { message: "boom" } } as never)
+    mockSupabaseFrom({ users: user() })
+    expect(await verifyReauth("u1", { password: "mala" })).toMatchObject({ ok: false })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(spy).toHaveBeenCalled()
+    spy.mockRestore()
+  })
 })
