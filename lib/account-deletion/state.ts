@@ -40,3 +40,19 @@ export function isUserDeleted(u: { deleted_at?: string | null } | null | undefin
 export function isOrgDeleted(o: { deleted_at?: string | null } | null | undefined): boolean {
   return !!o?.deleted_at
 }
+
+/**
+ * Decide si un login (o la renovación de una sesión) debe rechazarse.
+ * - Usuario dado de baja: siempre, también el superadmin.
+ * - Organización inexistente, inactiva o dada de baja: rechaza, salvo superadmin
+ *   (no pertenece a un taller). Mantiene tal cual la semántica previa de `activo`.
+ */
+export function isLoginBlocked(
+  user: { deleted_at?: string | null } | null | undefined,
+  org: { activo?: boolean | null; deleted_at?: string | null } | null | undefined,
+  opts: { isSuper: boolean },
+): boolean {
+  if (isUserDeleted(user)) return true
+  if (opts.isSuper) return false
+  return !org || !org.activo || isOrgDeleted(org)
+}

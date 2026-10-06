@@ -9,6 +9,7 @@ import {
   extractPublicCatalogoSlug,
 } from "@/lib/rate-limit"
 import { getTenantStatusBySlug } from "@/lib/tenant-status-edge"
+import { getUserDeletedStatus } from "@/lib/user-status-edge"
 import { isImpersonationWriteBlocked } from "@/lib/impersonation"
 
 // Hashea un string con SHA-256 usando Web Crypto (compatible con Edge Runtime,
@@ -451,6 +452,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({
       request: { headers: requestHeaders },
     })
+  }
+
+  // Usuario dado de baja (eliminación de cuenta): su JWT sigue siendo válido
+  // hasta ~18 h porque solo se revalida en las últimas 6 h de su día de vida.
+  // Mismo patrón que el estado del tenant: caché de 30 s y fail-open si
+  // Supabase no responde. Impersonación y rutas públicas quedan fuera
+  // (/api/auth tiene que seguir andando para poder cerrar sesión).
+  if (token?.id && !token.isImpersonating && !isPublicPath(pathname)) {
+    const userStatus = await getUserDeletedStatus(token.id as string)
+    if (userStatus.kind === "ok" && userStatus.deleted) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({ error: "Cuenta eliminada" }, { status: 401 })
+      }
+      return NextResponse.redirect(new URL("/login", request.url))
+    }
   }
 
   // Read-only impersonation enforcement. When a superadmin impersonates a

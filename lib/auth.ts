@@ -21,6 +21,7 @@ import { randomBytes } from "crypto"
 import { verifyGoogleIdToken } from "@/lib/google"
 import { logLoginEvent, logLogoutEvent } from "@/lib/superadmin-audit"
 import { verifyUserTotpCode } from "@/lib/totp"
+import { isUserDeleted, isLoginBlocked } from "@/lib/account-deletion/state"
 
 type Rol = "ADMIN" | "TECNICO" | "VENDEDOR"
 
@@ -84,12 +85,16 @@ export async function validateRefreshToken(refreshToken: string) {
       organization_id,
       sucursal_id,
       refresh_token_expires,
-      organizations (id, activo)
+      deleted_at,
+      organizations (id, activo, deleted_at)
     `)
     .eq("refresh_token", refreshToken)
     .single()
 
   if (error || !user) return null
+
+  // Usuario dado de baja: no renueva sesión ni entra por el refresh token de la PWA.
+  if (isUserDeleted(user)) return null
 
   // Verificar que no haya expirado
   const expires = new Date(user.refresh_token_expires)
@@ -105,7 +110,7 @@ export async function validateRefreshToken(refreshToken: string) {
   // Verificar organización activa (no requerido para superadmin)
   const orgs = user.organizations as unknown
   const org = Array.isArray(orgs) ? orgs[0] : orgs
-  if (!isSuperadminEmail(user.email) && (!org || !(org as { activo: boolean }).activo)) return null
+  if (isLoginBlocked(user, org as { activo: boolean; deleted_at?: string | null } | null, { isSuper: isSuperadminEmail(user.email) })) return null
 
   return user
 }
@@ -207,13 +212,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               *,
               organizations (
                 id,
-                activo
+                activo,
+                deleted_at
               )
             `)
             .eq("email", googleEmailNormalized)
             .single()
 
           if (gError || !gUser) {
+            throw new AuthSigninError("GOOGLE_NO_ACCOUNT")
+          }
+
+          // Baja en período de gracia: se comporta como cuenta inexistente.
+          if (isUserDeleted(gUser)) {
             throw new AuthSigninError("GOOGLE_NO_ACCOUNT")
           }
 
@@ -229,8 +240,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const isGoogleSuper = isSuperadminEmail(gUser.email)
 
           // Verificar que la organización esté activa
-          const gOrg = gUser.organizations as { id: string; activo: boolean } | null
-          if (!isGoogleSuper && !gOrg?.activo) {
+          const gOrg = gUser.organizations as { id: string; activo: boolean; deleted_at?: string | null } | null
+          if (isLoginBlocked(gUser, gOrg, { isSuper: isGoogleSuper })) {
             return null
           }
 
@@ -292,7 +303,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             *,
             organizations (
               id,
-              activo
+              activo,
+              deleted_at
             )
           `)
           .eq("email", normalizedEmail)
@@ -305,6 +317,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             success: false,
             isSuperadmin: isSuperadminEmail(normalizedEmail),
             reason: "Usuario no encontrado",
+          }).catch(() => {})
+          return null
+        }
+
+        // Baja en período de gracia: mismo resultado que una credencial inválida,
+        // sin revelar que la cuenta existe.
+        if (isUserDeleted(user)) {
+          logLoginEvent({
+            userId: user.id,
+            email: user.email,
+            success: false,
+            isSuperadmin: isSuperadminEmail(user.email),
+            reason: "Usuario eliminado",
           }).catch(() => {})
           return null
         }
@@ -330,8 +355,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const isSuper = isSuperadminEmail(user.email)
 
         // Verificar que la organización esté activa (no requerido para superadmin)
-        const organization = user.organizations as { id: string; activo: boolean } | null
-        if (!isSuper && !organization?.activo) {
+        const organization = user.organizations as { id: string; activo: boolean; deleted_at?: string | null } | null
+        if (isLoginBlocked(user, organization, { isSuper })) {
           logLoginEvent({
             userId: user.id,
             email: user.email,
