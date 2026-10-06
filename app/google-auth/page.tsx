@@ -10,6 +10,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Loader2 } from "lucide-react"
 import { BusinessLogo } from "@/components/shared/business-logo"
 import { extractAuthCode, parseRequires2FA } from "@/lib/auth-client"
+import { isValidTenantSlug } from "@/lib/account-deletion/urls"
 
 /**
  * Página de autenticación con Google en el dominio raíz.
@@ -25,11 +26,20 @@ import { extractAuthCode, parseRequires2FA } from "@/lib/auth-client"
 function GoogleAuthContent() {
   const searchParams = useSearchParams()
   const action = searchParams.get("action") || "login"
-  const tenant = searchParams.get("tenant") || ""
+  // `tenant` y `orgSlug` vienen de la URL (controlados por quien arma el link) y
+  // terminan como subdominio en window.location.href. Se normalizan y validan una
+  // sola vez: un valor invalido (ej. `evil.com/x#`) se trata como si no hubiera
+  // tenant, en vez de interpolarse crudo y redirigir fuera de `rootDomain`.
+  const tenantParam = (searchParams.get("tenant") || "").trim().toLowerCase()
+  const tenant = isValidTenantSlug(tenantParam) ? tenantParam : ""
   const orgNombre = searchParams.get("orgNombre") || ""
   const rubro = searchParams.get("rubro") || ""
   const rubroDetalle = searchParams.get("rubroDetalle") || ""
-  const orgSlug = searchParams.get("orgSlug") || ""
+  // El API de registro valida el slug por su cuenta, asi que se le manda tal cual
+  // llego; solo la navegacion posterior usa el valor normalizado.
+  const orgSlugParam = searchParams.get("orgSlug") || ""
+  const orgSlugNormalized = orgSlugParam.trim().toLowerCase()
+  const orgSlug = isValidTenantSlug(orgSlugNormalized) ? orgSlugNormalized : ""
   const userName = searchParams.get("userName") || ""
 
   // UTM params pasados desde el registro
@@ -80,7 +90,7 @@ function GoogleAuthContent() {
           body: JSON.stringify({
             organizacion: {
               nombre: orgNombre,
-              slug: orgSlug,
+              slug: orgSlugParam,
               ...(rubro ? { rubro } : {}),
               ...(rubroDetalle ? { rubroDetalle } : {}),
             },
@@ -102,8 +112,10 @@ function GoogleAuthContent() {
         }
 
         // Registro exitoso con Google → email ya verificado
-        // Redirigir al login del subdominio
-        window.location.href = `https://${orgSlug}.${rootDomain}/login?registered=true`
+        // Redirigir al login del subdominio (o al login relativo si el slug es invalido)
+        window.location.href = orgSlug
+          ? `https://${orgSlug}.${rootDomain}/login?registered=true`
+          : "/login?registered=true"
       } else {
         // Login: autenticar con Google token via NextAuth
         const result = await signIn("credentials", {
