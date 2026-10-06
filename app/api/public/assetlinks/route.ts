@@ -22,6 +22,10 @@ import { NextResponse } from "next/server"
  * de sideload con la de Play durante la transición.
  */
 
+// Se lee la env var en cada request: si Next llegara a prerenderizar la ruta,
+// quedaría congelada con la lista vacía del build.
+export const dynamic = "force-dynamic"
+
 const PACKAGE_NAME = "ar.com.stapp.app"
 const SHA256_RE = /^(?:[A-F0-9]{2}:){31}[A-F0-9]{2}$/
 
@@ -37,8 +41,9 @@ function getFingerprints(): string[] {
 export async function GET() {
   const fingerprints = getFingerprints()
 
-  // Sin huellas configuradas devolvemos una lista vacía y no cacheamos: Android
-  // reintenta la verificación y la toma apenas se setea la env var, sin deploy.
+  // Sin huellas configuradas devolvemos una lista vacía y no cacheamos, para que
+  // Android tome la huella en cuanto se setee la env var (en Vercel, un cambio de
+  // env var recién aplica al próximo deploy).
   if (fingerprints.length === 0) {
     return NextResponse.json([], {
       headers: { "Cache-Control": "no-store" },
