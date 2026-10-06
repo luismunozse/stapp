@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react"
 import { signIn, signOut } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { safeCallbackPath } from "@/lib/safe-callback-path"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -233,7 +234,7 @@ function LoginForm() {
         }
 
         await saveRefreshTokenForPWA()
-        window.location.href = "/dashboard"
+        window.location.href = safeCallbackPath(searchParams.get("callbackUrl"))
       } else {
         const orgRes = await fetch("/api/auth/user-organization", {
           credentials: "include",
@@ -320,7 +321,7 @@ function LoginForm() {
         await saveRefreshTokenForPWA()
 
         // Ya estamos en el subdominio correcto - usar window.location para navegación completa
-        window.location.href = "/dashboard"
+        window.location.href = safeCallbackPath(searchParams.get("callbackUrl"))
         return
       } else {
         // Login desde dominio principal: cerrar sesión aquí y redirigir al subdominio para login
