@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { timingSafeEqual } from "crypto"
 import { supabaseAdmin } from "@/lib/supabase"
+import { organizationAcceptsBilling } from "@/lib/account-deletion/org-state"
 import { beginWebhookEvent, finishWebhookEvent } from "@/lib/webhook-log"
 
 /**
@@ -177,11 +178,11 @@ async function handlePaymentEvent(data: any): Promise<RebillHandlerResult> {
   // Validar que la organización exista
   const { data: org } = await supabaseAdmin
     .from("organizations")
-    .select("id, activo")
+    .select("id, activo, deleted_at")
     .eq("id", organizationId)
     .single()
 
-  if (!org || org.activo === false) {
+  if (!org || org.activo === false || org.deleted_at) {
     console.error(`[rebill-webhook] Organization ${organizationId} not found or inactive`)
     return { processed: false, reason: "org_not_found_or_inactive", organizationId }
   }
@@ -351,6 +352,10 @@ async function handleSubscriptionEvent(data: any): Promise<RebillHandlerResult> 
   if (!organizationId) {
     console.error("[rebill-webhook] No organization_id in subscription metadata")
     return { processed: false, reason: "missing_organization_id" }
+  }
+
+  if (!(await organizationAcceptsBilling(organizationId))) {
+    return { processed: false, reason: "org_deleted_or_missing", organizationId }
   }
 
   // Mapear estado de Rebill a nuestro sistema
