@@ -48,8 +48,8 @@ BEGIN
   INSERT INTO clientes (organization_id, nombre, telefono)
   VALUES (v_org, 'PROBE-337 cliente', '0000000000') RETURNING id INTO v_cli;
 
-  INSERT INTO inventario (organization_id, nombre, stock, stock_reservado, precio_venta)
-  VALUES (v_org, 'PROBE-337 producto', 10, 0, 100) RETURNING id INTO v_inv;
+  INSERT INTO inventario (organization_id, codigo, categoria, precio_compra, nombre, stock, stock_reservado, precio_venta)
+  VALUES (v_org, 'PROBE-337-INV1', 'PROBE', 0, 'PROBE-337 producto', 10, 0, 100) RETURNING id INTO v_inv;
   INSERT INTO inventario_depositos (inventario_id, deposito_id, stock, stock_reservado, organization_id)
   VALUES (v_inv, v_dep, 10, 0, v_org)
   ON CONFLICT (inventario_id, deposito_id) DO UPDATE SET stock = 10, stock_reservado = 0;
@@ -113,12 +113,12 @@ BEGIN
   SELECT v INTO v_cli FROM _ids WHERE k = 'cli';
   IF v_org IS NULL THEN RETURN; END IF;
 
-  INSERT INTO inventario (organization_id, nombre, stock, stock_reservado, precio_venta)
-  VALUES (v_org, 'PROBE-337 inv2', 10, 0, 100) RETURNING id INTO v_inv2;
-  INSERT INTO inventario (organization_id, nombre, stock, stock_reservado, precio_venta)
-  VALUES (v_org, 'PROBE-337 inv3', 10, 0, 100) RETURNING id INTO v_inv3;
-  INSERT INTO inventario (organization_id, nombre, stock, stock_reservado, precio_venta)
-  VALUES (v_org, 'PROBE-337 inv4', 10, 0, 100) RETURNING id INTO v_inv4;
+  INSERT INTO inventario (organization_id, codigo, categoria, precio_compra, nombre, stock, stock_reservado, precio_venta)
+  VALUES (v_org, 'PROBE-337-INV2', 'PROBE', 0, 'PROBE-337 inv2', 10, 0, 100) RETURNING id INTO v_inv2;
+  INSERT INTO inventario (organization_id, codigo, categoria, precio_compra, nombre, stock, stock_reservado, precio_venta)
+  VALUES (v_org, 'PROBE-337-INV3', 'PROBE', 0, 'PROBE-337 inv3', 10, 0, 100) RETURNING id INTO v_inv3;
+  INSERT INTO inventario (organization_id, codigo, categoria, precio_compra, nombre, stock, stock_reservado, precio_venta)
+  VALUES (v_org, 'PROBE-337-INV4', 'PROBE', 0, 'PROBE-337 inv4', 10, 0, 100) RETURNING id INTO v_inv4;
   INSERT INTO catalogo_items (organization_id, nombre, precio, activo, inventario_id, tipo)
   VALUES (v_org, 'PROBE-337 A2', 100, TRUE, v_inv2, 'PRODUCTO') RETURNING id INTO v_a2;
   INSERT INTO catalogo_items (organization_id, nombre, precio, activo, inventario_id, tipo)
