@@ -1,4 +1,5 @@
 import { Metadata } from "next"
+import Link from "next/link"
 import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 export const metadata: Metadata = {
@@ -106,7 +107,9 @@ export default function PrivacidadPage() {
           <li>Hacer cumplir nuestros acuerdos</li>
         </ul>
         <p className="text-gray-600 mt-4">
-          Puede solicitar la eliminación de sus datos en cualquier momento contactándonos.
+          Puede eliminar su usuario o su taller en cualquier momento desde la sección “Zona de peligro” de su perfil, o
+          siguiendo las instrucciones en <Link href="/legal/eliminar-cuenta" className="text-blue-600 hover:underline">Eliminar mi cuenta</Link>.
+          Conservamos los datos durante 30 días para poder revertir el pedido y después los borramos de forma definitiva.
         </p>
       </section>
 
@@ -125,7 +128,8 @@ export default function PrivacidadPage() {
           <li><strong>Retiro del consentimiento:</strong> retirar el consentimiento en cualquier momento</li>
         </ul>
         <p className="text-gray-600 mt-4">
-          Para ejercer estos derechos, puede hacerlo desde la configuración de su cuenta.
+          Para ejercer estos derechos, puede hacerlo desde su perfil. La eliminación de la cuenta se explica en{" "}
+          <Link href="/legal/eliminar-cuenta" className="text-blue-600 hover:underline">Eliminar mi cuenta</Link>.
         </p>
       </section>
 
