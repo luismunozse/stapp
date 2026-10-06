@@ -4,6 +4,9 @@ La APK es un shell Capacitor que carga `https://stapp.com.ar/app-entry`. Las mej
 de UI web llegan solas; solo se sube una APK/AAB nueva cuando cambia config nativa
 (permisos, ícono, versión, plugins).
 
+Texto de la ficha, respuestas del Data Safety y runbook de Play Console:
+[`playstore-listing-v1.md`](./playstore-listing-v1.md).
+
 ## Hecho en código
 
 - `android/` se versiona (antes estaba en `.gitignore`), para persistir la config de
