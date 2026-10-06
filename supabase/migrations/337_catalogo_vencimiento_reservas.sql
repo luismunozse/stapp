@@ -65,6 +65,28 @@
 -- /api/public/cotizaciones/[token]/aprobar y /rechazar, convertir-venta.
 
 -- ============================================================
+-- Parte 0: generate_cuid() con search_path propio
+-- ============================================================
+-- generate_cuid() (DEFAULT del id de movimientos_inventario,
+-- catalogo_reservas_cotizacion, cotizaciones, ventas, ...) llama a
+-- GEN_RANDOM_BYTES sin calificar. pgcrypto vive en el schema "extensions", asi
+-- que el nombre se resuelve con el search_path del LLAMADOR. Toda funcion
+-- SECURITY DEFINER con "SET search_path = public, pg_temp" que inserte en esas
+-- tablas falla con "function gen_random_bytes(integer) does not exist".
+-- Verificado contra la base: con search_path = public, pg_temp falla; con
+-- extensions en el path anda.
+-- Ya rompia en produccion: liberar_reserva_catalogo (315) es SECURITY DEFINER
+-- con ese search_path e inserta LIBERACION_RESERVA, asi que rechazar o borrar
+-- una solicitud del catalogo con reserva de inventario fallaba (el trigger
+-- aborta el UPDATE). Tambien lo necesitan expirar_reservas_catalogo y
+-- retomar_reserva_catalogo_vencida.
+-- Se arregla en la raiz: la funcion fija su propio search_path, asi deja de
+-- depender de quien la llame. Mismo caso para generate_public_token (hoy tiene
+-- search_path=public y no puede resolver gen_random_bytes nunca).
+ALTER FUNCTION public.generate_cuid() SET search_path = public, extensions, pg_temp;
+ALTER FUNCTION public.generate_public_token() SET search_path = public, extensions, pg_temp;
+
+-- ============================================================
 -- Parte 1: configuracion por organizacion
 -- ============================================================
 ALTER TABLE catalogo_config

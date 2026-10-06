@@ -20,6 +20,20 @@ BEGIN;
 CREATE TEMP TABLE _r (orden INT, probe TEXT, esperado TEXT, obtenido TEXT);
 CREATE TEMP TABLE _ids (k TEXT PRIMARY KEY, v TEXT);
 
+-- ── Parte 0: generate_cuid() no depende del search_path del llamador ──
+DO $$
+DECLARE v TEXT;
+BEGIN
+  PERFORM set_config('search_path', 'public, pg_temp', true);
+  BEGIN
+    v := generate_cuid();
+    INSERT INTO _r VALUES (0, 'generate_cuid con search_path=public,pg_temp', 'ok', 'ok');
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _r VALUES (0, 'generate_cuid con search_path=public,pg_temp', 'ok', SQLERRM);
+  END;
+  PERFORM set_config('search_path', '"$user", public, extensions', true);
+END $$;
+
 -- ── Setup ──
 -- Producto A (linkeado, stock 10), item C1 y C2 (sin link, stock 10).
 -- Q1 vencida mixta (A2 + C1 2), Q7 vencida (A1), Q2 vigente (A1), Q3 aceptada
