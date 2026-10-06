@@ -60,3 +60,27 @@ describe("getUserDeletedStatus", () => {
     expect(String(spy.mock.calls[0][0])).toContain("id=eq.a%26b%3Dc")
   })
 })
+
+describe("getUserDeletedStatus cache eviction", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    clearUserStatusCache()
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co"
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key"
+  })
+
+  it("una entrada vencida se vuelve a consultar", async () => {
+    const spy = vi.spyOn(global, "fetch").mockImplementation(async () => row([{ deleted_at: null }]))
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000)
+    await getUserDeletedStatus("e1")
+    now.mockReturnValue(1_000 + 30_001)
+    await getUserDeletedStatus("e1")
+    expect(spy).toHaveBeenCalledTimes(2)
+  })
+
+  it("el caché se vacía al pasar el tope sin romper resultados", async () => {
+    vi.spyOn(global, "fetch").mockImplementation(async () => row([{ deleted_at: null }]))
+    for (let i = 0; i < 5005; i++) await getUserDeletedStatus(`bulk-${i}`)
+    expect(await getUserDeletedStatus("bulk-5004")).toEqual({ kind: "ok", deleted: false })
+  })
+})

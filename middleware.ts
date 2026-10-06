@@ -67,6 +67,51 @@ const RESERVED_SUBDOMAINS = new Set([
   "signin",
 ])
 
+// Cookie de sesión de NextAuth (mismo nombre/dominio que lib/auth.ts; el
+// middleware no puede importar auth.ts por Edge).
+function sessionCookieName(): string {
+  return process.env.NODE_ENV === "production"
+    ? "__Secure-next-auth.session-token"
+    : "next-auth.session-token"
+}
+
+function sessionCookieDomain(): string | undefined {
+  if (process.env.COOKIE_DOMAIN) return process.env.COOKIE_DOMAIN
+  if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_ROOT_DOMAIN) {
+    return `.${process.env.NEXT_PUBLIC_ROOT_DOMAIN}`
+  }
+  return undefined
+}
+
+// Usuario dado de baja (eliminación de cuenta): su JWT sigue siendo válido
+// hasta ~18 h porque solo se revalida en las últimas 6 h de su día de vida.
+// Devuelve la respuesta que corta la sesión (401 en /api, redirect a /login en
+// páginas, ambas borrando la cookie) o null si hay que seguir. Caché de 30 s y
+// fail-open si Supabase no responde; una baja encontrada nunca es fail-open.
+// Impersonación y rutas públicas quedan fuera (/api/auth tiene que seguir
+// andando para poder cerrar sesión).
+async function deletedUserResponse(
+  request: NextRequest,
+  token: { id?: unknown; isImpersonating?: unknown } | null,
+  pathname: string,
+): Promise<NextResponse | null> {
+  if (!token?.id || token.isImpersonating || isPublicPath(pathname)) return null
+  const status = await getUserDeletedStatus(token.id as string)
+  if (status.kind !== "ok" || !status.deleted) return null
+  const res = pathname.startsWith("/api/")
+    ? NextResponse.json({ error: "Cuenta eliminada" }, { status: 401 })
+    : NextResponse.redirect(new URL("/login", request.url))
+  res.cookies.set(sessionCookieName(), "", {
+    maxAge: 0,
+    path: "/",
+    domain: sessionCookieDomain(),
+    secure: process.env.NODE_ENV === "production",
+    httpOnly: true,
+    sameSite: "lax",
+  })
+  return res
+}
+
 // Rutas públicas que no requieren autenticación
 function isPublicPath(pathname: string): boolean {
   const publicPaths = [
@@ -270,6 +315,18 @@ export async function middleware(request: NextRequest) {
   // CASO 1: Dominio principal (sin subdominio)
   // ==========================================
   if (!subdomain) {
+    // Las APIs autentican por la cookie de sesión (scopeada al dominio raíz),
+    // así que también acá hay que cortar la sesión de un usuario dado de baja.
+    if (pathname.startsWith("/api/") && !isPublicPath(pathname)) {
+      const apexToken = await getToken({
+        req: request,
+        secret: process.env.NEXTAUTH_SECRET,
+        cookieName: sessionCookieName(),
+      })
+      const apexDeleted = await deletedUserResponse(request, apexToken, pathname)
+      if (apexDeleted) return apexDeleted
+    }
+
     // Landing page y rutas públicas permitidas
     return NextResponse.next({
       request: { headers: requestHeaders },
@@ -311,6 +368,9 @@ export async function middleware(request: NextRequest) {
       loginUrl.searchParams.set("callbackUrl", pathname)
       return NextResponse.redirect(loginUrl)
     }
+
+    const adminDeleted = await deletedUserResponse(request, token, pathname)
+    if (adminDeleted) return adminDeleted
 
     // Verificar que el email está en SUPERADMIN_EMAILS
     if (!isSuperadminEmail(token.email as string)) {
@@ -454,20 +514,8 @@ export async function middleware(request: NextRequest) {
     })
   }
 
-  // Usuario dado de baja (eliminación de cuenta): su JWT sigue siendo válido
-  // hasta ~18 h porque solo se revalida en las últimas 6 h de su día de vida.
-  // Mismo patrón que el estado del tenant: caché de 30 s y fail-open si
-  // Supabase no responde. Impersonación y rutas públicas quedan fuera
-  // (/api/auth tiene que seguir andando para poder cerrar sesión).
-  if (token?.id && !token.isImpersonating && !isPublicPath(pathname)) {
-    const userStatus = await getUserDeletedStatus(token.id as string)
-    if (userStatus.kind === "ok" && userStatus.deleted) {
-      if (pathname.startsWith("/api/")) {
-        return NextResponse.json({ error: "Cuenta eliminada" }, { status: 401 })
-      }
-      return NextResponse.redirect(new URL("/login", request.url))
-    }
-  }
+  const deletedRes = await deletedUserResponse(request, token, pathname)
+  if (deletedRes) return deletedRes
 
   // Read-only impersonation enforcement. When a superadmin impersonates a
   // tenant, the minted token carries `isImpersonating` (lib/impersonation.ts).

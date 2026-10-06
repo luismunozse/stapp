@@ -161,7 +161,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               avatar_url,
               organizations (
                 id,
-                activo
+                activo,
+                deleted_at
               )
             `)
             .eq("id", validUser.id)
@@ -177,7 +178,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           // Verificar organización activa (no requerido para superadmin)
           const orgs = fullUser.organizations as unknown
           const organization = Array.isArray(orgs) ? orgs[0] : orgs
-          if (!isSuper && (!organization || !(organization as { activo: boolean }).activo)) {
+          if (isLoginBlocked(validUser, organization as { activo: boolean; deleted_at?: string | null } | null, { isSuper })) {
             return null
           }
 
