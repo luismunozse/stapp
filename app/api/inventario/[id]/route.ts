@@ -230,19 +230,42 @@ export async function PUT(
       })
       const depositoId = sucursalId ? await getDepositoDeSucursal(organizationId!, sucursalId) : null
 
-      const { data: adj, error: adjError } = await supabaseAdmin.rpc("adjust_stock_atomic", {
-        p_inventario_id: id,
-        p_organization_id: organizationId!,
-        p_user_id: userId!,
-        p_mode: "absolute",
-        p_value: data.stock,
-        p_motivo: "Ajuste manual desde edición de producto",
-        p_tipo: "AJUSTE",
-        p_referencia_tipo: "AJUSTE_MANUAL",
-        p_deposito_id: depositoId,
-      })
+      const ajustar = (deposito: string | null) =>
+        supabaseAdmin.rpc("adjust_stock_atomic", {
+          p_inventario_id: id,
+          p_organization_id: organizationId!,
+          p_user_id: userId!,
+          p_mode: "absolute",
+          p_value: data.stock,
+          p_motivo: "Ajuste manual desde edición de producto",
+          p_tipo: "AJUSTE",
+          p_referencia_tipo: "AJUSTE_MANUAL",
+          p_deposito_id: deposito,
+        })
+
+      let { data: adj, error: adjError } = await ajustar(depositoId)
+
+      // Con un depósito explícito la RPC valida estricto: una baja solo puede
+      // salir de ESE depósito. Acá el usuario corrige el stock TOTAL del
+      // producto, y en una org con varias sucursales las unidades pueden estar
+      // en otro depósito (o reservadas, o con el detalle desfasado), así que la
+      // baja fallaba aunque el total alcanzara. Reintentar sin depósito aplica
+      // el mismo drain que el ajuste rápido de la lista. La primera llamada
+      // falló dentro de su propia transacción, así que no quedó nada aplicado.
+      if (adjError?.code === "P0010" && depositoId) {
+        ;({ data: adj, error: adjError } = await ajustar(null))
+      }
 
       if (adjError) {
+        if (adjError.code === "P0003") {
+          return NextResponse.json({ error: "El stock no puede quedar negativo" }, { status: 400 })
+        }
+        if (adjError.code === "P0011") {
+          return NextResponse.json(
+            { error: "La organización no tiene depósito principal configurado" },
+            { status: 400 }
+          )
+        }
         console.error("Error applying stock adjustment via RPC:", { inventarioId: id, adjError })
         return NextResponse.json({ error: "Error al actualizar stock" }, { status: 500 })
       }

@@ -212,9 +212,76 @@ describe("PUT /api/inventario/[id] — stock dual-write via adjust_stock_atomic 
     } as any)
 
     const response = await PUT(createPutRequest({ stock: 0 }), makeParams())
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(400)
+    expect(body.error).toBe("El stock no puede quedar negativo")
+  })
+
+  it("returns 500 when adjust_stock_atomic fails with an unexpected error", async () => {
+    mockAuthSuccess()
+    vi.mocked(sucursalParaEscritura).mockResolvedValue("suc-A")
+    vi.mocked(getDepositoDeSucursal).mockResolvedValue("dep-A")
+
+    let callIndex = 0
+    vi.mocked(supabaseAdmin.from).mockImplementation((_table: string) => {
+      callIndex++
+      if (callIndex === 1) return createChainMock(EXISTING_ITEM) as any
+      return createChainMock(UPDATED_ITEM) as any
+    })
+
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null,
+      error: { message: "boom", code: "XX000" },
+    } as any)
+
+    const response = await PUT(createPutRequest({ stock: 5 }), makeParams())
     const { status } = await parseResponse(response)
 
     expect(status).toBe(500)
+  })
+
+  // Org con varias sucursales: el admin baja el stock total desde la edición,
+  // pero las unidades están en otro depósito. La validación estricta del
+  // depósito de la sucursal no debe impedir la corrección del total.
+  it("retries without deposit when the sucursal deposit lacks stock for a decrease (P0010)", async () => {
+    mockAuthSuccess()
+    vi.mocked(sucursalParaEscritura).mockResolvedValue("suc-B")
+    vi.mocked(getDepositoDeSucursal).mockResolvedValue("dep-B")
+
+    let callIndex = 0
+    vi.mocked(supabaseAdmin.from).mockImplementation((_table: string) => {
+      callIndex++
+      if (callIndex === 1) return createChainMock(EXISTING_ITEM) as any
+      return createChainMock(UPDATED_ITEM) as any
+    })
+
+    vi.mocked(supabaseAdmin.rpc)
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: "STOCK_INSUFICIENTE_DEPOSITO", code: "P0010" },
+      } as any)
+      .mockResolvedValueOnce({
+        data: { stock: 4, stockAnterior: 10, stockPosterior: 4, changed: true, movimientoId: "mov-2" },
+        error: null,
+      } as any)
+
+    const response = await PUT(createPutRequest({ stock: 4 }), makeParams())
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(200)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledTimes(2)
+    expect(supabaseAdmin.rpc).toHaveBeenNthCalledWith(
+      1,
+      "adjust_stock_atomic",
+      expect.objectContaining({ p_value: 4, p_deposito_id: "dep-B" })
+    )
+    expect(supabaseAdmin.rpc).toHaveBeenNthCalledWith(
+      2,
+      "adjust_stock_atomic",
+      expect.objectContaining({ p_value: 4, p_deposito_id: null })
+    )
+    expect(body.stock).toBe(4)
   })
 
   it("does NOT insert directly into movimientos_inventario (old behavior replaced by RPC)", async () => {
