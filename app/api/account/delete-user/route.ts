@@ -35,11 +35,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: reauth.error, code: reauth.code }, { status })
   }
 
-  const { data: user } = await supabaseAdmin
+  const { data: user, error: userError } = await supabaseAdmin
     .from("users")
     .select("nombre, email, rol")
     .eq("id", userId!)
     .single()
+  // No fatal: solo alimenta el aviso a los admins.
+  if (userError) console.error("[account/delete-user] users select:", userError)
 
   // Guarda del último ADMIN + deleted_at + activo=false + refresh_token=NULL en UNA transacción.
   const { data: estado, error: rpcError } = await supabaseAdmin.rpc("solicitar_baja_usuario", {
@@ -64,6 +66,13 @@ export async function POST(request: Request) {
   }
   if (estado === "ALREADY_DELETED") {
     return NextResponse.json({ success: true })
+  }
+
+  // Cualquier estado que no sea OK (null, estado futuro) no confirma la baja:
+  // no se limpia, audita ni avisa nada.
+  if (estado !== "OK") {
+    console.error("[account/delete-user] estado inesperado del RPC:", estado)
+    return NextResponse.json({ error: "No pudimos procesar la baja" }, { status: 500 })
   }
 
   // Tokens de notificaciones: best-effort, la baja ya está hecha y no se deshace.

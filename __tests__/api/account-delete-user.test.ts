@@ -12,17 +12,18 @@ import { verifyReauth } from "@/lib/account-deletion/reauth"
 import { notifyAdminsUserDeleted } from "@/lib/account-deletion/emails"
 import { POST } from "@/app/api/account/delete-user/route"
 
-function setup(rpcData: string = "OK", pushError: unknown = null) {
+function setup(rpcData: string | null = "OK", pushError: unknown = null, auditError: unknown = null) {
   const push = createChainMock(null, pushError)
   const web = createChainMock(null, null)
+  const audit = createChainMock(null, auditError)
   mockSupabaseFrom({
     users: createChainMock({ nombre: "Pepe", email: "pepe@t.com", rol: "TECNICO" }, null),
     push_tokens: push,
     web_push_subscriptions: web,
-    audit_logs: createChainMock(null, null),
+    audit_logs: audit,
   })
   vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: rpcData, error: null } as never)
-  return { push, web }
+  return { push, web, audit }
 }
 
 describe("POST /api/account/delete-user", () => {
@@ -149,5 +150,40 @@ describe("POST /api/account/delete-user", () => {
     expect(status).toBe(200)
     expect(console.error).toHaveBeenCalled()
     expect(notifyAdminsUserDeleted).toHaveBeenCalled()
+  })
+
+  it.each([["string inesperado", "SOMETHING_NEW"], ["data null", null]])("estado del RPC desconocido (%s): 500 sin limpieza, auditoría ni aviso", async (_n, data) => {
+    mockAuthSuccess({ userId: "u1", organizationId: "o1", role: "TECNICO" })
+    const { push, web, audit } = setup(data)
+    expect((await POST(createPostRequest({ password: "x" }))).status).toBe(500)
+    expect(push.delete).not.toHaveBeenCalled()
+    expect(web.delete).not.toHaveBeenCalled()
+    expect(audit.insert).not.toHaveBeenCalled()
+    expect(notifyAdminsUserDeleted).not.toHaveBeenCalled()
+    expect(console.error).toHaveBeenCalled()
+  })
+
+  it("en OK se intenta el insert de audit_logs; si falla se loguea y la baja sigue en 200", async () => {
+    mockAuthSuccess({ userId: "u1", organizationId: "o1", role: "TECNICO" })
+    const { audit } = setup("OK", null, { message: "audit boom" })
+    expect((await POST(createPostRequest({ password: "x" }))).status).toBe(200)
+    expect(audit.insert).toHaveBeenCalledWith(expect.objectContaining({ user_id: "u1", entity: "users", action: "DELETE" }))
+    expect(console.error).toHaveBeenCalledWith("[account/delete-user] audit_logs:", { message: "audit boom" })
+    expect(notifyAdminsUserDeleted).toHaveBeenCalled()
+  })
+
+  it("si una limpieza de tokens rechaza (throw), igual responde 200", async () => {
+    mockAuthSuccess({ userId: "u1", organizationId: "o1", role: "TECNICO" })
+    const { push } = setup("OK")
+    push.then = (_res: unknown, rej?: (e: unknown) => unknown) => Promise.reject(new Error("net down")).then(undefined, rej)
+    expect((await POST(createPostRequest({ password: "x" }))).status).toBe(200)
+    expect(notifyAdminsUserDeleted).toHaveBeenCalled()
+  })
+
+  it("ignora un userId del body: el RPC recibe el id de la sesión", async () => {
+    mockAuthSuccess({ userId: "u1", organizationId: "o1", role: "TECNICO" })
+    setup("OK")
+    await POST(createPostRequest({ password: "x", userId: "other" }))
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith("solicitar_baja_usuario", { p_user_id: "u1" })
   })
 })
