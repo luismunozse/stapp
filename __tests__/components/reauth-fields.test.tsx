@@ -73,12 +73,12 @@ describe("<ReauthFields>", () => {
     expect(onChange).toHaveBeenCalledWith({ password: "abc", email: "", totpCode: "9" })
   })
 
-  it("el campo de código es numérico de 6 dígitos con autocomplete one-time-code", () => {
+  it("el campo de código admite TOTP o código de respaldo (8 alfanuméricos) con autocomplete one-time-code", () => {
     render(<ReauthFields {...base} hasPassword totpEnabled />)
     const totp = screen.getByLabelText(/código/i)
-    expect(totp).toHaveAttribute("inputmode", "numeric")
+    expect(totp).toHaveAttribute("inputmode", "text")
     expect(totp).toHaveAttribute("autocomplete", "one-time-code")
-    expect(totp).toHaveAttribute("maxlength", "6")
+    expect(totp).toHaveAttribute("maxlength", "8")
   })
 
   it("muestra el error en un alert", () => {
@@ -86,10 +86,17 @@ describe("<ReauthFields>", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Contraseña incorrecta")
   })
 
-  it("el código TOTP descarta lo que no es dígito y corta en 6", () => {
+  it("el código descarta símbolos y espacios, pasa a mayúsculas y corta en 8", () => {
     const onChange = vi.fn()
     render(<ReauthFields value={EMPTY_REAUTH} onChange={onChange} hasPassword totpEnabled />)
     fireEvent.change(screen.getByLabelText(/código/i), { target: { value: "12a 345678" } })
-    expect(onChange).toHaveBeenCalledWith({ password: "", email: "", totpCode: "123456" })
+    expect(onChange).toHaveBeenCalledWith({ password: "", email: "", totpCode: "12A34567" })
+  })
+
+  it("acepta un código de respaldo hexadecimal en minúsculas y lo normaliza", () => {
+    const onChange = vi.fn()
+    render(<ReauthFields value={EMPTY_REAUTH} onChange={onChange} hasPassword totpEnabled />)
+    fireEvent.change(screen.getByLabelText(/código/i), { target: { value: "a1b2c3d4" } })
+    expect(onChange).toHaveBeenCalledWith({ password: "", email: "", totpCode: "A1B2C3D4" })
   })
 })

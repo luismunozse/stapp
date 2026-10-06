@@ -83,12 +83,12 @@ export function ReauthFields({ hasPassword, totpEnabled, value, onChange, disabl
           <Label htmlFor={`${idPrefix}-totp`}>Código de verificación en dos pasos</Label>
           <Input
             id={`${idPrefix}-totp`}
-            inputMode="numeric"
+            inputMode="text"
             autoComplete="one-time-code"
-            maxLength={6}
+            maxLength={8}
             value={value.totpCode}
             disabled={disabled}
-            onChange={(e) => onChange({ ...value, totpCode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+            onChange={(e) => onChange({ ...value, totpCode: e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 8) })}
           />
         </div>
       )}
