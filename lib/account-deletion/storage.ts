@@ -43,7 +43,7 @@ function isMissingBucket(message: string): boolean {
  * (o fuera de la org): en un borrado masivo es pérdida de datos. Se rechaza
  * ANTES de cualquier list/remove.
  */
-function assertSafePrefix(prefix: string): void {
+export function assertSafePrefix(prefix: string): void {
   if (typeof prefix !== "string" || !prefix.trim() || prefix.startsWith("/") || prefix.includes("..")) {
     throw new Error(`prefijo de storage inválido: ${JSON.stringify(prefix)}`)
   }
