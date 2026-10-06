@@ -41,6 +41,9 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
   // El server rechaza /cotizar con FEATURE_REQUIRED si el plan cambió después de
   // cachear la página: desde ahí el carrito se comporta como el de un plan sin pedidos.
   const [planSinPedidos, setPlanSinPedidos] = useState(false)
+  // Mensaje del 429 (rate limit / pedidos pendientes): se muestra como aviso
+  // dentro del drawer, no como un error generico que desaparece solo.
+  const [avisoLimite, setAvisoLimite] = useState<string | null>(null)
   const soloWhatsapp = !recibePedidos || planSinPedidos
   // URL del pedido ya abierto en WhatsApp. El carrito NO se vacía al abrirlo:
   // window.open con noopener devuelve null siempre, no hay forma de saber si el
@@ -186,6 +189,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
     }
     if (cart.items.length === 0) return
 
+    setAvisoLimite(null)
     setSubmitting(true)
     try {
       const res = await fetch(`/api/public/catalogo/${slug}/cotizar`, {
@@ -210,6 +214,14 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
         }),
       })
       const data = await res.json()
+      if (res.status === 429) {
+        setAvisoLimite(
+          typeof data.error === "string" && data.error
+            ? data.error
+            : "Enviaste demasiadas solicitudes. Esperá unos minutos y volvé a intentar."
+        )
+        return
+      }
       if (res.status === 403 && data.code === "FEATURE_REQUIRED") {
         setPlanSinPedidos(true)
         toast.error(
@@ -675,6 +687,13 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                     </Button>
                   </>
                 ) : (
+                  <>
+                  {avisoLimite && (
+                    <p role="alert" className="text-xs text-amber-900 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3 inline-flex items-start gap-1.5">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      {avisoLimite}
+                    </p>
+                  )}
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
@@ -694,6 +713,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                       {soloWhatsapp ? "Enviar pedido por WhatsApp" : "Enviar solicitud"}
                     </Button>
                   </div>
+                  </>
                 )}
               </footer>
             )}

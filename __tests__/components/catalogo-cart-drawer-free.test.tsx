@@ -131,4 +131,19 @@ describe("CartDrawer — plan sin pedidos online", () => {
     expect(await screen.findByRole("button", { name: /whatsapp/i })).toBeInTheDocument()
     expect(clear).not.toHaveBeenCalled()
   })
+
+  it("429: muestra el mensaje del servidor como aviso en el drawer, sin vaciar el carrito ni error genérico", async () => {
+    const msg = "Ya tenés pedidos pendientes con este teléfono. El taller se va a comunicar con vos."
+    fetchMock.mockResolvedValue({ ok: false, status: 429, json: async () => ({ error: msg, code: "OPEN_ORDERS_LIMIT" }) })
+    renderDrawer({ recibePedidos: true, whatsapp: "5491112345678" })
+    fireEvent.click(screen.getByRole("button", { name: /continuar/i }))
+    fireEvent.change(document.getElementById("nombre") as HTMLElement, { target: { value: "Ana" } })
+    fireEvent.change(document.getElementById("telefono") as HTMLElement, { target: { value: "1122334455" } })
+    fireEvent.click(screen.getByRole("checkbox"))
+    fireEvent.click(screen.getByRole("button", { name: /enviar solicitud/i }))
+    const alerta = await screen.findByRole("alert")
+    expect(alerta).toHaveTextContent(msg)
+    expect(toast.error).not.toHaveBeenCalledWith("Error al enviar")
+    expect(clear).not.toHaveBeenCalled()
+  })
 })
