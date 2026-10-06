@@ -255,6 +255,10 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM _ids) THEN RETURN; END IF;
   v_antes := pg_temp.reservado();
   BEGIN
+    -- La linea que crear_cotizacion_publica_atomica graba para un item linkeado
+    -- (inventario_id = A): es lo que recorre liberar_items_cotizacion.
+    INSERT INTO items_cotizacion (cotizacion_id, descripcion, cantidad, precio_unitario, subtotal, inventario_id)
+    VALUES (pg_temp.id('q1'), 'PROBE-337 linea A', 2, 100, 200, pg_temp.id('inv'));
     PERFORM liberar_items_cotizacion(pg_temp.id('q1'), NULL, 'probe');
     v_despues := pg_temp.reservado();
     RAISE EXCEPTION 'rollback-probe';
@@ -390,7 +394,7 @@ BEGIN
   EXCEPTION WHEN check_violation THEN v_bajo := 'check_violation'; END;
   BEGIN UPDATE catalogo_config SET reserva_horas = 721 WHERE organization_id = v_org;
   EXCEPTION WHEN check_violation THEN v_alto := 'check_violation'; END;
-  INSERT INTO _r VALUES (24, 'CHECK reserva_horas rechaza 0 y 721', 'check_violation x2', v_bajo || ' x ' || v_alto);
+  INSERT INTO _r VALUES (24, 'CHECK reserva_horas rechaza 0 y 721', 'check_violation x check_violation', v_bajo || ' x ' || v_alto);
 END $$;
 
 INSERT INTO _r SELECT 25, 'anon sin EXECUTE en expirar_reservas_catalogo', 'false',
