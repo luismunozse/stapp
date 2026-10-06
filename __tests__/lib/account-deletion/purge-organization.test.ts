@@ -12,7 +12,7 @@ import { purgeOrganization } from "@/lib/account-deletion/purge-organization"
 
 const orden: string[] = []
 
-function setup(opts: { cancel?: unknown; org?: unknown; deleteError?: unknown } = {}) {
+function setup(opts: { cancel?: unknown; org?: unknown; deleteError?: unknown; deleteCount?: number } = {}) {
   orden.length = 0
   vi.mocked(cancelOrganizationSubscriptions).mockImplementation(async () => {
     orden.push("cancel")
@@ -29,7 +29,7 @@ function setup(opts: { cancel?: unknown; org?: unknown; deleteError?: unknown } 
   const orgChain = createChainMock(opts.org === undefined ? { id: "o1", deleted_at: "2026-09-01", deletion_requested_at: "2026-09-01" } : opts.org, null)
   orgChain.delete = vi.fn(() => {
     orden.push("db")
-    return createChainMock(null, opts.deleteError ?? null)
+    return createChainMock(null, opts.deleteError ?? null, opts.deleteCount ?? 1)
   }) as never
   mockSupabaseFrom({ organizations: orgChain })
   return orgChain
@@ -64,6 +64,13 @@ describe("purgeOrganization", () => {
   it("si falla el delete de la fila lo informa como paso database", async () => {
     setup({ deleteError: { message: "fk" } })
     expect(await purgeOrganization("o1")).toMatchObject({ ok: false, step: "database" })
+  })
+
+  it("sin expectArchived el delete no aplica guard .not y 0 filas es exito idempotente", async () => {
+    const chain = setup({ deleteCount: 0 })
+    expect(await purgeOrganization("o1")).toEqual({ ok: true, removedFiles: 4 })
+    const delChain = vi.mocked(chain.delete).mock.results[0].value
+    expect(delChain.not).not.toHaveBeenCalled()
   })
 
   it("pasa el deadline a removePrefix", async () => {
@@ -119,7 +126,18 @@ describe("purgeOrganization", () => {
       expect(chain.delete).toHaveBeenCalledTimes(1)
       const delChain = vi.mocked(chain.delete).mock.results[0].value
       expect(delChain.eq).toHaveBeenCalledWith("id", "o1")
+      expect(chain.delete).toHaveBeenCalledWith({ count: "exact" })
       expect(delChain.not).toHaveBeenCalledWith("deleted_at", "is", null)
+      expect(delChain.not).toHaveBeenCalledWith("deletion_requested_at", "is", null)
+    })
+
+    it("0 filas borradas (restaurada tras el precheck) es fallo en paso delete y se loguea", async () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {})
+      setup({ deleteCount: 0 })
+      const r = await purgeOrganization("o1", { expectArchived: true })
+      expect(r).toMatchObject({ ok: false, step: "delete", error: expect.stringContaining("not-archived-anymore") })
+      expect(spy).toHaveBeenCalled()
+      spy.mockRestore()
     })
 
     it("si el precheck falla lo informa como paso precheck", async () => {

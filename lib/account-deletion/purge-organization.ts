@@ -2,7 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { cancelOrganizationSubscriptions } from "./cancel-subscriptions"
 import { removePrefix, storageTargets } from "./storage"
 
-export type PurgeStep = "precheck" | "subscriptions" | "storage" | "database"
+export type PurgeStep = "precheck" | "subscriptions" | "storage" | "database" | "delete"
 
 export interface PurgeOptions {
   /** Timestamp (ms) a partir del cual no se empiezan más borrados de storage. */
@@ -67,10 +67,21 @@ export async function purgeOrganization(orgId: string, opts: PurgeOptions = {}):
   }
   if (failures.length > 0) return fail("storage", failures.join("; "))
 
-  let del = supabaseAdmin.from("organizations").delete().eq("id", orgId)
-  if (opts.expectArchived) del = del.not("deleted_at", "is", null)
-  const { error: deleteError } = await del
+  let del = supabaseAdmin.from("organizations").delete({ count: "exact" }).eq("id", orgId)
+  if (opts.expectArchived) {
+    // Mismo criterio que el precheck: archivada POR PEDIDO del usuario.
+    del = del.not("deleted_at", "is", null).not("deletion_requested_at", "is", null)
+  }
+  const { error: deleteError, count } = await del
   if (deleteError) return fail("database", deleteError.message)
+
+  if (opts.expectArchived && !count) {
+    // Restaurada después del precheck: ya se cancelaron suscripciones y se
+    // borró storage, así que esto necesita atención manual.
+    const msg = "not-archived-anymore: la organización dejó de estar archivada antes del delete (suscripciones y storage ya purgados)"
+    console.error(`[purgeOrganization] ${orgId}: ${msg}`)
+    return fail("delete", msg)
+  }
 
   return { ok: true, removedFiles }
 }
