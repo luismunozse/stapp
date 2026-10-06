@@ -141,14 +141,42 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verificar que el email del usuario no exista
-    const { data: existingUser } = await supabaseAdmin
+    // Verificar que el email del usuario no exista. Corre antes de cualquier
+    // insert y es común a credentials y Google (ambos usan `userEmail`).
+    const { data: existingUser, error: existingUserError } = await supabaseAdmin
       .from("users")
-      .select("id")
+      .select("id, deleted_at, organizations(deletion_requested_at)")
       .eq("email", userEmail)
       .single()
 
+    // PGRST116 = "no rows" con .single(): el email está libre. Cualquier otro
+    // error es una falla real: abortar antes de crear nada (falla cerrado).
+    if (existingUserError && existingUserError.code !== "PGRST116") {
+      console.error("Error checking existing user:", existingUserError)
+      return NextResponse.json(
+        { error: "Error interno del servidor" },
+        { status: 500 }
+      )
+    }
+
     if (existingUser) {
+      // Dos formas de estar "en gracia": el usuario se dio de baja (users.deleted_at)
+      // o su taller pidió eliminarse (organizations.deletion_requested_at; en ese
+      // caso los usuarios NO llevan deleted_at).
+      const rel = existingUser.organizations as
+        | { deletion_requested_at?: string | null }
+        | Array<{ deletion_requested_at?: string | null }>
+        | null
+      const org = Array.isArray(rel) ? rel[0] : rel
+      if (existingUser.deleted_at || org?.deletion_requested_at) {
+        return NextResponse.json(
+          {
+            error: "Esta cuenta está en proceso de eliminación, escribí a soporte",
+            code: "ACCOUNT_PENDING_DELETION",
+          },
+          { status: 400 }
+        )
+      }
       return NextResponse.json(
         { error: "Ya existe una cuenta con este email" },
         { status: 400 }
