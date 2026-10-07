@@ -3,6 +3,7 @@ import type { CurrencyCode } from "./currency"
 export type CountryCode =
   | "AR" | "MX" | "CL" | "CO" | "PE" | "UY" | "BR" | "BO" | "PY"
   | "VE" | "EC" | "CR" | "PA" | "DO" | "GT" | "HN" | "SV" | "NI" | "CU"
+  | "ES"
 
 export interface CountryConfig {
   code: CountryCode
@@ -363,6 +364,26 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     taxIdPlaceholder: "90010112345",
     ivaOptions: [0],
     ivaGeneral: 0,
+  },
+  ES: {
+    code: "ES",
+    name: "España",
+    phoneCode: "34",
+    // Los numeros espanoles tienen 9 digitos y no llevan 0 de larga distancia
+    phoneNationalMinDigits: 9,
+    defaultCurrency: "EUR",
+    defaultTimezone: "Europe/Madrid",
+    locale: "es-ES",
+    personalIdLabel: "DNI/NIE",
+    // DNI: 8 digitos + letra. NIE: X/Y/Z + 7 digitos + letra. Solo formato, sin letra de control.
+    personalIdRegex: /^(\d{8}-?[A-Z]|[XYZ]\d{7}-?[A-Z])?$/i,
+    personalIdPlaceholder: "12345678Z",
+    taxIdLabel: "NIF",
+    // NIF/CIF de empresa, o DNI/NIE: los autonomos usan su documento personal como NIF
+    taxIdRegex: /^([A-Z]\d{7}[0-9A-Z]|\d{8}-?[A-Z]|[XYZ]\d{7}-?[A-Z])?$/i,
+    taxIdPlaceholder: "B12345678",
+    ivaOptions: [0, 4, 10, 21],
+    ivaGeneral: 21,
   },
 }
 
