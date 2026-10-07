@@ -482,7 +482,8 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
                 <Label htmlFor="cuit">{countryConfig.taxIdLabel}</Label>
                 <Input
                   id="cuit"
-                  inputMode="numeric"
+                  inputMode={countryConfig.taxIdInputMode}
+                  autoCapitalize={countryConfig.taxIdInputMode === "text" ? "characters" : undefined}
                   {...register("cuit")}
                   placeholder={countryConfig.taxIdPlaceholder}
                 />
@@ -536,7 +537,8 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
             </Label>
             <Input
               id="dni"
-              inputMode="numeric"
+              inputMode={countryConfig.personalIdInputMode}
+              autoCapitalize={countryConfig.personalIdInputMode === "text" ? "characters" : undefined}
               {...register("dni")}
               placeholder={countryConfig.personalIdPlaceholder}
             />

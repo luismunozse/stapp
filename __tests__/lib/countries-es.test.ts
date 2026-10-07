@@ -59,3 +59,23 @@ describe("countries — Espana", () => {
     })
   })
 })
+
+describe("countries — teclado de los campos de ID", () => {
+  it("ES admite letras en DNI/NIE y NIF", () => {
+    const es = getCountryConfig("ES")
+    expect(es.personalIdInputMode).toBe("text")
+    expect(es.taxIdInputMode).toBe("text")
+  })
+
+  it("AR mantiene el teclado numerico", () => {
+    const ar = getCountryConfig("AR")
+    expect(ar.personalIdInputMode).toBe("numeric")
+    expect(ar.taxIdInputMode).toBe("numeric")
+  })
+
+  it.each(["MX", "CL", "VE", "NI"] as const)("%s admite letras en ambos IDs", (code) => {
+    const c = getCountryConfig(code)
+    expect(c.personalIdInputMode).toBe("text")
+    expect(c.taxIdInputMode).toBe("text")
+  })
+})
