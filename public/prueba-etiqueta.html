@@ -1,115 +1,176 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-AR">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Prueba de etiqueta 50×40</title>
+<title>Prueba de etiquetas | STApp</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+  /* Tokens de app/globals.css (STApp). */
   :root {
-    --bg: #f6f6f4;
-    --surface: #ffffff;
-    --text: #1a1a1a;
-    --muted: #5c5c5c;
-    --border: #dcdcd8;
-    --accent: #111111;
-    --accent-text: #ffffff;
-    --note: #fff7e0;
+    --background: hsl(214 24% 97%);
+    --foreground: hsl(222 47% 11%);
+    --surface: hsl(0 0% 100%);
+    --muted: hsl(215 19% 38%);
+    --border: hsl(214 25% 88%);
+    --primary: hsl(221.2 83.2% 53.3%);
+    --primary-hover: hsl(221.2 83.2% 47%);
+    --primary-text: hsl(0 0% 100%);
+    --ring: hsl(221.2 83.2% 53.3% / 0.35);
+    --step-bg: hsl(214 95% 95%);
+    --step-text: hsl(221.2 83.2% 40%);
+    --radius: 0.5rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: hsl(222.2 84% 4.9%);
+      --foreground: hsl(210 40% 98%);
+      --surface: hsl(222.2 84% 6%);
+      --muted: hsl(215 20.2% 65.1%);
+      --border: hsl(217.2 32.6% 17.5%);
+      --primary: hsl(217.2 91.2% 59.8%);
+      --primary-hover: hsl(217.2 91.2% 66%);
+      --primary-text: hsl(222.2 84% 4.9%);
+      --ring: hsl(217.2 91.2% 59.8% / 0.4);
+      --step-bg: hsl(217.2 32.6% 17.5%);
+      --step-text: hsl(213 94% 78%);
+    }
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--background);
+    color: var(--foreground);
+    font: 16px/1.55 Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
-  main { max-width: 680px; margin: 0 auto; padding: 24px 16px 48px; }
-  h1 { font-size: 1.5rem; margin: 0 0 4px; }
-  h2 { font-size: 1.05rem; margin: 28px 0 8px; }
-  p { margin: 0 0 10px; }
-  .sub { color: var(--muted); margin-bottom: 20px; }
-  ol { margin: 0; padding-left: 22px; }
-  ol li { margin-bottom: 10px; }
-  .card {
+  main { max-width: 640px; margin: 0 auto; padding: 28px 16px 56px; }
+
+  .brand { display: flex; align-items: center; gap: 8px; margin-bottom: 32px; font-weight: 700; font-size: 1.05rem; }
+  .brand img { width: 28px; height: 28px; }
+
+  h1 { font-size: 1.6rem; line-height: 1.2; letter-spacing: -0.01em; margin: 0 0 12px; text-wrap: balance; }
+  .intro { margin: 0 0 32px; max-width: 60ch; }
+  .intro strong { font-weight: 600; }
+
+  .steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
+  .steps > li {
+    position: relative;
+    padding: 0 0 28px 44px;
+    counter-increment: step;
+  }
+  .steps > li::before {
+    content: counter(step);
+    position: absolute; left: 0; top: 0;
+    width: 28px; height: 28px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--step-bg); color: var(--step-text);
+    font-weight: 700; font-size: 0.9rem;
+  }
+  .steps > li:not(:last-child)::after {
+    content: "";
+    position: absolute; left: 13.5px; top: 34px; bottom: 6px;
+    width: 1px; background: var(--border);
+  }
+  .steps h2 { font-size: 1.05rem; line-height: 28px; margin: 0 0 6px; }
+  .steps p { margin: 0 0 10px; max-width: 62ch; }
+  .steps p:last-child { margin-bottom: 0; }
+  .hint { color: var(--muted); font-size: 0.94rem; }
+
+  .panel {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: calc(var(--radius) + 4px);
     padding: 16px;
+    margin: 14px 0 12px;
   }
-  .note { background: var(--note); border-color: #ecd9a0; }
-  fieldset { border: 0; padding: 0; margin: 0 0 14px; }
-  legend { font-weight: 600; margin-bottom: 6px; }
-  .radios { display: flex; gap: 10px; flex-wrap: wrap; }
-  .radios label {
+  .question { font-weight: 600; margin: 0 0 10px; }
+  .choices { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .choices label {
     display: flex; align-items: center; gap: 8px;
-    border: 1px solid var(--border); border-radius: 8px;
-    padding: 8px 14px; cursor: pointer; background: var(--surface);
+    min-height: 44px; padding: 0 16px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    cursor: pointer; background: var(--surface);
+    transition: border-color 150ms ease-out, background-color 150ms ease-out;
   }
-  .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  button {
+  .choices label:has(input:checked) { border-color: var(--primary); background: var(--step-bg); }
+  .choices input { accent-color: var(--primary); width: 16px; height: 16px; margin: 0; }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .actions button {
     font: inherit; font-weight: 600;
-    background: var(--accent); color: var(--accent-text);
-    border: 0; border-radius: 8px; padding: 14px 12px; cursor: pointer;
+    min-height: 48px; padding: 0 16px;
+    background: var(--primary); color: var(--primary-text);
+    border: 0; border-radius: var(--radius); cursor: pointer;
+    transition: background-color 150ms ease-out, transform 100ms ease-out;
   }
-  button:active { transform: translateY(1px); }
-  .previews { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .preview-box { overflow: hidden; border: 1px dashed var(--border); background: #fff; }
-  .preview-box iframe { border: 0; transform-origin: 0 0; display: block; background: #fff; }
-  .caption { font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
-  code { background: #ececea; padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+  .actions button:hover { background: var(--primary-hover); }
+  .actions button:active { transform: translateY(1px); }
+  .actions button:focus-visible, .choices label:has(input:focus-visible) { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+  .example { display: flex; gap: 16px; align-items: center; margin-top: 16px; }
+  .example-label { flex: 0 0 auto; overflow: hidden; background: #fff; box-shadow: 0 1px 3px hsl(222 47% 11% / 0.12); }
+  .example-label iframe { display: block; border: 0; transform-origin: 0 0; background: #fff; }
+  .example p { margin: 0; font-size: 0.94rem; }
+
+  footer { margin-top: 12px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.94rem; }
+  footer a { color: var(--primary); }
+
   @media (max-width: 520px) {
-    .buttons, .previews { grid-template-columns: 1fr; }
+    .actions { grid-template-columns: 1fr; }
+    .example { flex-direction: column; align-items: flex-start; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
   }
 </style>
 </head>
 <body>
 <main>
-  <h1>Prueba de etiqueta 50×40 mm</h1>
-  <p class="sub">Xprinter XP-410B · abrir esta página con <strong>Google Chrome</strong> en la computadora del taller.</p>
+  <div class="brand"><img src="/favicon.svg" alt="" width="28" height="28"> STApp</div>
 
-  <div class="card">
-    <h2 style="margin-top:0">Pasos</h2>
-    <ol>
-      <li>Abrir las <strong>Preferencias de impresión</strong> de la XP-410B en Windows. Poner el tamaño de papel en <strong>50 mm de ancho × 40 mm de alto</strong> y la orientación en <strong>Vertical</strong>. Aceptar.</li>
-      <li>En esta página, marcar la <strong>misma orientación que quedó en Windows</strong> (Vertical) e imprimir la <strong>variante A</strong> y la <strong>variante B</strong>. En el diálogo de Chrome: elegir la XP-410B como impresora y, si aparecen en "Más configuraciones", poner Márgenes en <strong>Ninguno</strong>, Escala en <strong>Predeterminada</strong> y desmarcar <strong>Encabezados y pies de página</strong>.</li>
-      <li>Si ninguna de las dos sale bien: volver a las Preferencias de Windows, cambiar la orientación a <strong>Horizontal</strong>, marcar <strong>Horizontal</strong> en esta página e imprimir A y B otra vez.</li>
-      <li>Sacar <strong>una foto de todas las etiquetas impresas</strong> y enviarla por el mismo medio por el que llegó este enlace. Cada etiqueta lleva impreso qué variante y qué orientación se usó.</li>
-    </ol>
-  </div>
+  <h1>Probemos tu impresora de etiquetas</h1>
+  <p class="intro">Las etiquetas te están saliendo giradas y cortadas entre dos. Con esta prueba vemos qué ajuste necesita tu Xprinter. Son unos 5 minutos. Abrí esta página con <strong>Google Chrome</strong> en la compu que tiene la impresora conectada.</p>
 
-  <h2>Imprimir</h2>
-  <div class="card">
-    <fieldset>
-      <legend>Orientación configurada en el driver</legend>
-      <div class="radios">
-        <label><input type="radio" name="driver" value="Vertical" checked> Vertical</label>
-        <label><input type="radio" name="driver" value="Horizontal"> Horizontal</label>
+  <ol class="steps">
+    <li>
+      <h2>Configurá la impresora en Windows</h2>
+      <p>Desde Inicio, buscá <strong>Impresoras y escáneres</strong>, entrá a la XP-410B y abrí <strong>Preferencias de impresión</strong>.</p>
+      <p>Poné el papel en <strong>50 x 40 mm</strong> (50 de ancho, 40 de alto) y la orientación en <strong>Vertical</strong>. Si no aparece esa medida, creá un tamaño nuevo con esos valores. Guardá los cambios.</p>
+    </li>
+    <li>
+      <h2>Imprimí las dos pruebas</h2>
+      <div class="panel">
+        <p class="question">¿Qué orientación dejaste en Windows?</p>
+        <div class="choices" role="radiogroup">
+          <label><input type="radio" name="orientacion" value="Vertical" checked> Vertical</label>
+          <label><input type="radio" name="orientacion" value="Horizontal"> Horizontal</label>
+        </div>
+        <div class="actions">
+          <button type="button" data-prueba="1">Imprimir prueba 1</button>
+          <button type="button" data-prueba="2">Imprimir prueba 2</button>
+        </div>
       </div>
-    </fieldset>
-    <div class="buttons">
-      <button type="button" data-variant="A">Imprimir variante A</button>
-      <button type="button" data-variant="B">Imprimir variante B</button>
-    </div>
-  </div>
+      <p class="hint">Cuando se abra la ventana de impresión de Chrome, elegí la XP-410B y tocá Imprimir. Si alguna vez cambiaste los márgenes o la escala ahí, dejalos en Predeterminado.</p>
+      <div class="example">
+        <div class="example-label" data-preview></div>
+        <p>Así tiene que salir: el texto se lee normal (no de costado), el QR queda a la derecha y todo entra en una sola etiqueta, con el recuadro completo. Si la prueba 2 sale entera pero cabeza abajo, también nos sirve.</p>
+      </div>
+    </li>
+    <li>
+      <h2>Si ninguna salió bien, probá en horizontal</h2>
+      <p>Volvé a Preferencias de impresión, cambiá la orientación a <strong>Horizontal</strong> y guardá. Después marcá Horizontal acá arriba e imprimí las dos pruebas de nuevo.</p>
+    </li>
+    <li>
+      <h2>Mandanos una foto</h2>
+      <p>Sacale una foto a todas las etiquetas que imprimiste y mandánosla por donde te llegó este link. Cada etiqueta dice qué prueba es y con qué orientación salió, así que no hace falta que anotes nada.</p>
+    </li>
+  </ol>
 
-  <h2>Qué es una etiqueta bien impresa</h2>
-  <div class="card note">
-    <p>El texto se lee <strong>horizontal</strong>, con el QR a la <strong>derecha</strong>, todo dentro de <strong>una sola etiqueta</strong> y con el marco negro completo alrededor.</p>
-    <p style="margin:0">Si la variante B sale entera dentro de una etiqueta pero <strong>cabeza abajo</strong>, también sirve: anotarlo en el mensaje.</p>
-  </div>
-
-  <h2>Lo que se envía a la impresora</h2>
-  <div class="previews">
-    <div>
-      <div class="preview-box" data-preview="A"></div>
-      <div class="caption">Variante A: página horizontal 50×40 (igual a STApp hoy).</div>
-    </div>
-    <div>
-      <div class="preview-box" data-preview="B"></div>
-      <div class="caption">Variante B: página vertical 40×50 con el contenido girado.</div>
-    </div>
-  </div>
-  <p class="caption">El QR es de muestra: no hace falta escanearlo.</p>
+  <footer>¿Algo no te funciona? Escribinos a <a href="mailto:soporte@stapp.com.ar">soporte@stapp.com.ar</a>.</footer>
 </main>
 
 <script>
@@ -117,6 +178,9 @@
   // Etiqueta: copia de dieCutStyles/dieCutBody de STApp para 50x40
   // (components/ordenes/print-label.ts). Valores ya calculados:
   // scale 0.833 -> font 5.8pt, padding 1.5mm, QR 14mm.
+  //
+  // Prueba 1: pagina horizontal 50x40 (lo que STApp manda hoy).
+  // Prueba 2: pagina vertical 40x50 con el contenido girado 90 grados.
   // ------------------------------------------------------------------
   var W = 50, H = 40
 
@@ -169,39 +233,40 @@
 
   var QR = fakeQrDataUrl()
 
-  // Solo valores conocidos llegan al HTML: variant y driver pueden venir de la URL.
-  function safeVariant(v) { return v === "B" ? "B" : "A" }
-  function safeDriver(d) { return d === "Horizontal" ? "Horizontal" : "Vertical" }
+  // Solo valores conocidos llegan al HTML: prueba y orientacion pueden venir de la URL.
+  function safePrueba(p) { return p === "2" ? "2" : p === "ejemplo" ? "ejemplo" : "1" }
+  function safeOrientacion(o) { return o === "Horizontal" ? "Horizontal" : "Vertical" }
 
-  function labelContent(variant, driver) {
-    variant = safeVariant(variant)
-    driver = safeDriver(driver)
+  function labelContent(prueba, orientacion) {
+    prueba = safePrueba(prueba)
+    orientacion = safeOrientacion(orientacion)
+    var esEjemplo = prueba === "ejemplo"
     return '<div class="left">' +
-      '<div class="codigo">PRUEBA ' + variant + "</div>" +
+      '<div class="codigo">' + (esEjemplo ? "CEL036" : "PRUEBA " + prueba) + "</div>" +
       '<div class="info">' +
       '<div><span class="label">Cliente: </span><span class="value">Juan Pérez</span></div>' +
       '<div><span class="label">Equipo: </span><span class="value">Samsung S9</span></div>' +
-      '<div><span class="label">Problema: </span>Prueba de impresión</div>' +
+      '<div><span class="label">Problema: </span>No carga</div>' +
       "</div>" +
-      '<div class="stamp">' + variant + " · Driver " + driver + "</div>" +
+      '<div class="stamp">' + (esEjemplo ? "" : "Orientación: " + orientacion) + "</div>" +
       "</div>" +
       '<div class="right"><img src="' + QR + '" alt="QR" /><div class="scan">Seguimiento</div></div>'
   }
 
-  // A: lo que STApp manda hoy. Página horizontal W×H, la etiqueta es el body.
-  function htmlVariantA(driver) {
+  // Pagina horizontal W x H, la etiqueta es el body (igual que STApp).
+  function htmlHorizontal(prueba, orientacion) {
     var css =
       "* { margin: 0; padding: 0; box-sizing: border-box; }" +
       "@page { size: " + W + "mm " + H + "mm; margin: 0; }" +
       "body { " + CONTAINER_RULES + " }" +
       CONTENT_RULES +
       ".frame { position: fixed; top: 0; left: 0; width: " + W + "mm; height: " + H + "mm; }"
-    return "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Prueba A</title><style>" + css +
-      "</style></head><body><div class=\"frame\"></div>" + labelContent("A", driver) + "</body></html>"
+    return "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Prueba</title><style>" + css +
+      "</style></head><body><div class=\"frame\"></div>" + labelContent(prueba, orientacion) + "</body></html>"
   }
 
-  // B: página vertical H×W; la etiqueta W×H se gira 90° para ocuparla entera.
-  function htmlVariantB(driver) {
+  // Pagina vertical H x W; la etiqueta W x H se gira 90 grados para ocuparla entera.
+  function htmlVertical(prueba, orientacion) {
     var css =
       "* { margin: 0; padding: 0; box-sizing: border-box; }" +
       "@page { size: " + H + "mm " + W + "mm; margin: 0; }" +
@@ -210,29 +275,28 @@
       " transform-origin: 0 0; transform: translateX(" + H + "mm) rotate(90deg); }" +
       CONTENT_RULES +
       ".frame { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }"
-    return "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Prueba B</title><style>" + css +
-      "</style></head><body><div class=\"sheet\"><div class=\"frame\"></div>" + labelContent("B", driver) +
+    return "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Prueba</title><style>" + css +
+      "</style></head><body><div class=\"sheet\"><div class=\"frame\"></div>" + labelContent(prueba, orientacion) +
       "</div></body></html>"
   }
 
-  function buildHtml(variant, driver) {
-    return variant === "A" ? htmlVariantA(driver) : htmlVariantB(driver)
+  function buildHtml(prueba, orientacion) {
+    return safePrueba(prueba) === "2" ? htmlVertical(prueba, orientacion) : htmlHorizontal(prueba, orientacion)
   }
 
-  // ?raw=A|B&driver=... muestra solo la página de la etiqueta (vistas previas).
+  // ?raw=1|2|ejemplo&orientacion=... muestra solo la pagina de la etiqueta (vista previa).
   var PARAMS = new URLSearchParams(location.search)
-  var RAW = PARAMS.get("raw")
-  var IS_RAW = RAW === "A" || RAW === "B"
+  var IS_RAW = PARAMS.has("raw")
   if (IS_RAW) {
     window.addEventListener("load", function () {
       document.open()
-      document.write(buildHtml(RAW, safeDriver(PARAMS.get("driver"))))
+      document.write(buildHtml(PARAMS.get("raw"), PARAMS.get("orientacion")))
       document.close()
     })
   }
 
   // Mismo mecanismo que STApp (lib/print/print-html-iframe.ts):
-  // iframe oculto + document.write + esperar imágenes + print().
+  // iframe oculto + document.write + esperar imagenes + print().
   function printViaIframe(html) {
     var iframe = document.createElement("iframe")
     iframe.style.position = "fixed"
@@ -271,47 +335,32 @@
     }
   }
 
-  function selectedDriver() {
-    var el = document.querySelector('input[name="driver"]:checked')
+  function selectedOrientacion() {
+    var el = document.querySelector('input[name="orientacion"]:checked')
     return el ? el.value : "Vertical"
   }
 
-  document.querySelectorAll("button[data-variant]").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      printViaIframe(buildHtml(btn.getAttribute("data-variant"), selectedDriver()))
-    })
-  })
-
-  // Vistas previas a escala, ajustadas al ancho disponible.
-  var MM = 96 / 25.4
-  function renderPreviews() {
-    document.querySelectorAll("[data-preview]").forEach(function (box) {
-      var variant = box.getAttribute("data-preview")
-      var pageW = (variant === "A" ? W : H) * MM
-      var pageH = (variant === "A" ? H : W) * MM
-      var scale = Math.min(3, box.parentElement.clientWidth / pageW)
-      box.style.width = pageW * scale + "px"
-      box.style.height = pageH * scale + "px"
-      var iframe = box.querySelector("iframe")
-      if (!iframe) {
-        iframe = document.createElement("iframe")
-        iframe.setAttribute("title", "Vista previa variante " + variant)
-        iframe.setAttribute("tabindex", "-1")
-        box.appendChild(iframe)
-      }
-      iframe.style.width = pageW + "px"
-      iframe.style.height = pageH + "px"
-      iframe.style.transform = "scale(" + scale + ")"
-      var src = "?raw=" + variant + "&driver=" + encodeURIComponent(selectedDriver())
-      if (iframe.getAttribute("src") !== src) iframe.setAttribute("src", src)
-    })
-  }
   if (!IS_RAW) {
-    renderPreviews()
-    window.addEventListener("resize", renderPreviews)
-    document.querySelectorAll('input[name="driver"]').forEach(function (r) {
-      r.addEventListener("change", renderPreviews)
+    document.querySelectorAll("button[data-prueba]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        printViaIframe(buildHtml(btn.getAttribute("data-prueba"), selectedOrientacion()))
+      })
     })
+
+    // Ejemplo de etiqueta bien impresa, a escala.
+    var MM = 96 / 25.4
+    var box = document.querySelector("[data-preview]")
+    var scale = 1.4
+    var iframe = document.createElement("iframe")
+    iframe.setAttribute("title", "Ejemplo de etiqueta bien impresa")
+    iframe.setAttribute("tabindex", "-1")
+    iframe.style.width = W * MM + "px"
+    iframe.style.height = H * MM + "px"
+    iframe.style.transform = "scale(" + scale + ")"
+    box.style.width = Math.ceil(W * MM * scale) + 1 + "px"
+    box.style.height = Math.ceil(H * MM * scale) + 1 + "px"
+    box.appendChild(iframe)
+    iframe.setAttribute("src", "?raw=ejemplo")
   }
 </script>
 </body>
