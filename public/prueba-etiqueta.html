@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Prueba de etiqueta 50×40</title>
+<style>
+  :root {
+    --bg: #f6f6f4;
+    --surface: #ffffff;
+    --text: #1a1a1a;
+    --muted: #5c5c5c;
+    --border: #dcdcd8;
+    --accent: #111111;
+    --accent-text: #ffffff;
+    --note: #fff7e0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  main { max-width: 680px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  h2 { font-size: 1.05rem; margin: 28px 0 8px; }
+  p { margin: 0 0 10px; }
+  .sub { color: var(--muted); margin-bottom: 20px; }
+  ol { margin: 0; padding-left: 22px; }
+  ol li { margin-bottom: 10px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .note { background: var(--note); border-color: #ecd9a0; }
+  fieldset { border: 0; padding: 0; margin: 0 0 14px; }
+  legend { font-weight: 600; margin-bottom: 6px; }
+  .radios { display: flex; gap: 10px; flex-wrap: wrap; }
+  .radios label {
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 14px; cursor: pointer; background: var(--surface);
+  }
+  .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  button {
+    font: inherit; font-weight: 600;
+    background: var(--accent); color: var(--accent-text);
+    border: 0; border-radius: 8px; padding: 14px 12px; cursor: pointer;
+  }
+  button:active { transform: translateY(1px); }
+  .previews { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .preview-box { overflow: hidden; border: 1px dashed var(--border); background: #fff; }
+  .preview-box iframe { border: 0; transform-origin: 0 0; display: block; background: #fff; }
+  .caption { font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
+  code { background: #ececea; padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+  @media (max-width: 520px) {
+    .buttons, .previews { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Prueba de etiqueta 50×40 mm</h1>
+  <p class="sub">Xprinter XP-410B · abrir esta página con <strong>Google Chrome</strong> en la computadora del taller.</p>
+
+  <div class="card">
+    <h2 style="margin-top:0">Pasos</h2>
+    <ol>
+      <li>Abrir las <strong>Preferencias de impresión</strong> de la XP-410B en Windows. Poner el tamaño de papel en <strong>50 mm de ancho × 40 mm de alto</strong> y la orientación en <strong>Vertical</strong>. Aceptar.</li>
+      <li>En esta página, marcar la <strong>misma orientación que quedó en Windows</strong> (Vertical) e imprimir la <strong>variante A</strong> y la <strong>variante B</strong>. En el diálogo de Chrome: elegir la XP-410B como impresora y, si aparecen en "Más configuraciones", poner Márgenes en <strong>Ninguno</strong>, Escala en <strong>Predeterminada</strong> y desmarcar <strong>Encabezados y pies de página</strong>.</li>
+      <li>Si ninguna de las dos sale bien: volver a las Preferencias de Windows, cambiar la orientación a <strong>Horizontal</strong>, marcar <strong>Horizontal</strong> en esta página e imprimir A y B otra vez.</li>
+      <li>Sacar <strong>una foto de todas las etiquetas impresas</strong> y enviarla por el mismo medio por el que llegó este enlace. Cada etiqueta lleva impreso qué variante y qué orientación se usó.</li>
+    </ol>
+  </div>
+
+  <h2>Imprimir</h2>
+  <div class="card">
+    <fieldset>
+      <legend>Orientación configurada en el driver</legend>
+      <div class="radios">
+        <label><input type="radio" name="driver" value="Vertical" checked> Vertical</label>
+        <label><input type="radio" name="driver" value="Horizontal"> Horizontal</label>
+      </div>
+    </fieldset>
+    <div class="buttons">
+      <button type="button" data-variant="A">Imprimir variante A</button>
+      <button type="button" data-variant="B">Imprimir variante B</button>
+    </div>
+  </div>
+
+  <h2>Qué es una etiqueta bien impresa</h2>
+  <div class="card note">
+    <p>El texto se lee <strong>horizontal</strong>, con el QR a la <strong>derecha</strong>, todo dentro de <strong>una sola etiqueta</strong> y con el marco negro completo alrededor.</p>
+    <p style="margin:0">Si la variante B sale entera dentro de una etiqueta pero <strong>cabeza abajo</strong>, también sirve: anotarlo en el mensaje.</p>
+  </div>
+
+  <h2>Lo que se envía a la impresora</h2>
+  <div class="previews">
+    <div>
+      <div class="preview-box" data-preview="A"></div>
+      <div class="caption">Variante A: página horizontal 50×40 (igual a STApp hoy).</div>
+    </div>
+    <div>
+      <div class="preview-box" data-preview="B"></div>
+      <div class="caption">Variante B: página vertical 40×50 con el contenido girado.</div>
+    </div>
+  </div>
+  <p class="caption">El QR es de muestra: no hace falta escanearlo.</p>
+</main>
+
+<script>
+  // ------------------------------------------------------------------
+  // Etiqueta: copia de dieCutStyles/dieCutBody de STApp para 50x40
+  // (components/ordenes/print-label.ts). Valores ya calculados:
+  // scale 0.833 -> font 5.8pt, padding 1.5mm, QR 14mm.
+  // ------------------------------------------------------------------
+  var W = 50, H = 40
+
+  var CONTAINER_RULES =
+    "font-family: Arial, Helvetica, sans-serif;" +
+    "width: " + W + "mm; height: " + H + "mm; padding: 1.5mm;" +
+    "color: #000; display: flex; overflow: hidden;" +
+    "font-size: 5.8pt;" +
+    "-webkit-print-color-adjust: exact; print-color-adjust: exact;"
+
+  var CONTENT_RULES =
+    ".left { flex: 1; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; padding-right: 1.5mm; }" +
+    ".right { width: 15mm; display: flex; flex-direction: column; align-items: center; justify-content: center; }" +
+    ".right img { width: 14mm; height: 14mm; }" +
+    ".right .scan { font-size: 0.7em; color: #666; margin-top: 0.5mm; text-align: center; }" +
+    ".codigo { font-size: 1.9em; font-weight: bold; letter-spacing: 0.3px; line-height: 1.05; border-bottom: 1px solid #000; padding-bottom: 0.6mm; margin-bottom: 0.6mm; }" +
+    ".info { line-height: 1.25; flex: 1; }" +
+    ".info .label { color: #666; font-size: 0.85em; }" +
+    ".info .value { font-weight: bold; }" +
+    ".info > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }" +
+    ".stamp { font-size: 0.9em; font-weight: bold; margin-top: auto; white-space: nowrap; }" +
+    ".frame { border: 0.3mm solid #000; pointer-events: none; }"
+
+  function fakeQrDataUrl() {
+    var n = 21, seed = 7, rects = ""
+    function rnd() {
+      seed = (seed * 1103515245 + 12345) % 2147483648
+      return seed / 2147483648
+    }
+    var corners = [[0, 0], [0, n - 7], [n - 7, 0]]
+    for (var r = 0; r < n; r++) {
+      for (var c = 0; c < n; c++) {
+        var dark = null
+        for (var k = 0; k < corners.length; k++) {
+          var y = r - corners[k][0], x = c - corners[k][1]
+          if (y >= -1 && y <= 7 && x >= -1 && x <= 7) {
+            var inFinder = y >= 0 && y < 7 && x >= 0 && x < 7
+            dark = inFinder && (y === 0 || y === 6 || x === 0 || x === 6 || (y >= 2 && y <= 4 && x >= 2 && x <= 4))
+            break
+          }
+        }
+        if (dark === null) dark = rnd() < 0.5
+        if (dark) rects += '<rect x="' + c + '" y="' + r + '" width="1" height="1"/>'
+      }
+    }
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21" shape-rendering="crispEdges">' +
+      '<rect width="21" height="21" fill="#fff"/><g fill="#000">' + rects + "</g></svg>"
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg)
+  }
+
+  var QR = fakeQrDataUrl()
+
+  // Solo valores conocidos llegan al HTML: variant y driver pueden venir de la URL.
+  function safeVariant(v) { return v === "B" ? "B" : "A" }
+  function safeDriver(d) { return d === "Horizontal" ? "Horizontal" : "Vertical" }
+
+  function labelContent(variant, driver) {
+    variant = safeVariant(variant)
+    driver = safeDriver(driver)
+    return '<div class="left">' +
+      '<div class="codigo">PRUEBA ' + variant + "</div>" +
+      '<div class="info">' +
+      '<div><span class="label">Cliente: </span><span class="value">Juan Pérez</span></div>' +
+      '<div><span class="label">Equipo: </span><span class="value">Samsung S9</span></div>' +
+      '<div><span class="label">Problema: </span>Prueba de impresión</div>' +
+      "</div>" +
+      '<div class="stamp">' + variant + " · Driver " + driver + "</div>" +
+      "</div>" +
+      '<div class="right"><img src="' + QR + '" alt="QR" /><div class="scan">Seguimiento</div></div>'
+  }
+
+  // A: lo que STApp manda hoy. Página horizontal W×H, la etiqueta es el body.
+  function htmlVariantA(driver) {
+    var css =
+      "* { margin: 0; padding: 0; box-sizing: border-box; }" +
+      "@page { size: " + W + "mm " + H + "mm; margin: 0; }" +
+      "body { " + CONTAINER_RULES + " }" +
+      CONTENT_RULES +
+      ".frame { position: fixed; top: 0; left: 0; width: " + W + "mm; height: " + H + "mm; }"
+    return "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Prueba A</title><style>" + css +
+      "</style></head><body><div class=\"frame\"></div>" + labelContent("A", driver) + "</body></html>"
+  }
+
+  // B: página vertical H×W; la etiqueta W×H se gira 90° para ocuparla entera.
+  function htmlVariantB(driver) {
+    var css =
+      "* { margin: 0; padding: 0; box-sizing: border-box; }" +
+      "@page { size: " + H + "mm " + W + "mm; margin: 0; }" +
+      "html, body { width: " + H + "mm; height: " + W + "mm; overflow: hidden; position: relative; }" +
+      ".sheet { position: absolute; top: 0; left: 0; " + CONTAINER_RULES +
+      " transform-origin: 0 0; transform: translateX(" + H + "mm) rotate(90deg); }" +
+      CONTENT_RULES +
+      ".frame { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }"
+    return "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Prueba B</title><style>" + css +
+      "</style></head><body><div class=\"sheet\"><div class=\"frame\"></div>" + labelContent("B", driver) +
+      "</div></body></html>"
+  }
+
+  function buildHtml(variant, driver) {
+    return variant === "A" ? htmlVariantA(driver) : htmlVariantB(driver)
+  }
+
+  // ?raw=A|B&driver=... muestra solo la página de la etiqueta (vistas previas).
+  var PARAMS = new URLSearchParams(location.search)
+  var RAW = PARAMS.get("raw")
+  var IS_RAW = RAW === "A" || RAW === "B"
+  if (IS_RAW) {
+    window.addEventListener("load", function () {
+      document.open()
+      document.write(buildHtml(RAW, safeDriver(PARAMS.get("driver"))))
+      document.close()
+    })
+  }
+
+  // Mismo mecanismo que STApp (lib/print/print-html-iframe.ts):
+  // iframe oculto + document.write + esperar imágenes + print().
+  function printViaIframe(html) {
+    var iframe = document.createElement("iframe")
+    iframe.style.position = "fixed"
+    iframe.style.right = "0"
+    iframe.style.bottom = "0"
+    iframe.style.width = "0"
+    iframe.style.height = "0"
+    iframe.style.border = "0"
+    document.body.appendChild(iframe)
+    var doc = iframe.contentDocument || iframe.contentWindow.document
+    doc.open()
+    doc.write(html)
+    doc.close()
+
+    var printed = false
+    function trigger() {
+      if (printed) return
+      printed = true
+      var imgs = Array.prototype.slice.call(doc.images)
+      var waits = imgs.map(function (img) {
+        return img.complete && img.naturalWidth > 0
+          ? Promise.resolve()
+          : new Promise(function (res) { img.onload = res; img.onerror = res })
+      })
+      var timeout = new Promise(function (res) { setTimeout(res, 3000) })
+      Promise.race([Promise.all(waits), timeout]).then(function () {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+        setTimeout(function () { if (iframe.parentNode) iframe.parentNode.removeChild(iframe) }, 1000)
+      })
+    }
+    if (doc.readyState === "complete") trigger()
+    else {
+      iframe.onload = trigger
+      setTimeout(trigger, 3000)
+    }
+  }
+
+  function selectedDriver() {
+    var el = document.querySelector('input[name="driver"]:checked')
+    return el ? el.value : "Vertical"
+  }
+
+  document.querySelectorAll("button[data-variant]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      printViaIframe(buildHtml(btn.getAttribute("data-variant"), selectedDriver()))
+    })
+  })
+
+  // Vistas previas a escala, ajustadas al ancho disponible.
+  var MM = 96 / 25.4
+  function renderPreviews() {
+    document.querySelectorAll("[data-preview]").forEach(function (box) {
+      var variant = box.getAttribute("data-preview")
+      var pageW = (variant === "A" ? W : H) * MM
+      var pageH = (variant === "A" ? H : W) * MM
+      var scale = Math.min(3, box.parentElement.clientWidth / pageW)
+      box.style.width = pageW * scale + "px"
+      box.style.height = pageH * scale + "px"
+      var iframe = box.querySelector("iframe")
+      if (!iframe) {
+        iframe = document.createElement("iframe")
+        iframe.setAttribute("title", "Vista previa variante " + variant)
+        iframe.setAttribute("tabindex", "-1")
+        box.appendChild(iframe)
+      }
+      iframe.style.width = pageW + "px"
+      iframe.style.height = pageH + "px"
+      iframe.style.transform = "scale(" + scale + ")"
+      var src = "?raw=" + variant + "&driver=" + encodeURIComponent(selectedDriver())
+      if (iframe.getAttribute("src") !== src) iframe.setAttribute("src", src)
+    })
+  }
+  if (!IS_RAW) {
+    renderPreviews()
+    window.addEventListener("resize", renderPreviews)
+    document.querySelectorAll('input[name="driver"]').forEach(function (r) {
+      r.addEventListener("change", renderPreviews)
+    })
+  }
+</script>
+</body>
+</html>
