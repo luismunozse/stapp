@@ -69,4 +69,8 @@ describe("validarDestinoWhatsApp", () => {
     expect(r.valido).toBe(false)
     if (!r.valido) expect(r.motivo).toMatch(/Espa/)
   })
+
+  it("acepta un movil espanol con prefijo internacional 00", () => {
+    expect(validarDestinoWhatsApp("0034612345678", "ES").valido).toBe(true)
+  })
 })

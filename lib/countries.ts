@@ -416,6 +416,12 @@ export function formatPhoneForCountry(phone: string, countryCode?: string | null
   const country = getCountryConfig(countryCode)
   let cleaned = phone.replace(/\D/g, "")
 
+  // "00" es el prefijo internacional: lo que sigue ya trae su codigo de pais
+  // (puede ser de otro pais), asi que se devuelve tal cual sin anteponer el nuestro
+  if (cleaned.startsWith("00")) {
+    return cleaned.slice(2)
+  }
+
   // Si empieza con 0, removemos el 0 y agregamos código de país
   if (cleaned.startsWith("0")) {
     cleaned = country.phoneCode + cleaned.substring(1)
