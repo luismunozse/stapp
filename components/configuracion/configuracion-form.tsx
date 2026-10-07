@@ -984,12 +984,12 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         </CardHeader>
         <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
           <div>
-            <Label htmlFor="cuit" className="text-sm">CUIT</Label>
+            <Label htmlFor="cuit" className="text-sm">{getCountryConfig(pais).taxIdLabel}</Label>
             <Input
               id="cuit"
               value={cuit}
               onChange={(e) => setCuit(e.target.value)}
-              placeholder="30-12345678-9"
+              placeholder={getCountryConfig(pais).taxIdPlaceholder}
               disabled={!allowEdit}
             />
           </div>
