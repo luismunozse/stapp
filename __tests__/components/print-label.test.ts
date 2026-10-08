@@ -45,6 +45,36 @@ describe("buildLabelHtml — tamaños y modos", () => {
   })
 })
 
+describe("buildLabelHtml — die-cut entra siempre en una sola página", () => {
+  // Con el body del mismo alto exacto que la página, cualquier margen que sume
+  // el diálogo de impresión o el driver empuja lo que sobra a una segunda hoja,
+  // y la térmica gasta dos etiquetas. El contenido tiene que ocupar el área
+  // imprimible (100%) y recortar lo que no entra.
+  it.each(["40x30", "50x30", "50x40", "60x40"] as const)(
+    "%s: llena el área imprimible y recorta, sin alto fijo en mm",
+    (size) => {
+      const html = buildLabelHtml(baseData, size, "")
+      expect(html).toMatch(/html\s*\{[^}]*height:\s*100%[^}]*overflow:\s*hidden/)
+      const body = html.match(/body\s*\{([^}]*)\}/)?.[1] ?? ""
+      expect(body).toMatch(/height:\s*100%/)
+      expect(body).toMatch(/overflow:\s*hidden/)
+      expect(body).not.toMatch(/height:\s*\d+(\.\d+)?mm/)
+    },
+  )
+
+  it("si falta alto, se recorta la info y no la fecha del pie", () => {
+    const html = buildLabelHtml(baseData, "40x30", "")
+    const info = html.match(/\.info\s*\{([^}]*)\}/)?.[1] ?? ""
+    expect(info).toMatch(/min-height:\s*0/)
+    expect(info).toMatch(/overflow:\s*hidden/)
+  })
+
+  it("los rollos no se recortan: alto automático", () => {
+    const html = buildLabelHtml(baseData, "58mm", "")
+    expect(html).not.toMatch(/html\s*\{[^}]*overflow:\s*hidden/)
+  })
+})
+
 describe("buildLabelHtml — contenido por variante", () => {
   it("variante reparado muestra el badge REPARADO y 'Listo para entregar'", () => {
     const html = buildLabelHtml(baseData, "60x40", "")
