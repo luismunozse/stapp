@@ -1,5 +1,9 @@
 import QRCode from "qrcode"
 import { printHtmlViaIframe } from "@/lib/print/print-html-iframe"
+import { DEFAULT_LABEL_SIZE, LABEL_SIZES, type LabelSize } from "@/lib/etiqueta-tamano"
+import { resolveEtiquetaSize } from "./etiqueta-size-org"
+
+export { DEFAULT_LABEL_SIZE, LABEL_SIZES, type LabelSize }
 
 export interface LabelData {
   codigoOrden: string
@@ -26,8 +30,6 @@ export interface LabelData {
 // depender de un lenguaje crudo (ESC/POS, ZPL, TSPL...) que sería exclusivo de
 // una familia de impresoras.
 
-export type LabelSize = "40x30" | "50x30" | "50x40" | "60x40" | "58mm" | "80mm"
-
 interface SizeConfig {
   mode: "label" | "roll"
   widthMm: number
@@ -45,8 +47,6 @@ const SIZE_CONFIG: Record<LabelSize, SizeConfig> = {
   "80mm": { mode: "roll", widthMm: 80, label: "Rollo 80 mm" },
 }
 
-export const LABEL_SIZES: LabelSize[] = ["40x30", "50x30", "50x40", "60x40", "58mm", "80mm"]
-export const DEFAULT_LABEL_SIZE: LabelSize = "60x40"
 export const LABEL_SIZE_OPTIONS: { value: LabelSize; label: string }[] = LABEL_SIZES.map((v) => ({
   value: v,
   label: SIZE_CONFIG[v].label,
@@ -54,7 +54,10 @@ export const LABEL_SIZE_OPTIONS: { value: LabelSize; label: string }[] = LABEL_S
 
 const STORAGE_KEY = "stapp:etiqueta-size"
 
-/** Tamaño de etiqueta recordado por dispositivo/navegador (fallback al default). */
+/**
+ * Tamaño recordado en ESTE navegador (legado, fallback al default). El tamaño
+ * vigente del taller se resuelve con resolveEtiquetaSize (etiqueta-size-org).
+ */
 export function readEtiquetaSize(): LabelSize {
   if (typeof window === "undefined") return DEFAULT_LABEL_SIZE
   try {
@@ -232,14 +235,14 @@ function rollBody(p: {
 
 /**
  * Genera e imprime la etiqueta del equipo por el driver del SO.
- * @param opts.size tamaño/medio; si se omite, usa el recordado en localStorage.
+ * @param opts.size tamaño/medio; si se omite, usa el de la org (luego localStorage, luego default).
  */
 export async function printDeviceLabel(
   data: LabelData,
   baseUrl: string,
   opts?: { size?: LabelSize }
 ): Promise<void> {
-  const size = opts?.size ?? readEtiquetaSize()
+  const size = opts?.size ?? (await resolveEtiquetaSize())
 
   let qrDataUrl = ""
   if (data.publicToken && baseUrl) {

@@ -8,6 +8,13 @@ import {
   DEFAULT_LABEL_SIZE,
   type LabelData,
 } from "@/components/ordenes/print-label"
+import { resolveEtiquetaSize } from "@/components/ordenes/etiqueta-size-org"
+
+// El tamano por defecto sale de la org (red). Aca se aisla: los tests de
+// coordinacion de promesas no deben tocar fetch.
+vi.mock("@/components/ordenes/etiqueta-size-org", () => ({
+  resolveEtiquetaSize: vi.fn(() => Promise.resolve("60x40")),
+}))
 
 const baseData: LabelData = {
   codigoOrden: "A-1",
@@ -191,6 +198,9 @@ describe("printDeviceLabel — el promise cierra recién cuando el print ocurri�
 
     // baseUrl vacío ⇒ no se genera QR, así que no hay await de qrcode en medio.
     const { state, done } = track(printDeviceLabel(ingresoData, ""))
+    // El tamaño se resuelve (async) antes de armar el iframe: hay que dejar
+    // que exista antes de dispararle el onload.
+    await flush()
     expect(fake.print).not.toHaveBeenCalled()
 
     fake.fireOnload()
@@ -266,5 +276,31 @@ describe("printDeviceLabel — el promise cierra recién cuando el print ocurri�
     expect(fake.print).toHaveBeenCalledTimes(1)
     await done
     expect(state.value).toBe("resolved")
+  })
+})
+
+describe("printDeviceLabel — tamaño", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    document.body.innerHTML = ""
+  })
+
+  function printedHtml(fake: ReturnType<typeof installFakeIframe>) {
+    return (fake.doc.write.mock.calls[0]?.[0] ?? "") as string
+  }
+
+  it("sin opts.size usa el tamaño resuelto de la org", async () => {
+    vi.mocked(resolveEtiquetaSize).mockResolvedValueOnce("58mm")
+    const fake = installFakeIframe({ readyState: "complete", images: [loadedImg()] })
+    await printDeviceLabel(ingresoData, "")
+    expect(printedHtml(fake)).toContain("size: 58mm auto")
+  })
+
+  it("opts.size explícito gana y no consulta a la org", async () => {
+    vi.mocked(resolveEtiquetaSize).mockClear()
+    const fake = installFakeIframe({ readyState: "complete", images: [loadedImg()] })
+    await printDeviceLabel(ingresoData, "", { size: "40x30" })
+    expect(printedHtml(fake)).toContain("size: 40mm 30mm")
+    expect(resolveEtiquetaSize).not.toHaveBeenCalled()
   })
 })
