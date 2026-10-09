@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Upload, Trash2, Save, ImageIcon } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
 import { NotificationSettings } from "@/components/configuracion/notification-settings"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { CONFIG_TABS, FORM_TABS, parseConfigTab, type ConfigTab } from "@/components/configuracion/config-tabs"
 import { CURRENCY_OPTIONS } from "@/lib/currency"
 import { TIMEZONE_OPTIONS } from "@/lib/timezone"
 import { COUNTRY_OPTIONS, getCountryConfig, getIvaGeneral } from "@/lib/countries"
@@ -41,10 +43,26 @@ interface Config {
 
 interface ConfiguracionFormProps {
   allowEdit?: boolean
+  /** Pestaña inicial (viene de `?tab=` en la página server). */
+  initialTab?: string
+  /** Contenido server-rendered de la pestaña "Secciones" (tarjetas de navegación). */
+  secciones?: React.ReactNode
+  /** Contenido server-rendered de la pestaña "Seguridad" (2FA + cookies). */
+  seguridad?: React.ReactNode
 }
 
-export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) {
+// Todos los paneles quedan montados (ocultos si están inactivos) para que lo
+// editado en una pestaña no se pierda al cambiar a otra antes de guardar.
+const PANEL_CLASS = "space-y-4 sm:space-y-6 max-w-2xl"
+
+export function ConfiguracionForm({
+  allowEdit = true,
+  initialTab,
+  secciones,
+  seguridad,
+}: ConfiguracionFormProps) {
   const { confirm } = useModal()
+  const [tab, setTab] = useState<ConfigTab>(() => parseConfigTab(initialTab))
   const [config, setConfig] = useState<Config | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -119,6 +137,18 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   })
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // La pestaña activa vive en la URL (?tab=) para sobrevivir al refresh y poder
+  // compartirse. replaceState evita el salto de scroll y no ensucia el historial.
+  const handleTabChange = (value: string) => {
+    const next = parseConfigTab(value)
+    setTab(next)
+    const url = new URL(window.location.href)
+    url.searchParams.set("tab", next)
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`)
+  }
+
+  const showSaveBar = !loading && FORM_TABS.includes(tab)
 
   useEffect(() => {
     fetchConfig()
@@ -374,871 +404,929 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    )
-  }
+  const spinner = (
+    <div className="flex items-center justify-center p-8">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+    </div>
+  )
 
   return (
-    <div className="space-y-4 sm:space-y-6 max-w-2xl">
-      {message && (
-        <div
-          className={`px-3 sm:px-4 py-2 sm:py-3 rounded text-sm ${
-            message.type === "success"
-              ? "bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500"
-              : "bg-destructive/10 border border-destructive/30 text-destructive"
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
+    <Tabs value={tab} onValueChange={handleTabChange} className="space-y-4">
+      <div className="overflow-x-auto">
+        <TabsList className="inline-flex h-11 w-auto min-w-full sm:h-10 sm:min-w-0">
+          {CONFIG_TABS.map((t) => (
+            <TabsTrigger key={t.value} value={t.value} className="min-h-9 text-xs sm:text-sm">
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </div>
 
-      <Card>
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-base sm:text-lg">Logo de la Empresa</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Se mostrará en el login, navegación y comprobantes PDF.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <div className="w-16 h-16 sm:w-24 sm:h-24 border-2 border-dashed border-border rounded-lg flex items-center justify-center overflow-hidden bg-muted shrink-0">
-              {preview ? (
-                <img
-                  src={preview}
-                  alt="Logo preview"
-                  className="max-w-full max-h-full object-contain"
-                />
-              ) : (
-                <ImageIcon className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground" />
-              )}
-            </div>
-            <div className="space-y-2">
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept="image/png,image/jpeg,image/gif,image/webp"
-                className="hidden"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={!allowEdit}
-              >
-                <Upload className="mr-2 h-4 w-4" />
-                Subir Logo
-              </Button>
-              {preview && (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleDeleteLogo}
-                  disabled={saving || !allowEdit}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Eliminar
-                </Button>
-              )}
-            </div>
-          </div>
-          <p className="text-xs sm:text-sm text-muted-foreground">
-            PNG, JPG, GIF, WebP. Máximo 2MB.
-          </p>
-        </CardContent>
-      </Card>
+      <TabsContent value="secciones" forceMount>
+        {secciones}
+      </TabsContent>
 
-      <Card>
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-base sm:text-lg">Datos de la Empresa</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Se mostrarán en la app y en los comprobantes PDF.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
-          <div>
-            <Label htmlFor="nombreEmpresa" className="text-sm">Nombre de la Empresa</Label>
-            <Input
-              id="nombreEmpresa"
-              value={nombreEmpresa}
-              onChange={(e) => setNombreEmpresa(e.target.value)}
-              placeholder="Servicio Técnico"
-              disabled={!allowEdit}
-            />
-          </div>
-          <div>
-            <Label htmlFor="telefono" className="text-sm">Teléfono</Label>
-            <Input
-              id="telefono"
-              value={telefono}
-              onChange={(e) => setTelefono(e.target.value)}
-              placeholder="+54 11 1234-5678"
-              disabled={!allowEdit}
-            />
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Se mostrará en los comprobantes PDF
-            </p>
-          </div>
-          <div>
-            <Label htmlFor="direccion" className="text-sm">Dirección</Label>
-            <Input
-              id="direccion"
-              value={direccion}
-              onChange={(e) => setDireccion(e.target.value)}
-              placeholder="Av. Principal 123"
-              disabled={!allowEdit}
-            />
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Se mostrará en los comprobantes PDF
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="ciudad" className="text-sm">Ciudad</Label>
-              <Input
-                id="ciudad"
-                value={ciudad}
-                onChange={(e) => setCiudad(e.target.value)}
-                placeholder="Córdoba"
-                disabled={!allowEdit}
-              />
-            </div>
-            <div>
-              <Label htmlFor="provincia" className="text-sm">Provincia / Estado</Label>
-              <Input
-                id="provincia"
-                value={provincia}
-                onChange={(e) => setProvincia(e.target.value)}
-                placeholder="Córdoba"
-                disabled={!allowEdit}
-              />
-            </div>
-            <div>
-              <Label htmlFor="codigoPostal" className="text-sm">Código Postal</Label>
-              <Input
-                id="codigoPostal"
-                value={codigoPostal}
-                onChange={(e) => setCodigoPostal(e.target.value)}
-                placeholder="5000"
-                disabled={!allowEdit}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-base sm:text-lg">País</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            El país determina la moneda, zona horaria, formato de teléfono e identificación fiscal por defecto.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6 pt-0">
-          <div>
-            <Label htmlFor="pais" className="text-sm">País</Label>
-            <Select
-              value={pais}
-              onValueChange={(val) => {
-                setPais(val)
-                // Auto-completar defaults del país
-                const countryConfig = getCountryConfig(val)
-                setMoneda(countryConfig.defaultCurrency)
-                setZonaHoraria(countryConfig.defaultTimezone)
-              }}
-              disabled={!allowEdit}
-            >
-              <SelectTrigger id="pais">
-                <SelectValue placeholder="Seleccionar país" />
-              </SelectTrigger>
-              <SelectContent>
-                {COUNTRY_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-base sm:text-lg">Moneda</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Moneda utilizada para montos, remitos y comprobantes.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6 pt-0">
-          <div>
-            <Label htmlFor="moneda" className="text-sm">Moneda</Label>
-            <Select value={moneda} onValueChange={setMoneda} disabled={!allowEdit}>
-              <SelectTrigger id="moneda">
-                <SelectValue placeholder="Seleccionar moneda" />
-              </SelectTrigger>
-              <SelectContent>
-                {CURRENCY_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Se utilizará en toda la app, PDFs y notificaciones
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-base sm:text-lg">Zona Horaria</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Zona horaria del taller. Se utiliza para mostrar fechas y horas correctamente.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6 pt-0">
-          <div>
-            <Label htmlFor="zonaHoraria" className="text-sm">Zona Horaria</Label>
-            <Select value={zonaHoraria} onValueChange={setZonaHoraria} disabled={!allowEdit}>
-              <SelectTrigger id="zonaHoraria">
-                <SelectValue placeholder="Seleccionar zona horaria" />
-              </SelectTrigger>
-              <SelectContent>
-                {TIMEZONE_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label} ({opt.offset})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Se utilizara en toda la app, PDFs y notificaciones
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-base sm:text-lg">Módulos opcionales</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Activá funcionalidades específicas según tu rubro.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6 pt-0">
-          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors">
-            <input
-              type="checkbox"
-              checked={moduloAgenda}
-              onChange={(e) => setModuloAgenda(e.target.checked)}
-              disabled={!allowEdit}
-              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-            />
-            <div className="flex-1">
-              <div className="text-sm font-medium">Agenda de turnos</div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                Para servicios on-site (gastronomía, refrigeración, heladería, fabricadoras de helado).
-                Permite agendar visitas, retiros y entregas antes de crear la orden.
-                Al activarse, aparece la sección <strong>Agenda</strong> en el menú.
-              </div>
-            </div>
-          </label>
-          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-            <input
-              type="checkbox"
-              checked={comisionAplicaSinReparacion}
-              onChange={(e) => setComisionAplicaSinReparacion(e.target.checked)}
-              disabled={!allowEdit}
-              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-            />
-            <div className="flex-1">
-              <div className="text-sm font-medium">Pagar comisión en órdenes sin reparación</div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                Si está activo, las órdenes ENTREGADO_SIN_REPARACION generan comisión para el técnico y se deducen en el P&L.
-              </div>
-            </div>
-          </label>
-          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-            <input
-              type="checkbox"
-              checked={vendedoresAdministranInventario}
-              onChange={(e) => setVendedoresAdministranInventario(e.target.checked)}
-              disabled={!allowEdit}
-              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-            />
-            <div className="flex-1">
-              <div className="text-sm font-medium">Los vendedores pueden administrar inventario</div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                Permite a los usuarios con rol Vendedor gestionar productos, stock, depósitos, ajustes y conteos. Apagado, solo los administradores acceden.
-              </div>
-            </div>
-          </label>
-          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-            <input
-              type="checkbox"
-              checked={tecnicosOperanPos}
-              onChange={(e) => setTecnicosOperanPos(e.target.checked)}
-              disabled={!allowEdit}
-              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-            />
-            <div className="flex-1">
-              <div className="text-sm font-medium">Los técnicos pueden operar el POS</div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                Permite a los usuarios con rol Técnico vender desde el Punto de Venta y ver sus propias ventas, sin dejar de ser técnicos: siguen recibiendo órdenes asignadas y conservando sus comisiones. No incluye anular ni editar ventas, registrar pagos ni crear devoluciones, que siguen siendo solo de administradores.
-              </div>
-            </div>
-          </label>
-          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-            <input
-              type="checkbox"
-              checked={vendedoresManejanCaja}
-              onChange={(e) => setVendedoresManejanCaja(e.target.checked)}
-              disabled={!allowEdit}
-              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-            />
-            <div className="flex-1">
-              <div className="text-sm font-medium">Los vendedores pueden manejar la caja</div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                Permite a los usuarios con rol Vendedor abrir la caja de su sucursal, cerrarla con arqueo y cargar movimientos manuales. No incluye el historial de cierres ni la exportación, que siguen siendo solo de administradores.
-              </div>
-            </div>
-          </label>
-          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-            <input
-              type="checkbox"
-              checked={tecnicosCobranCotizaciones}
-              onChange={(e) => setTecnicosCobranCotizaciones(e.target.checked)}
-              disabled={!allowEdit}
-              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-            />
-            <div className="flex-1">
-              <div className="text-sm font-medium">Los técnicos pueden cobrar sus cotizaciones</div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                Permite a los usuarios con rol Técnico convertir en venta las cotizaciones aceptadas que ellos mismos crearon, sin depender de un administrador para cerrar el cobro. No incluye eliminar cotizaciones, revisarlas ni convertirlas en orden de servicio, que siguen siendo solo de administradores, ni las cotizaciones de otros técnicos. La venta se les acredita como vendedor; para que además la vean listada en Ventas necesitan también el permiso de POS de acá arriba.
-              </div>
-            </div>
-          </label>
-          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-            <input
-              type="checkbox"
-              checked={vendedoresVenIngresos}
-              onChange={(e) => setVendedoresVenIngresos(e.target.checked)}
-              disabled={!allowEdit}
-              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-            />
-            <div className="flex-1">
-              <div className="text-sm font-medium">Los vendedores pueden ver los ingresos</div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                Viene activado. Si lo desactivás, los usuarios con rol Vendedor dejan de ver en Reportes la facturación del taller y cuánto gastó cada cliente. Siguen viendo los reportes operativos —tiempos de reparación, fallas comunes, desempeño de técnicos, inventario— y sus propias ventas en el Punto de Venta. Los precios de compra y los márgenes ya estaban reservados a los administradores, con o sin este permiso.
-              </div>
-            </div>
-          </label>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-base sm:text-lg">Facturación / IVA</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Configuración fiscal para el Punto de Venta. Afecta cómo se calcula y muestra el IVA en tickets y totales.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
-          <div>
-            <Label htmlFor="ivaRegimen" className="text-sm">Régimen de IVA</Label>
-            <Select
-              value={ivaRegimen}
-              onValueChange={(val) => setIvaRegimen(val as "EXENTO" | "INCLUIDO" | "ADITIVO")}
-              disabled={!allowEdit}
-            >
-              <SelectTrigger id="ivaRegimen">
-                <SelectValue placeholder="Seleccionar régimen" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="EXENTO">Exento</SelectItem>
-                <SelectItem value="INCLUIDO">IVA incluido en el precio</SelectItem>
-                <SelectItem value="ADITIVO">IVA se suma</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              IVA incluido = el precio ya tiene IVA, se discrimina en el ticket. IVA se suma = se agrega al total.
-            </p>
-          </div>
-          {ivaRegimen !== "EXENTO" && (
-            <div>
-              <Label htmlFor="ivaTasa" className="text-sm">Tasa de IVA (%)</Label>
-              <Input
-                id="ivaTasa"
-                type="number"
-                min="0"
-                max="100"
-                step="0.01"
-                value={ivaTasa}
-                onChange={(e) => setIvaTasa(e.target.value)}
-                placeholder={String(getIvaGeneral(pais))}
-                disabled={!allowEdit}
-              />
-            </div>
-          )}
-          <div>
-            <Label htmlFor="redondeoEfectivo" className="text-sm">Redondeo de efectivo</Label>
-            <Select
-              value={redondeoEfectivo}
-              onValueChange={setRedondeoEfectivo}
-              disabled={!allowEdit}
-            >
-              <SelectTrigger id="redondeoEfectivo">
-                <SelectValue placeholder="Sin redondeo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">Sin redondeo</SelectItem>
-                <SelectItem value="10">$ 10</SelectItem>
-                <SelectItem value="50">$ 50</SelectItem>
-                <SelectItem value="100">$ 100</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Redondea el total al múltiplo más cercano cuando el pago es en efectivo.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {facturacionDisponible && (
-        <Card>
-          <CardHeader className="p-4 sm:p-6">
-            <CardTitle className="text-base sm:text-lg">Facturación electrónica (AFIP/ARCA)</CardTitle>
-            <CardDescription className="text-xs sm:text-sm">
-              Emití comprobantes electrónicos ante AFIP/ARCA usando tus propias credenciales.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
-            <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors">
-              <input
-                type="checkbox"
-                checked={facturacionHabilitada}
-                onChange={(e) => setFacturacionHabilitada(e.target.checked)}
-                disabled={!allowEdit}
-                className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-              />
-              <div className="flex-1">
-                <div className="text-sm font-medium">Activar facturación electrónica</div>
-                <div className="text-xs text-muted-foreground mt-0.5">
-                  Al activarse, se pueden emitir comprobantes electrónicos válidos ante AFIP/ARCA para las órdenes y ventas.
-                </div>
-              </div>
-            </label>
-
-            {facturacionHabilitada && (
-              <div className="space-y-4 pt-2 border-t">
-                {feProvider === "tusfacturas" ? (
-                  <>
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  Ingresá tus credenciales para conectar la cuenta. Se guardan cifradas y no vuelven a mostrarse.
-                </p>
-                <div>
-                  <Label htmlFor="feApitoken" className="text-sm">API Token</Label>
-                  <Input
-                    id="feApitoken"
-                    type="password"
-                    value={feApitoken}
-                    onChange={(e) => setFeApitoken(e.target.value)}
-                    placeholder="••••••••"
-                    autoComplete="off"
-                    disabled={!allowEdit}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="feApikey" className="text-sm">API Key</Label>
-                  <Input
-                    id="feApikey"
-                    type="password"
-                    value={feApikey}
-                    onChange={(e) => setFeApikey(e.target.value)}
-                    placeholder="••••••••"
-                    autoComplete="off"
-                    disabled={!allowEdit}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="feUsertoken" className="text-sm">User Token</Label>
-                  <Input
-                    id="feUsertoken"
-                    type="password"
-                    value={feUsertoken}
-                    onChange={(e) => setFeUsertoken(e.target.value)}
-                    placeholder="••••••••"
-                    autoComplete="off"
-                    disabled={!allowEdit}
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="fePuntoVenta" className="text-sm">Punto de Venta</Label>
-                    <Input
-                      id="fePuntoVenta"
-                      type="number"
-                      min="1"
-                      value={fePuntoVenta}
-                      onChange={(e) => setFePuntoVenta(e.target.value)}
-                      placeholder="1"
-                      disabled={!allowEdit}
+      <TabsContent value="empresa" forceMount className={PANEL_CLASS}>
+        {loading ? (
+          spinner
+        ) : (
+          <>
+          <Card>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">Logo de la Empresa</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Se mostrará en el login, navegación y comprobantes PDF.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="w-16 h-16 sm:w-24 sm:h-24 border-2 border-dashed border-border rounded-lg flex items-center justify-center overflow-hidden bg-muted shrink-0">
+                  {preview ? (
+                    <img
+                      src={preview}
+                      alt="Logo preview"
+                      className="max-w-full max-h-full object-contain"
                     />
-                  </div>
-                  <div>
-                    <Label htmlFor="feCondicionFiscal" className="text-sm">Condición Fiscal</Label>
-                    <Select
-                      value={feCondicionFiscal}
-                      onValueChange={(val) => setFeCondicionFiscal(val as "MONOTRIBUTO" | "RESPONSABLE_INSCRIPTO")}
-                      disabled={!allowEdit}
-                    >
-                      <SelectTrigger id="feCondicionFiscal">
-                        <SelectValue placeholder="Seleccionar condición fiscal" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="MONOTRIBUTO">Monotributo</SelectItem>
-                        <SelectItem value="RESPONSABLE_INSCRIPTO">Responsable Inscripto</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  ) : (
+                    <ImageIcon className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground" />
+                  )}
                 </div>
-
-                {feMessage && (
-                  <div
-                    className={`px-3 py-2 rounded text-sm ${
-                      feMessage.type === "success"
-                        ? "bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500"
-                        : "bg-destructive/10 border border-destructive/30 text-destructive"
-                    }`}
-                  >
-                    {feMessage.text}
-                  </div>
-                )}
-
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept="image/png,image/jpeg,image/gif,image/webp"
+                    className="hidden"
+                  />
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={handleConectarFE}
-                    disabled={feConectando || !allowEdit || !feApitoken || !feApikey || !feUsertoken}
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={!allowEdit}
                   >
-                    {feConectando ? "Conectando..." : "Conectar"}
+                    <Upload className="mr-2 h-4 w-4" />
+                    Subir Logo
                   </Button>
-                  <span
-                    className={`text-sm font-medium ${
-                      feConectado ? "text-success-600 dark:text-success-500" : "text-muted-foreground"
-                    }`}
-                  >
-                    {feConectado
-                      ? `Conectado${fePuntoVentaGuardado ? ` · Punto de venta ${fePuntoVentaGuardado}` : ""}`
-                      : "No conectado"}
-                  </span>
+                  {preview && (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleDeleteLogo}
+                      disabled={saving || !allowEdit}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Eliminar
+                    </Button>
+                  )}
                 </div>
-                  </>
-                ) : feProvider === "arca" ? (
-                  // BYO: solo para la org que YA tiene su propio certificado
-                  // cargado. Una org nueva no puede elegir este camino — son
-                  // seis pasos tecnicos y la adopcion real tiende a cero.
-                  <CredencialesArca
-                    allowEdit={allowEdit}
-                    estadoInicial={feEstadoArca}
-                    onConectado={(nuevo) => {
-                      setFeEstadoArca(nuevo)
-                      setFeConectado(nuevo.conectado)
-                      setFeProvider("arca")
-                    }}
+              </div>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                PNG, JPG, GIF, WebP. Máximo 2MB.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">Datos de la Empresa</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Se mostrarán en la app y en los comprobantes PDF.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
+              <div>
+                <Label htmlFor="nombreEmpresa" className="text-sm">Nombre de la Empresa</Label>
+                <Input
+                  id="nombreEmpresa"
+                  value={nombreEmpresa}
+                  onChange={(e) => setNombreEmpresa(e.target.value)}
+                  placeholder="Servicio Técnico"
+                  disabled={!allowEdit}
+                />
+              </div>
+              <div>
+                <Label htmlFor="telefono" className="text-sm">Teléfono</Label>
+                <Input
+                  id="telefono"
+                  value={telefono}
+                  onChange={(e) => setTelefono(e.target.value)}
+                  placeholder="+54 11 1234-5678"
+                  disabled={!allowEdit}
+                />
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  Se mostrará en los comprobantes PDF
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="direccion" className="text-sm">Dirección</Label>
+                <Input
+                  id="direccion"
+                  value={direccion}
+                  onChange={(e) => setDireccion(e.target.value)}
+                  placeholder="Av. Principal 123"
+                  disabled={!allowEdit}
+                />
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  Se mostrará en los comprobantes PDF
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="ciudad" className="text-sm">Ciudad</Label>
+                  <Input
+                    id="ciudad"
+                    value={ciudad}
+                    onChange={(e) => setCiudad(e.target.value)}
+                    placeholder="Córdoba"
+                    disabled={!allowEdit}
                   />
-                ) : (
-                  <CredencialesArcaDelegado
-                    allowEdit={allowEdit}
-                    cuitPlataforma={feCuitPlataforma}
-                    estadoInicial={feEstadoDelegacion}
-                    onGuardado={(nuevo) => {
-                      setFeEstadoDelegacion(nuevo)
-                      setFeConectado(nuevo.conectado)
-                      setFeProvider("arca_delegado")
-                    }}
+                </div>
+                <div>
+                  <Label htmlFor="provincia" className="text-sm">Provincia / Estado</Label>
+                  <Input
+                    id="provincia"
+                    value={provincia}
+                    onChange={(e) => setProvincia(e.target.value)}
+                    placeholder="Córdoba"
+                    disabled={!allowEdit}
                   />
+                </div>
+                <div>
+                  <Label htmlFor="codigoPostal" className="text-sm">Código Postal</Label>
+                  <Input
+                    id="codigoPostal"
+                    value={codigoPostal}
+                    onChange={(e) => setCodigoPostal(e.target.value)}
+                    placeholder="5000"
+                    disabled={!allowEdit}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">País</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                El país determina la moneda, zona horaria, formato de teléfono e identificación fiscal por defecto.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0">
+              <div>
+                <Label htmlFor="pais" className="text-sm">País</Label>
+                <Select
+                  value={pais}
+                  onValueChange={(val) => {
+                    setPais(val)
+                    // Auto-completar defaults del país
+                    const countryConfig = getCountryConfig(val)
+                    setMoneda(countryConfig.defaultCurrency)
+                    setZonaHoraria(countryConfig.defaultTimezone)
+                  }}
+                  disabled={!allowEdit}
+                >
+                  <SelectTrigger id="pais">
+                    <SelectValue placeholder="Seleccionar país" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COUNTRY_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">Moneda</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Moneda utilizada para montos, remitos y comprobantes.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0">
+              <div>
+                <Label htmlFor="moneda" className="text-sm">Moneda</Label>
+                <Select value={moneda} onValueChange={setMoneda} disabled={!allowEdit}>
+                  <SelectTrigger id="moneda">
+                    <SelectValue placeholder="Seleccionar moneda" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCY_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  Se utilizará en toda la app, PDFs y notificaciones
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">Zona Horaria</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Zona horaria del taller. Se utiliza para mostrar fechas y horas correctamente.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0">
+              <div>
+                <Label htmlFor="zonaHoraria" className="text-sm">Zona Horaria</Label>
+                <Select value={zonaHoraria} onValueChange={setZonaHoraria} disabled={!allowEdit}>
+                  <SelectTrigger id="zonaHoraria">
+                    <SelectValue placeholder="Seleccionar zona horaria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIMEZONE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label} ({opt.offset})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  Se utilizara en toda la app, PDFs y notificaciones
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          </>
+        )}
+      </TabsContent>
+
+      <TabsContent value="facturacion" forceMount className={PANEL_CLASS}>
+        {loading ? (
+          spinner
+        ) : (
+          <>
+          <Card>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">Facturación / IVA</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Configuración fiscal para el Punto de Venta. Afecta cómo se calcula y muestra el IVA en tickets y totales.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
+              <div>
+                <Label htmlFor="ivaRegimen" className="text-sm">Régimen de IVA</Label>
+                <Select
+                  value={ivaRegimen}
+                  onValueChange={(val) => setIvaRegimen(val as "EXENTO" | "INCLUIDO" | "ADITIVO")}
+                  disabled={!allowEdit}
+                >
+                  <SelectTrigger id="ivaRegimen">
+                    <SelectValue placeholder="Seleccionar régimen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EXENTO">Exento</SelectItem>
+                    <SelectItem value="INCLUIDO">IVA incluido en el precio</SelectItem>
+                    <SelectItem value="ADITIVO">IVA se suma</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  IVA incluido = el precio ya tiene IVA, se discrimina en el ticket. IVA se suma = se agrega al total.
+                </p>
+              </div>
+              {ivaRegimen !== "EXENTO" && (
+                <div>
+                  <Label htmlFor="ivaTasa" className="text-sm">Tasa de IVA (%)</Label>
+                  <Input
+                    id="ivaTasa"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={ivaTasa}
+                    onChange={(e) => setIvaTasa(e.target.value)}
+                    placeholder={String(getIvaGeneral(pais))}
+                    disabled={!allowEdit}
+                  />
+                </div>
+              )}
+              <div>
+                <Label htmlFor="redondeoEfectivo" className="text-sm">Redondeo de efectivo</Label>
+                <Select
+                  value={redondeoEfectivo}
+                  onValueChange={setRedondeoEfectivo}
+                  disabled={!allowEdit}
+                >
+                  <SelectTrigger id="redondeoEfectivo">
+                    <SelectValue placeholder="Sin redondeo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Sin redondeo</SelectItem>
+                    <SelectItem value="10">$ 10</SelectItem>
+                    <SelectItem value="50">$ 50</SelectItem>
+                    <SelectItem value="100">$ 100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  Redondea el total al múltiplo más cercano cuando el pago es en efectivo.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {facturacionDisponible && (
+            <Card>
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="text-base sm:text-lg">Facturación electrónica (AFIP/ARCA)</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  Emití comprobantes electrónicos ante AFIP/ARCA usando tus propias credenciales.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
+                <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={facturacionHabilitada}
+                    onChange={(e) => setFacturacionHabilitada(e.target.checked)}
+                    disabled={!allowEdit}
+                    className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                  />
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">Activar facturación electrónica</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      Al activarse, se pueden emitir comprobantes electrónicos válidos ante AFIP/ARCA para las órdenes y ventas.
+                    </div>
+                  </div>
+                </label>
+
+                {facturacionHabilitada && (
+                  <div className="space-y-4 pt-2 border-t">
+                    {feProvider === "tusfacturas" ? (
+                      <>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      Ingresá tus credenciales para conectar la cuenta. Se guardan cifradas y no vuelven a mostrarse.
+                    </p>
+                    <div>
+                      <Label htmlFor="feApitoken" className="text-sm">API Token</Label>
+                      <Input
+                        id="feApitoken"
+                        type="password"
+                        value={feApitoken}
+                        onChange={(e) => setFeApitoken(e.target.value)}
+                        placeholder="••••••••"
+                        autoComplete="off"
+                        disabled={!allowEdit}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="feApikey" className="text-sm">API Key</Label>
+                      <Input
+                        id="feApikey"
+                        type="password"
+                        value={feApikey}
+                        onChange={(e) => setFeApikey(e.target.value)}
+                        placeholder="••••••••"
+                        autoComplete="off"
+                        disabled={!allowEdit}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="feUsertoken" className="text-sm">User Token</Label>
+                      <Input
+                        id="feUsertoken"
+                        type="password"
+                        value={feUsertoken}
+                        onChange={(e) => setFeUsertoken(e.target.value)}
+                        placeholder="••••••••"
+                        autoComplete="off"
+                        disabled={!allowEdit}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="fePuntoVenta" className="text-sm">Punto de Venta</Label>
+                        <Input
+                          id="fePuntoVenta"
+                          type="number"
+                          min="1"
+                          value={fePuntoVenta}
+                          onChange={(e) => setFePuntoVenta(e.target.value)}
+                          placeholder="1"
+                          disabled={!allowEdit}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="feCondicionFiscal" className="text-sm">Condición Fiscal</Label>
+                        <Select
+                          value={feCondicionFiscal}
+                          onValueChange={(val) => setFeCondicionFiscal(val as "MONOTRIBUTO" | "RESPONSABLE_INSCRIPTO")}
+                          disabled={!allowEdit}
+                        >
+                          <SelectTrigger id="feCondicionFiscal">
+                            <SelectValue placeholder="Seleccionar condición fiscal" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="MONOTRIBUTO">Monotributo</SelectItem>
+                            <SelectItem value="RESPONSABLE_INSCRIPTO">Responsable Inscripto</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {feMessage && (
+                      <div
+                        className={`px-3 py-2 rounded text-sm ${
+                          feMessage.type === "success"
+                            ? "bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500"
+                            : "bg-destructive/10 border border-destructive/30 text-destructive"
+                        }`}
+                      >
+                        {feMessage.text}
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleConectarFE}
+                        disabled={feConectando || !allowEdit || !feApitoken || !feApikey || !feUsertoken}
+                      >
+                        {feConectando ? "Conectando..." : "Conectar"}
+                      </Button>
+                      <span
+                        className={`text-sm font-medium ${
+                          feConectado ? "text-success-600 dark:text-success-500" : "text-muted-foreground"
+                        }`}
+                      >
+                        {feConectado
+                          ? `Conectado${fePuntoVentaGuardado ? ` · Punto de venta ${fePuntoVentaGuardado}` : ""}`
+                          : "No conectado"}
+                      </span>
+                    </div>
+                      </>
+                    ) : feProvider === "arca" ? (
+                      // BYO: solo para la org que YA tiene su propio certificado
+                      // cargado. Una org nueva no puede elegir este camino — son
+                      // seis pasos tecnicos y la adopcion real tiende a cero.
+                      <CredencialesArca
+                        allowEdit={allowEdit}
+                        estadoInicial={feEstadoArca}
+                        onConectado={(nuevo) => {
+                          setFeEstadoArca(nuevo)
+                          setFeConectado(nuevo.conectado)
+                          setFeProvider("arca")
+                        }}
+                      />
+                    ) : (
+                      <CredencialesArcaDelegado
+                        allowEdit={allowEdit}
+                        cuitPlataforma={feCuitPlataforma}
+                        estadoInicial={feEstadoDelegacion}
+                        onGuardado={(nuevo) => {
+                          setFeEstadoDelegacion(nuevo)
+                          setFeConectado(nuevo.conectado)
+                          setFeProvider("arca_delegado")
+                        }}
+                      />
+                    )}
+                  </div>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">Datos fiscales y de cobro</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Datos del emisor y condiciones de cobro que se muestran en el remito.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
+              <div>
+                <Label htmlFor="cuit" className="text-sm">{getCountryConfig(pais).taxIdLabel}</Label>
+                <Input
+                  id="cuit"
+                  value={cuit}
+                  onChange={(e) => setCuit(e.target.value)}
+                  placeholder={getCountryConfig(pais).taxIdPlaceholder}
+                  disabled={!allowEdit}
+                />
+              </div>
+              <div>
+                <Label htmlFor="condicionIva" className="text-sm">Condición frente al IVA</Label>
+                <Select
+                  value={condicionIva || CONDICION_IVA_NONE}
+                  onValueChange={(val) => setCondicionIva(val === CONDICION_IVA_NONE ? "" : val)}
+                  disabled={!allowEdit}
+                >
+                  <SelectTrigger id="condicionIva">
+                    <SelectValue placeholder="Sin especificar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={CONDICION_IVA_NONE}>Sin especificar</SelectItem>
+                    {CONDICION_IVA_OPTIONS.map((opt) => (
+                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="domicilioFiscal" className="text-sm">Domicilio fiscal</Label>
+                <Input
+                  id="domicilioFiscal"
+                  value={domicilioFiscal}
+                  onChange={(e) => setDomicilioFiscal(e.target.value)}
+                  placeholder="Av. Principal 123, Córdoba"
+                  disabled={!allowEdit}
+                />
+              </div>
+              <div>
+                <Label htmlFor="ingresosBrutos" className="text-sm">Ingresos brutos</Label>
+                <Input
+                  id="ingresosBrutos"
+                  value={ingresosBrutos}
+                  onChange={(e) => setIngresosBrutos(e.target.value)}
+                  placeholder="902-123456-7"
+                  disabled={!allowEdit}
+                />
+              </div>
+              <div>
+                <Label htmlFor="inicioActividades" className="text-sm">Inicio de actividades</Label>
+                <Input
+                  id="inicioActividades"
+                  value={inicioActividades}
+                  onChange={(e) => setInicioActividades(e.target.value)}
+                  placeholder="01/2020"
+                  disabled={!allowEdit}
+                />
+              </div>
+              <div>
+                <Label htmlFor="cbuAlias" className="text-sm">CBU o alias</Label>
+                <Input
+                  id="cbuAlias"
+                  value={cbuAlias}
+                  onChange={(e) => setCbuAlias(e.target.value)}
+                  placeholder="mi.alias.mp"
+                  disabled={!allowEdit}
+                />
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  Se muestra en el remito para pagos por transferencia
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="mediosPagoTexto" className="text-sm">Medios de pago aceptados</Label>
+                <Input
+                  id="mediosPagoTexto"
+                  value={mediosPagoTexto}
+                  onChange={(e) => setMediosPagoTexto(e.target.value)}
+                  placeholder="Efectivo, transferencia, tarjeta"
+                  disabled={!allowEdit}
+                />
+              </div>
+              <div>
+                <Label htmlFor="plazoPagoDias" className="text-sm">Plazo de pago (días)</Label>
+                <Input
+                  id="plazoPagoDias"
+                  type="number"
+                  min="0"
+                  value={plazoPagoDias}
+                  onChange={(e) => setPlazoPagoDias(e.target.value)}
+                  placeholder="Ej: 30"
+                  disabled={!allowEdit}
+                />
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  Si se completa, el remito muestra la fecha de vencimiento calculada desde la emisión
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          </>
+        )}
+      </TabsContent>
+
+      <TabsContent value="comprobantes" forceMount className={PANEL_CLASS}>
+        {loading ? (
+          spinner
+        ) : (
+          <>
+          <Card>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">Cotizaciones / Presupuestos</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Valores por defecto al crear nuevas cotizaciones.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
+              <div>
+                <Label htmlFor="ivaPorcentaje" className="text-sm">IVA (%)</Label>
+                <Select value={ivaPorcentaje} onValueChange={setIvaPorcentaje} disabled={!allowEdit}>
+                  <SelectTrigger id="ivaPorcentaje">
+                    <SelectValue placeholder="Seleccionar IVA" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getCountryConfig(pais).ivaOptions.map((opt) => (
+                      <SelectItem key={opt} value={String(opt)}>
+                        {opt === 0 ? "0% (Sin IVA)" : `${opt}%`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  Se aplicará por defecto en nuevas cotizaciones
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="cotizacionValidezDias" className="text-sm">Validez por defecto (días)</Label>
+                <Input
+                  id="cotizacionValidezDias"
+                  type="number"
+                  min="1"
+                  value={cotizacionValidezDias}
+                  onChange={(e) => setCotizacionValidezDias(e.target.value)}
+                  placeholder="30"
+                  disabled={!allowEdit}
+                />
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  Días de validez que se asignan automáticamente
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="cotizacionTerminos" className="text-sm">Términos y Condiciones</Label>
+                <Textarea
+                  id="cotizacionTerminos"
+                  value={cotizacionTerminos}
+                  onChange={(e) => setCotizacionTerminos(e.target.value)}
+                  placeholder="Ej: Los precios no incluyen repuestos adicionales. Garantía de 30 días sobre mano de obra..."
+                  rows={4}
+                  disabled={!allowEdit}
+                />
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  Se incluirán por defecto en nuevas cotizaciones y PDFs
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t">
+                <div>
+                  <Label htmlFor="garantiaDiasDefault" className="text-sm">Garantía por defecto (días)</Label>
+                  <Input
+                    id="garantiaDiasDefault"
+                    type="number"
+                    min="0"
+                    value={garantiaDiasDefault}
+                    onChange={(e) => setGarantiaDiasDefault(e.target.value)}
+                    placeholder="30"
+                    disabled={!allowEdit}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="anticipoPorcentajeDefault" className="text-sm">Anticipo por defecto (%)</Label>
+                  <Input
+                    id="anticipoPorcentajeDefault"
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={anticipoPorcentajeDefault}
+                    onChange={(e) => setAnticipoPorcentajeDefault(e.target.value)}
+                    placeholder="50"
+                    disabled={!allowEdit}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="politicaAbandonoDiasDefault" className="text-sm">Plazo de retiro (días)</Label>
+                  <Input
+                    id="politicaAbandonoDiasDefault"
+                    type="number"
+                    min="0"
+                    value={politicaAbandonoDiasDefault}
+                    onChange={(e) => setPoliticaAbandonoDiasDefault(e.target.value)}
+                    placeholder="60"
+                    disabled={!allowEdit}
+                  />
+                </div>
+                <p className="text-xs sm:text-sm text-muted-foreground sm:col-span-3 mt-1">
+                  Defaults técnicos sugeridos al crear nuevos presupuestos.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">Comprobante de Recepcion</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Terminos y condiciones que aparecen en el comprobante PDF al recibir un equipo.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
+              <div>
+                <Label htmlFor="recepcionTerminos" className="text-sm">Terminos y Condiciones</Label>
+                <Textarea
+                  id="recepcionTerminos"
+                  value={recepcionTerminos}
+                  onChange={(e) => setRecepcionTerminos(e.target.value)}
+                  placeholder={"1. Conserve este comprobante para retirar su equipo. El plazo de retiro es de 30 dias.\n2. No nos hacemos responsables por datos perdidos. Realice backup antes de entregar el equipo.\n3. Al firmar, el cliente declara haber revisado el estado del equipo al momento de la entrega.\n4. El presupuesto puede variar segun el diagnostico final del equipo."}
+                  rows={5}
+                  disabled={!allowEdit}
+                />
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  Escriba cada termino en una linea separada. Si se deja vacio se usaran los terminos por defecto.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">Comprobante Termico (Impresora)</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Terminos y condiciones que se imprimen al pie del ticket termico de la orden de servicio.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
+              <div>
+                <Label htmlFor="comprobanteTerminos" className="text-sm">Terminos y Condiciones</Label>
+                <Textarea
+                  id="comprobanteTerminos"
+                  value={comprobanteTerminos}
+                  onChange={(e) => setComprobanteTerminos(e.target.value)}
+                  placeholder={"1. Conserve este comprobante para retirar su equipo.\n2. No nos responsabilizamos por datos perdidos.\n3. El presupuesto puede variar segun el diagnostico.\n4. Equipos sin retirar a los 60 dias seran considerados abandonados."}
+                  rows={5}
+                  disabled={!allowEdit}
+                />
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  Se imprime al final del ticket. Si se deja vacio no aparece ninguna seccion de terminos.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          </>
+        )}
+      </TabsContent>
+
+      <TabsContent value="modulos" forceMount className={PANEL_CLASS}>
+        {loading ? (
+          spinner
+        ) : (
+          <>
+          <Card>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">Módulos opcionales</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Activá funcionalidades específicas según tu rubro.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0">
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={moduloAgenda}
+                  onChange={(e) => setModuloAgenda(e.target.checked)}
+                  disabled={!allowEdit}
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Agenda de turnos</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Para servicios on-site (gastronomía, refrigeración, heladería, fabricadoras de helado).
+                    Permite agendar visitas, retiros y entregas antes de crear la orden.
+                    Al activarse, aparece la sección <strong>Agenda</strong> en el menú.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+                <input
+                  type="checkbox"
+                  checked={comisionAplicaSinReparacion}
+                  onChange={(e) => setComisionAplicaSinReparacion(e.target.checked)}
+                  disabled={!allowEdit}
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Pagar comisión en órdenes sin reparación</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Si está activo, las órdenes ENTREGADO_SIN_REPARACION generan comisión para el técnico y se deducen en el P&L.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+                <input
+                  type="checkbox"
+                  checked={vendedoresAdministranInventario}
+                  onChange={(e) => setVendedoresAdministranInventario(e.target.checked)}
+                  disabled={!allowEdit}
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Los vendedores pueden administrar inventario</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Permite a los usuarios con rol Vendedor gestionar productos, stock, depósitos, ajustes y conteos. Apagado, solo los administradores acceden.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+                <input
+                  type="checkbox"
+                  checked={tecnicosOperanPos}
+                  onChange={(e) => setTecnicosOperanPos(e.target.checked)}
+                  disabled={!allowEdit}
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Los técnicos pueden operar el POS</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Permite a los usuarios con rol Técnico vender desde el Punto de Venta y ver sus propias ventas, sin dejar de ser técnicos: siguen recibiendo órdenes asignadas y conservando sus comisiones. No incluye anular ni editar ventas, registrar pagos ni crear devoluciones, que siguen siendo solo de administradores.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+                <input
+                  type="checkbox"
+                  checked={vendedoresManejanCaja}
+                  onChange={(e) => setVendedoresManejanCaja(e.target.checked)}
+                  disabled={!allowEdit}
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Los vendedores pueden manejar la caja</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Permite a los usuarios con rol Vendedor abrir la caja de su sucursal, cerrarla con arqueo y cargar movimientos manuales. No incluye el historial de cierres ni la exportación, que siguen siendo solo de administradores.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+                <input
+                  type="checkbox"
+                  checked={tecnicosCobranCotizaciones}
+                  onChange={(e) => setTecnicosCobranCotizaciones(e.target.checked)}
+                  disabled={!allowEdit}
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Los técnicos pueden cobrar sus cotizaciones</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Permite a los usuarios con rol Técnico convertir en venta las cotizaciones aceptadas que ellos mismos crearon, sin depender de un administrador para cerrar el cobro. No incluye eliminar cotizaciones, revisarlas ni convertirlas en orden de servicio, que siguen siendo solo de administradores, ni las cotizaciones de otros técnicos. La venta se les acredita como vendedor; para que además la vean listada en Ventas necesitan también el permiso de POS de acá arriba.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+                <input
+                  type="checkbox"
+                  checked={vendedoresVenIngresos}
+                  onChange={(e) => setVendedoresVenIngresos(e.target.checked)}
+                  disabled={!allowEdit}
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Los vendedores pueden ver los ingresos</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Viene activado. Si lo desactivás, los usuarios con rol Vendedor dejan de ver en Reportes la facturación del taller y cuánto gastó cada cliente. Siguen viendo los reportes operativos —tiempos de reparación, fallas comunes, desempeño de técnicos, inventario— y sus propias ventas en el Punto de Venta. Los precios de compra y los márgenes ya estaban reservados a los administradores, con o sin este permiso.
+                  </div>
+                </div>
+              </label>
+            </CardContent>
+          </Card>
+            {/* Configuración de notificaciones - se guarda por separado */}
+            <NotificationSettings allowEdit={allowEdit} />
+          </>
+        )}
+      </TabsContent>
+
+      <TabsContent value="seguridad" forceMount className="space-y-4 sm:space-y-6">
+        {seguridad}
+      </TabsContent>
+
+      {/* Barra de guardado: queda pegada abajo para no tener que scrollear hasta el final.
+          En mobile se corre por encima de la barra de navegación inferior (fixed, 4rem). */}
+      {showSaveBar && (
+        <div
+          data-testid="config-save-bar"
+          className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] lg:bottom-0 z-30 -mx-4 lg:-mx-8 border-t bg-background/95 backdrop-blur-sm px-4 lg:px-8 py-3"
+        >
+          <div className="flex max-w-2xl flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+            <Button onClick={handleSave} disabled={saving || !allowEdit} className="w-full sm:w-auto">
+              <Save className="mr-2 h-4 w-4" />
+              {saving ? "Guardando..." : "Guardar Cambios"}
+            </Button>
+            {message && (
+              <div
+                role={message.type === "error" ? "alert" : "status"}
+                className={`min-w-0 flex-1 px-3 sm:px-4 py-2 rounded text-sm ${
+                  message.type === "success"
+                    ? "bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500"
+                    : "bg-destructive/10 border border-destructive/30 text-destructive"
+                }`}
+              >
+                {message.text}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
-
-      <Card>
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-base sm:text-lg">Datos fiscales y de cobro</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Datos del emisor y condiciones de cobro que se muestran en el remito.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
-          <div>
-            <Label htmlFor="cuit" className="text-sm">{getCountryConfig(pais).taxIdLabel}</Label>
-            <Input
-              id="cuit"
-              value={cuit}
-              onChange={(e) => setCuit(e.target.value)}
-              placeholder={getCountryConfig(pais).taxIdPlaceholder}
-              disabled={!allowEdit}
-            />
-          </div>
-          <div>
-            <Label htmlFor="condicionIva" className="text-sm">Condición frente al IVA</Label>
-            <Select
-              value={condicionIva || CONDICION_IVA_NONE}
-              onValueChange={(val) => setCondicionIva(val === CONDICION_IVA_NONE ? "" : val)}
-              disabled={!allowEdit}
-            >
-              <SelectTrigger id="condicionIva">
-                <SelectValue placeholder="Sin especificar" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={CONDICION_IVA_NONE}>Sin especificar</SelectItem>
-                {CONDICION_IVA_OPTIONS.map((opt) => (
-                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="domicilioFiscal" className="text-sm">Domicilio fiscal</Label>
-            <Input
-              id="domicilioFiscal"
-              value={domicilioFiscal}
-              onChange={(e) => setDomicilioFiscal(e.target.value)}
-              placeholder="Av. Principal 123, Córdoba"
-              disabled={!allowEdit}
-            />
-          </div>
-          <div>
-            <Label htmlFor="ingresosBrutos" className="text-sm">Ingresos brutos</Label>
-            <Input
-              id="ingresosBrutos"
-              value={ingresosBrutos}
-              onChange={(e) => setIngresosBrutos(e.target.value)}
-              placeholder="902-123456-7"
-              disabled={!allowEdit}
-            />
-          </div>
-          <div>
-            <Label htmlFor="inicioActividades" className="text-sm">Inicio de actividades</Label>
-            <Input
-              id="inicioActividades"
-              value={inicioActividades}
-              onChange={(e) => setInicioActividades(e.target.value)}
-              placeholder="01/2020"
-              disabled={!allowEdit}
-            />
-          </div>
-          <div>
-            <Label htmlFor="cbuAlias" className="text-sm">CBU o alias</Label>
-            <Input
-              id="cbuAlias"
-              value={cbuAlias}
-              onChange={(e) => setCbuAlias(e.target.value)}
-              placeholder="mi.alias.mp"
-              disabled={!allowEdit}
-            />
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Se muestra en el remito para pagos por transferencia
-            </p>
-          </div>
-          <div>
-            <Label htmlFor="mediosPagoTexto" className="text-sm">Medios de pago aceptados</Label>
-            <Input
-              id="mediosPagoTexto"
-              value={mediosPagoTexto}
-              onChange={(e) => setMediosPagoTexto(e.target.value)}
-              placeholder="Efectivo, transferencia, tarjeta"
-              disabled={!allowEdit}
-            />
-          </div>
-          <div>
-            <Label htmlFor="plazoPagoDias" className="text-sm">Plazo de pago (días)</Label>
-            <Input
-              id="plazoPagoDias"
-              type="number"
-              min="0"
-              value={plazoPagoDias}
-              onChange={(e) => setPlazoPagoDias(e.target.value)}
-              placeholder="Ej: 30"
-              disabled={!allowEdit}
-            />
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Si se completa, el remito muestra la fecha de vencimiento calculada desde la emisión
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-base sm:text-lg">Cotizaciones / Presupuestos</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Valores por defecto al crear nuevas cotizaciones.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
-          <div>
-            <Label htmlFor="ivaPorcentaje" className="text-sm">IVA (%)</Label>
-            <Select value={ivaPorcentaje} onValueChange={setIvaPorcentaje} disabled={!allowEdit}>
-              <SelectTrigger id="ivaPorcentaje">
-                <SelectValue placeholder="Seleccionar IVA" />
-              </SelectTrigger>
-              <SelectContent>
-                {getCountryConfig(pais).ivaOptions.map((opt) => (
-                  <SelectItem key={opt} value={String(opt)}>
-                    {opt === 0 ? "0% (Sin IVA)" : `${opt}%`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Se aplicará por defecto en nuevas cotizaciones
-            </p>
-          </div>
-          <div>
-            <Label htmlFor="cotizacionValidezDias" className="text-sm">Validez por defecto (días)</Label>
-            <Input
-              id="cotizacionValidezDias"
-              type="number"
-              min="1"
-              value={cotizacionValidezDias}
-              onChange={(e) => setCotizacionValidezDias(e.target.value)}
-              placeholder="30"
-              disabled={!allowEdit}
-            />
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Días de validez que se asignan automáticamente
-            </p>
-          </div>
-          <div>
-            <Label htmlFor="cotizacionTerminos" className="text-sm">Términos y Condiciones</Label>
-            <Textarea
-              id="cotizacionTerminos"
-              value={cotizacionTerminos}
-              onChange={(e) => setCotizacionTerminos(e.target.value)}
-              placeholder="Ej: Los precios no incluyen repuestos adicionales. Garantía de 30 días sobre mano de obra..."
-              rows={4}
-              disabled={!allowEdit}
-            />
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Se incluirán por defecto en nuevas cotizaciones y PDFs
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t">
-            <div>
-              <Label htmlFor="garantiaDiasDefault" className="text-sm">Garantía por defecto (días)</Label>
-              <Input
-                id="garantiaDiasDefault"
-                type="number"
-                min="0"
-                value={garantiaDiasDefault}
-                onChange={(e) => setGarantiaDiasDefault(e.target.value)}
-                placeholder="30"
-                disabled={!allowEdit}
-              />
-            </div>
-            <div>
-              <Label htmlFor="anticipoPorcentajeDefault" className="text-sm">Anticipo por defecto (%)</Label>
-              <Input
-                id="anticipoPorcentajeDefault"
-                type="number"
-                min="0"
-                max="100"
-                value={anticipoPorcentajeDefault}
-                onChange={(e) => setAnticipoPorcentajeDefault(e.target.value)}
-                placeholder="50"
-                disabled={!allowEdit}
-              />
-            </div>
-            <div>
-              <Label htmlFor="politicaAbandonoDiasDefault" className="text-sm">Plazo de retiro (días)</Label>
-              <Input
-                id="politicaAbandonoDiasDefault"
-                type="number"
-                min="0"
-                value={politicaAbandonoDiasDefault}
-                onChange={(e) => setPoliticaAbandonoDiasDefault(e.target.value)}
-                placeholder="60"
-                disabled={!allowEdit}
-              />
-            </div>
-            <p className="text-xs sm:text-sm text-muted-foreground sm:col-span-3 mt-1">
-              Defaults técnicos sugeridos al crear nuevos presupuestos.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-base sm:text-lg">Comprobante de Recepcion</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Terminos y condiciones que aparecen en el comprobante PDF al recibir un equipo.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
-          <div>
-            <Label htmlFor="recepcionTerminos" className="text-sm">Terminos y Condiciones</Label>
-            <Textarea
-              id="recepcionTerminos"
-              value={recepcionTerminos}
-              onChange={(e) => setRecepcionTerminos(e.target.value)}
-              placeholder={"1. Conserve este comprobante para retirar su equipo. El plazo de retiro es de 30 dias.\n2. No nos hacemos responsables por datos perdidos. Realice backup antes de entregar el equipo.\n3. Al firmar, el cliente declara haber revisado el estado del equipo al momento de la entrega.\n4. El presupuesto puede variar segun el diagnostico final del equipo."}
-              rows={5}
-              disabled={!allowEdit}
-            />
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Escriba cada termino en una linea separada. Si se deja vacio se usaran los terminos por defecto.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-base sm:text-lg">Comprobante Termico (Impresora)</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Terminos y condiciones que se imprimen al pie del ticket termico de la orden de servicio.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
-          <div>
-            <Label htmlFor="comprobanteTerminos" className="text-sm">Terminos y Condiciones</Label>
-            <Textarea
-              id="comprobanteTerminos"
-              value={comprobanteTerminos}
-              onChange={(e) => setComprobanteTerminos(e.target.value)}
-              placeholder={"1. Conserve este comprobante para retirar su equipo.\n2. No nos responsabilizamos por datos perdidos.\n3. El presupuesto puede variar segun el diagnostico.\n4. Equipos sin retirar a los 60 dias seran considerados abandonados."}
-              rows={5}
-              disabled={!allowEdit}
-            />
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Se imprime al final del ticket. Si se deja vacio no aparece ninguna seccion de terminos.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Button onClick={handleSave} disabled={saving || !allowEdit} className="w-full sm:w-auto">
-        <Save className="mr-2 h-4 w-4" />
-        {saving ? "Guardando..." : "Guardar Cambios"}
-      </Button>
-
-      {/* Configuración de notificaciones - se guarda por separado */}
-      <NotificationSettings allowEdit={allowEdit} />
-    </div>
+    </Tabs>
   )
 }
