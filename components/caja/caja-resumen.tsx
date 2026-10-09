@@ -63,7 +63,8 @@ interface CajaResumenProps {
     totalEgresos: number
     totalCostosFinancieros?: number
     ingresoReal?: number
-    sinCobrar: { count: number; ordenes: any[] }
+    // null = la consulta fallo en el servidor (no es lo mismo que 0 sin cobrar)
+    sinCobrar: { count: number; ordenes: any[] } | null
   } | null
   filtroMetodo: string
   filtroTipo: string
@@ -184,7 +185,12 @@ export function CajaResumen({
       )}
 
       {/* Órdenes sin cobrar */}
-      {data.sinCobrar.count > 0 && (
+      {data.sinCobrar === null && (
+        <p className="text-sm text-muted-foreground">
+          No se pudo cargar el listado de órdenes sin cobrar. Probá recargar la página.
+        </p>
+      )}
+      {data.sinCobrar && data.sinCobrar.count > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
