@@ -60,7 +60,8 @@ export async function GET(request: Request) {
         .from("ordenes_servicio")
         .select("organization_id")
         .in("organization_id", orgIds)
-        .gte("created_at", inactivityCutoff.toISOString()),
+        // ordenes_servicio no tiene created_at: la fecha de alta es fecha_ingreso.
+        .gte("fecha_ingreso", inactivityCutoff.toISOString()),
       supabaseAdmin
         .from("ventas")
         .select("organization_id")
@@ -72,6 +73,14 @@ export async function GET(request: Request) {
         .in("organization_id", orgIds)
         .gte("created_at", inactivityCutoff.toISOString()),
     ])
+
+    // Si una consulta de actividad falla NO es "sin actividad": abortar el run
+    // antes de contar a todas las orgs como inactivas y escribir en lifecycle_emails.
+    const activityError = ordenesRes.error || ventasRes.error || clientesRes.error
+    if (activityError) {
+      console.error("Error en cron re-engagement: consulta de actividad", activityError)
+      return NextResponse.json({ error: "Error leyendo actividad" }, { status: 500 })
+    }
 
     const activeRecently = new Set<string>()
     for (const row of [
