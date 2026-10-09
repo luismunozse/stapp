@@ -171,7 +171,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
   const { formatPrice } = useCurrency()
   const [outputFormat, setOutputFormat] = useState<OutputFormat>("PDF")
   // Medio y tamaño: por taller (org), con el localStorage del equipo de respaldo.
-  const { medium, size, onMediumChange, onSizeChange } = useEtiquetaInventario({
+  const { medium, size, ready, onMediumChange, onSizeChange } = useEtiquetaInventario({
     onSaveFailed: () =>
       toast.warning("No se pudo guardar para todo el taller. Queda solo en este equipo."),
   })
@@ -538,9 +538,10 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
                   <Select
                     value={size}
                     onValueChange={onSizeChange}
+                    disabled={!ready}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      {ready ? <SelectValue /> : <span className="text-muted-foreground">Cargando…</span>}
                     </SelectTrigger>
                     <SelectContent>
                       {(medium === "thermal" ? THERMAL_SIZES : DIE_CUT_SIZES).map((key) => (
@@ -698,7 +699,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
             Cancelar
           </Button>
           {outputFormat === "PDF" ? (
-            <Button onClick={handlePrint} disabled={totalLabels === 0}>
+            <Button onClick={handlePrint} disabled={totalLabels === 0 || !ready}>
               <Printer className="mr-2 h-4 w-4" />
               Imprimir ({totalLabels})
             </Button>

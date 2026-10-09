@@ -11,6 +11,9 @@ const ENDPOINT = "/api/configuracion/etiqueta-inventario"
 // Un fetch colgado no puede dejar el diálogo esperando a la org.
 const FETCH_TIMEOUT_MS = 3000
 
+// Cola de guardados; `enviar` nunca rechaza, así que la cadena no se corta.
+let cola: Promise<unknown> = Promise.resolve()
+
 export interface EtiquetaInventarioOrg {
   medio: PrintMedium
   tamano: LabelSizeKey
@@ -53,17 +56,24 @@ export async function fetchOrgEtiquetaInventario(): Promise<EtiquetaInventarioOr
  * localStorage (fallback si la org no las acepta). Devuelve true solo si
  * quedaron guardadas en la org.
  */
-export async function saveOrgEtiquetaInventario(prefs: LabelPrefs): Promise<boolean> {
+export function saveOrgEtiquetaInventario(prefs: LabelPrefs): Promise<boolean> {
   saveLabelPrefs(prefs)
   const tamano = prefs.medium === "thermal" ? prefs.thermalSize : prefs.sheetSize
-  try {
-    const res = await fetch(ENDPOINT, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ medio: prefs.medium, tamano }),
-    })
-    return res.ok
-  } catch {
-    return false
+  const enviar = async (): Promise<boolean> => {
+    try {
+      const res = await fetch(ENDPOINT, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ medio: prefs.medium, tamano }),
+      })
+      return res.ok
+    } catch {
+      return false
+    }
   }
+  // Cada PATCH sale recién cuando el anterior terminó: dos cambios seguidos
+  // (medio y después tamaño) no pueden llegar desordenados y dejar el par viejo.
+  const p = cola.then(enviar)
+  cola = p
+  return p
 }

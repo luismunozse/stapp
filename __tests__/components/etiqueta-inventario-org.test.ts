@@ -77,4 +77,41 @@ describe("saveOrgEtiquetaInventario", () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new Error("offline"))))
     expect(await saveOrgEtiquetaInventario(prefs)).toBe(false)
   })
+
+  it("serializa los PATCH: el segundo sale recién cuando el primero terminó", async () => {
+    const llegaron: string[] = []
+    let soltarPrimero: () => void = () => {}
+    const f = vi.fn((_u: string, init?: RequestInit) => {
+      const body = JSON.parse(init?.body as string)
+      llegaron.push(body.tamano)
+      if (body.tamano === "58mm") {
+        return new Promise<Response>((r) => {
+          soltarPrimero = () => r(new Response("{}"))
+        })
+      }
+      return jsonRes({})
+    })
+    vi.stubGlobal("fetch", f)
+
+    const a = saveOrgEtiquetaInventario({ medium: "thermal", thermalSize: "58mm", sheetSize: "50x30" })
+    const b = saveOrgEtiquetaInventario({ medium: "thermal", thermalSize: "40x30", sheetSize: "50x30" })
+    await new Promise((r) => setTimeout(r, 20))
+    // El segundo todavía no se mandó: el primero sigue en vuelo.
+    expect(llegaron).toEqual(["58mm"])
+
+    soltarPrimero()
+    expect(await a).toBe(true)
+    expect(await b).toBe(true)
+    expect(llegaron).toEqual(["58mm", "40x30"])
+  })
+
+  it("un PATCH fallido no frena a los siguientes", async () => {
+    const f = vi
+      .fn()
+      .mockImplementationOnce(() => Promise.reject(new Error("offline")))
+      .mockImplementation(() => jsonRes({}))
+    vi.stubGlobal("fetch", f)
+    expect(await saveOrgEtiquetaInventario(prefs)).toBe(false)
+    expect(await saveOrgEtiquetaInventario(prefs)).toBe(true)
+  })
 })

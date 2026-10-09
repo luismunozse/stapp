@@ -107,6 +107,29 @@ describe("useEtiquetaInventario: orden de resolución", () => {
     expect(result.current.thermalSize).toBe("40x30")
   })
 
+  it("pide la org y el tamaño de órdenes en paralelo desde el arranque", async () => {
+    const urls: string[] = []
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        urls.push(url)
+        return new Promise<Response>(() => {})
+      }),
+    )
+    renderHook(() => useEtiquetaInventario())
+    await waitFor(() => expect(urls).toContain(INV))
+    expect(urls).toContain(ORD)
+  })
+
+  it("con org Y tamaño de órdenes resueltos, gana la org", async () => {
+    stubFetch({ inv: { medio: "sheet", tamano: "40x30" }, ord: { tamano: "80mm" } })
+    const { result } = renderHook(() => useEtiquetaInventario())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    expect(result.current.medium).toBe("sheet")
+    expect(result.current.sheetSize).toBe("40x30")
+    expect(result.current.thermalSize).toBe("50x30")
+  })
+
   it("resolver el valor de la org NO dispara ningún PATCH", async () => {
     const f = stubFetch({ inv: { medio: "sheet", tamano: "40x30" } })
     const { result } = renderHook(() => useEtiquetaInventario())
@@ -183,6 +206,25 @@ describe("useEtiquetaInventario: guardar", () => {
     await waitFor(() => expect(onSaveFailed).toHaveBeenCalledTimes(1))
     expect(result.current.thermalSize).toBe("40x30")
     expect(JSON.parse(localStorage.getItem(LABEL_PREFS_KEY)!).thermalSize).toBe("40x30")
+  })
+
+  it("si TODOS los guardados fallan avisa una sola vez", async () => {
+    stubFetch({ patchStatus: 503 })
+    const onSaveFailed = vi.fn()
+    const { result } = renderHook(() => useEtiquetaInventario({ onSaveFailed }))
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    await act(async () => {
+      result.current.onSizeChange("40x30")
+    })
+    await waitFor(() => expect(onSaveFailed).toHaveBeenCalledTimes(1))
+    await act(async () => {
+      result.current.onSizeChange("60x40")
+    })
+    await act(async () => {
+      result.current.onMediumChange("sheet")
+    })
+    await new Promise((r) => setTimeout(r, 30))
+    expect(onSaveFailed).toHaveBeenCalledTimes(1)
   })
 
   it("si el guardado anda no avisa nada", async () => {
