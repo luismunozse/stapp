@@ -4,10 +4,11 @@ import { mockAuthSuccess, createChainMock, mockSupabaseFrom, parseResponse } fro
 vi.mock("@/lib/depositos", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/depositos")>()),
   depositoPermitido: vi.fn(),
+  depositoPorDefecto: vi.fn(),
 }))
 
 import { supabaseAdmin } from "@/lib/supabase"
-import { depositoPermitido, DEPOSITO_INVALIDO } from "@/lib/depositos"
+import { depositoPermitido, depositoPorDefecto, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { POST as postLotes } from "@/app/api/inventario/[id]/lotes/route"
 import { POST as postSeries } from "@/app/api/inventario/[id]/series/route"
 
@@ -39,6 +40,7 @@ describe.each(casos)("POST /api/inventario/[id]/$nombre — validacion del depos
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(depositoPermitido).mockResolvedValue(true)
+    vi.mocked(depositoPorDefecto).mockResolvedValue(null)
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ok: true }, error: null } as any)
     mockSupabaseFrom({ organizations: createChainMock({ vendedores_administran_inventario: true }) })
   })
@@ -79,6 +81,32 @@ describe.each(casos)("POST /api/inventario/[id]/$nombre — validacion del depos
     expect(res.status).toBe(201)
     expect(depositoPermitido).not.toHaveBeenCalled()
     expect((vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any).p_deposito_id).toBeNull()
+  })
+
+  it("sin depositoId, VENDEDOR de la sucursal B: la RPC recibe el depósito de B sin revalidarlo", async () => {
+    mockAuthSuccess({ role: "VENDEDOR", sucursalId: "suc-b", organizationId: "org-9" })
+    vi.mocked(depositoPorDefecto).mockResolvedValue("dep-b")
+    const { depositoId: _omit, ...sinDeposito } = caso.body
+
+    const res = await caso.post(req(sinDeposito), ctx)
+
+    expect(res.status).toBe(201)
+    expect(depositoPorDefecto).toHaveBeenCalledWith({
+      organizationId: "org-9",
+      role: "VENDEDOR",
+      userSucursalId: "suc-b",
+    })
+    expect(depositoPermitido).not.toHaveBeenCalled()
+    expect((vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any).p_deposito_id).toBe("dep-b")
+  })
+
+  it("con depositoId explícito no consulta el default", async () => {
+    mockAuthSuccess({ role: "VENDEDOR", sucursalId: "suc-b" })
+
+    await caso.post(req(caso.body), ctx)
+
+    expect(depositoPorDefecto).not.toHaveBeenCalled()
+    expect((vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any).p_deposito_id).toBe("dep-x")
   })
 
   it("responde 500 sin llamar a la RPC si la validacion falla", async () => {

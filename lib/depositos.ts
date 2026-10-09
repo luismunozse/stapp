@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { SUCURSAL_NINGUNA } from "@/lib/sucursal"
+import { SUCURSAL_NINGUNA, sucursalParaLectura, getDepositoDeSucursal } from "@/lib/sucursal"
 
 /**
  * Mensaje unico para TODO rechazo de un deposito enviado por el cliente: asi un
@@ -77,4 +77,120 @@ export async function depositoPermitido(params: {
   const { data, error } = await query.maybeSingle()
   if (error) throw error
   return !!data
+}
+
+/**
+ * Deposito destino cuando el stock entra SIN un deposito explicito: el del
+ * deposito principal de la sucursal de quien opera, en vez de caer siempre en la
+ * Casa Central.
+ *
+ *  - No-admin: el de SU sucursal.
+ *  - ADMIN con una sucursal elegida en la cookie: el de esa sucursal.
+ *  - ADMIN viendo "todas", o sin sucursal / sin deposito: null. El llamador conserva
+ *    el comportamiento de siempre (trigger al principal de la org; RPCs en modo
+ *    global/drain, que le permite a un ADMIN "todas" descontar de donde haya stock).
+ *
+ * Es un DESTINO por defecto, no un chequeo de seguridad: por eso puede apoyarse en
+ * la cookie de vista. Un id enviado por el cliente se valida con `depositoPermitido`.
+ */
+export async function depositoPorDefecto(params: {
+  organizationId: string
+  role: string | null
+  userSucursalId: string | null
+}): Promise<string | null> {
+  const lectura = await sucursalParaLectura({
+    role: params.role,
+    userSucursalId: params.userSucursalId,
+  })
+  if (lectura.verTodas || !lectura.sucursalId || lectura.sucursalId === SUCURSAL_NINGUNA) {
+    return null
+  }
+  return getDepositoDeSucursal(params.organizationId, lectura.sucursalId)
+}
+
+/**
+ * Mueve el stock inicial de un item recien creado al deposito elegido.
+ *
+ * El trigger de la migracion 291 ya sembro la fila en el principal de la org. Se
+ * mueve con un UPDATE de deposito_id: inventario_depositos solo tiene el trigger
+ * BEFORE UPDATE de updated_at (169) y UNIQUE(inventario_id, deposito_id), y el
+ * item recien creado no tiene otra fila, asi que no hay choque ni se dispara
+ * logica de stock. La invariante stock = SUM(detalle) se mantiene.
+ * Si falla LANZA: el llamador decide (el item ya existe, no conviene un 500).
+ */
+export async function moverStockInicialADeposito(params: {
+  inventarioId: string
+  depositoId: string
+  stock: number
+  organizationId: string
+}): Promise<void> {
+  const { inventarioId, depositoId, stock, organizationId } = params
+
+  const { data: principalId, error: principalError } = await supabaseAdmin.rpc(
+    "get_deposito_principal",
+    { p_org_id: organizationId }
+  )
+  if (principalError) throw principalError
+  // Ya cayo donde corresponde: nada que mover.
+  if (principalId === depositoId) return
+
+  if (principalId) {
+    const { data: movidas, error: updateError } = await supabaseAdmin
+      .from("inventario_depositos")
+      .update({ deposito_id: depositoId })
+      .eq("inventario_id", inventarioId)
+      .eq("deposito_id", principalId)
+      .eq("organization_id", organizationId)
+      .select("id")
+    if (updateError) throw updateError
+    if (movidas && movidas.length > 0) return
+  }
+
+  // Org sin principal (el trigger no sembro nada) o fila ausente: se crea el
+  // detalle directo en el deposito elegido para sostener la invariante.
+  const { error: insertError } = await supabaseAdmin
+    .from("inventario_depositos")
+    .insert({
+      inventario_id: inventarioId,
+      deposito_id: depositoId,
+      stock,
+      stock_reservado: 0,
+      organization_id: organizationId,
+    })
+  if (insertError) throw insertError
+}
+
+const LOTE_MOVER_STOCK = 200
+
+/**
+ * Version por lote de `moverStockInicialADeposito` para altas masivas: mueve las
+ * filas sembradas por el trigger (migracion 291) en el principal de la org al
+ * deposito elegido, con un UPDATE por tramo de ids. LANZA si falla. A diferencia
+ * de la version unitaria no crea detalle faltante: una org sin principal no
+ * siembra nada y tampoco tiene deposito de sucursal al que mover.
+ */
+export async function moverStockInicialLote(params: {
+  inventarioIds: string[]
+  depositoId: string
+  organizationId: string
+}): Promise<void> {
+  const { inventarioIds, depositoId, organizationId } = params
+  if (inventarioIds.length === 0) return
+
+  const { data: principalId, error: principalError } = await supabaseAdmin.rpc(
+    "get_deposito_principal",
+    { p_org_id: organizationId }
+  )
+  if (principalError) throw principalError
+  if (!principalId || principalId === depositoId) return
+
+  for (let i = 0; i < inventarioIds.length; i += LOTE_MOVER_STOCK) {
+    const { error } = await supabaseAdmin
+      .from("inventario_depositos")
+      .update({ deposito_id: depositoId })
+      .in("inventario_id", inventarioIds.slice(i, i + LOTE_MOVER_STOCK))
+      .eq("deposito_id", principalId)
+      .eq("organization_id", organizationId)
+    if (error) throw error
+  }
 }

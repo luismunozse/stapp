@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, denyIfNoInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { depositoPorDefecto, moverStockInicialLote } from "@/lib/depositos"
 import { parseCSV, parseExcel } from "@/lib/csv-parser"
 import { validateClienteRow, validateInventarioRow, validateCSVHeaders, normalizeHeaders, normalizeRow, resolveTipoDispositivo, generateCodigo } from "@/lib/csv-validator"
 import { uploadImportFile, base64ToBuffer } from "@/lib/storage"
@@ -41,13 +42,22 @@ async function batchInsert(
   client: typeof supabaseAdmin,
   table: 'clientes' | 'inventario',
   items: Array<{ rowNumber: number; row: any; payload: any; sinPrecio?: boolean }>,
-  results: { success: any[]; skipped: any[]; errors: any[]; sinPrecio: number }
-) {
+  results: { success: any[]; skipped: any[]; errors: any[]; sinPrecio: number; advertencia?: string }
+): Promise<Array<{ id: string; stock: number }>> {
+  // Para inventario se pide de vuelta id + stock de lo insertado: hace falta para
+  // mover el stock inicial al deposito de la sucursal (ver mas abajo).
+  const insertar = async (payload: any): Promise<{ data: any; error: any }> =>
+    table === 'inventario'
+      ? await client.from(table).insert(payload).select('id, stock')
+      : await client.from(table).insert(payload)
+  const insertados: Array<{ id: string; stock: number }> = []
+
   for (let start = 0; start < items.length; start += BATCH_SIZE) {
     const chunk = items.slice(start, start + BATCH_SIZE)
     const payloads = chunk.map(c => c.payload)
-    const { error } = await client.from(table).insert(payloads)
+    const { data: filas, error } = await insertar(payloads)
     if (!error) {
+      insertados.push(...(filas ?? []))
       for (const c of chunk) {
         results.success.push({ row: c.rowNumber, data: c.row })
         if (c.sinPrecio) results.sinPrecio++
@@ -56,20 +66,22 @@ async function batchInsert(
     }
     // Insert fallido: reintentar item por item para aislar la fila mala.
     for (const c of chunk) {
-      const { error: rowErr } = await client.from(table).insert(c.payload)
+      const { data: filas, error: rowErr } = await insertar(c.payload)
       if (rowErr) {
         results.errors.push({ row: c.rowNumber, error: rowErr.message, data: c.row })
       } else {
+        insertados.push(...(filas ?? []))
         results.success.push({ row: c.rowNumber, data: c.row })
         if (c.sinPrecio) results.sinPrecio++
       }
     }
   }
+  return insertados
 }
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     // Antes de `request.json()`, que es lo que materializa el base64 entero en
@@ -169,6 +181,7 @@ export async function POST(request: Request) {
       skipped: [] as any[],
       errors: [] as any[],
       sinPrecio: 0,
+      advertencia: undefined as string | undefined,
     }
     const validRows: Array<{ rowNumber: number; row: any; data: any; sinPrecio?: boolean }> = []
 
@@ -288,7 +301,31 @@ export async function POST(request: Request) {
         })
       }
 
-      await batchInsert(supabaseAdmin, 'inventario', toInsert, results)
+      const insertados = await batchInsert(supabaseAdmin, 'inventario', toInsert, results)
+
+      // El trigger de la migracion 291 siembra el stock en el principal de la org.
+      // Si quien importa opera una sucursal, ese stock va a SU deposito. Los items
+      // ya existen: si falla no se tira el import (reintentar duplicaria), se avisa.
+      const conStock = insertados.filter(i => i.stock > 0).map(i => i.id)
+      if (conStock.length > 0) {
+        try {
+          const depositoDestino = await depositoPorDefecto({
+            organizationId: organizationId!,
+            role,
+            userSucursalId: session!.user.sucursalId ?? null,
+          })
+          if (depositoDestino) {
+            await moverStockInicialLote({
+              inventarioIds: conStock,
+              depositoId: depositoDestino,
+              organizationId: organizationId!,
+            })
+          }
+        } catch (moveError) {
+          console.error("Error moviendo stock inicial importado al depósito de la sucursal:", moveError)
+          results.advertencia = "El stock quedó en el depósito principal"
+        }
+      }
     }
 
     // Save import history
@@ -323,6 +360,7 @@ export async function POST(request: Request) {
         skipped: results.skipped.length,
         errors: results.errors.length,
         sinPrecio: results.sinPrecio,
+        ...(results.advertencia ? { advertencia: results.advertencia } : {}),
         errorDetails: results.errors,
         skippedDetails: results.skipped,
       },

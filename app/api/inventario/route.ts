@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireInventarioAccess, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { depositoPermitido, DEPOSITO_INVALIDO } from "@/lib/depositos"
+import {
+  depositoPermitido,
+  depositoPorDefecto,
+  moverStockInicialADeposito,
+  DEPOSITO_INVALIDO,
+} from "@/lib/depositos"
 import { formatInventario } from "@/lib/db-utils"
 import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
@@ -29,48 +34,6 @@ const inventarioSchema = z.object({
   depositoId: z.string().min(1).nullable().optional(),
   diasGarantiaDefault: z.number().int().min(0).nullable().optional(),
 })
-
-async function moverStockInicialADeposito(params: {
-  inventarioId: string
-  depositoId: string
-  stock: number
-  organizationId: string
-}) {
-  const { inventarioId, depositoId, stock, organizationId } = params
-
-  const { data: principalId, error: principalError } = await supabaseAdmin.rpc(
-    "get_deposito_principal",
-    { p_org_id: organizationId }
-  )
-  if (principalError) throw principalError
-  // Ya cayó donde corresponde: nada que mover.
-  if (principalId === depositoId) return
-
-  if (principalId) {
-    const { data: movidas, error: updateError } = await supabaseAdmin
-      .from("inventario_depositos")
-      .update({ deposito_id: depositoId })
-      .eq("inventario_id", inventarioId)
-      .eq("deposito_id", principalId)
-      .eq("organization_id", organizationId)
-      .select("id")
-    if (updateError) throw updateError
-    if (movidas && movidas.length > 0) return
-  }
-
-  // Org sin principal (el trigger no sembró nada) o fila ausente: se crea el
-  // detalle directo en el depósito elegido para sostener la invariante.
-  const { error: insertError } = await supabaseAdmin
-    .from("inventario_depositos")
-    .insert({
-      inventario_id: inventarioId,
-      deposito_id: depositoId,
-      stock,
-      stock_reservado: 0,
-      organization_id: organizationId,
-    })
-  if (insertError) throw insertError
-}
 
 export async function GET(request: Request) {
   try {
@@ -329,23 +292,30 @@ export async function POST(request: Request) {
       throw dbError
     }
 
-    // Stock inicial en el depósito elegido (si no es el principal).
-    // El trigger de la migración 291 ya sembró la fila en el principal. Se mueve
-    // con un UPDATE de deposito_id: inventario_depositos solo tiene el trigger
-    // BEFORE UPDATE de updated_at (169) y UNIQUE(inventario_id, deposito_id), y
-    // el item recién creado no tiene otra fila, así que no hay choque ni se
-    // dispara lógica de stock. La invariante stock = SUM(detalle) se mantiene.
-    // Si falla, el item ya existe: un 500 haría reintentar y duplicar. Se
-    // responde 201 con advertencia; el stock queda en el principal (consistente).
+    // Stock inicial en el depósito elegido, o en el de la sucursal de quien crea
+    // cuando no eligió (ADMIN viendo "todas": null, se queda donde lo siembra el
+    // trigger de la migración 291, el principal de la org). Ver
+    // moverStockInicialADeposito. Si falla, el item ya existe: un 500 haría
+    // reintentar y duplicar. Se responde 201 con advertencia; el stock queda en
+    // el principal (consistente).
     let advertencia: string | undefined
-    if (inventario && data.depositoId && data.stock > 0) {
+    if (inventario && data.stock > 0) {
       try {
-        await moverStockInicialADeposito({
-          inventarioId: inventario.id,
-          depositoId: data.depositoId,
-          stock: data.stock,
-          organizationId: organizationId!,
-        })
+        const destinoId =
+          data.depositoId ??
+          (await depositoPorDefecto({
+            organizationId: organizationId!,
+            role,
+            userSucursalId: session!.user.sucursalId ?? null,
+          }))
+        if (destinoId) {
+          await moverStockInicialADeposito({
+            inventarioId: inventario.id,
+            depositoId: destinoId,
+            stock: data.stock,
+            organizationId: organizationId!,
+          })
+        }
       } catch (moveError) {
         console.error("Error moviendo stock inicial al depósito elegido:", moveError)
         advertencia = "El stock quedó en el depósito principal"
