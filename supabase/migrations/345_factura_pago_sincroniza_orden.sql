@@ -54,6 +54,30 @@
 -- correccion en silencio y las ~83 ordenes vuelven a quedar mal en cuanto se
 -- recalculen.
 --
+-- CONCURRENCIA Y ORDEN DE LOCKS
+-- recalcular_estado_cobro toma FOR UPDATE sobre la orden antes de sumar. Los
+-- pagos de factura ahora toman: factura -> (clientes, si el metodo es CUENTA
+-- CORRIENTE) -> orden. registrar_cobros_orden_atomica toma: orden -> clientes.
+-- Con cuenta corriente en ambos lados y la MISMA orden/cliente a la vez hay un
+-- ciclo posible (deadlock; Postgres aborta una de las dos con 40P01, no se
+-- pierde dinero). Ninguna otra ruta bloquea la orden y despues la factura
+-- (generar/crear_factura_atomica solo inserta la factura, anular y eliminar
+-- parten de la factura, /entregar y los RPC de servicios no tocan facturas).
+-- Arreglo de fondo, fuera de esta migracion: que registrar_pago_factura_atomica,
+-- anular_factura_atomica y eliminar_factura_atomica tomen la ORDEN primero
+-- (FOR UPDATE OF f, o en el SELECT inicial) para unificar el orden orden ->
+-- factura -> clientes.
+--
+-- IMPACTO EN COMISIONES (cambio de comportamiento visible)
+-- app/api/comisiones/route.ts:57 lista solo estado_cobro = 'COBRADO'. Medido en
+-- prod el 2026-10-09: de los 81 pedidos que pasan a COBRADO, 68 tienen tecnico
+-- y entran a v_comisiones_ordenes (REPARADO/ENTREGADO), de 3 organizaciones y 4
+-- tecnicos, con fecha_completado entre 2026-02-16 y 2026-03-22 (6 a 8 meses de
+-- antiguedad). Los 68 tienen porcentaje_comision = 0, asi que monto_comision
+-- total = $0 y ninguna comision pagada: aparecen filas viejas en el listado,
+-- sin deuda de comision. 0 dependen del flag comision_aplica_sin_reparacion.
+-- Si alguna organizacion fija un porcentaje retroactivo, esas ordenes se pagan.
+--
 -- RECURSION: ninguna. Los triggers nuevos cuelgan de pagos_parciales y
 -- facturas; recalcular_estado_cobro solo hace UPDATE de total_cobrado y
 -- estado_cobro en ordenes_servicio, y el trigger de la 277 es
@@ -144,6 +168,16 @@ DECLARE
   v_descuento DECIMAL;
   v_estado TEXT;
 BEGIN
+  -- Serializa los recalculos de la misma orden. Sin este lock, un pago de
+  -- factura (que solo bloquea la factura) y registrar_cobros_orden_atomica
+  -- (que bloquea la orden) podian calcular el total antes de que la otra
+  -- transaccion confirmara y el UPDATE mas tardio pisaba al otro (lost update).
+  -- Debe ser lo PRIMERO que hace la funcion y la suma va en una sentencia
+  -- plpgsql APARTE: en READ COMMITTED cada sentencia toma un snapshot nuevo,
+  -- asi que la suma ve lo confirmado mientras esperabamos el lock. No unir las
+  -- dos cosas en una sola sentencia SQL.
+  PERFORM 1 FROM ordenes_servicio WHERE id = p_orden_id FOR UPDATE;
+
   v_total_cobrado := total_cobrado_orden(p_orden_id);
 
   SELECT COALESCE(costo_final, 0), COALESCE(descuento_cobro, 0)

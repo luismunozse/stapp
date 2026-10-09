@@ -2,6 +2,9 @@
 --
 -- Restaura recalcular_estado_cobro al cuerpo de 068:100 (total_cobrado solo de
 -- cobros_orden), quita los triggers y la funcion auxiliar.
+-- NO deshace la backfill: las 83 ordenes corregidas vuelven a PENDIENTE en su
+-- proximo recalculo, y eso reabre el doble cobro de "Cobrar todo". Hacer
+-- rollback solo si el codigo se revierte tambien.
 -- Ojo: reintroduce el bug de la 345. Las ordenes que la backfill corrigio
 -- conservan su total_cobrado/estado_cobro hasta el proximo recalculo, que las
 -- vuelve a dejar en PENDIENTE.

@@ -68,6 +68,17 @@ describe("migracion 345: pago de factura sincroniza la orden", () => {
     expect(cuerpo).not.toMatch(/\)\s*\+\s*COALESCE/)
   })
 
+  it("bloquea la orden (FOR UPDATE) ANTES de sumar, en sentencias separadas", () => {
+    const cuerpo = sinComentarios(ultimaDefinicion("recalcular_estado_cobro"))
+    const lock = cuerpo.indexOf("PERFORM 1 FROM ordenes_servicio WHERE id = p_orden_id FOR UPDATE;")
+    const suma = cuerpo.indexOf("v_total_cobrado := total_cobrado_orden(p_orden_id);")
+    expect(lock).toBeGreaterThan(-1)
+    expect(suma).toBeGreaterThan(lock)
+    // el lock es la primera sentencia ejecutable tras el BEGIN
+    const trasBegin = cuerpo.slice(cuerpo.indexOf("BEGIN") + "BEGIN".length).trim()
+    expect(trasBegin.startsWith("PERFORM 1 FROM ordenes_servicio")).toBe(true)
+  })
+
   it("el estado se sigue comparando contra costo_final - descuento_cobro", () => {
     const cuerpo = ultimaDefinicion("recalcular_estado_cobro")
     expect(cuerpo).toContain("v_costo_final := v_costo_final - v_descuento;")
