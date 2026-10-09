@@ -159,3 +159,38 @@ export async function moverStockInicialADeposito(params: {
     })
   if (insertError) throw insertError
 }
+
+const LOTE_MOVER_STOCK = 200
+
+/**
+ * Version por lote de `moverStockInicialADeposito` para altas masivas: mueve las
+ * filas sembradas por el trigger (migracion 291) en el principal de la org al
+ * deposito elegido, con un UPDATE por tramo de ids. LANZA si falla. A diferencia
+ * de la version unitaria no crea detalle faltante: una org sin principal no
+ * siembra nada y tampoco tiene deposito de sucursal al que mover.
+ */
+export async function moverStockInicialLote(params: {
+  inventarioIds: string[]
+  depositoId: string
+  organizationId: string
+}): Promise<void> {
+  const { inventarioIds, depositoId, organizationId } = params
+  if (inventarioIds.length === 0) return
+
+  const { data: principalId, error: principalError } = await supabaseAdmin.rpc(
+    "get_deposito_principal",
+    { p_org_id: organizationId }
+  )
+  if (principalError) throw principalError
+  if (!principalId || principalId === depositoId) return
+
+  for (let i = 0; i < inventarioIds.length; i += LOTE_MOVER_STOCK) {
+    const { error } = await supabaseAdmin
+      .from("inventario_depositos")
+      .update({ deposito_id: depositoId })
+      .in("inventario_id", inventarioIds.slice(i, i + LOTE_MOVER_STOCK))
+      .eq("deposito_id", principalId)
+      .eq("organization_id", organizationId)
+    if (error) throw error
+  }
+}
