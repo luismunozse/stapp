@@ -152,7 +152,7 @@ export function createPostgrestFake(
 
       if (head) return { data: null, error: null, count: wantCount ? total : null }
       // Con embebidos (organizations!inner(...)) o * se devuelve la fila completa.
-      const data = selectCols && selectCols.every((c) => /^w+$/.test(c))
+      const data = selectCols && selectCols.every((c) => /^\w+$/.test(c))
         ? rows.map((r) => {
             const out: Row = {}
             for (const c of selectCols!) if (c in r) out[c] = get(r, c)
