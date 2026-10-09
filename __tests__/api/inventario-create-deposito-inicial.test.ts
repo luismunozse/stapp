@@ -12,6 +12,11 @@ vi.mock("@/lib/webhooks/dispatcher", () => ({
   emitWebhookEvent: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock("@/lib/sucursal", () => ({
+  sucursalParaLectura: vi.fn(),
+}))
+
+import { sucursalParaLectura } from "@/lib/sucursal"
 import { POST } from "@/app/api/inventario/route"
 
 const itemRow = {
@@ -68,6 +73,36 @@ describe("POST /api/inventario — depósito del stock inicial", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(sucursalParaLectura).mockResolvedValue({ verTodas: true, sucursalId: null } as any)
+  })
+
+  it("usuario atado a una sucursal: el depósito se filtra por esa sucursal y uno ajeno da 400", async () => {
+    vi.mocked(sucursalParaLectura).mockResolvedValue({ verTodas: false, sucursalId: "suc-1" } as any)
+    const { depositos, inventario } = setup({ deposito: null })
+    const res = await post({ depositoId: "dep-otra-sucursal" })
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(400)
+    expect(body.error).toBe("El depósito elegido no es válido")
+    expect(depositos.eq).toHaveBeenCalledWith("sucursal_id", "suc-1")
+    expect(inventario.insert).not.toHaveBeenCalled()
+  })
+
+  it("usuario atado a una sucursal con depósito propio: 201", async () => {
+    vi.mocked(sucursalParaLectura).mockResolvedValue({ verTodas: false, sucursalId: "suc-1" } as any)
+    const { depositos } = setup({ deposito: { id: "dep-2" } })
+    const res = await post({ depositoId: "dep-2" })
+
+    expect((await parseResponse(res)).status).toBe(201)
+    expect(depositos.eq).toHaveBeenCalledWith("sucursal_id", "suc-1")
+    expect(sucursalParaLectura).toHaveBeenCalledWith({ role: "ADMIN", userSucursalId: null })
+  })
+
+  it("verTodas: no filtra por sucursal", async () => {
+    const { depositos } = setup({ deposito: { id: "dep-2" } })
+    await post({ depositoId: "dep-2" })
+
+    expect(depositos.eq).not.toHaveBeenCalledWith("sucursal_id", expect.anything())
   })
 
   it("valida el depósito contra la org, no borrado y activo (antes de insertar)", async () => {

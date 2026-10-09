@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireInventarioAccess, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 import { formatInventario } from "@/lib/db-utils"
 import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
@@ -222,23 +223,31 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId } = await requireInventarioAccess()
+    const { error, organizationId, userId, role, session } = await requireInventarioAccess()
     if (error) return error
 
     const body = await request.json()
     const data = inventarioSchema.parse(body)
 
     // Límite de seguridad: nunca confiar en un depósito que mandó el cliente.
-    // Tiene que ser de ESTA org, no estar borrado y estar activo.
+    // Tiene que ser de ESTA org, no estar borrado, estar activo y ser uno que
+    // GET /api/depositos le listaría a este usuario (mismo filtro de sucursal).
     if (data.depositoId) {
-      const { data: deposito } = await supabaseAdmin
+      const lectura = await sucursalParaLectura({
+        role,
+        userSucursalId: session!.user.sucursalId ?? null,
+      })
+      let depositoQuery = supabaseAdmin
         .from("depositos")
         .select("id")
         .eq("id", data.depositoId)
         .eq("organization_id", organizationId!)
         .is("deleted_at", null)
         .eq("activo", true)
-        .maybeSingle()
+      if (!lectura.verTodas && lectura.sucursalId) {
+        depositoQuery = depositoQuery.eq("sucursal_id", lectura.sucursalId)
+      }
+      const { data: deposito } = await depositoQuery.maybeSingle()
       if (!deposito) {
         return NextResponse.json(
           { error: "El depósito elegido no es válido" },
