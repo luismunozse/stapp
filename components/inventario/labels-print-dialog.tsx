@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import Link from "next/link"
+import { toast } from "sonner"
 import useSWR from "swr"
 import JsBarcode from "jsbarcode"
 import {
@@ -51,13 +52,7 @@ import {
   type LabelSizeKey,
   type PrintMedium,
 } from "@/lib/labels/build-labels-html"
-import {
-  DEFAULT_MEDIUM,
-  DEFAULT_SIZE,
-  readLabelPrefs,
-  saveLabelPrefs,
-  type LabelPrefs,
-} from "@/lib/labels/label-prefs"
+import { useEtiquetaInventario } from "@/components/inventario/use-etiqueta-inventario"
 import { printHtmlViaIframe } from "@/lib/print/print-html-iframe"
 
 interface ApiLabelTemplate {
@@ -175,9 +170,11 @@ function generateBarcodeSVG(
 export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
   const { formatPrice } = useCurrency()
   const [outputFormat, setOutputFormat] = useState<OutputFormat>("PDF")
-  const [medium, setMedium] = useState<PrintMedium>(DEFAULT_MEDIUM)
-  const [thermalSize, setThermalSize] = useState<LabelSizeKey>(DEFAULT_SIZE)
-  const [sheetSize, setSheetSize] = useState<LabelSizeKey>(DEFAULT_SIZE)
+  // Medio y tamaño: por taller (org), con el localStorage del equipo de respaldo.
+  const { medium, size, onMediumChange, onSizeChange } = useEtiquetaInventario({
+    onSaveFailed: () =>
+      toast.warning("No se pudo guardar para todo el taller. Queda solo en este equipo."),
+  })
   const [printError, setPrintError] = useState("")
   const [format, setFormat] = useState<BarcodeFormat>("AUTO")
   const [showBarcode, setShowBarcode] = useState(true)
@@ -198,24 +195,6 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
     setHasWebUsb(typeof navigator !== "undefined" && !!(navigator as any).usb)
   }, [])
 
-  // Medio y tamaño recordados (se leen una sola vez, después de montar).
-  useEffect(() => {
-    const prefs = readLabelPrefs()
-    if (!prefs) return
-    setMedium(prefs.medium)
-    setThermalSize(prefs.thermalSize)
-    setSheetSize(prefs.sheetSize)
-  }, [])
-
-  const updatePrefs = (next: Partial<LabelPrefs>) => {
-    const merged = { medium, thermalSize, sheetSize, ...next }
-    if (next.medium) setMedium(next.medium)
-    if (next.thermalSize) setThermalSize(next.thermalSize)
-    if (next.sheetSize) setSheetSize(next.sheetSize)
-    saveLabelPrefs(merged)
-  }
-
-  const size: LabelSizeKey = medium === "thermal" ? thermalSize : sheetSize
   const sizeConfig = LABEL_SIZE_CONFIG[size]
 
   const contentOpts = useMemo<LabelContentOptions>(
@@ -542,7 +521,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
                   <Label>Medio de impresión</Label>
                   <Select
                     value={medium}
-                    onValueChange={(v) => updatePrefs({ medium: v as PrintMedium })}
+                    onValueChange={onMediumChange}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -558,13 +537,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
                   <Label>Tamaño de etiqueta</Label>
                   <Select
                     value={size}
-                    onValueChange={(v) =>
-                      updatePrefs(
-                        medium === "thermal"
-                          ? { thermalSize: v as LabelSizeKey }
-                          : { sheetSize: v as LabelSizeKey },
-                      )
-                    }
+                    onValueChange={onSizeChange}
                   >
                     <SelectTrigger>
                       <SelectValue />
