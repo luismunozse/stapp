@@ -16,6 +16,11 @@ describe("readLabelPrefs", () => {
     expect(readLabelPrefs()).toEqual({ medium: "sheet", thermalSize: "58mm", sheetSize: "40x25" })
   })
 
+  it("acepta las medidas nuevas 40x30 y 50x40", () => {
+    saveLabelPrefs({ medium: "thermal", thermalSize: "50x40", sheetSize: "40x30" })
+    expect(readLabelPrefs()).toEqual({ medium: "thermal", thermalSize: "50x40", sheetSize: "40x30" })
+  })
+
   it("JSON inválido devuelve null sin tirar", () => {
     window.localStorage.setItem(LABEL_PREFS_KEY, "{no es json")
     expect(readLabelPrefs()).toBeNull()
