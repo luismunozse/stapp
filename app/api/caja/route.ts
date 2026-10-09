@@ -54,10 +54,16 @@ export async function GET(request: Request) {
       .in("estado_cobro", ["PENDIENTE", "PARCIAL"])
       .not("costo_final", "is", null)
       .gt("costo_final", 0)
-      .order("created_at", { ascending: false })
+      // ordenes_servicio no tiene created_at: la fecha de alta es fecha_ingreso.
+      .order("fecha_ingreso", { ascending: false })
       .limit(10)
     if (sid) sinCobrarQuery = sinCobrarQuery.eq("sucursal_id", sid)
-    const { data: sinCobrar, count: sinCobrarCount } = await sinCobrarQuery
+    const { data: sinCobrar, count: sinCobrarCount, error: sinCobrarError } = await sinCobrarQuery
+    // Una consulta fallida NO es "0 sin cobrar": se loguea y la tarjeta se marca
+    // como no disponible (null) sin tumbar el resto de la caja.
+    if (sinCobrarError) {
+      console.error("Error fetching caja sinCobrar:", sinCobrarError)
+    }
 
     // Sesión actual
     let sesionQuery = supabaseAdmin
@@ -88,16 +94,18 @@ export async function GET(request: Request) {
       fecha,
       ...totales,
       movimientos,
-      sinCobrar: {
-        count: sinCobrarCount || 0,
-        ordenes: (sinCobrar || []).map((o) => ({
-          id: o.id,
-          numeroOrden: o.numero_orden,
-          costoFinal: parseFloat(o.costo_final || "0"),
-          totalCobrado: parseFloat(o.total_cobrado || "0"),
-          pendiente: parseFloat(o.costo_final || "0") - parseFloat(o.total_cobrado || "0"),
-        })),
-      },
+      sinCobrar: sinCobrarError
+        ? null
+        : {
+            count: sinCobrarCount || 0,
+            ordenes: (sinCobrar || []).map((o) => ({
+              id: o.id,
+              numeroOrden: o.numero_orden,
+              costoFinal: parseFloat(o.costo_final || "0"),
+              totalCobrado: parseFloat(o.total_cobrado || "0"),
+              pendiente: parseFloat(o.costo_final || "0") - parseFloat(o.total_cobrado || "0"),
+            })),
+          },
       sesionActual: sesionConUsuario,
     })
   } catch (err) {
