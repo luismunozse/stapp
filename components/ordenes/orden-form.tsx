@@ -36,6 +36,7 @@ import { useModal } from "@/contexts/modal-context"
 import { STORES } from "@/lib/offline/constants"
 import type { Cliente, CampoExtra } from "@/types"
 import { isValidImei, sanitizeImei } from "@/lib/imei"
+import { TRABAJO_A_REALIZAR_MAX } from "@/lib/orden-ingreso"
 import { parseMoneyInput } from "@/lib/parse-money"
 import { FotosIngreso, type FotoPreview } from "./fotos-ingreso"
 import { AccesoriosPicker } from "./accesorios-picker"
@@ -1619,6 +1620,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             <Textarea
               id="trabajoARealizar"
               {...register("trabajoARealizar")}
+              maxLength={TRABAJO_A_REALIZAR_MAX}
               placeholder="Ej: Cambio de pantalla + batería"
               rows={2}
             />

@@ -231,6 +231,7 @@ describe("OrdenForm — borrador local", () => {
     const trabajo = screen.getByLabelText(/Trabajo a realizar/i)
     expect(trabajo).toHaveValue("Cambio de pantalla")
     expect(trabajo).not.toBeRequired()
+    expect(trabajo).toHaveAttribute("maxlength", "2000")
     expect(problema.compareDocumentPosition(trabajo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 

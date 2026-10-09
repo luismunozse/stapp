@@ -26,5 +26,6 @@ describe("OrdenDetail - trabajo a realizar", () => {
   it("el campo no exige valor (es opcional)", () => {
     const bloque = SRC.slice(SRC.indexOf('label="Trabajo a realizar"'), SRC.indexOf('label="Trabajo a realizar"') + 400)
     expect(bloque).not.toContain("requireValue")
+    expect(bloque).toContain("maxLength={TRABAJO_A_REALIZAR_MAX}")
   })
 })

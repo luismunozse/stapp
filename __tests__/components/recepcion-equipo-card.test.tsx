@@ -111,5 +111,6 @@ describe("RecepcionEquipoCard — trabajo a realizar", () => {
     // Despues de la falla en el orden del documento.
     expect(falla.compareDocumentPosition(trabajo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByRole("textbox", { name: /Trabajo a realizar/i })).not.toBeRequired()
+    expect(screen.getByRole("textbox", { name: /Trabajo a realizar/i })).toHaveAttribute("maxlength", "2000")
   })
 })

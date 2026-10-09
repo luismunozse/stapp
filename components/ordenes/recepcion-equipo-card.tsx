@@ -16,6 +16,7 @@ import { AccesoriosPicker } from "./accesorios-picker"
 import { FotosIngreso, type FotoPreview } from "./fotos-ingreso"
 import { CodigoAccesoModal, inferirTipoAcceso } from "./codigo-acceso-modal"
 import type { CampoExtra, TipoDispositivoCustom } from "@/types"
+import { TRABAJO_A_REALIZAR_MAX } from "@/lib/orden-ingreso"
 
 /**
  * Schema y tipo de un equipo individual dentro de la recepcion multiple.
@@ -231,6 +232,7 @@ export function RecepcionEquipoCard(props: RecepcionEquipoCardProps) {
             id={`trabajo-a-realizar-${props.index}`}
             {...props.register(`equipos.${props.index}.trabajoARealizar`)}
             rows={2}
+            maxLength={TRABAJO_A_REALIZAR_MAX}
             placeholder="Opcional. Ej: cambio de pantalla + batería"
           />
         </div>

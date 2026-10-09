@@ -580,7 +580,7 @@ export async function POST(request: Request) {
       organizationTelefono: org?.telefono ?? null,
       organizationDireccion: org?.direccion ?? null,
       organizationComprobanteTerminos: org?.comprobante_terminos ?? null,
-      organizationGarantiaDiasDefault: (org as any)?.garantia_dias_default ?? null,
+      organizationGarantiaDiasDefault: org?.garantia_dias_default ?? null,
       trabajoARealizar: orden.trabajo_a_realizar ?? null,
     }
 

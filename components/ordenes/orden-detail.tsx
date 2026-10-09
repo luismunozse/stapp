@@ -65,6 +65,7 @@ import {
 import { useEtiquetaSize } from "@/components/ordenes/use-etiqueta-size"
 import { ThermalPrintOrden } from "@/components/ordenes/thermal-print-orden"
 import { OrdenPapelSelect, useOrdenPapel } from "@/components/ordenes/orden-papel-select"
+import { TRABAJO_A_REALIZAR_MAX } from "@/lib/orden-ingreso"
 import { NotificationHistory } from "@/components/ordenes/notification-history"
 import { PracticaOrdenDetail } from "@/components/ordenes/practica-orden-detail"
 import { OrdenEstadoCard } from "@/components/ordenes/orden-estado-card"
@@ -1005,6 +1006,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   value={orden.trabajoARealizar || ""}
                   onSave={handleSaveTrabajo}
                   placeholder="Ej: Cambio de pantalla + batería"
+                  maxLength={TRABAJO_A_REALIZAR_MAX}
                   emptyHint="Sin trabajo cargado. Haz clic en el lapiz para agregar."
                 />
               </div>

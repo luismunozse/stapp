@@ -22,6 +22,8 @@ interface EditableTextFieldProps {
   valueClassName?: string
   /** Extra classes on the textarea (e.g. a tinted background). */
   textareaClassName?: string
+  /** Max characters accepted by the textarea. */
+  maxLength?: number
 }
 
 /**
@@ -40,6 +42,7 @@ export function EditableTextField({
   emptyHint,
   valueClassName,
   textareaClassName,
+  maxLength,
 }: EditableTextFieldProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
@@ -86,6 +89,7 @@ export function EditableTextField({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={placeholder}
+            maxLength={maxLength}
             disabled={saving}
             autoFocus
           />
