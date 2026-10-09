@@ -8,6 +8,7 @@ import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import type { Cliente } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
+import { getPersonalIdLabel } from "@/lib/countries"
 import { useHasFeature } from "@/hooks/use-subscription"
 import { TipoPrecioBadge } from "./tipo-precio-badge"
 
@@ -23,7 +24,7 @@ interface ClienteMobileCardProps {
 
 export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCuentaCorriente, onCobrar, deleting }: ClienteMobileCardProps) {
   const router = useRouter()
-  const { formatDate, formatPrice } = useCurrency()
+  const { formatDate, formatPrice, pais } = useCurrency()
   const { hasFeature: hasCotizaciones, loading: cotizacionesLoading } = useHasFeature("cotizaciones_online")
   const puedeCotizar = cotizacionesLoading || hasCotizaciones
 
@@ -52,7 +53,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                 )}
                 <TipoPrecioBadge tipoPrecio={cliente.tipoPrecio} />
                 {cliente.dni && (
-                  <span className="text-xs text-muted-foreground">DNI: {cliente.dni}</span>
+                  <span className="text-xs text-muted-foreground">{getPersonalIdLabel(pais)}: {cliente.dni}</span>
                 )}
               </div>
               {cliente.razonSocial && (
