@@ -132,3 +132,35 @@ describe("generateOrdenPDF - hoja ENTREGA no cambia", () => {
     expect(text).not.toContain("desde la entrega")
   })
 })
+
+describe("generateOrdenPDF - RECEPCION: peor caso, sin desborde ni solapes", () => {
+  it("la linea de corte queda debajo de garantia/terminos/firma y el talon dentro del margen", async () => {
+    const { buildWorstCaseRecepcionFixture } = await import("./orden-fixture")
+    const buffer = await generateOrdenPDF(buildWorstCaseRecepcionFixture() as any)
+    const pos = await extractPdfTextPositions(buffer)
+    const y = (needle: string) => {
+      const p = pos.find((t) => t.text.includes(needle))
+      expect(p, needle).toBeDefined()
+      return p!.y
+    }
+    const cutLabelY = y("PARTE SUPERIOR")
+    const garantiaY = y("Garantía:")
+    const firmaY = y("FIRMA DEL CLIENTE")
+    const trabajoY = y("TRABAJO A REALIZAR")
+    const accesoriosY = y("ACCESORIOS RECIBIDOS")
+    // orden vertical de arriba hacia abajo
+    expect(trabajoY).toBeGreaterThan(accesoriosY)
+    expect(accesoriosY).toBeGreaterThan(firmaY)
+    expect(firmaY).toBeGreaterThan(garantiaY)
+    // el ultimo renglon de terminos (6 lineas de 8pt bajo la garantia) no pisa la linea de corte
+    const lastTermY = garantiaY - 6 * 8
+    expect(lastTermY).toBeGreaterThan(cutLabelY)
+    // el bloque dinero/retiro conserva su respiro minimo (MIN_GAP = 8) antes de QR/firma:
+    // si el trabajo o la garantia se comieran el espacio libre, esto se achicaria a < 8.
+    const retiroY = y("Retiro estimado")
+    expect(retiroY - (firmaY + 39)).toBeGreaterThanOrEqual(8)
+    // trabajo capado a 3 lineas con elipsis: el texto largo nunca crece mas alla del tope
+    expect(pos.some((p) => p.y < trabajoY && p.y > trabajoY - 36 && p.text.endsWith("…"))).toBe(true)
+    expect(Math.min(...pos.map((p) => p.y))).toBeGreaterThanOrEqual(28)
+  })
+})

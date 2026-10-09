@@ -109,3 +109,28 @@ export function buildMaxContentOrdenFixture() {
     recepcionTerminos: Array.from({ length: 10 }, (_, i) => `${i + 1}. ${LOREM}`).join("\n"),
   }
 }
+
+/**
+ * Worst case for the RECEPCIÓN sheet including the "Trabajo a realizar" row
+ * and the garantía line: every capped field at its cap, money band + retiro
+ * present, 6 lines of términos.
+ */
+export function buildWorstCaseRecepcionFixture() {
+  return {
+    ...buildMaxContentOrdenFixture(),
+    trabajoARealizar: LOREM + " " + LOREM,
+    garantiaDiasDefault: 90,
+    metadataCampos: Array.from({ length: 8 }, (_, i) => ({ label: `Campo extra ${i + 1}`, valor: "valor largo de ejemplo" })),
+    sector: "Sector de atención con un nombre bastante largo",
+    sucursal: { nombre: "Sucursal Centro con nombre largo", direccion: "Av. Corrientes 1234, piso 5 oficina 12, CABA", telefono: "+54 11 4000-1234" },
+    cliente: {
+      ...buildOrdenFixture().cliente,
+      razonSocial: "Pérez e Hijos Sociedad de Responsabilidad Limitada",
+      direccion: "Av. Corrientes 1234 piso 5 departamento B, Ciudad Autónoma de Buenos Aires",
+      tipoCliente: "EMPRESA",
+    },
+    presupuesto: 45000,
+    sena: 10000,
+    metodoPagoSena: "EFECTIVO",
+  }
+}

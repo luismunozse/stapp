@@ -2129,8 +2129,15 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // ---- Trabajo a realizar (fila completa, condicional) ----
   const trabajoARealizar = normalizarTrabajoARealizar(safe(data.trabajoARealizar))
   if (trabajoARealizar) {
-    const trabajoLines: RxCellLine[] = rxWrap(trabajoARealizar, archivoRegular, 9, rxContentW - rxCellPadX * 2)
-      .slice(0, 3)
+    // Tope de 3 líneas (alto máximo acotado: la fila entra en `ry` antes de
+    // calcular el reparto de huecos, así que el worst case ya está presupuestado).
+    // Si el texto no entra, la última línea termina en elipsis.
+    const trabajoWrapped = rxWrap(trabajoARealizar, archivoRegular, 9, rxContentW - rxCellPadX * 2)
+    const trabajoShown = trabajoWrapped.slice(0, 3)
+    if (trabajoWrapped.length > 3) {
+      trabajoShown[2] = rxTruncate(`${trabajoShown[2]}…`, archivoRegular, 9, rxContentW - rxCellPadX * 2)
+    }
+    const trabajoLines: RxCellLine[] = trabajoShown
       .map(l => ({ text: l, font: archivoRegular, size: 9, color: MONO.ink }))
     const rowTrabajo = rxDrawGridRow([{ x: rxMargin, width: rxContentW, label: "Trabajo a realizar", lines: trabajoLines }], ry)
     ry -= rowTrabajo
