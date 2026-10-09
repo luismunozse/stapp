@@ -8,6 +8,7 @@
 
 import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
 import { formatCurrencyValue, type CurrencyCode } from "@/lib/currency"
+import { garantiaDesdeEntregaTexto, normalizarTrabajoARealizar } from "@/lib/orden-ingreso"
 
 const CHARS_PER_LINE_58 = 32
 const CHARS_PER_LINE_80 = 48
@@ -202,6 +203,10 @@ export interface OrdenTicketData {
   imei?: string | null
   accesorios?: string | null
   problemaReportado: string
+  /** Trabajo planeado (texto libre). Vacío/null: no se imprime. */
+  trabajoARealizar?: string | null
+  /** Días de garantía de la organización. 0/null: no se imprime la línea. */
+  garantiaDiasDefault?: number | null
   presupuesto?: number | null
   costoFinal?: number | null
   fechaPrometida?: string | null
@@ -294,6 +299,15 @@ export function generateOrdenTicketCommands(
   add(CMD.BOLD_OFF)
   for (const l of wrapText(data.problemaReportado, W)) add(line(l))
 
+  const trabajo = normalizarTrabajoARealizar(data.trabajoARealizar)
+  if (trabajo) {
+    add(separator(W, "-"))
+    add(CMD.BOLD_ON)
+    add(line("TRABAJO A REALIZAR"))
+    add(CMD.BOLD_OFF)
+    for (const l of wrapText(trabajo, W)) add(line(l))
+  }
+
   if (data.observaciones) {
     add(separator(W, "-"))
     add(CMD.BOLD_ON)
@@ -332,6 +346,16 @@ export function generateOrdenTicketCommands(
     add(CMD.BOLD_OFF)
     add(line("Escanea para ver el estado"))
     buf.push(...qrCommands(data.qrUrl, 7))
+    add(separator(W))
+  }
+
+  // === GARANTIA ===
+  const garantia = garantiaDesdeEntregaTexto(data.garantiaDiasDefault)
+  if (garantia) {
+    add(CMD.ALIGN_CENTER)
+    add(CMD.BOLD_ON)
+    for (const l of wrapText(garantia, W)) add(line(l))
+    add(CMD.BOLD_OFF)
     add(separator(W))
   }
 

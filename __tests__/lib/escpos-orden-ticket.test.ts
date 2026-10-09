@@ -79,3 +79,25 @@ describe("generateOrdenTicketCommands — seccion dispositivo", () => {
     expect(modeloLine!.length).toBeLessThanOrEqual(33) // 32 chars + posible \r
   })
 })
+
+describe("generateOrdenTicketCommands - trabajo a realizar y garantia", () => {
+  it("imprime el trabajo bajo el problema y la linea de garantia", () => {
+    const text = decode(
+      generateOrdenTicketCommands(
+        { ...baseData, trabajoARealizar: "Cambio de pantalla", garantiaDiasDefault: 30, terminosCondiciones: "Terminos." },
+        80,
+      ),
+    )
+    expect(text).toContain("TRABAJO A REALIZAR")
+    expect(text).toContain("Cambio de pantalla")
+    expect(text).toContain("Garant")
+    expect(text).toContain("30 d")
+    expect(text.indexOf("TRABAJO A REALIZAR")).toBeGreaterThan(text.indexOf("PROBLEMA REPORTADO"))
+  })
+
+  it("omite ambos cuando faltan o la garantia es 0", () => {
+    const text = decode(generateOrdenTicketCommands({ ...baseData, trabajoARealizar: "  ", garantiaDiasDefault: 0 }, 80))
+    expect(text).not.toContain("TRABAJO A REALIZAR")
+    expect(text).not.toContain("Garant")
+  })
+})

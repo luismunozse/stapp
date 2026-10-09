@@ -26,6 +26,7 @@ import {
   type AnchoTermico,
 } from "@/lib/thermal-paper"
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
+import { garantiaDesdeEntregaTexto, normalizarTrabajoARealizar } from "@/lib/orden-ingreso"
 import { toast } from "sonner"
 import type { OrdenServicio } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
@@ -37,6 +38,8 @@ interface ThermalPrintOrdenProps {
     organizationTelefono?: string | null
     organizationDireccion?: string | null
     organizationComprobanteTerminos?: string | null
+    organizationGarantiaDiasDefault?: number | null
+    trabajoARealizar?: string | null
   }
 }
 
@@ -57,6 +60,8 @@ interface PreviewData {
   imei: string | null
   accesorios: string | null
   problemaReportado: string
+  trabajoARealizar: string | null
+  garantiaTexto: string | null
   observaciones: string | null
   presupuesto: number | null
   costoFinal: number | null
@@ -108,6 +113,8 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
       imei: orden.imei ?? null,
       accesorios: orden.accesorios ?? null,
       problemaReportado: orden.problemaReportado,
+      trabajoARealizar: normalizarTrabajoARealizar(orden.trabajoARealizar),
+      garantiaTexto: garantiaDesdeEntregaTexto(orden.organizationGarantiaDiasDefault),
       observaciones: orden.observaciones ?? null,
       presupuesto: orden.presupuesto ?? null,
       costoFinal: orden.costoFinal ?? null,
@@ -136,6 +143,8 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
       imei: preview.imei,
       accesorios: preview.accesorios,
       problemaReportado: preview.problemaReportado,
+      trabajoARealizar: preview.trabajoARealizar,
+      garantiaDiasDefault: orden.organizationGarantiaDiasDefault ?? null,
       presupuesto: preview.presupuesto,
       costoFinal: preview.costoFinal,
       fechaPrometida: preview.fechaPrometida,
@@ -429,6 +438,14 @@ function ReceiptPreview({ data, ancho }: { data: PreviewData; ancho: AnchoTermic
       <div className="font-bold">PROBLEMA REPORTADO</div>
       <div className="whitespace-pre-wrap break-words">{data.problemaReportado}</div>
 
+      {data.trabajoARealizar && (
+        <>
+          <Sep />
+          <div className="font-bold">TRABAJO A REALIZAR</div>
+          <div className="whitespace-pre-wrap break-words">{data.trabajoARealizar}</div>
+        </>
+      )}
+
       {data.observaciones && (
         <>
           <Sep />
@@ -460,6 +477,13 @@ function ReceiptPreview({ data, ancho }: { data: PreviewData; ancho: AnchoTermic
           <div className="text-center text-[10px]">Escanea para ver el estado</div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={qrDataUrl} alt="QR seguimiento" className="mx-auto my-1" style={{ width: "150px", height: "150px" }} />
+          <Sep />
+        </>
+      )}
+
+      {data.garantiaTexto && (
+        <>
+          <div className="font-bold text-center">{data.garantiaTexto}</div>
           <Sep />
         </>
       )}

@@ -12,6 +12,7 @@ import {
 import { Receipt, Printer } from "lucide-react"
 import { useTerminologia } from "@/contexts/currency-context"
 import { fitPrintPageToContent } from "@/lib/print-fit-page"
+import { garantiaDesdeEntregaTexto, normalizarTrabajoARealizar } from "@/lib/orden-ingreso"
 import {
   readAncho,
   saveAncho,
@@ -34,6 +35,8 @@ export interface RecepcionReceiptEquipo {
    */
   imei?: string | null
   problemaReportado: string
+  /** Trabajo planeado para este equipo (texto libre). Vacío: la línea se omite. */
+  trabajoARealizar?: string | null
   accesorios?: string | null
 }
 
@@ -46,6 +49,8 @@ export interface RecepcionReceiptData {
   organizationTelefono?: string | null
   organizationDireccion?: string | null
   organizationComprobanteTerminos?: string | null
+  /** Días de garantía de la organización. 0/null: la línea se omite. */
+  organizationGarantiaDiasDefault?: number | null
   /** Data URL completa (data:image/png;base64,...); null si no hay firma capturada. */
   firmaDataUrl?: string | null
   equipos: RecepcionReceiptEquipo[]
@@ -226,6 +231,7 @@ function Sep({ char = "-" }: { char?: string }) {
 
 function RecepcionReceiptPreview({ data, ancho }: { data: RecepcionReceiptData; ancho: AnchoTermico }) {
   const term = useTerminologia()
+  const garantiaTexto = garantiaDesdeEntregaTexto(data.organizationGarantiaDiasDefault)
 
   return (
     <div
@@ -268,6 +274,11 @@ function RecepcionReceiptPreview({ data, ancho }: { data: RecepcionReceiptData; 
             <div className="whitespace-pre-wrap break-words">IMEI/Serie: {equipo.imei}</div>
           )}
           <div className="whitespace-pre-wrap break-words">Problema: {equipo.problemaReportado}</div>
+          {normalizarTrabajoARealizar(equipo.trabajoARealizar) && (
+            <div className="whitespace-pre-wrap break-words">
+              Trabajo a realizar: {normalizarTrabajoARealizar(equipo.trabajoARealizar)}
+            </div>
+          )}
           {equipo.accesorios && (
             <div className="whitespace-pre-wrap break-words">Accesorios: {equipo.accesorios}</div>
           )}
@@ -275,6 +286,13 @@ function RecepcionReceiptPreview({ data, ancho }: { data: RecepcionReceiptData; 
       ))}
 
       <Sep />
+
+      {garantiaTexto && (
+        <>
+          <div className="font-bold text-center">{garantiaTexto}</div>
+          <Sep />
+        </>
+      )}
 
       {data.organizationComprobanteTerminos && (
         <>
