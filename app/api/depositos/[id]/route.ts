@@ -26,6 +26,35 @@ function formatDeposito(row: any) {
   }
 }
 
+/**
+ * Respuesta 409 si el depósito aún tiene stock > 0 en algún item (o null si
+ * está vacío). Compartida por archivar y desactivar: un depósito inactivo no
+ * puede ser origen de transferencia, así que el stock quedaría inalcanzable.
+ */
+async function bloqueoPorStock(
+  depositoId: string,
+  organizationId: string,
+  accion: "archivarlo" | "desactivarlo"
+) {
+  const { count: stockCount } = await supabaseAdmin
+    .from("inventario_depositos")
+    .select("id", { count: "exact", head: true })
+    .eq("deposito_id", depositoId)
+    .eq("organization_id", organizationId)
+    .gt("stock", 0)
+
+  if ((stockCount ?? 0) > 0) {
+    return NextResponse.json(
+      {
+        error: `El depósito tiene stock en ${stockCount} item(s). Transferí el stock antes de ${accion}.`,
+        code: "HAS_STOCK",
+      },
+      { status: 409 }
+    )
+  }
+  return null
+}
+
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -63,6 +92,12 @@ export async function PUT(
         { error: "No podés desactivar el depósito principal." },
         { status: 400 }
       )
+    }
+
+    // Desactivar (activo -> inactivo): mismo chequeo de stock que archivar.
+    if (existing.activo && data.activo === false) {
+      const bloqueo = await bloqueoPorStock(id, organizationId!, "desactivarlo")
+      if (bloqueo) return bloqueo
     }
 
     // Promote: demote del principal actual de ESA sucursal (uno por sucursal,
@@ -143,22 +178,8 @@ export async function DELETE(
     }
 
     // Bloquear si tiene stock > 0 en cualquier item
-    const { count: stockCount } = await supabaseAdmin
-      .from("inventario_depositos")
-      .select("id", { count: "exact", head: true })
-      .eq("deposito_id", id)
-      .eq("organization_id", organizationId!)
-      .gt("stock", 0)
-
-    if ((stockCount ?? 0) > 0) {
-      return NextResponse.json(
-        {
-          error: `El depósito tiene stock en ${stockCount} item(s). Transferí el stock antes de archivar.`,
-          code: "HAS_STOCK",
-        },
-        { status: 409 }
-      )
-    }
+    const bloqueo = await bloqueoPorStock(id, organizationId!, "archivarlo")
+    if (bloqueo) return bloqueo
 
     const { error: deleteErr } = await supabaseAdmin
       .from("depositos")
