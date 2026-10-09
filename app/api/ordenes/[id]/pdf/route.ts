@@ -259,6 +259,7 @@ export async function GET(
       logoUrl: safeString(org?.logo_url),
       moneda: safeString(org?.moneda) || "ARS",
       zonaHoraria: safeString(org?.zona_horaria) || "America/Argentina/Buenos_Aires",
+      pais: safeString(org?.pais) || undefined,
       estado: safeString(orden.estado) || undefined,
       fechaEntrega: orden.fecha_entrega ? new Date(orden.fecha_entrega) : null,
       firmaClienteEntrega: safeString(orden.firma_cliente_entrega),
