@@ -125,6 +125,8 @@ export async function GET(
       color: orden.color,
       imei: orden.imei,
       problemaReportado: orden.problema_reportado,
+      trabajoARealizar: orden.trabajo_a_realizar || null,
+      garantiaDiasDefault: org?.garantia_dias_default ?? null,
       accesorios: orden.accesorios,
       codigoAccesoDispositivo: orden.password_dispositivo,
       presupuesto: orden.presupuesto,

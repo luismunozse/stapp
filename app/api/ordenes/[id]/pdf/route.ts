@@ -247,6 +247,8 @@ export async function GET(
       color: safeString(orden.color),
       imei: safeString(orden.imei),
       problemaReportado: safeString(orden.problema_reportado) || "Sin descripción",
+      trabajoARealizar: safeString(orden.trabajo_a_realizar) || null,
+      garantiaDiasDefault: org?.garantia_dias_default ?? null,
       accesorios: safeString(orden.accesorios),
       codigoAccesoDispositivo: safeString(orden.password_dispositivo),
       presupuesto: typeof orden.presupuesto === "number" ? orden.presupuesto : null,

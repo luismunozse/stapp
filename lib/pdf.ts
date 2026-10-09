@@ -12,6 +12,7 @@ import { MONO, TYPE, RULE_WIDTH, drawRule, drawSectionLabel, drawOutlinedBadge, 
 import { ESTADO_FLOW, ESTADOS_COMPLETADOS, MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
 import { esInforme } from "@/lib/cotizacion-informe"
 import { normalizeOrdenPapel, type OrdenPapel } from "@/lib/orden-papel"
+import { garantiaDesdeEntregaTexto, normalizarTrabajoARealizar } from "@/lib/orden-ingreso"
 
 // Compatibilidad: algunos bundlers ponen el default dentro de .default
 const fontkit = (fontkitModule as any).default || fontkitModule
@@ -940,6 +941,10 @@ interface OrdenPDFData {
   color?: string | null
   imei?: string | null
   problemaReportado: string
+  /** Texto libre opcional (RECEPCIÓN). Vacío/null: la fila se omite. */
+  trabajoARealizar?: string | null
+  /** organizations.garantia_dias_default (RECEPCIÓN). 0/null: la línea se omite. */
+  garantiaDiasDefault?: number | null
   accesorios?: string | null
   codigoAccesoDispositivo?: string | null
   presupuesto?: number | null
@@ -1968,6 +1973,10 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     terminosFlat.push(...rxWrap(raw, archivoRegular, 6, rxContentW))
   }
   const shownTerminos = terminosFlat.slice(0, 6)
+  // "Garantía: N días desde la entrega" va justo arriba de los términos (que
+  // fijan las condiciones). Null cuando los días son 0/null: no se dibuja.
+  const garantiaLinea = garantiaDesdeEntregaTexto(data.garantiaDiasDefault)
+  const garantiaH = garantiaLinea ? 10 : 0
 
   let ry = height - rxMargin
 
@@ -2117,6 +2126,16 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const rowH2 = rxDrawGridRow([{ x: rxMargin, width: rxContentW, label: "Falla declarada", lines: fallaLines }], ry)
   ry -= rowH2
 
+  // ---- Trabajo a realizar (fila completa, condicional) ----
+  const trabajoARealizar = normalizarTrabajoARealizar(safe(data.trabajoARealizar))
+  if (trabajoARealizar) {
+    const trabajoLines: RxCellLine[] = rxWrap(trabajoARealizar, archivoRegular, 9, rxContentW - rxCellPadX * 2)
+      .slice(0, 3)
+      .map(l => ({ text: l, font: archivoRegular, size: 9, color: MONO.ink }))
+    const rowTrabajo = rxDrawGridRow([{ x: rxMargin, width: rxContentW, label: "Trabajo a realizar", lines: trabajoLines }], ry)
+    ry -= rowTrabajo
+  }
+
   // ---- Observaciones (fila completa, condicional) — fix final-review D1:
   // restaurada del layout viejo (se dibujaba tanto en la copia cliente como
   // en el talón; Task D3 la había dejado afuera), acá con el mismo lenguaje
@@ -2164,7 +2183,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const zoneBContentH = (moneyPresent ? 34 : 0) + (moneyPresent && retiroPresent ? 8 : 0) + (retiroPresent ? 9 : 0)
   // Alto fijo de la zona QR/firma/términos, de su propio arranque (el hueco
   // de 4pt previo a la fila QR) hasta la línea de corte (6pt de respiro).
-  const zoneCH = 4 + 55 + shownTerminos.length * 8 + 6
+  const zoneCH = 4 + 55 + garantiaH + shownTerminos.length * 8 + 6
   const zoneCTopTarget = cutYTarget + zoneCH
   const MIN_GAP = 8
   const leftoverGap = isPrintSheet ? Math.max(0, ry - zoneBContentH - zoneCTopTarget - MIN_GAP * 2) : 0
@@ -2283,7 +2302,11 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   }
   ry = sigRowTop - sigBlockH
 
-  // ---- Términos (compacto) — usa `shownTerminos`, ya medido más arriba ----
+  // ---- Garantía + términos (compacto) — `garantiaLinea`/`shownTerminos` ya medidos más arriba ----
+  if (garantiaLinea) {
+    page.drawText(garantiaLinea, { x: rxMargin, y: ry, size: 7, font: archivoBold, color: MONO.ink })
+    ry -= garantiaH
+  }
   if (shownTerminos.length > 0) {
     for (const l of shownTerminos) {
       page.drawText(l, { x: rxMargin, y: ry, size: 6, font: archivoRegular, color: MONO.faint })
