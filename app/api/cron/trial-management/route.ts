@@ -80,10 +80,18 @@ export async function GET(request: Request) {
     lookbackDate.setDate(lookbackDate.getDate() - ACTIVITY_LOOKBACK_DAYS)
 
     const [ordenesRes, ventasRes, clientesRes] = await Promise.all([
-      supabaseAdmin.from("ordenes_servicio").select("organization_id").in("organization_id", orgIds).gte("created_at", lookbackDate.toISOString()),
+      // ordenes_servicio no tiene created_at: la fecha de alta es fecha_ingreso.
+      supabaseAdmin.from("ordenes_servicio").select("organization_id").in("organization_id", orgIds).gte("fecha_ingreso", lookbackDate.toISOString()),
       supabaseAdmin.from("ventas").select("organization_id").in("organization_id", orgIds).gte("created_at", lookbackDate.toISOString()),
       supabaseAdmin.from("clientes").select("organization_id").in("organization_id", orgIds).gte("created_at", lookbackDate.toISOString()),
     ])
+
+    // Una consulta fallida NO es "sin actividad": abortar antes de mandar mails.
+    const activityError = ordenesRes.error || ventasRes.error || clientesRes.error
+    if (activityError) {
+      console.error("Error en cron trial-management: consulta de actividad", activityError)
+      return NextResponse.json({ error: "Error leyendo actividad" }, { status: 500 })
+    }
 
     // Contar actividad por org
     const activityCounts: Record<string, number> = {}

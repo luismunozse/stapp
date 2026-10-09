@@ -40,6 +40,10 @@ const TABLE_COLUMNS: Record<string, Set<string>> = {
 
 const MAX_ROWS = 1000
 
+// Soporta filtros sobre embebidos ("organizations.activo") como PostgREST.
+const get = (r: Row, c: string): unknown =>
+  c.includes(".") ? c.split(".").reduce<unknown>((acc, k) => (acc as Row | null)?.[k], r) : r[c]
+
 export type PgError = { code: string; message: string }
 export type RecordedQuery = { table: string; ops: Array<{ op: string; args: unknown[] }> }
 export type RecordedWrite = { table: string; op: string; payload: unknown }
@@ -94,17 +98,17 @@ export function createPostgrestFake(
       head = !!opts?.head
       wantCount = !!opts?.count
     })
-    add("eq", (c, v) => { track(c); filters.push((r) => r[c] === v) })
-    add("neq", (c, v) => { track(c); filters.push((r) => r[c] !== v) })
-    add("gte", (c, v) => { track(c); filters.push((r) => r[c] != null && String(r[c]) >= String(v)) })
-    add("lte", (c, v) => { track(c); filters.push((r) => r[c] != null && String(r[c]) <= String(v)) })
-    add("gt", (c, v) => { track(c); filters.push((r) => r[c] != null && String(r[c]) > String(v)) })
-    add("lt", (c, v) => { track(c); filters.push((r) => r[c] != null && String(r[c]) < String(v)) })
-    add("in", (c, vs: unknown[]) => { track(c); filters.push((r) => vs.includes(r[c])) })
-    add("is", (c, v) => { track(c); filters.push((r) => (v === null ? r[c] == null : r[c] === v)) })
+    add("eq", (c, v) => { track(c); filters.push((r) => get(r, c) === v) })
+    add("neq", (c, v) => { track(c); filters.push((r) => get(r, c) !== v) })
+    add("gte", (c, v) => { track(c); filters.push((r) => get(r, c) != null && String(get(r, c)) >= String(v)) })
+    add("lte", (c, v) => { track(c); filters.push((r) => get(r, c) != null && String(get(r, c)) <= String(v)) })
+    add("gt", (c, v) => { track(c); filters.push((r) => get(r, c) != null && String(get(r, c)) > String(v)) })
+    add("lt", (c, v) => { track(c); filters.push((r) => get(r, c) != null && String(get(r, c)) < String(v)) })
+    add("in", (c, vs: unknown[]) => { track(c); filters.push((r) => vs.includes(get(r, c))) })
+    add("is", (c, v) => { track(c); filters.push((r) => (v === null ? get(r, c) == null : get(r, c) === v)) })
     add("not", (c, op, v) => {
       track(c)
-      if (op === "is" && v === null) filters.push((r) => r[c] != null)
+      if (op === "is" && v === null) filters.push((r) => get(r, c) != null)
     })
     add("like", (c) => { track(c) })
     add("order", (c, o?: { ascending?: boolean }) => { track(c); orders.push({ col: c, asc: o?.ascending !== false }) })
@@ -147,10 +151,11 @@ export function createPostgrestFake(
       rows = rows.slice(0, MAX_ROWS)
 
       if (head) return { data: null, error: null, count: wantCount ? total : null }
-      const data = selectCols
+      // Con embebidos (organizations!inner(...)) o * se devuelve la fila completa.
+      const data = selectCols && selectCols.every((c) => /^w+$/.test(c))
         ? rows.map((r) => {
             const out: Row = {}
-            for (const c of selectCols!) if (c in r) out[c] = r[c]
+            for (const c of selectCols!) if (c in r) out[c] = get(r, c)
             return out
           })
         : rows
