@@ -208,7 +208,7 @@ describe("PUT /api/inventario/[id] — stock dual-write via adjust_stock_atomic 
 
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
       data: null,
-      error: { message: "Stock negativo", code: "P0003" },
+      error: { message: "boom", code: "XX000" },
     } as any)
 
     const response = await PUT(createPutRequest({ stock: 0 }), makeParams())
