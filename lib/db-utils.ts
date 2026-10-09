@@ -111,6 +111,7 @@ export function formatOrden(orden: any, options: FormatOrdenOptions = {}) {
     telefonoContacto: orden.telefono_contacto,
     // Campos existentes
     problemaReportado: orden.problema_reportado,
+    trabajoARealizar: orden.trabajo_a_realizar ?? null,
     estado: orden.estado,
     motivoSinCobro: orden.motivo_sin_cobro || null,
     presupuesto: orden.presupuesto,

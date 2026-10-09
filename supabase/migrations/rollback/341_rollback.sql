@@ -1,0 +1,3 @@
+-- Rollback de 341. Restaura crear_recepcion_multiple a la definición de 288
+-- (reaplicar 288_crear_recepcion_multiple.sql) y luego:
+-- ALTER TABLE ordenes_servicio DROP COLUMN IF EXISTS trabajo_a_realizar;

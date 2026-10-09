@@ -6,6 +6,7 @@ import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { queueNotification } from "@/lib/notifications/queue"
 import { formatOrden } from "@/lib/db-utils"
 import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos, ESTADO_LABELS, ESTADOS_COSTO_FINAL_BLOQUEADO } from "@/lib/orden-state-machine"
+import { TRABAJO_A_REALIZAR_MAX, normalizarTrabajoARealizar } from "@/lib/orden-ingreso"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
@@ -45,6 +46,7 @@ const updateOrdenSchema = z.object({
   notasInternas: z.string().optional().nullable(),
   diagnostico: z.string().optional().nullable(),
   problemaReportado: z.string().min(1, "El problema reportado no puede estar vacío").optional(),
+  trabajoARealizar: z.string().max(TRABAJO_A_REALIZAR_MAX, "El trabajo a realizar es demasiado largo").optional().nullable(),
   telefonoContacto: z.string().optional().nullable(),
   porcentajeComision: z.number().min(0).max(100).optional().nullable(),
   horasTrabajadas: z.number().min(0).optional().nullable(),
@@ -375,6 +377,7 @@ export async function PUT(
     if (data.notasInternas !== undefined) updateData.notas_internas = data.notasInternas
     if (data.diagnostico !== undefined) updateData.diagnostico = data.diagnostico
     if (data.problemaReportado !== undefined) updateData.problema_reportado = data.problemaReportado
+    if (data.trabajoARealizar !== undefined) updateData.trabajo_a_realizar = normalizarTrabajoARealizar(data.trabajoARealizar)
     if (data.telefonoContacto !== undefined) updateData.telefono_contacto = data.telefonoContacto
     if (data.horasTrabajadas !== undefined) {
       const h = Number(data.horasTrabajadas)

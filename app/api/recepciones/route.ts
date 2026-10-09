@@ -12,6 +12,7 @@ import { resolveOperador } from "@/lib/operadores"
 import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
 import { isValidImei } from "@/lib/imei"
 import { deletePracticeData } from "@/lib/onboarding/practica"
+import { TRABAJO_A_REALIZAR_MAX, normalizarTrabajoARealizar } from "@/lib/orden-ingreso"
 
 const FEATURE_KEY = "recepcion_multiple"
 
@@ -28,6 +29,7 @@ const equipoSchema = z.object({
   color: z.string().optional(),
   imei: z.string().optional(),
   problemaReportado: z.string().min(1, "El problema es requerido"),
+  trabajoARealizar: z.string().max(TRABAJO_A_REALIZAR_MAX, "El trabajo a realizar es demasiado largo").optional().nullable(),
   accesorios: z.string().optional(),
   codigoAccesoDispositivo: z.string().optional(),
   metadata: z.record(z.any()).optional(),
@@ -103,6 +105,7 @@ export async function POST(request: Request) {
       color: equipo.color ?? null,
       imei: equipo.imei ?? null,
       problemaReportado: equipo.problemaReportado,
+      trabajoARealizar: normalizarTrabajoARealizar(equipo.trabajoARealizar),
       accesorios: equipo.accesorios ?? null,
       codigoAccesoDispositivo: equipo.codigoAccesoDispositivo ?? null,
       metadata: equipo.metadata ?? {},
@@ -213,7 +216,7 @@ export async function POST(request: Request) {
     // renderiza (sin logo: ese comprobante no lo muestra).
     const { data: org } = await supabaseAdmin
       .from("organizations")
-      .select("nombre, nombre_mostrar, telefono, direccion, comprobante_terminos")
+      .select("nombre, nombre_mostrar, telefono, direccion, comprobante_terminos, garantia_dias_default")
       .eq("id", organizationId!)
       .single()
 
@@ -227,6 +230,7 @@ export async function POST(request: Request) {
         organizationTelefono: org?.telefono ?? null,
         organizationDireccion: org?.direccion ?? null,
         organizationComprobanteTerminos: org?.comprobante_terminos ?? null,
+        organizationGarantiaDiasDefault: org?.garantia_dias_default ?? null,
       },
       { status: 201 },
     )

@@ -352,6 +352,12 @@ describe('formatOrden', () => {
     expect(result?.metadata).toEqual({})
   })
 
+  it('mapea trabajo_a_realizar a trabajoARealizar (null cuando falta)', () => {
+    const base = { id: 'o1', numero_orden: 1, cliente_id: 'c1', organization_id: 'org-1' }
+    expect(formatOrden({ ...base, trabajo_a_realizar: 'Cambio de pantalla' })?.trabajoARealizar).toBe('Cambio de pantalla')
+    expect(formatOrden(base)?.trabajoARealizar).toBeNull()
+  })
+
   it('retorna null para input null', () => {
     expect(formatOrden(null)).toBe(null)
   })

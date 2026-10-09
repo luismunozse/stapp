@@ -19,6 +19,7 @@ import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
 import { isValidImei } from "@/lib/imei"
 import { resolveOperador } from "@/lib/operadores"
 import { deletePracticeData } from "@/lib/onboarding/practica"
+import { TRABAJO_A_REALIZAR_MAX, normalizarTrabajoARealizar } from "@/lib/orden-ingreso"
 
 // Generar token público único
 function generatePublicToken(): string {
@@ -40,6 +41,7 @@ const ordenSchema = z.object({
   color: z.string().optional(),
   imei: z.string().optional(),
   problemaReportado: z.string().min(1, "El problema es requerido"),
+  trabajoARealizar: z.string().max(TRABAJO_A_REALIZAR_MAX, "El trabajo a realizar es demasiado largo").optional().nullable(),
   accesorios: z.string().optional(),
   codigoAccesoDispositivo: z.string().optional(),
   presupuesto: z.number().optional(),
@@ -298,6 +300,7 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const data = ordenSchema.parse(body)
+    const trabajoARealizar = normalizarTrabajoARealizar(data.trabajoARealizar)
 
     // Server-side IMEI validation: only when tipo marks campo imei as validacion "imei"
     if (data.imei && data.imei.trim() && data.tipoDispositivo) {
@@ -401,6 +404,9 @@ export async function POST(request: Request) {
         color: data.color || null,
         imei: data.imei || null,
         problema_reportado: data.problemaReportado,
+        // Solo se manda cuando hay texto: un alta sin el campo no depende de que
+        // la migracion 341 ya este aplicada.
+        ...(trabajoARealizar ? { trabajo_a_realizar: trabajoARealizar } : {}),
         accesorios: data.accesorios || null,
         password_dispositivo: data.codigoAccesoDispositivo || null,
         presupuesto: data.presupuesto || null,
@@ -550,7 +556,7 @@ export async function POST(request: Request) {
     // Obtener datos de la organización para el mensaje de WhatsApp y comprobante térmico
     const { data: org } = await supabaseAdmin
       .from("organizations")
-      .select("nombre, nombre_mostrar, slug, moneda, zona_horaria, logo_url, telefono, direccion, comprobante_terminos")
+      .select("nombre, nombre_mostrar, slug, moneda, zona_horaria, logo_url, telefono, direccion, comprobante_terminos, garantia_dias_default")
       .eq("id", organizationId!)
       .single()
 
@@ -574,6 +580,8 @@ export async function POST(request: Request) {
       organizationTelefono: org?.telefono ?? null,
       organizationDireccion: org?.direccion ?? null,
       organizationComprobanteTerminos: org?.comprobante_terminos ?? null,
+      organizationGarantiaDiasDefault: (org as any)?.garantia_dias_default ?? null,
+      trabajoARealizar: orden.trabajo_a_realizar ?? null,
     }
 
     // Fire-and-forget customer notification on order creation (reuses CAMBIO_ESTADO)
