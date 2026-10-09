@@ -29,6 +29,11 @@ export interface CountryConfig {
   personalIdInputMode: "numeric" | "text"
   /** Etiqueta del ID fiscal empresarial (ej: "CUIT", "RFC", "RUT") */
   taxIdLabel: string
+  /**
+   * Etiqueta corta para un campo que puede guardar el documento personal o el
+   * ID fiscal (ej: "NIF/NIE"). Sin valor se compone con las dos etiquetas.
+   */
+  combinedIdLabel?: string
   /** Regex para validar el ID fiscal empresarial */
   taxIdRegex: RegExp
   /** Placeholder para el campo de ID empresarial */
@@ -97,6 +102,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     personalIdPlaceholder: "12.345.678-9",
     personalIdInputMode: "text",
     taxIdLabel: "RUT Empresa",
+    combinedIdLabel: "RUT",
     taxIdRegex: /^(\d{1,2}\.?\d{3}\.?\d{3}-?[0-9kK])?$/,
     taxIdPlaceholder: "76.123.456-7",
     taxIdInputMode: "text",
@@ -422,6 +428,7 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
     personalIdPlaceholder: "12345678Z",
     personalIdInputMode: "text",
     taxIdLabel: "NIF",
+    combinedIdLabel: "NIF/NIE",
     // NIF/CIF de empresa, o DNI/NIE: los autonomos usan su documento personal como NIF
     taxIdRegex: /^([A-Z]\d{7}[0-9A-Z]|\d{8}-?[A-Z]|[XYZ]\d{7}-?[A-Z])?$/i,
     taxIdPlaceholder: "B12345678",
@@ -451,6 +458,36 @@ export function getCountryConfig(code?: string | null): CountryConfig {
     return COUNTRIES[code as CountryCode]
   }
   return COUNTRIES[DEFAULT_COUNTRY]
+}
+
+/**
+ * Etiqueta del ID fiscal empresarial del país ("CUIT", "NIF", "RFC"...).
+ * Sin país conocido cae en Argentina, así lo que ya se imprime no cambia.
+ */
+export function getTaxIdLabel(code?: string | null): string {
+  return getCountryConfig(code).taxIdLabel
+}
+
+/** Etiqueta del documento personal del país ("DNI", "DNI/NIE", "CPF"...). */
+export function getPersonalIdLabel(code?: string | null): string {
+  return getCountryConfig(code).personalIdLabel
+}
+
+/**
+ * Etiqueta combinada para un campo que puede guardar el documento personal o
+ * el ID fiscal (ej: "CUIT/DNI"). Si el país define `combinedIdLabel` se usa tal
+ * cual, sin importar `orden`; si no, `orden` conserva el orden que ya usaba
+ * cada documento. Para Argentina da exactamente "DNI/CUIT" o "CUIT/DNI".
+ */
+export function getCombinedIdLabel(
+  code: string | null | undefined,
+  orden: "personal-primero" | "fiscal-primero",
+): string {
+  const { personalIdLabel, taxIdLabel, combinedIdLabel } = getCountryConfig(code)
+  if (combinedIdLabel) return combinedIdLabel
+  return orden === "personal-primero"
+    ? `${personalIdLabel}/${taxIdLabel}`
+    : `${taxIdLabel}/${personalIdLabel}`
 }
 
 /**
