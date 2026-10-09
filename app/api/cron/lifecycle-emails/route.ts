@@ -49,6 +49,12 @@ async function logEmail(
 
 export const maxDuration = 60
 
+// PostgREST devuelve como maximo 1000 filas por request.
+const ORDERS_PAGE_SIZE = 1000
+// El cron corre una vez por dia: 7 dias de margen cubren una semana de runs
+// caidos sin mandar felicitaciones por umbrales cruzados hace meses.
+const MILESTONE_RECENT_DAYS = 7
+
 export async function GET(request: Request) {
   const authError = requireCronAuth(request)
   if (authError) return authError
@@ -83,6 +89,35 @@ export async function GET(request: Request) {
       .eq("rol", "ADMIN")
 
     const adminMap = new Map((allAdmins || []).map(a => [a.organization_id, a]))
+
+    // Historial de ordenes en bulk (win-back + milestones). ordenes_servicio NO
+    // tiene created_at: la fecha de alta es fecha_ingreso. Se lee ANTES de mandar
+    // cualquier mail: si la consulta falla se aborta el run en vez de tratar a
+    // todas las orgs como "sin actividad". PostgREST corta en 1000 filas, asi que
+    // se pagina; sin eso los conteos de milestones quedan truncados.
+    const ordenFechasByOrg = new Map<string, string[]>() // fecha_ingreso desc por org
+    for (let from = 0; ; from += ORDERS_PAGE_SIZE) {
+      const { data: page, error: ordersError } = await supabaseAdmin
+        .from("ordenes_servicio")
+        .select("id, organization_id, fecha_ingreso")
+        .in("organization_id", orgIds)
+        .not("fecha_ingreso", "is", null)
+        .order("fecha_ingreso", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, from + ORDERS_PAGE_SIZE - 1)
+
+      if (ordersError) {
+        console.error("Error en cron lifecycle-emails: consulta de ordenes_servicio", ordersError)
+        return NextResponse.json({ error: "Error leyendo ordenes" }, { status: 500 })
+      }
+
+      for (const row of page || []) {
+        const list = ordenFechasByOrg.get(row.organization_id)
+        if (list) list.push(row.fecha_ingreso)
+        else ordenFechasByOrg.set(row.organization_id, [row.fecha_ingreso])
+      }
+      if (!page || page.length < ORDERS_PAGE_SIZE) break
+    }
 
     // Helper para enviar un lifecycle email — pasa por el kill switch del resolver.
     async function trySend(org: { id: string; nombre: string; slug: string }, emailType: LifecycleEmailType, extra?: { diasRestantes?: number; milestone?: { tipo: string; valor: number } }) {
@@ -226,23 +261,10 @@ export async function GET(request: Request) {
     // ============================================
     // 5. WIN-BACK (bulk, sin N+1)
     // ============================================
-    const { data: allOrders } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("organization_id, created_at")
-      .in("organization_id", orgIds)
-      .order("created_at", { ascending: false })
-
-    // Última actividad por org
-    const lastActivityMap = new Map<string, Date>()
-    for (const order of allOrders || []) {
-      if (!lastActivityMap.has(order.organization_id)) {
-        lastActivityMap.set(order.organization_id, new Date(order.created_at))
-      }
-    }
-
     for (const org of allOrgs) {
-      const lastActivity = lastActivityMap.get(org.id)
-      if (!lastActivity) continue
+      const ultimaOrden = ordenFechasByOrg.get(org.id)?.[0]
+      if (!ultimaOrden) continue
+      const lastActivity = new Date(ultimaOrden)
 
       const daysSince = Math.floor((now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60 * 24))
 
@@ -256,18 +278,20 @@ export async function GET(request: Request) {
     // ============================================
     // 6. MILESTONES (bulk, sin N+1)
     // ============================================
-    const orderCounts: Record<string, number> = {}
-    for (const o of allOrders || []) {
-      orderCounts[o.organization_id] = (orderCounts[o.organization_id] || 0) + 1
-    }
-
     const milestoneThresholds = [50, 100, 250, 500, 1000]
     for (const org of allOrgs) {
-      const total = orderCounts[org.id] || 0
+      const fechas = ordenFechasByOrg.get(org.id) || [] // desc: la mas nueva primero
+      const total = fechas.length
       for (const threshold of milestoneThresholds) {
         if (total >= threshold && total < threshold + 5) {
-          if (await trySend(org, "MILESTONE", { milestone: { tipo: "ordenes", valor: threshold } })) {
-            results.milestones++
+          // Solo se festeja un umbral recien cruzado: la orden numero `threshold`
+          // (la t-esima mas vieja) tiene que ser de los ultimos MILESTONE_RECENT_DAYS.
+          const cruzadoEl = new Date(fechas[total - threshold])
+          const diasDesdeCruce = (now.getTime() - cruzadoEl.getTime()) / (1000 * 60 * 60 * 24)
+          if (diasDesdeCruce <= MILESTONE_RECENT_DAYS) {
+            if (await trySend(org, "MILESTONE", { milestone: { tipo: "ordenes", valor: threshold } })) {
+              results.milestones++
+            }
           }
           break
         }
