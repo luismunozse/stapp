@@ -109,9 +109,8 @@ describe("GET /api/ventas/[id]/devolucion", () => {
 describe("POST /api/ventas/[id]/devolucion", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Force the JS fallback path: the auth/validation tests all return before the RPC
-    // is called, so this mock is harmless for them but documents intent — these tests
-    // cover the fallback path, not the RPC path (see devolucion-atomica.test.ts).
+    // La RPC "no existe": los tests de auth y validación cortan antes de
+    // llamarla, así que este mock solo asegura que no se llegue a escribir.
     vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
       if (fn === "registrar_devolucion_atomica") {
         return Promise.resolve({
