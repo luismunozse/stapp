@@ -56,7 +56,6 @@ const ventaSchema = z.object({
   descuentoMotivo: z.string().nullable().optional(),
   pagosParcial: z.boolean().optional(),
   idempotencyKey: z.string().max(100).nullable().optional(),
-  depositoId: z.string().min(1).nullable().optional(),
   pagos: z.array(z.object({
     // Antes z.string(): un método inexistente llegaba al SQL y fallaba el cast
     // al enum con un 400 críptico.
