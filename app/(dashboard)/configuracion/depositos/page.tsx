@@ -231,7 +231,7 @@ export default function DepositosPage() {
                   Principal
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Solo uno puede ser principal. Es el default cuando una operación no especifica depósito.
+                  Solo uno por sucursal puede ser principal. Es el default cuando una operación no especifica depósito.
                 </div>
               </div>
               <Switch

@@ -41,7 +41,7 @@ export async function PUT(
     // Verificar pertenencia + obtener estado actual (para validar transiciones)
     const { data: existing, error: fetchErr } = await supabaseAdmin
       .from("depositos")
-      .select("id, principal, activo")
+      .select("id, principal, activo, sucursal_id")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .is("deleted_at", null)
@@ -65,12 +65,14 @@ export async function PUT(
       )
     }
 
-    // Promote: demote actual principal antes
+    // Promote: demote del principal actual de ESA sucursal (uno por sucursal,
+    // migración 221). Sin el filtro se caía el principal de todas las demás.
     if (data.principal === true && !existing.principal) {
       await supabaseAdmin
         .from("depositos")
         .update({ principal: false })
         .eq("organization_id", organizationId!)
+        .eq("sucursal_id", existing.sucursal_id)
         .eq("principal", true)
         .is("deleted_at", null)
     }
