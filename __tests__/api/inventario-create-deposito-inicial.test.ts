@@ -12,11 +12,15 @@ vi.mock("@/lib/webhooks/dispatcher", () => ({
   emitWebhookEvent: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock("@/lib/sucursal", () => ({
-  sucursalParaLectura: vi.fn(),
+// Simula la cookie de sucursal activa: es un filtro de vista (incluso para ADMIN)
+// y la validación del depósito NO debe depender de ella.
+vi.mock("@/lib/sucursal", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/sucursal")>()),
+  sucursalParaLectura: vi.fn().mockResolvedValue({ verTodas: false, sucursalId: "suc-cookie" }),
 }))
 
-import { sucursalParaLectura } from "@/lib/sucursal"
+import { DEPOSITO_INVALIDO } from "@/lib/depositos"
+import { SUCURSAL_NINGUNA } from "@/lib/sucursal"
 import { POST } from "@/app/api/inventario/route"
 
 const itemRow = {
@@ -54,14 +58,20 @@ function setup(opts: {
   principal?: string | null
   detalle?: { data: any; error: any }
   stock?: number
+  depositoError?: { message: string } | null
 }) {
-  const depositos = createChainMock(opts.deposito ?? null)
+  const depositos = createChainMock(opts.deposito ?? null, opts.depositoError ?? null)
   const inventario = createChainMock({ ...itemRow, stock: opts.stock ?? 5 })
   const detalle = createChainMock(
     opts.detalle?.data ?? [{ id: "det-1" }],
     opts.detalle?.error ?? null
   )
-  mockSupabaseFrom({ depositos, inventario, inventario_depositos: detalle, audit_logs: createChainMock(null) })
+  mockSupabaseFrom({
+    organizations: createChainMock({ vendedores_administran_inventario: true }),
+    depositos,
+    inventario, inventario_depositos: detalle,
+    audit_logs: createChainMock(null),
+  })
   vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
     data: opts.principal === undefined ? "dep-principal" : opts.principal,
     error: null,
@@ -73,36 +83,55 @@ describe("POST /api/inventario — depósito del stock inicial", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
-    vi.mocked(sucursalParaLectura).mockResolvedValue({ verTodas: true, sucursalId: null } as any)
   })
 
-  it("usuario atado a una sucursal: el depósito se filtra por esa sucursal y uno ajeno da 400", async () => {
-    vi.mocked(sucursalParaLectura).mockResolvedValue({ verTodas: false, sucursalId: "suc-1" } as any)
+  it("VENDEDOR con sucursal: el depósito se filtra por su sucursal y uno ajeno da 400", async () => {
+    mockAuthSuccess({ role: "VENDEDOR", organizationId: "org-1", sucursalId: "suc-1" })
     const { depositos, inventario } = setup({ deposito: null })
     const res = await post({ depositoId: "dep-otra-sucursal" })
     const { status, body } = await parseResponse(res)
 
     expect(status).toBe(400)
-    expect(body.error).toBe("El depósito elegido no es válido")
+    expect(body.error).toBe(DEPOSITO_INVALIDO)
     expect(depositos.eq).toHaveBeenCalledWith("sucursal_id", "suc-1")
     expect(inventario.insert).not.toHaveBeenCalled()
   })
 
-  it("usuario atado a una sucursal con depósito propio: 201", async () => {
-    vi.mocked(sucursalParaLectura).mockResolvedValue({ verTodas: false, sucursalId: "suc-1" } as any)
+  it("VENDEDOR con sucursal y depósito propio: 201", async () => {
+    mockAuthSuccess({ role: "VENDEDOR", organizationId: "org-1", sucursalId: "suc-1" })
     const { depositos } = setup({ deposito: { id: "dep-2" } })
     const res = await post({ depositoId: "dep-2" })
 
     expect((await parseResponse(res)).status).toBe(201)
     expect(depositos.eq).toHaveBeenCalledWith("sucursal_id", "suc-1")
-    expect(sucursalParaLectura).toHaveBeenCalledWith({ role: "ADMIN", userSucursalId: null })
   })
 
-  it("verTodas: no filtra por sucursal", async () => {
-    const { depositos } = setup({ deposito: { id: "dep-2" } })
-    await post({ depositoId: "dep-2" })
+  it("no-admin sin sucursal asignada: se rechaza (fail-closed) y no inserta", async () => {
+    mockAuthSuccess({ role: "VENDEDOR", organizationId: "org-1", sucursalId: null })
+    const { depositos, inventario } = setup({ deposito: null })
+    const res = await post({ depositoId: "dep-2" })
 
+    expect((await parseResponse(res)).status).toBe(400)
+    expect(depositos.eq).toHaveBeenCalledWith("sucursal_id", SUCURSAL_NINGUNA)
+    expect(inventario.insert).not.toHaveBeenCalled()
+  })
+
+  it("ADMIN con sucursal asignada (cookie): no filtra por sucursal, puede elegir cualquier depósito de la org", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1", sucursalId: "suc-1" })
+    const { depositos } = setup({ deposito: { id: "dep-de-suc-b" } })
+    const res = await post({ depositoId: "dep-de-suc-b" })
+
+    expect((await parseResponse(res)).status).toBe(201)
     expect(depositos.eq).not.toHaveBeenCalledWith("sucursal_id", expect.anything())
+  })
+
+  it("error de Supabase al validar el depósito: 500 y no inserta", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const { inventario } = setup({ deposito: null, depositoError: { message: "boom" } })
+    const res = await post({ depositoId: "dep-2" })
+
+    expect((await parseResponse(res)).status).toBe(500)
+    expect(inventario.insert).not.toHaveBeenCalled()
   })
 
   it("valida el depósito contra la org, no borrado y activo (antes de insertar)", async () => {
@@ -111,7 +140,7 @@ describe("POST /api/inventario — depósito del stock inicial", () => {
     const { status, body } = await parseResponse(res)
 
     expect(status).toBe(400)
-    expect(body.error).toBe("El depósito elegido no es válido")
+    expect(body.error).toBe(DEPOSITO_INVALIDO)
     expect(depositos.eq).toHaveBeenCalledWith("id", "dep-ajeno")
     expect(depositos.eq).toHaveBeenCalledWith("organization_id", "org-1")
     expect(depositos.eq).toHaveBeenCalledWith("activo", true)

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireInventarioAccess, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { sucursalParaLectura } from "@/lib/sucursal"
+import { depositoPermitido, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { formatInventario } from "@/lib/db-utils"
 import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
@@ -230,29 +230,17 @@ export async function POST(request: Request) {
     const data = inventarioSchema.parse(body)
 
     // Límite de seguridad: nunca confiar en un depósito que mandó el cliente.
-    // Tiene que ser de ESTA org, no estar borrado, estar activo y ser uno que
-    // GET /api/depositos le listaría a este usuario (mismo filtro de sucursal).
+    // depositoPermitido aplica la regla única: de ESTA org, activo, no borrado y,
+    // si no es ADMIN, de su propia sucursal (el ADMIN no depende de la cookie).
     if (data.depositoId) {
-      const lectura = await sucursalParaLectura({
+      const permitido = await depositoPermitido({
+        depositoId: data.depositoId,
+        organizationId: organizationId!,
         role,
         userSucursalId: session!.user.sucursalId ?? null,
       })
-      let depositoQuery = supabaseAdmin
-        .from("depositos")
-        .select("id")
-        .eq("id", data.depositoId)
-        .eq("organization_id", organizationId!)
-        .is("deleted_at", null)
-        .eq("activo", true)
-      if (!lectura.verTodas && lectura.sucursalId) {
-        depositoQuery = depositoQuery.eq("sucursal_id", lectura.sucursalId)
-      }
-      const { data: deposito } = await depositoQuery.maybeSingle()
-      if (!deposito) {
-        return NextResponse.json(
-          { error: "El depósito elegido no es válido" },
-          { status: 400 }
-        )
+      if (!permitido) {
+        return NextResponse.json({ error: DEPOSITO_INVALIDO }, { status: 400 })
       }
     }
 
