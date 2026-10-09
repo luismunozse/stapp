@@ -146,6 +146,10 @@ export function TransferirStockDialog({
               Gestionar depósitos
             </a>
           </div>
+        ) : !data.some((d) => d.activo && d.puedeOrigen) ? (
+          <div className="text-sm text-muted-foreground py-4 text-center">
+            Tu sucursal no tiene depósitos con este producto para transferir.
+          </div>
         ) : (
           <div className="space-y-3 py-2">
             {discrepancia !== 0 && (
