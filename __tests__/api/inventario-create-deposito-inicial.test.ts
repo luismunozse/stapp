@@ -13,14 +13,14 @@ vi.mock("@/lib/webhooks/dispatcher", () => ({
 }))
 
 // Simula la cookie de sucursal activa: es un filtro de vista (incluso para ADMIN)
-// y la validación del depósito NO debe depender de ella.
+// y la validación del depósito NO debe depender de ella. Por defecto: "todas".
 vi.mock("@/lib/sucursal", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/sucursal")>()),
-  sucursalParaLectura: vi.fn().mockResolvedValue({ verTodas: false, sucursalId: "suc-cookie" }),
+  sucursalParaLectura: vi.fn().mockResolvedValue({ verTodas: true, sucursalId: null }),
 }))
 
 import { DEPOSITO_INVALIDO } from "@/lib/depositos"
-import { SUCURSAL_NINGUNA } from "@/lib/sucursal"
+import { SUCURSAL_NINGUNA, sucursalParaLectura } from "@/lib/sucursal"
 import { POST } from "@/app/api/inventario/route"
 
 const itemRow = {
@@ -82,6 +82,7 @@ function setup(opts: {
 describe("POST /api/inventario — depósito del stock inicial", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(sucursalParaLectura).mockResolvedValue({ verTodas: true, sucursalId: null })
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
   })
 
@@ -218,5 +219,75 @@ describe("POST /api/inventario — depósito del stock inicial", () => {
     expect(status).toBe(201)
     expect(body.id).toBe("inv-new")
     expect(body.advertencia).toBe("El stock quedó en el depósito principal")
+  })
+
+  describe("sin depositoId: depósito por defecto de la sucursal", () => {
+    it("VENDEDOR de la sucursal B: la fila sembrada se mueve al depósito de B", async () => {
+      mockAuthSuccess({ role: "VENDEDOR", organizationId: "org-1", sucursalId: "suc-b" })
+      vi.mocked(sucursalParaLectura).mockResolvedValue({ verTodas: false, sucursalId: "suc-b" })
+      const { depositos, detalle } = setup({ deposito: { id: "dep-b" } })
+      const res = await post()
+      const { status, body } = await parseResponse(res)
+
+      expect(status).toBe(201)
+      expect(body.advertencia).toBeUndefined()
+      expect(depositos.eq).toHaveBeenCalledWith("sucursal_id", "suc-b")
+      expect(depositos.eq).toHaveBeenCalledWith("principal", true)
+      expect(detalle.update).toHaveBeenCalledWith({ deposito_id: "dep-b" })
+      expect(detalle.eq).toHaveBeenCalledWith("deposito_id", "dep-principal")
+    })
+
+    it("VENDEDOR cuya sucursal ya es la de Casa Central: no mueve nada", async () => {
+      mockAuthSuccess({ role: "VENDEDOR", organizationId: "org-1", sucursalId: "suc-cc" })
+      vi.mocked(sucursalParaLectura).mockResolvedValue({ verTodas: false, sucursalId: "suc-cc" })
+      const { detalle } = setup({ deposito: { id: "dep-principal" } })
+      const res = await post()
+
+      expect((await parseResponse(res)).status).toBe(201)
+      expect(detalle.update).not.toHaveBeenCalled()
+      expect(detalle.insert).not.toHaveBeenCalled()
+    })
+
+    it("ADMIN viendo todas: no resuelve depósito ni mueve nada", async () => {
+      const { depositos, detalle } = setup({ deposito: { id: "dep-b" } })
+      const res = await post()
+
+      expect((await parseResponse(res)).status).toBe(201)
+      expect(depositos.select).not.toHaveBeenCalled()
+      expect(detalle.update).not.toHaveBeenCalled()
+    })
+
+    it("con depositoId explícito manda el explícito, no el de la sucursal", async () => {
+      mockAuthSuccess({ role: "VENDEDOR", organizationId: "org-1", sucursalId: "suc-b" })
+      vi.mocked(sucursalParaLectura).mockResolvedValue({ verTodas: false, sucursalId: "suc-b" })
+      const { detalle } = setup({ deposito: { id: "dep-2" } })
+      const res = await post({ depositoId: "dep-2" })
+
+      expect((await parseResponse(res)).status).toBe(201)
+      expect(detalle.update).toHaveBeenCalledWith({ deposito_id: "dep-2" })
+    })
+
+    it("stock 0: no resuelve el depósito por defecto", async () => {
+      mockAuthSuccess({ role: "VENDEDOR", organizationId: "org-1", sucursalId: "suc-b" })
+      vi.mocked(sucursalParaLectura).mockResolvedValue({ verTodas: false, sucursalId: "suc-b" })
+      const { depositos, detalle } = setup({ deposito: { id: "dep-b" }, stock: 0 })
+      const res = await post({ stock: 0 })
+
+      expect((await parseResponse(res)).status).toBe(201)
+      expect(depositos.select).not.toHaveBeenCalled()
+      expect(detalle.update).not.toHaveBeenCalled()
+    })
+
+    it("si el movimiento falla responde 201 con advertencia", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => {})
+      mockAuthSuccess({ role: "VENDEDOR", organizationId: "org-1", sucursalId: "suc-b" })
+      vi.mocked(sucursalParaLectura).mockResolvedValue({ verTodas: false, sucursalId: "suc-b" })
+      setup({ deposito: { id: "dep-b" }, detalle: { data: null, error: { message: "boom" } } })
+      const res = await post()
+      const { status, body } = await parseResponse(res)
+
+      expect(status).toBe(201)
+      expect(body.advertencia).toBe("El stock quedó en el depósito principal")
+    })
   })
 })
