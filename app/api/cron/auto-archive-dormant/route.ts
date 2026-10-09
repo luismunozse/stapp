@@ -72,10 +72,15 @@ export async function GET(request: Request) {
     const orgIds = allOrgs.map((o) => o.id)
 
     // 2. Orgs that EVER had a payment row → not eligible (never archive a payer).
-    const { data: paidRows } = await supabaseAdmin
+    const { data: paidRows, error: paidError } = await supabaseAdmin
       .from("subscription_payments")
       .select("organization_id")
       .in("organization_id", orgIds)
+    // Sin datos de pagos no se puede saber quien es pagador: abortar, nunca asumir "nadie pago".
+    if (paidError) {
+      console.error("Error en cron auto-archive-dormant: consulta de pagos", paidError)
+      return NextResponse.json({ error: "Error leyendo pagos" }, { status: 500 })
+    }
     const paidOrgIds = new Set<string>((paidRows || []).map((r) => r.organization_id))
 
     // 3. Activity within the dormancy window. audit_logs covers logins/any
@@ -85,7 +90,8 @@ export async function GET(request: Request) {
         .from("ordenes_servicio")
         .select("organization_id")
         .in("organization_id", orgIds)
-        .gte("created_at", dormancyCutoff.toISOString()),
+        // ordenes_servicio no tiene created_at: la fecha de alta es fecha_ingreso.
+        .gte("fecha_ingreso", dormancyCutoff.toISOString()),
       supabaseAdmin
         .from("ventas")
         .select("organization_id")
@@ -102,6 +108,14 @@ export async function GET(request: Request) {
         .in("organization_id", orgIds)
         .gte("created_at", dormancyCutoff.toISOString()),
     ])
+
+    // Una consulta fallida NO es "sin actividad": archivar con datos faltantes
+    // dejaria a orgs activas como dormidas. Abortar antes de tocar nada.
+    const activityError = ordenesRes.error || ventasRes.error || clientesRes.error || auditRes.error
+    if (activityError) {
+      console.error("Error en cron auto-archive-dormant: consulta de actividad", activityError)
+      return NextResponse.json({ error: "Error leyendo actividad" }, { status: 500 })
+    }
 
     const activeRecently = new Set<string>()
     for (const row of [
