@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { renderHook, act, waitFor } from "@testing-library/react"
 import { useEtiquetaInventario } from "@/components/inventario/use-etiqueta-inventario"
+import * as etiquetaSizeOrg from "@/components/ordenes/etiqueta-size-org"
 import { resetEtiquetaSizeCache } from "@/components/ordenes/etiqueta-size-org"
 import { LABEL_PREFS_KEY } from "@/lib/labels/label-prefs"
 
@@ -135,13 +136,19 @@ describe("useEtiquetaInventario: orden de resolución", () => {
       LABEL_PREFS_KEY,
       JSON.stringify({ medium: "thermal", thermalSize: "40x30", sheetSize: "50x30" }),
     )
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((url: string) => (url === ORD ? Promise.reject(new Error("boom")) : jsonRes({ medio: null, tamano: null }))),
-    )
-    const { result } = renderHook(() => useEtiquetaInventario())
-    await waitFor(() => expect(result.current.ready).toBe(true))
-    expect(result.current.thermalSize).toBe("40x30")
+    stubFetch()
+    // Un fetch que rechaza no alcanza: fetchOrgEtiquetaSize lo atrapa adentro.
+    // Lo que tiene que cubrir el hook es que la función misma rechace.
+    const spy = vi
+      .spyOn(etiquetaSizeOrg, "fetchOrgEtiquetaSize")
+      .mockRejectedValue(new Error("boom"))
+    try {
+      const { result } = renderHook(() => useEtiquetaInventario())
+      await waitFor(() => expect(result.current.ready).toBe(true))
+      expect(result.current.thermalSize).toBe("40x30")
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it("resolver el valor de la org NO dispara ningún PATCH", async () => {
