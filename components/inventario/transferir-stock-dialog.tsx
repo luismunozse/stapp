@@ -14,6 +14,8 @@ interface DepositoStock {
   depositoNombre: string
   principal: boolean
   activo: boolean
+  /** El servidor acepta este deposito como origen para el usuario actual. */
+  puedeOrigen: boolean
   stock: number
   stockReservado: number
   disponible: number
@@ -61,7 +63,7 @@ export function TransferirStockDialog({
         setDiscrepancia(res.discrepancia ?? 0)
         setStockTotal(res.item?.stockTotal ?? 0)
         // Default origen = primer depósito con stock > 0
-        const conStock = rows.find((d) => d.activo && d.disponible > 0)
+        const conStock = rows.find((d) => d.activo && d.puedeOrigen && d.disponible > 0)
         if (conStock) setOrigen(conStock.depositoId)
       })
       .catch(() => setError("Error al cargar depósitos"))
@@ -164,7 +166,7 @@ export function TransferirStockDialog({
                   <SelectValue placeholder="Seleccionar depósito origen" />
                 </SelectTrigger>
                 <SelectContent>
-                  {data.filter((d) => d.activo).map((d) => (
+                  {data.filter((d) => d.activo && d.puedeOrigen).map((d) => (
                     <SelectItem key={d.depositoId} value={d.depositoId}>
                       <div className="flex items-center gap-2">
                         {d.principal && <Star className="h-3 w-3 text-amber-500" />}
