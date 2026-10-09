@@ -145,6 +145,7 @@ export async function DELETE(
       .from("inventario_depositos")
       .select("id", { count: "exact", head: true })
       .eq("deposito_id", id)
+      .eq("organization_id", organizationId!)
       .gt("stock", 0)
 
     if ((stockCount ?? 0) > 0) {
