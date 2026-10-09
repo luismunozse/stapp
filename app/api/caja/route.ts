@@ -8,6 +8,7 @@ import { todayInTimeZone, dayRangeUtc, DEFAULT_TIMEZONE } from "@/lib/timezone"
 const PAGE = 1000
 const LOTE = 100
 const TOP = 10
+const LOTES_EN_PARALELO = 5
 
 type Fila = Record<string, any>
 
@@ -37,50 +38,71 @@ async function cargarSinCobrar(organizationId: string, sucursalId: string | null
   const candidatas = await leerTodo(() => {
     let q = supabaseAdmin
       .from("ordenes_servicio")
-      .select("id, numero_orden, costo_final, total_cobrado")
+      .select("id, numero_orden, costo_final, total_cobrado, descuento_cobro")
       .eq("organization_id", organizationId)
       .in("estado", ["REPARADO", "ENTREGADO"])
       .in("estado_cobro", ["PENDIENTE", "PARCIAL"])
       .not("costo_final", "is", null)
       .gt("costo_final", 0)
       // ordenes_servicio no tiene created_at: la fecha de alta es fecha_ingreso.
-      .order("fecha_ingreso", { ascending: false })
+      .order("fecha_ingreso", { ascending: false, nullsFirst: false })
     if (sucursalId) q = q.eq("sucursal_id", sucursalId)
     return q
   })
 
-  // Lotes chicos en el .in(): una org llega a cientos de candidatas y la URL
-  // de PostgREST tiene tope de largo.
-  const excluidas = new Set<string>()
-  for (let i = 0; i < candidatas.length; i += LOTE) {
-    const ids = candidatas.slice(i, i + LOTE).map((o) => o.id)
-    const [cargos, facturas] = await Promise.all([
-      leerTodo(() =>
-        supabaseAdmin
-          .from("cuenta_corriente")
-          .select("referencia_id")
-          .eq("organization_id", organizationId)
-          .eq("tipo", "CARGO")
-          .eq("referencia_tipo", "ORDEN")
-          .in("referencia_id", ids)
-      ),
-      leerTodo(() =>
-        supabaseAdmin.from("facturas").select("orden_id").eq("estado_pago", "PAGADO").in("orden_id", ids)
-      ),
-    ])
-    for (const c of cargos) excluidas.add(c.referencia_id)
-    for (const f of facturas) excluidas.add(f.orden_id)
-  }
+  // Pendiente real, igual que get_deuda_cliente_sucursal (mig 318) y
+  // clientes/[id]/ordenes-pendientes: costo - descuento - cobrado, con piso en 0
+  // (descuento_cobro null = sin descuento). Una orden sin saldo no es "sin cobrar".
+  const conSaldo = candidatas
+    .map((o) => {
+      const costo = parseFloat(o.costo_final || "0")
+      const descuento = parseFloat(o.descuento_cobro || "0")
+      const cobrado = parseFloat(o.total_cobrado || "0")
+      return { o, costo, cobrado, pendiente: Math.max(costo - descuento - cobrado, 0) }
+    })
+    .filter((x) => x.pendiente > 0)
 
-  const pendientes = candidatas.filter((o) => !excluidas.has(o.id))
+  // Lotes chicos en el .in(): una org llega a cientos de candidatas y la URL
+  // de PostgREST tiene tope de largo. Hasta LOTES_EN_PARALELO lotes a la vez; si
+  // cualquiera falla, Promise.all rechaza y no se devuelve un conteo parcial.
+  const lotes: string[][] = []
+  for (let i = 0; i < conSaldo.length; i += LOTE) {
+    lotes.push(conSaldo.slice(i, i + LOTE).map((x) => x.o.id))
+  }
+  const excluidas = new Set<string>()
+  let siguiente = 0
+  const trabajador = async () => {
+    while (siguiente < lotes.length) {
+      const ids = lotes[siguiente++]
+      const [cargos, facturas] = await Promise.all([
+        leerTodo(() =>
+          supabaseAdmin
+            .from("cuenta_corriente")
+            .select("referencia_id")
+            .eq("organization_id", organizationId)
+            .eq("tipo", "CARGO")
+            .eq("referencia_tipo", "ORDEN")
+            .in("referencia_id", ids)
+        ),
+        leerTodo(() =>
+          supabaseAdmin.from("facturas").select("orden_id").eq("estado_pago", "PAGADO").in("orden_id", ids)
+        ),
+      ])
+      for (const c of cargos) excluidas.add(c.referencia_id)
+      for (const f of facturas) excluidas.add(f.orden_id)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(LOTES_EN_PARALELO, lotes.length) }, trabajador))
+
+  const pendientes = conSaldo.filter((x) => !excluidas.has(x.o.id))
   return {
     count: pendientes.length,
-    ordenes: pendientes.slice(0, TOP).map((o) => ({
+    ordenes: pendientes.slice(0, TOP).map(({ o, costo, cobrado, pendiente }) => ({
       id: o.id,
       numeroOrden: o.numero_orden,
-      costoFinal: parseFloat(o.costo_final || "0"),
-      totalCobrado: parseFloat(o.total_cobrado || "0"),
-      pendiente: parseFloat(o.costo_final || "0") - parseFloat(o.total_cobrado || "0"),
+      costoFinal: costo,
+      totalCobrado: cobrado,
+      pendiente,
     })),
   }
 }

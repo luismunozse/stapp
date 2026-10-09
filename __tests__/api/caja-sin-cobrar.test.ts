@@ -37,18 +37,19 @@ import { GET } from "@/app/api/caja/route"
 // Columnas reales de ordenes_servicio que usa (o podria usar) esta consulta.
 // Notar: no existen created_at ni updated_at.
 const COLUMNAS_ORDENES = new Set([
-  "id", "numero_orden", "costo_final", "total_cobrado", "estado_cobro", "estado",
+  "id", "numero_orden", "costo_final", "total_cobrado", "descuento_cobro", "estado_cobro", "estado",
   "organization_id", "sucursal_id", "fecha_ingreso", "fecha_entrega", "fecha_completado",
 ])
 
 type Fila = Record<string, any>
 const MAX_ROWS = 1000
 
-type Orden = { column: string; ascending?: boolean }
+type Orden = { column: string; ascending?: boolean; nullsFirst?: boolean }
 type Consulta = { tabla: string; ordenes: Orden[]; ins: Array<{ col: string; n: number }> }
 
 function crearFake(tablas: Record<string, Fila[]>, fallan: string[] = []) {
   const consultas: Consulta[] = []
+  const vuelo = { actual: 0, max: 0 }
 
   function from(tabla: string) {
     const usadas: string[] = []
@@ -89,9 +90,9 @@ function crearFake(tablas: Record<string, Fila[]>, fallan: string[] = []) {
       filtros.push((r) => Number(r[c]) > v)
       return chain
     })
-    chain.order = vi.fn((c: string, o?: { ascending?: boolean }) => {
+    chain.order = vi.fn((c: string, o?: { ascending?: boolean; nullsFirst?: boolean }) => {
       reg(c)
-      orders.push({ column: c, ascending: o?.ascending })
+      orders.push({ column: c, ascending: o?.ascending, nullsFirst: o?.nullsFirst })
       return chain
     })
     chain.limit = vi.fn((n: number) => {
@@ -105,8 +106,18 @@ function crearFake(tablas: Record<string, Fila[]>, fallan: string[] = []) {
     chain.maybeSingle = vi.fn(async () => ({ data: null, error: null }))
     chain.single = vi.fn(async () => ({ data: tablas[tabla]?.[0] ?? null, error: null }))
     chain.then = (resolve: any, reject?: any) => {
+      vuelo.actual++
+      vuelo.max = Math.max(vuelo.max, vuelo.actual)
+      return new Promise((r) => setTimeout(r, 0))
+        .then(() => resolver())
+        .finally(() => {
+          vuelo.actual--
+        })
+        .then(resolve, reject)
+    }
+    const resolver = (): Promise<Fila> => {
       if (fallan.includes(tabla)) {
-        return Promise.resolve({ data: null, error: { code: "XX000", message: "boom" }, count: null }).then(resolve, reject)
+        return Promise.resolve({ data: null, error: { code: "XX000", message: "boom" }, count: null })
       }
       if (tabla === "ordenes_servicio") {
         const mala = usadas.find((c) => !COLUMNAS_ORDENES.has(c))
@@ -115,7 +126,7 @@ function crearFake(tablas: Record<string, Fila[]>, fallan: string[] = []) {
             data: null,
             count: null,
             error: { code: "42703", message: `column ordenes_servicio.${mala} does not exist` },
-          }).then(resolve, reject)
+          })
         }
       }
       let rows = (tablas[tabla] ?? []).filter((r) => filtros.every((f) => f(r)))
@@ -132,11 +143,11 @@ function crearFake(tablas: Record<string, Fila[]>, fallan: string[] = []) {
       if (rango) rows = rows.slice(rango[0], rango[1] + 1)
       if (max !== null) rows = rows.slice(0, max)
       rows = rows.slice(0, MAX_ROWS)
-      return Promise.resolve({ data: rows, error: null, count: conConteo ? total : null }).then(resolve, reject)
+      return Promise.resolve({ data: rows, error: null, count: conConteo ? total : null })
     }
     return chain
   }
-  return { from, consultas }
+  return { from, consultas, vuelo }
 }
 
 function montar(tablas: Record<string, Fila[]>, fallan: string[] = []) {
@@ -202,7 +213,7 @@ describe("GET /api/caja: sinCobrar", () => {
 
     expect(res.status).toBe(200)
     const q = fake.consultas.find((c) => c.tabla === "ordenes_servicio")!
-    expect(q.ordenes[0]).toEqual({ column: "fecha_ingreso", ascending: false })
+    expect(q.ordenes[0]).toMatchObject({ column: "fecha_ingreso", ascending: false })
     expect(body.sinCobrar.count).toBe(2)
     expect(body.sinCobrar.ordenes[0]).toMatchObject({ numeroOrden: 7, pendiente: 750, totalCobrado: 250 })
   })
@@ -272,6 +283,54 @@ describe("GET /api/caja: sinCobrar", () => {
     const lotes = fake.consultas.filter((c) => c.tabla !== "ordenes_servicio").flatMap((c) => c.ins)
     expect(lotes.length).toBeGreaterThan(2)
     expect(Math.max(...lotes.map((l) => l.n))).toBeLessThanOrEqual(100)
+  })
+
+  it("ordena fecha_ingreso desc con nullsFirst false (una orden sin fecha no ocupa un lugar del top)", async () => {
+    const fake = montar({ ordenes_servicio: [orden(1)] })
+
+    await pedir()
+
+    const q = fake.consultas.find((c) => c.tabla === "ordenes_servicio")!
+    expect(q.ordenes[0]).toEqual({ column: "fecha_ingreso", ascending: false, nullsFirst: false })
+  })
+
+  it("descuento_cobro: una orden con descuento igual al costo no aparece ni cuenta", async () => {
+    montar({
+      ordenes_servicio: [orden(1, { costo_final: "1000", descuento_cobro: "1000" }), orden(2)],
+    })
+
+    const { body } = await pedir()
+
+    expect(body.sinCobrar.count).toBe(1)
+    expect(body.sinCobrar.ordenes.map((o: any) => o.numeroOrden)).toEqual([2])
+  })
+
+  it("descuento_cobro: el pendiente descuenta el descuento, con piso en 0 (igual que mig 318)", async () => {
+    montar({
+      ordenes_servicio: [
+        orden(1, { costo_final: "1000", descuento_cobro: "200", total_cobrado: "300" }),
+        orden(2, { costo_final: "500", descuento_cobro: "100", total_cobrado: "600" }), // sobrepagada: pendiente 0
+        orden(3, { costo_final: "800", descuento_cobro: null, total_cobrado: "0" }), // null = sin descuento
+      ],
+    })
+
+    const { body } = await pedir()
+
+    expect(body.sinCobrar.count).toBe(2)
+    const porNumero = Object.fromEntries(body.sinCobrar.ordenes.map((o: any) => [o.numeroOrden, o.pendiente]))
+    expect(porNumero).toEqual({ 1: 500, 3: 800 })
+  })
+
+  it("los lotes de consulta corren en paralelo con concurrencia acotada", async () => {
+    const ordenes = Array.from({ length: 2000 }, (_, i) => orden(i + 1)) // 20 lotes
+    const fake = montar({ ordenes_servicio: ordenes })
+
+    const { body } = await pedir()
+
+    expect(body.sinCobrar.count).toBe(2000)
+    // cargos + facturas por lote, hasta 5 lotes a la vez
+    expect(fake.vuelo.max).toBeGreaterThan(2)
+    expect(fake.vuelo.max).toBeLessThanOrEqual(10)
   })
 
   it("no consulta columnas inexistentes de ordenes_servicio", async () => {
