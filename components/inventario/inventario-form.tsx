@@ -910,15 +910,21 @@ export function InventarioForm({
       // precio_compra real con cero. El PUT lo acepta opcional, así que
       // omitirlo deja la columna intacta.
       // `depositoId` sale de `rest` y vuelve solo en el alta (ver depositoAEnviar).
-      const { precioCompra, depositoId: _depositoId, ...rest } = data
+      const { precioCompra, stock, depositoId: _depositoId, ...rest } = data
       const costoField = costoCargado ? { precioCompra } : {}
 
+      // En edicion el stock viaja solo si el operador lo cambio. El de `item` es
+      // una foto de cuando se abrio la lista: reenviarlo tal cual hace que el PUT
+      // lo trate como ajuste absoluto y pise las ventas hechas entre medio.
+      const stockField = !item || stock !== item.stock ? { stock } : {}
+
       const payload = item
-        ? { ...rest, ...costoField, barcode: normalizedBarcode }
+        ? { ...rest, ...costoField, ...stockField, barcode: normalizedBarcode }
         : {
             ...rest,
             ...costoField,
-            ...depositoAEnviar(Number(data.stock)),
+            ...stockField,
+            ...depositoAEnviar(Number(stock)),
             barcode: normalizedBarcode,
             codigo: generatedCode,
             descripcion: "",
