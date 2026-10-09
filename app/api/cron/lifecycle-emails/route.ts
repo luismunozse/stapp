@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getLifecycleEmail, type LifecycleEmailType } from "@/lib/emails/lifecycle-templates"
 import { resolveTemplate } from "@/lib/emails/template-resolver"
 import { requireCronAuth } from "@/lib/cron-auth"
+import { fetchAllRows } from "@/lib/fetch-all-rows"
 
 const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
@@ -49,8 +50,6 @@ async function logEmail(
 
 export const maxDuration = 60
 
-// PostgREST devuelve como maximo 1000 filas por request.
-const ORDERS_PAGE_SIZE = 1000
 // El cron corre una vez por dia: 7 dias de margen cubren una semana de runs
 // caidos sin mandar felicitaciones por umbrales cruzados hace meses.
 const MILESTONE_RECENT_DAYS = 7
@@ -92,31 +91,19 @@ export async function GET(request: Request) {
 
     // Historial de ordenes en bulk (win-back + milestones). ordenes_servicio NO
     // tiene created_at: la fecha de alta es fecha_ingreso. Se lee ANTES de mandar
-    // cualquier mail: si la consulta falla se aborta el run en vez de tratar a
-    // todas las orgs como "sin actividad". PostgREST corta en 1000 filas, asi que
-    // se pagina; sin eso los conteos de milestones quedan truncados.
+    // cualquier mail: si la consulta falla lanza (500) en vez de tratar a todas las
+    // orgs como "sin actividad". fetchAllRows pagina (PostgREST corta en 1000 filas).
+    const ordenes = await fetchAllRows<{ organization_id: string; fecha_ingreso: string }>(
+      "ordenes_servicio",
+      "id, organization_id, fecha_ingreso",
+      (q) => q.in("organization_id", orgIds).not("fecha_ingreso", "is", null),
+      [{ column: "fecha_ingreso", ascending: false }]
+    )
     const ordenFechasByOrg = new Map<string, string[]>() // fecha_ingreso desc por org
-    for (let from = 0; ; from += ORDERS_PAGE_SIZE) {
-      const { data: page, error: ordersError } = await supabaseAdmin
-        .from("ordenes_servicio")
-        .select("id, organization_id, fecha_ingreso")
-        .in("organization_id", orgIds)
-        .not("fecha_ingreso", "is", null)
-        .order("fecha_ingreso", { ascending: false })
-        .order("id", { ascending: false })
-        .range(from, from + ORDERS_PAGE_SIZE - 1)
-
-      if (ordersError) {
-        console.error("Error en cron lifecycle-emails: consulta de ordenes_servicio", ordersError)
-        return NextResponse.json({ error: "Error leyendo ordenes" }, { status: 500 })
-      }
-
-      for (const row of page || []) {
-        const list = ordenFechasByOrg.get(row.organization_id)
-        if (list) list.push(row.fecha_ingreso)
-        else ordenFechasByOrg.set(row.organization_id, [row.fecha_ingreso])
-      }
-      if (!page || page.length < ORDERS_PAGE_SIZE) break
+    for (const row of ordenes) {
+      const list = ordenFechasByOrg.get(row.organization_id)
+      if (list) list.push(row.fecha_ingreso)
+      else ordenFechasByOrg.set(row.organization_id, [row.fecha_ingreso])
     }
 
     // Helper para enviar un lifecycle email — pasa por el kill switch del resolver.

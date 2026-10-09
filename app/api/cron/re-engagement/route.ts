@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { resolveTemplate } from "@/lib/emails/template-resolver"
 import { requireCronAuth } from "@/lib/cron-auth"
+import { fetchAllRows } from "@/lib/fetch-all-rows"
 
 const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
@@ -55,39 +56,24 @@ export async function GET(request: Request) {
     const orgIds = allOrgs.map((o) => o.id)
 
     // 2. Bulk: actividad reciente (orders, ventas, clientes) en los últimos INACTIVITY_DAYS.
-    const [ordenesRes, ventasRes, clientesRes] = await Promise.all([
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select("organization_id")
-        .in("organization_id", orgIds)
-        // ordenes_servicio no tiene created_at: la fecha de alta es fecha_ingreso.
-        .gte("fecha_ingreso", inactivityCutoff.toISOString()),
-      supabaseAdmin
-        .from("ventas")
-        .select("organization_id")
-        .in("organization_id", orgIds)
-        .gte("created_at", inactivityCutoff.toISOString()),
-      supabaseAdmin
-        .from("clientes")
-        .select("organization_id")
-        .in("organization_id", orgIds)
-        .gte("created_at", inactivityCutoff.toISOString()),
+    //    Se pagina (PostgREST trunca en 1000 filas sin error) y cualquier fallo lanza:
+    //    una lectura fallida o truncada NO es "sin actividad".
+    const desde = inactivityCutoff.toISOString()
+    const [ordenes, ventas, clientes] = await Promise.all([
+      // ordenes_servicio no tiene created_at: la fecha de alta es fecha_ingreso.
+      fetchAllRows<{ organization_id: string }>("ordenes_servicio", "organization_id", (q) =>
+        q.in("organization_id", orgIds).gte("fecha_ingreso", desde)
+      ),
+      fetchAllRows<{ organization_id: string }>("ventas", "organization_id", (q) =>
+        q.in("organization_id", orgIds).gte("created_at", desde)
+      ),
+      fetchAllRows<{ organization_id: string }>("clientes", "organization_id", (q) =>
+        q.in("organization_id", orgIds).gte("created_at", desde)
+      ),
     ])
 
-    // Si una consulta de actividad falla NO es "sin actividad": abortar el run
-    // antes de contar a todas las orgs como inactivas y escribir en lifecycle_emails.
-    const activityError = ordenesRes.error || ventasRes.error || clientesRes.error
-    if (activityError) {
-      console.error("Error en cron re-engagement: consulta de actividad", activityError)
-      return NextResponse.json({ error: "Error leyendo actividad" }, { status: 500 })
-    }
-
     const activeRecently = new Set<string>()
-    for (const row of [
-      ...(ordenesRes.data || []),
-      ...(ventasRes.data || []),
-      ...(clientesRes.data || []),
-    ]) {
+    for (const row of [...ordenes, ...ventas, ...clientes]) {
       if (row.organization_id) activeRecently.add(row.organization_id)
     }
 

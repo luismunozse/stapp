@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { resolveTemplate } from "@/lib/emails/template-resolver"
 import { requireCronAuth } from "@/lib/cron-auth"
+import { fetchAllRows } from "@/lib/fetch-all-rows"
 
 const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
@@ -79,23 +80,24 @@ export async function GET(request: Request) {
     const lookbackDate = new Date(now)
     lookbackDate.setDate(lookbackDate.getDate() - ACTIVITY_LOOKBACK_DAYS)
 
-    const [ordenesRes, ventasRes, clientesRes] = await Promise.all([
+    // Paginado: PostgREST trunca en 1000 filas sin error. Cualquier fallo lanza (500).
+    const desde = lookbackDate.toISOString()
+    const [ordenes, ventas, clientes] = await Promise.all([
       // ordenes_servicio no tiene created_at: la fecha de alta es fecha_ingreso.
-      supabaseAdmin.from("ordenes_servicio").select("organization_id").in("organization_id", orgIds).gte("fecha_ingreso", lookbackDate.toISOString()),
-      supabaseAdmin.from("ventas").select("organization_id").in("organization_id", orgIds).gte("created_at", lookbackDate.toISOString()),
-      supabaseAdmin.from("clientes").select("organization_id").in("organization_id", orgIds).gte("created_at", lookbackDate.toISOString()),
+      fetchAllRows<{ organization_id: string }>("ordenes_servicio", "organization_id", (q) =>
+        q.in("organization_id", orgIds).gte("fecha_ingreso", desde)
+      ),
+      fetchAllRows<{ organization_id: string }>("ventas", "organization_id", (q) =>
+        q.in("organization_id", orgIds).gte("created_at", desde)
+      ),
+      fetchAllRows<{ organization_id: string }>("clientes", "organization_id", (q) =>
+        q.in("organization_id", orgIds).gte("created_at", desde)
+      ),
     ])
-
-    // Una consulta fallida NO es "sin actividad": abortar antes de mandar mails.
-    const activityError = ordenesRes.error || ventasRes.error || clientesRes.error
-    if (activityError) {
-      console.error("Error en cron trial-management: consulta de actividad", activityError)
-      return NextResponse.json({ error: "Error leyendo actividad" }, { status: 500 })
-    }
 
     // Contar actividad por org
     const activityCounts: Record<string, number> = {}
-    for (const row of [...(ordenesRes.data || []), ...(ventasRes.data || []), ...(clientesRes.data || [])]) {
+    for (const row of [...ordenes, ...ventas, ...clientes]) {
       activityCounts[row.organization_id] = (activityCounts[row.organization_id] || 0) + 1
     }
 
