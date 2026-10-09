@@ -90,6 +90,7 @@ const equipoVacio = (): EquipoFormValues => ({
   color: "",
   imei: "",
   problemaReportado: "",
+  trabajoARealizar: "",
   codigoAccesoDispositivo: "",
 })
 
@@ -209,6 +210,7 @@ interface RecepcionCreadaResultado {
   organizationTelefono: string | null
   organizationDireccion: string | null
   organizationComprobanteTerminos: string | null
+  organizationGarantiaDiasDefault?: number | null
 }
 
 export function RecepcionForm() {
@@ -625,6 +627,7 @@ export function RecepcionForm() {
       setEquiposEnviados(
         equiposPayload.map((equipo) => ({
           problemaReportado: equipo.problemaReportado,
+          trabajoARealizar: equipo.trabajoARealizar || null,
           tipoDispositivo: equipo.tipoDispositivo,
           marca: equipo.marca || null,
           color: equipo.color || null,

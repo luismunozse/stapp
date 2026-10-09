@@ -29,6 +29,7 @@ export const equipoFormSchema = z.object({
   color: z.string().optional(),
   imei: z.string().optional(),
   problemaReportado: z.string().min(1, "Requerido"),
+  trabajoARealizar: z.string().optional(),
   codigoAccesoDispositivo: z.string().optional(),
 })
 
@@ -222,6 +223,16 @@ export function RecepcionEquipoCard(props: RecepcionEquipoCardProps) {
               ))}
             </div>
           )}
+        </div>
+
+        <div>
+          <Label htmlFor={`trabajo-a-realizar-${props.index}`}>Trabajo a realizar</Label>
+          <Textarea
+            id={`trabajo-a-realizar-${props.index}`}
+            {...props.register(`equipos.${props.index}.trabajoARealizar`)}
+            rows={2}
+            placeholder="Opcional. Ej: cambio de pantalla + batería"
+          />
         </div>
 
         <AccesoriosPicker

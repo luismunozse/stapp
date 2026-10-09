@@ -101,3 +101,15 @@ describe("RecepcionEquipoCard — codigo de acceso", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument()
   })
 })
+
+describe("RecepcionEquipoCard — trabajo a realizar", () => {
+  it("muestra el campo opcional 'Trabajo a realizar' justo debajo de la falla", () => {
+    render(<Harness codigoAcceso="" />)
+    const falla = screen.getByText(/Falla reportada/i)
+    const trabajo = screen.getByText("Trabajo a realizar")
+    expect(trabajo).toBeInTheDocument()
+    // Despues de la falla en el orden del documento.
+    expect(falla.compareDocumentPosition(trabajo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole("textbox", { name: /Trabajo a realizar/i })).not.toBeRequired()
+  })
+})

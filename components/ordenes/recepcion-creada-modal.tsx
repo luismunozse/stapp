@@ -30,6 +30,7 @@ import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
  */
 export interface EquipoRecepcionEnviado {
   problemaReportado: string
+  trabajoARealizar?: string | null
   tipoDispositivo?: string | null
   marca?: string | null
   color?: string | null
@@ -56,6 +57,7 @@ export interface RecepcionCreadaResultado {
   organizationTelefono: string | null
   organizationDireccion: string | null
   organizationComprobanteTerminos: string | null
+  organizationGarantiaDiasDefault?: number | null
 }
 
 interface RecepcionCreadaModalProps {
@@ -111,6 +113,7 @@ export function RecepcionCreadaModal({
     dispositivo: orden.dispositivo,
     imei: equipos[i]?.imei ?? null,
     problemaReportado: equipos[i]?.problemaReportado ?? "",
+    trabajoARealizar: equipos[i]?.trabajoARealizar ?? null,
     accesorios: equipos[i]?.accesorios ?? null,
   }))
 
@@ -207,6 +210,7 @@ export function RecepcionCreadaModal({
                   organizationTelefono: resultado.organizationTelefono,
                   organizationDireccion: resultado.organizationDireccion,
                   organizationComprobanteTerminos: resultado.organizationComprobanteTerminos,
+                  organizationGarantiaDiasDefault: resultado.organizationGarantiaDiasDefault ?? null,
                   firmaDataUrl: firma && firmaMime ? `data:${firmaMime};base64,${firma}` : null,
                   equipos: receiptEquipos,
                 }}

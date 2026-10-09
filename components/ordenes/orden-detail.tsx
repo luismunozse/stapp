@@ -175,6 +175,16 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     )
   }
 
+  const handleSaveTrabajo = async (next: string): Promise<boolean> => {
+    const value = next.trim() || null
+    if (!orden || (value || "") === (orden.trabajoARealizar || "")) return true
+    return saveOrdenField(
+      { trabajoARealizar: value },
+      { trabajoARealizar: value },
+      "Trabajo a realizar actualizado"
+    )
+  }
+
   const handleSaveDiagnostico = async (next: string): Promise<boolean> => {
     const value = next.trim() || null
     if (!orden || (value || "") === (orden.diagnostico || "")) return true
@@ -984,6 +994,18 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   value={orden.problemaReportado || ""}
                   onSave={handleSaveProblema}
                   requireValue
+                />
+              </div>
+
+              {/* Trabajo a realizar (opcional, sale en el comprobante de ingreso) */}
+              <div className="mt-4 pt-4 border-t">
+                <EditableTextField
+                  icon={Hammer}
+                  label="Trabajo a realizar"
+                  value={orden.trabajoARealizar || ""}
+                  onSave={handleSaveTrabajo}
+                  placeholder="Ej: Cambio de pantalla + batería"
+                  emptyHint="Sin trabajo cargado. Haz clic en el lapiz para agregar."
                 />
               </div>
 

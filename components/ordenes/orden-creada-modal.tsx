@@ -37,6 +37,7 @@ interface OrdenCreadaData {
   codigoOrden?: string
   dispositivo: string
   problemaReportado: string
+  trabajoARealizar?: string | null
   presupuesto?: number | null
   fechaPrometida?: string | null
   publicToken?: string | null
@@ -61,6 +62,7 @@ interface OrdenCreadaData {
   organizationTelefono?: string | null
   organizationDireccion?: string | null
   organizationComprobanteTerminos?: string | null
+  organizationGarantiaDiasDefault?: number | null
 }
 
 interface OrdenCreadaModalProps {
@@ -85,6 +87,7 @@ function buildThermalOrden(orden: OrdenCreadaData) {
     accesorios: orden.accesorios ?? null,
     telefonoContacto: orden.telefonoContacto ?? null,
     problemaReportado: orden.problemaReportado,
+    trabajoARealizar: orden.trabajoARealizar ?? null,
     estado: (orden.estado || "RECIBIDO") as OrdenServicio["estado"],
     presupuesto: orden.presupuesto ?? null,
     costoFinal: orden.costoFinal ?? null,
@@ -102,12 +105,14 @@ function buildThermalOrden(orden: OrdenCreadaData) {
     organizationTelefono: orden.organizationTelefono ?? null,
     organizationDireccion: orden.organizationDireccion ?? null,
     organizationComprobanteTerminos: orden.organizationComprobanteTerminos ?? null,
+    organizationGarantiaDiasDefault: orden.organizationGarantiaDiasDefault ?? null,
   } as unknown as OrdenServicio & {
     organizationName?: string | null
     organizationLogoUrl?: string | null
     organizationTelefono?: string | null
     organizationDireccion?: string | null
     organizationComprobanteTerminos?: string | null
+    organizationGarantiaDiasDefault?: number | null
   }
 }
 

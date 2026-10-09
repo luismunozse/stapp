@@ -192,3 +192,14 @@ describe("resolverAccesoriosDisponibles", () => {
     expect(result.length).toBeGreaterThan(0)
   })
 })
+
+describe("construirEquipoPayload — trabajo a realizar", () => {
+  it("lleva trabajoARealizar al payload del equipo", () => {
+    const result = construirEquipoPayload(
+      { ...equipoFixture, trabajoARealizar: "Cambio de pantalla" },
+      sideVacio(),
+      tiposFixture
+    )
+    expect(result.trabajoARealizar).toBe("Cambio de pantalla")
+  })
+})

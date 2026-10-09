@@ -214,6 +214,26 @@ describe("OrdenForm — borrador local", () => {
     )
   })
 
+  it("el campo opcional 'Trabajo a realizar' esta bajo el problema y se restaura del borrador", async () => {
+    const base = draftData()
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        version: 3,
+        savedAt: Date.now(),
+        data: { ...base, form: { ...base.form, trabajoARealizar: "Cambio de pantalla" } },
+      }),
+    )
+
+    await renderForm()
+
+    const problema = screen.getByPlaceholderText("Describa el problema del equipo...")
+    const trabajo = screen.getByLabelText(/Trabajo a realizar/i)
+    expect(trabajo).toHaveValue("Cambio de pantalla")
+    expect(trabajo).not.toBeRequired()
+    expect(problema.compareDocumentPosition(trabajo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('"Descartar" borra el borrador y limpia el formulario', async () => {
     window.localStorage.setItem(DRAFT_KEY, draftEnvelope())
 

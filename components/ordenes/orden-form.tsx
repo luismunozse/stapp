@@ -50,6 +50,7 @@ const ordenSchema = z.object({
   color: z.string().optional(),
   imei: z.string().optional().or(z.literal("")),
   problemaReportado: z.string().min(1, "El problema es requerido"),
+  trabajoARealizar: z.string().optional(),
   accesorios: z.string().optional(),
   codigoAccesoDispositivo: z.string().optional(),
   telefonoContacto: z.string().optional(),
@@ -75,6 +76,7 @@ function ordenFormDefaults(): OrdenFormData {
     color: "",
     imei: "",
     problemaReportado: "",
+    trabajoARealizar: "",
     accesorios: "",
     codigoAccesoDispositivo: "",
     telefonoContacto: "",
@@ -179,6 +181,7 @@ interface OrdenCreadaData {
   codigoOrden?: string
   dispositivo: string
   problemaReportado: string
+  trabajoARealizar?: string | null
   presupuesto?: number | null
   fechaPrometida?: string | null
   publicToken?: string | null
@@ -203,6 +206,7 @@ interface OrdenCreadaData {
   organizationTelefono?: string | null
   organizationDireccion?: string | null
   organizationComprobanteTerminos?: string | null
+  organizationGarantiaDiasDefault?: number | null
 }
 
 export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, inSheet = false }: OrdenFormProps) {
@@ -1219,6 +1223,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         codigoOrden: nuevaOrden.codigoOrden || undefined,
         dispositivo: data.dispositivo,
         problemaReportado: data.problemaReportado,
+        trabajoARealizar: data.trabajoARealizar?.trim() || null,
         presupuesto: data.presupuesto && data.presupuesto > 0 ? data.presupuesto : null,
         fechaPrometida: data.fechaPrometida || null,
         publicToken: nuevaOrden.publicToken || null,
@@ -1243,6 +1248,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         organizationTelefono: nuevaOrden.organizationTelefono ?? null,
         organizationDireccion: nuevaOrden.organizationDireccion ?? null,
         organizationComprobanteTerminos: nuevaOrden.organizationComprobanteTerminos ?? null,
+        organizationGarantiaDiasDefault: nuevaOrden.organizationGarantiaDiasDefault ?? null,
       })
       setShowOrdenCreadaModal(true)
     } catch (error) {
@@ -1605,6 +1611,17 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                 {errors.problemaReportado.message}
               </p>
             )}
+          </div>
+
+          {/* Trabajo a realizar: opcional, sale en el comprobante de ingreso */}
+          <div>
+            <Label htmlFor="trabajoARealizar">Trabajo a realizar (Opcional)</Label>
+            <Textarea
+              id="trabajoARealizar"
+              {...register("trabajoARealizar")}
+              placeholder="Ej: Cambio de pantalla + batería"
+              rows={2}
+            />
           </div>
           </>)}
 
