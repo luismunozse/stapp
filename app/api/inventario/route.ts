@@ -24,8 +24,52 @@ const inventarioSchema = z.object({
   puntoReorden: z.number().int().min(0).nullable().optional(),
   barcode: z.string().nullable().optional(),
   ubicacion: z.string().max(200).nullable().optional(),
+  // Depósito donde cae el stock inicial (cuid). Opcional: sin él, va al principal.
+  depositoId: z.string().min(1).nullable().optional(),
   diasGarantiaDefault: z.number().int().min(0).nullable().optional(),
 })
+
+async function moverStockInicialADeposito(params: {
+  inventarioId: string
+  depositoId: string
+  stock: number
+  organizationId: string
+}) {
+  const { inventarioId, depositoId, stock, organizationId } = params
+
+  const { data: principalId, error: principalError } = await supabaseAdmin.rpc(
+    "get_deposito_principal",
+    { p_org_id: organizationId }
+  )
+  if (principalError) throw principalError
+  // Ya cayó donde corresponde: nada que mover.
+  if (principalId === depositoId) return
+
+  if (principalId) {
+    const { data: movidas, error: updateError } = await supabaseAdmin
+      .from("inventario_depositos")
+      .update({ deposito_id: depositoId })
+      .eq("inventario_id", inventarioId)
+      .eq("deposito_id", principalId)
+      .eq("organization_id", organizationId)
+      .select("id")
+    if (updateError) throw updateError
+    if (movidas && movidas.length > 0) return
+  }
+
+  // Org sin principal (el trigger no sembró nada) o fila ausente: se crea el
+  // detalle directo en el depósito elegido para sostener la invariante.
+  const { error: insertError } = await supabaseAdmin
+    .from("inventario_depositos")
+    .insert({
+      inventario_id: inventarioId,
+      deposito_id: depositoId,
+      stock,
+      stock_reservado: 0,
+      organization_id: organizationId,
+    })
+  if (insertError) throw insertError
+}
 
 export async function GET(request: Request) {
   try {
@@ -184,6 +228,25 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = inventarioSchema.parse(body)
 
+    // Límite de seguridad: nunca confiar en un depósito que mandó el cliente.
+    // Tiene que ser de ESTA org, no estar borrado y estar activo.
+    if (data.depositoId) {
+      const { data: deposito } = await supabaseAdmin
+        .from("depositos")
+        .select("id")
+        .eq("id", data.depositoId)
+        .eq("organization_id", organizationId!)
+        .is("deleted_at", null)
+        .eq("activo", true)
+        .maybeSingle()
+      if (!deposito) {
+        return NextResponse.json(
+          { error: "El depósito elegido no es válido" },
+          { status: 400 }
+        )
+      }
+    }
+
     let codigo = data.codigo
     let inventario = null
     let retries = 3
@@ -269,6 +332,29 @@ export async function POST(request: Request) {
       throw dbError
     }
 
+    // Stock inicial en el depósito elegido (si no es el principal).
+    // El trigger de la migración 291 ya sembró la fila en el principal. Se mueve
+    // con un UPDATE de deposito_id: inventario_depositos solo tiene el trigger
+    // BEFORE UPDATE de updated_at (169) y UNIQUE(inventario_id, deposito_id), y
+    // el item recién creado no tiene otra fila, así que no hay choque ni se
+    // dispara lógica de stock. La invariante stock = SUM(detalle) se mantiene.
+    // Si falla, el item ya existe: un 500 haría reintentar y duplicar. Se
+    // responde 201 con advertencia; el stock queda en el principal (consistente).
+    let advertencia: string | undefined
+    if (inventario && data.depositoId && data.stock > 0) {
+      try {
+        await moverStockInicialADeposito({
+          inventarioId: inventario.id,
+          depositoId: data.depositoId,
+          stock: data.stock,
+          organizationId: organizationId!,
+        })
+      } catch (moveError) {
+        console.error("Error moviendo stock inicial al depósito elegido:", moveError)
+        advertencia = "El stock quedó en el depósito principal"
+      }
+    }
+
     // Audit log fire-and-forget
     if (inventario && userId) {
       createAuditLogger(organizationId!, userId, request)
@@ -304,7 +390,12 @@ export async function POST(request: Request) {
 
     // POST corre detrás de requireInventarioAccess(): el permiso de costo ya
     // está resuelto por el guard.
-    return NextResponse.json(formatInventario(inventario, true), { status: 201 })
+    return NextResponse.json(
+      advertencia
+        ? { ...formatInventario(inventario, true), advertencia }
+        : formatInventario(inventario, true),
+      { status: 201 }
+    )
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
