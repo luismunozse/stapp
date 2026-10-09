@@ -114,4 +114,35 @@ describe("saveOrgEtiquetaInventario", () => {
     expect(await saveOrgEtiquetaInventario(prefs)).toBe(false)
     expect(await saveOrgEtiquetaInventario(prefs)).toBe(true)
   })
+
+  it("un PATCH colgado se corta a los 8s, cuenta como fallido y no frena al siguiente", async () => {
+    vi.useFakeTimers()
+    try {
+      const signals: (AbortSignal | undefined)[] = []
+      const f = vi
+        .fn()
+        .mockImplementationOnce((_u: string, init?: RequestInit) => {
+          signals.push(init?.signal ?? undefined)
+          return new Promise<Response>(() => {})
+        })
+        .mockImplementation((_u: string, init?: RequestInit) => {
+          signals.push(init?.signal ?? undefined)
+          return jsonRes({})
+        })
+      vi.stubGlobal("fetch", f)
+
+      const a = saveOrgEtiquetaInventario(prefs)
+      const b = saveOrgEtiquetaInventario(prefs)
+      await vi.advanceTimersByTimeAsync(7900)
+      expect(f).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(200)
+
+      expect(await a).toBe(false)
+      expect(signals[0]?.aborted).toBe(true)
+      expect(await b).toBe(true)
+      expect(f).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

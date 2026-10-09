@@ -56,24 +56,29 @@ export function useEtiquetaInventario({ onSaveFailed }: Options = {}) {
 
     void (async () => {
       // En paralelo: el peor caso es un solo timeout (~3s), no dos en serie.
-      const [org, orden] = await Promise.all([fetchOrgEtiquetaInventario(), fetchOrgEtiquetaSize()])
-      if (!vivo) return
-      if (!tocado.current) {
-        if (org) {
-          const base = local ?? { medium: DEFAULT_MEDIUM, thermalSize: DEFAULT_SIZE, sheetSize: DEFAULT_SIZE }
-          aplicar({
-            medium: org.medio,
-            thermalSize: org.medio === "thermal" ? org.tamano : base.thermalSize,
-            sheetSize: org.medio === "sheet" ? org.tamano : base.sheetSize,
-          })
-        } else if (!local && orden) {
-          // Sin configuración propia: arranca con el tamaño que el taller ya usa
-          // para las etiquetas de órdenes (todo tamaño de orden existe en térmica).
-          setMedium("thermal")
-          setThermalSize(orden)
+      try {
+        const [org, orden] = await Promise.all([fetchOrgEtiquetaInventario(), fetchOrgEtiquetaSize()])
+        if (!vivo) return
+        if (!tocado.current) {
+          if (org) {
+            const base = local ?? { medium: DEFAULT_MEDIUM, thermalSize: DEFAULT_SIZE, sheetSize: DEFAULT_SIZE }
+            aplicar({
+              medium: org.medio,
+              thermalSize: org.medio === "thermal" ? org.tamano : base.thermalSize,
+              sheetSize: org.medio === "sheet" ? org.tamano : base.sheetSize,
+            })
+          } else if (!local && orden) {
+            // Sin configuración propia: arranca con el tamaño que el taller ya usa
+            // para las etiquetas de órdenes (todo tamaño de orden existe en térmica).
+            setMedium("thermal")
+            setThermalSize(orden)
+          }
         }
+      } catch {
+        // Si algo rechaza queda lo que ya hay (localStorage o default).
+      } finally {
+        if (vivo) setReady(true)
       }
-      setReady(true)
     })()
 
     return () => {

@@ -130,6 +130,20 @@ describe("useEtiquetaInventario: orden de resolución", () => {
     expect(result.current.thermalSize).toBe("50x30")
   })
 
+  it("si un fetch rechaza, ready igual pasa a true y cae al localStorage", async () => {
+    localStorage.setItem(
+      LABEL_PREFS_KEY,
+      JSON.stringify({ medium: "thermal", thermalSize: "40x30", sheetSize: "50x30" }),
+    )
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => (url === ORD ? Promise.reject(new Error("boom")) : jsonRes({ medio: null, tamano: null }))),
+    )
+    const { result } = renderHook(() => useEtiquetaInventario())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    expect(result.current.thermalSize).toBe("40x30")
+  })
+
   it("resolver el valor de la org NO dispara ningún PATCH", async () => {
     const f = stubFetch({ inv: { medio: "sheet", tamano: "40x30" } })
     const { result } = renderHook(() => useEtiquetaInventario())

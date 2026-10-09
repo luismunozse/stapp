@@ -10,6 +10,8 @@ const ENDPOINT = "/api/configuracion/etiqueta-inventario"
 
 // Un fetch colgado no puede dejar el diálogo esperando a la org.
 const FETCH_TIMEOUT_MS = 3000
+// El guardado tolera más que la lectura, pero no puede colgar la cola.
+const PATCH_TIMEOUT_MS = 8000
 
 // Cola de guardados; `enviar` nunca rechaza, así que la cadena no se corta.
 let cola: Promise<unknown> = Promise.resolve()
@@ -60,15 +62,33 @@ export function saveOrgEtiquetaInventario(prefs: LabelPrefs): Promise<boolean> {
   saveLabelPrefs(prefs)
   const tamano = prefs.medium === "thermal" ? prefs.thermalSize : prefs.sheetSize
   const enviar = async (): Promise<boolean> => {
+    // Un PATCH colgado frenaría toda la cola y el aviso nunca saldría: se corta
+    // y cuenta como guardado fallido.
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<false>((resolve) => {
+      timer = setTimeout(() => {
+        controller?.abort()
+        resolve(false)
+      }, PATCH_TIMEOUT_MS)
+    })
+    const pedido = (async () => {
+      try {
+        const res = await fetch(ENDPOINT, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ medio: prefs.medium, tamano }),
+          signal: controller?.signal,
+        })
+        return res.ok
+      } catch {
+        return false
+      }
+    })()
     try {
-      const res = await fetch(ENDPOINT, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ medio: prefs.medium, tamano }),
-      })
-      return res.ok
-    } catch {
-      return false
+      return await Promise.race([pedido, timeout])
+    } finally {
+      clearTimeout(timer)
     }
   }
   // Cada PATCH sale recién cuando el anterior terminó: dos cambios seguidos
