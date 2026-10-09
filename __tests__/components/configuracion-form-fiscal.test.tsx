@@ -66,7 +66,7 @@ describe("ConfiguracionForm — Datos fiscales y de cobro", () => {
     const { ConfiguracionForm } = await import("@/components/configuracion/configuracion-form")
     render(
       <ModalProvider>
-        <ConfiguracionForm />
+        <ConfiguracionForm initialTab="facturacion" />
       </ModalProvider>
     )
 
@@ -87,7 +87,7 @@ describe("ConfiguracionForm — Datos fiscales y de cobro", () => {
     const { ConfiguracionForm } = await import("@/components/configuracion/configuracion-form")
     render(
       <ModalProvider>
-        <ConfiguracionForm />
+        <ConfiguracionForm initialTab="facturacion" />
       </ModalProvider>
     )
 
@@ -128,7 +128,7 @@ describe("ConfiguracionForm — Datos fiscales y de cobro", () => {
     const { ConfiguracionForm } = await import("@/components/configuracion/configuracion-form")
     render(
       <ModalProvider>
-        <ConfiguracionForm />
+        <ConfiguracionForm initialTab="facturacion" />
       </ModalProvider>
     )
 

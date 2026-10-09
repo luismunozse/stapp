@@ -36,7 +36,7 @@ function configResponse(overrides: Record<string, any> = {}) {
 
 async function renderForm() {
   const { ConfiguracionForm } = await import("@/components/configuracion/configuracion-form")
-  render(<ModalProvider><ConfiguracionForm /></ModalProvider>)
+  render(<ModalProvider><ConfiguracionForm initialTab="empresa" /></ModalProvider>)
   return screen.findByLabelText(TOGGLE)
 }
 
