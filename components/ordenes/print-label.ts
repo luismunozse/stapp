@@ -1,4 +1,3 @@
-import QRCode from "qrcode"
 import { printHtmlViaIframe } from "@/lib/print/print-html-iframe"
 import { DEFAULT_LABEL_SIZE, LABEL_SIZES, type LabelSize } from "@/lib/etiqueta-tamano"
 import { resolveEtiquetaSize } from "./etiqueta-size-org"
@@ -9,10 +8,12 @@ export interface LabelData {
   codigoOrden: string
   numeroOrden: number
   clienteNombre: string
-  dispositivo: string
+  /** Teléfono de contacto (contacto de la orden o, si no hay, el del cliente). */
+  telefono?: string | null
+  /** IMEI o número de serie (comparten la columna imei de la orden). */
+  imei?: string | null
   problemaReportado: string
   fechaIngreso: string
-  publicToken?: string | null
   organizationName?: string
   /** "ingreso" (default): intake label with reported problem. "reparado": ready-for-pickup tag. */
   variant?: "ingreso" | "reparado"
@@ -94,10 +95,11 @@ function truncate(v: string, max: number): string {
 }
 
 /**
- * Devuelve el HTML completo de la etiqueta para el tamaño dado. QR se pasa ya
- * generado (data URL) o "" si no hay. Función pura: no toca el DOM.
+ * Devuelve el HTML completo de la etiqueta para el tamaño dado. Sin QR: la
+ * etiqueta va pegada en el equipo y el link de seguimiento ya le llega al
+ * cliente por el comprobante y WhatsApp. Función pura: no toca el DOM.
  */
-export function buildLabelHtml(data: LabelData, size: LabelSize, qrDataUrl: string): string {
+export function buildLabelHtml(data: LabelData, size: LabelSize): string {
   const cfg = SIZE_CONFIG[size] ?? SIZE_CONFIG[DEFAULT_LABEL_SIZE]
   const esReparado = data.variant === "reparado"
   const codigo = esc(data.codigoOrden || `#${data.numeroOrden}`)
@@ -107,8 +109,8 @@ export function buildLabelHtml(data: LabelData, size: LabelSize, qrDataUrl: stri
 
   const body =
     cfg.mode === "roll"
-      ? rollBody({ esReparado, codigo, empresa, fechaPie, data, qrDataUrl })
-      : dieCutBody({ esReparado, codigo, empresa, fechaPie, data, qrDataUrl })
+      ? rollBody({ esReparado, codigo, empresa, fechaPie, data })
+      : dieCutBody({ esReparado, codigo, empresa, fechaPie, data })
 
   const styles = cfg.mode === "roll" ? rollStyles(cfg) : dieCutStyles(cfg)
 
@@ -122,6 +124,29 @@ ${body}
 </body></html>`
 }
 
+// Líneas del bloque de datos compartidas por die-cut y rollo. Teléfono e IMEI
+// se omiten si vienen vacíos. `cls` es la clase del contenedor de cada línea.
+function dataLines(
+  data: LabelData,
+  max: { cliente: number; tel: number; imei: number },
+  cls: string,
+): string {
+  const tel = data.telefono?.trim()
+  const imei = data.imei?.trim()
+  const line = (label: string, value: string) =>
+    `<div${cls}><span class="label">${label}: </span><span class="value">${esc(value)}</span></div>`
+  return [
+    line("Cliente", truncate(data.clienteNombre, max.cliente)),
+    tel ? line("Tel", truncate(tel, max.tel)) : "",
+    imei ? line("IMEI/S/N", truncate(imei, max.imei)) : "",
+  ]
+    .filter(Boolean)
+    .join("\n      ")
+}
+
+/** El problema es texto libre de largo arbitrario: se acota antes de armar el HTML. */
+const PROBLEMA_MAX = 200
+
 // ---- Die-cut (etiqueta adhesiva de medida fija) ----
 
 function dieCutStyles(cfg: SizeConfig): string {
@@ -131,7 +156,8 @@ function dieCutStyles(cfg: SizeConfig): string {
   const scale = Math.max(0.72, Math.min(w / 60, h / 40))
   const bodyPt = (7 * scale).toFixed(1)
   const pad = scale < 0.85 ? 1.5 : 2.5
-  const qrMm = Math.round(Math.min(h * 0.42, w * 0.28))
+  // Etiquetas bajas (30mm) dejan 2 líneas al problema; las de 40mm, 3.
+  const problemaLines = h >= 40 ? 3 : 2
   // El body llena el área imprimible (100%), no la página en mm: si el diálogo
   // de impresión o el driver suman margen, un alto fijo igual a la página
   // desborda a una segunda hoja y la térmica gasta dos etiquetas. Así, lo que
@@ -145,19 +171,18 @@ function dieCutStyles(cfg: SizeConfig): string {
     font-size: ${bodyPt}pt;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .left { flex: 1; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; padding-right: 1.5mm; }
-  .right { width: ${qrMm + 1}mm; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  .right img { width: ${qrMm}mm; height: ${qrMm}mm; }
-  .right .scan { font-size: 0.7em; color: #666; margin-top: 0.5mm; text-align: center; }
+  .left { flex: 1; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
   .codigo { font-size: 1.9em; font-weight: bold; letter-spacing: 0.3px; line-height: 1.05; border-bottom: 1px solid #000; padding-bottom: 0.6mm; margin-bottom: 0.6mm; }
-  .empresa { font-size: 0.85em; color: #555; margin-bottom: 0.3mm; }
+  .empresa { font-size: 0.85em; color: #555; margin-bottom: 0.3mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .info { line-height: 1.25; flex: 1; min-height: 0; overflow: hidden; }
   .info .label { color: #666; font-size: 0.85em; }
   .info .value { font-weight: bold; }
   .info > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* El problema es la única línea que envuelve; si falta alto, es lo que se recorta. */
+  .info > .problema { white-space: normal; overflow: hidden; text-overflow: clip; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: ${problemaLines}; line-clamp: ${problemaLines}; }
   .badge { display: inline-block; background: #000; color: #fff; font-size: 1.15em; font-weight: bold; letter-spacing: 0.3px; padding: 0.5mm 1.5mm; margin-bottom: 0.6mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .listo { font-size: 1em; font-weight: bold; margin-top: 0.3mm; }
-  .fecha { font-size: 0.8em; color: #888; margin-top: auto; }`
+  .fecha { font-size: 0.8em; color: #888; margin-top: auto; flex-shrink: 0; }`
 }
 
 function dieCutBody(p: {
@@ -166,34 +191,26 @@ function dieCutBody(p: {
   empresa: string
   fechaPie: string
   data: LabelData
-  qrDataUrl: string
 }): string {
-  const cliente = esc(truncate(p.data.clienteNombre, 25))
-  const dispositivo = esc(truncate(p.data.dispositivo, 28))
-  const problema = esc(truncate(p.data.problemaReportado, 50))
+  const problema = esc(truncate(p.data.problemaReportado, PROBLEMA_MAX))
   return `  <div class="left">
     ${p.empresa ? `<div class="empresa">${p.empresa}</div>` : ""}
     <div class="codigo">${p.codigo}</div>
     ${p.esReparado ? `<span class="badge">✓ REPARADO</span>` : ""}
     <div class="info">
-      <div><span class="label">Cliente: </span><span class="value">${cliente}</span></div>
-      <div><span class="label">Equipo: </span><span class="value">${dispositivo}</span></div>
+      ${dataLines(p.data, { cliente: 40, tel: 24, imei: 30 }, "")}
       ${p.esReparado
         ? `<div class="listo">Listo para entregar</div>`
-        : `<div><span class="label">Problema: </span>${problema}</div>`}
+        : `<div class="problema"><span class="label">Problema: </span>${problema}</div>`}
     </div>
     <div class="fecha">${p.fechaPie}</div>
-  </div>
-  ${p.qrDataUrl
-      ? `<div class="right"><img src="${p.qrDataUrl}" alt="QR" /><div class="scan">Seguimiento</div></div>`
-      : ""}`
+  </div>`
 }
 
 // ---- Rollo (ticket continuo 58/80mm, vertical) ----
 
 function rollStyles(cfg: SizeConfig): string {
   const w = cfg.widthMm
-  const qrMm = w >= 80 ? 34 : 28
   return `  @page { size: ${w}mm auto; margin: 0; }
   body {
     font-family: Arial, Helvetica, sans-serif;
@@ -207,10 +224,7 @@ function rollStyles(cfg: SizeConfig): string {
   .row { text-align: left; margin: 0.4mm 0; word-break: break-word; }
   .row .label { color: #555; }
   .listo { font-weight: bold; margin: 1mm 0; }
-  .fecha { font-size: 0.85em; color: #666; margin-top: 1mm; }
-  .qr { margin-top: 1.5mm; }
-  .qr img { width: ${qrMm}mm; height: ${qrMm}mm; }
-  .qr .scan { font-size: 0.75em; color: #666; }`
+  .fecha { font-size: 0.85em; color: #666; margin-top: 1mm; }`
 }
 
 function rollBody(p: {
@@ -219,49 +233,24 @@ function rollBody(p: {
   empresa: string
   fechaPie: string
   data: LabelData
-  qrDataUrl: string
 }): string {
-  const cliente = esc(truncate(p.data.clienteNombre, 32))
-  const dispositivo = esc(truncate(p.data.dispositivo, 36))
-  const problema = esc(truncate(p.data.problemaReportado, 90))
+  const problema = esc(truncate(p.data.problemaReportado, PROBLEMA_MAX))
   return `  ${p.empresa ? `<div class="empresa">${p.empresa}</div>` : ""}
   <div class="codigo">${p.codigo}</div>
   ${p.esReparado ? `<span class="badge">✓ REPARADO</span>` : ""}
-  <div class="row"><span class="label">Cliente: </span>${cliente}</div>
-  <div class="row"><span class="label">Equipo: </span>${dispositivo}</div>
+  ${dataLines(p.data, { cliente: 32, tel: 24, imei: 30 }, ' class="row"')}
   ${p.esReparado
       ? `<div class="listo">Listo para entregar</div>`
       : `<div class="row"><span class="label">Problema: </span>${problema}</div>`}
-  <div class="fecha">${p.fechaPie}</div>
-  ${p.qrDataUrl
-      ? `<div class="qr"><img src="${p.qrDataUrl}" alt="QR" /><div class="scan">Seguimiento</div></div>`
-      : ""}`
+  <div class="fecha">${p.fechaPie}</div>`
 }
 
 /**
  * Genera e imprime la etiqueta del equipo por el driver del SO.
  * @param opts.size tamaño/medio; si se omite, usa el de la org (luego localStorage, luego default).
  */
-export async function printDeviceLabel(
-  data: LabelData,
-  baseUrl: string,
-  opts?: { size?: LabelSize }
-): Promise<void> {
+export async function printDeviceLabel(data: LabelData, opts?: { size?: LabelSize }): Promise<void> {
   const size = opts?.size ?? (await resolveEtiquetaSize())
-
-  let qrDataUrl = ""
-  if (data.publicToken && baseUrl) {
-    try {
-      qrDataUrl = await QRCode.toDataURL(`${baseUrl}/seguimiento/${data.publicToken}`, {
-        width: 240,
-        margin: 0,
-        errorCorrectionLevel: "M",
-      })
-    } catch {
-      // QR generation failed, continue without it
-    }
-  }
-
-  const html = buildLabelHtml(data, size, qrDataUrl)
+  const html = buildLabelHtml(data, size)
   await printHtmlViaIframe(html)
 }

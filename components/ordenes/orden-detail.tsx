@@ -711,7 +711,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             variant="outline"
             size="sm"
             onClick={() => {
-              const baseUrl = window.location.origin
               const fecha = orden.fechaIngreso
                 ? new Date(orden.fechaIngreso).toLocaleDateString("es-AR", { timeZone: timezone })
                 : new Date().toLocaleDateString("es-AR", { timeZone: timezone })
@@ -719,12 +718,12 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
                 numeroOrden: orden.numeroOrden,
                 clienteNombre: orden.cliente?.nombre || "",
-                dispositivo: orden.dispositivo,
+                telefono: orden.telefonoContacto || orden.cliente?.telefono,
+                imei: orden.imei,
                 problemaReportado: orden.problemaReportado,
                 fechaIngreso: fecha,
-                publicToken: orden.publicToken,
                 organizationName: undefined,
-              }, baseUrl, etiquetaOpts)
+              }, etiquetaOpts)
             }}
             title="Imprimir etiqueta para el equipo"
           >
@@ -736,7 +735,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               variant="outline"
               size="sm"
               onClick={() => {
-                const baseUrl = window.location.origin
                 const fechaRep = orden.fechaCompletado
                   ? new Date(orden.fechaCompletado).toLocaleDateString("es-AR", { timeZone: timezone })
                   : new Date().toLocaleDateString("es-AR", { timeZone: timezone })
@@ -744,14 +742,14 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
                   numeroOrden: orden.numeroOrden,
                   clienteNombre: orden.cliente?.nombre || "",
-                  dispositivo: orden.dispositivo,
+                  telefono: orden.telefonoContacto || orden.cliente?.telefono,
+                  imei: orden.imei,
                   problemaReportado: orden.problemaReportado,
                   fechaIngreso: fechaRep,
-                  publicToken: orden.publicToken,
                   organizationName: undefined,
                   variant: "reparado",
                   fechaReparacion: fechaRep,
-                }, baseUrl, etiquetaOpts)
+                }, etiquetaOpts)
               }}
               title="Imprimir etiqueta de reparado para pegar en el equipo"
             >
@@ -1274,9 +1272,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             totalCobrado: orden.totalCobrado || 0,
             descuentoCobro: orden.descuentoCobro || 0,
             clienteNombre: orden.cliente?.nombre,
-            dispositivo: orden.dispositivo,
+            telefono: orden.telefonoContacto || orden.cliente?.telefono,
+            imei: orden.imei,
             problemaReportado: orden.problemaReportado,
-            publicToken: orden.publicToken,
           }}
           onSuccess={() => {
             fetchOrden()

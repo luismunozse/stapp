@@ -28,9 +28,11 @@ interface ConfirmarReparadoDialogProps {
     totalCobrado?: number
     descuentoCobro?: number
     clienteNombre?: string
-    dispositivo?: string
+    /** Teléfono ya resuelto (contacto de la orden o, si no hay, el del cliente). */
+    telefono?: string | null
+    /** IMEI o número de serie. */
+    imei?: string | null
     problemaReportado?: string
-    publicToken?: string | null
   }
   onSuccess: () => void
 }
@@ -86,20 +88,17 @@ export function ConfirmarReparadoDialog({ open, onOpenChange, orden, onSuccess }
           // se avisa eso y el flujo de éxito sigue igual.
           try {
             const fecha = new Date().toLocaleDateString("es-AR", { timeZone: timezone })
-            await printDeviceLabel(
-              {
-                codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
-                numeroOrden: orden.numeroOrden,
-                clienteNombre: orden.clienteNombre || "",
-                dispositivo: orden.dispositivo || "",
-                problemaReportado: orden.problemaReportado || "",
-                fechaIngreso: fecha,
-                publicToken: orden.publicToken,
-                variant: "reparado",
-                fechaReparacion: fecha,
-              },
-              window.location.origin,
-            )
+            await printDeviceLabel({
+              codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
+              numeroOrden: orden.numeroOrden,
+              clienteNombre: orden.clienteNombre || "",
+              telefono: orden.telefono,
+              imei: orden.imei,
+              problemaReportado: orden.problemaReportado || "",
+              fechaIngreso: fecha,
+              variant: "reparado",
+              fechaReparacion: fecha,
+            })
           } catch (printError) {
             console.error("Error imprimiendo la etiqueta de reparado:", printError)
             toast.error(

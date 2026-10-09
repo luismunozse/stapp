@@ -119,7 +119,6 @@ export function RecepcionCreadaModal({
     // el operador necesita saber si reimprimir una sola o el lote entero.
     let impresas = 0
     try {
-      const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
       const fecha = new Date().toLocaleDateString("es-AR", {
         day: "2-digit",
         month: "2-digit",
@@ -131,19 +130,16 @@ export function RecepcionCreadaModal({
       // pisen entre si si se dispararan en paralelo (Promise.all).
       for (let i = 0; i < resultado.ordenes.length; i++) {
         const orden = resultado.ordenes[i]
-        await printDeviceLabel(
-          {
-            codigoOrden: orden.codigoOrden,
-            numeroOrden: orden.numeroOrden,
-            clienteNombre: cliente.nombre,
-            dispositivo: orden.dispositivo,
-            problemaReportado: equipos[i]?.problemaReportado ?? "",
-            fechaIngreso: fecha,
-            publicToken: orden.publicToken,
-            organizationName: resultado.organizationName || undefined,
-          },
-          baseUrl,
-        )
+        await printDeviceLabel({
+          codigoOrden: orden.codigoOrden,
+          numeroOrden: orden.numeroOrden,
+          clienteNombre: cliente.nombre,
+          telefono: cliente.telefono,
+          imei: equipos[i]?.imei,
+          problemaReportado: equipos[i]?.problemaReportado ?? "",
+          fechaIngreso: fecha,
+          organizationName: resultado.organizationName || undefined,
+        })
         impresas++
       }
     } catch (error) {
