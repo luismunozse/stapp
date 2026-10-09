@@ -148,6 +148,13 @@ export function ConfiguracionForm({
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`)
   }
 
+  // La página server re-renderiza con otro `?tab=` al navegar (ej. link del menú a
+  // /configuracion): sin esto el estado se queda en la pestaña anterior. No usar
+  // key={tab}: remontaría el form, volvería a pedir la config y perdería lo editado.
+  useEffect(() => {
+    setTab(parseConfigTab(initialTab))
+  }, [initialTab])
+
   const showSaveBar = !loading && FORM_TABS.includes(tab)
 
   useEffect(() => {
@@ -661,6 +668,124 @@ export function ConfiguracionForm({
               </div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">Módulos opcionales</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Activá funcionalidades específicas según tu rubro.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0">
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={moduloAgenda}
+                  onChange={(e) => setModuloAgenda(e.target.checked)}
+                  disabled={!allowEdit}
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Agenda de turnos</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Para servicios on-site (gastronomía, refrigeración, heladería, fabricadoras de helado).
+                    Permite agendar visitas, retiros y entregas antes de crear la orden.
+                    Al activarse, aparece la sección <strong>Agenda</strong> en el menú.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+                <input
+                  type="checkbox"
+                  checked={comisionAplicaSinReparacion}
+                  onChange={(e) => setComisionAplicaSinReparacion(e.target.checked)}
+                  disabled={!allowEdit}
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Pagar comisión en órdenes sin reparación</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Si está activo, las órdenes ENTREGADO_SIN_REPARACION generan comisión para el técnico y se deducen en el P&L.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+                <input
+                  type="checkbox"
+                  checked={vendedoresAdministranInventario}
+                  onChange={(e) => setVendedoresAdministranInventario(e.target.checked)}
+                  disabled={!allowEdit}
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Los vendedores pueden administrar inventario</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Permite a los usuarios con rol Vendedor gestionar productos, stock, depósitos, ajustes y conteos. Apagado, solo los administradores acceden.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+                <input
+                  type="checkbox"
+                  checked={tecnicosOperanPos}
+                  onChange={(e) => setTecnicosOperanPos(e.target.checked)}
+                  disabled={!allowEdit}
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Los técnicos pueden operar el POS</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Permite a los usuarios con rol Técnico vender desde el Punto de Venta y ver sus propias ventas, sin dejar de ser técnicos: siguen recibiendo órdenes asignadas y conservando sus comisiones. No incluye anular ni editar ventas, registrar pagos ni crear devoluciones, que siguen siendo solo de administradores.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+                <input
+                  type="checkbox"
+                  checked={vendedoresManejanCaja}
+                  onChange={(e) => setVendedoresManejanCaja(e.target.checked)}
+                  disabled={!allowEdit}
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Los vendedores pueden manejar la caja</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Permite a los usuarios con rol Vendedor abrir la caja de su sucursal, cerrarla con arqueo y cargar movimientos manuales. No incluye el historial de cierres ni la exportación, que siguen siendo solo de administradores.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+                <input
+                  type="checkbox"
+                  checked={tecnicosCobranCotizaciones}
+                  onChange={(e) => setTecnicosCobranCotizaciones(e.target.checked)}
+                  disabled={!allowEdit}
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Los técnicos pueden cobrar sus cotizaciones</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Permite a los usuarios con rol Técnico convertir en venta las cotizaciones aceptadas que ellos mismos crearon, sin depender de un administrador para cerrar el cobro. No incluye eliminar cotizaciones, revisarlas ni convertirlas en orden de servicio, que siguen siendo solo de administradores, ni las cotizaciones de otros técnicos. La venta se les acredita como vendedor; para que además la vean listada en Ventas necesitan también el permiso de POS de acá arriba.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+                <input
+                  type="checkbox"
+                  checked={vendedoresVenIngresos}
+                  onChange={(e) => setVendedoresVenIngresos(e.target.checked)}
+                  disabled={!allowEdit}
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Los vendedores pueden ver los ingresos</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Viene activado. Si lo desactivás, los usuarios con rol Vendedor dejan de ver en Reportes la facturación del taller y cuánto gastó cada cliente. Siguen viendo los reportes operativos —tiempos de reparación, fallas comunes, desempeño de técnicos, inventario— y sus propias ventas en el Punto de Venta. Los precios de compra y los márgenes ya estaban reservados a los administradores, con o sin este permiso.
+                  </div>
+                </div>
+              </label>
+            </CardContent>
+          </Card>
           </>
         )}
       </TabsContent>
@@ -1168,132 +1293,9 @@ export function ConfiguracionForm({
         )}
       </TabsContent>
 
-      <TabsContent value="modulos" forceMount className={PANEL_CLASS}>
-        {loading ? (
-          spinner
-        ) : (
-          <>
-          <Card>
-            <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-base sm:text-lg">Módulos opcionales</CardTitle>
-              <CardDescription className="text-xs sm:text-sm">
-                Activá funcionalidades específicas según tu rubro.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 sm:p-6 pt-0">
-              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={moduloAgenda}
-                  onChange={(e) => setModuloAgenda(e.target.checked)}
-                  disabled={!allowEdit}
-                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">Agenda de turnos</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Para servicios on-site (gastronomía, refrigeración, heladería, fabricadoras de helado).
-                    Permite agendar visitas, retiros y entregas antes de crear la orden.
-                    Al activarse, aparece la sección <strong>Agenda</strong> en el menú.
-                  </div>
-                </div>
-              </label>
-              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-                <input
-                  type="checkbox"
-                  checked={comisionAplicaSinReparacion}
-                  onChange={(e) => setComisionAplicaSinReparacion(e.target.checked)}
-                  disabled={!allowEdit}
-                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">Pagar comisión en órdenes sin reparación</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Si está activo, las órdenes ENTREGADO_SIN_REPARACION generan comisión para el técnico y se deducen en el P&L.
-                  </div>
-                </div>
-              </label>
-              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-                <input
-                  type="checkbox"
-                  checked={vendedoresAdministranInventario}
-                  onChange={(e) => setVendedoresAdministranInventario(e.target.checked)}
-                  disabled={!allowEdit}
-                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">Los vendedores pueden administrar inventario</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Permite a los usuarios con rol Vendedor gestionar productos, stock, depósitos, ajustes y conteos. Apagado, solo los administradores acceden.
-                  </div>
-                </div>
-              </label>
-              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-                <input
-                  type="checkbox"
-                  checked={tecnicosOperanPos}
-                  onChange={(e) => setTecnicosOperanPos(e.target.checked)}
-                  disabled={!allowEdit}
-                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">Los técnicos pueden operar el POS</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Permite a los usuarios con rol Técnico vender desde el Punto de Venta y ver sus propias ventas, sin dejar de ser técnicos: siguen recibiendo órdenes asignadas y conservando sus comisiones. No incluye anular ni editar ventas, registrar pagos ni crear devoluciones, que siguen siendo solo de administradores.
-                  </div>
-                </div>
-              </label>
-              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-                <input
-                  type="checkbox"
-                  checked={vendedoresManejanCaja}
-                  onChange={(e) => setVendedoresManejanCaja(e.target.checked)}
-                  disabled={!allowEdit}
-                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">Los vendedores pueden manejar la caja</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Permite a los usuarios con rol Vendedor abrir la caja de su sucursal, cerrarla con arqueo y cargar movimientos manuales. No incluye el historial de cierres ni la exportación, que siguen siendo solo de administradores.
-                  </div>
-                </div>
-              </label>
-              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-                <input
-                  type="checkbox"
-                  checked={tecnicosCobranCotizaciones}
-                  onChange={(e) => setTecnicosCobranCotizaciones(e.target.checked)}
-                  disabled={!allowEdit}
-                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">Los técnicos pueden cobrar sus cotizaciones</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Permite a los usuarios con rol Técnico convertir en venta las cotizaciones aceptadas que ellos mismos crearon, sin depender de un administrador para cerrar el cobro. No incluye eliminar cotizaciones, revisarlas ni convertirlas en orden de servicio, que siguen siendo solo de administradores, ni las cotizaciones de otros técnicos. La venta se les acredita como vendedor; para que además la vean listada en Ventas necesitan también el permiso de POS de acá arriba.
-                  </div>
-                </div>
-              </label>
-              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-                <input
-                  type="checkbox"
-                  checked={vendedoresVenIngresos}
-                  onChange={(e) => setVendedoresVenIngresos(e.target.checked)}
-                  disabled={!allowEdit}
-                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">Los vendedores pueden ver los ingresos</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Viene activado. Si lo desactivás, los usuarios con rol Vendedor dejan de ver en Reportes la facturación del taller y cuánto gastó cada cliente. Siguen viendo los reportes operativos —tiempos de reparación, fallas comunes, desempeño de técnicos, inventario— y sus propias ventas en el Punto de Venta. Los precios de compra y los márgenes ya estaban reservados a los administradores, con o sin este permiso.
-                  </div>
-                </div>
-              </label>
-            </CardContent>
-          </Card>
-            {/* Configuración de notificaciones - se guarda por separado */}
-            <NotificationSettings allowEdit={allowEdit} />
-          </>
-        )}
+      <TabsContent value="avisos" forceMount className={PANEL_CLASS}>
+        {/* Se guarda por separado (botón propio), por eso esta pestaña no tiene la barra de guardado */}
+        {loading ? spinner : <NotificationSettings allowEdit={allowEdit} />}
       </TabsContent>
 
       <TabsContent value="seguridad" forceMount className="space-y-4 sm:space-y-6">

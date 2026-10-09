@@ -6,6 +6,7 @@
  * URL sync via history.replaceState, state surviving a tab switch
  * (forceMount) and the sticky save bar visibility per tab.
  */
+import { useState } from "react"
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { ModalProvider } from "@/contexts/modal-context"
@@ -51,19 +52,34 @@ const configResponse = {
   plazoPagoDias: null,
 }
 
-const LABELS = ["Secciones", "Empresa", "Facturación", "Comprobantes", "Módulos y avisos", "Seguridad"]
+const LABELS = ["Secciones", "Empresa", "Facturación", "Comprobantes", "Avisos", "Seguridad"]
 
-async function renderForm(props: { initialTab?: string; allowEdit?: boolean } = {}) {
-  const { ConfiguracionForm } = await import("@/components/configuracion/configuracion-form")
-  const utils = render(
+// Slot with its own local state: only forceMount keeps it alive across tab switches.
+function StatefulSlot() {
+  const [value, setValue] = useState("")
+  return <input aria-label="slot-input" value={value} onChange={(e) => setValue(e.target.value)} />
+}
+
+function tree(ConfiguracionForm: typeof import("@/components/configuracion/configuracion-form").ConfiguracionForm, props: { initialTab?: string; allowEdit?: boolean }) {
+  return (
     <ModalProvider>
       <ConfiguracionForm
         {...props}
         secciones={<div>slot-secciones</div>}
-        seguridad={<div>slot-seguridad</div>}
+        seguridad={
+          <div>
+            <span>slot-seguridad</span>
+            <StatefulSlot />
+          </div>
+        }
       />
     </ModalProvider>
   )
+}
+
+async function renderForm(props: { initialTab?: string; allowEdit?: boolean } = {}) {
+  const { ConfiguracionForm } = await import("@/components/configuracion/configuracion-form")
+  const utils = render(tree(ConfiguracionForm, props))
   // Wait for the config fetch to settle (the form panels show a spinner until then).
   await screen.findByLabelText("Nombre de la Empresa")
   return utils
@@ -75,6 +91,11 @@ describe("parseConfigTab", () => {
     expect(parseConfigTab("nope")).toBe("secciones")
     expect(parseConfigTab(["facturacion", "empresa"])).toBe("facturacion")
     expect(parseConfigTab("comprobantes")).toBe("comprobantes")
+    expect(parseConfigTab("avisos")).toBe("avisos")
+  })
+
+  it("maps the legacy modulos value to empresa", () => {
+    expect(parseConfigTab("modulos")).toBe("empresa")
   })
 })
 
@@ -122,18 +143,40 @@ describe("ConfiguracionForm — tabs", () => {
     expect(url).toContain("totp=ok")
   })
 
-  it("keeps an edited value when switching away and back (forceMount)", async () => {
-    await renderForm({ initialTab: "empresa" })
+  it("keeps local state of an inactive panel when switching away and back (forceMount)", async () => {
+    await renderForm({ initialTab: "seguridad" })
 
-    const input = screen.getByLabelText("Nombre de la Empresa")
-    fireEvent.change(input, { target: { value: "Otro nombre" } })
+    fireEvent.change(screen.getByLabelText("slot-input"), { target: { value: "borrador" } })
+
+    fireEvent.click(screen.getByRole("tab", { name: "Empresa" }))
+    // Still in the DOM, just hidden.
+    const hiddenInput = screen.getByLabelText("slot-input")
+    expect(hiddenInput).not.toBeVisible()
+    expect(hiddenInput.closest("[role='tabpanel']")).toHaveAttribute("hidden")
 
     fireEvent.click(screen.getByRole("tab", { name: "Seguridad" }))
-    expect(screen.getByText("slot-seguridad")).toBeVisible()
-    fireEvent.click(screen.getByRole("tab", { name: "Empresa" }))
+    expect(screen.getByLabelText("slot-input")).toHaveValue("borrador")
+    expect(screen.getByLabelText("slot-input")).toBeVisible()
+  })
 
-    expect(screen.getByLabelText("Nombre de la Empresa")).toHaveValue("Otro nombre")
-    expect(screen.getByLabelText("Nombre de la Empresa")).toBeVisible()
+  it("resyncs the active tab when initialTab changes without remounting", async () => {
+    const { ConfiguracionForm } = await import("@/components/configuracion/configuracion-form")
+    const { rerender } = render(tree(ConfiguracionForm, { initialTab: "empresa" }))
+    await screen.findByLabelText("Nombre de la Empresa")
+    fireEvent.change(screen.getByLabelText("Nombre de la Empresa"), { target: { value: "Sin guardar" } })
+
+    rerender(tree(ConfiguracionForm, { initialTab: "secciones" }))
+
+    expect(screen.getByRole("tab", { name: "Secciones" })).toHaveAttribute("aria-selected", "true")
+    // No remount: unsaved edit survives.
+    expect(screen.getByLabelText("Nombre de la Empresa")).toHaveValue("Sin guardar")
+  })
+
+  it("puts Módulos opcionales in Empresa and only notifications in Avisos", async () => {
+    await renderForm({ initialTab: "empresa" })
+    const modulos = screen.getByText("Módulos opcionales")
+    expect(modulos).toBeVisible()
+    expect(modulos.closest("[role='tabpanel']")).toBe(screen.getByLabelText("Nombre de la Empresa").closest("[role='tabpanel']"))
   })
 
   it("shows the save bar only on form tabs", async () => {
@@ -142,13 +185,15 @@ describe("ConfiguracionForm — tabs", () => {
     // Secciones: no save bar
     expect(screen.queryByRole("button", { name: /Guardar Cambios/ })).not.toBeInTheDocument()
 
-    for (const label of ["Empresa", "Facturación", "Comprobantes", "Módulos y avisos"]) {
+    for (const label of ["Empresa", "Facturación", "Comprobantes"]) {
       fireEvent.click(screen.getByRole("tab", { name: label }))
       expect(screen.getByRole("button", { name: /Guardar Cambios/ })).toBeInTheDocument()
     }
 
-    fireEvent.click(screen.getByRole("tab", { name: "Seguridad" }))
-    expect(screen.queryByRole("button", { name: /Guardar Cambios/ })).not.toBeInTheDocument()
+    for (const label of ["Avisos", "Seguridad"]) {
+      fireEvent.click(screen.getByRole("tab", { name: label }))
+      expect(screen.queryByRole("button", { name: /Guardar Cambios/ })).not.toBeInTheDocument()
+    }
   })
 
   it("saves the whole form from the sticky bar and shows the result next to it", async () => {
