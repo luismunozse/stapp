@@ -4,7 +4,7 @@
 
 export type PrintMedium = "thermal" | "sheet"
 
-export type LabelSizeKey = "40x25" | "38x25" | "50x30" | "60x40" | "58mm" | "80mm"
+export type LabelSizeKey = "40x25" | "38x25" | "40x30" | "50x30" | "50x40" | "60x40" | "58mm" | "80mm"
 
 export interface LabelSizeConfig {
   /**
@@ -23,13 +23,15 @@ export interface LabelSizeConfig {
 export const LABEL_SIZE_CONFIG: Record<LabelSizeKey, LabelSizeConfig> = {
   "40x25": { mode: "label", widthMm: 40, heightMm: 25, label: "40 × 25 mm" },
   "38x25": { mode: "label", widthMm: 38, heightMm: 25, label: "38 × 25 mm" },
+  "40x30": { mode: "label", widthMm: 40, heightMm: 30, label: "40 × 30 mm" },
   "50x30": { mode: "label", widthMm: 50, heightMm: 30, label: "50 × 30 mm" },
+  "50x40": { mode: "label", widthMm: 50, heightMm: 40, label: "50 × 40 mm" },
   "60x40": { mode: "label", widthMm: 60, heightMm: 40, label: "60 × 40 mm" },
   "58mm": { mode: "roll", widthMm: 58, heightMm: 30, label: "Rollo 58 mm (etiquetas de 30 mm)" },
   "80mm": { mode: "roll", widthMm: 80, heightMm: 40, label: "Rollo 80 mm (etiquetas de 40 mm)" },
 }
 
-export const DIE_CUT_SIZES: LabelSizeKey[] = ["40x25", "38x25", "50x30", "60x40"]
+export const DIE_CUT_SIZES: LabelSizeKey[] = ["40x25", "38x25", "40x30", "50x30", "50x40", "60x40"]
 export const THERMAL_SIZES: LabelSizeKey[] = [...DIE_CUT_SIZES, "58mm", "80mm"]
 
 /** Una etiqueta ya resuelta. Las partes ausentes no se renderizan. */
@@ -186,8 +188,8 @@ function dieCutStyles(cfg: LabelSizeConfig): string {
   return `  @page { size: ${w}mm ${h}mm; margin: 0; }
   .sheet { display: block; }
   .label {
-    width: ${w}mm;
-    height: calc(${h}mm - 0.3mm);
+    width: 100vw;
+    height: calc(100vh - 0.3mm);
     padding: ${pad}mm;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
