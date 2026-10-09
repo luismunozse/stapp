@@ -26,14 +26,22 @@ export async function GET(request: Request) {
     for (const org of orgs || []) {
       const [ordenesRes, completadasRes, ventasRes, clientesRes] = await Promise.all([
         supabaseAdmin.from("ordenes_servicio").select("id", { count: "exact", head: true })
-          .eq("organization_id", org.id).gte("created_at", yesterdayStart.toISOString()).lte("created_at", yesterdayEnd.toISOString()),
+          .eq("organization_id", org.id).gte("fecha_ingreso", yesterdayStart.toISOString()).lte("fecha_ingreso", yesterdayEnd.toISOString()),
+        // ordenes_servicio no tiene created_at ni updated_at: alta = fecha_ingreso, entrega = fecha_entrega.
         supabaseAdmin.from("ordenes_servicio").select("id", { count: "exact", head: true })
-          .eq("organization_id", org.id).eq("estado", "ENTREGADO").gte("updated_at", yesterdayStart.toISOString()).lte("updated_at", yesterdayEnd.toISOString()),
+          .eq("organization_id", org.id).eq("estado", "ENTREGADO").gte("fecha_entrega", yesterdayStart.toISOString()).lte("fecha_entrega", yesterdayEnd.toISOString()),
         supabaseAdmin.from("ventas").select("id", { count: "exact", head: true })
           .eq("organization_id", org.id).gte("created_at", yesterdayStart.toISOString()).lte("created_at", yesterdayEnd.toISOString()),
         supabaseAdmin.from("clientes").select("id", { count: "exact", head: true })
           .eq("organization_id", org.id).gte("created_at", yesterdayStart.toISOString()).lte("created_at", yesterdayEnd.toISOString()),
       ])
+
+      // Una consulta fallida NO es "0 actividad": abortar en vez de guardar un score en cero.
+      const queryError = ordenesRes.error || completadasRes.error || ventasRes.error || clientesRes.error
+      if (queryError) {
+        console.error("Error en cron engagement: consulta de actividad", queryError)
+        return NextResponse.json({ error: "Error calculando engagement" }, { status: 500 })
+      }
 
       const ordenes = ordenesRes.count || 0
       const completadas = completadasRes.count || 0

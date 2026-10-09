@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { resolveTemplate } from "@/lib/emails/template-resolver"
 import { requireCronAuth } from "@/lib/cron-auth"
+import { fetchAllRows } from "@/lib/fetch-all-rows"
 import {
   classifyDormantOrg,
   DORMANT_DAYS,
@@ -72,45 +73,50 @@ export async function GET(request: Request) {
     const orgIds = allOrgs.map((o) => o.id)
 
     // 2. Orgs that EVER had a payment row → not eligible (never archive a payer).
-    const { data: paidRows } = await supabaseAdmin
+    const { data: paidRows, error: paidError } = await supabaseAdmin
       .from("subscription_payments")
       .select("organization_id")
       .in("organization_id", orgIds)
+    // Sin datos de pagos no se puede saber quien es pagador: abortar, nunca asumir "nadie pago".
+    if (paidError) {
+      console.error("Error en cron auto-archive-dormant: consulta de pagos", paidError)
+      return NextResponse.json({ error: "Error leyendo pagos" }, { status: 500 })
+    }
     const paidOrgIds = new Set<string>((paidRows || []).map((r) => r.organization_id))
 
-    // 3. Activity within the dormancy window. audit_logs covers logins/any
-    //    action, so an org that logs in but creates nothing still counts active.
-    const [ordenesRes, ventasRes, clientesRes, auditRes] = await Promise.all([
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select("organization_id")
-        .in("organization_id", orgIds)
-        .gte("created_at", dormancyCutoff.toISOString()),
-      supabaseAdmin
-        .from("ventas")
-        .select("organization_id")
-        .in("organization_id", orgIds)
-        .gte("created_at", dormancyCutoff.toISOString()),
-      supabaseAdmin
-        .from("clientes")
-        .select("organization_id")
-        .in("organization_id", orgIds)
-        .gte("created_at", dormancyCutoff.toISOString()),
-      supabaseAdmin
-        .from("audit_logs")
-        .select("organization_id")
-        .in("organization_id", orgIds)
-        .gte("created_at", dormancyCutoff.toISOString()),
+    // 3. Activity within the dormancy window. Paginated (PostgREST truncates at
+    //    1000 rows with no error) and any failure throws -> 500 before anything is
+    //    written: missing data must never read as "inactive".
+    const desde = dormancyCutoff.toISOString()
+    const orgIdsDe = (rows: { organization_id: string }[]) => rows.map((r) => r.organization_id)
+    const [ordenes, ventas, clientes] = await Promise.all([
+      // ordenes_servicio no tiene created_at: la fecha de alta es fecha_ingreso.
+      fetchAllRows<{ organization_id: string }>("ordenes_servicio", "organization_id", (q) =>
+        q.in("organization_id", orgIds).gte("fecha_ingreso", desde)
+      ),
+      fetchAllRows<{ organization_id: string }>("ventas", "organization_id", (q) =>
+        q.in("organization_id", orgIds).gte("created_at", desde)
+      ),
+      fetchAllRows<{ organization_id: string }>("clientes", "organization_id", (q) =>
+        q.in("organization_id", orgIds).gte("created_at", desde)
+      ),
     ])
 
-    const activeRecently = new Set<string>()
-    for (const row of [
-      ...(ordenesRes.data || []),
-      ...(ventasRes.data || []),
-      ...(clientesRes.data || []),
-      ...(auditRes.data || []),
-    ]) {
-      if (row.organization_id) activeRecently.add(row.organization_id)
+    const activeRecently = new Set<string>([
+      ...orgIdsDe(ordenes),
+      ...orgIdsDe(ventas),
+      ...orgIdsDe(clientes),
+    ])
+
+    // audit_logs covers logins/any action, so an org that logs in but creates
+    // nothing still counts active. It is the biggest table in the window (~38k rows
+    // in 90 days), so only read it for orgs that are still candidates.
+    const sinActividad = orgIds.filter((id) => !activeRecently.has(id))
+    if (sinActividad.length > 0) {
+      const audit = await fetchAllRows<{ organization_id: string }>("audit_logs", "organization_id", (q) =>
+        q.in("organization_id", sinActividad).gte("created_at", desde)
+      )
+      for (const id of orgIdsDe(audit)) activeRecently.add(id)
     }
 
     // 4. Admin contacts for the warning email.
