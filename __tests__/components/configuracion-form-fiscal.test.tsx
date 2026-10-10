@@ -257,4 +257,58 @@ describe("ConfiguracionForm — toggle de facturación electrónica", () => {
     expect(body).not.toHaveProperty("facturacionElectronicaHabilitada")
     expect(body.cuit).toBe("30-71234567-8")
   })
+
+  // Un GET de fetchConfig en vuelo no puede pisar el toggle: el GET trae el
+  // valor de antes de que el PUT se confirmara.
+  function montarControlado(puts: Array<() => Promise<unknown>>) {
+    const gets: Array<(v: unknown) => void> = []
+    const configGet = (valor: boolean) => ({
+      ok: true,
+      json: async () => ({ ...configResponse, facturacionElectronicaDisponible: true, facturacionElectronicaHabilitada: valor }),
+    })
+    let primero = true
+    let p = 0
+    mockFetch.mockImplementation((url: string, init?: { method?: string }) => {
+      if (init?.method === "PUT") return puts[p++]()
+      if (url === "/api/configuracion") {
+        if (primero) {
+          primero = false
+          return Promise.resolve(configGet(false))
+        }
+        return new Promise((r) => gets.push(r))
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    return { gets, configGet }
+  }
+
+  it("a stale config GET started before the tick does not undo the toggle", async () => {
+    const { gets, configGet } = montarControlado([() => eco(false), () => eco(true), () => Promise.reject(new Error("net"))])
+    const box = await renderizar()
+    fireEvent.click(screen.getByRole("button", { name: /Guardar Cambios/i }))
+    await waitFor(() => expect(gets).toHaveLength(1)) // fetchConfig pending
+    fireEvent.click(box)
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1))
+    gets[0](configGet(false))
+    await new Promise((r) => setTimeout(r, 50))
+    expect(box.checked).toBe(true)
+    fireEvent.click(box) // failing untick must go back to the confirmed true
+    await waitFor(() => expect(toast.error).toHaveBeenCalled())
+    expect(box.checked).toBe(true)
+  })
+
+  it("a config GET issued while the toggle PUT is pending does not undo it", async () => {
+    let resolverPut!: (v: unknown) => void
+    const { gets, configGet } = montarControlado([() => new Promise((r) => { resolverPut = r }), () => eco(false)])
+    const box = await renderizar()
+    fireEvent.click(box)
+    await waitFor(() => expect(box).toBeDisabled())
+    fireEvent.click(screen.getByRole("button", { name: /Guardar Cambios/i }))
+    await waitFor(() => expect(gets).toHaveLength(1))
+    resolverPut({ ok: true, json: async () => ({ facturacionElectronicaHabilitada: true }) })
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1))
+    gets[0](configGet(false))
+    await new Promise((r) => setTimeout(r, 50))
+    expect(box.checked).toBe(true)
+  })
 })

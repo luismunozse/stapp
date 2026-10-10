@@ -111,6 +111,9 @@ export function ConfiguracionForm({
   // Último valor que el servidor confirmó: si un guardado falla se vuelve a este,
   // no a la negación del click (dos fallos seguidos dejarían el estado al revés).
   const facturacionPersistida = useRef(false)
+  // Impar = guardado del toggle en vuelo; cambia al empezar y al terminar. Un
+  // fetchConfig que arrancó antes trae el valor viejo y no debe pisar el toggle.
+  const facturacionEpoch = useRef(0)
   const [feApitoken, setFeApitoken] = useState("")
   const [feApikey, setFeApikey] = useState("")
   const [feUsertoken, setFeUsertoken] = useState("")
@@ -167,6 +170,7 @@ export function ConfiguracionForm({
   }, [])
 
   const fetchConfig = async () => {
+    const epochAlIniciar = facturacionEpoch.current
     try {
       const res = await fetch("/api/configuracion")
       if (res.ok) {
@@ -208,8 +212,10 @@ export function ConfiguracionForm({
         setMediosPagoTexto(data.mediosPagoTexto || "")
         setPlazoPagoDias(data.plazoPagoDias != null ? String(data.plazoPagoDias) : "")
         setFacturacionDisponible(!!data.facturacionElectronicaDisponible)
-        facturacionPersistida.current = !!data.facturacionElectronicaHabilitada
-        setFacturacionHabilitada(!!data.facturacionElectronicaHabilitada)
+        if (facturacionEpoch.current === epochAlIniciar && epochAlIniciar % 2 === 0) {
+          facturacionPersistida.current = !!data.facturacionElectronicaHabilitada
+          setFacturacionHabilitada(!!data.facturacionElectronicaHabilitada)
+        }
         if (data.facturacionElectronicaDisponible) {
           fetchCredencialesFE()
         }
@@ -357,6 +363,7 @@ export function ConfiguracionForm({
   const handleToggleFacturacion = async (valor: boolean) => {
     setFacturacionHabilitada(valor)
     setGuardandoFacturacion(true)
+    facturacionEpoch.current++
     try {
       const res = await fetch("/api/configuracion", {
         method: "PUT",
@@ -374,6 +381,7 @@ export function ConfiguracionForm({
       setFacturacionHabilitada(facturacionPersistida.current)
       toast.error("No se pudo guardar la facturación electrónica. Probá de nuevo.")
     } finally {
+      facturacionEpoch.current++
       setGuardandoFacturacion(false)
     }
   }
