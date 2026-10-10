@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Upload, Trash2, Save, ImageIcon } from "lucide-react"
+import { toast } from "sonner"
 import { useModal } from "@/contexts/modal-context"
 import { NotificationSettings } from "@/components/configuracion/notification-settings"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -106,6 +107,10 @@ export function ConfiguracionForm({
   const [plazoPagoDias, setPlazoPagoDias] = useState("")
   const [facturacionDisponible, setFacturacionDisponible] = useState(false)
   const [facturacionHabilitada, setFacturacionHabilitada] = useState(false)
+  const [guardandoFacturacion, setGuardandoFacturacion] = useState(false)
+  // Último valor que el servidor confirmó: si un guardado falla se vuelve a este,
+  // no a la negación del click (dos fallos seguidos dejarían el estado al revés).
+  const facturacionPersistida = useRef(false)
   const [feApitoken, setFeApitoken] = useState("")
   const [feApikey, setFeApikey] = useState("")
   const [feUsertoken, setFeUsertoken] = useState("")
@@ -203,6 +208,7 @@ export function ConfiguracionForm({
         setMediosPagoTexto(data.mediosPagoTexto || "")
         setPlazoPagoDias(data.plazoPagoDias != null ? String(data.plazoPagoDias) : "")
         setFacturacionDisponible(!!data.facturacionElectronicaDisponible)
+        facturacionPersistida.current = !!data.facturacionElectronicaHabilitada
         setFacturacionHabilitada(!!data.facturacionElectronicaHabilitada)
         if (data.facturacionElectronicaDisponible) {
           fetchCredencialesFE()
@@ -344,6 +350,34 @@ export function ConfiguracionForm({
     }
   }
 
+  // El toggle se guarda solo: las tarjetas de credenciales ya guardan por su
+  // cuenta, y atarlo al "Guardar Cambios" global lo dejaba apagado en la base
+  // aunque el cliente hubiera cargado las credenciales. Es el único dueño de
+  // este campo (handleSave ya no lo manda).
+  const handleToggleFacturacion = async (valor: boolean) => {
+    setFacturacionHabilitada(valor)
+    setGuardandoFacturacion(true)
+    try {
+      const res = await fetch("/api/configuracion", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ facturacionElectronicaHabilitada: valor }),
+      })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      // Si el servidor descartó la columna (degradación) responde 200 con el
+      // valor viejo: eso no es un guardado.
+      if (data?.facturacionElectronicaHabilitada !== valor) throw new Error()
+      facturacionPersistida.current = valor
+      toast.success(valor ? "Facturación electrónica activada" : "Facturación electrónica desactivada")
+    } catch {
+      setFacturacionHabilitada(facturacionPersistida.current)
+      toast.error("No se pudo guardar la facturación electrónica. Probá de nuevo.")
+    } finally {
+      setGuardandoFacturacion(false)
+    }
+  }
+
   const handleSave = async () => {
     setSaving(true)
     setMessage(null)
@@ -360,7 +394,7 @@ export function ConfiguracionForm({
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, tecnicosCobranCotizaciones, vendedoresVenIngresos, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada: facturacionHabilitada }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, tecnicosCobranCotizaciones, vendedoresVenIngresos, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias }),
       })
 
       if (res.ok) {
@@ -876,8 +910,8 @@ export function ConfiguracionForm({
                   <input
                     type="checkbox"
                     checked={facturacionHabilitada}
-                    onChange={(e) => setFacturacionHabilitada(e.target.checked)}
-                    disabled={!allowEdit}
+                    onChange={(e) => handleToggleFacturacion(e.target.checked)}
+                    disabled={!allowEdit || guardandoFacturacion}
                     className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
                   />
                   <div className="flex-1">
@@ -885,6 +919,7 @@ export function ConfiguracionForm({
                     <div className="text-xs text-muted-foreground mt-0.5">
                       Al activarse, se pueden emitir comprobantes electrónicos válidos ante AFIP/ARCA para las órdenes y ventas.
                     </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">Se guarda al tocarlo.</div>
                   </div>
                 </label>
 
