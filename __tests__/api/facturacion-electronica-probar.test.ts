@@ -96,6 +96,23 @@ describe("POST /api/facturacion-electronica/probar", () => {
     expect(body.puntosVenta).toEqual([{ numero: 1, bloqueado: false }])
   })
 
+  it("devuelve los valores resueltos (defaults) cuando la fila no tiene punto de venta ni condición", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    mockSupabaseFrom({
+      facturacion_credenciales: createChainMock({
+        ...FILA_DELEGADA,
+        punto_venta: null,
+        condicion_fiscal: null,
+      }),
+    })
+    vi.mocked(arcaDirectProvider.probarConexion).mockResolvedValue({ ok: true, puntosVenta: [] })
+
+    const { body } = await parseResponse(await POST())
+
+    expect(body.puntoVentaConfigurado).toBe(1)
+    expect(body.condicionFiscal).toBe("MONOTRIBUTO")
+  })
+
   it("devuelve el punto de venta y la condición fiscal de la fila guardada", async () => {
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
     mockSupabaseFrom({ facturacion_credenciales: createChainMock(FILA_DELEGADA) })

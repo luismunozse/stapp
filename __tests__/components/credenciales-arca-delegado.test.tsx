@@ -202,6 +202,9 @@ describe("CredencialesArcaDelegado", () => {
       await waitFor(() => {
         expect(screen.getByText(/el punto de venta 3 está bloqueado en ARCA/i)).toBeInTheDocument()
       })
+      const texto = screen.getByText(/está bloqueado en ARCA/i).textContent ?? ""
+      expect(texto).toContain("Creá uno nuevo con el sistema “Factura Electronica - Monotributo - Web Service” o cargá otro.")
+      expect(texto).not.toMatch(/desbloque/i)
     })
 
     it("el punto de venta cargado está habilitado: mensaje de éxito", async () => {

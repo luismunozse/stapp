@@ -193,7 +193,7 @@ export function CredencialesArcaDelegado({
       if (encontrado?.bloqueado) {
         setMensaje({
           tone: "warn",
-          text: `La conexión funciona, pero el punto de venta ${configurado} está bloqueado en ARCA. Desbloquealo en ARCA o cargá otro.`,
+          text: `La conexión funciona, pero el punto de venta ${configurado} está bloqueado en ARCA. Creá uno nuevo con el sistema ${sistema} o cargá otro.`,
         })
         return
       }

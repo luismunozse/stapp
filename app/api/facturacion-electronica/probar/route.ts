@@ -107,10 +107,10 @@ export async function POST() {
     puntosVenta: resultado.puntosVenta ?? [],
     error: resultado.error,
     ...(permisoRenuevaAt ? { permisoRenuevaAt } : {}),
-    // De la fila GUARDADA que se probó: la UI juzga lo que se testeó, no lo que
+    // Lo RESUELTO de la fila GUARDADA que se probó (con los defaults ya aplicados): la UI juzga lo que se testeó, no lo que
     // haya escrito después en el formulario sin guardar.
-    puntoVentaConfigurado: cred.punto_venta,
-    condicionFiscal: cred.condicion_fiscal,
+    puntoVentaConfigurado: resuelto.creds.puntoVenta,
+    condicionFiscal: resuelto.creds.condicionFiscal,
     // Para que la UI pueda decir "en nombre de <cuit>" sin volver a pedirlo.
     cuitRepresentado: resuelto.creds.cuitRepresentado ?? resuelto.creds.cuit,
   })
