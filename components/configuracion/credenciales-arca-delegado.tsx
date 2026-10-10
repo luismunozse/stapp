@@ -11,6 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useCurrency } from "@/contexts/currency-context"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 type CondicionFiscal = "MONOTRIBUTO" | "RESPONSABLE_INSCRIPTO"
 
@@ -40,12 +42,35 @@ const TONOS: Record<Mensaje["tone"], string> = {
   error: "bg-destructive/10 border border-destructive/30 text-destructive",
 }
 
+/**
+ * h23 explícito: es-AR cae a 12 h ("03:30 p. m.") según el motor de ICU. Una zona
+ * inválida tira RangeError; se cae a la default para no tapar la explicación.
+ */
+function formatHora(fecha: Date, timeZone: string): string {
+  const opciones: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }
+  try {
+    return new Intl.DateTimeFormat("es-AR", { ...opciones, timeZone }).format(fecha)
+  } catch {
+    return new Intl.DateTimeFormat("es-AR", { ...opciones, timeZone: DEFAULT_TIMEZONE }).format(fecha)
+  }
+}
+
+/** Sistema de ARCA con el que hay que crear el punto de venta para que un sistema externo lo vea. */
+function nombreSistemaPuntoVenta(condicionFiscal: unknown): string {
+  const monotributo = "“Factura Electronica - Monotributo - Web Service”"
+  const inscripto = "“RECE para aplicativo y Web Service”"
+  if (condicionFiscal === "MONOTRIBUTO") return monotributo
+  if (condicionFiscal === "RESPONSABLE_INSCRIPTO") return inscripto
+  return `${monotributo} (Monotributo) o ${inscripto} (Responsable Inscripto)`
+}
+
 export function CredencialesArcaDelegado({
   allowEdit,
   cuitPlataforma,
   estadoInicial,
   onGuardado,
 }: Props) {
+  const { timezone } = useCurrency()
   const [estado, setEstado] = useState(estadoInicial)
   const [cuit, setCuit] = useState(estadoInicial.cuit ?? "")
   const [puntoVenta, setPuntoVenta] = useState(String(estadoInicial.puntoVenta ?? 1))
@@ -117,30 +142,63 @@ export function CredencialesArcaDelegado({
       }
 
       if (!data.ok) {
+        if (data.permisoRenuevaAt) {
+          // ARCA lee los permisos recién cuando le emitimos un ticket nuevo: antes
+          // de esa hora volver a probar devuelve lo mismo, y la hora se muestra
+          // en la zona de la organización, no en la del navegador.
+          // h23 explícito: es-AR cae a 12 h ("03:30 p. m.") según el motor de ICU.
+          const hora = formatHora(new Date(data.permisoRenuevaAt), timezone)
+          setMensaje({
+            tone: "warn",
+            text: `ARCA todavía no reconoce la delegación. Si ya la hiciste, falta que STApp la acepte. ARCA vuelve a leer los permisos a partir de las ${hora}: probá de nuevo después.`,
+          })
+          return
+        }
         setMensaje({
           tone: "error",
-          text: `ARCA rechazó la operación: ${data.error}. Revisá que la delegación esté hecha y aceptada — puede tardar hasta 24 h.`,
+          text: `ARCA rechazó la operación: ${data.error}. Revisá que la delegación esté hecha y aceptada.`,
         })
         return
       }
 
       const puntos: Array<{ numero: number; bloqueado: boolean }> = data.puntosVenta ?? []
+      const sistema = nombreSistemaPuntoVenta(data.condicionFiscal)
+
       if (puntos.length === 0) {
-        // 602: AFIP nos atendió en nombre del taller pero no encontró nada que
-        // listar. La delegación funciona; falta el alta del punto de venta.
+        // ARCA nos atendió en nombre del taller pero no lista nada: la delegación
+        // funciona. Los puntos de venta de "Factura en línea" (manual) no se ven
+        // desde un sistema; hay que crear uno con el sistema que corresponde.
         setMensaje({
           tone: "warn",
-          text: "La delegación funciona, pero ARCA responde sin puntos de venta dados de alta. Creá uno en ARCA para poder emitir.",
+          text: `La delegación funciona, pero ARCA no tiene puntos de venta habilitados para facturar desde un sistema. Los de “Factura en línea” no sirven: en ARCA, entrá a Administración de puntos de venta y domicilios, creá uno nuevo con el sistema ${sistema} y cargá ese número acá.`,
         })
         return
       }
 
-      setMensaje({
-        tone: "ok",
-        text: `Conexión OK. ARCA reconoce: ${puntos
-          .map((p) => `punto de venta ${p.numero}${p.bloqueado ? " (bloqueado)" : ""}`)
-          .join(", ")}.`,
-      })
+      const configurado: number | undefined =
+        data.puntoVentaConfigurado != null ? Number(data.puntoVentaConfigurado) : undefined
+      const encontrado = configurado === undefined ? undefined : puntos.find((p) => p.numero === configurado)
+      const lista = puntos
+        .map((p) => `punto de venta ${p.numero}${p.bloqueado ? " (bloqueado)" : ""}`)
+        .join(", ")
+
+      if (configurado !== undefined && !encontrado) {
+        setMensaje({
+          tone: "warn",
+          text: `La conexión funciona, pero el punto de venta ${configurado} que cargaste no está habilitado para facturar desde un sistema. ARCA reconoce: ${lista}. Cargá uno de esos o creá el ${configurado} con el sistema ${sistema}.`,
+        })
+        return
+      }
+
+      if (encontrado?.bloqueado) {
+        setMensaje({
+          tone: "warn",
+          text: `La conexión funciona, pero el punto de venta ${configurado} está bloqueado en ARCA. Creá uno nuevo con el sistema ${sistema} o cargá otro.`,
+        })
+        return
+      }
+
+      setMensaje({ tone: "ok", text: `Conexión OK. ARCA reconoce: ${lista}.` })
     } catch {
       setMensaje({ tone: "error", text: "Error al probar la conexión" })
     } finally {
@@ -177,7 +235,10 @@ export function CredencialesArcaDelegado({
                 {cuitPlataforma}
               </span>
             </li>
-            <li>Confirmar. La autorización puede tardar hasta 24 h en quedar activa.</li>
+            <li>
+              Confirmar. Al guardar, le avisamos a STApp para que acepte la delegación. Después ARCA
+              puede tardar unas horas en habilitarla.
+            </li>
           </ol>
         </div>
       )}

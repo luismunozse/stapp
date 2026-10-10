@@ -11,6 +11,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 import React from "react"
 
+let mockTimezone = "America/Argentina/Buenos_Aires"
+vi.mock("@/contexts/currency-context", () => ({
+  useCurrency: () => ({ timezone: mockTimezone }),
+}))
+
 import { CredencialesArcaDelegado } from "@/components/configuracion/credenciales-arca-delegado"
 
 const mockFetch = vi.fn()
@@ -129,8 +134,166 @@ describe("CredencialesArcaDelegado", () => {
    * delegacion funciona pero falta dar de alta el punto de venta en ARCA. Son
    * dos problemas distintos y el mensaje tiene que distinguirlos.
    */
-  it("distingue delegación OK sin puntos de venta dados de alta", async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ ok: true, puntosVenta: [] }) })
+  describe("puntos de venta que ARCA deja usar desde un sistema", () => {
+    function probar(respuesta: any) {
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ ok: true, ...respuesta }) })
+      render(
+        <CredencialesArcaDelegado allowEdit cuitPlataforma="23944498389" estadoInicial={CONFIGURADO} />
+      )
+      fireEvent.click(screen.getByRole("button", { name: /probar conexi/i }))
+    }
+
+    it("lista vacía + Monotributo: nombra el sistema de Monotributo", async () => {
+      probar({ puntosVenta: [], puntoVentaConfigurado: 1, condicionFiscal: "MONOTRIBUTO" })
+
+      await waitFor(() => {
+        expect(screen.getByText(/no tiene puntos de venta habilitados para facturar desde un sistema/i)).toBeInTheDocument()
+      })
+      const texto = screen.getByText(/habilitados para facturar/i).textContent ?? ""
+      expect(texto).toContain("Factura Electronica - Monotributo - Web Service")
+      expect(texto).not.toContain("RECE")
+    })
+
+    it("lista vacía + Responsable Inscripto: nombra el sistema RECE", async () => {
+      probar({ puntosVenta: [], puntoVentaConfigurado: 1, condicionFiscal: "RESPONSABLE_INSCRIPTO" })
+
+      await waitFor(() => {
+        expect(screen.getByText(/habilitados para facturar/i)).toBeInTheDocument()
+      })
+      const texto = screen.getByText(/habilitados para facturar/i).textContent ?? ""
+      expect(texto).toContain("RECE para aplicativo y Web Service")
+      expect(texto).not.toContain("Monotributo - Web Service")
+    })
+
+    it("lista vacía sin condición fiscal: nombra los dos sistemas", async () => {
+      probar({ puntosVenta: [] })
+
+      await waitFor(() => {
+        expect(screen.getByText(/habilitados para facturar/i)).toBeInTheDocument()
+      })
+      const texto = screen.getByText(/habilitados para facturar/i).textContent ?? ""
+      expect(texto).toContain("Factura Electronica - Monotributo - Web Service")
+      expect(texto).toContain("RECE para aplicativo y Web Service")
+    })
+
+    it("el punto de venta cargado no está en la lista", async () => {
+      probar({
+        puntosVenta: [{ numero: 2, bloqueado: false }, { numero: 4, bloqueado: false }],
+        puntoVentaConfigurado: 1,
+        condicionFiscal: "MONOTRIBUTO",
+      })
+
+      await waitFor(() => {
+        expect(screen.getByText(/el punto de venta 1 que cargaste no está habilitado/i)).toBeInTheDocument()
+      })
+      const texto = screen.getByText(/que cargaste/i).textContent ?? ""
+      expect(texto).toContain("punto de venta 2, punto de venta 4")
+      expect(texto).toContain("creá el 1 con el sistema")
+      expect(texto).toContain("Factura Electronica - Monotributo - Web Service")
+    })
+
+    it("el punto de venta cargado está bloqueado", async () => {
+      probar({
+        puntosVenta: [{ numero: 3, bloqueado: true }],
+        puntoVentaConfigurado: 3,
+        condicionFiscal: "MONOTRIBUTO",
+      })
+
+      await waitFor(() => {
+        expect(screen.getByText(/el punto de venta 3 está bloqueado en ARCA/i)).toBeInTheDocument()
+      })
+      const texto = screen.getByText(/está bloqueado en ARCA/i).textContent ?? ""
+      expect(texto).toContain("Creá uno nuevo con el sistema “Factura Electronica - Monotributo - Web Service” o cargá otro.")
+      expect(texto).not.toMatch(/desbloque/i)
+    })
+
+    it("el punto de venta cargado está habilitado: mensaje de éxito", async () => {
+      probar({
+        puntosVenta: [{ numero: 3, bloqueado: false }],
+        puntoVentaConfigurado: 3,
+        condicionFiscal: "MONOTRIBUTO",
+      })
+
+      await waitFor(() => {
+        expect(screen.getByText(/Conexión OK\. ARCA reconoce: punto de venta 3/)).toBeInTheDocument()
+      })
+    })
+
+    it("sin puntoVentaConfigurado (servidor viejo) conserva el mensaje de éxito", async () => {
+      probar({ puntosVenta: [{ numero: 2, bloqueado: false }] })
+
+      await waitFor(() => {
+        expect(screen.getByText(/Conexión OK\. ARCA reconoce: punto de venta 2/)).toBeInTheDocument()
+      })
+    })
+  })
+
+  it("las instrucciones avisan que STApp acepta la delegación, sin prometer 24 h", () => {
+    render(
+      <CredencialesArcaDelegado allowEdit cuitPlataforma="23944498389" estadoInicial={SIN_CONFIGURAR} />
+    )
+
+    expect(screen.getByText(/le avisamos a STApp para que acepte la delegación/i)).toBeInTheDocument()
+    expect(screen.queryByText(/24 h/i)).not.toBeInTheDocument()
+  })
+
+  describe("cuando ARCA todavía no reconoce la delegación (permisoRenuevaAt)", () => {
+    function probarConPermiso(permisoRenuevaAt: string) {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          ok: false,
+          error: "600: ValidacionDeToken: No aparecio CUIT en lista de relaciones",
+          permisoRenuevaAt,
+        }),
+      })
+      render(
+        <CredencialesArcaDelegado allowEdit cuitPlataforma="23944498389" estadoInicial={CONFIGURADO} />
+      )
+      fireEvent.click(screen.getByRole("button", { name: /probar conexi/i }))
+    }
+
+    it("muestra la hora HH:MM en la zona horaria de la organización", async () => {
+      mockTimezone = "America/Argentina/Buenos_Aires"
+      probarConPermiso("2026-10-09T18:30:00.000Z") // 15:30 en Buenos Aires (UTC-3)
+
+      await waitFor(() => {
+        expect(screen.getByText(/ARCA todavía no reconoce la delegación/i)).toBeInTheDocument()
+      })
+      expect(screen.getByText(/a partir de las 15:30/)).toBeInTheDocument()
+      expect(screen.queryByText(/ya le avisamos/i)).not.toBeInTheDocument()
+      expect(screen.getByText(/falta que STApp la acepte\. ARCA vuelve/)).toBeInTheDocument()
+      expect(screen.queryByText(/24 h/i)).not.toBeInTheDocument()
+    })
+
+    it("con una zona horaria inválida igual muestra la explicación con HH:MM", async () => {
+      mockTimezone = "No/Existe"
+      probarConPermiso("2026-10-09T18:30:00.000Z")
+
+      await waitFor(() => {
+        expect(screen.getByText(/ARCA todavía no reconoce la delegación/i)).toBeInTheDocument()
+      })
+      expect(screen.getByText(/a partir de las 15:30/)).toBeInTheDocument()
+      expect(screen.queryByText(/Error al probar/i)).not.toBeInTheDocument()
+      mockTimezone = "America/Argentina/Buenos_Aires"
+    })
+
+    it("respeta otra zona horaria", async () => {
+      mockTimezone = "America/Mexico_City" // UTC-6 sin horario de verano
+      probarConPermiso("2026-10-09T18:30:00.000Z")
+
+      await waitFor(() => {
+        expect(screen.getByText(/a partir de las 12:30/)).toBeInTheDocument()
+      })
+      mockTimezone = "America/Argentina/Buenos_Aires"
+    })
+  })
+
+  it("sin permisoRenuevaAt conserva el error de ARCA pero sin la promesa de 24 h", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: false, error: "600: CUIT representada no autorizada" }),
+    })
     render(
       <CredencialesArcaDelegado allowEdit cuitPlataforma="23944498389" estadoInicial={CONFIGURADO} />
     )
@@ -138,7 +301,8 @@ describe("CredencialesArcaDelegado", () => {
     fireEvent.click(screen.getByRole("button", { name: /probar conexi/i }))
 
     await waitFor(() => {
-      expect(screen.getByText(/sin puntos de venta/i)).toBeInTheDocument()
+      expect(screen.getByText(/no autorizada/i)).toBeInTheDocument()
     })
+    expect(screen.queryByText(/24 h/i)).not.toBeInTheDocument()
   })
 })
