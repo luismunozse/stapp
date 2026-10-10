@@ -11,6 +11,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { ModalProvider } from "@/contexts/modal-context"
+import { toast } from "sonner"
+
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 const mockFetch = vi.fn()
 global.fetch = mockFetch as unknown as typeof fetch
@@ -134,5 +137,178 @@ describe("ConfiguracionForm — Datos fiscales y de cobro", () => {
 
     await screen.findByText("Datos fiscales y de cobro")
     expect(screen.getByText("Sin especificar")).toBeInTheDocument()
+  })
+})
+
+describe("ConfiguracionForm — toggle de facturación electrónica", () => {
+  const LABEL = /Activar facturación electrónica/i
+  const putCalls = () => mockFetch.mock.calls.filter(([, init]) => init?.method === "PUT")
+
+  // GET devuelve la config (con el toggle según `persistido`); el PUT lo maneja
+  // cada test. Cualquier otro GET (credenciales) responde vacío.
+  function montar(persistido: boolean, put: () => Promise<unknown>) {
+    mockFetch.mockImplementation((url: string, init?: { method?: string }) => {
+      if (init?.method === "PUT") return put()
+      if (url === "/api/configuracion") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            ...configResponse,
+            facturacionElectronicaDisponible: true,
+            facturacionElectronicaHabilitada: persistido,
+          }),
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+  }
+
+  const eco = (valor: boolean) =>
+    Promise.resolve({ ok: true, json: async () => ({ facturacionElectronicaHabilitada: valor }) })
+
+  async function renderizar() {
+    const { ConfiguracionForm } = await import("@/components/configuracion/configuracion-form")
+    render(
+      <ModalProvider>
+        <ConfiguracionForm initialTab="facturacion" />
+      </ModalProvider>
+    )
+    return (await screen.findByLabelText(LABEL)) as HTMLInputElement
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("shows the autosave hint", async () => {
+    montar(false, () => eco(true))
+    await renderizar()
+    expect(screen.getByText("Se guarda al tocarlo.")).toBeInTheDocument()
+  })
+
+  it("ticking sends exactly one PUT with only the toggle", async () => {
+    montar(false, () => eco(true))
+    const box = await renderizar()
+    fireEvent.click(box)
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Facturación electrónica activada"))
+    expect(putCalls()).toHaveLength(1)
+    const [url, init] = putCalls()[0]
+    expect(url).toBe("/api/configuracion")
+    expect(JSON.parse(init.body as string)).toEqual({ facturacionElectronicaHabilitada: true })
+    expect(box.checked).toBe(true)
+  })
+
+  it("unticking sends false", async () => {
+    montar(true, () => eco(false))
+    const box = await renderizar()
+    await waitFor(() => expect(box.checked).toBe(true))
+    fireEvent.click(box)
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Facturación electrónica desactivada"))
+    expect(JSON.parse(putCalls()[0][1].body as string)).toEqual({ facturacionElectronicaHabilitada: false })
+    expect(box.checked).toBe(false)
+  })
+
+  it("reverts to the persisted value and toasts an error when the PUT is not ok", async () => {
+    montar(false, () => Promise.resolve({ ok: false, json: async () => ({ error: "boom" }) }))
+    const box = await renderizar()
+    fireEvent.click(box)
+    await waitFor(() => expect(toast.error).toHaveBeenCalled())
+    expect(box.checked).toBe(false)
+    expect(toast.success).not.toHaveBeenCalled()
+  })
+
+  it("reverts when the PUT is ok but the echo differs from what was sent", async () => {
+    montar(false, () => eco(false))
+    const box = await renderizar()
+    fireEvent.click(box)
+    await waitFor(() => expect(toast.error).toHaveBeenCalled())
+    expect(box.checked).toBe(false)
+    expect(toast.success).not.toHaveBeenCalled()
+  })
+
+  it("reverts to the last confirmed value, not to the negation of the click", async () => {
+    // 1st PUT confirms true; 2nd PUT fails -> must go back to true.
+    let n = 0
+    montar(false, () => (n++ === 0 ? eco(true) : Promise.reject(new Error("net"))))
+    const box = await renderizar()
+    fireEvent.click(box)
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1))
+    fireEvent.click(box)
+    await waitFor(() => expect(toast.error).toHaveBeenCalled())
+    expect(box.checked).toBe(true)
+  })
+
+  it("disables the checkbox while the request is pending", async () => {
+    let resolver!: (v: unknown) => void
+    montar(false, () => new Promise((r) => { resolver = r }))
+    const box = await renderizar()
+    fireEvent.click(box)
+    await waitFor(() => expect(box).toBeDisabled())
+    resolver({ ok: true, json: async () => ({ facturacionElectronicaHabilitada: true }) })
+    await waitFor(() => expect(box).not.toBeDisabled())
+  })
+
+  it("global Guardar Cambios no longer sends the toggle", async () => {
+    montar(true, () => eco(true))
+    await renderizar()
+    fireEvent.click(screen.getByRole("button", { name: /Guardar Cambios/i }))
+    await waitFor(() => expect(putCalls()).toHaveLength(1))
+    const body = JSON.parse(putCalls()[0][1].body as string)
+    expect(body).not.toHaveProperty("facturacionElectronicaHabilitada")
+    expect(body.cuit).toBe("30-71234567-8")
+  })
+
+  // Un GET de fetchConfig en vuelo no puede pisar el toggle: el GET trae el
+  // valor de antes de que el PUT se confirmara.
+  function montarControlado(puts: Array<() => Promise<unknown>>) {
+    const gets: Array<(v: unknown) => void> = []
+    const configGet = (valor: boolean) => ({
+      ok: true,
+      json: async () => ({ ...configResponse, facturacionElectronicaDisponible: true, facturacionElectronicaHabilitada: valor }),
+    })
+    let primero = true
+    let p = 0
+    mockFetch.mockImplementation((url: string, init?: { method?: string }) => {
+      if (init?.method === "PUT") return puts[p++]()
+      if (url === "/api/configuracion") {
+        if (primero) {
+          primero = false
+          return Promise.resolve(configGet(false))
+        }
+        return new Promise((r) => gets.push(r))
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    return { gets, configGet }
+  }
+
+  it("a stale config GET started before the tick does not undo the toggle", async () => {
+    const { gets, configGet } = montarControlado([() => eco(false), () => eco(true), () => Promise.reject(new Error("net"))])
+    const box = await renderizar()
+    fireEvent.click(screen.getByRole("button", { name: /Guardar Cambios/i }))
+    await waitFor(() => expect(gets).toHaveLength(1)) // fetchConfig pending
+    fireEvent.click(box)
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1))
+    gets[0](configGet(false))
+    await new Promise((r) => setTimeout(r, 50))
+    expect(box.checked).toBe(true)
+    fireEvent.click(box) // failing untick must go back to the confirmed true
+    await waitFor(() => expect(toast.error).toHaveBeenCalled())
+    expect(box.checked).toBe(true)
+  })
+
+  it("a config GET issued while the toggle PUT is pending does not undo it", async () => {
+    let resolverPut!: (v: unknown) => void
+    const { gets, configGet } = montarControlado([() => new Promise((r) => { resolverPut = r }), () => eco(false)])
+    const box = await renderizar()
+    fireEvent.click(box)
+    await waitFor(() => expect(box).toBeDisabled())
+    fireEvent.click(screen.getByRole("button", { name: /Guardar Cambios/i }))
+    await waitFor(() => expect(gets).toHaveLength(1))
+    resolverPut({ ok: true, json: async () => ({ facturacionElectronicaHabilitada: true }) })
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1))
+    gets[0](configGet(false))
+    await new Promise((r) => setTimeout(r, 50))
+    expect(box.checked).toBe(true)
   })
 })
