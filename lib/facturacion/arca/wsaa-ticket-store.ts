@@ -39,7 +39,13 @@ export interface WsaaTicket {
 }
 
 /** Margen de seguridad: un ticket a menos de 10 min de expirar se trata como miss (design ADR-05). */
-const WSAA_MARGIN_MS = 10 * 60 * 1000
+export const WSAA_MARGIN_MS = 10 * 60 * 1000
+/**
+ * Servicio WSAA del ticket compartido de facturación (WSFEv1). Lo usan el
+ * proveedor y el diagnóstico para armar la misma clave de ticket: si
+ * divergieran, el diagnóstico miraría una fila que el login no usa.
+ */
+export const WSAA_SERVICE_WSFE = "wsfe"
 /** Piso anti-tight-loop: no reintentar un login WSAA antes de este tiempo del intento previo. */
 const DEFAULT_LOGIN_FLOOR_MS = 60 * 1000
 /** TTL del lease de renovación WSAA (design ADR-02: 45s). */
@@ -116,6 +122,28 @@ export async function readWsaaTicket(key: WsaaTicketKey): Promise<WsaaTicket | n
     expiresAt: row.expires_at,
     generatedAt: row.generated_at ?? undefined,
   }
+}
+
+/**
+ * Vencimiento del ticket cacheado, sin tocar los secretos: misma identidad que
+ * `selectRow` (cuit + service + production, el más tardío) pero seleccionando
+ * SOLO `expires_at`. Sirve para decirle al taller cuándo ARCA va a volver a
+ * leer los permisos. Es best-effort: un fallo de lectura devuelve null en vez
+ * de romper el diagnóstico que lo consulta.
+ */
+export async function leerVencimientoTicket(key: WsaaTicketKey): Promise<string | null> {
+  const { data, error } = await supabaseAdmin
+    .from("wsaa_tickets")
+    .select("expires_at")
+    .eq("cuit", key.cuit)
+    .eq("service", key.service)
+    .eq("production", key.production)
+    .order("expires_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) return null
+  return (data as { expires_at: string } | null)?.expires_at ?? null
 }
 
 /** Persiste (upsert) un ticket renovado, cifrado at-rest. */

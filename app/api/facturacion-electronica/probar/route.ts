@@ -3,6 +3,11 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { arcaDirectProvider } from "@/lib/facturacion/arca/arca-direct-provider"
 import { isArcaProduction } from "@/lib/facturacion/arca/env"
+import {
+  leerVencimientoTicket,
+  WSAA_MARGIN_MS,
+  WSAA_SERVICE_WSFE,
+} from "@/lib/facturacion/arca/wsaa-ticket-store"
 import { ArcaStappCertError } from "@/lib/facturacion/arca/stapp-cert"
 import {
   resolverCredenciales,
@@ -75,10 +80,33 @@ export async function POST() {
 
   const resultado = await arcaDirectProvider.probarConexion(resuelto.creds)
 
+  // ARCA 600 ("No aparecio CUIT en lista de relaciones"): el ticket cacheado se
+  // emitió antes de que la relación existiera y ARCA lo sigue rechazando hasta
+  // que se emita uno nuevo. Eso pasa cuando le quedan menos de WSAA_MARGIN_MS,
+  // así que ese es el momento a partir del cual probar de nuevo tiene sentido.
+  let permisoRenuevaAt: string | undefined
+  if (!resultado.ok && /^\s*600(?!\d)/.test(resultado.error ?? "")) {
+    const vence = await leerVencimientoTicket({
+      // Misma clave que arma el proveedor al autenticarse (cert de plataforma).
+      organizationId: organizationId!,
+      cuit: resuelto.creds.cuit,
+      service: WSAA_SERVICE_WSFE,
+      production: resuelto.creds.production,
+    })
+    if (vence) {
+      const renueva = new Date(vence).getTime() - WSAA_MARGIN_MS
+      // Si ya pasó, la próxima prueba pide ticket nuevo: no hay nada que esperar.
+      if (Number.isFinite(renueva) && renueva > Date.now()) {
+        permisoRenuevaAt = new Date(renueva).toISOString()
+      }
+    }
+  }
+
   return NextResponse.json({
     ok: resultado.ok,
     puntosVenta: resultado.puntosVenta ?? [],
     error: resultado.error,
+    ...(permisoRenuevaAt ? { permisoRenuevaAt } : {}),
     // Para que la UI pueda decir "en nombre de <cuit>" sin volver a pedirlo.
     cuitRepresentado: resuelto.creds.cuitRepresentado ?? resuelto.creds.cuit,
   })

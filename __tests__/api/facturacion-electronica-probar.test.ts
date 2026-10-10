@@ -33,6 +33,13 @@ vi.mock("@/lib/facturacion/arca/arca-direct-provider", () => ({
   arcaDirectProvider: { probarConexion: vi.fn(), emitir: vi.fn() },
 }))
 
+vi.mock("@/lib/facturacion/arca/wsaa-ticket-store", () => ({
+  WSAA_MARGIN_MS: 10 * 60 * 1000,
+  WSAA_SERVICE_WSFE: "wsfe",
+  leerVencimientoTicket: vi.fn(),
+}))
+
+import { leerVencimientoTicket, WSAA_MARGIN_MS } from "@/lib/facturacion/arca/wsaa-ticket-store"
 import { getCertificadoStapp, ArcaStappCertError } from "@/lib/facturacion/arca/stapp-cert"
 import { arcaDirectProvider } from "@/lib/facturacion/arca/arca-direct-provider"
 import { POST } from "@/app/api/facturacion-electronica/probar/route"
@@ -106,6 +113,58 @@ describe("POST /api/facturacion-electronica/probar", () => {
     expect(status).toBe(200)
     expect(body.ok).toBe(false)
     expect(body.error).toContain("no autorizada")
+  })
+
+  describe("permisoRenuevaAt cuando ARCA todavía no reconoce la relación (600)", () => {
+    const ERROR_600 = "600: ValidacionDeToken: No aparecio CUIT en lista de relaciones"
+
+    function probarConError(error: string) {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+      mockSupabaseFrom({ facturacion_credenciales: createChainMock(FILA_DELEGADA) })
+      vi.mocked(arcaDirectProvider.probarConexion).mockResolvedValue({ ok: false, error })
+    }
+
+    it("lo agrega: vencimiento del ticket cacheado menos el margen de renovación", async () => {
+      const vence = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString()
+      vi.mocked(leerVencimientoTicket).mockResolvedValue(vence)
+      probarConError(ERROR_600)
+
+      const { body } = await parseResponse(await POST())
+
+      expect(body.permisoRenuevaAt).toBe(new Date(new Date(vence).getTime() - WSAA_MARGIN_MS).toISOString())
+      // Misma clave que usa el login: el certificado de plataforma, no el CUIT del taller.
+      expect(leerVencimientoTicket).toHaveBeenCalledWith(
+        expect.objectContaining({ cuit: CERT_PLATAFORMA.cuit, service: "wsfe" })
+      )
+    })
+
+    it("no lo agrega si el error no es 600", async () => {
+      vi.mocked(leerVencimientoTicket).mockResolvedValue(new Date(Date.now() + 3600_000).toISOString())
+      probarConError("602: sin resultados raros")
+
+      const { body } = await parseResponse(await POST())
+
+      expect(body).not.toHaveProperty("permisoRenuevaAt")
+      expect(leerVencimientoTicket).not.toHaveBeenCalled()
+    })
+
+    it("no lo agrega si no hay ticket cacheado", async () => {
+      vi.mocked(leerVencimientoTicket).mockResolvedValue(null)
+      probarConError(ERROR_600)
+
+      const { body } = await parseResponse(await POST())
+
+      expect(body).not.toHaveProperty("permisoRenuevaAt")
+    })
+
+    it("no lo agrega si el momento ya pasó (la próxima prueba pide ticket nuevo)", async () => {
+      vi.mocked(leerVencimientoTicket).mockResolvedValue(new Date(Date.now() + 5 * 60 * 1000).toISOString())
+      probarConError(ERROR_600)
+
+      const { body } = await parseResponse(await POST())
+
+      expect(body).not.toHaveProperty("permisoRenuevaAt")
+    })
   })
 
   it("400 cuando la organización factura por TusFacturas", async () => {

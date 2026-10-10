@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useCurrency } from "@/contexts/currency-context"
 
 type CondicionFiscal = "MONOTRIBUTO" | "RESPONSABLE_INSCRIPTO"
 
@@ -46,6 +47,7 @@ export function CredencialesArcaDelegado({
   estadoInicial,
   onGuardado,
 }: Props) {
+  const { timezone } = useCurrency()
   const [estado, setEstado] = useState(estadoInicial)
   const [cuit, setCuit] = useState(estadoInicial.cuit ?? "")
   const [puntoVenta, setPuntoVenta] = useState(String(estadoInicial.puntoVenta ?? 1))
@@ -117,9 +119,26 @@ export function CredencialesArcaDelegado({
       }
 
       if (!data.ok) {
+        if (data.permisoRenuevaAt) {
+          // ARCA lee los permisos recién cuando le emitimos un ticket nuevo: antes
+          // de esa hora volver a probar devuelve lo mismo, y la hora se muestra
+          // en la zona de la organización, no en la del navegador.
+          // h23 explícito: es-AR cae a 12 h ("03:30 p. m.") según el motor de ICU.
+          const hora = new Intl.DateTimeFormat("es-AR", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hourCycle: "h23",
+            timeZone: timezone,
+          }).format(new Date(data.permisoRenuevaAt))
+          setMensaje({
+            tone: "warn",
+            text: `ARCA todavía no reconoce la delegación. Si ya la hiciste, falta que STApp la acepte (ya le avisamos). ARCA vuelve a leer los permisos a partir de las ${hora}: probá de nuevo después.`,
+          })
+          return
+        }
         setMensaje({
           tone: "error",
-          text: `ARCA rechazó la operación: ${data.error}. Revisá que la delegación esté hecha y aceptada — puede tardar hasta 24 h.`,
+          text: `ARCA rechazó la operación: ${data.error}. Revisá que la delegación esté hecha y aceptada.`,
         })
         return
       }
@@ -177,7 +196,10 @@ export function CredencialesArcaDelegado({
                 {cuitPlataforma}
               </span>
             </li>
-            <li>Confirmar. La autorización puede tardar hasta 24 h en quedar activa.</li>
+            <li>
+              Confirmar. Al guardar, le avisamos a STApp para que acepte la delegación. Después ARCA
+              puede tardar unas horas en habilitarla.
+            </li>
           </ol>
         </div>
       )}

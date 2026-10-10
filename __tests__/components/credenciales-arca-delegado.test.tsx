@@ -11,6 +11,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 import React from "react"
 
+let mockTimezone = "America/Argentina/Buenos_Aires"
+vi.mock("@/contexts/currency-context", () => ({
+  useCurrency: () => ({ timezone: mockTimezone }),
+}))
+
 import { CredencialesArcaDelegado } from "@/components/configuracion/credenciales-arca-delegado"
 
 const mockFetch = vi.fn()
@@ -140,5 +145,70 @@ describe("CredencialesArcaDelegado", () => {
     await waitFor(() => {
       expect(screen.getByText(/sin puntos de venta/i)).toBeInTheDocument()
     })
+  })
+
+  it("las instrucciones avisan que STApp acepta la delegación, sin prometer 24 h", () => {
+    render(
+      <CredencialesArcaDelegado allowEdit cuitPlataforma="23944498389" estadoInicial={SIN_CONFIGURAR} />
+    )
+
+    expect(screen.getByText(/le avisamos a STApp para que acepte la delegación/i)).toBeInTheDocument()
+    expect(screen.queryByText(/24 h/i)).not.toBeInTheDocument()
+  })
+
+  describe("cuando ARCA todavía no reconoce la delegación (permisoRenuevaAt)", () => {
+    function probarConPermiso(permisoRenuevaAt: string) {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          ok: false,
+          error: "600: ValidacionDeToken: No aparecio CUIT en lista de relaciones",
+          permisoRenuevaAt,
+        }),
+      })
+      render(
+        <CredencialesArcaDelegado allowEdit cuitPlataforma="23944498389" estadoInicial={CONFIGURADO} />
+      )
+      fireEvent.click(screen.getByRole("button", { name: /probar conexi/i }))
+    }
+
+    it("muestra la hora HH:MM en la zona horaria de la organización", async () => {
+      mockTimezone = "America/Argentina/Buenos_Aires"
+      probarConPermiso("2026-10-09T18:30:00.000Z") // 15:30 en Buenos Aires (UTC-3)
+
+      await waitFor(() => {
+        expect(screen.getByText(/ARCA todavía no reconoce la delegación/i)).toBeInTheDocument()
+      })
+      expect(screen.getByText(/a partir de las 15:30/)).toBeInTheDocument()
+      expect(screen.getByText(/ya le avisamos/i)).toBeInTheDocument()
+      expect(screen.queryByText(/24 h/i)).not.toBeInTheDocument()
+    })
+
+    it("respeta otra zona horaria", async () => {
+      mockTimezone = "America/Mexico_City" // UTC-6 sin horario de verano
+      probarConPermiso("2026-10-09T18:30:00.000Z")
+
+      await waitFor(() => {
+        expect(screen.getByText(/a partir de las 12:30/)).toBeInTheDocument()
+      })
+      mockTimezone = "America/Argentina/Buenos_Aires"
+    })
+  })
+
+  it("sin permisoRenuevaAt conserva el error de ARCA pero sin la promesa de 24 h", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: false, error: "600: CUIT representada no autorizada" }),
+    })
+    render(
+      <CredencialesArcaDelegado allowEdit cuitPlataforma="23944498389" estadoInicial={CONFIGURADO} />
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: /probar conexi/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/no autorizada/i)).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/24 h/i)).not.toBeInTheDocument()
   })
 })
