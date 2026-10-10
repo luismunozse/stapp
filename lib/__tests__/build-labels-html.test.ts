@@ -4,8 +4,10 @@ import {
   buildLabelsHtml,
   LABEL_SIZE_CONFIG,
   THERMAL_SIZES,
+  DIE_CUT_SIZES,
   type BuiltLabel,
 } from "@/lib/labels/build-labels-html"
+import { LABEL_SIZES } from "@/lib/etiqueta-tamano"
 
 const lbl = (over: Partial<BuiltLabel> = {}): BuiltLabel => ({
   name: "Cable USB",
@@ -24,8 +26,12 @@ describe("buildLabelsHtml térmica die-cut", () => {
   it("emite @page con el tamaño exacto y margen 0", () => {
     expect(html).toMatch(/@page\s*\{\s*size:\s*50mm 30mm;\s*margin:\s*0;/)
   })
-  it("la etiqueta mide 0.3mm menos que la página para evitar una hoja en blanco", () => {
-    expect(html).toMatch(/\.label\s*\{[^}]*width:\s*50mm;[^}]*height:\s*calc\(30mm - 0\.3mm\);/)
+  it("la etiqueta ocupa el área imprimible (viewport) menos 0.3mm, no una medida fija en mm", () => {
+    // Con margen de impresión (diálogo de Chrome o área imprimible del driver) el
+    // área útil es menor que la página; una caja fija de Hmm desborda y parte la
+    // etiqueta en dos páginas. 100vw/100vh se resuelven contra el área real.
+    expect(html).toMatch(/\.label\s*\{[^}]*width:\s*100vw;[^}]*height:\s*calc\(100vh - 0\.3mm\);/)
+    expect(html).not.toMatch(/\.label\s*\{[^}]*(?:width|height):\s*(?:calc\()?\d+mm/)
     expect(html).toMatch(/\.label\s*\{[^}]*overflow:\s*hidden;/)
   })
   it("N etiquetas producen N bloques", () => {
@@ -57,9 +63,7 @@ describe("buildLabelsHtml térmica rollo", () => {
     expect(html).toMatch(
       new RegExp(String.raw`@page\s*\{\s*size:\s*${w}mm ${h}mm;\s*margin:\s*0;`),
     )
-    expect(html).toMatch(
-      new RegExp(String.raw`\.label\s*\{[^}]*height:\s*calc\(${h}mm - 0\.3mm\);`),
-    )
+    expect(html).toMatch(/\.label\s*\{[^}]*height:\s*calc\(100vh - 0\.3mm\);/)
   })
   it("también salta de página entre etiquetas", () => {
     const html = buildLabelsHtml([lbl(), lbl()], { medium: "thermal", size: "58mm" })
@@ -95,6 +99,10 @@ describe("buildLabelsHtml hoja (sheet)", () => {
     expect(html).toContain("flex-wrap: wrap")
     expect(html).toContain("gap: 2mm")
     expect(html).toMatch(/\.label\s*\{[^}]*width:\s*50mm;[^}]*height:\s*30mm;/)
+  })
+  it("la hoja sigue con medidas fijas en mm (no usa viewport)", () => {
+    expect(html).not.toContain("100vw")
+    expect(html).not.toContain("100vh")
   })
   it("no fuerza saltos de página por etiqueta", () => {
     expect(html).not.toContain("break-after: page")
@@ -140,6 +148,26 @@ describe("LABEL_SIZE_CONFIG", () => {
   it("el rótulo del rollo muestra el alto resultante", () => {
     expect(LABEL_SIZE_CONFIG["58mm"].label).toBe("Rollo 58 mm (etiquetas de 30 mm)")
     expect(LABEL_SIZE_CONFIG["80mm"].label).toBe("Rollo 80 mm (etiquetas de 40 mm)")
+  })
+})
+
+describe("medidas compartidas con las etiquetas de órdenes", () => {
+  it.each(LABEL_SIZES)("%s está disponible en térmica", (size) => {
+    expect(THERMAL_SIZES).toContain(size)
+    expect(LABEL_SIZE_CONFIG[size]).toBeDefined()
+  })
+  it.each(["40x30", "50x40"] as const)("%s es die-cut y también sirve para hoja", (size) => {
+    expect(DIE_CUT_SIZES).toContain(size)
+  })
+  it("conserva las medidas propias de inventario", () => {
+    expect(THERMAL_SIZES).toEqual(expect.arrayContaining(["40x25", "38x25"]))
+  })
+  it.each([
+    ["40x30", 40, 30],
+    ["50x40", 50, 40],
+  ] as const)("%s emite @page exacto", (size, w, h) => {
+    const html = buildLabelsHtml([lbl()], { medium: "thermal", size })
+    expect(html).toMatch(new RegExp(String.raw`@page\s*\{\s*size:\s*${w}mm ${h}mm;`))
   })
 })
 

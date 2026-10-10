@@ -11,6 +11,7 @@ import { PersonalInfo } from "@/components/perfil/personal-info"
 import { ChangePassword } from "@/components/perfil/change-password"
 import { SecuritySettings } from "@/components/configuracion/security-settings"
 import { PushSettings } from "@/components/notifications/push-settings"
+import { ZonaDePeligro } from "@/components/perfil/zona-de-peligro"
 import { Camera, Trash2, Loader2, User, Shield, Info, Bell } from "lucide-react"
 import { toast } from "sonner"
 
@@ -31,6 +32,7 @@ export default function PerfilPage() {
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [loading, setLoading] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [tab, setTab] = useState("general")
 
   useEffect(() => {
     fetch("/api/users/profile", { cache: "no-store" })
@@ -41,6 +43,11 @@ export default function PerfilPage() {
       })
       .catch(() => toast.error("Error al cargar perfil"))
       .finally(() => setLoading(false))
+  }, [])
+
+  // Deep link de /legal/eliminar-cuenta: /perfil#eliminar abre la pestaña de seguridad.
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hash === "#eliminar") setTab("seguridad")
   }, [])
 
   const currentAvatar = avatarUrl ?? session?.user?.avatar ?? null
@@ -152,7 +159,7 @@ export default function PerfilPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="general">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="general" className="gap-2">
             <User className="h-4 w-4" />
@@ -253,6 +260,8 @@ export default function PerfilPage() {
           {profile && (
             <SecuritySettings totpEnabled={profile.totpEnabled} />
           )}
+
+          <ZonaDePeligro />
         </TabsContent>
 
         <TabsContent value="notificaciones" className="space-y-4 mt-4">

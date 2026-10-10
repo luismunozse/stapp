@@ -11,12 +11,14 @@ export function mockAuthSuccess(overrides?: {
   organizationId?: string
   userId?: string
   role?: string
+  sucursalId?: string | null
 }) {
   vi.mocked(auth).mockResolvedValue({
     user: {
       id: overrides?.userId || "user-1",
       organizationId: overrides?.organizationId || "org-1",
       role: overrides?.role || "ADMIN",
+      sucursalId: overrides?.sucursalId ?? null,
       email: "test@test.com",
     },
     expires: new Date(Date.now() + 86400000).toISOString(),

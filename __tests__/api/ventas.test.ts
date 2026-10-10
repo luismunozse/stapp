@@ -27,7 +27,13 @@ vi.mock("@/lib/webhooks/dispatcher", () => ({
   emitWebhookEvent: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock("@/lib/depositos", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/depositos")>()),
+  depositoPermitido: vi.fn(),
+}))
+
 import { supabaseAdmin } from "@/lib/supabase"
+import { depositoPermitido, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { GET, POST } from "@/app/api/ventas/route"
 import { PUT } from "@/app/api/ventas/[id]/route"
 
@@ -604,6 +610,54 @@ describe("PUT /api/ventas/[id] — depositoId", () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(depositoPermitido).mockResolvedValue(true)
+  })
+
+  it("rechaza con 400 un depositoId no permitido y NO llama a la RPC", async () => {
+    mockAuthSuccess({ role: "ADMIN", sucursalId: "suc-1" })
+    vi.mocked(depositoPermitido).mockResolvedValue(false)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
+    })
+
+    const [req, ctx] = createPutRequest({ ...editBody, depositoId: "dep-ajeno" })
+    const { status, body } = await parseResponse(await PUT(req, ctx))
+
+    expect(status).toBe(400)
+    expect(body.error).toBe(DEPOSITO_INVALIDO)
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it("valida el depositoId con alcance sucursal, el rol y la sucursal de la sesion", async () => {
+    mockAuthSuccess({ role: "ADMIN", sucursalId: "suc-1", organizationId: "org-9" })
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
+    })
+
+    const [req, ctx] = createPutRequest({ ...editBody, depositoId: "dep-2" })
+    await PUT(req, ctx)
+
+    expect(depositoPermitido).toHaveBeenCalledWith({
+      depositoId: "dep-2",
+      organizationId: "org-9",
+      role: "ADMIN",
+      userSucursalId: "suc-1",
+      alcance: "sucursal",
+    })
+  })
+
+  it("sin depositoId no valida (queda el default del servidor)", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
+    })
+
+    const [req, ctx] = createPutRequest(editBody)
+    await PUT(req, ctx)
+
+    expect(depositoPermitido).not.toHaveBeenCalled()
   })
 
   it("pasa depositoId a la RPC editar_venta_atomica como p_deposito_id", async () => {

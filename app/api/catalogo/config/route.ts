@@ -26,6 +26,8 @@ const upsertSchema = z.object({
   banner_url: z.string().url().nullable().optional(),
   trust_badges: z.array(trustBadgeSchema).max(6).optional(),
   activo: z.boolean().optional(),
+  // Horas que una solicitud pendiente retiene stock (migración 337).
+  reserva_horas: z.number().int().min(1).max(720).optional(),
 })
 
 function normalizarSlug(texto: string): string {

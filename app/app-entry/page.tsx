@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { STAppLogo } from "@/components/shared/stapp-logo"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
+import { isValidTenantSlug } from "@/lib/account-deletion/urls"
 import {
   ArrowRight,
   Building2,
@@ -116,7 +117,7 @@ export default function AppEntryPage() {
       return
     }
 
-    if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(trimmed)) {
+    if (!isValidTenantSlug(trimmed)) {
       setError("Solo letras, numeros y guiones (sin espacios)")
       return
     }

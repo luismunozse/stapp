@@ -58,4 +58,19 @@ describe("validarDestinoWhatsApp", () => {
     if (!r.valido) expect(r.motivo).toMatch(/8/)
     else throw new Error("deberia ser invalido")
   })
+
+  it("acepta un movil espanol de 9 digitos con pais ES", () => {
+    expect(validarDestinoWhatsApp("612345678", "ES").valido).toBe(true)
+    expect(validarDestinoWhatsApp("+34 612 34 56 78", "ES").valido).toBe(true)
+  })
+
+  it("rechaza un numero espanol demasiado corto", () => {
+    const r = validarDestinoWhatsApp("6123456", "ES")
+    expect(r.valido).toBe(false)
+    if (!r.valido) expect(r.motivo).toMatch(/Espa/)
+  })
+
+  it("acepta un movil espanol con prefijo internacional 00", () => {
+    expect(validarDestinoWhatsApp("0034612345678", "ES").valido).toBe(true)
+  })
 })

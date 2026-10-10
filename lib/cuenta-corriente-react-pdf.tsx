@@ -234,6 +234,7 @@ export function ReciboCCDocument({
           <BandaCliente
             label="Recibimos de"
             cliente={data.cliente}
+            pais={data.pais}
             campos={["dni", "telefono", "email", "direccion"]}
             espacioInferior={0}
             espacioDerecha={8}
@@ -332,6 +333,7 @@ export function ResumenCCDocument({
           <BandaCliente
             label="Cliente"
             cliente={data.cliente}
+            pais={data.pais}
             campos={["dni", "telefono", "email", "direccion"]}
             espacioInferior={0}
             espacioDerecha={8}

@@ -63,6 +63,7 @@ export function CatalogoCompartirTab() {
   const [bannerUrl, setBannerUrl] = useState<string | null>(null)
   const [uploadingBanner, setUploadingBanner] = useState(false)
   const [activo, setActivo] = useState(false)
+  const [reservaHoras, setReservaHoras] = useState("48")
   const [trustBadges, setTrustBadges] = useState<TrustBadge[]>([])
   const bannerInputRef = useRef<HTMLInputElement>(null)
 
@@ -81,6 +82,7 @@ export function CatalogoCompartirTab() {
         setWhatsapp(data.config.whatsapp ?? "")
         setBannerUrl(data.config.banner_url ?? null)
         setActivo(data.config.activo)
+        setReservaHoras(String(data.config.reserva_horas ?? 48))
         setTrustBadges(Array.isArray(data.config.trust_badges) ? data.config.trust_badges : [])
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error cargando configuración")
@@ -117,6 +119,11 @@ export function CatalogoCompartirTab() {
   }
 
   const handleSave = async () => {
+    const horas = Number(reservaHoras)
+    if (!Number.isInteger(horas) || horas < 1 || horas > 720) {
+      toast.error("La reserva de stock debe ser un número entero de horas entre 1 y 720")
+      return
+    }
     setSaving(true)
     try {
       const payload = {
@@ -128,6 +135,9 @@ export function CatalogoCompartirTab() {
         banner_url: bannerUrl,
         trust_badges: trustBadges.filter((b) => b.label.trim().length > 0).slice(0, MAX_TRUST_BADGES),
         activo,
+        // Antes de aplicar la migración 337 la columna no existe: no se manda,
+        // para no romper el guardado de los demás campos.
+        ...(typeof config?.reserva_horas === "number" && { reserva_horas: horas }),
       }
       const res = await fetch("/api/catalogo/config", {
         method: "PUT",
@@ -306,6 +316,25 @@ export function CatalogoCompartirTab() {
                 placeholder="+5491112345678"
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="reserva-horas">Reserva de stock (horas)</Label>
+            <Input
+              id="reserva-horas"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={720}
+              step={1}
+              value={reservaHoras}
+              onChange={(e) => setReservaHoras(e.target.value)}
+              className="mt-1 w-32"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Los pedidos pendientes liberan el stock reservado pasado este tiempo (entre 1 y 720 horas).
+              El pedido sigue en tus cotizaciones.
+            </p>
           </div>
 
           <div className="pt-2 border-t">

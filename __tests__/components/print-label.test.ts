@@ -8,6 +8,13 @@ import {
   DEFAULT_LABEL_SIZE,
   type LabelData,
 } from "@/components/ordenes/print-label"
+import { resolveEtiquetaSize } from "@/components/ordenes/etiqueta-size-org"
+
+// El tamano por defecto sale de la org (red). Aca se aisla: los tests de
+// coordinacion de promesas no deben tocar fetch.
+vi.mock("@/components/ordenes/etiqueta-size-org", () => ({
+  resolveEtiquetaSize: vi.fn(() => Promise.resolve("60x40")),
+}))
 
 const baseData: LabelData = {
   codigoOrden: "A-1",
@@ -35,6 +42,36 @@ describe("buildLabelHtml — tamaños y modos", () => {
 
   it("rollo 80mm: @page 80mm auto", () => {
     expect(buildLabelHtml(baseData, "80mm", "")).toContain("size: 80mm auto")
+  })
+})
+
+describe("buildLabelHtml — die-cut entra siempre en una sola página", () => {
+  // Con el body del mismo alto exacto que la página, cualquier margen que sume
+  // el diálogo de impresión o el driver empuja lo que sobra a una segunda hoja,
+  // y la térmica gasta dos etiquetas. El contenido tiene que ocupar el área
+  // imprimible (100%) y recortar lo que no entra.
+  it.each(["40x30", "50x30", "50x40", "60x40"] as const)(
+    "%s: llena el área imprimible y recorta, sin alto fijo en mm",
+    (size) => {
+      const html = buildLabelHtml(baseData, size, "")
+      expect(html).toMatch(/html\s*\{[^}]*height:\s*100%[^}]*overflow:\s*hidden/)
+      const body = html.match(/body\s*\{([^}]*)\}/)?.[1] ?? ""
+      expect(body).toMatch(/height:\s*100%/)
+      expect(body).toMatch(/overflow:\s*hidden/)
+      expect(body).not.toMatch(/height:\s*\d+(\.\d+)?mm/)
+    },
+  )
+
+  it("si falta alto, se recorta la info y no la fecha del pie", () => {
+    const html = buildLabelHtml(baseData, "40x30", "")
+    const info = html.match(/\.info\s*\{([^}]*)\}/)?.[1] ?? ""
+    expect(info).toMatch(/min-height:\s*0/)
+    expect(info).toMatch(/overflow:\s*hidden/)
+  })
+
+  it("los rollos no se recortan: alto automático", () => {
+    const html = buildLabelHtml(baseData, "58mm", "")
+    expect(html).not.toMatch(/html\s*\{[^}]*overflow:\s*hidden/)
   })
 })
 
@@ -191,6 +228,9 @@ describe("printDeviceLabel — el promise cierra recién cuando el print ocurri�
 
     // baseUrl vacío ⇒ no se genera QR, así que no hay await de qrcode en medio.
     const { state, done } = track(printDeviceLabel(ingresoData, ""))
+    // El tamaño se resuelve (async) antes de armar el iframe: hay que dejar
+    // que exista antes de dispararle el onload.
+    await flush()
     expect(fake.print).not.toHaveBeenCalled()
 
     fake.fireOnload()
@@ -266,5 +306,31 @@ describe("printDeviceLabel — el promise cierra recién cuando el print ocurri�
     expect(fake.print).toHaveBeenCalledTimes(1)
     await done
     expect(state.value).toBe("resolved")
+  })
+})
+
+describe("printDeviceLabel — tamaño", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    document.body.innerHTML = ""
+  })
+
+  function printedHtml(fake: ReturnType<typeof installFakeIframe>) {
+    return (fake.doc.write.mock.calls[0]?.[0] ?? "") as string
+  }
+
+  it("sin opts.size usa el tamaño resuelto de la org", async () => {
+    vi.mocked(resolveEtiquetaSize).mockResolvedValueOnce("58mm")
+    const fake = installFakeIframe({ readyState: "complete", images: [loadedImg()] })
+    await printDeviceLabel(ingresoData, "")
+    expect(printedHtml(fake)).toContain("size: 58mm auto")
+  })
+
+  it("opts.size explícito gana y no consulta a la org", async () => {
+    vi.mocked(resolveEtiquetaSize).mockClear()
+    const fake = installFakeIframe({ readyState: "complete", images: [loadedImg()] })
+    await printDeviceLabel(ingresoData, "", { size: "40x30" })
+    expect(printedHtml(fake)).toContain("size: 40mm 30mm")
+    expect(resolveEtiquetaSize).not.toHaveBeenCalled()
   })
 })

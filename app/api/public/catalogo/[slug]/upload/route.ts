@@ -3,6 +3,7 @@ import { supabaseAdmin, STORAGE_BUCKETS, getPublicUrl } from "@/lib/supabase"
 import { rateLimit } from "@/lib/rate-limit"
 import { detectImageMime } from "@/lib/image-magic-bytes"
 import crypto from "node:crypto"
+import { catalogoOrgHash } from "@/lib/account-deletion/storage"
 
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"]
 const MAX_BYTES = 4 * 1024 * 1024
@@ -78,11 +79,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   // (era discoverable en cada URL pública). Bucket sigue siendo público
   // hoy — TODO: migrar a bucket privado con signed URLs.
   const ext = realMime === "image/jpeg" ? "jpg" : realMime === "image/png" ? "png" : "webp"
-  const orgHash = crypto
-    .createHash("sha256")
-    .update(`${config.organization_id}:${process.env.NEXTAUTH_SECRET || "stapp"}`)
-    .digest("hex")
-    .slice(0, 16)
+  const orgHash = catalogoOrgHash(config.organization_id)
   const rand = crypto.randomBytes(16).toString("hex")
   const path = `${orgHash}/cotizacion-publica/${Date.now()}-${rand}.${ext}`
 
