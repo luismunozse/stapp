@@ -134,16 +134,94 @@ describe("CredencialesArcaDelegado", () => {
    * delegacion funciona pero falta dar de alta el punto de venta en ARCA. Son
    * dos problemas distintos y el mensaje tiene que distinguirlos.
    */
-  it("distingue delegación OK sin puntos de venta dados de alta", async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ ok: true, puntosVenta: [] }) })
-    render(
-      <CredencialesArcaDelegado allowEdit cuitPlataforma="23944498389" estadoInicial={CONFIGURADO} />
-    )
+  describe("puntos de venta que ARCA deja usar desde un sistema", () => {
+    function probar(respuesta: any) {
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ ok: true, ...respuesta }) })
+      render(
+        <CredencialesArcaDelegado allowEdit cuitPlataforma="23944498389" estadoInicial={CONFIGURADO} />
+      )
+      fireEvent.click(screen.getByRole("button", { name: /probar conexi/i }))
+    }
 
-    fireEvent.click(screen.getByRole("button", { name: /probar conexi/i }))
+    it("lista vacía + Monotributo: nombra el sistema de Monotributo", async () => {
+      probar({ puntosVenta: [], puntoVentaConfigurado: 1, condicionFiscal: "MONOTRIBUTO" })
 
-    await waitFor(() => {
-      expect(screen.getByText(/sin puntos de venta/i)).toBeInTheDocument()
+      await waitFor(() => {
+        expect(screen.getByText(/no tiene puntos de venta habilitados para facturar desde un sistema/i)).toBeInTheDocument()
+      })
+      const texto = screen.getByText(/habilitados para facturar/i).textContent ?? ""
+      expect(texto).toContain("Factura Electronica - Monotributo - Web Service")
+      expect(texto).not.toContain("RECE")
+    })
+
+    it("lista vacía + Responsable Inscripto: nombra el sistema RECE", async () => {
+      probar({ puntosVenta: [], puntoVentaConfigurado: 1, condicionFiscal: "RESPONSABLE_INSCRIPTO" })
+
+      await waitFor(() => {
+        expect(screen.getByText(/habilitados para facturar/i)).toBeInTheDocument()
+      })
+      const texto = screen.getByText(/habilitados para facturar/i).textContent ?? ""
+      expect(texto).toContain("RECE para aplicativo y Web Service")
+      expect(texto).not.toContain("Monotributo - Web Service")
+    })
+
+    it("lista vacía sin condición fiscal: nombra los dos sistemas", async () => {
+      probar({ puntosVenta: [] })
+
+      await waitFor(() => {
+        expect(screen.getByText(/habilitados para facturar/i)).toBeInTheDocument()
+      })
+      const texto = screen.getByText(/habilitados para facturar/i).textContent ?? ""
+      expect(texto).toContain("Factura Electronica - Monotributo - Web Service")
+      expect(texto).toContain("RECE para aplicativo y Web Service")
+    })
+
+    it("el punto de venta cargado no está en la lista", async () => {
+      probar({
+        puntosVenta: [{ numero: 2, bloqueado: false }, { numero: 4, bloqueado: false }],
+        puntoVentaConfigurado: 1,
+        condicionFiscal: "MONOTRIBUTO",
+      })
+
+      await waitFor(() => {
+        expect(screen.getByText(/el punto de venta 1 que cargaste no está habilitado/i)).toBeInTheDocument()
+      })
+      const texto = screen.getByText(/que cargaste/i).textContent ?? ""
+      expect(texto).toContain("punto de venta 2, punto de venta 4")
+      expect(texto).toContain("creá el 1 con el sistema")
+      expect(texto).toContain("Factura Electronica - Monotributo - Web Service")
+    })
+
+    it("el punto de venta cargado está bloqueado", async () => {
+      probar({
+        puntosVenta: [{ numero: 3, bloqueado: true }],
+        puntoVentaConfigurado: 3,
+        condicionFiscal: "MONOTRIBUTO",
+      })
+
+      await waitFor(() => {
+        expect(screen.getByText(/el punto de venta 3 está bloqueado en ARCA/i)).toBeInTheDocument()
+      })
+    })
+
+    it("el punto de venta cargado está habilitado: mensaje de éxito", async () => {
+      probar({
+        puntosVenta: [{ numero: 3, bloqueado: false }],
+        puntoVentaConfigurado: 3,
+        condicionFiscal: "MONOTRIBUTO",
+      })
+
+      await waitFor(() => {
+        expect(screen.getByText(/Conexión OK\. ARCA reconoce: punto de venta 3/)).toBeInTheDocument()
+      })
+    })
+
+    it("sin puntoVentaConfigurado (servidor viejo) conserva el mensaje de éxito", async () => {
+      probar({ puntosVenta: [{ numero: 2, bloqueado: false }] })
+
+      await waitFor(() => {
+        expect(screen.getByText(/Conexión OK\. ARCA reconoce: punto de venta 2/)).toBeInTheDocument()
+      })
     })
   })
 

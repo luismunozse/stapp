@@ -96,6 +96,18 @@ describe("POST /api/facturacion-electronica/probar", () => {
     expect(body.puntosVenta).toEqual([{ numero: 1, bloqueado: false }])
   })
 
+  it("devuelve el punto de venta y la condición fiscal de la fila guardada", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    mockSupabaseFrom({ facturacion_credenciales: createChainMock(FILA_DELEGADA) })
+    vi.mocked(arcaDirectProvider.probarConexion).mockResolvedValue({ ok: true, puntosVenta: [] })
+
+    const { body } = await parseResponse(await POST())
+
+    expect(body.puntoVentaConfigurado).toBe(1)
+    expect(body.condicionFiscal).toBe("RESPONSABLE_INSCRIPTO")
+    expect(body.puntosVenta).toEqual([])
+  })
+
   /**
    * La delegación sin hacer es el caso ESPERADO del primer uso, no un error
    * del servidor: 200 con ok:false para que la UI muestre la instrucción.

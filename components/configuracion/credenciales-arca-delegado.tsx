@@ -55,6 +55,15 @@ function formatHora(fecha: Date, timeZone: string): string {
   }
 }
 
+/** Sistema de ARCA con el que hay que crear el punto de venta para que un sistema externo lo vea. */
+function nombreSistemaPuntoVenta(condicionFiscal: unknown): string {
+  const monotributo = "“Factura Electronica - Monotributo - Web Service”"
+  const inscripto = "“RECE para aplicativo y Web Service”"
+  if (condicionFiscal === "MONOTRIBUTO") return monotributo
+  if (condicionFiscal === "RESPONSABLE_INSCRIPTO") return inscripto
+  return `${monotributo} (Monotributo) o ${inscripto} (Responsable Inscripto)`
+}
+
 export function CredencialesArcaDelegado({
   allowEdit,
   cuitPlataforma,
@@ -153,22 +162,43 @@ export function CredencialesArcaDelegado({
       }
 
       const puntos: Array<{ numero: number; bloqueado: boolean }> = data.puntosVenta ?? []
+      const sistema = nombreSistemaPuntoVenta(data.condicionFiscal)
+
       if (puntos.length === 0) {
-        // 602: AFIP nos atendió en nombre del taller pero no encontró nada que
-        // listar. La delegación funciona; falta el alta del punto de venta.
+        // ARCA nos atendió en nombre del taller pero no lista nada: la delegación
+        // funciona. Los puntos de venta de "Factura en línea" (manual) no se ven
+        // desde un sistema; hay que crear uno con el sistema que corresponde.
         setMensaje({
           tone: "warn",
-          text: "La delegación funciona, pero ARCA responde sin puntos de venta dados de alta. Creá uno en ARCA para poder emitir.",
+          text: `La delegación funciona, pero ARCA no tiene puntos de venta habilitados para facturar desde un sistema. Los de “Factura en línea” no sirven: en ARCA, entrá a Administración de puntos de venta y domicilios, creá uno nuevo con el sistema ${sistema} y cargá ese número acá.`,
         })
         return
       }
 
-      setMensaje({
-        tone: "ok",
-        text: `Conexión OK. ARCA reconoce: ${puntos
-          .map((p) => `punto de venta ${p.numero}${p.bloqueado ? " (bloqueado)" : ""}`)
-          .join(", ")}.`,
-      })
+      const configurado: number | undefined =
+        data.puntoVentaConfigurado != null ? Number(data.puntoVentaConfigurado) : undefined
+      const encontrado = configurado === undefined ? undefined : puntos.find((p) => p.numero === configurado)
+      const lista = puntos
+        .map((p) => `punto de venta ${p.numero}${p.bloqueado ? " (bloqueado)" : ""}`)
+        .join(", ")
+
+      if (configurado !== undefined && !encontrado) {
+        setMensaje({
+          tone: "warn",
+          text: `La conexión funciona, pero el punto de venta ${configurado} que cargaste no está habilitado para facturar desde un sistema. ARCA reconoce: ${lista}. Cargá uno de esos o creá el ${configurado} con el sistema ${sistema}.`,
+        })
+        return
+      }
+
+      if (encontrado?.bloqueado) {
+        setMensaje({
+          tone: "warn",
+          text: `La conexión funciona, pero el punto de venta ${configurado} está bloqueado en ARCA. Desbloquealo en ARCA o cargá otro.`,
+        })
+        return
+      }
+
+      setMensaje({ tone: "ok", text: `Conexión OK. ARCA reconoce: ${lista}.` })
     } catch {
       setMensaje({ tone: "error", text: "Error al probar la conexión" })
     } finally {
