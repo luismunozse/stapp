@@ -148,6 +148,27 @@ describe("POST /api/facturacion-electronica/probar", () => {
       expect(leerVencimientoTicket).not.toHaveBeenCalled()
     })
 
+    it("lo agrega si el 600 no es el primer error de la lista", async () => {
+      vi.mocked(leerVencimientoTicket).mockResolvedValue(new Date(Date.now() + 3 * 3600_000).toISOString())
+      probarConError("602: x; 600: y")
+
+      const { body } = await parseResponse(await POST())
+
+      expect(body.permisoRenuevaAt).toBeDefined()
+    })
+
+    it.each(["6000: x", "Error: timeout 600 ms", "602: x; 6001: y"])(
+      "no lo agrega con falsos positivos (%s)",
+      async (error) => {
+        vi.mocked(leerVencimientoTicket).mockResolvedValue(new Date(Date.now() + 3 * 3600_000).toISOString())
+        probarConError(error)
+
+        const { body } = await parseResponse(await POST())
+
+        expect(body).not.toHaveProperty("permisoRenuevaAt")
+      }
+    )
+
     it("no lo agrega si no hay ticket cacheado", async () => {
       vi.mocked(leerVencimientoTicket).mockResolvedValue(null)
       probarConError(ERROR_600)

@@ -85,7 +85,7 @@ export async function POST() {
   // que se emita uno nuevo. Eso pasa cuando le quedan menos de WSAA_MARGIN_MS,
   // así que ese es el momento a partir del cual probar de nuevo tiene sentido.
   let permisoRenuevaAt: string | undefined
-  if (!resultado.ok && /^\s*600(?!\d)/.test(resultado.error ?? "")) {
+  if (!resultado.ok && /(^|;\s*)600(?!\d)\s*:/.test(resultado.error ?? "")) {
     const vence = await leerVencimientoTicket({
       // Misma clave que arma el proveedor al autenticarse (cert de plataforma).
       organizationId: organizationId!,

@@ -180,8 +180,21 @@ describe("CredencialesArcaDelegado", () => {
         expect(screen.getByText(/ARCA todavía no reconoce la delegación/i)).toBeInTheDocument()
       })
       expect(screen.getByText(/a partir de las 15:30/)).toBeInTheDocument()
-      expect(screen.getByText(/ya le avisamos/i)).toBeInTheDocument()
+      expect(screen.queryByText(/ya le avisamos/i)).not.toBeInTheDocument()
+      expect(screen.getByText(/falta que STApp la acepte\. ARCA vuelve/)).toBeInTheDocument()
       expect(screen.queryByText(/24 h/i)).not.toBeInTheDocument()
+    })
+
+    it("con una zona horaria inválida igual muestra la explicación con HH:MM", async () => {
+      mockTimezone = "No/Existe"
+      probarConPermiso("2026-10-09T18:30:00.000Z")
+
+      await waitFor(() => {
+        expect(screen.getByText(/ARCA todavía no reconoce la delegación/i)).toBeInTheDocument()
+      })
+      expect(screen.getByText(/a partir de las 15:30/)).toBeInTheDocument()
+      expect(screen.queryByText(/Error al probar/i)).not.toBeInTheDocument()
+      mockTimezone = "America/Argentina/Buenos_Aires"
     })
 
     it("respeta otra zona horaria", async () => {

@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useCurrency } from "@/contexts/currency-context"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 type CondicionFiscal = "MONOTRIBUTO" | "RESPONSABLE_INSCRIPTO"
 
@@ -39,6 +40,19 @@ const TONOS: Record<Mensaje["tone"], string> = {
   ok: "bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500",
   warn: "bg-warning-50 dark:bg-warning/15 border border-warning-200 dark:border-warning/30 text-warning-700 dark:text-warning-500",
   error: "bg-destructive/10 border border-destructive/30 text-destructive",
+}
+
+/**
+ * h23 explícito: es-AR cae a 12 h ("03:30 p. m.") según el motor de ICU. Una zona
+ * inválida tira RangeError; se cae a la default para no tapar la explicación.
+ */
+function formatHora(fecha: Date, timeZone: string): string {
+  const opciones: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }
+  try {
+    return new Intl.DateTimeFormat("es-AR", { ...opciones, timeZone }).format(fecha)
+  } catch {
+    return new Intl.DateTimeFormat("es-AR", { ...opciones, timeZone: DEFAULT_TIMEZONE }).format(fecha)
+  }
 }
 
 export function CredencialesArcaDelegado({
@@ -124,15 +138,10 @@ export function CredencialesArcaDelegado({
           // de esa hora volver a probar devuelve lo mismo, y la hora se muestra
           // en la zona de la organización, no en la del navegador.
           // h23 explícito: es-AR cae a 12 h ("03:30 p. m.") según el motor de ICU.
-          const hora = new Intl.DateTimeFormat("es-AR", {
-            hour: "2-digit",
-            minute: "2-digit",
-            hourCycle: "h23",
-            timeZone: timezone,
-          }).format(new Date(data.permisoRenuevaAt))
+          const hora = formatHora(new Date(data.permisoRenuevaAt), timezone)
           setMensaje({
             tone: "warn",
-            text: `ARCA todavía no reconoce la delegación. Si ya la hiciste, falta que STApp la acepte (ya le avisamos). ARCA vuelve a leer los permisos a partir de las ${hora}: probá de nuevo después.`,
+            text: `ARCA todavía no reconoce la delegación. Si ya la hiciste, falta que STApp la acepte. ARCA vuelve a leer los permisos a partir de las ${hora}: probá de nuevo después.`,
           })
           return
         }
