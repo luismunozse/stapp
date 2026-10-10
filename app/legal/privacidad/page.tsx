@@ -1,5 +1,6 @@
 import { Metadata } from "next"
 import Link from "next/link"
+import { CONTACT_EMAIL } from "@/lib/contact"
 import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 export const metadata: Metadata = {
@@ -46,6 +47,33 @@ export default function PrivacidadPage() {
           <li><strong>Información del dispositivo:</strong> tipo de navegador, sistema operativo, dirección IP</li>
           <li><strong>Cookies y tecnologías similares:</strong> para mejorar su experiencia</li>
         </ul>
+
+        <h3 className="text-lg font-medium text-gray-900 mt-6 mb-3">2.3 Aplicación móvil (Android)</h3>
+        <p className="text-gray-600 mb-4">
+          La aplicación de STApp para Android solicita los siguientes permisos. Todos son opcionales:
+          se los pedimos recién cuando usa la función correspondiente y puede revocarlos en cualquier
+          momento desde los ajustes de Android sin perder acceso al resto del Servicio.
+        </p>
+        <ul className="list-disc list-inside text-gray-600 space-y-2 ml-4">
+          <li>
+            <strong>Cámara y fotos:</strong> para adjuntar fotos de los equipos a una orden de servicio.
+            Sólo accedemos a las imágenes que usted captura o selecciona expresamente, y se almacenan
+            asociadas a la orden dentro de su cuenta. No leemos el resto de su galería.
+          </li>
+          <li>
+            <strong>Notificaciones:</strong> si las activa, el dispositivo genera un identificador
+            (token de Firebase Cloud Messaging) que guardamos para poder enviarle avisos sobre sus
+            órdenes. Dejamos de usarlo cuando el dispositivo lo invalida (por ejemplo, al
+            desinstalar la aplicación) y puede revocar el permiso desde los ajustes del teléfono.
+          </li>
+          <li>
+            <strong>Datos técnicos de la aplicación:</strong> plataforma y versión instalada, para
+            diagnosticar errores y avisarle cuando hay una actualización disponible.
+          </li>
+        </ul>
+        <p className="text-gray-600 mt-4">
+          No utilizamos identificadores de publicidad ni rastreamos su actividad fuera de STApp.
+        </p>
       </section>
 
       <section className="mb-8">
@@ -70,7 +98,13 @@ export default function PrivacidadPage() {
           No vendemos su información personal. Podemos compartir su información en las siguientes circunstancias:
         </p>
         <ul className="list-disc list-inside text-gray-600 space-y-2 ml-4">
-          <li><strong>Proveedores de servicios:</strong> terceros que nos ayudan a operar el Servicio (hosting, procesamiento de pagos, análisis)</li>
+          <li>
+            <strong>Proveedores de servicios:</strong> terceros que nos ayudan a operar el Servicio y
+            que sólo procesan los datos necesarios para su función: alojamiento de la aplicación
+            (Vercel), base de datos y almacenamiento de archivos (Supabase), procesamiento de pagos
+            (Mercado Pago), envío de notificaciones push (Google Firebase Cloud Messaging), envío de
+            correos transaccionales (EnvialoSimple, Resend) y mensajería de WhatsApp.
+          </li>
           <li><strong>Cumplimiento legal:</strong> cuando sea requerido por ley o para proteger derechos</li>
           <li><strong>Transferencia de negocio:</strong> en caso de fusión, adquisición o venta de activos</li>
           <li><strong>Con su consentimiento:</strong> cuando usted nos autorice expresamente</li>
@@ -128,7 +162,13 @@ export default function PrivacidadPage() {
           <li><strong>Retiro del consentimiento:</strong> retirar el consentimiento en cualquier momento</li>
         </ul>
         <p className="text-gray-600 mt-4">
-          Para ejercer estos derechos, puede hacerlo desde su perfil. La eliminación de la cuenta se explica en{" "}
+          Para ejercer estos derechos, puede hacerlo desde su perfil o
+          escribiéndonos a{" "}
+          <a href={`mailto:${CONTACT_EMAIL}`} className="text-blue-600 hover:underline">
+            {CONTACT_EMAIL}
+          </a>
+          . Si desea eliminar su cuenta y los datos asociados, incluidos los de la aplicación móvil,
+          encontrará los pasos en{" "}
           <Link href="/legal/eliminar-cuenta" className="text-blue-600 hover:underline">Eliminar mi cuenta</Link>.
         </p>
       </section>
