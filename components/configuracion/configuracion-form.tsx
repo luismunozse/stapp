@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Upload, Trash2, Save, ImageIcon } from "lucide-react"
+import { compressImageToDataUrl } from "@/lib/images/compress-image"
 import { toast } from "sonner"
 import { useModal } from "@/contexts/modal-context"
 import { NotificationSettings } from "@/components/configuracion/notification-settings"
@@ -302,37 +303,6 @@ export function ConfiguracionForm({
     }
   }
 
-  const compressImage = (file: File, maxWidth = 400, quality = 0.8): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        const img = new Image()
-        img.onload = () => {
-          const canvas = document.createElement("canvas")
-          let w = img.width
-          let h = img.height
-          if (w > maxWidth) {
-            h = Math.round((h * maxWidth) / w)
-            w = maxWidth
-          }
-          canvas.width = w
-          canvas.height = h
-          const ctx = canvas.getContext("2d")!
-          ctx.drawImage(img, 0, 0, w, h)
-          // Usar PNG si es transparente, JPEG si no
-          const isPng = file.type === "image/png"
-          const outputType = isPng ? "image/png" : "image/jpeg"
-          const dataUrl = canvas.toDataURL(outputType, isPng ? undefined : quality)
-          resolve(dataUrl)
-        }
-        img.onerror = reject
-        img.src = event.target?.result as string
-      }
-      reader.onerror = reject
-      reader.readAsDataURL(file)
-    })
-  }
-
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -348,7 +318,7 @@ export function ConfiguracionForm({
     }
 
     try {
-      const compressed = await compressImage(file)
+      const compressed = await compressImageToDataUrl(file)
       setPreview(compressed)
       setMessage(null)
     } catch {
