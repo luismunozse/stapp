@@ -205,18 +205,23 @@ export function OnboardingWizard() {
     }
   }
 
-  const handleComplete = async () => {
+  // Marks onboarding as done without navigating, so callers pick their own destination.
+  const completeOnboarding = async (destination: string) => {
     setLoading(true)
     try {
       await fetch("/api/onboarding/complete", { method: "POST" })
-      router.push("/dashboard")
-      router.refresh()
     } catch (err) {
       console.error("Error completing onboarding:", err)
     } finally {
+      // Navigate even if completion failed: the dashboard redirects back to
+      // onboarding when it did not persist, and the CTA must never be a no-op.
+      router.push(destination)
+      router.refresh()
       setLoading(false)
     }
   }
+
+  const handleComplete = () => completeOnboarding("/dashboard")
 
   const handleSkipToDashboard = async () => {
     await handleComplete()
@@ -450,9 +455,7 @@ export function OnboardingWizard() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <Button
-                  onClick={() => {
-                    handleComplete().then(() => router.push("/ordenes?new=true"))
-                  }}
+                  onClick={() => completeOnboarding("/ordenes?nueva=1")}
                   className="w-full"
                   size="lg"
                 >
