@@ -13,6 +13,13 @@ import { z } from "zod"
 /** Pagina donde el tester acepta la invitacion a la prueba. */
 export const PLAY_TESTING_URL = "https://play.google.com/apps/testing/ar.com.stapp.app"
 
+/**
+ * Tope de ids por PATCH del superadmin. El `.in("id", ids)` viaja en la URL de
+ * PostgREST y miles de ids la revientan; la pantalla parte las selecciones
+ * grandes en lotes de este tamaño.
+ */
+export const BETA_MAX_IDS_POR_LOTE = 200
+
 export const BETA_ESTADOS = ["PENDIENTE", "AGREGADO", "DESCARTADO"] as const
 export type BetaEstado = (typeof BETA_ESTADOS)[number]
 
@@ -38,4 +45,16 @@ export function toInscripcion(row: { email: string; estado: string }): Inscripci
   return estado === "AGREGADO"
     ? { email: row.email, estado, linkInvitacion: PLAY_TESTING_URL }
     : { email: row.email, estado }
+}
+
+/**
+ * Correos a pegar en la lista de testers de Play Console: solo los PENDIENTE,
+ * sin repetir (dos usuarios pueden haber cargado la misma cuenta de Google).
+ */
+export function emailsParaPlay(filas: { email: string; estado: string }[]): string[] {
+  const vistos = new Set<string>()
+  for (const f of filas) {
+    if (f.estado === "PENDIENTE") vistos.add(f.email.trim().toLowerCase())
+  }
+  return [...vistos]
 }

@@ -17,6 +17,7 @@ const segmentLabels: Record<string, string> = {
   broadcast: "Broadcast",
   changelog: "Changelog",
   waitlist: "Waitlist iOS",
+  "beta-android": "Beta Android",
   logs: "Auditoría",
   "feature-usage": "Feature Usage",
   "email-campaigns": "Campañas Email",
