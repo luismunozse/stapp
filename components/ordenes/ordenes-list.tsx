@@ -124,6 +124,19 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
     if (fromTurnoId || clienteIdParam) setShowForm(true)
   }, [fromTurnoId, clienteIdParam])
 
+  // ?nueva=1 (quick action, onboarding CTAs): open the creation form once and drop
+  // the param so a refresh or closing the modal does not reopen it.
+  const nuevaParam = searchParams?.get("nueva") === "1"
+  useEffect(() => {
+    if (!nuevaParam) return
+    setShowForm(true)
+    const next = new URLSearchParams(searchParams?.toString() ?? "")
+    next.delete("nueva")
+    const qs = next.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nuevaParam])
+
   // Placeholder rotativo cada 3 segundos
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   useEffect(() => {
