@@ -50,3 +50,25 @@ export function sanitizeTerminologia(
   }
   return clean
 }
+
+/** Feminine words that do not end in a feminine suffix. */
+const FEMENINOS_SIN_SUFIJO = new Set(["moto", "radio", "foto", "mano", "bici"])
+/** Masculine words that end in -a. */
+const MASCULINOS_EN_A = new Set(["sistema", "problema", "programa", "mapa", "dia", "sofa", "tema", "clima", "idioma", "planeta"])
+const SUFIJO_FEMENINO = /(a|cion|sion|dad|tad|tud|umbre)$/
+
+/**
+ * Indefinite article for a vocabulary term, so copy like "¿Tenés un equipo
+ * para cargar?" agrees with feminine terms ("una pieza"). Heuristic on the
+ * first word: genérico shops get free-text terms, so a fixed map cannot cover
+ * them, and the two exception lists catch the common words that break it.
+ */
+export function articuloIndefinido(termino: string): "un" | "una" {
+  const primera = (termino.trim().split(/\s+/)[0] ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+  if (FEMENINOS_SIN_SUFIJO.has(primera)) return "una"
+  if (MASCULINOS_EN_A.has(primera)) return "un"
+  return SUFIJO_FEMENINO.test(primera) ? "una" : "un"
+}

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { TERMINOS, resolveTerminologia, t } from "@/lib/terminologia"
+import { TERMINOS, articuloIndefinido, resolveTerminologia, t } from "@/lib/terminologia"
 
 describe("resolveTerminologia", () => {
   it("sin overrides => todos los defaults", () => {
@@ -31,5 +31,27 @@ describe("t", () => {
     const map = resolveTerminologia(null)
     expect(t(map, "equipo")).toBe("Equipo")
     expect(t(map, "inexistente")).toBe("inexistente")
+  })
+})
+
+describe("articuloIndefinido", () => {
+  it.each([
+    ["Equipo", "un"],
+    ["Vehículo", "un"],
+    ["Artefacto", "un"],
+    ["Rodado", "un"],
+    ["Reloj", "un"],
+    ["Pieza", "una"],
+    ["pieza", "una"],
+    ["Máquina de café", "una"],
+    ["Cortadora de pasto", "una"],
+    ["Instalación eléctrica", "una"],
+    ["Unidad", "una"],
+    ["Moto", "una"],
+    ["Bici", "una"],
+    ["Sistema de riego", "un"],
+    ["  Persiana  ", "una"],
+  ])("%s -> %s", (termino, esperado) => {
+    expect(articuloIndefinido(termino)).toBe(esperado)
   })
 })
