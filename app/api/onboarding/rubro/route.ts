@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { DEFAULT_RUBRO_ID } from "@/lib/rubros"
 import { validarSeleccionRubro, mismoRubro, type SeleccionRubro } from "@/lib/rubros/seleccion"
-import { aplicarCambioDeRubro, contarTiposActivos } from "@/lib/rubros/cambio"
+import { aplicarCambioDeRubro, estadoCoincideConRubro } from "@/lib/rubros/cambio"
 import { countRealOrders, deletePracticeData } from "@/lib/onboarding/practica"
 
 /** Same limit as the signup (app/api/auth/register/route.ts:32). */
@@ -91,10 +91,14 @@ export async function PUT(request: Request) {
     }
 
     // Re-picking the current rubro writes nothing: it keeps the practice and
-    // any vocabulary the shop edited by hand.
+    // any vocabulary the shop edited by hand. Only when the stored tipos match
+    // the rubro: otherwise (half-applied change, failed signup seed) the full
+    // change below runs and repairs them.
     if (mismoRubro(anterior, pedido)) {
-      const tiposActivos = await contarTiposActivos(orgId)
-      return NextResponse.json({ ...pedido, tiposActivos })
+      const estado = await estadoCoincideConRubro(orgId, pedido)
+      if (estado.consistente) {
+        return NextResponse.json({ ...pedido, tiposActivos: estado.tiposActivos })
+      }
     }
 
     await deletePracticeData(orgId)

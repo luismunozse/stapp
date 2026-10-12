@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { seedOrganizationFromRubro } from "@/lib/rubros/seed"
-import { aplicarCambioDeRubro } from "@/lib/rubros/cambio"
+import { aplicarCambioDeRubro, estadoCoincideConRubro } from "@/lib/rubros/cambio"
 import { mismoRubro, type SeleccionRubro } from "@/lib/rubros/seleccion"
 import { getRubro } from "@/lib/rubros"
 
@@ -313,6 +313,27 @@ describe("aplicarCambioDeRubro: custom tipos with a pack codigo", () => {
   })
 })
 
+describe("aplicarCambioDeRubro: every pack codigo taken by a custom tipo", () => {
+  it("skips the tipos upsert and still completes the change", async () => {
+    const fake = await orgSembradaCon("electronica")
+    fake.tables.tipos_dispositivo.push({
+      id: "t-propio",
+      organization_id: ORG,
+      codigo: "CERRADURA",
+      nombre: "Cerradura del taller",
+      es_base: false,
+      activo: true,
+    })
+    fake.calls.length = 0
+
+    await cambiar(fake, sel("electronica"), sel("generico", "cerraduras"))
+
+    expect(fake.calls.filter((c) => c.table === "tipos_dispositivo" && c.op === "upsert")).toEqual([])
+    expect(org(fake)).toMatchObject({ rubro: "generico", rubro_detalle: "cerraduras" })
+    expect(codigosActivos(fake)).toEqual(["CERRADURA"])
+  })
+})
+
 describe("aplicarCambioDeRubro: vocabulary and rubro", () => {
   it("resets the vocabulary to {} when the new pack has no overrides", async () => {
     const fake = await orgSembradaCon("electrodomesticos")
@@ -399,6 +420,20 @@ describe("aplicarCambioDeRubro: checklists", () => {
     ).rejects.toThrow("template boom")
 
     expect(plantillas(fake, "Recepción de artefacto").map((p) => p.activo)).toEqual([true])
+    expect(org(fake).rubro).toBe("electrodomesticos")
+  })
+
+  it("leaves the previous pack's base tipos active when a template fails to insert", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+    fake.failures["checklist_templates.insert"] = "template boom"
+
+    await expect(
+      cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+    ).rejects.toThrow("template boom")
+
+    for (const codigo of codigosDe("electrodomesticos")) {
+      expect(fake.tables.tipos_dispositivo.find((t) => t.codigo === codigo)?.activo).toBe(true)
+    }
     expect(org(fake).rubro).toBe("electrodomesticos")
   })
 
@@ -494,5 +529,61 @@ describe("mismoRubro", () => {
     },
   ])("$caso", ({ actual, pedido, esperado }) => {
     expect(mismoRubro(actual, pedido)).toBe(esperado)
+  })
+})
+
+describe("estadoCoincideConRubro", () => {
+  const consultar = (fake: FakeDb, seleccion: SeleccionRubro) =>
+    estadoCoincideConRubro(ORG, seleccion, fake.client as any)
+
+  it("is consistent for an org the signup just seeded", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+
+    const estado = await consultar(fake, sel("electrodomesticos"))
+
+    expect(estado.consistente).toBe(true)
+    expect(estado.tiposActivos).toBe(
+      getRubro("electrodomesticos").tipos.filter((t) => t.codigo !== "TODOS").length
+    )
+  })
+
+  it("is inconsistent when an active base tipo is outside the requested pack", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+    await cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+    // A half-applied change: the old pack's tipo was never deactivated.
+    fake.tables.tipos_dispositivo.find((t) => t.codigo === "HELADERA")!.activo = true
+
+    expect((await consultar(fake, sel("electronica"))).consistente).toBe(false)
+  })
+
+  it("is inconsistent when the org has no active tipo", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+    for (const t of fake.tables.tipos_dispositivo) t.activo = false
+
+    const estado = await consultar(fake, sel("electrodomesticos"))
+
+    expect(estado).toEqual({ consistente: false, tiposActivos: 0 })
+  })
+
+  it("ignores inactive base tipos and active custom ones outside the pack", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+    await cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+    fake.tables.tipos_dispositivo.push({
+      id: "t-dron",
+      organization_id: ORG,
+      codigo: "DRON",
+      nombre: "Dron",
+      es_base: false,
+      activo: true,
+    })
+
+    expect((await consultar(fake, sel("electronica"))).consistente).toBe(true)
+  })
+
+  it("throws when the tipos cannot be read", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+    fake.failures["tipos_dispositivo.select"] = "estado boom"
+
+    await expect(consultar(fake, sel("electrodomesticos"))).rejects.toThrow("estado boom")
   })
 })

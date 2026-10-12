@@ -13,11 +13,11 @@ import {
 vi.mock("@/lib/rubros/cambio", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/rubros/cambio")>()),
   aplicarCambioDeRubro: vi.fn(),
-  contarTiposActivos: vi.fn(),
+  estadoCoincideConRubro: vi.fn(),
 }))
 
 import { deletePracticeData } from "@/lib/onboarding/practica"
-import { aplicarCambioDeRubro, contarTiposActivos } from "@/lib/rubros/cambio"
+import { aplicarCambioDeRubro, estadoCoincideConRubro } from "@/lib/rubros/cambio"
 import { PUT } from "@/app/api/onboarding/rubro/route"
 
 const enviar = (cuerpo: string) =>
@@ -55,7 +55,7 @@ describe("PUT /api/onboarding/rubro", () => {
     mockOrg()
     vi.mocked(deletePracticeData).mockResolvedValue({ ordenBorrada: true, clienteConservado: false })
     vi.mocked(aplicarCambioDeRubro).mockResolvedValue({ tiposActivos: 7 })
-    vi.mocked(contarTiposActivos).mockResolvedValue(4)
+    vi.mocked(estadoCoincideConRubro).mockResolvedValue({ consistente: true, tiposActivos: 4 })
   })
 
   it("rejects a request without a session", async () => {
@@ -229,7 +229,10 @@ describe("PUT /api/onboarding/rubro", () => {
     expect(body).toEqual({ rubro: "electrodomesticos", rubroDetalle: null, tiposActivos: 4 })
     expect(deletePracticeData).not.toHaveBeenCalled()
     expect(aplicarCambioDeRubro).not.toHaveBeenCalled()
-    expect(contarTiposActivos).toHaveBeenCalledWith("org-1")
+    expect(estadoCoincideConRubro).toHaveBeenCalledWith("org-1", {
+      rubro: "electrodomesticos",
+      rubroDetalle: null,
+    })
   })
 
   it("treats the same genérico trade, modulo spaces, as no change", async () => {
@@ -241,6 +244,42 @@ describe("PUT /api/onboarding/rubro", () => {
     expect(aplicarCambioDeRubro).not.toHaveBeenCalled()
   })
 
+  it("runs the full change for the same rubro when an active base tipo is outside the pack", async () => {
+    vi.mocked(estadoCoincideConRubro).mockResolvedValue({ consistente: false, tiposActivos: 9 })
+
+    const { status, body } = await parseResponse(await put({ rubro: "electrodomesticos" }))
+
+    expect(status).toBe(200)
+    expect(body).toEqual({ rubro: "electrodomesticos", rubroDetalle: null, tiposActivos: 7 })
+    expect(deletePracticeData).toHaveBeenCalledWith("org-1")
+    expect(aplicarCambioDeRubro).toHaveBeenCalledTimes(1)
+  })
+
+  it("runs the full change for the same rubro when the org has no active tipo", async () => {
+    vi.mocked(estadoCoincideConRubro).mockResolvedValue({ consistente: false, tiposActivos: 0 })
+
+    await put({ rubro: "electrodomesticos" })
+
+    expect(deletePracticeData).toHaveBeenCalledWith("org-1")
+    expect(aplicarCambioDeRubro).toHaveBeenCalledTimes(1)
+  })
+
+  it("answers 500 when the consistency check cannot read the tipos", async () => {
+    vi.mocked(estadoCoincideConRubro).mockRejectedValue(new Error("estado boom"))
+
+    const { status } = await parseResponse(await put({ rubro: "electrodomesticos" }))
+
+    expect(status).toBe(500)
+    expect(deletePracticeData).not.toHaveBeenCalled()
+    expect(aplicarCambioDeRubro).not.toHaveBeenCalled()
+  })
+
+  it("does not check the tipos when the rubro differs", async () => {
+    await put({ rubro: "electronica" })
+
+    expect(estadoCoincideConRubro).not.toHaveBeenCalled()
+  })
+
   // Guard: the 409 runs before the no-op check.
   it("still answers 409 for the same rubro when the shop has real orders", async () => {
     mockOrg({ rubro: "electrodomesticos", rubro_detalle: null }, 2)
@@ -248,6 +287,6 @@ describe("PUT /api/onboarding/rubro", () => {
     const { status } = await parseResponse(await put({ rubro: "electrodomesticos" }))
 
     expect(status).toBe(409)
-    expect(contarTiposActivos).not.toHaveBeenCalled()
+    expect(estadoCoincideConRubro).not.toHaveBeenCalled()
   })
 })

@@ -49,8 +49,13 @@ export async function aplicarCambioDeRubro(
   const packAnterior = personalizarPack(getRubro(anterior.rubro), anterior.rubroDetalle)
   const packNuevo = personalizarPack(getRubro(nuevo.rubro), nuevo.rubroDetalle)
 
-  const tipoIdPorCodigo = await reemplazarTipos(organizationId, packNuevo, client)
+  const { tipoIdPorCodigo, aDesactivar } = await sembrarTiposNuevos(organizationId, packNuevo, client)
   await reemplazarChecklists(organizationId, packAnterior, packNuevo, tipoIdPorCodigo, client)
+
+  // Deactivating the old base tipos is the first step the shop would notice, so
+  // it runs only after everything that can fail fatally has succeeded: a throw
+  // above (or in the UPDATE below) leaves the previous pack fully usable.
+  await actualizarActivo(client, "tipos_dispositivo", organizationId, aDesactivar, false)
 
   // Spec steps 5 and 6 in one statement, written last. The terminology is
   // written even when it is {}: sembrarVocabulario in seed.ts skips that case,
@@ -66,6 +71,35 @@ export async function aplicarCambioDeRubro(
   if (error) throw new Error(`organizations: ${error.message}`)
 
   return { tiposActivos: await contarTiposActivos(organizationId, client) }
+}
+
+/**
+ * Whether the org's stored tipos match the pack the request asks for: at least
+ * one active tipo and no active base tipo outside that pack. Anything else is a
+ * half-applied change or a failed signup seed, which the full change repairs.
+ * Also returns the pickable count, so the route's no-op answer needs no 2nd read.
+ * Throws on a DB error (the route answers 500).
+ */
+export async function estadoCoincideConRubro(
+  organizationId: string,
+  seleccion: SeleccionRubro,
+  client: typeof supabaseAdmin = supabaseAdmin
+): Promise<{ consistente: boolean; tiposActivos: number }> {
+  const pack = personalizarPack(getRubro(seleccion.rubro), seleccion.rubroDetalle)
+  const codigosDelPack = new Set(pack.tipos.map((t) => t.codigo))
+
+  const { data, error } = await client
+    .from("tipos_dispositivo")
+    .select("codigo, es_base, activo")
+    .eq("organization_id", organizationId)
+    .eq("activo", true)
+  if (error) throw new Error(`tipos_dispositivo (estado): ${error.message}`)
+
+  const activos = (data ?? []) as Array<{ codigo: string; es_base: boolean | null }>
+  const tiposActivos = activos.filter((t) => t.codigo !== "TODOS").length
+  const hayBaseAjena = activos.some((t) => t.es_base === true && !codigosDelPack.has(t.codigo))
+
+  return { consistente: tiposActivos > 0 && !hayBaseAjena, tiposActivos }
 }
 
 /**
@@ -86,12 +120,16 @@ export async function contarTiposActivos(
   return (data ?? []).filter((t: { codigo: string }) => t.codigo !== "TODOS").length
 }
 
-/** Seeds the new pack's tipos, deactivates the old base ones, returns codigo -> id. */
-async function reemplazarTipos(
+/**
+ * Seeds the new pack's tipos. Returns codigo -> id and the ids of the previous
+ * pack's base tipos to deactivate; the caller deactivates them once the rest of
+ * the change has succeeded.
+ */
+async function sembrarTiposNuevos(
   organizationId: string,
   pack: RubroPack,
   client: typeof supabaseAdmin
-): Promise<Map<string, string>> {
+): Promise<{ tipoIdPorCodigo: Map<string, string>; aDesactivar: string[] }> {
   // Read BEFORE any write: a failed read aborts with nothing changed. The
   // overwrite below would turn a custom tipo (es_base = false) that happens to
   // share a pack codigo into a base one, so those codigos are left out.
@@ -111,10 +149,13 @@ async function reemplazarTipos(
   // Unlike the signup, no ignoreDuplicates: ON CONFLICT DO UPDATE writes the
   // pack's row, activo = true included, in one atomic statement. A code an
   // earlier change deactivated comes back active and with the pack's name.
-  const { error: upsertError } = await client
-    .from("tipos_dispositivo")
-    .upsert(filas, { onConflict: "organization_id,codigo" })
-  if (upsertError) throw new Error(`tipos_dispositivo: ${upsertError.message}`)
+  // Every pack codigo may be taken by a custom tipo, leaving nothing to write.
+  if (filas.length > 0) {
+    const { error: upsertError } = await client
+      .from("tipos_dispositivo")
+      .upsert(filas, { onConflict: "organization_id,codigo" })
+    if (upsertError) throw new Error(`tipos_dispositivo: ${upsertError.message}`)
+  }
 
   const { data, error: readError } = await client
     .from("tipos_dispositivo")
@@ -129,9 +170,8 @@ async function reemplazarTipos(
   const aDesactivar = tipos
     .filter((t) => t.es_base === true && t.activo !== false && !codigosDelPack.has(t.codigo))
     .map((t) => t.id)
-  await actualizarActivo(client, "tipos_dispositivo", organizationId, aDesactivar, false)
 
-  return new Map(tipos.map((t) => [t.codigo, t.id]))
+  return { tipoIdPorCodigo: new Map(tipos.map((t) => [t.codigo, t.id])), aDesactivar }
 }
 
 async function reemplazarChecklists(
