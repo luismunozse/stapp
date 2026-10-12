@@ -1,10 +1,17 @@
 /**
- * "Crear mi primera orden" completed onboarding (which pushed /dashboard) and
- * then pushed /ordenes?new=true: two competing navigations, and a param nobody
- * reads. It must complete onboarding and navigate once to /ordenes?nueva=1.
+ * "¿Tenés un equipo para cargar ahora?" — the fork after the business step.
+ *
+ * "Sí" must complete onboarding with camino "real" and navigate once to
+ * /ordenes?nueva=1 (#445: two competing navigations and a param nobody read).
+ * "Omitir" completes with camino "omitido". The old sample-data button and the
+ * "Primer cliente" step are gone.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+import { OnboardingWizard } from "@/components/onboarding/wizard/onboarding-wizard"
+import type { OnboardingWizardProps } from "@/components/onboarding/wizard/types"
+import { resolveTerminologia } from "@/lib/terminologia"
+import { bodyOf, callsTo, json, wizardProps } from "./onboarding-wizard-fixtures"
 
 const push = vi.fn()
 const refresh = vi.fn()
@@ -14,68 +21,189 @@ vi.mock("next/navigation", () => ({ useRouter: () => router }))
 const mockFetch = vi.fn()
 global.fetch = mockFetch as unknown as typeof fetch
 
-function json(body: unknown, ok = true) {
-  return { ok, json: async () => body }
+async function irAPregunta(overrides: Partial<OnboardingWizardProps> = {}) {
+  render(<OnboardingWizard {...wizardProps(overrides)} />)
+  fireEvent.click(screen.getByRole("button", { name: /Comenzar/i }))
+  await screen.findByText(/Personalizá tu negocio/i)
+  fireEvent.click(screen.getByRole("button", { name: /Siguiente/i }))
+  await screen.findByRole("heading", { name: /para cargar ahora\?/ })
 }
 
-describe("OnboardingWizard — crear mi primera orden", () => {
+function completeCalls() {
+  return callsTo(mockFetch, "POST", "/api/onboarding/complete")
+}
+
+describe("OnboardingWizard — question step", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockFetch.mockImplementation(async () => json({}))
   })
 
-  it("completes onboarding and navigates exactly once, to /ordenes?nueva=1", async () => {
-    const { OnboardingWizard } = await import("@/components/onboarding/onboarding-wizard")
-    render(<OnboardingWizard />)
-    fireEvent.click(screen.getByRole("button", { name: /Comenzar configuración/i }))
-    await screen.findByText(/Personalizá tu negocio/i)
-    fireEvent.click(screen.getByRole("button", { name: /Siguiente/i }))
-    await screen.findByText("Tu primer cliente")
-    fireEvent.click(screen.getByRole("button", { name: /Omitir/i }))
-    await screen.findByText("Tu primera orden")
+  it("Sí completes with camino real and navigates exactly once, to /ordenes?nueva=1", async () => {
+    await irAPregunta()
 
-    fireEvent.click(screen.getByRole("button", { name: /Crear mi primera orden/i }))
+    fireEvent.click(screen.getByRole("button", { name: "Sí, tengo uno" }))
 
     await waitFor(() => expect(push).toHaveBeenCalledTimes(1))
     expect(push).toHaveBeenCalledWith("/ordenes?nueva=1")
-    expect(push).not.toHaveBeenCalledWith("/dashboard")
-    expect(
-      mockFetch.mock.calls.filter(
-        ([url, init]) => url === "/api/onboarding/complete" && init?.method === "POST"
-      )
-    ).toHaveLength(1)
+    expect(completeCalls()).toHaveLength(1)
+    expect(bodyOf(completeCalls()[0])).toEqual({ camino: "real" })
   })
 
   it("still navigates once to /ordenes?nueva=1 when the completion request fails", async () => {
     mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url === "/api/onboarding/complete" && init?.method === "POST") {
-        throw new TypeError("network down")
-      }
+      if (url === "/api/onboarding/complete" && init?.method === "POST") throw new TypeError("network down")
       return json({})
     })
     vi.spyOn(console, "error").mockImplementation(() => {})
-    const { OnboardingWizard } = await import("@/components/onboarding/onboarding-wizard")
-    render(<OnboardingWizard />)
-    fireEvent.click(screen.getByRole("button", { name: /Comenzar configuración/i }))
-    await screen.findByText(/Personalizá tu negocio/i)
-    fireEvent.click(screen.getByRole("button", { name: /Siguiente/i }))
-    await screen.findByText("Tu primer cliente")
-    fireEvent.click(screen.getByRole("button", { name: /Omitir/i }))
-    await screen.findByText("Tu primera orden")
+    await irAPregunta()
 
-    fireEvent.click(screen.getByRole("button", { name: /Crear mi primera orden/i }))
+    fireEvent.click(screen.getByRole("button", { name: "Sí, tengo uno" }))
 
     await waitFor(() => expect(push).toHaveBeenCalledTimes(1))
     expect(push).toHaveBeenCalledWith("/ordenes?nueva=1")
   })
 
-  it("keeps sending skip to the dashboard", async () => {
-    const { OnboardingWizard } = await import("@/components/onboarding/onboarding-wizard")
-    render(<OnboardingWizard />)
+  it("a double tap on Sí sends one completion and one navigation", async () => {
+    await irAPregunta()
+    const si = screen.getByRole("button", { name: "Sí, tengo uno" })
 
-    fireEvent.click(screen.getByRole("button", { name: /Omitir e ir al dashboard/i }))
+    fireEvent.click(si)
+    fireEvent.click(si)
+
+    await waitFor(() => expect(push).toHaveBeenCalledTimes(1))
+    expect(completeCalls()).toHaveLength(1)
+  })
+
+  it("Omitir on the welcome step completes with camino omitido and goes to the dashboard", async () => {
+    render(<OnboardingWizard {...wizardProps()} />)
+
+    fireEvent.click(screen.getByRole("button", { name: /Omitir/i }))
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/dashboard"))
     expect(push).toHaveBeenCalledTimes(1)
+    expect(bodyOf(completeCalls()[0])).toEqual({ camino: "omitido" })
+  })
+
+  it("Omitir is still offered on the question step", async () => {
+    await irAPregunta()
+
+    fireEvent.click(screen.getByRole("button", { name: /Omitir/i }))
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/dashboard"))
+    expect(bodyOf(completeCalls()[0])).toEqual({ camino: "omitido" })
+  })
+
+  it.each([
+    ["Pieza", "¿Tenés una pieza para cargar ahora?", "Sí, tengo una"],
+    ["Vehículo", "¿Tenés un vehículo para cargar ahora?", "Sí, tengo uno"],
+    ["Máquina de café", "¿Tenés una máquina de café para cargar ahora?", "Sí, tengo una"],
+    ["TV", "¿Tenés un TV para cargar ahora?", "Sí, tengo uno"],
+  ])("speaks the org's vocabulary (%s)", async (equipo, titulo, boton) => {
+    await irAPregunta({ terminologia: resolveTerminologia({ equipo }) })
+
+    expect(screen.getByRole("heading", { name: titulo })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: boton })).toBeInTheDocument()
+  })
+
+  it("a double tap on Omitir sends one completion and one navigation", async () => {
+    await irAPregunta()
+    const omitir = screen.getByRole("button", { name: /Omitir/i })
+
+    fireEvent.click(omitir)
+    fireEvent.click(omitir)
+
+    await waitFor(() => expect(push).toHaveBeenCalledTimes(1))
+    expect(completeCalls()).toHaveLength(1)
+    expect(bodyOf(completeCalls()[0])).toEqual({ camino: "omitido" })
+  })
+
+  it("re-enables Sí and Omitir after the navigation, in case the dashboard sends the user back", async () => {
+    await irAPregunta()
+    const si = screen.getByRole("button", { name: "Sí, tengo uno" })
+
+    fireEvent.click(si)
+
+    await waitFor(() => expect(push).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(si).toBeEnabled())
+    expect(screen.getByRole("button", { name: /Omitir/i })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole("button", { name: /Omitir/i }))
+    await waitFor(() => expect(push).toHaveBeenCalledTimes(2))
+    expect(completeCalls()).toHaveLength(2)
+  })
+
+  it("offers the practice option when there are no real orders", async () => {
+    await irAPregunta()
+
+    expect(screen.getByRole("button", { name: "Todavía no, quiero practicar" })).toBeInTheDocument()
+  })
+
+  it("hides the practice option and says why when the shop already has real orders", async () => {
+    await irAPregunta({ ordenesRealesCount: 2 })
+
+    expect(screen.queryByRole("button", { name: /quiero practicar/i })).not.toBeInTheDocument()
+    expect(screen.getByText(/Ya cargaste órdenes/i)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Sí, tengo uno" })).toBeInTheDocument()
+  })
+
+  it("no longer offers sample data nor a first-client step", async () => {
+    await irAPregunta()
+
+    expect(screen.queryByText(/datos de ejemplo/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Tu primer cliente/i)).not.toBeInTheDocument()
+    expect(mockFetch.mock.calls.some(([url]) => url === "/api/onboarding/sample-data")).toBe(false)
+    expect(mockFetch.mock.calls.some(([url]) => url === "/api/clientes")).toBe(false)
+  })
+
+  it("Omitir shows a spinner and a gerund while it completes; the other CTAs only disable", async () => {
+    let release: (value: unknown) => void = () => {}
+    mockFetch.mockImplementation(async (url: string) =>
+      url === "/api/onboarding/complete" ? new Promise((resolve) => (release = resolve)) : json({})
+    )
+    await irAPregunta()
+    const si = screen.getByRole("button", { name: "Sí, tengo uno" })
+
+    fireEvent.click(screen.getByRole("button", { name: /Omitir/i }))
+
+    const entrando = await screen.findByRole("button", { name: /Entrando…/ })
+    expect(entrando).toBeDisabled()
+    expect(entrando.querySelector("svg.animate-spin")).not.toBeNull()
+    expect(screen.queryByRole("button", { name: /Omitir y entrar al panel/ })).not.toBeInTheDocument()
+    expect(si).toBeDisabled()
+    expect(si.querySelector("svg.animate-spin")).toBeNull()
+
+    release(json({}))
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/dashboard"))
+    await waitFor(() => expect(screen.getByRole("button", { name: /Omitir y entrar al panel/ })).toBeEnabled())
+  })
+
+  it("Omitir keeps its label while Sí is the CTA that started the completion", async () => {
+    mockFetch.mockImplementation(async (url: string) =>
+      url === "/api/onboarding/complete" ? new Promise(() => {}) : json({})
+    )
+    await irAPregunta()
+
+    fireEvent.click(screen.getByRole("button", { name: "Sí, tengo uno" }))
+
+    const omitir = await screen.findByRole("button", { name: /Omitir y entrar al panel/ })
+    expect(omitir).toBeDisabled()
+    expect(omitir.querySelector("svg.animate-spin")).toBeNull()
+  })
+
+  it("does not steal focus on first mount", () => {
+    render(<OnboardingWizard {...wizardProps()} />)
+
+    expect(screen.getByRole("heading", { name: /¡Hola, Ana!/ })).not.toHaveFocus()
+  })
+
+  it("moves focus to the new step's title", async () => {
+    render(<OnboardingWizard {...wizardProps()} />)
+
+    fireEvent.click(screen.getByRole("button", { name: /Comenzar/i }))
+
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: /Personalizá tu negocio/i })).toHaveFocus()
+    )
   })
 })

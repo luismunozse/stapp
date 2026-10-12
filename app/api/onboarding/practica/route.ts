@@ -6,7 +6,11 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { queueNotification } from "@/lib/notifications/queue"
 import { sucursalParaEscritura } from "@/lib/sucursal"
 import { MOTIVO_SIN_COBRO_LABELS } from "@/lib/seguimiento-state"
-import { PRACTICA_NUMERO_ORDEN } from "@/lib/onboarding/practica-shared"
+import {
+  PRACTICA_ERROR_CLIENTE_SIN_TELEFONO,
+  PRACTICA_ERROR_ORDENES_REALES,
+  PRACTICA_NUMERO_ORDEN,
+} from "@/lib/onboarding/practica-shared"
 import {
   PRACTICA_CODIGO_ORDEN,
   PRACTICA_ORDEN_SELECT,
@@ -260,7 +264,7 @@ async function clienteSinTelefonoBloqueante(orgId: string): Promise<NextResponse
     .maybeSingle()
   if (!data) return null
   return NextResponse.json(
-    { error: "Ya tenés un cliente cargado sin teléfono. Agregale un teléfono para poder repetir la práctica." },
+    { error: PRACTICA_ERROR_CLIENTE_SIN_TELEFONO },
     { status: 409 }
   )
 }
@@ -292,7 +296,7 @@ export async function POST(request: Request) {
     // orders. Refusing it here keeps that true.
     if ((await countRealOrders(orgId)) > 0) {
       return NextResponse.json(
-        { error: "Ya cargaste órdenes reales: la práctica es para antes de la primera." },
+        { error: PRACTICA_ERROR_ORDENES_REALES },
         { status: 409 }
       )
     }

@@ -226,8 +226,11 @@ describe("POST /api/onboarding/practica", () => {
 
   it("still returns 201 when recording the camino fails", async () => {
     prepararAlta()
+    const logError = vi.spyOn(console, "error").mockImplementation(() => {})
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: { message: "rpc down" } } as any)
     expect((await POST(createPostRequest(cuerpo))).status).toBe(201)
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining("could not record camino"), expect.anything())
+    logError.mockRestore()
   })
 
   it("returns the winning practice on a concurrent double submit", async () => {
@@ -310,9 +313,12 @@ describe("DELETE /api/onboarding/practica", () => {
   })
 
   it("returns 500 when the deletion fails", async () => {
+    const logError = vi.spyOn(console, "error").mockImplementation(() => {})
     vi.mocked(deletePracticeData).mockRejectedValueOnce(new Error("rpc down"))
     const { status } = await parseResponse(await DELETE())
     expect(status).toBe(500)
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining("Error deleting the practice order"), expect.any(Error))
+    logError.mockRestore()
   })
 
   it("returns 403 for a non-admin", async () => {

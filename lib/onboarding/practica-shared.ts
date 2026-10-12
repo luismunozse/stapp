@@ -24,6 +24,14 @@ export interface PracticaOrden {
   costoFinal: number | null
 }
 
+/**
+ * POST /api/onboarding/practica 409 messages that retrying can never fix. The
+ * wizard recognizes them by status + these exact strings to hide "Reintentar".
+ */
+export const PRACTICA_ERROR_ORDENES_REALES = "Ya cargaste órdenes reales: la práctica es para antes de la primera."
+export const PRACTICA_ERROR_CLIENTE_SIN_TELEFONO =
+  "Ya tenés un cliente cargado sin teléfono. Agregale un teléfono para poder repetir la práctica."
+
 /** Problem chips for rubros whose tipos have no config.problemasComunes (genérico). */
 export const PRACTICA_PROBLEMAS_GENERICOS = ["No enciende", "Funciona con fallas", "Hace ruido", "Mantenimiento"] as const
 

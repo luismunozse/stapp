@@ -14,6 +14,8 @@ interface OrdenLite {
   dispositivo?: string | null
   marca?: string | null
   estado: string
+  /** Onboarding practice order: read-only, never quotable. */
+  esPractica?: boolean
   clienteId?: string | null
   sectorId?: string | null
   cliente?: {
@@ -80,7 +82,7 @@ export function OrdenSelector({
       if (res.ok) {
         const data = await res.json()
         const list: OrdenLite[] = (data.data || []).filter(
-          (o: OrdenLite) => !excludeEstados.includes(o.estado)
+          (o: OrdenLite) => !o.esPractica && !excludeEstados.includes(o.estado)
         )
         setResults(list)
       }
