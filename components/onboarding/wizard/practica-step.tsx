@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { CheckCircle2, Loader2, Mail, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,7 +8,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { VerLoQueVeTuCliente } from "@/components/onboarding/ver-lo-que-ve-tu-cliente"
 import { CURRENCIES, formatCurrencyValue, type CurrencyCode } from "@/lib/currency"
-import type { PracticaOrden } from "@/lib/onboarding/practica-shared"
+import {
+  PRACTICA_ERROR_CLIENTE_SIN_TELEFONO,
+  PRACTICA_ERROR_ORDENES_REALES,
+  type PracticaOrden,
+} from "@/lib/onboarding/practica-shared"
 import { parseMoneyInput } from "@/lib/parse-money"
 import type { Terminologia } from "@/lib/terminologia"
 import { cn } from "@/lib/utils"
@@ -41,6 +45,9 @@ const ETAPAS: { sub: SubPasoPractica; label: string }[] = [
   { sub: "reparar", label: "Reparada" },
   { sub: "entregar", label: "Entregada" },
 ]
+/** 409s that no retry can fix (decided by status + the server's exact message). */
+const MENSAJES_SIN_REINTENTO = new Set([PRACTICA_ERROR_ORDENES_REALES, PRACTICA_ERROR_CLIENTE_SIN_TELEFONO])
+
 const ORDEN_SUBPASOS: SubPasoPractica[] = ["recibir", "reparar", "entregar", "terminada"]
 
 export interface PracticaStepProps {
@@ -64,7 +71,7 @@ export function PracticaStep({
 }: PracticaStepProps) {
   const subPaso = subPasoPractica(practica)
   const [enviando, setEnviando] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ mensaje: string; reintentable: boolean } | null>(null)
   const ultimaAccion = useRef<(() => Promise<ResultadoPractica>) | null>(null)
 
   // On 404/409 the practice moved under us (deleted, or advanced from another
@@ -89,11 +96,17 @@ export function PracticaStep({
           return
         }
       }
-      setError(resultado.error)
+      setError({
+        mensaje: resultado.error,
+        reintentable: !(resultado.status === 409 && MENSAJES_SIN_REINTENTO.has(resultado.error)),
+      })
     } finally {
       setEnviando(false)
     }
   }
+
+  // A new value makes the last error stale: Reintentar would resend the old one.
+  const limpiarError = () => setError(null)
 
   const reintentar = () => {
     if (ultimaAccion.current) void ejecutar(ultimaAccion.current)
@@ -123,6 +136,7 @@ export function PracticaStep({
             terminologia={terminologia}
             ownerEmail={ownerEmail}
             enviando={enviando}
+            onEditar={limpiarError}
             onEnviar={(body) => void ejecutar(() => practicaApi.crear(body))}
             onAtras={onAtras}
           />
@@ -131,6 +145,7 @@ export function PracticaStep({
           <PracticaReparar
             moneda={moneda}
             enviando={enviando}
+            onEditar={limpiarError}
             onReparar={(monto) => void ejecutar(() => practicaApi.reparar(monto))}
           />
         )}
@@ -142,7 +157,13 @@ export function PracticaStep({
             onEntregar={() => void ejecutar(practicaApi.entregar)}
           />
         )}
-        {error && <AvisoError mensaje={error} reintentando={enviando} onReintentar={reintentar} />}
+        {error && (
+          <AvisoError
+            mensaje={error.mensaje}
+            reintentando={enviando}
+            onReintentar={error.reintentable ? reintentar : undefined}
+          />
+        )}
       </CardContent>
     </>
   )
@@ -222,10 +243,12 @@ function ResumenPractica({ practica, tipos }: { practica: PracticaOrden; tipos: 
 function PracticaReparar({
   moneda,
   enviando,
+  onEditar,
   onReparar,
 }: {
   moneda: CurrencyCode
   enviando: boolean
+  onEditar: () => void
   onReparar: (monto: number) => void
 }) {
   const [valor, setValor] = useState("")
@@ -257,7 +280,10 @@ function PracticaReparar({
             inputMode="decimal"
             autoComplete="off"
             value={valor}
-            onChange={(e) => setValor(e.target.value)}
+            onChange={(e) => {
+              setValor(e.target.value)
+              onEditar()
+            }}
             disabled={enviando}
             placeholder="0"
             aria-invalid={mostrarAyuda}
@@ -319,18 +345,27 @@ function AvisoError({
 }: {
   mensaje: string
   reintentando: boolean
-  onReintentar: () => void
+  onReintentar?: () => void
 }) {
+  const ref = useRef<HTMLDivElement>(null)
+  // Keyboard users land on the error instead of losing focus to <body> when
+  // the form re-enables; it is also announced as an alert.
+  useEffect(() => ref.current?.focus(), [])
+
   return (
     <div
+      ref={ref}
+      tabIndex={-1}
       role="alert"
-      className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between"
+      className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive outline-none sm:flex-row sm:items-center sm:justify-between"
     >
       <p>{mensaje}</p>
-      <Button type="button" size="sm" variant="outline" onClick={onReintentar} disabled={reintentando} className="shrink-0">
-        <RotateCcw className="mr-1.5 h-4 w-4" aria-hidden="true" />
-        Reintentar
-      </Button>
+      {onReintentar && (
+        <Button type="button" size="sm" variant="outline" onClick={onReintentar} disabled={reintentando} className="shrink-0">
+          <RotateCcw className="mr-1.5 h-4 w-4" aria-hidden="true" />
+          Reintentar
+        </Button>
+      )}
     </div>
   )
 }

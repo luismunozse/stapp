@@ -9,7 +9,12 @@ import { useState } from "react"
 import { PracticaStep } from "@/components/onboarding/wizard/practica-step"
 import type { TipoPractica } from "@/components/onboarding/wizard/types"
 import { formatCurrencyValue } from "@/lib/currency"
-import { PRACTICA_PROBLEMAS_GENERICOS, type PracticaOrden } from "@/lib/onboarding/practica-shared"
+import {
+  PRACTICA_ERROR_CLIENTE_SIN_TELEFONO,
+  PRACTICA_ERROR_ORDENES_REALES,
+  PRACTICA_PROBLEMAS_GENERICOS,
+  type PracticaOrden,
+} from "@/lib/onboarding/practica-shared"
 import { resolveTerminologia } from "@/lib/terminologia"
 import { bodyOf, callsTo, json, practica, routeFetch, wizardProps } from "./onboarding-wizard-fixtures"
 
@@ -26,18 +31,20 @@ function Harness({
   tipos = wizardProps().tipos,
   onChange = () => {},
   onAtras = () => {},
+  equipo = "Artefacto",
 }: {
   inicial?: PracticaOrden | null
   tipos?: TipoPractica[]
   onChange?: (p: PracticaOrden | null) => void
   onAtras?: () => void
+  equipo?: string
 }) {
   const [actual, setActual] = useState<PracticaOrden | null>(inicial)
   return (
     <PracticaStep
       practica={actual}
       tipos={tipos}
-      terminologia={resolveTerminologia({ equipo: "Artefacto" })}
+      terminologia={resolveTerminologia({ equipo })}
       ownerEmail="ana@taller.test"
       moneda="ARS"
       onPracticaChange={(p) => {
@@ -183,11 +190,20 @@ describe("PracticaStep — recibir", () => {
     expect(onAtras).toHaveBeenCalledTimes(1)
   })
 
-  it("explains when the org has no active tipo", () => {
+  it("explains when the org has no active tipo, without sending the user to Omitir", () => {
     render(<Harness tipos={[]} />)
 
-    expect(screen.getByRole("alert")).toHaveTextContent(/al menos un tipo/)
+    expect(screen.getByRole("alert")).toHaveTextContent(/al menos un tipo de artefacto activo/)
+    expect(screen.getByRole("alert")).toHaveTextContent(/Atrás/)
+    expect(screen.getByRole("alert")).toHaveTextContent(/Configuración/)
+    expect(screen.getByRole("alert")).not.toHaveTextContent(/omitir/i)
     expect(screen.queryByRole("button", { name: "Cargar orden de práctica" })).not.toBeInTheDocument()
+  })
+
+  it("keeps an acronym vocabulary term intact in the no-tipo message", () => {
+    render(<Harness tipos={[]} equipo="TV" />)
+
+    expect(screen.getByRole("alert")).toHaveTextContent("al menos un tipo de TV activo")
   })
 
   it("still offers Atrás when the org has no active tipo", () => {
@@ -213,6 +229,75 @@ describe("PracticaStep — recibir", () => {
 
     expect(await screen.findByRole("heading", { name: "Ahora, la reparación" })).toBeInTheDocument()
     expect(callsTo(mockFetch, "POST", PRACTICA_URL)).toHaveLength(2)
+  })
+})
+
+describe("PracticaStep — errors", () => {
+  it("moves focus to the alert when a request fails", async () => {
+    routeFetch(mockFetch, { [CREAR]: [json({ error: "Se cortó la base" }, 500)] })
+    render(<Harness />)
+    cargarFormulario()
+
+    fireEvent.click(screen.getByRole("button", { name: "Cargar orden de práctica" }))
+
+    const alerta = await screen.findByRole("alert")
+    await waitFor(() => expect(alerta).toHaveFocus())
+  })
+
+  it("clears a stale error as soon as the user edits an input", async () => {
+    routeFetch(mockFetch, { [CREAR]: [json({ error: "Se cortó la base" }, 500)] })
+    render(<Harness />)
+    cargarFormulario()
+    fireEvent.click(screen.getByRole("button", { name: "Cargar orden de práctica" }))
+    await screen.findByRole("alert")
+
+    fireEvent.change(screen.getByLabelText("Artefacto"), { target: { value: "Gafa HGF-360" } })
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Reintentar" })).not.toBeInTheDocument()
+  })
+
+  it("clears a stale error when the amount changes", async () => {
+    routeFetch(mockFetch, { [AVANZAR]: [json({ error: "El precio es demasiado alto" }, 400)] })
+    render(<Harness inicial={practica()} />)
+    fireEvent.change(screen.getByLabelText("¿Cuánto cobrarías?"), { target: { value: "15000" } })
+    fireEvent.click(screen.getByRole("button", { name: "Marcar como reparada" }))
+    await screen.findByRole("alert")
+
+    fireEvent.change(screen.getByLabelText("¿Cuánto cobrarías?"), { target: { value: "1500" } })
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ["real orders exist", PRACTICA_ERROR_ORDENES_REALES],
+    ["a kept client has no phone", PRACTICA_ERROR_CLIENTE_SIN_TELEFONO],
+  ])("shows the 409 message without Reintentar when %s", async (_caso, mensaje) => {
+    routeFetch(mockFetch, { [CREAR]: [json({ error: mensaje }, 409)], [LEER]: [json({ practica: null })] })
+    const onAtras = vi.fn()
+    render(<Harness onAtras={onAtras} />)
+    cargarFormulario()
+
+    fireEvent.click(screen.getByRole("button", { name: "Cargar orden de práctica" }))
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(mensaje)
+    expect(screen.queryByRole("button", { name: "Reintentar" })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: /Atrás/ }))
+    expect(onAtras).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps Reintentar for the concurrent-submit 409", async () => {
+    routeFetch(mockFetch, {
+      [CREAR]: [json({ error: "No pudimos preparar la práctica. Probá de nuevo en un momento." }, 409)],
+      [LEER]: [json({ practica: null })],
+    })
+    render(<Harness />)
+    cargarFormulario()
+
+    fireEvent.click(screen.getByRole("button", { name: "Cargar orden de práctica" }))
+
+    await screen.findByRole("alert")
+    expect(screen.getByRole("button", { name: "Reintentar" })).toBeInTheDocument()
   })
 })
 

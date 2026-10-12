@@ -5,7 +5,7 @@ import { ChevronLeft, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { t, type Terminologia } from "@/lib/terminologia"
+import { minusculaInicial, t, type Terminologia } from "@/lib/terminologia"
 import { Chips } from "./chips"
 import type { NuevaPractica } from "./practica-api"
 import { marcasParaPractica, problemasParaPractica } from "./wizard-state"
@@ -16,6 +16,8 @@ interface PracticaRecibirProps {
   terminologia: Terminologia
   ownerEmail: string
   enviando: boolean
+  /** The user changed an input: any previous error is stale. */
+  onEditar: () => void
   onEnviar: (body: NuevaPractica) => void
   onAtras: () => void
 }
@@ -25,7 +27,7 @@ const SELECT_CLASS =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 " +
   "disabled:cursor-not-allowed disabled:opacity-50"
 
-export function PracticaRecibir({ tipos, terminologia, ownerEmail, enviando, onEnviar, onAtras }: PracticaRecibirProps) {
+export function PracticaRecibir({ tipos, terminologia, ownerEmail, enviando, onEditar, onEnviar, onAtras }: PracticaRecibirProps) {
   const [tipoCodigo, setTipoCodigo] = useState(tipos[0]?.codigo ?? "")
   const [dispositivo, setDispositivo] = useState("")
   const [problema, setProblema] = useState("")
@@ -40,8 +42,8 @@ export function PracticaRecibir({ tipos, terminologia, ownerEmail, enviando, onE
     return (
       <div className="space-y-4">
         <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          Para practicar necesitás al menos un tipo de {equipo.toLowerCase()} activo. Podés omitir este paso y activarlo
-          después en Configuración.
+          Para practicar necesitás al menos un tipo de {minusculaInicial(equipo)} activo. Podés volver con Atrás o activar tus
+          tipos más tarde en Configuración.
         </p>
         <Button type="button" variant="ghost" onClick={onAtras}>
           <ChevronLeft className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -66,6 +68,7 @@ export function PracticaRecibir({ tipos, terminologia, ownerEmail, enviando, onE
 
   const elegirMarca = (marca: string) => {
     setDispositivo(`${marca} `)
+    onEditar()
     dispositivoRef.current?.focus()
   }
 
@@ -83,7 +86,10 @@ export function PracticaRecibir({ tipos, terminologia, ownerEmail, enviando, onE
           <select
             id="practica-tipo"
             value={tipo.codigo}
-            onChange={(e) => setTipoCodigo(e.target.value)}
+            onChange={(e) => {
+              setTipoCodigo(e.target.value)
+              onEditar()
+            }}
             className={SELECT_CLASS}
           >
             {tipos.map((opcion) => (
@@ -100,7 +106,10 @@ export function PracticaRecibir({ tipos, terminologia, ownerEmail, enviando, onE
             id="practica-dispositivo"
             ref={dispositivoRef}
             value={dispositivo}
-            onChange={(e) => setDispositivo(e.target.value)}
+            onChange={(e) => {
+              setDispositivo(e.target.value)
+              onEditar()
+            }}
             placeholder="Marca y modelo"
             autoComplete="off"
             maxLength={120}
@@ -120,7 +129,10 @@ export function PracticaRecibir({ tipos, terminologia, ownerEmail, enviando, onE
           <Input
             id="practica-problema"
             value={problema}
-            onChange={(e) => setProblema(e.target.value)}
+            onChange={(e) => {
+              setProblema(e.target.value)
+              onEditar()
+            }}
             placeholder="¿Qué le pasa?"
             autoComplete="off"
             maxLength={200}
@@ -129,7 +141,10 @@ export function PracticaRecibir({ tipos, terminologia, ownerEmail, enviando, onE
             etiqueta="Problemas comunes"
             opciones={problemas}
             activa={(opcion) => problema.trim() === opcion}
-            onElegir={setProblema}
+            onElegir={(opcion) => {
+              setProblema(opcion)
+              onEditar()
+            }}
           />
         </div>
 
