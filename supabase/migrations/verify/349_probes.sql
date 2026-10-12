@@ -1,9 +1,9 @@
 -- =============================================================================
--- Verificación de la migración 328 — crear_reparaciones_express, columna
+-- Verificación de la migración 349 — crear_reparaciones_express, columna
 -- pago_idempotency.cliente_id y feature flag reparaciones_express.
 --
 -- CÓMO CORRERLO (ver verify/README.md):
---   - SQL editor de Supabase Studio, DESPUES de aplicar 328.
+--   - SQL editor de Supabase Studio, DESPUES de aplicar 349.
 --   - SIN RLS. ordenes_servicio/clientes/cuenta_corriente/plans tienen policies
 --     FOR ALL TO authenticated sobre auth.uid(); en el editor no hay JWT, así
 --     que con RLS encendido el setup de este probe no vería ninguna fila
@@ -12,7 +12,7 @@
 --
 -- Todo corre dentro de BEGIN/ROLLBACK: no persiste ningún dato. Este archivo
 -- CREA una organización/sucursal/cliente de prueba (namespaceados
--- 'probe-328-...') porque el RPC necesita un cliente con saldo_cuenta
+-- 'probe-349-...') porque el RPC necesita un cliente con saldo_cuenta
 -- conocido y una organización sin otras órdenes que contaminen los conteos.
 --
 -- crear_reparaciones_express, igual que revertir_cargos_orden (311), levanta
@@ -66,13 +66,13 @@ DECLARE
   v_org TEXT; v_suc TEXT; v_cli TEXT;
 BEGIN
   INSERT INTO organizations (nombre, slug)
-    VALUES ('Probe 328 Org', 'probe-328-org') RETURNING id INTO v_org;
+    VALUES ('Probe 349 Org', 'probe-349-org') RETURNING id INTO v_org;
 
   INSERT INTO sucursales (organization_id, nombre)
-    VALUES (v_org, 'Probe 328 Sucursal') RETURNING id INTO v_suc;
+    VALUES (v_org, 'Probe 349 Sucursal') RETURNING id INTO v_suc;
 
   INSERT INTO clientes (nombre, telefono, organization_id)
-    VALUES ('Probe 328 Cliente', '3120000001', v_org) RETURNING id INTO v_cli;
+    VALUES ('Probe 349 Cliente', '3120000001', v_org) RETURNING id INTO v_cli;
 
   INSERT INTO _setup VALUES (v_org, v_suc, v_cli);
 END $$;
