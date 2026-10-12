@@ -67,6 +67,11 @@ interface Origen {
   ventaId?: string
 }
 
+// Number(null) es 0: un monto ausente tiene que quedar NaN, no 0.
+function montoNumerico(valor: unknown): number {
+  return valor == null || valor === "" ? NaN : Number(valor)
+}
+
 function leerOrigenFallo(tabla: string, error: unknown): Error {
   console.error(`Error leyendo ${tabla} para corregir el método de pago:`, error)
   return new Error(`No se pudo leer ${tabla}`)
@@ -96,7 +101,7 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
       if (!data) return null
       return {
         metodoPago: data.metodo_pago,
-        monto: Number(data.monto),
+        monto: montoNumerico(data.monto),
         fecha: data.created_at,
         sucursalId: (data as any).ordenes_servicio?.sucursal_id ?? null,
         bloqueo: data.anulado ? "El cobro está anulado" : undefined,
@@ -120,7 +125,7 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
       const factura = (data as any).facturas
       return {
         metodoPago: data.metodo_pago,
-        monto: Number(data.monto),
+        monto: montoNumerico(data.monto),
         fecha: data.fecha,
         sucursalId: factura?.ordenes_servicio?.sucursal_id ?? null,
         bloqueo: factura?.estado_pago === "ANULADA" ? "El remito está anulado" : undefined,
@@ -143,7 +148,7 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
       const venta = (data as any).ventas
       return {
         metodoPago: data.metodo_pago,
-        monto: Number(data.monto),
+        monto: montoNumerico(data.monto),
         fecha: data.fecha,
         sucursalId: venta?.sucursal_id ?? null,
         bloqueo: venta?.estado === "ANULADA" ? "La venta está anulada" : undefined,
@@ -279,13 +284,19 @@ export async function PATCH(request: Request) {
       )
     }
 
-    // Cronograma de cuotas (cuotas_cobro) de un cobro de orden. Solo existe
-    // mientras el cobro es TARJETA_CREDITO: si el método guardado ya no lo es y
-    // quedan filas, son huérfanas (el borrado falló después de cambiar el método
-    // en un intento anterior). Se limpian ANTES del corte por "mismo método",
-    // si no, el reintento no las vería nunca.
-    let cuotasBorradas: number | null = null
-    if (fuente === "cobros_orden" && origen.metodoPago !== "TARJETA_CREDITO") {
+    // Cronograma de cuotas (cuotas_cobro) de un cobro de orden. Un cobro en
+    // crédito lo tiene; si el método guardado ya no es crédito y el cobro no
+    // guarda cuotas, las filas que queden son huérfanas (el borrado falló
+    // después de cambiar el método en un intento anterior). Se detectan acá, se
+    // revisa la sesión de caja y recién después se borran. No alcanza con mirar
+    // el método: el formulario de cobro puede dejar cuotas > 1 en un cobro de
+    // débito, y ese cronograma es legítimo (por eso se exige cuotas null).
+    const puedeTenerHuerfanas =
+      fuente === "cobros_orden" &&
+      origen.metodoPago !== "TARJETA_CREDITO" &&
+      (origen.previos?.cuotas ?? null) === null
+    let cuotasHuerfanas = 0
+    if (puedeTenerHuerfanas) {
       const { data: huerfanas, error: huerfanasError } = await supabaseAdmin
         .from("cuotas_cobro")
         .select("id")
@@ -295,32 +306,11 @@ export async function PATCH(request: Request) {
         console.error("Error leyendo cuotas del cobro:", huerfanasError)
         return NextResponse.json({ error: "Error al verificar las cuotas del cobro" }, { status: 500 })
       }
-      if ((huerfanas || []).length > 0) {
-        const { error: deleteError } = await supabaseAdmin
-          .from("cuotas_cobro")
-          .delete()
-          .eq("cobro_id", id)
-          .eq("organization_id", organizationId!)
-        if (deleteError) {
-          console.error("Error borrando cuotas huérfanas del cobro:", deleteError)
-          return NextResponse.json({ error: "No se pudieron borrar las cuotas del cobro" }, { status: 500 })
-        }
-        cuotasBorradas = huerfanas!.length
-      }
+      cuotasHuerfanas = (huerfanas || []).length
     }
 
-    if (origen.metodoPago === metodoPago) {
-      if (cuotasBorradas) {
-        await logAudit({
-          organizationId: organizationId!,
-          userId: userId!,
-          action: "UPDATE",
-          entity: origen.auditEntity,
-          entityId: origen.auditEntityId,
-          changes: { before: { cuotas_borradas: cuotasBorradas }, after: { fuente, id } },
-          description: `Limpió el cronograma de cuotas sobrante del cobro (${fuente} #${id.slice(-6)})`,
-        })
-      }
+    const mismoMetodo = origen.metodoPago === metodoPago
+    if (mismoMetodo && cuotasHuerfanas === 0) {
       return NextResponse.json({ ok: true, metodoPago })
     }
 
@@ -337,6 +327,33 @@ export async function PATCH(request: Request) {
         { error: "No se puede modificar un movimiento de una sesión de caja cerrada" },
         { status: 400 }
       )
+    }
+
+    let cuotasBorradas: number | null = null
+    if (cuotasHuerfanas > 0) {
+      const { error: deleteError } = await supabaseAdmin
+        .from("cuotas_cobro")
+        .delete()
+        .eq("cobro_id", id)
+        .eq("organization_id", organizationId!)
+      if (deleteError) {
+        console.error("Error borrando cuotas huérfanas del cobro:", deleteError)
+        return NextResponse.json({ error: "No se pudieron borrar las cuotas del cobro" }, { status: 500 })
+      }
+      cuotasBorradas = cuotasHuerfanas
+    }
+
+    if (mismoMetodo) {
+      await logAudit({
+        organizationId: organizationId!,
+        userId: userId!,
+        action: "UPDATE",
+        entity: origen.auditEntity,
+        entityId: origen.auditEntityId,
+        changes: { before: { cuotas_borradas: cuotasBorradas }, after: { fuente, id } },
+        description: `Limpió el cronograma de cuotas sobrante del cobro (${fuente} #${id.slice(-6)})`,
+      })
+      return NextResponse.json({ ok: true, metodoPago })
     }
 
     const esFuentePago =
@@ -387,9 +404,13 @@ export async function PATCH(request: Request) {
         // porcentaje, redondeado a 2 decimales; 0 o vacío = sin costo).
         if (costoFinancieroPorcentaje !== undefined) {
           const pct = costoFinancieroPorcentaje || null
+          if (pct && !Number.isFinite(origen.monto)) {
+            console.error("Monto del pago ilegible; no se puede calcular el costo de terminal:", fuente, id)
+            return NextResponse.json({ error: "Error al actualizar el método de pago" }, { status: 500 })
+          }
           update.costo_financiero_porcentaje = pct
           update.costo_financiero_monto =
-            pct && Number.isFinite(origen.monto)
+            pct
               ? Math.round((origen.monto as number) * (pct / 100) * 100) / 100
               : null
         }

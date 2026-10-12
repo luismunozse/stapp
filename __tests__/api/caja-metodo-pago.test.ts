@@ -458,6 +458,15 @@ describe("PATCH /api/caja/movimientos/metodo-pago", () => {
       expect(updateSpy).not.toHaveBeenCalled()
     })
 
+    it("500 si el monto del pago no es un número y hay porcentaje (no guarda el % sin monto)", async () => {
+      const { updateSpy } = setupPago({ ...efectivo, monto: null })
+      const res = await PATCH(
+        patch({ fuente: "pagos_venta", id: "pv-1", metodoPago: "TARJETA_DEBITO", costoFinancieroPorcentaje: 3 })
+      )
+      expect((await parseResponse(res)).status).toBe(500)
+      expect(updateSpy).not.toHaveBeenCalled()
+    })
+
     it("la auditoría registra los valores del costo antes y después", async () => {
       const { auditChain } = setupPago(credito)
       await PATCH(
@@ -727,6 +736,29 @@ describe("PATCH /api/caja/movimientos/metodo-pago", () => {
       expect(updateSpy).not.toHaveBeenCalled()
       const [fila] = (auditChain.insert as any).mock.calls[0]
       expect(fila.changes.before.cuotas_borradas).toBe(2)
+    })
+
+    it("no borra cuotas huérfanas dentro de una sesión de caja cerrada (400)", async () => {
+      const huerfanas = createChainMock([{ id: "q2", numero_cuota: 2, pagada: false }], null)
+      const { updateSpy } = setupCobro({ ...cobroCredito, metodo_pago: "EFECTIVO" }, huerfanas)
+      mockSupabaseFrom({
+        cobros_orden: pagoVentaChain({ ...cobroCredito, metodo_pago: "EFECTIVO" }, updateSpy),
+        sesiones_caja: createChainMock([{ id: "s-1", sucursal_id: null }], null),
+        cuotas_cobro: huerfanas,
+        audit_logs: createChainMock(null, null),
+      })
+      const res = await PATCH(patch({ fuente: "cobros_orden", id: "c-1", metodoPago: "EFECTIVO" }))
+      expect((await parseResponse(res)).status).toBe(400)
+      expect(huerfanas.delete).not.toHaveBeenCalled()
+    })
+
+    it("un cobro de débito con cuotas guardadas (cronograma legítimo) no se trata como huérfano", async () => {
+      const cuotasChain = createChainMock([{ id: "q2", numero_cuota: 2, pagada: false }], null)
+      setupCobro({ ...cobroCredito, metodo_pago: "TARJETA_DEBITO", cuotas: 3 }, cuotasChain)
+      const res = await PATCH(patch({ fuente: "cobros_orden", id: "c-1", metodoPago: "TARJETA_DEBITO" }))
+      expect((await parseResponse(res)).status).toBe(200)
+      expect(cuotasChain.select).not.toHaveBeenCalled()
+      expect(cuotasChain.delete).not.toHaveBeenCalled()
     })
 
     it("sin cuotas huérfanas el mismo método sigue siendo un no-op", async () => {

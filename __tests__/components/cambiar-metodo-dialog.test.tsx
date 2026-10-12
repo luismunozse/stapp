@@ -98,6 +98,57 @@ describe("CambiarMetodoDialog: costo de terminal", () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it("solo muestra el campo y envía el porcentaje para fuentes de pago", async () => {
+    abrir({ ...credito, fuente: "cuenta_corriente", metodoPago: "EFECTIVO" })
+    elegir("TARJETA_DEBITO")
+    expect(campo()).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    expect(cuerpo()).not.toHaveProperty("costoFinancieroPorcentaje")
+  })
+
+  it("muestra el campo en pagos de remitos (pagos_parciales)", () => {
+    abrir({ ...credito, fuente: "pagos_parciales" })
+    elegir("TARJETA_DEBITO")
+    expect(campo()).not.toBeNull()
+  })
+
+  it("si el campo no se tocó no envía el porcentaje (conserva el costo guardado)", async () => {
+    abrir({ ...credito, costoFinancieroPorcentaje: null })
+    elegir("TARJETA_DEBITO")
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    expect(cuerpo()).not.toHaveProperty("costoFinancieroPorcentaje")
+  })
+
+  it("si se escribe y se vuelve al valor original tampoco lo envía", async () => {
+    abrir()
+    elegir("TARJETA_DEBITO")
+    fireEvent.change(campo()!, { target: { value: "9" } })
+    fireEvent.change(campo()!, { target: { value: "4" } })
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    expect(cuerpo()).not.toHaveProperty("costoFinancieroPorcentaje")
+  })
+
+  it.each(["2,5abc", "abc", "1,2,3"])("rechaza el valor no numérico %s", async (valor) => {
+    abrir()
+    elegir("TARJETA_DEBITO")
+    fireEvent.change(campo()!, { target: { value: valor } })
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }))
+    expect(await screen.findByText(/número válido/i)).toBeTruthy()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("explica que los decimales van con coma si se escribe 2.500", async () => {
+    abrir()
+    elegir("TARJETA_DEBITO")
+    fireEvent.change(campo()!, { target: { value: "2.500" } })
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }))
+    expect(await screen.findByText(/coma para los decimales/i)).toBeTruthy()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it("ya no avisa que se borra el costo de terminal al pasar a otra tarjeta", () => {
     abrir()
     elegir("TARJETA_DEBITO")

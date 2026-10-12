@@ -37,6 +37,13 @@ export interface MovimientoEditable {
   costoFinancieroPorcentaje?: number | null
 }
 
+// Fuentes cuyo pago lleva costo de terminal (la API ignora el resto).
+const FUENTES_CON_COSTO = ["cobros_orden", "pagos_parciales", "pagos_venta"]
+
+function textoCosto(costoActual: number | null | undefined): string {
+  return costoActual ? String(costoActual).replace(".", ",") : ""
+}
+
 const esTarjeta = (metodo: string) => metodo === "TARJETA_DEBITO" || metodo === "TARJETA_CREDITO"
 
 interface CambiarMetodoDialogProps {
@@ -55,9 +62,7 @@ export function CambiarMetodoDialog({ movimiento, onOpenChange, onSuccess }: Cam
   useEffect(() => {
     if (movimiento) {
       setMetodo(movimiento.metodoPago)
-      setCosto(
-        movimiento.costoFinancieroPorcentaje ? String(movimiento.costoFinancieroPorcentaje).replace(".", ",") : ""
-      )
+      setCosto(textoCosto(movimiento.costoFinancieroPorcentaje))
       setError("")
     }
   }, [movimiento])
@@ -66,15 +71,30 @@ export function CambiarMetodoDialog({ movimiento, onOpenChange, onSuccess }: Cam
     if (!movimiento) return
     setError("")
 
-    // Costo de terminal: solo si el destino es tarjeta. Vacío = sin costo.
+    // Costo de terminal: solo para fuentes de pago con destino tarjeta, y solo
+    // si el usuario lo tocó. Sin tocar no se envía y la API conserva el guardado
+    // (una fila vieja puede tener monto de costo sin porcentaje).
     let costoFinancieroPorcentaje: number | null | undefined
-    if (esTarjetaDestino) {
-      const n = costo.trim() === "" ? null : parseMoneyInput(costo)
-      if (n !== null && (!Number.isFinite(n) || n < 0 || n > 100)) {
-        setError("El costo de terminal tiene que estar entre 0 y 100")
-        return
+    if (muestraCosto && costo.trim() !== textoCosto(movimiento.costoFinancieroPorcentaje)) {
+      const texto = costo.trim()
+      if (texto === "") {
+        costoFinancieroPorcentaje = null
+      } else {
+        if (/^\d{1,3}(\.\d{3})+$/.test(texto)) {
+          setError("Usá la coma para los decimales (por ejemplo 2,5)")
+          return
+        }
+        const n = /^\d+([.,]\d+)?$/.test(texto) ? parseMoneyInput(texto) : NaN
+        if (!Number.isFinite(n)) {
+          setError("Ingresá un número válido para el costo de terminal (por ejemplo 2,5)")
+          return
+        }
+        if (n < 0 || n > 100) {
+          setError("El costo de terminal tiene que estar entre 0 y 100")
+          return
+        }
+        costoFinancieroPorcentaje = n
       }
-      costoFinancieroPorcentaje = n
     }
 
     setLoading(true)
@@ -105,6 +125,8 @@ export function CambiarMetodoDialog({ movimiento, onOpenChange, onSuccess }: Cam
   const sinCambios = !!movimiento && metodo === movimiento.metodoPago
   const esTarjetaOrigen = !!movimiento && esTarjeta(movimiento.metodoPago)
   const esTarjetaDestino = esTarjeta(metodo)
+  const muestraCosto =
+    !!movimiento && FUENTES_CON_COSTO.includes(movimiento.fuente) && esTarjetaDestino && !sinCambios
 
   return (
     <Dialog open={!!movimiento} onOpenChange={onOpenChange}>
@@ -133,7 +155,7 @@ export function CambiarMetodoDialog({ movimiento, onOpenChange, onSuccess }: Cam
               </SelectContent>
             </Select>
           </div>
-          {esTarjetaDestino && !sinCambios && (
+          {muestraCosto && (
             <div>
               <label htmlFor="costo-terminal" className="text-sm font-medium">
                 Costo de terminal (%)
