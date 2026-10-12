@@ -118,6 +118,21 @@ describe("OnboardingWizard — question step", () => {
     expect(bodyOf(completeCalls()[0])).toEqual({ camino: "omitido" })
   })
 
+  it("re-enables Sí and Omitir after the navigation, in case the dashboard sends the user back", async () => {
+    await irAPregunta()
+    const si = screen.getByRole("button", { name: "Sí, tengo uno" })
+
+    fireEvent.click(si)
+
+    await waitFor(() => expect(push).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(si).toBeEnabled())
+    expect(screen.getByRole("button", { name: /Omitir/i })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole("button", { name: /Omitir/i }))
+    await waitFor(() => expect(push).toHaveBeenCalledTimes(2))
+    expect(completeCalls()).toHaveLength(2)
+  })
+
   it("offers the practice option when there are no real orders", async () => {
     await irAPregunta()
 

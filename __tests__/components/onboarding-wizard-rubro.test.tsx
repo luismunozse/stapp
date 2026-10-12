@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { OnboardingWizard } from "@/components/onboarding/wizard/onboarding-wizard"
 import type { OnboardingWizardProps } from "@/components/onboarding/wizard/types"
+import { etiquetaRubro } from "@/components/onboarding/wizard/wizard-state"
 import { json, routeFetch, wizardProps } from "./onboarding-wizard-fixtures"
 
 const push = vi.fn()
@@ -41,12 +42,14 @@ describe("OnboardingWizard — rubro change", () => {
   it("shows the new rubro and reloads tipos and vocabulary", async () => {
     routeFetch(mockFetch, { [RUBRO]: [json({ rubro: "automotor", rubroDetalle: null, tiposActivos: 3 })] })
     await irANegocio()
+    const etiquetaVieja = etiquetaRubro("electrodomesticos", null)
+    expect(screen.getByText(etiquetaVieja)).toBeInTheDocument()
 
     cambiarA(/Taller mecánico/)
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
     expect(await screen.findByText("Taller mecánico / Automotor")).toBeInTheDocument()
-    expect(screen.queryByText("Electrodomésticos")).not.toBeInTheDocument()
+    expect(screen.queryByText(etiquetaVieja)).not.toBeInTheDocument()
     expect(refresh).toHaveBeenCalledTimes(1)
     expect(refreshConfig).toHaveBeenCalledTimes(1)
   })

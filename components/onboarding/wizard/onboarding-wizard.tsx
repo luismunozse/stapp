@@ -70,6 +70,10 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
       // here when it did not persist, and the CTA must never be a no-op.
       router.push(destino)
       router.refresh()
+      // The dashboard may send the user back here with this same instance
+      // mounted: leave the CTAs usable instead of disabled until a reload.
+      completandoRef.current = false
+      setCompletando(false)
     }
   }
 
