@@ -389,6 +389,18 @@ describe("aplicarCambioDeRubro: checklists", () => {
     })
   })
 
+  it("aborts before retiring or writing the rubro when a template fails to insert", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+    fake.failures["checklist_templates.insert"] = "template boom"
+
+    await expect(
+      cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+    ).rejects.toThrow("template boom")
+
+    expect(plantillas(fake, "Recepción de artefacto").map((p) => p.activo)).toEqual([true])
+    expect(org(fake).rubro).toBe("electrodomesticos")
+  })
+
   // Guard: passes before the implementation; the retire step must not break it.
   it("leaves the checklists the shop created by hand alone", async () => {
     const fake = await orgSembradaCon("electrodomesticos")

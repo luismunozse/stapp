@@ -165,6 +165,8 @@ async function reemplazarChecklists(
     const tipoId =
       checklist.tipoCodigo === null ? null : tipoIdPorCodigo.get(checklist.tipoCodigo)
     const existente = tipoId === undefined ? undefined : porClave.get(clave(checklist.nombre, tipoId))
+    // Known limitation: a kept template whose items failed to insert on an
+    // earlier run is not healed here; the shop can edit it in Configuración.
     if (existente) conservadas.add(existente.id)
     else faltantes.push(checklist)
   }
@@ -184,6 +186,11 @@ async function reemplazarChecklists(
     client,
     errores
   )
+  // Only item-insert errors are tolerated. A template that failed to insert (or
+  // a tipo that did not resolve) would leave the shop with no active checklist
+  // once the previous pack's are retired below, so it aborts first.
+  const fatales = errores.filter((e) => !e.startsWith("checklist_template_items "))
+  if (fatales.length > 0) throw new Error(`checklist_templates: ${fatales.join("; ")}`)
   if (errores.length > 0) console.error("Rubro change: checklist seed errors:", errores)
 
   const nombresAnteriores = new Set(packAnterior.checklists.map((c) => c.nombre))
