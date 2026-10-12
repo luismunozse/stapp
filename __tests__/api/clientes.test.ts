@@ -22,6 +22,24 @@ describe("GET /api/clientes", () => {
     vi.clearAllMocks()
   })
 
+  it("exposes the practice flag as esPractica", async () => {
+    mockAuthSuccess()
+    const chain = createChainMock(
+      [
+        { id: "c1", nombre: "Luis", telefono: "", es_practica: true },
+        { id: "c2", nombre: "Ana", telefono: "1", es_practica: false },
+      ],
+      null,
+      2
+    )
+    mockSupabaseFrom({ v_clientes_resumen: chain })
+
+    const { body } = await parseResponse(await GET(createGetRequest("http://localhost:3000/api/clientes")))
+
+    expect(body.data[0].esPractica).toBe(true)
+    expect(body.data[1].esPractica).toBe(false)
+  })
+
   it("returns 401 when not authenticated", async () => {
     mockAuthError()
 

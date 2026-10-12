@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { todayInTimeZone, addMonthsToDateOnly, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
+import { rejectIfPractica } from "@/lib/onboarding/practica"
 
 const pagoLineSchema = z.object({
   monto: z.number().positive("El monto debe ser mayor a 0"),
@@ -122,6 +123,8 @@ export async function POST(
     }
 
     const { id: ordenId } = await params
+    const practica = await rejectIfPractica(ordenId, organizationId!)
+    if (practica) return practica
     const body = await request.json()
     const data = cobrosSchema.parse(body)
 

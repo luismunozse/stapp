@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { registrarEgresoCajaEfectivo } from "@/lib/caja-utils"
 import { z } from "zod"
+import { rejectIfPractica } from "@/lib/onboarding/practica"
 
 const itemSchema = z.object({
   itemVentaId: z.string().nullable().optional(),
@@ -101,6 +102,8 @@ export async function POST(request: Request) {
       sucursalId = (v as any).sucursal_id ?? null
     }
     if (data.ordenId) {
+      const practica = await rejectIfPractica(data.ordenId, organizationId!)
+      if (practica) return practica
       const { data: o } = await supabaseAdmin
         .from("ordenes_servicio").select("id, sucursal_id").eq("id", data.ordenId).eq("organization_id", organizationId!).single()
       if (!o) return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })

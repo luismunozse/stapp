@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { queueNotification } from "@/lib/notifications/queue"
 import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
+import { rejectIfPractica } from "@/lib/onboarding/practica"
 
 const garantiaSchema = z.object({
   ordenId: z.string().min(1, "Orden requerida"),
@@ -114,6 +115,8 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const data = garantiaSchema.parse(body)
+    const practica = await rejectIfPractica(data.ordenId, organizationId!)
+    if (practica) return practica
 
     // Verificar que la orden existe, está entregada y pertenece a la org
     const { data: orden, error: ordenError } = await supabaseAdmin

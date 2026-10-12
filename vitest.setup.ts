@@ -86,3 +86,17 @@ vi.mock('@/lib/supabase', () => ({
     CATALOGO: 'catalogo',
   },
 }))
+
+// Practice-order helpers. Every route that creates a real order calls
+// deletePracticeData, and every money or stock route calls rejectIfPractica.
+// Without these defaults each of those route suites would see an extra rpc() or
+// from("ordenes_servicio") call. The helpers' own tests load the real module
+// with vi.importActual; route tests override these per case with vi.mocked().
+vi.mock('@/lib/onboarding/practica', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/onboarding/practica')>('@/lib/onboarding/practica')
+  return {
+    ...actual,
+    deletePracticeData: vi.fn(async () => ({ ordenBorrada: false, ordenConservada: false, clienteConservado: false })),
+    rejectIfPractica: vi.fn(async () => null),
+  }
+})

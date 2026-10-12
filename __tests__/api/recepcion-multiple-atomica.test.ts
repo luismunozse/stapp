@@ -23,6 +23,7 @@ vi.mock("@/lib/audit", () => ({ createAuditLogger: () => ({ create: vi.fn().mock
 import { supabaseAdmin } from "@/lib/supabase"
 import { isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { POST } from "@/app/api/recepciones/route"
+import { deletePracticeData } from "@/lib/onboarding/practica"
 
 const body = {
   clienteId: "cli-1",
@@ -165,5 +166,19 @@ describe("POST /api/recepciones — atomicidad", () => {
     expect(status).toBe(400)
     expect(json.error).toContain("al menos 2 equipos")
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it("deletes the onboarding practice when the reception creates real orders", async () => {
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: rpcOk, error: null } as any)
+    const res = await POST(createPostRequest(body))
+    expect(res.status).toBe(201)
+    expect(deletePracticeData).toHaveBeenCalledWith("org-1")
+  })
+
+  it("does not delete the practice when the RPC fails", async () => {
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: { message: "error" } } as any)
+    const res = await POST(createPostRequest(body))
+    expect(res.status).toBe(500)
+    expect(deletePracticeData).not.toHaveBeenCalled()
   })
 })

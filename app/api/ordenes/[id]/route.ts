@@ -7,6 +7,7 @@ import { queueNotification } from "@/lib/notifications/queue"
 import { formatOrden } from "@/lib/db-utils"
 import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos, ESTADO_LABELS, ESTADOS_COSTO_FINAL_BLOQUEADO } from "@/lib/orden-state-machine"
 import { z } from "zod"
+import { rejectIfPractica } from "@/lib/onboarding/practica"
 
 // Estados que solo se alcanzan por POST /api/ordenes/[id]/entregar. Ese endpoint,
 // además de cambiar el estado, registra la fecha de entrega, las firmas, el cargo
@@ -215,6 +216,8 @@ export async function PUT(
     if (error) return error
 
     const { id } = await params
+    const practica = await rejectIfPractica(id, organizationId!)
+    if (practica) return practica
     const body = await request.json()
     const data = updateOrdenSchema.parse(body)
 

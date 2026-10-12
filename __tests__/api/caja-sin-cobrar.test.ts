@@ -38,14 +38,14 @@ import { GET } from "@/app/api/caja/route"
 // Notar: no existen created_at ni updated_at.
 const COLUMNAS_ORDENES = new Set([
   "id", "numero_orden", "costo_final", "total_cobrado", "descuento_cobro", "estado_cobro", "estado",
-  "organization_id", "sucursal_id", "fecha_ingreso", "fecha_entrega", "fecha_completado",
+  "organization_id", "sucursal_id", "fecha_ingreso", "fecha_entrega", "fecha_completado", "es_practica",
 ])
 
 type Fila = Record<string, any>
 const MAX_ROWS = 1000
 
 type Orden = { column: string; ascending?: boolean; nullsFirst?: boolean }
-type Consulta = { tabla: string; ordenes: Orden[]; ins: Array<{ col: string; n: number }> }
+type Consulta = { tabla: string; ordenes: Orden[]; ins: Array<{ col: string; n: number }>; eqs: Array<[string, unknown]> }
 
 function crearFake(tablas: Record<string, Fila[]>, fallan: string[] = []) {
   const consultas: Consulta[] = []
@@ -59,7 +59,8 @@ function crearFake(tablas: Record<string, Fila[]>, fallan: string[] = []) {
     let rango: [number, number] | null = null
     let max: number | null = null
     let conConteo = false
-    consultas.push({ tabla, ordenes: orders, ins })
+    const eqs: Array<[string, unknown]> = []
+    consultas.push({ tabla, ordenes: orders, ins, eqs })
     const chain: any = {}
     const reg = (c: unknown) => {
       if (typeof c === "string") usadas.push(c)
@@ -71,6 +72,7 @@ function crearFake(tablas: Record<string, Fila[]>, fallan: string[] = []) {
     })
     chain.eq = vi.fn((c: string, v: unknown) => {
       reg(c)
+      eqs.push([c, v])
       filtros.push((r) => r[c] === v)
       return chain
     })
@@ -181,6 +183,7 @@ const orden = (n: number, extra: Fila = {}): Fila => ({
   costo_final: "1000",
   total_cobrado: "0",
   fecha_ingreso: new Date(Date.UTC(2026, 0, 1) + n * 60_000).toISOString(),
+  es_practica: false,
   ...extra,
 })
 const cargo = (ordenId: string, extra: Fila = {}): Fila => ({
@@ -216,6 +219,19 @@ describe("GET /api/caja: sinCobrar", () => {
     expect(q.ordenes[0]).toMatchObject({ column: "fecha_ingreso", ascending: false })
     expect(body.sinCobrar.count).toBe(2)
     expect(body.sinCobrar.ordenes[0]).toMatchObject({ numeroOrden: 7, pendiente: 750, totalCobrado: 250 })
+  })
+
+  it("excludes the onboarding practice order from the unpaid list", async () => {
+    const fake = montar({
+      ordenes_servicio: [orden(1), orden(0, { es_practica: true, estado: "REPARADO", costo_final: "500" })],
+    })
+
+    const { body } = await pedir()
+
+    expect(body.sinCobrar.count).toBe(1)
+    expect(body.sinCobrar.ordenes.map((o: any) => o.numeroOrden)).toEqual([1])
+    const q = fake.consultas.find((c) => c.tabla === "ordenes_servicio")!
+    expect(q.eqs).toContainEqual(["es_practica", false])
   })
 
   it("excluye una orden fiada (CARGO a cuenta corriente) y las demas siguen", async () => {

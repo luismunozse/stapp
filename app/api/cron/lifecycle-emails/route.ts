@@ -230,6 +230,7 @@ export async function GET(request: Request) {
       .from("ordenes_servicio")
       .select("organization_id, created_at")
       .in("organization_id", orgIds)
+      .eq("es_practica", false)
       .order("created_at", { ascending: false })
 
     // Última actividad por org

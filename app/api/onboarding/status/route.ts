@@ -18,7 +18,8 @@ export async function GET() {
       supabaseAdmin
         .from("clientes")
         .select("id", { count: "exact", head: true })
-        .eq("organization_id", organizationId!),
+        .eq("organization_id", organizationId!)
+        .eq("es_practica", false),
       supabaseAdmin
         .from("inventario")
         .select("id", { count: "exact", head: true })
@@ -26,7 +27,8 @@ export async function GET() {
       supabaseAdmin
         .from("ordenes_servicio")
         .select("id", { count: "exact", head: true })
-        .eq("organization_id", organizationId!),
+        .eq("organization_id", organizationId!)
+        .eq("es_practica", false),
       supabaseAdmin
         .from("organizations")
         .select("logo_url")

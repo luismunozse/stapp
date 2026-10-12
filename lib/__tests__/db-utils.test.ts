@@ -173,6 +173,11 @@ describe('transformToSnakeCase', () => {
 })
 
 describe('formatCliente', () => {
+  it('exposes the onboarding practice flag', () => {
+    expect(formatCliente({ id: '1', nombre: 'Luis', telefono: '', es_practica: true })?.esPractica).toBe(true)
+    expect(formatCliente({ id: '2', nombre: 'Ana', telefono: '1' })?.esPractica).toBe(false)
+  })
+
   it('formatea cliente correctamente', () => {
     const input = {
       id: '1',
@@ -197,6 +202,7 @@ describe('formatCliente', () => {
       razonSocial: undefined,
       cuit: undefined,
       aceptaWhatsapp: true,
+      esPractica: false,
       saldoCuenta: 0,
       tipoPrecio: 'MINORISTA',
       descuentoPct: null,
@@ -262,6 +268,11 @@ describe('formatCliente', () => {
 })
 
 describe('formatOrden', () => {
+  it('exposes the onboarding practice flag', () => {
+    expect(formatOrden({ id: 'ord-p', es_practica: true })?.esPractica).toBe(true)
+    expect(formatOrden({ id: 'ord-1' })?.esPractica).toBe(false)
+  })
+
   it('formatea orden con sector', () => {
     const input = {
       id: 'ord-1',

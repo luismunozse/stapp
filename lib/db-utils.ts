@@ -151,6 +151,8 @@ export function formatOrden(orden: any, options: FormatOrdenOptions = {}) {
     // Re-ingreso
     ordenOrigenId: orden.orden_origen_id || null,
     esReingreso: orden.es_reingreso || false,
+    // Onboarding practice order (migration 348): the UI shows a badge and a read-only detail.
+    esPractica: orden.es_practica === true,
     garantiaOrigenId: orden.garantia_origen_id || null,
     metadata: orden.metadata || {},
     sectorId: orden.sector_id,
@@ -180,6 +182,7 @@ export function formatCliente(cliente: any) {
     razonSocial: cliente.razon_social,
     cuit: cliente.cuit,
     aceptaWhatsapp: cliente.acepta_whatsapp ?? true,
+    esPractica: cliente.es_practica === true,
     tipoPrecio: cliente.tipo_precio || "MINORISTA",
     descuentoPct: cliente.descuento_pct != null ? Number(cliente.descuento_pct) : null,
     saldoCuenta: parseFloat(cliente.saldo_cuenta || "0"),

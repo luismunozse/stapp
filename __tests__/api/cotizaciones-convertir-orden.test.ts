@@ -25,6 +25,7 @@ vi.mock("@/lib/counters", () => ({
 import { sucursalParaEscritura } from "@/lib/sucursal"
 import { supabaseAdmin } from "@/lib/supabase"
 import { POST } from "@/app/api/cotizaciones/[id]/convertir-orden/route"
+import { deletePracticeData } from "@/lib/onboarding/practica"
 
 function createParams(id: string) {
   return { params: Promise.resolve({ id }) }
@@ -154,5 +155,34 @@ describe("POST /api/cotizaciones/[id]/convertir-orden", () => {
       organizationId: "org-99",
       userSucursalId: null,
     })
+  })
+
+  it("deletes the onboarding practice after converting the presupuesto", async () => {
+    mockAuthSuccess()
+    vi.mocked(sucursalParaEscritura).mockResolvedValue("suc-A")
+    const eventosChain = createChainMock(null)
+    const cotizUpdateChain = createChainMock(null)
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "cotizaciones") {
+        const chain: any = createChainMock(mockCotizacion)
+        chain.update = vi.fn().mockReturnValue(cotizUpdateChain)
+        return chain
+      }
+      if (table === "ordenes_servicio") {
+        return {
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: mockOrden, error: null }),
+          }),
+        } as any
+      }
+      if (table === "orden_eventos") return eventosChain as any
+      return createChainMock(null) as any
+    })
+
+    const response = await POST(createPostRequest({}), createParams("cot-1"))
+
+    expect(response.status).toBe(201)
+    expect(deletePracticeData).toHaveBeenCalledWith("org-1")
   })
 })
