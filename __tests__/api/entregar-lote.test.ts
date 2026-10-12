@@ -316,6 +316,33 @@ describe("POST /api/recepciones/[id]/entregar — entrega y cobro de lote", () =
     )
   })
 
+  it("un miembro ENTREGADO_SIN_REPARACION con costo_final se liquido aparte: no entra en el subtotal ni en lo ya cobrado", async () => {
+    mockTables({ descuento_tipo: "porcentaje", descuento_valor: 10 }, [
+      { id: "retiro", estado: "ENTREGADO_SIN_REPARACION", costo_final: 500, descuento_cobro: 50 },
+      ...miembrosReparados,
+    ])
+    mockRpc()
+
+    const res = await POST(entregarRequest({ ordenes: ordenesBody, metodoPago: "EFECTIVO" }), createParams("rec-1"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    // subtotal 600 (el retiro de 500 no entra), 10% -> 540, ya cobrado 0
+    expect(body.totalLote).toBe(540)
+    expect(body.yaCobrado).toBe(0)
+    expect(body.totalCobrado).toBe(540)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      "entregar_lote_recepcion",
+      expect.objectContaining({
+        p_ordenes: [
+          { id: "o1", costoFinal: 100, montoCobro: 90 },
+          { id: "o2", costoFinal: 200, montoCobro: 180 },
+          { id: "o3", costoFinal: 300, montoCobro: 270 },
+        ],
+      }),
+    )
+  })
+
   it("un miembro ENTREGADO_SIN_COBRO no reduce lo que pagan los pendientes (descuento fijo)", async () => {
     mockTables({ descuento_tipo: "monto", descuento_valor: 100 }, [
       { id: "regalado", estado: "ENTREGADO_SIN_COBRO", costo_final: 100, descuento_cobro: null },

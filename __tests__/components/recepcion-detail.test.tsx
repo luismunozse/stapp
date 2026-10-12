@@ -401,6 +401,34 @@ describe("RecepcionDetail", () => {
     expect(dialogo.queryByText(/1.430,00/)).not.toBeInTheDocument()
   })
 
+  it("el dialogo ignora a un equipo ENTREGADO_SIN_REPARACION con costo: se liquido aparte", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetchOnce(
+        buildResponse({
+          ordenes: [
+            orden({ id: "o1", numeroOrden: 1, codigoOrden: "CEL-001", estado: "ENTREGADO", costoFinal: 300 }),
+            orden({ id: "o5", numeroOrden: 5, codigoOrden: "CEL-005", estado: "ENTREGADO_SIN_REPARACION", costoFinal: 800 }),
+            orden({ id: "o2", numeroOrden: 2, codigoOrden: "CEL-002", estado: "REPARADO", costoFinal: 100 }),
+            orden({ id: "o3", numeroOrden: 3, codigoOrden: "CEL-003", estado: "REPARADO", costoFinal: 200 }),
+            orden({ id: "o4", numeroOrden: 4, codigoOrden: "CEL-004", estado: "REPARADO", costoFinal: 300 }),
+          ],
+          totales: { subtotal: 900, totalLote: 810, yaCobrado: 280, pendienteCobro: 530, entregadas: 2, pendientes: 3 },
+        }),
+      ),
+    )
+
+    render(<RecepcionDetail recepcionId="rec-1" />)
+
+    fireEvent.click(await screen.findByRole("button", { name: /entregar lote/i }))
+
+    const dialogo = within(await screen.findByRole("dialog"))
+    // 600 pendientes + 300 entregado normal = 900 (los 800 del retiro no
+    // entran), -10% = 810, -280 ya cobrados = 530.
+    expect(dialogo.getByText(/530,00/)).toBeInTheDocument()
+    expect(dialogo.queryByText(/1[.]250,00/)).not.toBeInTheDocument()
+  })
+
   it('oculta "Entregar lote" para un usuario que no es ADMIN', async () => {
     sessionMock.role = "VENDEDOR"
     vi.stubGlobal("fetch", mockFetchOnce(buildResponse()))

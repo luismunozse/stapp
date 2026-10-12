@@ -49,23 +49,26 @@ export function esEstadoExcluidoDeLote(estado: string | null | undefined): boole
 }
 
 /**
- * ENTREGADO_SIN_COBRO: el taller regalo el equipo (cortesia, garantia, el
- * cliente desistio). Salio del taller, pero no se cobro nada y nunca formo
- * parte de lo negociado: queda FUERA de todas las lineas de dinero del lote
- * (subtotal, descuento, ya cobrado). No sube ni baja lo que pagan los demas.
+ * Entregadas "aparte": ENTREGADO_SIN_COBRO (el taller regalo el equipo:
+ * cortesia, garantia, desistio) y ENTREGADO_SIN_REPARACION (retiro sin
+ * reparar, que se liquido por su cuenta al entregar y puede traer un
+ * costo_final que no se cobro entero). Salieron del taller, pero nunca
+ * formaron parte de lo negociado en el lote: quedan FUERA de todas las lineas
+ * de dinero (subtotal, base del descuento, ya cobrado). No suben ni bajan lo
+ * que pagan los demas equipos.
  */
-export function esEstadoEntregadoSinCobro(estado: string | null | undefined): boolean {
-  return estado === "ENTREGADO_SIN_COBRO"
+export function esEstadoEntregadoAparte(estado: string | null | undefined): boolean {
+  return estado === "ENTREGADO_SIN_COBRO" || estado === "ENTREGADO_SIN_REPARACION"
 }
 
-/** Entregada Y con cobro: es la unica que cuenta como "ya cobrado" del lote. */
-export function esEstadoEntregadoConCobro(estado: string | null | undefined): boolean {
-  return esEstadoEntregado(estado) && !esEstadoEntregadoSinCobro(estado)
+/** Entregada de forma normal (ENTREGADO): la unica que cuenta como "ya cobrado" del lote. */
+export function esEstadoEntregadoNormal(estado: string | null | undefined): boolean {
+  return esEstadoEntregado(estado) && !esEstadoEntregadoAparte(estado)
 }
 
-/** La orden no entra en los montos del lote (cerrada sin entrega o regalada). */
+/** La orden no entra en los montos del lote (cerrada sin entrega o entregada aparte). */
 export function esEstadoFueraDeLosMontos(estado: string | null | undefined): boolean {
-  return esEstadoCerradoSinEntrega(estado) || esEstadoEntregadoSinCobro(estado)
+  return esEstadoCerradoSinEntrega(estado) || esEstadoEntregadoAparte(estado)
 }
 
 export interface MiembroEntregadoPrevio {
@@ -75,7 +78,7 @@ export interface MiembroEntregadoPrevio {
 }
 
 /**
- * Lo que los miembros ya entregados con cobro aportan a la liquidacion del
+ * Lo que los miembros ya entregados (ENTREGADO) aportan a la liquidacion del
  * lote: su costo (base del descuento) y lo que se les cobro neto. Fuente unica
  * para la ruta de entrega y el detalle, asi servidor y pantalla no divergen.
  */
@@ -83,11 +86,11 @@ export function liquidarEntregadosPrevios(miembros: MiembroEntregadoPrevio[]): {
   subtotal: number
   yaCobrado: number
 } {
-  const conCobro = miembros.filter((m) => esEstadoEntregadoConCobro(m.estado))
+  const previos = miembros.filter((m) => esEstadoEntregadoNormal(m.estado))
   return {
-    subtotal: round2(conCobro.reduce((a, m) => a + Number(m.costo_final ?? 0), 0)),
+    subtotal: round2(previos.reduce((a, m) => a + Number(m.costo_final ?? 0), 0)),
     yaCobrado: round2(
-      conCobro.reduce((a, m) => a + round2(Number(m.costo_final ?? 0) - Number(m.descuento_cobro ?? 0)), 0),
+      previos.reduce((a, m) => a + round2(Number(m.costo_final ?? 0) - Number(m.descuento_cobro ?? 0)), 0),
     ),
   }
 }

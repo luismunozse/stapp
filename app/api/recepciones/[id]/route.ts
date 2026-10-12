@@ -86,8 +86,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     // Ya cobrado = neto facturado en los equipos que ya salieron (por el flujo
     // individual o por una entrega de lote previa). Pendiente de cobro = lo que
     // falta para llegar al total negociado del lote, nunca negativo.
-    // "Entregadas" cuenta todas las que salieron (incluidas las regaladas);
-    // solo las entregadas CON cobro entran en el ya cobrado.
+    // "Entregadas" cuenta todas las que salieron (incluidas las entregadas aparte);
+    // solo los ENTREGADO normales entran en el ya cobrado.
     const entregadas = lista.filter((o) => esEstadoEntregado(o.estado)).length
     const { yaCobrado } = liquidarEntregadosPrevios(enElLote)
     const pendienteCobro = Math.max(0, round2(totalLote - yaCobrado))

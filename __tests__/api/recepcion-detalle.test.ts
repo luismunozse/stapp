@@ -142,6 +142,29 @@ describe("GET /api/recepciones/[id] — detalle del lote", () => {
     expect(body.totales.pendienteCobro).toBe(135)
   })
 
+  it("un equipo ENTREGADO_SIN_REPARACION queda fuera de subtotal, descuento y ya cobrado", async () => {
+    vi.mocked(hasPlanFeature).mockResolvedValue(true)
+    mockSupabaseFrom({
+      recepciones: createChainMock(createMockRecepcion({ descuento_tipo: "porcentaje", descuento_valor: 10 })),
+      ordenes_servicio: createChainMock([
+        { id: "o1", numero_orden: 1, codigo_orden: "CEL-001", dispositivo: "iPhone 13", marca: "Apple", estado: "ENTREGADO_SIN_REPARACION", presupuesto: null, costo_final: 500, descuento_cobro: 50 },
+        { id: "o2", numero_orden: 2, codigo_orden: "CEL-002", dispositivo: "Notebook HP", marca: "HP", estado: "REPARADO", presupuesto: null, costo_final: 400, descuento_cobro: null },
+      ]),
+    })
+
+    const res = await GET(createGetRequest(), createParams("rec-1"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    // subtotal 400 (el retiro de 500 no entra), 10% -> 360, ya cobrado 0
+    expect(body.totales.subtotal).toBe(400)
+    expect(body.totales.totalLote).toBe(360)
+    expect(body.totales.yaCobrado).toBe(0)
+    expect(body.totales.pendienteCobro).toBe(360)
+    expect(body.totales.entregadas).toBe(1)
+    expect(body.totales.pendientes).toBe(1)
+  })
+
   it("sin equipos entregados, ya cobrado es 0 y el pendiente de cobro es el total del lote", async () => {
     vi.mocked(hasPlanFeature).mockResolvedValue(true)
     mockSupabaseFrom({

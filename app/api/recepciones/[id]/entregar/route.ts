@@ -146,7 +146,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Subtotal del lote = costos confirmados ahora + costos ya persistidos de
     // los equipos entregados antes.
     const subtotalPendientes = costos.reduce((a, b) => a + b, 0)
-    // Los ENTREGADO_SIN_COBRO (regalados) no entran: ver liquidarEntregadosPrevios.
+    // Los ENTREGADO_SIN_COBRO / ENTREGADO_SIN_REPARACION no entran: ver liquidarEntregadosPrevios.
     const previos = liquidarEntregadosPrevios(lista)
     const subtotalLote = round2(subtotalPendientes + previos.subtotal)
 

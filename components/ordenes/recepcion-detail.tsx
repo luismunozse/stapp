@@ -153,7 +153,7 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
   // Base que el servidor usa para el total del lote: los costos ya
   // persistidos de los equipos que se retiraron individualmente. El diálogo
   // los necesita para mostrar el mismo número que se va a cobrar.
-  // Los ENTREGADO_SIN_COBRO (regalados) quedan fuera: helper compartido con el servidor.
+  // Los ENTREGADO_SIN_COBRO / ENTREGADO_SIN_REPARACION quedan fuera: helper compartido con el servidor.
   const subtotalEntregados = liquidarEntregadosPrevios(
     ordenes.map((o) => ({ estado: o.estado, costo_final: o.costoFinal })),
   ).subtotal
