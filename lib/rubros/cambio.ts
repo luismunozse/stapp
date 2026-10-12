@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getRubro } from "./index"
 import { personalizarPack } from "./detalle"
 import { filasDeTipos, sembrarChecklists } from "./seed"
+import type { SeleccionRubro } from "./seleccion"
 import type { RubroChecklist, RubroPack } from "./types"
 
 /**
@@ -20,10 +21,8 @@ import type { RubroChecklist, RubroPack } from "./types"
  * Server-only (supabaseAdmin). Never import it from a client component.
  */
 
-export interface SeleccionRubro {
-  rubro: string | null
-  rubroDetalle: string | null
-}
+// The type lives in seleccion.ts (client-safe); re-exported so existing imports keep working.
+export type { SeleccionRubro }
 
 interface TipoExistente {
   id: string

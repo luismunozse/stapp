@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { seedOrganizationFromRubro } from "@/lib/rubros/seed"
-import { aplicarCambioDeRubro, type SeleccionRubro } from "@/lib/rubros/cambio"
+import { aplicarCambioDeRubro } from "@/lib/rubros/cambio"
+import { mismoRubro, type SeleccionRubro } from "@/lib/rubros/seleccion"
 import { getRubro } from "@/lib/rubros"
 
 /**
@@ -460,5 +461,38 @@ describe("aplicarCambioDeRubro: checklists", () => {
 
     expect(plantillas(fake, "Recepción").map((p) => p.activo)).toEqual([true])
     expect(console.error).not.toHaveBeenCalled()
+  })
+})
+
+describe("mismoRubro", () => {
+  it.each<{ caso: string; actual: SeleccionRubro; pedido: SeleccionRubro; esperado: boolean }>([
+    { caso: "same curated pack", actual: sel("automotor"), pedido: sel("automotor"), esperado: true },
+    {
+      caso: "same curated pack ignores a stale trade text",
+      actual: sel("automotor", "algo viejo"),
+      pedido: sel("automotor"),
+      esperado: true,
+    },
+    { caso: "different pack", actual: sel("automotor"), pedido: sel("electronica"), esperado: false },
+    {
+      caso: "same genérico trade modulo spaces",
+      actual: sel("generico", "maquinas de cafe "),
+      pedido: sel("generico", "maquinas de cafe"),
+      esperado: true,
+    },
+    {
+      caso: "different genérico trade",
+      actual: sel("generico", "maquinas de cafe"),
+      pedido: sel("generico", "cerraduras"),
+      esperado: false,
+    },
+    {
+      caso: "org without a stored rubro",
+      actual: { rubro: null, rubroDetalle: null },
+      pedido: sel("generico", "cerraduras"),
+      esperado: false,
+    },
+  ])("$caso", ({ actual, pedido, esperado }) => {
+    expect(mismoRubro(actual, pedido)).toBe(esperado)
   })
 })
