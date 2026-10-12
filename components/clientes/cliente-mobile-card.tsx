@@ -11,6 +11,7 @@ import { useCurrency } from "@/contexts/currency-context"
 import { getPersonalIdLabel } from "@/lib/countries"
 import { useHasFeature } from "@/hooks/use-subscription"
 import { TipoPrecioBadge } from "./tipo-precio-badge"
+import { PracticaBadge } from "@/components/onboarding/practica-badge"
 
 interface ClienteMobileCardProps {
   cliente: Cliente
@@ -52,6 +53,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                   </span>
                 )}
                 <TipoPrecioBadge tipoPrecio={cliente.tipoPrecio} />
+                {cliente.esPractica && <PracticaBadge />}
                 {cliente.dni && (
                   <span className="text-xs text-muted-foreground">{getPersonalIdLabel(pais)}: {cliente.dni}</span>
                 )}
@@ -113,7 +115,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                     Enviar WhatsApp
                   </button>
                 )}
-                {onCobrar && (
+                {onCobrar && !cliente.esPractica && (
                   <button
                     type="button"
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
@@ -123,7 +125,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                     Cobrar órdenes
                   </button>
                 )}
-                {onCuentaCorriente && (
+                {onCuentaCorriente && !cliente.esPractica && (
                   <button
                     type="button"
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
@@ -133,16 +135,20 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                     Cuenta corriente
                   </button>
                 )}
-                <div className="h-px bg-border my-1" />
-                <button
-                  type="button"
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-destructive/10 text-destructive transition-colors"
-                  onClick={(e) => onDelete(e, cliente)}
-                  disabled={deleting}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Eliminar
-                </button>
+                {!cliente.esPractica && (
+                  <>
+                    <div className="h-px bg-border my-1" />
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-destructive/10 text-destructive transition-colors"
+                      onClick={(e) => onDelete(e, cliente)}
+                      disabled={deleting}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Eliminar
+                    </button>
+                  </>
+                )}
               </PopoverContent>
             </Popover>
           </div>

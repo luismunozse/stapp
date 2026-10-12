@@ -104,6 +104,20 @@ function wireSupabase(vendedoresAdministranInventario = false) {
 describe("GET /api/ordenes/[id] — inventario purchase cost visibility", () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it("exposes the practice flag as esPractica on the detail", async () => {
+    mockRole("ADMIN")
+    mockSupabaseFrom({
+      ordenes_servicio: createChainMock({ ...ordenRow, es_practica: true }),
+      orden_eventos: createChainMock(null),
+      organizations: createChainMock({ vendedores_administran_inventario: false }),
+    })
+
+    const { status, body } = await parseResponse(await GET(createGetRequest(), ctx()))
+
+    expect(status).toBe(200)
+    expect(body.esPractica).toBe(true)
+  })
+
   it("ADMIN sees both repuestos.inventario.precioCompra and cotizaciones items inventario cost (no behavior change)", async () => {
     mockRole("ADMIN")
     wireSupabase()

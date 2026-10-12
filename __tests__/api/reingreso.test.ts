@@ -27,6 +27,7 @@ vi.mock("@/lib/sucursal", () => ({
 }))
 
 import { POST } from "@/app/api/ordenes/[id]/reingreso/route"
+import { deletePracticeData } from "@/lib/onboarding/practica"
 
 function createParams(id: string) {
   return { params: Promise.resolve({ id }) }
@@ -253,5 +254,22 @@ describe("POST /api/ordenes/[id]/reingreso", () => {
     )
     const { status } = await parseResponse(response)
     expect(status).toBe(400)
+  })
+
+  it("deletes the onboarding practice after creating the reingreso", async () => {
+    mockAuthSuccess()
+    const ordenChain = createChainMock(null)
+    let singleCallCount = 0
+    ordenChain.single = vi.fn().mockImplementation(() => {
+      singleCallCount++
+      if (singleCallCount === 1) return Promise.resolve({ data: createMockOrdenOriginal({ estado: "ENTREGADO" }), error: null })
+      return Promise.resolve({ data: { id: "o2", numero_orden: 2, codigo_orden: "CEL-002", clientes: { id: "c1", nombre: "Juan" } }, error: null })
+    })
+    mockSupabaseFrom({ ordenes_servicio: ordenChain, orden_eventos: createChainMock(null) })
+
+    const response = await POST(createPostRequest({ problemaReportado: "Problema recurrente" }), createParams("o1"))
+
+    expect(response.status).toBe(201)
+    expect(deletePracticeData).toHaveBeenCalledWith("org-1")
   })
 })

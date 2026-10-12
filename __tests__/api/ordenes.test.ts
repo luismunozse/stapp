@@ -47,10 +47,23 @@ import { auth } from "@/lib/auth"
 import { GET, POST } from "@/app/api/ordenes/route"
 import { queueNotification } from "@/lib/notifications/queue"
 import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
+import { deletePracticeData } from "@/lib/onboarding/practica"
 
 describe("GET /api/ordenes", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it("exposes the practice flag as esPractica", async () => {
+    mockAuthSuccess()
+    const filas = [{ id: "ord-p", numero_orden: 0, codigo_orden: "PRACTICA", es_practica: true, clientes: { id: "c1", nombre: "Luis" } }]
+    const chain = createChainMock(filas, null, 1)
+    chain.then = (resolve: any) => resolve({ data: filas, error: null, count: 1 })
+    mockSupabaseFrom({ clientes: createChainMock([]), ordenes_servicio: chain })
+
+    const { body } = await parseResponse(await GET(createGetRequest("http://localhost:3000/api/ordenes")))
+
+    expect(body.data[0].esPractica).toBe(true)
   })
 
   it("returns 401 when not authenticated", async () => {
@@ -213,6 +226,54 @@ describe("POST /api/ordenes", () => {
     expect(body.codigoOrden).toBe("CEL-001")
     expect(body.dispositivo).toBe("iPhone 14")
     expect(body.organizationName).toBe("Mi Taller Pro")
+  })
+
+  it("deletes the onboarding practice once a real order is created", async () => {
+    mockAuthSuccess()
+    mockSupabaseFrom({
+      ordenes_servicio: createChainMock({ id: "o-real", numero_orden: 1, public_token: "t", estado: "RECIBIDO", clientes: { id: "c1", nombre: "Juan" } }),
+      organizations: createChainMock({ nombre: "Mi Taller", nombre_mostrar: "Mi Taller Pro" }),
+    })
+
+    const response = await POST(
+      createPostRequest({ clienteId: "c1", dispositivo: "iPhone 14", tipoDispositivo: "CELULAR", problemaReportado: "No enciende" })
+    )
+
+    expect(response.status).toBe(201)
+    expect(deletePracticeData).toHaveBeenCalledTimes(1)
+    expect(deletePracticeData).toHaveBeenCalledWith("org-1")
+  })
+
+  it("still returns 201 when deleting the practice fails", async () => {
+    mockAuthSuccess()
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.mocked(deletePracticeData).mockRejectedValueOnce(new Error("rpc down"))
+    mockSupabaseFrom({
+      ordenes_servicio: createChainMock({ id: "o-real", numero_orden: 1, public_token: "t", estado: "RECIBIDO", clientes: { id: "c1", nombre: "Juan" } }),
+      organizations: createChainMock({ nombre: "Mi Taller", nombre_mostrar: "Mi Taller Pro" }),
+    })
+
+    const response = await POST(
+      createPostRequest({ clienteId: "c1", dispositivo: "iPhone 14", tipoDispositivo: "CELULAR", problemaReportado: "No enciende" })
+    )
+
+    expect(response.status).toBe(201)
+    expect(errorSpy).toHaveBeenCalledWith("[practica] automatic deletion failed:", expect.any(Error))
+    errorSpy.mockRestore()
+  })
+
+  it("does not delete the practice when the order is not created", async () => {
+    mockAuthSuccess()
+    vi.mocked(enforcePlanLimit).mockResolvedValueOnce(
+      NextResponse.json({ error: "Límite de órdenes alcanzado" }, { status: 403 }) as any
+    )
+
+    const response = await POST(
+      createPostRequest({ clienteId: "c1", dispositivo: "iPhone 14", tipoDispositivo: "CELULAR", problemaReportado: "No enciende" })
+    )
+
+    expect(response.status).toBe(403)
+    expect(deletePracticeData).not.toHaveBeenCalled()
   })
 
   it("inserts a CAMBIO_ESTADO orden_eventos row (creación) with estado_nuevo y sin estado_anterior", async () => {

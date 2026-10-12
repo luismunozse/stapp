@@ -154,6 +154,12 @@ describe("GET /api/cron/recordatorios", () => {
     expect(vi.mocked(queueNotification).mock.calls.length).toBe(0)
   })
 
+  it("no le recuerda el retiro a la orden de práctica", async () => {
+    const { ordenesChain } = mockTables([mockOrg], [mockOrden])
+    await GET(new Request("http://localhost/api/cron/recordatorios"))
+    expect(ordenesChain.eq).toHaveBeenCalledWith("es_practica", false)
+  })
+
   describe("hora de envío según la zona horaria de la org", () => {
     it("envía a las 10:00 locales de una org de Argentina", async () => {
       vi.setSystemTime(new Date(UTC_10_AR))

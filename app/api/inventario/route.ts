@@ -33,7 +33,15 @@ const inventarioSchema = z.object({
   // Depósito donde cae el stock inicial (cuid). Opcional: sin él, va al principal.
   depositoId: z.string().min(1).nullable().optional(),
   diasGarantiaDefault: z.number().int().min(0).nullable().optional(),
+  trackeaLotes: z.boolean().optional(),
+  trackeaSeries: z.boolean().optional(),
+  diasAlertaVencimiento: z.number().int().min(1).max(365).nullable().optional(),
+  tieneVariantes: z.boolean().optional(),
+  esKit: z.boolean().optional(),
+  tipoKit: z.enum(["ENSAMBLADO", "VIRTUAL"]).nullable().optional(),
 })
+
+const KIT_SIN_TIPO = "Un kit necesita un tipo: ensamblado o virtual"
 
 export async function GET(request: Request) {
   try {
@@ -100,7 +108,7 @@ export async function GET(request: Request) {
       let q = supabaseAdmin
         .from("inventario")
         .select(
-          "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, stock_reservado, precio_compra, precio_venta, proveedor, proveedor_id, imagen_url, imagen_path, stock_minimo, stock_maximo, punto_reorden, ubicacion, barcode, deleted_at, deleted_by, created_at, proveedores:proveedor_id(id, nombre)",
+          "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, stock_reservado, precio_compra, precio_venta, proveedor, proveedor_id, imagen_url, imagen_path, stock_minimo, stock_maximo, punto_reorden, ubicacion, barcode, trackea_lotes, trackea_series, dias_alerta_vencimiento, dias_garantia_default, tiene_variantes, es_kit, tipo_kit, deleted_at, deleted_by, created_at, proveedores:proveedor_id(id, nombre)",
           { count: "exact" }
         )
         .eq("organization_id", organizationId!)
@@ -192,6 +200,11 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = inventarioSchema.parse(body)
 
+    // DB check (migración 177): un kit necesita tipo. Validar acá evita un 500.
+    if (data.esKit === true && !data.tipoKit) {
+      return NextResponse.json({ error: KIT_SIN_TIPO }, { status: 400 })
+    }
+
     // Límite de seguridad: nunca confiar en un depósito que mandó el cliente.
     // depositoPermitido aplica la regla única: de ESTA org, activo, no borrado y,
     // si no es ADMIN, de su propia sucursal (el ADMIN no depende de la cookie).
@@ -237,6 +250,14 @@ export async function POST(request: Request) {
         dias_garantia_default: diasGarantiaDefaultVal,
         organization_id: organizationId!,
       }
+
+      // Per-item flags: only written when sent, so the DB defaults apply otherwise.
+      if (data.trackeaLotes !== undefined) insertPayload.trackea_lotes = data.trackeaLotes
+      if (data.trackeaSeries !== undefined) insertPayload.trackea_series = data.trackeaSeries
+      if (data.diasAlertaVencimiento !== undefined) insertPayload.dias_alerta_vencimiento = data.diasAlertaVencimiento
+      if (data.tieneVariantes !== undefined) insertPayload.tiene_variantes = data.tieneVariantes
+      if (data.esKit !== undefined) insertPayload.es_kit = data.esKit
+      if (data.tipoKit !== undefined) insertPayload.tipo_kit = data.tipoKit
 
       let { data: result, error: dbError } = await supabaseAdmin
         .from("inventario")

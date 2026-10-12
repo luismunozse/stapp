@@ -47,4 +47,21 @@ describe("GET /api/superadmin/organizations/[id] — includes limitOverrides", (
     const { body } = await parseResponse(res)
     expect(body.limitOverrides).toBeNull()
   })
+
+  it("counts only real orders in the activity series", async () => {
+    const ordenes = createChainMock([])
+    mockSupabaseFrom({
+      organizations: createChainMock({ id: "o1", nombre: "Guru", slug: "guru", activo: true }),
+      users: createChainMock([]),
+      organization_usage: createChainMock(null),
+      subscriptions: createChainMock(null),
+      subscription_payments: createChainMock([]),
+      ordenes_servicio: ordenes,
+      organization_limit_overrides: createChainMock(null),
+    })
+
+    await GET(createGetRequest("http://localhost/api/superadmin/organizations/o1"), ctx("o1"))
+
+    expect(ordenes.eq).toHaveBeenCalledWith("es_practica", false)
+  })
 })

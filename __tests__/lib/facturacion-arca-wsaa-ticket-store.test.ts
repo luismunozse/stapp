@@ -6,6 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { encryptSecret, decryptSecret } from "@/lib/facturacion/crypto"
 import {
   readWsaaTicket,
+  leerVencimientoTicket,
   writeWsaaTicket,
   renewWsaaTicket,
   WsaaLoginRateLimitedError,
@@ -492,3 +493,34 @@ describe("renewWsaaTicket — delegación (un certificado, N organizaciones)", (
   })
 })
 
+
+describe("leerVencimientoTicket", () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  it("devuelve solo expires_at, con el mismo filtro que selectRow", async () => {
+    const chain = selectChain({ data: { expires_at: "2026-10-09T20:00:00.000Z" }, error: null })
+    ;(supabaseAdmin.from as any).mockReturnValueOnce(chain)
+
+    const out = await leerVencimientoTicket(key)
+
+    expect(out).toBe("2026-10-09T20:00:00.000Z")
+    expect((supabaseAdmin.from as any).mock.calls[0][0]).toBe("wsaa_tickets")
+    // Nunca columnas secretas: esto es solo para mostrarle una hora al taller.
+    expect(chain.select).toHaveBeenCalledWith("expires_at")
+    expect(chain.eq).toHaveBeenCalledWith("cuit", key.cuit)
+    expect(chain.eq).toHaveBeenCalledWith("service", key.service)
+    expect(chain.eq).toHaveBeenCalledWith("production", key.production)
+    expect(chain.order).toHaveBeenCalledWith("expires_at", { ascending: false })
+    expect(chain.limit).toHaveBeenCalledWith(1)
+  })
+
+  it("devuelve null cuando no hay fila", async () => {
+    ;(supabaseAdmin.from as any).mockReturnValueOnce(selectChain({ data: null, error: null }))
+    expect(await leerVencimientoTicket(key)).toBeNull()
+  })
+
+  it("devuelve null (no tira) si la lectura falla", async () => {
+    ;(supabaseAdmin.from as any).mockReturnValueOnce(selectChain({ data: null, error: { message: "boom" } }))
+    expect(await leerVencimientoTicket(key)).toBeNull()
+  })
+})
