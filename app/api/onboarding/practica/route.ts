@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { queueNotification } from "@/lib/notifications/queue"
 import { sucursalParaEscritura } from "@/lib/sucursal"
+import { MOTIVO_SIN_COBRO_LABELS } from "@/lib/seguimiento-state"
 import { PRACTICA_NUMERO_ORDEN } from "@/lib/onboarding/practica-shared"
 import {
   PRACTICA_CODIGO_ORDEN,
@@ -12,6 +13,7 @@ import {
   countRealOrders,
   deletePracticeData,
   getPracticaOrden,
+  getPracticaOrdenRow,
   registrarCamino,
   toPracticaOrden,
   type PracticaOrdenRow,
@@ -36,6 +38,113 @@ const crearSchema = z.object({
     .min(1, "Contanos qué le pasa")
     .max(500, "La descripción es muy larga"),
 })
+
+const avanceSchema = z.discriminatedUnion("accion", [
+  z.object({
+    accion: z.literal("reparar"),
+    costoFinal: z
+      .number({ required_error: "Ingresá el precio", invalid_type_error: "El precio tiene que ser un número" })
+      .positive("El precio tiene que ser mayor a cero")
+      .max(99_999_999.99, "El precio es demasiado alto"),
+  }),
+  z.object({ accion: z.literal("entregar") }),
+])
+
+function conflicto() {
+  return NextResponse.json({ error: "La práctica ya pasó por este paso" }, { status: 409 })
+}
+
+// Upsert by organization_id: the row may be missing (see registrarCaminoPractica).
+async function guardarProgreso(orgId: string, campos: { practica_completada_at: string }) {
+  const { error } = await supabaseAdmin
+    .from("onboarding_progress")
+    .upsert({ organization_id: orgId, ...campos }, { onConflict: "organization_id" })
+  if (error) console.error("[practica] could not update onboarding_progress:", error.message)
+}
+
+// RECIBIDO cannot jump to REPARADO (lib/orden-state-machine.ts:12), so the
+// practice walks EN_REPARACION -> REPARADO like a real order. Each write is
+// conditional on the expected estado: a double click loses with 409 and sends
+// nothing, so the REPARADO email goes out once.
+async function reparar(orgId: string, userId: string, actual: PracticaOrdenRow, costoFinal: number) {
+  if (actual.estado !== "RECIBIDO" && actual.estado !== "EN_REPARACION") return conflicto()
+
+  if (actual.estado === "RECIBIDO") {
+    const { data: movida, error } = await supabaseAdmin
+      .from("ordenes_servicio")
+      .update({ estado: "EN_REPARACION" })
+      .eq("id", actual.id)
+      .eq("organization_id", orgId)
+      .eq("es_practica", true)
+      .eq("estado", "RECIBIDO")
+      .select("id")
+      .maybeSingle()
+    if (error) throw error
+    if (!movida) return conflicto()
+    await registrarEvento(orgId, userId, actual.id, "RECIBIDO", "EN_REPARACION", "Estado cambiado de RECIBIDO a EN_REPARACION")
+  }
+
+  const { data: reparada, error } = await supabaseAdmin
+    .from("ordenes_servicio")
+    .update({
+      estado: "REPARADO",
+      // EN_REPARACION -> REPARADO requires costo_final > 0 (orden-state-machine.ts:77-83).
+      costo_final: costoFinal,
+      fecha_completado: actual.fecha_completado ?? new Date().toISOString(),
+    })
+    .eq("id", actual.id)
+    .eq("organization_id", orgId)
+    .eq("es_practica", true)
+    .eq("estado", "EN_REPARACION")
+    .select(PRACTICA_ORDEN_SELECT)
+    .maybeSingle()
+  if (error) throw error
+  if (!reparada) return conflicto()
+
+  const row = reparada as unknown as PracticaOrdenRow
+  await registrarEvento(orgId, userId, row.id, "EN_REPARACION", "REPARADO", "Estado cambiado de EN_REPARACION a REPARADO")
+  await notificar(orgId, row, "REPARADO", "EN_REPARACION")
+  return NextResponse.json({ practica: toPracticaOrden(row) })
+}
+
+// Writes the delivery directly. No cobros_orden, no cargar_deuda_cuenta_corriente,
+// no garantía, no stock: the practice must never reach caja, arqueo, ARCA or stock.
+async function entregar(orgId: string, userId: string, actual: PracticaOrdenRow) {
+  if (actual.estado !== "REPARADO") return conflicto()
+
+  const ahora = new Date().toISOString()
+  const { data: entregada, error } = await supabaseAdmin
+    .from("ordenes_servicio")
+    .update({
+      estado: "ENTREGADO_SIN_COBRO",
+      motivo_sin_cobro: "CORTESIA",
+      fecha_entrega: ahora,
+      entregado_por_user_id: userId,
+      ...(actual.fecha_completado ? {} : { fecha_completado: ahora }),
+    })
+    .eq("id", actual.id)
+    .eq("organization_id", orgId)
+    .eq("es_practica", true)
+    .eq("estado", "REPARADO")
+    .select(PRACTICA_ORDEN_SELECT)
+    .maybeSingle()
+  if (error) throw error
+  if (!entregada) return conflicto()
+
+  const row = entregada as unknown as PracticaOrdenRow
+  await registrarEvento(
+    orgId,
+    userId,
+    row.id,
+    "REPARADO",
+    "ENTREGADO_SIN_COBRO",
+    `Estado cambiado de REPARADO a ENTREGADO_SIN_COBRO · Motivo: ${MOTIVO_SIN_COBRO_LABELS.CORTESIA}`,
+    { motivoSinCobro: "CORTESIA" }
+  )
+  await notificar(orgId, row, "ENTREGADO_SIN_COBRO", "REPARADO")
+  await guardarProgreso(orgId, { practica_completada_at: ahora })
+  return NextResponse.json({ practica: toPracticaOrden(row) })
+}
 
 async function leerJson(request: Request): Promise<unknown> {
   try {
@@ -293,6 +402,31 @@ export async function POST(request: Request) {
   } catch (err) {
     console.error("Error creating the practice order:", err)
     return NextResponse.json({ error: "No pudimos crear la práctica" }, { status: 500 })
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const { error, organizationId, userId } = await requireAdmin()
+    if (error) return error
+    const orgId = organizationId!
+
+    const parsed = avanceSchema.safeParse(await leerJson(request))
+    if (!parsed.success) {
+      return NextResponse.json({ error: primerError(parsed.error, "Acción inválida") }, { status: 400 })
+    }
+
+    const actual = await getPracticaOrdenRow(orgId)
+    if (!actual) {
+      return NextResponse.json({ error: "No hay una práctica en curso" }, { status: 404 })
+    }
+
+    return parsed.data.accion === "reparar"
+      ? await reparar(orgId, userId!, actual, parsed.data.costoFinal)
+      : await entregar(orgId, userId!, actual)
+  } catch (err) {
+    console.error("Error advancing the practice order:", err)
+    return NextResponse.json({ error: "No pudimos avanzar la práctica" }, { status: 500 })
   }
 }
 
