@@ -79,7 +79,7 @@ export function RecepcionCreadaModal({
   firma,
   firmaMime,
 }: RecepcionCreadaModalProps) {
-  const { timezone } = useCurrency()
+  const { timezone, pais } = useCurrency()
   const { showError } = useModal()
   const [mensaje, setMensaje] = useState("")
   const [printingLabels, setPrintingLabels] = useState(false)
@@ -160,7 +160,7 @@ export function RecepcionCreadaModal({
   }
 
   const handleOpenWhatsApp = () => {
-    const url = generateWhatsAppUrl(cliente.telefono, mensaje)
+    const url = generateWhatsAppUrl(cliente.telefono, mensaje, pais)
     window.open(url, "_blank")
   }
 

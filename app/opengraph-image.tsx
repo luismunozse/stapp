@@ -1,146 +1,30 @@
 import { ImageResponse } from "next/og"
+import { OgCard, OG_SIZE } from "@/lib/og/card"
 
 export const runtime = "edge"
 
-export const alt = "STApp - Gestión de Servicio Técnico"
-export const size = {
-  width: 1200,
-  height: 630,
-}
+export const alt = "STApp - Software de gestión para talleres de reparación"
+export const size = OG_SIZE
 export const contentType = "image/png"
 
-export default async function Image() {
-  return new ImageResponse(
-    (
-      <div
-        style={{
-          fontSize: 48,
-          background: "linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #16213e 100%)",
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "white",
-          padding: "40px",
-        }}
-      >
-        {/* Logo/Icon */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: "20px",
-          }}
-        >
-          <div
-            style={{
-              width: "80px",
-              height: "80px",
-              borderRadius: "16px",
-              background: "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "40px",
-              fontWeight: "bold",
-            }}
-          >
-            ST
-          </div>
-        </div>
-
-        {/* Title */}
-        <div
-          style={{
-            fontSize: "64px",
-            fontWeight: "bold",
-            background: "linear-gradient(90deg, #3b82f6, #8b5cf6)",
-            backgroundClip: "text",
-            color: "transparent",
-            marginBottom: "16px",
-          }}
-        >
-          STApp
-        </div>
-
-        {/* Subtitle */}
-        <div
-          style={{
-            fontSize: "32px",
-            color: "#94a3b8",
-            textAlign: "center",
-            maxWidth: "800px",
-          }}
-        >
-          Gestión de Servicio Técnico
-        </div>
-
-        {/* Features */}
-        <div
-          style={{
-            display: "flex",
-            gap: "24px",
-            marginTop: "40px",
-            fontSize: "20px",
-            color: "#64748b",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
-            • Órdenes de trabajo
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
-            • Clientes
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
-            • Inventario
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
-            • Facturación
-          </div>
-        </div>
-
-        {/* URL */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: "40px",
-            fontSize: "24px",
-            color: "#475569",
-          }}
-        >
-          stapp.com.ar
-        </div>
-      </div>
-    ),
-    {
-      ...size,
-    }
-  )
+/**
+ * og:image de todo el sitio.
+ *
+ * Esta convencion de Next se aplica al segmento y a todos sus hijos, y pisa el
+ * `openGraph.images` del metadata. Eso importa porque en Next `openGraph` NO se
+ * mergea en profundidad: una pagina que declara su propio bloque `openGraph`
+ * sin `images` — y hay once — pierde la imagen heredada del layout raiz. Este
+ * archivo es lo unico que las cubre a todas.
+ *
+ * El bug que se arreglo en #364 no era que este archivo existiera, sino que
+ * dibujaba una tarjeta DISTINTA a la de /api/og: og:image servia una y
+ * twitter:image otra. Borrarlo dejo al sitio sin og:image en ningun lado, asi
+ * que vuelve — pero renderizando exactamente la misma OgCard. Un solo diseno,
+ * dos vias de entrega, sin forma de divergir.
+ *
+ * Para las tarjetas con titulo propio (posts del blog) sigue estando
+ * /api/og?title=..., que esas paginas declaran explicitamente.
+ */
+export default function Image() {
+  return new ImageResponse(<OgCard />, OG_SIZE)
 }

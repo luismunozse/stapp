@@ -106,9 +106,9 @@ export const tourSteps: DriveStep[] = [
   {
     element: "#nav-facturacion",
     popover: {
-      title: "Facturación",
+      title: "Comprobantes",
       description:
-        "Generá facturas, registrá pagos parciales y llevá el control de la cobranza.",
+        "Generá remitos, registrá pagos parciales y llevá el control de la cobranza.",
       side: "right",
       align: "start",
     },

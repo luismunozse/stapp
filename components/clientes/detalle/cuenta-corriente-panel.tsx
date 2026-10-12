@@ -11,12 +11,14 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import {
   PiggyBank, Plus, ArrowDownCircle, ArrowUpCircle, Banknote,
-  ArrowRightLeft, CreditCard, Wallet, MoreHorizontal, Loader2,
+  ArrowRightLeft, CreditCard, Wallet, MoreHorizontal, Loader2, Printer, FileText, Undo2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { EmptyState } from "@/components/ui/empty-state"
 import { useCurrency } from "@/contexts/currency-context"
+import { todayInTimeZone } from "@/lib/timezone"
 import { useModal } from "@/contexts/modal-context"
+import { RevertirCargoDialog } from "./revertir-cargo-dialog"
 import type { Cliente } from "@/types"
 
 const METODOS_DEPOSITO = [
@@ -41,11 +43,27 @@ interface Movimiento {
   numeroReferencia: string | null
   observaciones: string | null
   createdAt: string
+  revertidoAt: string | null
+  revertidoMovimientoId: string | null
 }
 
+// CARGO and PAGO come from migration 234 (fiado). Without them the badge
+// falls through to the raw enum for every credit sale and every debt payment.
 const tipoLabels: Record<string, string> = {
   DEPOSITO: "Depósito", USO: "Uso", DEVOLUCION: "Devolución", AJUSTE: "Ajuste",
+  CARGO: "Cargo", PAGO: "Pago",
 }
+
+// A recibo acknowledges money received, so only the two movement types that
+// bring money in can be emitted — same rule the API and migration 306 enforce.
+const TIPOS_CON_RECIBO = ["DEPOSITO", "PAGO"]
+
+// A fiado charge tied to an order is the only movement kind that can be
+// reverted (see the revertir_cargos_orden RPC).
+function esCargoReversible(mov: Movimiento): boolean {
+  return mov.tipo === "CARGO" && mov.referenciaTipo === "ORDEN" && mov.revertidoAt == null
+}
+
 const metodoPagoLabels: Record<string, string> = {
   EFECTIVO: "Efectivo", TRANSFERENCIA: "Transferencia", TARJETA_DEBITO: "Tarjeta Débito",
   TARJETA_CREDITO: "Tarjeta Crédito", MERCADOPAGO: "MercadoPago", OTRO: "Otro",
@@ -57,10 +75,17 @@ interface CuentaCorrientePanelProps {
 }
 
 export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePanelProps) {
-  const { formatPrice, formatDate } = useCurrency()
+  const { formatPrice, formatDate, timezone } = useCurrency()
   const { showError } = useModal()
   const { data: session } = useSession()
   const esAdmin = session?.user?.role === "ADMIN"
+
+  // Month-to-date in the org's timezone, matching the resumen route's own
+  // default so the form opens on the range the API would have picked anyway.
+  const hoy = todayInTimeZone(timezone)
+  const [showResumen, setShowResumen] = useState(false)
+  const [resumenDesde, setResumenDesde] = useState(`${hoy.slice(0, 7)}-01`)
+  const [resumenHasta, setResumenHasta] = useState(hoy)
 
   const [showDeposito, setShowDeposito] = useState(false)
   const [depositoLoading, setDepositoLoading] = useState(false)
@@ -68,6 +93,7 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
   const [depositoMetodo, setDepositoMetodo] = useState<MetodoDeposito>("EFECTIVO")
   const [depositoReferencia, setDepositoReferencia] = useState("")
   const [depositoObservaciones, setDepositoObservaciones] = useState("")
+  const [revertirTarget, setRevertirTarget] = useState<Movimiento | null>(null)
 
   const { data, isLoading: loading, mutate } = useSWR<{ saldo: number; movimientos: Movimiento[] }>(
     `/api/clientes/${cliente.id}/cuenta-corriente?limit=50`,
@@ -200,7 +226,43 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
       )}
 
       <div className="space-y-2">
-        <h4 className="font-medium text-sm">Movimientos</h4>
+        <div className="flex items-center justify-between">
+          <h4 className="font-medium text-sm">Movimientos</h4>
+          <Button variant="outline" size="sm" onClick={() => setShowResumen((v) => !v)}>
+            <FileText className="mr-2 h-3.5 w-3.5" />
+            Resumen de cuenta
+          </Button>
+        </div>
+
+        {showResumen && (
+          <div className="rounded-lg border p-3 space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">Desde</Label>
+                <Input type="date" value={resumenDesde} onChange={(e) => setResumenDesde(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">Hasta</Label>
+                <Input type="date" value={resumenHasta} onChange={(e) => setResumenHasta(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                disabled={!resumenDesde || !resumenHasta || resumenDesde > resumenHasta}
+                onClick={() =>
+                  window.open(
+                    `/api/clientes/${cliente.id}/cuenta-corriente/resumen?desde=${resumenDesde}&hasta=${resumenHasta}`,
+                    "_blank",
+                    "noopener,noreferrer"
+                  )
+                }
+              >
+                Emitir resumen
+              </Button>
+            </div>
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -225,6 +287,11 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                         {tipoLabels[mov.tipo] || mov.tipo}
                       </Badge>
+                      {mov.revertidoAt && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                          Revertido
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {formatDate(mov.createdAt)}
@@ -232,7 +299,7 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
                     </div>
                     {mov.referenciaTipo && mov.referenciaTipo !== "MANUAL" && (
                       <div className="text-xs text-muted-foreground">
-                        {mov.referenciaTipo === "VENTA" ? "Venta" : mov.referenciaTipo === "FACTURA" ? "Factura" : mov.referenciaTipo}
+                        {mov.referenciaTipo === "VENTA" ? "Venta" : mov.referenciaTipo === "FACTURA" ? "Remito" : mov.referenciaTipo}
                       </div>
                     )}
                     {mov.observaciones && (
@@ -240,14 +307,57 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
                     )}
                   </div>
                 </div>
-                <div className="text-xs text-muted-foreground whitespace-nowrap">
-                  Saldo: {formatPrice(mov.saldoPosterior)}
+                <div className="flex items-center gap-1 shrink-0">
+                  <div className="text-xs text-muted-foreground whitespace-nowrap">
+                    Saldo: {formatPrice(mov.saldoPosterior)}
+                  </div>
+                  {TIPOS_CON_RECIBO.includes(mov.tipo) && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      title="Emitir recibo"
+                      aria-label={`Emitir recibo de ${tipoLabels[mov.tipo] || mov.tipo} por ${formatPrice(Math.abs(mov.monto))}`}
+                      onClick={() =>
+                        window.open(
+                          `/api/clientes/${cliente.id}/cuenta-corriente/${mov.id}/recibo`,
+                          "_blank",
+                          "noopener,noreferrer"
+                        )
+                      }
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {esCargoReversible(mov) && esAdmin && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      title="Revertir cargo"
+                      aria-label={`Revertir cargo por ${formatPrice(Math.abs(mov.monto))}`}
+                      onClick={() => setRevertirTarget(mov)}
+                    >
+                      <Undo2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {revertirTarget && (
+        <RevertirCargoDialog
+          clienteId={cliente.id}
+          movimientos={[{ id: revertirTarget.id, monto: revertirTarget.monto }]}
+          saldoActual={saldo}
+          open={!!revertirTarget}
+          onOpenChange={(v) => !v && setRevertirTarget(null)}
+          onDone={() => mutate()}
+        />
+      )}
     </div>
   )
 }

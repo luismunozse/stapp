@@ -1,13 +1,30 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { formatVenta } from "@/lib/db-utils"
-import { sucursalParaEscritura, sucursalParaLectura, getDepositoDeSucursal } from "@/lib/sucursal"
-import { getRecargosMetodo, factorRecargo, metodoCondicion } from "@/lib/recargos"
+import { sucursalParaLectura, resolverDestinoVenta, getNombreSucursal } from "@/lib/sucursal"
+import { getRecargosMetodo } from "@/lib/recargos"
+import {
+  calcularTotalesVenta,
+  conciliarPagos,
+  condicionDeCobro,
+  lineaConRecargo,
+  type DescuentoConfig,
+  type FiscalConfig,
+  type IvaRegimen,
+} from "@/lib/ventas/totales"
 import { resolveOperador } from "@/lib/operadores"
 import { z } from "zod"
+import { getIvaGeneral } from "@/lib/countries"
+import { escapeOrIlikeTerm } from "@/lib/pg-search"
+import { DEFAULT_TIMEZONE, dayRangeUtc } from "@/lib/timezone"
+
+const METODOS_PAGO = [
+  "EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO",
+  "MERCADOPAGO", "CUENTA_CORRIENTE", "OTRO",
+] as const
 
 const itemSchema = z.object({
   inventarioId: z.string().nullable().optional(),
@@ -30,7 +47,7 @@ const ventaSchema = z.object({
   descuento: z.number().min(0).default(0),
   tipoDescuento: z.enum(["MONTO", "PORCENTAJE"]).default("MONTO"),
   porcentajeDescuento: z.number().min(0).max(100).default(0),
-  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO", "MERCADOPAGO", "CUENTA_CORRIENTE", "OTRO"]),
+  metodoPago: z.enum(METODOS_PAGO),
   observaciones: z.string().nullable().optional(),
   cuotas: z.number().int().min(1).nullable().optional(),
   recargoPorcentaje: z.number().min(0).nullable().optional(),
@@ -39,9 +56,10 @@ const ventaSchema = z.object({
   descuentoMotivo: z.string().nullable().optional(),
   pagosParcial: z.boolean().optional(),
   idempotencyKey: z.string().max(100).nullable().optional(),
-  depositoId: z.string().min(1).nullable().optional(),
   pagos: z.array(z.object({
-    metodo: z.string(),
+    // Antes z.string(): un método inexistente llegaba al SQL y fallaba el cast
+    // al enum con un 400 críptico.
+    metodo: z.enum(METODOS_PAGO),
     monto: z.number().positive(),
     referencia: z.string().nullable().optional(),
     cuotas: z.number().int().min(1).nullable().optional(),
@@ -54,7 +72,7 @@ const ventaSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId, userId, role, session } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role, session } = await requirePosAccess()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -100,7 +118,7 @@ export async function GET(request: Request) {
       .order(sortBy, { ascending: sortOrder })
 
     // Vendedores solo ven sus ventas
-    if (role === "VENDEDOR") {
+    if (soloVeSusVentas(role)) {
       query = query.eq("vendedor_id", userId!)
     }
 
@@ -114,28 +132,42 @@ export async function GET(request: Request) {
       query = query.eq("estado", estado)
     }
 
-    if (fechaDesde) {
-      query = query.gte("created_at", fechaDesde)
-    }
-
-    if (fechaHasta) {
-      query = query.lte("created_at", fechaHasta + "T23:59:59")
+    // Fechas: días de la organización. "hasta" + "T23:59:59" sin offset se
+    // leía como UTC y en Argentina dejaba afuera las ventas de 21 a 24 h.
+    if (fechaDesde || fechaHasta) {
+      const { data: org } = await supabaseAdmin
+        .from("organizations")
+        .select("zona_horaria")
+        .eq("id", organizationId!)
+        .single()
+      const tz: string = org?.zona_horaria || DEFAULT_TIMEZONE
+      const esDia = (f: string) => /^\d{4}-\d{2}-\d{2}$/.test(f)
+      if (fechaDesde) {
+        query = query.gte("created_at", esDia(fechaDesde) ? dayRangeUtc(fechaDesde, tz).desde : fechaDesde)
+      }
+      if (fechaHasta) {
+        query = query.lte("created_at", esDia(fechaHasta) ? dayRangeUtc(fechaHasta, tz).hasta : fechaHasta)
+      }
     }
 
     if (search) {
-      const filters = [
-        `cliente_nombre.ilike.%${search}%`,
-        `cliente_telefono.ilike.%${search}%`,
-        `observaciones.ilike.%${search}%`,
-      ]
+      // Escapado: una coma o un paréntesis en la búsqueda ("Pérez, Juan")
+      // rompía el filtro .or() de PostgREST y el listado respondía 500.
+      const termino = escapeOrIlikeTerm(search)
+      const filters = termino
+        ? [
+            `cliente_nombre.ilike.%${termino}%`,
+            `cliente_telefono.ilike.%${termino}%`,
+            `observaciones.ilike.%${termino}%`,
+          ]
+        : []
 
-      // Si es numérico, buscar por numero_venta exacto
-      const searchNum = parseInt(search, 10)
-      if (!isNaN(searchNum)) {
-        filters.push(`numero_venta.eq.${searchNum}`)
+      // Si es un número, buscar también por numero_venta exacto
+      if (/^\d+$/.test(search.trim())) {
+        filters.push(`numero_venta.eq.${parseInt(search.trim(), 10)}`)
       }
 
-      query = query.or(filters.join(","))
+      if (filters.length > 0) query = query.or(filters.join(","))
     }
 
     // Aplicar paginación
@@ -168,56 +200,44 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId, role, session } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role, session, tecnicosOperanPos } = await requirePosAccess()
     if (error) return error
-
-    // Solo ADMIN o VENDEDOR pueden crear ventas
-    if (role !== "ADMIN" && role !== "VENDEDOR") {
-      return NextResponse.json(
-        { error: "No autorizado para crear ventas" },
-        { status: 403 }
-      )
-    }
 
     const body = await request.json()
     const data = ventaSchema.parse(body)
 
+    // El cliente tiene que ser de la organización (también lo controla
+    // crear_venta_atomica desde la migración 332): si no, la deuda o el saldo
+    // a favor se movían en la cuenta de un cliente ajeno.
+    if (data.clienteId) {
+      const { data: cliente } = await supabaseAdmin
+        .from("clientes")
+        .select("id")
+        .eq("id", data.clienteId)
+        .eq("organization_id", organizationId!)
+        .maybeSingle()
+      if (!cliente) {
+        return NextResponse.json({ error: "Cliente no encontrado" }, { status: 400 })
+      }
+    }
+
+    // "Saldo a favor" (CUENTA_CORRIENTE) descuenta de la cuenta del cliente:
+    // sin cliente la venta quedaba cobrada sin descontar nada de ningún lado.
+    const usaSaldoAFavor =
+      (data.pagos ?? []).some((p) => p.metodo === "CUENTA_CORRIENTE") ||
+      (!data.pagos?.length && !data.pagosParcial && data.metodoPago === "CUENTA_CORRIENTE")
+    if (usaSaldoAFavor && !data.clienteId) {
+      return NextResponse.json(
+        { error: "Para cobrar con saldo a favor la venta tiene que tener un cliente" },
+        { status: 400 }
+      )
+    }
+
     // Precio efectivo por método de pago: el método-condición (pago de mayor monto)
     // fija un factor que sube el precio de venta (ingreso real, no recargo bancario).
     const recargosMetodo = await getRecargosMetodo(organizationId!)
-    const condicion = metodoCondicion(data.pagos, data.metodoPago)
-    const factor = factorRecargo(recargosMetodo, condicion)
-
-    // Calcular totales. Convención: venta.subtotal = bruto (Σ cantidad×precio);
-    // venta.descuento = descuento total (por línea + global); venta.total =
-    // bruto − descuento. Los descuentos por línea se restan del neto sobre el
-    // que se aplica el descuento global (% global sobre el neto post-línea).
-    const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
-
-    let subtotalBruto = 0
-    let descuentoItems = 0
-    for (const item of data.items) {
-      const precioEfectivo = round2(item.precioUnitario * factor)
-      const lineaBruto = item.cantidad * precioEfectivo
-      subtotalBruto += lineaBruto
-      const lineaDesc =
-        item.tipoDescuento === "PORCENTAJE"
-          ? lineaBruto * (item.porcentajeDescuento / 100)
-          : Math.min(item.descuento, lineaBruto)
-      descuentoItems += lineaDesc
-    }
-    const subtotalNeto = subtotalBruto - descuentoItems
-
-    let descuentoGlobal = data.descuento
-    if (data.tipoDescuento === "PORCENTAJE") {
-      descuentoGlobal = subtotalNeto * (data.porcentajeDescuento / 100)
-    }
-    // Clamp: el descuento global no puede exceder el neto (total nunca negativo)
-    descuentoGlobal = Math.min(Math.max(descuentoGlobal, 0), subtotalNeto)
-
-    const subtotal = round2(subtotalBruto)
-    const descuentoMonto = round2(descuentoItems + descuentoGlobal)
-    const base = round2(Math.max(subtotalBruto - descuentoItems - descuentoGlobal, 0))
+    const parcial = !!data.pagosParcial
+    const cobro = condicionDeCobro(data.pagos, data.metodoPago, parcial, recargosMetodo)
 
     // Config fiscal de la organización (IVA + redondeo). select("*") es defensivo:
     // si las columnas no existen aún (migración 229 sin aplicar) quedan undefined
@@ -228,82 +248,89 @@ export async function POST(request: Request) {
       .eq("id", organizationId!)
       .single()
     const ivaRegimen: string = orgFiscal?.iva_regimen ?? "EXENTO"
-    const ivaTasa = Number(orgFiscal?.iva_tasa ?? 0)
-    const redondeoUnidad = Number(orgFiscal?.redondeo_efectivo ?? 0)
-
-    // ¿Pago 100% en efectivo? (para redondeo)
-    const isCash =
-      data.pagos && data.pagos.length > 0
-        ? data.pagos.every((p) => p.metodo === "EFECTIVO")
-        : data.metodoPago === "EFECTIVO"
-
-    // IVA por régimen (espeja computeVentaTotals del front)
-    let ivaNeto = base
-    let ivaMonto = 0
-    let totalConIva = base
-    if (ivaRegimen === "INCLUIDO" && ivaTasa > 0) {
-      ivaNeto = round2(base / (1 + ivaTasa / 100))
-      ivaMonto = round2(base - ivaNeto)
-      totalConIva = base
-    } else if (ivaRegimen === "ADITIVO" && ivaTasa > 0) {
-      ivaNeto = base
-      ivaMonto = round2(base * (ivaTasa / 100))
-      totalConIva = round2(base + ivaMonto)
+    // iva_tasa en NULL significa "sin tasa propia: usar la del pais"
+    // (migracion 310). Con regimen EXENTO no se aplica ninguna igual.
+    const ivaTasa = Number(orgFiscal?.iva_tasa ?? getIvaGeneral(orgFiscal?.pais))
+    const fiscal: FiscalConfig = {
+      regimen: ivaRegimen as IvaRegimen,
+      tasa: ivaTasa,
+      redondeoEfectivo: Number(orgFiscal?.redondeo_efectivo ?? 0),
     }
 
-    // Redondeo de efectivo
-    let redondeoMonto = 0
-    let total = totalConIva
-    if (isCash && redondeoUnidad > 0) {
-      const r = Math.round(totalConIva / redondeoUnidad) * redondeoUnidad
-      redondeoMonto = round2(r - totalConIva)
-      total = round2(r)
-    }
+    // Totales con la misma función que muestra el POS (lib/ventas/totales.ts).
+    // Convención: venta.subtotal = bruto (Σ cantidad×precio); venta.descuento =
+    // descuento total (por línea + global); venta.total = bruto − descuento,
+    // más IVA aditivo y redondeo de efectivo.
+    const descuentoGlobal: DescuentoConfig =
+      data.tipoDescuento === "PORCENTAJE"
+        ? { tipo: "PORCENTAJE", valor: data.porcentajeDescuento }
+        : { tipo: "MONTO", valor: data.descuento }
+    const totales = calcularTotalesVenta(data.items, descuentoGlobal, fiscal, cobro.efectivo, cobro.factor)
+    const subtotal = totales.subtotal
+    const descuentoMonto = totales.descuentoTotal
+    const total = totales.total
+    const ivaNeto = totales.neto
+    const ivaMonto = totales.iva
+    const redondeoMonto = totales.redondeo
     const fiscalActivo = ivaRegimen !== "EXENTO" || redondeoMonto !== 0
 
-    // Preparar items para la función atómica. El precioUnitario se persiste con
-    // el factor del método aplicado (precio efectivo = ingreso real).
-    const pItems = data.items.map(item => ({
-      inventarioId: item.inventarioId || null,
-      descripcion: item.descripcion,
-      cantidad: item.cantidad,
-      precioUnitario: round2(item.precioUnitario * factor),
-      diasGarantia: item.diasGarantia,
-      descuento: item.descuento,
-      tipoDescuento: item.tipoDescuento,
-      porcentajeDescuento: item.porcentajeDescuento,
-      ...(item.serieIds && item.serieIds.length > 0 && { serieIds: item.serieIds }),
-      ...(item.costo != null && { costo: item.costo }),
-    }))
+    // Pagos contra el total, al centavo. Los que cubren el total con hasta un
+    // centavo de diferencia se ajustan para sumar exacto: si no, el SQL deja
+    // $0,01 de deuda en la cuenta del cliente (o rechaza la venta sin cliente).
+    const conciliacion = conciliarPagos(data.pagos ?? [], total, parcial)
 
-    // Resolver sucursal concreta para la escritura (no-ADMIN: la suya;
-    // ADMIN: según cookie, fallback a principal).
-    const sucursalId = await sucursalParaEscritura({
+    // Una venta con saldo pendiente requiere un cliente
+    if (conciliacion.saldoPendiente > 0 && !data.clienteId) {
+      return NextResponse.json(
+        { error: "Para una venta a cuenta corriente (sin cobro total) tenés que seleccionar un cliente." },
+        { status: 400 }
+      )
+    }
+    if (conciliacion.error) {
+      return NextResponse.json({ error: conciliacion.error }, { status: 400 })
+    }
+
+    // Preparar items para la función atómica. Precio y descuento se persisten
+    // con el factor del método aplicado (precio efectivo = ingreso real), así
+    // cada línea suma lo mismo que el total de la venta.
+    const pItems = data.items.map(item => {
+      const linea = lineaConRecargo(item, cobro.factor)
+      return {
+        inventarioId: item.inventarioId || null,
+        descripcion: item.descripcion,
+        cantidad: item.cantidad,
+        precioUnitario: linea.precioUnitario,
+        diasGarantia: item.diasGarantia,
+        descuento: linea.descuento,
+        tipoDescuento: item.tipoDescuento,
+        porcentajeDescuento: item.porcentajeDescuento,
+        ...(item.serieIds && item.serieIds.length > 0 && { serieIds: item.serieIds }),
+        ...(item.costo != null && { costo: item.costo }),
+      }
+    })
+
+    // Resolver sucursal + deposito concretos para la escritura (no-ADMIN: la
+    // suya; ADMIN: según cookie, fallback a principal). Mismo helper que usan
+    // los endpoints de lectura del POS (scope=venta) para que nunca diverjan
+    // sobre qué depósito descuenta la venta.
+    const destinoVenta = await resolverDestinoVenta({
       role,
       organizationId: organizationId!,
       userSucursalId: session!.user.sucursalId ?? null,
     })
-
-    // Resolve the principal deposito of this sucursal to enforce strict deduction
-    // (p_deposito_id explicit → RPC drains only from that deposito, not across all).
-    // If null (sucursal has no principal deposito — misconfiguration), fall back to
-    // null (drain across org) and log a warning.
-    let resolvedDepositoId: string | null = null
-    if (sucursalId) {
-      resolvedDepositoId = await getDepositoDeSucursal(organizationId!, sucursalId)
-      if (!resolvedDepositoId) {
-        console.warn(
-          `[ventas] Sucursal ${sucursalId} has no principal deposito — falling back to drain mode`
-        )
-      }
-    }
+    const sucursalId = destinoVenta.sucursalId
+    const resolvedDepositoId = destinoVenta.depositoId
 
     // Resolver vendedor (server-authoritative: valida que pertenezca a la org con rol válido)
+    // Quién puede quedar ACREDITADO como operador de la venta. Con el permiso
+    // prendido el técnico también: si no está en la lista, resolveOperador lo
+    // descarta en silencio y cae al fallback, y la venta que hizo el técnico
+    // termina atribuida a otro.
     const vendedorId = await resolveOperador(
       organizationId!,
       data.vendedorId,
       userId!,
-      { roles: ["VENDEDOR", "ADMIN"] }
+      { roles: tecnicosOperanPos ? ["VENDEDOR", "ADMIN", "TECNICO"] : ["VENDEDOR", "ADMIN"] }
     )
 
     // Crear venta atómicamente
@@ -330,43 +357,17 @@ export async function POST(request: Request) {
       p_sucursal_id: sucursalId,
     }
 
-    // Pass multi-payment array if provided
     if (data.pagos && data.pagos.length > 0) {
-      rpcParams.p_pagos = data.pagos
-    } else if (data.pagosParcial) {
+      rpcParams.p_pagos = conciliacion.pagos
+    } else if (!parcial && data.metodoPago === "CUENTA_CORRIENTE") {
+      // Camino viejo (sin array de pagos) pagando todo con saldo a favor: el
+      // SQL registraba el pago sin descontar el saldo del cliente. Como pago
+      // explícito pasa por usar_cuenta_corriente, que descuenta y valida.
+      rpcParams.p_pagos = [{ metodo: "CUENTA_CORRIENTE", monto: total }]
+    } else if (parcial) {
       // Deferred payment ("paga después"): send empty array
       // RPC distinguishes NULL (legacy full payment) vs empty array (no payments)
       rpcParams.p_pagos = []
-    }
-
-    // Validate: a sale with pending balance requires a cliente_id
-    const montoPagado = data.pagos && data.pagos.length > 0
-      ? data.pagos.reduce((sum, p) => sum + p.monto, 0)
-      : data.pagosParcial ? 0 : total
-    const saldoPendiente = total - montoPagado
-    if (saldoPendiente > 0 && !data.clienteId) {
-      return NextResponse.json(
-        { error: "Para una venta a cuenta corriente (sin cobro total) tenés que seleccionar un cliente." },
-        { status: 400 }
-      )
-    }
-
-    // Server-side payment/total reconciliation — mirrors the client guard in PosCheckoutDialog.
-    // For non-partial sales: pagos must sum to exactly the effective total (tolerance 0.01).
-    if (data.pagos && data.pagos.length > 0 && !data.pagosParcial) {
-      if (Math.abs(saldoPendiente) > 0.01) {
-        return NextResponse.json(
-          { error: "El total de pagos no coincide con el total de la venta." },
-          { status: 400 }
-        )
-      }
-    }
-    // For partial sales: pagos must not exceed the total.
-    if (data.pagosParcial && montoPagado > total + 0.01) {
-      return NextResponse.json(
-        { error: "El total de pagos no puede exceder el total de la venta." },
-        { status: 400 }
-      )
     }
 
     const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc("crear_venta_atomica", rpcParams)
@@ -412,8 +413,24 @@ export async function POST(request: Request) {
 
       // Mapped deposit error codes
       if (rpcError.code === "P0010") {
+        // El nombre solo se necesita acá: resolverlo de forma diferida evita
+        // una query extra en cada venta exitosa.
+        //
+        // Solo se nombra la sucursal cuando la venta salió de SU depósito. Sin
+        // depositoId resuelto el RPC corrió con p_deposito_id = null y drenó de
+        // toda la organización: el faltante es org-wide y esa sucursal no tiene
+        // depósito principal, así que nombrarla sería falso (mismo criterio que
+        // el indicador "Vendiendo desde", ver derivarLecturaVenta).
+        const sucursalNombre =
+          sucursalId && resolvedDepositoId
+            ? await getNombreSucursal(organizationId!, sucursalId)
+            : null
         return NextResponse.json(
-          { error: "Stock insuficiente en el depósito seleccionado" },
+          {
+            error: sucursalNombre
+              ? `Stock insuficiente en el depósito de ${sucursalNombre}`
+              : "Stock insuficiente en el depósito seleccionado",
+          },
           { status: 400 }
         )
       }
@@ -434,6 +451,8 @@ export async function POST(request: Request) {
 
     const ventaId = rpcResult?.ventaId || rpcResult
 
+    let advertencia: string | undefined
+
     // Snapshot fiscal en la venta (solo si el régimen está activo o hubo
     // redondeo). Las columnas existen porque fiscalActivo ⇒ la org configuró
     // IVA/redondeo ⇒ migración 229 aplicada (sin hazard de orden de deploy).
@@ -449,11 +468,11 @@ export async function POST(request: Request) {
         })
         .eq("id", ventaId)
       if (ivaError) {
+        // La venta ya está creada (stock descontado, pagos y deuda
+        // registrados): responder 500 hacía creer que falló y el cajero la
+        // volvía a cargar. Se avisa y se sigue.
         console.error("Error al guardar snapshot IVA:", ivaError)
-        return NextResponse.json(
-          { error: "Error al guardar datos fiscales de la venta" },
-          { status: 500 }
-        )
+        advertencia = "La venta se registró, pero no se pudieron guardar los datos de IVA. Revisala en el detalle."
       }
     }
 
@@ -516,6 +535,7 @@ export async function POST(request: Request) {
     const response = {
       ...formatVenta(ventaCompleta),
       organizationName: org?.nombre_mostrar || org?.nombre || null,
+      ...(advertencia ? { advertencia } : {}),
     }
 
     return NextResponse.json(response, { status: 201 })

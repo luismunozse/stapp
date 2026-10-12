@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { stockDisponibleCatalogo } from "@/lib/catalogo/stock-disponible"
 
 // Devuelve top 3 items "comprados juntos" calculados a partir de cotizaciones
 // del catálogo público que incluyeron el item solicitado.
@@ -65,7 +66,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     .select(`
       id, tipo, nombre, precio, precio_lista, imagen_url,
       stock, inventario_id, activo, organization_id,
-      inventario:inventario(stock)
+      inventario:inventario(stock, stock_reservado, deleted_at)
     `)
     .in("id", topIds)
     .eq("organization_id", config.organization_id)
@@ -73,7 +74,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
 
   const result = (items ?? [])
     .map((it: any) => {
-      const stockReal = it.inventario_id && it.inventario ? it.inventario.stock : it.stock
+      const stockReal = stockDisponibleCatalogo(it)
       const { inventario, organization_id, activo, ...rest } = it
       return {
         ...rest,

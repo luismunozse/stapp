@@ -138,7 +138,7 @@ export function ComparativaIngresos() {
           tone={data.cambio.direccion === "up" ? "success" : data.cambio.direccion === "down" ? "danger" : "default"}
         />
         <StatCard
-          title="Facturas Este Mes"
+          title="Remitos Este Mes"
           value={String(data.mesActual.cantidad)}
           description={`Prom: ${formatPrice(data.mesActual.promedio)}`}
           icon={Receipt}

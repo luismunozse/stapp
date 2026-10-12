@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useCurrency } from "@/contexts/currency-context"
+import { getTaxIdLabel, getPersonalIdLabel } from "@/lib/countries"
 import { useHasFeature } from "@/hooks/use-subscription"
+import { TipoPrecioBadge } from "@/components/clientes/tipo-precio-badge"
 import type { Cliente } from "@/types"
 
 interface ClienteDetalleHeaderProps {
@@ -23,7 +25,7 @@ interface ClienteDetalleHeaderProps {
 export function ClienteDetalleHeader({
   cliente, saldo, deudaPendiente, totalOrdenes, onEdit, onWhatsApp,
 }: ClienteDetalleHeaderProps) {
-  const { formatPrice } = useCurrency()
+  const { formatPrice, pais } = useCurrency()
   const router = useRouter()
   const esEmpresa = cliente.tipoCliente === "EMPRESA"
   const { hasFeature: hasCotizaciones, loading: cotizacionesLoading } = useHasFeature("cotizaciones_online")
@@ -44,11 +46,12 @@ export function ClienteDetalleHeader({
             {esEmpresa && (
               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-warning/10 text-warning-700">Empresa</span>
             )}
+            <TipoPrecioBadge tipoPrecio={cliente.tipoPrecio} />
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2">
             {cliente.telefono && <span>{cliente.telefono}</span>}
             {cliente.email && <span className="truncate">· {cliente.email}</span>}
-            {(cliente.cuit || cliente.dni) && <span>· {cliente.cuit ? `CUIT ${cliente.cuit}` : `DNI ${cliente.dni}`}</span>}
+            {(cliente.cuit || cliente.dni) && <span>· {cliente.cuit ? `${getTaxIdLabel(pais)} ${cliente.cuit}` : `${getPersonalIdLabel(pais)} ${cliente.dni}`}</span>}
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">

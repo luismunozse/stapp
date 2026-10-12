@@ -32,9 +32,11 @@ interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   onResult: (result: ScanResult) => void
+  /** POS opt-in: scope stock to the sucursal/deposito the sale will draw from. */
+  scopeVenta?: boolean
 }
 
-export function BarcodeScanner({ open, onOpenChange, onResult }: Props) {
+export function BarcodeScanner({ open, onOpenChange, onResult, scopeVenta = false }: Props) {
   const [code, setCode] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -52,7 +54,8 @@ export function BarcodeScanner({ open, onOpenChange, onResult }: Props) {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/inventario/barcode?code=${encodeURIComponent(trimmed)}`)
+      const scopeQuery = scopeVenta ? "&scope=venta" : ""
+      const res = await fetch(`/api/inventario/barcode?code=${encodeURIComponent(trimmed)}${scopeQuery}`)
       if (res.ok) {
         const data = await res.json()
         onOpenChange(false)
@@ -67,7 +70,7 @@ export function BarcodeScanner({ open, onOpenChange, onResult }: Props) {
       setLoading(false)
       loadingRef.current = false
     }
-  }, [onResult, onOpenChange])
+  }, [onResult, onOpenChange, scopeVenta])
 
   const handleSearch = useCallback(() => runSearch(code), [code, runSearch])
 

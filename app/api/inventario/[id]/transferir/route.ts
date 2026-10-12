@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { depositoPermitido, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { z } from "zod"
 
 const schema = z.object({
@@ -18,12 +19,36 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId } = await requireInventarioAccess()
+    const { error, session, organizationId, userId, role } = await requireInventarioAccess()
     if (error) return error
 
     const { id } = await params
     const body = await request.json()
     const data = schema.parse(body)
+
+    // La RPC solo verifica que los depositos existan (FK). El origen tiene que
+    // ser de la sucursal de quien transfiere; el destino puede ser de cualquier
+    // sucursal de la org (se transfiere stock entre sucursales).
+    const userSucursalId = session?.user?.sucursalId ?? null
+    const origenOk = await depositoPermitido({
+      depositoId: data.depositoOrigenId,
+      organizationId: organizationId!,
+      role,
+      userSucursalId,
+      alcance: "sucursal",
+    })
+    const destinoOk =
+      origenOk &&
+      (await depositoPermitido({
+        depositoId: data.depositoDestinoId,
+        organizationId: organizationId!,
+        role,
+        userSucursalId,
+        alcance: "organizacion",
+      }))
+    if (!origenOk || !destinoOk) {
+      return NextResponse.json({ error: DEPOSITO_INVALIDO }, { status: 400 })
+    }
 
     const { data: result, error: rpcErr } = await supabaseAdmin.rpc(
       "transferir_stock_atomic",

@@ -15,6 +15,8 @@ const clienteSchema = z.object({
   razonSocial: z.string().optional(),
   cuit: z.string().optional(),
   aceptaWhatsapp: z.boolean().optional(),
+  tipoPrecio: z.enum(["MINORISTA", "MAYORISTA"]).optional(),
+  descuentoPct: z.number().min(0, "El descuento debe estar entre 0 y 100").max(100, "El descuento debe estar entre 0 y 100").nullable().optional(),
 })
 
 export async function GET(request: Request) {
@@ -114,7 +116,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     // Verificar límite de clientes del plan
@@ -124,20 +126,49 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = clienteSchema.parse(body)
 
+    // El precio mayorista es una regla de negocio persistente y sensible en
+    // plata (cada orden futura de ese cliente la hereda) — solo ADMIN puede
+    // definirla. Se rechaza fuerte (403), nunca se aplica parcial en
+    // silencio (ver design ADR-7).
+    if ((data.tipoPrecio !== undefined || data.descuentoPct !== undefined) && role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Solo un administrador puede definir el precio del cliente" },
+        { status: 403 }
+      )
+    }
+
+    // Un cliente MAYORISTA sin % es un estado inválido (el badge quedaría sin
+    // magnitud) — usar descuentoPct: 0 si la intención es "cuenta mayorista,
+    // sin descuento activo por ahora".
+    if (data.tipoPrecio === "MAYORISTA" && (data.descuentoPct === undefined || data.descuentoPct === null)) {
+      return NextResponse.json(
+        { error: "Definí un descuento para un cliente mayorista" },
+        { status: 400 }
+      )
+    }
+
+    const insertPayload: Record<string, any> = {
+      nombre: data.nombre,
+      telefono: data.telefono,
+      email: data.email || null,
+      direccion: data.direccion || null,
+      dni: data.dni || null,
+      tipo_cliente: data.tipoCliente || "INDIVIDUAL",
+      razon_social: data.razonSocial || null,
+      cuit: data.cuit || null,
+      organization_id: organizationId!,
+      acepta_whatsapp: data.aceptaWhatsapp ?? true,
+    }
+    // Solo se tocan estas columnas si el request las trajo — un MINORISTA
+    // nunca guarda un % (coerción silenciosa, ver spec REQ-5.2).
+    if (data.tipoPrecio !== undefined) {
+      insertPayload.tipo_precio = data.tipoPrecio
+      insertPayload.descuento_pct = data.tipoPrecio === "MAYORISTA" ? (data.descuentoPct ?? null) : null
+    }
+
     const { data: cliente, error: dbError } = await supabaseAdmin
       .from("clientes")
-      .insert({
-        nombre: data.nombre,
-        telefono: data.telefono,
-        email: data.email || null,
-        direccion: data.direccion || null,
-        dni: data.dni || null,
-        tipo_cliente: data.tipoCliente || "INDIVIDUAL",
-        razon_social: data.razonSocial || null,
-        cuit: data.cuit || null,
-        organization_id: organizationId!,
-        acepta_whatsapp: data.aceptaWhatsapp ?? true,
-      })
+      .insert(insertPayload)
       .select()
       .single()
 

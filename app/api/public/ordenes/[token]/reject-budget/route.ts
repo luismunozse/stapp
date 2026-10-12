@@ -4,6 +4,8 @@ import { queueNotification } from "@/lib/notifications/queue"
 import { z } from "zod"
 import { getOrderByPublicToken } from "@/lib/public-token"
 import { transicionarOrden } from "@/lib/orden-transicion"
+import { restaurarOriginalDeRevision } from "@/lib/cotizacion-revision"
+import { totalPresupuestoDeOrden } from "@/lib/cotizacion-presupuesto"
 
 const rejectSchema = z.object({
   motivo: z.string().max(500).optional(),
@@ -54,6 +56,18 @@ export async function POST(
       return NextResponse.json({ message: "Presupuesto rechazado", estado: "EN_DIAGNOSTICO" })
     }
 
+    // Relevar ANTES del bulk update quiénes son revisión: el UPDATE de abajo
+    // pisa el estado de TODAS las ENVIADA de la orden en una sola consulta y
+    // no toca `reemplazada_por`. Si una de esas filas es una revisión, la
+    // original que reemplazó queda apuntada para siempre — excluida del
+    // presupuesto mientras su firma sigue siendo el acuerdo vigente y su
+    // stock sigue reservado.
+    const { data: enviadasAntesDelRechazo } = await supabaseAdmin
+      .from("cotizaciones")
+      .select("id, revision_de")
+      .eq("orden_id", orden.id)
+      .eq("estado", "ENVIADA")
+
     // Si hay cotizaciones ENVIADA vinculadas, marcarlas como RECHAZADA
     await supabaseAdmin
       .from("cotizaciones")
@@ -64,6 +78,23 @@ export async function POST(
       })
       .eq("orden_id", orden.id)
       .eq("estado", "ENVIADA")
+
+    // Restaurar la original de cada revisión que acaba de morir en el bloque.
+    let huboRestauracion = false
+    for (const cot of enviadasAntesDelRechazo || []) {
+      const restaurada = await restaurarOriginalDeRevision(cot, orden.organization_id)
+      if (restaurada) huboRestauracion = true
+    }
+
+    if (huboRestauracion) {
+      // La cifra restaurada no aparece sola: hay que recalcular para que
+      // aterrice en la orden.
+      const { total } = await totalPresupuestoDeOrden(orden.id)
+      await supabaseAdmin
+        .from("ordenes_servicio")
+        .update({ presupuesto: total, costo_final: total })
+        .eq("id", orden.id)
+    }
 
     // Registrar evento
     await supabaseAdmin.from("orden_eventos").insert({

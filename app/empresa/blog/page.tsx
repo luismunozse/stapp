@@ -5,6 +5,7 @@ import { BreadcrumbJsonLd } from "@/components/seo/json-ld"
 import { blogPosts, blogCategories } from "@/lib/blog-data"
 import { BlogList } from "@/components/blog/blog-list"
 import { NewsletterForm } from "@/components/blog/newsletter-form"
+import { OG_IMAGES } from "@/lib/og/metadata"
 
 export const metadata = {
   title: "Blog - Consejos para Talleres de Reparación de Celulares",
@@ -19,6 +20,7 @@ export const metadata = {
     "órdenes de trabajo servicio técnico",
   ],
   openGraph: {
+    images: OG_IMAGES,
     title: "Blog - STApp | Consejos para Talleres de Reparación",
     description:
       "Consejos, novedades y mejores prácticas para talleres de reparación de celulares.",

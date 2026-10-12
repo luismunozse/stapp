@@ -64,7 +64,9 @@ interface Proveedor {
 interface ProveedorStats {
   productosCount: number
   ordenesCount: number
-  totalComprado: number
+  /** null cuando el rol no puede ver costos de compra (hasInventarioAccess):
+   *  es lo que la organización le pagó a este proveedor. */
+  totalComprado: number | null
   ultimaCompra: string | null
 }
 
@@ -98,6 +100,15 @@ export function ProveedoresList() {
     { revalidateOnFocus: false, dedupingInterval: 5000 }
   )
 
+  // El endpoint devuelve totalComprado en null cuando el rol no puede ver
+  // costos de compra, así que la propia respuesta es la señal: si alguna fila
+  // trae el número, el rol lo puede ver. Con el mapa vacío no hay nada que
+  // mostrar de todos modos.
+  const canViewCompra = useMemo(
+    () => Object.values(statsMap).some((s) => s.totalComprado !== null),
+    [statsMap]
+  )
+
   const allTags = useMemo(() => {
     const set = new Set<string>()
     for (const p of proveedores) {
@@ -124,6 +135,11 @@ export function ProveedoresList() {
       const sb = statsMap[b.id]
       switch (sortBy) {
         case "totalComprado":
+          // Ordenar por una cifra que el rol no ve sería un canal lateral, como
+          // en masValiosos y rentabilidad-tecnicos. Gateado, totalComprado
+          // viene null en todas las filas: el comparador da 0 en todos los
+          // pares y el orden filtrado queda intacto. La opción tampoco se
+          // ofrece (ver el Select de abajo).
           return (sb?.totalComprado || 0) - (sa?.totalComprado || 0)
         case "productos":
           return (sb?.productosCount || 0) - (sa?.productosCount || 0)
@@ -181,7 +197,7 @@ export function ProveedoresList() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="nombre">Nombre (A-Z)</SelectItem>
-              <SelectItem value="totalComprado">Más comprado</SelectItem>
+              {canViewCompra && <SelectItem value="totalComprado">Más comprado</SelectItem>}
               <SelectItem value="productos">Más productos</SelectItem>
               <SelectItem value="ultimaCompra">Compra reciente</SelectItem>
               <SelectItem value="rating">Mejor rating</SelectItem>
@@ -360,18 +376,20 @@ export function ProveedoresList() {
                   {/* KPIs */}
                   <Link
                     href={`/proveedores/${proveedor.id}`}
-                    className="grid grid-cols-3 gap-1 -mx-1 px-1 py-2 rounded-md hover:bg-muted/50 transition-colors"
+                    className={`grid ${canViewCompra ? "grid-cols-3" : "grid-cols-2"} gap-1 -mx-1 px-1 py-2 rounded-md hover:bg-muted/50 transition-colors`}
                   >
                     <Kpi
                       icon={<Package className="h-3 w-3" />}
                       label="Items"
                       value={s ? s.productosCount.toLocaleString("es-AR") : "—"}
                     />
-                    <Kpi
-                      icon={<ShoppingCart className="h-3 w-3" />}
-                      label="Comprado"
-                      value={s ? formatPrice(s.totalComprado) : "—"}
-                    />
+                    {canViewCompra && (
+                      <Kpi
+                        icon={<ShoppingCart className="h-3 w-3" />}
+                        label="Comprado"
+                        value={s && s.totalComprado !== null ? formatPrice(s.totalComprado) : "—"}
+                      />
+                    )}
                     <Kpi
                       icon={<Calendar className="h-3 w-3" />}
                       label="Última"

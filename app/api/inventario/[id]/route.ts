@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
-import { requireAuth, requireInventarioAccess } from "@/lib/auth-utils"
+import { requireAuth, requireInventarioAccess, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
@@ -64,7 +64,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     const { id } = await params
@@ -84,7 +84,11 @@ export async function GET(
       )
     }
 
-    return NextResponse.json(formatInventario(item))
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+    return NextResponse.json(formatInventario(item, canViewCost))
   } catch (error) {
     console.error("Error fetching inventario:", error)
     return NextResponse.json(
@@ -119,6 +123,17 @@ export async function PUT(
       return NextResponse.json(
         { error: "Item no encontrado" },
         { status: 404 }
+      )
+    }
+
+    // DB check (migración 177): es_kit=true exige tipo_kit. Se evalúa sobre la fila
+    // resultante (body + fila actual) para no rechazar un PUT que solo reenvía esKit.
+    const esKitFinal = data.esKit !== undefined ? data.esKit : existingItem.es_kit
+    const tipoKitFinal = data.tipoKit !== undefined ? data.tipoKit : existingItem.tipo_kit
+    if (esKitFinal === true && !tipoKitFinal) {
+      return NextResponse.json(
+        { error: "Un kit necesita un tipo: ensamblado o virtual" },
+        { status: 400 }
       )
     }
 
@@ -157,6 +172,79 @@ export async function PUT(
       const v = data.diasGarantiaDefault
       updateData.dias_garantia_default =
         v != null && Number.isFinite(v) && v >= 0 ? v : null
+    }
+
+    // Conflicto de codigo conocido: se chequea ANTES de tocar el stock, asi un
+    // codigo duplicado no deja el stock ajustado con una respuesta de error. El
+    // catch de 23505 de abajo queda como red ante una carrera.
+    if (data.codigo !== undefined && data.codigo !== existingItem.codigo) {
+      const { data: duplicado } = await supabaseAdmin
+        .from("inventario")
+        .select("id")
+        .eq("organization_id", organizationId!)
+        .eq("codigo", data.codigo)
+        .neq("id", id)
+        .is("deleted_at", null)
+        .maybeSingle()
+      if (duplicado) {
+        return NextResponse.json({ error: "Ya existe un item con ese código" }, { status: 400 })
+      }
+    }
+
+    // El stock se ajusta ANTES de guardar los demas campos: si la RPC lo rechaza
+    // (p. ej. el deposito de la sucursal no tiene unidades) o hay un conflicto
+    // de validacion conocido, no queda un guardado parcial. Un error de base de
+    // datos DESPUES de un ajuste exitoso todavia puede dejar el stock aplicado.
+    let stockConfirmado: number | null = null
+    if (data.stock !== undefined && data.stock !== existingItem.stock) {
+      // Route the stock change through the atomic RPC so inventario_depositos
+      // is kept in sync and the movement is logged under the correct deposit.
+      const sucursalId = await sucursalParaEscritura({
+        role: role ?? "ADMIN",
+        organizationId: organizationId!,
+        userSucursalId: session!.user.sucursalId ?? null,
+      })
+      const depositoId = sucursalId ? await getDepositoDeSucursal(organizationId!, sucursalId) : null
+
+      const { data: adj, error: adjError } = await supabaseAdmin.rpc("adjust_stock_atomic", {
+        p_inventario_id: id,
+        p_organization_id: organizationId!,
+        p_user_id: userId!,
+        p_mode: "absolute",
+        p_value: data.stock,
+        p_motivo: "Ajuste manual desde edición de producto",
+        p_tipo: "AJUSTE",
+        p_referencia_tipo: "AJUSTE_MANUAL",
+        p_deposito_id: depositoId,
+      })
+
+      if (adjError) {
+        // Mismos errores de negocio que mapea /api/inventario/[id]/stock.
+        if (adjError.code === "P0002") {
+          return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
+        }
+        if (adjError.code === "P0010") {
+          return NextResponse.json(
+            {
+              error: `No hay stock suficiente en el depósito de tu sucursal para dejar el total en ${data.stock}. El resto está en otros depósitos: transferilo primero.`,
+            },
+            { status: 400 }
+          )
+        }
+        if (adjError.code === "P0011") {
+          return NextResponse.json(
+            { error: "La organización no tiene depósito principal configurado" },
+            { status: 400 }
+          )
+        }
+        if (adjError.code === "P0003") {
+          return NextResponse.json({ error: "El stock no puede quedar negativo" }, { status: 400 })
+        }
+        console.error("Error applying stock adjustment via RPC:", { inventarioId: id, adjError })
+        return NextResponse.json({ error: "Error al actualizar stock" }, { status: 500 })
+      }
+
+      stockConfirmado = (adj as any)?.stockPosterior ?? data.stock
     }
 
     let { data: item, error: updateError } = await supabaseAdmin
@@ -216,43 +304,16 @@ export async function PUT(
       }
     }
 
-    if (data.stock !== undefined && data.stock !== existingItem.stock) {
-      // Route the stock change through the atomic RPC so inventario_depositos
-      // is kept in sync and the movement is logged under the correct deposit.
-      const sucursalId = await sucursalParaEscritura({
-        role: role ?? "ADMIN",
-        organizationId: organizationId!,
-        userSucursalId: session!.user.sucursalId ?? null,
-      })
-      const depositoId = sucursalId ? await getDepositoDeSucursal(organizationId!, sucursalId) : null
-
-      const { data: adj, error: adjError } = await supabaseAdmin.rpc("adjust_stock_atomic", {
-        p_inventario_id: id,
-        p_organization_id: organizationId!,
-        p_user_id: userId!,
-        p_mode: "absolute",
-        p_value: data.stock,
-        p_motivo: "Ajuste manual desde edición de producto",
-        p_tipo: "AJUSTE",
-        p_referencia_tipo: "AJUSTE_MANUAL",
-        p_deposito_id: depositoId,
-      })
-
-      if (adjError) {
-        console.error("Error applying stock adjustment via RPC:", { inventarioId: id, adjError })
-        return NextResponse.json({ error: "Error al actualizar stock" }, { status: 500 })
-      }
-
-      // The raw update no longer writes stock, so patch the in-memory item so the
-      // response reflects the new value confirmed by the RPC.
-      if (item) {
-        item.stock = (adj as any)?.stockPosterior ?? data.stock
-      }
-
+    if (stockConfirmado !== null) {
+      // El update de campos ya no escribe stock, asi que se parchea el item en
+      // memoria para que la respuesta refleje el valor confirmado por la RPC.
+      if (item) item.stock = stockConfirmado
       revalidateTag("catalogo", "max")
     }
 
-    return NextResponse.json(formatInventario(item))
+    // PUT corre detrás de requireInventarioAccess(): el permiso de costo ya
+    // está resuelto por el guard, así que el costo vuelve en la respuesta.
+    return NextResponse.json(formatInventario(item, true))
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

@@ -81,6 +81,15 @@ export async function POST(
         descuento_global_tipo: source.descuento_global_tipo,
         descuento_global_valor: source.descuento_global_valor,
         iva_porcentaje: source.iva_porcentaje,
+        // Un duplicado de un informe tecnico tiene que seguir siendo un
+        // informe: sin estas cuatro columnas, la copia queda con 0 items y
+        // veredicto NULL, lo que la vuelve un documento que no se puede
+        // guardar (el form manda items: []) ni corregir, pero si se puede
+        // enviar en blanco a un cliente.
+        veredicto: source.veredicto,
+        diagnostico_tecnico: source.diagnostico_tecnico,
+        causa_dano: source.causa_dano,
+        presentado_ante: source.presentado_ante,
         subtotal: source.subtotal,
         iva: source.iva,
         total: source.total,

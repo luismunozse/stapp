@@ -26,23 +26,30 @@ interface ItemInventario {
   stock: number
   precioCompra: number | null
   precioVenta: number | null
-  valorEnStock?: number
+  valorEnStock?: number | null
 }
 
 interface CategoriaResumen {
   categoria: string
   cantidad: number
   stockTotal: number
-  valorTotal: number
+  /** null cuando el rol no puede ver costos de compra: el total por categoría
+   *  se reduce al costo de un item si la categoría tiene un único SKU. */
+  valorTotal: number | null
 }
 
 interface AnalisisData {
   resumen: {
     totalItems: number
     totalUnidades: number
-    valorCompra: number
+    /** null cuando el rol no puede ver costos de compra. Con totalItems === 1
+     *  —una org nueva, o de un solo SKU— valorCompra / totalUnidades es el
+     *  costo unitario exacto, y las dos cifras viajan en este mismo resumen. */
+    valorCompra: number | null
     valorVenta: number
-    margenPotencial: number
+    /** null junto con valorCompra: es valorVenta - valorCompra, así que sin el
+     *  costo a la vista el gate ya no lo defiende una resta. */
+    margenPotencial: number | null
     itemsSinStock: number
     itemsStockCritico: number
     categorias: number
@@ -50,7 +57,7 @@ interface AnalisisData {
   stockCritico: ItemInventario[]
   sinStock: ItemInventario[]
   porCategoria: CategoriaResumen[]
-  masValiosos: (ItemInventario & { valorEnStock: number })[]
+  masValiosos: (ItemInventario & { valorEnStock: number | null })[]
 }
 
 const COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"]
@@ -116,10 +123,22 @@ export function AnalisisInventario() {
     )
   }
 
-  const chartData = data.porCategoria.slice(0, 8).map((cat) => ({
-    name: cat.categoria,
-    value: cat.valorTotal,
-  }))
+  // El endpoint devuelve el valor por categoría en null para los roles sin
+  // acceso a costos de compra. Sin filtrar, el gráfico dibuja porciones de $0:
+  // un número real en vez de un permiso faltante.
+  const chartData = data.porCategoria
+    .filter((cat): cat is CategoriaResumen & { valorTotal: number } => cat.valorTotal !== null)
+    .slice(0, 8)
+    .map((cat) => ({
+      name: cat.categoria,
+      value: cat.valorTotal,
+    }))
+
+  // Sin acceso a costo, el endpoint ya no ordena masValiosos por valor (el
+  // orden solo devolvía el ranking de costo): la lista llega ordenada por
+  // stock. La card tiene que decir eso — titularla "Más Valiosos" sobre una
+  // lista ordenada por unidades es afirmar algo que la lista no dice.
+  const valorPorItemOculto = data.masValiosos.some((item) => item.valorEnStock === null)
 
   return (
     <div className="space-y-6">
@@ -132,20 +151,27 @@ export function AnalisisInventario() {
           icon={Package}
           tone="default"
         />
-        <StatCard
-          title="Valor Inventario"
-          value={formatPrice(data.resumen.valorCompra)}
-          description="Costo compra"
-          icon={DollarSign}
-          tone="default"
-        />
-        <StatCard
-          title="Margen Pot."
-          value={formatPrice(data.resumen.margenPotencial)}
-          description="Si se vende todo"
-          icon={TrendingUp}
-          tone="success"
-        />
+        {/* Las cifras de costo llegan en null para los roles sin acceso: se
+            oculta la tarjeta entera en vez de pintar "$0", que se lee como un
+            inventario sin valor y no como un permiso faltante. */}
+        {data.resumen.valorCompra !== null && (
+          <StatCard
+            title="Valor Inventario"
+            value={formatPrice(data.resumen.valorCompra)}
+            description="Costo compra"
+            icon={DollarSign}
+            tone="default"
+          />
+        )}
+        {data.resumen.margenPotencial !== null && (
+          <StatCard
+            title="Margen Pot."
+            value={formatPrice(data.resumen.margenPotencial)}
+            description="Si se vende todo"
+            icon={TrendingUp}
+            tone="success"
+          />
+        )}
         <StatCard
           title="Stock Crítico"
           value={String(data.resumen.itemsStockCritico)}
@@ -195,15 +221,15 @@ export function AnalisisInventario() {
           </Card>
         )}
 
-        {/* Items Más Valiosos */}
+        {/* Items Más Valiosos (o, sin acceso a costo, los de más stock) */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
               <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-success" />
-              Items Más Valiosos
+              {valorPorItemOculto ? "Items con más stock" : "Items Más Valiosos"}
             </CardTitle>
             <CardDescription className="text-xs sm:text-sm">
-              Mayor valor en stock
+              {valorPorItemOculto ? "Mayor cantidad de unidades" : "Mayor valor en stock"}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -227,14 +253,21 @@ export function AnalisisInventario() {
                       </span>
                       <div className="min-w-0">
                         <p className="font-medium text-xs sm:text-sm truncate">{item.nombre}</p>
+                        {/* El endpoint devuelve null en el costo por item para
+                            los roles sin acceso a inventario: se oculta, no se
+                            pinta como $0. */}
                         <p className="text-[10px] sm:text-xs text-muted-foreground">
-                          {item.stock} uds x {formatPrice(item.precioCompra || 0)}
+                          {item.precioCompra !== null
+                            ? `${item.stock} uds x ${formatPrice(item.precioCompra)}`
+                            : `${item.stock} uds`}
                         </p>
                       </div>
                     </div>
-                    <Badge variant="default" className="bg-success text-white text-[10px] sm:text-xs shrink-0">
-                      {formatPrice(item.valorEnStock)}
-                    </Badge>
+                    {item.valorEnStock != null && (
+                      <Badge variant="default" className="bg-success text-white text-[10px] sm:text-xs shrink-0">
+                        {formatPrice(item.valorEnStock)}
+                      </Badge>
+                    )}
                   </div>
                 ))}
               </div>
@@ -309,19 +342,24 @@ export function AnalisisInventario() {
         <CardContent>
           <div className="space-y-4">
             {data.porCategoria.map((cat) => {
+              // Ambas cifras caen con el mismo gate, así que o están las dos o
+              // no está ninguna: sin costo no hay barra de proporción.
               const porcentaje =
+                cat.valorTotal !== null &&
+                data.resumen.valorCompra !== null &&
                 data.resumen.valorCompra > 0
                   ? (cat.valorTotal / data.resumen.valorCompra) * 100
-                  : 0
+                  : null
               return (
                 <div key={cat.categoria} className="space-y-1.5">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 text-sm">
                     <span className="font-medium">{cat.categoria}</span>
                     <span className="text-xs text-muted-foreground">
-                      {cat.cantidad} items · {cat.stockTotal} uds · {formatPrice(cat.valorTotal)}
+                      {cat.cantidad} items · {cat.stockTotal} uds
+                      {cat.valorTotal !== null ? ` · ${formatPrice(cat.valorTotal)}` : ""}
                     </span>
                   </div>
-                  <Progress value={porcentaje} className="h-2" />
+                  {porcentaje !== null && <Progress value={porcentaje} className="h-2" />}
                 </div>
               )
             })}

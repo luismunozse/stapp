@@ -5,6 +5,41 @@ import { randomBytes } from "crypto"
 import { z } from "zod"
 import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { stockDisponibleCatalogo } from "@/lib/catalogo/stock-disponible"
+import { normalizarWhatsAppCatalogo, catalogoWhatsAppUrl } from "@/lib/catalogo/whatsapp"
+import { rateLimitDb } from "@/lib/rate-limit-db"
+
+// Topes por IP + catalogo. Una tienda detras de un mismo NAT (wifi del local)
+// rara vez manda mas de 5 pedidos en 10 minutos; un script si.
+const RATE_LIMIT_SHORT = { max: 5, windowSeconds: 10 * 60 }
+const RATE_LIMIT_DAILY = { max: 20, windowSeconds: 24 * 60 * 60 }
+// Pedidos abiertos (ENVIADA) por telefono. El tope existe para frenar el
+// acaparamiento de stock, y la reserva vence a las 48 h por defecto: solo
+// cuentan los pedidos de esa ventana, asi un cliente recurrente no queda
+// bloqueado por dias por cotizaciones que el taller nunca contesto.
+const MAX_OPEN_ORDERS_PER_PHONE = 3
+const OPEN_ORDERS_WINDOW_HOURS = 48
+
+/**
+ * IP del comprador. x-vercel-forwarded-for lo pone el CDN y el cliente no lo
+ * puede falsear; el primer salto de x-forwarded-for es solo el fallback (local /
+ * otros hosts). Sin ninguna, "unknown" es su propia clave.
+ */
+function clientIp(req: Request): string {
+  return (
+    req.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip")?.trim() ||
+    "unknown"
+  )
+}
+
+function tooManyRequests(message: string, code: string, retryAfterSeconds: number) {
+  return NextResponse.json(
+    { error: message, code },
+    { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
+  )
+}
 
 const cotizarSchema = z.object({
   cliente: z.object({
@@ -77,7 +112,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     .from("catalogo_items")
     .select(`
       id, nombre, precio, stock, inventario_id, activo, tipo,
-      inventario:inventario(id, stock, nombre),
+      inventario:inventario(id, stock, stock_reservado, deleted_at, nombre),
       variantes:catalogo_variantes(id, etiqueta, sku, precio, stock, activo)
     `)
     .in("id", itemIds)
@@ -130,10 +165,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       continue
     }
 
-    // Sin variantes: validar stock + precio del item base
-    const stockReal = item.inventario_id && item.inventario
-      ? item.inventario.stock
-      : item.stock
+    // Sin variantes: validar disponibilidad + precio del item base.
+    // Disponibilidad = stock - stock_reservado sobre inventario: el chequeo
+    // previo tiene que mirar lo mismo que el storefront y lo mismo que la RPC,
+    // o el comprador ve "disponible" y recién falla al confirmar.
+    const stockReal = stockDisponibleCatalogo(item)
     if (stockReal != null && stockReal < cartItem.cantidad) {
       return NextResponse.json({
         error: `Stock insuficiente para "${item.nombre}" (disponible: ${stockReal})`,
@@ -144,6 +180,33 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         error: `"${item.nombre}" requiere consulta de precio. Contactá directamente.`,
       }, { status: 400 })
     }
+  }
+
+  // Rate limit por IP + catalogo. Cuenta PEDIDOS, no intentos: corre despues de
+  // validar el cuerpo, el plan y el stock (un comprador que reintenta tras un
+  // 400/409 no gasta cupo) y ANTES de cualquier escritura (cliente, numero de
+  // cotizacion, RPC). Primero la ventana corta; la diaria solo se incrementa si
+  // la corta paso. Falla abierto: ver lib/rate-limit-db.ts.
+  const ip = clientIp(req)
+  const okShort = await rateLimitDb(
+    `cotizar:short:${slug}:${ip}`, RATE_LIMIT_SHORT.max, RATE_LIMIT_SHORT.windowSeconds,
+  )
+  if (!okShort) {
+    return tooManyRequests(
+      "Enviaste muchas solicitudes seguidas. Esperá unos minutos y volvé a intentar.",
+      "RATE_LIMITED",
+      RATE_LIMIT_SHORT.windowSeconds,
+    )
+  }
+  const okDaily = await rateLimitDb(
+    `cotizar:day:${slug}:${ip}`, RATE_LIMIT_DAILY.max, RATE_LIMIT_DAILY.windowSeconds,
+  )
+  if (!okDaily) {
+    return tooManyRequests(
+      "Llegaste al máximo de pedidos por hoy desde esta conexión. Probá mañana o escribile al taller por WhatsApp.",
+      "RATE_LIMITED",
+      RATE_LIMIT_DAILY.windowSeconds,
+    )
   }
 
   // 5. Cliente: buscar por teléfono dentro de la org, o crear.
@@ -166,6 +229,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   let clienteId: string
   if (clienteExistente) {
     clienteId = clienteExistente.id
+
+    // Tope de pedidos abiertos por cliente (match exacto por telefono, igual que
+    // arriba: el telefono se guarda sin normalizar, asi que "11 2233" y
+    // "112233" cuentan como clientes distintos — limitacion conocida). Corre
+    // antes de tomar numero y de tocar el stock. Un cliente nuevo no tiene
+    // pedidos, por eso solo se chequea en esta rama.
+    const desde = new Date(Date.now() - OPEN_ORDERS_WINDOW_HOURS * 60 * 60 * 1000).toISOString()
+    const { count: abiertos } = await supabaseAdmin
+      .from("cotizaciones")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .eq("cliente_id", clienteExistente.id)
+      .eq("origen", "CATALOGO_PUBLICO")
+      .eq("estado", "ENVIADA")
+      .is("deleted_at", null)
+      .gte("created_at", desde)
+    if ((abiertos ?? 0) >= MAX_OPEN_ORDERS_PER_PHONE) {
+      return tooManyRequests(
+        "Ya tenés pedidos pendientes con este teléfono. El taller se va a comunicar con vos para coordinarlos antes de recibir uno nuevo.",
+        "OPEN_ORDERS_LIMIT",
+        60 * 60,
+      )
+    }
     const nameDiff = nombreNuevo && nombreNuevo !== clienteExistente.nombre
     const emailDiff = emailNuevo && emailNuevo !== clienteExistente.email
     if (nameDiff || emailDiff) {
@@ -232,6 +318,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   // (fix ERR-02): si cualquier paso falla, el incremento de usos_actuales
   // rollbackea solo — nunca queda un cupón consumido sin cotización. La RPC
   // valida el cupón, calcula descuento + total y los devuelve.
+  // El numero se toma lo mas tarde posible: todo rechazo previo (rate limit,
+  // pedidos abiertos, stock, cliente) ya salio sin gastarlo. Si la RPC falla
+  // despues (P0003 stock / P0004 cupon por carrera), el hueco queda: el contador
+  // vive fuera de la transaccion de la RPC.
   const numeroCotizacion = await getNextQuoteNumber(organizationId)
   const publicToken = randomBytes(16).toString("hex")
 
@@ -329,7 +419,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   // el cliente lo "envíe" desde su WhatsApp. Refuerza que el taller reciba la
   // solicitud en su canal habitual y abra contacto directo con el cliente.
   let whatsappTallerUrl: string | null = null
-  if (config.whatsapp) {
+  const { data: orgRow } = config.whatsapp
+    ? await supabaseAdmin
+        .from("organizations")
+        .select("plantillas_whatsapp, pais")
+        .eq("id", organizationId)
+        .maybeSingle()
+    : { data: null }
+  // Número crudo → con código de país. Si no es entregable no hay link: la
+  // cotización ya está guardada y el taller la ve en el panel.
+  const numeroTaller = normalizarWhatsAppCatalogo(config.whatsapp, orgRow?.pais as string | null | undefined)
+  if (numeroTaller) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || ""
     const linkPublico = appUrl
       ? `${appUrl}/cotizacion/${cotizacion.public_token}`
@@ -345,12 +445,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       ? `\nCupón: ${cuponCodigoAplicado} (− $${cuponDescuento.toLocaleString("es-AR")})`
       : ""
 
-    // Cargar plantillas custom de la org (override sobre defaultText del catálogo).
-    const { data: orgRow } = await supabaseAdmin
-      .from("organizations")
-      .select("plantillas_whatsapp")
-      .eq("id", organizationId)
-      .maybeSingle()
+    // Plantillas custom de la org (override sobre defaultText del catálogo).
     const orgPlantillas = (orgRow?.plantillas_whatsapp as Record<string, string> | null) ?? null
 
     const msg = resolvePlantilla(
@@ -367,8 +462,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       },
       orgPlantillas,
     )
-    const telLimpio = config.whatsapp.replace(/\D/g, "")
-    whatsappTallerUrl = `https://wa.me/${telLimpio}?text=${encodeURIComponent(msg)}`
+    whatsappTallerUrl = catalogoWhatsAppUrl(numeroTaller, msg)
   }
 
   return NextResponse.json({

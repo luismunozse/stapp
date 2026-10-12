@@ -2,7 +2,8 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
-import { TIPOS_BASE_CONFIG, DEFAULT_TIPO_CONFIG } from "@/lib/tipos-dispositivo-defaults"
+import { DEFAULT_TIPO_CONFIG } from "@/lib/tipos-dispositivo-defaults"
+import { seedOrganizationFromRubro } from "@/lib/rubros/seed"
 
 const tipoDispositivoSchema = z.object({
   codigo: z
@@ -39,20 +40,19 @@ function formatTipoDispositivo(tipo: any) {
   }
 }
 
-// Tipos base que se crean automaticamente para organizaciones nuevas
-const TIPOS_BASE = [
-  { codigo: "CELULAR", nombre: "Celular", prefijo_orden: "CEL", orden: 1 },
-  { codigo: "COMPUTADORA", nombre: "Computadora", prefijo_orden: "PC", orden: 2 },
-  { codigo: "TABLET", nombre: "Tablet", prefijo_orden: "TAB", orden: 3 },
-  { codigo: "CONSOLA", nombre: "Consola", prefijo_orden: "CONS", orden: 4 },
-  { codigo: "SMARTWATCH", nombre: "Smartwatch", prefijo_orden: "SW", orden: 5 },
-  { codigo: "ACCESORIOS", nombre: "Accesorios", prefijo_orden: "ACC", orden: 6 },
-  { codigo: "IMPRESORA", nombre: "Impresora", prefijo_orden: "IMP", orden: 7 },
-  { codigo: "TODOS", nombre: "Todos los dispositivos", prefijo_orden: "ORD", orden: 99 },
-]
-
+/**
+ * Red de seguridad: si una organizacion no tiene ningun tipo de equipo, la
+ * sembramos con el pack de su rubro.
+ *
+ * Antes esta funcion tenia los ocho tipos de electronica escritos a mano, en
+ * paralelo a la funcion SQL `poblar_tipos_dispositivo_base()`: dos fuentes de
+ * verdad que podian divergir sin que nadie se enterara. Ahora ambas apuntan al
+ * mismo registro de `lib/rubros`.
+ *
+ * Cubre las altas que no pasan por /api/auth/register (superadmin, scripts) y
+ * las orgs viejas que hayan quedado vacias.
+ */
 async function ensureTiposExist(organizationId: string) {
-  // Verificar si la org tiene al menos un tipo
   const { count } = await supabaseAdmin
     .from("tipos_dispositivo")
     .select("id", { count: "exact", head: true })
@@ -60,20 +60,16 @@ async function ensureTiposExist(organizationId: string) {
 
   if (count && count > 0) return
 
-  // No tiene tipos, crear los base con su config preestablecida
-  const rows = TIPOS_BASE.map((t) => ({
-    organization_id: organizationId,
-    codigo: t.codigo,
-    nombre: t.nombre,
-    prefijo_orden: t.prefijo_orden,
-    es_base: true,
-    orden: t.orden,
-    config: TIPOS_BASE_CONFIG[t.codigo] ?? DEFAULT_TIPO_CONFIG,
-  }))
+  const { data: org } = await supabaseAdmin
+    .from("organizations")
+    .select("rubro")
+    .eq("id", organizationId)
+    .single()
 
-  await supabaseAdmin
-    .from("tipos_dispositivo")
-    .upsert(rows, { onConflict: "organization_id,codigo" })
+  const result = await seedOrganizationFromRubro(organizationId, org?.rubro ?? null)
+  if (result.errors.length > 0) {
+    console.error("ensureTiposExist seed errors:", result.errors)
+  }
 }
 
 export async function GET(request: Request) {

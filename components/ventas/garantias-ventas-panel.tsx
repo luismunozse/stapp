@@ -14,11 +14,13 @@ import {
   ShieldAlert,
   ShieldCheck,
   ShieldX,
+  ShieldOff,
   Clock,
   AlertTriangle,
 } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { useCurrency } from "@/contexts/currency-context"
+import { formatPhoneForWhatsApp } from "@/lib/notifications/whatsapp-templates"
 import { EmptyState } from "@/components/ui/empty-state"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
@@ -29,7 +31,7 @@ interface Props {
 }
 
 export function GarantiasVentasPanel({ open, onOpenChange }: Props) {
-  const { formatDate } = useCurrency()
+  const { formatDate, pais } = useCurrency()
 
   const { data, isLoading } = useSWR(
     open ? "/api/reportes/garantias-ventas" : null,
@@ -37,10 +39,8 @@ export function GarantiasVentasPanel({ open, onOpenChange }: Props) {
     { revalidateOnFocus: false, dedupingInterval: 30000 }
   )
 
-  const formatWhatsAppLink = (telefono: string) => {
-    const clean = telefono.replace(/\D/g, "")
-    return `https://wa.me/549${clean}`
-  }
+  const formatWhatsAppLink = (telefono: string) =>
+    `https://wa.me/${formatPhoneForWhatsApp(telefono, pais)}`
 
   const porVencer7 = data?.porVencer?.filter((g: any) => g.diasRestantes <= 7) || []
   const porVencer15 = data?.porVencer?.filter((g: any) => g.diasRestantes > 7 && g.diasRestantes <= 15) || []
@@ -70,7 +70,7 @@ export function GarantiasVentasPanel({ open, onOpenChange }: Props) {
         ) : (
           <div className="space-y-5">
             {/* Summary */}
-            <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+            <div className={`grid gap-3 grid-cols-2 ${data.resumen.totalAnuladas > 0 ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
               <Card>
                 <CardContent className="p-3 flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-success-50 dark:bg-success/15">
@@ -115,6 +115,21 @@ export function GarantiasVentasPanel({ open, onOpenChange }: Props) {
                   </div>
                 </CardContent>
               </Card>
+              {/* Solo aparece cuando hay algo que contar: sin devoluciones el
+                  panel se queda en cuatro tarjetas parejas. */}
+              {data.resumen.totalAnuladas > 0 && (
+                <Card>
+                  <CardContent className="p-3 flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-muted">
+                      <ShieldOff className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <div className="text-lg font-bold">{data.resumen.totalAnuladas}</div>
+                      <div className="text-[10px] text-muted-foreground">Anuladas por devolución</div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
 
             {/* Por Vencer */}

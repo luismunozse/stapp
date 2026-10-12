@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Users,
   Wrench,
+  Hammer,
   Package,
   FileText,
   BarChart3,
@@ -59,7 +60,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 
-type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[]; featureFlag?: "moduloAgenda"; vendedorFeatureFlag?: "vendedoresAdministranInventario" }
+type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[]; featureFlag?: "moduloAgenda"; vendedorFeatureFlag?: "vendedoresAdministranInventario" | "vendedoresManejanCaja"; tecnicoFeatureFlag?: "tecnicosOperanPos" }
 
 type NavSection = { label: string; items: NavItem[] }
 
@@ -73,15 +74,16 @@ const navItems: NavItem[] = [
   { href: "/tecnicos", label: "Mi desempeño", icon: TrendingUp, roles: ["TECNICO"] },
   { href: "/comisiones", label: "Comisiones", icon: Percent, roles: ["ADMIN"] },
   { href: "/vendedores", label: "Vendedores", icon: TrendingUp, roles: ["ADMIN"] },
-  { href: "/ventas", label: "Ventas", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"] },
-  { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"] },
+  { href: "/ventas", label: "Ventas", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"], tecnicoFeatureFlag: "tecnicosOperanPos" },
+  { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"], tecnicoFeatureFlag: "tecnicosOperanPos" },
   { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt, roles: ["ADMIN", "TECNICO"] },
   { href: "/catalogo", label: "Catálogo público", icon: BookMarked, roles: ["ADMIN"] },
   { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN", "VENDEDOR"], vendedorFeatureFlag: "vendedoresAdministranInventario" },
+  { href: "/servicios", label: "Servicios", icon: Hammer, roles: ["ADMIN"] },
   { href: "/ordenes-compra", label: "Compras", icon: Truck, roles: ["ADMIN"] },
-  { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN"] },
+  { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN", "VENDEDOR"], vendedorFeatureFlag: "vendedoresManejanCaja" },
   { href: "/finanzas", label: "Finanzas", icon: Wallet, roles: ["ADMIN"] },
-  { href: "/facturacion", label: "Facturación", icon: FileText, roles: ["ADMIN"] },
+  { href: "/facturacion", label: "Comprobantes", icon: FileText, roles: ["ADMIN"] },
   { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "VENDEDOR"] },
   { href: "/emails", label: "Emails", icon: Mail, roles: ["ADMIN"] },
   { href: "/soporte", label: "Soporte", icon: Headset },
@@ -99,14 +101,15 @@ const navSections: NavSection[] = [
       { href: "/agenda", label: "Agenda", icon: CalendarDays, featureFlag: "moduloAgenda" },
       { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
       { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN", "VENDEDOR"], vendedorFeatureFlag: "vendedoresAdministranInventario" },
-      { href: "/ventas", label: "Ventas / POS", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"] },
+      { href: "/servicios", label: "Servicios", icon: Hammer, roles: ["ADMIN"] },
+      { href: "/ventas", label: "Ventas / POS", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"], tecnicoFeatureFlag: "tecnicosOperanPos" },
       { href: "/finanzas", label: "Finanzas", icon: Wallet, roles: ["ADMIN"] },
     ],
   },
   {
     label: "Ventas",
     items: [
-      { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"] },
+      { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"], tecnicoFeatureFlag: "tecnicosOperanPos" },
       { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt, roles: ["ADMIN", "TECNICO"] },
       { href: "/catalogo", label: "Catálogo público", icon: BookMarked, roles: ["ADMIN"] },
     ],
@@ -114,8 +117,8 @@ const navSections: NavSection[] = [
   {
     label: "Finanzas",
     items: [
-      { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN"] },
-      { href: "/facturacion", label: "Facturación", icon: FileText, roles: ["ADMIN"] },
+      { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN", "VENDEDOR"], vendedorFeatureFlag: "vendedoresManejanCaja" },
+      { href: "/facturacion", label: "Comprobantes", icon: FileText, roles: ["ADMIN"] },
       { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "VENDEDOR"] },
     ],
   },
@@ -172,9 +175,11 @@ export function Navbar() {
   // disparado desde /perfil después de un cambio.
   const [liveName, setLiveName] = useState<string | null>(null)
   const [liveAvatar, setLiveAvatar] = useState<string | null>(null)
-  const [orgFeatures, setOrgFeatures] = useState<{ moduloAgenda: boolean; vendedoresAdministranInventario: boolean }>({
+  const [orgFeatures, setOrgFeatures] = useState<{ moduloAgenda: boolean; vendedoresAdministranInventario: boolean; tecnicosOperanPos: boolean; vendedoresManejanCaja: boolean }>({
     moduloAgenda: false,
     vendedoresAdministranInventario: false,
+    tecnicosOperanPos: false,
+    vendedoresManejanCaja: false,
   })
 
   useEffect(() => {
@@ -187,6 +192,8 @@ export function Navbar() {
           setOrgFeatures({
             moduloAgenda: !!d.moduloAgenda,
             vendedoresAdministranInventario: !!d.vendedoresAdministranInventario,
+            tecnicosOperanPos: !!d.tecnicosOperanPos,
+            vendedoresManejanCaja: !!d.vendedoresManejanCaja,
           })
         })
         .catch(() => {})
@@ -211,6 +218,15 @@ export function Navbar() {
   const vendedorAllowed = useCallback((item: NavItem) => (
     userRole !== "VENDEDOR" || !item.vendedorFeatureFlag || !!orgFeatures[item.vendedorFeatureFlag]
   ), [userRole, orgFeatures])
+
+  // Inverso de vendedorFeatureFlag: en vez de SACARLE el módulo a un rol que ya
+  // está en `roles`, se lo AGREGA a uno que no está. El técnico habilitado ve
+  // el POS sin dejar de ser TECNICO — sigue siendo asignable a órdenes y
+  // conserva "Mi desempeño".
+  const rolePermitido = useCallback((item: NavItem) => {
+    if (!item.roles || item.roles.includes(userRole)) return true
+    return userRole === "TECNICO" && !!item.tecnicoFeatureFlag && !!orgFeatures[item.tecnicoFeatureFlag]
+  }, [userRole, orgFeatures])
 
   useEffect(() => {
     let cancelled = false
@@ -259,7 +275,7 @@ export function Navbar() {
 
   const allNavItems = [
     ...navItems.filter(item =>
-      (!item.roles || item.roles.includes(userRole)) && isFeatureEnabled(item.featureFlag) && vendedorAllowed(item),
+      rolePermitido(item) && isFeatureEnabled(item.featureFlag) && vendedorAllowed(item),
     ),
     ...(userRole === "ADMIN" || userRole === "VENDEDOR" ? [
       { href: "/proveedores", label: "Proveedores", icon: Store }
@@ -273,7 +289,7 @@ export function Navbar() {
   const filteredSections = navSections.map(section => ({
     ...section,
     items: section.items.filter(item =>
-      (!item.roles || item.roles.includes(userRole)) && isFeatureEnabled(item.featureFlag) && vendedorAllowed(item),
+      rolePermitido(item) && isFeatureEnabled(item.featureFlag) && vendedorAllowed(item),
     ),
   })).filter(section => section.items.length > 0)
 
@@ -309,6 +325,7 @@ export function Navbar() {
   }, [])
 
   // Logout que redirige al login del mismo dominio/subdominio
+  // Keep cleanup steps in sync with components/perfil/cerrar-sesion-tras-baja.ts
   const handleLogout = async () => {
     const { clearPWATokens } = await import("@/components/auth/session-refresher")
     await clearPWATokens()
@@ -599,6 +616,11 @@ export function Navbar() {
               </span>
               <PlanBadge />
             </div>
+            {/* The desktop top-right bar is `hidden lg:flex`, so this is the only
+                place the branch switcher reaches a phone. It renders null when
+                there is nothing to switch between, hence no wrapper: the margin
+                lives on the trigger so it collapses with it. */}
+            <SucursalSwitcher variant="block" />
           </div>
           <nav className="flex-1 px-3 py-3 overflow-y-auto">
             {filteredSections.map((section) => (

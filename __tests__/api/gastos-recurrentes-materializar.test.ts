@@ -162,4 +162,66 @@ describe("POST /api/gastos-recurrentes/materializar", () => {
       expect(payload.sucursal_id).toBe("suc-A")
     }
   })
+
+  function setupInsertCapture(results: Array<{ data: any; error: any }>) {
+    const insertPayloads: any[] = []
+    const updateChain = createChainMock(null)
+    updateChain.then = (resolve: any) => resolve({ data: null, error: null })
+    const single = vi.fn()
+    for (const r of results) single.mockResolvedValueOnce(r)
+    single.mockResolvedValue({ data: { id: "mov-x" }, error: null })
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "gastos_recurrentes") {
+        const chain = createChainMock([mockVencidos[0]])
+        chain.update = vi.fn().mockReturnValue(updateChain)
+        return chain as any
+      }
+      if (table === "sesiones_caja") return createChainMock(null) as any
+      if (table === "movimientos_caja") {
+        const chain: any = {
+          insert: vi.fn().mockImplementation((payload: any) => {
+            insertPayloads.push(payload)
+            return chain
+          }),
+          single,
+        }
+        chain.select = vi.fn().mockReturnValue(chain)
+        return chain
+      }
+      return createChainMock(null) as any
+    })
+    return insertPayloads
+  }
+
+  it("marca cada movimiento generado con origen RECURRENTE", async () => {
+    mockAuthSuccess()
+    vi.mocked(sucursalParaEscritura).mockResolvedValue("suc-A")
+    const payloads = setupInsertCapture([])
+
+    await POST()
+
+    expect(payloads[0]).toMatchObject({ origen: "RECURRENTE", es_recurrente: true })
+  })
+
+  it("sin la migracion 335 (PGRST204) reintenta sin origen y el gasto se materializa", async () => {
+    mockAuthSuccess()
+    vi.mocked(sucursalParaEscritura).mockResolvedValue("suc-A")
+    const payloads = setupInsertCapture([
+      {
+        data: null,
+        error: {
+          code: "PGRST204",
+          message: "Could not find the 'origen' column of 'movimientos_caja' in the schema cache",
+        },
+      },
+    ])
+
+    const response = await POST()
+    const { body } = await parseResponse(response)
+
+    expect(payloads).toHaveLength(2)
+    expect(payloads[1]).not.toHaveProperty("origen")
+    expect(body.generados).toBe(1)
+  })
 })

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 // GET /api/inventario/summary?proveedorId=...&categoria=...&tipoDispositivo=...&bajoStock=true
@@ -7,7 +7,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 // aplicados. Ideal para mostrar métricas por proveedor en la vista de inventario.
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -78,12 +78,20 @@ export async function GET(request: Request) {
       else if (stock <= (r.stock_minimo ?? globalThreshold)) itemsBajoStock++
     }
 
+    // valorCosto sale de precio_compra y margenEstimado es valorVenta -
+    // valorCosto: dejar el margen expuesto devuelve el costo por resta, así que
+    // los dos van detrás del mismo permiso.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
     return NextResponse.json({
       totalArticulos,
       totalStock,
-      valorCosto: Math.round(valorCosto * 100) / 100,
+      valorCosto: canViewCost ? Math.round(valorCosto * 100) / 100 : null,
       valorVenta: Math.round(valorVenta * 100) / 100,
-      margenEstimado: Math.round((valorVenta - valorCosto) * 100) / 100,
+      margenEstimado: canViewCost ? Math.round((valorVenta - valorCosto) * 100) / 100 : null,
       itemsBajoStock,
       itemsSinStock,
       truncated: rows.length >= LIMIT,

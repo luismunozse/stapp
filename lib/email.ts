@@ -1,8 +1,6 @@
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
 import { formatDateValue } from "@/lib/timezone"
-
-const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
-const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
+import { CONTACT_EMAIL } from "@/lib/contact"
 
 // ============================================
 // ESTILOS BASE
@@ -144,77 +142,17 @@ const getDivider = () => `
 // ============================================
 // ENVÍO DE EMAIL
 // ============================================
-interface SendEmailParams {
-  to: string
-  subject: string
-  html: string
-  /** Nombre a mostrar como remitente (ej. el nombre del taller). La dirección
-   *  sigue siendo la verificada en EMAIL_FROM. */
-  fromName?: string
-  substitutions?: Record<string, string>
-  attachments?: Array<{
-    filename: string
-    content: string // base64
-    type: string
-  }>
-}
+import { sendPlatform, type EmailMessage } from "@/lib/email/index"
 
-/** Extrae la dirección de un from con formato "Nombre <addr>" o "addr". */
-function addressOf(from: string): string {
-  const match = from.match(/<([^>]+)>/)
-  return match ? match[1].trim() : from.trim()
-}
+type SendEmailParams = EmailMessage
 
-export async function sendEmail({ to, subject, html, fromName, substitutions, attachments }: SendEmailParams) {
-  const apiKey = process.env.ENVIALOSIMPLE_API_KEY
-
-  if (!apiKey) {
-    throw new Error("ENVIALOSIMPLE_API_KEY no está configurada")
-  }
-
-  const from = fromName ? `${fromName} <${addressOf(EMAIL_FROM)}>` : EMAIL_FROM
-
-  const payload: Record<string, unknown> = {
-    from,
-    to,
-    subject,
-    html,
-  }
-
-  if (substitutions) {
-    payload.substitutions = substitutions
-  }
-
-  if (attachments && attachments.length > 0) {
-    payload.attachments = attachments.map((att) => ({
-      filename: att.filename,
-      content: att.content,
-      type: att.type,
-      disposition: "attachment",
-    }))
-  }
-
-  const response = await fetch(ENVIALOSIMPLE_API_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  })
-
-  if (!response.ok) {
-    const errorData = await response.text()
-    console.error("EnvialoSimple error:", errorData)
-    console.error("EnvialoSimple status:", response.status)
-    console.error("EnvialoSimple payload keys:", Object.keys(payload))
-    if (attachments && attachments.length > 0) {
-      console.error("EnvialoSimple attachment info:", attachments.map(a => ({ filename: a.filename, type: a.type, contentLength: a.content.length })))
-    }
-    throw new Error(`Error al enviar el correo: ${errorData}`)
-  }
-
-  return await response.json()
+/**
+ * Envio de correo de PLATAFORMA. Para correo dirigido al cliente final del
+ * taller usar `sendCustomer` de "@/lib/email/index": sale por otro proveedor y
+ * otro dominio a proposito.
+ */
+export async function sendEmail(params: SendEmailParams) {
+  return sendPlatform(params)
 }
 
 interface SendVerificationEmailParams {
@@ -572,7 +510,9 @@ interface SendCotizacionEmailParams {
   numeroCotizacion: string
   numeroOrden: number
   total: number
-  fechaVencimiento?: Date | null
+  // Llega como el string ISO de Postgres, no como Date; `formatDateValue`
+  // acepta las dos formas desde siempre y el tipo se quedó atrás.
+  fechaVencimiento?: Date | string | null
   pdfBuffer: Buffer
   moneda?: string
   zonaHoraria?: string
@@ -795,7 +735,9 @@ export async function sendNewLeadNotification({
   origen,
 }: SendNewLeadNotificationParams) {
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
-  const adminEmail = process.env.LEAD_NOTIFICATION_EMAIL || process.env.EMAIL_FROM || "contacto@stapp.com.ar"
+  // Cae a la casilla real, no a EMAIL_FROM: esa es la direccion desde la
+  // que se envia (noreply@), nadie lee lo que llega ahi.
+  const adminEmail = process.env.LEAD_NOTIFICATION_EMAIL || CONTACT_EMAIL
   const leadsUrl = `https://${rootDomain}/leads`
 
   const contactDetails = [
@@ -866,6 +808,119 @@ export async function sendNewLeadNotification({
       content,
       rootDomain,
       footerText: "Recibiste este correo porque un potencial cliente dejó sus datos en STApp.",
+    }),
+  })
+}
+
+// ============================================
+// DELEGACIÓN ARCA PENDIENTE DE ACEPTAR (aviso al dueño de la plataforma)
+// ============================================
+interface SendDelegacionArcaPendienteParams {
+  organizationId: string
+  organizationName: string | null
+  /** CUIT del taller (representado), solo dígitos. */
+  cuit: string
+  puntoVenta: number
+  condicionFiscal: string
+}
+
+let avisoFallbackPlataformaEmitido = false
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+}
+
+/**
+ * Un taller guardó una delegación de ARCA: queda "Aceptada: Pendiente" hasta
+ * que el dueño de la plataforma la acepta a mano en ARCA. Sin este aviso nadie
+ * se entera y el taller espera para siempre.
+ */
+export async function sendDelegacionArcaPendienteNotification({
+  organizationId,
+  organizationName,
+  cuit,
+  puntoVenta,
+  condicionFiscal,
+}: SendDelegacionArcaPendienteParams) {
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+  const destino = process.env.PLATFORM_NOTIFICATION_EMAIL
+  if (!destino && !avisoFallbackPlataformaEmitido) {
+    // Una sola vez por instancia: que se vea en los logs sin inundarlos.
+    avisoFallbackPlataformaEmitido = true
+    console.warn(
+      "[email] PLATFORM_NOTIFICATION_EMAIL no está configurada: los avisos de plataforma van a la casilla de contacto"
+    )
+  }
+  const adminEmail = destino || CONTACT_EMAIL
+
+  // El nombre lo escribe el taller: se escapa antes de ir al HTML del mail.
+  const nombre = escapeHtml(organizationName || "(sin nombre)")
+  const detalle = [
+    `<strong>Organización:</strong> ${nombre}`,
+    `<strong>ID:</strong> ${escapeHtml(organizationId)}`,
+    `<strong>CUIT representado:</strong> ${escapeHtml(cuit)}`,
+    `<strong>Punto de venta:</strong> ${puntoVenta}`,
+    `<strong>Condición fiscal:</strong> ${escapeHtml(condicionFiscal)}`,
+  ]
+    .map((line) => `<p class="text-body" style="color: #4b5563; font-size: 15px; margin: 4px 0;">${line}</p>`)
+    .join("")
+
+  const paso = (texto: string) =>
+    `<li class="text-body" style="color: #4b5563; font-size: 15px; margin: 0 0 10px 0;">${texto}</li>`
+
+  const content = `
+    <h1 class="text-heading" style="color: #1f2937; font-size: 22px; font-weight: 700; margin: 0 0 8px 0;">
+      Delegación de ARCA para aceptar
+    </h1>
+
+    <p class="text-body" style="color: #4b5563; font-size: 16px; margin: 16px 0 0 0;">
+      ${nombre} guardó su delegación de Facturación Electrónica. Queda "Aceptada: Pendiente"
+      hasta que la aceptes vos en ARCA.
+    </p>
+
+    ${getInfoCard(`
+      <p class="text-muted" style="color: #6b7280; font-size: 12px; margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 1px;">
+        Datos del taller
+      </p>
+      ${detalle}
+    `)}
+
+    <p class="text-body" style="color: #1f2937; font-size: 15px; font-weight: 600; margin: 24px 0 8px 0;">
+      Qué hacer
+    </p>
+    <ol style="margin: 0; padding-left: 20px;">
+      ${paso(
+        "Entrá a ARCA con la Clave Fiscal de STApp, abrí la app <strong>Aceptación de Designación</strong> y aceptá la autorización del CUIT " +
+          escapeHtml(cuit) +
+          "."
+      )}
+      ${paso(
+        "Administrador de Relaciones → <strong>Nueva Relación</strong> → Representado = " +
+          escapeHtml(cuit) +
+          " → Buscar → ARCA &gt; WebServices &gt; Facturación Electrónica → segundo Buscar → elegí el computador fiscal <strong>stapp-prod</strong> → Confirmar → Confirmar."
+      )}
+    </ol>
+
+    ${getDivider()}
+
+    <p class="text-muted" style="color: #9ca3af; font-size: 13px; margin: 0;">
+      Mientras no lo hagas, al taller le va a seguir fallando la prueba de conexión.
+    </p>
+  `
+
+  return sendEmail({
+    to: adminEmail,
+    subject: `Aceptar delegación ARCA: ${organizationName || organizationId} - STApp`,
+    html: getBaseTemplate({
+      preheader: `${nombre} delegó la facturación electrónica y espera que la aceptes`,
+      headerGradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+      content,
+      rootDomain,
+      footerText: "Recibiste este correo porque un taller guardó una delegación de ARCA en STApp.",
     }),
   })
 }

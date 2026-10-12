@@ -24,7 +24,7 @@ const MOTIVOS = [
   { value: "DEVOLUCION", label: "Devolución de producto" },
   { value: "AJUSTE_PRECIO", label: "Ajuste de precio" },
   { value: "GARANTIA", label: "Garantía / reposición" },
-  { value: "ERROR_FACTURACION", label: "Error de facturación" },
+  { value: "ERROR_FACTURACION", label: "Error de remito" },
   { value: "DESCUENTO_RETRO", label: "Descuento retroactivo" },
   { value: "OTRO", label: "Otro" },
 ] as const

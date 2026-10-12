@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateGarantiaVentaPDF } from "@/lib/pdf"
 
@@ -8,7 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string; garantiaId: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role } = await requirePosAccess()
     if (error) return error
 
     const { id, garantiaId } = await params
@@ -18,6 +18,7 @@ export async function GET(
       .from("ventas")
       .select(`
         *,
+        users:vendedor_id (id, nombre),
         organizations!inner (
           nombre,
           nombre_mostrar,
@@ -31,7 +32,7 @@ export async function GET(
       .eq("id", id)
       .eq("organization_id", organizationId!)
 
-    if (role === "VENDEDOR") {
+    if (soloVeSusVentas(role)) {
       ventaQuery = ventaQuery.eq("vendedor_id", userId!)
     }
 
@@ -41,6 +42,15 @@ export async function GET(
       return NextResponse.json(
         { error: "Venta no encontrada" },
         { status: 404 }
+      )
+    }
+
+    // Una venta anulada se deshizo entera: su garantía no cubre nada, aunque
+    // la fila haya quedado ACTIVA (ventas anuladas antes de la migración 334).
+    if (venta.estado === "ANULADA") {
+      return NextResponse.json(
+        { error: "La venta fue anulada: su garantía ya no emite comprobante" },
+        { status: 410 }
       )
     }
 
@@ -66,24 +76,45 @@ export async function GET(
       )
     }
 
-    // Obtener firma del encargado desde la última orden entregada de esta organización
+    // Una garantía ANULADA se retiró al devolverse el producto (migración 316):
+    // emitir su certificado entregaría un papel que dice que la garantía vale
+    // cuando la venta ya se reembolsó. 410 y no 404 porque el documento existió
+    // y se retiró a propósito — no es un id inventado.
+    //
+    // VENCIDA y RECLAMADA sí siguen emitiendo: esas garantías existieron y
+    // corrieron su plazo, y el cliente conserva el derecho al comprobante.
+    if (garantia.estado === "ANULADA") {
+      return NextResponse.json(
+        { error: "La garantía fue anulada por una devolución y ya no emite comprobante" },
+        { status: 410 }
+      )
+    }
+
+    // Firma: la de quien hizo la venta. Antes se tomaba la de la última orden
+    // entregada de toda la organización, así que el certificado salía firmado
+    // por alguien que no tuvo nada que ver (otro empleado, otra sucursal). Si el
+    // vendedor tiene una firma de entrega guardada se usa esa; si no, el
+    // recuadro queda con su nombre para firmar a mano.
     let firmaEncargado: string | null = null
     let firmaEncargadoMime: string | null = null
-    let nombreEncargado: string | null = null
+    const vendedor = venta.users as { id?: string; nombre?: string } | null
+    const nombreEncargado: string | null = vendedor?.nombre || null
 
-    const { data: lastDelivered } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("firma_encargado_entrega, firma_encargado_entrega_mime, users:entregado_por_user_id(nombre)")
-      .eq("organization_id", organizationId!)
-      .not("firma_encargado_entrega", "is", null)
-      .order("fecha_entrega", { ascending: false })
-      .limit(1)
-      .single()
+    if (venta.vendedor_id) {
+      const { data: firmaVendedor } = await supabaseAdmin
+        .from("ordenes_servicio")
+        .select("firma_encargado_entrega, firma_encargado_entrega_mime")
+        .eq("organization_id", organizationId!)
+        .eq("entregado_por_user_id", venta.vendedor_id)
+        .not("firma_encargado_entrega", "is", null)
+        .order("fecha_entrega", { ascending: false })
+        .limit(1)
+        .maybeSingle()
 
-    if (lastDelivered?.firma_encargado_entrega) {
-      firmaEncargado = lastDelivered.firma_encargado_entrega
-      firmaEncargadoMime = lastDelivered.firma_encargado_entrega_mime || "image/png"
-      nombreEncargado = (lastDelivered.users as any)?.nombre || null
+      if (firmaVendedor?.firma_encargado_entrega) {
+        firmaEncargado = firmaVendedor.firma_encargado_entrega
+        firmaEncargadoMime = firmaVendedor.firma_encargado_entrega_mime || "image/png"
+      }
     }
 
     // Preparar datos para el PDF

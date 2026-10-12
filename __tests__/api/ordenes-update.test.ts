@@ -533,3 +533,107 @@ describe("PUT /api/ordenes/[id] - Evento de aprobación manual de presupuesto", 
     expect(insertCall![0].tipo).toBe("CAMBIO_ESTADO")
   })
 })
+
+describe("PUT /api/ordenes/[id] - Guard costo_final (cobros y estado)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("rechaza bajar costoFinal por debajo de lo ya cobrado", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrden({
+      estado: "REPARADO",
+      costo_final: "25000",
+      total_cobrado: "10000",
+      descuento_cobro: "0",
+    })
+    const chain = createChainMock(mockOrden)
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    const response = await PUT(
+      createPutRequest({ costoFinal: 5000 }),
+      createParams("o1")
+    )
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("cobrado")
+    expect(chain.update).not.toHaveBeenCalled()
+  })
+
+  it("rechaza vaciar costoFinal (null) en una orden REPARADO", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrden({
+      estado: "REPARADO",
+      costo_final: "25000",
+      total_cobrado: "0",
+      descuento_cobro: "0",
+    })
+    const chain = createChainMock(mockOrden)
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    const response = await PUT(
+      createPutRequest({ costoFinal: null }),
+      createParams("o1")
+    )
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("Reparado")
+    expect(chain.update).not.toHaveBeenCalled()
+  })
+
+  it("rechaza costoFinal 0 en una orden ya ENTREGADA", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrden({
+      estado: "ENTREGADO",
+      costo_final: "25000",
+      total_cobrado: "0",
+      descuento_cobro: "0",
+    })
+    const chain = createChainMock(mockOrden)
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    const response = await PUT(
+      createPutRequest({ costoFinal: 0 }),
+      createParams("o1")
+    )
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(400)
+    expect(chain.update).not.toHaveBeenCalled()
+  })
+
+  it("permite subir costoFinal por encima de lo ya cobrado", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrden({
+      estado: "REPARADO",
+      costo_final: "25000",
+      total_cobrado: "10000",
+      descuento_cobro: "0",
+    })
+    const mockUpdated = { ...mockOrden, costo_final: 30000 }
+
+    let callCount = 0
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return Promise.resolve({ data: mockOrden, error: null })
+      return Promise.resolve({ data: mockUpdated, error: null })
+    })
+
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    const response = await PUT(
+      createPutRequest({ costoFinal: 30000 }),
+      createParams("o1")
+    )
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(200)
+  })
+})

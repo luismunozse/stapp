@@ -15,7 +15,7 @@ const pagoLineSchema = z.object({
 
 // Supports both legacy single payment and new multi-payment
 const pagoSchema = z.object({
-  facturaId: z.string().min(1, "Factura requerida"),
+  facturaId: z.string().min(1, "Remito requerido"),
   // Multi-payment (new)
   pagos: z.array(pagoLineSchema).optional(),
   // Legacy single payment (backwards compat)
@@ -114,7 +114,7 @@ export async function POST(request: Request) {
       .single()
 
     if (fetchError || !factura) {
-      return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
+      return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
     }
 
     const ordenOrgId = (factura.ordenes_servicio as any)?.organization_id
@@ -167,7 +167,7 @@ export async function POST(request: Request) {
     // Known business-rule errors from the RPC's RAISE EXCEPTION
     const msg = rpcError.message ?? ""
     if (msg.includes("no encontrada")) {
-      return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
+      return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
     }
     if (msg.includes("No autorizado")) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 })
@@ -208,7 +208,7 @@ async function runJsFallback(opts: {
   // Guard: cannot pay an already-voided invoice
   if (factura.estado_pago === 'ANULADA') {
     return NextResponse.json(
-      { error: "No se pueden registrar pagos en una factura anulada" },
+      { error: "No se pueden registrar pagos en un remito anulado" },
       { status: 400 }
     )
   }

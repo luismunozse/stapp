@@ -5,6 +5,7 @@ import { SessionProvider } from "next-auth/react"
 import { ModalProvider } from "@/contexts/modal-context"
 import { ConfirmProvider } from "@/contexts/confirm-context"
 import { SessionRefresher } from "@/components/auth/session-refresher"
+import { ApiCacheSessionGuard } from "@/components/pwa/api-cache-session-guard"
 import { CurrencyProvider } from "@/contexts/currency-context"
 import { PushNotificationRegistrar } from "@/components/push-notification-registrar"
 import { syncStatusBarToTheme, hideSplashScreen } from "@/lib/capacitor"
@@ -46,6 +47,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider refetchInterval={0} refetchOnWindowFocus={false}>
       <SessionRefresher>
+        {/* Antes que cualquier consumidor: si el cache del SW quedo de otra
+            sesion, hay que tirarlo antes de que la pantalla lo lea. */}
+        <ApiCacheSessionGuard />
         <CurrencyProvider>
           <ConfirmProvider>
             <ModalProvider>

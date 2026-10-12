@@ -25,6 +25,8 @@ export async function GET(
       .select("id, numero_orden, codigo_orden, dispositivo, costo_final, total_cobrado, estado_cobro, descuento_cobro, estado")
       .eq("organization_id", organizationId!)
       .eq("cliente_id", clienteId)
+      // The onboarding practice order is never collectable.
+      .eq("es_practica", false)
       .in("estado_cobro", ["PENDIENTE", "PARCIAL"])
       .not("costo_final", "is", null)
       .gt("costo_final", 0)
@@ -36,8 +38,27 @@ export async function GET(
 
     if (dbError) throw dbError
 
+    // Una orden cuya deuda ya migró a la cuenta corriente (CARGO con
+    // referencia_tipo=ORDEN) no debe listarse como pendiente de cobro acá:
+    // get_deuda_cliente_sucursal (mig 318) ya la excluye de deuda_ordenes,
+    // reverted or not. Sin este mismo filtro, "Cobrar todo" vuelve a cobrar
+    // una deuda que ya vive (o vivió) en cuenta_corriente y acredita plata
+    // que el cliente nunca pagó.
+    const { data: cargos, error: cargosError } = await supabaseAdmin
+      .from("cuenta_corriente")
+      .select("referencia_id")
+      .eq("organization_id", organizationId!)
+      .eq("cliente_id", clienteId)
+      .eq("tipo", "CARGO")
+      .eq("referencia_tipo", "ORDEN")
+
+    if (cargosError) throw cargosError
+
+    const idsConCargo = new Set((cargos || []).map((c) => c.referencia_id))
+    const ordenesCobrables = (ordenes || []).filter((o) => !idsConCargo.has(o.id))
+
     return NextResponse.json(
-      (ordenes || []).map((o) => ({
+      ordenesCobrables.map((o) => ({
         id: o.id,
         numeroOrden: o.numero_orden,
         codigoOrden: o.codigo_orden,

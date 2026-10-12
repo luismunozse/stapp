@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { RubroPicker } from "@/components/registro/rubro-picker"
+import { validarSeleccionRubro } from "@/lib/rubros/seleccion"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,6 +25,8 @@ import { getStoredUtmParams } from "@/lib/utm"
 interface FormData {
   orgNombre: string
   orgSlug: string
+  rubro: string
+  rubroDetalle: string
   nombre: string
   email: string
   password: string
@@ -47,6 +51,8 @@ function RegistroForm() {
   const [formData, setFormData] = useState<FormData>({
     orgNombre: "",
     orgSlug: "",
+    rubro: "",
+    rubroDetalle: "",
     nombre: "",
     email: "",
     password: "",
@@ -164,6 +170,11 @@ function RegistroForm() {
       setError("Espera mientras verificamos el subdominio")
       return false
     }
+    const errorRubro = validarSeleccionRubro(formData.rubro, formData.rubroDetalle)
+    if (errorRubro) {
+      setError(errorRubro)
+      return false
+    }
     if (!formData.nombre.trim()) {
       setError("Tu nombre es requerido")
       return false
@@ -207,12 +218,21 @@ function RegistroForm() {
       setError("Esperá mientras verificamos el subdominio")
       return
     }
+    // El alta con Google se va del formulario y vuelve por /google-auth, asi
+    // que el rubro tiene que quedar resuelto antes de salir.
+    const errorRubro = validarSeleccionRubro(formData.rubro, formData.rubroDetalle)
+    if (errorRubro) {
+      setError(errorRubro)
+      return
+    }
 
     const cleanSlug = formData.orgSlug.replace(/-$/, "")
     const params = new URLSearchParams({
       action: "register",
       orgNombre: formData.orgNombre,
       orgSlug: cleanSlug,
+      rubro: formData.rubro,
+      rubroDetalle: formData.rubroDetalle.trim(),
       userName: formData.nombre || "",
     })
     // Pasar UTMs al flujo de Google auth
@@ -242,6 +262,8 @@ function RegistroForm() {
           organizacion: {
             nombre: formData.orgNombre,
             slug: cleanSlug,
+            rubro: formData.rubro,
+            rubroDetalle: formData.rubroDetalle.trim() || undefined,
           },
           usuario: {
             nombre: formData.nombre,
@@ -366,6 +388,22 @@ function RegistroForm() {
                 <span className="font-medium text-primary">
                   {formData.orgSlug || "tu-negocio"}.{rootDomain}
                 </span>
+              </p>
+            </div>
+
+            {/* Rubro del negocio */}
+            <div className="space-y-2">
+              <Label>¿Qué reparás?</Label>
+              <RubroPicker
+                value={formData.rubro}
+                onChange={(rubro) => updateForm("rubro", rubro)}
+                detalle={formData.rubroDetalle}
+                onDetalleChange={(detalle) => updateForm("rubroDetalle", detalle)}
+                disabled={loading}
+              />
+              <p className="text-xs text-muted-foreground">
+                Preparamos tus tipos de equipo, el checklist de recepción y el
+                vocabulario del sistema. Podés cambiar todo después.
               </p>
             </div>
 

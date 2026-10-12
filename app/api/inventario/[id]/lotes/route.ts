@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server"
-import { requireInventarioAccess, requireAuth } from "@/lib/auth-utils"
+import {
+  requireInventarioAccess,
+  requireAuth,
+  hasInventarioAccess,
+  resolveVendedoresHabilitados,
+} from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { depositoPermitido, depositoPorDefecto, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { z } from "zod"
 
 // GET /api/inventario/[id]/lotes
@@ -10,7 +16,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     const { id } = await params
@@ -33,7 +39,21 @@ export async function GET(
     const { data, error: dbErr } = await query
     if (dbErr) throw dbErr
 
-    return NextResponse.json({ data: data ?? [] })
+    // costo_unitario is the purchase cost of the batch, so it follows the same
+    // rule as inventario.precio_compra everywhere else. Lot tracking (numbers,
+    // quantities, expiry, state) stays available to every role.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
+    const lotes = (data ?? []).map((l: any) =>
+      canViewCost ? l : { ...l, costo_unitario: null }
+    )
+
+    return NextResponse.json({ data: lotes }, {
+      headers: { "Cache-Control": "no-store" },
+    })
   } catch (err) {
     console.error("Error listing lotes:", err)
     return NextResponse.json({ error: "Error al obtener lotes" }, { status: 500 })
@@ -57,12 +77,38 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId } = await requireInventarioAccess()
+    const { error, session, organizationId, userId, role } = await requireInventarioAccess()
     if (error) return error
 
     const { id } = await params
     const body = await request.json()
     const data = createSchema.parse(body)
+
+    // La RPC solo verifica que el deposito exista (FK): sin esto un request
+    // armado escribe stock en un deposito de otra org o de otra sucursal.
+    if (
+      data.depositoId &&
+      !(await depositoPermitido({
+        depositoId: data.depositoId,
+        organizationId: organizationId!,
+        role,
+        userSucursalId: session?.user?.sucursalId ?? null,
+        alcance: "sucursal",
+      }))
+    ) {
+      return NextResponse.json({ error: DEPOSITO_INVALIDO }, { status: 400 })
+    }
+
+    // Sin deposito explicito, la entrada va al de la sucursal de quien opera
+    // (resuelto en el servidor: no hace falta revalidarlo). null => ADMIN viendo
+    // "todas" o sin deposito: se conserva el default de la RPC.
+    const depositoDestino =
+      data.depositoId ||
+      (await depositoPorDefecto({
+        organizationId: organizationId!,
+        role,
+        userSucursalId: session?.user?.sucursalId ?? null,
+      }))
 
     const { data: result, error: rpcErr } = await supabaseAdmin.rpc(
       "registrar_entrada_lote",
@@ -76,7 +122,7 @@ export async function POST(
         p_fecha_vencimiento: data.fechaVencimiento || null,
         p_proveedor_id: data.proveedorId || null,
         p_orden_compra_id: data.ordenCompraId || null,
-        p_deposito_id: data.depositoId || null,
+        p_deposito_id: depositoDestino,
         p_notas: data.notas ?? null,
       }
     )

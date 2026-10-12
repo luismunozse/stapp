@@ -137,6 +137,7 @@ export async function createSubscription({
   billingPeriod,
   backUrl,
   planSlug,
+  startDate,
 }: {
   organizationId: string
   organizationName: string
@@ -144,6 +145,14 @@ export async function createSubscription({
   billingPeriod: "MONTHLY" | "YEARLY"
   backUrl: string
   planSlug?: string
+  /**
+   * Cuándo debe hacer MercadoPago el primer cobro (ISO 8601, en el futuro).
+   * Sin este dato MP cobra en el momento de la autorización: para quien ya pagó
+   * y tiene período vigente, eso adelanta un cobro por algo que todavía no
+   * consumió. Se manda la fecha de fin del período pagado para que el débito
+   * automático empiece justo donde termina lo que ya abonó.
+   */
+  startDate?: string
 }) {
   const plan = await resolvePlan(planSlug)
   const unitPrice =
@@ -158,6 +167,7 @@ export async function createSubscription({
         frequency_type: "months",
         transaction_amount: unitPrice,
         currency_id: "ARS",
+        ...(startDate ? { start_date: startDate } : {}),
       },
       back_url: backUrl,
       payer_email: email,

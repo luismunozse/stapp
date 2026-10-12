@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireAdmin } from "@/lib/auth-utils"
+import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, assertSucursalEnOrg } from "@/lib/sucursal"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
@@ -22,7 +22,10 @@ const vendedorCreateSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    // El POST de este mismo archivo ya pedia requireAdmin y el GET quedo en
+    // requireAuth: cualquier rol listaba los vendedores de la organizacion.
+    // El POS no depende de esta ruta, usa /api/operadores?rol=VENDEDOR.
+    const { error, organizationId } = await requireAdmin()
     if (error) return error
 
     const { searchParams } = new URL(request.url)

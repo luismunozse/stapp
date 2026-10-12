@@ -97,3 +97,29 @@ describe("buildVentaPayload — serieIds", () => {
     expect(payload.items[0]).not.toHaveProperty("serieIds")
   })
 })
+
+describe("buildVentaPayload — costo de terminal y venta fiada", () => {
+  const item = {
+    lineId: "l1", inventarioId: "inv1", codigo: "", nombre: "Mouse",
+    precioUnitario: 100, cantidad: 1, stockDisponible: 5, diasGarantia: 0,
+    trackeaSeries: false, serieIds: [],
+  }
+  const cliente = { id: "c1", nombre: "Ana", telefono: "" }
+
+  it("manda el % que cobra la terminal (antes se pedía y no se enviaba)", () => {
+    const payload = buildVentaPayload({
+      items: [item], cliente, pagoParcial: false, observaciones: "", idempotencyKey: "k",
+      pagosLines: [{ ...createPagoLine(100, "TARJETA_CREDITO"), cuotas: 1, costoFinanciero: 12 }],
+    })
+    expect(payload.pagos).toEqual([{ metodo: "TARJETA_CREDITO", monto: 100, cuotas: 1, costoFinanciero: 12 }])
+  })
+
+  it("una venta fiada viaja como cuenta corriente", () => {
+    const payload = buildVentaPayload({
+      items: [item], cliente, pagoParcial: true, observaciones: "", idempotencyKey: "k",
+      pagosLines: [createPagoLine(0)],
+    })
+    expect(payload.metodoPago).toBe("CUENTA_CORRIENTE")
+    expect(payload.pagos).toBeUndefined()
+  })
+})

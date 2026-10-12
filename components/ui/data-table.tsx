@@ -18,6 +18,32 @@ import { DatePicker } from "./date-picker"
 import { SkeletonTable } from "./skeleton"
 import { EmptyState } from "./empty-state"
 
+// Controles que, al tocarse, tienen su propia acción: el click NO es "abrir la
+// fila". Antes cada lista lo resolvía por su cuenta con stopPropagation botón
+// por botón, así que el agujero volvía con cada botón nuevo.
+const CONTROLES_INTERACTIVOS = [
+  "button",
+  "a[href]",
+  "input",
+  "select",
+  "textarea",
+  "label",
+  '[role="button"]',
+  '[role="checkbox"]',
+  '[role="menuitem"]',
+  '[role="menuitemcheckbox"]',
+  '[role="menuitemradio"]',
+  '[role="option"]',
+  '[role="switch"]',
+  '[role="tab"]',
+  "[data-no-row-click]",
+].join(",")
+
+function naceDeControlInteractivo(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  return !!target.closest(CONTROLES_INTERACTIVOS)
+}
+
 // Types
 export interface Column<T> {
   key: string
@@ -51,6 +77,12 @@ export interface DataTableProps<T> {
     pageSizeOptions?: number[]
   }
   // Row actions
+  /**
+   * Se dispara al tocar una fila. Los clicks que nacen de un control
+   * interactivo de la fila (botones de acción, links, inputs) NO lo disparan:
+   * ver `naceDeControlInteractivo`. Para excluir una zona que no es un control,
+   * marcarla con `data-no-row-click`.
+   */
   onRowClick?: (item: T) => void
   rowClassName?: (item: T) => string
   // Selection
@@ -170,7 +202,10 @@ export function DataTable<T>({
               return (
                 <div
                   key={key}
-                  onClick={() => onRowClick?.(item)}
+                  onClick={(e) => {
+                    if (naceDeControlInteractivo(e.target)) return
+                    onRowClick?.(item)
+                  }}
                   className={cn(
                     "rounded-lg border bg-card p-4 transition-transform",
                     onRowClick && "cursor-pointer active:scale-[0.99] active:bg-muted/40",
@@ -267,7 +302,10 @@ export function DataTable<T>({
                           isSelected && "bg-primary/5",
                           rowClassName?.(item)
                         )}
-                        onClick={() => onRowClick?.(item)}
+                        onClick={(e) => {
+                    if (naceDeControlInteractivo(e.target)) return
+                    onRowClick?.(item)
+                  }}
                       >
                         {selectable && (
                           <td className={cellPad} onClick={(e) => e.stopPropagation()}>

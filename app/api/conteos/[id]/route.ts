@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireAdmin } from "@/lib/auth-utils"
+import { requireAdmin, requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 function formatConteo(row: any) {
@@ -33,7 +33,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+        // Mismo criterio que el listado: los conteos son inventario.
+const { error, organizationId } = await requireInventarioAccess()
     if (error) return error
 
     const { id } = await params

@@ -50,7 +50,7 @@ export async function GET(req: Request) {
 
   let query = supabaseAdmin
     .from("catalogo_items")
-    .select("*, categoria:catalogo_categorias(id,nombre), inventario:inventario(id,stock,nombre)", { count: "exact" })
+    .select("*, categoria:catalogo_categorias(id,nombre), inventario:inventario(id,stock,stock_reservado,nombre)", { count: "exact" })
     .eq("organization_id", org)
 
   if (categoriaId) query = query.eq("categoria_id", categoriaId)

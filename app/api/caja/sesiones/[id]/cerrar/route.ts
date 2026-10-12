@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireCajaAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchMovimientosDia, computeTotales } from "@/lib/caja-utils"
+import { sucursalParaLectura } from "@/lib/sucursal"
 import { z } from "zod"
 
 const cierreSchema = z.object({
@@ -15,7 +16,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId } = await requireAdmin()
+    const { error, organizationId, userId, role, session } = await requireCajaAccess()
     if (error) return error
 
     const { id } = await params
@@ -32,6 +33,27 @@ export async function POST(
 
     if (!sesion) {
       return NextResponse.json({ error: "Sesión no encontrada" }, { status: 404 })
+    }
+
+    // Guard de alcance por sucursal para los roles atados a una. El id de la
+    // sesión viaja en la URL y el VENDEDOR está atado a su sucursal: sin esto
+    // cierra —y arquea— la caja de otra sucursal escribiendo otro id.
+    //
+    // 404 y no 403: quién tiene caja abierta en la sucursal de al lado no es
+    // asunto suyo. Mismo criterio que el DELETE de movimientos.
+    //
+    // El ADMIN queda fuera del guard a propósito: hasta ahora cerraba
+    // cualquier sesión de la organización tuviera el selector de sucursal
+    // donde lo tuviera, y ese alcance no es lo que este permiso vino a tocar.
+    if (role !== "ADMIN") {
+      const filtro = await sucursalParaLectura({
+        role,
+        userSucursalId: session!.user.sucursalId ?? null,
+      })
+
+      if (sesion.sucursal_id !== filtro.sucursalId) {
+        return NextResponse.json({ error: "Sesión no encontrada" }, { status: 404 })
+      }
     }
 
     if (sesion.estado === "CERRADA") {

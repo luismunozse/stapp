@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requireIngresosAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { DEFAULT_TIMEZONE, getZonedParts, monthRangeUtc } from "@/lib/timezone"
@@ -14,7 +14,7 @@ import { nombreMesCivil } from "@/lib/finanzas-period"
  */
 export async function GET() {
   try {
-    const { error, organizationId, role, session } = await requireAdminOrVendedor()
+    const { error, organizationId, role, session } = await requireIngresosAccess()
     if (error) return error
 
     const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })

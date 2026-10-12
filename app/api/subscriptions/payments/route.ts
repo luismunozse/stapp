@@ -1,10 +1,18 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 export async function GET() {
   try {
-    const { error, organizationId } = await requireAuth()
+    // Historial de facturacion de la organizacion: select("*") sobre
+    // subscription_payments (montos, fechas, medio de pago). El unico
+    // consumidor es /configuracion/billing, que ya es admin-only.
+    //
+    // Ojo: /api/subscriptions y /api/subscriptions/usage NO se cierran. Los
+    // consumen TrialCountdownBanner y UsageWarningBanner, montados en el
+    // layout del dashboard para TODOS los roles, y subscription-required-view,
+    // que es la pantalla de 'se vencio tu suscripcion'.
+    const { error, organizationId } = await requireAdmin()
     if (error) return error
 
     const { data, error: paymentsError } = await supabaseAdmin

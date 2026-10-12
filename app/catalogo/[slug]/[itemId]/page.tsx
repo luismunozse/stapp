@@ -3,6 +3,10 @@ import Link from "next/link"
 import { unstable_cache } from "next/cache"
 import { supabaseAdmin } from "@/lib/supabase"
 import { CatalogoItemView } from "@/components/catalogo-public/catalogo-item-view"
+import { stockDisponibleCatalogo } from "@/lib/catalogo/stock-disponible"
+import { normalizarWhatsAppCatalogo } from "@/lib/catalogo/whatsapp"
+import { catalogoRecibePedidos } from "@/lib/catalogo/recibe-pedidos"
+import { buildItemDescription, buildItemTitle } from "@/lib/catalogo/item-meta"
 import type { Metadata, Viewport } from "next"
 
 type PageProps = { params: Promise<{ slug: string; itemId: string }> }
@@ -42,7 +46,7 @@ async function _fetchItem(slug: string, itemId: string) {
       .select(`
         id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
         imagen_url, imagenes, etiquetas, stock, destacado, inventario_id,
-        inventario:inventario(stock),
+        inventario:inventario(stock, stock_reservado, deleted_at),
         variantes:catalogo_variantes(id, etiqueta, sku, precio, stock, imagen_url, activo, orden)
       `)
       .eq("id", itemId)
@@ -51,7 +55,7 @@ async function _fetchItem(slug: string, itemId: string) {
       .maybeSingle(),
     supabaseAdmin
       .from("organizations")
-      .select("id, nombre, nombre_mostrar, logo_url, telefono, moneda")
+      .select("id, nombre, nombre_mostrar, logo_url, telefono, moneda, pais")
       .eq("id", config.organization_id)
       .single(),
     supabaseAdmin
@@ -98,9 +102,7 @@ async function _fetchItem(slug: string, itemId: string) {
     : null
   const stockReal = tieneVariantes
     ? stockVariantes
-    : itemRaw.inventario_id && (itemRaw as any).inventario
-      ? (itemRaw as any).inventario.stock
-      : itemRaw.stock
+    : stockDisponibleCatalogo(itemRaw as any)
   const precioMin = tieneVariantes
     ? variantesActivas.reduce((m: number | null, v: any) => {
         if (v.precio == null) return m
@@ -131,7 +133,7 @@ async function _fetchItem(slug: string, itemId: string) {
       .select(`
         id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
         imagen_url, imagenes, etiquetas, stock, destacado, inventario_id,
-        inventario:inventario(stock)
+        inventario:inventario(stock, stock_reservado, deleted_at)
       `)
       .eq("organization_id", config.organization_id)
       .eq("activo", true)
@@ -141,7 +143,7 @@ async function _fetchItem(slug: string, itemId: string) {
       .order("precio", { ascending: false, nullsFirst: false })
       .limit(8)
     relacionados = (data ?? []).map((it: any) => {
-      const stk = it.inventario_id && it.inventario ? it.inventario.stock : it.stock
+      const stk = stockDisponibleCatalogo(it)
       const { inventario: _i, ...rs } = it
       return { ...rs, stock_disponible: stk }
     })
@@ -174,14 +176,14 @@ async function _fetchItem(slug: string, itemId: string) {
         .select(`
           id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
           imagen_url, imagenes, etiquetas, stock, destacado, inventario_id,
-          inventario:inventario(stock)
+          inventario:inventario(stock, stock_reservado, deleted_at)
         `)
         .in("id", topIds)
         .eq("organization_id", config.organization_id)
         .eq("activo", true)
       bundle = (bItems ?? [])
         .map((it: any) => {
-          const stk = it.inventario_id && it.inventario ? it.inventario.stock : it.stock
+          const stk = stockDisponibleCatalogo(it)
           const { inventario: _i, ...rs } = it
           return { ...rs, stock_disponible: stk, co_count: counts.get(it.id) ?? 0 }
         })
@@ -190,14 +192,21 @@ async function _fetchItem(slug: string, itemId: string) {
     }
   }
 
+  // Define si el checkout registra la cotización o arma un mensaje de WhatsApp.
+  const recibePedidos = await catalogoRecibePedidos(config.organization_id)
+
+  // `pais` solo sirve para normalizar el WhatsApp; no se expone al cliente.
+  const { pais: _pais, ...orgPublica } = org ?? ({} as NonNullable<typeof org>)
+
   return {
     config: {
       slug: config.slug,
       titulo: config.titulo,
       color_primary: config.color_primary || "#2563eb",
-      whatsapp: config.whatsapp,
+      whatsapp: normalizarWhatsAppCatalogo(config.whatsapp, org?.pais),
+      recibe_pedidos: recibePedidos,
     },
-    organizacion: org!,
+    organizacion: orgPublica!,
     item,
     relacionados,
     bundle,
@@ -216,8 +225,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!data) return { title: "Item no encontrado" }
 
   const orgName = data.organizacion.nombre_mostrar || data.organizacion.nombre
-  const titulo = `${data.item.nombre} — ${orgName}`
-  const desc = data.item.descripcion?.slice(0, 200) || `${data.item.nombre} disponible en el catálogo de ${orgName}`
+  const titulo = buildItemTitle(data.item.nombre, orgName)
+  const desc = buildItemDescription({
+    nombre: data.item.nombre,
+    descripcion: data.item.descripcion,
+    etiquetas: data.item.etiquetas,
+    precio: data.item.precio,
+    precioHasta: data.item.precio_hasta,
+    moneda: data.organizacion.moneda,
+    stockDisponible: data.item.stock_disponible,
+    orgName,
+  })
 
   return {
     title: titulo,

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -11,11 +11,14 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FormActionBar } from "@/components/ui/form-action-bar"
+import { DraftRestoredNotice } from "@/components/ui/draft-restored-notice"
 import { Plus } from "lucide-react"
 import { ClienteSelector } from "@/components/cotizaciones/cliente-selector"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { compressImage } from "@/lib/image-compression"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
+import { useIsMobileViewport } from "@/hooks/use-is-mobile-viewport"
+import { useFormDraft } from "@/hooks/use-form-draft"
 import { useTerminologia } from "@/contexts/currency-context"
 import { useOffline } from "@/contexts/offline-context"
 import { useModal } from "@/contexts/modal-context"
@@ -50,6 +53,36 @@ const equipoSideStateVacio = (): EquipoSideState => ({
   fotos: [],
 })
 
+/** Snapshot de EquipoSideState sin `fotos`: los File/preview base64 no son
+ *  serializables de forma segura para localStorage (ver useFormDraft). Las
+ *  fotos adjuntas nunca se restauran desde un borrador. */
+type EquipoSideStateDraft = Omit<EquipoSideState, "fotos">
+
+/** Equipo tal como se persiste: sin `codigoAccesoDispositivo`. Es la clave con
+ *  la que se desbloquea el equipo del cliente y el borrador vive 7 dias en
+ *  texto plano en una terminal compartida — perderlo al restaurar es aceptable,
+ *  filtrarlo no. */
+type EquipoFormDraft = Omit<EquipoFormValues, "codigoAccesoDispositivo">
+
+/** Proyeccion minima del cliente elegido: lo unico que el formulario
+ *  restaurado consume de ese objeto es el nombre y el telefono (placeholder de
+ *  contacto y modal de recepcion creada). El resto de la ficha (dni, cuit,
+ *  email, direccion) no se persiste. */
+type ClienteDraftSnapshot = Pick<Cliente, "nombre" | "telefono">
+
+/** Forma persistida por useFormDraft para este formulario. La firma del
+ *  cliente tampoco se incluye (mismo motivo que las fotos: dato binario) y por
+ *  eso `terminosAceptados` queda afuera: la aceptacion no puede sobrevivir a
+ *  la evidencia que la respalda. `selectedCliente` SI se incluye (proyectado):
+ *  ClienteSelector re-hidrata su propio display a partir del id, pero nunca
+ *  llama a onChange, asi que sin esto el modal de exito muestra el nombre del
+ *  cliente en blanco. */
+interface RecepcionDraftValue {
+  form: Omit<RecepcionFormData, "equipos"> & { equipos: EquipoFormDraft[] }
+  sideState: EquipoSideStateDraft[]
+  selectedCliente: ClienteDraftSnapshot | null
+}
+
 const equipoVacio = (): EquipoFormValues => ({
   dispositivo: "",
   tipoDispositivo: "",
@@ -59,6 +92,20 @@ const equipoVacio = (): EquipoFormValues => ({
   problemaReportado: "",
   codigoAccesoDispositivo: "",
 })
+
+/** Valores base del formulario. Vive afuera del componente (sin hooks) para
+ *  que useForm(defaultValues), el discard del borrador y el rescate de un
+ *  borrador invalido usen la MISMA lista y no se desincronicen. */
+function recepcionFormDefaults(): RecepcionFormData {
+  return {
+    clienteId: "",
+    telefonoContacto: "",
+    observaciones: "",
+    // El minimo son 2 equipos: arranca con 2 para que el mostrador no tenga
+    // que hacer un click extra para llegar al caso minimo.
+    equipos: [equipoVacio(), equipoVacio()],
+  }
+}
 
 /** Forma de un equipo en el payload que espera POST /api/recepciones (ver
  *  equipoSchema en app/api/recepciones/route.ts). */
@@ -170,10 +217,39 @@ export function RecepcionForm() {
   const { offlineFetch } = useOffline()
   const { showError, showInfo } = useModal()
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
+  const isMobile = useIsMobileViewport()
 
-  const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null)
+  // Alto REAL de la barra sticky (mobile), medido con ResizeObserver -- no un
+  // numero fijo. La barra puede ocupar 1 o 2 filas segun cuanto entren
+  // "N equipos" + "Agregar otro equipo" + el submit en el ancho disponible
+  // (flex-wrap en el FormActionBar de mas abajo), asi que un alto fijo
+  // (h-24) se quedaba corto en pantallas angostas: el checkbox "El cliente
+  // acepta los terminos", que onSubmit exige, quedaba tapado por la barra
+  // incluso scrolleando hasta el final. 130 es solo el valor del primer
+  // frame, antes de que el observer reporte la medida real -- la garantia
+  // de correctitud es barHeight, no este default.
+  const barWrapperRef = useRef<HTMLDivElement>(null)
+  const [barHeight, setBarHeight] = useState(130)
+
+  useEffect(() => {
+    const el = barWrapperRef.current
+    if (!el || typeof ResizeObserver === "undefined") return
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (entry) setBarHeight(Math.ceil(entry.contentRect.height))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // Tipado como la proyeccion que se persiste (no como Cliente entero): asi el
+  // compilador avisa si alguien empieza a consumir un campo del cliente que el
+  // borrador no puede reponer.
+  const [selectedCliente, setSelectedCliente] = useState<ClienteDraftSnapshot | null>(null)
   const [firma, setFirma] = useState<string | null>(null)
   const [firmaMime, setFirmaMime] = useState<string | null>(null)
+  /** Se incrementa para remontar el SignaturePad (ver discardDraft). */
+  const [firmaResetKey, setFirmaResetKey] = useState(0)
   const [terminosAceptados, setTerminosAceptados] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [comprimiendo, setComprimiendo] = useState(false)
@@ -192,18 +268,13 @@ export function RecepcionForm() {
     register,
     handleSubmit,
     watch,
+    getValues,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<RecepcionFormData>({
     resolver: zodResolver(recepcionFormSchema),
-    defaultValues: {
-      clienteId: "",
-      telefonoContacto: "",
-      observaciones: "",
-      // El minimo son 2 equipos: arranca con 2 para que el mostrador no
-      // tenga que hacer un click extra para llegar al caso minimo.
-      equipos: [equipoVacio(), equipoVacio()],
-    },
+    defaultValues: recepcionFormDefaults(),
   })
 
   const { fields, append, remove } = useFieldArray({ control, name: "equipos" })
@@ -213,6 +284,144 @@ export function RecepcionForm() {
   ])
 
   const clienteId = watch("clienteId")
+
+  // --- Borrador local (useFormDraft) ----------------------------------------
+  // Siempre "new record" (esta pantalla no tiene modo edicion), asi que no
+  // hace falta recordId. La firma y las fotos de cada equipo quedan afuera
+  // del snapshot: son datos binarios, no formularios recuperables.
+  /** El borrador que este formulario efectivamente aplico. Es lo que se usa
+   *  para DERIVAR el aviso de "se restauró un borrador" (ver
+   *  `draftNoticeVisible`, debajo del hook) en vez de tener un booleano aparte:
+   *  ese booleano tenia un `set(true)` por cada camino de restauracion y un
+   *  `set(false)` por cada camino que da de baja el borrador, y alcanzaba con
+   *  que uno solo se olvidara de apagarlo para dejar el cartel colgado. Esta
+   *  pantalla tenia justo ese caso: el submit encolado offline borra el
+   *  borrador y corta ahi, sin resetear ni navegar, asi que el aviso quedaba
+   *  sobre un formulario lleno cuyo borrador ya no existe. */
+  const [appliedDraft, setAppliedDraft] = useState<RecepcionDraftValue | null>(null)
+  /** El borrador ya aplicado, POR IDENTIDAD (mismo latch que orden-form.tsx y
+   *  cliente-form.tsx). Cada re-lectura del hook devuelve un objeto nuevo y
+   *  cada re-render devuelve el mismo, asi que es la unica marca que esta
+   *  sincronizada con su estado: no se queda pegada cuando el hook vuelve a
+   *  resolver la key (aca, una sesion que se cae y vuelve) ni se adelanta a el.
+   */
+  const draftAppliedRef = useRef<RecepcionDraftValue | null>(null)
+  /** Raiz del formulario para el gate de interaccion del hook: ClienteSelector
+   *  monta ClienteForm (su propio <form>) adentro de este, y escribir en ese
+   *  dialog no es una edicion de la recepcion. */
+  const formRef = useRef<HTMLFormElement>(null)
+  const { draft, ready: draftReady, clearDraft, notifyChange } = useFormDraft<RecepcionDraftValue>({
+    feature: "recepcion-form",
+    // El restore recorre `equipos` y `sideState` por indice: si un borrador
+    // viejo (hasta 7 dias) tiene otra forma, ese recorrido tira un TypeError
+    // adentro de un efecto y la pantalla de recepcion queda en blanco.
+    validate: (data) => {
+      const value = data as RecepcionDraftValue
+      return Array.isArray(value?.form?.equipos) && Array.isArray(value?.sideState)
+    },
+    rootRef: formRef,
+    // `getValues()` en vez de `watch()`: leer el form entero en render
+    // suscribe el componente a cada tecla de cada equipo. El borrador no
+    // necesita re-render, solo el valor al momento de grabar.
+    //
+    // LIMITE DE PERSISTENCIA — lo que se devuelve aca queda en localStorage en
+    // texto plano, 7 dias, en una terminal que comparten varios operadores y
+    // que no borra nada al cerrar sesion. Solo entra lo que el formulario
+    // restaurado necesita para seguir cargandose: nada de codigos de acceso al
+    // equipo, nada de la ficha del cliente mas alla de la proyeccion de abajo.
+    // Antes de agregar un campo aca, preguntarse si molestaria verlo en la
+    // pantalla del proximo turno.
+    getValue: () => ({
+      form: {
+        ...getValues(),
+        equipos: getValues().equipos.map(
+          ({ codigoAccesoDispositivo: _codigo, ...equipo }) => equipo
+        ),
+      },
+      sideState: sideState.map(({ fotos: _fotos, ...rest }) => rest),
+      selectedCliente,
+    }),
+  })
+
+  /** El aviso no puede sobrevivir al borrador que anuncia: sale solo mientras
+   *  el borrador que el hook tiene AHORA es exactamente el que este formulario
+   *  aplico. `clearDraft` pone `draft` en null en todos los caminos que lo dan
+   *  de baja (submit, encolado offline, "Descartar") y una key nueva sin nada
+   *  guardado lo deja en null tambien, asi que ninguno de ellos -- ni los que
+   *  todavia no existen -- puede dejar el cartel colgado sin acordarse de
+   *  apagarlo. */
+  const draftNoticeVisible = draft !== null && appliedDraft === draft
+
+  // Los cambios de react-hook-form ya no re-renderizan el formulario, asi que
+  // hay que avisarle al borrador por suscripcion.
+  useEffect(() => {
+    const subscription = watch(() => notifyChange())
+    return () => subscription.unsubscribe()
+  }, [watch, notifyChange])
+
+  useEffect(() => {
+    // El latch se toca DESPUES de saber que hay algo que aplicar (mismo
+    // criterio que cliente-form.tsx). Marcarlo antes dejaba el formulario "con
+    // el borrador ya aplicado" sin haberlo aplicado: si el hook volvia a
+    // resolver la key (una sesion que se cae y vuelve) y aparecia un borrador
+    // que otra pestana habia escrito, este efecto no lo tocaba nunca -- pero el
+    // hook si lo contaba como restaurado, asi que el flush siguiente lo pisaba
+    // en silencio con lo que hubiera en pantalla y el aviso no salia.
+    if (!draftReady || !draft || draftAppliedRef.current === draft) return
+    draftAppliedRef.current = draft
+    try {
+      // El codigo de acceso no se persiste (ver el limite en getValue): se
+      // repone vacio para no dejar el campo en undefined si un borrador viejo
+      // todavia lo trae.
+      reset({
+        ...draft.form,
+        equipos: draft.form.equipos.map((equipo) => ({
+          ...equipo,
+          codigoAccesoDispositivo: "",
+        })),
+      })
+      setSideState(
+        draft.form.equipos.map((_, i) => ({
+          ...equipoSideStateVacio(),
+          ...draft.sideState[i],
+        }))
+      )
+      // La conformidad NO se restaura. Su evidencia es la firma del cliente, que
+      // este borrador no persiste a proposito (dato binario), y el POST manda
+      // `terminosAceptados: true` con `firmaCliente: undefined`: quedaria una
+      // recepcion conforme sin nada que la respalde.
+      setTerminosAceptados(false)
+      setSelectedCliente(draft.selectedCliente ?? null)
+      setAppliedDraft(draft)
+    } catch (error) {
+      // Ultima red, ademas del `validate` del hook: un borrador de otra forma
+      // que igual pase la validacion no puede llevarse puesta la pantalla. Una
+      // excepcion aca corre dentro de un efecto, o sea que desmonta el arbol
+      // entero y deja la recepcion en blanco, sin salida.
+      console.error("Borrador de recepcion invalido, se descarta:", error)
+      clearDraft()
+      setAppliedDraft(null)
+      reset(recepcionFormDefaults())
+      setSideState([equipoSideStateVacio(), equipoSideStateVacio()])
+    }
+  }, [draftReady, draft, reset, clearDraft])
+
+  const discardDraft = () => {
+    // El aviso se apaga solo: `clearDraft` deja `draft` en null en este mismo
+    // commit y de ahi se deriva (ver draftNoticeVisible).
+    clearDraft()
+    reset(recepcionFormDefaults())
+    setSideState([equipoSideStateVacio(), equipoSideStateVacio()])
+    setTerminosAceptados(false)
+    setSelectedCliente(null)
+    // La firma no se persiste, asi que no viene del borrador -- pero si sigue
+    // en pantalla despues de descartar, la recepcion del cliente siguiente se
+    // manda firmada por el anterior. El bump de la key remonta el pad: sin eso
+    // el trazo queda dibujado y el mostrador no vuelve a pedir la firma.
+    setFirma(null)
+    setFirmaMime(null)
+    setFirmaResetKey((prev) => prev + 1)
+  }
 
   // --- Mantener fields (react-hook-form) y sideState sincronizados ---------
   // Un desalineado aca manda, por ejemplo, las fotos del equipo 2 a la orden
@@ -390,6 +599,7 @@ export function RecepcionForm() {
         // Encolado offline: el body sintetico ({ _offline, tempId, message })
         // no tiene la forma de RecepcionCreadaResultado, asi que no hay nada
         // que mostrarle al modal de exito todavia (se sincroniza solo).
+        clearDraft()
         await showInfo("Recepcion guardada offline. Se sincronizara automaticamente cuando vuelva la conexion.")
         return
       }
@@ -400,7 +610,14 @@ export function RecepcionForm() {
         return
       }
 
+      // Leer ANTES de dar de baja el borrador. Un 2xx cuyo body no parsea (un
+      // proxy que corta la respuesta) cae en el catch de abajo y avisa "Error
+      // al crear la recepcion" sobre una recepcion que el servidor SI creo: con
+      // el borrador ya borrado el operador queda con un error y sin nada para
+      // verificar ni reintentar. Mismo orden que orden-form.tsx y
+      // cliente-form.tsx.
       const creada: RecepcionCreadaResultado = await res.json()
+      clearDraft()
       // Snapshot de lo enviado: problemaReportado/tipoDispositivo/marca/
       // accesorios no vuelven en la respuesta del endpoint (a diferencia de
       // POST /api/ordenes), asi que el modal los necesita de aca, alineados
@@ -430,13 +647,23 @@ export function RecepcionForm() {
   return (
     <Card>
       <CardContent className="pt-6 space-y-4">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form ref={formRef} onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {draftNoticeVisible && (
+            <DraftRestoredNotice onDiscard={discardDraft} />
+          )}
+
           <div>
             <ClienteSelector
               value={clienteId || null}
               onChange={(id, cliente) => {
                 setValue("clienteId", id || "", { shouldValidate: !!id })
-                setSelectedCliente(cliente as Cliente | null)
+                // Proyectado en el acto: el objeto entero nunca entra al estado
+                // que el borrador persiste (ver el limite en getValue).
+                setSelectedCliente(
+                  cliente
+                    ? { nombre: cliente.nombre, telefono: cliente.telefono ?? "" }
+                    : null
+                )
               }}
             />
             {errors.clienteId && (
@@ -485,14 +712,25 @@ export function RecepcionForm() {
                 onRemoveFoto={(id) => removeFoto(index, id)}
                 onFotoDescripcionChange={(id, value) => updateFotoDescripcion(index, id, value)}
                 labelFotos={`Fotos del ${term("equipo")} (Ingreso)`}
+                codigoAcceso={watch(`equipos.${index}.codigoAccesoDispositivo`) || ""}
+                onCodigoAccesoChange={(value) =>
+                  setValue(`equipos.${index}.codigoAccesoDispositivo`, value)
+                }
               />
             ))}
           </div>
 
-          <Button type="button" variant="outline" onClick={agregarEquipo} className="w-full">
-            <Plus className="mr-2 h-4 w-4" />
-            Agregar otro equipo
-          </Button>
+          {/* En mobile este boton vive en la barra sticky de abajo (junto al
+              contador y "Crear recepcion"): con dos tarjetas largas arriba
+              quedaba fuera de pantalla y un mostrador real penso que el
+              limite era 2 equipos. isMobile decide cual de los dos se monta
+              -- nunca los dos a la vez, mismo agregarEquipo en ambos. */}
+          {!isMobile && (
+            <Button type="button" variant="outline" onClick={agregarEquipo} className="w-full">
+              <Plus className="mr-2 h-4 w-4" />
+              Agregar otro equipo
+            </Button>
+          )}
 
           <div>
             <Label htmlFor="observaciones">Observaciones</Label>
@@ -513,6 +751,7 @@ export function RecepcionForm() {
                 Una sola firma cubre los {fields.length} equipos de esta recepcion.
               </p>
               <SignaturePad
+                key={firmaResetKey}
                 label="Firma del cliente (conformidad de recepcion)"
                 onSignatureChange={(data, mime) => {
                   setFirma(data)
@@ -532,11 +771,46 @@ export function RecepcionForm() {
             </CardContent>
           </Card>
 
-          <FormActionBar className="justify-end">
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Creando..." : `Crear recepcion (${fields.length} equipos)`}
-            </Button>
-          </FormActionBar>
+          {/* Despeje para que la barra sticky de abajo (mobile) no tape el
+              final de la tarjeta de conformidad mientras se scrollea --
+              position: sticky solo reserva su propio alto al final del
+              flujo, asi que sin este espacio el checkbox de conformidad
+              queda debajo de la barra hasta llegar al final del todo. Alto
+              MEDIDO (barHeight), no fijo -- ver comentario junto al
+              ResizeObserver mas arriba. */}
+          <div className="sm:hidden" style={{ height: barHeight }} aria-hidden="true" />
+
+          <div ref={barWrapperRef}>
+            <FormActionBar className="flex-wrap justify-end">
+              {isMobile && (
+                <span
+                  className="mr-auto text-sm font-medium text-muted-foreground"
+                  aria-live="polite"
+                  data-testid="equipo-counter"
+                >
+                  {fields.length} equipos
+                </span>
+              )}
+              {isMobile && (
+                <Button type="button" variant="outline" size="sm" onClick={agregarEquipo}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Agregar otro equipo
+                </Button>
+              )}
+              <Button type="submit" disabled={submitting}>
+                {/* Label mas corto en mobile: el contador ya muestra la
+                    cantidad de equipos, no hace falta repetirla y asi el
+                    boton entra en la fila junto a "Agregar otro equipo" en
+                    mas pantallas (menos filas = menos alto de barra). En
+                    desktop el label completo queda igual que siempre. */}
+                {submitting
+                  ? "Creando..."
+                  : isMobile
+                    ? "Crear recepcion"
+                    : `Crear recepcion (${fields.length} equipos)`}
+              </Button>
+            </FormActionBar>
+          </div>
         </form>
 
         {resultado && (

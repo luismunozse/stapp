@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { OG_IMAGES } from "@/lib/og/metadata"
 
 export const metadata: Metadata = {
   title: "Centro de Ayuda - STApp",
@@ -14,6 +15,7 @@ export const metadata: Metadata = {
     "servicio técnico",
   ],
   openGraph: {
+    images: OG_IMAGES,
     title: "Centro de Ayuda - STApp",
     description:
       "Encontrá respuestas a tus preguntas sobre STApp. Guías, preguntas frecuentes y soporte.",

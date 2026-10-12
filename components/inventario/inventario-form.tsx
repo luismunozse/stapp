@@ -10,14 +10,17 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FormActionBar } from "@/components/ui/form-action-bar"
+import { DraftRestoredNotice, RecordChangedNotice } from "@/components/ui/draft-restored-notice"
 import { X, ChevronDown, ChevronUp, Plus, Check, Loader2, ImagePlus, Trash2, Package, AlertTriangle, PlusCircle, Pencil, MapPin } from "lucide-react"
 import type { Inventario } from "@/types"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { compressImage } from "@/lib/image-compression"
 import { parseMoneyInput } from "@/lib/parse-money"
 import { validateBarcode, computeEAN13CheckDigit } from "@/lib/barcode-validation"
+import { ignoreSelectEcho } from "@/lib/radix-select-echo"
 import useSWR from "swr"
 import { useModal } from "@/contexts/modal-context"
+import { useFormDraft, fingerprintRecord } from "@/hooks/use-form-draft"
 
 interface ProveedorLite {
   id: string
@@ -46,6 +49,21 @@ const proveedoresFetcher = async (url: string): Promise<ProveedorLite[]> => {
   return Array.isArray(data) ? data : []
 }
 
+interface DepositoLite {
+  id: string
+  nombre: string
+  principal?: boolean
+  activo?: boolean
+}
+
+const depositosFetcher = async (url: string): Promise<DepositoLite[]> => {
+  // /api/depositos responde `{ data: [...] }`; ante un error (401, 500) llega
+  // `{ error }`. Sin guard, .filter() rompe en runtime.
+  const res = await fetch(url)
+  const json = await res.json().catch(() => null)
+  return Array.isArray(json?.data) ? json.data : []
+}
+
 const inventarioSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido"),
   categoria: z.string().min(1, "La categoría es requerida"),
@@ -58,6 +76,9 @@ const inventarioSchema = z.object({
   stockMaximo: z.number().int().min(0).nullable().optional(),
   puntoReorden: z.number().int().min(0).nullable().optional(),
   ubicacion: z.string().max(200, "Máximo 200 caracteres").nullable().optional(),
+  // Solo alta. null = "el principal": el default se DERIVA al renderizar en vez
+  // de setearse cuando llegan los depósitos (ver `depositoEfectivo`).
+  depositoId: z.string().min(1).nullable().optional(),
   // Validación de checksum NO bloquea: el form muestra sugerencia inline
   // (ver bloque debajo del input). Códigos internos / impresos sin checksum
   // estricto deben poder guardarse igual; bloquearlos fue causa de "no se
@@ -72,6 +93,146 @@ const inventarioSchema = z.object({
 })
 
 type InventarioFormData = z.infer<typeof inventarioSchema>
+
+/**
+ * Valores base del formulario: prefill de edicion, o blanco (con el barcode del
+ * scanner, si vino uno) para el alta.
+ *
+ * Vive afuera del componente y en UNA sola funcion a proposito. Es la base del
+ * `useForm`, del reset de edicion, del descarte de borrador y del token de
+ * frescura que compara este formulario contra el registro (`fingerprintRecord`,
+ * mas abajo): mientras las cuatro cosas salgan de aca, agregar un campo al
+ * formulario lo agrega a las cuatro y no pueden separarse.
+ */
+function inventarioFormDefaults(
+  item?: Inventario | null,
+  initialBarcode?: string | null
+): InventarioFormData {
+  return item
+    ? {
+        nombre: item.nombre,
+        categoria: item.categoria,
+        tipoDispositivo: item.tipoDispositivo,
+        stock: item.stock,
+        // precioCompra viene en null cuando la fuente no expuso el costo. El
+        // input necesita un número, así que arranca en 0 — pero ese 0 no se
+        // envía: onSubmit omite el campo del payload cuando el item cargó
+        // sin costo (ver `costoCargado`).
+        precioCompra: item.precioCompra ?? 0,
+        precioVenta: item.precioVenta,
+        proveedorId: item.proveedorId ?? null,
+        stockMinimo: item.stockMinimo ?? null,
+        stockMaximo: item.stockMaximo ?? null,
+        puntoReorden: item.puntoReorden ?? null,
+        barcode: item.barcode ?? null,
+        diasGarantiaDefault: (item as any).diasGarantiaDefault ?? null,
+        ubicacion: item.ubicacion ?? null,
+        trackeaLotes: item.trackeaLotes ?? false,
+        trackeaSeries: item.trackeaSeries ?? false,
+        tieneVariantes: item.tieneVariantes ?? false,
+        esKit: item.esKit ?? false,
+        tipoKit: item.tipoKit ?? null,
+      }
+    : {
+        nombre: "",
+        categoria: "",
+        tipoDispositivo: "",
+        stock: 0,
+        precioCompra: 0,
+        precioVenta: 0,
+        proveedorId: null,
+        stockMinimo: null,
+        stockMaximo: null,
+        puntoReorden: null,
+        barcode: initialBarcode ?? null,
+        diasGarantiaDefault: null,
+        ubicacion: null,
+        depositoId: null,
+        trackeaLotes: false,
+        trackeaSeries: false,
+        tieneVariantes: false,
+        esKit: false,
+        tipoKit: null,
+      }
+}
+
+/**
+ * Estado del formulario que NO vive en react-hook-form y que igual es trabajo
+ * escrito: los inputs inline de "nuevo tipo" / "nueva categoria" (texto que el
+ * operador ya tipeo y que todavia no existe en el servidor) y el panel de
+ * umbrales de stock, que se abre a mano.
+ *
+ * Un snapshot de `getValues()` a secas los tira en silencio: el borrador
+ * volveria "restaurado" con el panel cerrado y el tipo a medio crear perdido,
+ * que es justo la parte que cuesta volver a cargar.
+ */
+interface InventarioDraftUi {
+  showStockConfig: boolean
+  showNewTipo: boolean
+  newTipo: string
+  showNewCategoria: boolean
+  newCategoria: string
+  /** Habia una imagen elegida sin subir. El `File` NO se persiste (ver el
+   *  snapshot del hook, mas abajo): esto es solo la marca que le permite al
+   *  aviso decir que hay que volver a elegirla. */
+  imagenPendiente: boolean
+}
+
+/**
+ * Los campos del formulario TAL COMO SE PERSISTEN: sin el costo de compra.
+ *
+ * `precioCompra` es el unico campo de esta pantalla con permiso propio -- el
+ * formulario lo oculta y lo saca del payload cuando la fuente no lo expuso (ver
+ * `costoCargado`) -- y un borrador es exactamente lo contrario de eso: vive
+ * hasta 7 dias en localStorage, en texto plano, sobrevive al logout a proposito
+ * y esta en una terminal de mostrador que varias personas comparten. Lo que
+ * `getValue()` devuelve queda legible para el operador siguiente, sea cual sea
+ * su rol. Persistir el costo de un proveedor ahi es el mismo error que
+ * lib/cliente-draft-projection.ts existe para no repetir con el dni y el cuit.
+ *
+ * Se excluye SIEMPRE, no solo cuando el rol actual no puede ver el costo: la
+ * amenaza es quien use la maquina despues, no quien la esta usando ahora.
+ * Volver a tipear un costo cuesta una linea; que salga de la organizacion no se
+ * deshace.
+ *
+ * El tipo es lo que lo sostiene: `getValue()` devuelve esto, asi que un
+ * `getValues()` crudo no compila y el campo solo puede volver si alguien lo
+ * agrega a mano.
+ *
+ * Sin bump de DRAFT_SCHEMA_VERSION, a diferencia de los dos anteriores: esos
+ * retiraban entradas que YA estaban escritas en las terminales bajo una regla
+ * mas laxa, y aca no hay ninguna -- el borrador de este formulario no existe
+ * todavia fuera de esta rama. Bumpear igual borraria los borradores vivos de
+ * orden, recepcion y cliente, que es exactamente el trabajo que el hook existe
+ * para proteger. Lo que pueda haber quedado en una maquina de desarrollo lo
+ * cubre `sinCostoDeCompra` al leer.
+ */
+type InventarioDraftValues = Omit<InventarioFormData, "precioCompra">
+
+/** Runtime de la exclusion de arriba. Tambien se aplica al LEER: un borrador
+ *  escrito antes de esta regla todavia puede traer el costo en disco, y
+ *  restaurarlo seria devolverlo a la pantalla igual. */
+function sinCostoDeCompra(
+  values: InventarioFormData | InventarioDraftValues
+): InventarioDraftValues {
+  const { precioCompra: _costo, ...rest } = values as InventarioFormData
+  return rest
+}
+
+/**
+ * Lo unico de este formulario que llega a localStorage.
+ *
+ * Los campos de react-hook-form van SEPARADOS del estado de UI y no mezclados
+ * en un objeto plano: el submit spreadea los valores del formulario dentro del
+ * payload (`{ ...rest }` en onSubmit), asi que una clave de UI que se cuele en
+ * ese nivel viaja al POST/PUT. Con el corte hecho por tipo, `reset()` recibe
+ * `values` y nada mas, y agregar una clave de UI manana no puede terminar en la
+ * API por olvido.
+ */
+interface InventarioDraftValue {
+  values: InventarioDraftValues
+  ui: InventarioDraftUi
+}
 
 // Categorías específicas por tipo de dispositivo
 const categoriasPorTipo: Record<string, string[]> = {
@@ -93,12 +254,25 @@ const categoriasPorTipo: Record<string, string[]> = {
   TODOS: ["Pantallas", "Baterías", "Fundas", "Teclados", "Memorias", "Cargadores", "Otros"],
 }
 
+export interface ItemGuardado {
+  id: string
+  codigo: string
+  nombre: string
+  precioCompra?: number | null
+}
+
 interface InventarioFormProps {
   item?: Inventario | null
   // Barcode pre-cargado (p.ej. desde scanner cuando se crea un item nuevo)
   initialBarcode?: string | null
   onClose: () => void
-  onSuccess: () => void
+  /**
+   * Se dispara al guardar. Recibe el item resultante cuando se lo puede
+   * identificar, para que el llamador lo vincule sin volver a buscarlo (lo usa
+   * el picker del alta de orden de compra). Los llamadores que solo refrescan
+   * una lista pueden ignorar el argumento.
+   */
+  onSuccess: (saved?: ItemGuardado) => void
   // Disparado al pedir editar un duplicado detectado. El padre debe cargar
   // ese item y reabrir el form en modo edición.
   onEditExisting?: (id: string) => void
@@ -111,7 +285,7 @@ export function InventarioForm({
   onSuccess,
   onEditExisting,
 }: InventarioFormProps) {
-  const { showError, showWarning } = useModal()
+  const { showError, showWarning, confirm } = useModal()
   const { tipos: tiposDispositivo, loading: tiposLoading, error: tiposError, refetch: refetchTipos } = useTiposDispositivo({ incluirTodos: true })
   const [loading, setLoading] = useState(false)
   const [generatedCode, setGeneratedCode] = useState<string>("")
@@ -146,57 +320,170 @@ export function InventarioForm({
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isDirty },
     reset,
     watch,
+    getValues,
     setValue,
   } = useForm<InventarioFormData>({
     resolver: zodResolver(inventarioSchema),
-    defaultValues: item
-      ? {
-          nombre: item.nombre,
-          categoria: item.categoria,
-          tipoDispositivo: item.tipoDispositivo,
-          stock: item.stock,
-          precioCompra: item.precioCompra,
-          precioVenta: item.precioVenta,
-          proveedorId: item.proveedorId ?? null,
-          stockMinimo: item.stockMinimo ?? null,
-          stockMaximo: item.stockMaximo ?? null,
-          puntoReorden: item.puntoReorden ?? null,
-          barcode: item.barcode ?? null,
-          diasGarantiaDefault: (item as any).diasGarantiaDefault ?? null,
-          ubicacion: item.ubicacion ?? null,
-          trackeaLotes: item.trackeaLotes ?? false,
-          trackeaSeries: item.trackeaSeries ?? false,
-          tieneVariantes: item.tieneVariantes ?? false,
-          esKit: item.esKit ?? false,
-          tipoKit: item.tipoKit ?? null,
-        }
-      : {
-          nombre: "",
-          categoria: "",
-          tipoDispositivo: "",
-          stock: 0,
-          precioCompra: 0,
-          precioVenta: 0,
-          proveedorId: null,
-          stockMinimo: null,
-          stockMaximo: null,
-          puntoReorden: null,
-          barcode: initialBarcode ?? null,
-          diasGarantiaDefault: null,
-          ubicacion: null,
-          trackeaLotes: false,
-          trackeaSeries: false,
-          tieneVariantes: false,
-          esKit: false,
-          tipoKit: null,
-        },
+    defaultValues: inventarioFormDefaults(item, initialBarcode),
   })
 
   const categoria = watch("categoria")
   const tipoDispositivo = watch("tipoDispositivo")
+
+  // Depósito del stock inicial (solo alta). Se muestra con 2+ depósitos activos;
+  // con uno solo no hay nada que elegir y el servidor usa el principal.
+  const { data: depositos = [] } = useSWR<DepositoLite[]>(
+    item ? null : "/api/depositos",
+    depositosFetcher,
+    { revalidateOnFocus: false }
+  )
+  const depositosActivos = depositos.filter((d) => d.activo !== false)
+  const mostrarDeposito = !item && depositosActivos.length >= 2
+  const depositoElegido = watch("depositoId")
+  const stockActual = Number(watch("stock"))
+  const hayStockInicial = Number.isFinite(stockActual) && stockActual > 0
+  // El valor mostrado se deriva: lo elegido si todavía existe y está activo
+  // (un borrador viejo puede apuntar a uno que ya no), si no el principal. Así
+  // no hay un setValue asíncrono sobre un Select ya montado.
+  const depositoEfectivo =
+    depositosActivos.find((d) => d.id === depositoElegido)?.id ??
+    (depositosActivos.find((d) => d.principal) ?? depositosActivos[0])?.id ??
+    null
+  /** Lo que viaja al servidor: nada si no se muestra el Select o no hay stock. */
+  const depositoAEnviar = (stock: number) =>
+    mostrarDeposito && depositoEfectivo && stock > 0 ? { depositoId: depositoEfectivo } : {}
+
+
+  // ¿La fuente expuso el costo de este item? Un item nuevo no tiene costo
+  // previo que proteger, así que su 0 es un valor real. Un item cargado con
+  // `precioCompra: null` llega sin costo porque el rol no puede verlo.
+  //
+  // Manda sobre el input y sobre el payload a la vez: si no se muestra, no se
+  // manda (ver onSubmit). Antes vivía sólo en onSubmit, y el input se pintaba
+  // igual sembrado en 0 — un costo inventado a la vista del operador.
+  const costoCargado = !item || (item.precioCompra !== null && item.precioCompra !== undefined)
+
+  // --- Borrador local (useFormDraft) ----------------------------------------
+  //
+  // Este formulario tiene ~20 campos que se cargan a mano y hasta ahora se
+  // perdian enteros: un vencimiento de sesion, un click en el menu o el cierre
+  // de la pestana los borraba sin dejar rastro.
+  //
+  // Tres particularidades frente a los otros tres call sites del hook:
+  //
+  //  1. La IMAGEN no se persiste. Vive fuera de react-hook-form porque es un
+  //     upload multipart (ver el bloque de estado mas arriba) y es un `File`:
+  //     `JSON.stringify` lo convierte en `{}`, y guardar su base64 en su lugar
+  //     seria meter hasta varios MB en una cuota de ~5MB que ademas comparte
+  //     con todos los otros borradores -- el `setItem` empieza a tirar
+  //     QuotaExceededError y la persistencia deja de funcionar EN TODO EL
+  //     PANEL, en silencio. Se guarda solo la marca `imagenPendiente` y el
+  //     aviso le dice al operador que la vuelva a elegir.
+  //
+  //  2. El resto del estado de afuera de RHF SI se persiste (`InventarioDraftUi`).
+  //
+  //  3. `enabled` no hace falta: inventario-list monta este Card dentro de
+  //     `{showForm && ...}`, o sea que desmonta de verdad al cerrar -- a
+  //     diferencia de los dialogs, que quedan montados con `open=false`.
+  const recordId = item?.id ?? null
+  /** Huella de los campos que ESTE formulario edita, sobre la misma funcion que
+   *  arma el prefill. `Inventario` no expone `updatedAt`, pero aunque lo
+   *  expusiera no serviria: la fila se escribe en cada venta, cada recepcion y
+   *  cada ajuste de stock, o sea que el token se moveria por trabajo de
+   *  mostrador rutinario y borraria el borrador de quien tuviera la ficha
+   *  abierta (ver la advertencia de `recordVersion` en el hook). */
+  const itemRecordVersion = item ? fingerprintRecord(inventarioFormDefaults(item)) : null
+  /** El borrador que este formulario efectivamente aplico. De aca se DERIVA el
+   *  aviso (`draftNoticeVisible`) en vez de tener un booleano aparte que haya
+   *  que apagar en cada camino de baja: `clearDraft` deja `draft` en null en
+   *  todos ellos. Mismo criterio que los otros tres call sites. */
+  const [appliedDraft, setAppliedDraft] = useState<InventarioDraftValue | null>(null)
+  /** Latch POR IDENTIDAD del objeto, no por scope: el scope cambia en el render
+   *  y `draft` recien en el commit siguiente, asi que una marca por `recordId`
+   *  se adelanta al hook y aplica el borrador del registro anterior. */
+  const draftAppliedRef = useRef<InventarioDraftValue | null>(null)
+  /** Raiz del formulario para el gate de interaccion del hook. */
+  const formRef = useRef<HTMLFormElement>(null)
+  const {
+    draft,
+    ready: draftReady,
+    clearDraft,
+    notifyChange,
+    hasUnsavedWork,
+    recordChangedWhileEditing,
+  } = useFormDraft<InventarioDraftValue>({
+    feature: "inventario-form",
+    // En alta no hay id (el registro todavia no existe) y `generatedCode`
+    // tampoco sirve de key: lo devuelve el servidor y cambia con la categoria y
+    // el tipo, o sea que se movería mientras el operador carga. Queda UNA
+    // entrada de "producto nuevo" por usuario, igual que el alta de ordenes.
+    recordId,
+    getValue: () => ({
+      // `getValues()` y no `watch()`: leer el form entero en render suscribe el
+      // componente a cada tecla y el borrador no necesita re-renderizar nada.
+      // LIMITE DE PERSISTENCIA: sin el costo de compra (ver InventarioDraftValues).
+      values: sinCostoDeCompra(getValues()),
+      ui: {
+        showStockConfig,
+        showNewTipo,
+        newTipo,
+        showNewCategoria,
+        newCategoria,
+        // LIMITE DE PERSISTENCIA: la marca, nunca el archivo (ver punto 1).
+        imagenPendiente: pendingFile !== null,
+      },
+    }),
+    rootRef: formRef,
+    // `reset()` no tira excepcion con un borrador de otra forma: aplica lo que
+    // le den. Un borrador de hasta 7 dias escrito por una version anterior de
+    // este formulario abriria la pantalla con basura, en silencio, y esos
+    // valores saldrian tal cual en el POST/PUT.
+    validate: (data) => {
+      const value = data as InventarioDraftValue
+      return (
+        !!value &&
+        typeof value === "object" &&
+        !!value.values &&
+        typeof value.values === "object" &&
+        typeof value.values.nombre === "string" &&
+        typeof value.values.categoria === "string" &&
+        typeof value.values.tipoDispositivo === "string" &&
+        !!value.ui &&
+        typeof value.ui === "object"
+      )
+    },
+    // En edicion el PUT manda el item entero, asi que restaurar un borrador
+    // viejo encima de un registro que otro operador ya guardo lo pisaria.
+    recordVersion: itemRecordVersion,
+  })
+
+  /** El aviso no puede sobrevivir al borrador que anuncia. */
+  const draftNoticeVisible = draft !== null && appliedDraft === draft
+
+  /**
+   * Lo que el borrador NO pudo traer de vuelta. "Se restauro un borrador" a
+   * secas seria una promesa que este formulario no cumple, y las dos cosas que
+   * faltan son campos que el operador no va a mirar dos veces.
+   *
+   * El costo se nombra siempre que el campo este a la vista: no se persiste
+   * NUNCA (ver InventarioDraftValues), asi que no hay forma de saber si el
+   * borrador tenia uno -- y el input vuelve mostrando 0, que se lee como un
+   * costo real. Cuando el rol no puede ver el costo el campo ni existe en la
+   * pantalla, y ahi mencionarlo es mandar a alguien a un campo que no tiene.
+   */
+  const detalleDelAviso = [
+    costoCargado ? "El costo no se guarda en el borrador: volvé a cargarlo." : null,
+    // La foto queda afuera por ser un `File`. Se dice solo cuando habia una:
+    // decirlo siempre es ruido sobre los altas que ni la usan.
+    appliedDraft?.ui?.imagenPendiente
+      ? "La foto no se guarda en el borrador: volvé a seleccionarla."
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" ")
 
   // Categorías disponibles según el tipo seleccionado
   // Prioritize dynamic categories from device type config, fallback to hardcoded map
@@ -249,31 +536,21 @@ export function InventarioForm({
 
   useEffect(() => {
     if (item) {
-      reset({
-        nombre: item.nombre,
-        categoria: item.categoria,
-        tipoDispositivo: item.tipoDispositivo,
-        stock: item.stock,
-        precioCompra: item.precioCompra,
-        precioVenta: item.precioVenta,
-        proveedorId: item.proveedorId ?? null,
-        stockMinimo: item.stockMinimo ?? null,
-        stockMaximo: item.stockMaximo ?? null,
-        puntoReorden: item.puntoReorden ?? null,
-        barcode: item.barcode ?? null,
-        diasGarantiaDefault: (item as any).diasGarantiaDefault ?? null,
-        ubicacion: item.ubicacion ?? null,
-        trackeaLotes: item.trackeaLotes ?? false,
-        trackeaSeries: item.trackeaSeries ?? false,
-        tieneVariantes: item.tieneVariantes ?? false,
-        esKit: item.esKit ?? false,
-        tipoKit: item.tipoKit ?? null,
-      })
+      reset(inventarioFormDefaults(item))
       setImagenPreview(item.imagenUrl || null)
       setPendingFile(null)
       setRemoveExistingImage(false)
     }
   }, [item, reset])
+
+  // Los cambios de react-hook-form no re-renderizan el componente para los
+  // campos que nadie observa (stock, precios, ubicacion, umbrales...), asi que
+  // hay que avisarle al borrador por suscripcion o dejarian de programar
+  // grabados.
+  useEffect(() => {
+    const subscription = watch(() => notifyChange())
+    return () => subscription.unsubscribe()
+  }, [watch, notifyChange])
 
   // Pre-fill barcode from scanner.
   // - Item nuevo: setea siempre.
@@ -287,6 +564,70 @@ export function InventarioForm({
       setValue("barcode", initialBarcode, { shouldDirty: true, shouldTouch: true })
     }
   }, [item, initialBarcode, setValue])
+
+  // Aplicacion del borrador. Declarado DESPUES del prefill de edicion y del
+  // pre-cargado del scanner, que es lo que le da al borrador la ultima palabra
+  // sobre esos mismos campos.
+  useEffect(() => {
+    // El latch se toca DESPUES de saber que hay algo que aplicar: marcarlo antes
+    // deja el formulario "con el borrador ya aplicado" sin haberlo aplicado, y
+    // un borrador que aparezca despues (otra pestana escribiendo la misma key)
+    // se cuenta como restaurado, se pisa en silencio y el aviso no sale nunca.
+    if (!draftReady || !draft || draftAppliedRef.current === draft) return
+    draftAppliedRef.current = draft
+    try {
+      // Encima del prefill, no en su lugar: la proyeccion deja el costo afuera
+      // a proposito (ver InventarioDraftValues), asi que aplicar el borrador tal
+      // cual lo pondria en blanco -- y el PUT manda el item entero.
+      reset({
+        ...inventarioFormDefaults(item, initialBarcode),
+        ...sinCostoDeCompra(draft.values),
+        // ...salvo el codigo que el lector acaba de entregar, que va DESPUES del
+        // borrador. Es el unico campo de esta pantalla que el operador no tipeo
+        // y no vuelve a mirar: un borrador de hasta 7 dias lo reemplazaba --
+        // casi siempre por null -- y el producto se guardaba sin el codigo que
+        // se acababa de escanear. La condicion es la misma del prefill del
+        // scanner: nunca pisa un barcode que el item ya tenia guardado.
+        ...(initialBarcode && !item?.barcode ? { barcode: initialBarcode } : {}),
+      })
+      setShowStockConfig(draft.ui?.showStockConfig === true)
+      setShowNewTipo(draft.ui?.showNewTipo === true)
+      setNewTipo(typeof draft.ui?.newTipo === "string" ? draft.ui.newTipo : "")
+      setShowNewCategoria(draft.ui?.showNewCategoria === true)
+      setNewCategoria(typeof draft.ui?.newCategoria === "string" ? draft.ui.newCategoria : "")
+      setAppliedDraft(draft)
+    } catch (error) {
+      // Un borrador de otra forma no puede tumbar la pantalla: la excepcion
+      // correria dentro de un efecto y se llevaria el arbol entero.
+      console.error("Borrador de inventario invalido, se descarta:", error)
+      clearDraft()
+      setAppliedDraft(null)
+      reset(inventarioFormDefaults(item, initialBarcode))
+    }
+    // `item`/`initialBarcode` se leen adentro (base del prefill) pero no van en
+    // las dependencias: el efecto corre por borrador nuevo y ahi lee el render
+    // en curso, que es el que corresponde.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftReady, draft, reset, clearDraft])
+
+  /** Vuelve el formulario ENTERO al estado base -- incluido lo que vive fuera de
+   *  react-hook-form. Resetear solo RHF dejaba el input de "nuevo tipo" abierto
+   *  con el texto del borrador que se acababa de descartar. */
+  const discardDraft = () => {
+    // El aviso se apaga solo: `clearDraft` deja `draft` en null en este mismo
+    // commit y de ahi se deriva (ver draftNoticeVisible).
+    clearDraft()
+    reset(inventarioFormDefaults(item, initialBarcode))
+    setShowStockConfig(!!(item?.stockMinimo || item?.stockMaximo || item?.puntoReorden))
+    setShowNewTipo(false)
+    setNewTipo("")
+    setShowNewCategoria(false)
+    setNewCategoria("")
+    setPendingFile(null)
+    setImagenPreview(item?.imagenUrl || null)
+    setRemoveExistingImage(false)
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
 
   // Duplicate detection — dispara on blur del nombre (cuando el usuario pasa
   // al siguiente input). Fuzzy match por tokens en el backend; tipo/categoría
@@ -325,6 +666,18 @@ export function InventarioForm({
       await showError("Ingresá una cantidad de stock mayor a 0 para sumar al existente.")
       return
     }
+    // Consolidar cierra el formulario (onSuccess), así que del producto nuevo
+    // sobrevive únicamente el stock: nombre, precios, ubicación e imagen
+    // pendiente se descartan. Mismo criterio que el botón de al lado.
+    const confirmado = await confirm({
+      title: "Sumar el stock al producto existente",
+      description:
+        `Se van a sumar ${stockToAdd} al stock de "${match.nombre}" y este formulario se va a cerrar: se pierde el resto de lo que cargaste para el producto nuevo. No se puede deshacer.`,
+      confirmText: "Sumar stock",
+      cancelText: "Seguir con el nuevo",
+      variant: "danger",
+    })
+    if (!confirmado) return
     setConsolidating(match.id)
     try {
       const res = await fetch(`/api/inventario/${match.id}/stock`, {
@@ -335,6 +688,8 @@ export function InventarioForm({
           value: stockToAdd,
           tipo: "ENTRADA",
           referenciaTipo: "CONSOLIDACION",
+          // Mismo depósito que habría recibido el alta.
+          ...depositoAEnviar(stockToAdd),
           motivo: `Consolidación desde alta duplicada (${values.nombre})`,
         }),
       })
@@ -342,13 +697,61 @@ export function InventarioForm({
         const err = await res.json().catch(() => ({}))
         throw new Error(err.error || "Error al sumar stock")
       }
-      onSuccess()
+      // El alta se consumio: el stock que se estaba cargando ya entro contra el
+      // item existente. Dejar el borrador vivo reabriria "Nuevo Item" con ese
+      // mismo producto y el operador lo cargaria dos veces.
+      clearDraft()
+      // El alta se resolvió contra el item existente, así que el llamador que
+      // esperaba vincular algo se queda con ese, no con uno nuevo.
+      onSuccess({
+        id: match.id,
+        codigo: match.codigo,
+        nombre: match.nombre,
+        precioCompra: null,
+      })
     } catch (err) {
       console.error("Error consolidando stock:", err)
       await showError(err instanceof Error ? err.message : "Error al sumar stock")
     } finally {
       setConsolidating(null)
     }
+  }
+
+  // Abrir el duplicado existente reemplaza este formulario: el padre carga ese
+  // item y lo pasa como `item`, lo que dispara el reset() de más arriba y pisa
+  // todos los campos cargados para el producto nuevo. El aviso de duplicados
+  // aparece justo después de escribir el nombre, o sea con trabajo en pantalla
+  // por definición.
+  //
+  // Ya no es irreversible: al mover `item` de null a un objeto cambia la key del
+  // borrador (`new` -> `edit:{id}`) y el hook vuelca lo pendiente ANTES de
+  // cambiarla, asi que lo cargado para el producto nuevo queda en su propia
+  // entrada y vuelve solo al reabrir "Nuevo Item". La confirmación se queda
+  // igual —la pantalla cambia debajo de la mano y eso se avisa— pero dice lo que
+  // realmente pasa: prometer una pérdida que no ocurre es tan malo como
+  // ocultarla, porque enseña a desconfiar del resto de los avisos.
+  const handleEditExisting = async (match: DuplicateMatch) => {
+    if (!onEditExisting) return
+    // `hasUnsavedWork()` y no solo `isDirty`: el borrador se aplica con
+    // `reset()`, que deja `isDirty` en false. Una recarga con borrador en disco
+    // devolvia el formulario LLENO de trabajo restaurado y con el aviso de
+    // duplicados arriba, y "Editar este" cambiaba la pantalla entera sin
+    // preguntar nada -- justo el caso para el que existe la confirmacion. El
+    // hook ya sabe la respuesta (lo escrito por el operador, o un borrador
+    // restaurado que sigue en pantalla); calcularla aparte es dejarla derivar.
+    const hayTrabajoSinGuardar = isDirty || pendingFile !== null || hasUnsavedWork()
+    if (hayTrabajoSinGuardar) {
+      const confirmado = await confirm({
+        title: "Abrir el producto existente",
+        description:
+          `Se va a cargar "${match.nombre}" en este formulario. Lo que cargaste para el producto nuevo queda guardado como borrador y vuelve al abrir "Nuevo Item"` +
+          (pendingFile ? ", salvo la foto, que hay que elegir de nuevo." : "."),
+        confirmText: "Abrir el existente",
+        cancelText: "Seguir con el nuevo",
+      })
+      if (!confirmado) return
+    }
+    onEditExisting(match.id)
   }
 
   const handleAddTipo = async () => {
@@ -500,10 +903,31 @@ export function InventarioForm({
       const barcodeFromWatch = (watch("barcode") || "").toString().trim()
       const normalizedBarcode = barcodeFromWatch.length > 0 ? barcodeFromWatch : null
 
+      // El costo se manda solo si la fuente lo expuso. Cuando el item llega con
+      // `precioCompra: null` el input arranca en 0 porque necesita un número —
+      // pero ese 0 es "no lo recibí", no "vale cero". Como el payload se
+      // spreadea entero y no hay filtro de campos sucios, mandarlo pisaría el
+      // precio_compra real con cero. El PUT lo acepta opcional, así que
+      // omitirlo deja la columna intacta.
+      // `depositoId` sale de `rest` y vuelve solo en el alta (ver depositoAEnviar).
+      const { precioCompra, stock, depositoId: _depositoId, ...rest } = data
+      // El selector muestra "Ensamblado" por defecto aunque el valor siga en null;
+      // el servidor exige tipo para un kit, así que se manda lo que se ve.
+      if (rest.esKit && !rest.tipoKit) rest.tipoKit = "ENSAMBLADO"
+      const costoField = costoCargado ? { precioCompra } : {}
+
+      // En edicion el stock viaja solo si el operador lo cambio. El de `item` es
+      // una foto de cuando se abrio la lista: reenviarlo tal cual hace que el PUT
+      // lo trate como ajuste absoluto y pise las ventas hechas entre medio.
+      const stockField = !item || stock !== item.stock ? { stock } : {}
+
       const payload = item
-        ? { ...data, barcode: normalizedBarcode }
+        ? { ...rest, ...costoField, ...stockField, barcode: normalizedBarcode }
         : {
-            ...data,
+            ...rest,
+            ...costoField,
+            ...stockField,
+            ...depositoAEnviar(Number(stock)),
             barcode: normalizedBarcode,
             codigo: generatedCode,
             descripcion: "",
@@ -533,6 +957,14 @@ export function InventarioForm({
         throw new Error("No se pudo obtener el id del item guardado")
       }
 
+      // El item existe pero el servidor no pudo mover el stock al depósito
+      // elegido: quedó en el principal. No es un error de guardado.
+      if (savedItem?.advertencia) {
+        await showWarning(
+          "El producto se guardó, pero el stock quedó en el depósito principal. Podés pasarlo al otro depósito con una transferencia."
+        )
+      }
+
       // Manejo de imagen:
       //  - Si el usuario pidió quitar la existente, llamar DELETE
       //  - Si hay archivo pendiente, subirlo
@@ -548,7 +980,16 @@ export function InventarioForm({
         }
       }
 
-      onSuccess()
+      // Solo en el camino exitoso. Los `return` de mas arriba (error de la API,
+      // codigo duplicado a reintentar) dejan el borrador donde esta: es lo unico
+      // irrecuperable de los dos lados.
+      clearDraft()
+      onSuccess({
+        id: savedId,
+        codigo: savedItem?.codigo ?? item?.codigo ?? "",
+        nombre: savedItem?.nombre ?? item?.nombre ?? "",
+        precioCompra: savedItem?.precioCompra ?? null,
+      })
     } catch (error) {
       console.error("Error saving item:", error)
       await showError("Error al guardar item")
@@ -569,6 +1010,7 @@ export function InventarioForm({
       </CardHeader>
       <CardContent>
         <form
+          ref={formRef}
           onSubmit={handleSubmit(onSubmit)}
           onKeyDown={(e) => {
             if (e.key !== "Enter") return
@@ -580,6 +1022,16 @@ export function InventarioForm({
           }}
           className="space-y-4"
         >
+          {/* Primero el conflicto: el borrador se conserva, pero guardarlo
+              reemplaza lo que guardó la otra persona. */}
+          {recordChangedWhileEditing && <RecordChangedNotice />}
+          {draftNoticeVisible && (
+            <DraftRestoredNotice
+              onDiscard={discardDraft}
+              detail={detalleDelAviso || undefined}
+            />
+          )}
+
           {/* Fila con imagen + nombre */}
           <div className="flex gap-4 items-start">
             <div className="shrink-0">
@@ -691,7 +1143,7 @@ export function InventarioForm({
                           size="sm"
                           variant="outline"
                           className="h-8 gap-1"
-                          onClick={() => onEditExisting(match.id)}
+                          onClick={() => handleEditExisting(match)}
                           disabled={consolidating !== null}
                         >
                           <Pencil className="h-3.5 w-3.5" />
@@ -746,7 +1198,9 @@ export function InventarioForm({
                 <div className="flex gap-1.5">
                   <Select
                     value={tipoDispositivo || ""}
-                    onValueChange={(value) => setValue("tipoDispositivo", value, { shouldValidate: true, shouldDirty: true })}
+                    onValueChange={ignoreSelectEcho((value) =>
+                      setValue("tipoDispositivo", value, { shouldValidate: true, shouldDirty: true })
+                    )}
                     disabled={tiposLoading}
                   >
                     <SelectTrigger>
@@ -824,7 +1278,9 @@ export function InventarioForm({
                 <div className="flex gap-1.5">
                   <Select
                     value={watch("categoria") || ""}
-                    onValueChange={(value) => setValue("categoria", value, { shouldValidate: true, shouldDirty: true })}
+                    onValueChange={ignoreSelectEcho((value) =>
+                      setValue("categoria", value, { shouldValidate: true, shouldDirty: true })
+                    )}
                     disabled={!tipoDispositivo}
                   >
                     <SelectTrigger>
@@ -877,20 +1333,35 @@ export function InventarioForm({
             </div>
 
             <div>
-              <Label htmlFor="precioCompra">Costo *</Label>
-              <Input
-                id="precioCompra"
-                type="text"
-                inputMode="decimal"
-                step="0.01"
-                {...register("precioCompra", { setValueAs: (v: string) => parseMoneyInput(v) })}
-                min={0}
-                placeholder="0.00"
-              />
-              {errors.precioCompra && (
-                <p className="text-sm text-destructive mt-1">
-                  {errors.precioCompra.message}
-                </p>
+              {costoCargado ? (
+                <>
+                  <Label htmlFor="precioCompra">Costo *</Label>
+                  <Input
+                    id="precioCompra"
+                    type="text"
+                    inputMode="decimal"
+                    step="0.01"
+                    {...register("precioCompra", { setValueAs: (v: string) => parseMoneyInput(v) })}
+                    min={0}
+                    placeholder="0.00"
+                  />
+                  {errors.precioCompra && (
+                    <p className="text-sm text-destructive mt-1">
+                      {errors.precioCompra.message}
+                    </p>
+                  )}
+                </>
+              ) : (
+                // El item llegó sin costo. El input necesita un número y
+                // arrancaría en 0, así que mostrarlo le inventa un precio al
+                // operador: un 0 se lee como gratis. Se oculta y se explica,
+                // igual que inventario-list muestra "—" para este mismo null.
+                <>
+                  <Label className="text-muted-foreground">Costo</Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Sin permiso para ver el costo. El valor guardado no se modifica.
+                  </p>
+                </>
               )}
             </div>
 
@@ -918,11 +1389,11 @@ export function InventarioForm({
             <Label htmlFor="proveedor">Proveedor</Label>
             <Select
               value={watch("proveedorId") || "none"}
-              onValueChange={(value) =>
+              onValueChange={ignoreSelectEcho((value) =>
                 setValue("proveedorId", value === "none" ? null : value, {
                   shouldDirty: true,
                 })
-              }
+              )}
             >
               <SelectTrigger id="proveedor">
                 <SelectValue placeholder="Sin proveedor" />
@@ -994,6 +1465,35 @@ export function InventarioForm({
               </div>
             )}
           </div>
+
+          {mostrarDeposito && (
+            <div className="space-y-1.5">
+              <Label htmlFor="deposito">Depósito del stock inicial</Label>
+              <Select
+                value={depositoEfectivo ?? ""}
+                disabled={!hayStockInicial}
+                onValueChange={ignoreSelectEcho((value) =>
+                  setValue("depositoId", value, { shouldDirty: true })
+                )}
+              >
+                <SelectTrigger id="deposito">
+                  <SelectValue placeholder="Elegí un depósito" />
+                </SelectTrigger>
+                <SelectContent>
+                  {depositosActivos.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {hayStockInicial
+                  ? "Acá se guarda el stock que cargás ahora."
+                  : "Cargá un stock mayor a 0 para elegir dónde se guarda."}
+              </p>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="ubicacion" className="flex items-center gap-1.5 text-sm font-medium">
@@ -1152,7 +1652,9 @@ export function InventarioForm({
                   <Label className="text-xs">Tipo de kit</Label>
                   <Select
                     value={watch("tipoKit") ?? "ENSAMBLADO"}
-                    onValueChange={(v) => setValue("tipoKit", v as "ENSAMBLADO" | "VIRTUAL", { shouldDirty: true })}
+                    onValueChange={ignoreSelectEcho((v) =>
+                      setValue("tipoKit", v as "ENSAMBLADO" | "VIRTUAL", { shouldDirty: true })
+                    )}
                   >
                     <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>

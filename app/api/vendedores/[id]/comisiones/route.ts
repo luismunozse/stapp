@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 type EstadoFiltro = "pendiente" | "pagada" | "all"
@@ -9,7 +9,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    // El id del vendedor viaja en la URL: con requireAuth cualquier rol leia
+    // lo que gana CUALQUIER vendedor —ventas, porcentaje, montos, si ya se le
+    // pago— cambiando un id. La pantalla que la consume es la liquidacion,
+    // que ya era admin-only en el middleware.
+    //
+    // Esto NO es 'mis comisiones'. Si mañana el vendedor tiene que ver las
+    // propias, va por una ruta que se scopee sola, como ya hace
+    // GET /api/comisiones con el tecnico.
+    const { error, organizationId } = await requireAdmin()
     if (error) return error
 
     const { id } = await params

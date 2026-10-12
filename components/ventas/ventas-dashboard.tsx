@@ -119,18 +119,23 @@ export function VentasDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-muted-foreground">Margen Bruto</span>
-              <TrendingUp className="h-4 w-4 text-success" />
-            </div>
-            <div className={`text-xl font-bold ${data.margenBruto.porcentaje >= 0 ? "text-success" : "text-destructive"}`}>
-              {data.margenBruto.porcentaje.toFixed(1)}%
-            </div>
-            <p className="text-xs text-muted-foreground">{formatPrice(data.margenBruto.margen)}</p>
-          </CardContent>
-        </Card>
+        {/* margenBruto llega en null para los roles sin acceso a costos: se
+            oculta la tarjeta entera en vez de pintar "$0" o "0.0%", que se leen
+            como un margen real de cero y no como un permiso faltante. */}
+        {data.margenBruto.porcentaje !== null && (
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-medium text-muted-foreground">Margen Bruto</span>
+                <TrendingUp className="h-4 w-4 text-success" />
+              </div>
+              <div className={`text-xl font-bold ${data.margenBruto.porcentaje >= 0 ? "text-success" : "text-destructive"}`}>
+                {data.margenBruto.porcentaje.toFixed(1)}%
+              </div>
+              <p className="text-xs text-muted-foreground">{formatPrice(data.margenBruto.margen)}</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {expanded && (
@@ -242,8 +247,9 @@ export function VentasDashboard() {
                   <div className="text-lg font-bold">{data.descuentosOtorgados.cantidadConDescuento}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-muted-foreground">% sobre ventas totales</div>
-                  <div className="text-lg font-bold">{data.descuentosOtorgados.promedioDescuento.toFixed(1)}%</div>
+                  {/* La API devuelve el monto promedio por venta, no un porcentaje */}
+                  <div className="text-xs text-muted-foreground">Descuento promedio por venta</div>
+                  <div className="text-lg font-bold">{formatPrice(data.descuentosOtorgados.promedioDescuento)}</div>
                 </div>
               </CardContent>
             </Card>

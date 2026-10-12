@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import {
+  requireAuth,
+  requirePosAccess,
+  soloVeSusVentas,
+  hasInventarioAccess,
+  resolveVendedoresHabilitados,
+} from "@/lib/auth-utils"
+import { traerTodas } from "@/lib/supabase-paginar"
+import { DEFAULT_TIMEZONE, dayRangeUtc } from "@/lib/timezone"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura, type ResultadoLectura } from "@/lib/sucursal"
 import {
@@ -9,11 +17,21 @@ import {
   ORDENES_COLUMNS,
   VENTAS_COLUMNS,
   CLIENTES_COLUMNS,
-  INVENTARIO_COLUMNS,
+  inventarioColumns,
+  pedidoColumns,
   GARANTIAS_COLUMNS,
 } from "@/lib/csv-export"
 
 type EntityType = "ordenes" | "ventas" | "clientes" | "inventario" | "garantias"
+
+// Techo de la selección exportable. El límite real de la query es 10000; esto
+// corta antes para que un "seleccionar todo" sobre un catálogo grande no se
+// convierta en un IN gigante.
+const MAX_SELECCION_IDS = 2000
+
+// Fallback del umbral de stock bajo cuando la org no lo tiene configurado.
+// Mismo default que usa el RPC de reposición (migración 168).
+const UMBRAL_STOCK_BAJO_DEFAULT = 5
 
 const VALID_ENTITIES: EntityType[] = [
   "ordenes",
@@ -41,11 +59,62 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ entity: string }> }
 ) {
-  try {
-    const { error, organizationId, role, session } = await requireAuth()
-    if (error) return error
+  const { entity } = await params
+  const filters = Object.fromEntries(request.nextUrl.searchParams.entries())
+  return runExport(entity, filters)
+}
 
-    const { entity } = await params
+/**
+ * POST /api/export/[entity]
+ * Misma exportación que el GET, pero con la selección en el body.
+ *
+ * Existe por longitud de URL: una selección de cientos de items no entra en
+ * un query string (los ids son cuid, ~25 chars cada uno). El GET con `ids`
+ * sigue andando para selecciones chicas.
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ entity: string }> }
+) {
+  const { entity } = await params
+
+  let body: { ids?: unknown; preset?: unknown; format?: unknown }
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: "Body inválido" }, { status: 400 })
+  }
+
+  const ids = Array.isArray(body.ids)
+    ? body.ids.filter((id): id is string => typeof id === "string" && id.length > 0)
+    : []
+
+  // Sin ids el POST no tiene sentido: exportar todo es el GET. Cortar acá
+  // evita que una selección vacía baje el inventario entero por accidente.
+  if (ids.length === 0) {
+    return NextResponse.json(
+      { error: "No hay items seleccionados" },
+      { status: 400 }
+    )
+  }
+  if (ids.length > MAX_SELECCION_IDS) {
+    return NextResponse.json(
+      { error: `La selección supera los ${MAX_SELECCION_IDS} items` },
+      { status: 400 }
+    )
+  }
+
+  const filters: Record<string, string> = { ids: ids.join(",") }
+  if (typeof body.preset === "string") filters.preset = body.preset
+  if (typeof body.format === "string") filters.format = body.format
+
+  return runExport(entity, filters)
+}
+
+async function runExport(entity: string, filters: Record<string, string>) {
+  try {
+    const { error, organizationId, userId, role, session } = await requireAuth()
+    if (error) return error
 
     if (!VALID_ENTITIES.includes(entity as EntityType)) {
       return NextResponse.json(
@@ -54,8 +123,6 @@ export async function GET(
       )
     }
 
-    const searchParams = request.nextUrl.searchParams
-    const filters = Object.fromEntries(searchParams.entries())
     const format = (filters.format || "csv").toLowerCase()
 
     const lectura = await sucursalParaLectura({
@@ -68,15 +135,31 @@ export async function GET(
       case "ordenes":
         payload = await exportOrdenes(organizationId!, filters, lectura)
         break
-      case "ventas":
-        payload = await exportVentas(organizationId!, filters, lectura)
+      case "ventas": {
+        // Las mismas reglas que el listado de ventas: un TECNICO sin acceso al
+        // POS no exporta ventas y un VENDEDOR solo las suyas. Antes cualquier
+        // usuario de la org bajaba todas.
+        const pos = await requirePosAccess()
+        if (pos.error) return pos.error
+        payload = await exportVentas(organizationId!, filters, lectura, {
+          soloVendedor: soloVeSusVentas(role) ? userId! : null,
+        })
         break
+      }
       case "clientes":
         payload = await exportClientes(organizationId!, filters)
         break
-      case "inventario":
-        payload = await exportInventario(organizationId!, filters)
+      case "inventario": {
+        // El costo de compra sigue hasInventarioAccess, igual que los endpoints
+        // de inventario. El round-trip a organizations solo hace falta para
+        // VENDEDOR; los demás roles se resuelven sin consultar.
+        const vendedoresHabilitados = role === "VENDEDOR"
+          ? await resolveVendedoresHabilitados(organizationId!)
+          : false
+        const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+        payload = await exportInventario(organizationId!, filters, canViewCost)
         break
+      }
       case "garantias":
         payload = await exportGarantias(organizationId!, filters)
         break
@@ -87,13 +170,17 @@ export async function GET(
         )
     }
 
+    // El pedido no es el inventario: que el archivo no se llame igual, o el
+    // usuario termina mandándole al proveedor el dump equivocado.
+    const basename = filters.preset === "pedido" ? "pedido" : entity
+
     if (format === "xlsx") {
       const buffer = await arrayToXLSX(payload.data, payload.columns)
       return new NextResponse(new Uint8Array(buffer), {
         headers: {
           "Content-Type":
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          "Content-Disposition": `attachment; filename="${entity}_${formatDateFilename()}.xlsx"`,
+          "Content-Disposition": `attachment; filename="${basename}_${formatDateFilename()}.xlsx"`,
         },
       })
     }
@@ -102,7 +189,7 @@ export async function GET(
     return new NextResponse(csvContent, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${entity}_${formatDateFilename()}.csv"`,
+        "Content-Disposition": `attachment; filename="${basename}_${formatDateFilename()}.csv"`,
       },
     })
   } catch (error) {
@@ -152,25 +239,48 @@ async function exportOrdenes(
 async function exportVentas(
   organizationId: string,
   filters: Record<string, string>,
-  lectura: ResultadoLectura
+  lectura: ResultadoLectura,
+  opts: { soloVendedor: string | null }
 ): Promise<ExportPayload> {
-  let query = supabaseAdmin
-    .from("ventas")
-    .select(`*, vendedor:users!vendedor_id(nombre)`)
-    .eq("organization_id", organizationId)
-    .order("created_at", { ascending: false })
-    .limit(10000)
+  // desde/hasta son días ("YYYY-MM-DD") de la organización: `lte(hasta)` a
+  // secas comparaba contra las 00:00 UTC y dejaba afuera todo el último día.
+  let rango: { desde?: string; hasta?: string } = {}
+  if (filters.desde || filters.hasta) {
+    const { data: org } = await supabaseAdmin
+      .from("organizations")
+      .select("zona_horaria")
+      .eq("id", organizationId)
+      .single()
+    const tz: string = org?.zona_horaria || DEFAULT_TIMEZONE
+    const dia = (f: string) => (/^\d{4}-\d{2}-\d{2}$/.test(f) ? dayRangeUtc(f, tz) : { desde: f, hasta: f })
+    rango = {
+      ...(filters.desde ? { desde: dia(filters.desde).desde } : {}),
+      ...(filters.hasta ? { hasta: dia(filters.hasta).hasta } : {}),
+    }
+  }
 
-  if (!lectura.verTodas && lectura.sucursalId)
-    query = query.eq("sucursal_id", lectura.sucursalId)
+  const armar = () => {
+    let query = supabaseAdmin
+      .from("ventas")
+      .select(`*, vendedor:users!vendedor_id(nombre)`)
+      .eq("organization_id", organizationId)
+      .order("created_at", { ascending: false })
+      .order("id")
 
-  if (filters.estado) query = query.eq("estado", filters.estado)
-  if (filters.desde) query = query.gte("created_at", filters.desde)
-  if (filters.hasta) query = query.lte("created_at", filters.hasta)
+    if (!lectura.verTodas && lectura.sucursalId)
+      query = query.eq("sucursal_id", lectura.sucursalId)
+    if (opts.soloVendedor) query = query.eq("vendedor_id", opts.soloVendedor)
 
-  const { data, error } = await query
+    if (filters.estado) query = query.eq("estado", filters.estado)
+    if (rango.desde) query = query.gte("created_at", rango.desde)
+    if (rango.hasta) query = query.lte("created_at", rango.hasta)
+    return query
+  }
+
+  // Paginado: `.limit(10000)` no pasa del tope de 1000 filas de PostgREST
+  const { data, error } = await traerTodas(armar, { maximo: 10000 })
   if (error) throw error
-  return { data: data || [], columns: VENTAS_COLUMNS }
+  return { data, columns: VENTAS_COLUMNS }
 }
 
 async function exportClientes(
@@ -197,14 +307,28 @@ async function exportClientes(
 
 async function exportInventario(
   organizationId: string,
-  filters: Record<string, string>
+  filters: Record<string, string>,
+  canViewCost: boolean
 ): Promise<ExportPayload> {
+  const esPedido = filters.preset === "pedido"
+
+  // El pedido necesita el proveedor real (FK) y los umbrales por item para
+  // sugerir la cantidad; el export genérico se queda con el select de siempre.
+  const select = esPedido
+    ? "id, codigo, nombre, categoria, stock, stock_minimo, stock_maximo, punto_reorden, precio_compra, proveedor, proveedores:proveedor_id(nombre)"
+    : "*"
+
   let query = supabaseAdmin
     .from("inventario")
-    .select("*")
+    .select(select)
     .eq("organization_id", organizationId)
     .order("nombre", { ascending: true })
     .limit(10000)
+
+  // Selección explícita del usuario. El .eq de organization_id de arriba se
+  // mantiene, así que un id de otra org no devuelve nada (anti-IDOR).
+  const ids = parseIds(filters.ids)
+  if (ids.length > 0) query = query.in("id", ids)
 
   if (filters.categoria) query = query.eq("categoria", filters.categoria)
   if (filters.tipo_dispositivo)
@@ -220,7 +344,34 @@ async function exportInventario(
 
   const { data, error } = await query
   if (error) throw error
-  return { data: data || [], columns: INVENTARIO_COLUMNS }
+
+  if (esPedido) {
+    const umbralOrg = await resolveUmbralStockBajo(organizationId)
+    return {
+      data: data || [],
+      columns: pedidoColumns(canViewCost, umbralOrg),
+    }
+  }
+
+  return { data: data || [], columns: inventarioColumns(canViewCost) }
+}
+
+function parseIds(raw: string | undefined): string[] {
+  if (!raw) return []
+  return raw
+    .split(",")
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0)
+    .slice(0, MAX_SELECCION_IDS)
+}
+
+async function resolveUmbralStockBajo(organizationId: string): Promise<number> {
+  const { data } = await supabaseAdmin
+    .from("organizations")
+    .select("umbral_stock_bajo")
+    .eq("id", organizationId)
+    .single()
+  return data?.umbral_stock_bajo ?? UMBRAL_STOCK_BAJO_DEFAULT
 }
 
 async function exportGarantias(

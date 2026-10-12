@@ -204,6 +204,29 @@ describe("POST /api/cotizaciones/[id]/convertir-venta", () => {
     expect(rpcCalls).not.toContain("convertir_cotizacion_venta_atomica")
   })
 
+  it("rechaza con 400 la conversion de una cotizacion reemplazada por una revision", async () => {
+    // Sigue ACEPTADA (migracion 311 no pisa el estado), pero ya no es el
+    // documento vigente. Convertirla duplicaria la liberacion de reservas
+    // que la migracion 312 ya hizo al aprobar la revision.
+    mockAuthSuccess()
+    vi.mocked(sucursalParaEscritura).mockResolvedValue("suc-A")
+
+    const cotizacionReemplazada = { ...mockCotizacion, reemplazada_por: "rev-1" }
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "cotizaciones") return createChainMock(cotizacionReemplazada) as any
+      return createChainMock(null) as any
+    })
+
+    const response = await POST(createPostRequest(validBody), createParams("cot-1"))
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/reemplaz|revisi/i)
+    // No debe crear la venta.
+    const rpcCalls = vi.mocked(supabaseAdmin.rpc).mock.calls.map((c) => c[0])
+    expect(rpcCalls).not.toContain("convertir_cotizacion_venta_atomica")
+  })
+
   it("calls sucursalParaEscritura with correct args", async () => {
     mockAuthSuccess({ organizationId: "org-99", role: "ADMIN" })
     vi.mocked(sucursalParaEscritura).mockResolvedValue("suc-X")

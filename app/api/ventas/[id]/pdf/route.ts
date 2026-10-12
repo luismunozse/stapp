@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateVentaPDF, generateVentaTicketPDF } from "@/lib/pdf"
 
@@ -8,7 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role } = await requirePosAccess()
     if (error) return error
 
     const { id } = await params
@@ -35,7 +35,7 @@ export async function GET(
       .eq("organization_id", organizationId!)
 
     // Vendedores solo pueden ver sus propias ventas
-    if (role === "VENDEDOR") {
+    if (soloVeSusVentas(role)) {
       query = query.eq("vendedor_id", userId!)
     }
 

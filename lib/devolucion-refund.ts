@@ -141,3 +141,42 @@ export function computeDevolucionMonto(
   // Cap: nunca reembolsar más que lo que resta.
   return Math.min(proporcional, remaining)
 }
+
+export interface ReturnableSaleLine {
+  id: string
+  cantidad: number | string
+}
+
+/**
+ * Sale lines that end up 100% returned once this batch is applied.
+ *
+ * A `garantias_venta` row covers a whole line, not a unit: returning 1 of 3
+ * leaves the warranty legitimately covering the other 2. So a warranty may only
+ * be voided when the line is fully returned counting every prior devolución.
+ *
+ * Only lines present in `batch` are reported — a line completed by an earlier
+ * return already had its warranty voided back then.
+ *
+ * Espeja la lógica del RPC `registrar_devolucion_atomica` (migración 316):
+ * cualquier cambio debe replicarse en ambos lados.
+ *
+ * @param saleItems       todos los `items_venta` de la venta.
+ * @param alreadyReturned cantidad ya devuelta por `item_venta_id` (devoluciones previas).
+ * @param batch           líneas + cantidad de ESTA devolución.
+ */
+export function fullyReturnedItemIds(
+  saleItems: ReturnableSaleLine[],
+  alreadyReturned: Record<string, number>,
+  batch: RefundReturnLine[]
+): string[] {
+  const originalById = new Map(saleItems.map((it) => [it.id, num(it.cantidad)]))
+
+  const ids: string[] = []
+  for (const line of batch) {
+    const original = originalById.get(line.itemVentaId)
+    if (original === undefined) continue
+    const returnedAfter = num(alreadyReturned[line.itemVentaId]) + num(line.cantidad)
+    if (returnedAfter >= original) ids.push(line.itemVentaId)
+  }
+  return ids
+}

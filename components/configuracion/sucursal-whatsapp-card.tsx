@@ -7,28 +7,52 @@ import { Loader2, MessageCircle, RefreshCw } from "lucide-react"
 
 type State = "open" | "connecting" | "close" | "qr" | "unknown"
 
+/** Cada cuánto consultamos el estado de vinculación. */
+const POLL_MS = 3_000
+/** Vida útil que le damos al QR en pantalla antes de pedir el siguiente. */
+const QR_TTL_MS = 15_000
+
 export function SucursalWhatsAppCard({ sucursalId }: { sucursalId: string }) {
   const [state, setState] = useState<State>("unknown")
   const [qr, setQr] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const ultimoQrRef = useRef(0)
 
   const stopPoll = useCallback(() => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
   }, [])
 
-  const poll = useCallback(async () => {
+  // `conQr` va aparte del estado porque `/instance/connect` es más caro que
+  // `/instance/connectionState`, y el estado se pollea mucho más seguido que
+  // lo que tarda el QR en vencer.
+  const poll = useCallback(async (conQr = false) => {
     try {
-      const res = await fetch(`/api/sucursales/${sucursalId}/whatsapp/qr`, { method: "GET" })
+      const res = await fetch(
+        `/api/sucursales/${sucursalId}/whatsapp/qr${conQr ? "?refresh=1" : ""}`,
+        { method: "GET" }
+      )
       if (!res.ok) return
       const d = await res.json()
       setState(d.state)
-      if (d.state === "open") { setQr(null); stopPoll() }
+      if (d.state === "open") { setQr(null); stopPoll(); return }
+      if (conQr && d.qrBase64) setQr(d.qrBase64)
     } catch {
       // Error de red al pollear: se reintenta en el próximo ciclo
     }
   }, [sucursalId, stopPoll])
+
+  // El QR del server vence solo; hay que ir a buscar el vigente en vez de
+  // dejar en pantalla uno que el teléfono ya va a rechazar.
+  const arrancarPoll = useCallback(() => {
+    stopPoll()
+    pollRef.current = setInterval(() => {
+      const toca = Date.now() - ultimoQrRef.current >= QR_TTL_MS
+      if (toca) ultimoQrRef.current = Date.now()
+      poll(toca)
+    }, POLL_MS)
+  }, [poll, stopPoll])
 
   const connect = useCallback(async () => {
     setLoading(true); setError(null)
@@ -38,16 +62,16 @@ export function SucursalWhatsAppCard({ sucursalId }: { sucursalId: string }) {
       if (!res.ok) { setError(d.error || "Error al conectar"); return }
       setState(d.state)
       setQr(d.qrBase64 || null)
+      ultimoQrRef.current = Date.now()
       if (d.state !== "open") {
-        stopPoll()
-        pollRef.current = setInterval(poll, 3000)
+        arrancarPoll()
       }
     } catch {
       setError("Error de conexión")
     } finally {
       setLoading(false)
     }
-  }, [sucursalId, poll, stopPoll])
+  }, [sucursalId, arrancarPoll])
 
   const logout = useCallback(async () => {
     setLoading(true); setError(null)
@@ -88,7 +112,7 @@ export function SucursalWhatsAppCard({ sucursalId }: { sucursalId: string }) {
           <p className="text-xs text-muted-foreground text-center">
             Escaneá este QR desde WhatsApp → Dispositivos vinculados, con el teléfono de la sucursal.
           </p>
-          <Button variant="ghost" size="sm" onClick={poll}>
+          <Button variant="ghost" size="sm" onClick={() => poll()}>
             <RefreshCw className="h-3.5 w-3.5 mr-1" /> Ya lo escaneé
           </Button>
         </div>

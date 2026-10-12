@@ -47,6 +47,11 @@ vi.mock('next/headers', () => ({
 // Mock para @/lib/auth
 vi.mock('@/lib/auth', () => ({
   auth: vi.fn(() => Promise.resolve(null)),
+  // Corta el refresh token de un usuario. Lo usa el cambio de rol para que la
+  // sesion no se siga extendiendo con el rol viejo. Va en el mock global
+  // porque el modulo real arrastra next-auth, que no carga en este entorno:
+  // un importActual sobre @/lib/auth revienta con ERR_MODULE_NOT_FOUND.
+  invalidateRefreshToken: vi.fn(() => Promise.resolve()),
 }))
 
 // Mock para @/lib/supabase (evitar conexiones reales en tests)
@@ -81,3 +86,17 @@ vi.mock('@/lib/supabase', () => ({
     CATALOGO: 'catalogo',
   },
 }))
+
+// Practice-order helpers. Every route that creates a real order calls
+// deletePracticeData, and every money or stock route calls rejectIfPractica.
+// Without these defaults each of those route suites would see an extra rpc() or
+// from("ordenes_servicio") call. The helpers' own tests load the real module
+// with vi.importActual; route tests override these per case with vi.mocked().
+vi.mock('@/lib/onboarding/practica', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/onboarding/practica')>('@/lib/onboarding/practica')
+  return {
+    ...actual,
+    deletePracticeData: vi.fn(async () => ({ ordenBorrada: false, ordenConservada: false, clienteConservado: false })),
+    rejectIfPractica: vi.fn(async () => null),
+  }
+})

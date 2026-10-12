@@ -26,6 +26,14 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
+// Sesion real: con `data: null` useFormDraft nunca resuelve su key, se queda
+// en ready=false y todo el camino de borrador (restore incluido) queda inerte
+// justo en la suite que existe para detectar desalineados entre fields y
+// sideState -- que es exactamente lo que un restore puede romper.
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({ data: { user: { id: "user-1", organizationId: "org-1" } } }),
+}))
+
 vi.mock("@/hooks/use-tipos-dispositivo", () => ({
   useTiposDispositivo: () => ({
     tipos: [
@@ -62,6 +70,9 @@ describe("RecepcionForm — fields y sideState en el mismo indice al quitar un e
       "fetch",
       vi.fn(() => Promise.resolve({ ok: true, json: async () => [] } as Response)),
     )
+    // Con la sesion mockeada el formulario graba borradores de verdad: sin
+    // limpiar, un test le restaura al siguiente los equipos que dejo cargados.
+    window.localStorage.clear()
   })
 
   it(

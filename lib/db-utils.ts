@@ -40,25 +40,54 @@ export function transformToSnakeCase<T extends Record<string, any>>(obj: T): any
   return result
 }
 
+// PostgREST returns a reverse embed over a UNIQUE FK (one-to-one relationship
+// detection, e.g. `facturas (id)` embedded via `facturas.venta_id`/`orden_id`)
+// as a single object instead of an array. Normalize either shape to an array
+// so callers can safely use `.length` / `[0]` regardless of which shape came
+// back.
+export function toArray<T>(value: T | T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : value ? [value] : []
+}
+
+export interface FormatOrdenOptions {
+  /** Purchase cost the order carries over from inventario: every repuesto's
+   *  `precioUnitario` is the `precio_compra` frozen when the part was loaded.
+   *  Gate it with `hasInventarioAccess`. Defaults to true so existing callers
+   *  that never expose the repuestos embed keep their behavior. */
+  includeInventarioCost?: boolean
+  /** Cost aggregate derived from the linked cotización items' `precio_compra`
+   *  (`costoRepuestosCotizaciones`). Gate it with `canViewCotizacionCosts`. */
+  includeCotizacionCost?: boolean
+}
+
 // Mapeo específico para órdenes (incluye relaciones)
-export function formatOrden(orden: any) {
+export function formatOrden(orden: any, options: FormatOrdenOptions = {}) {
   if (!orden) return null
+
+  const { includeInventarioCost = true, includeCotizacionCost = true } = options
 
   // Costo de repuestos provenientes de cotizaciones ACEPTADAS linkeadas a inventario.
   // Se suma como prop separada para que la card de comisión lo agregue al costo
   // que ya calcula desde repuestos_orden. El admin es responsable de no duplicar
   // (usar tab Repuestos O cotización aceptada, no ambos para el mismo ítem).
+  //
+  // Este agregado se deriva de items_cotizacion[].inventario.precio_compra, así
+  // que es costo: con un solo ítem equivale a precio_compra × cantidad. Va
+  // detrás del mismo permiso que los campos de los que sale, no se devuelve
+  // como 0 (un cero sería indistinguible de "no hay cotización aceptada").
   const cotizacionesActivas = (orden.cotizaciones || []).filter(
     (c: any) => !c.deleted_at && c.estado === "ACEPTADA"
   )
-  const costoRepuestosCotizaciones = cotizacionesActivas.reduce((sum: number, c: any) => {
-    const itemsCosto = (c.items_cotizacion || []).reduce((acc: number, it: any) => {
-      const precioCompra = Number(it.inventario?.precio_compra) || 0
-      const cantidad = Number(it.cantidad) || 0
-      return acc + precioCompra * cantidad
-    }, 0)
-    return sum + itemsCosto
-  }, 0)
+  const costoRepuestosCotizaciones = includeCotizacionCost
+    ? cotizacionesActivas.reduce((sum: number, c: any) => {
+        const itemsCosto = (c.items_cotizacion || []).reduce((acc: number, it: any) => {
+          const precioCompra = Number(it.inventario?.precio_compra) || 0
+          const cantidad = Number(it.cantidad) || 0
+          return acc + precioCompra * cantidad
+        }, 0)
+        return sum + itemsCosto
+      }, 0)
+    : null
 
   return {
     costoRepuestosCotizaciones,
@@ -111,7 +140,8 @@ export function formatOrden(orden: any) {
       nombre: orden.recibido.nombre,
     } : null,
     fotos: orden.fotos_orden?.map(formatFoto),
-    repuestos: orden.repuestos_orden?.map(formatRepuesto),
+    repuestos: orden.repuestos_orden?.map((r: any) => formatRepuesto(r, includeInventarioCost)),
+    servicios: orden.servicios_orden?.map(formatServicioOrden),
     facturas: orden.facturas,
     cotizaciones: orden.cotizaciones,
     garantia: orden.garantias,
@@ -121,6 +151,8 @@ export function formatOrden(orden: any) {
     // Re-ingreso
     ordenOrigenId: orden.orden_origen_id || null,
     esReingreso: orden.es_reingreso || false,
+    // Onboarding practice order (migration 348): the UI shows a badge and a read-only detail.
+    esPractica: orden.es_practica === true,
     garantiaOrigenId: orden.garantia_origen_id || null,
     // Recepcion multiple (lote mayorista): presente solo si la orden se creo
     // como parte de un lote. recepciones viene del join recepcion_id -> recepciones
@@ -155,6 +187,9 @@ export function formatCliente(cliente: any) {
     razonSocial: cliente.razon_social,
     cuit: cliente.cuit,
     aceptaWhatsapp: cliente.acepta_whatsapp ?? true,
+    esPractica: cliente.es_practica === true,
+    tipoPrecio: cliente.tipo_precio || "MINORISTA",
+    descuentoPct: cliente.descuento_pct != null ? Number(cliente.descuento_pct) : null,
     saldoCuenta: parseFloat(cliente.saldo_cuenta || "0"),
     organizationId: cliente.organization_id,
     createdAt: cliente.created_at,
@@ -178,7 +213,10 @@ export function formatFoto(foto: any) {
   }
 }
 
-export function formatRepuesto(repuesto: any) {
+/** `includeCost` defaults to true so callers that do not expose the repuesto to
+ *  a gated role keep their behavior. Pass `hasInventarioAccess(...)` on any
+ *  route whose response reaches a non-inventario role. */
+export function formatRepuesto(repuesto: any, includeCost = true) {
   if (!repuesto) return null
 
   return {
@@ -190,24 +228,58 @@ export function formatRepuesto(repuesto: any) {
     // precioUnitario es el COSTO (precio_compra congelado al cargar el
     // repuesto); precioVentaUnitario es lo que se le cobra al cliente.
     // Este último es NULL en filas anteriores a la migración 286.
-    precioUnitario: repuesto.precio_unitario,
+    precioUnitario: includeCost ? repuesto.precio_unitario : null,
     precioVentaUnitario: repuesto.precio_venta_unitario ?? null,
-    inventario: repuesto.inventario ? formatInventario(repuesto.inventario) : undefined,
+    // El embed de inventario trae el costo VIVO (precio_compra), no la copia
+    // congelada: sale por el mismo permiso que precioUnitario.
+    inventario: repuesto.inventario ? formatInventario(repuesto.inventario, includeCost) : undefined,
+  }
+}
+
+export function formatServicioOrden(servicio: any) {
+  if (!servicio) return null
+
+  return {
+    id: servicio.id,
+    ordenId: servicio.orden_id,
+    servicioId: servicio.servicio_id, // Nullable: null en líneas manuales
+    nombre: servicio.nombre, // Snapshot, ver comentario en 300_servicios.sql
+    cantidad: servicio.cantidad,
+    precioUnitario: servicio.precio_unitario,
   }
 }
 
 /** Lo que se le cobra al cliente por un repuesto. Cae al costo cuando la fila
- *  es anterior a la migración 286 y no tiene precio de venta registrado. */
+ *  es anterior a la migración 286 y no tiene precio de venta registrado.
+ *
+ *  Devuelve null cuando no queda ningún precio utilizable: pasa en una fila
+ *  vieja (sin precio de venta) leída por un rol al que se le ocultó el costo.
+ *  La UI tiene que mostrar "sin precio", nunca $0: un cero ahí se lee como
+ *  "gratis" y encima se sumaría a los totales. */
 export function precioVentaRepuesto(repuesto: {
   precioVentaUnitario?: number | string | null
   precioUnitario?: number | string | null
-}) {
+}): number | null {
   const venta = repuesto.precioVentaUnitario
   if (venta !== null && venta !== undefined && venta !== "") return Number(venta)
-  return Number(repuesto.precioUnitario ?? 0)
+  const costo = repuesto.precioUnitario
+  if (costo !== null && costo !== undefined && costo !== "") return Number(costo)
+  return null
 }
 
-export function formatInventario(item: any) {
+/** `includeCost` es OPT-IN y arranca en false a propósito: `precio_compra` es
+ *  el costo de compra, detrás de `hasInventarioAccess` (ADMIN siempre;
+ *  VENDEDOR solo si la org habilitó el permiso; TECNICO nunca).
+ *
+ *  Con el default apagado, un caller nuevo que se olvide del gate pierde el
+ *  costo — un bug visible que aparece en la primera prueba con un ADMIN — en
+ *  vez de filtrarlo a un rol sin permiso, que es un bug silencioso. Es lo que
+ *  hizo falta: la ruta de barcode quedó afuera de un barrido ruta por ruta
+ *  justamente porque el formateador compartido lo emitía crudo.
+ *
+ *  Pasar `true` solo desde un caller que ya resolvió el permiso (con
+ *  `hasInventarioAccess`) o que corre detrás de `requireInventarioAccess()`. */
+export function formatInventario(item: any, includeCost = false) {
   if (!item) return null
 
   // Resolver nombre del proveedor: si viene el join (proveedores), usarlo.
@@ -224,7 +296,7 @@ export function formatInventario(item: any) {
     tipoDispositivo: item.tipo_dispositivo,
     stock: item.stock,
     stockReservado: item.stock_reservado ?? 0,
-    precioCompra: item.precio_compra,
+    precioCompra: includeCost ? item.precio_compra : null,
     precioVenta: item.precio_venta,
     proveedor: proveedorNombre,
     proveedorId: item.proveedor_id ?? null,
@@ -250,6 +322,16 @@ export function formatInventario(item: any) {
   }
 }
 
+/** Saldo que el cliente todavía debe de una venta (fila cruda de ventas). */
+export function saldoPendienteVenta(venta: any): number {
+  const aplicado = toArray(venta?.devoluciones_venta).reduce(
+    (s: number, d: any) => s + (parseFloat(d?.monto_aplicado_deuda ?? "0") || 0),
+    0
+  )
+  const saldo = (parseFloat(venta?.total) || 0) - (parseFloat(venta?.monto_abonado || "0") || 0) - aplicado
+  return Math.max(Math.round(saldo * 100) / 100, 0)
+}
+
 export function formatVenta(venta: any) {
   if (!venta) return null
 
@@ -265,7 +347,17 @@ export function formatVenta(venta: any) {
     tipoDescuento: venta.tipo_descuento || "MONTO",
     porcentajeDescuento: venta.porcentaje_descuento ? parseFloat(venta.porcentaje_descuento) : 0,
     total: parseFloat(venta.total),
+    // Snapshot fiscal (mig 229). NULL en orgs EXENTO sin redondeo y en ventas
+    // previas: el ticket solo agrega las lineas de IVA/redondeo cuando vienen.
+    ivaRegimen: venta.iva_regimen ?? null,
+    ivaTasa: venta.iva_tasa != null ? parseFloat(venta.iva_tasa) : null,
+    ivaNeto: venta.iva_neto != null ? parseFloat(venta.iva_neto) : null,
+    ivaMonto: venta.iva_monto != null ? parseFloat(venta.iva_monto) : null,
+    redondeoMonto: venta.redondeo_monto != null ? parseFloat(venta.redondeo_monto) : null,
     montoAbonado: parseFloat(venta.monto_abonado || "0"),
+    // Lo que el cliente todavía debe: total − cobrado − lo que las
+    // devoluciones descontaron del saldo (mig 330).
+    saldoPendiente: saldoPendienteVenta(venta),
     estadoPago: venta.estado_pago || "PAGADO",
     metodoPago: venta.metodo_pago,
     estado: venta.estado,
@@ -283,6 +375,7 @@ export function formatVenta(venta: any) {
       (a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
     ) || [],
     devoluciones: venta.devoluciones_venta?.map(formatDevolucion) || [],
+    facturaId: toArray(venta.facturas)[0]?.id ?? null,
   }
 }
 
@@ -292,6 +385,8 @@ export function formatItemVenta(item: any) {
   return {
     id: item.id,
     inventarioId: item.inventario_id,
+    // El embed `inventario (*)` de la venta trae precio_compra, pero ningún
+    // consumidor de /api/ventas lee el costo del item: no se pide.
     inventario: item.inventario ? formatInventario(item.inventario) : undefined,
     descripcion: item.descripcion,
     cantidad: item.cantidad,
@@ -365,6 +460,11 @@ export function formatDevolucion(d: any) {
     motivo: d.motivo,
     tipo: d.tipo,
     montoDevolucion: parseFloat(d.monto_devolucion),
+    // Mig 330: parte que descontó el saldo pendiente de la venta; el resto es
+    // lo que se le devolvió al cliente.
+    montoAplicadoDeuda: parseFloat(d.monto_aplicado_deuda ?? "0") || 0,
+    montoReembolso:
+      Math.round((parseFloat(d.monto_devolucion) - (parseFloat(d.monto_aplicado_deuda ?? "0") || 0)) * 100) / 100,
     estado: d.estado,
     observaciones: d.observaciones,
     procesadoPor: d.procesado_por,
@@ -463,7 +563,16 @@ export function formatProveedorAdjunto(a: any) {
   }
 }
 
-export function formatProveedorCatalogoItem(i: any) {
+/** `includeCost` es OPT-IN y arranca en false, igual que `formatInventario`:
+ *  `precio_referencia` es el precio de compra al proveedor y el item viaja con
+ *  `inventario_id`, así que se reduce al costo de un item de inventario exacto.
+ *  Va detrás de `hasInventarioAccess`, como sus dos hermanos de la misma
+ *  página (`/proveedores/[id]/stats` y `/proveedores/[id]/comparativa`).
+ *
+ *  Con el default apagado, un caller nuevo que se olvide del gate pierde el
+ *  precio — un bug visible con un ADMIN — en vez de filtrarlo a un rol sin
+ *  permiso, que es un bug silencioso. Son tres call sites, todos gateados. */
+export function formatProveedorCatalogoItem(i: any, includeCost = false) {
   if (!i) return null
   return {
     id: i.id,
@@ -472,7 +581,8 @@ export function formatProveedorCatalogoItem(i: any) {
     codigoProveedor: i.codigo_proveedor ?? null,
     nombre: i.nombre,
     descripcion: i.descripcion ?? null,
-    precioReferencia: i.precio_referencia != null ? Number(i.precio_referencia) : null,
+    precioReferencia:
+      includeCost && i.precio_referencia != null ? Number(i.precio_referencia) : null,
     moneda: i.moneda ?? "ARS",
     unidad: i.unidad ?? null,
     notas: i.notas ?? null,

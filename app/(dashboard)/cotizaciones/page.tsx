@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -44,6 +45,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useCurrency } from "@/contexts/currency-context"
+import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 import { CotizacionForm } from "@/components/cotizaciones/cotizacion-form"
 import { CotizacionApprovalDialog } from "@/components/cotizaciones/cotizacion-approval-dialog"
 import { ConvertirVentaDialog } from "@/components/cotizaciones/convertir-venta-dialog"
@@ -103,6 +105,7 @@ interface Cotizacion {
     notas?: string | null
   } | null
   convertidaAOrdenId?: string | null
+  ventaId?: string | null
   items: {
     id: string
     descripcion: string
@@ -133,7 +136,10 @@ const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: s
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 export default function CotizacionesPage() {
-  const { formatPrice, formatDate } = useCurrency()
+  const { formatPrice, formatDate, pais } = useCurrency()
+  const { data: session } = useSession()
+  // Cost/margin data is ADMIN-only (see components/ordenes/orden-detail.tsx's isAdmin gate).
+  const mostrarCostos = session?.user?.role === "ADMIN"
   const [showForm, setShowForm] = useState(false)
   const [showTipoSelector, setShowTipoSelector] = useState(false)
   const [formTipo, setFormTipo] = useState<"ORDEN" | "PRESUPUESTO">("ORDEN")
@@ -155,6 +161,40 @@ export default function CotizacionesPage() {
   const [viewMode, setViewMode] = useState<"cards" | "list">("cards")
   const { hasFeature: hasCotizaciones, loading: cotizacionesLoading } = useHasFeature("cotizaciones_online")
   const canCrear = cotizacionesLoading || hasCotizaciones
+
+  // Convertir a ORDEN de servicio es de ADMIN, y siempre lo fue. El botón, en
+  // cambio, nunca miró el rol: al técnico se le dibujaba igual y sólo se
+  // enteraba al apretarlo, contra un 403. Un botón que siempre falla es una
+  // mentira en pantalla, así que acá se esconde.
+  const puedeConvertirAOrden = session?.user?.role === "ADMIN"
+
+  // Convertir a VENTA (el cobro) es de ADMIN, más el TECNICO cuyo taller
+  // habilitó `tecnicos_cobran_cotizaciones` (migración 322). El flag vive en la
+  // BD, así que hay que ir a buscarlo; para el ADMIN no hay nada que preguntar.
+  //
+  // Sólo un `false` EXPLÍCITO esconde el botón. Un chequeo que no se pudo
+  // completar —503, la columna todavía sin migrar— NO es una negativa, y
+  // tratarlo como tal le sacaría el cobro a un técnico que sí tiene el permiso
+  // (la misma denegación fabricada que ya se corrigió en /api/org/features y en
+  // el gate del POS). Dejarlo visible no abre nada: el POST sigue pasando por
+  // requireCotizacionCobroAccess(), que es fail-closed del lado del servidor.
+  const role = session?.user?.role
+  const [tecnicoCobraCotizaciones, setTecnicoCobraCotizaciones] = useState(true)
+  useEffect(() => {
+    if (role !== "TECNICO") return
+    let cancelado = false
+    fetch("/api/org/features", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelado || !d) return
+        setTecnicoCobraCotizaciones(!!d.tecnicosCobranCotizaciones)
+      })
+      .catch(() => {})
+    return () => {
+      cancelado = true
+    }
+  }, [role])
+  const puedeConvertirAVenta = role === "ADMIN" || (role === "TECNICO" && tecnicoCobraCotizaciones)
 
   // Persistir preferencia de vista
   useEffect(() => {
@@ -380,8 +420,7 @@ export default function CotizacionesPage() {
     const telefono = (cotizacion.clienteTelefono || "").replace(/\D/g, "")
     let waUrl: string
     if (telefono) {
-      const normalized = telefono.startsWith("54") ? telefono : `54${telefono}`
-      waUrl = `https://wa.me/${normalized}?text=${encodeURIComponent(mensaje)}`
+      waUrl = generateWhatsAppUrl(telefono, mensaje, pais)
     } else {
       waUrl = `https://wa.me/?text=${encodeURIComponent(mensaje)}`
     }
@@ -634,6 +673,7 @@ export default function CotizacionesPage() {
             key={`new-${formTipo}-${nuevoClienteId ?? ""}`}
             tipo={formTipo}
             initialClienteId={nuevoClienteId || undefined}
+            mostrarCostos={mostrarCostos}
             onClose={() => { setShowForm(false); setNuevoClienteId(null) }}
             onSuccess={() => {
               setShowForm(false)
@@ -648,6 +688,7 @@ export default function CotizacionesPage() {
             key={`edit-${editingCotizacion.id}`}
             tipo={editingCotizacion.tipo || "ORDEN"}
             ordenId={editingCotizacion.ordenId || undefined}
+            mostrarCostos={mostrarCostos}
             initialData={{
               id: editingCotizacion.id,
               items: editingCotizacion.items,
@@ -724,7 +765,7 @@ export default function CotizacionesPage() {
                     {cotizaciones.map((cotizacion) => {
                       const config = estadoConfig[cotizacion.estado] || estadoConfig.BORRADOR
                       const Icon = config.icon
-                      const canEdit = cotizacion.estado === "BORRADOR"
+                      const canEdit = !["ACEPTADA", "RECHAZADA"].includes(cotizacion.estado)
                       const canSend = ["BORRADOR", "ENVIADA"].includes(cotizacion.estado)
                       const canDelete = cotizacion.estado !== "ACEPTADA"
                       return (
@@ -808,7 +849,7 @@ export default function CotizacionesPage() {
                                   </Button>
                                 </>
                               )}
-                              {cotizacion.estado === "ACEPTADA" && cotizacion.tipo !== "PRESUPUESTO" && (
+                              {cotizacion.estado === "ACEPTADA" && cotizacion.tipo !== "PRESUPUESTO" && !cotizacion.ventaId && puedeConvertirAVenta && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -819,7 +860,7 @@ export default function CotizacionesPage() {
                                   <ShoppingCart className="h-4 w-4" />
                                 </Button>
                               )}
-                              {cotizacion.tipo === "PRESUPUESTO" && !cotizacion.convertidaAOrdenId && (
+                              {cotizacion.tipo === "PRESUPUESTO" && !cotizacion.convertidaAOrdenId && puedeConvertirAOrden && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -907,7 +948,7 @@ export default function CotizacionesPage() {
             {cotizaciones.map((cotizacion) => {
               const config = estadoConfig[cotizacion.estado] || estadoConfig.BORRADOR
               const Icon = config.icon
-              const canEdit = cotizacion.estado === "BORRADOR"
+              const canEdit = !["ACEPTADA", "RECHAZADA"].includes(cotizacion.estado)
               const canSend = ["BORRADOR", "ENVIADA"].includes(cotizacion.estado)
               const canDelete = cotizacion.estado !== "ACEPTADA"
 
@@ -947,6 +988,11 @@ export default function CotizacionesPage() {
                         {cotizacion.convertidaAOrdenId && (
                           <Badge variant="outline" className="text-xs border-green-300 text-green-700">
                             Convertida a orden
+                          </Badge>
+                        )}
+                        {cotizacion.ventaId && (
+                          <Badge variant="outline" className="text-xs border-green-300 text-green-700">
+                            Convertida en venta
                           </Badge>
                         )}
                         {cotizacion.vistoAt && (
@@ -1074,7 +1120,7 @@ export default function CotizacionesPage() {
                           {duplicatingId === cotizacion.id ? "Duplicando..." : "Duplicar"}
                         </Button>
                       )}
-                      {cotizacion.estado === "ACEPTADA" && cotizacion.tipo !== "PRESUPUESTO" && (
+                      {cotizacion.estado === "ACEPTADA" && cotizacion.tipo !== "PRESUPUESTO" && !cotizacion.ventaId && puedeConvertirAVenta && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -1085,7 +1131,7 @@ export default function CotizacionesPage() {
                           Convertir a Venta
                         </Button>
                       )}
-                      {cotizacion.tipo === "PRESUPUESTO" && !cotizacion.convertidaAOrdenId && (
+                      {cotizacion.tipo === "PRESUPUESTO" && !cotizacion.convertidaAOrdenId && puedeConvertirAOrden && (
                         <Button
                           size="sm"
                           variant="outline"

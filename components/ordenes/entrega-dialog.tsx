@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Loader2, PackageCheck, PackageX, AlertTriangle, Shield, HandCoins } from "lucide-react"
 import { toast } from "sonner"
 import { useCurrency } from "@/contexts/currency-context"
+import { precioVentaRepuesto } from "@/lib/db-utils"
 import {
   defaultMotivoSinCobro,
   MOTIVOS_SIN_COBRO,
@@ -72,7 +73,11 @@ interface RepuestoEntrega {
   id: string
   nombre?: string
   cantidad: number
-  precioUnitario: number
+  /** COSTO unitario: lo que pagó el taller. El servidor lo devuelve en NULL a
+   *  los roles sin acceso a inventario. */
+  precioUnitario: number | null
+  /** Precio de VENTA unitario: lo que se le cobra al cliente.
+   *  NULL en repuestos cargados antes de la migración 286. */
   precioVentaUnitario?: number | null
   inventario?: { nombre: string } | null
 }
@@ -123,16 +128,27 @@ export function EntregaDialog({
   const tienePendiente = !esRetiro && !sinCobro && orden.estadoCobro && orden.estadoCobro !== "COBRADO" && (orden.pendienteCobro || 0) > 0
 
   const repuestos = orden.repuestos || []
-  // Fallback al costo en repuestos anteriores a la migración 286, que no
-  // tienen precio de venta registrado.
-  const precioVentaDe = (r: RepuestoEntrega) =>
-    r.precioVentaUnitario !== null && r.precioVentaUnitario !== undefined
-      ? Number(r.precioVentaUnitario)
-      : Number(r.precioUnitario || 0)
-  const totalRepuestos = repuestos.reduce((sum, r) => sum + r.cantidad * precioVentaDe(r), 0)
+  // Precio de VENTA, con fallback al costo en las filas anteriores a la
+  // migración 286. A un rol sin acceso a inventario el servidor le oculta el
+  // costo, así que en esas filas viejas no queda ningún precio utilizable y
+  // `precioVentaRepuesto` devuelve null.
+  //
+  // Ahí el total de repuestos es incalculable en el cliente. El servidor sí lo
+  // calcula (entregar/route.ts relee los precios de la base), o sea que sumar
+  // esas filas como $0 haría que el operador confirme un monto y al cliente se
+  // le cobre otro más alto. Cuando falta un sumando no se publica el total.
+  const preciosDeVenta = repuestos.map((r) => precioVentaRepuesto(r))
+  const totalRepuestosCompleto = preciosDeVenta.every((p) => p !== null)
+  const totalRepuestos = repuestos.reduce(
+    (sum, r, i) => sum + r.cantidad * (preciosDeVenta[i] ?? 0),
+    0
+  )
   const mostrarCobro = !sinCobro
   const totalIngresado = parseFloat(totalDraft) || 0
   const totalACobrarFinal = incluyeRepuestos ? totalIngresado : totalIngresado + totalRepuestos
+  // Con el checkbox tildado el servidor toma el total tal cual se tipeó, así
+  // que ese número siempre es fiel. Destildado depende de los repuestos.
+  const puedeMostrarTotal = incluyeRepuestos || totalRepuestosCompleto
 
   const handleFirmaClienteChange = (data: string | null, mime: string | null) => {
     setFirmaCliente(data)
@@ -313,24 +329,33 @@ export function EntregaDialog({
                 <div>
                   <Label className="text-sm font-medium">Repuestos utilizados</Label>
                   <ul className="mt-2 space-y-1">
-                    {repuestos.map((r) => (
-                      <li key={r.id} className="flex items-baseline justify-between gap-3 text-sm">
-                        <span className="min-w-0 truncate text-muted-foreground">
-                          {r.inventario?.nombre || r.nombre}
-                          <span className="ml-1 text-xs">
-                            {r.cantidad} × {formatPrice(precioVentaDe(r))}
+                    {repuestos.map((r, i) => {
+                      const precio = preciosDeVenta[i]
+                      return (
+                        <li key={r.id} className="flex items-baseline justify-between gap-3 text-sm">
+                          <span className="min-w-0 truncate text-muted-foreground">
+                            {r.inventario?.nombre || r.nombre}
+                            <span className="ml-1 text-xs">
+                              {r.cantidad} × {precio === null ? "Sin precio" : formatPrice(precio)}
+                            </span>
                           </span>
-                        </span>
-                        <span className="shrink-0 tabular-nums">
-                          {formatPrice(r.cantidad * precioVentaDe(r))}
-                        </span>
-                      </li>
-                    ))}
+                          <span className="shrink-0 tabular-nums">
+                            {precio === null ? "Sin precio" : formatPrice(r.cantidad * precio)}
+                          </span>
+                        </li>
+                      )
+                    })}
                   </ul>
-                  <div className="mt-2 flex justify-between border-t pt-2 text-sm font-medium">
-                    <span>Total repuestos</span>
-                    <span className="tabular-nums">{formatPrice(totalRepuestos)}</span>
-                  </div>
+                  {totalRepuestosCompleto ? (
+                    <div className="mt-2 flex justify-between border-t pt-2 text-sm font-medium">
+                      <span>Total repuestos</span>
+                      <span className="tabular-nums">{formatPrice(totalRepuestos)}</span>
+                    </div>
+                  ) : (
+                    <p className="mt-2 border-t pt-2 text-xs text-amber-700 dark:text-amber-400">
+                      No se puede calcular el total de repuestos: hay ítems sin precio de venta cargado.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -368,17 +393,26 @@ export function EntregaDialog({
               )}
 
               {totalDraft.trim() && (
-                <div className="flex items-baseline justify-between rounded-md bg-muted/60 px-3 py-2 text-sm">
-                  <span className="font-medium">Se cobrará</span>
-                  <span className="font-semibold tabular-nums">
-                    {formatPrice(totalACobrarFinal)}
-                    {!incluyeRepuestos && repuestos.length > 0 && (
-                      <span className="ml-2 text-xs font-normal text-muted-foreground">
-                        ({formatPrice(totalIngresado)} + {formatPrice(totalRepuestos)})
-                      </span>
-                    )}
-                  </span>
-                </div>
+                puedeMostrarTotal ? (
+                  <div className="flex items-baseline justify-between rounded-md bg-muted/60 px-3 py-2 text-sm">
+                    <span className="font-medium">Se cobrará</span>
+                    <span className="font-semibold tabular-nums">
+                      {formatPrice(totalACobrarFinal)}
+                      {!incluyeRepuestos && repuestos.length > 0 && (
+                        <span className="ml-2 text-xs font-normal text-muted-foreground">
+                          ({formatPrice(totalIngresado)} + {formatPrice(totalRepuestos)})
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+                    No se puede calcular el total acá: hay repuestos sin precio de venta cargado.
+                    Al confirmar, el sistema le suma los repuestos al monto ingresado y el importe
+                    final va a ser mayor. Tildá la opción de arriba si el total que ingresaste ya
+                    los incluye.
+                  </p>
+                )
               )}
             </div>
           )}

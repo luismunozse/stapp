@@ -34,15 +34,21 @@ describe("getDepositoDeSucursal", () => {
     expect(result).toBeNull()
   })
 
-  it("returns null when supabase returns an error", async () => {
+  it("returns null when supabase returns an error, and warns instead of swallowing it", async () => {
     const chain: any = {}
     const methods = ["select", "eq", "is"]
     for (const m of methods) chain[m] = vi.fn().mockReturnValue(chain)
     chain.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: { message: "DB error" } })
     vi.mocked(supabaseAdmin.from).mockReturnValue(chain as any)
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
 
     const result = await getDepositoDeSucursal("org-1", "suc-1")
 
+    // A failed lookup is indistinguishable from "this sucursal has no principal
+    // deposito" by the return value alone — callers that only need the id keep
+    // the drain-mode fallback, but the failure must not be silent.
     expect(result).toBeNull()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("Could not resolve the principal deposito"))
+    warn.mockRestore()
   })
 })

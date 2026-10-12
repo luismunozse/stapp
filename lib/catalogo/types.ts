@@ -41,6 +41,8 @@ export interface CatalogoPublicConfig {
   whatsapp: string | null
   banner_url: string | null
   trust_badges: Array<{ icon: string; label: string }>
+  /** Plan con `cotizaciones_online`: false = el pedido solo sale por WhatsApp. */
+  recibe_pedidos: boolean
 }
 
 export interface CatalogoPublicOrganizacion {

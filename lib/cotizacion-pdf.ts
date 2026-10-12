@@ -71,5 +71,18 @@ export async function buildCotizacionPdfExtras(cotizacion: any) {
     }
   }
 
-  return { tipo, equipo, checklist, condiciones }
+  // Los cuatro campos del informe viajan por aca porque las cuatro rutas que
+  // emiten el documento -PDF interno, envio por mail, PDF publico y JSON
+  // publico- hacen spread de este objeto. Agregarlos en cada ruta seria
+  // agregarlos cuatro veces y olvidarse en una.
+  return {
+    tipo,
+    equipo,
+    checklist,
+    condiciones,
+    veredicto: cotizacion?.veredicto ?? null,
+    diagnosticoTecnico: cotizacion?.diagnostico_tecnico ?? null,
+    causaDano: cotizacion?.causa_dano ?? null,
+    presentadoAnte: cotizacion?.presentado_ante ?? null,
+  }
 }

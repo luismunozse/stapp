@@ -152,6 +152,69 @@ describe("EntregaDialog — resumen de repuestos y total a cobrar", () => {
     expect(screen.queryByText(/despu[eé]s de la entrega desde el detalle/i)).not.toBeInTheDocument()
   })
 
+  // El servidor recalcula el total leyendo precio_venta_unitario/precio_unitario
+  // de la base (entregar/route.ts), asi que si el dialogo suma de menos el
+  // operador confirma un monto y al cliente se le cobra otro. Una fila anterior
+  // a la migracion 286 leida por un rol sin acceso a inventario no tiene ningun
+  // precio utilizable: el dialogo no puede publicar un total incompleto.
+  describe("repuestos sin precio utilizable (rol gateado + fila pre-286)", () => {
+    const repuestosGated = [
+      {
+        id: "r1",
+        cantidad: 2,
+        precioUnitario: null,
+        precioVentaUnitario: 4500,
+        inventario: { nombre: "Pantalla iPhone 12" },
+      },
+      {
+        id: "r2",
+        cantidad: 1,
+        precioUnitario: null,
+        precioVentaUnitario: null,
+        nombre: "Flex de carga",
+      },
+    ]
+
+    it("no publica un total de repuestos al que le falta un sumando", () => {
+      renderDialog({ repuestos: repuestosGated })
+
+      expect(screen.queryByText("Total repuestos")).not.toBeInTheDocument()
+      expect(screen.getByText(/no se puede calcular el total de repuestos/i)).toBeInTheDocument()
+      expect(screen.getAllByText(/Sin precio/).length).toBeGreaterThan(0)
+      // 2 × 4500 es el subtotal de la fila con precio; lo que no puede salir es
+      // ese mismo numero publicado como si fuera el total de repuestos.
+      expect(screen.getAllByText(/9\.000/)).toHaveLength(1)
+    })
+
+    it("destildado, no muestra un 'Se cobrara' que no puede calcular", async () => {
+      renderDialog({ repuestos: repuestosGated })
+
+      fireEvent.change(screen.getByLabelText("Total a cobrar"), { target: { value: "50000" } })
+      fireEvent.click(screen.getByRole("checkbox", { name: /ya incluye/i }))
+
+      expect(await screen.findByText(/no se puede calcular el total ac[aá]/i)).toBeInTheDocument()
+      expect(screen.queryByText("Se cobrará")).not.toBeInTheDocument()
+      expect(screen.queryByText(/59\.000/)).not.toBeInTheDocument()
+    })
+
+    it("tildado el total es el que tipeo el operador, y ese si se muestra", () => {
+      renderDialog({ repuestos: repuestosGated })
+
+      fireEvent.change(screen.getByLabelText("Total a cobrar"), { target: { value: "50000" } })
+
+      expect(screen.getByText("Se cobrará")).toBeInTheDocument()
+      expect(screen.getByText(/50\.000/)).toBeInTheDocument()
+    })
+
+    it("con todos los precios de venta presentes sigue mostrando el total", () => {
+      renderDialog({ repuestos: [repuestosGated[0]] })
+
+      expect(screen.getByText("Total repuestos")).toBeInTheDocument()
+      expect(screen.getAllByText(/9\.000/).length).toBeGreaterThan(0)
+      expect(screen.queryByText(/no se puede calcular/i)).not.toBeInTheDocument()
+    })
+  })
+
   it("no muestra el bloque de cobro en una entrega sin cobro", () => {
     render(
       <EntregaDialog

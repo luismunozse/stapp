@@ -23,6 +23,13 @@ type ExportFormat = "csv" | "xlsx"
 interface ExportButtonProps {
   entity: ExportEntity
   filters?: Record<string, string>
+  /**
+   * Exportar solo estos ids en vez de todo lo que matchea los filtros.
+   * Con selección se usa POST: una lista de cuids no entra en un query string.
+   */
+  ids?: string[]
+  /** Juego de columnas alternativo del backend (ej: "pedido"). */
+  preset?: string
   label?: string
   variant?: "default" | "outline" | "ghost"
   size?: "default" | "sm" | "lg" | "icon"
@@ -46,6 +53,8 @@ const EMPTY_FILTERS: Record<string, string> = {}
 export function ExportButton({
   entity,
   filters = EMPTY_FILTERS,
+  ids,
+  preset,
   label,
   variant = "outline",
   size = "default",
@@ -54,19 +63,32 @@ export function ExportButton({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const hasSelection = Boolean(ids && ids.length > 0)
+
   const handleExport = async (format: ExportFormat) => {
     setError(null)
     setLoading(true)
     try {
-      const params = new URLSearchParams({ ...filters, format })
-      const response = await fetch(`/api/export/${entity}?${params.toString()}`)
+      const response = hasSelection
+        ? await fetch(`/api/export/${entity}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids, preset, format }),
+          })
+        : await fetch(
+            `/api/export/${entity}?${new URLSearchParams({
+              ...filters,
+              ...(preset ? { preset } : {}),
+              format,
+            }).toString()}`
+          )
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
         throw new Error(data.error || "Error al exportar")
       }
 
       const disposition = response.headers.get("Content-Disposition")
-      let filename = `${entity}_export.${format}`
+      let filename = `${preset || entity}_export.${format}`
       if (disposition) {
         const match = disposition.match(/filename="(.+)"/)
         if (match) filename = match[1]

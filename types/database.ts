@@ -82,7 +82,9 @@ export type MetodoPagoVenta = "EFECTIVO" | "TRANSFERENCIA" | "TARJETA" | "TARJET
 
 export type EstadoVenta = "COMPLETADA" | "ANULADA"
 
-export type EstadoGarantiaVenta = "ACTIVA" | "VENCIDA" | "RECLAMADA"
+// ANULADA: cancelada porque la línea vendida se devolvió entera. No es lo mismo
+// que VENCIDA (cumplió su plazo) — el reporte de garantías necesita distinguirlas.
+export type EstadoGarantiaVenta = "ACTIVA" | "VENCIDA" | "RECLAMADA" | "ANULADA"
 
 // ========================================
 // TABLE TYPES
@@ -195,6 +197,31 @@ export interface RepuestoOrden {
   inventario_id: string
   cantidad: number
   precio_unitario: number
+}
+
+export interface Servicio {
+  id: string
+  organization_id: string
+  codigo: string
+  nombre: string
+  descripcion: string | null
+  categoria: string | null
+  precio: number
+  duracion_estimada_min: number | null
+  activo: boolean
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ServicioOrden {
+  id: string
+  orden_id: string
+  servicio_id: string | null
+  nombre: string
+  cantidad: number
+  precio_unitario: number
+  created_at: string
 }
 
 export interface Factura {
@@ -424,6 +451,16 @@ export interface Database {
         Row: RepuestoOrden
         Insert: Omit<RepuestoOrden, "id"> & { id?: string }
         Update: Partial<Omit<RepuestoOrden, "id">>
+      }
+      servicios: {
+        Row: Servicio
+        Insert: Omit<Servicio, "id"> & { id?: string }
+        Update: Partial<Omit<Servicio, "id">>
+      }
+      servicios_orden: {
+        Row: ServicioOrden
+        Insert: Omit<ServicioOrden, "id"> & { id?: string }
+        Update: Partial<Omit<ServicioOrden, "id">>
       }
       facturas: {
         Row: Factura
@@ -769,6 +806,8 @@ export interface CatalogoConfig {
   banner_url: string | null
   trust_badges: TrustBadge[]
   activo: boolean
+  /** Horas de retención de stock por solicitud pendiente. Ausente hasta aplicar la migración 337. */
+  reserva_horas?: number
   created_at: string
   updated_at: string
 }

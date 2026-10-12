@@ -4,7 +4,9 @@ import { supabaseAdmin } from "@/lib/supabase"
 
 /**
  * POST /api/superadmin/organizations/[id]/restore
- * Restaura una org archivada (limpia deleted_at/deleted_by/archived_reason).
+ * Restaura una org archivada (limpia deleted_at/deleted_by/archived_reason/
+ * deletion_requested_at). La suscripción cancelada NO se reactiva: el taller
+ * vuelve a suscribirse.
  */
 export async function POST(
   _request: Request,
@@ -39,7 +41,7 @@ export async function POST(
     // request concurrente).
     const { data: restoredRows, error: updateError } = await supabaseAdmin
       .from("organizations")
-      .update({ deleted_at: null, deleted_by: null, archived_reason: null })
+      .update({ deleted_at: null, deleted_by: null, archived_reason: null, deletion_requested_at: null })
       .eq("id", id)
       .not("deleted_at", "is", null)
       .select("id")

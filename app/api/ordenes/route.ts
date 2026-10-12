@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server"
 import { randomBytes } from "crypto"
-import { requireAuth } from "@/lib/auth-utils"
+import {
+  requireAuth,
+  hasInventarioAccess,
+  resolveVendedoresHabilitados,
+  canViewCotizacionCosts,
+} from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumberByType } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
@@ -13,6 +18,7 @@ import { z } from "zod"
 import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
 import { isValidImei } from "@/lib/imei"
 import { resolveOperador } from "@/lib/operadores"
+import { deletePracticeData } from "@/lib/onboarding/practica"
 
 // Generar token público único
 function generatePublicToken(): string {
@@ -245,8 +251,22 @@ export async function GET(request: Request) {
       throw dbError
     }
 
-    // Transformar datos usando formatOrden unificado
-    const ordenesFormatted = ordenes?.map(formatOrden)
+    // Transformar datos usando formatOrden unificado. Wrapped on purpose:
+    // passing formatOrden bare to .map would feed the array index into its
+    // options argument.
+    //
+    // Hoy este select no trae los embeds repuestos_orden/cotizaciones, así que
+    // no hay costo de compra que filtrar — pero dejar los defaults en true hace
+    // que la corrección dependa de que nadie agregue un embed. Se resuelven los
+    // mismos dos gates que en GET /api/ordenes/[id] y se pasan explícitos.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const ordenOptions = {
+      includeInventarioCost: hasInventarioAccess(role, vendedoresHabilitados),
+      includeCotizacionCost: canViewCotizacionCosts(role),
+    }
+    const ordenesFormatted = ordenes?.map((o: any) => formatOrden(o, ordenOptions))
 
     // Retornar con información de paginación y cache headers
     return NextResponse.json({
@@ -449,6 +469,14 @@ export async function POST(request: Request) {
           { status: 409 },
         )
       }
+    }
+
+    // The first real order replaces the onboarding practice. A failure never
+    // affects this order: the next real order retries.
+    try {
+      await deletePracticeData(organizationId!)
+    } catch (err) {
+      console.error("[practica] automatic deletion failed:", err)
     }
 
     // Si hay seña, crear cobro_orden y actualizar total_cobrado

@@ -1,42 +1,81 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getCookieSucursalId, resolveSucursalLectura, getDepositoDeSucursal } from "@/lib/sucursal"
+import {
+  getCookieSucursalId,
+  resolveSucursalLectura,
+  getDepositoDeSucursal,
+  resolverDestinoVenta,
+  derivarLecturaVenta,
+} from "@/lib/sucursal"
 
-// POST /api/inventario/check-stock  body: { ids: string[] }
+// POST /api/inventario/check-stock?scope=venta  body: { ids: string[], precios?: boolean }
 // Returns the CURRENT available stock per inventory id, scoped to the caller's
 // sucursal (per-deposito) the same way the barcode/search endpoints are — so a
 // POS pre-checkout re-validation sees the real, up-to-the-second stock and can
 // warn before submitting (the RPC enforces it atomically anyway, but this gives
 // a clean UX instead of a post-submit error). Response: { stock: { [id]: number } }
+// scope=venta (POS-only opt-in): ignores "ver todas" and always scopes stock to the
+// sucursal/deposito the sale will actually draw from (same resolution as the ventas
+// write path) — see app/api/inventario/search/route.ts for the full rationale.
 export async function POST(request: Request) {
   try {
     const { error, organizationId, role, session } = await requireAuth()
     if (error) return error
+
+    const { searchParams } = new URL(request.url)
+    const scopeVenta = searchParams.get("scope") === "venta"
 
     const body = await request.json().catch(() => ({}))
     const ids: string[] = Array.isArray(body?.ids)
       ? body.ids.filter((x: unknown): x is string => typeof x === "string" && x.length > 0)
       : []
 
+    // precios: true agrega el precio de lista actual de cada id (el POS lo usa
+    // para avisar qué cambió en una venta apartada).
+    const conPrecios = body?.precios === true
+
     if (ids.length === 0) {
-      return NextResponse.json({ stock: {} })
+      return NextResponse.json(conPrecios ? { stock: {}, precios: {} } : { stock: {} })
     }
     const uniqueIds = Array.from(new Set(ids)).slice(0, 200)
 
     const cookieSucursalId = await getCookieSucursalId()
     const userSucursalId = session?.user?.sucursalId ?? null
-    const { sucursalId, verTodas } = resolveSucursalLectura({
-      role,
-      userSucursalId,
-      cookieSucursalId,
-    })
+
+    let sucursalId: string | null
+    let verTodas: boolean
+    let depositoIdPrefetched: string | null = null
+
+    if (scopeVenta) {
+      // Sin cache, a diferencia de search/barcode: esta ruta corre una vez por
+      // checkout, no por tecla, así que el cache no le ahorra nada y sí le puede
+      // mentir. Durante los 30s posteriores a un cambio de depósito principal,
+      // una entrada vencida haría que el diálogo valide contra el depósito viejo
+      // y diga "hay stock" mientras crear_venta_atomica descuenta del nuevo y
+      // vuelve con P0010 — exactamente el error que este chequeo existe para
+      // adelantar. La venta resuelve sin cache (app/api/ventas/route.ts): la
+      // revalidación previa tiene que mirar lo mismo que la venta.
+      const destino = await resolverDestinoVenta({
+        role,
+        organizationId: organizationId!,
+        userSucursalId,
+      })
+      const lectura = derivarLecturaVenta(destino)
+      sucursalId = lectura.sucursalId
+      depositoIdPrefetched = lectura.depositoId
+      verTodas = lectura.verTodas
+    } else {
+      const resolved = resolveSucursalLectura({ role, userSucursalId, cookieSucursalId })
+      sucursalId = resolved.sucursalId
+      verTodas = resolved.verTodas
+    }
 
     const stock: Record<string, number> = {}
 
     if (!verTodas && sucursalId) {
       // Per-sucursal: read stock from that sucursal's principal deposito.
-      const depId = await getDepositoDeSucursal(organizationId!, sucursalId)
+      const depId = scopeVenta ? depositoIdPrefetched : await getDepositoDeSucursal(organizationId!, sucursalId)
       if (depId) {
         const { data, error: dbError } = await supabaseAdmin
           .from("inventario_depositos")
@@ -66,6 +105,18 @@ export async function POST(request: Request) {
     // Normalize: every requested id present (missing → 0).
     for (const id of uniqueIds) {
       if (!(id in stock)) stock[id] = 0
+    }
+
+    if (conPrecios) {
+      const { data: filas, error: preciosError } = await supabaseAdmin
+        .from("inventario")
+        .select("id, precio_venta")
+        .eq("organization_id", organizationId!)
+        .in("id", uniqueIds)
+      if (preciosError) throw preciosError
+      const precios: Record<string, number> = {}
+      for (const row of filas || []) precios[row.id] = Number(row.precio_venta) || 0
+      return NextResponse.json({ stock, precios })
     }
 
     return NextResponse.json({ stock })

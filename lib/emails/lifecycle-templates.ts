@@ -2,6 +2,8 @@
  * Templates de emails de lifecycle para retención de usuarios de STApp
  */
 
+import { CONTACT_EMAIL } from "@/lib/contact"
+
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
 
 // ============================================
@@ -362,27 +364,32 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
         }),
       }
 
+    // WIN_BACK se dispara por la fecha de la última ORDEN, no por el último
+    // ingreso (app/api/cron/lifecycle-emails/route.ts): un comercio que entra
+    // todos los días a vender por el POS sin cargar órdenes también lo recibe.
+    // Por eso el texto habla de órdenes y nunca dice "no entrás". Sale una sola
+    // vez por organización (wasAlreadySent) y no hay link de baja.
     case "WIN_BACK_7":
       return {
-        subject: "Te extrañamos - Tu taller te necesita organizado",
+        subject: "Hace una semana que no cargás órdenes en STApp",
         html: baseTemplate({
-          preheader: `${data.nombre}, hace una semana que no entrás. Tu taller te necesita.`,
+          preheader: `${data.nombre}, hace una semana que no se carga ninguna orden en ${data.organizacion}.`,
           headerGradient: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
           content: `
             <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; text-align: center; margin: 0 0 16px 0;">
-              Te extrañamos en STApp
+              ¿Te trabaste con algo?
             </h1>
             <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
-              Hola <strong>${data.nombre}</strong>, hace un tiempo que no te vemos por acá.
+              Hola <strong>${data.nombre}</strong>, hace una semana que no se carga ninguna orden en <strong>${data.organizacion}</strong>.
             </p>
             <p class="text-body" style="color: #4b5563; font-size: 15px; text-align: center; margin: 0 0 24px 0;">
-              Mientras no estabas, seguimos mejorando STApp. Algunas novedades te pueden interesar.
+              Si te trabaste con algo, escribinos a <a href="mailto:${CONTACT_EMAIL}" style="color: #3b82f6; text-decoration: none;">${CONTACT_EMAIL}</a> y te ayudamos.
             </p>
 
-            ${button(appUrl, "Volver a STApp", "#8b5cf6")}
+            ${button(appUrl, "Ir a STApp", "#8b5cf6")}
 
             <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 24px 0 0 0;">
-              Si ya no querés recibir estos emails, simplemente ignoralo.
+              Este aviso te llega una sola vez.
             </p>
           `,
         }),
@@ -390,28 +397,28 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
 
     case "WIN_BACK_30":
       return {
-        subject: "Hace un mes que no te vemos - ¿Volvemos?",
+        subject: "Tus datos siguen guardados en STApp",
         html: baseTemplate({
-          preheader: `${data.nombre}, hace un mes sin STApp. Tu cuenta sigue activa.`,
+          preheader: `${data.nombre}, hace un mes que no se carga ninguna orden en ${data.organizacion}.`,
           headerGradient: "linear-gradient(135deg, #ec4899 0%, #db2777 100%)",
           content: `
             <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; text-align: center; margin: 0 0 16px 0;">
-              Tu cuenta sigue activa
+              Tus datos siguen guardados
             </h1>
             <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
-              Hola <strong>${data.nombre}</strong>, hace un mes que no entrás a <strong>${data.organizacion}</strong>.
+              Hola <strong>${data.nombre}</strong>, hace un mes que no se carga ninguna orden en <strong>${data.organizacion}</strong>.
             </p>
             <p class="text-body" style="color: #4b5563; font-size: 15px; text-align: center; margin: 0 0 8px 0;">
-              Tus datos, clientes y órdenes siguen ahí, esperándote.
+              Tus clientes y órdenes siguen ahí.
             </p>
             <p class="text-body" style="color: #4b5563; font-size: 15px; text-align: center; margin: 0 0 24px 0;">
-              Si necesitás ayuda o tenés alguna sugerencia, estamos para escucharte.
+              Si te trabaste con algo, escribinos a <a href="mailto:${CONTACT_EMAIL}" style="color: #3b82f6; text-decoration: none;">${CONTACT_EMAIL}</a> y te ayudamos.
             </p>
 
-            ${button(appUrl, "Volver a mi cuenta", "#ec4899")}
+            ${button(appUrl, "Ir a STApp", "#ec4899")}
 
             <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 24px 0 0 0;">
-              Respondé a este correo si necesitás ayuda con algo.
+              Este aviso te llega una sola vez.
             </p>
           `,
         }),

@@ -19,6 +19,8 @@ export type AuditEntity =
   | "movimientos_inventario"
   | "turnos"
   | "recepciones"
+  | "cuenta_corriente"
+  | "movimientos_caja"
 
 interface AuditLogParams {
   organizationId: string
@@ -42,7 +44,7 @@ const ENTITY_DISPLAY: Record<string, string> = {
   inventario: "producto",
   proveedores: "proveedor",
   cotizaciones: "cotización",
-  facturas: "factura",
+  facturas: "remito",
   garantias: "garantía",
   users: "usuario",
   checklist_templates: "checklist",
@@ -51,6 +53,8 @@ const ENTITY_DISPLAY: Record<string, string> = {
   movimientos_inventario: "movimiento de inventario",
   turnos: "turno",
   recepciones: "recepción",
+  cuenta_corriente: "movimiento de cuenta corriente",
+  movimientos_caja: "movimiento de caja",
 }
 
 // Campos con labels amigables para diffs
@@ -78,9 +82,14 @@ const FIELD_DISPLAY: Record<string, string> = {
 }
 
 /**
- * Genera una descripción legible del cambio para la columna description
+ * Genera una descripción legible del cambio para la columna description.
+ *
+ * Se exporta porque las rutas que filtran campos del diff antes de devolverlo
+ * tienen que RE-generar la descripción sobre el diff ya filtrado: la original
+ * se armó con los campos completos y nombra los que se acaban de sacar. Ver
+ * app/api/inventario/[id]/audit/route.ts.
  */
-function generateDescription(
+export function generateDescription(
   action: AuditAction,
   entity: AuditEntity,
   entityId: string,

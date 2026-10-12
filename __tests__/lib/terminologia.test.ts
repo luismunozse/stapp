@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { TERMINOS, resolveTerminologia, t } from "@/lib/terminologia"
+import { TERMINOS, articuloIndefinido, minusculaInicial, resolveTerminologia, t } from "@/lib/terminologia"
 
 describe("resolveTerminologia", () => {
   it("sin overrides => todos los defaults", () => {
@@ -31,5 +31,56 @@ describe("t", () => {
     const map = resolveTerminologia(null)
     expect(t(map, "equipo")).toBe("Equipo")
     expect(t(map, "inexistente")).toBe("inexistente")
+  })
+})
+
+describe("articuloIndefinido", () => {
+  it.each([
+    ["Equipo", "un"],
+    ["Vehículo", "un"],
+    ["Artefacto", "un"],
+    ["Rodado", "un"],
+    ["Reloj", "un"],
+    ["Pieza", "una"],
+    ["pieza", "una"],
+    ["Máquina de café", "una"],
+    ["Cortadora de pasto", "una"],
+    ["Instalación eléctrica", "una"],
+    ["Unidad", "una"],
+    ["Moto", "una"],
+    ["Bici", "una"],
+    ["Sistema de riego", "un"],
+    ["  Persiana  ", "una"],
+    ["Llave", "una"],
+    ["Notebook", "una"],
+    ["Tablet", "una"],
+    ["Laptop", "una"],
+    ["PC", "una"],
+    ["Fuente de poder", "una"],
+    ["Tele", "una"],
+    ["Red", "una"],
+    ["Luz", "una"],
+    ["Día de trabajo", "un"],
+    ["Mapa", "un"],
+    ["Sofá", "un"],
+  ])("%s -> %s", (termino, esperado) => {
+    expect(articuloIndefinido(termino)).toBe(esperado)
+  })
+})
+
+describe("minusculaInicial", () => {
+  it.each([
+    ["Pieza", "pieza"],
+    ["Equipo", "equipo"],
+    ["Máquina de café", "máquina de café"],
+    ["TV", "TV"],
+    ["TV LED", "TV LED"],
+    ["PC", "PC"],
+    ["pieza", "pieza"],
+    ["A", "a"],
+    ["", ""],
+    ["  Pieza", "  Pieza"],
+  ])("%j -> %j", (termino, esperado) => {
+    expect(minusculaInicial(termino)).toBe(esperado)
   })
 })

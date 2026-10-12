@@ -105,7 +105,7 @@ interface TicketItem {
   diasGarantia: number
 }
 
-interface TicketData {
+export interface TicketData {
   numeroVenta: number
   fecha: string
   cliente: { nombre: string; telefono?: string | null }
@@ -118,6 +118,15 @@ interface TicketData {
   nombreEmpresa?: string
   telefonoEmpresa?: string | null
   direccionEmpresa?: string | null
+  /** Snapshot fiscal de la venta (mismo criterio que el ticket HTML). */
+  ivaRegimen?: string | null
+  ivaTasa?: number | null
+  ivaMonto?: number | null
+  redondeoMonto?: number | null
+  /** Pagos cobrados en la venta; con más de uno se listan. */
+  pagos?: Array<{ metodoPago: string; monto: number }>
+  /** Lo que queda a pagar (venta fiada o pago parcial). */
+  saldoPendiente?: number | null
 }
 
 const METODO_LABELS: Record<string, string> = {
@@ -420,16 +429,42 @@ export function generateTicketCommands(data: TicketData, printerWidth: 58 | 80 =
     add(columns("Descuento:", `-${formatMoney(data.descuento)}`, W))
   }
 
+  const ivaMonto = data.ivaMonto ?? 0
+  if (data.ivaRegimen === "ADITIVO" && ivaMonto > 0) {
+    add(columns(`IVA (${data.ivaTasa ?? 0}%):`, formatMoney(ivaMonto), W))
+  }
+  const redondeo = data.redondeoMonto ?? 0
+  if (redondeo !== 0) {
+    add(columns("Redondeo:", `${redondeo > 0 ? "+" : "-"}${formatMoney(Math.abs(redondeo))}`, W))
+  }
+
   add(CMD.BOLD_ON, CMD.DOUBLE_ON)
   const totalStr = formatMoney(data.total)
   add(columns("TOTAL:", totalStr, W / 2))
   add(CMD.DOUBLE_OFF, CMD.BOLD_OFF)
 
+  if (data.ivaRegimen === "INCLUIDO" && ivaMonto > 0) {
+    add(columns(`IVA incluido (${data.ivaTasa ?? 0}%):`, formatMoney(ivaMonto), W))
+  }
+
   add(separator(W))
 
-  // Metodo de pago
-  const metodoLabel = METODO_LABELS[data.metodoPago] || data.metodoPago
-  add(columns("Pago:", metodoLabel, W))
+  // Metodo de pago: con varios pagos se lista cada uno
+  const pagos = data.pagos ?? []
+  if (pagos.length > 1) {
+    add(line("Pagos:"))
+    for (const p of pagos) {
+      add(columns(` ${METODO_LABELS[p.metodoPago] || p.metodoPago}`, formatMoney(p.monto), W))
+    }
+  } else {
+    const metodoLabel = METODO_LABELS[data.metodoPago] || data.metodoPago
+    add(columns("Pago:", metodoLabel, W))
+  }
+  if ((data.saldoPendiente ?? 0) > 0) {
+    add(CMD.BOLD_ON)
+    add(columns("Saldo pendiente:", formatMoney(data.saldoPendiente!), W))
+    add(CMD.BOLD_OFF)
+  }
 
   add(doubleSeparator(W))
 

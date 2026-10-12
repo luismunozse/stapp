@@ -117,7 +117,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
   const [printing, setPrinting] = useState(false)
   const [mensaje, setMensaje] = useState("")
   const [plantillas, setPlantillas] = useState<Record<string, string> | null>(null)
-  const { formatPrice, formatDate, timezone } = useCurrency()
+  const { formatPrice, formatDate, timezone, pais } = useCurrency()
 
   // Traer plantillas custom de la organización cuando se abre el modal
   useEffect(() => {
@@ -251,7 +251,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
 
   const handleOpenWhatsApp = () => {
     if (!orden) return
-    const url = generateWhatsAppUrl(orden.telefonoContacto || orden.cliente.telefono, mensaje)
+    const url = generateWhatsAppUrl(orden.telefonoContacto || orden.cliente.telefono, mensaje, pais)
     window.open(url, "_blank")
   }
 

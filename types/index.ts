@@ -83,6 +83,8 @@ export interface User {
 
 export type TipoCliente = "INDIVIDUAL" | "EMPRESA"
 
+export type TipoPrecio = "MINORISTA" | "MAYORISTA"
+
 export interface SectorCliente {
   id: string
   clienteId: string
@@ -104,11 +106,15 @@ export interface Cliente {
   razonSocial?: string | null
   cuit?: string | null
   aceptaWhatsapp?: boolean
+  tipoPrecio?: TipoPrecio
+  descuentoPct?: number | null
   sectores?: SectorCliente[]
   saldoCuenta?: number
   deudaPendiente?: number
   ordenesCount?: number
   ultimaVisita?: string | null
+  /** Onboarding practice client (clientes.es_practica). */
+  esPractica?: boolean
   createdAt: Date
   updatedAt: Date
 }
@@ -165,6 +171,8 @@ export interface OrdenServicio {
   // Re-ingreso/garantía
   ordenOrigenId?: string | null
   esReingreso?: boolean
+  /** Onboarding practice order (ordenes_servicio.es_practica): read-only everywhere. */
+  esPractica?: boolean
   garantiaOrigenId?: string | null
   ordenOrigen?: OrdenServicio | null
   // Recepcion multiple (lote mayorista): presente solo si la orden se creo
@@ -184,7 +192,9 @@ export interface Inventario {
   tipoDispositivoCustom?: TipoDispositivoCustom | null
   stock: number
   stockReservado: number
-  precioCompra: number
+  // Los endpoints devuelven null cuando el rol no tiene acceso a inventario
+  // (ver hasInventarioAccess). No es un costo de 0: es un permiso faltante.
+  precioCompra: number | null
   precioVenta: number
   proveedor?: string | null
   proveedorId?: string | null

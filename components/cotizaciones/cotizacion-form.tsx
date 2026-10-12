@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/select"
 import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2, BookOpen, Smartphone, Wrench } from "lucide-react"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
-import { useCurrency } from "@/contexts/currency-context"
+import { useCurrency, useTerminologia } from "@/contexts/currency-context"
+import { getCountryConfig } from "@/lib/countries"
 import { useModal } from "@/contexts/modal-context"
 import { ItemRow, calcItemNeto } from "./item-row"
 import { ClienteSelector } from "./cliente-selector"
@@ -25,6 +26,10 @@ import { OrdenSelector, type OrdenLite } from "./orden-selector"
 import { ChecklistPicker, type ChecklistPickerValue } from "./checklist-picker"
 
 interface CotizacionItem {
+  // Present on items loaded from an existing cotización (GET). Sent back on
+  // PUT so the server can match existing items and preserve cost data that a
+  // non-ADMIN editor never receives (see item-based cost preservation on PUT).
+  id?: string
   descripcion: string
   cantidad: number
   precioUnitario: number
@@ -35,9 +40,37 @@ interface CotizacionItem {
   descuentoTipo?: string
   descuentoValor?: number
   inventarioId?: string | null
+  servicioId?: string | null
   tipoRepuesto?: "ORIGINAL" | "ALTERNATIVO" | "RECICLADO" | "NO_APLICA"
   // Solo runtime: capturado al seleccionar del inventario para mostrar margen.
   precioCompra?: number | null
+}
+
+/**
+ * Traduce un item del formulario al payload de la API.
+ *
+ * `precioCompra` es solo de runtime: se captura al elegir un producto del
+ * inventario para poder mostrar el margen en pantalla, y viaja al servidor como
+ * `costoUnitario`. Un servicio no tiene costo conocido, asi que queda en null:
+ * null significa "no se sabe", que no es lo mismo que "el costo es cero".
+ */
+export function toItemPayload(item: CotizacionItem) {
+  return {
+    // Solo en items que ya existen. El PUT lo necesita para reconocer la linea
+    // y conservar el costo que un editor sin permiso de costos no recibe; sin
+    // id, findStoredItem corta y una linea manual pierde el costo cargado.
+    ...(item.id ? { id: item.id } : {}),
+    descripcion: item.descripcion,
+    cantidad: item.cantidad,
+    precioUnitario: item.precioUnitario,
+    costoUnitario: item.costoUnitario ?? item.precioCompra ?? null,
+    unidad: item.unidad || "Unidad",
+    descuentoTipo: item.descuentoTipo || "porcentaje",
+    descuentoValor: item.descuentoValor || 0,
+    inventarioId: item.inventarioId || null,
+    servicioId: item.servicioId || null,
+    tipoRepuesto: item.tipoRepuesto || "NO_APLICA",
+  }
 }
 
 interface CondicionesTecnicas {
@@ -69,6 +102,8 @@ interface CotizacionFormProps {
   initialClienteId?: string
   onClose: () => void
   onSuccess: () => void
+  /** Cost/margin data is ADMIN-only. Defaults to hidden (fail-closed). */
+  mostrarCostos?: boolean
   initialData?: {
     id: string
     items: CotizacionItem[]
@@ -91,11 +126,13 @@ export function CotizacionForm({
   initialClienteId,
   onClose,
   onSuccess,
+  mostrarCostos,
   initialData,
 }: CotizacionFormProps) {
   const isPresupuesto = tipo === "PRESUPUESTO"
   const [loading, setLoading] = useState(false)
-  const { formatPrice } = useCurrency()
+  const { formatPrice, pais } = useCurrency()
+  const t = useTerminologia()
   const { showError, showWarning } = useModal()
   const [items, setItems] = useState<CotizacionItem[]>(
     initialData?.items || [{ descripcion: "", cantidad: 1, precioUnitario: 0, unidad: "Unidad", descuentoTipo: "porcentaje", descuentoValor: 0, tipoRepuesto: "NO_APLICA" }]
@@ -112,6 +149,13 @@ export function CotizacionForm({
   )
   const descuentoGlobalValor = parseFloat(descuentoGlobalValorStr) || 0
   const [ivaPorcentaje, setIvaPorcentaje] = useState(initialData?.ivaPorcentaje ?? 0)
+  // Las alicuotas disponibles dependen del pais de la org (AR: 0/10.5/21/27,
+  // CL: 0/19, ...). El valor guardado se suma a la lista aunque no pertenezca
+  // al pais actual: sin un SelectItem que lo matchee, Radix deja el trigger
+  // vacio y el primer cambio de foco borraria el IVA de la cotizacion.
+  const ivaOptions = Array.from(
+    new Set([...getCountryConfig(pais).ivaOptions, ivaPorcentaje])
+  ).sort((a, b) => a - b)
   const [tipoCambio, setTipoCambio] = useState<number | null>((initialData as any)?.tipoCambio || null)
   const [clienteId, setClienteId] = useState<string | null>(initialData?.clienteId || initialClienteId || null)
   const [clienteObj, setClienteObj] = useState<{ tipoCliente?: string | null; razonSocial?: string | null } | null>(null)
@@ -275,7 +319,7 @@ export function CotizacionForm({
   }
 
   const addItem = () => {
-    setItems([...items, { descripcion: "", cantidad: 1, precioUnitario: 0, unidad: "Unidad", descuentoTipo: "porcentaje", descuentoValor: 0, inventarioId: null, tipoRepuesto: "NO_APLICA" }])
+    setItems([...items, { descripcion: "", cantidad: 1, precioUnitario: 0, unidad: "Unidad", descuentoTipo: "porcentaje", descuentoValor: 0, inventarioId: null, servicioId: null, tipoRepuesto: "NO_APLICA" }])
   }
 
   const handleLoadTemplates = async () => {
@@ -348,11 +392,11 @@ export function CotizacionForm({
 
     if (isPresupuesto) {
       if (!equipo.tipoDispositivoId) {
-        await showWarning("Seleccioná el tipo de dispositivo")
+        await showWarning(`Seleccioná el tipo de ${t("equipo").toLowerCase()}`)
         return
       }
       if (!equipo.marca?.trim() || !equipo.modelo?.trim()) {
-        await showWarning("Ingresá marca y modelo del equipo")
+        await showWarning(`Ingresá ${t("marca").toLowerCase()} y ${t("modelo").toLowerCase()} del ${t("equipo").toLowerCase()}`)
         return
       }
       if (!equipo.problemaReportado.trim()) {
@@ -378,17 +422,7 @@ export function CotizacionForm({
 
       const payload: Record<string, any> = {
         tipo,
-        items: validItems.map(item => ({
-          descripcion: item.descripcion,
-          cantidad: item.cantidad,
-          precioUnitario: item.precioUnitario,
-          costoUnitario: item.costoUnitario ?? item.precioCompra ?? null,
-          unidad: item.unidad || "Unidad",
-          descuentoTipo: item.descuentoTipo || "porcentaje",
-          descuentoValor: item.descuentoValor || 0,
-          inventarioId: item.inventarioId || null,
-          tipoRepuesto: item.tipoRepuesto || "NO_APLICA",
-        })),
+        items: validItems.map(toItemPayload),
         notas: notas || undefined,
         fechaVencimiento: fechaVencimiento || undefined,
         terminos: terminos || undefined,
@@ -558,11 +592,11 @@ export function CotizacionForm({
 
           {/* Datos del equipo + Checklist + Condiciones técnicas (solo PRESUPUESTO) */}
           {isPresupuesto && (
-            <CollapsibleSection title="Datos del equipo" icon={Smartphone} defaultOpen>
+            <CollapsibleSection title={`Datos del ${t("equipo").toLowerCase()}`} icon={Smartphone} defaultOpen>
               <div className="space-y-3 p-3 border rounded-lg bg-muted/20">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <Label>Tipo de dispositivo *</Label>
+                    <Label>Tipo de {t("equipo").toLowerCase()} *</Label>
                     <Select
                       value={equipo.tipoDispositivoId || ""}
                       onValueChange={(id) => {
@@ -644,7 +678,7 @@ export function CotizacionForm({
                   <Textarea
                     value={equipo.problemaReportado}
                     onChange={(e) => setEquipo((p) => ({ ...p, problemaReportado: e.target.value }))}
-                    placeholder="Descripción del problema del equipo..."
+                    placeholder={`Descripción del problema del ${t("equipo").toLowerCase()}...`}
                     rows={2}
                     disabled={loading}
                     className="mt-1"
@@ -668,7 +702,7 @@ export function CotizacionForm({
                   <Textarea
                     value={condiciones.diagnostico || ""}
                     onChange={(e) => setCondiciones((p) => ({ ...p, diagnostico: e.target.value || null }))}
-                    placeholder="Qué encontró el técnico al revisar el equipo (distinto del problema reportado por el cliente)"
+                    placeholder={`Qué encontró el ${t("tecnico").toLowerCase()} al revisar el ${t("equipo").toLowerCase()} (distinto del problema reportado por el cliente)`}
                     rows={2}
                     disabled={loading}
                     className="mt-1"
@@ -787,6 +821,7 @@ export function CotizacionForm({
                 onRemove={removeItem}
                 disabled={loading}
                 showTipoRepuesto={isPresupuesto}
+                mostrarCostos={mostrarCostos}
               />
             ))}
 
@@ -871,20 +906,21 @@ export function CotizacionForm({
                 </div>
               </div>
               <div>
-                <Label className="text-sm">IVA</Label>
+                <Label htmlFor="cotizacion-iva" className="text-sm">IVA</Label>
                 <Select
                   value={String(ivaPorcentaje)}
                   onValueChange={(v) => setIvaPorcentaje(parseFloat(v))}
                   disabled={loading}
                 >
-                  <SelectTrigger className="w-32 mt-1">
+                  <SelectTrigger id="cotizacion-iva" className="w-32 mt-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="0">0%</SelectItem>
-                    <SelectItem value="10.5">10.5%</SelectItem>
-                    <SelectItem value="21">21%</SelectItem>
-                    <SelectItem value="27">27%</SelectItem>
+                    {ivaOptions.map((opt) => (
+                      <SelectItem key={opt} value={String(opt)}>
+                        {opt}%
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -939,7 +975,7 @@ export function CotizacionForm({
                   <span>Total:</span>
                   <span>{formatPrice(total)}</span>
                 </div>
-                {tieneCostos && (
+                {mostrarCostos && tieneCostos && (
                   <div className="pt-2 mt-1 border-t space-y-1">
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Costo repuestos:</span>

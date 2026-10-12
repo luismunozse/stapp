@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { z } from "zod"
 import type { UseFormRegister, FieldErrors } from "react-hook-form"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -7,12 +8,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Trash2 } from "lucide-react"
+import { Trash2, Lock, X } from "lucide-react"
 import { useTipoDispositivoConfig } from "@/hooks/use-tipo-dispositivo-config"
 import { TipoDispositivoPicker } from "./tipo-dispositivo-picker"
 import { CamposExtraFields } from "./campos-extra-fields"
 import { AccesoriosPicker } from "./accesorios-picker"
 import { FotosIngreso, type FotoPreview } from "./fotos-ingreso"
+import { CodigoAccesoModal, inferirTipoAcceso } from "./codigo-acceso-modal"
 import type { CampoExtra, TipoDispositivoCustom } from "@/types"
 
 /**
@@ -31,6 +33,25 @@ export const equipoFormSchema = z.object({
 })
 
 export type EquipoFormValues = z.infer<typeof equipoFormSchema>
+
+/**
+ * Resumen enmascarado que muestra el chip de codigo de acceso cuando ya
+ * tiene un valor cargado. Reusa inferirTipoAcceso (mismo componente que
+ * decide la pestana inicial del modal) para que el chip y el modal nunca se
+ * contradigan sobre que tipo de dato es un valor dado.
+ *
+ * El codigo y la contrasena se enmascaran con una cantidad fija de puntos
+ * (no la longitud real): mostrar el largo exacto de un PIN o contrasena no
+ * aporta nada util aca y es informacion de mas. El patron no se enmascara
+ * -- en esta app nunca fue secreto, orden-form.tsx ya lo muestra en texto
+ * plano.
+ */
+function resumenCodigoAcceso(value: string): string {
+  const tipo = inferirTipoAcceso(value)
+  if (tipo === "patron") return value
+  if (tipo === "contrasena") return "Contraseña ••••••"
+  return "PIN ••••"
+}
 
 interface RecepcionEquipoCardProps {
   index: number
@@ -56,6 +77,8 @@ interface RecepcionEquipoCardProps {
   onRemoveFoto: (id: string) => void
   onFotoDescripcionChange: (id: string, value: string) => void
   labelFotos: string
+  codigoAcceso: string
+  onCodigoAccesoChange: (value: string) => void
 }
 
 /**
@@ -68,6 +91,7 @@ interface RecepcionEquipoCardProps {
  */
 export function RecepcionEquipoCard(props: RecepcionEquipoCardProps) {
   const cfg = useTipoDispositivoConfig(props.tipos, props.tipoSeleccionado)
+  const [codigoAccesoModalOpen, setCodigoAccesoModalOpen] = useState(false)
 
   return (
     <Card>
@@ -126,7 +150,47 @@ export function RecepcionEquipoCard(props: RecepcionEquipoCardProps) {
           {cfg.showPassword && (
             <div>
               <Label>Codigo de acceso</Label>
-              <Input {...props.register(`equipos.${props.index}.codigoAccesoDispositivo`)} />
+              <div className="mt-2">
+                {props.codigoAcceso ? (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setCodigoAccesoModalOpen(true)}
+                      className="flex-1 justify-start font-normal"
+                      aria-label="Editar código de acceso"
+                    >
+                      <Lock className="h-4 w-4 mr-2 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{resumenCodigoAcceso(props.codigoAcceso)}</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => props.onCodigoAccesoChange("")}
+                      aria-label="Quitar código de acceso"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCodigoAccesoModalOpen(true)}
+                    className="w-full justify-start font-normal text-muted-foreground"
+                  >
+                    <Lock className="h-4 w-4 mr-2" />
+                    Agregar código de acceso
+                  </Button>
+                )}
+              </div>
+              <CodigoAccesoModal
+                open={codigoAccesoModalOpen}
+                onOpenChange={setCodigoAccesoModalOpen}
+                value={props.codigoAcceso}
+                onChange={props.onCodigoAccesoChange}
+              />
             </div>
           )}
         </div>

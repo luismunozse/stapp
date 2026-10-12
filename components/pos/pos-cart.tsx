@@ -20,6 +20,7 @@ import {
   Shield,
   WifiOff,
   Pencil,
+  Store,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
@@ -52,6 +53,15 @@ interface PosCartProps {
   onSetDescuentoMotivo: (m: string) => void
   onSetPrecio: (lineId: string, precio: number) => void
   fiscal?: FiscalConfig | null
+  /** Sucursal the sale will actually draw stock from, when resolved (see pos-terminal.tsx). */
+  ventaSucursalNombre?: string | null
+  /**
+   * True when the sale spans the whole org despite a concrete sucursal being
+   * selected — see derivarAvisoAlcanceOrg in lib/sucursal.ts. Mutually
+   * exclusive with a resolved `ventaSucursalNombre`: in this state there is no
+   * single sucursal to name.
+   */
+  ventaAlcanceOrg?: boolean
 }
 
 interface ClienteResult {
@@ -83,8 +93,15 @@ export function PosCart({
   onSetDescuentoMotivo,
   onSetPrecio,
   fiscal,
+  ventaSucursalNombre = null,
+  ventaAlcanceOrg = false,
 }: PosCartProps) {
   const { formatPrice } = useCurrency()
+  // No gating here on purpose: whether this indicator disambiguates anything
+  // depends on the httpOnly sucursal cookie and the org's sucursal count, neither
+  // of which the browser can see. The server sends a name only when it is worth
+  // showing (resolverIndicadorVenta in lib/sucursal.ts), so a name is the signal.
+  const showVentaSucursal = !!ventaSucursalNombre
   const [clienteQuery, setClienteQuery] = useState("")
   const [clienteResults, setClienteResults] = useState<ClienteResult[]>([])
   const [clienteLoading, setClienteLoading] = useState(false)
@@ -102,6 +119,51 @@ export function PosCart({
   // Global discount local draft state
   const [globalDescTipo, setGlobalDescTipo] = useState<TipoDescuento>(descuentoGlobal?.tipo ?? "PORCENTAJE")
   const [globalDescValor, setGlobalDescValor] = useState<string>(descuentoGlobal ? String(descuentoGlobal.valor) : "")
+
+  // Último valor que ESTE componente subió al padre (null incluido). Se usa
+  // para distinguir un cambio externo real de `descuentoGlobal` (venta
+  // completada, vaciar carrito, F2) de la vuelta como prop de algo que el
+  // propio cajero acaba de tipear.
+  // "Recuperar apartado" NO es un caso de restaurar el descuento del
+  // apartado: `recallSale` pisa `descuentoGlobal` a `null` sin condición y
+  // `HeldSale` ni siquiera lo persiste, así que llega acá como un reset más
+  // (mismo camino que vaciar carrito), no como un valor externo distinto.
+  const lastEmittedDescuentoRef = useRef<DescuentoConfig | null>(descuentoGlobal)
+
+  const emitDescuentoGlobal = (d: DescuentoConfig | null) => {
+    lastEmittedDescuentoRef.current = d
+    onSetDescuentoGlobal(d)
+  }
+
+  // Resincroniza el draft cuando el padre cambia `descuentoGlobal` desde
+  // afuera (venta completada, vaciar carrito): sin esto, el toggle %/$ y el
+  // valor quedaban mostrando el descuento del cliente anterior hasta que
+  // alguien tocaba el campo, y ahí reaplicaba ese descuento viejo sobre la
+  // venta nueva.
+  // No alcanza con comparar el prop entrante contra el draft actual: cada
+  // tecla que el cajero tipea sube un `descuentoGlobal` NUEVO (por ejemplo
+  // `null` al borrar el dígito para reemplazarlo) y ese valor sí es un
+  // cambio real, así que el efecto se reejecutaría y pisaría lo que el
+  // cajero recién tipeó antes de que termine de escribir el siguiente
+  // carácter. Por eso comparamos por REFERENCIA con lo último que ESTE
+  // componente emitió: `onSetDescuentoGlobal` baja exactamente el mismo
+  // objeto que subimos (el padre lo guarda en un `useState` y lo devuelve
+  // tal cual, sin clonarlo), así que la identidad ya detecta cualquier eco
+  // genuino. No se compara tipo/valor a propósito: eso ensancharía "eco" a
+  // cualquier escritura externa que coincida en valor con la última emitida
+  // (hoy inalcanzable porque todo escritor externo manda `null`, pero sería
+  // una trampa para la próxima feature que setee un descuento no nulo desde
+  // afuera) y, en ese caso, el efecto se saltearía tanto la resincronización
+  // como la actualización de esta ref.
+  useEffect(() => {
+    const last = lastEmittedDescuentoRef.current
+    const isEcho = last === descuentoGlobal
+    if (isEcho) return
+    lastEmittedDescuentoRef.current = descuentoGlobal
+    setGlobalDescTipo(descuentoGlobal?.tipo ?? "PORCENTAJE")
+    setGlobalDescValor(descuentoGlobal ? String(descuentoGlobal.valor) : "")
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [descuentoGlobal?.tipo, descuentoGlobal?.valor])
 
   // Focus client search when toggled
   useEffect(() => {
@@ -195,6 +257,27 @@ export function PosCart({
             )}
           </div>
         </div>
+
+        {/* Selling-from indicator — only when "todas las sucursales" would otherwise hide it */}
+        {showVentaSucursal && (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Store className="h-3.5 w-3.5 shrink-0" />
+            Vendiendo desde: <span className="font-medium text-foreground">{ventaSucursalNombre}</span>
+          </p>
+        )}
+
+        {/* Alcance ensanchado: el selector muestra una sucursal, pero la venta
+            toma stock de toda la organización. Sin esto, la única explicación
+            en pantalla sería el chip del selector, que dice lo contrario. */}
+        {ventaAlcanceOrg && (
+          <p className="flex items-start gap-1.5 text-xs text-warning">
+            <Store className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            <span>
+              Vendiendo desde <span className="font-medium">todas las sucursales</span>: la
+              sucursal seleccionada no tiene depósito principal.
+            </span>
+          </p>
+        )}
 
         {/* Cliente */}
         <div className="flex items-center gap-2">
@@ -584,7 +667,7 @@ export function PosCart({
                     onClick={() => {
                       setGlobalDescTipo(t)
                       const val = parseFloat(globalDescValor) || 0
-                      if (val > 0) onSetDescuentoGlobal({ tipo: t, valor: val })
+                      if (val > 0) emitDescuentoGlobal({ tipo: t, valor: val })
                     }}
                     className={cn(
                       "px-2 h-full text-[10px] font-medium transition-colors",
@@ -607,9 +690,9 @@ export function PosCart({
                   setGlobalDescValor(raw)
                   const val = parseFloat(raw) || 0
                   if (val > 0) {
-                    onSetDescuentoGlobal({ tipo: globalDescTipo, valor: val })
+                    emitDescuentoGlobal({ tipo: globalDescTipo, valor: val })
                   } else {
-                    onSetDescuentoGlobal(null)
+                    emitDescuentoGlobal(null)
                   }
                 }}
                 className="h-7 w-20 text-xs text-center"

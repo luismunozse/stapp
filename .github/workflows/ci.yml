@@ -71,6 +71,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: PDF render smoke (production bundle)
+        run: node scripts/pdf-smoke.mjs
+        env:
+          PDF_SMOKE: '1'
+
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest

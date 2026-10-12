@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, denyIfNoInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { depositoPorDefecto, moverStockInicialLote } from "@/lib/depositos"
 import { parseCSV, parseExcel } from "@/lib/csv-parser"
 import { validateClienteRow, validateInventarioRow, validateCSVHeaders, normalizeHeaders, normalizeRow, resolveTipoDispositivo, generateCodigo } from "@/lib/csv-validator"
 import { uploadImportFile, base64ToBuffer } from "@/lib/storage"
 import { enforcePlanLimit } from "@/lib/plan-limits"
+import { excedeTechoDeImportacion, MAX_IMPORT_FILE_LABEL } from "@/lib/import-limits"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { z } from "zod"
 
@@ -39,33 +41,74 @@ function buildInventarioPayload(d: any, codigo: string, organizationId: string) 
 async function batchInsert(
   client: typeof supabaseAdmin,
   table: 'clientes' | 'inventario',
-  items: Array<{ rowNumber: number; row: any; payload: any }>,
-  results: { success: any[]; skipped: any[]; errors: any[] }
-) {
+  items: Array<{ rowNumber: number; row: any; payload: any; sinPrecio?: boolean }>,
+  results: { success: any[]; skipped: any[]; errors: any[]; sinPrecio: number; advertencia?: string }
+): Promise<Array<{ id: string; stock: number }>> {
+  // Para inventario se pide de vuelta id + stock de lo insertado: hace falta para
+  // mover el stock inicial al deposito de la sucursal (ver mas abajo).
+  const insertar = async (payload: any): Promise<{ data: any; error: any }> =>
+    table === 'inventario'
+      ? await client.from(table).insert(payload).select('id, stock')
+      : await client.from(table).insert(payload)
+  const insertados: Array<{ id: string; stock: number }> = []
+
   for (let start = 0; start < items.length; start += BATCH_SIZE) {
     const chunk = items.slice(start, start + BATCH_SIZE)
     const payloads = chunk.map(c => c.payload)
-    const { error } = await client.from(table).insert(payloads)
+    const { data: filas, error } = await insertar(payloads)
     if (!error) {
-      for (const c of chunk) results.success.push({ row: c.rowNumber, data: c.row })
+      insertados.push(...(filas ?? []))
+      for (const c of chunk) {
+        results.success.push({ row: c.rowNumber, data: c.row })
+        if (c.sinPrecio) results.sinPrecio++
+      }
       continue
     }
     // Insert fallido: reintentar item por item para aislar la fila mala.
     for (const c of chunk) {
-      const { error: rowErr } = await client.from(table).insert(c.payload)
+      const { data: filas, error: rowErr } = await insertar(c.payload)
       if (rowErr) {
         results.errors.push({ row: c.rowNumber, error: rowErr.message, data: c.row })
       } else {
+        insertados.push(...(filas ?? []))
         results.success.push({ row: c.rowNumber, data: c.row })
+        if (c.sinPrecio) results.sinPrecio++
       }
     }
   }
+  return insertados
 }
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
+
+    // Antes de `request.json()`, que es lo que materializa el base64 entero en
+    // memoria. Ver lib/import-limits.ts.
+    if (excedeTechoDeImportacion(request)) {
+      return NextResponse.json(
+        { error: `Archivo demasiado grande (máx ${MAX_IMPORT_FILE_LABEL})` },
+        { status: 413 },
+      )
+    }
+
+    const body = await request.json()
+    const data = executeSchema.parse(body)
+
+    // Importar inventario ES escribir inventario, así que pasa por el mismo
+    // permiso que el resto de /api/inventario.
+    //
+    // Va lo más arriba que el handler permite, que NO es arriba de todo: el
+    // discriminador (`entityType`) viaja en el body, así que hay que leerlo
+    // primero. Lo que sí queda por debajo es el chequeo de plan, y ese orden
+    // importa — al revés, a un vendedor que jamás va a poder importar
+    // inventario se le contestaba "necesitás el plan Profesional", y un admin
+    // persiguiendo ese mensaje puede pagar un upgrade que no cambia nada.
+    if (data.entityType === 'INVENTARIO') {
+      const denied = await denyIfNoInventarioAccess(role, organizationId!)
+      if (denied) return denied
+    }
 
     const hasImport = await hasPlanFeature(organizationId!, "import_export")
     if (!hasImport) {
@@ -74,9 +117,6 @@ export async function POST(request: Request) {
         { status: 403 }
       )
     }
-
-    const body = await request.json()
-    const data = executeSchema.parse(body)
 
     // Detect by filename + mime. Excel 97-2003 (.xls) no soportado por ExcelJS.
     const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -140,8 +180,10 @@ export async function POST(request: Request) {
       success: [] as any[],
       skipped: [] as any[],
       errors: [] as any[],
+      sinPrecio: 0,
+      advertencia: undefined as string | undefined,
     }
-    const validRows: Array<{ rowNumber: number; row: any; data: any }> = []
+    const validRows: Array<{ rowNumber: number; row: any; data: any; sinPrecio?: boolean }> = []
 
     for (let i = 0; i < parseResult.data.length; i++) {
       const row = parseResult.data[i]
@@ -153,7 +195,7 @@ export async function POST(request: Request) {
         results.errors.push({ row: rowNumber, error: validation.error!, data: row })
         continue
       }
-      validRows.push({ rowNumber, row, data: validation.data })
+      validRows.push({ rowNumber, row, data: validation.data, sinPrecio: validation.sinPrecio })
     }
 
     if (data.entityType === 'CLIENTES') {
@@ -227,7 +269,7 @@ export async function POST(request: Request) {
       }
 
       const seenInBatch = new Set<string>()
-      const toInsert: Array<{ rowNumber: number; row: any; payload: any }> = []
+      const toInsert: Array<{ rowNumber: number; row: any; payload: any; sinPrecio?: boolean }> = []
 
       for (const v of withCodigo) {
         if (existingSet.has(v.data.codigo)) {
@@ -243,6 +285,7 @@ export async function POST(request: Request) {
           rowNumber: v.rowNumber,
           row: v.row,
           payload: buildInventarioPayload(v.data, v.data.codigo, organizationId!),
+          sinPrecio: v.sinPrecio,
         })
       }
 
@@ -254,10 +297,35 @@ export async function POST(request: Request) {
           rowNumber: v.rowNumber,
           row: v.row,
           payload: buildInventarioPayload(v.data, codigo, organizationId!),
+          sinPrecio: v.sinPrecio,
         })
       }
 
-      await batchInsert(supabaseAdmin, 'inventario', toInsert, results)
+      const insertados = await batchInsert(supabaseAdmin, 'inventario', toInsert, results)
+
+      // El trigger de la migracion 291 siembra el stock en el principal de la org.
+      // Si quien importa opera una sucursal, ese stock va a SU deposito. Los items
+      // ya existen: si falla no se tira el import (reintentar duplicaria), se avisa.
+      const conStock = insertados.filter(i => i.stock > 0).map(i => i.id)
+      if (conStock.length > 0) {
+        try {
+          const depositoDestino = await depositoPorDefecto({
+            organizationId: organizationId!,
+            role,
+            userSucursalId: session!.user.sucursalId ?? null,
+          })
+          if (depositoDestino) {
+            await moverStockInicialLote({
+              inventarioIds: conStock,
+              depositoId: depositoDestino,
+              organizationId: organizationId!,
+            })
+          }
+        } catch (moveError) {
+          console.error("Error moviendo stock inicial importado al depósito de la sucursal:", moveError)
+          results.advertencia = "El stock quedó en el depósito principal"
+        }
+      }
     }
 
     // Save import history
@@ -291,6 +359,8 @@ export async function POST(request: Request) {
         success: results.success.length,
         skipped: results.skipped.length,
         errors: results.errors.length,
+        sinPrecio: results.sinPrecio,
+        ...(results.advertencia ? { advertencia: results.advertencia } : {}),
         errorDetails: results.errors,
         skippedDetails: results.skipped,
       },

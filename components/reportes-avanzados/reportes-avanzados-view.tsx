@@ -79,7 +79,23 @@ const RentabilidadTecnicos = dynamic(
   { loading: () => <ReporteSkeleton />, ssr: false }
 )
 
-export function ReportesAvanzadosView() {
+/**
+ * `verTopClientes` — "Clientes" es Top clientes: cuánto gastó cada uno. Un
+ * taller puede apagarle eso al vendedor con `vendedores_ven_ingresos`
+ * (migración 326).
+ *
+ * Llega RESUELTO como prop desde la página, que es un server component y ya
+ * tiene la sesión y el acceso a la BD. Se hizo así y no con useSession() + un
+ * fetch a /api/org/features por tres motivos: no obliga a este componente a
+ * vivir dentro de un <SessionProvider> (sus tests lo montan pelado), no hay
+ * flash de la pestaña apareciendo y desapareciendo, y el valor sale del mismo
+ * resolver que usa la API en vez de una segunda fuente de verdad.
+ *
+ * Default `true`: quien no pase la prop ve la pestaña, que es la conducta
+ * previa a este permiso. Esconder de más sería una denegación fabricada; del
+ * lado del servidor requireIngresosAccess() decide de verdad igual.
+ */
+export function ReportesAvanzadosView({ verTopClientes = true }: { verTopClientes?: boolean }) {
   const [activeTab, setActiveTab] = useState("tecnicos")
 
   // Map tab values to report types for export
@@ -120,10 +136,12 @@ export function ReportesAvanzadosView() {
               <ShoppingCart className="h-4 w-4" />
               <span className="hidden sm:inline">Vendedores</span>
             </TabsTrigger>
-            <TabsTrigger value="clientes" className="gap-2">
-              <Users className="h-4 w-4" />
-              <span className="hidden sm:inline">Clientes</span>
-            </TabsTrigger>
+            {verTopClientes && (
+              <TabsTrigger value="clientes" className="gap-2">
+                <Users className="h-4 w-4" />
+                <span className="hidden sm:inline">Clientes</span>
+              </TabsTrigger>
+            )}
             <TabsTrigger value="inventario" className="gap-2">
               <Package className="h-4 w-4" />
               <span className="hidden sm:inline">Inventario</span>
@@ -163,9 +181,11 @@ export function ReportesAvanzadosView() {
           <PerformanceVendedores />
         </TabsContent>
 
-        <TabsContent value="clientes" className="mt-6">
-          <TopClientes />
-        </TabsContent>
+        {verTopClientes && (
+          <TabsContent value="clientes" className="mt-6">
+            <TopClientes />
+          </TabsContent>
+        )}
 
         <TabsContent value="inventario" className="mt-6">
           <AnalisisInventario />

@@ -22,7 +22,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import { PosProductSearch, type PosProductSearchRef } from "./pos-product-search"
+import { PosProductSearch, type PosProductSearchRef, type VentaSucursalInfo } from "./pos-product-search"
 import { PosCart } from "./pos-cart"
 import { PosCheckoutDialog } from "./pos-checkout-dialog"
 import { PosHeldSales } from "./pos-held-sales"
@@ -36,6 +36,7 @@ import { BarcodeScanner } from "@/components/inventario/barcode-scanner"
 import { useCurrency } from "@/contexts/currency-context"
 import { generateTicketCommands } from "@/lib/escpos"
 import { fitPrintPageToContent } from "@/lib/print-fit-page"
+import { buildTicketHTML } from "./ticket-html"
 import type {
   PosCartItem,
   PosCliente,
@@ -53,6 +54,7 @@ import {
 } from "@/lib/whatsapp/plantillas-venta"
 import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 import { useOffline } from "@/contexts/offline-context"
+import { useSession } from "next-auth/react"
 
 const HELD_SALES_KEY = "pos_held_sales"
 
@@ -80,10 +82,19 @@ export function PosTerminal() {
   const { formatPrice, pais, timezone } = useCurrency()
   const { confirm, showSuccess, showError } = useModal()
   const { isOnline } = useOffline()
+  const { data: session } = useSession()
+  // Las devoluciones son solo de ADMIN en la API: a otros roles el botón les
+  // terminaba en un 403.
+  const isAdmin = session?.user?.role === "ADMIN"
   const searchRef = useRef<PosProductSearchRef>(null)
 
   // Cart state
   const [cartItems, setCartItems] = useState<PosCartItem[]>([])
+  // Espejo del carrito para leerlo fuera de los setState (tope de stock al escanear)
+  const cartItemsRef = useRef<PosCartItem[]>([])
+  useEffect(() => {
+    cartItemsRef.current = cartItems
+  }, [cartItems])
   const [cliente, setCliente] = useState<PosCliente>({ ...EMPTY_CLIENT })
   const [showClienteSearch, setShowClienteSearch] = useState(false)
   const [descuentoGlobal, setDescuentoGlobal] = useState<DescuentoConfig | null>(null)
@@ -113,26 +124,68 @@ export function PosTerminal() {
   const [fiscal, setFiscal] = useState<FiscalConfig | null>(null)
   const [orgGarantiaDefault, setOrgGarantiaDefault] = useState<number>(0)
 
+  // Sucursal the current sale will actually draw stock from — resolved server-side
+  // (search/route.ts, scope=venta) so it always matches the ventas write path, even
+  // when an ADMIN has "todas las sucursales" selected. Drives the cart's "selling
+  // from" indicator.
+  const [ventaSucursal, setVentaSucursal] = useState<VentaSucursalInfo | null>(null)
+  const handleVentaSucursal = useCallback((info: VentaSucursalInfo) => {
+    setVentaSucursal(info)
+  }, [])
+
+  // Facturación electrónica: emitir comprobante desde el overlay de venta exitosa
+  const [facturacionDisponible, setFacturacionDisponible] = useState(false)
+  const [emitiendoFE, setEmitiendoFE] = useState(false)
+  const [comprobanteFE, setComprobanteFE] = useState<any>(null)
+  const [errorFE, setErrorFE] = useState<string | null>(null)
+
   // Devolucion (return) flow
   const [devolucionOpen, setDevolucionOpen] = useState(false)
   const [devolucionVenta, setDevolucionVenta] = useState<VentaForDevolucion | null>(null)
 
-  // Fetch fiscal config and org warranty default on mount
+  // Fetch fiscal config, org warranty default y disponibilidad de facturación
+  // electrónica on mount (una sola llamada, se reutiliza para todo).
+  //
+  // /api/configuracion/operativa y no /api/configuracion: esa es solo ADMIN, y
+  // un VENDEDOR recibía 403 que acá se tragaba en silencio. El POS seguía con
+  // fiscal = null (EXENTO, sin redondeo) y en una org con IVA aditivo cobraba
+  // un total que el server rechazaba. Si la config no carga no se cobra: un
+  // total calculado sin ella no coincide con el del server.
+  const [configEstado, setConfigEstado] = useState<"cargando" | "ok" | "error">("cargando")
   useEffect(() => {
-    fetch("/api/configuracion")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data) {
-          setFiscal({
-            regimen: data.ivaRegimen ?? "EXENTO",
-            tasa: data.ivaTasa ?? 21,
-            redondeoEfectivo: data.redondeoEfectivo ?? 0,
-          })
-          setOrgGarantiaDefault(Number(data.garantiaDiasDefault) || 0)
-        }
+    fetch("/api/configuracion/operativa")
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
       })
-      .catch(() => {})
+      .then((data) => {
+        setFiscal({
+          regimen: data.ivaRegimen ?? "EXENTO",
+          // Sin tasa en la respuesta no se inventa una: cobrar la alicuota
+          // argentina en una org de otro pais es peor que no discriminar IVA.
+          tasa: data.ivaTasa ?? 0,
+          redondeoEfectivo: data.redondeoEfectivo ?? 0,
+        })
+        setOrgGarantiaDefault(Number(data.garantiaDiasDefault) || 0)
+        setFacturacionDisponible(!!data.facturacionElectronicaDisponible)
+        setConfigEstado("ok")
+      })
+      .catch((err) => {
+        console.error("[pos] No se pudo cargar la configuración operativa:", err)
+        setConfigEstado("error")
+      })
   }, [])
+
+  const checkoutBloqueo: string | undefined = !isOnline
+    ? "Sin conexión — no se puede cobrar"
+    : configEstado === "cargando"
+      ? "Cargando la configuración del negocio…"
+      : configEstado === "error"
+        ? "No se pudo cargar la configuración del negocio (IVA, redondeo). Recargá la página para cobrar."
+        : undefined
+  const abrirCobro = () => {
+    if (cartItems.length > 0 && !checkoutBloqueo) setCheckoutOpen(true)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -201,6 +254,16 @@ export function PosTerminal() {
     setPrinterWidth(w)
     localStorage.setItem("pos_printer_width", String(w))
   }
+
+  // Etiqueta del botón de impresora: se usa tanto para el texto visible (oculto
+  // en mobile vía `hidden sm:inline`) como para su aria-label, así el nombre
+  // accesible no queda pisado por el `title` (más largo/distinto) en ningún
+  // ancho de pantalla.
+  const printerLabel = printer.connecting
+    ? "Conectando..."
+    : printer.connected
+      ? (printer.device?.name?.substring(0, 15) ?? "Impresora")
+      : "Impresora"
 
   // Computed values
   const cartCount = cartItems.reduce((sum, i) => sum + i.cantidad, 0)
@@ -364,6 +427,8 @@ export function PosTerminal() {
       cliente: { ...cliente },
       items: [...cartItems],
       nota,
+      descuentoGlobal,
+      descuentoMotivo,
     }
     const updated = [...heldSales, held]
     setHeldSales(updated)
@@ -374,7 +439,39 @@ export function PosTerminal() {
     setDescuentoGlobal(null)
     setDescuentoMotivo("")
     setMobileTab("products")
-  }, [cartItems, cliente, heldSales])
+  }, [cartItems, cliente, heldSales, descuentoGlobal, descuentoMotivo])
+
+  // Una venta apartada guarda los precios y el stock de cuando se apartó. Al
+  // recuperarla se avisa qué cambió desde entonces (no se pisa nada: el
+  // cajero pudo haber ajustado un precio a mano).
+  const avisarCambiosApartada = useCallback(async (items: PosCartItem[]) => {
+    const deInventario = items.filter((i) => i.inventarioId)
+    if (deInventario.length === 0) return
+    try {
+      const res = await fetch("/api/inventario/check-stock?scope=venta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: deInventario.map((i) => i.inventarioId), precios: true }),
+      })
+      if (!res.ok) return
+      const { stock = {}, precios = {} } = await res.json()
+      const cambios: string[] = []
+      for (const it of deInventario) {
+        const id = it.inventarioId!
+        if (id in precios && precios[id] !== it.precioUnitario) {
+          cambios.push(`${it.nombre}: precio de lista actual ${formatPrice(precios[id])} (en la venta apartada: ${formatPrice(it.precioUnitario)})`)
+        }
+        if (id in stock && stock[id] < it.cantidad) {
+          cambios.push(`${it.nombre}: hay ${stock[id]} en stock y la venta tiene ${it.cantidad}`)
+        }
+      }
+      if (cambios.length > 0) {
+        await showError(`Cambios desde que se apartó la venta:\n${cambios.join("\n")}`)
+      }
+    } catch {
+      // Sin red el aviso no es crítico: la venta igual se valida al cobrar
+    }
+  }, [formatPrice, showError])
 
   const recallSale = useCallback(
     (id: string) => {
@@ -388,6 +485,8 @@ export function PosTerminal() {
           cliente: { ...cliente },
           items: [...cartItems],
           nota: "",
+          descuentoGlobal,
+          descuentoMotivo,
         }
         const withCurrent = [...heldSales, currentHeld]
         const withoutRecalled = withCurrent.filter((s) => s.id !== id)
@@ -405,12 +504,15 @@ export function PosTerminal() {
       )
       setCartItems(restoredItems)
       setCliente(sale.cliente)
-      setDescuentoGlobal(null)
-      setDescuentoMotivo("")
+      setDescuentoGlobal(sale.descuentoGlobal ?? null)
+      setDescuentoMotivo(sale.descuentoMotivo ?? "")
       setMobileTab("cart")
+      void avisarCambiosApartada(restoredItems)
     },
-    [heldSales, cartItems, cliente]
+    [heldSales, cartItems, cliente, descuentoGlobal, descuentoMotivo, avisarCambiosApartada]
   )
+
+
 
   const deleteHeldSale = useCallback(
     (id: string) => {
@@ -428,7 +530,8 @@ export function PosTerminal() {
     try {
       const ticketData = {
         numeroVenta: ventaData.numeroVenta,
-        fecha: new Date().toLocaleString("es-AR", { timeZone: timezone }),
+        // La fecha de la venta: al reimprimir salía la de hoy
+        fecha: new Date(ventaData.createdAt ?? Date.now()).toLocaleString("es-AR", { timeZone: timezone }),
         cliente: {
           nombre: ventaData.clienteNombre || "Consumidor Final",
           telefono: ventaData.clienteTelefono,
@@ -446,76 +549,28 @@ export function PosTerminal() {
         total: ventaData.total,
         metodoPago: ventaData.metodoPago,
         nombreEmpresa: ventaData.organizationName,
+        ivaRegimen: ventaData.ivaRegimen ?? null,
+        ivaTasa: ventaData.ivaTasa ?? null,
+        ivaMonto: ventaData.ivaMonto ?? null,
+        redondeoMonto: ventaData.redondeoMonto ?? null,
+        pagos: (ventaData.pagos || []).map((p: any) => ({ metodoPago: p.metodoPago, monto: Number(p.monto) || 0 })),
+        saldoPendiente: ventaData.saldoPendiente ?? null,
       }
       const commands = generateTicketCommands(ticketData, printerWidth)
-      await printer.print(commands)
-      return true
+      // print() no tira: devuelve false si la impresora falló. Antes se
+      // respondía true igual y el cajero no se enteraba de que no salió.
+      return await printer.print(commands)
     } catch (err) {
       console.error("Print error:", err)
       return false
     } finally {
       setPrinting(false)
     }
-  }, [printer])
+  }, [printer, timezone, printerWidth])
 
   // --- Print ticket via browser print dialog (fallback when no USB printer) ---
   const printTicketHTML = useCallback((ventaData: any) => {
-    const items = ventaData.items || []
-    const subtotal = ventaData.subtotal ?? items.reduce((s: number, i: any) => s + i.cantidad * i.precioUnitario, 0)
-    const descuento = ventaData.descuento || 0
-    const total = ventaData.total
-    const empresa = ventaData.organizationName || "Servicio Técnico"
-    const cliente = ventaData.clienteNombre || "Consumidor Final"
-    const fecha = new Date().toLocaleString("es-AR", {
-      timeZone: timezone,
-      day: "2-digit", month: "2-digit", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    })
-    const fmtPrice = (n: number) => "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2 })
-
-    const itemsHTML = items.map((item: any) => `
-      <div style="margin-bottom:6px">
-        <div style="font-weight:bold">${item.descripcion}</div>
-        <div style="display:flex;justify-content:space-between;color:#555">
-          <span>&nbsp;&nbsp;${item.cantidad} x ${fmtPrice(item.precioUnitario)}</span>
-          <span style="font-weight:bold;color:#000">${fmtPrice(item.cantidad * item.precioUnitario)}</span>
-        </div>
-      </div>
-    `).join("")
-
-    const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Ticket Venta #${ventaData.numeroVenta}</title>
-<style>
-  @page { size: ${printerWidth}mm auto; margin: 0; }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Courier New', Courier, monospace; font-size: ${printerWidth === 80 ? 13 : 12}px; width: ${printerWidth}mm; padding: ${printerWidth === 80 ? 10 : 8}px; color: #000; }
-  .center { text-align: center; }
-  .bold { font-weight: bold; }
-  .sep { border-top: 1px dashed #999; margin: 6px 0; }
-  .sep-bold { border-top: 2px solid #000; margin: 6px 0; }
-  .row { display: flex; justify-content: space-between; }
-  .total-box { background: #f5f5f5; padding: 6px; margin: 4px 0; }
-  .big { font-size: 16px; }
-  .small { font-size: 10px; color: #888; }
-</style></head><body>
-  <div class="center bold big">${empresa}</div>
-  <div class="sep-bold"></div>
-  <div class="center bold big">VENTA #${String(ventaData.numeroVenta).padStart(4, "0")}</div>
-  <div class="center small">${fecha}</div>
-  <div class="sep"></div>
-  <div class="row"><span style="color:#666">Cliente:</span><span class="bold">${cliente}</span></div>
-  ${ventaData.clienteTelefono ? `<div class="row"><span style="color:#666">Tel:</span><span>${ventaData.clienteTelefono}</span></div>` : ""}
-  <div class="sep"></div>
-  ${itemsHTML}
-  <div class="sep-bold"></div>
-  <div class="row"><span>Subtotal:</span><span>${fmtPrice(subtotal)}</span></div>
-  ${descuento > 0 ? `<div class="row" style="color:#c00"><span>Descuento:</span><span>-${fmtPrice(descuento)}</span></div>` : ""}
-  <div class="total-box row bold big"><span>TOTAL:</span><span>${fmtPrice(total)}</span></div>
-  <div class="sep-bold"></div>
-  <div class="center bold">¡Gracias por su compra!</div>
-  <div class="center small">Conserve este ticket como comprobante</div>
-  <br><br>
-</body></html>`
+    const html = buildTicketHTML(ventaData, { timezone, printerWidth, formatPrice })
 
     const printWindow = window.open("", "_blank", "width=320,height=600")
     if (printWindow) {
@@ -535,7 +590,7 @@ export function PosTerminal() {
         printWindow.onload = () => { void triggerPrint() }
       }
     }
-  }, [timezone, printerWidth])
+  }, [timezone, printerWidth, formatPrice])
 
   // --- Checkout ---
   const handleCheckoutComplete = useCallback(async (ventaData: any) => {
@@ -549,18 +604,57 @@ export function PosTerminal() {
     setShowClienteSearch(false)
     setDescuentoGlobal(null)
     setDescuentoMotivo("")
+    // Facturación electrónica: nueva venta, limpiar estado de emisión anterior
+    setEmitiendoFE(false)
+    setComprobanteFE(null)
+    setErrorFE(null)
 
     // Auto-print ticket if printer connected
     if (printer.connected) {
-      await printTicket(ventaData)
+      const impreso = await printTicket(ventaData)
+      if (!impreso) await showError("La venta se registró, pero no se pudo imprimir el ticket. Revisá la impresora y usá Reimprimir.")
     }
-  }, [printer.connected, printTicket])
+  }, [printer.connected, printTicket, showError])
 
   const handleSuccessClose = useCallback(() => {
     setSuccessData(null)
     setMobileTab("products")
+    // Facturación electrónica: limpiar estado de emisión al cerrar el overlay
+    setEmitiendoFE(false)
+    setComprobanteFE(null)
+    setErrorFE(null)
     searchRef.current?.focusSearch()
   }, [])
+
+  // Facturación electrónica: emitir comprobante para la venta del overlay actual
+  const handleEmitirFactura = useCallback(async () => {
+    if (!successData?.id || emitiendoFE || comprobanteFE) return
+    setEmitiendoFE(true)
+    setErrorFE(null)
+    try {
+      const res = await fetch("/api/facturacion-electronica/emitir", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ventaId: successData.id }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.status === 200) {
+        setComprobanteFE(data.comprobante ?? null)
+      } else if (res.status === 409) {
+        setComprobanteFE(data.comprobante ? { ...data.comprobante, yaEmitido: true } : null)
+      } else if (res.status === 422) {
+        setErrorFE(data.comprobante?.error_msg || data.error || "No se pudo emitir el comprobante")
+      } else if (res.status === 403) {
+        setErrorFE("Facturación electrónica no disponible. Configurá facturación electrónica en Ajustes.")
+      } else {
+        setErrorFE(data.error || "No se pudo emitir el comprobante")
+      }
+    } catch {
+      setErrorFE("Error de conexión al emitir el comprobante")
+    } finally {
+      setEmitiendoFE(false)
+    }
+  }, [successData, emitiendoFE, comprobanteFE])
 
   // Item 2: build WhatsApp URL for manual phone share
   const buildManualWhatsAppUrl = useCallback((phone: string, ventaData: any) => {
@@ -570,31 +664,50 @@ export function PosTerminal() {
   }, [formatPrice, plantillaCorta, pais])
 
   // --- Barcode scanner ---
+  // Lector y cámara agregan igual que el buscador: con series y garantía del
+  // producto (antes un serializado escaneado entraba como si no lo fuera) y
+  // avisando cuando ya no hay más stock (antes se ignoraba la unidad y se
+  // mostraba "agregado" igual).
+  const agregarEscaneado = useCallback(
+    async (item: any) => {
+      if ((item.stock ?? 0) <= 0) {
+        await showError(`"${item.nombre}" sin stock disponible`)
+        return
+      }
+      const enCarrito = cartItemsRef.current
+        .filter((i) => i.inventarioId === item.id)
+        .reduce((s, i) => s + i.cantidad, 0)
+      if (enCarrito >= item.stock) {
+        await showError(`No hay más stock de "${item.nombre}": ya hay ${enCarrito} en el carrito`)
+        return
+      }
+      addProduct({
+        id: item.id,
+        codigo: item.codigo,
+        nombre: item.nombre,
+        stock: item.stock,
+        precioVenta: item.precioVenta,
+        trackeaSeries: item.trackeaSeries ?? false,
+        diasGarantiaDefault: item.diasGarantiaDefault ?? null,
+      })
+      // Item 5: Show brief scan success indicator (~1.2s)
+      if (scanSuccessTimerRef.current) clearTimeout(scanSuccessTimerRef.current)
+      setScanSuccess({ nombre: item.nombre })
+      scanSuccessTimerRef.current = setTimeout(() => setScanSuccess(null), 1200)
+    },
+    [addProduct, showError]
+  )
+
   const handleBarcodeScan = useCallback(
     async (barcode: string) => {
       const code = barcode.trim()
       if (!code) return
       try {
-        const res = await fetch(`/api/inventario/barcode?code=${encodeURIComponent(code)}`)
+        const res = await fetch(`/api/inventario/barcode?code=${encodeURIComponent(code)}&scope=venta`)
         if (!res.ok) return
         const data = await res.json()
         if (data.found && data.item) {
-          if ((data.item.stock ?? 0) <= 0) {
-            await showError(`"${data.item.nombre}" sin stock disponible`)
-            return
-          }
-          addProduct({
-            id: data.item.id,
-            codigo: data.item.codigo,
-            nombre: data.item.nombre,
-            stock: data.item.stock,
-            precioVenta: data.item.precioVenta,
-            diasGarantiaDefault: data.item.diasGarantiaDefault ?? null,
-          })
-          // Item 5: Show brief scan success indicator (~1.2s)
-          if (scanSuccessTimerRef.current) clearTimeout(scanSuccessTimerRef.current)
-          setScanSuccess({ nombre: data.item.nombre })
-          scanSuccessTimerRef.current = setTimeout(() => setScanSuccess(null), 1200)
+          await agregarEscaneado(data.item)
         } else {
           await showError(`Código "${code}" no encontrado en inventario`)
         }
@@ -602,7 +715,7 @@ export function PosTerminal() {
         await showError("Error al buscar el código de barras")
       }
     },
-    [addProduct, showError]
+    [agregarEscaneado, showError]
   )
 
   useBarcodeScanner({
@@ -627,14 +740,12 @@ export function PosTerminal() {
     },
     onHoldSale: holdSale,
     onRecallSale: () => setHeldSalesOpen(true),
-    onCheckout: () => {
-      if (cartItems.length > 0 && isOnline) setCheckoutOpen(true)
-    },
+    onCheckout: abrirCobro,
     onToggleClient: () => {
       setMobileTab("cart")
       setShowClienteSearch((prev) => !prev)
     },
-    enabled: !checkoutOpen && !heldSalesOpen && !successData && !devolucionOpen && !devolucionVenta && !holdNoteOpen,
+    enabled: !checkoutOpen && !heldSalesOpen && !successData && !scannerOpen && !devolucionOpen && !devolucionVenta && !holdNoteOpen,
   })
 
   return (
@@ -647,6 +758,7 @@ export function PosTerminal() {
             size="sm"
             className="h-8 gap-1.5"
             onClick={() => router.push("/ventas")}
+            aria-label="Salir"
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="hidden sm:inline">Salir</span>
@@ -675,6 +787,7 @@ export function PosTerminal() {
                   ? `Conectada: ${printer.device?.name} (click para desconectar)`
                   : "Conectar impresora térmica"
               }
+              aria-label={printerLabel}
             >
               {printer.connecting ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -683,9 +796,7 @@ export function PosTerminal() {
               ) : (
                 <Unplug className="h-3.5 w-3.5" />
               )}
-              <span className="hidden sm:inline">
-                {printer.connecting ? "Conectando..." : printer.connected ? printer.device?.name?.substring(0, 15) : "Impresora"}
-              </span>
+              <span className="hidden sm:inline">{printerLabel}</span>
             </Button>
           )}
 
@@ -725,32 +836,37 @@ export function PosTerminal() {
               variant="outline"
               size="sm"
               className="h-8 gap-1.5 text-xs"
-              onClick={() => {
+              onClick={async () => {
                 if (printer.connected) {
-                  printTicket(lastSaleData)
+                  const impreso = await printTicket(lastSaleData)
+                  if (!impreso) await showError("No se pudo imprimir el ticket. Revisá la impresora.")
                 } else {
                   printTicketHTML(lastSaleData)
                 }
               }}
               disabled={printing}
               title={`Reimprimir venta #${lastSaleData.numeroVenta}`}
+              aria-label="Reimprimir"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Reimprimir</span>
             </Button>
           )}
 
-          {/* Devolucion button */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs"
-            onClick={() => setDevolucionOpen(true)}
-            title="Procesar devolución"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Devolución</span>
-          </Button>
+          {/* Devolucion button (solo ADMIN: la API rechaza a los demás) */}
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              onClick={() => setDevolucionOpen(true)}
+              title="Procesar devolución"
+              aria-label="Devolución"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Devolución</span>
+            </Button>
+          )}
 
           {/* Shortcuts toggle - desktop only */}
           <Button
@@ -800,7 +916,7 @@ export function PosTerminal() {
       <div className="hidden lg:flex flex-1 overflow-hidden">
         {/* Left: Product search */}
         <div className="w-[60%] border-r overflow-hidden flex flex-col">
-          <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} />
+          <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} onVentaSucursal={handleVentaSucursal} />
         </div>
         {/* Right: Cart */}
         <div className="w-[40%] overflow-hidden flex flex-col">
@@ -812,8 +928,8 @@ export function PosTerminal() {
             onSetGarantia={setGarantia}
             onSetSerieIds={setSerieIds}
             onSetCliente={setCliente}
-            onCheckout={() => cartItems.length > 0 && isOnline && setCheckoutOpen(true)}
-            checkoutDisabledReason={!isOnline ? "Sin conexión — no se puede cobrar" : undefined}
+            onCheckout={abrirCobro}
+            checkoutDisabledReason={checkoutBloqueo}
             onHoldSale={holdSale}
             onRecallSale={() => setHeldSalesOpen(true)}
             onClearCart={clearCart}
@@ -827,6 +943,8 @@ export function PosTerminal() {
             onSetDescuentoMotivo={setDescuentoMotivo}
             onSetPrecio={setItemPrecio}
             fiscal={fiscal}
+            ventaSucursalNombre={ventaSucursal?.nombre ?? null}
+            ventaAlcanceOrg={ventaSucursal?.alcanceOrg ?? false}
           />
         </div>
       </div>
@@ -839,7 +957,7 @@ export function PosTerminal() {
             style={{ display: mobileTab === "products" ? "block" : "none" }}
             className="absolute inset-0 overflow-hidden"
           >
-            <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} />
+            <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} onVentaSucursal={handleVentaSucursal} />
           </div>
           <div
             style={{ display: mobileTab === "cart" ? "block" : "none" }}
@@ -853,8 +971,8 @@ export function PosTerminal() {
               onSetGarantia={setGarantia}
               onSetSerieIds={setSerieIds}
               onSetCliente={setCliente}
-              onCheckout={() => cartItems.length > 0 && isOnline && setCheckoutOpen(true)}
-            checkoutDisabledReason={!isOnline ? "Sin conexión — no se puede cobrar" : undefined}
+              onCheckout={abrirCobro}
+            checkoutDisabledReason={checkoutBloqueo}
               onHoldSale={holdSale}
               onRecallSale={() => setHeldSalesOpen(true)}
               onClearCart={clearCart}
@@ -868,6 +986,8 @@ export function PosTerminal() {
               onSetDescuentoMotivo={setDescuentoMotivo}
               onSetPrecio={setItemPrecio}
               fiscal={fiscal}
+              ventaSucursalNombre={ventaSucursal?.nombre ?? null}
+              ventaAlcanceOrg={ventaSucursal?.alcanceOrg ?? false}
             />
           </div>
         </div>
@@ -979,20 +1099,11 @@ export function PosTerminal() {
       <BarcodeScanner
         open={scannerOpen}
         onOpenChange={setScannerOpen}
+        scopeVenta
         onResult={async (result) => {
           // Scanner ya consultó la API; reusar resultado en vez de re-fetchear.
           if (result.found && result.item) {
-            if ((result.item.stock ?? 0) <= 0) {
-              await showError(`"${result.item.nombre}" sin stock disponible`)
-              return
-            }
-            addProduct({
-              id: result.item.id,
-              codigo: result.item.codigo,
-              nombre: result.item.nombre,
-              stock: result.item.stock,
-              precioVenta: result.item.precioVenta,
-            })
+            await agregarEscaneado(result.item)
           } else {
             await showError(`Código "${result.code}" no encontrado en inventario`)
           }
@@ -1092,6 +1203,50 @@ export function PosTerminal() {
 
               {/* WhatsApp share as image + download image */}
               <PosTicketShare ventaData={successData} plantillaCorta={plantillaCorta} countryCode={pais} />
+
+              {/* Facturación electrónica: emitir comprobante para esta venta */}
+              {facturacionDisponible && (
+                <div className="flex flex-col gap-1.5">
+                  <Button
+                    variant="outline"
+                    className="h-11"
+                    onClick={handleEmitirFactura}
+                    disabled={emitiendoFE || !!comprobanteFE}
+                  >
+                    {emitiendoFE ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileText className="mr-2 h-4 w-4" />
+                    )}
+                    {emitiendoFE ? "Emitiendo factura..." : "Emitir factura"}
+                  </Button>
+
+                  {comprobanteFE && (
+                    <p className="text-sm text-success">
+                      {comprobanteFE.yaEmitido ? "Ya emitida" : "Factura emitida"}
+                      {": "}
+                      Factura {comprobanteFE.tipo} #{comprobanteFE.numero}
+                      {comprobanteFE.pdf_url && (
+                        <>
+                          {" — "}
+                          <a
+                            href={comprobanteFE.pdf_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline"
+                          >
+                            Ver factura
+                          </a>
+                        </>
+                      )}
+                    </p>
+                  )}
+
+                  {errorFE && (
+                    <p className="text-sm text-destructive">{errorFE}</p>
+                  )}
+                </div>
+              )}
 
               {/* Item 2: Manual WhatsApp share when no phone on record */}
               {!successData.clienteTelefono && (

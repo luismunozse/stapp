@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 
@@ -15,7 +15,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; itemId: string }> }
 ) {
   try {
-    const { error, organizationId, userId } = await requireAuth()
+        // La unica ESCRITURA del namespace que se habia escapado del permiso
+    // 275: anotar la cantidad contada de un item. Crear el conteo,
+    // cancelarlo y finalizarlo —que es lo que ajusta el stock— siguen
+    // siendo de ADMIN; recorrer las gondolas y anotar, no.
+const { error, organizationId, userId } = await requireInventarioAccess()
     if (error) return error
 
     const { id, itemId } = await params

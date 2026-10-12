@@ -2,8 +2,10 @@
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { uploadLogo, deleteLogo, dataUrlToBuffer } from "@/lib/storage"
-import { COUNTRIES } from "@/lib/countries"
+import { COUNTRIES, getIvaGeneral } from "@/lib/countries"
 import { resolveTerminologia, sanitizeTerminologia } from "@/lib/terminologia"
+import { isMissingColumnError } from "@/lib/db-errors"
+import { hasPlanFeature } from "@/lib/subscriptions"
 
 // GET - Obtener configuraciÃ³n (solo ADMIN)
 export async function GET() {
@@ -15,9 +17,7 @@ export async function GET() {
     let organization: any = null
     let dbError: any = null
 
-    const result = await supabaseAdmin
-      .from("organizations")
-      .select(`
+    const baseSelect = `
         id,
         logo_url,
         logo_path,
@@ -48,11 +48,128 @@ export async function GET() {
         redondeo_efectivo,
         comision_aplica_sin_reparacion,
         terminologia
-      `)
+      `
+    // Datos fiscales y de cobro (migración 295). Seleccionados aparte del
+    // resto de columnas: si esa migración todavía no corrió en este entorno,
+    // el PGRST204 de estas 6 columnas no debe tumbar el resto de la config
+    // (ver reintento sin ellas más abajo).
+    const fiscalSelect = `${baseSelect}, cuit, condicion_iva, domicilio_fiscal, cbu_alias, medios_pago_texto, plazo_pago_dias`
+    // Toggle de facturación electrónica (migración 296). Las migraciones se
+    // aplican a mano, una por una, en orden — 295 puede estar aplicada sin
+    // que 296 lo esté todavía (ventana real mientras se despliega esta
+    // feature), así que degrada de forma INDEPENDIENTE: perder 296 no debe
+    // tumbar los 6 campos fiscales de 295 que sí existen.
+    const facturacionSelect = `${fiscalSelect}, facturacion_electronica_habilitada`
+    // Datos del remito formato clásico (migración 297): ingresos brutos +
+    // inicio de actividades del emisor. Igual que el resto, se piden aparte
+    // para poder degradar de forma independiente si 297 todavía no corrió
+    // (puede pasar sin que 296 lo esté, ya que las migraciones se aplican a
+    // mano en orden — ver reintento sin ellas más abajo).
+    const settingsSelect = `${facturacionSelect}, ingresos_brutos, inicio_actividades`
+    // Permiso de POS para tecnicos (migracion 314). Escalon propio, arriba de
+    // todo, por el mismo motivo que 296 y 297 tienen el suyo: si viajara
+    // dentro de baseSelect estaria en TODOS los escalones, su 42703 los
+    // tumbaria a todos y la cascada caeria hasta el fallback minimo. El admin
+    // recibiria la configuracion mutilada —sin terminologia, sin regimen de
+    // IVA, sin datos fiscales— y el primer guardado escribiria esos vacios
+    // encima de lo que habia.
+    const posSelect = `${settingsSelect}, tecnicos_operan_pos`
+    // Permiso de caja para vendedores. Escalon propio por el mismo motivo que
+    // los de arriba: si viajara dentro de baseSelect estaria en TODOS los
+    // escalones y su 42703 los tumbaria a todos, dejando al admin con la
+    // configuracion mutilada y un guardado que la pisa.
+    const cajaSelect = `${posSelect}, vendedores_manejan_caja`
+    // Permiso de cobro de cotizaciones para tecnicos (migracion 322). Escalon
+    // propio y arriba de todo, por el mismo motivo que los de arriba: si
+    // viajara dentro de baseSelect estaria en TODOS los escalones y su 42703
+    // los tumbaria a todos, dejando al admin con la configuracion mutilada y
+    // un guardado que la pisa.
+    const cotizacionCobroSelect = `${cajaSelect}, tecnicos_cobran_cotizaciones`
+    // Permiso de ingresos para vendedores (migracion 326). Escalon propio y
+    // arriba de todo, por el mismo motivo que los de abajo.
+    const ingresosSelect = `${cotizacionCobroSelect}, vendedores_ven_ingresos`
+
+    let result = await supabaseAdmin
+      .from("organizations")
+      .select(ingresosSelect)
       .eq("id", organizationId!)
       .single()
 
-    if (result.error?.code === "PGRST204") {
+    if (isMissingColumnError(result.error)) {
+      // Migracion 326 no aplicada todavia: reintentar sin el permiso de
+      // ingresos, conservando todo lo demas.
+      result = await supabaseAdmin
+        .from("organizations")
+        .select(cotizacionCobroSelect)
+        .eq("id", organizationId!)
+        .single()
+    }
+
+    if (isMissingColumnError(result.error)) {
+      // Migracion 322 no aplicada todavia: reintentar sin el permiso de cobro
+      // de cotizaciones, conservando todo lo demas.
+      result = await supabaseAdmin
+        .from("organizations")
+        .select(cajaSelect)
+        .eq("id", organizationId!)
+        .single()
+    }
+
+    if (isMissingColumnError(result.error)) {
+      // Migracion del permiso de caja no aplicada todavia: reintentar sin el
+      // flag, conservando todo lo demas.
+      result = await supabaseAdmin
+        .from("organizations")
+        .select(posSelect)
+        .eq("id", organizationId!)
+        .single()
+    }
+
+    if (isMissingColumnError(result.error)) {
+      // Migracion 314 no aplicada todavia: reintentar sin el permiso de POS,
+      // conservando todo lo demas.
+      result = await supabaseAdmin
+        .from("organizations")
+        .select(settingsSelect)
+        .eq("id", organizationId!)
+        .single()
+    }
+
+    if (isMissingColumnError(result.error)) {
+      // Migración 297 no aplicada todavía: reintentar sin ingresos_brutos /
+      // inicio_actividades, conservando las columnas de 295 y 296. SELECT
+      // pura (sin .update()): 42703, no PGRST204.
+      result = await supabaseAdmin
+        .from("organizations")
+        .select(facturacionSelect)
+        .eq("id", organizationId!)
+        .single()
+    }
+
+    if (isMissingColumnError(result.error)) {
+      // Migración 296 no aplicada todavía: reintentar sin el toggle de
+      // facturación electrónica, conservando las columnas de 295. SELECT
+      // pura (sin .update()): Postgres devuelve 42703 ("column ... does not
+      // exist"), no PGRST204 — PGRST204 solo aparece cuando el payload de
+      // una escritura nombra una columna desconocida. isMissingColumnError()
+      // cubre ambos casos.
+      result = await supabaseAdmin
+        .from("organizations")
+        .select(fiscalSelect)
+        .eq("id", organizationId!)
+        .single()
+    }
+
+    if (isMissingColumnError(result.error)) {
+      // Migración 295 tampoco aplicada: reintentar sin las columnas fiscales.
+      result = await supabaseAdmin
+        .from("organizations")
+        .select(baseSelect)
+        .eq("id", organizationId!)
+        .single()
+    }
+
+    if (isMissingColumnError(result.error)) {
       // Column doesn't exist yet, query without it
       const fallback = await supabaseAdmin
         .from("organizations")
@@ -73,6 +190,9 @@ export async function GET() {
     if (dbError || !organization) {
       return NextResponse.json({ error: "OrganizaciÃ³n no encontrada" }, { status: 404 })
     }
+
+    const facturacionElectronicaDisponible =
+      organization.pais === "AR" && (await hasPlanFeature(organizationId!, "facturacion_electronica"))
 
     // Mapear para compatibilidad con frontend
     return NextResponse.json({
@@ -102,12 +222,26 @@ export async function GET() {
       pais: organization.pais || "AR",
       moduloAgenda: !!organization.modulo_agenda,
       vendedoresAdministranInventario: !!organization.vendedores_administran_inventario,
+      tecnicosOperanPos: !!organization.tecnicos_operan_pos,
+      vendedoresManejanCaja: !!organization.vendedores_manejan_caja,
+      tecnicosCobranCotizaciones: !!organization.tecnicos_cobran_cotizaciones,
+      vendedoresVenIngresos: organization.vendedores_ven_ingresos !== false,
       ivaRegimen: organization.iva_regimen ?? "EXENTO",
-      ivaTasa: organization.iva_tasa ?? 21,
+      ivaTasa: organization.iva_tasa ?? getIvaGeneral(organization.pais),
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
       comisionAplicaSinReparacion: organization.comision_aplica_sin_reparacion ?? false,
       terminologia: resolveTerminologia(organization.terminologia),
       terminologiaOverrides: organization.terminologia ?? {},
+      cuit: organization.cuit || "",
+      condicionIva: organization.condicion_iva || "",
+      domicilioFiscal: organization.domicilio_fiscal || "",
+      ingresosBrutos: organization.ingresos_brutos || "",
+      inicioActividades: organization.inicio_actividades || "",
+      cbuAlias: organization.cbu_alias || "",
+      mediosPagoTexto: organization.medios_pago_texto || "",
+      plazoPagoDias: organization.plazo_pago_dias ?? null,
+      facturacionElectronicaHabilitada: !!organization.facturacion_electronica_habilitada,
+      facturacionElectronicaDisponible,
     })
   } catch (error) {
     console.error("Error fetching config:", error)
@@ -131,7 +265,7 @@ export async function PUT(request: Request) {
         { status: 413 }
       )
     }
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, tecnicosCobranCotizaciones, vendedoresVenIngresos, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada, ingresosBrutos, inicioActividades } = body
 
     const updateData: Record<string, any> = {}
 
@@ -272,6 +406,22 @@ export async function PUT(request: Request) {
       updateData.vendedores_administran_inventario = !!vendedoresAdministranInventario
     }
 
+    if (tecnicosOperanPos !== undefined) {
+      updateData.tecnicos_operan_pos = !!tecnicosOperanPos
+    }
+
+    if (vendedoresManejanCaja !== undefined) {
+      updateData.vendedores_manejan_caja = !!vendedoresManejanCaja
+    }
+
+    if (tecnicosCobranCotizaciones !== undefined) {
+      updateData.tecnicos_cobran_cotizaciones = !!tecnicosCobranCotizaciones
+    }
+
+    if (vendedoresVenIngresos !== undefined) {
+      updateData.vendedores_ven_ingresos = !!vendedoresVenIngresos
+    }
+
     if (ivaRegimen !== undefined) {
       const validRegimen = ["EXENTO", "INCLUIDO", "ADITIVO"]
       if (validRegimen.includes(ivaRegimen)) {
@@ -301,17 +451,172 @@ export async function PUT(request: Request) {
       updateData.terminologia = sanitizeTerminologia(terminologia as Record<string, unknown>)
     }
 
+    // Datos fiscales y de cobro (migración 295) — alimentan el remito.
+    if (cuit !== undefined) {
+      updateData.cuit = cuit || null
+    }
+
+    if (condicionIva !== undefined) {
+      const validCondicionIva = ["Responsable Inscripto", "Monotributo", "Exento", "Consumidor Final"]
+      if (condicionIva === "" || validCondicionIva.includes(condicionIva)) {
+        updateData.condicion_iva = condicionIva || null
+      }
+    }
+
+    if (domicilioFiscal !== undefined) {
+      updateData.domicilio_fiscal = domicilioFiscal || null
+    }
+
+    // Ingresos brutos + inicio de actividades del emisor (migración 297) —
+    // texto libre, se muestran en el encabezado del remito formato clásico.
+    if (ingresosBrutos !== undefined) {
+      updateData.ingresos_brutos = ingresosBrutos || null
+    }
+
+    if (inicioActividades !== undefined) {
+      updateData.inicio_actividades = inicioActividades || null
+    }
+
+    if (cbuAlias !== undefined) {
+      updateData.cbu_alias = cbuAlias || null
+    }
+
+    if (mediosPagoTexto !== undefined) {
+      updateData.medios_pago_texto = mediosPagoTexto || null
+    }
+
+    if (plazoPagoDias !== undefined) {
+      if (plazoPagoDias === "" || plazoPagoDias === null) {
+        updateData.plazo_pago_dias = null
+      } else {
+        const val = parseInt(plazoPagoDias)
+        if (!isNaN(val) && val >= 0) {
+          updateData.plazo_pago_dias = val
+        }
+      }
+    }
+
+    // Toggle de facturación electrónica (migración 296).
+    if (facturacionElectronicaHabilitada !== undefined) {
+      updateData.facturacion_electronica_habilitada = !!facturacionElectronicaHabilitada
+    }
+
     const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda, vendedores_administran_inventario, iva_regimen, iva_tasa, redondeo_efectivo, comision_aplica_sin_reparacion, terminologia"
-    const selectColsFull = selectCols + ", recepcion_terminos, comprobante_terminos"
+    // Pre-295: lo que ya persistÃ­a antes de esta migraciÃ³n. Se usa como
+    // segundo intento (ver PGRST204 abajo) para que un 295 sin aplicar
+    // solo tumbe los 6 campos fiscales nuevos, no recepcion_terminos/
+    // comprobante_terminos ni el resto del update.
+    const selectColsPre295 = selectCols + ", recepcion_terminos, comprobante_terminos"
+    // Pre-296: campos fiscales (migración 295), sin el toggle de facturación
+    // electrónica todavía.
+    const selectColsFull = selectColsPre295 + ", cuit, condicion_iva, domicilio_fiscal, cbu_alias, medios_pago_texto, plazo_pago_dias"
+    // Full: 295 + toggle de facturación electrónica (migración 296). Las
+    // migraciones se aplican a mano, una por una — 295 puede estar aplicada
+    // sin que 296 lo esté todavía, así que degrada de forma independiente
+    // (ver reintentos abajo) en lugar de tumbar los 6 campos fiscales junto
+    // con el toggle.
+    const selectColsFull296 = selectColsFull + ", facturacion_electronica_habilitada"
+    // "Remito formato clásico" (migración 297): ingresos brutos + inicio de
+    // actividades del emisor. Igual que el resto, se piden aparte para poder
+    // degradar de forma independiente si 297 todavía no corrió (puede pasar
+    // sin que 296 lo esté, ya que las migraciones se aplican a mano en
+    // orden — ver reintentos abajo).
+    const selectColsFull297 = selectColsFull296 + ", ingresos_brutos, inicio_actividades"
+    // Permiso de POS para tecnicos (migracion 314). Escalon propio y arriba
+    // de todo: los demas se construyen encima de `selectCols`, asi que una
+    // columna metida ahi viaja en TODOS y su 42703 los tumba a todos. La
+    // cascada caeria hasta el ultimo escalon, que borra de updateData el
+    // regimen de IVA, la terminologia y el flag de inventario del vendedor —
+    // el admin guarda y esos campos se pierden sin un error en pantalla.
+    const selectColsPos = selectColsFull297 + ", tecnicos_operan_pos"
+    // Permiso de caja para vendedores. Escalon propio y arriba de todo, igual
+    // que el de la 314: los demas se construyen encima de `selectCols`, asi
+    // que una columna metida ahi viaja en TODOS y su 42703 los tumba a todos.
+    const selectColsCaja = selectColsPos + ", vendedores_manejan_caja"
+    // Permiso de cobro de cotizaciones para tecnicos (migracion 322). Escalon
+    // propio y arriba de todo, igual que el de la 314 y el de la caja: los
+    // demas se construyen encima de `selectCols`, asi que una columna metida
+    // ahi viaja en TODOS y su 42703 los tumba a todos.
+    const selectColsCotizacionCobro = selectColsCaja + ", tecnicos_cobran_cotizaciones"
+    // Permiso de ingresos (326). Escalon propio y arriba de todo.
+    const selectColsIngresos = selectColsCotizacionCobro + ", vendedores_ven_ingresos"
 
     // Solo actualizar si hay cambios
     if (Object.keys(updateData).length === 0) {
-      // Retornar estado actual
-      const { data } = await supabaseAdmin
+      // Retornar estado actual. Mismo escalonado PGRST204 que el resto del
+      // archivo: PostgREST solo devuelve las columnas pedidas, así que usar
+      // `selectCols` a secas acá (como antes) devolvía recepcion_terminos/
+      // comprobante_terminos/los 6 campos fiscales siempre vacíos aunque
+      // estuvieran cargados en la DB.
+      let { data, error: selectError } = await supabaseAdmin
         .from("organizations")
-        .select(selectCols)
+        .select(selectColsIngresos)
         .eq("id", organizationId!)
         .single()
+      if (isMissingColumnError(selectError)) {
+        // Migracion 326 no aplicada: reintentar sin el permiso de ingresos.
+        ;({ data, error: selectError } = await supabaseAdmin
+          .from("organizations")
+          .select(selectColsCotizacionCobro)
+          .eq("id", organizationId!)
+          .single())
+      }
+      if (isMissingColumnError(selectError)) {
+        // Migracion 322 no aplicada: reintentar sin el permiso de cobro de
+        // cotizaciones, conservando todo lo demas.
+        ;({ data, error: selectError } = await supabaseAdmin
+          .from("organizations")
+          .select(selectColsCaja)
+          .eq("id", organizationId!)
+          .single())
+      }
+      if (isMissingColumnError(selectError)) {
+        // Migracion del permiso de caja no aplicada: reintentar sin el flag,
+        // conservando todo lo demas.
+        ;({ data, error: selectError } = await supabaseAdmin
+          .from("organizations")
+          .select(selectColsPos)
+          .eq("id", organizationId!)
+          .single())
+      }
+      if (isMissingColumnError(selectError)) {
+        // Migracion 314 no aplicada: reintentar sin el permiso de POS,
+        // conservando todo lo demas.
+        ;({ data, error: selectError } = await supabaseAdmin
+          .from("organizations")
+          .select(selectColsFull297)
+          .eq("id", organizationId!)
+          .single())
+      }
+      if (isMissingColumnError(selectError)) {
+        // Migración 297 no aplicada: reintentar sin ingresos_brutos /
+        // inicio_actividades, conservando los 6 campos fiscales de 295 y el
+        // toggle de 296. SELECT pura (sin .update()): 42703, no PGRST204.
+        ;({ data, error: selectError } = await supabaseAdmin
+          .from("organizations")
+          .select(selectColsFull296)
+          .eq("id", organizationId!)
+          .single())
+      }
+      if (isMissingColumnError(selectError)) {
+        // Migración 296 no aplicada: reintentar sin el toggle de facturación
+        // electrónica, conservando los 6 campos fiscales de 295. SELECT pura
+        // (sin .update()): 42703, no PGRST204.
+        ;({ data, error: selectError } = await supabaseAdmin
+          .from("organizations")
+          .select(selectColsFull)
+          .eq("id", organizationId!)
+          .single())
+      }
+      if (isMissingColumnError(selectError)) {
+        // Migración 295 tampoco aplicada: reintentar sin las columnas
+        // fiscales. SELECT pura otra vez (sin .update()): 42703, no PGRST204.
+        ;({ data } = await supabaseAdmin
+          .from("organizations")
+          .select(selectColsPre295)
+          .eq("id", organizationId!)
+          .single())
+      }
       const org = data as any
 
       return NextResponse.json({
@@ -337,12 +642,25 @@ export async function PUT(request: Request) {
         pais: org?.pais || "AR",
         moduloAgenda: !!org?.modulo_agenda,
         vendedoresAdministranInventario: !!org?.vendedores_administran_inventario,
+        tecnicosOperanPos: !!org?.tecnicos_operan_pos,
+        vendedoresManejanCaja: !!org?.vendedores_manejan_caja,
+        tecnicosCobranCotizaciones: !!org?.tecnicos_cobran_cotizaciones,
+        vendedoresVenIngresos: org?.vendedores_ven_ingresos !== false,
         ivaRegimen: org?.iva_regimen ?? "EXENTO",
-        ivaTasa: org?.iva_tasa ?? 21,
+        ivaTasa: org?.iva_tasa ?? getIvaGeneral(org?.pais),
         redondeoEfectivo: org?.redondeo_efectivo ?? 0,
         comisionAplicaSinReparacion: org?.comision_aplica_sin_reparacion ?? false,
         terminologia: resolveTerminologia(org?.terminologia),
         terminologiaOverrides: org?.terminologia ?? {},
+        cuit: org?.cuit || "",
+        condicionIva: org?.condicion_iva || "",
+        domicilioFiscal: org?.domicilio_fiscal || "",
+        ingresosBrutos: org?.ingresos_brutos || "",
+        inicioActividades: org?.inicio_actividades || "",
+        cbuAlias: org?.cbu_alias || "",
+        mediosPagoTexto: org?.medios_pago_texto || "",
+        plazoPagoDias: org?.plazo_pago_dias ?? null,
+        facturacionElectronicaHabilitada: !!org?.facturacion_electronica_habilitada,
       })
     }
 
@@ -351,10 +669,110 @@ export async function PUT(request: Request) {
       .from("organizations")
       .update(updateData)
       .eq("id", organizationId!)
-      .select(selectColsFull)
+      .select(selectColsIngresos)
       .single()
 
-    if (result2.error?.code === "PGRST204") {
+    if (isMissingColumnError(result2.error)) {
+      // Migracion 326 no aplicada todavia: reintentar sin el permiso de
+      // ingresos, conservando el resto de updateData.
+      delete updateData.vendedores_ven_ingresos
+      result2 = await supabaseAdmin
+        .from("organizations")
+        .update(updateData)
+        .eq("id", organizationId!)
+        .select(selectColsCotizacionCobro)
+        .single() as any
+    }
+
+    if (isMissingColumnError(result2.error)) {
+      // Migracion 322 no aplicada todavia: reintentar sin el permiso de cobro
+      // de cotizaciones, conservando el resto de updateData.
+      delete updateData.tecnicos_cobran_cotizaciones
+      result2 = await supabaseAdmin
+        .from("organizations")
+        .update(updateData)
+        .eq("id", organizationId!)
+        .select(selectColsCaja)
+        .single() as any
+    }
+
+    if (isMissingColumnError(result2.error)) {
+      // Migracion del permiso de caja no aplicada todavia: reintentar sin el
+      // flag, conservando el resto de updateData.
+      delete updateData.vendedores_manejan_caja
+      result2 = await supabaseAdmin
+        .from("organizations")
+        .update(updateData)
+        .eq("id", organizationId!)
+        .select(selectColsPos)
+        .single() as any
+    }
+
+    if (isMissingColumnError(result2.error)) {
+      // Migracion 314 no aplicada todavia: reintentar sin el permiso de POS,
+      // conservando el resto de updateData.
+      delete updateData.tecnicos_operan_pos
+      result2 = await supabaseAdmin
+        .from("organizations")
+        .update(updateData)
+        .eq("id", organizationId!)
+        .select(selectColsFull297)
+        .single() as any
+    }
+
+    if (isMissingColumnError(result2.error)) {
+      // Migración 297 no aplicada todavía: reintentar sin ingresos_brutos /
+      // inicio_actividades en el payload de escritura ni en el select,
+      // conservando los 6 campos fiscales de 295 y el toggle de 296 en
+      // updateData (297 puede estar ausente sin que 295/296 lo estén).
+      delete updateData.ingresos_brutos
+      delete updateData.inicio_actividades
+      result2 = await supabaseAdmin
+        .from("organizations")
+        .update(updateData)
+        .eq("id", organizationId!)
+        .select(selectColsFull296)
+        .single() as any
+    }
+
+    if (isMissingColumnError(result2.error)) {
+      // Migración 296 no aplicada todavía: reintentar sin el toggle de
+      // facturación electrónica, conservando los 6 campos fiscales de 295 en
+      // updateData (295 puede estar aplicada sin que 296 lo esté). Este
+      // primer intento sí suele dar PGRST204 real si el body trae
+      // facturacionElectronicaHabilitada (updateData nombra una columna
+      // desconocida en el payload de escritura), pero isMissingColumnError
+      // también cubre el 42703 que daría un RETURNING con columnas
+      // desconocidas si el body no la incluyera.
+      delete updateData.facturacion_electronica_habilitada
+      result2 = await supabaseAdmin
+        .from("organizations")
+        .update(updateData)
+        .eq("id", organizationId!)
+        .select(selectColsFull)
+        .single() as any
+    }
+
+    if (isMissingColumnError(result2.error)) {
+      // Migración 295 tampoco aplicada todavía: reintentar sin los 6 campos
+      // fiscales nuevos. El resto de updateData (recepcion_terminos,
+      // iva_regimen, terminologia, etc.) sigue intacto: esas columnas SÍ
+      // existen hoy, así que deben persistirse igual.
+      delete updateData.cuit
+      delete updateData.condicion_iva
+      delete updateData.domicilio_fiscal
+      delete updateData.cbu_alias
+      delete updateData.medios_pago_texto
+      delete updateData.plazo_pago_dias
+      result2 = await supabaseAdmin
+        .from("organizations")
+        .update(updateData)
+        .eq("id", organizationId!)
+        .select(selectColsPre295)
+        .single() as any
+    }
+
+    if (isMissingColumnError(result2.error)) {
       // recepcion_terminos column doesn't exist yet, retry without it
       delete updateData.recepcion_terminos
       hasRecepcionTerminos = false
@@ -366,6 +784,16 @@ export async function PUT(request: Request) {
       delete updateData.comision_aplica_sin_reparacion
       // Strip vendedor inventory flag (migration 275) in case it doesn't exist yet
       delete updateData.vendedores_administran_inventario
+      // Strip tecnico POS flag (migration 314) in case it doesn't exist yet
+      delete updateData.tecnicos_operan_pos
+      // Strip vendedor caja flag in case it doesn't exist yet
+      delete updateData.vendedores_manejan_caja
+      // Strip tecnico cotizacion-cobro flag (migration 322) in case it doesn't exist yet
+      delete updateData.tecnicos_cobran_cotizaciones
+      // Strip vendedor ingresos flag (migration 326) in case it doesn't exist yet
+      delete updateData.vendedores_ven_ingresos
+      // Strip facturacion electronica flag (migration 296) in case it doesn't exist yet
+      delete updateData.facturacion_electronica_habilitada
       const selectColsNoFiscal = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda"
       result2 = await supabaseAdmin
         .from("organizations")
@@ -408,12 +836,25 @@ export async function PUT(request: Request) {
       pais: organization.pais || "AR",
       moduloAgenda: !!organization.modulo_agenda,
       vendedoresAdministranInventario: !!organization.vendedores_administran_inventario,
+      tecnicosOperanPos: !!organization.tecnicos_operan_pos,
+      vendedoresManejanCaja: !!organization.vendedores_manejan_caja,
+      tecnicosCobranCotizaciones: !!organization.tecnicos_cobran_cotizaciones,
+      vendedoresVenIngresos: organization.vendedores_ven_ingresos !== false,
       ivaRegimen: organization.iva_regimen ?? "EXENTO",
-      ivaTasa: organization.iva_tasa ?? 21,
+      ivaTasa: organization.iva_tasa ?? getIvaGeneral(organization.pais),
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
       comisionAplicaSinReparacion: organization.comision_aplica_sin_reparacion ?? false,
       terminologia: resolveTerminologia(organization.terminologia),
       terminologiaOverrides: organization.terminologia ?? {},
+      cuit: organization.cuit || "",
+      condicionIva: organization.condicion_iva || "",
+      domicilioFiscal: organization.domicilio_fiscal || "",
+      ingresosBrutos: organization.ingresos_brutos || "",
+      inicioActividades: organization.inicio_actividades || "",
+      cbuAlias: organization.cbu_alias || "",
+      mediosPagoTexto: organization.medios_pago_texto || "",
+      plazoPagoDias: organization.plazo_pago_dias ?? null,
+      facturacionElectronicaHabilitada: !!organization.facturacion_electronica_habilitada,
     })
   } catch (error: any) {
     console.error("Error updating config:", error)

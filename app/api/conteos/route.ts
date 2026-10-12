@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireAdmin } from "@/lib/auth-utils"
+import { requireAdmin, requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { depositoPermitido, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { z } from "zod"
 
 const createSchema = z.object({
@@ -48,7 +49,11 @@ function formatConteo(row: any) {
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+        // Los conteos son inventario: la pantalla vive en
+    // app/(dashboard)/inventario/conteos y el namespace ya esta detras del
+    // permiso 275. Con requireAuth entraba tambien un TECNICO y un VENDEDOR
+    // SIN el permiso, ninguno de los dos con nada que hacer en inventario.
+const { error, organizationId } = await requireInventarioAccess()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -77,11 +82,26 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId } = await requireAdmin()
+    const { error, session, organizationId, userId, role } = await requireAdmin()
     if (error) return error
 
     const body = await request.json()
     const data = createSchema.parse(body)
+
+    // La RPC solo verifica que el deposito exista (FK): sin esto un request
+    // armado mueve stock de un deposito de otra org o de otra sucursal.
+    if (
+      data.depositoId &&
+      !(await depositoPermitido({
+        depositoId: data.depositoId,
+        organizationId: organizationId!,
+        role,
+        userSucursalId: session?.user?.sucursalId ?? null,
+        alcance: "sucursal",
+      }))
+    ) {
+      return NextResponse.json({ error: DEPOSITO_INVALIDO }, { status: 400 })
+    }
 
     const { data: result, error: rpcErr } = await supabaseAdmin.rpc("iniciar_conteo", {
       p_organization_id: organizationId!,

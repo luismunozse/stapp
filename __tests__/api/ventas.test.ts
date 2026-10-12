@@ -27,7 +27,13 @@ vi.mock("@/lib/webhooks/dispatcher", () => ({
   emitWebhookEvent: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock("@/lib/depositos", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/depositos")>()),
+  depositoPermitido: vi.fn(),
+}))
+
 import { supabaseAdmin } from "@/lib/supabase"
+import { depositoPermitido, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { GET, POST } from "@/app/api/ventas/route"
 import { PUT } from "@/app/api/ventas/[id]/route"
 
@@ -476,6 +482,86 @@ describe("POST /api/ventas — depositoId server-resolved (T4)", () => {
     expect(body.error).toContain("Stock insuficiente en el depósito")
   })
 
+  it("mapea P0010 nombrando la sucursal cuando la venta salió de SU depósito", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null,
+      error: { code: "P0010", message: "STOCK_INSUFICIENTE_DEPOSITO: deposito dep-2" },
+    } as any)
+    mockSupabaseFrom({
+      sucursales: createChainMock({ id: "suc-p", nombre: "Sucursal Centro" }),
+      depositos: (() => {
+        const c: any = {}
+        for (const m of ["select", "eq", "is"]) c[m] = vi.fn().mockReturnValue(c)
+        c.maybeSingle = vi.fn().mockResolvedValue({ data: { id: "dep-1" }, error: null })
+        return c
+      })(),
+    })
+
+    const res = await POST(createPostRequest(baseBody))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(400)
+    expect(body.error).toBe("Stock insuficiente en el depósito de Sucursal Centro")
+  })
+
+  it("P0010 en modo drenaje (sucursal sin depósito principal): NO nombra una sucursal", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null,
+      error: { code: "P0010", message: "STOCK_INSUFICIENTE_DEPOSITO: deposito dep-2" },
+    } as any)
+    mockSupabaseFrom({
+      sucursales: createChainMock({ id: "suc-p", nombre: "Sucursal Centro" }),
+      depositos: (() => {
+        const c: any = {}
+        for (const m of ["select", "eq", "is"]) c[m] = vi.fn().mockReturnValue(c)
+        c.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+        return c
+      })(),
+    })
+
+    const res = await POST(createPostRequest(baseBody))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(400)
+    // The RPC ran with p_deposito_id = null and drained org-wide, so the
+    // shortfall is org-wide and the named sucursal has no deposito at all.
+    expect(body.error).toBe("Stock insuficiente en el depósito seleccionado")
+    // The name query must not even run: only getPrincipalId reads `sucursales`.
+    const sucursalesReads = vi
+      .mocked(supabaseAdmin.from)
+      .mock.calls.filter((call) => call[0] === "sucursales")
+    expect(sucursalesReads).toHaveLength(1)
+  })
+
+  it("camino feliz: no paga la query del nombre de sucursal (solo la del error P0010)", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      sucursales: createChainMock({ id: "suc-p", nombre: "Sucursal Centro" }),
+      depositos: (() => {
+        const c: any = {}
+        for (const m of ["select", "eq", "is"]) c[m] = vi.fn().mockReturnValue(c)
+        c.maybeSingle = vi.fn().mockResolvedValue({ data: { id: "dep-1" }, error: null })
+        return c
+      })(),
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
+      organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+    })
+
+    const res = await POST(createPostRequest(baseBody))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    // Only getPrincipalId hits `sucursales`; getNombreSucursal is lazy and
+    // must stay inside the P0010 branch.
+    const sucursalesReads = vi
+      .mocked(supabaseAdmin.from)
+      .mock.calls.filter((call) => call[0] === "sucursales")
+    expect(sucursalesReads).toHaveLength(1)
+  })
+
   it("mapea P0011 a 400 con mensaje claro", async () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
@@ -524,6 +610,54 @@ describe("PUT /api/ventas/[id] — depositoId", () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(depositoPermitido).mockResolvedValue(true)
+  })
+
+  it("rechaza con 400 un depositoId no permitido y NO llama a la RPC", async () => {
+    mockAuthSuccess({ role: "ADMIN", sucursalId: "suc-1" })
+    vi.mocked(depositoPermitido).mockResolvedValue(false)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
+    })
+
+    const [req, ctx] = createPutRequest({ ...editBody, depositoId: "dep-ajeno" })
+    const { status, body } = await parseResponse(await PUT(req, ctx))
+
+    expect(status).toBe(400)
+    expect(body.error).toBe(DEPOSITO_INVALIDO)
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it("valida el depositoId con alcance sucursal, el rol y la sucursal de la sesion", async () => {
+    mockAuthSuccess({ role: "ADMIN", sucursalId: "suc-1", organizationId: "org-9" })
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
+    })
+
+    const [req, ctx] = createPutRequest({ ...editBody, depositoId: "dep-2" })
+    await PUT(req, ctx)
+
+    expect(depositoPermitido).toHaveBeenCalledWith({
+      depositoId: "dep-2",
+      organizationId: "org-9",
+      role: "ADMIN",
+      userSucursalId: "suc-1",
+      alcance: "sucursal",
+    })
+  })
+
+  it("sin depositoId no valida (queda el default del servidor)", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
+    })
+
+    const [req, ctx] = createPutRequest(editBody)
+    await PUT(req, ctx)
+
+    expect(depositoPermitido).not.toHaveBeenCalled()
   })
 
   it("pasa depositoId a la RPC editar_venta_atomica como p_deposito_id", async () => {
@@ -639,6 +773,7 @@ describe("POST /api/ventas — saldo pendiente requiere cliente", () => {
     mockSupabaseFrom({
       ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
       organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+      clientes: createChainMock({ id: "cliente-1" }),
     })
 
     const res = await POST(createPostRequest({
@@ -836,5 +971,69 @@ describe("POST /api/ventas — descuentos por línea + global", () => {
     const res = await POST(createPostRequest({ clienteNombre: "CF", metodoPago: "EFECTIVO", items: [{ inventarioId: "i1", descripcion: "X", cantidad: 1, precioUnitario: 100, diasGarantia: 0 }] }))
     expect((await parseResponse(res)).status).toBe(201)
     expect((vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any).p_total).toBe(100)
+  })
+})
+
+describe("POST /api/ventas — IVA sin tasa propia: la resuelve el pais de la org", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+  })
+
+  const venderPor100 = async (org: Record<string, unknown>) => {
+    mockSupabaseFrom({
+      organizations: createChainMock(org),
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 0 }),
+    })
+    const res = await POST(
+      createPostRequest({
+        clienteNombre: "CF",
+        metodoPago: "EFECTIVO",
+        items: [{ inventarioId: "i1", descripcion: "X", cantidad: 1, precioUnitario: 100, diasGarantia: 0 }],
+      })
+    )
+    expect((await parseResponse(res)).status).toBe(201)
+    return vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any
+  }
+
+  it("ADITIVO en org chilena sin tasa guardada: aplica 19% (100 → 119)", async () => {
+    const args = await venderPor100({
+      pais: "CL",
+      iva_regimen: "ADITIVO",
+      iva_tasa: null,
+      redondeo_efectivo: 0,
+    })
+    expect(args.p_total).toBe(119)
+  })
+
+  it("ADITIVO en org argentina sin tasa guardada: sigue en 21% (100 → 121)", async () => {
+    const args = await venderPor100({
+      pais: "AR",
+      iva_regimen: "ADITIVO",
+      iva_tasa: null,
+      redondeo_efectivo: 0,
+    })
+    expect(args.p_total).toBe(121)
+  })
+
+  it("la tasa guardada por la org le gana al default del pais", async () => {
+    const args = await venderPor100({
+      pais: "CL",
+      iva_regimen: "ADITIVO",
+      iva_tasa: 10,
+      redondeo_efectivo: 0,
+    })
+    expect(args.p_total).toBe(110)
+  })
+
+  it("EXENTO no cobra IVA aunque el pais tenga tasa general", async () => {
+    const args = await venderPor100({
+      pais: "CL",
+      iva_regimen: "EXENTO",
+      iva_tasa: null,
+      redondeo_efectivo: 0,
+    })
+    expect(args.p_total).toBe(100)
   })
 })

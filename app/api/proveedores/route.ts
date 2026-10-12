@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatProveedor } from "@/lib/db-utils"
 import { z } from "zod"
@@ -45,7 +45,17 @@ const proveedorSchema = z.object({
 
 export async function GET() {
   try {
-    const { error, organizationId } = await requireAuth()
+    // Todas las escrituras de este namespace ya iban por
+    // requireAdminOrVendedor; las lecturas se habian quedado en
+    // requireAuth, asi que un TECNICO listaba los proveedores de la org,
+    // abria su ficha y se bajaba adjuntos y contactos.
+    //
+    // No es requireAdmin porque GET /api/proveedores lo consume tambien
+    // el selector de proveedor de inventario y el alta de ordenes de
+    // compra: cerrarlo del todo rompia el alta de articulos para un
+    // VENDEDOR con el permiso 275. El gate del PRECIO DE COMPRA es otro
+    // eje y sigue intacto: hasInventarioAccess, adentro de cada handler.
+    const { error, organizationId } = await requireAdminOrVendedor()
     if (error) return error
 
     const { data: proveedores, error: dbError } = await supabaseAdmin

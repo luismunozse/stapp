@@ -16,7 +16,7 @@ export const panelRoutes: PanelRoute[] = [
   { ruta: "/ventas", descripcion: "Ventas realizadas y devoluciones" },
   { ruta: "/pos", descripcion: "Punto de venta (vender accesorios y repuestos)" },
   { ruta: "/cotizaciones", descripcion: "Cotizaciones y presupuestos" },
-  { ruta: "/facturacion", descripcion: "Facturas y cobros" },
+  { ruta: "/facturacion", descripcion: "Remitos y cobros" },
   { ruta: "/caja", descripcion: "Caja diaria: ingresos, egresos y arqueo" },
   { ruta: "/finanzas", descripcion: "Finanzas: gastos y estado de resultados" },
   { ruta: "/proveedores", descripcion: "Proveedores" },

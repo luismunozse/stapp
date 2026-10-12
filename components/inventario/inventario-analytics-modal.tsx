@@ -21,7 +21,9 @@ interface AnalyticsData {
   disponible: number
   stockReservado: number
   puntoReorden: number | null
-  valorStock: number
+  /** null cuando el rol no puede ver costos de compra (hasInventarioAccess):
+   *  se calcula como stock × precio_compra. */
+  valorStock: number | null
 }
 
 interface Props {
@@ -114,10 +116,12 @@ export function InventarioAnalyticsModal({ open, onOpenChange, inventarioId, inv
 
             {/* Extra info */}
             <div className="rounded-lg bg-muted/50 p-3 space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Valor en stock</span>
-                <span className="font-medium">{formatPrice(data.valorStock)}</span>
-              </div>
+              {data.valorStock !== null && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Valor en stock</span>
+                  <span className="font-medium">{formatPrice(data.valorStock)}</span>
+                </div>
+              )}
               {data.puntoReorden != null && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Punto de reorden</span>

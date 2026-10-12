@@ -17,7 +17,7 @@ const METODO_LABELS: Record<string, string> = {
 
 const TIPO_LABELS: Record<string, string> = {
   COBRO_ORDEN: "Cobro de Orden",
-  PAGO_FACTURA: "Pago Factura",
+  PAGO_FACTURA: "Pago Remito",
   PAGO_VENTA: "Venta",
   DEPOSITO_CUENTA: "Depósito a Cuenta",
   INGRESO_MANUAL: "Ingreso Manual",

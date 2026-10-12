@@ -10,6 +10,7 @@ import { WhatsAppButton } from "@/components/landing/whatsapp-button"
 import { PricingPageTracker } from "@/components/marketing/pricing-page-tracker"
 import { getPremiumPrices, getAllPlanPrices } from "@/lib/pricing"
 import { FAQPageJsonLd, BreadcrumbJsonLd } from "@/components/seo/json-ld"
+import { OG_IMAGES } from "@/lib/og/metadata"
 
 export const metadata: Metadata = {
   title: "Precios y Planes | Software de Gestión para Servicio Técnico",
@@ -26,6 +27,7 @@ export const metadata: Metadata = {
     "gestión servicio técnico planes",
   ],
   openGraph: {
+    images: OG_IMAGES,
     title: "Precios STApp - Software de Gestión para Talleres de Reparación",
     description:
       "Planes accesibles para tu taller. Desde $0 con 30 días gratis. Órdenes de trabajo, inventario, facturación y WhatsApp incluidos.",

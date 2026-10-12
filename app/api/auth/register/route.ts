@@ -6,6 +6,8 @@ import { z } from "zod"
 import { isValidSlug, RESERVED_SUBDOMAINS } from "@/lib/tenant"
 import { sendVerificationEmail } from "@/lib/email"
 import { verifyGoogleIdToken } from "@/lib/google"
+import { isRubroId, DEFAULT_RUBRO_ID } from "@/lib/rubros"
+import { seedOrganizationFromRubro } from "@/lib/rubros/seed"
 
 // Schema de validación (password opcional para Google)
 const registerSchema = z.object({
@@ -16,6 +18,18 @@ const registerSchema = z.object({
     telefono: z.string().optional(),
     email: z.string().email("Email inválido").optional().or(z.literal("")),
     direccion: z.string().optional(),
+    // Pack de rubro elegido en el registro. Define los tipos de equipo, el
+    // vocabulario y los checklists con los que nace la organizacion.
+    rubro: z
+      .string()
+      .optional()
+      .refine((v) => v === undefined || v === "" || isRubroId(v), {
+        message: "Rubro invalido",
+      }),
+    // Texto libre para el rubro generico ("maquinas de cafe"). De aca sale el
+    // nombre del tipo de equipo y el vocabulario, que es lo que cubre el long
+    // tail de oficios sin escribir un pack por cada uno.
+    rubroDetalle: z.string().max(120).optional(),
   }),
   // Datos del usuario admin (nombre y email pueden estar vacíos si hay googleIdToken)
   usuario: z.object({
@@ -53,6 +67,15 @@ export async function POST(request: NextRequest) {
     }
 
     const { organizacion, usuario, googleIdToken, utm } = validationResult.data
+
+    // Un rubro vacio o ausente cae al pack generico: preferimos una base neutral
+    // antes que sembrar el rubro de otro oficio.
+    const rubro = organizacion.rubro && organizacion.rubro !== ""
+      ? organizacion.rubro
+      : DEFAULT_RUBRO_ID
+
+    // Solo tiene sentido junto al pack generico; los curados lo ignoran.
+    const rubroDetalle = organizacion.rubroDetalle?.trim() || null
 
     // Determinar si es registro con Google
     const isGoogleRegister = !!googleIdToken
@@ -118,14 +141,42 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verificar que el email del usuario no exista
-    const { data: existingUser } = await supabaseAdmin
+    // Verificar que el email del usuario no exista. Corre antes de cualquier
+    // insert y es común a credentials y Google (ambos usan `userEmail`).
+    const { data: existingUser, error: existingUserError } = await supabaseAdmin
       .from("users")
-      .select("id")
+      .select("id, deleted_at, organizations(deletion_requested_at)")
       .eq("email", userEmail)
       .single()
 
+    // PGRST116 = "no rows" con .single(): el email está libre. Cualquier otro
+    // error es una falla real: abortar antes de crear nada (falla cerrado).
+    if (existingUserError && existingUserError.code !== "PGRST116") {
+      console.error("Error checking existing user:", existingUserError)
+      return NextResponse.json(
+        { error: "Error interno del servidor" },
+        { status: 500 }
+      )
+    }
+
     if (existingUser) {
+      // Dos formas de estar "en gracia": el usuario se dio de baja (users.deleted_at)
+      // o su taller pidió eliminarse (organizations.deletion_requested_at; en ese
+      // caso los usuarios NO llevan deleted_at).
+      const rel = existingUser.organizations as
+        | { deletion_requested_at?: string | null }
+        | Array<{ deletion_requested_at?: string | null }>
+        | null
+      const org = Array.isArray(rel) ? rel[0] : rel
+      if (existingUser.deleted_at || org?.deletion_requested_at) {
+        return NextResponse.json(
+          {
+            error: "Esta cuenta está en proceso de eliminación, escribí a soporte",
+            code: "ACCOUNT_PENDING_DELETION",
+          },
+          { status: 400 }
+        )
+      }
       return NextResponse.json(
         { error: "Ya existe una cuenta con este email" },
         { status: 400 }
@@ -159,6 +210,8 @@ export async function POST(request: NextRequest) {
         direccion: organizacion.direccion || null,
         activo: true,
         nombre_mostrar: organizacion.nombre,
+        rubro,
+        rubro_detalle: rubroDetalle,
         notificaciones_email: true,
         notificaciones_whatsapp: false,
         dias_recordatorio: 3,
@@ -238,61 +291,30 @@ export async function POST(request: NextRequest) {
       console.error("Error creating onboarding progress:", onboardingError)
     }
 
-    // Crear template de checklist por defecto
-    const { data: template } = await supabaseAdmin
-      .from("checklist_templates")
-      .insert({
-        organization_id: newOrg.id,
-        nombre: "Checklist de Recepción",
-        activo: true,
-      })
-      .select()
-      .single()
-
-    // Agregar items por defecto al template
-    if (template) {
-      await supabaseAdmin.from("checklist_template_items").insert([
-        {
-          template_id: template.id,
-          label: "Pantalla en buen estado",
-          tipo: "BOOLEAN",
-          categoria: "CONDICION_FISICA",
-          orden: 0,
-          requerido: true,
-        },
-        {
-          template_id: template.id,
-          label: "Carcasa sin daños",
-          tipo: "BOOLEAN",
-          categoria: "CONDICION_FISICA",
-          orden: 1,
-          requerido: true,
-        },
-        {
-          template_id: template.id,
-          label: "Botones funcionan",
-          tipo: "BOOLEAN",
-          categoria: "FUNCIONAL",
-          orden: 2,
-          requerido: true,
-        },
-        {
-          template_id: template.id,
-          label: "Cargador incluido",
-          tipo: "BOOLEAN",
-          categoria: "ACCESORIOS",
-          orden: 3,
-          requerido: false,
-        },
-        {
-          template_id: template.id,
-          label: "Observaciones adicionales",
-          tipo: "TEXT",
-          categoria: "OTRO",
-          orden: 4,
-          requerido: false,
-        },
-      ])
+    // Sembrar la organizacion con el pack de su rubro: tipos de equipo con su
+    // config, vocabulario y checklists de recepcion.
+    //
+    // Antes esto estaba partido en dos lugares y ninguno sabia a que se dedicaba
+    // el negocio: un trigger de base sembraba ocho tipos de electronica (migs
+    // 014/021/092, dado de baja en la 307) y aca se insertaba a mano un checklist
+    // de celular ("Pantalla en buen estado", "Cargador incluido") para cualquier
+    // rubro.
+    //
+    // No hacemos rollback si falla: la org es usable igual y `ensureTiposExist`
+    // la recupera en el primer GET de tipos. Abortar el registro por esto seria
+    // mucho peor que arrancar sin checklist.
+    try {
+      const seedResult = await seedOrganizationFromRubro(
+        newOrg.id,
+        rubro,
+        supabaseAdmin,
+        rubroDetalle
+      )
+      if (seedResult.errors.length > 0) {
+        console.error("Rubro seed completed with errors:", seedResult.errors)
+      }
+    } catch (seedError) {
+      console.error("Error seeding organization from rubro:", seedError)
     }
 
     // Enviar email de verificación (solo para registro con credentials).
@@ -328,6 +350,7 @@ export async function POST(request: NextRequest) {
         id: newOrg.id,
         nombre: newOrg.nombre,
         slug: newOrg.slug,
+        rubro,
       },
       user: {
         id: newUser.id,

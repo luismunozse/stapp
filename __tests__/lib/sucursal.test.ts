@@ -6,9 +6,35 @@
  *  SL-2 — non-admin with a real branch id: returns that id, verTodas false
  *  SL-3 — ADMIN without cookie / "todas" cookie: returns { sucursalId: null, verTodas: true }
  *  SL-4 — ADMIN with specific cookie id: returns that id, verTodas false
+ *
+ * Also covers resolverDestinoVenta / getNombreSucursal — the shared helper
+ * used by the ventas write route and the POS read endpoints (search/
+ * barcode/check-stock via scope=venta) to agree on which sucursal/deposito
+ * a sale draws stock from.
  */
-import { describe, it, expect } from "vitest"
-import { resolveSucursalLectura, SUCURSAL_NINGUNA } from "@/lib/sucursal"
+import { describe, it, expect, vi, beforeEach } from "vitest"
+import { cookies } from "next/headers"
+import { supabaseAdmin } from "@/lib/supabase"
+import {
+  resolveSucursalLectura,
+  resolverDestinoVenta,
+  derivarLecturaVenta,
+  derivarAvisoAlcanceOrg,
+  getNombreSucursal,
+  resolverIndicadorVenta,
+  resolverDestinoVentaCacheado,
+  resolverIndicadorVentaCacheado,
+  resetCacheResolucionVenta,
+  CACHE_VENTA_MAX_ENTRIES,
+  SUCURSAL_NINGUNA,
+} from "@/lib/sucursal"
+
+function mockCookie(value: string | null) {
+  vi.mocked(cookies).mockResolvedValue({
+    get: vi.fn((name: string) => (name === "stapp-sucursal-activa" && value ? { value } : undefined)),
+    set: vi.fn(),
+  } as any)
+}
 
 describe("resolveSucursalLectura", () => {
   it("SL-1 — TECNICO with null sucursalId returns SUCURSAL_NINGUNA (fail-closed, not data-leak)", () => {
@@ -63,5 +89,960 @@ describe("resolveSucursalLectura", () => {
       cookieSucursalId: "suc-cookie",
     })
     expect(result).toEqual({ sucursalId: "suc-cookie", verTodas: false })
+  })
+})
+
+// ─── resolverDestinoVenta / getNombreSucursal ───
+
+function mockSucursalesYDepositos(opts: {
+  principalSucursalId?: string | null
+  depositoId?: string | null
+  nombre?: string
+  /** Error returned by getPrincipalId's .single() — e.g. two rows flagged principal. */
+  principalError?: { code: string; message: string }
+  /** Error returned by the depositos lookup — e.g. a transient query failure. */
+  depositoError?: { code: string; message: string }
+}) {
+  const sucursalesChain: any = {}
+  for (const m of ["select", "eq", "is"]) sucursalesChain[m] = vi.fn().mockReturnValue(sucursalesChain)
+  sucursalesChain.single = vi.fn().mockResolvedValue({
+    data:
+      opts.principalSucursalId === null
+        ? null
+        : { id: opts.principalSucursalId ?? "suc-principal", nombre: opts.nombre ?? "Sucursal Centro" },
+    error: opts.principalError ?? null,
+  })
+
+  const depositosChain: any = {}
+  for (const m of ["select", "eq", "is"]) depositosChain[m] = vi.fn().mockReturnValue(depositosChain)
+  depositosChain.maybeSingle = vi.fn().mockResolvedValue({
+    data: opts.depositoId ? { id: opts.depositoId } : null,
+    error: opts.depositoError ?? null,
+  })
+
+  vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+    if (table === "sucursales") return sucursalesChain
+    if (table === "depositos") return depositosChain
+    return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: null, error: null }) } as any
+  })
+}
+
+describe("resolverDestinoVenta", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCookie(null)
+  })
+
+  it("DV-1 — ADMIN sin cookie: resuelve la sucursal principal y su deposito", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    const result = await resolverDestinoVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      userSucursalId: null,
+    })
+
+    expect(result).toEqual({
+      sucursalId: "suc-principal",
+      depositoId: "dep-principal",
+      unassignedSucursal: false,
+      branchScoped: false,
+    })
+  })
+
+  it('DV-2 — ADMIN con cookie "todas": igual resuelve la principal (mismo comportamiento que sucursalParaEscritura)', async () => {
+    mockCookie("todas")
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    const result = await resolverDestinoVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      userSucursalId: null,
+    })
+
+    expect(result.sucursalId).toBe("suc-principal")
+  })
+
+  it("DV-3 — ADMIN con cookie de sucursal especifica: usa esa sucursal, no la principal", async () => {
+    mockCookie("suc-B")
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-B" })
+
+    const result = await resolverDestinoVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      userSucursalId: null,
+    })
+
+    expect(result.sucursalId).toBe("suc-B")
+  })
+
+  it("DV-4 — sucursal sin deposito principal: depositoId null (modo drenaje), sin excepcion", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: null })
+
+    const result = await resolverDestinoVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      userSucursalId: null,
+    })
+
+    expect(result).toEqual({
+      sucursalId: "suc-principal",
+      depositoId: null,
+      unassignedSucursal: false,
+      branchScoped: false,
+    })
+  })
+
+  it("DV-5 — org sin sucursal principal y ADMIN en 'todas': sucursalId y depositoId null", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: null })
+
+    const result = await resolverDestinoVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      userSucursalId: null,
+    })
+
+    expect(result).toEqual({
+      sucursalId: null,
+      depositoId: null,
+      unassignedSucursal: false,
+      branchScoped: false,
+    })
+  })
+
+  it("DV-6 — no-ADMIN sin sucursal asignada: marca unassignedSucursal, pero la escritura sigue cayendo a la principal", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    const result = await resolverDestinoVenta({
+      role: "VENDEDOR",
+      organizationId: "org-1",
+      userSucursalId: null,
+    })
+
+    expect(result.unassignedSucursal).toBe(true)
+    // The write path keeps its principal fallback — only reads go fail-closed.
+    expect(result.sucursalId).toBe("suc-principal")
+  })
+
+  it("DV-7 — no-ADMIN con sucursal asignada: unassignedSucursal false", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-B" })
+
+    const result = await resolverDestinoVenta({
+      role: "VENDEDOR",
+      organizationId: "org-1",
+      userSucursalId: "suc-B",
+    })
+
+    expect(result).toEqual({
+      sucursalId: "suc-B",
+      depositoId: "dep-B",
+      unassignedSucursal: false,
+      branchScoped: true,
+    })
+  })
+
+  it("DV-8 — ADMIN sin sucursal asignada: NO es unassigned (asimetria ADMIN / no-ADMIN)", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    const result = await resolverDestinoVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      userSucursalId: null,
+    })
+
+    expect(result.unassignedSucursal).toBe(false)
+  })
+
+  // `branchScoped` is what tells the read derivation whether widening the scope
+  // is legitimate: an ADMIN is org-wide by definition, a VENDEDOR/TECNICO is
+  // pinned to one branch and must never read another branch's stock.
+  it.each(["VENDEDOR", "TECNICO"])(
+    "DV-9 — %s: branchScoped true (el rol esta atado a una sucursal)",
+    async (role) => {
+      mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-B" })
+
+      const result = await resolverDestinoVenta({
+        role,
+        organizationId: "org-1",
+        userSucursalId: "suc-B",
+      })
+
+      expect(result.branchScoped).toBe(true)
+    }
+  )
+
+  it("DV-10 — ADMIN: branchScoped false (es org-wide por definicion)", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    const result = await resolverDestinoVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      userSucursalId: null,
+    })
+
+    expect(result.branchScoped).toBe(false)
+  })
+
+  // The org-level principal sucursal is only a FALLBACK. Resolving it first and
+  // bailing out on null collapsed every role to "no sucursal" — which reads then
+  // widened org-wide — over an org-level lookup the user's own branch never needed.
+  it("DV-11 — VENDEDOR con su sucursal bien configurada y org SIN principal: usa su propia sucursal", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: null, depositoId: "dep-B" })
+
+    const result = await resolverDestinoVenta({
+      role: "VENDEDOR",
+      organizationId: "org-1",
+      userSucursalId: "suc-B",
+    })
+
+    expect(result).toEqual({
+      sucursalId: "suc-B",
+      depositoId: "dep-B",
+      unassignedSucursal: false,
+      branchScoped: true,
+    })
+  })
+
+  it("DV-12 — dos sucursales marcadas principal (.single() falla): la sucursal propia sigue mandando", async () => {
+    // The demote in POST /api/sucursales is not atomic with the insert, so an
+    // org can transiently have two principal=true rows; .single() then errors
+    // and getPrincipalId returns null. Same shape as any transient failure.
+    mockSucursalesYDepositos({
+      principalSucursalId: null,
+      depositoId: "dep-B",
+      principalError: { code: "PGRST116", message: "multiple (or no) rows returned" },
+    })
+
+    const result = await resolverDestinoVenta({
+      role: "TECNICO",
+      organizationId: "org-1",
+      userSucursalId: "suc-B",
+    })
+
+    expect(result.sucursalId).toBe("suc-B")
+    expect(result.depositoId).toBe("dep-B")
+  })
+
+  it("DV-13 — ADMIN con sucursal seleccionada y org SIN principal: usa la seleccionada", async () => {
+    mockCookie("suc-A")
+    mockSucursalesYDepositos({ principalSucursalId: null, depositoId: "dep-A" })
+
+    const result = await resolverDestinoVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      userSucursalId: null,
+    })
+
+    expect(result.sucursalId).toBe("suc-A")
+    expect(result.depositoId).toBe("dep-A")
+  })
+
+  it("DV-14 — la query de depositos falla: cae a modo drenaje y avisa por consola (no se traga el error)", async () => {
+    // A transient failure and "this sucursal has no principal deposito" produce
+    // the same null, so the failure must at least be visible in the logs — and
+    // must not claim the sucursal has no deposito, which it may well have.
+    mockSucursalesYDepositos({
+      principalSucursalId: "suc-principal",
+      depositoError: { code: "57014", message: "canceling statement due to statement timeout" },
+    })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const result = await resolverDestinoVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      userSucursalId: null,
+    })
+
+    expect(result.sucursalId).toBe("suc-principal")
+    expect(result.depositoId).toBeNull()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("Could not resolve the principal deposito"))
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("has no principal deposito"))
+    warn.mockRestore()
+  })
+})
+
+describe("derivarLecturaVenta", () => {
+  it("LV-1 — no-ADMIN sin sucursal asignada: fail-closed (sentinel, sin deposito, sin agregado)", () => {
+    const lectura = derivarLecturaVenta({
+      sucursalId: "suc-principal",
+      depositoId: "dep-principal",
+      unassignedSucursal: true,
+      branchScoped: true,
+    })
+
+    expect(lectura).toEqual({
+      sucursalId: SUCURSAL_NINGUNA,
+      depositoId: null,
+      verTodas: false,
+      ventaSucursalId: null,
+    })
+  })
+
+  it("LV-2 — destino con deposito concreto: lectura escopeada a ese deposito", () => {
+    const lectura = derivarLecturaVenta({
+      sucursalId: "suc-A",
+      depositoId: "dep-A",
+      unassignedSucursal: false,
+      branchScoped: false,
+    })
+
+    expect(lectura).toEqual({
+      sucursalId: "suc-A",
+      depositoId: "dep-A",
+      verTodas: false,
+      ventaSucursalId: "suc-A",
+    })
+  })
+
+  it("LV-3 — ADMIN sin deposito (modo drenaje): lectura agregada org-wide", () => {
+    const lectura = derivarLecturaVenta({
+      sucursalId: "suc-A",
+      depositoId: null,
+      unassignedSucursal: false,
+      branchScoped: false,
+    })
+
+    expect(lectura.verTodas).toBe(true)
+  })
+
+  it("LV-4 — modo drenaje: NO nombra una sucursal (el RPC puede drenar de cualquier deposito)", () => {
+    const lectura = derivarLecturaVenta({
+      sucursalId: "suc-A",
+      depositoId: null,
+      unassignedSucursal: false,
+      branchScoped: false,
+    })
+
+    // descontar_stock_deposito(..., strict=false) puede tomar unidades del
+    // deposito de cualquier otra sucursal: afirmar "vendiendo desde suc-A"
+    // seria mentira. El escopeo de la lectura sigue apuntando a la sucursal.
+    expect(lectura.ventaSucursalId).toBeNull()
+    expect(lectura.sucursalId).toBe("suc-A")
+  })
+
+  it("LV-5 — rol atado a una sucursal en modo drenaje: fail-closed, NO ensancha a toda la org", () => {
+    // A VENDEDOR/TECNICO whose sucursal has no principal deposito is a
+    // configuration gap. Widening the read to the org aggregate would show —
+    // and let them sell — units physically sitting in another branch, so the
+    // read stays closed exactly as it was before scope=venta existed.
+    const lectura = derivarLecturaVenta({
+      sucursalId: "suc-B",
+      depositoId: null,
+      unassignedSucursal: false,
+      branchScoped: true,
+    })
+
+    expect(lectura).toEqual({
+      sucursalId: SUCURSAL_NINGUNA,
+      depositoId: null,
+      verTodas: false,
+      ventaSucursalId: null,
+    })
+  })
+
+  it("LV-6 — rol atado a una sucursal CON deposito: lectura escopeada normal (el fail-closed es solo el drenaje)", () => {
+    const lectura = derivarLecturaVenta({
+      sucursalId: "suc-B",
+      depositoId: "dep-B",
+      unassignedSucursal: false,
+      branchScoped: true,
+    })
+
+    expect(lectura).toEqual({
+      sucursalId: "suc-B",
+      depositoId: "dep-B",
+      verTodas: false,
+      ventaSucursalId: "suc-B",
+    })
+  })
+})
+
+// ─── derivarAvisoAlcanceOrg ───
+//
+// El modo drenaje con una sucursal concreta elegida es el unico estado donde la
+// pantalla se contradice sola: el chip del switcher dice "Sucursal X" mientras
+// la grilla lista stock que esta fisicamente en otras sucursales, y el
+// indicador "Vendiendo desde" —lo unico que podria explicarlo— esta apagado
+// justo ahi (ventaSucursalId null, ver LV-4). Los numeros son honestos sobre lo
+// que una venta puede tomar; lo que falta es que la UI lo diga.
+
+describe("derivarAvisoAlcanceOrg", () => {
+  const DRENAJE: ReturnType<typeof derivarLecturaVenta> = {
+    sucursalId: "suc-X",
+    depositoId: null,
+    verTodas: true,
+    ventaSucursalId: null,
+  }
+
+  it("AO-1 — ADMIN con sucursal concreta elegida en modo drenaje: avisa", () => {
+    // El chip dice "Sucursal X" y la grilla es de toda la org: sin este aviso
+    // no queda nada en pantalla que explique la diferencia.
+    expect(
+      derivarAvisoAlcanceOrg({ role: "ADMIN", cookieSucursalId: "suc-X", lectura: DRENAJE })
+    ).toBe(true)
+  })
+
+  it("AO-2 — ADMIN con sucursal concreta y deposito propio: no avisa (no hay nada raro que explicar)", () => {
+    expect(
+      derivarAvisoAlcanceOrg({
+        role: "ADMIN",
+        cookieSucursalId: "suc-X",
+        lectura: {
+          sucursalId: "suc-X",
+          depositoId: "dep-X",
+          verTodas: false,
+          ventaSucursalId: "suc-X",
+        },
+      })
+    ).toBe(false)
+  })
+
+  it.each([null, "todas"])(
+    "AO-3 — ADMIN en 'todas' (cookie %s) en modo drenaje: no avisa, el chip ya dice toda la org",
+    (cookie) => {
+      expect(
+        derivarAvisoAlcanceOrg({ role: "ADMIN", cookieSucursalId: cookie, lectura: DRENAJE })
+      ).toBe(false)
+    }
+  )
+
+  it.each(["VENDEDOR", "TECNICO"])(
+    "AO-4 — %s: nunca avisa (su lectura ya es fail-closed, no se ensancha)",
+    (role) => {
+      expect(
+        derivarAvisoAlcanceOrg({ role, cookieSucursalId: "suc-X", lectura: DRENAJE })
+      ).toBe(false)
+    }
+  )
+
+  it("AO-5 — lectura fail-closed: no avisa (no se ensancho nada, se cerro)", () => {
+    expect(
+      derivarAvisoAlcanceOrg({
+        role: "ADMIN",
+        cookieSucursalId: "suc-X",
+        lectura: {
+          sucursalId: SUCURSAL_NINGUNA,
+          depositoId: null,
+          verTodas: false,
+          ventaSucursalId: null,
+        },
+      })
+    ).toBe(false)
+  })
+})
+
+// ─── resolverIndicadorVenta ───
+//
+// The POS "Vendiendo desde" indicator is gated server-side: the browser cannot
+// read the httpOnly sucursal cookie, and the localStorage mirror only exists
+// once an ADMIN has actively used the switcher — which single-sucursal orgs
+// never can, because SucursalSwitcher renders null for them.
+
+function mockListaSucursales(sucursales: Array<{ id: string; nombre: string }>) {
+  const chain: any = {}
+  for (const m of ["select", "eq", "is"]) chain[m] = vi.fn().mockReturnValue(chain)
+  chain.then = (resolve: any, reject?: any) =>
+    Promise.resolve({ data: sucursales, error: null }).then(resolve, reject)
+
+  vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+    if (table === "sucursales") return chain
+    return createUnusedChain()
+  })
+  return chain
+}
+
+/** Same shape as mockListaSucursales, but the list query comes back failed. */
+function mockListaSucursalesConError(error: { code: string; message: string }) {
+  const chain: any = {}
+  for (const m of ["select", "eq", "is"]) chain[m] = vi.fn().mockReturnValue(chain)
+  chain.then = (resolve: any, reject?: any) =>
+    Promise.resolve({ data: null, error }).then(resolve, reject)
+
+  vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+    if (table === "sucursales") return chain
+    return createUnusedChain()
+  })
+  return chain
+}
+
+function createUnusedChain(): any {
+  const chain: any = {}
+  for (const m of ["select", "eq", "is"]) chain[m] = vi.fn().mockReturnValue(chain)
+  chain.single = vi.fn().mockResolvedValue({ data: null, error: null })
+  return chain
+}
+
+const DOS_SUCURSALES = [
+  { id: "suc-principal", nombre: "Casa Central" },
+  { id: "suc-B", nombre: "Sucursal Norte" },
+]
+
+describe("resolverIndicadorVenta", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("IV-1 — ADMIN sin cookie en org multi-sucursal: devuelve el nombre", async () => {
+    mockListaSucursales(DOS_SUCURSALES)
+
+    const nombre = await resolverIndicadorVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-principal",
+    })
+
+    expect(nombre).toBe("Casa Central")
+  })
+
+  it('IV-2 — ADMIN con cookie "todas" en org multi-sucursal: devuelve el nombre', async () => {
+    mockListaSucursales(DOS_SUCURSALES)
+
+    const nombre = await resolverIndicadorVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: "todas",
+      ventaSucursalId: "suc-B",
+    })
+
+    expect(nombre).toBe("Sucursal Norte")
+  })
+
+  it("IV-3 — org de UNA sola sucursal: null (el switcher ni se renderiza, no hay nada que desambiguar)", async () => {
+    mockListaSucursales([{ id: "suc-principal", nombre: "Casa Central" }])
+
+    const nombre = await resolverIndicadorVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-principal",
+    })
+
+    expect(nombre).toBeNull()
+  })
+
+  it("IV-4 — ADMIN con una sucursal concreta seleccionada: null (el selector ya la muestra) y sin query", async () => {
+    mockListaSucursales(DOS_SUCURSALES)
+
+    const nombre = await resolverIndicadorVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: "suc-B",
+      ventaSucursalId: "suc-B",
+    })
+
+    expect(nombre).toBeNull()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it("IV-5 — no-ADMIN: null sin query (nunca ve mas de una sucursal a la vez)", async () => {
+    mockListaSucursales(DOS_SUCURSALES)
+
+    const nombre = await resolverIndicadorVenta({
+      role: "VENDEDOR",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-B",
+    })
+
+    expect(nombre).toBeNull()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it("IV-6 — sin ventaSucursalId (drenaje o fail-closed): null sin query", async () => {
+    mockListaSucursales(DOS_SUCURSALES)
+
+    const nombre = await resolverIndicadorVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: null,
+    })
+
+    expect(nombre).toBeNull()
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it("IV-7 — la sucursal resuelta no esta en la lista: null en vez de un nombre inventado", async () => {
+    mockListaSucursales(DOS_SUCURSALES)
+
+    const nombre = await resolverIndicadorVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-fantasma",
+    })
+
+    expect(nombre).toBeNull()
+  })
+
+  it("IV-8 — la query de sucursales falla: null y avisa por consola (no se traga el error)", async () => {
+    mockListaSucursalesConError({ code: "57014", message: "canceling statement due to statement timeout" })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const nombre = await resolverIndicadorVenta({
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-principal",
+    })
+
+    expect(nombre).toBeNull()
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+})
+
+// ─── Cache de resolucion para el camino de LECTURA del POS ───
+//
+// scope=venta corre en cada tecla del buscador debounced. Sin cache eso son
+// dos queries extra por tecla (principal + deposito) que casi nunca cambian.
+
+describe("cache de resolucion de venta (solo lecturas del POS)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetCacheResolucionVenta()
+    mockCookie(null)
+  })
+
+  function contarLecturas(tabla: string) {
+    return vi.mocked(supabaseAdmin.from).mock.calls.filter((call) => call[0] === tabla).length
+  }
+
+  it("CV-1 — dos llamadas seguidas con el mismo contexto: una sola tanda de queries", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+    const params = { role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null }
+
+    const primera = await resolverDestinoVentaCacheado(params)
+    const segunda = await resolverDestinoVentaCacheado(params)
+
+    expect(segunda).toEqual(primera)
+    expect(contarLecturas("sucursales")).toBe(1)
+    expect(contarLecturas("depositos")).toBe(1)
+  })
+
+  it("CV-2 — otra org NO reusa la entrada (aislamiento multi-tenant)", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    await resolverDestinoVentaCacheado({ role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null })
+    await resolverDestinoVentaCacheado({ role: "ADMIN", organizationId: "org-2", userSucursalId: null, cookieSucursalId: null })
+
+    expect(contarLecturas("sucursales")).toBe(2)
+  })
+
+  it("CV-3 — distinto estado del selector NO comparte entrada", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    await resolverDestinoVentaCacheado({ role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null })
+    mockCookie("suc-B")
+    await resolverDestinoVentaCacheado({ role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: "suc-B" })
+
+    expect(contarLecturas("sucursales")).toBe(2)
+  })
+
+  it("CV-4 — distinto usuario/rol NO comparte entrada (no filtrar scope entre roles)", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    await resolverDestinoVentaCacheado({ role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null })
+    await resolverDestinoVentaCacheado({ role: "VENDEDOR", organizationId: "org-1", userSucursalId: "suc-V", cookieSucursalId: null })
+
+    expect(contarLecturas("sucursales")).toBe(2)
+  })
+
+  it("CV-5 — resetCacheResolucionVenta fuerza volver a consultar", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+    const params = { role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null }
+
+    await resolverDestinoVentaCacheado(params)
+    resetCacheResolucionVenta()
+    await resolverDestinoVentaCacheado(params)
+
+    expect(contarLecturas("sucursales")).toBe(2)
+  })
+
+  // NO afirma que los dos montajes de PosProductSearch paguen una sola query:
+  // memoConTtl cachea VALORES, no promesas en vuelo, asi que dos requests
+  // realmente concurrentes pueden consultar las dos. Lo que si garantiza (y es
+  // lo que se mide aca) es que una llamada posterior a que la primera resolvio
+  // reusa la entrada — el caso del buscador debounced, tecla tras tecla.
+  it("CV-6 — el indicador tambien se cachea: resuelta la primera, la siguiente no consulta", async () => {
+    mockListaSucursales(DOS_SUCURSALES)
+    const params = {
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-principal",
+    }
+
+    const primera = await resolverIndicadorVentaCacheado(params)
+    const segunda = await resolverIndicadorVentaCacheado(params)
+
+    expect(primera).toBe("Casa Central")
+    expect(segunda).toBe("Casa Central")
+    expect(contarLecturas("sucursales")).toBe(1)
+  })
+
+  it("CV-8 — un destino sin resolver NO se cachea (una falla transitoria no queda fijada 30s)", async () => {
+    // getPrincipalId came back empty (none configured, two principal rows, or a
+    // transient query failure). For an ADMIN in "todas" that means org-wide
+    // reads; pinning it for a full TTL would outlive the failure that caused it.
+    mockSucursalesYDepositos({ principalSucursalId: null })
+    const params = { role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null }
+
+    const primera = await resolverDestinoVentaCacheado(params)
+    const segunda = await resolverDestinoVentaCacheado(params)
+
+    expect(primera.sucursalId).toBeNull()
+    expect(segunda.sucursalId).toBeNull()
+    expect(contarLecturas("sucursales")).toBe(2)
+  })
+
+  it("CV-9 — un indicador sin resolver NO se cachea (un blip no lo oculta toda la sesion)", async () => {
+    // El cliente lee el header una sola vez, al montar: si una falla transitoria
+    // queda fijada 30s, el indicador desaparece para TODA la sesion del POS.
+    mockListaSucursalesConError({ code: "57014", message: "canceling statement due to statement timeout" })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const params = {
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-principal",
+    }
+
+    expect(await resolverIndicadorVentaCacheado(params)).toBeNull()
+    expect(await resolverIndicadorVentaCacheado(params)).toBeNull()
+
+    expect(contarLecturas("sucursales")).toBe(2)
+    warn.mockRestore()
+  })
+
+  it("CV-10 — pasado el blip el indicador vuelve, sin esperar el TTL", async () => {
+    mockListaSucursalesConError({ code: "57014", message: "canceling statement due to statement timeout" })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const params = {
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-principal",
+    }
+
+    expect(await resolverIndicadorVentaCacheado(params)).toBeNull()
+    mockListaSucursales(DOS_SUCURSALES)
+
+    expect(await resolverIndicadorVentaCacheado(params)).toBe("Casa Central")
+    warn.mockRestore()
+  })
+
+  it("CV-11 — una org de UNA sucursal SI se cachea (es una respuesta real, no una falla)", async () => {
+    mockListaSucursales([{ id: "suc-unica", nombre: "Casa Central" }])
+    const params = {
+      role: "ADMIN",
+      organizationId: "org-1",
+      cookieSucursalId: null,
+      ventaSucursalId: "suc-unica",
+    }
+
+    expect(await resolverIndicadorVentaCacheado(params)).toBeNull()
+    expect(await resolverIndicadorVentaCacheado(params)).toBeNull()
+
+    expect(contarLecturas("sucursales")).toBe(1)
+  })
+
+  it("CV-12 — una falla de la query de depositos NO se cachea (el drenaje no queda fijado 30s)", async () => {
+    // A failed deposito lookup lands on the same drain-mode fallback as a
+    // sucursal that genuinely has no principal deposito. Pinning it for a full
+    // TTL hands an ADMIN the org-wide aggregate — the exact read/write drift
+    // scope=venta exists to close — and leaves branch-scoped users fail-closed
+    // on an empty catalog, all over a blip that already passed.
+    mockSucursalesYDepositos({
+      principalSucursalId: "suc-principal",
+      depositoError: { code: "57014", message: "canceling statement due to statement timeout" },
+    })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const params = { role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null }
+
+    expect((await resolverDestinoVentaCacheado(params)).depositoId).toBeNull()
+    expect((await resolverDestinoVentaCacheado(params)).depositoId).toBeNull()
+
+    expect(contarLecturas("depositos")).toBe(2)
+    warn.mockRestore()
+  })
+
+  it("CV-13 — pasado el blip de depositos vuelve el deposito, sin esperar el TTL", async () => {
+    mockSucursalesYDepositos({
+      principalSucursalId: "suc-principal",
+      depositoError: { code: "57014", message: "canceling statement due to statement timeout" },
+    })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const params = { role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null }
+
+    expect((await resolverDestinoVentaCacheado(params)).depositoId).toBeNull()
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    expect((await resolverDestinoVentaCacheado(params)).depositoId).toBe("dep-principal")
+    warn.mockRestore()
+  })
+
+  it("CV-14 — una sucursal SIN deposito principal SI se cachea (es una respuesta real, no una falla)", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: null })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const params = { role: "ADMIN", organizationId: "org-1", userSucursalId: null, cookieSucursalId: null }
+
+    expect((await resolverDestinoVentaCacheado(params)).depositoId).toBeNull()
+    expect((await resolverDestinoVentaCacheado(params)).depositoId).toBeNull()
+
+    expect(contarLecturas("depositos")).toBe(1)
+    warn.mockRestore()
+  })
+
+  // Cada request de POS que resuelve un contexto nuevo deja una entrada. La org,
+  // el rol, el usuario y la sucursal del selector forman la clave, asi que una
+  // instancia con muchos tenants pasa el tope sin que venza nada: el barrido de
+  // expiradas no libera una sola entrada y el tope tiene que morder igual.
+  function paramsDeOrg(org: string) {
+    return { role: "ADMIN", organizationId: org, userSucursalId: null, cookieSucursalId: null }
+  }
+
+  it("CV-15 — el tope de entradas es real: pasado el limite se desaloja la menos usada", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    for (let i = 0; i < CACHE_VENTA_MAX_ENTRIES + 10; i++) {
+      await resolverDestinoVentaCacheado(paramsDeOrg(`org-${i}`))
+    }
+
+    const antes = contarLecturas("depositos")
+    await resolverDestinoVentaCacheado(paramsDeOrg("org-0"))
+    expect(contarLecturas("depositos")).toBe(antes + 1)
+
+    const despues = contarLecturas("depositos")
+    await resolverDestinoVentaCacheado(paramsDeOrg(`org-${CACHE_VENTA_MAX_ENTRIES + 9}`))
+    expect(contarLecturas("depositos")).toBe(despues)
+  })
+
+  it("CV-16 — el desalojo mira el uso, no el orden de llegada: una entrada recien usada sobrevive", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+
+    for (let i = 0; i < CACHE_VENTA_MAX_ENTRIES; i++) {
+      await resolverDestinoVentaCacheado(paramsDeOrg(`org-${i}`))
+    }
+    // La mas vieja por orden de llegada, pero la mas reciente por uso.
+    await resolverDestinoVentaCacheado(paramsDeOrg("org-0"))
+    for (let i = 0; i < 5; i++) {
+      await resolverDestinoVentaCacheado(paramsDeOrg(`nueva-${i}`))
+    }
+
+    const antes = contarLecturas("depositos")
+    await resolverDestinoVentaCacheado(paramsDeOrg("org-0"))
+    expect(contarLecturas("depositos")).toBe(antes)
+  })
+
+  it("CV-17 — una clave que se refresca seguido NO es la primera en caer (refrescar tambien renueva el uso)", async () => {
+    // Map.set sobre una clave que ya existe no la mueve de lugar, asi que el
+    // camino de refresco (entrada vencida que se vuelve a resolver) la dejaba
+    // clavada en su posicion original — y el desalojo, que empieza por la
+    // primera, terminaba echando justo al tenant mas activo.
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+    const T0 = 1_000_000
+    const ahora = vi.spyOn(Date, "now")
+    try {
+      ahora.mockReturnValue(T0)
+      await resolverDestinoVentaCacheado(paramsDeOrg("org-activa"))
+
+      // Vecinas mas nuevas, todas vivas cuando org-activa se refresca (asi el
+      // barrido de vencidas no las limpia y el desalojo tiene que elegir).
+      ahora.mockReturnValue(T0 + 25_000)
+      for (let i = 0; i < CACHE_VENTA_MAX_ENTRIES - 2; i++) {
+        await resolverDestinoVentaCacheado(paramsDeOrg(`org-${i}`))
+      }
+
+      // org-activa vencio y se vuelve a resolver: ese es el camino en cuestion,
+      // y la deja como la entrada usada mas recientemente de todo el mapa.
+      ahora.mockReturnValue(T0 + 31_000)
+      await resolverDestinoVentaCacheado(paramsDeOrg("org-activa"))
+
+      // Presion de desalojo: cada una de estas empuja a la menos usada afuera.
+      for (let i = 0; i < 5; i++) {
+        await resolverDestinoVentaCacheado(paramsDeOrg(`nueva-${i}`))
+      }
+
+      const antes = contarLecturas("depositos")
+      await resolverDestinoVentaCacheado(paramsDeOrg("org-activa"))
+      expect(contarLecturas("depositos")).toBe(antes)
+    } finally {
+      ahora.mockRestore()
+    }
+  })
+
+  it("CV-18 — el TTL se cuenta desde que la query CONTESTO, no desde que arranco", async () => {
+    // Un round trip lento a Supabase transcurre entre las dos marcas: medir el
+    // vencimiento contra la de antes guarda una entrada que ya nace vieja, y le
+    // recorta al TTL exactamente lo que tardo la consulta.
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+    const T0 = 1_000_000
+    const ahora = vi.spyOn(Date, "now")
+    try {
+      // Antes de resolver: T0. Despues de resolver: T0 + 3s (la query tardo).
+      ahora.mockReturnValueOnce(T0).mockReturnValue(T0 + 3_000)
+      await resolverDestinoVentaCacheado(paramsDeOrg("org-lenta"))
+
+      // A los 29s de que la query contesto la entrada TIENE que seguir viva.
+      ahora.mockReturnValue(T0 + 3_000 + 29_000)
+      const antes = contarLecturas("depositos")
+      await resolverDestinoVentaCacheado(paramsDeOrg("org-lenta"))
+
+      expect(contarLecturas("depositos")).toBe(antes)
+    } finally {
+      ahora.mockRestore()
+    }
+  })
+
+  it("CV-19 — la sucursal del selector que se pasa es la que RESUELVE, no solo la que arma la clave", async () => {
+    // Hoy los tres callers pasan exactamente lo que hay en la cookie, asi que la
+    // clave y el contenido coinciden por casualidad. Un caller futuro que pase un
+    // valor recordado o normalizado (por ejemplo null por "todas") guardaria una
+    // entrada bajo una clave que NO describe lo que contiene, y cada request con
+    // esa clave heredaria la sucursal equivocada por un TTL entero. Que el valor
+    // que identifica la entrada sea el mismo que la resuelve cierra esa puerta.
+    mockCookie("suc-de-la-cookie")
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-X" })
+
+    const destino = await resolverDestinoVentaCacheado({
+      role: "ADMIN",
+      organizationId: "org-1",
+      userSucursalId: null,
+      cookieSucursalId: "suc-pasada",
+    })
+
+    expect(destino.sucursalId).toBe("suc-pasada")
+  })
+
+  it("CV-7 — el camino de ESCRITURA no se cachea: resolverDestinoVenta siempre consulta", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-principal", depositoId: "dep-principal" })
+    const params = { role: "ADMIN", organizationId: "org-1", userSucursalId: null }
+
+    await resolverDestinoVenta(params)
+    await resolverDestinoVenta(params)
+
+    // Una venta real nunca debe apoyarse en un destino potencialmente vencido.
+    expect(contarLecturas("sucursales")).toBe(2)
+    expect(contarLecturas("depositos")).toBe(2)
+  })
+})
+
+describe("getNombreSucursal", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("devuelve el nombre cuando la sucursal existe", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: "suc-A", nombre: "Sucursal Palermo" })
+
+    const nombre = await getNombreSucursal("org-1", "suc-A")
+
+    expect(nombre).toBe("Sucursal Palermo")
+  })
+
+  it("devuelve null cuando no hay datos", async () => {
+    mockSucursalesYDepositos({ principalSucursalId: null })
+
+    const nombre = await getNombreSucursal("org-1", "suc-inexistente")
+
+    expect(nombre).toBeNull()
   })
 })

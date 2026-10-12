@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireAdmin, requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requireAdmin, requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatProveedor } from "@/lib/db-utils"
 import { z } from "zod"
@@ -48,7 +48,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    // Mismo eje que el resto del namespace: ver el comentario en
+    // app/api/proveedores/route.ts.
+    const { error, organizationId } = await requireAdminOrVendedor()
     if (error) return error
 
     const { id } = await params

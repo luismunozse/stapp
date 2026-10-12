@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { organizationAcceptsBilling } from "@/lib/account-deletion/org-state"
 import { verifyCreemSignature } from "@/lib/creem"
 import { beginWebhookEvent, finishWebhookEvent } from "@/lib/webhook-log"
 
@@ -224,6 +225,23 @@ async function registerCreemPayment(
     .single()
 
   if (payErr) {
+    // 23505 = unique_violation contra subscription_payments_provider_payment_uniq
+    // (migracion 305): otra entrega concurrente del MISMO evento ya registro el
+    // pago. Se reconoce en vez de devolver 500 y hacer que Creem reintente.
+    //
+    // DEUDA CONOCIDA: aca la suscripcion YA fue extendida por upsertCreemSubscription,
+    // que corre antes del insert. La ventana es mucho mas chica que la de MercadoPago
+    // (Creem no manda notificaciones multiples del mismo pago) pero existe. Cerrarla
+    // pide invertir el orden, y el insert necesita el subscription_id que devuelve
+    // ese upsert: es un cambio propio.
+    if ((payErr as { code?: string }).code === "23505") {
+      console.log(`[creem-webhook] Payment ${payment.providerPaymentId} ya registrado - skip`)
+      return {
+        status: "SKIPPED",
+        reason: "already_processed",
+      }
+    }
+
     console.error(`[creem-webhook] Error inserting payment for org ${ctx.organizationId}:`, payErr)
     throw payErr
   }
@@ -243,6 +261,9 @@ async function handleCheckoutCompleted(object: any): Promise<HandleResult> {
   const metadata = object?.metadata ?? {}
   const organizationId = metadata.organization_id
   if (!organizationId) return { status: "SKIPPED", reason: "missing_organization_id" }
+  if (!(await organizationAcceptsBilling(organizationId))) {
+    return { status: "SKIPPED", reason: "org_deleted_or_missing", organizationId }
+  }
 
   const order = object?.order ?? {}
   const productId = object?.product?.id ?? order?.product ?? null
@@ -284,6 +305,9 @@ async function handleSubscriptionActivate(object: any): Promise<HandleResult> {
   const metadata = object?.metadata ?? {}
   const organizationId = metadata.organization_id
   if (!organizationId) return { status: "SKIPPED", reason: "missing_organization_id" }
+  if (!(await organizationAcceptsBilling(organizationId))) {
+    return { status: "SKIPPED", reason: "org_deleted_or_missing", organizationId }
+  }
 
   const plan = await resolvePlan(metadata, object?.product?.id ?? null)
   if (!plan) return { status: "SKIPPED", reason: "plan_not_found", organizationId }
@@ -312,6 +336,9 @@ async function handleSubscriptionPaid(object: any): Promise<HandleResult> {
   const metadata = object?.metadata ?? {}
   const organizationId = metadata.organization_id
   if (!organizationId) return { status: "SKIPPED", reason: "missing_organization_id" }
+  if (!(await organizationAcceptsBilling(organizationId))) {
+    return { status: "SKIPPED", reason: "org_deleted_or_missing", organizationId }
+  }
 
   const plan = await resolvePlan(metadata, object?.product?.id ?? null)
   if (!plan) return { status: "SKIPPED", reason: "plan_not_found", organizationId }

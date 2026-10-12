@@ -72,6 +72,47 @@ export async function createCreemCheckout(
 }
 
 /**
+ * Cancela la suscripción en Creem al final del período actual (mode scheduled),
+ * igual criterio que MP/Rebill: el cliente conserva el acceso que ya pagó.
+ */
+export async function cancelCreemSubscription(subscriptionId: string): Promise<void> {
+  const res = await fetch(`${getBaseUrl()}/subscriptions/${subscriptionId}/cancel`, {
+    method: "POST",
+    headers: {
+      "x-api-key": getApiKey(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ mode: "scheduled", onExecute: "cancel" }),
+  })
+
+  if (!res.ok) {
+    // Reintento tras fallo parcial (Creem canceló pero nuestra base no llegó a
+    // actualizarse): si la suscripción ya está cancelada o agendada para
+    // cancelar, el rechazo no es un error real.
+    if (await isCreemSubscriptionEnding(subscriptionId)) return
+    const errText = await res.text()
+    throw new Error(`Creem cancel error (${res.status}): ${errText.slice(0, 500)}`)
+  }
+}
+
+async function isCreemSubscriptionEnding(subscriptionId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${getBaseUrl()}/subscriptions/${subscriptionId}`, {
+      headers: { "x-api-key": getApiKey() },
+    })
+    if (!res.ok) return false
+    const sub = await res.json()
+    return (
+      sub?.status === "canceled" ||
+      sub?.status === "scheduled_cancel" ||
+      Boolean(sub?.canceled_at)
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
  * Verifica la firma del webhook de Creem.
  *
  * HMAC-SHA256(rawBody, secret) en hex, comparado con el header `creem-signature`.

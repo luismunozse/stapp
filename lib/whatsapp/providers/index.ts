@@ -8,6 +8,7 @@ import { decrypt } from "@/lib/whatsapp/encryption"
 import { getPlatformEvolutionConfig } from "@/lib/whatsapp/platform-config"
 import { sendTextMessage as metaSendText, sendTemplateMessage as metaSendTemplate, type TemplateComponent } from "@/lib/whatsapp/client"
 import { sendText as evoSendText, type EvolutionCredentials } from "@/lib/whatsapp/providers/evolution"
+import { validarDestinoWhatsApp } from "@/lib/whatsapp/destino"
 
 export type WhatsAppProvider = "meta" | "evolution"
 
@@ -84,6 +85,10 @@ export async function sendWhatsAppText(
       return { success: false, error: "Plataforma Evolution no configurada", provider: "evolution" }
     }
     const countryCode = await loadOrgCountry(organizationId)
+    const destino = validarDestinoWhatsApp(to, countryCode)
+    if (!destino.valido) {
+      return { success: false, error: destino.motivo, provider: "evolution" }
+    }
     const creds = {
       baseUrl: platform.baseUrl,
       instanceName: opts.instanceNameOverride,
@@ -100,6 +105,13 @@ export async function sendWhatsAppText(
 
   const provider: WhatsAppProvider = config.provider || "meta"
   const countryCode = await loadOrgCountry(organizationId)
+
+  // Antes de gastar un envio: un numero sin codigo de area no le llega a nadie
+  // y el proveedor solo devuelve "Bad Request", que no le dice nada al taller.
+  const destino = validarDestinoWhatsApp(to, countryCode)
+  if (!destino.valido) {
+    return { success: false, error: destino.motivo, provider }
+  }
 
   if (provider === "evolution") {
     const creds = getEvolutionCreds(config)

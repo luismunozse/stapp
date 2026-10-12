@@ -15,7 +15,9 @@ const METODOS_PAGO = [
   { value: "TARJETA_DEBITO", label: "T. Débito", icon: CreditCard },
   { value: "TARJETA_CREDITO", label: "T. Crédito", icon: CreditCard },
   { value: "MERCADOPAGO", label: "MercadoPago", icon: Wallet },
-  { value: "CUENTA_CORRIENTE", label: "Cuenta", icon: PiggyBank },
+  // Spends the credit the client already deposited — every consumer routes it to
+  // usar_cuenta_corriente, which refuses to overdraw. It is not a way to fiar.
+  { value: "CUENTA_CORRIENTE", label: "Saldo a favor", icon: PiggyBank },
   { value: "OTRO", label: "Otro", icon: MoreHorizontal },
 ] as const
 
@@ -210,6 +212,14 @@ export function MultiPagoInput({
                 }}
                 placeholder="0.00"
               />
+              {/* Con punto o coma el monto se interpreta (1.500 = mil
+                  quinientos, 1500,50 = con centavos): se muestra cómo quedó
+                  antes de cobrar. */}
+              {/[.,]/.test(rawInputs[`${pago.id}:monto`] ?? "") && pago.monto > 0 && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Se registra {formatPrice(pago.monto)}
+                </p>
+              )}
             </div>
 
             {/* Cuotas para tarjeta crédito */}

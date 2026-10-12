@@ -3,7 +3,7 @@ import { requireApiKey } from "@/lib/api-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 
 const COLUMNS =
-  "id, nombre, telefono, email, direccion, dni, tipo_cliente, razon_social, cuit, created_at"
+  "id, nombre, telefono, email, direccion, dni, tipo_cliente, razon_social, cuit, tipo_precio, descuento_pct, created_at"
 
 // Org-wide by design: clientes has no sucursal_id column (shared CRM across branches).
 export async function GET(request: Request) {

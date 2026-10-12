@@ -14,6 +14,7 @@ import { Footer } from "@/components/landing/footer"
 import { WhatsAppFloat } from "@/components/marketing/whatsapp-float"
 import { useCases, getUseCase } from "@/lib/use-cases-data"
 import type { Metadata } from "next"
+import { OG_IMAGES } from "@/lib/og/metadata"
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -36,6 +37,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       canonical: `https://stapp.com.ar/casos-de-uso/${useCase.slug}`,
     },
     openGraph: {
+      images: OG_IMAGES,
       title: useCase.metaTitle,
       description: useCase.metaDescription,
       url: `https://stapp.com.ar/casos-de-uso/${useCase.slug}`,

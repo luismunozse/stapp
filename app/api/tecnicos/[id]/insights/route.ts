@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrSelf } from "@/lib/auth-utils"
+import {
+  requireAdminOrSelf,
+  hasInventarioAccess,
+  resolveVendedoresHabilitados,
+} from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+
+interface TopRepuesto {
+  nombre: string
+  cantidad: number
+  /** null cuando el rol no puede ver costos de compra:
+   *  repuestos_orden.precio_unitario es una copia congelada de precio_compra. */
+  monto: number | null
+}
 
 export async function GET(
   request: Request,
@@ -8,7 +20,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    const { error, organizationId } = await requireAdminOrSelf(id)
+    const { error, organizationId, role } = await requireAdminOrSelf(id)
     if (error) return error
     const { searchParams } = new URL(request.url)
     const dias = parseInt(searchParams.get("dias") || "90", 10)
@@ -103,9 +115,30 @@ export async function GET(
         repMap.set(key, cur)
       }
     }
-    const topRepuestos = Array.from(repMap.values())
+    // Mismo gate que /api/reportes/rentabilidad-tecnicos y /api/ordenes/[id],
+    // por la misma regla: quien no puede ver el costo de compra por item no
+    // recibe NINGUNA cifra derivada de precio_compra, a ningún nivel de
+    // agregación.
+    //
+    // monto es Σ cantidad x repuestos_orden.precio_unitario, y
+    // precio_unitario es la copia CONGELADA del costo de compra. cantidad
+    // viaja visible en la misma fila, así que monto / cantidad devuelve el
+    // costo de compra unitario exacto — el mismo número que /api/ordenes/[id]
+    // ya le niega al rol. El guard de esta ruta es requireAdminOrSelf, o sea
+    // que el propio TECNICO llega hasta acá.
+    //
+    // El resto de la fila no deriva de precio_compra y sigue visible: nombre y
+    // cantidad son consumo, no costo. El orden tampoco es canal lateral: se
+    // ordena por cantidad, que ya viaja visible.
+    const canViewCost = hasInventarioAccess(
+      role,
+      role === "VENDEDOR" ? await resolveVendedoresHabilitados(organizationId!) : false
+    )
+
+    const topRepuestos: TopRepuesto[] = Array.from(repMap.values())
       .sort((a, b) => b.cantidad - a.cantidad)
       .slice(0, 5)
+      .map((r) => (canViewCost ? r : { ...r, monto: null }))
 
     // Productividad por semana (últimas 8 semanas)
     const ahora = new Date()

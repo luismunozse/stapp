@@ -15,6 +15,7 @@ import {
   Mail,
   MapPin,
   Wrench,
+  Hammer,
   Trash2,
   FileText,
   FileDown,
@@ -49,6 +50,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import Link from "next/link"
 import { useCurrency, useTerminologia } from "@/contexts/currency-context"
+import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 import { CotizacionList } from "@/components/cotizaciones/cotizacion-list"
 import { GarantiaCard } from "@/components/garantias/garantia-card"
 import { FotoGallery } from "@/components/fotos/foto-gallery"
@@ -57,19 +59,19 @@ import { WhatsAppDialog } from "@/components/ordenes/whatsapp-dialog"
 import { EntregaDialog } from "@/components/ordenes/entrega-dialog"
 import {
   printDeviceLabel,
-  readEtiquetaSize,
-  saveEtiquetaSize,
   LABEL_SIZE_OPTIONS,
-  DEFAULT_LABEL_SIZE,
   type LabelSize,
 } from "@/components/ordenes/print-label"
+import { useEtiquetaSize } from "@/components/ordenes/use-etiqueta-size"
 import { ThermalPrintOrden } from "@/components/ordenes/thermal-print-orden"
 import { NotificationHistory } from "@/components/ordenes/notification-history"
+import { PracticaOrdenDetail } from "@/components/ordenes/practica-orden-detail"
 import { OrdenEstadoCard } from "@/components/ordenes/orden-estado-card"
 import { OrdenTecnicoCard } from "@/components/ordenes/orden-tecnico-card"
 import { OrdenCostosCard } from "@/components/ordenes/orden-costos-card"
 import { OrdenComisionCard } from "@/components/ordenes/orden-comision-card"
 import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
+import { OrdenServiciosTab } from "@/components/ordenes/orden-servicios-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
 import { ConfirmarReparadoDialog } from "@/components/ordenes/confirmar-reparado-dialog"
 import { NotaCreditoDialog } from "@/components/notas-credito/nota-credito-dialog"
@@ -105,7 +107,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const { data: session } = useSession()
   const { confirm, alert } = useModal()
   const term = useTerminologia()
-  const { formatPrice, formatDate, currency, timezone } = useCurrency()
+  const { formatPrice, formatDate, currency, timezone, pais } = useCurrency()
   const [orden, setOrden] = useState<OrdenServicio | null>(null)
   const [tecnicos, setTecnicos] = useState<UserType[]>([])
   const [loading, setLoading] = useState(true)
@@ -120,11 +122,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [showReparadoDialog, setShowReparadoDialog] = useState(false)
   const [showNCDialog, setShowNCDialog] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
-  const [etiquetaSize, setEtiquetaSize] = useState<LabelSize>(DEFAULT_LABEL_SIZE)
-
-  useEffect(() => {
-    setEtiquetaSize(readEtiquetaSize())
-  }, [])
+  const { size: etiquetaSize, ready: etiquetaSizeReady, update: updateEtiquetaSize } = useEtiquetaSize()
+  // Antes de que la org responda, no se fuerza el default: printDeviceLabel lo resuelve.
+  const etiquetaOpts = etiquetaSizeReady ? { size: etiquetaSize } : undefined
 
   const isAdmin = session?.user?.role === "ADMIN"
   const userRole = session?.user?.role
@@ -228,8 +228,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       message = `Hola ${orden.cliente?.nombre}, desde acá podés seguir el estado de tu equipo (Orden ${codigoDisplay}):\n${seguimientoUrl}`
     }
 
-    const phone = contactPhone.replace(/\D/g, "")
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank")
+    window.open(generateWhatsAppUrl(contactPhone, message, pais), "_blank")
   }
 
   const fetchOrden = useCallback(async () => {
@@ -436,8 +435,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
   const handleGenerarFactura = async () => {
     const confirmed = await confirm({
-      title: "Generar factura",
-      description: "¿Generar factura para esta orden?",
+      title: "Generar remito",
+      description: "¿Generar remito para esta orden?",
       confirmText: "Generar",
       variant: "info",
     })
@@ -453,8 +452,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
       if (res.ok) {
         await alert({
-          title: "Factura generada",
-          description: "La factura se generó correctamente",
+          title: "Remito generado",
+          description: "El remito se generó correctamente",
           variant: "success",
         })
         router.push("/facturacion")
@@ -462,14 +461,14 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         const error = await res.json()
         await alert({
           title: "Error",
-          description: error.error || "Error al generar factura",
+          description: error.error || "Error al generar remito",
           variant: "error",
         })
       }
     } catch (error) {
       await alert({
         title: "Error",
-        description: "Error al generar factura",
+        description: "Error al generar remito",
         variant: "error",
       })
     } finally {
@@ -577,6 +576,13 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
   if (!orden) {
     return <div className="text-center py-8 text-muted-foreground">Orden no encontrada</div>
+  }
+
+  // A practice order gets its own read-only view: no state change, cobro,
+  // sena, parts, quotes, invoices or printing (see PracticaOrdenDetail).
+  // Every hook of this component runs above this line.
+  if (orden.esPractica) {
+    return <PracticaOrdenDetail orden={orden} isAdmin={isAdmin} />
   }
 
   // ESPERANDO_REPUESTO es un sub-estado de EN_REPARACION, mapear al mismo índice
@@ -706,11 +712,12 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             value={etiquetaSize}
             onChange={(e) => {
               const s = e.target.value as LabelSize
-              setEtiquetaSize(s)
-              saveEtiquetaSize(s)
+              void updateEtiquetaSize(s).then((guardado) => {
+                if (!guardado) toast.warning("No se pudo guardar para todo el taller. Queda solo en este equipo.")
+              })
             }}
             className="h-9 rounded-md border bg-background px-2 text-xs"
-            title="Tamaño de etiqueta (térmica): elegí según tu impresora"
+            title="Tamaño de etiqueta (térmica): se guarda para todo el taller"
           >
             {LABEL_SIZE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -735,7 +742,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 fechaIngreso: fecha,
                 publicToken: orden.publicToken,
                 organizationName: undefined,
-              }, baseUrl, { size: etiquetaSize })
+              }, baseUrl, etiquetaOpts)
             }}
             title="Imprimir etiqueta para el equipo"
           >
@@ -762,7 +769,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   organizationName: undefined,
                   variant: "reparado",
                   fechaReparacion: fechaRep,
-                }, baseUrl, { size: etiquetaSize })
+                }, baseUrl, etiquetaOpts)
               }}
               title="Imprimir etiqueta de reparado para pegar en el equipo"
             >
@@ -781,7 +788,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 {(orden.estado === "REPARADO" || orden.estado === "ENTREGADO") && (
                   <DropdownMenuItem onClick={handleGenerarFactura} disabled={updating}>
                     <Receipt className="h-4 w-4 mr-2" />
-                    Generar Factura
+                    Generar Remito
                   </DropdownMenuItem>
                 )}
                 {(orden.estado === "ENTREGADO" || orden.estado === "REPARADO") && !orden.esReingreso && (
@@ -1027,6 +1034,15 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 <Package className="h-4 w-4" />
                 Repuestos
               </TabsTrigger>
+              {/* Servicios mueve el presupuesto y el costo final de la orden,
+                  asi que el panel es solo ADMIN. El trigger sigue al panel: si
+                  se muestra sin el, el tecnico abre una pestana vacia. */}
+              {isAdmin && (
+                <TabsTrigger value="servicios" className="gap-2">
+                  <Hammer className="h-4 w-4" />
+                  Servicios
+                </TabsTrigger>
+              )}
               <TabsTrigger value="fotos" className="gap-2">
                 <Camera className="h-4 w-4" />
                 Fotos
@@ -1055,6 +1071,20 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               />
             </TabsContent>
 
+            <TabsContent value="servicios" className="mt-4">
+              {isAdmin && (
+                <OrdenServiciosTab
+                  ordenId={ordenId}
+                  servicios={(orden as any).servicios || []}
+                  costoFinal={orden.costoFinal ?? null}
+                  presupuesto={orden.presupuesto ?? null}
+                  estado={orden.estado}
+                  totalCobrado={orden.totalCobrado || 0}
+                  onServiciosChanged={fetchOrden}
+                />
+              )}
+            </TabsContent>
+
             <TabsContent value="fotos" className="mt-4">
               <FotoGallery ordenId={ordenId} />
             </TabsContent>
@@ -1066,7 +1096,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             <TabsContent value="cotizaciones" className="mt-4">
               <Card>
                 <CardContent className="p-6">
-                  <CotizacionList ordenId={ordenId} clienteEmail={orden.cliente?.email} readOnly={!isAdmin && userRole !== "TECNICO"} repuestos={(orden as any).repuestos || []} onOrdenChanged={fetchOrden} />
+                  <CotizacionList ordenId={ordenId} clienteEmail={orden.cliente?.email} readOnly={!isAdmin && userRole !== "TECNICO"} repuestos={(orden as any).repuestos || []} mostrarCostos={isAdmin} onOrdenChanged={fetchOrden} />
                 </CardContent>
               </Card>
             </TabsContent>

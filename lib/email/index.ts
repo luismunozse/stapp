@@ -1,0 +1,52 @@
+import { envialoSimpleProvider } from "./providers/envialosimple"
+import { resendProvider } from "./providers/resend"
+import { estaSuprimido, EmailSuprimidoError } from "./suppression"
+import type { EmailMessage, NombreProveedor, SendResult } from "./types"
+
+export type { EmailMessage, EmailAttachment, SendResult, EmailProvider } from "./types"
+export { EmailSuprimidoError } from "./suppression"
+
+/**
+ * Proveedor que resuelve hoy para el canal de cliente. Existe para que el
+ * registro del path de error pueda atribuir el intento sin repetir la regla
+ * del kill switch: la decision de ruteo vive en un solo lugar.
+ */
+export function proveedorCliente(): NombreProveedor {
+  return process.env.RESEND_API_KEY ? "resend" : "envialosimple"
+}
+
+/**
+ * Correo de plataforma: verificacion de cuenta, reset de contrasena,
+ * facturacion, leads, soporte, cotizaciones y los crons de lifecycle.
+ * Sale por el dominio principal.
+ */
+export async function sendPlatform(msg: EmailMessage): Promise<SendResult> {
+  return envialoSimpleProvider.send(msg)
+}
+
+/**
+ * Correo dirigido al CLIENTE FINAL del taller: cambios de estado de orden,
+ * presupuesto, recordatorio de retiro, garantia, cobranza.
+ *
+ * Sale por un proveedor y un subdominio distintos a proposito. Si esta rama
+ * se llenara de correo de plataforma, un pico de rebotes en el canal operativo
+ * volveria a tumbar la verificacion de cuenta y el reset de contrasena, que es
+ * exactamente lo que esta separacion evita.
+ */
+export async function sendCustomer(msg: EmailMessage): Promise<SendResult> {
+  // El chequeo de supresion va ANTES de elegir proveedor, y por lo tanto corre
+  // tambien durante el fallback: la supresion es un hecho del destinatario, no
+  // del proveedor. Enviar a una casilla suprimida por EnvialoSimple degradaria
+  // el dominio de plataforma, que es justo lo que esta separacion protege.
+  const motivo = await estaSuprimido(msg.to)
+  if (motivo) {
+    throw new EmailSuprimidoError(motivo)
+  }
+
+  // KILL SWITCH: la caida a EnvialoSimple ocurre SOLO por configuracion
+  // ausente, NUNCA por un envio fallido. Un fallback en runtime romperia dos
+  // cosas a la vez: mandaria correo de taller por el dominio que se quiere
+  // aislar, y ocultaria la config rota detras de un "todo funciona".
+  const provider = proveedorCliente() === "resend" ? resendProvider : envialoSimpleProvider
+  return provider.send(msg)
+}

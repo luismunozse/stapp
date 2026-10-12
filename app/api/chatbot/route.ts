@@ -6,6 +6,7 @@ import { headers } from "next/headers"
 import { getPremiumPrices } from "@/lib/pricing"
 import { extractLeadData, shouldExtract, type ChatTurn } from "@/lib/chatbot/extract-lead-data"
 import { upsertLeadFromConversation } from "@/lib/chatbot/upsert-lead"
+import { CONTACT_EMAIL, CONTACT_PHONE_DISPLAY } from "@/lib/contact"
 
 const chatRequestSchema = z.object({
   sessionId: z.string().min(1, "Session ID es requerido"),
@@ -219,11 +220,11 @@ Instrucciones:
 function fallbackMessage(reason: { status?: number; message?: string } | null): string {
   if (reason?.status === 429 || reason?.message?.includes("429")) {
     return "¡Hola! En este momento tenemos mucha demanda y no puedo responderte al instante. " +
-      "Si querés, podés escribirnos a contacto@stapp.com.ar o visitá nuestra página para más info sobre STApp. " +
+      `Si querés, podés escribirnos a ${CONTACT_EMAIL} o visitá nuestra página para más info sobre STApp. ` +
       "¡Gracias por tu paciencia!"
   }
   return "Disculpá, estoy teniendo algunos problemas técnicos. " +
-    "Podés intentar de nuevo en unos segundos o escribirnos a contacto@stapp.com.ar. ¡Gracias!"
+    `Podés intentar de nuevo en unos segundos o escribirnos a ${CONTACT_EMAIL}. ¡Gracias!`
 }
 
 async function buildContextPrompt(): Promise<string> {
@@ -418,9 +419,9 @@ INTEGRACIONES Y API:
 - Notificaciones push web y nativas.
 
 CONTACTO:
-- WhatsApp: +54 9 11 6962-5733
+- WhatsApp: ${CONTACT_PHONE_DISPLAY}
 - Web: https://stapp.com.ar
-- Email: contacto@stapp.com.ar
+- Email: ${CONTACT_EMAIL}
 
 ESTRATEGIA DE CAPTURA DE LEADS (MUY IMPORTANTE):
 

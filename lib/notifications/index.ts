@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { sendEmail } from "@/lib/email"
+import { sendCustomer, proveedorCliente } from "@/lib/email/index"
 import {
   NotificationType,
   NotificationChannel,
@@ -24,7 +24,7 @@ export class NotificationService {
 
     const { data: org } = await supabaseAdmin
       .from("organizations")
-      .select("notificaciones_email, notificaciones_whatsapp, dias_recordatorio")
+      .select("notificaciones_email, notificaciones_whatsapp, dias_recordatorio, pais")
       .eq("id", this.organizationId)
       .single()
 
@@ -32,6 +32,7 @@ export class NotificationService {
       emailEnabled: org?.notificaciones_email ?? true,
       whatsappEnabled: org?.notificaciones_whatsapp ?? true,
       diasRecordatorio: org?.dias_recordatorio ?? 3,
+      pais: org?.pais ?? null,
     }
 
     return this.config
@@ -92,7 +93,7 @@ export class NotificationService {
     }
 
     try {
-      const result = await sendEmail({
+      const result = await sendCustomer({
         to: context.cliente.email,
         subject: emailContent.subject,
         html: emailContent.html,
@@ -106,6 +107,7 @@ export class NotificationService {
         context,
         success: true,
         messageId,
+        proveedor: result.proveedor,
         content: emailContent.html,
         subject: emailContent.subject,
       })
@@ -125,6 +127,7 @@ export class NotificationService {
         context,
         success: false,
         error: errorMessage,
+        proveedor: proveedorCliente(),
         content: emailContent.html,
         subject: emailContent.subject,
       })
@@ -187,7 +190,8 @@ export class NotificationService {
 
     const whatsappUrl = generateWhatsAppUrl(
       context.cliente.telefonoContacto || context.cliente.telefono,
-      template.mensaje
+      template.mensaje,
+      (await this.getConfig()).pais
     )
 
     // Registrar como pendiente (se marca enviado cuando el usuario hace click)
@@ -212,12 +216,17 @@ export class NotificationService {
     context: NotificationContext
     success: boolean
     messageId?: string
+    proveedor?: string
     error?: string
     content: string
     subject?: string
   }): Promise<void> {
     try {
-      await supabaseAdmin.from("notification_logs").insert({
+      // supabase-js devuelve los errores de PostgREST como valor, no los
+      // lanza: sin destructurar `error` acá, un insert que falla (por
+      // ejemplo por una migracion pendiente) no dispara el catch y la
+      // entrada del timeline se pierde sin ningun otro sintoma.
+      const { error } = await supabaseAdmin.from("notification_logs").insert({
         organization_id: this.organizationId,
         orden_id: params.context.orden?.id || null,
         garantia_id: params.context.garantia?.id || null,
@@ -232,11 +241,16 @@ export class NotificationService {
         asunto: params.subject || null,
         contenido: params.content,
         error_message: params.error || null,
+        provider_message_id: params.messageId || null,
+        proveedor: params.proveedor || "envialosimple",
         metadata: JSON.stringify({
           messageId: params.messageId,
           ordenNumero: params.context.orden?.numeroOrden,
         }),
       })
+      if (error) {
+        console.error("logNotification: no se pudo registrar el envio", error.message)
+      }
     } catch (err) {
       console.error("Error logging notification:", err)
     }
@@ -247,7 +261,8 @@ export class NotificationService {
     let query = supabaseAdmin
       .from("notification_logs")
       .select(`
-        *,
+        id, tipo, canal, estado, destinatario, asunto, error_message, created_at,
+        estado_entrega, delivered_at, bounced_at, bounce_tipo, proveedor,
         ordenes_servicio (numero_orden),
         clientes (nombre)
       `)

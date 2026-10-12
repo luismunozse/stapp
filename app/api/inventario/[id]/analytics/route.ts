@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 export async function GET(
@@ -7,7 +7,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     const { id } = await params
@@ -83,6 +83,11 @@ export async function GET(
 
     const puntoReorden = item.punto_reorden ?? (promedioDiario90 > 0 ? Math.ceil(promedioDiario90 * 14) : null)
 
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
     return NextResponse.json({
       ventasUlt30d,
       ventasUlt90d,
@@ -94,7 +99,7 @@ export async function GET(
       disponible,
       stockReservado: item.stock_reservado || 0,
       puntoReorden,
-      valorStock: item.stock * (Number(item.precio_compra) || 0),
+      valorStock: canViewCost ? item.stock * (Number(item.precio_compra) || 0) : null,
     })
   } catch (error) {
     console.error("Error fetching item analytics:", error)

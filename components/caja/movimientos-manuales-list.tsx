@@ -25,6 +25,15 @@ interface MovimientosManualesListProps {
   refreshKey?: number
 }
 
+// Origenes generados por el sistema: no se borran desde caja (el endpoint
+// responde 409). Se espeja ORIGENES_NO_ELIMINABLES de lib/caja-utils, que no se
+// importa aca para no arrastrar supabaseAdmin al bundle del cliente.
+const ORIGEN_BADGE: Record<string, string> = {
+  DEVOLUCION: "Devolución",
+  NOTA_CREDITO: "Nota de crédito",
+}
+const ORIGENES_SISTEMA = new Set(["DEVOLUCION", "NOTA_CREDITO", "COGS"])
+
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManualesListProps) {
@@ -45,11 +54,15 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
     setDeleteLoading(true)
     try {
       const res = await fetch(`/api/caja/movimientos/${deleteId}`, { method: "DELETE" })
-      if (!res.ok) throw new Error("Error al eliminar")
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error || "Error al eliminar")
+      }
       setDeleteId(null)
       mutate()
-    } catch {
-      await showError("Error al eliminar movimiento")
+    } catch (err) {
+      setDeleteId(null)
+      await showError(err instanceof Error ? err.message : "Error al eliminar movimiento")
     } finally {
       setDeleteLoading(false)
     }
@@ -136,6 +149,11 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
                           Recurrente
                         </Badge>
                       )}
+                      {ORIGEN_BADGE[m.origen] && (
+                        <Badge variant="outline" className="text-xs font-normal">
+                          {ORIGEN_BADGE[m.origen]}
+                        </Badge>
+                      )}
                       {m.comprobanteUrl && (
                         <a
                           href={m.comprobanteUrl}
@@ -182,14 +200,16 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
                     {m.tipo === "INGRESO" ? "+" : "-"}
                     {formatPrice(m.monto)}
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setDeleteId(m.id)}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {!ORIGENES_SISTEMA.has(m.origen) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setDeleteId(m.id)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}

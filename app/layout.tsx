@@ -12,7 +12,6 @@ import {
   OrganizationJsonLd,
   SoftwareApplicationJsonLd,
   WebSiteJsonLd,
-  ServiceJsonLd,
 } from "@/components/seo/json-ld"
 import { GoogleAnalytics } from "@/components/seo/google-analytics"
 
@@ -49,7 +48,11 @@ export const metadata: Metadata = {
     default: "STApp - Gestión de Servicio Técnico",
     template: "%s | STApp",
   },
-  description: "Software #1 de gestión para talleres de reparación de celulares y servicio técnico. Órdenes de trabajo, clientes, inventario, facturación electrónica y notificaciones WhatsApp. Probá 30 días gratis.",
+  // "facturación", no "facturación electrónica": STApp factura con numeración
+  // automática e IVA discriminado y exporta a PDF, pero no tiene integración
+  // con AFIP. Esta description es el snippet que se ve en Google, así que la
+  // promesa se cumple tal cual está escrita.
+  description: "Software #1 de gestión para talleres de reparación de celulares y servicio técnico. Órdenes de trabajo, clientes, inventario, facturación y notificaciones WhatsApp. Probá 30 días gratis.",
   keywords: [
     "software servicio técnico",
     "gestión taller reparación",
@@ -92,7 +95,7 @@ export const metadata: Metadata = {
     description: "Sistema de gestión para servicio técnico de dispositivos electrónicos. Administra órdenes de trabajo, clientes, inventario y facturación.",
     images: [
       {
-        url: "/api/og?v=3",
+        url: "/api/og?v=4",
         width: 1200,
         height: 630,
         alt: "STApp - Software de Gestión para Talleres de Reparación de Celulares",
@@ -104,8 +107,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "STApp - Gestión de Servicio Técnico",
     description: "Sistema de gestión para servicio técnico de dispositivos electrónicos. Administra órdenes, clientes e inventario.",
-    images: ["/api/og?v=3"],
-    creator: "@stapp_ar",
+    images: ["/api/og?v=4"],
   },
   // Robots
   robots: {
@@ -128,10 +130,17 @@ export const metadata: Metadata = {
       "x-default": siteUrl,
     },
   },
-  // Verification (agregar IDs cuando est\u00e9n disponibles)
-  // verification: {
-  //   google: "google-site-verification-id",
-  // },
+  // Search Console. Se resuelve por variable de entorno para que activarlo no
+  // requiera tocar codigo: alcanza con setear GOOGLE_SITE_VERIFICATION en
+  // Vercel y redeployar. Si no esta seteada, Next omite la meta tag entera.
+  //
+  // Nota: verificar el dominio por DNS en Search Console no necesita esta meta
+  // tag en absoluto, y cubre el dominio completo incluidos los subdominios de
+  // tenant. Esta via es la alternativa para cuando se verifica por prefijo de
+  // URL.
+  verification: process.env.GOOGLE_SITE_VERIFICATION
+    ? { google: process.env.GOOGLE_SITE_VERIFICATION }
+    : undefined,
 }
 
 export const viewport: Viewport = {
@@ -222,7 +231,6 @@ export default async function RootLayout({
         <OrganizationJsonLd />
         <SoftwareApplicationJsonLd />
         <WebSiteJsonLd />
-        <ServiceJsonLd />
 
         {/* Google Analytics */}
         <GoogleAnalytics />

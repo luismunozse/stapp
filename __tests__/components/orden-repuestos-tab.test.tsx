@@ -364,6 +364,148 @@ describe("OrdenRepuestosTab — costo y margen visibles solo con mostrarCostos",
   })
 })
 
+// Un rol sin acceso a inventario recibe precioUnitario en null. En una fila
+// anterior a la migracion 286 tampoco hay precioVentaUnitario, asi que no queda
+// ningun precio: hay que decir "sin precio", no inventar un $0 y sumarlo.
+describe("OrdenRepuestosTab — repuesto sin precio visible (rol con costo oculto)", () => {
+  const repuestoSinPrecio = {
+    id: "rep-1",
+    inventarioId: "inv-1",
+    inventario: { id: "inv-1", nombre: "Pantalla iPhone 12", stock: 5 },
+    cantidad: 2,
+    precioUnitario: null,
+    precioVentaUnitario: null,
+  }
+
+  const repuestoConVenta = {
+    id: "rep-2",
+    inventarioId: "inv-2",
+    inventario: { id: "inv-2", nombre: "Bateria iPhone 12", stock: 3 },
+    cantidad: 1,
+    precioUnitario: null,
+    precioVentaUnitario: 250,
+  }
+
+  const setupFetch = () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: true, json: async () => ({ data: [] }) } as Response)),
+    )
+  }
+
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("no muestra $0 y oculta el subtotal cuando falta el precio de un repuesto", () => {
+    setupFetch()
+
+    render(
+      <ModalProvider>
+        <OrdenRepuestosTab
+          ordenId="orden-1"
+          repuestos={[repuestoSinPrecio, repuestoConVenta]}
+          onRepuestosChanged={vi.fn()}
+        />
+      </ModalProvider>,
+    )
+
+    expect(screen.queryByText(/\$0/)).not.toBeInTheDocument()
+    expect(screen.queryByText("Subtotal Repuestos")).not.toBeInTheDocument()
+    expect(screen.getAllByText(/Sin precio/i).length).toBeGreaterThan(0)
+    // El resto de la fila sigue siendo util para el tecnico.
+    expect(screen.getByText("Pantalla iPhone 12")).toBeInTheDocument()
+  })
+
+  it("muestra el subtotal cuando todos los repuestos tienen precio", () => {
+    setupFetch()
+
+    render(
+      <ModalProvider>
+        <OrdenRepuestosTab
+          ordenId="orden-1"
+          repuestos={[repuestoConVenta]}
+          onRepuestosChanged={vi.fn()}
+        />
+      </ModalProvider>,
+    )
+
+    expect(screen.getByText("Subtotal Repuestos")).toBeInTheDocument()
+    expect(screen.queryByText(/Sin precio/i)).not.toBeInTheDocument()
+  })
+})
+
+// El "Subtotal" del formulario de alta multiplica el COSTO del item elegido.
+// Con /api/inventario devolviendo precioCompra: null a los roles sin acceso,
+// ese recuadro mostraba un "$0" que parecia un precio real.
+describe("OrdenRepuestosTab — subtotal del formulario de alta", () => {
+  const itemInventario = {
+    id: "inv-1",
+    codigo: "P12",
+    nombre: "Pantalla iPhone 12",
+    stock: 5,
+    stockReservado: 0,
+    categoria: null,
+    ubicacion: null,
+    barcode: null,
+  }
+
+  const setupFetch = (precioCompra: number | null) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: async () => ({ data: [{ ...itemInventario, precioCompra }] }),
+        } as Response),
+      ),
+    )
+  }
+
+  const seleccionarItem = async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Agregar" }))
+    fireEvent.change(
+      screen.getByPlaceholderText("Buscar por nombre, código o código de barras..."),
+      { target: { value: "pantalla" } },
+    )
+    await waitFor(() => expect(screen.getAllByText("Pantalla iPhone 12").length).toBeGreaterThan(0))
+    fireEvent.click(screen.getAllByText("Pantalla iPhone 12")[0])
+  }
+
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("no muestra el subtotal de costo cuando el rol no puede ver costos", async () => {
+    setupFetch(null)
+
+    render(
+      <ModalProvider>
+        <OrdenRepuestosTab ordenId="orden-1" repuestos={[]} onRepuestosChanged={vi.fn()} />
+      </ModalProvider>,
+    )
+
+    await seleccionarItem()
+
+    expect(screen.queryByText("Subtotal")).not.toBeInTheDocument()
+    expect(screen.queryByText(/\$0/)).not.toBeInTheDocument()
+  })
+
+  it("muestra el subtotal de costo con mostrarCostos y precio disponible (admin)", async () => {
+    setupFetch(300)
+
+    render(
+      <ModalProvider>
+        <OrdenRepuestosTab ordenId="orden-1" repuestos={[]} mostrarCostos onRepuestosChanged={vi.fn()} />
+      </ModalProvider>,
+    )
+
+    await seleccionarItem()
+
+    expect(screen.getByText("Subtotal")).toBeInTheDocument()
+  })
+})
+
 describe("OrdenRepuestosTab — stepper de cantidad", () => {
   const repuestoCargado = {
     id: "rep-1",

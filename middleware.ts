@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { redirigirPorRol } from "@/lib/rutas-por-rol"
 import { getToken } from "next-auth/jwt"
 import {
   rateLimit,
@@ -8,7 +9,9 @@ import {
   extractPublicCatalogoSlug,
 } from "@/lib/rate-limit"
 import { getTenantStatusBySlug } from "@/lib/tenant-status-edge"
+import { getUserDeletedStatus } from "@/lib/user-status-edge"
 import { isImpersonationWriteBlocked } from "@/lib/impersonation"
+import { isPublicPath } from "@/lib/public-paths"
 
 // Hashea un string con SHA-256 usando Web Crypto (compatible con Edge Runtime,
 // donde `node:crypto` no está disponible). Devuelve los primeros 16 hex chars,
@@ -65,39 +68,49 @@ const RESERVED_SUBDOMAINS = new Set([
   "signin",
 ])
 
-// Rutas públicas que no requieren autenticación
-function isPublicPath(pathname: string): boolean {
-  const publicPaths = [
-    "/login",
-    "/registro",
-    "/forgot-password",
-    "/reset-password",
-    "/verificar-email",
-    "/tenant-not-found",
-    "/api/auth",
-    "/api/public",
-    "/api/cron",
-    "/api/mercadopago/webhook",
-    "/api/rebill/webhook",
-    "/api/creem/webhook",
-    "/_next",
-    "/favicon.ico",
-    "/manifest.json",
-    "/sw.js",
-    "/logo.png",
-    "/icons",
-    "/seguimiento",
-    "/cotizacion",
-    "/kiosco",
-    "/api/whatsapp/webhook",
-    "/api/v1",
-    "/api/health",
-    "/app-entry",
-    "/ayuda",
-    "/descargar",
-    "/google-auth",
-  ]
-  return publicPaths.some((path) => pathname.startsWith(path))
+// Cookie de sesión de NextAuth (mismo nombre/dominio que lib/auth.ts; el
+// middleware no puede importar auth.ts por Edge).
+function sessionCookieName(): string {
+  return process.env.NODE_ENV === "production"
+    ? "__Secure-next-auth.session-token"
+    : "next-auth.session-token"
+}
+
+function sessionCookieDomain(): string | undefined {
+  if (process.env.COOKIE_DOMAIN) return process.env.COOKIE_DOMAIN
+  if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_ROOT_DOMAIN) {
+    return `.${process.env.NEXT_PUBLIC_ROOT_DOMAIN}`
+  }
+  return undefined
+}
+
+// Usuario dado de baja (eliminación de cuenta): su JWT sigue siendo válido
+// hasta ~18 h porque solo se revalida en las últimas 6 h de su día de vida.
+// Devuelve la respuesta que corta la sesión (401 en /api, redirect a /login en
+// páginas, ambas borrando la cookie) o null si hay que seguir. Caché de 30 s y
+// fail-open si Supabase no responde; una baja encontrada nunca es fail-open.
+// Impersonación y rutas públicas quedan fuera (/api/auth tiene que seguir
+// andando para poder cerrar sesión).
+async function deletedUserResponse(
+  request: NextRequest,
+  token: { id?: unknown; isImpersonating?: unknown } | null,
+  pathname: string,
+): Promise<NextResponse | null> {
+  if (!token?.id || token.isImpersonating || isPublicPath(pathname)) return null
+  const status = await getUserDeletedStatus(token.id as string)
+  if (status.kind !== "ok" || !status.deleted) return null
+  const res = pathname.startsWith("/api/")
+    ? NextResponse.json({ error: "Cuenta eliminada" }, { status: 401 })
+    : NextResponse.redirect(new URL("/login", request.url))
+  res.cookies.set(sessionCookieName(), "", {
+    maxAge: 0,
+    path: "/",
+    domain: sessionCookieDomain(),
+    secure: process.env.NODE_ENV === "production",
+    httpOnly: true,
+    sameSite: "lax",
+  })
+  return res
 }
 
 // Rutas de landing page (solo para dominio principal)
@@ -268,6 +281,18 @@ export async function middleware(request: NextRequest) {
   // CASO 1: Dominio principal (sin subdominio)
   // ==========================================
   if (!subdomain) {
+    // Las APIs autentican por la cookie de sesión (scopeada al dominio raíz),
+    // así que también acá hay que cortar la sesión de un usuario dado de baja.
+    if (pathname.startsWith("/api/") && !isPublicPath(pathname)) {
+      const apexToken = await getToken({
+        req: request,
+        secret: process.env.NEXTAUTH_SECRET,
+        cookieName: sessionCookieName(),
+      })
+      const apexDeleted = await deletedUserResponse(request, apexToken, pathname)
+      if (apexDeleted) return apexDeleted
+    }
+
     // Landing page y rutas públicas permitidas
     return NextResponse.next({
       request: { headers: requestHeaders },
@@ -292,15 +317,10 @@ export async function middleware(request: NextRequest) {
     }
 
     // Verificar autenticación
-    const adminCookieName =
-      process.env.NODE_ENV === "production"
-        ? "__Secure-next-auth.session-token"
-        : "next-auth.session-token"
-
     const token = await getToken({
       req: request,
       secret: process.env.NEXTAUTH_SECRET,
-      cookieName: adminCookieName,
+      cookieName: sessionCookieName(),
     })
 
     if (!token) {
@@ -309,6 +329,9 @@ export async function middleware(request: NextRequest) {
       loginUrl.searchParams.set("callbackUrl", pathname)
       return NextResponse.redirect(loginUrl)
     }
+
+    const adminDeleted = await deletedUserResponse(request, token, pathname)
+    if (adminDeleted) return adminDeleted
 
     // Verificar que el email está en SUPERADMIN_EMAILS
     if (!isSuperadminEmail(token.email as string)) {
@@ -403,15 +426,10 @@ export async function middleware(request: NextRequest) {
 
   // Leemos el token una sola vez y lo reutilizamos para los chequeos de
   // ownership, landing y rutas protegidas.
-  const cookieName =
-    process.env.NODE_ENV === "production"
-      ? "__Secure-next-auth.session-token"
-      : "next-auth.session-token"
-
   const token = await getToken({
     req: request,
     secret: process.env.NEXTAUTH_SECRET,
-    cookieName,
+    cookieName: sessionCookieName(),
   })
 
   // Chequeo de pertenencia al tenant. La cookie de sesión está scopeada a
@@ -451,6 +469,9 @@ export async function middleware(request: NextRequest) {
       request: { headers: requestHeaders },
     })
   }
+
+  const deletedRes = await deletedUserResponse(request, token, pathname)
+  if (deletedRes) return deletedRes
 
   // Read-only impersonation enforcement. When a superadmin impersonates a
   // tenant, the minted token carries `isImpersonating` (lib/impersonation.ts).
@@ -506,21 +527,13 @@ export async function middleware(request: NextRequest) {
     requestHeaders.set("x-impersonating", "true")
   }
 
-  // Protección de rutas por rol
-  const userRole = token.role as string
-  const adminOnlyRoutes = ["/tecnicos", "/vendedores", "/configuracion", "/emails", "/facturacion", "/finanzas"]
-  // /inventario admite VENDEDOR a nivel de ruta; el permiso fino por
-  // organización (opt-in) lo resuelven el gate de la página y la API
-  // (requireInventarioAccess), que sí pueden leer el flag en la BD.
-  const adminOrVendedorRoutes = ["/ventas", "/pos", "/reportes", "/proveedores", "/inventario"]
-
-  const isAdminOnly = adminOnlyRoutes.some(r => pathname === r || pathname.startsWith(r + "/"))
-  const isAdminOrVendedor = adminOrVendedorRoutes.some(r => pathname === r || pathname.startsWith(r + "/"))
-
-  if (isAdminOnly && userRole !== "ADMIN") {
-    return NextResponse.redirect(new URL("/dashboard", request.url))
-  }
-  if (isAdminOrVendedor && userRole !== "ADMIN" && userRole !== "VENDEDOR") {
+  // Protección de rutas por rol. La tabla vive en lib/rutas-por-rol, aparte y
+  // sin dependencias, para poder testearla: acá adentro no se puede.
+  //
+  // Es un gate GRUESO. Los permisos finos por organización (los toggles opt-in
+  // como vendedores_administran_inventario y tecnicos_operan_pos) están en la
+  // BD, que el Edge no lee: los resuelven la página y la API.
+  if (redirigirPorRol(pathname, token.role as string)) {
     return NextResponse.redirect(new URL("/dashboard", request.url))
   }
 

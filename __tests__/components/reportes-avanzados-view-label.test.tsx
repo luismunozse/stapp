@@ -49,3 +49,38 @@ describe("ReportesAvanzadosView — BranchScopeLabel in header", () => {
     expect(header?.querySelector("[data-testid='branch-scope-label']")).not.toBeNull()
   }, 20000)
 })
+
+describe("ReportesAvanzadosView — pestaña Clientes y el permiso de ingresos", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("por defecto la muestra: sin prop, la conducta es la de siempre", async () => {
+    // Default true a propósito. Esconder de más sería una denegación
+    // fabricada, y del lado del servidor requireIngresosAccess() decide igual.
+    const { ReportesAvanzadosView } = await import("@/components/reportes-avanzados/reportes-avanzados-view")
+    render(<ReportesAvanzadosView />)
+
+    expect(screen.getByRole("tab", { name: /clientes/i })).toBeTruthy()
+  })
+
+  it("con verTopClientes en false la esconde, y no deja el contenido colgado", async () => {
+    // Top clientes muestra cuánto gastó cada cliente: es un reporte de
+    // ingresos. Se esconde el trigger Y el TabsContent — dejar el contenido
+    // montado lo haría alcanzable por teclado.
+    const { ReportesAvanzadosView } = await import("@/components/reportes-avanzados/reportes-avanzados-view")
+    const { container } = render(<ReportesAvanzadosView verTopClientes={false} />)
+
+    expect(screen.queryByRole("tab", { name: /clientes/i })).toBeNull()
+    expect(container.querySelector('[data-state][value="clientes"]')).toBeNull()
+  })
+
+  it("esconder Clientes no se lleva puestas las demás pestañas", async () => {
+    const { ReportesAvanzadosView } = await import("@/components/reportes-avanzados/reportes-avanzados-view")
+    render(<ReportesAvanzadosView verTopClientes={false} />)
+
+    expect(screen.getByRole("tab", { name: /tecnicos/i })).toBeTruthy()
+    expect(screen.getByRole("tab", { name: /inventario/i })).toBeTruthy()
+    expect(screen.getByRole("tab", { name: /rentabilidad/i })).toBeTruthy()
+  })
+})

@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
-import { LocalBusinessJsonLd, BreadcrumbJsonLd } from "@/components/seo/json-ld"
+import { BreadcrumbJsonLd } from "@/components/seo/json-ld"
+import { OG_IMAGES } from "@/lib/og/metadata"
 
 export const metadata: Metadata = {
   title: "Contacto - Soporte para Software de Servicio T\u00e9cnico",
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
     "soporte software servicio t\u00e9cnico",
   ],
   openGraph: {
+    images: OG_IMAGES,
     title: "Contacto - STApp Software de Servicio T\u00e9cnico",
     description:
       "Contacta con el equipo de STApp. Soporte por email, tel\u00e9fono y WhatsApp para tu taller de reparaci\u00f3n.",
@@ -30,7 +32,6 @@ export default function ContactoLayout({
 }) {
   return (
     <>
-      <LocalBusinessJsonLd />
       <BreadcrumbJsonLd
         items={[
           { name: "Inicio", url: "https://stapp.com.ar" },

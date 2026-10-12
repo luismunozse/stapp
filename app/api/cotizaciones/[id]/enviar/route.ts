@@ -5,6 +5,9 @@ import { generateCotizacionPDF } from "@/lib/pdf"
 import { buildCotizacionPdfExtras } from "@/lib/cotizacion-pdf"
 import { sendCotizacionEmail } from "@/lib/email"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { totalPresupuestoDeOrden } from "@/lib/cotizacion-presupuesto"
+import { marcarOriginalReemplazada } from "@/lib/cotizacion-revision"
+import { esInforme } from "@/lib/cotizacion-informe"
 
 export async function POST(
   request: Request,
@@ -71,6 +74,28 @@ export async function POST(
       org = orgData
     }
 
+    // Una revision nace sin fecha_vencimiento a proposito: heredar la de la
+    // original podria crearla ya vencida. Pero el vencimiento tiene que existir
+    // para cuando el cliente la recibe — si no, el PDF que se le manda y la
+    // pantalla de seguimiento le muestran "válida hasta" en blanco, y una
+    // oferta sin plazo no es una oferta. Se le asigna al enviarla, con la
+    // validez configurada por la organizacion, igual que hace duplicar/.
+    // Sólo se completa si está vacía: si el taller ya le puso una fecha al
+    // editar la revisión, esa manda.
+    let fechaVencimiento: string | null = cotizacion.fecha_vencimiento ?? null
+    if (!fechaVencimiento && cotizacion.revision_de) {
+      const { data: orgConfig } = await supabaseAdmin
+        .from("organizations")
+        .select("cotizacion_validez_dias")
+        .eq("id", organizationId!)
+        .single()
+
+      const validezDias = orgConfig?.cotizacion_validez_dias || 30
+      const vencimiento = new Date()
+      vencimiento.setDate(vencimiento.getDate() + validezDias)
+      fechaVencimiento = vencimiento.toISOString()
+    }
+
     // Generar PDF
     const pdfExtras = await buildCotizacionPdfExtras(cotizacion)
 
@@ -78,7 +103,7 @@ export async function POST(
       ...pdfExtras,
       numeroCotizacion: cotizacion.numero_cotizacion,
       fecha: cotizacion.created_at,
-      fechaVencimiento: cotizacion.fecha_vencimiento,
+      fechaVencimiento,
       cliente: {
         nombre: cliente.nombre,
         telefono: cliente.telefono,
@@ -120,17 +145,45 @@ export async function POST(
       numeroCotizacion: cotizacion.numero_cotizacion,
       numeroOrden: orden?.numero_orden,
       total: cotizacion.total,
-      fechaVencimiento: cotizacion.fecha_vencimiento,
+      fechaVencimiento,
       pdfBuffer,
       moneda: org?.moneda || "ARS",
       zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
     })
 
-    // Actualizar estado a ENVIADA
-    await supabaseAdmin.from("cotizaciones").update({ estado: "ENVIADA" }).eq("id", id)
+    // Actualizar estado a ENVIADA (y persistir el vencimiento recien asignado,
+    // para que la pantalla de seguimiento muestre lo mismo que el PDF enviado).
+    await supabaseAdmin
+      .from("cotizaciones")
+      .update({
+        estado: "ENVIADA",
+        ...(fechaVencimiento !== (cotizacion.fecha_vencimiento ?? null)
+          ? { fecha_vencimiento: fechaVencimiento }
+          : {}),
+      })
+      .eq("id", id)
 
-    // Si la cotización está vinculada a una orden, transicionar a PRESUPUESTADO automáticamente
-    if (orden && orden.id) {
+    // Una revision reemplaza a su original recien cuando se envia. Antes de eso
+    // es un borrador que se puede abandonar sin dejar huerfana a la aceptada.
+    // Tiene que ir ANTES del recalculo de abajo: si quedara despues, la suma
+    // contaria la aceptada Y su revision, y el presupuesto de la orden se
+    // duplicaria.
+    await marcarOriginalReemplazada(cotizacion, organizationId!)
+
+    // Si la cotización está vinculada a una orden, transicionar a PRESUPUESTADO
+    // automáticamente. Un informe tecnico no: no hay presupuesto que esperar y
+    // el equipo sigue en el mostrador hasta que el cliente lo retire.
+    const { count: itemsCount } = await supabaseAdmin
+      .from("items_cotizacion")
+      .select("id", { count: "exact", head: true })
+      .eq("cotizacion_id", id)
+
+    const emiteInforme = esInforme({
+      cantidadItems: itemsCount || 0,
+      veredicto: (cotizacion as any).veredicto,
+    })
+
+    if (orden && orden.id && !emiteInforme) {
       const validStates = ["RECIBIDO", "EN_DIAGNOSTICO"]
       const { data: ordenActual } = await supabaseAdmin
         .from("ordenes_servicio")
@@ -140,13 +193,7 @@ export async function POST(
 
       if (ordenActual && validStates.includes(ordenActual.estado)) {
         const estadoAnterior = ordenActual.estado
-        const { data: allCots } = await supabaseAdmin
-          .from("cotizaciones")
-          .select("total")
-          .eq("orden_id", orden.id)
-          .is("deleted_at", null)
-          .neq("estado", "RECHAZADA")
-        const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
+        const { total: totalPresupuesto } = await totalPresupuestoDeOrden(orden.id)
         await supabaseAdmin
           .from("ordenes_servicio")
           .update({

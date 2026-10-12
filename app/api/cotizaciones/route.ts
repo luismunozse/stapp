@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, canViewCotizacionCosts } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextQuoteNumber } from "@/lib/counters"
 import { parsePagination } from "@/lib/api-utils"
 import { createAuditLogger } from "@/lib/audit"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { dateOnlyToNoonUtcISO, dateNumberInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { totalPresupuestoDeOrden } from "@/lib/cotizacion-presupuesto"
+import { validarInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizacion-informe"
 import { randomBytes } from "crypto"
 import { z } from "zod"
+import { rejectIfPractica } from "@/lib/onboarding/practica"
 
 const itemSchema = z.object({
   descripcion: z.string().min(1, "Descripción requerida"),
@@ -18,6 +21,7 @@ const itemSchema = z.object({
   descuentoTipo: z.enum(["porcentaje", "fijo"]).optional(),
   descuentoValor: z.number().min(0).optional(),
   inventarioId: z.string().nullable().optional(),
+  servicioId: z.string().nullable().optional(),
   tipoRepuesto: z.enum(["ORIGINAL", "ALTERNATIVO", "RECICLADO", "NO_APLICA"]).optional(),
 })
 
@@ -56,7 +60,9 @@ const cotizacionSchema = z.object({
   ordenId: z.string().optional(),
   clienteId: z.string().optional(),
   sectorId: z.string().optional(),
-  items: z.array(itemSchema).min(1, "Debe tener al menos un item"),
+  // Sin .min(1): una cotizacion sin items es un informe tecnico. La regla que
+  // decide cuando eso es valido vive en validarInforme (lib/cotizacion-informe).
+  items: z.array(itemSchema),
   notas: z.string().optional(),
   fechaVencimiento: z.string().optional(),
   terminos: z.string().optional(),
@@ -66,6 +72,20 @@ const cotizacionSchema = z.object({
   tipoCambio: z.number().positive().optional(),
   equipo: equipoSchema.optional(),
   checklist: checklistSchema.optional(),
+  veredicto: veredictoSchema.nullable().optional(),
+  diagnosticoTecnico: z.string().max(4000).nullable().optional(),
+  causaDano: causaDanoSchema.nullable().optional(),
+  presentadoAnte: z.string().max(200).nullable().optional(),
+}).superRefine((data, ctx) => {
+  const mensaje = validarInforme({
+    cantidadItems: data.items.length,
+    veredicto: data.veredicto,
+    diagnosticoTecnico: data.diagnosticoTecnico,
+    causaDano: data.causaDano,
+  })
+  if (mensaje) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: mensaje, path: ["items"] })
+  }
 })
 
 function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuentoTipo?: string; descuentoValor?: number }) {
@@ -76,7 +96,7 @@ function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuent
   return Math.max(0, bruto * (1 - dv / 100))
 }
 
-function formatCotizacion(c: any) {
+function formatCotizacion(c: any, includeCosts: boolean) {
   const orden = c.ordenes_servicio
   const cliente = c.clientes || orden?.clientes
   const sector = c.sectores_cliente
@@ -109,7 +129,16 @@ function formatCotizacion(c: any) {
     tipo: c.tipo || "ORDEN",
     equipo: c.equipo_snapshot || null,
     checklist: c.checklist_snapshot || null,
+    veredicto: c.veredicto ?? null,
+    diagnosticoTecnico: c.diagnostico_tecnico ?? null,
+    causaDano: c.causa_dano ?? null,
+    presentadoAnte: c.presentado_ante ?? null,
     convertidaAOrdenId: c.convertida_a_orden_id || null,
+    // Venta que salió de esta cotización (migración 327): con valor, la UI no
+    // ofrece volver a convertirla.
+    ventaId: c.venta_id || null,
+    reemplazadaPor: c.reemplazada_por,
+    revisionDe: c.revision_de,
     clienteNombre: cliente?.nombre || null,
     clienteEmail: cliente?.email || null,
     clienteTelefono: cliente?.telefono || null,
@@ -135,7 +164,8 @@ function formatCotizacion(c: any) {
       descripcion: i.descripcion,
       cantidad: i.cantidad,
       precioUnitario: i.precio_unitario,
-      costoUnitario: i.costo_unitario != null ? Number(i.costo_unitario) : null,
+      // Cost/margin data is ADMIN-only (server-side enforced, not just hidden in UI).
+      costoUnitario: includeCosts && i.costo_unitario != null ? Number(i.costo_unitario) : null,
       subtotal: i.subtotal,
       unidad: i.unidad,
       descuentoTipo: i.descuento_tipo,
@@ -181,7 +211,8 @@ export async function GET(request: Request) {
       const { data: cotizaciones, error: dbError } = await query
       if (dbError) throw dbError
 
-      return NextResponse.json(cotizaciones?.map(formatCotizacion) || [])
+      const includeCosts = canViewCotizacionCosts(role)
+      return NextResponse.json(cotizaciones?.map((c) => formatCotizacion(c, includeCosts)) || [])
     }
 
     // Modo standalone: filtrar por organization_id con LEFT join + paginacion
@@ -233,7 +264,8 @@ export async function GET(request: Request) {
     if (dbError) throw dbError
 
     const total = count || 0
-    const result = cotizaciones?.map(formatCotizacion) || []
+    const includeCosts = canViewCotizacionCosts(role)
+    const result = cotizaciones?.map((c) => formatCotizacion(c, includeCosts)) || []
 
     return NextResponse.json({
       data: result,
@@ -301,6 +333,8 @@ export async function POST(request: Request) {
     let clienteIdForInsert: string | null = null
 
     if (data.ordenId) {
+      const practica = await rejectIfPractica(data.ordenId, organizationId!)
+      if (practica) return practica
       // Verificar que la orden existe y pertenece a la organización
       const { data: orden, error: ordenError } = await supabaseAdmin
         .from("ordenes_servicio")
@@ -356,6 +390,32 @@ export async function POST(request: Request) {
       }
     }
 
+    // Cost/margin data is ADMIN-only, uniformly (VENDEDOR included — they
+    // have no cotizaciones nav access today, so losing cost entry here is
+    // deliberate, not an oversight; see canViewCotizacionCosts). Non-admin
+    // creators never see costoUnitario, so their client can't submit a
+    // trustworthy value: derive it server-side from the linked inventario
+    // record instead, and ignore whatever costoUnitario the client sent.
+    // Free-text (non-linked) items from non-admin creators get null cost.
+    const canViewCosts = canViewCotizacionCosts(role)
+    const inventarioCostoById = new Map<string, number | null>()
+    if (!canViewCosts) {
+      const inventarioIds = Array.from(new Set(
+        data.items.filter((item) => item.inventarioId).map((item) => item.inventarioId as string)
+      ))
+      if (inventarioIds.length > 0) {
+        const { data: invRows, error: invError } = await supabaseAdmin
+          .from("inventario")
+          .select("id, precio_compra")
+          .eq("organization_id", organizationId!)
+          .in("id", inventarioIds)
+        if (invError) throw invError
+        for (const row of invRows || []) {
+          inventarioCostoById.set(row.id, row.precio_compra != null ? Number(row.precio_compra) : null)
+        }
+      }
+    }
+
     // Calculate totals with discounts and IVA
     const ivaPct = data.ivaPorcentaje || 0
     const descGlobalTipo = data.descuentoGlobalTipo || "porcentaje"
@@ -364,6 +424,9 @@ export async function POST(request: Request) {
     const items = data.items.map((item) => ({
       ...item,
       subtotal: calcItemNeto(item),
+      costoUnitario: canViewCosts
+        ? (item.costoUnitario ?? null)
+        : (item.inventarioId ? (inventarioCostoById.get(item.inventarioId) ?? null) : null),
     }))
     const subtotalNeto = items.reduce((sum, item) => sum + item.subtotal, 0)
 
@@ -408,6 +471,10 @@ export async function POST(request: Request) {
         tipo: data.tipo,
         equipo_snapshot: data.tipo === "PRESUPUESTO" ? data.equipo : null,
         checklist_snapshot: data.tipo === "PRESUPUESTO" ? data.checklist || null : null,
+        veredicto: data.veredicto || null,
+        diagnostico_tecnico: data.diagnosticoTecnico?.trim() || null,
+        causa_dano: data.causaDano || null,
+        presentado_ante: data.presentadoAnte?.trim() || null,
       })
       .select()
       .single()
@@ -425,12 +492,13 @@ export async function POST(request: Request) {
           descripcion: item.descripcion,
           cantidad: item.cantidad,
           precio_unitario: item.precioUnitario,
-          costo_unitario: item.costoUnitario ?? null,
+          costo_unitario: item.costoUnitario,
           subtotal: item.subtotal,
           unidad: item.unidad || "Unidad",
           descuento_tipo: item.descuentoTipo || "porcentaje",
           descuento_valor: item.descuentoValor || 0,
           inventario_id: item.inventarioId || null,
+          servicio_id: item.servicioId || null,
           tipo_repuesto: item.tipoRepuesto || "NO_APLICA",
         }))
       )
@@ -442,13 +510,7 @@ export async function POST(request: Request) {
 
     // Auto-fill presupuesto on the linked order — sum non-rejected cotizaciones for this orden
     if (data.ordenId) {
-      const { data: allCots } = await supabaseAdmin
-        .from("cotizaciones")
-        .select("total")
-        .eq("orden_id", data.ordenId)
-        .is("deleted_at", null)
-        .neq("estado", "RECHAZADA")
-      const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
+      const { total: totalPresupuesto } = await totalPresupuestoDeOrden(data.ordenId)
       await supabaseAdmin
         .from("ordenes_servicio")
         .update({ presupuesto: totalPresupuesto, costo_final: totalPresupuesto })
@@ -480,7 +542,7 @@ export async function POST(request: Request) {
       items_count: items.length,
     })
 
-    return NextResponse.json(formatCotizacion(cotizacionCompleta), { status: 201 })
+    return NextResponse.json(formatCotizacion(cotizacionCompleta, canViewCotizacionCosts(role)), { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

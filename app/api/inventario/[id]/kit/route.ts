@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 // GET /api/inventario/[id]/kit
@@ -10,8 +10,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
+
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
 
     const { id } = await params
     const { searchParams } = new URL(request.url)
@@ -63,14 +68,13 @@ export async function GET(
               0,
               (c.componente.stock ?? 0) - (c.componente.stock_reservado ?? 0)
             ),
-            precioCompra: c.componente.precio_compra ?? 0,
+            precioCompra: canViewCost ? (c.componente.precio_compra ?? 0) : null,
             imagenUrl: c.componente.imagen_url ?? null,
             esKit: c.componente.es_kit ?? false,
             tipoKit: c.componente.tipo_kit ?? null,
           }
         : null,
-      subtotalCosto:
-        c.cantidad * Number(c.componente?.precio_compra ?? 0),
+      subtotalCosto: canViewCost ? c.cantidad * Number(c.componente?.precio_compra ?? 0) : null,
     }))
 
     // Costo calculado via RPC (autoritario)
@@ -91,8 +95,8 @@ export async function GET(
           codigo: r.codigo,
           nombre: r.nombre,
           cantidadTotal: Number(r.cantidad_total),
-          precioCompra: Number(r.precio_compra ?? 0),
-          costoSubtotal: Number(r.costo_subtotal ?? 0),
+          precioCompra: canViewCost ? Number(r.precio_compra ?? 0) : null,
+          costoSubtotal: canViewCost ? Number(r.costo_subtotal ?? 0) : null,
           esKit: r.es_kit,
           profundidad: r.profundidad,
         }))
@@ -106,14 +110,14 @@ export async function GET(
         nombre: kit.nombre,
         stock: kit.stock ?? 0,
         stockReservado: kit.stock_reservado ?? 0,
-        precioCompra: kit.precio_compra ?? 0,
+        precioCompra: canViewCost ? (kit.precio_compra ?? 0) : null,
         precioVenta: kit.precio_venta ?? 0,
         esKit: kit.es_kit ?? false,
         tipoKit: kit.tipo_kit ?? null,
         imagenUrl: kit.imagen_url ?? null,
       },
       componentes,
-      costoCalculado: Number(costoData ?? 0),
+      costoCalculado: canViewCost ? Number(costoData ?? 0) : null,
       explosionado,
     })
   } catch (err) {
@@ -145,16 +149,39 @@ export async function PATCH(
     })
     const data = schema.parse(body)
 
+    if (data.esKit === undefined && data.tipoKit === undefined) {
+      return NextResponse.json({ error: "Nada para actualizar" }, { status: 400 })
+    }
+
+    const { data: existing, error: fetchErr } = await supabaseAdmin
+      .from("inventario")
+      .select("id, es_kit, tipo_kit")
+      .eq("id", id)
+      .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
+      .single()
+
+    if (fetchErr || !existing) {
+      return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
+    }
+
+    // DB check (migración 177): es_kit=true exige tipo_kit. Se evalúa sobre la fila
+    // resultante (body + fila actual), igual que el PUT de /api/inventario/[id].
     const update: Record<string, unknown> = {}
     if (data.esKit !== undefined) update.es_kit = data.esKit
     if (data.tipoKit !== undefined) update.tipo_kit = data.tipoKit
-    if (data.esKit === true && data.tipoKit === undefined) {
-      // Si está activando es_kit y no se mandó tipo, default ENSAMBLADO
+    if (data.esKit === true && data.tipoKit === undefined && !existing.tipo_kit) {
+      // Activando es_kit sin tipo (y sin tipo previo): default ENSAMBLADO
       update.tipo_kit = "ENSAMBLADO"
     }
 
-    if (Object.keys(update).length === 0) {
-      return NextResponse.json({ error: "Nada para actualizar" }, { status: 400 })
+    const esKitFinal = data.esKit !== undefined ? data.esKit : existing.es_kit
+    const tipoKitFinal = "tipo_kit" in update ? update.tipo_kit : existing.tipo_kit
+    if (esKitFinal === true && !tipoKitFinal) {
+      return NextResponse.json(
+        { error: "Un kit necesita un tipo: ensamblado o virtual" },
+        { status: 400 }
+      )
     }
 
     const { data: row, error: dbErr } = await supabaseAdmin

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 // Stats agregadas para el header de /inventario:
@@ -7,7 +7,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 // Una sola query SQL en la base usando aggregations.
 export async function GET() {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     // Umbral global desde la organización (fallback 5)
@@ -56,17 +56,38 @@ export async function GET() {
       }
     }
 
+    // valorCosto y valorEnRiesgo salen de precio_compra, así que van detrás del
+    // mismo permiso que el costo de cada item. Los conteos y el valor a venta
+    // no son costo y siguen disponibles para todos los roles.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
+
+    // La respuesta depende del rol, así que una cache con clave solo de URL no
+    // sirve. `Vary: Cookie` mete la sesión en la clave del navegador: otro
+    // login es otra entrada, nunca la copia del ADMIN.
+    //
+    // El ADMIN conserva la cache de 60s (este endpoint se dispara en cada
+    // montaje de /inventario) porque su acceso al costo sale de session.role,
+    // que ya queda fijo mientras dura la sesión: cachear no agrega staleness.
+    // El VENDEDOR no la conserva: su acceso depende de
+    // vendedores_administran_inventario, que se resuelve vivo en cada request,
+    // y cachear le dejaría el costo a la vista hasta un minuto después de que
+    // un admin le revoque el permiso.
+    const cacheControl = role === "ADMIN" ? "private, max-age=60" : "no-store"
+
     return NextResponse.json(
       {
         totalSkus,
-        valorCosto: Math.round(valorCosto * 100) / 100,
+        valorCosto: canViewCost ? Math.round(valorCosto * 100) / 100 : null,
         valorVenta: Math.round(valorVenta * 100) / 100,
         sinStock,
         bajoStock,
-        valorEnRiesgo: Math.round(valorEnRiesgo * 100) / 100,
+        valorEnRiesgo: canViewCost ? Math.round(valorEnRiesgo * 100) / 100 : null,
       },
       {
-        headers: { "Cache-Control": "private, max-age=60" },
+        headers: { "Cache-Control": cacheControl, Vary: "Cookie" },
       }
     )
   } catch (error) {

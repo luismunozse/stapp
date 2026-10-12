@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireInventarioAccess } from "@/lib/auth-utils"
+import { requireAuth, requireInventarioAccess, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import {
+  depositoPermitido,
+  depositoPorDefecto,
+  moverStockInicialADeposito,
+  DEPOSITO_INVALIDO,
+} from "@/lib/depositos"
 import { formatInventario } from "@/lib/db-utils"
 import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
@@ -24,13 +30,31 @@ const inventarioSchema = z.object({
   puntoReorden: z.number().int().min(0).nullable().optional(),
   barcode: z.string().nullable().optional(),
   ubicacion: z.string().max(200).nullable().optional(),
+  // Depósito donde cae el stock inicial (cuid). Opcional: sin él, va al principal.
+  depositoId: z.string().min(1).nullable().optional(),
   diasGarantiaDefault: z.number().int().min(0).nullable().optional(),
+  trackeaLotes: z.boolean().optional(),
+  trackeaSeries: z.boolean().optional(),
+  diasAlertaVencimiento: z.number().int().min(1).max(365).nullable().optional(),
+  tieneVariantes: z.boolean().optional(),
+  esKit: z.boolean().optional(),
+  tipoKit: z.enum(["ENSAMBLADO", "VIRTUAL"]).nullable().optional(),
 })
+
+const KIT_SIN_TIPO = "Un kit necesita un tipo: ensamblado o virtual"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
+
+    // Purchase cost (precioCompra) follows hasInventarioAccess: ADMIN always,
+    // VENDEDOR only if the org opted in (vendedores_administran_inventario),
+    // TECNICO never.
+    const vendedoresHabilitados = role === "VENDEDOR"
+      ? await resolveVendedoresHabilitados(organizationId!)
+      : false
+    const canViewCost = hasInventarioAccess(role, vendedoresHabilitados)
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search") || ""
@@ -84,7 +108,7 @@ export async function GET(request: Request) {
       let q = supabaseAdmin
         .from("inventario")
         .select(
-          "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, stock_reservado, precio_compra, precio_venta, proveedor, proveedor_id, imagen_url, imagen_path, stock_minimo, stock_maximo, punto_reorden, ubicacion, barcode, deleted_at, deleted_by, created_at, proveedores:proveedor_id(id, nombre)",
+          "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, stock_reservado, precio_compra, precio_venta, proveedor, proveedor_id, imagen_url, imagen_path, stock_minimo, stock_maximo, punto_reorden, ubicacion, barcode, trackea_lotes, trackea_series, dias_alerta_vencimiento, dias_garantia_default, tiene_variantes, es_kit, tipo_kit, deleted_at, deleted_by, created_at, proveedores:proveedor_id(id, nombre)",
           { count: "exact" }
         )
         .eq("organization_id", organizationId!)
@@ -148,8 +172,10 @@ export async function GET(request: Request) {
       count = fallback.count
     }
 
+    const data = inventario?.map((item) => formatInventario(item, canViewCost))
+
     return NextResponse.json({
-      data: inventario?.map(formatInventario),
+      data,
       total: count || 0,
       page,
       limit,
@@ -168,11 +194,31 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId } = await requireInventarioAccess()
+    const { error, organizationId, userId, role, session } = await requireInventarioAccess()
     if (error) return error
 
     const body = await request.json()
     const data = inventarioSchema.parse(body)
+
+    // DB check (migración 177): un kit necesita tipo. Validar acá evita un 500.
+    if (data.esKit === true && !data.tipoKit) {
+      return NextResponse.json({ error: KIT_SIN_TIPO }, { status: 400 })
+    }
+
+    // Límite de seguridad: nunca confiar en un depósito que mandó el cliente.
+    // depositoPermitido aplica la regla única: de ESTA org, activo, no borrado y,
+    // si no es ADMIN, de su propia sucursal (el ADMIN no depende de la cookie).
+    if (data.depositoId) {
+      const permitido = await depositoPermitido({
+        depositoId: data.depositoId,
+        organizationId: organizationId!,
+        role,
+        userSucursalId: session!.user.sucursalId ?? null,
+      })
+      if (!permitido) {
+        return NextResponse.json({ error: DEPOSITO_INVALIDO }, { status: 400 })
+      }
+    }
 
     let codigo = data.codigo
     let inventario = null
@@ -204,6 +250,14 @@ export async function POST(request: Request) {
         dias_garantia_default: diasGarantiaDefaultVal,
         organization_id: organizationId!,
       }
+
+      // Per-item flags: only written when sent, so the DB defaults apply otherwise.
+      if (data.trackeaLotes !== undefined) insertPayload.trackea_lotes = data.trackeaLotes
+      if (data.trackeaSeries !== undefined) insertPayload.trackea_series = data.trackeaSeries
+      if (data.diasAlertaVencimiento !== undefined) insertPayload.dias_alerta_vencimiento = data.diasAlertaVencimiento
+      if (data.tieneVariantes !== undefined) insertPayload.tiene_variantes = data.tieneVariantes
+      if (data.esKit !== undefined) insertPayload.es_kit = data.esKit
+      if (data.tipoKit !== undefined) insertPayload.tipo_kit = data.tipoKit
 
       let { data: result, error: dbError } = await supabaseAdmin
         .from("inventario")
@@ -259,6 +313,36 @@ export async function POST(request: Request) {
       throw dbError
     }
 
+    // Stock inicial en el depósito elegido, o en el de la sucursal de quien crea
+    // cuando no eligió (ADMIN viendo "todas": null, se queda donde lo siembra el
+    // trigger de la migración 291, el principal de la org). Ver
+    // moverStockInicialADeposito. Si falla, el item ya existe: un 500 haría
+    // reintentar y duplicar. Se responde 201 con advertencia; el stock queda en
+    // el principal (consistente).
+    let advertencia: string | undefined
+    if (inventario && data.stock > 0) {
+      try {
+        const destinoId =
+          data.depositoId ??
+          (await depositoPorDefecto({
+            organizationId: organizationId!,
+            role,
+            userSucursalId: session!.user.sucursalId ?? null,
+          }))
+        if (destinoId) {
+          await moverStockInicialADeposito({
+            inventarioId: inventario.id,
+            depositoId: destinoId,
+            stock: data.stock,
+            organizationId: organizationId!,
+          })
+        }
+      } catch (moveError) {
+        console.error("Error moviendo stock inicial al depósito elegido:", moveError)
+        advertencia = "El stock quedó en el depósito principal"
+      }
+    }
+
     // Audit log fire-and-forget
     if (inventario && userId) {
       createAuditLogger(organizationId!, userId, request)
@@ -292,7 +376,14 @@ export async function POST(request: Request) {
       }).catch(() => {})
     }
 
-    return NextResponse.json(formatInventario(inventario), { status: 201 })
+    // POST corre detrás de requireInventarioAccess(): el permiso de costo ya
+    // está resuelto por el guard.
+    return NextResponse.json(
+      advertencia
+        ? { ...formatInventario(inventario, true), advertencia }
+        : formatInventario(inventario, true),
+      { status: 201 }
+    )
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

@@ -20,11 +20,37 @@ interface ManualProduct {
   costo?: number
 }
 
+/** The sucursal a POS sale will actually draw stock from — resolved server-side. */
+export interface VentaSucursalInfo {
+  id: string | null
+  nombre: string | null
+  /**
+   * True when the sale spans the WHOLE org even though the selector shows a
+   * concrete sucursal: la elegida no tiene depósito principal y el RPC drena de
+   * cualquiera. `nombre` viene vacío justamente en ese estado (no hay una sola
+   * sucursal que nombrar sin mentir), así que este es el único dato que le
+   * permite al POS explicar la diferencia entre el chip y la grilla.
+   */
+  alcanceOrg: boolean
+}
+
 interface PosProductSearchProps {
   onAddProduct: (product: InventarioResult) => void
   onAddManualProduct: (product: ManualProduct) => void
   onOpenScanner?: () => void
   scanSuccess?: { nombre: string } | null
+  /** Reports the sale's resolved sucursal once, from the initial products load. */
+  onVentaSucursal?: (info: VentaSucursalInfo) => void
+}
+
+/** Reads the X-Venta-* headers set by search/route.ts under scope=venta. */
+function readVentaSucursalHeaders(res: Response): VentaSucursalInfo {
+  const nombreRaw = res.headers?.get("X-Venta-Sucursal-Nombre")
+  return {
+    id: res.headers?.get("X-Venta-Sucursal-Id") || null,
+    nombre: nombreRaw ? decodeURIComponent(nombreRaw) : null,
+    alcanceOrg: res.headers?.get("X-Venta-Alcance") === "org",
+  }
 }
 
 export interface PosProductSearchRef {
@@ -143,7 +169,7 @@ function StockOtrasSucursales({ inventarioId, productName }: StockOtrasSucursale
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearchProps>(
-  function PosProductSearch({ onAddProduct, onAddManualProduct, onOpenScanner, scanSuccess }, ref) {
+  function PosProductSearch({ onAddProduct, onAddManualProduct, onOpenScanner, scanSuccess, onVentaSucursal }, ref) {
     const { formatPrice } = useCurrency()
     const inputRef = useRef<HTMLInputElement>(null)
     const manualNameRef = useRef<HTMLInputElement>(null)
@@ -153,6 +179,19 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     const [loading, setLoading] = useState(false)
     const [recentProducts, setRecentProducts] = useState<InventarioResult[]>([])
     const [initialLoad, setInitialLoad] = useState(true)
+    // Se incrementa en cada revalidacion que trajo datos nuevos. La busqueda
+    // activa depende de este contador para volver a correr — ver el efecto del
+    // debounce mas abajo.
+    const [revalidacion, setRevalidacion] = useState(0)
+    // El montaje y la revalidación escriben las MISMAS dos cosas
+    // (`recentProducts` y el indicador) con pedidos idénticos que pueden estar
+    // en vuelo a la vez: `ultima` arranca en 0, así que un `focus` apenas
+    // montado pasa el throttle de inmediato. Sin este orden gana el que llega
+    // último y no el que se pidió último — y cuando el lento es el del montaje,
+    // la grilla vuelve a la sucursal anterior sin ningún evento posterior que
+    // lo corrija.
+    const pedidoCatalogo = useRef(0)
+    const catalogoAplicado = useRef(0)
     const [showManualForm, setShowManualForm] = useState(false)
     const [manualNombre, setManualNombre] = useState("")
     // Draft en string para permitir escribir decimales (coma es-AR) sin que el
@@ -167,14 +206,33 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
       },
     }))
 
-    // Load initial/popular products
+    // Load initial/popular products. scope=venta keeps stock consistent with what
+    // a sale can actually decrement (see app/api/inventario/search/route.ts);
+    // ventaInfo=true also resolves the sucursal name for the "selling from"
+    // indicator — asked for only here, since this fetch always runs on mount and
+    // it is the only one whose response headers are read.
+    //
+    // PosProductSearch is mounted twice (desktop + mobile), so two of these run
+    // per POS load and both report into the same parent state. Only an `ok`
+    // response is reported: an error body still parses as JSON and would carry
+    // no X-Venta-Sucursal-* headers, so reporting it would clear the sucursal
+    // the other mount already resolved. A resolved-but-empty header is a real
+    // answer (drain mode / fail-closed, "hide the indicator") and is reported.
     useEffect(() => {
       const loadInitial = async () => {
+        const pedido = ++pedidoCatalogo.current
         try {
-          const res = await fetch("/api/inventario/search?q=&limit=20")
+          const res = await fetch("/api/inventario/search?q=&limit=20&scope=venta&ventaInfo=true")
           const data = await res.json()
+          // Ver `pedidoCatalogo`: una revalidación que ya llegó describe una
+          // sucursal más nueva que la de este response.
+          if (pedido < catalogoAplicado.current) return
+          catalogoAplicado.current = pedido
           if (Array.isArray(data)) {
             setRecentProducts(data)
+          }
+          if (res.ok) {
+            onVentaSucursal?.(readVentaSucursalHeaders(res))
           }
         } catch {
           // ignore
@@ -183,30 +241,116 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
         }
       }
       loadInitial()
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    // Debounced search
+    // Revalidación al volver a la pestaña.
+    //
+    // La cookie de sucursal activa la comparten TODAS las pestañas, pero solo la
+    // que hace el cambio recarga. Sin esto, un ADMIN con el POS abierto en la
+    // pestaña 1 que cambia de sucursal en la pestaña 2 sigue leyendo "Vendiendo
+    // desde: <sucursal vieja>" mientras /api/ventas atribuye y descuenta de la
+    // nueva: el indicador pasa de informar a desinformar, que es justo lo que
+    // `derivarLecturaVenta` evita ocultándolo cuando no puede afirmar de dónde
+    // sale el stock.
+    //
+    // Se revalida, NO se recarga: el cambio lo hizo otra pestaña y acá puede
+    // haber un carrito a medio armar que el operador no pidió perder.
+    //
+    // Se refresca el indicador Y la grilla, con el mismo pedido que el montaje.
+    // Traer solo los headers haría que la pantalla mienta MÁS fuerte: el título
+    // diría "Vendiendo desde: Sucursal Nueva" mientras `recentProducts` —lo que
+    // se ve con el buscador vacío— sigue listando el catálogo y el stock por
+    // depósito de la sucursal anterior, y esas filas se pueden clickear al
+    // carrito. El listado ya venía en el mismo response: descartarlo no ahorra
+    // un request, solo deja la mitad de la pantalla desactualizada.
+    //
+    // Con texto en el buscador la grilla visible NO es `recentProducts` sino
+    // `results`, que sale de otro request: por eso la revalidación además
+    // incrementa `revalidacion`, y el efecto del debounce vuelve a correr la
+    // búsqueda activa contra la sucursal nueva. Se re-consulta en vez de
+    // vaciar `results` porque vaciar cambia una grilla desactualizada por una
+    // vacía que contradice el "N resultados" de arriba y obliga a re-tipear;
+    // re-consultar deja un solo lugar dueño de qué significa `results`.
+    useEffect(() => {
+      let cancelado = false
+      // `focus` y `visibilitychange` llegan juntos al volver a la pestaña (y
+      // varias veces al volver de un diálogo del sistema): sin esta ventana,
+      // cada vuelta cuesta varias consultas por cada montaje del buscador.
+      let ultima = 0
+      const MIN_ENTRE_REVALIDACIONES = 5000
+
+      const revalidar = async () => {
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") return
+        const ahora = Date.now()
+        if (ahora - ultima < MIN_ENTRE_REVALIDACIONES) return
+        ultima = ahora
+        const pedido = ++pedidoCatalogo.current
+        try {
+          const res = await fetch("/api/inventario/search?q=&limit=20&scope=venta&ventaInfo=true")
+          // Mismo criterio que el montaje: un error también parsea como JSON y
+          // no trae headers, así que reportarlo apagaría un indicador que ya
+          // estaba bien resuelto y vaciaría la grilla. Se sale ANTES de tomar
+          // el turno: una revalidación que no escribió nada no tiene por qué
+          // descartar a la que venía en camino.
+          if (cancelado || !res.ok) return
+          const data = await res.json()
+          if (pedido < catalogoAplicado.current) return
+          catalogoAplicado.current = pedido
+          if (Array.isArray(data)) {
+            setRecentProducts(data)
+          }
+          onVentaSucursal?.(readVentaSucursalHeaders(res))
+          // Solo con una revalidación que trajo datos: una que falló no tiene
+          // por qué hacer parpadear la búsqueda activa.
+          setRevalidacion((n) => n + 1)
+        } catch {
+          // Sin red se conserva lo último resuelto.
+        }
+      }
+
+      window.addEventListener("focus", revalidar)
+      document.addEventListener("visibilitychange", revalidar)
+      return () => {
+        cancelado = true
+        window.removeEventListener("focus", revalidar)
+        document.removeEventListener("visibilitychange", revalidar)
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
+    // Debounced search.
+    //
+    // Depende también de `revalidacion`: al volver a la pestaña, la sucursal
+    // activa puede ser otra, y los resultados en pantalla son los de la
+    // anterior. `cancelado` hace que solo escriba la corrida vigente — sin él,
+    // el request de la sucursal vieja que quedó en vuelo puede llegar último y
+    // pisar el de la nueva.
     useEffect(() => {
       if (!query.trim()) {
         setResults([])
         return
       }
 
+      let cancelado = false
       const timer = setTimeout(async () => {
         setLoading(true)
         try {
-          const res = await fetch(`/api/inventario/search?q=${encodeURIComponent(query)}&limit=20`)
+          const res = await fetch(`/api/inventario/search?q=${encodeURIComponent(query)}&limit=20&scope=venta`)
           const data = await res.json()
-          setResults(Array.isArray(data) ? data : [])
+          if (!cancelado) setResults(Array.isArray(data) ? data : [])
         } catch {
-          setResults([])
+          if (!cancelado) setResults([])
         } finally {
-          setLoading(false)
+          if (!cancelado) setLoading(false)
         }
       }, 200)
 
-      return () => clearTimeout(timer)
-    }, [query])
+      return () => {
+        cancelado = true
+        clearTimeout(timer)
+      }
+    }, [query, revalidacion])
 
     const handleAdd = useCallback((product: InventarioResult) => {
       onAddProduct(product)

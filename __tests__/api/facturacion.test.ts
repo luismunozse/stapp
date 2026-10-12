@@ -127,7 +127,37 @@ describe("POST /api/facturacion/generar", () => {
     const { status, body } = await parseResponse(response)
 
     expect(status).toBe(400)
-    expect(body.error).toContain("Ya existe una factura")
+    expect(body.error).toContain("Ya existe un remito")
+  })
+
+  it("returns 400 when factura already exists (PostgREST one-to-one object embed, not array)", async () => {
+    mockAuthSuccess()
+
+    // facturas (id) is a reverse embed over the UNIQUE orden_id FK — PostgREST
+    // one-to-one detection can return it as a bare object instead of an
+    // array. The duplicate gate must still catch it, not silently pass.
+    const mockOrden = {
+      id: "o1",
+      estado: "REPARADO",
+      costo_final: 5000,
+      presupuesto: 5000,
+      sena: 0,
+      organization_id: "org-1",
+      numero_orden: 1,
+      dispositivo: "iPhone",
+      clientes: { nombre: "Test" },
+      repuestos_orden: [],
+      facturas: { id: "f1" },
+    }
+
+    const chain = createChainMock(mockOrden)
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    const response = await POST(createPostRequest({ ordenId: "o1" }))
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("Ya existe un remito")
   })
 
   it("creates factura successfully with seña consideration", async () => {

@@ -4,6 +4,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 import { getPrincipalId } from "@/lib/sucursal"
+import { isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 
 const changeRoleSchema = z.object({
   rol: z.enum(["ADMIN", "TECNICO", "VENDEDOR"]),
@@ -72,7 +73,22 @@ export async function POST(
       .update(updates)
       .eq("id", userId)
 
-    if (updateError) throw updateError
+    // Desde la migración 323 el trigger de `tecnicos_count` corre también en
+    // UPDATE, así que promover a alguien por encima del cupo de su plan ahora
+    // levanta PLAN_LIMIT_EXCEEDED. Antes era imposible que llegara acá: el
+    // trigger no veía los cambios de rol, y esa ceguera ERA el bug que la 323
+    // vino a cerrar.
+    //
+    // Sin este chequeo el `throw` de abajo lo entrega como 500 "Error al
+    // cambiar rol del usuario": el superadmin ve un fallo del sistema donde
+    // hay una regla de negocio con nombre y número. Los helpers ya existían
+    // para el alta; el cambio de rol es la segunda puerta al mismo límite.
+    if (updateError) {
+      if (isPlanLimitError(updateError)) {
+        return planLimitErrorResponse(updateError)
+      }
+      throw updateError
+    }
 
     await supabaseAdmin.from("audit_logs").insert({
       organization_id: user.organization_id,

@@ -40,7 +40,7 @@ export const OPERATION_LABELS: Record<StoreName, string> = {
   [STORES.PAYMENTS]: "Pago",
   [STORES.COBROS]: "Cobro",
   [STORES.ORDER_EDITS]: "Edición de orden",
-  [STORES.INVOICES]: "Factura",
+  [STORES.INVOICES]: "Remito",
   [STORES.UPLOADS]: "Archivo",
 }
 

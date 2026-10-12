@@ -42,7 +42,9 @@ Lista de clientes.
 
 Query: `page`, `limit`, `search` (matchea nombre/teléfono/email).
 
-Campos: `id, nombre, telefono, email, direccion, dni, tipo_cliente, razon_social, cuit, created_at`.
+Campos: `id, nombre, telefono, email, direccion, dni, tipo_cliente, razon_social, cuit, tipo_precio, descuento_pct, created_at`.
+
+`tipo_precio` es `"MINORISTA"` o `"MAYORISTA"`. `descuento_pct` es el % negociado (0-100) cuando el cliente es mayorista, `null` en caso contrario.
 
 ### `GET /api/v1/ordenes`
 Lista de órdenes de servicio.

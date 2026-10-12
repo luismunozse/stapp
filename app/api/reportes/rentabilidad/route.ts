@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import {
+  requireAdminOrVendedor,
+  hasInventarioAccess,
+  resolveVendedoresHabilitados,
+  canViewCotizacionCosts,
+} from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { sucursalParaLectura } from "@/lib/sucursal"
@@ -49,9 +54,38 @@ export async function GET() {
 
     const { data: ordenes } = await ordenesQuery
 
+    // Sin órdenes no hay margen que calcular. Va null y no 0 para que el campo
+    // tenga UNA sola forma: el camino con datos ya devuelve null cuando el rol
+    // no puede ver costos, y dos formas para el mismo campo es como el próximo
+    // lector arma una suposición equivocada.
     if (!ordenes || ordenes.length === 0) {
-      return NextResponse.json({ data: [], margenPromedio: 0 })
+      return NextResponse.json({ data: [], margenPromedio: null })
     }
+
+    // Se resuelve ACÁ, antes de armar la lista: el ranking por ganancia es una
+    // clave de costo y el orden sobrevive al nulleo. Ver el sort de más abajo.
+    //
+    // Hacen falta las DOS llaves, porque `costos` mezcla dos costos de origen
+    // distinto: repuestos_orden.precio_unitario —precio_compra congelado, que
+    // gobierna hasInventarioAccess— e items_cotizacion.costo_unitario, que
+    // gobierna canViewCotizacionCosts, ADMIN-only a propósito y MÁS estricta
+    // (costo de cotización y costo de inventario son permisos independientes;
+    // ver lib/auth-utils.ts). Un VENDEDOR con el opt-in de inventario leyendo
+    // un agregado armado en parte con costos de cotización es el mismo agujero
+    // con otra forma.
+    //
+    // NO se parte el agregado en una cifra "sólo repuestos" para ese rol: un
+    // número de rentabilidad al que le falta parte del costo es peor que uno
+    // ausente, porque se lee como exacto.
+    //
+    // canViewCotizacionCosts corta primero y ahorra el SELECT de
+    // resolveVendedoresHabilitados cuando ya sabemos la respuesta.
+    const canViewCost = canViewCotizacionCosts(role)
+      ? hasInventarioAccess(
+          role,
+          role === "VENDEDOR" ? await resolveVendedoresHabilitados(organizationId!) : false
+        )
+      : false
 
     // Calcular rentabilidad por tipo de dispositivo
     // Costos incluyen: repuestos consumidos + cotizaciones aceptadas (inv) + comisión técnico.
@@ -97,7 +131,9 @@ export async function GET() {
       porTipo[tipo].count++
     }
 
-    const data = Object.entries(porTipo).map(([tipo, stats]) => {
+    // Filas completas primero; el gate se aplica al escribir la respuesta, así
+    // los totales se calculan sobre las cifras reales y no sobre los nulls.
+    const filas = Object.entries(porTipo).map(([tipo, stats]) => {
       const ganancia = stats.ingresos - stats.costos
       const margen = stats.ingresos > 0 ? Math.round((ganancia / stats.ingresos) * 100) : 0
 
@@ -110,15 +146,48 @@ export async function GET() {
         margen,
         cantidad: stats.count,
       }
-    }).sort((a, b) => b.ganancia - a.ganancia)
+    })
 
-    const totalIngresos = data.reduce((acc, d) => acc + d.ingresos, 0)
-    const totalCostos = data.reduce((acc, d) => acc + d.costos, 0)
+    // El orden es un canal lateral: ganancia es ingresos menos costos e
+    // ingresos viaja visible en cada fila, así que el ranking por ganancia
+    // devuelve el ranking por costo aunque el número vaya en null. Para quien
+    // no puede ver costo se ordena por ingresos, que ya ve.
+    filas.sort(
+      canViewCost
+        ? (a, b) => b.ganancia - a.ganancia
+        : (a, b) => b.ingresos - a.ingresos || a.tipoDispositivo.localeCompare(b.tipoDispositivo, "es")
+    )
+
+    const totalIngresos = filas.reduce((acc, d) => acc + d.ingresos, 0)
+    const totalCostos = filas.reduce((acc, d) => acc + d.costos, 0)
     const margenPromedio = totalIngresos > 0
       ? Math.round(((totalIngresos - totalCostos) / totalIngresos) * 100)
       : 0
 
-    return NextResponse.json({ data, margenPromedio })
+    // Mismo gate y misma regla que las rutas hermanas: quien no puede ver el
+    // costo de compra por item no recibe NINGUNA cifra derivada de
+    // precio_compra, a ningún nivel de agregación.
+    //
+    // `costos` agrega repuestos_orden.precio_unitario —la copia congelada del
+    // costo de compra— más items_cotizacion, que cae de vuelta a
+    // inventario.precio_compra. Un tipo de dispositivo puede tener una sola
+    // orden, y entonces costos menos el costoManoObra visible es el costo del
+    // repuesto.
+    //
+    // ganancia es ingresos - costos con ingresos visible al lado, así que
+    // taparle solo `costos` lo devolvería por resta; margen es esa misma
+    // ganancia sobre ingresos. Se gatea la clausura entera.
+    //
+    // ingresos, costoManoObra y cantidad no derivan de precio_compra y siguen
+    // visibles.
+    const data = canViewCost
+      ? filas
+      : filas.map((f) => ({ ...f, costos: null, ganancia: null, margen: null }))
+
+    return NextResponse.json({
+      data,
+      margenPromedio: canViewCost ? margenPromedio : null,
+    })
   } catch (err) {
     console.error("Error en reporte rentabilidad:", err)
     return NextResponse.json({ error: "Error interno" }, { status: 500 })

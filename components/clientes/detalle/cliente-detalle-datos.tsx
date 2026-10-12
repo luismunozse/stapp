@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Phone, Mail, MapPin, IdCard, Building2 } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import type { Cliente } from "@/types"
+import { useCurrency } from "@/contexts/currency-context"
+import { getTaxIdLabel, getPersonalIdLabel } from "@/lib/countries"
 
 function Row({ icon: Icon, label, value }: { icon: typeof Phone; label: string; value: string }) {
   return (
@@ -16,6 +18,7 @@ function Row({ icon: Icon, label, value }: { icon: typeof Phone; label: string; 
 }
 
 export function ClienteDetalleDatos({ cliente }: { cliente: Cliente }) {
+  const { pais } = useCurrency()
   return (
     <Card>
       <CardHeader><CardTitle className="text-base">Datos &amp; contacto</CardTitle></CardHeader>
@@ -23,9 +26,9 @@ export function ClienteDetalleDatos({ cliente }: { cliente: Cliente }) {
         {cliente.telefono && <Row icon={Phone} label="Teléfono" value={cliente.telefono} />}
         {cliente.email && <Row icon={Mail} label="Email" value={cliente.email} />}
         {cliente.direccion && <Row icon={MapPin} label="Dirección" value={cliente.direccion} />}
-        {cliente.dni && <Row icon={IdCard} label="DNI" value={cliente.dni} />}
+        {cliente.dni && <Row icon={IdCard} label={getPersonalIdLabel(pais)} value={cliente.dni} />}
         {cliente.razonSocial && <Row icon={Building2} label="Razón social" value={cliente.razonSocial} />}
-        {cliente.cuit && <Row icon={IdCard} label="CUIT" value={cliente.cuit} />}
+        {cliente.cuit && <Row icon={IdCard} label={getTaxIdLabel(pais)} value={cliente.cuit} />}
         <div className="flex items-center gap-2 text-sm">
           <WhatsAppIcon className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="text-muted-foreground">WhatsApp:</span>

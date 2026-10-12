@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { getPlatformEvolutionConfig, buildSucursalInstanceName } from "@/lib/whatsapp/platform-config"
 import { connectInstance, getConnectionState } from "@/lib/whatsapp/providers/evolution"
-import { upsertSucursalWhatsAppState } from "@/lib/whatsapp/sucursal-config"
+import { updateSucursalWhatsAppState } from "@/lib/whatsapp/sucursal-config"
 
 async function guard(sucursalId: string) {
   const { error, organizationId } = await requireAdmin()
@@ -33,7 +33,7 @@ async function guard(sucursalId: string) {
     }
   }
   const instanceName = buildSucursalInstanceName(organizationId!, sucursalId)
-  return { organizationId: organizationId!, creds: { baseUrl: platform.baseUrl, instanceName, apiKey: platform.apiKey }, instanceName }
+  return { organizationId: organizationId!, creds: { baseUrl: platform.baseUrl, instanceName, apiKey: platform.apiKey } }
 }
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -42,7 +42,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const g = await guard(id)
     if (g.error) return g.error
     const result = await connectInstance(g.creds!)
-    await upsertSucursalWhatsAppState(g.organizationId!, id, g.instanceName!, result.state, { qr: !!result.qrBase64 })
+    // Update-only: crear filas es trabajo exclusivo del POST /connect.
+    await updateSucursalWhatsAppState(g.organizationId!, id, result.state, { qr: !!result.qrBase64 })
     return NextResponse.json({
       state: result.state,
       qrBase64: result.qrBase64 || null,
@@ -55,14 +56,33 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   }
 }
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+/**
+ * Poll de estado. Con `?refresh=1` devuelve ademas un QR nuevo: los QR de
+ * Baileys vencen en segundos y Evolution los rota, asi que dejar fijo el
+ * primero hace que la sucursal escanee un codigo muerto. Sigue usando
+ * `updateSucursalWhatsAppState` (nunca upsert): pollear no debe crear filas.
+ */
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const g = await guard(id)
     if (g.error) return g.error
     const state = await getConnectionState(g.creds!)
-    await upsertSucursalWhatsAppState(g.organizationId!, id, g.instanceName!, state.state)
-    return NextResponse.json({ state: state.state, error: state.error || null })
+    await updateSucursalWhatsAppState(g.organizationId!, id, state.state)
+
+    const wantsQr = new URL(req.url).searchParams.get("refresh") === "1"
+    if (!wantsQr || state.state === "open") {
+      return NextResponse.json({ state: state.state, qrBase64: null, error: state.error || null })
+    }
+
+    const refreshed = await connectInstance(g.creds!)
+    await updateSucursalWhatsAppState(g.organizationId!, id, refreshed.state)
+
+    return NextResponse.json({
+      state: refreshed.state,
+      qrBase64: refreshed.qrBase64 || null,
+      error: refreshed.error || null,
+    })
   } catch (err) {
     console.error("Error poll Evolution sucursal:", err)
     return NextResponse.json({ error: "Error interno" }, { status: 500 })

@@ -43,6 +43,7 @@ import { ContactRow } from "./contact-row"
 import { ProveedorForm } from "./proveedor-form"
 import { useModal } from "@/contexts/modal-context"
 import { useCurrency } from "@/contexts/currency-context"
+import { getTaxIdLabel } from "@/lib/countries"
 
 interface Proveedor {
   id: string
@@ -94,13 +95,16 @@ function pagoLabel(p?: Proveedor | null): string {
 
 interface Stats {
   productosCount: number
-  valorCostoStock: number
+  /** null cuando el rol no puede ver costos de compra (hasInventarioAccess). */
+  valorCostoStock: number | null
   valorVentaStock: number
   itemsSinStock: number
   itemsBajoStock: number
   ordenesCount: number
   ordenesAbiertas: number
-  totalComprado: number
+  /** null cuando el rol no puede ver costos de compra (hasInventarioAccess):
+   *  es lo que la organización le pagó a este proveedor. */
+  totalComprado: number | null
   ultimaCompra: string | null
 }
 
@@ -162,7 +166,7 @@ function formatDate(iso: string | null | undefined, timezone: string) {
 export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
   const router = useRouter()
   const { confirm } = useModal()
-  const { formatPrice, timezone } = useCurrency()
+  const { formatPrice, timezone, pais } = useCurrency()
   const [editing, setEditing] = useState(false)
 
   const { data: proveedor, mutate: mutateProv, isLoading } = useSWR<Proveedor>(
@@ -346,11 +350,16 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
             ) : null
           }
         />
-        <KpiCard
-          icon={<DollarSign className="h-4 w-4" />}
-          label="Total comprado"
-          value={stats ? formatPrice(stats.totalComprado) : "—"}
-        />
+        {/* Se oculta la tarjeta entera cuando el rol no puede ver costos de
+            compra. Mientras carga (stats undefined) se mantiene con "—" para
+            no saltar el layout. */}
+        {(!stats || stats.totalComprado !== null) && (
+          <KpiCard
+            icon={<DollarSign className="h-4 w-4" />}
+            label="Total comprado"
+            value={stats ? formatPrice(stats.totalComprado!) : "—"}
+          />
+        )}
         <KpiCard
           icon={<ShoppingCart className="h-4 w-4" />}
           label="Órdenes de compra"
@@ -445,7 +454,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
                     <FiscalField label="Razón social" value={proveedor.razonSocial} />
                   )}
                   {proveedor.cuit && (
-                    <FiscalField label="CUIT" value={proveedor.cuit} mono />
+                    <FiscalField label={getTaxIdLabel(pais)} value={proveedor.cuit} mono />
                   )}
                   {proveedor.condicionIva && (
                     <FiscalField label="Condición IVA" value={CONDICION_IVA_LABEL[proveedor.condicionIva] || proveedor.condicionIva} />
@@ -492,7 +501,10 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <div className="text-muted-foreground text-xs uppercase tracking-wide">A costo</div>
-                  <div className="font-semibold">{stats ? formatPrice(stats.valorCostoStock) : "—"}</div>
+                  {/* null = el rol no puede ver costos de compra. */}
+                  <div className="font-semibold">
+                    {stats && stats.valorCostoStock !== null ? formatPrice(stats.valorCostoStock) : "—"}
+                  </div>
                 </div>
                 <div>
                   <div className="text-muted-foreground text-xs uppercase tracking-wide">A venta</div>

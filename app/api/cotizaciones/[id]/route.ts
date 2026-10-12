@@ -1,11 +1,33 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, canViewCotizacionCosts } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { transicionarOrden } from "@/lib/orden-transicion"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { dateOnlyToNoonUtcISO } from "@/lib/timezone"
+import { totalPresupuestoDeOrden, cotizacionesVigentesDeOrden } from "@/lib/cotizacion-presupuesto"
+import { marcarOriginalReemplazada, restaurarOriginalDeRevision } from "@/lib/cotizacion-revision"
+import { validarInforme, esInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizacion-informe"
+import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { z } from "zod"
+
+// Detecta el error de "la función no existe todavía", que acá significa
+// "la migración 315 no se corrió a mano aún". Mismo helper que las rutas de
+// aprobar y convertir-venta; se repite en vez de compartirse para no tocar esos
+// archivos en este cambio.
+function isFunctionMissingError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false
+  const e = err as Record<string, unknown>
+  const code = String(e.code ?? "")
+  const msg = String(e.message ?? "").toLowerCase()
+  return (
+    code === "PGRST202" ||
+    code === "42883" ||
+    msg.includes("could not find the function") ||
+    msg.includes("does not exist") ||
+    msg.includes("schema cache")
+  )
+}
 
 const itemSchema = z.object({
   id: z.string().optional(),
@@ -17,6 +39,7 @@ const itemSchema = z.object({
   descuentoTipo: z.enum(["porcentaje", "fijo"]).optional(),
   descuentoValor: z.number().min(0).optional(),
   inventarioId: z.string().nullable().optional(),
+  servicioId: z.string().nullable().optional(),
   tipoRepuesto: z.enum(["ORIGINAL", "ALTERNATIVO", "RECICLADO", "NO_APLICA"]).optional(),
 })
 
@@ -64,6 +87,10 @@ const updateCotizacionSchema = z.object({
   ordenId: z.string().nullable().optional(),
   equipo: equipoSchema.optional(),
   checklist: checklistSchema.nullable().optional(),
+  veredicto: veredictoSchema.nullable().optional(),
+  diagnosticoTecnico: z.string().max(4000).nullable().optional(),
+  causaDano: causaDanoSchema.nullable().optional(),
+  presentadoAnte: z.string().max(200).nullable().optional(),
 })
 
 // Revierte una orden a EN_DIAGNOSTICO cuando deja de tener un presupuesto
@@ -116,15 +143,9 @@ async function revertirOrdenSinPresupuestoActivo(
 }
 
 async function recalcPresupuestoOrden(ordenId: string, organizationId: string, userId?: string | null) {
-  const { data: allCots } = await supabaseAdmin
-    .from("cotizaciones")
-    .select("total")
-    .eq("orden_id", ordenId)
-    .is("deleted_at", null)
-    .neq("estado", "RECHAZADA")
-  const total = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
+  const { total, cantidad } = await totalPresupuestoDeOrden(ordenId)
 
-  if ((allCots?.length || 0) > 0) {
+  if (cantidad > 0) {
     await supabaseAdmin
       .from("ordenes_servicio")
       .update({ presupuesto: total, costo_final: total })
@@ -160,7 +181,7 @@ function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuent
   return Math.max(0, bruto * (1 - dv / 100))
 }
 
-function formatCotizacion(c: any) {
+function formatCotizacion(c: any, includeCosts: boolean) {
   const orden = c.ordenes_servicio
   const cliente = c.clientes || orden?.clientes
   const sector = c.sectores_cliente
@@ -188,7 +209,16 @@ function formatCotizacion(c: any) {
     tipo: c.tipo || "ORDEN",
     equipo: c.equipo_snapshot || null,
     checklist: c.checklist_snapshot || null,
+    veredicto: c.veredicto ?? null,
+    diagnosticoTecnico: c.diagnostico_tecnico ?? null,
+    causaDano: c.causa_dano ?? null,
+    presentadoAnte: c.presentado_ante ?? null,
     convertidaAOrdenId: c.convertida_a_orden_id || null,
+    // Venta que salió de esta cotización (migración 327): con valor, la UI no
+    // ofrece volver a convertirla.
+    ventaId: c.venta_id || null,
+    reemplazadaPor: c.reemplazada_por,
+    revisionDe: c.revision_de,
     orden: orden ? {
       id: orden.id,
       numeroOrden: orden.numero_orden,
@@ -210,12 +240,14 @@ function formatCotizacion(c: any) {
       descripcion: i.descripcion,
       cantidad: i.cantidad,
       precioUnitario: i.precio_unitario,
-      costoUnitario: i.costo_unitario != null ? Number(i.costo_unitario) : null,
+      // Cost/margin data is ADMIN-only (server-side enforced, not just hidden in UI).
+      costoUnitario: includeCosts && i.costo_unitario != null ? Number(i.costo_unitario) : null,
       subtotal: i.subtotal,
       unidad: i.unidad,
       descuentoTipo: i.descuento_tipo,
       descuentoValor: i.descuento_valor,
       inventarioId: i.inventario_id ?? null,
+      servicioId: i.servicio_id ?? null,
       tipoRepuesto: i.tipo_repuesto || "NO_APLICA",
     })),
   }
@@ -226,7 +258,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     const { id } = await params
@@ -256,7 +288,7 @@ export async function GET(
       )
     }
 
-    return NextResponse.json(formatCotizacion(cotizacion))
+    return NextResponse.json(formatCotizacion(cotizacion, canViewCotizacionCosts(role)))
   } catch (error) {
     console.error("Error fetching cotizacion:", error)
     return NextResponse.json(
@@ -289,7 +321,7 @@ export async function PUT(
     // Verify cotizacion exists and belongs to org
     const { data: existing, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, tipo, organization_id, created_by, iva_porcentaje, descuento_global_tipo, descuento_global_valor, orden_id")
+      .select("id, estado, tipo, origen, organization_id, created_by, iva_porcentaje, descuento_global_tipo, descuento_global_valor, orden_id, revision_de, veredicto, diagnostico_tecnico, causa_dano, presentado_ante, items_cotizacion(id)")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .single()
@@ -306,6 +338,25 @@ export async function PUT(
       return NextResponse.json(
         { error: "No autorizado para editar esta cotización" },
         { status: 403 }
+      )
+    }
+
+    // Rechazar una solicitud del catálogo devuelve su stock (trigger de la
+    // migración 315). Reabrirla dejaría una solicitud viva que no retiene nada:
+    // el storefront ofrece las unidades y esta cotización cree tenerlas. Para
+    // el catálogo lo correcto es una solicitud nueva, no resucitar la muerta.
+    if (
+      existing.origen === "CATALOGO_PUBLICO" &&
+      existing.estado === "RECHAZADA" &&
+      data.estado !== undefined &&
+      data.estado !== "RECHAZADA"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Una solicitud del catálogo rechazada no se puede reabrir: su stock ya se devolvió. Creá una solicitud nueva.",
+        },
+        { status: 400 }
       )
     }
 
@@ -345,6 +396,46 @@ export async function PUT(
     if (data.tipoCambio !== undefined) updateData.tipo_cambio = data.tipoCambio
     if (data.sectorId !== undefined) updateData.sector_id = data.sectorId
 
+    if (data.veredicto !== undefined) updateData.veredicto = data.veredicto
+    if (data.diagnosticoTecnico !== undefined) {
+      updateData.diagnostico_tecnico = data.diagnosticoTecnico?.trim() || null
+    }
+    if (data.causaDano !== undefined) updateData.causa_dano = data.causaDano
+    if (data.presentadoAnte !== undefined) {
+      updateData.presentado_ante = data.presentadoAnte?.trim() || null
+    }
+
+    // La regla solo corre si el pedido toca el estado que le importa. Un PUT que
+    // solo cambia notas o fecha no empeora nada: frenarlo dejaria inservible a
+    // toda cotizacion vieja de cero items y veredicto NULL, que ni siquiera se
+    // podria rechazar. El PUT viejo aceptaba `items: []` sin minimo, asi que esas
+    // filas pueden existir.
+    const tocaElInforme =
+      data.items !== undefined ||
+      data.veredicto !== undefined ||
+      data.diagnosticoTecnico !== undefined ||
+      data.causaDano !== undefined
+
+    if (tocaElInforme) {
+      // La regla mira el estado RESULTANTE, no el payload: un pedido puede
+      // cambiar el veredicto sin mandar items, y viceversa. Por eso se fusiona
+      // contra la fila existente en vez de vivir en un refine de Zod.
+      const itemsResultantes = data.items !== undefined
+        ? data.items
+        : (existing.items_cotizacion || [])
+      const mensajeInforme = validarInforme({
+        cantidadItems: itemsResultantes.length,
+        veredicto: data.veredicto !== undefined ? data.veredicto : existing.veredicto,
+        diagnosticoTecnico: data.diagnosticoTecnico !== undefined
+          ? data.diagnosticoTecnico
+          : existing.diagnostico_tecnico,
+        causaDano: data.causaDano !== undefined ? data.causaDano : existing.causa_dano,
+      })
+      if (mensajeInforme) {
+        return NextResponse.json({ error: mensajeInforme }, { status: 400 })
+      }
+    }
+
     // Reasignación de orden (vincular/desvincular). Solo tipo ORDEN.
     let ordenIdChanged = false
     const oldOrdenId: string | null = existing.orden_id || null
@@ -377,6 +468,8 @@ export async function PUT(
             { status: 404 }
           )
         }
+        const practica = await rejectIfPractica(newOrdenId, organizationId!)
+        if (practica) return practica
       }
       updateData.orden_id = newOrdenId
       ordenIdChanged = true
@@ -399,9 +492,198 @@ export async function PUT(
       const descGlobalTipo = data.descuentoGlobalTipo ?? "porcentaje"
       const descGlobalValor = data.descuentoGlobalValor ?? 0
 
+      // Cost/margin data is ADMIN-only, uniformly (VENDEDOR included — they
+      // have no cotizaciones nav access today, so losing cost entry here is
+      // deliberate, not an oversight; see canViewCotizacionCosts). Non-admin
+      // actors never see costoUnitario in GET responses, so their edit
+      // payload can't carry trustworthy values — resolve costs server-side
+      // instead:
+      //  - existing item (matched to a stored row) with an UNCHANGED inventario
+      //    link: preserve the DB's current costo_unitario, ignoring whatever
+      //    the client sent (blocks spoofing and prevents an edit from silently
+      //    wiping out cost data an admin entered earlier).
+      //  - existing item whose inventario link CHANGED (relinked to another
+      //    product, or unlinked): the old cost no longer applies — re-derive
+      //    from the new inventario.precio_compra, or null if unlinked.
+      //  - new item linked to inventario: derive from inventario.precio_compra.
+      //  - new free-text item: costo_unitario stays null.
+      //
+      // Matching an existing item cannot rely on item.id alone. This handler
+      // deletes every items_cotizacion row and re-inserts fresh ones on each
+      // PUT, and the insert never supplies an id (the column defaults to
+      // generate_cuid()), so ids change on every save. Any client holding a
+      // pre-save copy — a second tab, or the SWR cache in cotizacion-list,
+      // which sets revalidateOnFocus: false — submits ids that no longer
+      // exist. The id lookup missed, the item looked new, and a free-text line
+      // (nothing to re-derive from) lost the manual cost an ADMIN had entered.
+      //
+      // The fix is a natural key — descripción (trimmed, case-insensitive)
+      // plus the inventario link — used ONLY when the client sent an id that
+      // missed. The key is the tuple that decides which cost applies, so a hit
+      // means the same line: it also implies the link is unchanged, since the
+      // link is part of the key. Restricting it to payloads that carry an id
+      // keeps a genuinely new line (no id) from inheriting a same-named row's
+      // cost. Rows are recreated rather than diffed because turning this into
+      // a three-way diff would rework a write path that also feeds
+      // recalcPresupuestoOrden, the stock reservations released by
+      // liberar_items_cotizacion, and the items_factura.cotizacion_item_id FK
+      // — and items_cotizacion has no unique constraint to upsert on anyway.
+      //
+      // Two limits, on purpose: a line renamed by the same edit that carries a
+      // stale id is indistinguishable from a new line and still resolves to
+      // null, and an ambiguous key (several stored rows sharing it but
+      // disagreeing on cost) declines to guess.
+      const canViewCosts = canViewCotizacionCosts(role)
+      type StoredItemCost = { costoUnitario: number | null; inventarioId: string | null }
+      // El separador se escribe como ESCAPE, nunca como el carácter literal.
+      // Un NUL crudo en el fuente hace que ripgrep clasifique el archivo como
+      // binario: informa "binary file matches" y devuelve CERO líneas, así que
+      // la ruta entera desaparece de toda búsqueda del proyecto. Y `git diff`
+      // pinta el NUL como un espacio común, así que quien revisa el PR lee un
+      // separador de espacio — que sería inseguro, porque las descripciones
+      // tienen espacios; cualquier editor o formateador que limpie caracteres
+      // de control convertiría la clave segura en esa otra, en silencio.
+      // Se elige NUL justamente porque no puede aparecer en una descripción.
+      // Guard en __tests__/source-nul-bytes.test.ts.
+      const naturalKey = (descripcion: string | null, inventarioId: string | null) =>
+        `${(descripcion || "").trim().toLowerCase()}\u0000${inventarioId ?? ""}`
+      // Procedencia del catálogo. Se rastrea SIEMPRE (no sólo cuando el rol no
+      // ve costos) porque el borrar-y-reinsertar de acá perdía
+      // catalogo_item_id / variante_id / variante_etiqueta en cada PUT, y esas
+      // columnas son lo que vincula la línea con el ítem del catálogo que la
+      // originó: sin ellas la cotización queda huérfana de su procedencia en el
+      // PDF, en el analytics de "comprados juntos" y en cualquier lectura que
+      // parta del catálogo.
+      //
+      // (La restitución de stock NO depende de esto: vive en
+      // catalogo_reservas_cotizacion, que el PUT no toca. Ver migración 315.)
+      type StoredItemOrigen = {
+        catalogoItemId: string | null
+        varianteId: string | null
+        varianteEtiqueta: string | null
+      }
+      const origenById = new Map<string, StoredItemOrigen>()
+      const origenByNaturalKey = new Map<string, StoredItemOrigen | null>()
+
+      const existingItemsById = new Map<string, StoredItemCost>()
+      // null marks an ambiguous key: several rows share it and disagree.
+      const existingItemsByNaturalKey = new Map<string, StoredItemCost | null>()
+      const inventarioCostoById = new Map<string, number | null>()
+
+      const { data: existingItemRows, error: existingItemsError } = await supabaseAdmin
+        .from("items_cotizacion")
+        .select(
+          "id, descripcion, costo_unitario, inventario_id, catalogo_item_id, variante_id, variante_etiqueta"
+        )
+        .eq("cotizacion_id", id)
+      if (existingItemsError) throw existingItemsError
+
+      for (const row of existingItemRows || []) {
+        const stored: StoredItemCost = {
+          costoUnitario: row.costo_unitario != null ? Number(row.costo_unitario) : null,
+          inventarioId: row.inventario_id ?? null,
+        }
+        const origen: StoredItemOrigen = {
+          catalogoItemId: row.catalogo_item_id ?? null,
+          varianteId: row.variante_id ?? null,
+          varianteEtiqueta: row.variante_etiqueta ?? null,
+        }
+        const key = naturalKey(row.descripcion, stored.inventarioId)
+
+        origenById.set(row.id, origen)
+        if (origenByNaturalKey.has(key)) {
+          // Misma regla que para el costo: sólo un desacuerdo inutiliza la
+          // clave. Dos líneas iguales que apuntan al mismo item/variante dan la
+          // misma respuesta por cualquier camino.
+          const previo = origenByNaturalKey.get(key)
+          if (
+            !previo ||
+            previo.catalogoItemId !== origen.catalogoItemId ||
+            previo.varianteId !== origen.varianteId
+          ) {
+            origenByNaturalKey.set(key, null)
+          }
+        } else {
+          origenByNaturalKey.set(key, origen)
+        }
+
+        if (canViewCosts) continue
+
+        existingItemsById.set(row.id, stored)
+        if (existingItemsByNaturalKey.has(key)) {
+          // Duplicated lines that agree on cost resolve to the same answer
+          // either way, so only a disagreement makes the key unusable.
+          const previous = existingItemsByNaturalKey.get(key)
+          if (!previous || previous.costoUnitario !== stored.costoUnitario) {
+            existingItemsByNaturalKey.set(key, null)
+          }
+        } else {
+          existingItemsByNaturalKey.set(key, stored)
+        }
+      }
+
+      const SIN_ORIGEN: StoredItemOrigen = {
+        catalogoItemId: null,
+        varianteId: null,
+        varianteEtiqueta: null,
+      }
+      const findOrigen = (item: (typeof data.items)[number]): StoredItemOrigen => {
+        if (!item.id) return SIN_ORIGEN
+        const byId = origenById.get(item.id)
+        if (byId) return byId
+        return (
+          origenByNaturalKey.get(naturalKey(item.descripcion, item.inventarioId ?? null)) ??
+          SIN_ORIGEN
+        )
+      }
+
+      const findStoredItem = (item: (typeof data.items)[number]): StoredItemCost | undefined => {
+        if (!item.id) return undefined
+        const byId = existingItemsById.get(item.id)
+        if (byId) return byId
+        return existingItemsByNaturalKey.get(
+          naturalKey(item.descripcion, item.inventarioId ?? null)
+        ) ?? undefined
+      }
+
+      if (!canViewCosts) {
+        const inventarioIdsNeedingLookup = Array.from(new Set(
+          data.items
+            .filter((item) => {
+              const stored = findStoredItem(item)
+              const linkChanged = stored ? stored.inventarioId !== (item.inventarioId ?? null) : true
+              return linkChanged && !!item.inventarioId
+            })
+            .map((item) => item.inventarioId as string)
+        ))
+        if (inventarioIdsNeedingLookup.length > 0) {
+          const { data: invRows, error: invError } = await supabaseAdmin
+            .from("inventario")
+            .select("id, precio_compra")
+            .eq("organization_id", organizationId!)
+            .in("id", inventarioIdsNeedingLookup)
+          if (invError) throw invError
+          for (const row of invRows || []) {
+            inventarioCostoById.set(row.id, row.precio_compra != null ? Number(row.precio_compra) : null)
+          }
+        }
+      }
+
+      const resolveCostoUnitario = (item: (typeof data.items)[number]): number | null => {
+        if (canViewCosts) return item.costoUnitario ?? null
+        const stored = findStoredItem(item)
+        if (stored && stored.inventarioId === (item.inventarioId ?? null)) {
+          return stored.costoUnitario
+        }
+        if (item.inventarioId) return inventarioCostoById.get(item.inventarioId) ?? null
+        return null
+      }
+
       const items = data.items.map((item) => ({
         ...item,
         subtotal: calcItemNeto(item),
+        costoUnitario: resolveCostoUnitario(item),
+        origen: findOrigen(item),
       }))
       const subtotalNeto = items.reduce((sum, item) => sum + item.subtotal, 0)
 
@@ -434,13 +716,20 @@ export async function PUT(
             descripcion: item.descripcion,
             cantidad: item.cantidad,
             precio_unitario: item.precioUnitario,
-            costo_unitario: item.costoUnitario ?? null,
+            costo_unitario: item.costoUnitario,
             subtotal: item.subtotal,
             unidad: item.unidad || "Unidad",
             descuento_tipo: item.descuentoTipo || "porcentaje",
             descuento_valor: item.descuentoValor || 0,
             inventario_id: item.inventarioId || null,
+            servicio_id: item.servicioId || null,
             tipo_repuesto: item.tipoRepuesto || "NO_APLICA",
+            // Procedencia del catálogo: se repone tal cual estaba. Sin esto,
+            // editar una solicitud del catálogo la desvincula de su ítem y de
+            // su variante, y su stock ya no se puede devolver.
+            catalogo_item_id: item.origen.catalogoItemId,
+            variante_id: item.origen.varianteId,
+            variante_etiqueta: item.origen.varianteEtiqueta,
           }))
         )
     }
@@ -455,8 +744,43 @@ export async function PUT(
       throw updateError
     }
 
+    // ── El puntero `reemplazada_por` de la original, en las dos direcciones ──
+    //
+    // Este PUT es la otra puerta por la que una revisión se envía: el botón
+    // "Enviar y compartir" de la lista no pasa por /enviar (eso manda el mail),
+    // manda `estado: "ENVIADA"` acá. Si la marca sólo viviera en /enviar, una
+    // revisión compartida por link nunca reemplazaría a su original y la orden
+    // contaría las dos versiones.
+    //
+    // Y al revés: rechazar la revisión la saca del presupuesto por RECHAZADA,
+    // pero la original sigue apuntada como reemplazada — quedan las dos fuera y
+    // el próximo recálculo deja la orden en 0 aunque la firma de la original
+    // siga siendo el acuerdo vigente.
+    //
+    // Ambas van ANTES del recálculo de abajo: al revés, la suma es la de antes.
+    let originalRestaurada: string | null = null
+    if (existing.revision_de) {
+      if (data.estado === "ENVIADA") {
+        await marcarOriginalReemplazada(
+          { id, revision_de: existing.revision_de },
+          organizationId!
+        )
+      } else if (data.estado === "RECHAZADA") {
+        originalRestaurada = await restaurarOriginalDeRevision(
+          { id, revision_de: existing.revision_de },
+          organizationId!
+        )
+      }
+    }
+
     // Recalc presupuesto en órdenes afectadas (items o reasignación de orden_id)
     const ordenesARecalcular = new Set<string>()
+    // Un cambio pelado de estado no recalcula nada (a propósito). Pero si acá se
+    // restauró una original, la cifra restaurada no aparece sola: hay que
+    // recalcular para que el presupuesto de la orden vuelva a valer lo firmado.
+    if (originalRestaurada && existing.orden_id) {
+      ordenesARecalcular.add(existing.orden_id)
+    }
     if (ordenIdChanged) {
       if (oldOrdenId) ordenesARecalcular.add(oldOrdenId)
       if (newOrdenId) ordenesARecalcular.add(newOrdenId)
@@ -469,28 +793,86 @@ export async function PUT(
       await recalcPresupuestoOrden(oid, organizationId!, userId)
     }
 
-    // If changing to RECHAZADA from ACEPTADA, release reservations
+    // Liberar reservas al rechazar una cotización ACEPTADA.
+    //
+    // Con la migración 315 aplicada, las del catálogo ya las liberó el trigger
+    // cotizaciones_liberar_reserva_catalogo, que devuelve exactamente lo que
+    // dice el libro de movimientos. liberar_items_cotizacion NO mira ese libro:
+    // libera LEAST(item.cantidad, inventario.stock_reservado) leyendo la fila
+    // del producto, y ese stock_reservado es el global de todas las
+    // cotizaciones. Correr las dos sobre la misma cotización libera de más y se
+    // come la reserva de OTRA que esté reteniendo ese producto — y el
+    // HAVING > 0 de reserva_cotizacion_pendiente esconde el negativo, así que
+    // falla en silencio. Por eso no alcanza con dejarla como respaldo ciego:
+    // no es idempotente.
+    //
+    // Pero el código llega a producción al mergear y la migración se corre A
+    // MANO después. En esa ventana el trigger no existe, y si la ruta tampoco
+    // libera, rechazar una cotización del catálogo ACEPTADA deja stock_reservado
+    // inflado sin camino de vuelta (esta rama no trae barrido de rescate).
+    //
+    // Se resuelve detectando el estado del mundo en vez de asumirlo: se intenta
+    // la RPC nueva y, si la función no existe, estamos antes de la migración y
+    // corresponde el camino viejo. Mismo patrón que ya usan las rutas de
+    // aprobar y convertir-venta.
     if (data.estado === "RECHAZADA" && existing.estado === "ACEPTADA") {
-      try {
-        await supabaseAdmin.rpc("liberar_items_cotizacion", {
+      let usarCaminoLegacy = existing.origen !== "CATALOGO_PUBLICO"
+
+      if (!usarCaminoLegacy) {
+        // Post-migración esto es un no-op real: el trigger ya neteó el libro a
+        // cero. Sirve sólo como sonda de si la 315 está aplicada.
+        const { error: rpcError } = await supabaseAdmin.rpc("liberar_reserva_catalogo", {
+          p_cotizacion_id: id,
+          p_motivo: "Cotización rechazada",
+        })
+        if (rpcError) {
+          if (isFunctionMissingError(rpcError)) {
+            usarCaminoLegacy = true
+          } else {
+            console.error("Error liberando reserva del catálogo:", rpcError)
+          }
+        }
+      }
+
+      if (usarCaminoLegacy) {
+        const { error: releaseErr } = await supabaseAdmin.rpc("liberar_items_cotizacion", {
           p_cotizacion_id: id,
           p_user_id: userId,
           p_motivo: "Cotización rechazada",
         })
-      } catch (releaseErr) {
-        console.error("Error releasing stock reservations:", releaseErr)
+        if (releaseErr) {
+          console.error("Error releasing stock reservations:", releaseErr)
+        }
       }
     }
 
-    // Si cambió a ENVIADA y está vinculada a una orden, transicionar a PRESUPUESTADO
+    // Para el resto de los finales (borrado, rechazo desde los portales
+    // públicos) la reserva del catálogo la devuelve el trigger
+    // cotizaciones_liberar_reserva_catalogo (migración 315) al entrar en estado
+    // terminal. Va en la tabla y no acá porque son cuatro las rutas que matan
+    // una cotización y una ya se había olvidado de llamar.
+
+    // Si cambió a ENVIADA y está vinculada a una orden, transicionar a PRESUPUESTADO.
+    // Un informe tecnico es la excepcion: no hay presupuesto que esperar, asi que
+    // la orden se queda donde esta hasta que el cliente retire el equipo.
     if (data.estado === "ENVIADA") {
       const { data: cotWithOrder } = await supabaseAdmin
         .from("cotizaciones")
-        .select("orden_id, total")
+        .select("orden_id, total, veredicto")
         .eq("id", id)
         .single()
 
-      if (cotWithOrder?.orden_id) {
+      const { count: itemsCount } = await supabaseAdmin
+        .from("items_cotizacion")
+        .select("id", { count: "exact", head: true })
+        .eq("cotizacion_id", id)
+
+      const emiteInforme = esInforme({
+        cantidadItems: itemsCount || 0,
+        veredicto: cotWithOrder?.veredicto,
+      })
+
+      if (cotWithOrder?.orden_id && !emiteInforme) {
         const validStates = ["RECIBIDO", "EN_DIAGNOSTICO"]
         const { data: ordenActual } = await supabaseAdmin
           .from("ordenes_servicio")
@@ -500,13 +882,7 @@ export async function PUT(
 
         if (ordenActual && validStates.includes(ordenActual.estado)) {
           const estadoAnterior = ordenActual.estado
-          const { data: allCots } = await supabaseAdmin
-            .from("cotizaciones")
-            .select("total")
-            .eq("orden_id", cotWithOrder.orden_id)
-            .is("deleted_at", null)
-            .neq("estado", "RECHAZADA")
-          const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
+          const { total: totalPresupuesto } = await totalPresupuestoDeOrden(cotWithOrder.orden_id)
           await supabaseAdmin
             .from("ordenes_servicio")
             .update({
@@ -553,7 +929,7 @@ export async function PUT(
       total: cotizacion?.total,
     })
 
-    return NextResponse.json(formatCotizacion(cotizacion))
+    return NextResponse.json(formatCotizacion(cotizacion, canViewCotizacionCosts(role)))
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -589,7 +965,7 @@ export async function DELETE(
     // Verify cotizacion via organization_id
     const { data: cotizacion, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, organization_id, orden_id")
+      .select("id, estado, organization_id, orden_id, revision_de")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .single()
@@ -612,14 +988,8 @@ export async function DELETE(
     // APROBADA (dejaría la orden sin presupuesto y forzaría un regreso inválido
     // APROBADO -> EN_DIAGNOSTICO). El staff debe cancelar o mover la orden primero.
     if (cotizacion.orden_id) {
-      const { data: otrasCots } = await supabaseAdmin
-        .from("cotizaciones")
-        .select("id")
-        .eq("orden_id", cotizacion.orden_id)
-        .neq("id", id)
-        .is("deleted_at", null)
-        .neq("estado", "RECHAZADA")
-      if (!otrasCots || otrasCots.length === 0) {
+      const otrasCots = await cotizacionesVigentesDeOrden(cotizacion.orden_id, id)
+      if (otrasCots.length === 0) {
         const { data: ordenAprob } = await supabaseAdmin
           .from("ordenes_servicio")
           .select("estado")
@@ -647,6 +1017,19 @@ export async function DELETE(
       throw deleteError
     }
 
+    // El soft-delete de arriba dispara cotizaciones_liberar_reserva_catalogo,
+    // que devuelve la reserva. Ver migración 315, parte 7.
+
+    // Borrar una revisión es la tercera forma de matarla (las otras dos son el
+    // rechazo del staff y el del cliente desde el link público), y deja el mismo
+    // agujero: la original quedaría apuntada como reemplazada por una fila que
+    // ya no existe, fuera del presupuesto para siempre. Va antes del recálculo
+    // de abajo, que es el que hace aterrizar la cifra restaurada.
+    await restaurarOriginalDeRevision(
+      { id, revision_de: cotizacion.revision_de },
+      organizationId!
+    )
+
     // Si la cotización estaba vinculada a una orden, recalcular presupuesto con cotizaciones restantes
     if (cotizacion.orden_id) {
       const { data: orden } = await supabaseAdmin
@@ -656,16 +1039,9 @@ export async function DELETE(
         .single()
 
       if (orden) {
-        const { data: remaining } = await supabaseAdmin
-          .from("cotizaciones")
-          .select("total")
-          .eq("orden_id", cotizacion.orden_id)
-          .is("deleted_at", null)
-          .neq("estado", "RECHAZADA")
+        const { total: totalPresupuesto, cantidad } = await totalPresupuestoDeOrden(cotizacion.orden_id)
 
-        const totalPresupuesto = (remaining || []).reduce((sum, c) => sum + Number(c.total), 0)
-
-        if (remaining && remaining.length > 0) {
+        if (cantidad > 0) {
           await supabaseAdmin
             .from("ordenes_servicio")
             .update({ presupuesto: totalPresupuesto, costo_final: totalPresupuesto })

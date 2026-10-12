@@ -50,12 +50,13 @@ interface Componente {
     stock: number
     stockReservado: number
     disponible: number
-    precioCompra: number
+    /** null cuando el rol no puede ver costos de compra (hasInventarioAccess). */
+    precioCompra: number | null
     imagenUrl: string | null
     esKit: boolean
     tipoKit: string | null
   } | null
-  subtotalCosto: number
+  subtotalCosto: number | null
 }
 
 interface ExplosionadoRow {
@@ -63,8 +64,8 @@ interface ExplosionadoRow {
   codigo: string
   nombre: string
   cantidadTotal: number
-  precioCompra: number
-  costoSubtotal: number
+  precioCompra: number | null
+  costoSubtotal: number | null
   esKit: boolean
   profundidad: number
 }
@@ -76,14 +77,14 @@ interface KitData {
     nombre: string
     stock: number
     stockReservado: number
-    precioCompra: number
+    precioCompra: number | null
     precioVenta: number
     esKit: boolean
     tipoKit: "ENSAMBLADO" | "VIRTUAL" | null
     imagenUrl: string | null
   }
   componentes: Componente[]
-  costoCalculado: number
+  costoCalculado: number | null
   explosionado: ExplosionadoRow[] | null
 }
 
@@ -92,7 +93,7 @@ interface SearchResultItem {
   codigo: string
   nombre: string
   stock: number
-  precioCompra: number
+  precioCompra: number | null
   imagenUrl: string | null
 }
 
@@ -216,7 +217,7 @@ export function KitDialog({
           codigo: string
           nombre: string
           stock: number
-          precioCompra: number
+          precioCompra: number | null
           imagenUrl: string | null
         }>
         // Excluir el propio kit + los ya agregados
@@ -232,7 +233,8 @@ export function KitDialog({
               codigo: r.codigo,
               nombre: r.nombre,
               stock: r.stock ?? 0,
-              precioCompra: Number(r.precioCompra ?? 0),
+              // No colapsar a 0: null significa "sin permiso", no "gratis".
+              precioCompra: r.precioCompra == null ? null : Number(r.precioCompra),
               imagenUrl: r.imagenUrl ?? null,
             }))
         )
@@ -456,14 +458,16 @@ export function KitDialog({
                   </Badge>
                 )}
               </div>
-              <div className="text-right">
-                <div className="text-[10px] uppercase text-muted-foreground">
-                  Costo total receta
+              {data.costoCalculado !== null && (
+                <div className="text-right">
+                  <div className="text-[10px] uppercase text-muted-foreground">
+                    Costo total receta
+                  </div>
+                  <div className="text-lg font-bold">
+                    {formatPrice(data.costoCalculado)}
+                  </div>
                 </div>
-                <div className="text-lg font-bold">
-                  {formatPrice(data.costoCalculado)}
-                </div>
-              </div>
+              )}
             </div>
 
             <p className="text-[11px] text-muted-foreground">
@@ -523,8 +527,8 @@ export function KitDialog({
                             <div className="flex-1 min-w-0">
                               <div className="font-medium truncate">{r.nombre}</div>
                               <div className="text-[11px] text-muted-foreground">
-                                {r.codigo} · Stock {r.stock} ·{" "}
-                                {formatPrice(r.precioCompra)}
+                                {r.codigo} · Stock {r.stock}
+                                {r.precioCompra !== null && ` · ${formatPrice(r.precioCompra)}`}
                               </div>
                             </div>
                           </button>
@@ -573,8 +577,9 @@ export function KitDialog({
                             </div>
                             <div className="text-[11px] text-muted-foreground">
                               {c.componente.codigo} · Disp.{" "}
-                              {c.componente.disponible} · Costo{" "}
-                              {formatPrice(c.componente.precioCompra)}
+                              {c.componente.disponible}
+                              {c.componente.precioCompra !== null &&
+                                ` · Costo ${formatPrice(c.componente.precioCompra)}`}
                             </div>
                           </div>
 
@@ -595,9 +600,11 @@ export function KitDialog({
                             />
                           </div>
 
-                          <div className="w-24 text-right text-xs shrink-0">
-                            {formatPrice(c.subtotalCosto)}
-                          </div>
+                          {c.subtotalCosto !== null && (
+                            <div className="w-24 text-right text-xs shrink-0">
+                              {formatPrice(c.subtotalCosto)}
+                            </div>
+                          )}
 
                           <div className="flex items-center gap-1 shrink-0">
                             <Switch
@@ -783,9 +790,11 @@ export function KitDialog({
                           <div className="text-xs font-medium">
                             x {r.cantidadTotal}
                           </div>
-                          <div className="text-[10px] text-muted-foreground">
-                            {formatPrice(r.costoSubtotal)}
-                          </div>
+                          {r.costoSubtotal !== null && (
+                            <div className="text-[10px] text-muted-foreground">
+                              {formatPrice(r.costoSubtotal)}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}

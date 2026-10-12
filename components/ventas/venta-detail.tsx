@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -40,6 +41,7 @@ import { DevolucionForm } from "@/components/ventas/devolucion-form"
 import { PagosHistorial } from "@/components/facturacion/pagos-historial"
 import { VentaPagoForm } from "@/components/ventas/venta-pago-form"
 import type { MetodoPagoVenta } from "@/lib/notifications/types"
+import { descuentoGlobalDeVenta, esCobroEnEfectivo } from "@/lib/ventas/totales"
 
 interface VentaItem {
   id: string
@@ -95,6 +97,8 @@ interface Devolucion {
   motivo: string
   tipo: string
   montoDevolucion: number
+  montoAplicadoDeuda?: number
+  montoReembolso?: number
   estado: string
   observaciones: string | null
   items: DevolucionItem[]
@@ -112,8 +116,12 @@ interface VentaDetail {
   garantias: Garantia[]
   subtotal: number
   descuento: number
+  tipoDescuento?: "MONTO" | "PORCENTAJE"
+  porcentajeDescuento?: number
   total: number
   montoAbonado: number
+  /** total − cobrado − lo que las devoluciones descontaron del saldo */
+  saldoPendiente?: number
   estadoPago: string
   metodoPago: string
   estado: string
@@ -121,6 +129,7 @@ interface VentaDetail {
   createdAt: string
   pagos: Pago[]
   devoluciones?: Devolucion[]
+  facturaId: string | null
 }
 
 const metodoPagoLabels: Record<string, string> = {
@@ -146,12 +155,15 @@ interface Organization {
 
 export function VentaDetail({ ventaId }: VentaDetailProps) {
   const router = useRouter()
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "ADMIN"
   const { formatPrice, formatDate } = useCurrency()
   const { confirm, showError, showSuccess } = useModal()
   const [venta, setVenta] = useState<VentaDetail | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [loading, setLoading] = useState(true)
   const [anulando, setAnulando] = useState(false)
+  const [generandoFactura, setGenerandoFactura] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDevolucionModal, setShowDevolucionModal] = useState(false)
   const [showPagoForm, setShowPagoForm] = useState(false)
@@ -231,6 +243,30 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
     }
   }
 
+  const handleGenerarFactura = async () => {
+    if (!venta) return
+    setGenerandoFactura(true)
+    try {
+      const res = await fetch("/api/facturacion/generar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ventaId: venta.id }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        await showError(data.error || "Error al generar el remito")
+        return
+      }
+      await showSuccess("Remito generado correctamente")
+      fetchVenta()
+    } catch (error) {
+      console.error("Error:", error)
+      await showError("Error al generar el remito")
+    } finally {
+      setGenerandoFactura(false)
+    }
+  }
+
   const getGarantiaForItem = (itemId: string) => {
     return venta?.garantias.find((g) => g.itemVentaId === itemId)
   }
@@ -253,6 +289,10 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
       </>
     )
   }
+
+  // Lo que el cliente todavía debe (las devoluciones pueden haber descontado
+  // parte del saldo); sin el campo, el cálculo de siempre.
+  const saldoPendiente = venta.saldoPendiente ?? Math.max(venta.total - (venta.montoAbonado || 0), 0)
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -298,7 +338,10 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   cantidad: item.cantidad,
                   diasGarantia: item.diasGarantia,
                 })),
-                garantias: venta.garantias.map((g) => ({
+                // Una garantia ANULADA se retiro al devolverse el producto: su
+                // certificado ya no se emite (410), asi que ofrecer el link solo
+                // le manda al cliente una descarga muerta.
+                garantias: venta.garantias.filter((g) => g.estado !== "ANULADA").map((g) => ({
                   id: g.id,
                   numeroGarantia: g.numeroGarantia,
                   diasValidez: g.diasValidez,
@@ -317,28 +360,46 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
         </Button>
         {venta.estado === "COMPLETADA" && (
           <>
-            <Button
-              variant="outline"
-              onClick={() => setShowEditModal(true)}
-            >
-              <Pencil className="mr-2 h-4 w-4" />
-              Editar
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setShowDevolucionModal(true)}
-            >
-              <RotateCcw className="mr-2 h-4 w-4" />
-              Devolución
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleAnular}
-              disabled={anulando}
-            >
-              <XCircle className="mr-2 h-4 w-4" />
-              {anulando ? "Anulando..." : "Anular"}
-            </Button>
+            {isAdmin && !venta.facturaId && (
+              <Button
+                variant="outline"
+                onClick={handleGenerarFactura}
+                disabled={generandoFactura}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                {generandoFactura ? "Generando..." : "Generar remito"}
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                variant="outline"
+                onClick={() => setShowEditModal(true)}
+              >
+                <Pencil className="mr-2 h-4 w-4" />
+                Editar
+              </Button>
+            )}
+            {/* Devolución, anulación y cobro son solo de ADMIN en la API:
+                mostrarlos a otros roles terminaba en un 403. */}
+            {isAdmin && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDevolucionModal(true)}
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Devolución
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleAnular}
+                  disabled={anulando}
+                >
+                  <XCircle className="mr-2 h-4 w-4" />
+                  {anulando ? "Anulando..." : "Anular"}
+                </Button>
+              </>
+            )}
           </>
         )}
       </div>
@@ -365,9 +426,14 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
               tipoDescuento: item.tipoDescuento,
               porcentajeDescuento: item.porcentajeDescuento,
             })),
-            descuento: venta.descuento,
-            metodoPago: venta.metodoPago,
+            // venta.descuento es el total de descuentos (líneas + global):
+            // el formulario recibe solo el global para no descontar dos veces.
+            descuentoGlobal: descuentoGlobalDeVenta(venta),
             observaciones: venta.observaciones,
+            montoAbonado: venta.montoAbonado || 0,
+            cobroEnEfectivo: esCobroEnEfectivo(
+              venta.pagos.map((p) => ({ metodo: p.metodoPago, monto: p.monto }))
+            ),
           }}
           onSuccess={() => {
             fetchVenta()
@@ -384,6 +450,12 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
             id: venta.id,
             numeroVenta: venta.numeroVenta,
             total: venta.total,
+            clienteId: venta.clienteId,
+            saldoPendiente,
+            devoluciones: (venta.devoluciones || []).map((d) => ({
+              montoDevolucion: d.montoDevolucion,
+              items: d.items.map((i) => ({ itemVentaId: i.itemVentaId, cantidad: i.cantidad })),
+            })),
             items: venta.items.map(item => ({
               id: item.id,
               inventarioId: item.inventarioId,
@@ -487,7 +559,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   <div>
                     <div className="text-xs text-muted-foreground">Pendiente</div>
                     <div className="font-medium text-base sm:text-lg text-destructive">
-                      {formatPrice(venta.total - (venta.montoAbonado || 0))}
+                      {formatPrice(saldoPendiente)}
                     </div>
                   </div>
                 </div>
@@ -504,31 +576,34 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
           })()}
 
           {/* Botón registrar pago si hay pendiente */}
-          {venta.estadoPago !== "PAGADO" && venta.estadoPago !== "ANULADA" && venta.estado !== "ANULADA" && (
+          {saldoPendiente > 0 && venta.estadoPago !== "ANULADA" && venta.estado !== "ANULADA" && (
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 border border-dashed rounded-lg">
               <div>
                 <div className="text-sm text-muted-foreground">Pendiente de pago</div>
                 <div className="text-xl font-bold text-destructive">
-                  {formatPrice(venta.total - (venta.montoAbonado || 0))}
+                  {formatPrice(saldoPendiente)}
                 </div>
               </div>
-              <Button
-                onClick={() => setShowPagoForm(!showPagoForm)}
-                variant={showPagoForm ? "outline" : "default"}
-                className="w-full sm:w-auto"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Registrar Pago
-              </Button>
+              {isAdmin && (
+                <Button
+                  onClick={() => setShowPagoForm(!showPagoForm)}
+                  variant={showPagoForm ? "outline" : "default"}
+                  className="w-full sm:w-auto"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Registrar Pago
+                </Button>
+              )}
             </div>
           )}
 
           {/* Formulario de pago */}
-          {showPagoForm && (
+          {showPagoForm && isAdmin && (
             <VentaPagoForm
               ventaId={venta.id}
               total={venta.total}
               montoAbonado={venta.montoAbonado || 0}
+              pendiente={saldoPendiente}
               clienteId={venta.clienteId}
               onClose={() => setShowPagoForm(false)}
               onSuccess={() => {
@@ -595,7 +670,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                     </span>
                     <span className="font-medium">{formatPrice(item.subtotal)}</span>
                   </div>
-                  {garantia && (
+                  {garantia && garantia.estado !== "ANULADA" && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -673,7 +748,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                           )}
                         </td>
                         <td className="py-3 text-right">
-                          {garantia && (
+                          {garantia && garantia.estado !== "ANULADA" && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -744,7 +819,11 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                 return (
                   <div
                     key={garantia.id}
-                    className="rounded-lg border bg-success-50 p-4 dark:bg-success/10"
+                    className={
+                      garantia.estado === "ANULADA"
+                        ? "rounded-lg border bg-muted p-4"
+                        : "rounded-lg border bg-success-50 p-4 dark:bg-success/10"
+                    }
                   >
                     <div className="mb-2 flex items-center justify-between">
                       <span className="font-mono text-sm font-medium text-success-700 dark:text-success-500">
@@ -771,20 +850,26 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                         Vence: {formatDate(garantia.fechaVencimiento)}
                       </p>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3 w-full"
-                      onClick={() =>
-                        window.open(
-                          `/api/ventas/${ventaId}/garantia/${garantia.id}/pdf`,
-                          "_blank"
-                        )
-                      }
-                    >
-                      <Download className="mr-2 h-4 w-4" />
-                      Descargar PDF
-                    </Button>
+                    {garantia.estado === "ANULADA" ? (
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Retirada por una devolución: ya no emite comprobante.
+                      </p>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 w-full"
+                        onClick={() =>
+                          window.open(
+                            `/api/ventas/${ventaId}/garantia/${garantia.id}/pdf`,
+                            "_blank"
+                          )
+                        }
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Descargar PDF
+                      </Button>
+                    )}
                   </div>
                 )
               })}
@@ -829,6 +914,12 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   {dev.observaciones && (
                     <div className="text-sm text-muted-foreground">
                       {dev.observaciones}
+                    </div>
+                  )}
+                  {(dev.montoAplicadoDeuda ?? 0) > 0 && (
+                    <div className="text-sm text-muted-foreground">
+                      Descontado del saldo pendiente: {formatPrice(dev.montoAplicadoDeuda ?? 0)}
+                      {" · "}Reembolsado: {formatPrice(dev.montoReembolso ?? 0)}
                     </div>
                   )}
                   <div className="text-xs text-muted-foreground">

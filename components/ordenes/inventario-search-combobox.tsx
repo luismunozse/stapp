@@ -12,7 +12,9 @@ export interface InventarioOption {
   nombre: string
   stock: number
   stockReservado: number
-  precioCompra: number
+  /** null cuando el rol no puede ver costos de compra: /api/inventario aplica
+   *  hasInventarioAccess. No colapsar a 0 — un 0 se lee como precio real. */
+  precioCompra: number | null
   categoria?: string | null
   ubicacion?: string | null
   barcode?: string | null
@@ -90,7 +92,7 @@ export function InventarioSearchCombobox({
             nombre: r.nombre ?? "",
             stock: Number(r.stock ?? 0),
             stockReservado: Number(r.stockReservado ?? 0),
-            precioCompra: Number(r.precioCompra ?? 0),
+            precioCompra: r.precioCompra == null ? null : Number(r.precioCompra),
             categoria: r.categoria ?? null,
             ubicacion: r.ubicacion ?? null,
             barcode: r.barcode ?? null,
@@ -201,7 +203,7 @@ export function InventarioSearchCombobox({
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
             {value.codigo && <span className="font-mono">{value.codigo}</span>}
             <span>Disponible: {disponible}</span>
-            <span>Costo: {formatPrice(value.precioCompra)}</span>
+            {value.precioCompra !== null && <span>Costo: {formatPrice(value.precioCompra)}</span>}
           </div>
         </div>
         <Button
@@ -299,7 +301,9 @@ export function InventarioSearchCombobox({
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
-                      <div className="text-sm font-medium">{formatPrice(item.precioCompra)}</div>
+                      {item.precioCompra !== null && (
+                        <div className="text-sm font-medium">{formatPrice(item.precioCompra)}</div>
+                      )}
                       <div
                         className={[
                           "text-xs",

@@ -22,6 +22,7 @@ vi.mock("@/lib/caja-utils", () => ({
   }),
 }))
 
+import { auth } from "@/lib/auth"
 import { fetchMovimientosDia } from "@/lib/caja-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { POST } from "@/app/api/caja/sesiones/[id]/cerrar/route"
@@ -105,5 +106,79 @@ describe("POST /api/caja/sesiones/[id]/cerrar — sucursal_id wiring", () => {
     expect(callArgs[3]).toBeUndefined()
     // 5th arg should be sucursal_id from session
     expect(callArgs[4]).toBe("suc-B")
+  })
+})
+
+/**
+ * El cierre pasó de requireAdmin() a requireCajaAccess(): ahora entra también
+ * el VENDEDOR de una org que habilitó `vendedores_manejan_caja`.
+ *
+ * El ADMIN ve todas las sucursales, así que la ruta nunca necesitó preguntar
+ * de qué sucursal era la sesión. El VENDEDOR está atado a la suya, y el id de
+ * la sesión viaja en la URL: sin este guard, el vendedor de una sucursal
+ * cierra —y arquea— la caja de otra escribiendo otro id.
+ */
+function mockVendedor(sucursalId: string | null) {
+  vi.mocked(auth).mockResolvedValue({
+    user: {
+      id: "vendedor-1",
+      organizationId: "org-1",
+      role: "VENDEDOR",
+      sucursalId,
+      email: "v@v.com",
+    },
+    expires: new Date(Date.now() + 86400000).toISOString(),
+  } as any)
+}
+
+/** Sesión de suc-B + el flag de caja prendido para la org. */
+function mockSesionYFlag(sesion: any = mockSesion) {
+  vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+    if (table === "organizations") {
+      return createChainMock({ vendedores_manejan_caja: true }) as any
+    }
+    if (table === "sesiones_caja") {
+      const chain = createChainMock(null)
+      chain.single = vi.fn().mockResolvedValue({ data: sesion, error: null })
+      chain.update = vi.fn().mockReturnValue(createChainMock([mockUpdatedSesion], null))
+      return chain as any
+    }
+    return createChainMock(null) as any
+  })
+}
+
+describe("POST /api/caja/sesiones/[id]/cerrar — alcance por sucursal del VENDEDOR", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("el VENDEDOR de otra sucursal no puede cerrar la sesión: 404", async () => {
+    mockVendedor("suc-A")
+    mockSesionYFlag() // la sesión es de suc-B
+
+    const response = await POST(createPostRequest(validBody), createParams("ses-1"))
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(404)
+    expect(fetchMovimientosDia).not.toHaveBeenCalled()
+  })
+
+  it("el VENDEDOR sin sucursal asignada tampoco entra: fail-closed", async () => {
+    mockVendedor(null)
+    mockSesionYFlag()
+
+    const response = await POST(createPostRequest(validBody), createParams("ses-1"))
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(404)
+  })
+
+  it("el VENDEDOR de la misma sucursal sí cierra su caja", async () => {
+    mockVendedor("suc-B")
+    mockSesionYFlag()
+
+    const response = await POST(createPostRequest(validBody), createParams("ses-1"))
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(200)
+    expect(fetchMovimientosDia).toHaveBeenCalled()
   })
 })

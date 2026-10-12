@@ -15,6 +15,7 @@ import { toast } from "sonner"
 import type { CatalogoItem, CatalogoCategoria } from "@/types/database"
 import { CatalogoItemDialog } from "./catalogo-item-dialog"
 import { CatalogoImportInventarioDialog } from "./catalogo-import-inventario-dialog"
+import { stockFisicoCatalogo, stockReservadoCatalogo } from "@/lib/catalogo/stock-disponible"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -27,7 +28,12 @@ import { useDebouncedValue } from "./use-debounced-value"
 
 type ItemConCategoria = CatalogoItem & {
   categoria?: { id: string; nombre: string } | null
-  inventario?: { id: string; stock: number | null; nombre: string } | null
+  inventario?: {
+    id: string
+    stock: number | null
+    stock_reservado?: number | null
+    nombre: string
+  } | null
 }
 type BulkAction = "activar" | "desactivar" | "destacar" | "quitar_destacado" | "borrar" | "cambiar_categoria"
 
@@ -461,7 +467,11 @@ export function CatalogoItemsTab() {
                         // Stock gestionado por inventario: solo lectura para no descuadrar la fuente de verdad.
                         <span
                           className="text-xs text-muted-foreground"
-                          title="Stock gestionado desde Inventario"
+                          title={
+                            (item.inventario?.stock_reservado ?? 0) > 0
+                              ? `Stock gestionado desde Inventario. ${item.inventario?.stock_reservado} reservadas por cotizaciones sin cerrar`
+                              : "Stock gestionado desde Inventario"
+                          }
                         >
                           {item.inventario?.stock == null ? (
                             "—"
@@ -469,6 +479,11 @@ export function CatalogoItemsTab() {
                             <span className="text-destructive">0</span>
                           ) : (
                             item.inventario.stock
+                          )}
+                          {(item.inventario?.stock_reservado ?? 0) > 0 && (
+                            <span className="ml-1 text-warning-600">
+                              −{item.inventario?.stock_reservado}
+                            </span>
                           )}
                           <span className="ml-1 opacity-60">(inv.)</span>
                         </span>
@@ -601,12 +616,27 @@ export function CatalogoItemsTab() {
                           : `$${Number(item.precio).toLocaleString("es-AR")}`}
                     </div>
                     {item.tipo === "PRODUCTO" && (() => {
-                      // Fuente de verdad: inventario si está linkeado, si no catalogo_items.stock.
-                      const stockReal = item.inventario_id ? item.inventario?.stock ?? null : item.stock
-                      if (stockReal == null) return null
+                      // Vista de ADMIN: se muestra el stock FÍSICO, no la
+                      // disponibilidad pública. Pero si hay reservas tomadas, el
+                      // catálogo va a mostrar menos (o "Agotado") y sin este
+                      // dato el número de acá parece contradecirlo.
+                      const fisico = stockFisicoCatalogo(item)
+                      if (fisico == null) return null
+                      const reservado = stockReservadoCatalogo(item)
+                      const disponible = Math.max(0, fisico - reservado)
                       return (
-                        <Badge variant={stockReal === 0 ? "destructive" : "outline"} className="text-xs">
-                          Stock: {stockReal}{item.inventario_id ? " (inv.)" : ""}
+                        <Badge
+                          variant={disponible === 0 ? "destructive" : "outline"}
+                          className="text-xs"
+                          title={
+                            reservado > 0
+                              ? `${fisico} en stock, ${reservado} reservadas por cotizaciones sin cerrar`
+                              : undefined
+                          }
+                        >
+                          Stock: {fisico}
+                          {reservado > 0 ? ` (−${reservado} res.)` : ""}
+                          {item.inventario_id ? " (inv.)" : ""}
                         </Badge>
                       )
                     })()}

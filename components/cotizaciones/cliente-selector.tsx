@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Search, User, Loader2, UserPlus } from "lucide-react"
 import { ClienteForm } from "@/components/clientes/cliente-form"
+import { TipoPrecioBadge } from "@/components/clientes/tipo-precio-badge"
 
 interface Cliente {
   id: string
@@ -14,6 +15,8 @@ interface Cliente {
   telefono?: string | null
   tipoCliente?: string | null
   razonSocial?: string | null
+  tipoPrecio?: string | null
+  descuentoPct?: number | null
 }
 
 interface ClienteSelectorProps {
@@ -168,6 +171,12 @@ export function ClienteSelector({ value, onChange, disabled }: ClienteSelectorPr
         </Button>
       </div>
 
+      {selected?.tipoPrecio === "MAYORISTA" && (
+        <div className="mt-1.5">
+          <TipoPrecioBadge tipoPrecio={selected.tipoPrecio} />
+        </div>
+      )}
+
       {open && (search.length >= 2) && (
         <div className="absolute z-50 w-full mt-1 bg-popover border rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {loading ? (
@@ -202,7 +211,10 @@ export function ClienteSelector({ value, onChange, disabled }: ClienteSelectorPr
                 >
                   <User className="h-4 w-4 text-muted-foreground shrink-0" />
                   <div className="min-w-0">
-                    <p className="font-medium truncate">{cliente.nombre}</p>
+                    <div className="font-medium truncate flex items-center gap-1.5">
+                      <span className="truncate">{cliente.nombre}</span>
+                      <TipoPrecioBadge tipoPrecio={cliente.tipoPrecio} />
+                    </div>
                     {(cliente.email || cliente.telefono) && (
                       <p className="text-xs text-muted-foreground truncate">
                         {cliente.email || cliente.telefono}

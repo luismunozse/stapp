@@ -1,79 +1,184 @@
-# Deploy de Evolution API en Hetzner Cloud (VPS)
+# Evolution API en Hetzner Cloud (producción)
 
-Plan B de `whatsapp-evolution-oracle-deploy.md` cuando Oracle ARM no tiene cupo ("Out of capacity"). Hetzner tiene capacidad garantizada y es lo más confiable para un servicio always-on. Costo ~**€3.79–4.5/mes**.
+Servidor Evolution de producción de STApp: `https://evo.stapp.com.ar`. Se armó en Hetzner porque Oracle ARM no tenía cupo ("Out of capacity"); `whatsapp-evolution-oracle-deploy.md` queda como alternativa gratuita.
 
-> El resto del stack (Docker, docker-compose, Cloudflare Tunnel, conexión a STApp) es **idéntico** al doc de Oracle. Este doc solo cambia la **Parte 1 (provisionar el servidor)**; después seguís el doc de Oracle desde la Parte 2.
-
----
-
-## Por qué Hetzner
-
-- **Capacidad real**: no hay lotería de cupo como el ARM free de Oracle.
-- **Always-on de verdad**: VPS dedicado, no se duerme.
-- Mismo `docker-compose` corre igual (la imagen de Evolution es multi-arch: anda en ARM y x86).
+La diferencia principal con el doc de Oracle: el HTTPS lo pone **Caddy**, dentro del mismo compose, con los puertos 80 y 443 abiertos. **No hay Cloudflare Tunnel.**
 
 ---
 
-## Parte 1 — Provisionar el servidor
+## Cómo está armado hoy
 
-1. Creá cuenta en **Hetzner Cloud** (https://console.hetzner.cloud). Cuentas nuevas a veces piden verificación de identidad/pago — normal.
-2. Creá un **Project** (ej. `stapp-whatsapp`).
-3. **Add Server**:
-   - **Image**: **Ubuntu 22.04**.
-   - **Type + Location** (atención, los ARM son EU-only):
-     - **CX22** (x86, 2 vCPU / 4 GB, ~€4.5/mes) — disponible en **todas** las locations (US Ashburn/Hillsboro y EU). **Recomendado para arrancar sin trabas.**
-     - **CAX11** (Arm64, 2 vCPU / 4 GB / 40 GB, ~€3.79/mes) — más barato, pero **solo en EU** (Falkenstein / Nuremberg / Helsinki). Si elegís location US, NO aparece.
-   - **Location**: cualquiera sirve (latencia a Argentina ~200ms en US o EU). Si vas con CAX11, tiene que ser **EU**.
-   - Nota cloudflared (Parte 4): CX22 = binario **`amd64`**; CAX11 = **`arm64`**.
-   - **SSH key**: agregá tu clave pública (Add SSH key → pegás tu `id_ed25519.pub` o `id_rsa.pub`). Sin esto no entrás.
-   - **Firewall**: opcional. Si lo activás, permití **solo inbound TCP 22 (SSH)**. Con Cloudflare Tunnel **no** necesitás abrir 80/443 (el túnel sale por conexión saliente).
-   - El resto (volumes, backups, placement): default. Backups de Hetzner (+20%) son opcionales — recomendable si querés snapshot automático de la sesión.
-4. **Create & Buy now**.
+| | |
+|---|---|
+| Server | `ubuntu-4gb-hel1-1` en la consola de Hetzner: **CX23** (x86, 2 vCPU, 4 GB, 40 GB), Helsinki |
+| Dominio | `evo.stapp.com.ar`: registro A directo a la IP del server, sin proxy de Cloudflare |
+| Stack | `/root/evolution/`: `docker-compose.yml` y `Caddyfile` (proyecto `evolution`) |
+| Acceso | `ssh root@evo.stapp.com.ar`, solo con clave SSH |
 
-Anotá la **IP pública** del server.
+| Servicio | Imagen | Puertos |
+|---|---|---|
+| `evolution-api` | `atendai/evolution-api:v2.1.1` | `127.0.0.1:8080`, solo local |
+| `caddy` | `caddy:2-alpine` | `80` y `443`, públicos |
+| `postgres` | `postgres:16-alpine` | interno |
+| `redis` | `redis:7-alpine` | interno |
 
-> Generá tu key SSH si no tenés: `ssh-keygen -t ed25519 -C "stapp-evolution"` → la pública queda en `~/.ssh/id_ed25519.pub`.
+Caddy recibe el tráfico de `evo.stapp.com.ar` y se lo pasa a `evolution-api`; los demás contenedores no quedan expuestos. STApp se conecta con `EVOLUTION_BASE_URL=https://evo.stapp.com.ar` y `EVOLUTION_API_KEY` (el `AUTHENTICATION_API_KEY` del compose) en las variables de entorno de Vercel. Cada taller solo escanea su QR.
+
+Los archivos completos están más abajo, en *Configuración del server*.
 
 ---
 
-## Partes 2 a 5 — Idénticas al doc de Oracle
-
-Seguí **`docs/whatsapp-evolution-oracle-deploy.md`** desde la **Parte 2**, con un solo ajuste: el usuario SSH de Hetzner Ubuntu es **`root`**, no `ubuntu`.
+## Acceso
 
 ```bash
-ssh root@TU_IP_PUBLICA
+ssh root@evo.stapp.com.ar
 ```
 
-Resumen de lo que viene (todo igual que el doc de Oracle):
+- Se entra **solo con clave SSH**. No dependas de la contraseña de root.
+- Huella del server (ED25519): `SHA256:zUvFLMUUFsrsYOE803Lo1cp9dAankCjQd5KaoqqTWas`. Si al conectarte aparece otra, estás en el modo rescate o el server cambió.
+- Guardá una copia de la clave privada (`~/.ssh/id_ed25519`) en un gestor de contraseñas. Si se pierde, la única vuelta es el modo rescate.
 
-- **Parte 2** — instalar Docker + compose plugin. (Como entrás como `root`, podés omitir el `usermod -aG docker` / `newgrp`.)
-- **Parte 3** — `~/evolution/docker-compose.yml` con Evolution + Postgres + Redis. **Mismo archivo, sin cambios.** Acordate de:
-  - poner una `AUTHENTICATION_API_KEY` real (`openssl rand -hex 32`),
-  - cambiar `evopass` por una contraseña real,
-  - dejar `SERVER_URL=https://evo.tudominio.com` (tu hostname del Tunnel).
-- **Parte 4** — Cloudflare Tunnel.
-  - El binario ARM (`cloudflared-linux-arm64`) sirve para **CAX11**. Si elegiste **CX22 (x86)**, usá `cloudflared-linux-amd64` en vez de `arm64`.
-  - En `config.yml`, el `credentials-file` queda bajo `/root/.cloudflared/...` (no `/home/ubuntu/...`), porque entrás como root.
-- **Parte 5** — conectar en STApp (Base URL, Instance name, API key) y seguir con la Parte B del doc de pruebas (QR pairing → toggle → prueba de cambio de estado).
+### Si perdiste la clave
 
----
+Así se recuperó el acceso el 2026-09-28. Mientras el server está en modo rescate, Evolution queda caído (unos minutos).
 
-## Diferencias clave vs Oracle (checklist rápido)
-
-| | Oracle | Hetzner |
-|---|---|---|
-| Usuario SSH | `ubuntu` | **`root`** |
-| `credentials-file` del tunnel | `/home/ubuntu/.cloudflared/…` | `/root/.cloudflared/…` |
-| Binario cloudflared | `arm64` | `arm64` (CAX11) / `amd64` (CX22) |
-| Firewall | no tocar (tunnel) | opcional, solo SSH 22 |
-| Costo | gratis (si hay cupo) | ~€4/mes (garantizado) |
-
-Todo lo demás (compose, env vars, smoke `curl`, seguridad, troubleshooting) es igual — usá las secciones del doc de Oracle.
+1. En tu PC, generá una clave nueva. Si ya tenés un `id_ed25519` que usás para otra cosa (GitHub, otro server), no lo pises: generala con otro nombre (`-f`) y conectate con `ssh -i`.
+   ```
+   ssh-keygen -t ed25519
+   ```
+2. Hetzner → **Security → SSH keys → Add SSH key**: pegá la pública (`id_ed25519.pub`).
+3. Server → **Rescue → Enable rescue & power cycle**, con `linux64` y esa clave. Tiene que ser la opción con *power cycle*: sin el reinicio, el server sigue en el Ubuntu normal.
+4. Entrá al rescate. El prompt dice `root@rescue` y la huella es distinta de la de arriba:
+   ```
+   ssh-keygen -R evo.stapp.com.ar
+   ssh root@evo.stapp.com.ar
+   ```
+5. Copiá la clave al disco del server y reiniciá:
+   ```bash
+   mount /dev/sda1 /mnt
+   mkdir -p /mnt/root/.ssh
+   echo 'ssh-ed25519 AAAA...tu-clave-publica' >> /mnt/root/.ssh/authorized_keys
+   chmod 700 /mnt/root/.ssh; chmod 600 /mnt/root/.ssh/authorized_keys
+   umount /mnt
+   reboot
+   ```
+6. El rescate se desactiva solo. Cuando el server vuelva: `ssh-keygen -R evo.stapp.com.ar` y `ssh root@evo.stapp.com.ar`.
 
 ---
 
 ## Operación
 
-- **Backups**: activá Hetzner Backups (+20%) o sacá snapshots manuales. El volumen con la sesión de WhatsApp vive en los volúmenes Docker (`postgres_data`, `evolution_instances`); si el server muere sin backup, re-escaneás el QR.
-- **Costo**: ~€4/mes fijo. Apagar el server NO ahorra (se cobra igual mientras exista); para pausar gasto hay que borrarlo (y perdés la sesión salvo snapshot).
-- **Riesgo de baneo**: Evolution es WhatsApp no oficial. Para uso comercial de volumen, evaluá migrar a **Meta Cloud API** (oficial) — STApp ya lo soporta.
+```bash
+cd /root/evolution
+docker compose ps                            # los 4 contenedores tienen que estar Up
+docker compose logs --tail 50 evolution-api
+```
+
+- **Cambiar una variable**: `cp docker-compose.yml docker-compose.yml.bak`, editá y corré `docker compose up -d`. Recrea solo el contenedor que cambió. Después confirmá en STApp (Configuración → WhatsApp) que siga conectado, y pasá el cambio a la copia de este doc.
+- **Cambiar el `Caddyfile`**: editalo y corré `docker compose restart caddy`. El `up -d` no alcanza, porque el compose no cambió.
+- **`DATABASE_SAVE_DATA_NEW_MESSAGE=true` es obligatoria**: con `false`, los reintentos de WhatsApp le llegan vacíos al cliente (ver el troubleshooting de `whatsapp-evolution-oracle-deploy.md`). Se corrigió el 2026-09-28.
+- **Firewall**: si activás el de Hetzner, abrí TCP **22** (SSH), **80** y **443** (Caddy). Con solo el 22, `evo.stapp.com.ar` deja de responder y se cortan todos los WhatsApp automáticos.
+- **Actualizar Evolution**: cambiá el tag de la imagen (siempre fijo, nunca `latest`), corré `docker compose pull && docker compose up -d` y verificá que la sesión sobreviva.
+- **Backups**: Hetzner Backups o snapshots manuales. La sesión de WhatsApp vive en los volúmenes `postgres_data` y `evolution_instances`, y los certificados HTTPS en `caddy_data` (en `docker volume ls` aparecen con el prefijo `evolution_`). Si el server muere sin backup, hay que reescanear el QR.
+- **Costo**: fijo mientras el server exista; apagarlo no ahorra. El precio vigente está en la consola de Hetzner.
+- **Riesgo de baneo**: Evolution es WhatsApp no oficial. Para volumen comercial, evaluá **Meta Cloud API** (oficial); STApp ya lo soporta.
+
+---
+
+## Configuración del server
+
+Copia de `/root/evolution/` al 2026-09-28, con los secretos reemplazados por marcadores. Si cambiás algo en el server, actualizá también esta copia.
+
+`docker-compose.yml`:
+
+```yaml
+services:
+  evolution-api:
+    image: atendai/evolution-api:v2.1.1
+    restart: always
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - SERVER_URL=https://evo.stapp.com.ar
+      - AUTHENTICATION_API_KEY=TU_API_KEY_SECRETA
+      - CONFIG_SESSION_PHONE_VERSION=2.3000.1043857760
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://evo:TU_PASSWORD_POSTGRES@postgres:5432/evolution?schema=public
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://redis:6379/0
+      - CACHE_REDIS_PREFIX_KEY=evolution
+      - CACHE_LOCAL_ENABLED=false
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - evolution_instances:/evolution/instances
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    depends_on:
+      - evolution-api
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=evo
+      - POSTGRES_PASSWORD=TU_PASSWORD_POSTGRES
+      - POSTGRES_DB=evolution
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - redis_data:/data
+
+volumes:
+  evolution_instances:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+```
+
+`Caddyfile`:
+
+```
+evo.stapp.com.ar {
+    reverse_proxy evolution-api:8080
+}
+```
+
+- `TU_API_KEY_SECRETA`: la misma que `EVOLUTION_API_KEY` en Vercel. Para generar una nueva: `openssl rand -hex 32`.
+- `TU_PASSWORD_POSTGRES`: va en dos lugares, `DATABASE_CONNECTION_URI` y `POSTGRES_PASSWORD`, y tiene que ser la misma en los dos.
+- `CONFIG_SESSION_PHONE_VERSION`: la versión de WhatsApp Web que presenta Baileys. Si el QR deja de aparecer, está vieja: actualizala como explica el doc de Oracle (comentario del compose y troubleshooting).
+- Caddy saca y renueva solo el certificado HTTPS de `evo.stapp.com.ar`, y lo guarda en `caddy_data`.
+
+---
+
+## Armarlo de cero
+
+1. **Server**: Hetzner Cloud → **Add Server** → Ubuntu LTS, tipo **CX23** (x86, 2 vCPU / 4 GB / 40 GB) o equivalente, cualquier location (hoy es Helsinki). Cargá tu clave SSH al crearlo.
+2. **Docker**: Parte 2 de `whatsapp-evolution-oracle-deploy.md`. Como entrás como `root`, salteá el `usermod -aG docker` / `newgrp`.
+3. **Archivos**: `mkdir -p /root/evolution` y creá adentro el `docker-compose.yml` y el `Caddyfile` de *Configuración del server*, con los secretos completados.
+4. **DNS y firewall**: registro A de `evo.stapp.com.ar` a la IP nueva (como hoy, sin proxy de Cloudflare) y los puertos 22, 80 y 443 abiertos.
+5. **Levantar y probar**:
+   ```bash
+   cd /root/evolution && docker compose up -d
+   curl -s https://evo.stapp.com.ar/instance/fetchInstances -H "apikey: TU_API_KEY_SECRETA"
+   ```
+   Tiene que devolver JSON (`[]` en un server nuevo), no un error de auth.
+6. **STApp**: si cambió la API key, actualizá `EVOLUTION_API_KEY` en Vercel. Cada taller vuelve a escanear su QR en Configuración → WhatsApp.
