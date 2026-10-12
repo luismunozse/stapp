@@ -169,7 +169,8 @@ function normalizarOpciones(opciones: string | null, tipo: string): string | nul
   return items.length > 0 ? JSON.stringify(items) : null
 }
 
-async function sembrarChecklists(
+/** Also used by the rubro change (lib/rubros/cambio.ts) for the templates it lacks. */
+export async function sembrarChecklists(
   organizationId: string,
   pack: RubroPack,
   tipoIdPorCodigo: Map<string, string>,

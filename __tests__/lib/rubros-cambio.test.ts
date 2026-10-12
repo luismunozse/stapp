@@ -178,6 +178,11 @@ const codigosDe = (rubro: string) =>
 
 const org = (fake: FakeDb) => fake.tables.organizations[0]
 
+const plantillas = (fake: FakeDb, nombre: string) =>
+  (fake.tables.checklist_templates ?? []).filter((t) => t.nombre === nombre)
+
+const nombresChecklist = (rubro: string) => getRubro(rubro).checklists.map((c) => c.nombre)
+
 vi.spyOn(console, "error").mockImplementation(() => {})
 
 beforeEach(() => {
@@ -329,5 +334,119 @@ describe("aplicarCambioDeRubro: vocabulary and rubro", () => {
       equipoPlural: "Maquinas de cafe",
     })
     expect(codigosActivos(fake)).toEqual(["MAQUINA_DE_CAFE"])
+  })
+})
+
+describe("aplicarCambioDeRubro: checklists", () => {
+  it("retires the previous pack's checklists and seeds the new pack's", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+
+    await cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+
+    expect(plantillas(fake, "Recepción de artefacto").map((p) => p.activo)).toEqual([false])
+    for (const nombre of nombresChecklist("electronica")) {
+      expect(plantillas(fake, nombre).map((p) => p.activo)).toEqual([true])
+    }
+  })
+
+  it("moves the genérico checklist to the new trade's tipo", async () => {
+    const fake = await orgSembradaCon("generico", "maquinas de cafe")
+
+    await cambiar(fake, sel("generico", "maquinas de cafe"), sel("generico", "cerraduras"))
+
+    const idDe = (codigo: string) =>
+      fake.tables.tipos_dispositivo.find((t) => t.codigo === codigo)?.id
+    const recepcion = plantillas(fake, "Recepción")
+    expect(recepcion).toHaveLength(2)
+    expect(recepcion.find((p) => p.tipo_dispositivo_id === idDe("MAQUINA_DE_CAFE"))?.activo).toBe(false)
+    expect(recepcion.find((p) => p.tipo_dispositivo_id === idDe("CERRADURA"))?.activo).toBe(true)
+  })
+
+  it("finishes the change when a checklist's items fail to insert", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+    fake.failures["checklist_template_items.insert"] = "items boom"
+
+    await cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+
+    expect(org(fake).rubro).toBe("electronica")
+    expect(console.error).toHaveBeenCalledWith(
+      "Rubro change: checklist seed errors:",
+      expect.arrayContaining([expect.stringContaining("items boom")])
+    )
+  })
+
+  it("stops before writing the rubro when the checklists cannot be read", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+    fake.failures["checklist_templates.select"] = "read boom"
+
+    await expect(
+      cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+    ).rejects.toThrow("read boom")
+
+    expect(org(fake)).toMatchObject({
+      rubro: "electrodomesticos",
+      terminologia: { equipo: "Artefacto" },
+    })
+  })
+
+  // Guard: passes before the implementation; the retire step must not break it.
+  it("leaves the checklists the shop created by hand alone", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+    fake.tables.checklist_templates.push({
+      id: "tpl-propio",
+      organization_id: ORG,
+      nombre: "Mi checklist",
+      tipo_dispositivo_id: null,
+      activo: true,
+    })
+
+    await cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+
+    expect(fake.tables.checklist_templates.find((p) => p.id === "tpl-propio")?.activo).toBe(true)
+  })
+
+  // Guard: deleting would break inventory FKs and quote checklist snapshots.
+  it("never deletes tipos or checklists", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+
+    await cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+    await cambiar(fake, sel("electronica"), sel("generico", "cerraduras"))
+
+    expect(fake.calls.filter((c) => c.op === "delete")).toEqual([])
+  })
+
+  it("does not duplicate a checklist when the shop comes back to a rubro", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+
+    await cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+    await cambiar(fake, sel("electronica"), sel("electrodomesticos"))
+
+    expect(plantillas(fake, "Recepción de artefacto").map((p) => p.activo)).toEqual([true])
+    for (const nombre of nombresChecklist("electronica")) {
+      expect(plantillas(fake, nombre).map((p) => p.activo)).toEqual([false])
+    }
+    expect(console.error).not.toHaveBeenCalled()
+  })
+
+  it("brings back a typed checklist instead of failing on its unique key", async () => {
+    const fake = await orgSembradaCon("electronica")
+
+    await cambiar(fake, sel("electronica"), sel("electrodomesticos"))
+    await cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+
+    for (const nombre of nombresChecklist("electronica")) {
+      expect(plantillas(fake, nombre).map((p) => p.activo)).toEqual([true])
+    }
+    expect(plantillas(fake, "Recepción de artefacto").map((p) => p.activo)).toEqual([false])
+    expect(console.error).not.toHaveBeenCalled()
+  })
+
+  it("keeps the checklist when the new pack has it for the same tipo", async () => {
+    const fake = await orgSembradaCon("generico", "maquinas de cafe")
+
+    await cambiar(fake, sel("generico", "maquinas de cafe"), sel("generico", "máquinas de café"))
+
+    expect(plantillas(fake, "Recepción").map((p) => p.activo)).toEqual([true])
+    expect(console.error).not.toHaveBeenCalled()
   })
 })

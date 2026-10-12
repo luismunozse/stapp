@@ -1,8 +1,8 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { getRubro } from "./index"
 import { personalizarPack } from "./detalle"
-import { filasDeTipos } from "./seed"
-import type { RubroPack } from "./types"
+import { filasDeTipos, sembrarChecklists } from "./seed"
+import type { RubroChecklist, RubroPack } from "./types"
 
 /**
  * Rubro change for an org with no real orders yet (PUT /api/onboarding/rubro).
@@ -32,15 +32,26 @@ interface TipoExistente {
   activo: boolean | null
 }
 
+interface PlantillaExistente {
+  id: string
+  nombre: string
+  tipo_dispositivo_id: string | null
+  activo: boolean | null
+}
+
 export async function aplicarCambioDeRubro(
   organizationId: string,
   anterior: SeleccionRubro,
   nuevo: SeleccionRubro,
   client: typeof supabaseAdmin = supabaseAdmin
 ): Promise<{ tiposActivos: number }> {
+  // Resolved before any write: the previous pack comes from what the org
+  // still has stored, which is only overwritten by the final UPDATE below.
+  const packAnterior = personalizarPack(getRubro(anterior.rubro), anterior.rubroDetalle)
   const packNuevo = personalizarPack(getRubro(nuevo.rubro), nuevo.rubroDetalle)
 
-  await reemplazarTipos(organizationId, packNuevo, client)
+  const tipoIdPorCodigo = await reemplazarTipos(organizationId, packNuevo, client)
+  await reemplazarChecklists(organizationId, packAnterior, packNuevo, tipoIdPorCodigo, client)
 
   // Spec steps 5 and 6 in one statement, written last. The terminology is
   // written even when it is {}: sembrarVocabulario in seed.ts skips that case,
@@ -122,6 +133,64 @@ async function reemplazarTipos(
   await actualizarActivo(client, "tipos_dispositivo", organizationId, aDesactivar, false)
 
   return new Map(tipos.map((t) => [t.codigo, t.id]))
+}
+
+async function reemplazarChecklists(
+  organizationId: string,
+  packAnterior: RubroPack,
+  packNuevo: RubroPack,
+  tipoIdPorCodigo: Map<string, string>,
+  client: typeof supabaseAdmin
+): Promise<void> {
+  // Read BEFORE inserting, so what this change seeds never lands in the retire list.
+  const { data, error } = await client
+    .from("checklist_templates")
+    .select("id, nombre, tipo_dispositivo_id, activo")
+    .eq("organization_id", organizationId)
+  if (error) throw new Error(`checklist_templates (lectura): ${error.message}`)
+
+  const existentes = (data ?? []) as PlantillaExistente[]
+
+  // UNIQUE (organization_id, nombre, tipo_dispositivo_id), migration 050.
+  // Re-inserting duplicates the untyped templates (NULLs never collide) and
+  // fails with 23505 on the typed ones, so an existing match is reused instead.
+  const clave = (nombre: string, tipoId: string | null) => JSON.stringify([nombre, tipoId])
+  const porClave = new Map(
+    existentes.map((p) => [clave(p.nombre, p.tipo_dispositivo_id ?? null), p])
+  )
+
+  const conservadas = new Set<string>()
+  const faltantes: RubroChecklist[] = []
+  for (const checklist of packNuevo.checklists) {
+    const tipoId =
+      checklist.tipoCodigo === null ? null : tipoIdPorCodigo.get(checklist.tipoCodigo)
+    const existente = tipoId === undefined ? undefined : porClave.get(clave(checklist.nombre, tipoId))
+    if (existente) conservadas.add(existente.id)
+    else faltantes.push(checklist)
+  }
+
+  const aReactivar = existentes
+    .filter((p) => conservadas.has(p.id) && p.activo === false)
+    .map((p) => p.id)
+  await actualizarActivo(client, "checklist_templates", organizationId, aReactivar, true)
+
+  // Item errors do not abort, as at signup: a missing checklist is fixed from
+  // Configuración, a half-applied rubro change is not.
+  const errores: string[] = []
+  await sembrarChecklists(
+    organizationId,
+    { ...packNuevo, checklists: faltantes },
+    tipoIdPorCodigo,
+    client,
+    errores
+  )
+  if (errores.length > 0) console.error("Rubro change: checklist seed errors:", errores)
+
+  const nombresAnteriores = new Set(packAnterior.checklists.map((c) => c.nombre))
+  const aRetirar = existentes
+    .filter((p) => nombresAnteriores.has(p.nombre) && !conservadas.has(p.id) && p.activo !== false)
+    .map((p) => p.id)
+  await actualizarActivo(client, "checklist_templates", organizationId, aRetirar, false)
 }
 
 async function actualizarActivo(
