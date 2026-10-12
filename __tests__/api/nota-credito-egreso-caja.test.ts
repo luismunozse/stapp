@@ -61,7 +61,7 @@ describe("nota de crédito — egreso de caja en reembolso EFECTIVO (arqueo part
   })
 })
 
-describe("POST /api/notas-credito — solo de órdenes (migración 342)", () => {
+describe("POST /api/notas-credito — solo de órdenes (migración 350)", () => {
   const url = "http://localhost/api/notas-credito"
   beforeEach(() => vi.clearAllMocks())
 

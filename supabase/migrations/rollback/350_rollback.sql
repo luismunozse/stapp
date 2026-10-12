@@ -1,4 +1,4 @@
--- Rollback de la 342.
+-- Rollback de la 350.
 --
 -- PIERDE DATOS de las columnas nuevas. Exportar antes:
 --   SELECT id, modo, motivo_nc, anulada, anulada_at, anulada_por, anulada_motivo

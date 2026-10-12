@@ -1,9 +1,9 @@
--- Probes de la 342. Abre su propia transaccion y la revierte: db-run.mjs
--- detecta el BEGIN y rechaza --apply. Correr DESPUES de aplicar la 342:
---   npm run db:dry -- supabase/migrations/verify/342_probes.sql
--- Contra una base sin la 342 corta con "column ... does not exist".
+-- Probes de la 350. Abre su propia transaccion y la revierte: db-run.mjs
+-- detecta el BEGIN y rechaza --apply. Correr DESPUES de aplicar la 350:
+--   npm run db:dry -- supabase/migrations/verify/350_probes.sql
+-- Contra una base sin la 350 corta con "column ... does not exist".
 --
--- Fixture propia (org-probe-342). La sucursal y el deposito principales los
+-- Fixture propia (org-probe-350). La sucursal y el deposito principales los
 -- crea el trigger de alta de la org (217): no insertar otra sucursal principal,
 -- choca con sucursales_org_principal_unique.
 -- 1 a 4 y 14 miran datos reales; lo que tocan se revierte con el ROLLBACK.
@@ -12,45 +12,45 @@ BEGIN;
 CREATE TEMP TABLE _r (orden INT, probe TEXT, esperado TEXT, obtenido TEXT);
 
 INSERT INTO organizations (id, nombre, nombre_mostrar, slug)
-VALUES ('org-probe-342', 'Probe 342', 'Probe 342', 'probe-342-' || substr(md5(random()::text), 1, 8));
+VALUES ('org-probe-350', 'Probe 350', 'Probe 350', 'probe-350-' || substr(md5(random()::text), 1, 8));
 
 INSERT INTO clientes (id, nombre, telefono, organization_id)
-VALUES ('cli-probe-342', 'Cliente probe 342', '342-0001', 'org-probe-342');
+VALUES ('cli-probe-350', 'Cliente probe 350', '350-0001', 'org-probe-350');
 
 INSERT INTO ordenes_servicio (
   id, numero_orden, cliente_id, organization_id, sucursal_id,
   dispositivo, tipo_dispositivo, problema_reportado, estado,
   costo_final, descuento_cobro, total_cobrado, estado_cobro
 ) VALUES
-  ('ord-probe-342-1', 1, 'cli-probe-342', 'org-probe-342',
-   (SELECT id FROM sucursales WHERE organization_id = 'org-probe-342' AND principal),
+  ('ord-probe-350-1', 1, 'cli-probe-350', 'org-probe-350',
+   (SELECT id FROM sucursales WHERE organization_id = 'org-probe-350' AND principal),
    'Celular', 'CELULAR', 'Pantalla', 'ENTREGADO', 1000, 0, 1000, 'COBRADO'),
-  ('ord-probe-342-2', 2, 'cli-probe-342', 'org-probe-342',
-   (SELECT id FROM sucursales WHERE organization_id = 'org-probe-342' AND principal),
+  ('ord-probe-350-2', 2, 'cli-probe-350', 'org-probe-350',
+   (SELECT id FROM sucursales WHERE organization_id = 'org-probe-350' AND principal),
    'Celular', 'CELULAR', 'Bateria', 'ENTREGADO', 500, 0, 500, 'COBRADO');
 
 INSERT INTO inventario (id, organization_id, codigo, categoria, precio_compra, nombre, stock, stock_reservado, precio_venta)
-VALUES ('inv-probe-342', 'org-probe-342', 'PROBE-342', 'PROBE', 0, 'Repuesto probe 342', 0, 0, 0);
+VALUES ('inv-probe-350', 'org-probe-350', 'PROBE-350', 'PROBE', 0, 'Repuesto probe 350', 0, 0, 0);
 
 INSERT INTO repuestos_orden (id, orden_id, inventario_id, cantidad, precio_unitario)
-VALUES ('rep-probe-342', 'ord-probe-342-1', 'inv-probe-342', 1, 100);
+VALUES ('rep-probe-350', 'ord-probe-350-1', 'inv-probe-350', 1, 100);
 
 INSERT INTO notas_credito (id, organization_id, numero, orden_id, motivo, monto, monto_aplicado_deuda)
 VALUES
-  ('nc-probe-342-1', 'org-probe-342', 'NC-P342-1', 'ord-probe-342-1', 'TRABAJO_NO_REALIZADO', 100, 30),
-  ('nc-probe-342-2', 'org-probe-342', 'NC-P342-2', 'ord-probe-342-2', 'OTRO', 50, 0);
+  ('nc-probe-350-1', 'org-probe-350', 'NC-P350-1', 'ord-probe-350-1', 'TRABAJO_NO_REALIZADO', 100, 30),
+  ('nc-probe-350-2', 'org-probe-350', 'NC-P350-2', 'ord-probe-350-2', 'OTRO', 50, 0);
 
 INSERT INTO items_nota_credito (nota_credito_id, repuesto_orden_id, deposito_id, descripcion, cantidad, precio_unitario, restock)
-VALUES ('nc-probe-342-1', 'rep-probe-342',
-        (SELECT id FROM depositos WHERE organization_id = 'org-probe-342' AND principal LIMIT 1),
-        'Repuesto probe 342', 1, 100, false);
+VALUES ('nc-probe-350-1', 'rep-probe-350',
+        (SELECT id FROM depositos WHERE organization_id = 'org-probe-350' AND principal LIMIT 1),
+        'Repuesto probe 350', 1, 100, false);
 
 -- 0. Setup
 INSERT INTO _r SELECT 0, 'setup: 2 ordenes, 2 NC y 1 item con repuesto y deposito', '2 / 2 / 1',
-  (SELECT COUNT(*)::TEXT FROM ordenes_servicio WHERE organization_id = 'org-probe-342') || ' / ' ||
-  (SELECT COUNT(*)::TEXT FROM notas_credito WHERE organization_id = 'org-probe-342') || ' / ' ||
+  (SELECT COUNT(*)::TEXT FROM ordenes_servicio WHERE organization_id = 'org-probe-350') || ' / ' ||
+  (SELECT COUNT(*)::TEXT FROM notas_credito WHERE organization_id = 'org-probe-350') || ' / ' ||
   (SELECT COUNT(*)::TEXT FROM items_nota_credito
-     WHERE nota_credito_id = 'nc-probe-342-1' AND repuesto_orden_id IS NOT NULL AND deposito_id IS NOT NULL);
+     WHERE nota_credito_id = 'nc-probe-350-1' AND repuesto_orden_id IS NOT NULL AND deposito_id IS NOT NULL);
 
 -- 1. El historial de devoluciones queda igual: ITEMS, activo, sin motivo de catalogo
 INSERT INTO _r SELECT 1, 'devoluciones existentes: todas ITEMS, activas y sin motivo_nc', '0',
@@ -89,14 +89,14 @@ END $$;
 
 -- 5. notas_credito acepta el motivo nuevo (la NC 1 del fixture se inserto con el)
 INSERT INTO _r SELECT 5, 'notas_credito acepta TRABAJO_NO_REALIZADO', 'TRABAJO_NO_REALIZADO', motivo
-  FROM notas_credito WHERE id = 'nc-probe-342-1';
+  FROM notas_credito WHERE id = 'nc-probe-350-1';
 
 -- 6. ... y rechaza uno fuera del catalogo
 DO $$
 DECLARE v_msg TEXT := 'sin error';
 BEGIN
   BEGIN
-    UPDATE notas_credito SET motivo = 'INVENTADO' WHERE id = 'nc-probe-342-2';
+    UPDATE notas_credito SET motivo = 'INVENTADO' WHERE id = 'nc-probe-350-2';
   EXCEPTION
     WHEN check_violation THEN v_msg := 'check_violation';
     WHEN OTHERS THEN v_msg := 'otro error: ' || SQLERRM;
@@ -115,7 +115,7 @@ DO $$
 DECLARE v_msg TEXT := 'sin error';
 BEGIN
   BEGIN
-    UPDATE notas_credito SET venta_id = 'venta-probe-342' WHERE id = 'nc-probe-342-2';
+    UPDATE notas_credito SET venta_id = 'venta-probe-350' WHERE id = 'nc-probe-350-2';
   EXCEPTION
     WHEN check_violation THEN v_msg := 'check_violation';
     WHEN OTHERS THEN v_msg := 'otro error: ' || SQLERRM;
@@ -128,7 +128,7 @@ DO $$
 DECLARE v_msg TEXT := 'sin error';
 BEGIN
   BEGIN
-    UPDATE notas_credito SET orden_id = NULL WHERE id = 'nc-probe-342-2';
+    UPDATE notas_credito SET orden_id = NULL WHERE id = 'nc-probe-350-2';
   EXCEPTION
     WHEN check_violation THEN v_msg := 'check_violation';
     WHEN OTHERS THEN v_msg := 'otro error: ' || SQLERRM;
@@ -141,7 +141,7 @@ DO $$
 DECLARE v_msg TEXT := 'sin error';
 BEGIN
   BEGIN
-    UPDATE notas_credito SET modo = 'OTRA_COSA' WHERE id = 'nc-probe-342-2';
+    UPDATE notas_credito SET modo = 'OTRA_COSA' WHERE id = 'nc-probe-350-2';
   EXCEPTION
     WHEN check_violation THEN v_msg := 'check_violation';
     WHEN OTHERS THEN v_msg := 'otro error: ' || SQLERRM;
@@ -154,7 +154,7 @@ DO $$
 DECLARE v_msg TEXT := 'sin error';
 BEGIN
   BEGIN
-    UPDATE notas_credito SET monto_aplicado_deuda = 51 WHERE id = 'nc-probe-342-2';
+    UPDATE notas_credito SET monto_aplicado_deuda = 51 WHERE id = 'nc-probe-350-2';
   EXCEPTION
     WHEN check_violation THEN v_msg := 'check_violation';
     WHEN OTHERS THEN v_msg := 'otro error: ' || SQLERRM;
@@ -164,15 +164,15 @@ END $$;
 
 -- 12. Reintegro generado = monto - aplicado
 INSERT INTO _r SELECT 12, 'monto_reembolso = monto - monto_aplicado_deuda', '70.00', monto_reembolso::TEXT
-  FROM notas_credito WHERE id = 'nc-probe-342-1';
+  FROM notas_credito WHERE id = 'nc-probe-350-1';
 
 -- 13. idempotency_key unica por organizacion
 DO $$
 DECLARE v_msg TEXT := 'sin error';
 BEGIN
-  UPDATE notas_credito SET idempotency_key = 'k-probe-342' WHERE id = 'nc-probe-342-1';
+  UPDATE notas_credito SET idempotency_key = 'k-probe-350' WHERE id = 'nc-probe-350-1';
   BEGIN
-    UPDATE notas_credito SET idempotency_key = 'k-probe-342' WHERE id = 'nc-probe-342-2';
+    UPDATE notas_credito SET idempotency_key = 'k-probe-350' WHERE id = 'nc-probe-350-2';
   EXCEPTION
     WHEN unique_violation THEN v_msg := 'unique_violation';
     WHEN OTHERS THEN v_msg := 'otro error: ' || SQLERRM;
@@ -183,7 +183,7 @@ END $$;
 -- 14. Backfill de modo en el historial: ITEMS si tiene items, MONTO si no
 INSERT INTO _r SELECT 14, 'NC historicas: ITEMS con items, MONTO sin items', '0',
   (SELECT COUNT(*)::TEXT FROM notas_credito nc
-    WHERE nc.organization_id <> 'org-probe-342'
+    WHERE nc.organization_id <> 'org-probe-350'
       AND nc.modo <> CASE WHEN EXISTS (SELECT 1 FROM items_nota_credito i WHERE i.nota_credito_id = nc.id)
                           THEN 'ITEMS' ELSE 'MONTO' END);
 
@@ -197,7 +197,7 @@ DO $$
 DECLARE v_msg TEXT := 'sin error';
 BEGIN
   BEGIN
-    DELETE FROM ordenes_servicio WHERE id = 'ord-probe-342-2';
+    DELETE FROM ordenes_servicio WHERE id = 'ord-probe-350-2';
   EXCEPTION
     WHEN foreign_key_violation THEN
       v_msg := CASE WHEN SQLERRM LIKE '%notas_credito_orden_id_fkey%' THEN 'foreign_key_violation'
@@ -212,7 +212,7 @@ DO $$
 DECLARE v_msg TEXT := 'OK';
 BEGIN
   BEGIN
-    DELETE FROM organizations WHERE id = 'org-probe-342';
+    DELETE FROM organizations WHERE id = 'org-probe-350';
   EXCEPTION WHEN OTHERS THEN
     v_msg := 'FALLO: ' || SQLERRM;
   END;
@@ -220,7 +220,7 @@ BEGIN
 END $$;
 
 INSERT INTO _r SELECT 18, 'la cascada se llevo las NC del taller', '0',
-  (SELECT COUNT(*)::TEXT FROM notas_credito WHERE organization_id = 'org-probe-342');
+  (SELECT COUNT(*)::TEXT FROM notas_credito WHERE organization_id = 'org-probe-350');
 
 SELECT orden, probe, esperado, obtenido,
        CASE WHEN obtenido LIKE 'SALTEADO%' THEN 'SALTEADO'

@@ -1,4 +1,4 @@
--- Migration 342: bases de las notas de credito unificadas.
+-- Migration 350: bases de las notas de credito unificadas.
 --
 -- Spec: docs/superpowers/specs/2026-10-07-notas-de-credito-design.md
 -- Plan: docs/superpowers/plans/2026-10-07-notas-credito-pr1-bases.md (PR1b)
@@ -31,7 +31,7 @@ DECLARE
 BEGIN
   SELECT COUNT(*) INTO v_con_venta FROM notas_credito WHERE venta_id IS NOT NULL;
   IF v_con_venta > 0 THEN
-    RAISE EXCEPTION 'Abort: % nota(s) de credito con venta_id. Resolverlas antes de aplicar la 342.', v_con_venta;
+    RAISE EXCEPTION 'Abort: % nota(s) de credito con venta_id. Resolverlas antes de aplicar la 350.', v_con_venta;
   END IF;
 END $$;
 
@@ -59,11 +59,11 @@ CREATE INDEX IF NOT EXISTS devoluciones_venta_venta_activa_idx
   ON devoluciones_venta (venta_id) WHERE anulada = false;
 
 COMMENT ON COLUMN devoluciones_venta.modo IS
-  'ITEMS: devuelve mercaderia (monto calculado). MONTO: credito por un importe, sin tocar stock. Migracion 342.';
+  'ITEMS: devuelve mercaderia (monto calculado). MONTO: credito por un importe, sin tocar stock. Migracion 350.';
 COMMENT ON COLUMN devoluciones_venta.motivo_nc IS
-  'Motivo del catalogo de notas de credito (mismo CHECK que notas_credito.motivo). NULL en el historial; motivo queda como detalle libre. Migracion 342.';
+  'Motivo del catalogo de notas de credito (mismo CHECK que notas_credito.motivo). NULL en el historial; motivo queda como detalle libre. Migracion 350.';
 COMMENT ON COLUMN devoluciones_venta.anulada IS
-  'NC anulada: queda visible y su numero no se reusa. Todo consumidor de devoluciones_venta tiene que excluirlas. Migracion 342.';
+  'NC anulada: queda visible y su numero no se reusa. Todo consumidor de devoluciones_venta tiene que excluirlas. Migracion 350.';
 
 -- ── 2. notas_credito ───────────────────────────────────────────────────────
 -- modo DEFAULT 'MONTO': el dialogo actual de la orden nunca manda items, asi
@@ -118,11 +118,11 @@ ALTER TABLE notas_credito ADD CONSTRAINT notas_credito_orden_id_fkey
   FOREIGN KEY (orden_id) REFERENCES ordenes_servicio(id) ON DELETE RESTRICT;
 
 COMMENT ON COLUMN notas_credito.monto_aplicado_deuda IS
-  'Parte del monto que bajo el pendiente de la orden (pendiente_orden). Migracion 342.';
+  'Parte del monto que bajo el pendiente de la orden (pendiente_orden). Migracion 350.';
 COMMENT ON COLUMN notas_credito.monto_reembolso IS
-  'Generada: monto - monto_aplicado_deuda, lo que se le devolvio al cliente. Migracion 342.';
+  'Generada: monto - monto_aplicado_deuda, lo que se le devolvio al cliente. Migracion 350.';
 COMMENT ON COLUMN notas_credito.venta_id IS
-  'Solo historial: desde la 342 las NC de ventas viven en devoluciones_venta (CHECK notas_credito_solo_ordenes).';
+  'Solo historial: desde la 350 las NC de ventas viven en devoluciones_venta (CHECK notas_credito_solo_ordenes).';
 
 -- ── 3. items_nota_credito ──────────────────────────────────────────────────
 ALTER TABLE items_nota_credito
@@ -130,4 +130,4 @@ ALTER TABLE items_nota_credito
   ADD COLUMN IF NOT EXISTS deposito_id       TEXT REFERENCES depositos(id);
 
 COMMENT ON COLUMN items_nota_credito.item_venta_id IS
-  'Solo historial: desde la 342 las NC son de ordenes (repuesto_orden_id).';
+  'Solo historial: desde la 350 las NC son de ordenes (repuesto_orden_id).';

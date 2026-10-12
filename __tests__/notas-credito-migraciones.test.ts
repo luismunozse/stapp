@@ -9,7 +9,7 @@ import { join } from "path"
 // rollback, y que ninguna abre su propia transacción. Lo último importa:
 // db-run.mjs ejecuta TAL CUAL un archivo con BEGIN en sus primeras 40 líneas,
 // así que `npm run db:dry` sobre una migración con BEGIN/COMMIT la aplicaría.
-const MIGRACIONES = ["342_notas_credito_bases"]
+const MIGRACIONES = ["350_notas_credito_bases"]
 
 const leer = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8")
 const existe = (rel: string) => existsSync(join(process.cwd(), rel))
@@ -42,8 +42,8 @@ describe.each(MIGRACIONES)("migración %s", (nombre) => {
   })
 })
 
-describe("342: contratos que el pre-flight y la app dan por hechos", () => {
-  const sql = () => leer("supabase/migrations/342_notas_credito_bases.sql")
+describe("350: contratos que el pre-flight y la app dan por hechos", () => {
+  const sql = () => leer("supabase/migrations/350_notas_credito_bases.sql")
 
   it("aborta si queda alguna NC de venta", () => {
     expect(sql()).toMatch(/FROM notas_credito WHERE venta_id IS NOT NULL/)

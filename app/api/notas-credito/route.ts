@@ -92,7 +92,7 @@ export async function POST(request: Request) {
     if (error) return error
 
     const body = await request.json()
-    // Desde la migración 342 esta tabla es solo de órdenes: lo que se acredita
+    // Desde la migración 350 esta tabla es solo de órdenes: lo que se acredita
     // sobre una venta es una devolución de la venta (otro motor, otra ruta).
     if (body?.ventaId) {
       return NextResponse.json(
