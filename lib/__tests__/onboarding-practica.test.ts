@@ -101,18 +101,38 @@ describe("getPracticaOrden", () => {
 
 describe("deletePracticeData", () => {
   it("delegates to borrar_datos_practica and reports a client kept for real work", async () => {
-    const { client } = clienteFalso({ data: { orden_borrada: true, cliente_conservado: true } })
+    const { client } = clienteFalso({ data: { orden_borrada: true, orden_conservada: false, cliente_conservado: true } })
     await expect(real.deletePracticeData("org-1", client)).resolves.toEqual({
       ordenBorrada: true,
+      ordenConservada: false,
       clienteConservado: true,
     })
     expect(client.rpc).toHaveBeenCalledWith("borrar_datos_practica", { p_org_id: "org-1" })
   })
 
-  it("reports nothing deleted when the org had no practice", async () => {
-    const { client } = clienteFalso({ data: { orden_borrada: false, cliente_conservado: false } })
+  it("reports an order kept for real work, and its client with it", async () => {
+    const { client } = clienteFalso({ data: { orden_borrada: false, orden_conservada: true, cliente_conservado: true } })
     await expect(real.deletePracticeData("org-1", client)).resolves.toEqual({
       ordenBorrada: false,
+      ordenConservada: true,
+      clienteConservado: true,
+    })
+  })
+
+  it("reports nothing deleted when the org had no practice", async () => {
+    const { client } = clienteFalso({ data: { orden_borrada: false, orden_conservada: false, cliente_conservado: false } })
+    await expect(real.deletePracticeData("org-1", client)).resolves.toEqual({
+      ordenBorrada: false,
+      ordenConservada: false,
+      clienteConservado: false,
+    })
+  })
+
+  it("reads a missing orden_conservada key as false", async () => {
+    const { client } = clienteFalso({ data: { orden_borrada: true, cliente_conservado: false } })
+    await expect(real.deletePracticeData("org-1", client)).resolves.toEqual({
+      ordenBorrada: true,
+      ordenConservada: false,
       clienteConservado: false,
     })
   })

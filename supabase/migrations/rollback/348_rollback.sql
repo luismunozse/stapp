@@ -1,7 +1,7 @@
 -- Rollback de 348_orden_practica_onboarding.sql
 --
--- PIERDE DATOS. Borra las prácticas que existan (orden + cliente sin uso real)
--- y las columnas onboarding_progress.camino / practica_completada_at, que son la
+-- PIERDE DATOS. Borra las prácticas que existan (orden + cliente sin uso real;
+-- lo que ya se usó para trabajo real queda como real) y las columnas onboarding_progress.camino / practica_completada_at, que son la
 -- única traza del camino que tomó cada taller en el wizard. Exportar antes:
 --
 --   SELECT organization_id, camino, practica_completada_at

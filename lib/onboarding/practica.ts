@@ -73,20 +73,29 @@ export async function getPracticaOrden(
 }
 
 /**
- * Deletes the org's practice order and its client. The client is kept, and
- * turned into a real one, when anything outside the practice references it.
- * All of it runs in borrar_datos_practica (migration 348), so a cascading FK
- * can never take real data with it. Throws on error; callers decide.
+ * Deletes the org's practice order and its client. Each one is kept, and turned
+ * into a real one, when anything outside the practice references it; a kept
+ * order keeps its client too. All of it runs in borrar_datos_practica
+ * (migration 348), so a cascading FK can never take real data with it. Throws
+ * on error; callers decide.
+ *
+ * ordenConservada is optional in the type so results built before the key
+ * existed still type-check; this function always sets it.
  */
 export async function deletePracticeData(
   organizationId: string,
   client: DbClient = supabaseAdmin
-): Promise<{ ordenBorrada: boolean; clienteConservado: boolean }> {
+): Promise<{ ordenBorrada: boolean; ordenConservada?: boolean; clienteConservado: boolean }> {
   const { data, error } = await client.rpc("borrar_datos_practica", { p_org_id: organizationId })
   if (error) throw new Error(`borrar_datos_practica: ${error.message}`)
-  const result = (data ?? {}) as { orden_borrada?: boolean; cliente_conservado?: boolean }
+  const result = (data ?? {}) as {
+    orden_borrada?: boolean
+    orden_conservada?: boolean
+    cliente_conservado?: boolean
+  }
   return {
     ordenBorrada: result.orden_borrada === true,
+    ordenConservada: result.orden_conservada === true,
     clienteConservado: result.cliente_conservado === true,
   }
 }

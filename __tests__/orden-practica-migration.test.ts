@@ -19,6 +19,21 @@ const FILES: Array<[string, string]> = [
   ["rollback", ROLLBACK],
 ]
 
+// borrar_datos_practica, from its header to its LANGUAGE line.
+const BORRAR =
+  MIGRATION.match(/CREATE OR REPLACE FUNCTION borrar_datos_practica\(p_org_id TEXT\)[\s\S]*?\$\$ LANGUAGE plpgsql[^;]*;/)?.[0] ?? ""
+
+// Tables the practice itself writes to. Any other reference to the practice
+// order means it was used for real work.
+const EFECTOS_DE_LA_PRACTICA = [
+  "checklist_recepcion",
+  "fotos_orden",
+  "notification_logs",
+  "orden_eventos",
+  "orden_tiempos_estado",
+  "user_notifications",
+]
+
 describe("migration 348: practice order (es_practica)", () => {
   it.each(FILES)("%s recreates v_clientes_resumen with security_invoker", (_name, sql) => {
     expect(sql).toMatch(/CREATE VIEW v_clientes_resumen WITH \(security_invoker = true\)/)
@@ -105,5 +120,70 @@ describe("migration 348: practice order (es_practica)", () => {
 
   it("sets a lock_timeout without owning the transaction", () => {
     expect(MIGRATION).toMatch(/^SET LOCAL lock_timeout = '5s';/m)
+  })
+
+  describe("borrar_datos_practica keeps a practice order that other tables reference", () => {
+    it("locks the order, then reads its FKs from pg_constraint before deleting", () => {
+      expect(BORRAR).toMatch(/SELECT id FROM ordenes_servicio\s+WHERE organization_id = p_org_id AND es_practica\s+FOR UPDATE/)
+      const lock = BORRAR.search(/SELECT id FROM ordenes_servicio\s+WHERE organization_id = p_org_id AND es_practica\s+FOR UPDATE/)
+      const check = BORRAR.indexOf("c.confrelid = 'public.ordenes_servicio'::regclass")
+      const borrado = BORRAR.indexOf("DELETE FROM ordenes_servicio WHERE id = v_orden_id;")
+      expect(check).toBeGreaterThan(lock)
+      expect(borrado).toBeGreaterThan(check)
+    })
+
+    it("exempts only the practice's own side-effect tables", () => {
+      const lista = BORRAR.match(/c\.confrelid = 'public\.ordenes_servicio'::regclass\s+AND c\.conrelid NOT IN \(([^)]*)\)/)
+      expect(lista).not.toBeNull()
+      const tablas = [...lista![1].matchAll(/'public\.(\w+)'::regclass/g)].map((m) => m[1]).sort()
+      expect(tablas).toEqual(EFECTOS_DE_LA_PRACTICA)
+    })
+
+    it("turns a referenced order into a real one instead of deleting it", () => {
+      expect(BORRAR).toMatch(
+        /IF v_orden_usada THEN\s+(?:--.*\s+)*UPDATE ordenes_servicio SET es_practica = FALSE WHERE id = v_orden_id;\s+v_orden_conservada := TRUE;\s+ELSE/
+      )
+    })
+
+    it("treats a composite FK as a reference, like the client check", () => {
+      const ordenCheck = BORRAR.slice(BORRAR.indexOf("c.confrelid = 'public.ordenes_servicio'::regclass"))
+      expect(ordenCheck).toMatch(/IF array_length\(v_fk\.conkey, 1\) <> 1 THEN\s+(?:--.*\s+)*v_orden_usada := TRUE;/)
+    })
+
+    it("reports orden_conservada on every return", () => {
+      const salidas = BORRAR.match(/RETURN jsonb_build_object\([\s\S]*?\);/g) ?? []
+      expect(salidas).toHaveLength(2)
+      for (const salida of salidas) {
+        expect(salida).toMatch(/'orden_borrada'/)
+        expect(salida).toMatch(/'orden_conservada'/)
+        expect(salida).toMatch(/'cliente_conservado'/)
+      }
+    })
+
+    it("autocheck (i): an order with a payment survives as real, with its payment and client", () => {
+      const caso = MIGRATION.slice(MIGRATION.indexOf("-- (i)"))
+      expect(MIGRATION.indexOf("-- (i)")).toBeGreaterThan(-1)
+      expect(MIGRATION.indexOf("-- (i)")).toBeLessThan(MIGRATION.lastIndexOf("RAISE EXCEPTION 'autocheck-348-rollback';"))
+      expect(caso).toMatch(/INSERT INTO cobros_orden \(orden_id, organization_id, monto, metodo_pago\)/)
+      expect(caso).toMatch(/\(v_res->>'orden_conservada'\)::BOOLEAN IS NOT TRUE/)
+      expect(caso).toMatch(/\(v_res->>'orden_borrada'\)::BOOLEAN IS NOT FALSE/)
+      expect(caso).toMatch(/\(v_res->>'cliente_conservado'\)::BOOLEAN IS NOT TRUE/)
+      expect(caso).toMatch(/NOT EXISTS \(SELECT 1 FROM ordenes_servicio WHERE id = v_orden_c AND NOT es_practica\)/)
+      expect(caso).toMatch(/NOT EXISTS \(SELECT 1 FROM cobros_orden WHERE orden_id = v_orden_c\)/)
+      expect(caso).toMatch(/NOT EXISTS \(SELECT 1 FROM clientes WHERE id = v_cli_c AND NOT es_practica\)/)
+    })
+
+    it("autocheck (c): an order with only side-effect rows is still deleted", () => {
+      expect(MIGRATION).toMatch(
+        /\(v_res->>'orden_borrada'\)::BOOLEAN IS NOT TRUE\s+OR \(v_res->>'orden_conservada'\)::BOOLEAN IS NOT FALSE\s+OR EXISTS \(SELECT 1 FROM ordenes_servicio WHERE id = v_orden_a\)/
+      )
+    })
+
+    it("rollback cleans the practices with the function before dropping it", () => {
+      const limpieza = ROLLBACK.indexOf("borrar_datos_practica(o.id)")
+      const drop = ROLLBACK.indexOf("DROP FUNCTION IF EXISTS borrar_datos_practica(TEXT);")
+      expect(limpieza).toBeGreaterThan(-1)
+      expect(drop).toBeGreaterThan(limpieza)
+    })
   })
 })

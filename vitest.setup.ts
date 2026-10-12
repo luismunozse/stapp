@@ -96,7 +96,7 @@ vi.mock('@/lib/onboarding/practica', async () => {
   const actual = await vi.importActual<typeof import('@/lib/onboarding/practica')>('@/lib/onboarding/practica')
   return {
     ...actual,
-    deletePracticeData: vi.fn(async () => ({ ordenBorrada: false, clienteConservado: false })),
+    deletePracticeData: vi.fn(async () => ({ ordenBorrada: false, ordenConservada: false, clienteConservado: false })),
     rejectIfPractica: vi.fn(async () => null),
   }
 })

@@ -29,9 +29,11 @@
 --   3b. es_practica lo escribe solo el servidor: un trigger BEFORE en clientes y
 --      ordenes_servicio rechaza (42501) que anon/authenticated lo fijen o lo
 --      cambien. Los RPC SECURITY DEFINER y service_role pasan.
---   4. borrar_datos_practica(org) borra la práctica de la org. El cliente se
---      borra solo si ninguna FK hacia clientes lo referencia (salvo los logs de
---      notificaciones); si no, se conserva y pasa a real.
+--   4. borrar_datos_practica(org) borra la práctica de la org. La orden se
+--      borra solo si ninguna FK hacia ordenes_servicio la referencia (salvo las
+--      tablas que escribe la práctica misma); si no, se conserva y pasa a real.
+--      El cliente se borra solo si ninguna FK hacia clientes lo referencia
+--      (salvo los logs de notificaciones); si no, se conserva y pasa a real.
 --   4b. registrar_camino_onboarding(org, camino): upsert atómico de
 --      onboarding_progress.camino. Crea la fila si falta (el wizard nuevo ya no
 --      llama a GET /api/onboarding/progress, que era quien la creaba), nunca
@@ -43,10 +45,12 @@
 -- POR QUÉ EL CHEQUEO DE REFERENCIAS ES DINÁMICO
 --   ordenes_servicio.cliente_id, cuenta_corriente, recepciones,
 --   sectores_cliente y notification_logs apuntan a clientes con ON DELETE
---   CASCADE: borrar un cliente referenciado borraría trabajo real. La función
---   lee las FKs de pg_constraint en cada llamada (una FK nueva queda cubierta
---   sin tocarla) y toma FOR UPDATE sobre el cliente antes de mirar, así un
---   INSERT concurrente que lo referencie (FOR KEY SHARE) espera.
+--   CASCADE: borrar un cliente referenciado borraría trabajo real. Lo mismo
+--   con la orden: cobros, facturas, cotizaciones, garantías, repuestos y
+--   servicios cascadean desde ordenes_servicio. La función lee las FKs de
+--   pg_constraint en cada llamada (una FK nueva queda cubierta sin tocarla) y
+--   toma FOR UPDATE sobre la fila antes de mirar, así un INSERT concurrente
+--   que la referencie (FOR KEY SHARE) espera.
 --
 -- VERIFICACIÓN POSTERIOR (después de --apply):
 --   SELECT es_practica FROM v_clientes_resumen LIMIT 1;  -- corre sin error
@@ -291,27 +295,69 @@ DECLARE
   v_cliente_id TEXT;
   v_fk RECORD;
   v_referenciado BOOLEAN;
+  v_orden_usada BOOLEAN;
   v_orden_borrada BOOLEAN := FALSE;
+  v_orden_conservada BOOLEAN := FALSE;
   v_cliente_conservado BOOLEAN := FALSE;
 BEGIN
   -- Camino rápido: la gran mayoría de las órdenes reales llegan acá sin
   -- práctica. Los dos índices parciales hacen esto casi gratis.
   IF NOT EXISTS (SELECT 1 FROM ordenes_servicio WHERE organization_id = p_org_id AND es_practica)
      AND NOT EXISTS (SELECT 1 FROM clientes WHERE organization_id = p_org_id AND es_practica) THEN
-    RETURN jsonb_build_object('orden_borrada', FALSE, 'cliente_conservado', FALSE);
+    RETURN jsonb_build_object('orden_borrada', FALSE, 'orden_conservada', FALSE,
+                              'cliente_conservado', FALSE);
   END IF;
 
-  -- La orden. Sus notificaciones tienen FK SET NULL: se borran antes, si no la
-  -- campanita queda con un link a una orden que ya no existe. El resto cascadea.
+  -- La orden. Mismo criterio que el cliente: si otra tabla ya usa la orden, se
+  -- conserva como orden real. FOR UPDATE antes de mirar, así un INSERT
+  -- concurrente que la referencie (FOR KEY SHARE) espera.
   FOR v_orden_id IN
     SELECT id FROM ordenes_servicio
      WHERE organization_id = p_org_id AND es_practica
        FOR UPDATE
   LOOP
-    DELETE FROM user_notifications WHERE orden_id = v_orden_id;
-    DELETE FROM notification_logs WHERE orden_id = v_orden_id;
-    DELETE FROM ordenes_servicio WHERE id = v_orden_id;
-    v_orden_borrada := TRUE;
+    v_orden_usada := FALSE;
+    -- Las seis tablas excluidas las escribe la práctica misma (eventos,
+    -- tiempos por estado, avisos, fotos y checklist): no son uso.
+    FOR v_fk IN
+      SELECT c.conrelid::regclass AS tabla, c.conkey, a.attname AS columna
+        FROM pg_constraint c
+        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+       WHERE c.contype = 'f'
+         AND c.confrelid = 'public.ordenes_servicio'::regclass
+         AND c.conrelid NOT IN ('public.orden_eventos'::regclass,
+                                'public.orden_tiempos_estado'::regclass,
+                                'public.notification_logs'::regclass,
+                                'public.user_notifications'::regclass,
+                                'public.fotos_orden'::regclass,
+                                'public.checklist_recepcion'::regclass)
+    LOOP
+      IF array_length(v_fk.conkey, 1) <> 1 THEN
+        -- FK compuesta: no se sabe chequear, así que se conserva la orden.
+        v_orden_usada := TRUE;
+      ELSE
+        EXECUTE format('SELECT EXISTS (SELECT 1 FROM %s WHERE %I = $1)', v_fk.tabla, v_fk.columna)
+          INTO v_orden_usada
+          USING v_orden_id;
+      END IF;
+      EXIT WHEN v_orden_usada;
+    END LOOP;
+
+    IF v_orden_usada THEN
+      -- El dueño la usó para trabajo real: pasa a ser una orden real. Su
+      -- cliente queda referenciado por ella, así que el bucle de abajo también
+      -- lo conserva.
+      UPDATE ordenes_servicio SET es_practica = FALSE WHERE id = v_orden_id;
+      v_orden_conservada := TRUE;
+    ELSE
+      -- Sus notificaciones tienen FK SET NULL: se borran antes, si no la
+      -- campanita queda con un link a una orden que ya no existe. El resto
+      -- cascadea.
+      DELETE FROM user_notifications WHERE orden_id = v_orden_id;
+      DELETE FROM notification_logs WHERE orden_id = v_orden_id;
+      DELETE FROM ordenes_servicio WHERE id = v_orden_id;
+      v_orden_borrada := TRUE;
+    END IF;
   END LOOP;
 
   -- El cliente, incluido uno huérfano (orden borrada a mano desde el listado).
@@ -353,12 +399,13 @@ BEGIN
   END LOOP;
 
   RETURN jsonb_build_object('orden_borrada', v_orden_borrada,
+                            'orden_conservada', v_orden_conservada,
                             'cliente_conservado', v_cliente_conservado);
 END;
 $$ LANGUAGE plpgsql SET search_path = public, pg_temp;
 
 COMMENT ON FUNCTION borrar_datos_practica(TEXT) IS
-  'Borra la orden de práctica del onboarding y su cliente si nada real lo referencia. Ver migración 348.';
+  'Borra la orden de práctica del onboarding y su cliente si nada real los referencia; lo que ya se usó se conserva como real. Ver migración 348.';
 
 REVOKE EXECUTE ON FUNCTION borrar_datos_practica(TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION borrar_datos_practica(TEXT) FROM anon;
@@ -411,8 +458,10 @@ DECLARE
   v_falla TEXT;
   v_cli_a TEXT;
   v_cli_b TEXT;
+  v_cli_c TEXT;
   v_orden_a TEXT;
   v_orden_b TEXT;
+  v_orden_c TEXT;
   v_orden_real TEXT;
   v_res JSONB;
   v_n INT;
@@ -464,6 +513,7 @@ BEGIN
 
     v_res := borrar_datos_practica(v_org);
     IF (v_res->>'orden_borrada')::BOOLEAN IS NOT TRUE
+       OR (v_res->>'orden_conservada')::BOOLEAN IS NOT FALSE
        OR EXISTS (SELECT 1 FROM ordenes_servicio WHERE id = v_orden_a)
        OR EXISTS (SELECT 1 FROM clientes WHERE id = v_cli_a)
        OR EXISTS (SELECT 1 FROM notification_logs WHERE cliente_id = v_cli_a) THEN
@@ -587,6 +637,29 @@ BEGIN
     EXCEPTION WHEN check_violation THEN
       NULL;
     END;
+
+    -- (i) Práctica con un cobro (tabla fuera de las que escribe la práctica):
+    --     la orden se conserva y pasa a real, el cobro sigue ahí y el cliente,
+    --     que la orden referencia, también se conserva. Teléfono '0' porque el
+    --     cliente de (d) ya es real con teléfono vacío (UNIQUE por org).
+    INSERT INTO clientes (organization_id, nombre, telefono, es_practica)
+    VALUES (v_org, 'Práctica C', '0', TRUE) RETURNING id INTO v_cli_c;
+    INSERT INTO ordenes_servicio (organization_id, sucursal_id, cliente_id, numero_orden, codigo_orden,
+                                  dispositivo, tipo_dispositivo, problema_reportado, estado, es_practica)
+    VALUES (v_org, v_suc, v_cli_c, 0, 'PRACTICA', 'Equipo', 'CELULAR', 'No enciende', 'RECIBIDO', TRUE)
+    RETURNING id INTO v_orden_c;
+    INSERT INTO cobros_orden (orden_id, organization_id, monto, metodo_pago)
+    VALUES (v_orden_c, v_org, 100, 'EFECTIVO');
+
+    v_res := borrar_datos_practica(v_org);
+    IF (v_res->>'orden_conservada')::BOOLEAN IS NOT TRUE
+       OR (v_res->>'orden_borrada')::BOOLEAN IS NOT FALSE
+       OR (v_res->>'cliente_conservado')::BOOLEAN IS NOT TRUE
+       OR NOT EXISTS (SELECT 1 FROM ordenes_servicio WHERE id = v_orden_c AND NOT es_practica)
+       OR NOT EXISTS (SELECT 1 FROM cobros_orden WHERE orden_id = v_orden_c)
+       OR NOT EXISTS (SELECT 1 FROM clientes WHERE id = v_cli_c AND NOT es_practica) THEN
+      v_falla := concat_ws('; ', v_falla, 'no se conservó la práctica con un cobro: ' || v_res::TEXT);
+    END IF;
 
     RAISE EXCEPTION 'autocheck-348-rollback';
   EXCEPTION WHEN raise_exception THEN
