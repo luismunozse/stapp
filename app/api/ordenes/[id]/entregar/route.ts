@@ -7,6 +7,7 @@ import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
 import { resolverEstadoEntrega, esTransicionValida, ESTADO_LABELS } from "@/lib/orden-state-machine"
 import { z } from "zod"
+import { rejectIfPractica } from "@/lib/onboarding/practica"
 
 const entregarSchema = z.object({
   firmaClienteEntrega: z.string().optional().nullable(),
@@ -38,6 +39,8 @@ export async function POST(
     if (error) return error
 
     const { id } = await params
+    const practica = await rejectIfPractica(id, organizationId!)
+    if (practica) return practica
     const body = await request.json()
     const data = entregarSchema.parse(body)
 

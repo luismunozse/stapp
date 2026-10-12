@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { rejectIfPractica } from "@/lib/onboarding/practica"
 
 const lineaSchema = z.discriminatedUnion("tipo", [
   z.object({
@@ -38,6 +39,8 @@ export async function POST(
     if (error) return error
 
     const { id: ordenId } = await params
+    const practica = await rejectIfPractica(ordenId, organizationId!)
+    if (practica) return practica
     const parsed = lineaSchema.parse(await request.json())
 
     // Snapshot de nombre y precio. Si viene del catálogo, se leen de ahí, pero
@@ -193,6 +196,8 @@ export async function PATCH(
     if (error) return error
 
     const { id: ordenId } = await params
+    const practica = await rejectIfPractica(ordenId, organizationId!)
+    if (practica) return practica
 
     const { data: result, error: rpcError } = await supabaseAdmin.rpc(
       "aplicar_monto_servicios_orden",
