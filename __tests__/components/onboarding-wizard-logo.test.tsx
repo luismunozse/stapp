@@ -141,6 +141,25 @@ describe("OnboardingWizard — paso del negocio", () => {
     expect(logError).toHaveBeenCalled()
   })
 
+  it("mientras guarda, Siguiente muestra Guardando… con spinner y Cambiar rubro queda deshabilitado", async () => {
+    await renderOnStep1()
+    fireEvent.change(nombreInput(), { target: { value: "Mi Taller" } })
+    let responder: (value: unknown) => void = () => {}
+    mockFetch.mockImplementation((url: string) =>
+      url === "/api/configuracion" ? new Promise((resolve) => (responder = resolve)) : Promise.resolve(json({}))
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: /Siguiente/i }))
+
+    const guardando = await screen.findByRole("button", { name: /Guardando…/ })
+    expect(guardando).toBeDisabled()
+    expect(guardando.querySelector("svg.animate-spin")).not.toBeNull()
+    expect(screen.getByRole("button", { name: "Cambiar rubro" })).toBeDisabled()
+
+    responder(json({}))
+    expect(await screen.findByRole("heading", { name: PREGUNTA })).toBeInTheDocument()
+  })
+
   it("rechaza archivos que no son imagen con un mensaje inline", async () => {
     const container = await renderOnStep1()
 

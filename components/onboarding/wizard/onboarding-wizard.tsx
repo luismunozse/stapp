@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, ChevronRight, Sparkles } from "lucide-react"
+import { CheckCircle2, ChevronRight, Loader2, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useCurrency } from "@/contexts/currency-context"
@@ -31,10 +31,13 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   const [rubroGuardado, setRubroGuardado] = useState<RubroVigente | null>(null)
   const [rubroBloqueadoAhora, setRubroBloqueadoAhora] = useState(false)
   const rubro = rubroGuardado ?? { rubro: props.rubro, rubroDetalle: props.rubroDetalle }
-  const rubroBloqueado = props.ordenesRealesCount > 0 || rubroBloqueadoAhora
+  // A rubro 409 means real orders exist, even if this snapshot says otherwise.
+  const hayOrdenesReales = props.ordenesRealesCount > 0 || rubroBloqueadoAhora
+  const rubroBloqueado = hayOrdenesReales
   const [actualizando, startActualizar] = useTransition()
 
   const [completando, setCompletando] = useState(false)
+  const [omitiendo, setOmitiendo] = useState(false)
   const completandoRef = useRef(false)
 
   const contenidoRef = useRef<HTMLDivElement>(null)
@@ -58,6 +61,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     if (completandoRef.current) return
     completandoRef.current = true
     setCompletando(true)
+    setOmitiendo(camino === "omitido")
     try {
       await fetch(
         "/api/onboarding/complete",
@@ -76,6 +80,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
       // mounted: leave the CTAs usable instead of disabled until a reload.
       completandoRef.current = false
       setCompletando(false)
+      setOmitiendo(false)
     }
   }
 
@@ -152,7 +157,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
               <PreguntaStep
                 terminologia={props.terminologia}
                 completando={completando}
-                ordenesRealesCount={props.ordenesRealesCount}
+                ordenesRealesCount={hayOrdenesReales ? Math.max(props.ordenesRealesCount, 1) : 0}
                 onSi={() => void completar("/ordenes?nueva=1", "real")}
                 onPracticar={() => irA("practica")}
                 onAtras={() => irA("negocio")}
@@ -181,7 +186,8 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             disabled={completando}
             className="text-muted-foreground"
           >
-            Omitir y entrar al panel
+            {omitiendo && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+            {omitiendo ? "Entrando…" : "Omitir y entrar al panel"}
           </Button>
         </div>
       </div>

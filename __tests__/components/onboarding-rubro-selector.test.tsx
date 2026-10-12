@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
-import type { ComponentProps } from "react"
+import { useState, type ComponentProps } from "react"
 import { RubroSelector } from "@/components/onboarding/wizard/rubro-selector"
 import { bodyOf, callsTo, json, routeFetch } from "./onboarding-wizard-fixtures"
 
@@ -140,7 +140,7 @@ describe("RubroSelector", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument()
   })
 
-  it("shows a connection error and stays open", async () => {
+  it("shows a connection error, refreshes the server state and stays open", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
     routeFetch(mockFetch, { [RUBRO]: [new TypeError("network down")] })
     renderSelector()
@@ -151,8 +151,54 @@ describe("RubroSelector", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/Revisá tu conexión/)
     expect(screen.getByRole("dialog")).toBeInTheDocument()
-    expect(mockRefresh).not.toHaveBeenCalled()
+    // The request may have committed before the connection dropped.
+    expect(mockRefresh).toHaveBeenCalledTimes(1)
     consoleError.mockRestore()
+  })
+
+  it("disables Guardar after a 409: the change can no longer succeed", async () => {
+    routeFetch(mockFetch, { [RUBRO]: [json({ error: "Ya tenés órdenes reales" }, 409)] })
+    renderSelector()
+    abrir()
+    fireEvent.click(screen.getByRole("radio", { name: /Taller mecánico/ }))
+
+    guardar()
+
+    await screen.findByRole("alert")
+    expect(screen.getByRole("button", { name: "Guardar rubro" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Cancelar" })).toBeEnabled()
+  })
+
+  it("moves focus to the reason line when the dialog closes on a locked trigger", async () => {
+    routeFetch(mockFetch, { [RUBRO]: [json({ error: "Ya tenés órdenes reales" }, 409)] })
+    function Padre() {
+      const [bloqueado, setBloqueado] = useState(false)
+      return (
+        <RubroSelector
+          rubro="electrodomesticos"
+          rubroDetalle={null}
+          bloqueado={bloqueado}
+          onGuardado={vi.fn()}
+          onBloqueado={() => setBloqueado(true)}
+        />
+      )
+    }
+    render(<Padre />)
+    abrir()
+    fireEvent.click(screen.getByRole("radio", { name: /Taller mecánico/ }))
+    guardar()
+    await screen.findByRole("alert")
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }))
+
+    const motivo = await screen.findByText("Ya cargaste órdenes, así que el rubro queda como está.")
+    await waitFor(() => expect(motivo).toHaveFocus())
+    expect(motivo).toHaveAttribute("tabindex", "-1")
+  })
+
+  it("disables Cambiar while the parent says it is busy", () => {
+    renderSelector({ deshabilitado: true })
+    expect(screen.getByRole("button", { name: "Cambiar rubro" })).toBeDisabled()
   })
 
   it("cannot be dismissed while saving", async () => {

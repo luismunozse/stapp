@@ -165,6 +165,7 @@ export function NegocioStep({
           rubro={rubro.rubro}
           rubroDetalle={rubro.rubroDetalle}
           bloqueado={rubroBloqueado}
+          deshabilitado={guardando}
           onGuardado={onRubroGuardado}
           onBloqueado={onRubroBloqueado}
         />
@@ -176,8 +177,8 @@ export function NegocioStep({
         <div className="flex flex-col gap-2 pt-4 sm:flex-row-reverse sm:justify-between">
           <Button onClick={() => void handleSiguiente()} disabled={guardando || actualizando}>
             {(guardando || actualizando) && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-            {actualizando ? "Actualizando…" : "Siguiente"}
-            {!actualizando && <ChevronRight className="ml-2 h-4 w-4" aria-hidden="true" />}
+            {actualizando ? "Actualizando…" : guardando ? "Guardando…" : "Siguiente"}
+            {!actualizando && !guardando && <ChevronRight className="ml-2 h-4 w-4" aria-hidden="true" />}
           </Button>
           <Button variant="ghost" onClick={onAtras} disabled={guardando}>
             <ChevronLeft className="mr-2 h-4 w-4" aria-hidden="true" />

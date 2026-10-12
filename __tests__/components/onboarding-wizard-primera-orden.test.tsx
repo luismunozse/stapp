@@ -156,6 +156,41 @@ describe("OnboardingWizard — question step", () => {
     expect(mockFetch.mock.calls.some(([url]) => url === "/api/clientes")).toBe(false)
   })
 
+  it("Omitir shows a spinner and a gerund while it completes; the other CTAs only disable", async () => {
+    let release: (value: unknown) => void = () => {}
+    mockFetch.mockImplementation(async (url: string) =>
+      url === "/api/onboarding/complete" ? new Promise((resolve) => (release = resolve)) : json({})
+    )
+    await irAPregunta()
+    const si = screen.getByRole("button", { name: "Sí, tengo uno" })
+
+    fireEvent.click(screen.getByRole("button", { name: /Omitir/i }))
+
+    const entrando = await screen.findByRole("button", { name: /Entrando…/ })
+    expect(entrando).toBeDisabled()
+    expect(entrando.querySelector("svg.animate-spin")).not.toBeNull()
+    expect(screen.queryByRole("button", { name: /Omitir y entrar al panel/ })).not.toBeInTheDocument()
+    expect(si).toBeDisabled()
+    expect(si.querySelector("svg.animate-spin")).toBeNull()
+
+    release(json({}))
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/dashboard"))
+    await waitFor(() => expect(screen.getByRole("button", { name: /Omitir y entrar al panel/ })).toBeEnabled())
+  })
+
+  it("Omitir keeps its label while Sí is the CTA that started the completion", async () => {
+    mockFetch.mockImplementation(async (url: string) =>
+      url === "/api/onboarding/complete" ? new Promise(() => {}) : json({})
+    )
+    await irAPregunta()
+
+    fireEvent.click(screen.getByRole("button", { name: "Sí, tengo uno" }))
+
+    const omitir = await screen.findByRole("button", { name: /Omitir y entrar al panel/ })
+    expect(omitir).toBeDisabled()
+    expect(omitir.querySelector("svg.animate-spin")).toBeNull()
+  })
+
   it("does not steal focus on first mount", () => {
     render(<OnboardingWizard {...wizardProps()} />)
 

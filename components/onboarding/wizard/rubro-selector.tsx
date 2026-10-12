@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -23,6 +23,8 @@ interface RubroSelectorProps {
   rubroDetalle: string | null
   /** True when the shop already has real orders: the server would answer 409. */
   bloqueado: boolean
+  /** The parent is busy (e.g. saving the business step): no new change can start. */
+  deshabilitado?: boolean
   onGuardado: (rubro: RubroVigente) => void
   onBloqueado: () => void
 }
@@ -30,7 +32,14 @@ interface RubroSelectorProps {
 const MOTIVO_BLOQUEO_ID = "rubro-bloqueado-motivo"
 const MENSAJE_BLOQUEO = "Ya cargaste órdenes, así que el rubro no se puede cambiar desde acá."
 
-export function RubroSelector({ rubro, rubroDetalle, bloqueado, onGuardado, onBloqueado }: RubroSelectorProps) {
+export function RubroSelector({
+  rubro,
+  rubroDetalle,
+  bloqueado,
+  deshabilitado = false,
+  onGuardado,
+  onBloqueado,
+}: RubroSelectorProps) {
   const router = useRouter()
   const [abierto, setAbierto] = useState(false)
   const [borrador, setBorrador] = useState(rubro)
@@ -38,11 +47,15 @@ export function RubroSelector({ rubro, rubroDetalle, bloqueado, onGuardado, onBl
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [cambiado, setCambiado] = useState(false)
+  // After a 409 the change can never succeed: Guardar stays off until reopened.
+  const [rechazado, setRechazado] = useState(false)
+  const motivoRef = useRef<HTMLParagraphElement>(null)
 
   const abrir = () => {
     setBorrador(rubro)
     setDetalle(rubroDetalle ?? "")
     setError(null)
+    setRechazado(false)
     setAbierto(true)
   }
 
@@ -73,6 +86,7 @@ export function RubroSelector({ rubro, rubroDetalle, bloqueado, onGuardado, onBl
       const body = await res.json().catch(() => null)
       if (res.status === 409) {
         setError(body?.error || MENSAJE_BLOQUEO)
+        setRechazado(true)
         onBloqueado()
         return
       }
@@ -90,6 +104,8 @@ export function RubroSelector({ rubro, rubroDetalle, bloqueado, onGuardado, onBl
       setAbierto(false)
     } catch (err) {
       console.error("Error changing the rubro:", err)
+      // The request may have been applied before the connection dropped.
+      router.refresh()
       setError("No pudimos cambiar el rubro. Revisá tu conexión y probá de nuevo.")
     } finally {
       setGuardando(false)
@@ -109,7 +125,7 @@ export function RubroSelector({ rubro, rubroDetalle, bloqueado, onGuardado, onBl
           variant="link"
           className="h-auto p-0"
           onClick={abrir}
-          disabled={bloqueado}
+          disabled={bloqueado || deshabilitado}
           aria-label="Cambiar rubro"
           aria-describedby={bloqueado ? MOTIVO_BLOQUEO_ID : undefined}
         >
@@ -117,7 +133,7 @@ export function RubroSelector({ rubro, rubroDetalle, bloqueado, onGuardado, onBl
         </Button>
       </div>
       {bloqueado && (
-        <p id={MOTIVO_BLOQUEO_ID} className="mt-1 text-xs text-muted-foreground">
+        <p id={MOTIVO_BLOQUEO_ID} ref={motivoRef} tabIndex={-1} className="mt-1 text-xs text-muted-foreground outline-none">
           Ya cargaste órdenes, así que el rubro queda como está.
         </p>
       )}
@@ -135,6 +151,14 @@ export function RubroSelector({ rubro, rubroDetalle, bloqueado, onGuardado, onBl
           }}
           onInteractOutside={(e) => {
             if (guardando) e.preventDefault()
+          }}
+          onCloseAutoFocus={(e) => {
+            // Radix returns focus to the trigger, which is now disabled: land
+            // on the reason line instead of losing focus to <body>.
+            if (bloqueado && motivoRef.current) {
+              e.preventDefault()
+              motivoRef.current.focus()
+            }
           }}
         >
           <DialogHeader>
@@ -169,7 +193,7 @@ export function RubroSelector({ rubro, rubroDetalle, bloqueado, onGuardado, onBl
             <Button type="button" variant="ghost" onClick={() => cambiarApertura(false)} disabled={guardando}>
               Cancelar
             </Button>
-            <Button type="button" onClick={() => void guardar()} disabled={guardando}>
+            <Button type="button" onClick={() => void guardar()} disabled={guardando || rechazado}>
               {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
               {guardando ? "Guardando…" : "Guardar rubro"}
             </Button>

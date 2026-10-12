@@ -67,6 +67,21 @@ describe("OnboardingWizard — rubro change", () => {
     expect(refresh).not.toHaveBeenCalled()
   })
 
+  it("hides the practice option on the question step after a rubro 409", async () => {
+    routeFetch(mockFetch, { [RUBRO]: [json({ error: "Ya tenés órdenes reales" }, 409)] })
+    await irANegocio()
+    cambiarA(/Taller mecánico/)
+    await screen.findByRole("alert")
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }))
+    await waitFor(() => expect(screen.getByRole("button", { name: "Cambiar rubro" })).toBeDisabled())
+
+    fireEvent.click(screen.getByRole("button", { name: /Siguiente/ }))
+
+    await screen.findByRole("heading", { name: /para cargar ahora\?/ })
+    expect(screen.queryByRole("button", { name: /quiero practicar/i })).not.toBeInTheDocument()
+    expect(screen.getByText(/Ya cargaste órdenes/i)).toBeInTheDocument()
+  })
+
   it("Cambiar is disabled from the start when the shop has real orders", async () => {
     await irANegocio({ ordenesRealesCount: 2 })
 
