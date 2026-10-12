@@ -81,7 +81,7 @@ const SUFIJO_FEMENINO = /(a|cion|sion|dad|tad|tud|umbre)$/
 export function articuloIndefinido(termino: string): "un" | "una" {
   const primera = (termino.trim().split(/\s+/)[0] ?? "")
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
   if (FEMENINOS_SIN_SUFIJO.has(primera)) return "una"
   if (MASCULINOS_EN_A.has(primera)) return "un"
