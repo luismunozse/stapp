@@ -2,8 +2,8 @@
 -- 348: orden de práctica del onboarding (es_practica) y camino del wizard
 -- ============================================================================
 -- NUMERO: provisorio, se asigna al mergear. En main, 346 es android_beta_testers
--- y 347 es una migración aparte que fija security_invoker = true en
--- v_clientes_resumen y restringe sus permisos a service_role. 341 la reserva
+-- y 347 es otra migración sobre v_clientes_resumen (opción security_invoker).
+-- 341 la reserva
 -- feat/orden-ingreso-trabajo-garantia y 342-344 el plan de notas de crédito.
 -- Antes del merge: máximo global entre main y las branches abiertas.
 --
@@ -14,6 +14,9 @@
 -- (dry-run por defecto, --apply para confirmar). Sin transacción propia a
 -- propósito: el runner abre y cierra la suya.
 --
+-- Los locks de las ALTER TABLE se sostienen hasta el COMMIT: si hay una
+-- transacción larga abierta, se corta en 5 s en vez de encolar las consultas.
+--
 -- QUÉ HACE
 --   1. es_practica en ordenes_servicio y clientes (+ índices parciales), y
 --      camino / practica_completada_at en onboarding_progress.
@@ -23,6 +26,9 @@
 --   3. v_clientes_resumen se recrea para que exponga es_practica (c.* quedó
 --      congelado en 294). Misma definición que tenía, con la misma opción
 --      security_invoker que fija 347, y los mismos permisos.
+--   3b. es_practica lo escribe solo el servidor: un trigger BEFORE en clientes y
+--      ordenes_servicio rechaza (42501) que anon/authenticated lo fijen o lo
+--      cambien. Los RPC SECURITY DEFINER y service_role pasan.
 --   4. borrar_datos_practica(org) borra la práctica de la org. El cliente se
 --      borra solo si ninguna FK hacia clientes lo referencia (salvo los logs de
 --      notificaciones); si no, se conserva y pasa a real.
@@ -49,6 +55,8 @@
 --   SELECT reloptions::text FROM pg_class
 --    WHERE oid = 'public.v_clientes_resumen'::regclass;   -- {security_invoker=true}
 -- ============================================================================
+
+SET LOCAL lock_timeout = '5s';
 
 -- ----------------------------------------------------------------------------
 -- 1. Columnas e índices
@@ -158,6 +166,36 @@ DROP TRIGGER IF EXISTS trigger_clientes_count ON clientes;
 CREATE TRIGGER trigger_clientes_count
   AFTER INSERT OR DELETE OR UPDATE OF es_practica ON clientes
   FOR EACH ROW EXECUTE FUNCTION update_clientes_count();
+
+-- ----------------------------------------------------------------------------
+-- 3b. es_practica lo escribe solo el servidor
+-- ----------------------------------------------------------------------------
+-- Sin SECURITY DEFINER a propósito: necesita ver el current_user de quien
+-- escribe. Las filas que crea un RPC SECURITY DEFINER corren con el dueño de la
+-- función y pasan; las que quedan con el default FALSE también.
+CREATE OR REPLACE FUNCTION es_practica_solo_servidor()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF current_user IN ('anon', 'authenticated') THEN
+    IF (TG_OP = 'INSERT' AND NEW.es_practica)
+       OR (TG_OP = 'UPDATE' AND NEW.es_practica IS DISTINCT FROM OLD.es_practica) THEN
+      RAISE EXCEPTION 'es_practica lo escribe solo el servidor'
+        USING ERRCODE = '42501';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SET search_path = public, pg_temp;
+
+DROP TRIGGER IF EXISTS trigger_clientes_es_practica_guard ON clientes;
+CREATE TRIGGER trigger_clientes_es_practica_guard
+  BEFORE INSERT OR UPDATE OF es_practica ON clientes
+  FOR EACH ROW EXECUTE FUNCTION es_practica_solo_servidor();
+
+DROP TRIGGER IF EXISTS trigger_ordenes_es_practica_guard ON ordenes_servicio;
+CREATE TRIGGER trigger_ordenes_es_practica_guard
+  BEFORE INSERT OR UPDATE OF es_practica ON ordenes_servicio
+  FOR EACH ROW EXECUTE FUNCTION es_practica_solo_servidor();
 
 -- ----------------------------------------------------------------------------
 -- 3. v_clientes_resumen
@@ -349,7 +387,7 @@ RETURNS TEXT AS $$
       ELSE EXCLUDED.camino
     END
   RETURNING camino;
-$$ LANGUAGE sql SET search_path = public, pg_temp;
+$$ LANGUAGE sql STRICT SET search_path = public, pg_temp;
 
 COMMENT ON FUNCTION registrar_camino_onboarding(TEXT, TEXT) IS
   'Upsert de onboarding_progress.camino: crea la fila si falta, omitido nunca pisa, nada pisa practica. Ver migración 348.';
@@ -432,7 +470,7 @@ BEGIN
       v_falla := concat_ws('; ', v_falla, 'no se borró la práctica sin uso: ' || v_res::TEXT);
     END IF;
     SELECT COALESCE(clientes_count, 0) INTO v_n FROM organization_usage WHERE organization_id = v_org;
-    IF v_n <> 5 THEN
+    IF v_n IS DISTINCT FROM 5 THEN
       v_falla := concat_ws('; ', v_falla, 'borrar la práctica movió clientes_count de 5 a ' || v_n);
     END IF;
 
@@ -459,13 +497,41 @@ BEGIN
       v_falla := concat_ws('; ', v_falla, 'se destruyeron o no se liberaron datos reales: ' || v_res::TEXT);
     END IF;
     SELECT COALESCE(clientes_count, 0) INTO v_n FROM organization_usage WHERE organization_id = v_org;
-    IF v_n <> v_antes + 1 THEN
+    IF v_n IS DISTINCT FROM v_antes + 1 THEN
       v_falla := concat_ws('; ', v_falla,
         'el cliente que pasó a real no sumó cupo (' || v_antes || ' -> ' || v_n || ')');
     END IF;
 
     -- (e) La lista de clientes lee la vista: tiene que exponer la columna.
     PERFORM es_practica FROM v_clientes_resumen LIMIT 1;
+
+    -- (h) anon/authenticated no pueden fijar es_practica: el guard responde con
+    --     su propio mensaje, antes de RLS (los BEFORE ROW corren primero).
+    BEGIN
+      SET LOCAL ROLE authenticated;
+      INSERT INTO clientes (organization_id, nombre, telefono, es_practica)
+      VALUES (v_org, 'Guard C', '1', TRUE);
+      RESET ROLE;
+      v_falla := concat_ws('; ', v_falla, 'authenticated pudo insertar un cliente con es_practica');
+    EXCEPTION WHEN insufficient_privilege THEN
+      RESET ROLE;
+      IF SQLERRM <> 'es_practica lo escribe solo el servidor' THEN
+        v_falla := concat_ws('; ', v_falla, 'cliente: el rechazo no vino del guard: ' || SQLERRM);
+      END IF;
+    END;
+    BEGIN
+      SET LOCAL ROLE authenticated;
+      INSERT INTO ordenes_servicio (organization_id, sucursal_id, cliente_id, numero_orden, codigo_orden,
+                                    dispositivo, tipo_dispositivo, problema_reportado, estado, es_practica)
+      VALUES (v_org, v_suc, v_cli_b, 98, 'PRACTICA', 'Equipo', 'CELULAR', 'No enciende', 'RECIBIDO', TRUE);
+      RESET ROLE;
+      v_falla := concat_ws('; ', v_falla, 'authenticated pudo insertar una orden con es_practica');
+    EXCEPTION WHEN insufficient_privilege THEN
+      RESET ROLE;
+      IF SQLERRM <> 'es_practica lo escribe solo el servidor' THEN
+        v_falla := concat_ws('; ', v_falla, 'orden: el rechazo no vino del guard: ' || SQLERRM);
+      END IF;
+    END;
 
     -- (g) camino: fila ausente y fila presente, para las dos escrituras.
     --     La org sintética no tiene fila (la crea el registro en la app, no un

@@ -21,6 +21,9 @@ SELECT o.id AS organization_id, borrar_datos_practica(o.id) AS resultado
  WHERE EXISTS (SELECT 1 FROM ordenes_servicio s WHERE s.organization_id = o.id AND s.es_practica)
     OR EXISTS (SELECT 1 FROM clientes c WHERE c.organization_id = o.id AND c.es_practica);
 
+DROP TRIGGER IF EXISTS trigger_clientes_es_practica_guard ON clientes;
+DROP TRIGGER IF EXISTS trigger_ordenes_es_practica_guard ON ordenes_servicio;
+DROP FUNCTION IF EXISTS es_practica_solo_servidor();
 DROP FUNCTION IF EXISTS borrar_datos_practica(TEXT);
 DROP FUNCTION IF EXISTS registrar_camino_onboarding(TEXT, TEXT);
 
