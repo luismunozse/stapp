@@ -405,7 +405,7 @@ export async function POST(request: Request) {
         imei: data.imei || null,
         problema_reportado: data.problemaReportado,
         // Solo se manda cuando hay texto: un alta sin el campo no depende de que
-        // la migracion 341 ya este aplicada.
+        // la migracion 349 ya este aplicada.
         ...(trabajoARealizar ? { trabajo_a_realizar: trabajoARealizar } : {}),
         accesorios: data.accesorios || null,
         password_dispositivo: data.codigoAccesoDispositivo || null,

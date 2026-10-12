@@ -1,4 +1,4 @@
--- 341: "Trabajo a realizar" en la orden de ingreso.
+-- 349: "Trabajo a realizar" en la orden de ingreso.
 --
 -- El comprobante de recepción ahora muestra, además de la falla declarada, el
 -- trabajo que el taller planea hacer (texto libre: "Cambio de pantalla +
