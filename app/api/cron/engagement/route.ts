@@ -32,7 +32,7 @@ export async function GET(request: Request) {
         supabaseAdmin.from("ventas").select("id", { count: "exact", head: true })
           .eq("organization_id", org.id).gte("created_at", yesterdayStart.toISOString()).lte("created_at", yesterdayEnd.toISOString()),
         supabaseAdmin.from("clientes").select("id", { count: "exact", head: true })
-          .eq("organization_id", org.id).gte("created_at", yesterdayStart.toISOString()).lte("created_at", yesterdayEnd.toISOString()),
+          .eq("organization_id", org.id).eq("es_practica", false).gte("created_at", yesterdayStart.toISOString()).lte("created_at", yesterdayEnd.toISOString()),
       ])
 
       const ordenes = ordenesRes.count || 0

@@ -32,7 +32,7 @@ async function countRows(
     }
   }
 
-  // The onboarding practice order is not activity.
+  // The onboarding practice (its order and its client) is not activity.
   if (opts.soloReales) query = query.eq("es_practica", false)
 
   const { count } = await query
@@ -94,7 +94,7 @@ export async function GET(request: Request) {
           countRows("ordenes_servicio", o, { column: "public_token", op: "not_null" }, { soloReales: true }),
           countRows("users", o, { column: "rol", op: "eq", value: "TECNICO" }),
           countRows("users", o, { column: "rol", op: "eq", value: "VENDEDOR" }),
-          countRows("clientes", o),
+          countRows("clientes", o, undefined, { soloReales: true }),
           countRows("kiosk_tokens", o, { column: "activo", op: "eq", value: "true" }),
         ])
 

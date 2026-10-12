@@ -116,7 +116,7 @@ export async function GET() {
         supabaseAdmin.from("ordenes_servicio").select("organization_id").in("organization_id", orgIds).not("public_token", "is", null).eq("es_practica", false),
         supabaseAdmin.from("users").select("organization_id").in("organization_id", orgIds).eq("rol", "TECNICO"),
         supabaseAdmin.from("users").select("organization_id").in("organization_id", orgIds).eq("rol", "VENDEDOR"),
-        supabaseAdmin.from("clientes").select("organization_id").in("organization_id", orgIds),
+        supabaseAdmin.from("clientes").select("organization_id").in("organization_id", orgIds).eq("es_practica", false),
         supabaseAdmin.from("kiosk_tokens").select("organization_id").in("organization_id", orgIds).eq("activo", true),
       ])
 
