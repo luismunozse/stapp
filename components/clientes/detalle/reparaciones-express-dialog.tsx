@@ -93,11 +93,10 @@ export function ReparacionesExpressDialog({
   // the first submit of a given set of filas and reused on a retry of that
   // exact batch, so a lost-response retry replays server-side instead of
   // double-charging. Any edit to filas after an attempt (actualizar, add
-  // row, remove row) clears it, because the server's replay-on-repeated-key
-  // barrier returns attempt #1's stored response verbatim with no payload
-  // comparison (migration 349) — if the key survived an edit, a resubmit of
-  // genuinely different data would come back as a false "success" for the
-  // OLD batch while the edited data was silently never charged. Deliberately
+  // row, remove row) clears it: the server (migration 349) replays only when
+  // the cliente and the charge-defining fields match, and rejects a reused
+  // key with a different batch with a 409, so a key that survived an edit
+  // would turn a legitimate resubmit into an error. Deliberately
   // NOT cleared on Cancelar/ESC/overlay-close: that would let an unedited
   // retry after a dropped response mint a fresh key, miss the barrier, and
   // create a real duplicate charge instead.
