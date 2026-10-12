@@ -52,6 +52,7 @@ export async function GET() {
       supabaseAdmin
         .from("ordenes_servicio")
         .select("organization_id, estado, created_at, updated_at")
+        .eq("es_practica", false)
         .gte("created_at", thirtyDaysAgo.toISOString())
         .limit(10000),
 

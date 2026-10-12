@@ -19,6 +19,7 @@ import {
 import { WhatsNewModal } from "@/components/whats-new-modal"
 import { NpsSurvey } from "@/components/nps-survey"
 import { unstable_cache } from "next/cache"
+import { countRealOrders } from "@/lib/onboarding/practica"
 import { HeroMetric } from "@/components/dashboard/hero-metric"
 import { ActionStrip, buildAdminActions } from "@/components/dashboard/action-strip"
 
@@ -326,14 +327,13 @@ export default async function DashboardPage() {
   const moneda = (orgData?.moneda || "ARS") as CurrencyCode
   const esArgentina = (orgData?.pais ?? "AR") === "AR"
 
-  // Redirect a onboarding si no fue completado (solo para admins con < 5 órdenes)
+  // Redirect a onboarding si no fue completado (solo para admins con < 5 órdenes
+  // reales: la orden de práctica del wizard no cuenta)
   if (orgData && orgData.onboarding_completed === false && session.user?.role === "ADMIN") {
-    const { count: orderCount } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", organizationId)
+    // A failed count lands the admin in the wizard, as before.
+    const orderCount = await countRealOrders(organizationId).catch(() => 0)
 
-    if ((orderCount ?? 0) < 5) {
+    if (orderCount < 5) {
       redirect("/onboarding")
     } else {
       // Si ya tienen 5+ órdenes, marcar onboarding como completado automáticamente

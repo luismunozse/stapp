@@ -40,6 +40,7 @@ async function cargarSinCobrar(organizationId: string, sucursalId: string | null
       .from("ordenes_servicio")
       .select("id, numero_orden, costo_final, total_cobrado, descuento_cobro")
       .eq("organization_id", organizationId)
+      .eq("es_practica", false)
       .in("estado", ["REPARADO", "ENTREGADO"])
       .in("estado_cobro", ["PENDIENTE", "PARCIAL"])
       .not("costo_final", "is", null)

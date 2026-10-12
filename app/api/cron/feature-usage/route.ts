@@ -16,7 +16,8 @@ export const maxDuration = 60
 async function countRows(
   table: string,
   orgId: string,
-  extraFilter?: { column: string; op: "eq" | "not_null"; value?: string }
+  extraFilter?: { column: string; op: "eq" | "not_null"; value?: string },
+  opts: { soloReales?: boolean } = {}
 ): Promise<number> {
   let query = supabaseAdmin
     .from(table)
@@ -30,6 +31,9 @@ async function countRows(
       query = query.not(extraFilter.column, "is", null)
     }
   }
+
+  // The onboarding practice order is not activity.
+  if (opts.soloReales) query = query.eq("es_practica", false)
 
   const { count } = await query
   return count ?? 0
@@ -76,7 +80,7 @@ export async function GET(request: Request) {
           facturasCount, checklistCount, firmasCount, trackingCount,
           tecnicosCount, vendedoresCount, clientesCount, kioscoCount,
         ] = await Promise.all([
-          countRows("ordenes_servicio", o),
+          countRows("ordenes_servicio", o, undefined, { soloReales: true }),
           countRows("cotizaciones", o),
           countRows("garantias", o),
           countRows("fotos_orden", o),
@@ -87,7 +91,7 @@ export async function GET(request: Request) {
           countRows("facturas", o),
           countRows("checklist_recepcion", o),
           countRows("cotizaciones", o, { column: "firma_cliente", op: "not_null" }),
-          countRows("ordenes_servicio", o, { column: "public_token", op: "not_null" }),
+          countRows("ordenes_servicio", o, { column: "public_token", op: "not_null" }, { soloReales: true }),
           countRows("users", o, { column: "rol", op: "eq", value: "TECNICO" }),
           countRows("users", o, { column: "rol", op: "eq", value: "VENDEDOR" }),
           countRows("clientes", o),

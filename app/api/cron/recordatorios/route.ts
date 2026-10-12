@@ -87,6 +87,7 @@ export async function GET(request: Request) {
         `)
         .eq("organization_id", org.id)
         .eq("estado", "REPARADO")
+        .eq("es_practica", false)
         .lte("fecha_completado", fechaLimite.toISOString()) as {
           data: {
             id: string

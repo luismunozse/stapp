@@ -80,7 +80,7 @@ export async function GET(request: Request) {
     lookbackDate.setDate(lookbackDate.getDate() - ACTIVITY_LOOKBACK_DAYS)
 
     const [ordenesRes, ventasRes, clientesRes] = await Promise.all([
-      supabaseAdmin.from("ordenes_servicio").select("organization_id").in("organization_id", orgIds).gte("created_at", lookbackDate.toISOString()),
+      supabaseAdmin.from("ordenes_servicio").select("organization_id").in("organization_id", orgIds).eq("es_practica", false).gte("created_at", lookbackDate.toISOString()),
       supabaseAdmin.from("ventas").select("organization_id").in("organization_id", orgIds).gte("created_at", lookbackDate.toISOString()),
       supabaseAdmin.from("clientes").select("organization_id").in("organization_id", orgIds).gte("created_at", lookbackDate.toISOString()),
     ])
