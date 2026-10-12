@@ -217,7 +217,10 @@ COMMENT ON FUNCTION entregar_lote_recepcion(TEXT,TEXT,TEXT,JSONB,TEXT,TEXT,TEXT,
   'LOTE_ERROR: para que la ruta HTTP (Tarea 6) las mapee a status codes. '
   'Migracion 290.';
 
--- Invocable solo por service_role — ver nota HARDENING arriba.
+-- Invocable solo por service_role: la funcion cobra dinero y cambia el estado
+-- de ordenes, y PostgREST expone por defecto toda funcion de public a anon y
+-- authenticated. Mismo hardening que 352 (REVOKE de PUBLIC, anon y
+-- authenticated; GRANT solo a service_role).
 REVOKE EXECUTE ON FUNCTION entregar_lote_recepcion(TEXT,TEXT,TEXT,JSONB,TEXT,TEXT,TEXT,TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION entregar_lote_recepcion(TEXT,TEXT,TEXT,JSONB,TEXT,TEXT,TEXT,TEXT) FROM anon;
 REVOKE EXECUTE ON FUNCTION entregar_lote_recepcion(TEXT,TEXT,TEXT,JSONB,TEXT,TEXT,TEXT,TEXT) FROM authenticated;
