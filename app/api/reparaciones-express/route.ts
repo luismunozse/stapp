@@ -14,19 +14,36 @@ import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 const FEATURE_KEY = "reparaciones_express"
 
+// numeric(10,2) is the width of ordenes_servicio.costo_final,
+// cuenta_corriente.monto/saldo_posterior and clientes.saldo_cuenta (max
+// 99,999,999.99). With up to MAX_REPARACIONES per batch, 1,000,000 per repair
+// keeps the batch total at 50,000,000, which still leaves room for the
+// client's existing balance.
+const MAX_REPARACIONES = 50
+const MAX_PRECIO = 1_000_000
+const MAX_DIAS_GARANTIA = 3650
+
 const reparacionSchema = z.object({
-  dispositivo: z.string().min(1, "El dispositivo es requerido"),
-  tipoDispositivo: z.string().min(1, "El tipo de dispositivo es requerido"),
-  marca: z.string().optional(),
-  imei: z.string().optional(),
-  trabajoRealizado: z.string().min(1, "El trabajo realizado es requerido"),
-  precio: z.number().positive("El precio debe ser mayor a 0"),
-  diasGarantia: z.number().int().min(0).default(0),
+  dispositivo: z.string().min(1, "El dispositivo es requerido").max(200),
+  tipoDispositivo: z.string().min(1, "El tipo de dispositivo es requerido").max(200),
+  marca: z.string().max(200).optional(),
+  imei: z.string().max(30).optional(),
+  trabajoRealizado: z.string().min(1, "El trabajo realizado es requerido").max(200),
+  precio: z
+    .number()
+    .positive("El precio debe ser mayor a 0")
+    .max(MAX_PRECIO, "El precio supera el máximo permitido")
+    .transform((n) => Math.round(n * 100) / 100)
+    .refine((n) => n > 0, "El precio debe ser mayor a 0"),
+  diasGarantia: z.number().int().min(0).max(MAX_DIAS_GARANTIA).default(0),
 })
 
 const loteSchema = z.object({
-  clienteId: z.string().min(1, "El cliente es requerido"),
-  reparaciones: z.array(reparacionSchema).min(1, "Debe cargar al menos una reparación"),
+  clienteId: z.string().min(1, "El cliente es requerido").max(200),
+  reparaciones: z
+    .array(reparacionSchema)
+    .min(1, "Debe cargar al menos una reparación")
+    .max(MAX_REPARACIONES, `Se pueden cargar hasta ${MAX_REPARACIONES} reparaciones por vez`),
   operadorId: z.string().nullable().optional(),
   idempotencyKey: z.string().max(100).nullable().optional(),
 })
@@ -124,6 +141,11 @@ export async function POST(request: Request) {
       if (rpcError.message === "Cliente no encontrado") {
         return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 })
       }
+      // The same idempotency key arrived with another client or another set of
+      // repairs: a conflict, not a replay.
+      if (rpcError.message?.includes("clave de idempotencia")) {
+        return NextResponse.json({ error: rpcError.message }, { status: 409 })
+      }
       console.error("Error en crear_reparaciones_express:", rpcError)
       return NextResponse.json({ error: "Error al cargar las reparaciones" }, { status: 500 })
     }
@@ -142,15 +164,21 @@ export async function POST(request: Request) {
       saldoNuevo: number
     }
 
-    const audit = createAuditLogger(organizationId!, userId!, request)
-    for (const orden of result.ordenes || []) {
-      await audit.create("ordenes_servicio", orden.id, {
-        numero_orden: orden.numeroOrden,
-        dispositivo: orden.dispositivo,
-        cliente_id: data.clienteId,
-        precio: orden.precio,
-        origen: "reparacion_express",
-      })
+    // The batch is already committed: an audit failure must not turn a
+    // successful charge into a 500 (the client would retry and see a replay).
+    try {
+      const audit = createAuditLogger(organizationId!, userId!, request)
+      for (const orden of result.ordenes || []) {
+        await audit.create("ordenes_servicio", orden.id, {
+          numero_orden: orden.numeroOrden,
+          dispositivo: orden.dispositivo,
+          cliente_id: data.clienteId,
+          precio: orden.precio,
+          origen: "reparacion_express",
+        })
+      }
+    } catch (auditErr) {
+      console.error("Error auditando reparaciones express:", auditErr)
     }
 
     return NextResponse.json(result, { status: 201 })
