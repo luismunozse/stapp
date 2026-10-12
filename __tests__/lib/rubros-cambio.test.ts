@@ -254,6 +254,59 @@ describe("aplicarCambioDeRubro: tipos", () => {
   })
 })
 
+describe("aplicarCambioDeRubro: custom tipos with a pack codigo", () => {
+  const CODIGO = codigosDe("electronica")[0]
+  const personalizado = {
+    id: "t-propio",
+    organization_id: ORG,
+    codigo: CODIGO,
+    nombre: "Nombre del taller",
+    es_base: false,
+    activo: true,
+  }
+
+  it("keeps a custom tipo whose codigo equals a pack codigo exactly as the shop left it", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+    fake.tables.tipos_dispositivo.push({ ...personalizado })
+
+    await cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+
+    const filas = fake.tables.tipos_dispositivo.filter((t) => t.codigo === CODIGO)
+    expect(filas).toHaveLength(1)
+    expect(filas[0]).toMatchObject({
+      id: "t-propio",
+      es_base: false,
+      nombre: "Nombre del taller",
+      activo: true,
+    })
+  })
+
+  it("does not deactivate that custom tipo on a later change", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+    fake.tables.tipos_dispositivo.push({ ...personalizado })
+
+    await cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+    await cambiar(fake, sel("electronica"), sel("electrodomesticos"))
+
+    expect(fake.tables.tipos_dispositivo.find((t) => t.id === "t-propio")).toMatchObject({
+      es_base: false,
+      activo: true,
+    })
+  })
+
+  it("aborts with nothing changed when reading the existing tipos fails", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+    fake.failures["tipos_dispositivo.select"] = "lectura rota"
+    const antes = clonar(fake.tables)
+
+    await expect(
+      cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+    ).rejects.toThrow("lectura rota")
+
+    expect(fake.tables).toEqual(antes)
+  })
+})
+
 describe("aplicarCambioDeRubro: vocabulary and rubro", () => {
   it("resets the vocabulary to {} when the new pack has no overrides", async () => {
     const fake = await orgSembradaCon("electrodomesticos")

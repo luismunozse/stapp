@@ -82,12 +82,28 @@ async function reemplazarTipos(
   pack: RubroPack,
   client: typeof supabaseAdmin
 ): Promise<Map<string, string>> {
+  // Read BEFORE any write: a failed read aborts with nothing changed. The
+  // overwrite below would turn a custom tipo (es_base = false) that happens to
+  // share a pack codigo into a base one, so those codigos are left out.
+  const { data: previos, error: previosError } = await client
+    .from("tipos_dispositivo")
+    .select("codigo, es_base")
+    .eq("organization_id", organizationId)
+  if (previosError) throw new Error(`tipos_dispositivo (lectura previa): ${previosError.message}`)
+
+  const codigosPropios = new Set(
+    ((previos ?? []) as Array<{ codigo: string; es_base: boolean | null }>)
+      .filter((t) => t.es_base === false)
+      .map((t) => t.codigo)
+  )
+  const filas = filasDeTipos(organizationId, pack).filter((f) => !codigosPropios.has(f.codigo))
+
   // Unlike the signup, no ignoreDuplicates: ON CONFLICT DO UPDATE writes the
   // pack's row, activo = true included, in one atomic statement. A code an
   // earlier change deactivated comes back active and with the pack's name.
   const { error: upsertError } = await client
     .from("tipos_dispositivo")
-    .upsert(filasDeTipos(organizationId, pack), { onConflict: "organization_id,codigo" })
+    .upsert(filas, { onConflict: "organization_id,codigo" })
   if (upsertError) throw new Error(`tipos_dispositivo: ${upsertError.message}`)
 
   const { data, error: readError } = await client
