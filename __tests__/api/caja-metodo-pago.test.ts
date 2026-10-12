@@ -500,4 +500,258 @@ describe("PATCH /api/caja/movimientos/metodo-pago", () => {
     })
   })
 
+  describe("fallas de lectura y de cabecera", () => {
+    it("500 si falla la lectura del registro (no se confunde con 404)", async () => {
+      mockAuthSuccess({ role: "ADMIN" })
+      mockSupabaseFrom({ pagos_venta: createChainMock(null, { message: "connection reset" }) })
+      const res = await PATCH(patch({ fuente: "pagos_venta", id: "pv-1", metodoPago: "EFECTIVO" }))
+      expect((await parseResponse(res)).status).toBe(500)
+    })
+
+    it("500 si falla la lectura de un depósito de cuenta corriente", async () => {
+      mockAuthSuccess({ role: "ADMIN" })
+      mockSupabaseFrom({ cuenta_corriente: createChainMock(null, { message: "connection reset" }) })
+      const res = await PATCH(patch({ fuente: "cuenta_corriente", id: "cc-1", metodoPago: "EFECTIVO" }))
+      expect((await parseResponse(res)).status).toBe(500)
+    })
+
+    it("500 si la lectura de un movimiento falla por algo que no es la columna origen", async () => {
+      mockAuthSuccess({ role: "ADMIN" })
+      mockSupabaseFrom({ movimientos_caja: createChainMock(null, { message: "connection reset" }) })
+      const res = await PATCH(patch({ fuente: "movimientos_caja", id: "m-1", metodoPago: "EFECTIVO" }))
+      expect((await parseResponse(res)).status).toBe(500)
+    })
+
+    it("500 si falla el conteo de pagos de la venta (no deja la cabecera a medias en silencio)", async () => {
+      mockAuthSuccess({ role: "ADMIN" })
+      const updateSpy = vi.fn().mockReturnValue(createChainMock(null, null))
+      const ventasUpdate = vi.fn().mockReturnValue(createChainMock(null, null))
+      const pagos = pagoVentaChain(pagoVenta, updateSpy)
+      const respuestas = [{ data: pagoVenta, error: null }, { data: null, error: { message: "boom" } }]
+      pagos.then = (resolve: any) => Promise.resolve(respuestas.shift()).then(resolve)
+      mockSupabaseFrom({
+        pagos_venta: pagos,
+        sesiones_caja: createChainMock([], null),
+        ventas: { ...createChainMock(null, null), update: ventasUpdate } as any,
+        audit_logs: createChainMock(null, null),
+      })
+      const res = await PATCH(patch({ fuente: "pagos_venta", id: "pv-1", metodoPago: "EFECTIVO" }))
+      expect((await parseResponse(res)).status).toBe(500)
+      expect(ventasUpdate).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("otras fuentes y filtros por organización", () => {
+    it("cuenta_corriente: actualiza solo el método, filtrado por id y organización", async () => {
+      mockAuthSuccess({ role: "ADMIN" })
+      const upd = createChainMock(null, null)
+      const updateSpy = vi.fn().mockReturnValue(upd)
+      const cc = pagoVentaChain(
+        {
+          id: "cc-1",
+          metodo_pago: "EFECTIVO",
+          created_at: "2026-10-03T15:00:00Z",
+          tipo: "DEPOSITO",
+          sucursal_id: null,
+        },
+        updateSpy
+      )
+      mockSupabaseFrom({
+        cuenta_corriente: cc,
+        sesiones_caja: createChainMock([], null),
+        audit_logs: createChainMock(null, null),
+      })
+      const res = await PATCH(patch({ fuente: "cuenta_corriente", id: "cc-1", metodoPago: "TRANSFERENCIA" }))
+      expect((await parseResponse(res)).status).toBe(200)
+      expect(updateSpy).toHaveBeenCalledWith({ metodo_pago: "TRANSFERENCIA" })
+      expect(upd.eq).toHaveBeenCalledWith("id", "cc-1")
+      expect(upd.eq).toHaveBeenCalledWith("organization_id", "org-1")
+      expect(cc.eq).toHaveBeenCalledWith("organization_id", "org-1")
+    })
+
+    it("movimientos_caja: actualiza solo el método, filtrado por id y organización", async () => {
+      mockAuthSuccess({ role: "ADMIN" })
+      const upd = createChainMock(null, null)
+      const updateSpy = vi.fn().mockReturnValue(upd)
+      mockSupabaseFrom({
+        movimientos_caja: pagoVentaChain(
+          {
+            id: "m-1",
+            metodo_pago: "EFECTIVO",
+            fecha: "2026-10-03T15:00:00Z",
+            sucursal_id: null,
+            origen: "MANUAL",
+            sesiones_caja: { estado: "ABIERTA" },
+          },
+          updateSpy
+        ),
+        sesiones_caja: createChainMock([], null),
+        audit_logs: createChainMock(null, null),
+      })
+      const res = await PATCH(patch({ fuente: "movimientos_caja", id: "m-1", metodoPago: "TRANSFERENCIA" }))
+      expect((await parseResponse(res)).status).toBe(200)
+      expect(updateSpy).toHaveBeenCalledWith({ metodo_pago: "TRANSFERENCIA" })
+      expect(upd.eq).toHaveBeenCalledWith("id", "m-1")
+      expect(upd.eq).toHaveBeenCalledWith("organization_id", "org-1")
+    })
+
+    it("movimientos_caja: sin la columna origen (mig 335) relee con el respaldo y corrige", async () => {
+      mockAuthSuccess({ role: "ADMIN" })
+      const upd = createChainMock(null, null)
+      const updateSpy = vi.fn().mockReturnValue(upd)
+      const mov = pagoVentaChain(null, updateSpy)
+      const respuestas = [
+        { data: null, error: { code: "42703", message: "column movimientos_caja.origen does not exist" } },
+        {
+          data: {
+            id: "m-1",
+            metodo_pago: "EFECTIVO",
+            fecha: "2026-10-03T15:00:00Z",
+            sucursal_id: null,
+            tipo: "EGRESO",
+            afecta_rentabilidad: true,
+            es_recurrente: false,
+            concepto: "Compra de insumos",
+            sesiones_caja: { estado: "ABIERTA" },
+          },
+          error: null,
+        },
+      ]
+      mov.then = (resolve: any) => Promise.resolve(respuestas.shift()).then(resolve)
+      mockSupabaseFrom({
+        movimientos_caja: mov,
+        sesiones_caja: createChainMock([], null),
+        audit_logs: createChainMock(null, null),
+      })
+      const res = await PATCH(patch({ fuente: "movimientos_caja", id: "m-1", metodoPago: "TRANSFERENCIA" }))
+      expect((await parseResponse(res)).status).toBe(200)
+      expect(mov.select).toHaveBeenCalledTimes(2)
+      expect(String(mov.select.mock.calls[1][0])).toContain("concepto")
+      expect(updateSpy).toHaveBeenCalledWith({ metodo_pago: "TRANSFERENCIA" })
+    })
+  })
+
+  describe("cronograma cuotas_cobro: filtros, errores y reintento", () => {
+    const cobroCredito = {
+      id: "c-1",
+      metodo_pago: "TARJETA_CREDITO",
+      monto: "500",
+      created_at: "2026-10-03T15:00:00Z",
+      anulado: false,
+      orden_id: "o-1",
+      ordenes_servicio: { sucursal_id: null },
+    }
+
+    function setupCobro(cobro: any, cuotasChain: any) {
+      mockAuthSuccess({ role: "ADMIN" })
+      const upd = createChainMock(null, null)
+      const updateSpy = vi.fn().mockReturnValue(upd)
+      const auditChain = createChainMock(null, null)
+      mockSupabaseFrom({
+        cobros_orden: pagoVentaChain(cobro, updateSpy),
+        sesiones_caja: createChainMock([], null),
+        cuotas_cobro: cuotasChain,
+        audit_logs: auditChain,
+      })
+      return { upd, updateSpy, auditChain }
+    }
+
+    /** Args de los `.eq` encadenados entre dos llamadas (por orden global de invocación). */
+    function eqEntre(chain: any, desde: any, hasta?: any) {
+      const ini = desde.mock.invocationCallOrder[0]
+      const fin = hasta ? hasta.mock.invocationCallOrder[0] : Infinity
+      return chain.eq.mock.calls.filter((_: any, i: number) => {
+        const o = chain.eq.mock.invocationCallOrder[i]
+        return o > ini && o < fin
+      })
+    }
+
+    it("lee y borra el cronograma filtrando por cobro y organización; el update final también", async () => {
+      const cuotasChain = createChainMock(
+        [
+          { id: "q1", numero_cuota: 1, pagada: true },
+          { id: "q2", numero_cuota: 2, pagada: false },
+        ],
+        null
+      )
+      const { upd } = setupCobro(cobroCredito, cuotasChain)
+      const res = await PATCH(patch({ fuente: "cobros_orden", id: "c-1", metodoPago: "EFECTIVO" }))
+      expect((await parseResponse(res)).status).toBe(200)
+
+      const lectura = eqEntre(cuotasChain, cuotasChain.select, cuotasChain.delete)
+      expect(lectura).toContainEqual(["cobro_id", "c-1"])
+      expect(lectura).toContainEqual(["organization_id", "org-1"])
+      const borrado = eqEntre(cuotasChain, cuotasChain.delete)
+      expect(borrado).toContainEqual(["cobro_id", "c-1"])
+      expect(borrado).toContainEqual(["organization_id", "org-1"])
+      expect(upd.eq).toHaveBeenCalledWith("id", "c-1")
+      expect(upd.eq).toHaveBeenCalledWith("organization_id", "org-1")
+    })
+
+    it("500 si falla la lectura del cronograma y no toca el cobro", async () => {
+      const { updateSpy } = setupCobro(cobroCredito, createChainMock(null, { message: "boom" }))
+      const res = await PATCH(patch({ fuente: "cobros_orden", id: "c-1", metodoPago: "EFECTIVO" }))
+      expect((await parseResponse(res)).status).toBe(500)
+      expect(updateSpy).not.toHaveBeenCalled()
+    })
+
+    it("500 si falla el borrado del cronograma e indica que el método ya cambió", async () => {
+      const cuotasChain = createChainMock([{ id: "q1", numero_cuota: 1, pagada: true }], null)
+      const respuestas = [
+        { data: [{ id: "q1", numero_cuota: 1, pagada: true }], error: null },
+        { data: null, error: { message: "boom" } },
+      ]
+      cuotasChain.then = (resolve: any) => Promise.resolve(respuestas.shift()).then(resolve)
+      const { updateSpy } = setupCobro(cobroCredito, cuotasChain)
+      const res = await PATCH(patch({ fuente: "cobros_orden", id: "c-1", metodoPago: "EFECTIVO" }))
+      const { status, body } = await parseResponse(res)
+      expect(status).toBe(500)
+      expect(updateSpy).toHaveBeenCalled()
+      expect(body.error).toMatch(/cuotas/i)
+    })
+
+    it("reintento: con el método ya cambiado, borra las cuotas huérfanas antes del corte por mismo método", async () => {
+      const huerfanas = createChainMock(
+        [
+          { id: "q1", numero_cuota: 1, pagada: true },
+          { id: "q2", numero_cuota: 2, pagada: false },
+        ],
+        null
+      )
+      const { updateSpy, auditChain } = setupCobro({ ...cobroCredito, metodo_pago: "EFECTIVO" }, huerfanas)
+      const res = await PATCH(patch({ fuente: "cobros_orden", id: "c-1", metodoPago: "EFECTIVO" }))
+      expect((await parseResponse(res)).status).toBe(200)
+      expect(huerfanas.delete).toHaveBeenCalled()
+      expect(eqEntre(huerfanas, huerfanas.delete)).toContainEqual(["cobro_id", "c-1"])
+      expect(eqEntre(huerfanas, huerfanas.delete)).toContainEqual(["organization_id", "org-1"])
+      expect(updateSpy).not.toHaveBeenCalled()
+      const [fila] = (auditChain.insert as any).mock.calls[0]
+      expect(fila.changes.before.cuotas_borradas).toBe(2)
+    })
+
+    it("sin cuotas huérfanas el mismo método sigue siendo un no-op", async () => {
+      const vacio = createChainMock([], null)
+      const { updateSpy, auditChain } = setupCobro({ ...cobroCredito, metodo_pago: "EFECTIVO" }, vacio)
+      const res = await PATCH(patch({ fuente: "cobros_orden", id: "c-1", metodoPago: "EFECTIVO" }))
+      expect((await parseResponse(res)).status).toBe(200)
+      expect(vacio.delete).not.toHaveBeenCalled()
+      expect(updateSpy).not.toHaveBeenCalled()
+      expect(auditChain.insert).not.toHaveBeenCalled()
+    })
+
+    it("la auditoría registra cuántas cuotas del cronograma se borraron", async () => {
+      const cuotasChain = createChainMock(
+        [
+          { id: "q1", numero_cuota: 1, pagada: true },
+          { id: "q2", numero_cuota: 2, pagada: false },
+          { id: "q3", numero_cuota: 3, pagada: false },
+        ],
+        null
+      )
+      const { auditChain } = setupCobro(cobroCredito, cuotasChain)
+      await PATCH(patch({ fuente: "cobros_orden", id: "c-1", metodoPago: "EFECTIVO" }))
+      const [fila] = (auditChain.insert as any).mock.calls[0]
+      expect(fila.changes.before.cuotas_borradas).toBe(3)
+    })
+  })
 })

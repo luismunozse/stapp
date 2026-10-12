@@ -67,6 +67,11 @@ interface Origen {
   ventaId?: string
 }
 
+function leerOrigenFallo(tabla: string, error: unknown): Error {
+  console.error(`Error leyendo ${tabla} para corregir el método de pago:`, error)
+  return new Error(`No se pudo leer ${tabla}`)
+}
+
 function extraerPrevios(row: any): Record<string, unknown> {
   const previos: Record<string, unknown> = {}
   for (const col of COLUMNAS_TARJETA) previos[col] = row?.[col] ?? null
@@ -74,11 +79,12 @@ function extraerPrevios(row: any): Record<string, unknown> {
 }
 
 // Carga el registro original scopeado a la org. `null` = no existe o es de
-// otra org (se responde 404 igual en ambos casos).
+// otra org (se responde 404 igual en ambos casos). Si la consulta falla lanza:
+// una caída de la DB no es "no encontrado" (el PATCH la responde con 500).
 async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<Origen | null> {
   switch (fuente) {
     case "cobros_orden": {
-      const { data } = await supabaseAdmin
+      const { data, error } = await supabaseAdmin
         .from("cobros_orden")
         .select(
           `id, monto, metodo_pago, created_at, anulado, orden_id, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto, ordenes_servicio:orden_id!inner(sucursal_id)`
@@ -86,6 +92,7 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
         .eq("id", id)
         .eq("organization_id", orgId)
         .maybeSingle()
+      if (error) throw leerOrigenFallo("cobros_orden", error)
       if (!data) return null
       return {
         metodoPago: data.metodo_pago,
@@ -99,7 +106,7 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
       }
     }
     case "pagos_parciales": {
-      const { data } = await supabaseAdmin
+      const { data, error } = await supabaseAdmin
         .from("pagos_parciales")
         .select(`
           id, monto, metodo_pago, fecha, factura_id, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto,
@@ -108,6 +115,7 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
         .eq("id", id)
         .eq("facturas.ordenes_servicio.organization_id", orgId)
         .maybeSingle()
+      if (error) throw leerOrigenFallo("pagos_parciales", error)
       if (!data) return null
       const factura = (data as any).facturas
       return {
@@ -122,7 +130,7 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
       }
     }
     case "pagos_venta": {
-      const { data } = await supabaseAdmin
+      const { data, error } = await supabaseAdmin
         .from("pagos_venta")
         .select(
           `id, monto, metodo_pago, fecha, venta_id, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto, ventas!inner(organization_id, estado, sucursal_id)`
@@ -130,6 +138,7 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
         .eq("id", id)
         .eq("ventas.organization_id", orgId)
         .maybeSingle()
+      if (error) throw leerOrigenFallo("pagos_venta", error)
       if (!data) return null
       const venta = (data as any).ventas
       return {
@@ -145,12 +154,13 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
       }
     }
     case "cuenta_corriente": {
-      const { data } = await supabaseAdmin
+      const { data, error } = await supabaseAdmin
         .from("cuenta_corriente")
         .select("id, metodo_pago, created_at, tipo, sucursal_id")
         .eq("id", id)
         .eq("organization_id", orgId)
         .maybeSingle()
+      if (error) throw leerOrigenFallo("cuenta_corriente", error)
       if (!data) return null
       return {
         metodoPago: data.metodo_pago,
@@ -180,6 +190,7 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
           `id, metodo_pago, fecha, sucursal_id, tipo, afecta_rentabilidad, es_recurrente, concepto, ${sesion}`
         ))
       }
+      if (error) throw leerOrigenFallo("movimientos_caja", error)
       if (!data) return null
       const mov = data as any
       // Mismo guard que el DELETE: lo que escribe el sistema (devolución, nota
@@ -268,7 +279,48 @@ export async function PATCH(request: Request) {
       )
     }
 
+    // Cronograma de cuotas (cuotas_cobro) de un cobro de orden. Solo existe
+    // mientras el cobro es TARJETA_CREDITO: si el método guardado ya no lo es y
+    // quedan filas, son huérfanas (el borrado falló después de cambiar el método
+    // en un intento anterior). Se limpian ANTES del corte por "mismo método",
+    // si no, el reintento no las vería nunca.
+    let cuotasBorradas: number | null = null
+    if (fuente === "cobros_orden" && origen.metodoPago !== "TARJETA_CREDITO") {
+      const { data: huerfanas, error: huerfanasError } = await supabaseAdmin
+        .from("cuotas_cobro")
+        .select("id")
+        .eq("cobro_id", id)
+        .eq("organization_id", organizationId!)
+      if (huerfanasError) {
+        console.error("Error leyendo cuotas del cobro:", huerfanasError)
+        return NextResponse.json({ error: "Error al verificar las cuotas del cobro" }, { status: 500 })
+      }
+      if ((huerfanas || []).length > 0) {
+        const { error: deleteError } = await supabaseAdmin
+          .from("cuotas_cobro")
+          .delete()
+          .eq("cobro_id", id)
+          .eq("organization_id", organizationId!)
+        if (deleteError) {
+          console.error("Error borrando cuotas huérfanas del cobro:", deleteError)
+          return NextResponse.json({ error: "No se pudieron borrar las cuotas del cobro" }, { status: 500 })
+        }
+        cuotasBorradas = huerfanas!.length
+      }
+    }
+
     if (origen.metodoPago === metodoPago) {
+      if (cuotasBorradas) {
+        await logAudit({
+          organizationId: organizationId!,
+          userId: userId!,
+          action: "UPDATE",
+          entity: origen.auditEntity,
+          entityId: origen.auditEntityId,
+          changes: { before: { cuotas_borradas: cuotasBorradas }, after: { fuente, id } },
+          description: `Limpió el cronograma de cuotas sobrante del cobro (${fuente} #${id.slice(-6)})`,
+        })
+      }
       return NextResponse.json({ ok: true, metodoPago })
     }
 
@@ -313,6 +365,7 @@ export async function PATCH(request: Request) {
           { status: 409 }
         )
       }
+      cuotasBorradas = (cuotas || []).length
     }
 
     const update: Record<string, unknown> = { metodo_pago: metodoPago }
@@ -375,10 +428,14 @@ export async function PATCH(request: Request) {
     // el detalle. Con un único pago tiene que seguir coincidiendo con él; con
     // pagos combinados se deja como está.
     if (origen.ventaId) {
-      const { data: pagos } = await supabaseAdmin
+      const { data: pagos, error: pagosError } = await supabaseAdmin
         .from("pagos_venta")
         .select("id")
         .eq("venta_id", origen.ventaId)
+      if (pagosError) {
+        console.error("Error contando los pagos de la venta:", pagosError)
+        return NextResponse.json({ error: "Error al actualizar el método de pago" }, { status: 500 })
+      }
       // TODO: pago + cabecera no son atómicos; la atomicidad completa queda
       // diferida a una RPC.
       if ((pagos || []).length === 1) {
@@ -404,7 +461,11 @@ export async function PATCH(request: Request) {
       entity: origen.auditEntity,
       entityId: origen.auditEntityId,
       changes: {
-        before: { metodo_pago: origen.metodoPago, ...(esFuentePago ? origen.previos : {}) },
+        before: {
+          metodo_pago: origen.metodoPago,
+          ...(esFuentePago ? origen.previos : {}),
+          ...(cuotasBorradas !== null ? { cuotas_borradas: cuotasBorradas } : {}),
+        },
         after: {
           metodo_pago: metodoPago,
           fuente,
