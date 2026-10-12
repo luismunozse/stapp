@@ -149,16 +149,39 @@ export async function PATCH(
     })
     const data = schema.parse(body)
 
+    if (data.esKit === undefined && data.tipoKit === undefined) {
+      return NextResponse.json({ error: "Nada para actualizar" }, { status: 400 })
+    }
+
+    const { data: existing, error: fetchErr } = await supabaseAdmin
+      .from("inventario")
+      .select("id, es_kit, tipo_kit")
+      .eq("id", id)
+      .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
+      .single()
+
+    if (fetchErr || !existing) {
+      return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
+    }
+
+    // DB check (migración 177): es_kit=true exige tipo_kit. Se evalúa sobre la fila
+    // resultante (body + fila actual), igual que el PUT de /api/inventario/[id].
     const update: Record<string, unknown> = {}
     if (data.esKit !== undefined) update.es_kit = data.esKit
     if (data.tipoKit !== undefined) update.tipo_kit = data.tipoKit
-    if (data.esKit === true && data.tipoKit === undefined) {
-      // Si está activando es_kit y no se mandó tipo, default ENSAMBLADO
+    if (data.esKit === true && data.tipoKit === undefined && !existing.tipo_kit) {
+      // Activando es_kit sin tipo (y sin tipo previo): default ENSAMBLADO
       update.tipo_kit = "ENSAMBLADO"
     }
 
-    if (Object.keys(update).length === 0) {
-      return NextResponse.json({ error: "Nada para actualizar" }, { status: 400 })
+    const esKitFinal = data.esKit !== undefined ? data.esKit : existing.es_kit
+    const tipoKitFinal = "tipo_kit" in update ? update.tipo_kit : existing.tipo_kit
+    if (esKitFinal === true && !tipoKitFinal) {
+      return NextResponse.json(
+        { error: "Un kit necesita un tipo: ensamblado o virtual" },
+        { status: 400 }
+      )
     }
 
     const { data: row, error: dbErr } = await supabaseAdmin

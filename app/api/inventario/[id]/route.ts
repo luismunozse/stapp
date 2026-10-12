@@ -126,6 +126,17 @@ export async function PUT(
       )
     }
 
+    // DB check (migración 177): es_kit=true exige tipo_kit. Se evalúa sobre la fila
+    // resultante (body + fila actual) para no rechazar un PUT que solo reenvía esKit.
+    const esKitFinal = data.esKit !== undefined ? data.esKit : existingItem.es_kit
+    const tipoKitFinal = data.tipoKit !== undefined ? data.tipoKit : existingItem.tipo_kit
+    if (esKitFinal === true && !tipoKitFinal) {
+      return NextResponse.json(
+        { error: "Un kit necesita un tipo: ensamblado o virtual" },
+        { status: 400 }
+      )
+    }
+
     // Preparar datos para update
     const updateData: Record<string, any> = {}
     if (data.codigo !== undefined) updateData.codigo = data.codigo
