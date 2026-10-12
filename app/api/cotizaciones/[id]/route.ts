@@ -8,6 +8,7 @@ import { dateOnlyToNoonUtcISO } from "@/lib/timezone"
 import { totalPresupuestoDeOrden, cotizacionesVigentesDeOrden } from "@/lib/cotizacion-presupuesto"
 import { marcarOriginalReemplazada, restaurarOriginalDeRevision } from "@/lib/cotizacion-revision"
 import { validarInforme, esInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizacion-informe"
+import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { z } from "zod"
 
 // Detecta el error de "la función no existe todavía", que acá significa
@@ -467,6 +468,8 @@ export async function PUT(
             { status: 404 }
           )
         }
+        const practica = await rejectIfPractica(newOrdenId, organizationId!)
+        if (practica) return practica
       }
       updateData.orden_id = newOrdenId
       ordenIdChanged = true

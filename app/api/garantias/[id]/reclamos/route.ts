@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumber } from "@/lib/counters"
+import { deletePracticeData } from "@/lib/onboarding/practica"
 import { z } from "zod"
 
 const reclamoSchema = z.object({
@@ -160,6 +161,14 @@ export async function PUT(
 
       if (ordenError) throw ordenError
       ordenReparacionId = nuevaOrden.id
+
+      // The first real order replaces the onboarding practice. A failure never
+      // affects this order: the next real order retries.
+      try {
+        await deletePracticeData(orgId)
+      } catch (err) {
+        console.error("[practica] automatic deletion failed:", err)
+      }
 
       // Evento de creación en el historial de la orden (fire-and-forget: un
       // fallo acá no debe hacer fallar la resolución del reclamo)

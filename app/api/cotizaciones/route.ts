@@ -10,6 +10,7 @@ import { totalPresupuestoDeOrden } from "@/lib/cotizacion-presupuesto"
 import { validarInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizacion-informe"
 import { randomBytes } from "crypto"
 import { z } from "zod"
+import { rejectIfPractica } from "@/lib/onboarding/practica"
 
 const itemSchema = z.object({
   descripcion: z.string().min(1, "Descripción requerida"),
@@ -332,6 +333,8 @@ export async function POST(request: Request) {
     let clienteIdForInsert: string | null = null
 
     if (data.ordenId) {
+      const practica = await rejectIfPractica(data.ordenId, organizationId!)
+      if (practica) return practica
       // Verificar que la orden existe y pertenece a la organización
       const { data: orden, error: ordenError } = await supabaseAdmin
         .from("ordenes_servicio")

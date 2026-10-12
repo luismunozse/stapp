@@ -64,6 +64,7 @@ import {
 import { useEtiquetaSize } from "@/components/ordenes/use-etiqueta-size"
 import { ThermalPrintOrden } from "@/components/ordenes/thermal-print-orden"
 import { NotificationHistory } from "@/components/ordenes/notification-history"
+import { PracticaOrdenDetail } from "@/components/ordenes/practica-orden-detail"
 import { OrdenEstadoCard } from "@/components/ordenes/orden-estado-card"
 import { OrdenTecnicoCard } from "@/components/ordenes/orden-tecnico-card"
 import { OrdenCostosCard } from "@/components/ordenes/orden-costos-card"
@@ -574,6 +575,13 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
   if (!orden) {
     return <div className="text-center py-8 text-muted-foreground">Orden no encontrada</div>
+  }
+
+  // A practice order gets its own read-only view: no state change, cobro,
+  // sena, parts, quotes, invoices or printing (see PracticaOrdenDetail).
+  // Every hook of this component runs above this line.
+  if (orden.esPractica) {
+    return <PracticaOrdenDetail orden={orden} isAdmin={isAdmin} />
   }
 
   // ESPERANDO_REPUESTO es un sub-estado de EN_REPARACION, mapear al mismo índice

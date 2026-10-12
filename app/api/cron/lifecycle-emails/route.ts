@@ -96,7 +96,7 @@ export async function GET(request: Request) {
     const ordenes = await fetchAllRows<{ organization_id: string; fecha_ingreso: string }>(
       "ordenes_servicio",
       "id, organization_id, fecha_ingreso",
-      (q) => q.in("organization_id", orgIds).not("fecha_ingreso", "is", null),
+      (q) => q.in("organization_id", orgIds).eq("es_practica", false).not("fecha_ingreso", "is", null),
       [{ column: "fecha_ingreso", ascending: false }]
     )
     const ordenFechasByOrg = new Map<string, string[]>() // fecha_ingreso desc por org

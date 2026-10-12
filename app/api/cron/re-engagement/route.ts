@@ -62,13 +62,13 @@ export async function GET(request: Request) {
     const [ordenes, ventas, clientes] = await Promise.all([
       // ordenes_servicio no tiene created_at: la fecha de alta es fecha_ingreso.
       fetchAllRows<{ organization_id: string }>("ordenes_servicio", "organization_id", (q) =>
-        q.in("organization_id", orgIds).gte("fecha_ingreso", desde)
+        q.in("organization_id", orgIds).eq("es_practica", false).gte("fecha_ingreso", desde)
       ),
       fetchAllRows<{ organization_id: string }>("ventas", "organization_id", (q) =>
         q.in("organization_id", orgIds).gte("created_at", desde)
       ),
       fetchAllRows<{ organization_id: string }>("clientes", "organization_id", (q) =>
-        q.in("organization_id", orgIds).gte("created_at", desde)
+        q.in("organization_id", orgIds).eq("es_practica", false).gte("created_at", desde)
       ),
     ])
 

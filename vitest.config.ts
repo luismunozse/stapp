@@ -50,6 +50,8 @@ export default defineConfig({
       '@': path.resolve(__dirname, './'),
       'firebase-admin': path.resolve(__dirname, './__mocks__/firebase-admin.ts'),
       'web-push': path.resolve(__dirname, './__mocks__/web-push.ts'),
+      // `import "server-only"` throws outside a React Server layer; Next aliases it itself.
+      'server-only': path.resolve(__dirname, './__mocks__/server-only.ts'),
     },
   },
 })

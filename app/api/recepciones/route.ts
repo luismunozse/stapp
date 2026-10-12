@@ -11,6 +11,7 @@ import { sucursalParaEscritura } from "@/lib/sucursal"
 import { resolveOperador } from "@/lib/operadores"
 import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
 import { isValidImei } from "@/lib/imei"
+import { deletePracticeData } from "@/lib/onboarding/practica"
 
 const FEATURE_KEY = "recepcion_multiple"
 
@@ -126,6 +127,14 @@ export async function POST(request: Request) {
       if (isPlanLimitError(rpcError)) return planLimitErrorResponse(rpcError)
       console.error("Error en crear_recepcion_multiple:", rpcError)
       return NextResponse.json({ error: "Error al crear la recepcion" }, { status: 500 })
+    }
+
+    // The first real order replaces the onboarding practice. A failure never
+    // affects this order: the next real order retries.
+    try {
+      await deletePracticeData(organizationId!)
+    } catch (err) {
+      console.error("[practica] automatic deletion failed:", err)
     }
 
     const recepcion = rpcResult.recepcion as { id: string; numero: number; codigo: string }

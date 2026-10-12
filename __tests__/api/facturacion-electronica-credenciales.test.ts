@@ -31,6 +31,11 @@ vi.mock("@/lib/facturacion/arca/cert", async () => {
 })
 
 import { encryptSecret } from "@/lib/facturacion/crypto"
+vi.mock("@/lib/email", () => ({
+  sendDelegacionArcaPendienteNotification: vi.fn(),
+}))
+
+import { sendDelegacionArcaPendienteNotification } from "@/lib/email"
 vi.mock("@/lib/facturacion/arca/stapp-cert", () => ({
   getCertificadoStapp: vi.fn(),
   ArcaStappCertError: class ArcaStappCertError extends Error {},
@@ -458,10 +463,20 @@ describe("facturacion-electronica/credenciales", () => {
       })
     }
 
+    /** La tabla responde el select previo (`previa`) y registra el upsert. */
+    function mockTablas(previa: any, upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null })) {
+      const credenciales: any = createChainMock(previa)
+      credenciales.upsert = upsertSpy
+      mockSupabaseFrom({
+        facturacion_credenciales: credenciales,
+        organizations: createChainMock({ nombre: "Taller Uno SRL", nombre_mostrar: "Taller Uno" }),
+      })
+      return upsertSpy
+    }
+
     it("guarda provider=arca_delegado con el CUIT del taller y SIN certificado", async () => {
       mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
-      const upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null })
-      mockSupabaseFrom({ facturacion_credenciales: { upsert: upsertSpy } as any })
+      const upsertSpy = mockTablas(null)
 
       const { status, body } = await parseResponse(await PUT(putDelegado()))
 
@@ -479,6 +494,70 @@ describe("facturacion-electronica/credenciales", () => {
       )
       expect(body.provider).toBe("arca_delegado")
       expect(body.cuit).toBe("30710955057")
+    })
+
+    describe("aviso a la plataforma", () => {
+      const PREVIA_IGUAL = { provider: "arca_delegado", cuit: "30710955057" }
+
+      beforeEach(() => {
+        mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+        vi.mocked(sendDelegacionArcaPendienteNotification).mockResolvedValue(undefined as any)
+      })
+
+      it("avisa cuando la organización no tenía credenciales", async () => {
+        mockTablas(null)
+
+        const { status } = await parseResponse(await PUT(putDelegado()))
+
+        expect(status).toBe(200)
+        expect(sendDelegacionArcaPendienteNotification).toHaveBeenCalledTimes(1)
+        expect(sendDelegacionArcaPendienteNotification).toHaveBeenCalledWith({
+          organizationId: "o1",
+          organizationName: "Taller Uno",
+          cuit: "30710955057",
+          puntoVenta: 3,
+          condicionFiscal: "RESPONSABLE_INSCRIPTO",
+        })
+      })
+
+      it("avisa cuando venía de otro proveedor", async () => {
+        mockTablas({ provider: "arca", cuit: "30710955057" })
+        await PUT(putDelegado())
+        expect(sendDelegacionArcaPendienteNotification).toHaveBeenCalledTimes(1)
+      })
+
+      it("avisa cuando cambia el CUIT", async () => {
+        mockTablas({ provider: "arca_delegado", cuit: "20111111112" })
+        await PUT(putDelegado())
+        expect(sendDelegacionArcaPendienteNotification).toHaveBeenCalledTimes(1)
+      })
+
+      it("NO avisa al guardar de nuevo los mismos datos", async () => {
+        mockTablas(PREVIA_IGUAL)
+        const { status } = await parseResponse(await PUT(putDelegado({ puntoVenta: 5 })))
+        expect(status).toBe(200)
+        expect(sendDelegacionArcaPendienteNotification).not.toHaveBeenCalled()
+      })
+
+      it("NO avisa si el upsert falla", async () => {
+        mockTablas(null, vi.fn().mockResolvedValue({ data: null, error: { message: "boom" } }))
+        const { status } = await parseResponse(await PUT(putDelegado()))
+        expect(status).toBe(500)
+        expect(sendDelegacionArcaPendienteNotification).not.toHaveBeenCalled()
+      })
+
+      it("responde 200 aunque el mail falle", async () => {
+        mockTablas(null)
+        vi.mocked(sendDelegacionArcaPendienteNotification).mockRejectedValue(new Error("resend caído"))
+        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+
+        const { status, body } = await parseResponse(await PUT(putDelegado()))
+
+        expect(status).toBe(200)
+        expect(body.provider).toBe("arca_delegado")
+        expect(errorSpy).toHaveBeenCalled()
+        errorSpy.mockRestore()
+      })
     })
 
     it("400 cuando falta el CUIT del taller", async () => {

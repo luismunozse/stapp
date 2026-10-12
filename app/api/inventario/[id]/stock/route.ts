@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
 import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { depositoPermitido, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { z } from "zod"
 
@@ -29,12 +30,27 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId } = await requireInventarioAccess()
+    const { error, session, organizationId, userId, role } = await requireInventarioAccess()
     if (error) return error
 
     const { id } = await params
     const body = await request.json()
     const { mode, value, motivo, tipo, referenciaTipo, depositoId } = adjustSchema.parse(body)
+
+    // La RPC solo verifica que el deposito exista (FK): sin esto un request
+    // armado escribe stock en un deposito de otra org o de otra sucursal.
+    if (
+      depositoId &&
+      !(await depositoPermitido({
+        depositoId,
+        organizationId: organizationId!,
+        role,
+        userSucursalId: session?.user?.sucursalId ?? null,
+        alcance: "sucursal",
+      }))
+    ) {
+      return NextResponse.json({ error: DEPOSITO_INVALIDO }, { status: 400 })
+    }
 
     const { data, error: rpcErr } = await supabaseAdmin.rpc("adjust_stock_atomic", {
       p_inventario_id: id,

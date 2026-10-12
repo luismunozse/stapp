@@ -138,6 +138,7 @@ export async function GET(
       logoUrl: org?.logo_url,
       moneda: org?.moneda || "ARS",
       zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
+      pais: org?.pais,
       estado: orden.estado,
       fechaEntrega: orden.fecha_entrega ? new Date(orden.fecha_entrega) : null,
       firmaClienteEntrega: orden.firma_cliente_entrega,

@@ -116,18 +116,18 @@ describe("POST devolución — saldo pendiente, crédito en tienda e idempotenci
     expect(egresos).toHaveLength(0)
   })
 
-  it("sin la migración 330 vuelve a llamar con la firma vieja", async () => {
+  it("sin la RPC responde 503 con una sola llamada (no reintenta con la firma vieja)", async () => {
     setup({ cliente_id: "c1" })
-    vi.mocked(supabaseAdmin.rpc)
-      .mockResolvedValueOnce({ data: null, error: { code: "PGRST202", message: "Could not find the function" } } as any)
-      .mockResolvedValueOnce({ data: { id: "d1", tipo: "PARCIAL", montoDevolucion: 200 }, error: null } as any)
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null,
+      error: { code: "PGRST202", message: "Could not find the function" },
+    } as any)
 
     const { status } = await parseResponse(await POST(createPostRequest(body({ idempotencyKey: "k-1" }), url), params))
 
-    expect(status).toBe(201)
-    const calls = vi.mocked(supabaseAdmin.rpc).mock.calls
-    expect(calls).toHaveLength(2)
-    expect(calls[1][1]).not.toHaveProperty("p_idempotency_key")
+    expect(status).toBe(503)
+    expect(vi.mocked(supabaseAdmin.rpc).mock.calls).toHaveLength(1)
+    expect(auditCreate).not.toHaveBeenCalled()
   })
 })
 

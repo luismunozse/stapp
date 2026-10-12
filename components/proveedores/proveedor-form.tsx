@@ -21,6 +21,8 @@ import { FormActionBar } from "@/components/ui/form-action-bar"
 import { Star, X, Upload, ImageIcon, Trash2, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { useModal } from "@/contexts/modal-context"
+import { useCurrency } from "@/contexts/currency-context"
+import { getTaxIdLabel } from "@/lib/countries"
 
 const CONDICION_IVA_OPTIONS = [
   { value: "RESPONSABLE_INSCRIPTO", label: "Responsable Inscripto" },
@@ -114,6 +116,7 @@ function fileToBase64(file: File): Promise<string> {
 
 export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormProps) {
   const { showError } = useModal()
+  const { pais } = useCurrency()
   const [loading, setLoading] = useState(false)
   const [tags, setTags] = useState<string[]>(proveedor?.tags || [])
   const [tagInput, setTagInput] = useState("")
@@ -390,7 +393,7 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="cuit">CUIT</Label>
+                <Label htmlFor="cuit">{getTaxIdLabel(pais)}</Label>
                 <Input
                   id="cuit"
                   {...register("cuit")}

@@ -162,3 +162,62 @@ describe("InventarioForm — the cost input when the item loaded without a cost"
     expect(screen.getByLabelText("Costo *")).toBeInTheDocument()
   })
 })
+
+/**
+ * Kit type default.
+ *
+ * The "Tipo de kit" Select shows "Ensamblado" while the form value is still
+ * null. The server rejects a kit without a tipo (migration 177 CHECK), so the
+ * payload must carry what the operator sees, and must not overwrite a tipo
+ * that was already chosen.
+ */
+describe("InventarioForm — kit tipo in the PUT payload", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    window.localStorage.clear()
+    fetchMock = vi.fn((url: string) => {
+      if (typeof url === "string" && url.includes("/api/proveedores")) {
+        return Promise.resolve({ ok: true, json: async () => [] } as Response)
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ id: "i1" }) } as Response)
+    })
+    vi.stubGlobal("fetch", fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  async function savedPayload() {
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }))
+    let payload: Record<string, unknown> = {}
+    await waitFor(() => {
+      const put = fetchMock.mock.calls.find(([, init]: any[]) => init?.method === "PUT")
+      expect(put).toBeDefined()
+      payload = JSON.parse((put![1] as RequestInit).body as string)
+    })
+    return payload
+  }
+
+  it("submits tipoKit ENSAMBLADO when 'Es kit' is ticked and the tipo Select is untouched", async () => {
+    render(<InventarioForm item={makeItem(150)} onClose={vi.fn()} onSuccess={vi.fn()} />)
+
+    fireEvent.click(screen.getByLabelText(/Es kit/i))
+    const payload = await savedPayload()
+
+    expect(payload.esKit).toBe(true)
+    expect(payload.tipoKit).toBe("ENSAMBLADO")
+  })
+
+  it("keeps VIRTUAL when editing an existing virtual kit", async () => {
+    const kit = { ...makeItem(150), esKit: true, tipoKit: "VIRTUAL" } as Inventario
+    render(<InventarioForm item={kit} onClose={vi.fn()} onSuccess={vi.fn()} />)
+
+    const payload = await savedPayload()
+
+    expect(payload.esKit).toBe(true)
+    expect(payload.tipoKit).toBe("VIRTUAL")
+  })
+})

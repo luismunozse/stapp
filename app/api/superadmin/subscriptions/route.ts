@@ -146,6 +146,7 @@ export async function GET(request: Request) {
           .from("ordenes_servicio")
           .select("organization_id")
           .in("organization_id", matureOrgIds)
+          .eq("es_practica", false)
           .gte("created_at", sevenDaysAgo.toISOString())
           .limit(50000),
         supabaseAdmin
@@ -158,6 +159,7 @@ export async function GET(request: Request) {
           .from("clientes")
           .select("organization_id")
           .in("organization_id", matureOrgIds)
+          .eq("es_practica", false)
           .gte("created_at", sevenDaysAgo.toISOString())
           .limit(50000),
       ])

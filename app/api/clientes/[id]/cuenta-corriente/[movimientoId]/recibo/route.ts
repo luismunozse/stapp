@@ -8,7 +8,7 @@ import { isMissingColumnError } from "@/lib/db-errors"
 // not be applied yet, and a recibo must still print without them. Same
 // pattern as app/api/facturacion/[id]/pdf/route.ts — see lib/db-errors.ts for
 // why the SELECT side raises 42703 rather than PGRST204.
-const ORG_COLS = "nombre, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria"
+const ORG_COLS = "nombre, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria, pais"
 const ORG_COLS_FISCAL = `${ORG_COLS}, cuit, condicion_iva, domicilio_fiscal`
 
 /**
@@ -127,6 +127,7 @@ export async function GET(
       telefonoEmpresa: orgAny?.telefono as string,
       direccionEmpresa: orgAny?.direccion as string,
       cuitEmpresa: orgAny?.cuit as string,
+      pais: orgAny?.pais as string | null | undefined,
       condicionIvaEmpresa: orgAny?.condicion_iva as string,
       domicilioFiscalEmpresa: orgAny?.domicilio_fiscal as string,
       logoUrl: orgAny?.logo_url as string,

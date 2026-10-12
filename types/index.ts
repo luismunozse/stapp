@@ -113,6 +113,8 @@ export interface Cliente {
   deudaPendiente?: number
   ordenesCount?: number
   ultimaVisita?: string | null
+  /** Onboarding practice client (clientes.es_practica). */
+  esPractica?: boolean
   createdAt: Date
   updatedAt: Date
 }
@@ -169,6 +171,8 @@ export interface OrdenServicio {
   // Re-ingreso/garantía
   ordenOrigenId?: string | null
   esReingreso?: boolean
+  /** Onboarding practice order (ordenes_servicio.es_practica): read-only everywhere. */
+  esPractica?: boolean
   garantiaOrigenId?: string | null
   ordenOrigen?: OrdenServicio | null
 }

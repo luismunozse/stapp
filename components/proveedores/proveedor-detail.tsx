@@ -43,6 +43,7 @@ import { ContactRow } from "./contact-row"
 import { ProveedorForm } from "./proveedor-form"
 import { useModal } from "@/contexts/modal-context"
 import { useCurrency } from "@/contexts/currency-context"
+import { getTaxIdLabel } from "@/lib/countries"
 
 interface Proveedor {
   id: string
@@ -165,7 +166,7 @@ function formatDate(iso: string | null | undefined, timezone: string) {
 export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
   const router = useRouter()
   const { confirm } = useModal()
-  const { formatPrice, timezone } = useCurrency()
+  const { formatPrice, timezone, pais } = useCurrency()
   const [editing, setEditing] = useState(false)
 
   const { data: proveedor, mutate: mutateProv, isLoading } = useSWR<Proveedor>(
@@ -453,7 +454,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
                     <FiscalField label="Razón social" value={proveedor.razonSocial} />
                   )}
                   {proveedor.cuit && (
-                    <FiscalField label="CUIT" value={proveedor.cuit} mono />
+                    <FiscalField label={getTaxIdLabel(pais)} value={proveedor.cuit} mono />
                   )}
                   {proveedor.condicionIva && (
                     <FiscalField label="Condición IVA" value={CONDICION_IVA_LABEL[proveedor.condicionIva] || proveedor.condicionIva} />

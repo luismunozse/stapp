@@ -7,6 +7,7 @@ import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
 import { resolverEstadoEntrega, esTransicionValida, ESTADO_LABELS } from "@/lib/orden-state-machine"
 import { z } from "zod"
+import { rejectIfPractica } from "@/lib/onboarding/practica"
 
 const entregarSchema = z.object({
   firmaClienteEntrega: z.string().optional().nullable(),
@@ -38,6 +39,8 @@ export async function POST(
     if (error) return error
 
     const { id } = await params
+    const practica = await rejectIfPractica(id, organizationId!)
+    if (practica) return practica
     const body = await request.json()
     const data = entregarSchema.parse(body)
 
@@ -131,6 +134,14 @@ export async function POST(
       .update({
         estado: nuevoEstado,
         fecha_entrega: new Date().toISOString(),
+        // fecha_completado es la fecha de devengo contable (reportes de
+        // resultados, comisiones). Se escribe acá porque las tres transiciones
+        // ENTREGADO* pueden alcanzarse sin pasar por REPARADO (p. ej.
+        // SIN_FALLA_DETECTADA -> ENTREGADO), que es el único otro lugar del
+        // repo que la setea (app/api/ordenes/[id]/route.ts). Condicional para
+        // no pisar el devengo original de una orden reparada en un mes y
+        // entregada en otro (reingreso).
+        ...(!orden.fecha_completado ? { fecha_completado: new Date().toISOString() } : {}),
         ...(costoFinalConfirmado !== null ? { costo_final: costoFinalConfirmado } : {}),
         firma_cliente_entrega: data.firmaClienteEntrega || null,
         firma_cliente_entrega_mime: data.firmaClienteMime || null,

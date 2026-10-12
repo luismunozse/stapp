@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { depositoPermitido, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { z } from "zod"
 
 // Techo sano por línea. No hay tope contra cantidad_pedida a propósito: se
@@ -31,7 +32,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId } = await requireAdmin()
+    const { error, session, organizationId, userId, role } = await requireAdmin()
     if (error) return error
 
     const { id } = await params
@@ -55,6 +56,21 @@ export async function POST(
         { error: `No se puede recibir una OC en estado "${oc.estado}". Debe estar ENVIADA o RECIBIDA_PARCIAL.` },
         { status: 400 }
       )
+    }
+
+    // La RPC solo verifica que el deposito exista (FK): sin esto un request
+    // armado mueve stock de un deposito de otra org o de otra sucursal.
+    if (
+      data.depositoId &&
+      !(await depositoPermitido({
+        depositoId: data.depositoId,
+        organizationId: organizationId!,
+        role,
+        userSucursalId: session?.user?.sucursalId ?? null,
+        alcance: "sucursal",
+      }))
+    ) {
+      return NextResponse.json({ error: DEPOSITO_INVALIDO }, { status: 400 })
     }
 
     const { data: result, error: rpcError } = await supabaseAdmin.rpc("recibir_orden_compra", {

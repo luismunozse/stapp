@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { rejectIfPractica } from "@/lib/onboarding/practica"
 
 // Schema para repuesto de inventario
 const repuestoInventarioSchema = z.object({
@@ -45,6 +46,8 @@ export async function POST(
     if (error) return error
 
     const { id: ordenId } = await params
+    const practica = await rejectIfPractica(ordenId, organizationId!)
+    if (practica) return practica
     const body = await request.json()
     const data = repuestoSchema.parse(body)
 

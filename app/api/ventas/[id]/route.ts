@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
+import { depositoPermitido, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
@@ -335,6 +336,21 @@ export async function PUT(
         tipoDescuento: item.tipoDescuento,
         porcentajeDescuento: item.tipoDescuento === "PORCENTAJE" ? item.porcentajeDescuento : 0,
       }))
+
+      // La RPC solo verifica que el deposito exista (FK): sin esto un request
+      // armado mueve stock de un deposito de otra org o de otra sucursal.
+      if (
+        data.depositoId &&
+        !(await depositoPermitido({
+          depositoId: data.depositoId,
+          organizationId: organizationId!,
+          role,
+          userSucursalId: session?.user?.sucursalId ?? null,
+          alcance: "sucursal",
+        }))
+      ) {
+        return NextResponse.json({ error: DEPOSITO_INVALIDO }, { status: 400 })
+      }
 
       // Editar venta atómicamente
       const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc("editar_venta_atomica", {
