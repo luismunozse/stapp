@@ -1,6 +1,5 @@
 -- =============================================================================
--- Verificación de la migración 349 — crear_reparaciones_express, columna
--- tabla reparaciones_express_idempotencia y feature flag reparaciones_express.
+-- Verificación de la migración 349 — crear_reparaciones_express, tabla reparaciones_express_idempotencia y feature flag reparaciones_express.
 --
 -- CÓMO CORRERLO (ver verify/README.md):
 --   - SQL editor de Supabase Studio, DESPUES de aplicar 349.
@@ -302,6 +301,91 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN
     INSERT INTO _r VALUES (7, 'precio <= 0 se rechaza', 'error', 'OK: ' || SQLERRM);
   END;
+END $$;
+
+-- ---------------------------------------------------------------------------
+-- PROBE 8 — La clave de idempotencia solo se repite con la MISMA carga.
+-- Mismo payload con otros publicToken (la ruta los regenera en cada intento)
+-- es un replay; otro cliente u otras reparaciones es un conflicto.
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE
+  v_org TEXT; v_suc TEXT; v_cli TEXT; v_cli2 TEXT;
+  v_key TEXT := 'clave de idempotencia de prueba 1';
+  v_mismo JSONB; v_otro JSONB; v_res JSONB;
+  v_saldo_pre DECIMAL(10,2); v_saldo_post DECIMAL(10,2);
+BEGIN
+  SELECT org_id, sucursal_id, cliente_id INTO v_org, v_suc, v_cli FROM _setup;
+  INSERT INTO clientes (nombre, telefono, organization_id)
+    VALUES ('Probe 349 Cliente 2', '3120000002', v_org) RETURNING id INTO v_cli2;
+
+  v_mismo := jsonb_build_array(
+    jsonb_build_object('dispositivo', 'Tablet Samsung', 'tipoDispositivo', 'TABLET', 'precio', 4000,
+      'trabajoRealizado', 'Cambio de vidrio', 'publicToken', 'otro token distinto')
+  );
+  v_otro := jsonb_build_array(
+    jsonb_build_object('dispositivo', 'Tablet Samsung', 'tipoDispositivo', 'TABLET', 'precio', 9000,
+      'trabajoRealizado', 'Cambio de vidrio', 'publicToken', 'token otro lote')
+  );
+  SELECT saldo_cuenta INTO v_saldo_pre FROM clientes WHERE id = v_cli;
+
+  -- Misma carga, otros tokens (y precio sin escala): replay.
+  v_res := crear_reparaciones_express(v_org, v_suc, v_cli, v_mismo, NULL, NULL, v_key);
+  INSERT INTO _r VALUES (8, 'misma key y misma carga con otros tokens: replay', 'true', (v_res->>'replayed'));
+
+  BEGIN
+    PERFORM crear_reparaciones_express(v_org, v_suc, v_cli2, v_mismo, NULL, NULL, v_key);
+    INSERT INTO _r VALUES (8, 'misma key y otro cliente se rechaza', 'error', 'FALLO: no levanto excepcion');
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _r VALUES (8, 'misma key y otro cliente se rechaza', 'error', 'OK: ' || SQLERRM);
+  END;
+
+  BEGIN
+    PERFORM crear_reparaciones_express(v_org, v_suc, v_cli, v_otro, NULL, NULL, v_key);
+    INSERT INTO _r VALUES (8, 'misma key y otras reparaciones se rechaza', 'error', 'FALLO: no levanto excepcion');
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _r VALUES (8, 'misma key y otras reparaciones se rechaza', 'error', 'OK: ' || SQLERRM);
+  END;
+
+  SELECT saldo_cuenta INTO v_saldo_post FROM clientes WHERE id = v_cli;
+  INSERT INTO _r VALUES (8, 'los rechazos no cambian el saldo', v_saldo_pre::TEXT, v_saldo_post::TEXT);
+END $$;
+
+-- ---------------------------------------------------------------------------
+-- PROBE 9 — Un cliente de OTRA organizacion se rechaza y no persiste nada:
+-- ni ordenes, ni CARGO, ni fila de idempotencia.
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE
+  v_org TEXT; v_suc TEXT; v_cli TEXT;
+  v_org_b TEXT; v_cli_b TEXT;
+  v_key TEXT := 'clave de prueba otra organizacion';
+  v_reparaciones JSONB;
+BEGIN
+  SELECT org_id, sucursal_id, cliente_id INTO v_org, v_suc, v_cli FROM _setup;
+  INSERT INTO organizations (nombre, slug)
+    VALUES ('Probe 349 Org B', 'probe-349-org-b') RETURNING id INTO v_org_b;
+  INSERT INTO clientes (nombre, telefono, organization_id)
+    VALUES ('Probe 349 Cliente B', '3120000003', v_org_b) RETURNING id INTO v_cli_b;
+
+  v_reparaciones := jsonb_build_array(
+    jsonb_build_object('dispositivo', 'Notebook', 'tipoDispositivo', 'NOTEBOOK', 'precio', 7000,
+      'trabajoRealizado', 'Limpieza', 'publicToken', 'token de prueba otra org')
+  );
+
+  BEGIN
+    PERFORM crear_reparaciones_express(v_org, v_suc, v_cli_b, v_reparaciones, NULL, NULL, v_key);
+    INSERT INTO _r VALUES (9, 'cliente de otra organizacion se rechaza', 'error', 'FALLO: no levanto excepcion');
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO _r VALUES (9, 'cliente de otra organizacion se rechaza', 'error', 'OK: ' || SQLERRM);
+  END;
+
+  INSERT INTO _r VALUES (9, 'otra org: ninguna orden persistida', '0',
+    (SELECT COUNT(*)::TEXT FROM ordenes_servicio WHERE cliente_id = v_cli_b));
+  INSERT INTO _r VALUES (9, 'otra org: ningun CARGO persistido', '0',
+    (SELECT COUNT(*)::TEXT FROM cuenta_corriente WHERE cliente_id = v_cli_b));
+  INSERT INTO _r VALUES (9, 'otra org: ninguna fila de idempotencia', '0',
+    (SELECT COUNT(*)::TEXT FROM reparaciones_express_idempotencia WHERE idempotency_key = v_key));
 END $$;
 
 -- Resultado único. Verde = `esperado` coincide con `obtenido`, y `obtenido`
