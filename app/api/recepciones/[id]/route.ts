@@ -4,7 +4,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { calcularTotalLote, round2, type DescuentoTipo } from "@/lib/lote-utils"
-import { ESTADOS_ENTREGADOS, esEstadoEntregado, esEstadoCerradoSinEntrega } from "@/lib/lote-estados"
+import { ESTADOS_ENTREGADOS, esEstadoEntregado, esEstadoExcluidoDeLote, esEstadoFueraDeLosMontos, liquidarEntregadosPrevios } from "@/lib/lote-estados"
 
 const FEATURE_KEY = "recepcion_multiple"
 
@@ -76,7 +76,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     // Las entregadas se quedan (su costo forma parte del total negociado); las
     // cerradas sin entrega salen — un cancelado con presupuesto no puede
     // inflar el total del lote. La lista de equipos igual las devuelve todas.
-    const enElLote = lista.filter((o) => !esEstadoCerradoSinEntrega(o.estado))
+    const enElLote = lista.filter((o) => !esEstadoFueraDeLosMontos(o.estado))
     const subtotal = enElLote.reduce((acc, o) => acc + Number(o.costo_final ?? o.presupuesto ?? 0), 0)
     const totalLote = calcularTotalLote(
       subtotal,
@@ -86,11 +86,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     // Ya cobrado = neto facturado en los equipos que ya salieron (por el flujo
     // individual o por una entrega de lote previa). Pendiente de cobro = lo que
     // falta para llegar al total negociado del lote, nunca negativo.
-    const entregados = enElLote.filter((o) => esEstadoEntregado(o.estado))
-    const entregadas = entregados.length
-    const yaCobrado = round2(
-      entregados.reduce((acc, o) => acc + round2(Number(o.costo_final ?? 0) - Number(o.descuento_cobro ?? 0)), 0),
-    )
+    // "Entregadas" cuenta todas las que salieron (incluidas las regaladas);
+    // solo las entregadas CON cobro entran en el ya cobrado.
+    const entregadas = lista.filter((o) => esEstadoEntregado(o.estado)).length
+    const { yaCobrado } = liquidarEntregadosPrevios(enElLote)
     const pendienteCobro = Math.max(0, round2(totalLote - yaCobrado))
 
     return NextResponse.json({
@@ -122,7 +121,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         pendienteCobro,
         entregadas,
         // Elegibles todavia por entregar (los cerrados sin entrega no cuentan).
-        pendientes: enElLote.length - entregadas,
+        pendientes: lista.filter((o) => !esEstadoExcluidoDeLote(o.estado)).length,
       },
     })
   } catch (error) {

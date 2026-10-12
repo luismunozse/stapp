@@ -128,17 +128,18 @@ describe("GET /api/recepciones/[id] — detalle del lote", () => {
       costoFinal: 200,
     })
 
-    // subtotal = 200 + 150 + 250 = 600
-    expect(body.totales.subtotal).toBe(600)
-    // 10% de descuento sobre 600 -> 540
-    expect(body.totales.totalLote).toBe(540)
+    // o3 es ENTREGADO_SIN_COBRO (regalado): fuera de los montos del lote.
+    // subtotal = 200 + 150 = 350
+    expect(body.totales.subtotal).toBe(350)
+    // 10% de descuento sobre 350 -> 315
+    expect(body.totales.totalLote).toBe(315)
     // ENTREGADO + ENTREGADO_SIN_COBRO = 2, pendiente (RECIBIDO) = 1
     expect(body.totales.entregadas).toBe(2)
     expect(body.totales.pendientes).toBe(1)
-    // Ya cobrado neto sobre los entregados: (200 - 20) + (250 - 0) = 430
-    expect(body.totales.yaCobrado).toBe(430)
-    // Pendiente de cobro = total del lote - ya cobrado = 540 - 430 = 110
-    expect(body.totales.pendienteCobro).toBe(110)
+    // Ya cobrado neto sobre los entregados CON cobro: 200 - 20 = 180
+    expect(body.totales.yaCobrado).toBe(180)
+    // Pendiente de cobro = total del lote - ya cobrado = 315 - 180 = 135
+    expect(body.totales.pendienteCobro).toBe(135)
   })
 
   it("sin equipos entregados, ya cobrado es 0 y el pendiente de cobro es el total del lote", async () => {

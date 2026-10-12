@@ -14,6 +14,12 @@ vi.mock("@/lib/subscriptions", () => ({
   hasPlanFeature: vi.fn(),
 }))
 
+const auditUpdate = vi.fn()
+vi.mock("@/lib/audit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/audit")>()),
+  createAuditLogger: vi.fn(() => ({ update: auditUpdate })),
+}))
+
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { POST } from "@/app/api/recepciones/[id]/entregar/route"
@@ -91,6 +97,8 @@ describe("POST /api/recepciones/[id]/entregar — entrega y cobro de lote", () =
     mockAuthSuccess()
     vi.mocked(hasPlanFeature).mockResolvedValue(true)
     mockTables()
+    auditUpdate.mockReset()
+    auditUpdate.mockResolvedValue(undefined)
   })
 
   it("devuelve 403 FEATURE_REQUIRED cuando el plan no tiene la feature", async () => {
@@ -133,6 +141,63 @@ describe("POST /api/recepciones/[id]/entregar — entrega y cobro de lote", () =
     expect(status).toBe(400)
     expect(body.error).toBeTruthy()
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it("devuelve 400 cuando el payload trae mas de 200 ordenes", async () => {
+    const ordenes = Array.from({ length: 201 }, (_, i) => ({ id: `x${i}`, costoFinal: 1 }))
+    const res = await POST(entregarRequest({ ordenes, metodoPago: "EFECTIVO" }), createParams("rec-1"))
+    expect((await parseResponse(res)).status).toBe(400)
+    expect(loteCalls()).toHaveLength(0)
+  })
+
+  it("devuelve 400 cuando costoFinal supera 99999999.99", async () => {
+    const res = await POST(
+      entregarRequest({ ordenes: [{ id: "o1", costoFinal: 100000000 }], metodoPago: "EFECTIVO" }),
+      createParams("rec-1"),
+    )
+    expect((await parseResponse(res)).status).toBe(400)
+    expect(loteCalls()).toHaveLength(0)
+  })
+
+  it("devuelve 400 cuando referencia u observaciones superan 500 caracteres", async () => {
+    const larga = "a".repeat(501)
+    for (const extra of [{ referencia: larga }, { observaciones: larga }]) {
+      const res = await POST(
+        entregarRequest({ ordenes: ordenesBody, metodoPago: "EFECTIVO", ...extra }),
+        createParams("rec-1"),
+      )
+      expect((await parseResponse(res)).status).toBe(400)
+    }
+    expect(loteCalls()).toHaveLength(0)
+  })
+
+  it("devuelve 400 con un mensaje claro cuando el payload repite una orden", async () => {
+    mockRpc()
+    const res = await POST(
+      entregarRequest({
+        ordenes: [...ordenesBody, { id: "o1", costoFinal: 100 }],
+        metodoPago: "EFECTIVO",
+      }),
+      createParams("rec-1"),
+    )
+    const { status, body } = await parseResponse(res)
+    expect(status).toBe(400)
+    expect(body.error).toBe("No se puede repetir una orden en la entrega del lote")
+    expect(loteCalls()).toHaveLength(0)
+  })
+
+  it("redondea costoFinal a 2 decimales antes de prorratear y de llamar a la RPC", async () => {
+    mockTables({}, [{ id: "o1", estado: "REPARADO", costo_final: null, descuento_cobro: null }])
+    mockRpc()
+    const res = await POST(
+      entregarRequest({ ordenes: [{ id: "o1", costoFinal: 33.333 }], metodoPago: "EFECTIVO" }),
+      createParams("rec-1"),
+    )
+    expect((await parseResponse(res)).status).toBe(200)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      "entregar_lote_recepcion",
+      expect.objectContaining({ p_ordenes: [{ id: "o1", costoFinal: 33.33, montoCobro: 33.33 }] }),
+    )
   })
 
   it("devuelve 400 cuando metodoPago no es valido", async () => {
@@ -203,20 +268,76 @@ describe("POST /api/recepciones/[id]/entregar — entrega y cobro de lote", () =
     const { status, body } = await parseResponse(res)
 
     expect(status).toBe(200)
-    // subtotal del lote = 200 + 100 (entregados, persistido) + 600 (payload) = 900
-    // total del lote = 900 - 10% = 810
-    // ya cobrado neto = (200-20) + (100-0) = 280
-    // restante = 810 - 280 = 530, prorrateado sobre [100, 200, 300]
-    expect(body.totalLote).toBe(810)
-    expect(body.yaCobrado).toBe(280)
-    expect(body.totalCobrado).toBe(530)
+    // prev-2 es ENTREGADO_SIN_COBRO (se regalo): queda fuera del lote, ni suma
+    // al subtotal ni cuenta como cobrado.
+    // subtotal del lote = 200 (entregado con cobro) + 600 (payload) = 800
+    // total del lote = 800 - 10% = 720
+    // ya cobrado neto = 200 - 20 = 180
+    // restante = 720 - 180 = 540, prorrateado sobre [100, 200, 300]
+    expect(body.totalLote).toBe(720)
+    expect(body.yaCobrado).toBe(180)
+    expect(body.totalCobrado).toBe(540)
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
       "entregar_lote_recepcion",
       expect.objectContaining({
         p_ordenes: [
-          { id: "o1", costoFinal: 100, montoCobro: 88.33 },
-          { id: "o2", costoFinal: 200, montoCobro: 176.67 },
-          { id: "o3", costoFinal: 300, montoCobro: 265 },
+          { id: "o1", costoFinal: 100, montoCobro: 90 },
+          { id: "o2", costoFinal: 200, montoCobro: 180 },
+          { id: "o3", costoFinal: 300, montoCobro: 270 },
+        ],
+      }),
+    )
+  })
+
+  it("un miembro ENTREGADO_SIN_COBRO no reduce lo que pagan los pendientes (descuento porcentual)", async () => {
+    mockTables({ descuento_tipo: "porcentaje", descuento_valor: 20 }, [
+      { id: "regalado", estado: "ENTREGADO_SIN_COBRO", costo_final: 1000, descuento_cobro: null },
+      ...miembrosReparados,
+    ])
+    mockRpc()
+
+    const res = await POST(entregarRequest({ ordenes: ordenesBody, metodoPago: "EFECTIVO" }), createParams("rec-1"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    // subtotal 600 (el regalado no entra), 20% -> 480, ya cobrado 0
+    expect(body.totalLote).toBe(480)
+    expect(body.yaCobrado).toBe(0)
+    expect(body.totalCobrado).toBe(480)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      "entregar_lote_recepcion",
+      expect.objectContaining({
+        p_ordenes: [
+          { id: "o1", costoFinal: 100, montoCobro: 80 },
+          { id: "o2", costoFinal: 200, montoCobro: 160 },
+          { id: "o3", costoFinal: 300, montoCobro: 240 },
+        ],
+      }),
+    )
+  })
+
+  it("un miembro ENTREGADO_SIN_COBRO no reduce lo que pagan los pendientes (descuento fijo)", async () => {
+    mockTables({ descuento_tipo: "monto", descuento_valor: 100 }, [
+      { id: "regalado", estado: "ENTREGADO_SIN_COBRO", costo_final: 100, descuento_cobro: null },
+      ...miembrosReparados,
+    ])
+    mockRpc()
+
+    const res = await POST(entregarRequest({ ordenes: ordenesBody, metodoPago: "EFECTIVO" }), createParams("rec-1"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    // subtotal 600, -100 fijo -> 500, ya cobrado 0 (antes se descontaban 100 de mas)
+    expect(body.totalLote).toBe(500)
+    expect(body.yaCobrado).toBe(0)
+    expect(body.totalCobrado).toBe(500)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      "entregar_lote_recepcion",
+      expect.objectContaining({
+        p_ordenes: [
+          { id: "o1", costoFinal: 100, montoCobro: 83.33 },
+          { id: "o2", costoFinal: 200, montoCobro: 166.67 },
+          { id: "o3", costoFinal: 300, montoCobro: 250 },
         ],
       }),
     )
@@ -268,6 +389,41 @@ describe("POST /api/recepciones/[id]/entregar — entrega y cobro de lote", () =
 
     expect(status).toBe(409)
     expect(loteCalls()).toHaveLength(0)
+  })
+
+  it("audita la entrega: una entrada UPDATE de ordenes_servicio por orden entregada (como /entregar)", async () => {
+    mockRpc()
+
+    const res = await POST(entregarRequest({ ordenes: ordenesBody, metodoPago: "EFECTIVO" }), createParams("rec-1"))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(auditUpdate).toHaveBeenCalledTimes(3)
+    expect(auditUpdate).toHaveBeenCalledWith(
+      "ordenes_servicio",
+      "o2",
+      expect.objectContaining({ estado: "REPARADO" }),
+      expect.objectContaining({ estado: "ENTREGADO", costo_final: 200, monto_cobrado: 180, recepcion_id: "rec-1" }),
+    )
+  })
+
+  it("un fallo de auditoria despues de la RPC no devuelve 500", async () => {
+    mockRpc()
+    auditUpdate.mockRejectedValue(new Error("audit caido"))
+
+    const res = await POST(entregarRequest({ ordenes: ordenesBody, metodoPago: "EFECTIVO" }), createParams("rec-1"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(body.recepcionId).toBe("rec-1")
+  })
+
+  it("no audita nada cuando la RPC falla", async () => {
+    mockRpc({ lote: { data: null, error: { message: "LOTE_ERROR:ORDEN_NO_REPARADA:o1:ENTREGADO" } } })
+
+    const res = await POST(entregarRequest({ ordenes: ordenesBody, metodoPago: "EFECTIVO" }), createParams("rec-1"))
+    expect((await parseResponse(res)).status).toBe(409)
+    expect(auditUpdate).not.toHaveBeenCalled()
   })
 
   it("devuelve 409 con un mensaje claro (no 500) al entregar de nuevo un lote ya entregado", async () => {

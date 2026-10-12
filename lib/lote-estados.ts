@@ -19,6 +19,8 @@
  *
  * "Pendiente elegible" = miembro cuyo estado NO esta en ESTADOS_EXCLUIDOS_LOTE.
  */
+import { round2 } from "@/lib/lote-utils"
+
 export const ESTADOS_ENTREGADOS = [
   "ENTREGADO",
   "ENTREGADO_SIN_REPARACION",
@@ -44,6 +46,50 @@ export function esEstadoEntregado(estado: string | null | undefined): boolean {
 /** El estado saca a la orden de la accion de lote (entregada o cerrada). */
 export function esEstadoExcluidoDeLote(estado: string | null | undefined): boolean {
   return estado != null && (ESTADOS_EXCLUIDOS_LOTE as readonly string[]).includes(estado)
+}
+
+/**
+ * ENTREGADO_SIN_COBRO: el taller regalo el equipo (cortesia, garantia, el
+ * cliente desistio). Salio del taller, pero no se cobro nada y nunca formo
+ * parte de lo negociado: queda FUERA de todas las lineas de dinero del lote
+ * (subtotal, descuento, ya cobrado). No sube ni baja lo que pagan los demas.
+ */
+export function esEstadoEntregadoSinCobro(estado: string | null | undefined): boolean {
+  return estado === "ENTREGADO_SIN_COBRO"
+}
+
+/** Entregada Y con cobro: es la unica que cuenta como "ya cobrado" del lote. */
+export function esEstadoEntregadoConCobro(estado: string | null | undefined): boolean {
+  return esEstadoEntregado(estado) && !esEstadoEntregadoSinCobro(estado)
+}
+
+/** La orden no entra en los montos del lote (cerrada sin entrega o regalada). */
+export function esEstadoFueraDeLosMontos(estado: string | null | undefined): boolean {
+  return esEstadoCerradoSinEntrega(estado) || esEstadoEntregadoSinCobro(estado)
+}
+
+export interface MiembroEntregadoPrevio {
+  estado: string | null | undefined
+  costo_final?: number | string | null
+  descuento_cobro?: number | string | null
+}
+
+/**
+ * Lo que los miembros ya entregados con cobro aportan a la liquidacion del
+ * lote: su costo (base del descuento) y lo que se les cobro neto. Fuente unica
+ * para la ruta de entrega y el detalle, asi servidor y pantalla no divergen.
+ */
+export function liquidarEntregadosPrevios(miembros: MiembroEntregadoPrevio[]): {
+  subtotal: number
+  yaCobrado: number
+} {
+  const conCobro = miembros.filter((m) => esEstadoEntregadoConCobro(m.estado))
+  return {
+    subtotal: round2(conCobro.reduce((a, m) => a + Number(m.costo_final ?? 0), 0)),
+    yaCobrado: round2(
+      conCobro.reduce((a, m) => a + round2(Number(m.costo_final ?? 0) - Number(m.descuento_cobro ?? 0)), 0),
+    ),
+  }
 }
 
 /** La orden se cerro sin entrega con cobro: no entra en los montos del lote. */

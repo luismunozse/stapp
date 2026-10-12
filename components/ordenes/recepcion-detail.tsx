@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ArrowLeft, Truck } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { EntregaLoteDialog } from "@/components/ordenes/entrega-lote-dialog"
-import { esEstadoEntregado, esEstadoExcluidoDeLote } from "@/lib/lote-estados"
+import { esEstadoExcluidoDeLote, liquidarEntregadosPrevios } from "@/lib/lote-estados"
 import { round2 } from "@/lib/lote-utils"
 
 type DescuentoTipo = "porcentaje" | "monto"
@@ -153,9 +153,10 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
   // Base que el servidor usa para el total del lote: los costos ya
   // persistidos de los equipos que se retiraron individualmente. El diálogo
   // los necesita para mostrar el mismo número que se va a cobrar.
-  const subtotalEntregados = round2(
-    ordenes.filter((o) => esEstadoEntregado(o.estado)).reduce((acc, o) => acc + (o.costoFinal ?? 0), 0),
-  )
+  // Los ENTREGADO_SIN_COBRO (regalados) quedan fuera: helper compartido con el servidor.
+  const subtotalEntregados = liquidarEntregadosPrevios(
+    ordenes.map((o) => ({ estado: o.estado, costo_final: o.costoFinal })),
+  ).subtotal
   // Equipos que siguen dentro del lote: entregados + elegibles pendientes.
   const equiposEnLote = totales.entregadas + totales.pendientes
 

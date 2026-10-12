@@ -3,8 +3,9 @@ import { z } from "zod"
 import { requireAuth } from "@/lib/auth-utils"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createAuditLogger } from "@/lib/audit"
 import { calcularTotalLote, prorratearLote, round2, type DescuentoTipo } from "@/lib/lote-utils"
-import { esEstadoEntregado, esEstadoExcluidoDeLote } from "@/lib/lote-estados"
+import { esEstadoEntregado, esEstadoExcluidoDeLote, liquidarEntregadosPrevios } from "@/lib/lote-estados"
 
 const FEATURE_KEY = "recepcion_multiple"
 
@@ -15,10 +16,27 @@ const MENSAJE_LOTE_YA_ENTREGADO = "Este lote ya fue entregado"
 const WARNING_STOCK = (numero: string) =>
   `Se entrego la orden ${numero}, pero no se pudo descontar el stock de sus repuestos. Revisa el inventario.`
 
+const MAX_ORDENES_LOTE = 200
+const MAX_COSTO_FINAL = 99999999.99
+const MENSAJE_ORDEN_REPETIDA = "No se puede repetir una orden en la entrega del lote"
+
 const entregarLoteSchema = z.object({
   ordenes: z
-    .array(z.object({ id: z.string().min(1), costoFinal: z.number().min(0) }))
-    .min(1),
+    .array(
+      z.object({
+        id: z.string().min(1),
+        // Tope contable (NUMERIC(10,2)) y redondeo a centavos: los shares se
+        // prorratean sobre el valor ya redondeado.
+        costoFinal: z.number().min(0).max(MAX_COSTO_FINAL).transform(round2),
+      }),
+    )
+    .min(1)
+    // Una recepcion no tiene tope de equipos al crearse; 200 cubre cualquier
+    // lote real y acota el trabajo de una sola transaccion.
+    .max(MAX_ORDENES_LOTE)
+    .refine((arr) => new Set(arr.map((o) => o.id)).size === arr.length, {
+      message: MENSAJE_ORDEN_REPETIDA,
+    }),
   metodoPago: z.enum([
     "EFECTIVO",
     "TRANSFERENCIA",
@@ -27,8 +45,8 @@ const entregarLoteSchema = z.object({
     "MERCADOPAGO",
     "OTRO",
   ]),
-  referencia: z.string().nullable().optional(),
-  observaciones: z.string().nullable().optional(),
+  referencia: z.string().max(500).nullable().optional(),
+  observaciones: z.string().max(500).nullable().optional(),
   idempotencyKey: z.string().max(100).nullable().optional(),
 })
 
@@ -102,7 +120,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     const lista = miembros ?? []
-    const entregados = lista.filter((m) => esEstadoEntregado(m.estado))
     const elegiblesPendientes = lista.filter((m) => !esEstadoExcluidoDeLote(m.estado))
     const idsEnPayload = new Set(ordenes.map((o) => o.id))
 
@@ -129,8 +146,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Subtotal del lote = costos confirmados ahora + costos ya persistidos de
     // los equipos entregados antes.
     const subtotalPendientes = costos.reduce((a, b) => a + b, 0)
-    const subtotalEntregados = entregados.reduce((a, m) => a + Number(m.costo_final ?? 0), 0)
-    const subtotalLote = round2(subtotalPendientes + subtotalEntregados)
+    // Los ENTREGADO_SIN_COBRO (regalados) no entran: ver liquidarEntregadosPrevios.
+    const previos = liquidarEntregadosPrevios(lista)
+    const subtotalLote = round2(subtotalPendientes + previos.subtotal)
 
     const totalLote = calcularTotalLote(
       subtotalLote,
@@ -140,9 +158,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     // Neto ya facturado en los entregados individualmente: su costo final menos
     // el descuento de cobro que se les haya aplicado.
-    const yaCobrado = round2(
-      entregados.reduce((a, m) => a + round2(Number(m.costo_final ?? 0) - Number(m.descuento_cobro ?? 0)), 0),
-    )
+    const yaCobrado = previos.yaCobrado
     // Lo que falta para llegar al total negociado del lote. Piso en 0: si el
     // flujo individual ya cobro de mas, el lote no devuelve plata (eso se
     // resuelve con una nota de credito, fuera de alcance).
@@ -214,6 +230,31 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       } catch (consumeErr) {
         warnings.push(WARNING_STOCK(numero))
         console.error(`[entregar-lote] error consumiendo reservas de la orden ${orden.id}:`, consumeErr)
+      }
+    }
+
+    // Auditoria, igual que POST /api/ordenes/[id]/entregar: una entrada UPDATE
+    // de ordenes_servicio por cada orden entregada. La RPC ya commiteo: un
+    // fallo de auditoria se registra y NO convierte la entrega en un 500.
+    const audit = createAuditLogger(organizationId!, userId!, request)
+    const entregadasRpc = (data as { ordenes: { id: string; montoCobrado?: number }[] }).ordenes ?? []
+    const montoPorId = new Map(entregadasRpc.map((o) => [o.id, o.montoCobrado]))
+    for (const orden of ordenes) {
+      const previo = lista.find((m) => m.id === orden.id)
+      try {
+        await audit.update(
+          "ordenes_servicio",
+          orden.id,
+          { estado: previo?.estado ?? null, costo_final: previo?.costo_final ?? null },
+          {
+            estado: "ENTREGADO",
+            costo_final: orden.costoFinal,
+            monto_cobrado: montoPorId.get(orden.id) ?? null,
+            recepcion_id: id,
+          },
+        )
+      } catch (auditErr) {
+        console.error(`[entregar-lote] auditoria fallo para la orden ${orden.id}:`, auditErr)
       }
     }
 
