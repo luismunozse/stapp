@@ -911,6 +911,9 @@ export function InventarioForm({
       // omitirlo deja la columna intacta.
       // `depositoId` sale de `rest` y vuelve solo en el alta (ver depositoAEnviar).
       const { precioCompra, depositoId: _depositoId, ...rest } = data
+      // El selector muestra "Ensamblado" por defecto aunque el valor siga en null;
+      // el servidor exige tipo para un kit, así que se manda lo que se ve.
+      if (rest.esKit && !rest.tipoKit) rest.tipoKit = "ENSAMBLADO"
       const costoField = costoCargado ? { precioCompra } : {}
 
       const payload = item

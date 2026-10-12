@@ -201,3 +201,98 @@ describe("PUT /api/inventario/[id] — flags", () => {
     expect(inv.update).toHaveBeenCalledWith(expect.objectContaining({ tiene_variantes: value }))
   })
 })
+
+// Migration 177: CHECK (es_kit = false OR tipo_kit IS NOT NULL). A kit without
+// a tipo must be a 400 validation error, not a 500 from the constraint.
+describe("kit without tipo is a 400, not a DB check violation", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const baseBody = {
+    codigo: "C1",
+    nombre: "Pantalla",
+    categoria: "Repuestos",
+    tipoDispositivo: "CELULAR",
+    stock: 5,
+    precioCompra: 300,
+    precioVenta: 900,
+  }
+  const params = { params: Promise.resolve({ id: "inv-1" }) }
+  const put = (body: Record<string, unknown>) =>
+    PUT(
+      new Request("http://localhost:3000/api/inventario/inv-1", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+      params
+    )
+
+  it.each([
+    ["missing", {}],
+    ["null", { tipoKit: null }],
+  ])("POST esKit=true with tipoKit %s returns 400 and does not insert", async (_l, extra) => {
+    mockAuthSuccess({ role: "ADMIN" })
+    const inv = createChainMock(fullRow)
+    mockSupabaseFrom({ inventario: inv })
+
+    const res = await POST(createPostRequest({ ...baseBody, esKit: true, ...extra }))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/kit/i)
+    expect(inv.insert).not.toHaveBeenCalled()
+  })
+
+  it("PUT esKit=true with no tipoKit anywhere (row has none) returns 400", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    const inv = createChainMock({ ...fullRow, es_kit: false, tipo_kit: null })
+    mockSupabaseFrom({ inventario: inv })
+
+    const res = await put({ esKit: true })
+
+    expect(res.status).toBe(400)
+    expect(inv.update).not.toHaveBeenCalled()
+  })
+
+  it("PUT esKit=true with explicit tipoKit null returns 400 even if row had one", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    const inv = createChainMock(fullRow)
+    mockSupabaseFrom({ inventario: inv })
+
+    const res = await put({ esKit: true, tipoKit: null })
+
+    expect(res.status).toBe(400)
+    expect(inv.update).not.toHaveBeenCalled()
+  })
+
+  it("PUT esKit=true without tipoKit is fine when the row already has one", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    const inv = createChainMock(fullRow)
+    mockSupabaseFrom({ inventario: inv })
+
+    const res = await put({ esKit: true })
+
+    expect(res.status).toBe(200)
+  })
+
+  it("PUT tipoKit=null on an existing kit (no esKit sent) returns 400", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    const inv = createChainMock(fullRow)
+    mockSupabaseFrom({ inventario: inv })
+
+    const res = await put({ tipoKit: null })
+
+    expect(res.status).toBe(400)
+    expect(inv.update).not.toHaveBeenCalled()
+  })
+
+  it("PUT esKit=false with tipoKit null is allowed", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    const inv = createChainMock(fullRow)
+    mockSupabaseFrom({ inventario: inv })
+
+    const res = await put({ esKit: false, tipoKit: null })
+
+    expect(res.status).toBe(200)
+  })
+})

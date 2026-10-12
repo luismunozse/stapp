@@ -36,6 +36,8 @@ const inventarioSchema = z.object({
   tipoKit: z.enum(["ENSAMBLADO", "VIRTUAL"]).nullable().optional(),
 })
 
+const KIT_SIN_TIPO = "Un kit necesita un tipo: ensamblado o virtual"
+
 async function moverStockInicialADeposito(params: {
   inventarioId: string
   depositoId: string
@@ -234,6 +236,11 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const data = inventarioSchema.parse(body)
+
+    // DB check (migración 177): un kit necesita tipo. Validar acá evita un 500.
+    if (data.esKit === true && !data.tipoKit) {
+      return NextResponse.json({ error: KIT_SIN_TIPO }, { status: 400 })
+    }
 
     // Límite de seguridad: nunca confiar en un depósito que mandó el cliente.
     // depositoPermitido aplica la regla única: de ESTA org, activo, no borrado y,
