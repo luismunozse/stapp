@@ -6,6 +6,7 @@ import { OrderStatusBadge } from "@/components/ui/badge"
 import { Eye, Trash2, Calendar, Smartphone, AlertTriangle, Clock, Printer } from "lucide-react"
 import Link from "next/link"
 import { useCurrency } from "@/contexts/currency-context"
+import { PracticaBadge } from "@/components/onboarding/practica-badge"
 import type { OrdenServicio } from "@/types"
 
 interface OrdenMobileCardProps {
@@ -15,19 +16,25 @@ interface OrdenMobileCardProps {
   deleting: boolean
   onClick: () => void
   hideDelete?: boolean
+  /** Only for the onboarding practice order (ADMIN). */
+  onBorrarPractica?: () => void
+  borrandoPractica?: boolean
 }
 
-export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick, hideDelete }: OrdenMobileCardProps) {
+export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick, hideDelete, onBorrarPractica, borrandoPractica }: OrdenMobileCardProps) {
   const { formatPrice, formatDate } = useCurrency()
 
   return (
     <Card className="cursor-pointer active:bg-muted/50 transition-colors" onClick={onClick}>
       <CardContent className="p-4">
         {/* Header: Código + Estado */}
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-primary font-semibold text-sm">
-            {orden.codigoOrden || `#${orden.numeroOrden}`}
-          </span>
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="min-w-0 space-y-1">
+            <span className="text-primary font-semibold text-sm">
+              {orden.codigoOrden || `#${orden.numeroOrden}`}
+            </span>
+            {orden.esPractica && <PracticaBadge conAviso />}
+          </div>
           <OrderStatusBadge status={orden.estado} showIcon />
         </div>
 
@@ -87,24 +94,44 @@ export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick, h
               Ver detalle
             </Button>
           </Link>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-10 w-10 text-muted-foreground hover:text-primary"
-            onClick={(e) => onPrint(e, orden)}
-          >
-            <Printer className="h-4 w-4" />
-          </Button>
-          {!hideDelete && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-10 w-10 text-muted-foreground hover:text-destructive"
-              onClick={(e) => onDelete(e, orden)}
-              disabled={deleting}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+          {orden.esPractica ? (
+            onBorrarPractica && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-10 px-3 text-sm text-muted-foreground hover:text-destructive"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onBorrarPractica()
+                }}
+                disabled={borrandoPractica}
+              >
+                <Trash2 className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                Borrar práctica
+              </Button>
+            )
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-10 w-10 text-muted-foreground hover:text-primary"
+                onClick={(e) => onPrint(e, orden)}
+              >
+                <Printer className="h-4 w-4" />
+              </Button>
+              {!hideDelete && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-10 w-10 text-muted-foreground hover:text-destructive"
+                  onClick={(e) => onDelete(e, orden)}
+                  disabled={deleting}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </>
           )}
         </div>
       </CardContent>
