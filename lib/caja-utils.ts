@@ -199,7 +199,7 @@ export async function fetchMovimientosDia(
   // 1. Cobros de órdenes (excluir anulados — no representan ingreso real)
   let cobrosQuery = supabaseAdmin
     .from("cobros_orden")
-    .select("id, monto, metodo_pago, created_at, orden_id, observaciones, ordenes_servicio:orden_id!inner(numero_orden, sucursal_id)")
+    .select("id, monto, metodo_pago, created_at, orden_id, observaciones, costo_financiero_porcentaje, costo_financiero_monto, ordenes_servicio:orden_id!inner(numero_orden, sucursal_id)")
     .eq("organization_id", organizationId)
     .eq("anulado", false)
     .gte("created_at", fechaDesde)
@@ -298,6 +298,8 @@ export async function fetchMovimientosDia(
       referenciaId: c.orden_id,
       referenciaNumero: ordenNum ? `ORD-${String(ordenNum).padStart(4, "0")}` : null,
       observaciones: c.observaciones,
+      costoFinancieroMonto: c.costo_financiero_monto ? parseFloat(c.costo_financiero_monto) : null,
+      costoFinancieroPorcentaje: c.costo_financiero_porcentaje ? parseFloat(c.costo_financiero_porcentaje) : null,
     })
   }
 

@@ -202,7 +202,9 @@ describe("PATCH /api/caja/movimientos/metodo-pago", () => {
       sesiones_caja: createChainMock([], null),
       audit_logs: createChainMock(null, null),
     })
-    const res = await PATCH(patch({ fuente: "pagos_venta", id: "pv-1", metodoPago: "TARJETA_DEBITO" }))
+    const res = await PATCH(
+      patch({ fuente: "pagos_venta", id: "pv-1", metodoPago: "TARJETA_DEBITO", costoFinancieroPorcentaje: null })
+    )
     expect((await parseResponse(res)).status).toBe(200)
     expect(updateSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -326,9 +328,176 @@ describe("PATCH /api/caja/movimientos/metodo-pago", () => {
       audit_logs: auditChain,
     })
     await PATCH(patch({ fuente: "pagos_venta", id: "pv-1", metodoPago: "EFECTIVO" }))
-    const insertado = JSON.stringify((auditChain.insert as any).mock.calls)
-    expect(insertado).toContain("costo_financiero_monto")
-    expect(insertado).toContain("recargo_porcentaje")
-    expect(insertado).toContain('"id":"pv-1"')
+    const [fila0] = (auditChain.insert as any).mock.calls[0]
+    expect(fila0.entity_id).toBe("v-1")
+    expect(fila0.changes.before).toMatchObject({
+      metodo_pago: "TARJETA_CREDITO",
+      cuotas: 3,
+      recargo_porcentaje: 10,
+      monto_original: 1000,
+      costo_financiero_porcentaje: 5,
+      costo_financiero_monto: 50,
+    })
+    expect(fila0.changes.after).toMatchObject({
+      metodo_pago: "EFECTIVO",
+      fuente: "pagos_venta",
+      id: "pv-1",
+      costo_financiero_porcentaje: null,
+      costo_financiero_monto: null,
+    })
   })
+
+  describe("costo de terminal al corregir a tarjeta", () => {
+    function setupPago(row: any, cantidadPagos = 2) {
+      mockAuthSuccess({ role: "ADMIN" })
+      const updateSpy = vi.fn().mockReturnValue(createChainMock(null, null))
+      const pagos = pagoVentaChain(row, updateSpy)
+      const respuestas = [
+        { data: row, error: null },
+        { data: Array.from({ length: cantidadPagos }, (_, i) => ({ id: `pv-${i}` })), error: null },
+      ]
+      pagos.then = (resolve: any) => Promise.resolve(respuestas.shift()).then(resolve)
+      const auditChain = createChainMock(null, null)
+      mockSupabaseFrom({
+        pagos_venta: pagos,
+        sesiones_caja: createChainMock([], null),
+        audit_logs: auditChain,
+      })
+      return { updateSpy, auditChain }
+    }
+    const credito = {
+      ...pagoVenta,
+      monto: "1000",
+      cuotas: 3,
+      recargo_porcentaje: 10,
+      monto_original: 909.09,
+      costo_financiero_porcentaje: 4,
+      costo_financiero_monto: 40,
+    }
+    const efectivo = { ...pagoVenta, metodo_pago: "EFECTIVO", monto: "1000" }
+
+    it("a débito guarda porcentaje y monto sobre el monto del pago, y limpia cuotas y recargo", async () => {
+      const { updateSpy } = setupPago(credito)
+      const res = await PATCH(
+        patch({ fuente: "pagos_venta", id: "pv-1", metodoPago: "TARJETA_DEBITO", costoFinancieroPorcentaje: 2.5 })
+      )
+      expect((await parseResponse(res)).status).toBe(200)
+      expect(updateSpy).toHaveBeenCalledWith({
+        metodo_pago: "TARJETA_DEBITO",
+        cuotas: null,
+        recargo_porcentaje: null,
+        monto_original: null,
+        costo_financiero_porcentaje: 2.5,
+        costo_financiero_monto: 25,
+      })
+    })
+
+    it("a crédito desde otro método guarda solo el costo financiero (pago único, sin cuotas ni recargo)", async () => {
+      const { updateSpy } = setupPago(efectivo)
+      const res = await PATCH(
+        patch({ fuente: "pagos_venta", id: "pv-1", metodoPago: "TARJETA_CREDITO", costoFinancieroPorcentaje: 3 })
+      )
+      expect((await parseResponse(res)).status).toBe(200)
+      expect(updateSpy).toHaveBeenCalledWith({
+        metodo_pago: "TARJETA_CREDITO",
+        costo_financiero_porcentaje: 3,
+        costo_financiero_monto: 30,
+      })
+    })
+
+    it("redondea el monto del costo a 2 decimales", async () => {
+      const { updateSpy } = setupPago({ ...efectivo, monto: "100.5" })
+      await PATCH(
+        patch({ fuente: "pagos_venta", id: "pv-1", metodoPago: "TARJETA_DEBITO", costoFinancieroPorcentaje: 2.5 })
+      )
+      expect(updateSpy.mock.calls[0][0].costo_financiero_monto).toBe(2.51)
+    })
+
+    it("sin porcentaje (o en 0) deja el costo financiero en null", async () => {
+      const { updateSpy } = setupPago(credito)
+      await PATCH(
+        patch({ fuente: "pagos_venta", id: "pv-1", metodoPago: "TARJETA_DEBITO", costoFinancieroPorcentaje: 0 })
+      )
+      expect(updateSpy.mock.calls[0][0]).toMatchObject({
+        costo_financiero_porcentaje: null,
+        costo_financiero_monto: null,
+      })
+    })
+
+    it("con el porcentaje omitido conserva el costo ya guardado (solo limpia cuotas y recargo)", async () => {
+      const { updateSpy } = setupPago(credito)
+      await PATCH(patch({ fuente: "pagos_venta", id: "pv-1", metodoPago: "TARJETA_DEBITO" }))
+      const enviado = updateSpy.mock.calls[0][0]
+      expect(enviado).toMatchObject({ cuotas: null, recargo_porcentaje: null, monto_original: null })
+      expect(enviado).not.toHaveProperty("costo_financiero_porcentaje")
+      expect(enviado).not.toHaveProperty("costo_financiero_monto")
+    })
+
+    it("con un método que no es tarjeta ignora el porcentaje y limpia las cinco columnas", async () => {
+      const { updateSpy } = setupPago(credito)
+      const res = await PATCH(
+        patch({ fuente: "pagos_venta", id: "pv-1", metodoPago: "EFECTIVO", costoFinancieroPorcentaje: 5 })
+      )
+      expect((await parseResponse(res)).status).toBe(200)
+      expect(updateSpy).toHaveBeenCalledWith({
+        metodo_pago: "EFECTIVO",
+        cuotas: null,
+        recargo_porcentaje: null,
+        monto_original: null,
+        costo_financiero_porcentaje: null,
+        costo_financiero_monto: null,
+      })
+    })
+
+    it.each([101, -1, "abc"])("400 si el porcentaje es inválido (%s)", async (valor) => {
+      const { updateSpy } = setupPago(credito)
+      const res = await PATCH(
+        patch({ fuente: "pagos_venta", id: "pv-1", metodoPago: "TARJETA_DEBITO", costoFinancieroPorcentaje: valor })
+      )
+      expect((await parseResponse(res)).status).toBe(400)
+      expect(updateSpy).not.toHaveBeenCalled()
+    })
+
+    it("la auditoría registra los valores del costo antes y después", async () => {
+      const { auditChain } = setupPago(credito)
+      await PATCH(
+        patch({ fuente: "pagos_venta", id: "pv-1", metodoPago: "TARJETA_DEBITO", costoFinancieroPorcentaje: 2.5 })
+      )
+      const [fila] = (auditChain.insert as any).mock.calls[0]
+      expect(fila.changes.before).toMatchObject({ costo_financiero_porcentaje: 4, costo_financiero_monto: 40 })
+      expect(fila.changes.after).toMatchObject({ costo_financiero_porcentaje: 2.5, costo_financiero_monto: 25 })
+    })
+
+    it("en un cobro de orden usa el monto del cobro como base", async () => {
+      mockAuthSuccess({ role: "ADMIN" })
+      const upd = createChainMock(null, null)
+      const updateSpy = vi.fn().mockReturnValue(upd)
+      mockSupabaseFrom({
+        cobros_orden: pagoVentaChain(
+          {
+            id: "c-1",
+            metodo_pago: "EFECTIVO",
+            monto: "800",
+            created_at: "2026-10-03T15:00:00Z",
+            anulado: false,
+            orden_id: "o-1",
+            ordenes_servicio: { sucursal_id: null },
+          },
+          updateSpy
+        ),
+        sesiones_caja: createChainMock([], null),
+        cuotas_cobro: createChainMock([], null),
+        audit_logs: createChainMock(null, null),
+      })
+      const res = await PATCH(
+        patch({ fuente: "cobros_orden", id: "c-1", metodoPago: "TARJETA_DEBITO", costoFinancieroPorcentaje: 5 })
+      )
+      expect((await parseResponse(res)).status).toBe(200)
+      expect(updateSpy.mock.calls[0][0]).toMatchObject({
+        costo_financiero_porcentaje: 5,
+        costo_financiero_monto: 40,
+      })
+    })
+  })
+
 })

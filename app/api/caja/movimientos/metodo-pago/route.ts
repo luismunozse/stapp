@@ -29,6 +29,9 @@ const bodySchema = z.object({
   ]),
   id: z.string().min(1),
   metodoPago: z.enum(METODOS_CORREGIBLES),
+  // % que cobra la terminal. Solo se usa si el destino es débito o crédito; con
+  // cualquier otro método se descarta. Omitido = no tocar el costo ya guardado.
+  costoFinancieroPorcentaje: z.number().min(0).max(100).nullable().optional(),
 })
 
 type Fuente = z.infer<typeof bodySchema>["fuente"]
@@ -46,6 +49,8 @@ const COLUMNAS_TARJETA = [
 
 interface Origen {
   metodoPago: string
+  /** Monto del pago (base del costo de terminal); solo las fuentes de pago lo traen. */
+  monto?: number
   fecha: string
   sucursalId: string | null
   /** Sesión explícita (solo movimientos manuales la guardan). */
@@ -76,7 +81,7 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
       const { data } = await supabaseAdmin
         .from("cobros_orden")
         .select(
-          `id, metodo_pago, created_at, anulado, orden_id, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto, ordenes_servicio:orden_id!inner(sucursal_id)`
+          `id, monto, metodo_pago, created_at, anulado, orden_id, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto, ordenes_servicio:orden_id!inner(sucursal_id)`
         )
         .eq("id", id)
         .eq("organization_id", orgId)
@@ -84,6 +89,7 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
       if (!data) return null
       return {
         metodoPago: data.metodo_pago,
+        monto: Number(data.monto),
         fecha: data.created_at,
         sucursalId: (data as any).ordenes_servicio?.sucursal_id ?? null,
         bloqueo: data.anulado ? "El cobro está anulado" : undefined,
@@ -96,7 +102,7 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
       const { data } = await supabaseAdmin
         .from("pagos_parciales")
         .select(`
-          id, metodo_pago, fecha, factura_id, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto,
+          id, monto, metodo_pago, fecha, factura_id, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto,
           facturas!inner(estado_pago, ordenes_servicio!inner(organization_id, sucursal_id))
         `)
         .eq("id", id)
@@ -106,6 +112,7 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
       const factura = (data as any).facturas
       return {
         metodoPago: data.metodo_pago,
+        monto: Number(data.monto),
         fecha: data.fecha,
         sucursalId: factura?.ordenes_servicio?.sucursal_id ?? null,
         bloqueo: factura?.estado_pago === "ANULADA" ? "El remito está anulado" : undefined,
@@ -118,7 +125,7 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
       const { data } = await supabaseAdmin
         .from("pagos_venta")
         .select(
-          `id, metodo_pago, fecha, venta_id, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto, ventas!inner(organization_id, estado, sucursal_id)`
+          `id, monto, metodo_pago, fecha, venta_id, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto, ventas!inner(organization_id, estado, sucursal_id)`
         )
         .eq("id", id)
         .eq("ventas.organization_id", orgId)
@@ -127,6 +134,7 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
       const venta = (data as any).ventas
       return {
         metodoPago: data.metodo_pago,
+        monto: Number(data.monto),
         fecha: data.fecha,
         sucursalId: venta?.sucursal_id ?? null,
         bloqueo: venta?.estado === "ANULADA" ? "La venta está anulada" : undefined,
@@ -233,7 +241,7 @@ export async function PATCH(request: Request) {
     if (!parsed.success) {
       return NextResponse.json({ error: "Datos inválidos" }, { status: 400 })
     }
-    const { fuente, id, metodoPago } = parsed.data
+    const { fuente, id, metodoPago, costoFinancieroPorcentaje } = parsed.data
 
     const origen = await cargarOrigen(fuente, id, organizationId!)
     if (!origen) {
@@ -308,12 +316,31 @@ export async function PATCH(request: Request) {
     }
 
     const update: Record<string, unknown> = { metodo_pago: metodoPago }
-    // Cuotas, recargo y costo financiero solo valen para TARJETA_CREDITO. Débito
-    // tampoco lleva cuotas ni recargo, así que al pasar de crédito a débito (o a
-    // cualquier otro método) se limpian; si no, un pago pasado a efectivo
-    // seguiría restando "costo terminal".
-    if (esFuentePago && metodoPago !== "TARJETA_CREDITO") {
-      for (const col of COLUMNAS_TARJETA) update[col] = null
+    const esTarjeta = metodoPago === "TARJETA_DEBITO" || metodoPago === "TARJETA_CREDITO"
+    if (esFuentePago) {
+      if (!esTarjeta) {
+        // Un pago pasado a efectivo/transferencia/etc. no lleva cuotas, recargo
+        // ni costo de terminal; si no, seguiría restando "costo terminal".
+        for (const col of COLUMNAS_TARJETA) update[col] = null
+      } else {
+        // Débito tampoco lleva cuotas ni recargo (solo crédito). Crédito viene
+        // de un método sin cuotas, así que queda como pago único (null).
+        if (metodoPago === "TARJETA_DEBITO") {
+          update.cuotas = null
+          update.recargo_porcentaje = null
+          update.monto_original = null
+        }
+        // Costo de terminal: mismo cálculo que al cobrar (monto del pago *
+        // porcentaje, redondeado a 2 decimales; 0 o vacío = sin costo).
+        if (costoFinancieroPorcentaje !== undefined) {
+          const pct = costoFinancieroPorcentaje || null
+          update.costo_financiero_porcentaje = pct
+          update.costo_financiero_monto =
+            pct && Number.isFinite(origen.monto)
+              ? Math.round((origen.monto as number) * (pct / 100) * 100) / 100
+              : null
+        }
+      }
     }
 
     let updateQuery = supabaseAdmin.from(fuente).update(update).eq("id", id)
@@ -367,6 +394,9 @@ export async function PATCH(request: Request) {
       }
     }
 
+    // Valor que queda en la columna: el nuevo si se escribió, el previo si no.
+    const valorFinal = (col: string) => (col in update ? update[col] : origen.previos?.[col] ?? null)
+
     await logAudit({
       organizationId: organizationId!,
       userId: userId!,
@@ -375,7 +405,17 @@ export async function PATCH(request: Request) {
       entityId: origen.auditEntityId,
       changes: {
         before: { metodo_pago: origen.metodoPago, ...(esFuentePago ? origen.previos : {}) },
-        after: { metodo_pago: metodoPago, fuente, id },
+        after: {
+          metodo_pago: metodoPago,
+          fuente,
+          id,
+          ...(esFuentePago
+            ? {
+                costo_financiero_porcentaje: valorFinal("costo_financiero_porcentaje"),
+                costo_financiero_monto: valorFinal("costo_financiero_monto"),
+              }
+            : {}),
+        },
       },
       description: `Corrigió el método de pago en caja (${fuente} #${id.slice(-6)}): ${origen.metodoPago} → ${metodoPago}`,
     })

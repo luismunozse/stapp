@@ -10,6 +10,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { parseMoneyInput } from "@/lib/parse-money"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
@@ -31,7 +33,11 @@ export interface MovimientoEditable {
   metodoPago: string
   monto: number
   descripcion: string
+  /** % de costo de terminal que tiene hoy el pago (precarga el campo). */
+  costoFinancieroPorcentaje?: number | null
 }
+
+const esTarjeta = (metodo: string) => metodo === "TARJETA_DEBITO" || metodo === "TARJETA_CREDITO"
 
 interface CambiarMetodoDialogProps {
   movimiento: MovimientoEditable | null
@@ -42,12 +48,16 @@ interface CambiarMetodoDialogProps {
 export function CambiarMetodoDialog({ movimiento, onOpenChange, onSuccess }: CambiarMetodoDialogProps) {
   const { formatPrice } = useCurrency()
   const [metodo, setMetodo] = useState("")
+  const [costo, setCosto] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
   useEffect(() => {
     if (movimiento) {
       setMetodo(movimiento.metodoPago)
+      setCosto(
+        movimiento.costoFinancieroPorcentaje ? String(movimiento.costoFinancieroPorcentaje).replace(".", ",") : ""
+      )
       setError("")
     }
   }, [movimiento])
@@ -55,12 +65,29 @@ export function CambiarMetodoDialog({ movimiento, onOpenChange, onSuccess }: Cam
   const handleSubmit = async () => {
     if (!movimiento) return
     setError("")
+
+    // Costo de terminal: solo si el destino es tarjeta. Vacío = sin costo.
+    let costoFinancieroPorcentaje: number | null | undefined
+    if (esTarjetaDestino) {
+      const n = costo.trim() === "" ? null : parseMoneyInput(costo)
+      if (n !== null && (!Number.isFinite(n) || n < 0 || n > 100)) {
+        setError("El costo de terminal tiene que estar entre 0 y 100")
+        return
+      }
+      costoFinancieroPorcentaje = n
+    }
+
     setLoading(true)
     try {
       const res = await fetch("/api/caja/movimientos/metodo-pago", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fuente: movimiento.fuente, id: movimiento.id, metodoPago: metodo }),
+        body: JSON.stringify({
+          fuente: movimiento.fuente,
+          id: movimiento.id,
+          metodoPago: metodo,
+          ...(costoFinancieroPorcentaje !== undefined && { costoFinancieroPorcentaje }),
+        }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -76,9 +103,8 @@ export function CambiarMetodoDialog({ movimiento, onOpenChange, onSuccess }: Cam
   }
 
   const sinCambios = !!movimiento && metodo === movimiento.metodoPago
-  const esTarjetaOrigen =
-    movimiento?.metodoPago === "TARJETA_DEBITO" || movimiento?.metodoPago === "TARJETA_CREDITO"
-  const esTarjetaDestino = metodo === "TARJETA_DEBITO" || metodo === "TARJETA_CREDITO"
+  const esTarjetaOrigen = !!movimiento && esTarjeta(movimiento.metodoPago)
+  const esTarjetaDestino = esTarjeta(metodo)
 
   return (
     <Dialog open={!!movimiento} onOpenChange={onOpenChange}>
@@ -107,6 +133,28 @@ export function CambiarMetodoDialog({ movimiento, onOpenChange, onSuccess }: Cam
               </SelectContent>
             </Select>
           </div>
+          {esTarjetaDestino && !sinCambios && (
+            <div>
+              <label htmlFor="costo-terminal" className="text-sm font-medium">
+                Costo de terminal (%)
+              </label>
+              <Input
+                id="costo-terminal"
+                className="mt-1"
+                type="text"
+                inputMode="decimal"
+                value={costo}
+                onChange={(e) => setCosto(e.target.value)}
+                placeholder="Ej: 2,5"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Lo que cobra el posnet. Se descuenta como costo financiero.
+              </p>
+            </div>
+          )}
+          {movimiento?.metodoPago === "TARJETA_CREDITO" && metodo === "TARJETA_DEBITO" && (
+            <p className="text-xs text-muted-foreground">Se van a borrar las cuotas y el recargo del pago.</p>
+          )}
           {esTarjetaOrigen && !esTarjetaDestino && !sinCambios && (
             <p className="text-xs text-muted-foreground">
               Se van a borrar las cuotas, el recargo y el costo de terminal del pago.

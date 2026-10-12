@@ -340,6 +340,7 @@ export function CajaResumen({
                               metodoPago: mov.metodoPago,
                               monto: mov.monto,
                               descripcion: displayName,
+                              costoFinancieroPorcentaje: mov.costoFinancieroPorcentaje ?? null,
                             })
                           }
                         >
