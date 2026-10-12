@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { organizationAcceptsBilling } from "@/lib/account-deletion/org-state"
 import { verifyCreemSignature } from "@/lib/creem"
 import { beginWebhookEvent, finishWebhookEvent } from "@/lib/webhook-log"
 
@@ -260,6 +261,9 @@ async function handleCheckoutCompleted(object: any): Promise<HandleResult> {
   const metadata = object?.metadata ?? {}
   const organizationId = metadata.organization_id
   if (!organizationId) return { status: "SKIPPED", reason: "missing_organization_id" }
+  if (!(await organizationAcceptsBilling(organizationId))) {
+    return { status: "SKIPPED", reason: "org_deleted_or_missing", organizationId }
+  }
 
   const order = object?.order ?? {}
   const productId = object?.product?.id ?? order?.product ?? null
@@ -301,6 +305,9 @@ async function handleSubscriptionActivate(object: any): Promise<HandleResult> {
   const metadata = object?.metadata ?? {}
   const organizationId = metadata.organization_id
   if (!organizationId) return { status: "SKIPPED", reason: "missing_organization_id" }
+  if (!(await organizationAcceptsBilling(organizationId))) {
+    return { status: "SKIPPED", reason: "org_deleted_or_missing", organizationId }
+  }
 
   const plan = await resolvePlan(metadata, object?.product?.id ?? null)
   if (!plan) return { status: "SKIPPED", reason: "plan_not_found", organizationId }
@@ -329,6 +336,9 @@ async function handleSubscriptionPaid(object: any): Promise<HandleResult> {
   const metadata = object?.metadata ?? {}
   const organizationId = metadata.organization_id
   if (!organizationId) return { status: "SKIPPED", reason: "missing_organization_id" }
+  if (!(await organizationAcceptsBilling(organizationId))) {
+    return { status: "SKIPPED", reason: "org_deleted_or_missing", organizationId }
+  }
 
   const plan = await resolvePlan(metadata, object?.product?.id ?? null)
   if (!plan) return { status: "SKIPPED", reason: "plan_not_found", organizationId }

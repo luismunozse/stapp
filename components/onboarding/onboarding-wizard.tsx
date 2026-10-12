@@ -20,6 +20,7 @@ import {
   Database,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { compressImageToDataUrl } from "@/lib/images/compress-image"
 
 interface OnboardingProgress {
   step_logo: boolean
@@ -48,6 +49,7 @@ export function OnboardingWizard() {
   const [orgName, setOrgName] = useState("")
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [businessError, setBusinessError] = useState<string | null>(null)
 
   const [clienteNombre, setClienteNombre] = useState("")
   const [clienteTelefono, setClienteTelefono] = useState("")
@@ -83,46 +85,81 @@ export function OnboardingWizard() {
     setProgress((prev) => prev ? { ...prev, [field]: value } : null)
   }
 
-  const handleLogoUpload = async () => {
-    if (!logoFile) return
-    setLoading(true)
-    try {
-      const formData = new FormData()
-      formData.append("logo", logoFile)
-      if (orgName) formData.append("nombreMostrar", orgName)
-
-      const res = await fetch("/api/configuracion/logo", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (res.ok) {
-        await updateProgress("step_logo", true)
-        setCurrentStep(2)
-      }
-    } catch (err) {
-      console.error("Error uploading logo:", err)
-    } finally {
-      setLoading(false)
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target
+    const file = input.files?.[0]
+    // Reset so picking the same file again still fires onChange.
+    const resetInput = () => {
+      input.value = ""
     }
+    if (!file) return
+
+    const rejectFile = (message: string) => {
+      // Drop any previously picked logo: it must not be uploaded after an invalid pick.
+      setLogoFile(null)
+      setLogoPreview(null)
+      setBusinessError(message)
+      resetInput()
+    }
+
+    if (!file.type.startsWith("image/")) {
+      rejectFile("Elegí una imagen válida.")
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      rejectFile("La imagen es demasiado grande (máximo 5MB).")
+      return
+    }
+
+    setBusinessError(null)
+    setLogoFile(file)
+    setLogoPreview(URL.createObjectURL(file))
+    resetInput()
   }
 
-  const handleSaveOrgName = async () => {
-    if (!orgName.trim()) {
+  // Single save for step 1: name and (only if a new file was picked) logo.
+  const handleSaveBusiness = async () => {
+    const nombreEmpresa = orgName.trim()
+    if (!nombreEmpresa && !logoFile) {
       setCurrentStep(2)
       return
     }
     setLoading(true)
+    setBusinessError(null)
     try {
-      await fetch("/api/configuracion", {
+      const payload: Record<string, string> = {}
+      if (nombreEmpresa) payload.nombreEmpresa = nombreEmpresa
+      if (logoFile) {
+        let dataUrl: string
+        try {
+          dataUrl = await compressImageToDataUrl(logoFile)
+        } catch (err) {
+          console.error("Error compressing logo:", err)
+          setBusinessError("No pudimos leer la imagen. Probá con un PNG o JPG.")
+          return
+        }
+        const [header, data] = dataUrl.split(",")
+        payload.logoData = data
+        payload.logoMime = header.split(":")[1].split(";")[0]
+      }
+
+      const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombreMostrar: orgName }),
+        body: JSON.stringify(payload),
       })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        setBusinessError(body?.error || "No pudimos guardar los datos. Probá de nuevo.")
+        return
+      }
+
       await updateProgress("step_logo", true)
       setCurrentStep(2)
     } catch (err) {
-      console.error("Error saving org name:", err)
+      console.error("Error saving business data:", err)
+      setBusinessError("No pudimos guardar los datos. Revisá tu conexión y probá de nuevo.")
     } finally {
       setLoading(false)
     }
@@ -168,18 +205,23 @@ export function OnboardingWizard() {
     }
   }
 
-  const handleComplete = async () => {
+  // Marks onboarding as done without navigating, so callers pick their own destination.
+  const completeOnboarding = async (destination: string) => {
     setLoading(true)
     try {
       await fetch("/api/onboarding/complete", { method: "POST" })
-      router.push("/dashboard")
-      router.refresh()
     } catch (err) {
       console.error("Error completing onboarding:", err)
     } finally {
+      // Navigate even if completion failed: the dashboard redirects back to
+      // onboarding when it did not persist, and the CTA must never be a no-op.
+      router.push(destination)
+      router.refresh()
       setLoading(false)
     }
   }
+
+  const handleComplete = () => completeOnboarding("/dashboard")
 
   const handleSkipToDashboard = async () => {
     await handleComplete()
@@ -281,13 +323,7 @@ export function OnboardingWizard() {
                     <input
                       type="file"
                       accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (file) {
-                          setLogoFile(file)
-                          setLogoPreview(URL.createObjectURL(file))
-                        }
-                      }}
+                      onChange={handleLogoFileChange}
                       className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900 dark:file:text-blue-300"
                     />
                     {logoPreview && (
@@ -299,13 +335,21 @@ export function OnboardingWizard() {
                     )}
                   </div>
                 </div>
+                {businessError && (
+                  <div
+                    role="alert"
+                    className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded text-sm"
+                  >
+                    {businessError}
+                  </div>
+                )}
                 <div className="flex justify-between pt-4">
                   <Button variant="ghost" onClick={() => setCurrentStep(0)}>
                     <ChevronLeft className="mr-2 h-4 w-4" />
                     Atrás
                   </Button>
                   <Button
-                    onClick={logoFile ? handleLogoUpload : handleSaveOrgName}
+                    onClick={handleSaveBusiness}
                     disabled={loading}
                   >
                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -411,9 +455,7 @@ export function OnboardingWizard() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <Button
-                  onClick={() => {
-                    handleComplete().then(() => router.push("/ordenes?new=true"))
-                  }}
+                  onClick={() => completeOnboarding("/ordenes?nueva=1")}
                   className="w-full"
                   size="lg"
                 >

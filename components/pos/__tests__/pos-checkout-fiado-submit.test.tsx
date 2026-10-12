@@ -81,6 +81,8 @@ describe("PosCheckoutDialog — el botón Fiar realmente deja la venta impaga", 
     expect(venta.body.pagosParcial).toBe(true)
     expect(venta.body.pagos).toBeUndefined()
     expect(venta.body.clienteId).toBe("c1")
+    // Antes viajaba "EFECTIVO" y así salía en el ticket y en los reportes
+    expect(venta.body.metodoPago).toBe("CUENTA_CORRIENTE")
   })
 
   // computeVentaTotals rounds the total only when every payment line is cash, so

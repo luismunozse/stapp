@@ -36,6 +36,13 @@ import { useModal } from "@/contexts/modal-context"
 import { MultiPagoInput, createPagoLine, type PagoLineItem } from "@/components/pagos/multi-pago-input"
 import type { PosCartItem, PosCliente, DescuentoConfig, FiscalConfig } from "./pos-types"
 import { computeVentaTotals } from "./pos-types"
+import {
+  condicionDeCobro,
+  conciliarPagos,
+  metodoPagoCabecera,
+  pagosCobrados,
+  round2,
+} from "@/lib/ventas/totales"
 import { buildVentaPayload } from "./pos-payload"
 import { TotalRow } from "@/components/pos/total-row"
 
@@ -84,34 +91,25 @@ export function PosCheckoutDialog({
   const montoRecibidoParsed = parseMoneyInput(montoRecibidoTexto)
   const montoRecibido: number | "" = Number.isNaN(montoRecibidoParsed) ? "" : montoRecibidoParsed
 
-  // Método que fija el precio: el pago de mayor monto (empate => primero).
-  // Replicado aquí para no importar @/lib/recargos (usa supabaseAdmin, server-only).
-  function resolveMetodoCondicion(
-    pagos: Array<{ metodo: string; monto: number }>,
-    fallback: string
-  ): string {
-    if (!pagos || pagos.length === 0) return fallback
-    let elegido = pagos[0]
-    for (const p of pagos) {
-      if (p.monto > elegido.monto) elegido = p
-    }
-    return elegido.metodo
-  }
-
-  // roundCash = all payment lines are EFECTIVO (mirrors backend isCash logic)
   const isCashOnly = pagosLines.length === 1 && pagosLines[0].metodo === "EFECTIVO"
-  const allCash = pagosLines.length > 0 && pagosLines.every((p) => p.metodo === "EFECTIVO")
-  const t = computeVentaTotals(items, descuentoGlobal, fiscal, allCash)
-  const total = t.total
 
-  // Total efectivo: precio base × factor del método-condición
-  const metodoCondicionActual = resolveMetodoCondicion(
-    pagosLines.map((p) => ({ metodo: p.metodo, monto: p.monto })),
-    pagosLines[0]?.metodo ?? "EFECTIVO"
-  )
-  const porcentajeRecargo = recargosMetodo[metodoCondicionActual] ?? 0
-  const factorEfectivo = 1 + porcentajeRecargo / 100
-  const totalEfectivo = Math.round(total * factorEfectivo * 100) / 100
+  // Recargo del método y redondeo de efectivo con las mismas reglas y los
+  // mismos datos que usa POST /api/ventas (lib/ventas/totales.ts): los pagos
+  // que viajan en el payload, su metodoPago y si es a pagar después.
+  const cobro = condicionDeCobro(pagosLines, metodoPagoCabecera(pagosLines, pagoParcial), pagoParcial, recargosMetodo)
+  const metodoCondicionActual = cobro.metodo
+  const porcentajeRecargo = cobro.porcentaje
+
+  // Desglose y "Total contado" a precio de lista. El total a cobrar aplica el
+  // recargo al precio de cada producto y a los descuentos en monto, igual que
+  // el servidor: antes acá se multiplicaba el total ya descontado y, con un
+  // descuento en monto, el servidor esperaba otro número y rechazaba la venta.
+  const t = computeVentaTotals(items, descuentoGlobal, fiscal, cobro.efectivo)
+  const total = t.total
+  const totalEfectivo =
+    cobro.factor === 1
+      ? total
+      : computeVentaTotals(items, descuentoGlobal, fiscal, cobro.efectivo, cobro.factor).total
 
   const vuelto = useMemo(() => {
     if (!isCashOnly || montoRecibido === "") return 0
@@ -216,11 +214,14 @@ export function PosCheckoutDialog({
     submittingRef.current = true
     setLoading(true)
     try {
-      // Validar contra el total efectivo (precio base × factor del método)
-      const totalPagosBase = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
+      // Validar contra el total efectivo, al centavo y con la misma regla que
+      // el servidor (conciliarPagos).
+      const cobrados = pagosCobrados(pagosLines)
+      const totalPagosBase = round2(cobrados.reduce((sum, p) => sum + p.monto, 0))
+      const conciliacion = conciliarPagos(cobrados, totalEfectivo, pagoParcial)
 
       // Sin pago parcial, los pagos deben coincidir con el total efectivo
-      if (!pagoParcial && Math.abs(totalPagosBase - totalEfectivo) > 0.01) {
+      if (!pagoParcial && (conciliacion.error || (cobrados.length === 0 && totalEfectivo > 0))) {
         // Validación 100% sincrónica: no hay nada async en vuelo, así que se
         // libera `loading` ANTES de esperar a que el cajero cierre la alerta
         // (si no, el botón queda diciendo "Procesando..." mientras la propia
@@ -234,15 +235,14 @@ export function PosCheckoutDialog({
         return
       }
       // Con pago parcial, los pagos no pueden exceder el total efectivo
-      if (pagoParcial && totalPagosBase > totalEfectivo + 0.01) {
+      if (pagoParcial && conciliacion.error) {
         setLoading(false)
         await showError("El total de pagos no puede exceder el total de la venta")
         return
       }
 
       // Una venta con saldo pendiente requiere un cliente registrado
-      const saldoPendiente = totalEfectivo - totalPagosBase
-      if (pagoParcial && saldoPendiente > 0.01 && !cliente.id) {
+      if (pagoParcial && conciliacion.saldoPendiente > 0 && !cliente.id) {
         setLoading(false)
         await showError("Seleccioná un cliente para dejar saldo pendiente / fiar")
         return
@@ -360,9 +360,8 @@ export function PosCheckoutDialog({
 
   // Whether the confirm button should be blocked due to missing client for pending balance
   const pendienteRequiereCliente = useMemo(() => {
-    const totalPagosBase = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
-    const saldoPendiente = totalEfectivo - totalPagosBase
-    return pagoParcial && saldoPendiente > 0.01 && !cliente.id
+    if (!pagoParcial || cliente.id) return false
+    return conciliarPagos(pagosCobrados(pagosLines), totalEfectivo, true).saldoPendiente > 0
   }, [pagoParcial, pagosLines, totalEfectivo, cliente.id])
 
   // Quick cash amounts
@@ -472,8 +471,24 @@ export function PosCheckoutDialog({
                 onChange={(e) => {
                   setPagoParcial(e.target.checked)
                   if (!e.target.checked) {
-                    // Restore full amount on first pago line
-                    setPagosLines([createPagoLine(total)])
+                    // Volver a cobrar el total con el método (y cuotas,
+                    // referencia, costo) que ya estaba elegido. Antes ponía el
+                    // total de lista en efectivo: se perdía el método y, con
+                    // recargo, el monto no coincidía con el total a cobrar.
+                    // Línea nueva (id nuevo) para que el input no muestre lo
+                    // que se había tipeado como pago parcial.
+                    const primera = pagosLines[0]
+                    setPagosLines([
+                      primera
+                        ? {
+                            ...createPagoLine(totalEfectivo, primera.metodo),
+                            referencia: primera.referencia,
+                            cuotas: primera.cuotas,
+                            recargo: primera.recargo,
+                            costoFinanciero: primera.costoFinanciero,
+                          }
+                        : createPagoLine(totalEfectivo),
+                    ])
                   }
                 }}
               />
@@ -542,8 +557,8 @@ export function PosCheckoutDialog({
 
           {/* Partial payment summary */}
           {pagoParcial && (() => {
-            const totalPagosBase = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
-            const pendiente = totalEfectivo - totalPagosBase
+            const totalPagosBase = round2(pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0))
+            const pendiente = round2(totalEfectivo - totalPagosBase)
             return (pendiente > 0.01 && totalPagosBase > 0) ? (
               <div className="rounded-lg bg-warning-50 border border-warning/30 p-3 space-y-1">
                 <TotalRow label="Total pagos:" amount={formatPrice(totalPagosBase)} tone="success" />

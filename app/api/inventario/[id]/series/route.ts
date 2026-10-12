@@ -6,6 +6,7 @@ import {
   resolveVendedoresHabilitados,
 } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { depositoPermitido, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { z } from "zod"
 
 // GET /api/inventario/[id]/series — filtros estado, search numero_serie
@@ -76,12 +77,27 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId } = await requireInventarioAccess()
+    const { error, session, organizationId, userId, role } = await requireInventarioAccess()
     if (error) return error
 
     const { id } = await params
     const body = await request.json()
     const data = createSchema.parse(body)
+
+    // La RPC solo verifica que el deposito exista (FK): sin esto un request
+    // armado escribe stock en un deposito de otra org o de otra sucursal.
+    if (
+      data.depositoId &&
+      !(await depositoPermitido({
+        depositoId: data.depositoId,
+        organizationId: organizationId!,
+        role,
+        userSucursalId: session?.user?.sucursalId ?? null,
+        alcance: "sucursal",
+      }))
+    ) {
+      return NextResponse.json({ error: DEPOSITO_INVALIDO }, { status: 400 })
+    }
 
     const { data: result, error: rpcErr } = await supabaseAdmin.rpc(
       "registrar_entrada_series",

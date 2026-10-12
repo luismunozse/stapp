@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { verifyWebhookSignature } from "@/lib/mercadopago"
+import { organizationAcceptsBilling } from "@/lib/account-deletion/org-state"
 import { beginWebhookEvent, finishWebhookEvent } from "@/lib/webhook-log"
 
 export async function POST(request: NextRequest) {
@@ -317,11 +318,11 @@ export async function handlePaymentNotification(
   // Validar que la organización exista y esté activa
   const { data: org, error: orgError } = await supabaseAdmin
     .from("organizations")
-    .select("id, activo")
+    .select("id, activo, deleted_at")
     .eq("id", organizationId)
     .single()
 
-  if (orgError || !org || org.activo === false) {
+  if (orgError || !org || org.activo === false || org.deleted_at) {
     console.error(`[MP webhook] Organization ${organizationId} not found or inactive (payment ${paymentId})`, orgError)
     return {
       status: "SKIPPED",
@@ -635,6 +636,9 @@ export async function handlePreApprovalNotification(
 
   const organizationId = externalRef.organization_id
   if (!organizationId) return { status: "SKIPPED", reason: "missing_organization_id" }
+  if (!(await organizationAcceptsBilling(organizationId))) {
+    return { status: "SKIPPED", reason: "org_deleted_or_missing", organizationId }
+  }
 
   const statusMap: Record<string, "ACTIVE" | "CANCELED" | "PAST_DUE"> = {
     authorized: "ACTIVE",

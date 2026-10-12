@@ -5,6 +5,7 @@ import { encryptSecret } from "@/lib/facturacion/crypto"
 import { isMissingColumnError } from "@/lib/db-errors"
 import { validateCertKeyPair, CertValidationError } from "@/lib/facturacion/arca/cert"
 import { getCertificadoStapp } from "@/lib/facturacion/arca/stapp-cert"
+import { sendDelegacionArcaPendienteNotification } from "@/lib/email"
 
 /**
  * Credenciales fiscales — proveedor ARCA directo (migración 299, design
@@ -198,6 +199,18 @@ async function putArcaDelegado(organizationId: string, body: any) {
 
   const cond = condicionFiscal === "RESPONSABLE_INSCRIPTO" ? "RESPONSABLE_INSCRIPTO" : "MONOTRIBUTO"
 
+  // Solo se avisa a la plataforma cuando hay algo NUEVO que aceptar en ARCA:
+  // fila nueva, venía de otro proveedor, o cambió el CUIT. Guardar de nuevo los
+  // mismos datos (p.ej. cambiar solo el punto de venta) no es un trámite nuevo.
+  // Si la lectura falla se asume "nuevo": un aviso de más pesa menos que uno perdido.
+  const { data: previa } = await supabaseAdmin
+    .from("facturacion_credenciales")
+    .select("provider, cuit")
+    .eq("organization_id", organizationId)
+    .maybeSingle()
+  const requiereAviso =
+    !previa || previa.provider !== "arca_delegado" || previa.cuit !== cuitNormalizado
+
   const { error: dbError } = await supabaseAdmin.from("facturacion_credenciales").upsert({
     organization_id: organizationId,
     provider: "arca_delegado",
@@ -223,6 +236,15 @@ async function putArcaDelegado(organizationId: string, body: any) {
     return NextResponse.json({ error: "No se pudo guardar" }, { status: 500 })
   }
 
+  if (requiereAviso) {
+    await avisarDelegacionPendiente({
+      organizationId,
+      cuit: cuitNormalizado,
+      puntoVenta: puntoVentaValidado,
+      condicionFiscal: cond,
+    })
+  }
+
   return NextResponse.json({
     conectado: true,
     provider: "arca_delegado",
@@ -232,6 +254,37 @@ async function putArcaDelegado(organizationId: string, body: any) {
     condicionFiscal: cond,
     cuitPlataforma: cuitDeLaPlataforma(),
   })
+}
+
+/**
+ * Se espera (await) en vez de dejar la promesa suelta: en Vercel una promesa
+ * sin esperar puede morir en cuanto se devuelve la respuesta, y el aviso se
+ * perdería en silencio. Un fallo se loguea y se traga — guardar la delegación
+ * nunca depende de que el mail salga.
+ */
+async function avisarDelegacionPendiente(datos: {
+  organizationId: string
+  cuit: string
+  puntoVenta: number
+  condicionFiscal: string
+}) {
+  try {
+    const { data: org } = await supabaseAdmin
+      .from("organizations")
+      .select("nombre, nombre_mostrar")
+      .eq("id", datos.organizationId)
+      .maybeSingle()
+
+    await sendDelegacionArcaPendienteNotification({
+      ...datos,
+      organizationName: org?.nombre_mostrar || org?.nombre || null,
+    })
+  } catch (e) {
+    console.error(
+      "[facturacion] no se pudo avisar la delegación ARCA pendiente:",
+      e instanceof Error ? e.message : e
+    )
+  }
 }
 
 async function putArca(organizationId: string, body: any) {

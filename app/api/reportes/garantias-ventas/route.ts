@@ -1,6 +1,7 @@
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { traerTodas } from "@/lib/supabase-paginar"
 import { NextResponse } from "next/server"
 
 export async function GET() {
@@ -16,55 +17,58 @@ export async function GET() {
   hace30Dias.setDate(now.getDate() - 30)
 
   try {
-    // Build base garantias queries — filter via ventas!inner when a branch is active
-    let resumenQuery = supabaseAdmin
-      .from("garantias_venta")
-      .select("id, estado, ventas!inner(organization_id, sucursal_id)")
-      .eq("ventas.organization_id", organizationId!)
+    // Build base garantias queries — filter via ventas!inner when a branch is active.
+    // Sin las de ventas anuladas: esa garantía no existe (la venta se deshizo).
+    const sucursalId = !filtro.verTodas && filtro.sucursalId ? filtro.sucursalId : null
 
     let porVencerQuery = supabaseAdmin
       .from("garantias_venta")
       .select(`
         id, numero_garantia, dias_validez, fecha_inicio, fecha_vencimiento, estado,
         items_venta!inner(descripcion, cantidad, precio_unitario),
-        ventas!inner(numero_venta, cliente_nombre, cliente_telefono, organization_id, sucursal_id)
+        ventas!inner(numero_venta, cliente_nombre, cliente_telefono, organization_id, sucursal_id, estado)
       `)
       .eq("ventas.organization_id", organizationId!)
+      .neq("ventas.estado", "ANULADA")
       .eq("estado", "ACTIVA")
       .gte("fecha_vencimiento", now.toISOString())
       .lte("fecha_vencimiento", en30Dias.toISOString())
       .order("fecha_vencimiento", { ascending: true })
+    if (sucursalId) porVencerQuery = porVencerQuery.eq("ventas.sucursal_id", sucursalId)
 
-    let todasGarantiasQuery = supabaseAdmin
-      .from("garantias_venta")
-      .select(`
-        id, estado, numero_garantia, fecha_inicio, created_at,
-        items_venta!inner(descripcion),
-        ventas!inner(numero_venta, cliente_nombre, organization_id, sucursal_id)
-      `)
-      .eq("ventas.organization_id", organizationId!)
-
-    if (!filtro.verTodas && filtro.sucursalId) {
-      resumenQuery = resumenQuery.eq("ventas.sucursal_id", filtro.sucursalId)
-      porVencerQuery = porVencerQuery.eq("ventas.sucursal_id", filtro.sucursalId)
-      todasGarantiasQuery = todasGarantiasQuery.eq("ventas.sucursal_id", filtro.sucursalId)
+    // Una sola lectura para el resumen, la tasa de reclamo y la distribución,
+    // paginada: con más de 1000 garantías PostgREST cortaba en silencio.
+    // dias_validez y fecha_vencimiento no se pedían: la distribución salía
+    // toda en "0 días" y las vencidas en 0.
+    const todasGarantiasQuery = () => {
+      let q = supabaseAdmin
+        .from("garantias_venta")
+        .select(`
+          id, estado, numero_garantia, dias_validez, fecha_inicio, fecha_vencimiento, created_at,
+          items_venta!inner(descripcion),
+          ventas!inner(numero_venta, cliente_nombre, organization_id, sucursal_id, estado)
+        `)
+        .eq("ventas.organization_id", organizationId!)
+        .neq("ventas.estado", "ANULADA")
+        .order("id")
+      if (sucursalId) q = q.eq("ventas.sucursal_id", sucursalId)
+      return q
     }
 
-    const [
-      resumenResult,
-      porVencerResult,
-      todasGarantiasResult,
-    ] = await Promise.all([
-      resumenQuery,
+    const [porVencerResult, todasGarantiasResult] = await Promise.all([
       porVencerQuery,
-      todasGarantiasQuery,
+      traerTodas(todasGarantiasQuery),
     ])
 
     // --- Resumen ---
-    const todas = resumenResult.data || []
+    // Nadie pasa las garantías a VENCIDA: una ACTIVA con la fecha cumplida
+    // está vencida aunque el estado no lo diga.
+    const todas = todasGarantiasResult.data as any[]
+    const vencidaPorFecha = (g: any) =>
+      g.estado === "ACTIVA" && g.fecha_vencimiento && new Date(g.fecha_vencimiento) < now
     const resumen = {
-      totalActivas: todas.filter(g => g.estado === "ACTIVA").length,
-      totalVencidas: todas.filter(g => g.estado === "VENCIDA").length,
+      totalActivas: todas.filter(g => g.estado === "ACTIVA" && !vencidaPorFecha(g)).length,
+      totalVencidas: todas.filter(g => g.estado === "VENCIDA" || vencidaPorFecha(g)).length,
       totalReclamadas: todas.filter(g => g.estado === "RECLAMADA").length,
       // Retiradas por devolución (migración 316). Sin este bucket los otros tres
       // no cierran contra totalGarantias y la diferencia no la explica nadie.
@@ -92,7 +96,7 @@ export async function GET() {
     })
 
     // --- Tasa de Reclamo por Producto ---
-    const todasGarantias = todasGarantiasResult.data || []
+    const todasGarantias = todas
     const productoMap: Record<string, { producto: string; totalGarantias: number; totalReclamadas: number }> = {}
     todasGarantias.forEach((g: any) => {
       // Una garantía ANULADA se retiró al devolverse el producto: nunca pudo

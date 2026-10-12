@@ -48,4 +48,17 @@ describe("parseMoneyInput — normaliza montos es-AR (coma decimal, punto de mil
   it("caso del bug: 1.500,50 NO colapsa a 1.5", () => {
     expect(parseMoneyInput("1.500,50")).not.toBeCloseTo(1.5, 2)
   })
+
+  it("punto de miles sin decimales (cajero es-AR): 1.500 es mil quinientos, no 1,5", () => {
+    expect(parseMoneyInput("1.500")).toBe(1500)
+    expect(parseMoneyInput("12.345.678")).toBe(12345678)
+    expect(parseMoneyInput("-2.000")).toBe(-2000)
+  })
+
+  it("con otra cantidad de dígitos el punto sigue siendo decimal", () => {
+    expect(parseMoneyInput("1.5")).toBeCloseTo(1.5, 2)
+    expect(parseMoneyInput("1.50")).toBeCloseTo(1.5, 2)
+    expect(parseMoneyInput("1500.5")).toBeCloseTo(1500.5, 2)
+    expect(parseMoneyInput("1.5000")).toBeCloseTo(1.5, 2)
+  })
 })

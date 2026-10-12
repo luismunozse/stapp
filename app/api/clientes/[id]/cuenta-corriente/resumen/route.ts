@@ -7,7 +7,7 @@ import { dayRangeUtc, todayInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 // Same two-tier emisor select as the recibo route: migration 295's fiscal
 // columns may not be applied yet and the statement must still print.
-const ORG_COLS = "nombre, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria"
+const ORG_COLS = "nombre, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria, pais"
 const ORG_COLS_FISCAL = `${ORG_COLS}, cuit, condicion_iva, domicilio_fiscal`
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/
@@ -147,6 +147,7 @@ export async function GET(
       telefonoEmpresa: orgAny?.telefono as string,
       direccionEmpresa: orgAny?.direccion as string,
       cuitEmpresa: orgAny?.cuit as string,
+      pais: orgAny?.pais as string | null | undefined,
       condicionIvaEmpresa: orgAny?.condicion_iva as string,
       domicilioFiscalEmpresa: orgAny?.domicilio_fiscal as string,
       logoUrl: orgAny?.logo_url as string,

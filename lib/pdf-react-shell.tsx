@@ -18,6 +18,7 @@ import {
   type PdfLogo,
   type HelveticaMetrics,
 } from "./pdf-react-shared"
+import { getTaxIdLabel, getCombinedIdLabel } from "./countries"
 
 /** The one wording. Previously written three different ways across engines. */
 export const LEYENDA_NO_FISCAL = "Documento no válido como comprobante fiscal"
@@ -208,6 +209,8 @@ export type EmisorData = {
   direccionEmpresa?: string | null
   domicilioFiscalEmpresa?: string | null
   cuitEmpresa?: string | null
+  /** País de la org: define la etiqueta del ID fiscal (CUIT, NIF...). Sin valor, Argentina. */
+  pais?: string | null
   condicionIvaEmpresa?: string | null
   ingresosBrutosEmpresa?: string | null
   inicioActividadesEmpresa?: string | null
@@ -484,7 +487,11 @@ export function Cabecera({
                 {linea}
               </Text>
             ))}
-            {cuit ? <Text style={estilosShell.smallLabelRight}>CUIT: {cuit}</Text> : null}
+            {cuit ? (
+              <Text style={estilosShell.smallLabelRight}>
+                {getTaxIdLabel(emisor.pais)}: {cuit}
+              </Text>
+            ) : null}
             {ingresosBrutos ? <Text style={estilosShell.smallLabelRight}>Ingresos brutos: {ingresosBrutos}</Text> : null}
             {inicioActividades ? (
               <Text style={estilosShell.smallLabelRight}>Inicio actividades: {inicioActividades}</Text>
@@ -541,9 +548,12 @@ export function BandaCliente({
   derecha,
   espacioInferior,
   espacioDerecha,
+  pais,
 }: {
   label: string
   cliente: ClienteData
+  /** País de la org, para la etiqueta del documento del cliente. Sin valor, Argentina. */
+  pais?: string | null
   campos: CampoCliente[]
   derecha?: React.ReactNode
   /** Bottom padding, for a band followed by another band inside the frame. */
@@ -557,7 +567,7 @@ export function BandaCliente({
 }) {
   const nombre = safe(cliente?.nombre) || "Consumidor Final"
   const valores: Record<CampoCliente, string> = {
-    dni: safe(cliente?.dni) ? `DNI/CUIT: ${safe(cliente?.dni)}` : "",
+    dni: safe(cliente?.dni) ? `${getCombinedIdLabel(pais, "personal-primero")}: ${safe(cliente?.dni)}` : "",
     telefono: safe(cliente?.telefono) ? `Tel: ${safe(cliente?.telefono)}` : "",
     email: safe(cliente?.email),
     direccion: safe(cliente?.direccion),

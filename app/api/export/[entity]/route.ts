@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
+import {
+  requireAuth,
+  requirePosAccess,
+  soloVeSusVentas,
+  hasInventarioAccess,
+  resolveVendedoresHabilitados,
+} from "@/lib/auth-utils"
+import { traerTodas } from "@/lib/supabase-paginar"
+import { DEFAULT_TIMEZONE, dayRangeUtc } from "@/lib/timezone"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura, type ResultadoLectura } from "@/lib/sucursal"
 import {
@@ -105,7 +113,7 @@ export async function POST(
 
 async function runExport(entity: string, filters: Record<string, string>) {
   try {
-    const { error, organizationId, role, session } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     if (!VALID_ENTITIES.includes(entity as EntityType)) {
@@ -127,9 +135,17 @@ async function runExport(entity: string, filters: Record<string, string>) {
       case "ordenes":
         payload = await exportOrdenes(organizationId!, filters, lectura)
         break
-      case "ventas":
-        payload = await exportVentas(organizationId!, filters, lectura)
+      case "ventas": {
+        // Las mismas reglas que el listado de ventas: un TECNICO sin acceso al
+        // POS no exporta ventas y un VENDEDOR solo las suyas. Antes cualquier
+        // usuario de la org bajaba todas.
+        const pos = await requirePosAccess()
+        if (pos.error) return pos.error
+        payload = await exportVentas(organizationId!, filters, lectura, {
+          soloVendedor: soloVeSusVentas(role) ? userId! : null,
+        })
         break
+      }
       case "clientes":
         payload = await exportClientes(organizationId!, filters)
         break
@@ -223,25 +239,48 @@ async function exportOrdenes(
 async function exportVentas(
   organizationId: string,
   filters: Record<string, string>,
-  lectura: ResultadoLectura
+  lectura: ResultadoLectura,
+  opts: { soloVendedor: string | null }
 ): Promise<ExportPayload> {
-  let query = supabaseAdmin
-    .from("ventas")
-    .select(`*, vendedor:users!vendedor_id(nombre)`)
-    .eq("organization_id", organizationId)
-    .order("created_at", { ascending: false })
-    .limit(10000)
+  // desde/hasta son días ("YYYY-MM-DD") de la organización: `lte(hasta)` a
+  // secas comparaba contra las 00:00 UTC y dejaba afuera todo el último día.
+  let rango: { desde?: string; hasta?: string } = {}
+  if (filters.desde || filters.hasta) {
+    const { data: org } = await supabaseAdmin
+      .from("organizations")
+      .select("zona_horaria")
+      .eq("id", organizationId)
+      .single()
+    const tz: string = org?.zona_horaria || DEFAULT_TIMEZONE
+    const dia = (f: string) => (/^\d{4}-\d{2}-\d{2}$/.test(f) ? dayRangeUtc(f, tz) : { desde: f, hasta: f })
+    rango = {
+      ...(filters.desde ? { desde: dia(filters.desde).desde } : {}),
+      ...(filters.hasta ? { hasta: dia(filters.hasta).hasta } : {}),
+    }
+  }
 
-  if (!lectura.verTodas && lectura.sucursalId)
-    query = query.eq("sucursal_id", lectura.sucursalId)
+  const armar = () => {
+    let query = supabaseAdmin
+      .from("ventas")
+      .select(`*, vendedor:users!vendedor_id(nombre)`)
+      .eq("organization_id", organizationId)
+      .order("created_at", { ascending: false })
+      .order("id")
 
-  if (filters.estado) query = query.eq("estado", filters.estado)
-  if (filters.desde) query = query.gte("created_at", filters.desde)
-  if (filters.hasta) query = query.lte("created_at", filters.hasta)
+    if (!lectura.verTodas && lectura.sucursalId)
+      query = query.eq("sucursal_id", lectura.sucursalId)
+    if (opts.soloVendedor) query = query.eq("vendedor_id", opts.soloVendedor)
 
-  const { data, error } = await query
+    if (filters.estado) query = query.eq("estado", filters.estado)
+    if (rango.desde) query = query.gte("created_at", rango.desde)
+    if (rango.hasta) query = query.lte("created_at", rango.hasta)
+    return query
+  }
+
+  // Paginado: `.limit(10000)` no pasa del tope de 1000 filas de PostgREST
+  const { data, error } = await traerTodas(armar, { maximo: 10000 })
   if (error) throw error
-  return { data: data || [], columns: VENTAS_COLUMNS }
+  return { data, columns: VENTAS_COLUMNS }
 }
 
 async function exportClientes(

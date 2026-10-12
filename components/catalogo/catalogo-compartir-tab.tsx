@@ -13,6 +13,8 @@ import {
 } from "lucide-react"
 import { useRef } from "react"
 import { toast } from "sonner"
+import Link from "next/link"
+import { useHasFeature } from "@/hooks/use-subscription"
 import QRCode from "qrcode"
 import type { CatalogoConfig, TrustBadge, TrustBadgeIcon } from "@/types/database"
 
@@ -44,6 +46,9 @@ const MAX_TRUST_BADGES = 6
 import { CatalogoStatsCard } from "./catalogo-stats-card"
 
 export function CatalogoCompartirTab() {
+  const { hasFeature: hasCotizaciones, loading: planLoading } = useHasFeature("cotizaciones_online")
+  // Mientras carga el plan no mostramos el aviso: evita un parpadeo falso.
+  const soloWhatsapp = !planLoading && !hasCotizaciones
   const [config, setConfig] = useState<CatalogoConfig | null>(null)
   const [url, setUrl] = useState("")
   const [loading, setLoading] = useState(true)
@@ -58,6 +63,7 @@ export function CatalogoCompartirTab() {
   const [bannerUrl, setBannerUrl] = useState<string | null>(null)
   const [uploadingBanner, setUploadingBanner] = useState(false)
   const [activo, setActivo] = useState(false)
+  const [reservaHoras, setReservaHoras] = useState("48")
   const [trustBadges, setTrustBadges] = useState<TrustBadge[]>([])
   const bannerInputRef = useRef<HTMLInputElement>(null)
 
@@ -76,6 +82,7 @@ export function CatalogoCompartirTab() {
         setWhatsapp(data.config.whatsapp ?? "")
         setBannerUrl(data.config.banner_url ?? null)
         setActivo(data.config.activo)
+        setReservaHoras(String(data.config.reserva_horas ?? 48))
         setTrustBadges(Array.isArray(data.config.trust_badges) ? data.config.trust_badges : [])
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error cargando configuración")
@@ -112,6 +119,11 @@ export function CatalogoCompartirTab() {
   }
 
   const handleSave = async () => {
+    const horas = Number(reservaHoras)
+    if (!Number.isInteger(horas) || horas < 1 || horas > 720) {
+      toast.error("La reserva de stock debe ser un número entero de horas entre 1 y 720")
+      return
+    }
     setSaving(true)
     try {
       const payload = {
@@ -123,6 +135,9 @@ export function CatalogoCompartirTab() {
         banner_url: bannerUrl,
         trust_badges: trustBadges.filter((b) => b.label.trim().length > 0).slice(0, MAX_TRUST_BADGES),
         activo,
+        // Antes de aplicar la migración 337 la columna no existe: no se manda,
+        // para no romper el guardado de los demás campos.
+        ...(typeof config?.reserva_horas === "number" && { reserva_horas: horas }),
       }
       const res = await fetch("/api/catalogo/config", {
         method: "PUT",
@@ -179,6 +194,20 @@ export function CatalogoCompartirTab() {
             </div>
             <Switch id="activo" checked={activo} onCheckedChange={setActivo} />
           </div>
+
+          {soloWhatsapp && (
+            <div className="flex items-start gap-3 p-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
+              <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-amber-900 dark:text-amber-200">
+                En tu plan actual los pedidos del catálogo llegan solo por WhatsApp: no se registran como
+                cotización ni reservan stock. Cargá tu WhatsApp más abajo, sin él tus clientes no pueden hacer
+                pedidos. Con un plan que incluya cotizaciones online los pedidos quedan registrados.{" "}
+                <Link href="/configuracion/billing?plan=profesional" className="font-medium underline">
+                  Ver planes
+                </Link>
+              </p>
+            </div>
+          )}
 
           <div>
             <Label htmlFor="slug">URL del catálogo</Label>
@@ -287,6 +316,25 @@ export function CatalogoCompartirTab() {
                 placeholder="+5491112345678"
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="reserva-horas">Reserva de stock (horas)</Label>
+            <Input
+              id="reserva-horas"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={720}
+              step={1}
+              value={reservaHoras}
+              onChange={(e) => setReservaHoras(e.target.value)}
+              className="mt-1 w-32"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Los pedidos pendientes liberan el stock reservado pasado este tiempo (entre 1 y 720 horas).
+              El pedido sigue en tus cotizaciones.
+            </p>
           </div>
 
           <div className="pt-2 border-t">

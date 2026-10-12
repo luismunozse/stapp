@@ -13,7 +13,7 @@ import { lazyInventarioAccess } from "@/lib/auth-utils"
  * these two routes it was resolved eagerly, above the early returns.
  *
  * /api/inventario/search runs on every keystroke of the POS product search
- * (venta-form, venta-edit-form, item-row, inventario-search-combobox all hit
+ * (venta-edit-form, item-row, inventario-search-combobox all hit
  * it), so every VENDEDOR session paid one extra round trip per key — including
  * on responses that carry no cost at all: no matching deposito, no rows,
  * check-duplicate bailing on an empty query.

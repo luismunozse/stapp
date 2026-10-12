@@ -22,11 +22,11 @@ const garantia = (id: string, estado: string, descripcion = "Cargador") => ({
   ventas: { numero_venta: 1, cliente_nombre: "Ana", organization_id: "org-1", sucursal_id: null },
 })
 
-/** garantias_venta is queried three times in the route; rotate mocks per call. */
+/**
+ * garantias_venta se consulta dos veces: primero las por vencer y después
+ * todas (paginada), de la que salen el resumen, la tasa y la distribución.
+ */
 function mockReport(rows: any[]) {
-  const resumenChain = createChainMock(
-    rows.map((r) => ({ id: r.id, estado: r.estado, ventas: { organization_id: "org-1", sucursal_id: null } }))
-  )
   const porVencerChain = createChainMock([])
   const todasChain = createChainMock(rows)
 
@@ -34,9 +34,7 @@ function mockReport(rows: any[]) {
   vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
     if (table === "garantias_venta") {
       callCount++
-      if (callCount === 1) return resumenChain as any
-      if (callCount === 2) return porVencerChain as any
-      return todasChain as any
+      return (callCount === 1 ? porVencerChain : todasChain) as any
     }
     return createChainMock([]) as any
   })
@@ -97,5 +95,17 @@ describe("GET /api/reportes/garantias-ventas — ANULADA", () => {
     expect(cargador).toBeDefined()
     expect(cargador.totalGarantias).toBe(2)
     expect(cargador.tasaReclamo).toBe(50)
+  })
+
+  it("una garantía ACTIVA con la fecha cumplida cuenta como vencida (nadie le cambia el estado)", async () => {
+    mockReport([
+      { ...garantia("g1", "ACTIVA"), fecha_vencimiento: "2020-01-31T00:00:00Z" },
+      { ...garantia("g2", "ACTIVA"), fecha_vencimiento: "2999-01-31T00:00:00Z" },
+    ])
+
+    const { body } = await get()
+
+    expect(body.resumen.totalVencidas).toBe(1)
+    expect(body.resumen.totalActivas).toBe(1)
   })
 })

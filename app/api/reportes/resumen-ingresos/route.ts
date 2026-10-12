@@ -3,7 +3,7 @@ import { requireIngresosAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { getDeviceTypeLabel } from "@/lib/device-types"
-import { DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { DEFAULT_TIMEZONE, dayRangeUtc, getZonedParts, monthRangeUtc } from "@/lib/timezone"
 import { nombreMesCivil } from "@/lib/finanzas-period"
 
 export async function GET(request: Request) {
@@ -29,29 +29,42 @@ export async function GET(request: Request) {
 
     // Rango explícito (desde/hasta) tiene prioridad sobre `meses`.
     // Sin rango, se usa la ventana de los últimos N meses (default 6).
+    // Días y meses de la organización: con la hora del servidor (UTC) las
+    // ventas de la noche del último día del mes caían en el mes siguiente.
     let fechaDesde: Date
     let fechaHasta: Date
     if (desdeParam && hastaParam) {
-      fechaDesde = new Date(`${desdeParam}T00:00:00`)
-      fechaHasta = new Date(`${hastaParam}T23:59:59.999`)
+      fechaDesde = new Date(dayRangeUtc(desdeParam, tz).desde)
+      fechaHasta = new Date(dayRangeUtc(hastaParam, tz).hasta)
     } else {
-      fechaDesde = new Date(now.getFullYear(), now.getMonth() - meses + 1, 1)
+      const hoy = getZonedParts(now, tz)
+      fechaDesde = monthRangeUtc(hoy.year, hoy.month - meses + 1, tz).desde
       fechaHasta = now
     }
 
     const desdeISO = fechaDesde.toISOString()
     const hastaISO = fechaHasta.toISOString()
 
+    // Mes (YYYY-MM) de un instante en la zona de la organización
+    const mesDe = (fecha: string | Date) => {
+      const { year, month } = getZonedParts(new Date(fecha), tz)
+      return `${year}-${String(month).padStart(2, "0")}`
+    }
+
     // Claves de mes (YYYY-MM) que abarca el rango, en orden.
     const monthKeys: string[] = []
     {
-      const cursor = new Date(fechaDesde.getFullYear(), fechaDesde.getMonth(), 1)
-      const end = new Date(fechaHasta.getFullYear(), fechaHasta.getMonth(), 1)
-      while (cursor <= end) {
-        monthKeys.push(
-          `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`
-        )
-        cursor.setMonth(cursor.getMonth() + 1)
+      const ini = getZonedParts(fechaDesde, tz)
+      const fin = getZonedParts(fechaHasta, tz)
+      let y = ini.year
+      let m = ini.month
+      while (y < fin.year || (y === fin.year && m <= fin.month)) {
+        monthKeys.push(`${y}-${String(m).padStart(2, "0")}`)
+        m++
+        if (m > 12) {
+          m = 1
+          y++
+        }
       }
     }
 
@@ -80,7 +93,7 @@ export async function GET(request: Request) {
     // Ventas completadas (branch-filtered directly)
     let ventasQuery = supabaseAdmin
       .from("ventas")
-      .select("id, total, iva_neto, iva_monto, metodo_pago, created_at")
+      .select("id, total, iva_neto, iva_monto, metodo_pago, created_at, pagos_venta(monto, metodo_pago)")
       .eq("organization_id", organizationId!)
       .eq("estado", "COMPLETADA")
       .gte("created_at", desdeISO)
@@ -133,8 +146,7 @@ export async function GET(request: Request) {
 
     for (const f of facturas || []) {
       if (ordenesConCobro.has(f.orden_id)) continue
-      const fecha = new Date(f.fecha)
-      const key = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`
+      const key = mesDe(f.fecha)
       // NET: subtotal (== total when no IVA — EXENTO no-op)
       const monto = Number((f as any).subtotal || f.total || 0)
       if (ingresosPorMes[key]) ingresosPorMes[key].servicios += monto
@@ -153,8 +165,7 @@ export async function GET(request: Request) {
     }
 
     for (const c of (cobros || []) as any[]) {
-      const fecha = new Date(c.created_at)
-      const key = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`
+      const key = mesDe(c.created_at)
       // Direct order payments: no IVA breakdown — kept at gross (face value)
       const monto = Number(c.monto || 0)
       if (ingresosPorMes[key]) ingresosPorMes[key].servicios += monto
@@ -162,12 +173,29 @@ export async function GET(request: Request) {
     }
 
     for (const v of ventas || []) {
-      const fecha = new Date(v.created_at)
-      const key = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`
+      const key = mesDe(v.created_at)
       // NET: COALESCE(iva_neto, total) — iva_neto is NULL for EXENTO/legacy (no-op)
       const monto = Number((v as any).iva_neto ?? v.total ?? 0)
       if (ingresosPorMes[key]) ingresosPorMes[key].ventas += monto
-      addMetodo(key, (v as any).metodo_pago || "OTRO", monto)
+      // Método: prorratear según los pagos reales (como las facturas con sus
+      // pagos_parciales). Con la cabecera, una venta mitad efectivo y mitad
+      // tarjeta iba toda a efectivo, y una fiada figuraba como cobrada.
+      const pagos = ((v as any).pagos_venta || []) as { monto: any; metodo_pago: string }[]
+      const bruto = Number(v.total || 0)
+      if (pagos.length === 0) {
+        // Ventas viejas sin filas de pago: el método de la cabecera (una fiada
+        // nueva figura como CUENTA_CORRIENTE)
+        addMetodo(key, (v as any).metodo_pago || "OTRO", monto)
+      } else if (bruto > 0) {
+        let cubierto = 0
+        for (const p of pagos) {
+          const share = Math.min(Number(p.monto || 0) / bruto, 1 - cubierto)
+          if (share <= 0) continue
+          addMetodo(key, p.metodo_pago || "OTRO", monto * share)
+          cubierto += share
+        }
+        if (cubierto < 0.9999) addMetodo(key, "PENDIENTE_COBRO", monto * (1 - cubierto))
+      }
     }
 
     const porMes = Object.entries(ingresosPorMes)
@@ -191,7 +219,8 @@ export async function GET(request: Request) {
         const [year, month] = key.split("-")
         const nombreMes = nombreMesCivil(parseInt(year), parseInt(month), tz)
         const lista = Object.entries(metodos)
-          .map(([metodo, monto]) => ({ metodo, monto }))
+          // Al prorratear quedan restos binarios (199.99999…): a centavos
+          .map(([metodo, monto]) => ({ metodo, monto: Math.round(monto * 100) / 100 }))
           .sort((a, b) => b.monto - a.monto)
         return {
           mesKey: key,

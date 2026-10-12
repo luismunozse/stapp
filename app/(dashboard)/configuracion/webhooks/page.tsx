@@ -39,6 +39,9 @@ const EVENT_TYPES = [
   { id: "inventario.archived", label: "Inventario archivado" },
   { id: "inventario.stock_bajo", label: "Stock bajo" },
   { id: "venta.completada", label: "Venta completada" },
+  { id: "venta.anulada", label: "Venta anulada" },
+  { id: "venta.editada", label: "Venta editada" },
+  { id: "venta.devolucion", label: "Devolución de venta" },
   { id: "orden.estado_cambiado", label: "Cambio estado orden" },
   { id: "cotizacion.aceptada", label: "Cotización aceptada" },
 ] as const

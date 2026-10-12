@@ -1,5 +1,6 @@
 import type { PosCartItem, PosCliente, DescuentoConfig, TipoDescuento } from "./pos-types"
 import type { PagoLineItem } from "@/components/pagos/multi-pago-input"
+import { metodoPagoCabecera } from "@/lib/ventas/totales"
 
 export interface BuildVentaPayloadInput {
   items: PosCartItem[]
@@ -48,6 +49,7 @@ export interface VentaPayload {
     cuotas?: number
     recargo?: number
     montoOriginal?: number
+    costoFinanciero?: number
   }[]
 }
 
@@ -84,7 +86,8 @@ export function buildVentaPayload(input: BuildVentaPayloadInput): VentaPayload {
     porcentajeDescuento: globalTipo === "PORCENTAJE" ? globalValor : 0,
     ...(descuentoMotivo ? { descuentoMotivo } : {}),
     ...(vendedorId ? { vendedorId } : {}),
-    metodoPago: pagosConMonto.length > 0 ? pagosConMonto[0].metodo : "EFECTIVO",
+    // El checkout calcula el recargo con este mismo metodoPago (condicionDeCobro).
+    metodoPago: metodoPagoCabecera(pagosLines, pagoParcial),
     ...(observaciones ? { observaciones } : {}),
     ...(pagosConMonto.length > 0 && {
       pagos: pagosConMonto.map((p) => ({
@@ -93,6 +96,8 @@ export function buildVentaPayload(input: BuildVentaPayloadInput): VentaPayload {
         ...(p.referencia && { referencia: p.referencia }),
         ...(p.cuotas && { cuotas: p.cuotas }),
         ...(p.recargo && p.recargo > 0 && { recargo: p.recargo }),
+        // % que cobra la terminal: antes se cargaba en el cobro y no se mandaba
+        ...(p.costoFinanciero && p.costoFinanciero > 0 && { costoFinanciero: p.costoFinanciero }),
         // monto_original queda deprecado: `monto` es la base y `recargo` el %;
         // el total con recargo se deriva (monto + monto*recargo/100). No se escribe
         // el valor invertido que tenia antes (guardaba el total con recargo).

@@ -25,6 +25,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import type { Cliente } from "@/types"
 import { useModal } from "@/contexts/modal-context"
 import { useCurrency } from "@/contexts/currency-context"
+import { getPersonalIdLabel } from "@/lib/countries"
 import { useHasFeature } from "@/hooks/use-subscription"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
@@ -36,7 +37,7 @@ interface ClientesListProps {
 export function ClientesList({ allowImport = true }: ClientesListProps) {
   const router = useRouter()
   const { confirm, showError } = useModal()
-  const { formatDate, formatPrice } = useCurrency()
+  const { formatDate, formatPrice, pais } = useCurrency()
   const { hasFeature: hasCotizaciones, loading: cotizacionesLoading } = useHasFeature("cotizaciones_online")
   const puedeCotizar = cotizacionesLoading || hasCotizaciones
   const [showForm, setShowForm] = useState(false)
@@ -187,7 +188,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
               <div className="text-xs text-muted-foreground">{cliente.razonSocial}</div>
             )}
             {!cliente.razonSocial && cliente.dni && (
-              <div className="text-xs text-muted-foreground">DNI: {cliente.dni}</div>
+              <div className="text-xs text-muted-foreground">{getPersonalIdLabel(pais)}: {cliente.dni}</div>
             )}
           </div>
         </div>
@@ -381,7 +382,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por nombre, teléfono, DNI o sector..."
+              placeholder={`Buscar por nombre, teléfono, ${getPersonalIdLabel(pais)} o sector...`}
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-10 w-full sm:max-w-sm"
