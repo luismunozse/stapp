@@ -31,9 +31,27 @@
 -- for any workshop outside UTC.
 -- ============================================================================
 
--- pago_idempotency already carries venta_id / orden_id / factura_id, each added
--- by the flow that needed it (mig 233, 242, 243). A batch has none of those.
-ALTER TABLE pago_idempotency ADD COLUMN IF NOT EXISTS cliente_id TEXT;
+-- Own idempotency table, deliberately NOT pago_idempotency: that table is the
+-- barrier of the payment RPCs and this migration must not create, alter or
+-- reference it. Same shape and conventions as recepciones_oc_idempotencia
+-- (mig 313): composite PK is the barrier, RLS enabled with NO policies so only
+-- the service-role client can read or write.
+CREATE TABLE IF NOT EXISTS reparaciones_express_idempotencia (
+  organization_id TEXT        NOT NULL,
+  idempotency_key TEXT        NOT NULL,
+  cliente_id      TEXT        NOT NULL,
+  response        JSONB,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (organization_id, idempotency_key)
+);
+
+COMMENT ON TABLE reparaciones_express_idempotencia IS
+  'One row per express repairs batch claimed with an idempotency key. A retry '
+  'replays the stored response instead of charging the client twice. Accessed '
+  'only through the service-role client: RLS is enabled with no policies.';
+
+ALTER TABLE reparaciones_express_idempotencia ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON reparaciones_express_idempotencia FROM PUBLIC, anon, authenticated;
 
 CREATE OR REPLACE FUNCTION crear_reparaciones_express(
   p_organization_id TEXT,
@@ -64,16 +82,16 @@ BEGIN
     RAISE EXCEPTION 'reparaciones_express: at least one repair is required';
   END IF;
 
-  -- Idempotency claim INSIDE this transaction (same shape as mig 269:651-661).
+  -- Idempotency claim INSIDE this transaction (claim + unique_violation replay).
   -- This is money: without it a double click on a slow connection charges the
   -- client twice.
   IF p_idempotency_key IS NOT NULL THEN
     BEGIN
-      INSERT INTO pago_idempotency (organization_id, idempotency_key, cliente_id)
+      INSERT INTO reparaciones_express_idempotencia (organization_id, idempotency_key, cliente_id)
         VALUES (p_organization_id, p_idempotency_key, p_cliente_id);
     EXCEPTION WHEN unique_violation THEN
       SELECT response INTO v_existing
-        FROM pago_idempotency
+        FROM reparaciones_express_idempotencia
         WHERE organization_id = p_organization_id
           AND idempotency_key = p_idempotency_key;
       RETURN jsonb_build_object('replayed', true, 'response', v_existing);
@@ -175,7 +193,7 @@ BEGIN
   );
 
   IF p_idempotency_key IS NOT NULL THEN
-    UPDATE pago_idempotency
+    UPDATE reparaciones_express_idempotencia
       SET response = v_result
       WHERE organization_id = p_organization_id
         AND idempotency_key = p_idempotency_key;
@@ -194,7 +212,7 @@ COMMENT ON FUNCTION crear_reparaciones_express(TEXT, TEXT, TEXT, JSONB, TEXT, TE
   'Creates N express repair orders for one client, born in the terminal state '
   'ENTREGADO, each with its CARGO on the client cuenta corriente, in a single '
   'transaction. Rolls the whole batch back on any failure, plan order limit '
-  'included. Idempotent through pago_idempotency.';
+  'included. Idempotent through reparaciones_express_idempotencia.';
 
 -- Feature flag: Profesional y Pro. A dedicated flag and NOT a reuse of
 -- recepcion_multiple: they are independent features and a workshop may want one

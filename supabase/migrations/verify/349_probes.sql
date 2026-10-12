@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Verificación de la migración 349 — crear_reparaciones_express, columna
--- pago_idempotency.cliente_id y feature flag reparaciones_express.
+-- tabla reparaciones_express_idempotencia y feature flag reparaciones_express.
 --
 -- CÓMO CORRERLO (ver verify/README.md):
 --   - SQL editor de Supabase Studio, DESPUES de aplicar 349.
@@ -15,7 +15,7 @@
 -- 'probe-349-...') porque el RPC necesita un cliente con saldo_cuenta
 -- conocido y una organización sin otras órdenes que contaminen los conteos.
 --
--- crear_reparaciones_express, igual que revertir_cargos_orden (311), levanta
+-- crear_reparaciones_express, igual que revertir_cargos_orden (319), levanta
 -- con RAISE EXCEPTION simple (SQLSTATE P0001, no check_violation), así que los
 -- bloques que esperan rechazo usan EXCEPTION WHEN OTHERS, no WHEN check_violation.
 --
@@ -46,9 +46,18 @@ INSERT INTO _r SELECT 0, 'authenticated sin EXECUTE', 'false',
 INSERT INTO _r SELECT 0, 'service_role con EXECUTE', 'true',
   has_function_privilege('service_role', 'crear_reparaciones_express(text, text, text, jsonb, text, text, text)', 'EXECUTE')::TEXT;
 
-INSERT INTO _r SELECT 0, 'columna pago_idempotency.cliente_id', 'text',
-  COALESCE((SELECT data_type FROM information_schema.columns
-            WHERE table_name = 'pago_idempotency' AND column_name = 'cliente_id'), 'FALTA');
+INSERT INTO _r SELECT 0, 'tabla propia reparaciones_express_idempotencia existe', 'true',
+  (to_regclass('public.reparaciones_express_idempotencia') IS NOT NULL)::TEXT;
+INSERT INTO _r SELECT 0, 'RLS habilitado en la tabla propia', 'true',
+  COALESCE((SELECT relrowsecurity::TEXT FROM pg_class WHERE oid = to_regclass('public.reparaciones_express_idempotencia')), 'FALTA');
+INSERT INTO _r SELECT 0, 'tabla propia sin politicas', '0',
+  (SELECT COUNT(*)::TEXT FROM pg_policies WHERE tablename = 'reparaciones_express_idempotencia');
+INSERT INTO _r SELECT 0, 'anon sin acceso a la tabla propia', 'false',
+  has_table_privilege('anon', 'public.reparaciones_express_idempotencia', 'SELECT,INSERT,UPDATE,DELETE')::TEXT;
+INSERT INTO _r SELECT 0, 'authenticated sin acceso a la tabla propia', 'false',
+  has_table_privilege('authenticated', 'public.reparaciones_express_idempotencia', 'SELECT,INSERT,UPDATE,DELETE')::TEXT;
+INSERT INTO _r SELECT 0, 'pago_idempotency no fue creada ni tocada por la 349', 'ausente',
+  CASE WHEN to_regclass('public.pago_idempotency') IS NULL THEN 'ausente' ELSE 'presente (revisar: la 349 no debe crearla)' END;
 
 INSERT INTO _r SELECT 0, 'feature flag reparaciones_express en plan profesional', 'true',
   COALESCE((SELECT (feature_flags->>'reparaciones_express') FROM plans WHERE slug = 'profesional'), 'FALTA');
@@ -259,6 +268,10 @@ BEGIN
 
   INSERT INTO _r VALUES (6, 'segunda llamada replica la respuesta de la primera',
     (v_resultado1->'ordenes')::TEXT, (v_resultado2->'response'->'ordenes')::TEXT);
+
+  INSERT INTO _r VALUES (6, 'la clave quedo sellada en la tabla propia', '1',
+    (SELECT COUNT(*)::TEXT FROM reparaciones_express_idempotencia
+      WHERE organization_id = v_org AND idempotency_key = v_key AND response IS NOT NULL));
 
   SELECT saldo_cuenta INTO v_saldo_post2 FROM clientes WHERE id = v_cli;
   INSERT INTO _r VALUES (6, 'la segunda llamada no vuelve a cobrar', v_saldo_post1::TEXT, v_saldo_post2::TEXT);
