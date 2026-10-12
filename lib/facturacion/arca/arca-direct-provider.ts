@@ -24,6 +24,7 @@ import { buildVoucher } from "@/lib/facturacion/arca/voucher"
 import { toLoginCredentials, wsaaLogin } from "@/lib/facturacion/arca/wsaa-login"
 import {
   renewWsaaTicket,
+  WSAA_SERVICE_WSFE,
   type RenewWsaaTicketOptions,
   type WsaaTicket,
 } from "@/lib/facturacion/arca/wsaa-ticket-store"
@@ -38,7 +39,7 @@ import type {
   SoportaDiagnostico,
 } from "@/lib/facturacion/types"
 
-const SERVICE: ArcaServiceName = "wsfe"
+const SERVICE: ArcaServiceName = WSAA_SERVICE_WSFE
 
 interface ArcaLike {
   electronicBillingService: {

@@ -85,6 +85,7 @@ export async function GET(request: Request) {
         .from("ordenes_servicio")
         .select("organization_id")
         .in("organization_id", orgIds)
+        .eq("es_practica", false)
         .gte("created_at", dormancyCutoff.toISOString()),
       supabaseAdmin
         .from("ventas")
@@ -95,6 +96,7 @@ export async function GET(request: Request) {
         .from("clientes")
         .select("organization_id")
         .in("organization_id", orgIds)
+        .eq("es_practica", false)
         .gte("created_at", dormancyCutoff.toISOString()),
       supabaseAdmin
         .from("audit_logs")

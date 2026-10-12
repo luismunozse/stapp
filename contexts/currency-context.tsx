@@ -25,6 +25,8 @@ interface CurrencyContextType {
   formatPrice: (amount: number | string | null | undefined) => string
   formatDate: (date: Date | string | null | undefined) => string
   formatDateTime: (date: Date | string | null | undefined) => string
+  /** Re-reads /api/configuracion/operativa (e.g. after the rubro changed the vocabulary). */
+  refreshConfig: () => void
 }
 
 const CurrencyContext = createContext<CurrencyContextType>({
@@ -36,6 +38,7 @@ const CurrencyContext = createContext<CurrencyContextType>({
   formatPrice: (amount) => formatCurrencyValue(amount, DEFAULT_CURRENCY),
   formatDate: (date) => formatDateValue(date, DEFAULT_TIMEZONE),
   formatDateTime: (date) => formatDateTimeValue(date, DEFAULT_TIMEZONE),
+  refreshConfig: () => {},
 })
 
 export function CurrencyProvider({ children }: { children: ReactNode }) {
@@ -45,6 +48,8 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   const [pais, setPais] = useState<CountryCode>(DEFAULT_COUNTRY)
   const [organizationName, setOrganizationName] = useState<string>("")
   const [terminologia, setTerminologia] = useState<Terminologia>(resolveTerminologia(null))
+  const [configVersion, setConfigVersion] = useState(0)
+  const refreshConfig = useCallback(() => setConfigVersion((v) => v + 1), [])
 
   useEffect(() => {
     if (!session?.user?.organizationId) return
@@ -84,7 +89,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
 
     fetchConfig()
     return () => controller.abort()
-  }, [session?.user?.organizationId])
+  }, [session?.user?.organizationId, configVersion])
 
   const formatPrice = useCallback(
     (amount: number | string | null | undefined) => {
@@ -110,7 +115,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   )
 
   return (
-    <CurrencyContext.Provider value={{ currency, timezone, pais, organizationName, terminologia, formatPrice, formatDate, formatDateTime }}>
+    <CurrencyContext.Provider value={{ currency, timezone, pais, organizationName, terminologia, formatPrice, formatDate, formatDateTime, refreshConfig }}>
       {children}
     </CurrencyContext.Provider>
   )

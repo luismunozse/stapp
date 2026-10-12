@@ -26,13 +26,13 @@ export async function GET(request: Request) {
     for (const org of orgs || []) {
       const [ordenesRes, completadasRes, ventasRes, clientesRes] = await Promise.all([
         supabaseAdmin.from("ordenes_servicio").select("id", { count: "exact", head: true })
-          .eq("organization_id", org.id).gte("created_at", yesterdayStart.toISOString()).lte("created_at", yesterdayEnd.toISOString()),
+          .eq("organization_id", org.id).eq("es_practica", false).gte("created_at", yesterdayStart.toISOString()).lte("created_at", yesterdayEnd.toISOString()),
         supabaseAdmin.from("ordenes_servicio").select("id", { count: "exact", head: true })
-          .eq("organization_id", org.id).eq("estado", "ENTREGADO").gte("updated_at", yesterdayStart.toISOString()).lte("updated_at", yesterdayEnd.toISOString()),
+          .eq("organization_id", org.id).eq("es_practica", false).eq("estado", "ENTREGADO").gte("updated_at", yesterdayStart.toISOString()).lte("updated_at", yesterdayEnd.toISOString()),
         supabaseAdmin.from("ventas").select("id", { count: "exact", head: true })
           .eq("organization_id", org.id).gte("created_at", yesterdayStart.toISOString()).lte("created_at", yesterdayEnd.toISOString()),
         supabaseAdmin.from("clientes").select("id", { count: "exact", head: true })
-          .eq("organization_id", org.id).gte("created_at", yesterdayStart.toISOString()).lte("created_at", yesterdayEnd.toISOString()),
+          .eq("organization_id", org.id).eq("es_practica", false).gte("created_at", yesterdayStart.toISOString()).lte("created_at", yesterdayEnd.toISOString()),
       ])
 
       const ordenes = ordenesRes.count || 0

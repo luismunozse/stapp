@@ -23,6 +23,7 @@ const ARCHIVOS_CABLEADOS = [
   "components/fotos/foto-gallery.tsx",
   "components/dashboard/onboarding-panel.tsx",
   "app/(dashboard)/ordenes/recepcion/page.tsx",
+  "components/ordenes/practica-orden-detail.tsx",
 ]
 
 /**

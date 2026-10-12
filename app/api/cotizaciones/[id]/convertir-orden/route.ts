@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumberByType } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
 import { sucursalParaEscritura } from "@/lib/sucursal"
+import { deletePracticeData } from "@/lib/onboarding/practica"
 import { randomBytes } from "crypto"
 
 /**
@@ -182,6 +183,14 @@ export async function POST(
 
     if (ordenError) {
       throw ordenError
+    }
+
+    // The first real order replaces the onboarding practice. A failure never
+    // affects this order: the next real order retries.
+    try {
+      await deletePracticeData(organizationId!)
+    } catch (err) {
+      console.error("[practica] automatic deletion failed:", err)
     }
 
     // Crear garantía si corresponde

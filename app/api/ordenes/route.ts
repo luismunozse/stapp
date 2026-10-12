@@ -18,6 +18,7 @@ import { z } from "zod"
 import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
 import { isValidImei } from "@/lib/imei"
 import { resolveOperador } from "@/lib/operadores"
+import { deletePracticeData } from "@/lib/onboarding/practica"
 
 // Generar token público único
 function generatePublicToken(): string {
@@ -468,6 +469,14 @@ export async function POST(request: Request) {
           { status: 409 },
         )
       }
+    }
+
+    // The first real order replaces the onboarding practice. A failure never
+    // affects this order: the next real order retries.
+    try {
+      await deletePracticeData(organizationId!)
+    } catch (err) {
+      console.error("[practica] automatic deletion failed:", err)
     }
 
     // Si hay seña, crear cobro_orden y actualizar total_cobrado

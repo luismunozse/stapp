@@ -37,3 +37,21 @@ export function validarSeleccionRubro(
 
   return null
 }
+
+/** The rubro an org has stored, or the one a request asks for. */
+export interface SeleccionRubro {
+  rubro: string | null
+  rubroDetalle: string | null
+}
+
+/**
+ * True when the request would rebuild what the org already has. A curated pack
+ * ignores the trade text (personalizarPack only reads it for genérico).
+ *
+ * Pure and client-safe: the onboarding wizard uses it too.
+ */
+export function mismoRubro(actual: SeleccionRubro, pedido: SeleccionRubro): boolean {
+  if (actual.rubro !== pedido.rubro) return false
+  if (pedido.rubro !== DEFAULT_RUBRO_ID) return true
+  return (actual.rubroDetalle ?? "").trim() === (pedido.rubroDetalle ?? "").trim()
+}

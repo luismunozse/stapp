@@ -146,6 +146,7 @@ export async function GET(
         .from("ordenes_servicio")
         .select("fecha_ingreso")
         .eq("organization_id", id)
+        .eq("es_practica", false)
         .gte("fecha_ingreso", sixMonthsAgo.toISOString())
         .order("fecha_ingreso", { ascending: true }),
     ])

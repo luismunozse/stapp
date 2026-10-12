@@ -103,3 +103,14 @@ describe('redirigirPorRol', () => {
     }
   })
 })
+
+describe('beta de Android', () => {
+  it('la API de inscripción queda abierta a todos los roles autenticados', () => {
+    // Es una cuestión de la persona (su celular, su cuenta de Google), no del
+    // taller: el TECNICO y el VENDEDOR también se anotan. No está en ninguna
+    // lista de rutas por rol, y este test falla si alguien la agrega a una.
+    for (const rol of ['ADMIN', 'TECNICO', 'VENDEDOR']) {
+      expect(redirigirPorRol('/api/beta-android', rol)).toBe(false)
+    }
+  })
+})

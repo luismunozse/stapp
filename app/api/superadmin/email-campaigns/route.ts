@@ -82,12 +82,14 @@ export async function GET() {
       supabaseAdmin
         .from("ordenes_servicio")
         .select("organization_id")
+        .eq("es_practica", false)
         .gte("created_at", sevenDaysAgo.toISOString()),
 
       // Orgs con órdenes en últimos 30 días
       supabaseAdmin
         .from("ordenes_servicio")
         .select("organization_id")
+        .eq("es_practica", false)
         .gte("created_at", thirtyDaysAgo.toISOString()),
     ])
 
