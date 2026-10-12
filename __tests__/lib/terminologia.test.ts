@@ -51,6 +51,18 @@ describe("articuloIndefinido", () => {
     ["Bici", "una"],
     ["Sistema de riego", "un"],
     ["  Persiana  ", "una"],
+    ["Llave", "una"],
+    ["Notebook", "una"],
+    ["Tablet", "una"],
+    ["Laptop", "una"],
+    ["PC", "una"],
+    ["Fuente de poder", "una"],
+    ["Tele", "una"],
+    ["Red", "una"],
+    ["Luz", "una"],
+    ["Día de trabajo", "un"],
+    ["Mapa", "un"],
+    ["Sofá", "un"],
   ])("%s -> %s", (termino, esperado) => {
     expect(articuloIndefinido(termino)).toBe(esperado)
   })

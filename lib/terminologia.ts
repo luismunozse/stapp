@@ -52,7 +52,22 @@ export function sanitizeTerminologia(
 }
 
 /** Feminine words that do not end in a feminine suffix. */
-const FEMENINOS_SIN_SUFIJO = new Set(["moto", "radio", "foto", "mano", "bici"])
+const FEMENINOS_SIN_SUFIJO = new Set([
+  "moto",
+  "radio",
+  "foto",
+  "mano",
+  "bici",
+  "llave",
+  "notebook",
+  "tablet",
+  "laptop",
+  "pc",
+  "fuente",
+  "tele",
+  "red",
+  "luz",
+])
 /** Masculine words that end in -a. */
 const MASCULINOS_EN_A = new Set(["sistema", "problema", "programa", "mapa", "dia", "sofa", "tema", "clima", "idioma", "planeta"])
 const SUFIJO_FEMENINO = /(a|cion|sion|dad|tad|tud|umbre)$/
