@@ -7,9 +7,12 @@
  *
  * Semantica del lote: una orden "sale" del lote por dos vias distintas.
  *  - ESTADOS_ENTREGADOS: ya se entrego (por el flujo individual o por una
- *    entrega de lote anterior). Su costo ya esta cobrado o bonificado, asi que
- *    cuenta para el total del lote y para "ya cobrado", pero no se vuelve a
- *    cobrar.
+ *    entrega de lote anterior) y no se vuelve a cobrar. Solo las ENTREGADO
+ *    normales cuentan para el total del lote y para "ya cobrado". Las
+ *    entregadas aparte (ENTREGADO_SIN_COBRO, ENTREGADO_SIN_REPARACION) se
+ *    liquidaron por su cuenta al entregarse: quedan fuera de los montos del
+ *    lote, porque contarlas como cobradas haria pagar de menos a las
+ *    pendientes (ver esEstadoEntregadoAparte).
  *  - ESTADOS_EXCLUIDOS_LOTE: ademas de las entregadas, las que quedaron
  *    cerradas sin entrega con cobro (CANCELADO, SIN_REPARACION,
  *    SIN_FALLA_DETECTADA). Ninguna de ellas puede entregarse por la accion de

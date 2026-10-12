@@ -73,9 +73,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
     const lista = ordenes ?? []
     // Base de las lineas de dinero: los miembros que siguen dentro del lote.
-    // Las entregadas se quedan (su costo forma parte del total negociado); las
-    // cerradas sin entrega salen — un cancelado con presupuesto no puede
-    // inflar el total del lote. La lista de equipos igual las devuelve todas.
+    // Las ENTREGADO normales se quedan (su costo forma parte del total
+    // negociado); las entregadas aparte y las cerradas sin entrega salen — se
+    // liquidaron por su cuenta, y un cancelado con presupuesto no puede inflar
+    // el total del lote. La lista de equipos igual las devuelve todas.
     const enElLote = lista.filter((o) => !esEstadoFueraDeLosMontos(o.estado))
     const subtotal = enElLote.reduce((acc, o) => acc + Number(o.costo_final ?? o.presupuesto ?? 0), 0)
     const totalLote = calcularTotalLote(
