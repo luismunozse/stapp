@@ -56,3 +56,34 @@ describe("350: contratos que el pre-flight y la app dan por hechos", () => {
     }
   })
 })
+
+describe("351: el deposito de los items de NC no bloquea la purga de una organizacion", () => {
+  const sql = () => leer("supabase/migrations/351_nc_items_deposito_set_null.sql")
+  const rollback = () => leer("supabase/migrations/rollback/351_rollback.sql")
+
+  it("ni la migracion ni el rollback abren su propia transaccion", () => {
+    expect(existe("supabase/migrations/351_nc_items_deposito_set_null.sql")).toBe(true)
+    expect(existe("supabase/migrations/rollback/351_rollback.sql")).toBe(true)
+    expect(abreTransaccion(sql())).toBe(false)
+    expect(sql()).not.toMatch(/^\s*COMMIT\s*;/im)
+    expect(abreTransaccion(rollback())).toBe(false)
+    expect(rollback()).not.toMatch(/^\s*COMMIT\s*;/im)
+  })
+
+  it("reemplaza la FK sin IF EXISTS y la recrea con ON DELETE SET NULL", () => {
+    expect(sql()).toContain(
+      "ALTER TABLE items_nota_credito DROP CONSTRAINT items_nota_credito_deposito_id_fkey;"
+    )
+    expect(sql()).toMatch(
+      /ADD CONSTRAINT items_nota_credito_deposito_id_fkey\s+FOREIGN KEY \(deposito_id\) REFERENCES depositos\(id\) ON DELETE SET NULL;/
+    )
+  })
+
+  it("el rollback restaura la FK original, sin SET NULL", () => {
+    expect(rollback()).toContain("DROP CONSTRAINT items_nota_credito_deposito_id_fkey;")
+    expect(rollback()).toMatch(
+      /ADD CONSTRAINT items_nota_credito_deposito_id_fkey\s+FOREIGN KEY \(deposito_id\) REFERENCES depositos\(id\);/
+    )
+    expect(rollback()).not.toMatch(/ON DELETE SET NULL/)
+  })
+})
