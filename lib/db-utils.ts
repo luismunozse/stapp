@@ -314,6 +314,16 @@ export function formatInventario(item: any, includeCost = false) {
   }
 }
 
+/** Saldo que el cliente todavía debe de una venta (fila cruda de ventas). */
+export function saldoPendienteVenta(venta: any): number {
+  const aplicado = toArray(venta?.devoluciones_venta).reduce(
+    (s: number, d: any) => s + (parseFloat(d?.monto_aplicado_deuda ?? "0") || 0),
+    0
+  )
+  const saldo = (parseFloat(venta?.total) || 0) - (parseFloat(venta?.monto_abonado || "0") || 0) - aplicado
+  return Math.max(Math.round(saldo * 100) / 100, 0)
+}
+
 export function formatVenta(venta: any) {
   if (!venta) return null
 
@@ -329,7 +339,17 @@ export function formatVenta(venta: any) {
     tipoDescuento: venta.tipo_descuento || "MONTO",
     porcentajeDescuento: venta.porcentaje_descuento ? parseFloat(venta.porcentaje_descuento) : 0,
     total: parseFloat(venta.total),
+    // Snapshot fiscal (mig 229). NULL en orgs EXENTO sin redondeo y en ventas
+    // previas: el ticket solo agrega las lineas de IVA/redondeo cuando vienen.
+    ivaRegimen: venta.iva_regimen ?? null,
+    ivaTasa: venta.iva_tasa != null ? parseFloat(venta.iva_tasa) : null,
+    ivaNeto: venta.iva_neto != null ? parseFloat(venta.iva_neto) : null,
+    ivaMonto: venta.iva_monto != null ? parseFloat(venta.iva_monto) : null,
+    redondeoMonto: venta.redondeo_monto != null ? parseFloat(venta.redondeo_monto) : null,
     montoAbonado: parseFloat(venta.monto_abonado || "0"),
+    // Lo que el cliente todavía debe: total − cobrado − lo que las
+    // devoluciones descontaron del saldo (mig 330).
+    saldoPendiente: saldoPendienteVenta(venta),
     estadoPago: venta.estado_pago || "PAGADO",
     metodoPago: venta.metodo_pago,
     estado: venta.estado,
@@ -432,6 +452,11 @@ export function formatDevolucion(d: any) {
     motivo: d.motivo,
     tipo: d.tipo,
     montoDevolucion: parseFloat(d.monto_devolucion),
+    // Mig 330: parte que descontó el saldo pendiente de la venta; el resto es
+    // lo que se le devolvió al cliente.
+    montoAplicadoDeuda: parseFloat(d.monto_aplicado_deuda ?? "0") || 0,
+    montoReembolso:
+      Math.round((parseFloat(d.monto_devolucion) - (parseFloat(d.monto_aplicado_deuda ?? "0") || 0)) * 100) / 100,
     estado: d.estado,
     observaciones: d.observaciones,
     procesadoPor: d.procesado_por,

@@ -20,6 +20,12 @@ export interface VentaForDevolucion {
   id: string
   numeroVenta: number
   total: number
+  clienteId?: string | null
+  saldoPendiente?: number
+  devoluciones?: Array<{
+    montoDevolucion: number
+    items: Array<{ itemVentaId: string; cantidad: number }>
+  }>
   items: Array<{
     id: string
     inventarioId: string | null
@@ -37,8 +43,14 @@ interface VentaFromApi {
   id: string
   numeroVenta: number
   estado: string
+  clienteId?: string | null
   clienteNombre?: string | null
   total: number
+  saldoPendiente?: number
+  devoluciones?: Array<{
+    montoDevolucion: number
+    items?: Array<{ itemVentaId: string; cantidad: number }>
+  }>
   items: Array<{
     id: string
     inventarioId?: string | null
@@ -64,6 +76,14 @@ function mapVenta(v: VentaFromApi): VentaForDevolucion {
     id: v.id,
     numeroVenta: v.numeroVenta,
     total: v.total,
+    // Igual que el detalle de la venta: el formulario descuenta lo ya devuelto
+    // y muestra cuánto va al saldo pendiente y cuánto se reembolsa.
+    clienteId: v.clienteId ?? null,
+    saldoPendiente: v.saldoPendiente,
+    devoluciones: (v.devoluciones ?? []).map((d) => ({
+      montoDevolucion: d.montoDevolucion,
+      items: (d.items ?? []).map((i) => ({ itemVentaId: i.itemVentaId, cantidad: i.cantidad })),
+    })),
     items: v.items.map((i) => ({
       id: i.id,
       inventarioId: i.inventarioId ?? null,

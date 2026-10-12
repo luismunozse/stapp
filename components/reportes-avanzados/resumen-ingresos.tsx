@@ -72,6 +72,7 @@ const METODO_PAGO_LABELS: Record<string, string> = {
   MERCADOPAGO: "MercadoPago",
   CUENTA_CORRIENTE: "Cuenta corriente",
   SIN_ESPECIFICAR: "Sin especificar",
+  PENDIENTE_COBRO: "Pendiente de cobro",
   OTRO: "Otro",
 }
 

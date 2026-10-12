@@ -67,4 +67,16 @@ describe("handlePaymentNotification — notificación duplicada del mismo pago",
 
     expect(subscriptions.upsert).not.toHaveBeenCalled()
   })
+
+  it("una org en período de gracia (deleted_at) no registra el pago ni reactiva la suscripción", async () => {
+    const subscriptions = createChainMock(null, null)
+    mockSupabaseFrom({
+      organizations: createChainMock({ id: "org-1", activo: true, deleted_at: "2026-10-05T00:00:00Z" }, null),
+      subscriptions,
+      subscription_payments: createChainMock(null, null),
+    })
+    const r = await handlePaymentNotification("174586824094")
+    expect(r).toMatchObject({ status: "SKIPPED", reason: "org_not_found_or_inactive" })
+    expect(subscriptions.upsert).not.toHaveBeenCalled()
+  })
 })

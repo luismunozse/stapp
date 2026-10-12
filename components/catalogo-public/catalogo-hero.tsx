@@ -8,6 +8,7 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
+import { catalogoWhatsAppUrl } from "@/lib/catalogo/whatsapp"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { CatalogoImagePlaceholder } from "./catalogo-image-placeholder"
 
@@ -64,7 +65,7 @@ function TrustStrip({ items, brandColor }: { items: TrustBadgeData[]; brandColor
 export function CatalogoHero({ bannerUrl, logoUrl, titulo, descripcion, whatsapp, brandColor, shareUrl, trustBadges }: Props) {
   const [shared, setShared] = useState(false)
 
-  const whatsappLink = whatsapp ? `https://wa.me/${whatsapp.replace(/\D/g, "")}` : null
+  const whatsappLink = catalogoWhatsAppUrl(whatsapp)
 
   const handleShare = async () => {
     if (typeof navigator !== "undefined" && navigator.share) {

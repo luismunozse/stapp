@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { depositoUsableDesde } from "@/lib/depositos"
 
 // GET /api/inventario/[id]/depositos
 // Devuelve stock split por depósito para un item. Incluye depósitos sin stock
@@ -10,7 +11,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, session, organizationId, role } = await requireAuth()
     if (error) return error
 
     const { id } = await params
@@ -59,6 +60,12 @@ export async function GET(
         depositoNombre: d.nombre,
         principal: d.principal,
         activo: d.activo,
+        // Misma regla que valida POST /transferir para el origen: la UI solo
+        // ofrece como origen lo que el servidor va a aceptar.
+        puedeOrigen: depositoUsableDesde(
+          { activo: d.activo, deleted_at: null, sucursal_id: d.sucursal_id ?? null },
+          { role, userSucursalId: session?.user?.sucursalId ?? null, alcance: "sucursal" }
+        ),
         sucursalId: d.sucursal_id ?? null,
         sucursalNombre: sucursalRow?.nombre ?? null,
         stock: s.stock,

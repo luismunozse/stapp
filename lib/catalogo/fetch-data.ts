@@ -10,7 +10,9 @@
 
 import { supabaseAdmin } from "@/lib/supabase"
 import { SLUG_REGEX } from "@/lib/catalogo-validators"
+import { catalogoRecibePedidos } from "./recibe-pedidos"
 import { stockDisponibleCatalogo } from "./stock-disponible"
+import { normalizarWhatsAppCatalogo } from "./whatsapp"
 import type {
   CatalogoPublicData,
   CatalogoPublicItem,
@@ -35,10 +37,11 @@ export async function fetchCatalogoBaseData(slug: string): Promise<CatalogoPubli
     { data: categorias },
     { data: itemsRaw },
     { data: viewsRaw },
+    recibePedidos,
   ] = await Promise.all([
     supabaseAdmin
       .from("organizations")
-      .select("id, nombre, nombre_mostrar, logo_url, telefono, moneda")
+      .select("id, nombre, nombre_mostrar, logo_url, telefono, moneda, pais")
       .eq("id", config.organization_id)
       .single(),
     supabaseAdmin
@@ -66,6 +69,9 @@ export async function fetchCatalogoBaseData(slug: string): Promise<CatalogoPubli
       .not("item_id", "is", null)
       .gte("created_at", ago7)
       .limit(10000),
+    // Solo el booleano viaja al cliente: define si el checkout registra la
+    // cotización o arma un mensaje de WhatsApp. Cacheado con la página (ISR).
+    catalogoRecibePedidos(config.organization_id),
   ])
 
   // El limit() puede truncar en silencio para orgs con mucho tráfico → vistas
@@ -173,17 +179,21 @@ export async function fetchCatalogoBaseData(slug: string): Promise<CatalogoPubli
     }
   })
 
+  // `pais` solo sirve para normalizar el WhatsApp; no se expone al cliente.
+  const { pais: _pais, ...orgPublica } = org ?? ({} as NonNullable<typeof org>)
+
   return {
     config: {
       slug: config.slug,
       titulo: config.titulo,
       descripcion: config.descripcion,
       color_primary: config.color_primary || "#2563eb",
-      whatsapp: config.whatsapp,
+      whatsapp: normalizarWhatsAppCatalogo(config.whatsapp, org?.pais),
       banner_url: config.banner_url,
       trust_badges: Array.isArray(config.trust_badges) ? config.trust_badges : [],
+      recibe_pedidos: recibePedidos,
     },
-    organizacion: org!,
+    organizacion: orgPublica!,
     categorias: (categorias ?? []) as any,
     items,
   }

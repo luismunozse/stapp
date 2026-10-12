@@ -95,7 +95,10 @@ async function getFcm(): Promise<FcmSender | null> {
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const admin: any = await import("firebase-admin" as any)
+    const mod: any = await import("firebase-admin" as any)
+    // CJS/ESM interop: depending on the runtime the exports live under `.default`.
+    // Same pattern as getWebPush() above.
+    const admin = mod.default || mod
     if (!admin.apps?.length) {
       const cred = JSON.parse(sa)
       admin.initializeApp({ credential: admin.credential.cert(cred) })

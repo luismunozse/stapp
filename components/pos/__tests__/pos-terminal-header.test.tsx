@@ -6,6 +6,10 @@ import { PosTerminal } from "@/components/pos/pos-terminal"
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
+// ADMIN: el botón de Devolución solo se muestra a quien la API se lo permite
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({ data: { user: { id: "u1", role: "ADMIN" } } }),
+}))
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}`, pais: "AR", timezone: "America/Argentina/Buenos_Aires" }),
 }))

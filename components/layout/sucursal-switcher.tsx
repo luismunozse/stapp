@@ -19,7 +19,18 @@ interface Sucursal {
 
 const TODAS = "todas"
 
-export function SucursalSwitcher() {
+/**
+ * `compact` is the pill in the desktop top-right bar; `block` is the full-width
+ * row in the mobile drawer, where there is room for the whole branch name and
+ * the tap target has to reach 44px.
+ */
+type SucursalSwitcherVariant = "compact" | "block"
+
+export function SucursalSwitcher({
+  variant = "compact",
+}: {
+  variant?: SucursalSwitcherVariant
+}) {
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === "ADMIN"
 
@@ -81,20 +92,32 @@ export function SucursalSwitcher() {
       ? "Todas las sucursales"
       : sucursales.find((s) => s.id === activa)?.nombre ?? "Sucursal"
 
+  const isBlock = variant === "block"
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
           disabled={saving}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background px-2.5 py-1 text-xs font-medium hover:bg-accent disabled:opacity-50"
+          className={
+            isBlock
+              ? "touch-target mt-3 inline-flex w-full items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-2.5 text-sm font-medium hover:bg-accent disabled:opacity-50"
+              : "inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background px-2.5 py-1 text-xs font-medium hover:bg-accent disabled:opacity-50"
+          }
         >
-          <Store className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="max-w-[110px] truncate">{label}</span>
-          <ChevronsUpDown className="h-3 w-3 text-muted-foreground" />
+          <Store
+            className={`text-muted-foreground ${isBlock ? "h-4 w-4 flex-shrink-0" : "h-3.5 w-3.5"}`}
+          />
+          <span className={isBlock ? "flex-1 truncate text-left" : "max-w-[110px] truncate"}>
+            {label}
+          </span>
+          <ChevronsUpDown
+            className={`text-muted-foreground ${isBlock ? "h-4 w-4 flex-shrink-0" : "h-3 w-3"}`}
+          />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
+      <DropdownMenuContent align={isBlock ? "start" : "end"} className="w-56">
         <div className="px-3 py-2">
           <p className="text-xs font-medium text-muted-foreground">Sucursal activa</p>
         </div>

@@ -17,6 +17,7 @@ import { useRecientes, useFavoritos } from "./use-catalogo-storage"
 import { useFuseSearch } from "./use-fuse-search"
 import { Clock, Heart, Check } from "lucide-react"
 import { toast } from "sonner"
+import { catalogoWhatsAppUrl } from "@/lib/catalogo/whatsapp"
 
 // Dialogs/drawers solo se abren tras interacción. Cargarlos dynamic con
 // ssr:false los saca del bundle inicial → mejor TTI mobile.
@@ -38,6 +39,7 @@ interface CatalogoData {
     whatsapp: string | null
     banner_url: string | null
     trust_badges: Array<{ icon: string; label: string }>
+    recibe_pedidos?: boolean
   }
   organizacion: {
     id: string
@@ -416,11 +418,12 @@ export function CatalogoView({
                       style={{ backgroundColor: data.config.color_primary }}
                     >
                       <a
-                        href={`https://wa.me/${data.config.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
+                        href={catalogoWhatsAppUrl(
+                          data.config.whatsapp,
                           search.trim()
                             ? `Hola! Estoy buscando "${search.trim()}" pero no lo encuentro en el catálogo. ¿Tienen disponibilidad?`
                             : `Hola! ¿Pueden ayudarme a encontrar algo en el catálogo?`
-                        )}`}
+                        ) ?? undefined}
                         target="_blank"
                         rel="noreferrer"
                       >
@@ -537,6 +540,8 @@ export function CatalogoView({
         titulo={titulo}
         formatPrecio={formatPrecio}
         brandColor={data.config.color_primary}
+        recibePedidos={data.config.recibe_pedidos}
+        whatsapp={data.config.whatsapp}
       />
     </div>
   )

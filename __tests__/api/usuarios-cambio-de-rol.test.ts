@@ -181,6 +181,33 @@ describe("PATCH /api/usuarios/[id]/rol", () => {
     expect(usersChain.update).not.toHaveBeenCalled()
   })
 
+  it("no cuenta como ADMIN restante al que esta dado de baja", async () => {
+    // El otro ADMIN (A) tiene deleted_at: no puede entrar, asi que B (u-2) es
+    // el unico ADMIN real. El conteo tiene que filtrar deleted_at IS NULL; si
+    // no, devolveria 1 y la degradacion pasaria.
+    const { usersChain } = mockDb(usuario({ id: "u-2", rol: "ADMIN", sucursal_id: null }))
+    usersChain.select = vi.fn((_cols: string, o?: { count?: string }) => {
+      if (!o?.count) return usersChain
+      let deletedAtNull = false
+      const c: any = createChainMock(null, null, 1)
+      c.is = vi.fn((col: string, val: unknown) => {
+        if (col === "deleted_at" && val === null) deletedAtNull = true
+        return c
+      })
+      c.then = (resolve: any, reject?: any) =>
+        Promise.resolve({ data: null, error: null, count: deletedAtNull ? 0 : 1 }).then(resolve, reject)
+      return c
+    })
+
+    const { PATCH } = await import("@/app/api/usuarios/[id]/rol/route")
+    const { status } = await parseResponse(
+      (await PATCH(patchJson("u-2", { rol: "TECNICO", porcentajeComision: 10 }), ctx("u-2"))) as Response,
+    )
+
+    expect(status).toBe(400)
+    expect(usersChain.update).not.toHaveBeenCalled()
+  })
+
   it("sí deja degradar a un ADMIN cuando queda otro", async () => {
     const { usersChain } = mockDb(usuario({ id: "u-2", rol: "ADMIN", sucursal_id: null }), {
       adminsRestantes: 1,

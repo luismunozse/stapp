@@ -9,6 +9,7 @@ import { Document, Page, View, Text, StyleSheet, renderToBuffer } from "@react-p
 import { type PDFFont } from "pdf-lib"
 import { formatCurrencyValue, DEFAULT_CURRENCY, type CurrencyCode } from "./currency"
 import { formatDateValue, formatDateTimeValue, DEFAULT_TIMEZONE } from "./timezone"
+import { getCombinedIdLabel } from "./countries"
 // Monochrome tokens, logo fetching and Helvetica text measurement are shared
 // with the other react-pdf engines — see lib/pdf-react-shared.ts. The frame,
 // the header and the cliente band — including this document's letter box,
@@ -204,7 +205,7 @@ export function RemitoDocument({
             espacioDerecha={4}
             derecha={
               <>
-                {clienteDni ? <Text style={estilosShell.smallLabelRight}>CUIT/DNI: {clienteDni}</Text> : null}
+                {clienteDni ? <Text style={estilosShell.smallLabelRight}>{getCombinedIdLabel(data.pais, "fiscal-primero")}: {clienteDni}</Text> : null}
                 <Text style={[styles.detalleValue, { marginTop: 4 }]}>
                   {data.venta ? `VENTA: V${String(data.venta.numeroVenta).padStart(4, "0")}` : `ORDEN: ${ordenDisplay}${dispositivo ? ` — ${dispositivo}` : ""}`}
                 </Text>

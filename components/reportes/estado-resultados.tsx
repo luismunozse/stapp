@@ -27,6 +27,7 @@ interface EstadoResultadosData {
   periodo: { desde: string; hasta: string }
   ingresos: { ventas: number; servicios: number; serviciosAdelantos?: number; otros: number; total: number }
   costos: { productos: number; repuestos: number; merma?: number; mermaPorTipo?: Record<string, number>; total: number }
+  devoluciones?: { ventas: number; costoDevueltoAStock: number }
   gananciaBruta: number
   margenBruto: number
   costosFinancieros?: { ventas: number; servicios: number; total: number }
@@ -313,6 +314,11 @@ export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
               </CardHeader>
               <CardContent className="space-y-1 text-sm">
                 <Row label="Ventas de productos" value={formatPrice(data.ingresos.ventas)} />
+                {(data.devoluciones?.ventas ?? 0) > 0 && (
+                  <p className="pl-2 text-xs text-muted-foreground">
+                    Neto de {formatPrice(data.devoluciones!.ventas)} en devoluciones del período
+                  </p>
+                )}
                 <Row label="Servicios (órdenes)" value={formatPrice(data.ingresos.servicios)} />
                 {(data.ingresos.serviciosAdelantos ?? 0) > 0 && (
                   <div className="text-xs text-muted-foreground pl-3 -mt-1">

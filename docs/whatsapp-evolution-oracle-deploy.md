@@ -1,5 +1,7 @@
 # Deploy de Evolution API en Oracle Cloud Free Tier
 
+> **Producción no corre acá**: está en Hetzner, con Caddy en vez de Cloudflare Tunnel. Ver `whatsapp-evolution-hetzner-deploy.md`. Este doc queda como alternativa gratuita, y su compose (Parte 3) sigue siendo la base del de Hetzner.
+
 Objetivo: levantar un servidor **Evolution API** siempre-encendido y gratis (Oracle Always Free ARM), con **HTTPS vía Cloudflare Tunnel**, listo para conectar desde STApp (Configuración → WhatsApp → Evolution).
 
 > Always-on es obligatorio: si el proceso se duerme/reinicia, se cae la sesión de WhatsApp. Oracle ARM no se duerme por idle → sirve.
@@ -104,7 +106,12 @@ services:
       - DATABASE_PROVIDER=postgresql
       - DATABASE_CONNECTION_URI=postgresql://evo:evopass@postgres:5432/evolution?schema=public
       - DATABASE_SAVE_DATA_INSTANCE=true
-      - DATABASE_SAVE_DATA_NEW_MESSAGE=false
+      # CRÍTICO: tiene que ser true (sin definir vale false). Cuando el teléfono
+      # del cliente no puede descifrar un mensaje pide un reintento, y Baileys le
+      # pide el original a Evolution (getMessage). Si Evolution no lo guardó,
+      # contesta { conversation: '' } y el reintento sale VACÍO: el cliente recibe
+      # el WhatsApp automático en blanco aunque STApp lo haya mandado completo.
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
       - CACHE_REDIS_ENABLED=true
       - CACHE_REDIS_URI=redis://redis:6379/0
       - CACHE_REDIS_PREFIX_KEY=evolution
@@ -240,3 +247,4 @@ Seguí desde la **Parte B** de `docs/whatsapp-evolution-pruebas.md` (QR pairing 
 | QR se conecta y se cae | VM se reinició / volumen perdido | `restart: always` ya está; verificá que los volúmenes persistan |
 | "Out of capacity" al crear VM | Falta cupo ARM en la región | Otra AD/región o reintentar |
 | `connect` devuelve `{count:0}`, no hay QR, logs loopean "Baileys version env" | Versión WA Web vieja, WhatsApp la rechaza (`isBelowHard`) | Setear `CONFIG_SESSION_PHONE_VERSION` a la vigente (ver compose), `docker compose up -d evolution-api`, borrar la instancia stale (`DELETE /instance/delete/{name}`) y reconectar |
+| El cliente recibe el WhatsApp automático vacío, pero en `notification_logs` figura `ENVIADO` con el `contenido` completo | `DATABASE_SAVE_DATA_NEW_MESSAGE` en `false` o sin definir: Evolution no guarda lo que envía y, cuando el teléfono del cliente pide un reintento, lo reenvía como `{ conversation: '' }` | Ponerla en `true` en el compose y `docker compose up -d evolution-api` (la sesión queda en los volúmenes, no hay que reescanear). Corrige los mensajes nuevos, no los ya enviados |

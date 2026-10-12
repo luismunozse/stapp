@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Inbox } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { fetchCatalogoBaseData } from "@/lib/catalogo/fetch-data"
+import { catalogoWhatsAppUrl } from "@/lib/catalogo/whatsapp"
 import type { Metadata, Viewport } from "next"
 
 type PageProps = { params: Promise<{ slug: string; categoriaSlug: string }> }
@@ -215,9 +216,10 @@ export default async function CatalogoCategoriaPage({ params }: PageProps) {
                   style={{ backgroundColor: data.config.color_primary }}
                 >
                   <a
-                    href={`https://wa.me/${data.config.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
+                    href={catalogoWhatsAppUrl(
+                      data.config.whatsapp,
                       `Hola! Estoy buscando algo en "${data.categoria.nombre}". ¿Tienen disponibilidad?`
-                    )}`}
+                    ) ?? undefined}
                     target="_blank"
                     rel="noreferrer"
                   >

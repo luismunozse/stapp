@@ -4,6 +4,7 @@ import { readFile } from "fs/promises"
 import { join } from "path"
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
 import { formatDateValue, formatDateTimeValue, getZonedParts, DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { getTaxIdLabel, getPersonalIdLabel, getCombinedIdLabel } from "@/lib/countries"
 import { parseRecepcionTerminos } from "@/lib/terminos"
 import QRCode from "qrcode"
 import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
@@ -951,6 +952,8 @@ interface OrdenPDFData {
   logoUrl?: string | null
   moneda?: string
   zonaHoraria?: string
+  /** País de la org: define las etiquetas CUIT/NIF y DNI/DNI-NIE del cliente. Sin valor, Argentina. */
+  pais?: string | null
   estado?: string
   fechaEntrega?: Date | null
   firmaClienteEntrega?: string | null
@@ -1103,6 +1106,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const sucursalTelefono = data.sucursal ? safe(data.sucursal.telefono) : ""
   const clienteDni = safe(cliente.dni)
   const clienteCuit = safe(cliente.cuit)
+  const labelIdFiscal = getTaxIdLabel(data.pais)
+  const labelIdPersonal = getPersonalIdLabel(data.pais)
   const clienteRazonSocial = safe(cliente.razonSocial)
   const clienteTipoCliente = safe(cliente.tipoCliente)
   const metadataCampos = Array.isArray(data.metadataCampos) ? data.metadataCampos : []
@@ -1434,12 +1439,12 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     // overflow the grid cell by ~5pt at 9pt bold before this.
     const clienteNameMaxWEn = colGridWEn - rxCellPadX * 2
     if (isEmpresaEn) {
-      const idSuffix = clienteCuit ? ` · CUIT ${clienteCuit}` : ""
+      const idSuffix = clienteCuit ? ` · ${labelIdFiscal} ${clienteCuit}` : ""
       clienteLinesEn.push({ text: rxTruncate(`${clienteRazonSocial}${idSuffix}`, archivoBold, 9, clienteNameMaxWEn), font: archivoBold, size: 9, color: MONO.ink })
-      const contactSuffix = clienteDni ? ` · DNI ${clienteDni}` : ""
+      const contactSuffix = clienteDni ? ` · ${labelIdPersonal} ${clienteDni}` : ""
       clienteLinesEn.push({ text: `Contacto: ${clienteNombre}${contactSuffix}`.substring(0, 60), font: archivoRegular, size: 8, color: MONO.label })
     } else {
-      const idSuffix = clienteDni ? ` · DNI ${clienteDni}` : (clienteCuit ? ` · CUIT ${clienteCuit}` : "")
+      const idSuffix = clienteDni ? ` · ${labelIdPersonal} ${clienteDni}` : (clienteCuit ? ` · ${labelIdFiscal} ${clienteCuit}` : "")
       clienteLinesEn.push({ text: rxTruncate(`${clienteNombre}${idSuffix}`, archivoBold, 9, clienteNameMaxWEn), font: archivoBold, size: 9, color: MONO.ink })
     }
     const telPartsEn = [clienteTelefono]
@@ -1894,7 +1899,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const stubClienteLines: RxCellLine[] = [
     { text: `${clienteNombre} · ${clienteTelefono}`.substring(0, 55), font: archivoBold, size: 8, color: MONO.ink },
   ]
-  if (clienteDni) stubClienteLines.push({ text: `DNI ${clienteDni}`, font: archivoRegular, size: 7.5, color: MONO.label })
+  if (clienteDni) stubClienteLines.push({ text: `${labelIdPersonal} ${clienteDni}`, font: archivoRegular, size: 7.5, color: MONO.label })
   const stubEquipoLines: RxCellLine[] = [
     { text: equipoTitle.substring(0, 55), font: archivoBold, size: 8, color: MONO.ink },
   ]
@@ -2061,12 +2066,12 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // overflow the grid cell by ~5pt at 9pt bold before this.
   const clienteNameMaxW = colGridW - rxCellPadX * 2
   if (isEmpresa) {
-    const idSuffix = clienteCuit ? ` · CUIT ${clienteCuit}` : ""
+    const idSuffix = clienteCuit ? ` · ${labelIdFiscal} ${clienteCuit}` : ""
     clienteLines.push({ text: rxTruncate(`${clienteRazonSocial}${idSuffix}`, archivoBold, 9, clienteNameMaxW), font: archivoBold, size: 9, color: MONO.ink })
-    const contactSuffix = clienteDni ? ` · DNI ${clienteDni}` : ""
+    const contactSuffix = clienteDni ? ` · ${labelIdPersonal} ${clienteDni}` : ""
     clienteLines.push({ text: `Contacto: ${clienteNombre}${contactSuffix}`.substring(0, 60), font: archivoRegular, size: 8, color: MONO.label })
   } else {
-    const idSuffix = clienteDni ? ` · DNI ${clienteDni}` : (clienteCuit ? ` · CUIT ${clienteCuit}` : "")
+    const idSuffix = clienteDni ? ` · ${labelIdPersonal} ${clienteDni}` : (clienteCuit ? ` · ${labelIdFiscal} ${clienteCuit}` : "")
     clienteLines.push({ text: rxTruncate(`${clienteNombre}${idSuffix}`, archivoBold, 9, clienteNameMaxW), font: archivoBold, size: 9, color: MONO.ink })
   }
   const telParts = [clienteTelefono]
@@ -3542,6 +3547,8 @@ interface FacturaPDFData {
   direccionEmpresa?: string | null
   // Fiscal emitter identity — drawn in the EMISOR header block below.
   cuitEmpresa?: string | null
+  /** País de la org: define la etiqueta del ID fiscal (CUIT, NIF...). Sin valor, Argentina. */
+  pais?: string | null
   condicionIvaEmpresa?: string | null
   domicilioFiscalEmpresa?: string | null
   ingresosBrutosEmpresa?: string | null
@@ -3831,7 +3838,7 @@ export async function generateFacturaPDFLegacy(data: FacturaPDFData): Promise<Bu
   }
   if (cuitEmpresa) {
     rightY -= 12
-    drawHeaderRight(`CUIT: ${cuitEmpresa}`, rightY, TYPE.small, helvetica, MONO.label)
+    drawHeaderRight(`${getTaxIdLabel(data.pais)}: ${cuitEmpresa}`, rightY, TYPE.small, helvetica, MONO.label)
     rightLines++
   }
   if (ingresosBrutosEmpresa) {
@@ -3906,7 +3913,7 @@ export async function generateFacturaPDFLegacy(data: FacturaPDFData): Promise<Bu
   let rightClientY = clientBlockTop - 20
   let rightClientLines = 0
   if (clienteDni) {
-    page.drawText(`CUIT/DNI: ${clienteDni}`, { x: clientRightX, y: rightClientY, size: TYPE.small, font: helvetica, color: MONO.label })
+    page.drawText(`${getCombinedIdLabel(data.pais, "fiscal-primero")}: ${clienteDni}`, { x: clientRightX, y: rightClientY, size: TYPE.small, font: helvetica, color: MONO.label })
     rightClientLines++
     rightClientY -= 12
   }

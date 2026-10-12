@@ -58,12 +58,10 @@ import { WhatsAppDialog } from "@/components/ordenes/whatsapp-dialog"
 import { EntregaDialog } from "@/components/ordenes/entrega-dialog"
 import {
   printDeviceLabel,
-  readEtiquetaSize,
-  saveEtiquetaSize,
   LABEL_SIZE_OPTIONS,
-  DEFAULT_LABEL_SIZE,
   type LabelSize,
 } from "@/components/ordenes/print-label"
+import { useEtiquetaSize } from "@/components/ordenes/use-etiqueta-size"
 import { ThermalPrintOrden } from "@/components/ordenes/thermal-print-orden"
 import { NotificationHistory } from "@/components/ordenes/notification-history"
 import { OrdenEstadoCard } from "@/components/ordenes/orden-estado-card"
@@ -122,11 +120,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [showReparadoDialog, setShowReparadoDialog] = useState(false)
   const [showNCDialog, setShowNCDialog] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
-  const [etiquetaSize, setEtiquetaSize] = useState<LabelSize>(DEFAULT_LABEL_SIZE)
-
-  useEffect(() => {
-    setEtiquetaSize(readEtiquetaSize())
-  }, [])
+  const { size: etiquetaSize, ready: etiquetaSizeReady, update: updateEtiquetaSize } = useEtiquetaSize()
+  // Antes de que la org responda, no se fuerza el default: printDeviceLabel lo resuelve.
+  const etiquetaOpts = etiquetaSizeReady ? { size: etiquetaSize } : undefined
 
   const isAdmin = session?.user?.role === "ADMIN"
   const userRole = session?.user?.role
@@ -698,11 +694,12 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             value={etiquetaSize}
             onChange={(e) => {
               const s = e.target.value as LabelSize
-              setEtiquetaSize(s)
-              saveEtiquetaSize(s)
+              void updateEtiquetaSize(s).then((guardado) => {
+                if (!guardado) toast.warning("No se pudo guardar para todo el taller. Queda solo en este equipo.")
+              })
             }}
             className="h-9 rounded-md border bg-background px-2 text-xs"
-            title="Tamaño de etiqueta (térmica): elegí según tu impresora"
+            title="Tamaño de etiqueta (térmica): se guarda para todo el taller"
           >
             {LABEL_SIZE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -727,7 +724,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 fechaIngreso: fecha,
                 publicToken: orden.publicToken,
                 organizationName: undefined,
-              }, baseUrl, { size: etiquetaSize })
+              }, baseUrl, etiquetaOpts)
             }}
             title="Imprimir etiqueta para el equipo"
           >
@@ -754,7 +751,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   organizationName: undefined,
                   variant: "reparado",
                   fechaReparacion: fechaRep,
-                }, baseUrl, { size: etiquetaSize })
+                }, baseUrl, etiquetaOpts)
               }}
               title="Imprimir etiqueta de reparado para pegar en el equipo"
             >

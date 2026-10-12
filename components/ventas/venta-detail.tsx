@@ -41,6 +41,7 @@ import { DevolucionForm } from "@/components/ventas/devolucion-form"
 import { PagosHistorial } from "@/components/facturacion/pagos-historial"
 import { VentaPagoForm } from "@/components/ventas/venta-pago-form"
 import type { MetodoPagoVenta } from "@/lib/notifications/types"
+import { descuentoGlobalDeVenta, esCobroEnEfectivo } from "@/lib/ventas/totales"
 
 interface VentaItem {
   id: string
@@ -96,6 +97,8 @@ interface Devolucion {
   motivo: string
   tipo: string
   montoDevolucion: number
+  montoAplicadoDeuda?: number
+  montoReembolso?: number
   estado: string
   observaciones: string | null
   items: DevolucionItem[]
@@ -113,8 +116,12 @@ interface VentaDetail {
   garantias: Garantia[]
   subtotal: number
   descuento: number
+  tipoDescuento?: "MONTO" | "PORCENTAJE"
+  porcentajeDescuento?: number
   total: number
   montoAbonado: number
+  /** total − cobrado − lo que las devoluciones descontaron del saldo */
+  saldoPendiente?: number
   estadoPago: string
   metodoPago: string
   estado: string
@@ -283,6 +290,10 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
     )
   }
 
+  // Lo que el cliente todavía debe (las devoluciones pueden haber descontado
+  // parte del saldo); sin el campo, el cálculo de siempre.
+  const saldoPendiente = venta.saldoPendiente ?? Math.max(venta.total - (venta.montoAbonado || 0), 0)
+
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
@@ -359,28 +370,36 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                 {generandoFactura ? "Generando..." : "Generar remito"}
               </Button>
             )}
-            <Button
-              variant="outline"
-              onClick={() => setShowEditModal(true)}
-            >
-              <Pencil className="mr-2 h-4 w-4" />
-              Editar
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setShowDevolucionModal(true)}
-            >
-              <RotateCcw className="mr-2 h-4 w-4" />
-              Devolución
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleAnular}
-              disabled={anulando}
-            >
-              <XCircle className="mr-2 h-4 w-4" />
-              {anulando ? "Anulando..." : "Anular"}
-            </Button>
+            {isAdmin && (
+              <Button
+                variant="outline"
+                onClick={() => setShowEditModal(true)}
+              >
+                <Pencil className="mr-2 h-4 w-4" />
+                Editar
+              </Button>
+            )}
+            {/* Devolución, anulación y cobro son solo de ADMIN en la API:
+                mostrarlos a otros roles terminaba en un 403. */}
+            {isAdmin && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDevolucionModal(true)}
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Devolución
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleAnular}
+                  disabled={anulando}
+                >
+                  <XCircle className="mr-2 h-4 w-4" />
+                  {anulando ? "Anulando..." : "Anular"}
+                </Button>
+              </>
+            )}
           </>
         )}
       </div>
@@ -407,9 +426,14 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
               tipoDescuento: item.tipoDescuento,
               porcentajeDescuento: item.porcentajeDescuento,
             })),
-            descuento: venta.descuento,
-            metodoPago: venta.metodoPago,
+            // venta.descuento es el total de descuentos (líneas + global):
+            // el formulario recibe solo el global para no descontar dos veces.
+            descuentoGlobal: descuentoGlobalDeVenta(venta),
             observaciones: venta.observaciones,
+            montoAbonado: venta.montoAbonado || 0,
+            cobroEnEfectivo: esCobroEnEfectivo(
+              venta.pagos.map((p) => ({ metodo: p.metodoPago, monto: p.monto }))
+            ),
           }}
           onSuccess={() => {
             fetchVenta()
@@ -426,6 +450,12 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
             id: venta.id,
             numeroVenta: venta.numeroVenta,
             total: venta.total,
+            clienteId: venta.clienteId,
+            saldoPendiente,
+            devoluciones: (venta.devoluciones || []).map((d) => ({
+              montoDevolucion: d.montoDevolucion,
+              items: d.items.map((i) => ({ itemVentaId: i.itemVentaId, cantidad: i.cantidad })),
+            })),
             items: venta.items.map(item => ({
               id: item.id,
               inventarioId: item.inventarioId,
@@ -529,7 +559,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   <div>
                     <div className="text-xs text-muted-foreground">Pendiente</div>
                     <div className="font-medium text-base sm:text-lg text-destructive">
-                      {formatPrice(venta.total - (venta.montoAbonado || 0))}
+                      {formatPrice(saldoPendiente)}
                     </div>
                   </div>
                 </div>
@@ -546,31 +576,34 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
           })()}
 
           {/* Botón registrar pago si hay pendiente */}
-          {venta.estadoPago !== "PAGADO" && venta.estadoPago !== "ANULADA" && venta.estado !== "ANULADA" && (
+          {saldoPendiente > 0 && venta.estadoPago !== "ANULADA" && venta.estado !== "ANULADA" && (
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 border border-dashed rounded-lg">
               <div>
                 <div className="text-sm text-muted-foreground">Pendiente de pago</div>
                 <div className="text-xl font-bold text-destructive">
-                  {formatPrice(venta.total - (venta.montoAbonado || 0))}
+                  {formatPrice(saldoPendiente)}
                 </div>
               </div>
-              <Button
-                onClick={() => setShowPagoForm(!showPagoForm)}
-                variant={showPagoForm ? "outline" : "default"}
-                className="w-full sm:w-auto"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Registrar Pago
-              </Button>
+              {isAdmin && (
+                <Button
+                  onClick={() => setShowPagoForm(!showPagoForm)}
+                  variant={showPagoForm ? "outline" : "default"}
+                  className="w-full sm:w-auto"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Registrar Pago
+                </Button>
+              )}
             </div>
           )}
 
           {/* Formulario de pago */}
-          {showPagoForm && (
+          {showPagoForm && isAdmin && (
             <VentaPagoForm
               ventaId={venta.id}
               total={venta.total}
               montoAbonado={venta.montoAbonado || 0}
+              pendiente={saldoPendiente}
               clienteId={venta.clienteId}
               onClose={() => setShowPagoForm(false)}
               onSuccess={() => {
@@ -881,6 +914,12 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   {dev.observaciones && (
                     <div className="text-sm text-muted-foreground">
                       {dev.observaciones}
+                    </div>
+                  )}
+                  {(dev.montoAplicadoDeuda ?? 0) > 0 && (
+                    <div className="text-sm text-muted-foreground">
+                      Descontado del saldo pendiente: {formatPrice(dev.montoAplicadoDeuda ?? 0)}
+                      {" · "}Reembolsado: {formatPrice(dev.montoReembolso ?? 0)}
                     </div>
                   )}
                   <div className="text-xs text-muted-foreground">

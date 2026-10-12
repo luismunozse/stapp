@@ -28,7 +28,8 @@ import {
   stripSensitiveClienteFields,
   type WithoutSensitiveClienteFields,
 } from "@/lib/cliente-draft-projection"
-import { useTerminologia } from "@/contexts/currency-context"
+import { useTerminologia, useCurrency } from "@/contexts/currency-context"
+import { getTaxIdLabel } from "@/lib/countries"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { useOffline } from "@/contexts/offline-context"
 import { useModal } from "@/contexts/modal-context"
@@ -206,6 +207,7 @@ interface OrdenCreadaData {
 
 export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, inSheet = false }: OrdenFormProps) {
   const term = useTerminologia()
+  const { pais } = useCurrency()
   const { offlineFetch } = useOffline()
   const { showError, showInfo } = useModal()
   const { data: session } = useSession()
@@ -1428,7 +1430,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               {clienteSeleccionadoObj.razonSocial && (
                 <p className="text-xs text-muted-foreground mt-1">
                   Empresa: {clienteSeleccionadoObj.razonSocial}
-                  {clienteSeleccionadoObj.cuit && ` - CUIT: ${clienteSeleccionadoObj.cuit}`}
+                  {clienteSeleccionadoObj.cuit && ` - ${getTaxIdLabel(pais)}: ${clienteSeleccionadoObj.cuit}`}
                 </p>
               )}
             </div>

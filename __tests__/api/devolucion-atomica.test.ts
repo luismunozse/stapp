@@ -148,43 +148,17 @@ describe("POST /api/ventas/[id]/devolucion — atomic RPC path", () => {
     expect(status).toBe(400)
   })
 
-  it("function-missing → fallback path runs (multi-step inserts)", async () => {
+  it("sin la RPC responde 503 y no escribe nada (ya no hay fallback JS)", async () => {
     mockAuthSuccess({ role: "ADMIN" })
-    // Force function-missing on first RPC call, then allow subsequent ones
-    vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
-      if (fn === "registrar_devolucion_atomica") {
-        return Promise.resolve({
-          data: null,
-          error: { code: "42883", message: "function registrar_devolucion_atomica does not exist" },
-        })
-      }
-      return Promise.resolve({ data: {}, error: null })
-    }) as any)
-
-    // Build the fallback DB mocks: ventas, devoluciones_venta (3 hits), items_devolucion
-    const VENTA = {
-      id: "v1", estado: "COMPLETADA", cliente_id: null, organization_id: "org-1",
-      items_venta: [{ id: "iv1", cantidad: 5, descripcion: "Item", inventario_id: null, precio_unitario: 10 }],
-    }
-    const insertResult = { id: "d1", items_devolucion: [] }
-    let devCallCount = 0
-    const devChain: any = {}
-    const methods = ["select","insert","update","upsert","delete","eq","neq","not","gte","lte","gt","lt","or","in","is","textSearch","order","limit","range","maybeSingle"]
-    for (const m of methods) devChain[m] = vi.fn().mockReturnValue(devChain)
-    devChain.single = vi.fn().mockResolvedValue({ data: insertResult, error: null })
-    devChain.then = (resolve: any, reject?: any) => {
-      devCallCount++
-      const result = devCallCount === 1 ? { data: [], error: null } : { data: insertResult, error: null }
-      return Promise.resolve(result).then(resolve, reject)
-    }
-    devChain.catch = (reject: any) => Promise.resolve({ data: [], error: null }).catch(reject)
-
-    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
-      if (table === "ventas") return createChainMock(VENTA) as any
-      if (table === "devoluciones_venta") return devChain
-      if (table === "items_devolucion") return createChainMock({ id: "id1" }) as any
-      return createChainMock(null, { message: `No mock: ${table}` }) as any
+    const devoluciones = createChainMock(DEV_COMPLETA)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", estado: "COMPLETADA", items_venta: [] }),
+      devoluciones_venta: devoluciones,
     })
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null,
+      error: { code: "42883", message: "function registrar_devolucion_atomica does not exist" },
+    } as any)
 
     const response = await POST(
       createPostRequest({
@@ -193,10 +167,10 @@ describe("POST /api/ventas/[id]/devolucion — atomic RPC path", () => {
       }, "http://localhost/api/ventas/v1/devolucion"),
       createParams("v1")
     )
-    const { status } = await parseResponse(response)
+    const { status, body } = await parseResponse(response)
 
-    // Fallback should do the multi-step inserts (insert into devoluciones_venta was called)
-    expect(devChain.insert).toHaveBeenCalled()
-    expect(status).toBe(201)
+    expect(status).toBe(503)
+    expect(body.error).toMatch(/no están disponibles/)
+    expect(devoluciones.insert).not.toHaveBeenCalled()
   })
 })

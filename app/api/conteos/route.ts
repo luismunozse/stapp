@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin, requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { depositoPermitido, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { z } from "zod"
 
 const createSchema = z.object({
@@ -81,11 +82,26 @@ const { error, organizationId } = await requireInventarioAccess()
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId } = await requireAdmin()
+    const { error, session, organizationId, userId, role } = await requireAdmin()
     if (error) return error
 
     const body = await request.json()
     const data = createSchema.parse(body)
+
+    // La RPC solo verifica que el deposito exista (FK): sin esto un request
+    // armado mueve stock de un deposito de otra org o de otra sucursal.
+    if (
+      data.depositoId &&
+      !(await depositoPermitido({
+        depositoId: data.depositoId,
+        organizationId: organizationId!,
+        role,
+        userSucursalId: session?.user?.sucursalId ?? null,
+        alcance: "sucursal",
+      }))
+    ) {
+      return NextResponse.json({ error: DEPOSITO_INVALIDO }, { status: 400 })
+    }
 
     const { data: result, error: rpcErr } = await supabaseAdmin.rpc("iniciar_conteo", {
       p_organization_id: organizationId!,

@@ -119,4 +119,41 @@ describe("GET /api/ventas/[id]/garantia/[garantiaId]/pdf — estado", () => {
     expect(res.status).toBe(200)
     expect(generateGarantiaVentaPDF).toHaveBeenCalled()
   })
+
+  it("no emite la garantía de una venta anulada aunque la fila siga ACTIVA", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "ventas") return createChainMock({ ...VENTA, estado: "ANULADA" }) as any
+      if (table === "garantias_venta") return createChainMock(garantia("ACTIVA")) as any
+      return createChainMock(null) as any
+    })
+
+    const { status, body } = await get()
+
+    expect(status).toBe(410)
+    expect(body.error).toMatch(/venta fue anulada/i)
+    expect(generateGarantiaVentaPDF).not.toHaveBeenCalled()
+  })
+
+  it("firma quien hizo la venta, no el último que entregó una orden en la organización", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    const ordenes = createChainMock(null)
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "ventas") return createChainMock({ ...VENTA, users: { id: "user-1", nombre: "Vera Vendedora" } }) as any
+      if (table === "garantias_venta") return createChainMock(garantia("ACTIVA")) as any
+      if (table === "ordenes_servicio") return ordenes as any
+      return createChainMock(null) as any
+    })
+
+    const res = await GET(
+      createGetRequest("http://localhost/api/ventas/v1/garantia/g1/pdf"),
+      createParams("v1", "g1")
+    )
+
+    expect(res.status).toBe(200)
+    expect(ordenes.eq).toHaveBeenCalledWith("entregado_por_user_id", "user-1")
+    expect(generateGarantiaVentaPDF).toHaveBeenCalledWith(
+      expect.objectContaining({ nombreEncargado: "Vera Vendedora", firmaEncargado: null })
+    )
+  })
 })

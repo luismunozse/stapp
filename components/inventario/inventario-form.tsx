@@ -49,6 +49,21 @@ const proveedoresFetcher = async (url: string): Promise<ProveedorLite[]> => {
   return Array.isArray(data) ? data : []
 }
 
+interface DepositoLite {
+  id: string
+  nombre: string
+  principal?: boolean
+  activo?: boolean
+}
+
+const depositosFetcher = async (url: string): Promise<DepositoLite[]> => {
+  // /api/depositos responde `{ data: [...] }`; ante un error (401, 500) llega
+  // `{ error }`. Sin guard, .filter() rompe en runtime.
+  const res = await fetch(url)
+  const json = await res.json().catch(() => null)
+  return Array.isArray(json?.data) ? json.data : []
+}
+
 const inventarioSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido"),
   categoria: z.string().min(1, "La categoría es requerida"),
@@ -61,6 +76,9 @@ const inventarioSchema = z.object({
   stockMaximo: z.number().int().min(0).nullable().optional(),
   puntoReorden: z.number().int().min(0).nullable().optional(),
   ubicacion: z.string().max(200, "Máximo 200 caracteres").nullable().optional(),
+  // Solo alta. null = "el principal": el default se DERIVA al renderizar en vez
+  // de setearse cuando llegan los depósitos (ver `depositoEfectivo`).
+  depositoId: z.string().min(1).nullable().optional(),
   // Validación de checksum NO bloquea: el form muestra sugerencia inline
   // (ver bloque debajo del input). Códigos internos / impresos sin checksum
   // estricto deben poder guardarse igual; bloquearlos fue causa de "no se
@@ -129,6 +147,7 @@ function inventarioFormDefaults(
         barcode: initialBarcode ?? null,
         diasGarantiaDefault: null,
         ubicacion: null,
+        depositoId: null,
         trackeaLotes: false,
         trackeaSeries: false,
         tieneVariantes: false,
@@ -313,6 +332,29 @@ export function InventarioForm({
 
   const categoria = watch("categoria")
   const tipoDispositivo = watch("tipoDispositivo")
+
+  // Depósito del stock inicial (solo alta). Se muestra con 2+ depósitos activos;
+  // con uno solo no hay nada que elegir y el servidor usa el principal.
+  const { data: depositos = [] } = useSWR<DepositoLite[]>(
+    item ? null : "/api/depositos",
+    depositosFetcher,
+    { revalidateOnFocus: false }
+  )
+  const depositosActivos = depositos.filter((d) => d.activo !== false)
+  const mostrarDeposito = !item && depositosActivos.length >= 2
+  const depositoElegido = watch("depositoId")
+  const stockActual = Number(watch("stock"))
+  const hayStockInicial = Number.isFinite(stockActual) && stockActual > 0
+  // El valor mostrado se deriva: lo elegido si todavía existe y está activo
+  // (un borrador viejo puede apuntar a uno que ya no), si no el principal. Así
+  // no hay un setValue asíncrono sobre un Select ya montado.
+  const depositoEfectivo =
+    depositosActivos.find((d) => d.id === depositoElegido)?.id ??
+    (depositosActivos.find((d) => d.principal) ?? depositosActivos[0])?.id ??
+    null
+  /** Lo que viaja al servidor: nada si no se muestra el Select o no hay stock. */
+  const depositoAEnviar = (stock: number) =>
+    mostrarDeposito && depositoEfectivo && stock > 0 ? { depositoId: depositoEfectivo } : {}
 
 
   // ¿La fuente expuso el costo de este item? Un item nuevo no tiene costo
@@ -646,6 +688,8 @@ export function InventarioForm({
           value: stockToAdd,
           tipo: "ENTRADA",
           referenciaTipo: "CONSOLIDACION",
+          // Mismo depósito que habría recibido el alta.
+          ...depositoAEnviar(stockToAdd),
           motivo: `Consolidación desde alta duplicada (${values.nombre})`,
         }),
       })
@@ -865,7 +909,8 @@ export function InventarioForm({
       // spreadea entero y no hay filtro de campos sucios, mandarlo pisaría el
       // precio_compra real con cero. El PUT lo acepta opcional, así que
       // omitirlo deja la columna intacta.
-      const { precioCompra, ...rest } = data
+      // `depositoId` sale de `rest` y vuelve solo en el alta (ver depositoAEnviar).
+      const { precioCompra, depositoId: _depositoId, ...rest } = data
       const costoField = costoCargado ? { precioCompra } : {}
 
       const payload = item
@@ -873,6 +918,7 @@ export function InventarioForm({
         : {
             ...rest,
             ...costoField,
+            ...depositoAEnviar(Number(data.stock)),
             barcode: normalizedBarcode,
             codigo: generatedCode,
             descripcion: "",
@@ -900,6 +946,14 @@ export function InventarioForm({
       const savedId = savedItem?.id || item?.id
       if (!savedId) {
         throw new Error("No se pudo obtener el id del item guardado")
+      }
+
+      // El item existe pero el servidor no pudo mover el stock al depósito
+      // elegido: quedó en el principal. No es un error de guardado.
+      if (savedItem?.advertencia) {
+        await showWarning(
+          "El producto se guardó, pero el stock quedó en el depósito principal. Podés pasarlo al otro depósito con una transferencia."
+        )
       }
 
       // Manejo de imagen:
@@ -1402,6 +1456,35 @@ export function InventarioForm({
               </div>
             )}
           </div>
+
+          {mostrarDeposito && (
+            <div className="space-y-1.5">
+              <Label htmlFor="deposito">Depósito del stock inicial</Label>
+              <Select
+                value={depositoEfectivo ?? ""}
+                disabled={!hayStockInicial}
+                onValueChange={ignoreSelectEcho((value) =>
+                  setValue("depositoId", value, { shouldDirty: true })
+                )}
+              >
+                <SelectTrigger id="deposito">
+                  <SelectValue placeholder="Elegí un depósito" />
+                </SelectTrigger>
+                <SelectContent>
+                  {depositosActivos.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {hayStockInicial
+                  ? "Acá se guarda el stock que cargás ahora."
+                  : "Cargá un stock mayor a 0 para elegir dónde se guarda."}
+              </p>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="ubicacion" className="flex items-center gap-1.5 text-sm font-medium">

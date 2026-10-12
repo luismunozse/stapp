@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -31,6 +31,15 @@ interface DevolucionFormProps {
     numeroVenta: number
     /** Total efectivamente cobrado (con descuento global + IVA). */
     total: number
+    /** Sin cliente no se puede devolver a cuenta corriente. */
+    clienteId?: string | null
+    /** Lo que el cliente todavía debe: la devolución lo descuenta primero. */
+    saldoPendiente?: number
+    /** Devoluciones anteriores: cantidades ya devueltas y lo ya reintegrado. */
+    devoluciones?: Array<{
+      montoDevolucion: number
+      items: Array<{ itemVentaId: string; cantidad: number }>
+    }>
     items: Array<{
       id: string
       inventarioId: string | null
@@ -61,6 +70,8 @@ interface ItemSelectionState {
   selected: boolean
   cantidad: number
   restaurarStock: boolean
+  /** Unidades que todavía se pueden devolver (vendidas − ya devueltas). */
+  disponible: number
 }
 
 // --- Component ---
@@ -75,10 +86,27 @@ export function DevolucionForm({
   const { formatPrice } = useCurrency()
   const [loading, setLoading] = useState(false)
   const [metodoReembolso, setMetodoReembolso] = useState<string>("")
+  // Un pedido por apertura del diálogo: si el primer POST llegó y la
+  // respuesta se perdió, el reintento no registra otra devolución.
+  const [idempotencyKey, setIdempotencyKey] = useState("")
+  // Guard de reentrada: el state `loading` llega tarde para un doble click.
+  const submittingRef = useRef(false)
+
+  const devueltas = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const d of venta.devoluciones ?? []) {
+      for (const it of d.items) map[it.itemVentaId] = (map[it.itemVentaId] ?? 0) + it.cantidad
+    }
+    return map
+  }, [venta.devoluciones])
+  const yaReintegrado = useMemo(
+    () => (venta.devoluciones ?? []).reduce((s, d) => s + (d.montoDevolucion || 0), 0),
+    [venta.devoluciones]
+  )
 
   // Track selection state for each item by its id
   const [itemStates, setItemStates] = useState<Record<string, ItemSelectionState>>(() =>
-    buildInitialItemStates(venta.items)
+    buildInitialItemStates(venta.items, devueltas)
   )
 
   const {
@@ -94,15 +122,25 @@ export function DevolucionForm({
     },
   })
 
-  // Reset item states when the dialog opens with potentially new venta data
-  const handleOpenChange = (value: boolean) => {
-    if (value) {
-      setItemStates(buildInitialItemStates(venta.items))
-      reset({ motivo: "", observaciones: "" })
-      setMetodoReembolso("")
-    }
-    onOpenChange(value)
-  }
+  // Al abrir se arranca de cero con los items actuales de la venta. El padre
+  // abre el diálogo cambiando `open` (eso no dispara onOpenChange), así que
+  // antes los estados quedaban armados con los items del primer render: tras
+  // editar la venta (items con id nuevo) la lista salía vacía.
+  // Solo en la transición cerrado → abierto: el padre arma `venta` en cada
+  // render, y resetear con cada render borraría lo que el usuario va marcando.
+  const wasOpen = useRef(false)
+  useEffect(() => {
+    const justOpened = open && !wasOpen.current
+    wasOpen.current = open
+    if (!justOpened) return
+    setItemStates(buildInitialItemStates(venta.items, devueltas))
+    reset({ motivo: "", observaciones: "" })
+    setMetodoReembolso("")
+    setIdempotencyKey(crypto.randomUUID())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  const handleOpenChange = (value: boolean) => onOpenChange(value)
 
   // Derived: selected items and total refund
   const selectedItems = useMemo(() => {
@@ -135,13 +173,26 @@ export function DevolucionForm({
     return si ? effectivePaidUnitPrice(si, venta.total, saleNet) : 0
   }
 
-  const totalReembolso = useMemo(() => {
+  const totalDevolucion = useMemo(() => {
     const returned = selectedItems.map((item) => ({
       itemVentaId: item.id,
       cantidad: itemStates[item.id]?.cantidad ?? 0,
     }))
-    return computeDevolucionMonto(venta.total, saleItems, returned)
-  }, [selectedItems, itemStates, saleItems, venta.total])
+    // Igual que el servidor: tope en lo que queda por reintegrar y, si con
+    // esto se devuelve todo, exactamente lo que queda.
+    const esTotal = venta.items.every(
+      (it) => (devueltas[it.id] ?? 0) + (itemStates[it.id]?.selected ? itemStates[it.id].cantidad : 0) >= it.cantidad
+    )
+    return computeDevolucionMonto(venta.total, saleItems, returned, {
+      priorRefunded: yaReintegrado,
+      isTotal: esTotal,
+    })
+  }, [selectedItems, itemStates, saleItems, venta.total, venta.items, devueltas, yaReintegrado])
+
+  // Lo devuelto descuenta primero lo que el cliente todavía debe; solo el
+  // resto se le reintegra (mig 330).
+  const aplicadoDeuda = Math.min(totalDevolucion, Math.max(venta.saldoPendiente ?? 0, 0))
+  const totalReembolso = Math.round((totalDevolucion - aplicadoDeuda) * 100) / 100
 
   // --- Handlers ---
 
@@ -156,9 +207,8 @@ export function DevolucionForm({
   }
 
   const updateCantidad = (itemId: string, cantidad: number) => {
-    const item = venta.items.find((i) => i.id === itemId)
-    if (!item) return
-    const clamped = Math.max(1, Math.min(cantidad, item.cantidad))
+    const disponible = itemStates[itemId]?.disponible ?? 0
+    const clamped = Math.max(1, Math.min(cantidad, disponible))
     setItemStates((prev) => ({
       ...prev,
       [itemId]: {
@@ -179,22 +229,24 @@ export function DevolucionForm({
   }
 
   const onSubmit = async (data: DevolucionFormData) => {
+    if (submittingRef.current) return
     if (selectedItems.length === 0) {
       await showError("Selecciona al menos un producto para devolver")
       return
     }
 
+    submittingRef.current = true
     setLoading(true)
     try {
       const body = {
         motivo: data.motivo,
         observaciones: data.observaciones || undefined,
-        metodoReembolso: metodoReembolso || undefined,
+        metodoReembolso: (totalReembolso > 0 && metodoReembolso) || undefined,
+        idempotencyKey: idempotencyKey || undefined,
         items: selectedItems.map((item) => {
           const state = itemStates[item.id]
           return {
             itemVentaId: item.id,
-            inventarioId: item.inventarioId,
             cantidad: state.cantidad,
             precioUnitario: item.precioUnitario,
             restaurarStock: state.restaurarStock,
@@ -215,14 +267,13 @@ export function DevolucionForm({
       }
 
       await showSuccess("Devolución registrada correctamente")
-      reset()
-      setItemStates(buildInitialItemStates(venta.items))
       onOpenChange(false)
       onSuccess()
     } catch (error) {
       console.error("Error creating devolucion:", error)
       await showError("Error al registrar la devolución")
     } finally {
+      submittingRef.current = false
       setLoading(false)
     }
   }
@@ -264,8 +315,10 @@ export function DevolucionForm({
                       <input
                         type="checkbox"
                         checked={state.selected}
+                        disabled={state.disponible === 0}
                         onChange={() => toggleItem(item.id)}
-                        className="mt-1 h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
+                        aria-label={`Devolver ${item.descripcion}`}
+                        className="mt-1 h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer disabled:cursor-not-allowed"
                       />
 
                       <div className="flex-1 min-w-0">
@@ -277,6 +330,13 @@ export function DevolucionForm({
                         </div>
                         <div className="mt-1 text-sm text-muted-foreground">
                           {item.cantidad} x {formatPrice(item.precioUnitario)}
+                          {state.disponible < item.cantidad && (
+                            <span className="ml-2 text-xs">
+                              {state.disponible === 0
+                                ? "· Ya devuelto"
+                                : `· Ya devueltas: ${item.cantidad - state.disponible}`}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -294,7 +354,7 @@ export function DevolucionForm({
                           <Input
                             type="number"
                             min={1}
-                            max={item.cantidad}
+                            max={state.disponible}
                             value={state.cantidad}
                             onChange={(e) =>
                               updateCantidad(item.id, parseInt(e.target.value) || 1)
@@ -302,7 +362,7 @@ export function DevolucionForm({
                             className="h-8"
                           />
                           <p className="text-[11px] text-muted-foreground">
-                            Máximo: {item.cantidad}
+                            Máximo: {state.disponible}
                           </p>
                         </div>
 
@@ -358,23 +418,24 @@ export function DevolucionForm({
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="metodoReembolso">Método de reembolso</Label>
-              <select
-                id="metodoReembolso"
-                value={metodoReembolso}
-                onChange={(e) => setMetodoReembolso(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                <option value="">Sin reembolso</option>
-                <option value="EFECTIVO">Efectivo</option>
-                <option value="TRANSFERENCIA">Transferencia</option>
-                <option value="TARJETA">Tarjeta</option>
-                <option value="CREDITO_TIENDA">Crédito en tienda</option>
-                <option value="CUENTA_CORRIENTE">Cuenta corriente</option>
-                <option value="OTRO">Otro</option>
-              </select>
-            </div>
+            {totalReembolso > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="metodoReembolso">Método de reembolso</Label>
+                <select
+                  id="metodoReembolso"
+                  value={metodoReembolso}
+                  onChange={(e) => setMetodoReembolso(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">Sin reembolso</option>
+                  <option value="EFECTIVO">Efectivo</option>
+                  <option value="TRANSFERENCIA">Transferencia</option>
+                  <option value="TARJETA">Tarjeta</option>
+                  {venta.clienteId && <option value="CUENTA_CORRIENTE">Saldo a favor en cuenta corriente</option>}
+                  <option value="OTRO">Otro</option>
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Resumen */}
@@ -401,6 +462,18 @@ export function DevolucionForm({
                 </p>
               )}
             </div>
+            {aplicadoDeuda > 0 && (
+              <div className="space-y-1 border-t pt-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Valor de lo devuelto:</span>
+                  <span>{formatPrice(totalDevolucion)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Se descuenta del saldo pendiente:</span>
+                  <span>-{formatPrice(aplicadoDeuda)}</span>
+                </div>
+              </div>
+            )}
             <div className="flex justify-between border-t pt-2 text-lg font-bold">
               <span>Total a reembolsar:</span>
               <span className="text-primary">{formatPrice(totalReembolso)}</span>
@@ -442,14 +515,17 @@ export function DevolucionForm({
 // --- Helpers ---
 
 function buildInitialItemStates(
-  items: DevolucionFormProps["venta"]["items"]
+  items: DevolucionFormProps["venta"]["items"],
+  devueltas: Record<string, number> = {}
 ): Record<string, ItemSelectionState> {
   const states: Record<string, ItemSelectionState> = {}
   for (const item of items) {
+    const disponible = Math.max(item.cantidad - (devueltas[item.id] ?? 0), 0)
     states[item.id] = {
       selected: false,
-      cantidad: item.cantidad,
+      cantidad: disponible,
       restaurarStock: item.inventarioId !== null,
+      disponible,
     }
   }
   return states

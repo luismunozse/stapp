@@ -2,7 +2,12 @@ import { NextResponse } from "next/server"
 import { requireCajaAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
-import { esMovimientoCogsAutomatico } from "@/lib/caja-utils"
+import {
+  esErrorColumnaOrigen,
+  esMovimientoCogsAutomatico,
+  resolverOrigen,
+  sinOrigen,
+} from "@/lib/caja-utils"
 import { todayInTimeZone, dayRangeUtc, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
 
@@ -77,6 +82,7 @@ export async function GET(request: Request) {
         afectaRentabilidad: m.afecta_rentabilidad,
         comprobanteUrl: m.comprobante_url,
         esRecurrente: m.es_recurrente,
+        origen: resolverOrigen(m),
       })),
     })
   } catch (err) {
@@ -122,24 +128,34 @@ export async function POST(request: Request) {
       if (cat) afectaRentabilidad = cat.afecta_rentabilidad
     }
 
-    const { data: movimiento, error: insertError } = await supabaseAdmin
+    const payload = {
+      organization_id: organizationId!,
+      sucursal_id: sucursalId,
+      sesion_caja_id: sesionAbierta?.id || null,
+      tipo: parsed.tipo,
+      monto: parsed.monto,
+      metodo_pago: parsed.metodoPago,
+      concepto: parsed.concepto,
+      observaciones: parsed.observaciones || null,
+      usuario_id: userId!,
+      categoria_gasto_id: parsed.categoriaGastoId || null,
+      afecta_rentabilidad: afectaRentabilidad ?? true,
+      comprobante_url: parsed.comprobanteUrl || null,
+      origen: "MANUAL",
+    }
+    let { data: movimiento, error: insertError } = await supabaseAdmin
       .from("movimientos_caja")
-      .insert({
-        organization_id: organizationId!,
-        sucursal_id: sucursalId,
-        sesion_caja_id: sesionAbierta?.id || null,
-        tipo: parsed.tipo,
-        monto: parsed.monto,
-        metodo_pago: parsed.metodoPago,
-        concepto: parsed.concepto,
-        observaciones: parsed.observaciones || null,
-        usuario_id: userId!,
-        categoria_gasto_id: parsed.categoriaGastoId || null,
-        afecta_rentabilidad: afectaRentabilidad ?? true,
-        comprobante_url: parsed.comprobanteUrl || null,
-      })
+      .insert(payload)
       .select("*")
       .single()
+    // Mig 335 sin aplicar: reintentar sin la columna (el default no existe aun).
+    if (insertError && esErrorColumnaOrigen(insertError)) {
+      ;({ data: movimiento, error: insertError } = await supabaseAdmin
+        .from("movimientos_caja")
+        .insert(sinOrigen(payload))
+        .select("*")
+        .single())
+    }
 
     if (insertError) {
       console.error("Error creating movimiento:", insertError)

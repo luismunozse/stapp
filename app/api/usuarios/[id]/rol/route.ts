@@ -104,6 +104,7 @@ export async function PATCH(
         .select("id", { count: "exact", head: true })
         .eq("organization_id", organizationId!)
         .eq("rol", "ADMIN")
+        .is("deleted_at", null)
         .neq("id", id)
 
       // Fail-closed: si no se pudo contar, no se degrada. Dejar al taller sin

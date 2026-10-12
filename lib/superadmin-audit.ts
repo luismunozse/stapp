@@ -330,6 +330,17 @@ export function createSuperadminAuditLogger(email: string | null, request?: Requ
         userAgent,
       }),
 
+    betaAndroidUpdate: (ids: string[], estado: string) =>
+      logSuperadminAudit({
+        email,
+        action: "BULK_ACTION",
+        entity: "system",
+        description: `Beta Android: ${ids.length} inscriptos marcados ${estado}`,
+        metadata: { ids, estado, count: ids.length },
+        ipAddress,
+        userAgent,
+      }),
+
     waitlistBulkDelete: (count: number, ids: string[]) =>
       logSuperadminAudit({
         email,

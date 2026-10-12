@@ -813,6 +813,119 @@ export async function sendNewLeadNotification({
 }
 
 // ============================================
+// DELEGACIÓN ARCA PENDIENTE DE ACEPTAR (aviso al dueño de la plataforma)
+// ============================================
+interface SendDelegacionArcaPendienteParams {
+  organizationId: string
+  organizationName: string | null
+  /** CUIT del taller (representado), solo dígitos. */
+  cuit: string
+  puntoVenta: number
+  condicionFiscal: string
+}
+
+let avisoFallbackPlataformaEmitido = false
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+}
+
+/**
+ * Un taller guardó una delegación de ARCA: queda "Aceptada: Pendiente" hasta
+ * que el dueño de la plataforma la acepta a mano en ARCA. Sin este aviso nadie
+ * se entera y el taller espera para siempre.
+ */
+export async function sendDelegacionArcaPendienteNotification({
+  organizationId,
+  organizationName,
+  cuit,
+  puntoVenta,
+  condicionFiscal,
+}: SendDelegacionArcaPendienteParams) {
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+  const destino = process.env.PLATFORM_NOTIFICATION_EMAIL
+  if (!destino && !avisoFallbackPlataformaEmitido) {
+    // Una sola vez por instancia: que se vea en los logs sin inundarlos.
+    avisoFallbackPlataformaEmitido = true
+    console.warn(
+      "[email] PLATFORM_NOTIFICATION_EMAIL no está configurada: los avisos de plataforma van a la casilla de contacto"
+    )
+  }
+  const adminEmail = destino || CONTACT_EMAIL
+
+  // El nombre lo escribe el taller: se escapa antes de ir al HTML del mail.
+  const nombre = escapeHtml(organizationName || "(sin nombre)")
+  const detalle = [
+    `<strong>Organización:</strong> ${nombre}`,
+    `<strong>ID:</strong> ${escapeHtml(organizationId)}`,
+    `<strong>CUIT representado:</strong> ${escapeHtml(cuit)}`,
+    `<strong>Punto de venta:</strong> ${puntoVenta}`,
+    `<strong>Condición fiscal:</strong> ${escapeHtml(condicionFiscal)}`,
+  ]
+    .map((line) => `<p class="text-body" style="color: #4b5563; font-size: 15px; margin: 4px 0;">${line}</p>`)
+    .join("")
+
+  const paso = (texto: string) =>
+    `<li class="text-body" style="color: #4b5563; font-size: 15px; margin: 0 0 10px 0;">${texto}</li>`
+
+  const content = `
+    <h1 class="text-heading" style="color: #1f2937; font-size: 22px; font-weight: 700; margin: 0 0 8px 0;">
+      Delegación de ARCA para aceptar
+    </h1>
+
+    <p class="text-body" style="color: #4b5563; font-size: 16px; margin: 16px 0 0 0;">
+      ${nombre} guardó su delegación de Facturación Electrónica. Queda "Aceptada: Pendiente"
+      hasta que la aceptes vos en ARCA.
+    </p>
+
+    ${getInfoCard(`
+      <p class="text-muted" style="color: #6b7280; font-size: 12px; margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 1px;">
+        Datos del taller
+      </p>
+      ${detalle}
+    `)}
+
+    <p class="text-body" style="color: #1f2937; font-size: 15px; font-weight: 600; margin: 24px 0 8px 0;">
+      Qué hacer
+    </p>
+    <ol style="margin: 0; padding-left: 20px;">
+      ${paso(
+        "Entrá a ARCA con la Clave Fiscal de STApp, abrí la app <strong>Aceptación de Designación</strong> y aceptá la autorización del CUIT " +
+          escapeHtml(cuit) +
+          "."
+      )}
+      ${paso(
+        "Administrador de Relaciones → <strong>Nueva Relación</strong> → Representado = " +
+          escapeHtml(cuit) +
+          " → Buscar → ARCA &gt; WebServices &gt; Facturación Electrónica → segundo Buscar → elegí el computador fiscal <strong>stapp-prod</strong> → Confirmar → Confirmar."
+      )}
+    </ol>
+
+    ${getDivider()}
+
+    <p class="text-muted" style="color: #9ca3af; font-size: 13px; margin: 0;">
+      Mientras no lo hagas, al taller le va a seguir fallando la prueba de conexión.
+    </p>
+  `
+
+  return sendEmail({
+    to: adminEmail,
+    subject: `Aceptar delegación ARCA: ${organizationName || organizationId} - STApp`,
+    html: getBaseTemplate({
+      preheader: `${nombre} delegó la facturación electrónica y espera que la aceptes`,
+      headerGradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+      content,
+      rootDomain,
+      footerText: "Recibiste este correo porque un taller guardó una delegación de ARCA en STApp.",
+    }),
+  })
+}
+
+// ============================================
 // ALERTA DIARIA - DIGEST
 // ============================================
 interface AlertDigestParams {
