@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { TERMINOS, articuloIndefinido, resolveTerminologia, t } from "@/lib/terminologia"
+import { TERMINOS, articuloIndefinido, minusculaInicial, resolveTerminologia, t } from "@/lib/terminologia"
 
 describe("resolveTerminologia", () => {
   it("sin overrides => todos los defaults", () => {
@@ -53,5 +53,22 @@ describe("articuloIndefinido", () => {
     ["  Persiana  ", "una"],
   ])("%s -> %s", (termino, esperado) => {
     expect(articuloIndefinido(termino)).toBe(esperado)
+  })
+})
+
+describe("minusculaInicial", () => {
+  it.each([
+    ["Pieza", "pieza"],
+    ["Equipo", "equipo"],
+    ["Máquina de café", "máquina de café"],
+    ["TV", "TV"],
+    ["TV LED", "TV LED"],
+    ["PC", "PC"],
+    ["pieza", "pieza"],
+    ["A", "a"],
+    ["", ""],
+    ["  Pieza", "  Pieza"],
+  ])("%j -> %j", (termino, esperado) => {
+    expect(minusculaInicial(termino)).toBe(esperado)
   })
 })

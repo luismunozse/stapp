@@ -72,3 +72,15 @@ export function articuloIndefinido(termino: string): "un" | "una" {
   if (MASCULINOS_EN_A.has(primera)) return "un"
   return SUFIJO_FEMENINO.test(primera) ? "una" : "un"
 }
+
+/**
+ * Lowercases only the first letter, and only when the second is not uppercase,
+ * so a term can sit mid-sentence without breaking acronyms: "Pieza" -> "pieza",
+ * "TV" stays "TV".
+ */
+export function minusculaInicial(termino: string): string {
+  const [primera, segunda] = termino
+  if (primera === undefined) return termino
+  if (segunda !== undefined && segunda !== segunda.toLowerCase()) return termino
+  return primera.toLowerCase() + termino.slice(1)
+}
