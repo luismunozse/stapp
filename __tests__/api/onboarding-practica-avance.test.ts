@@ -69,7 +69,7 @@ function preparar(...respuestas: unknown[]) {
 // be satisfied by the load. This returns only the eq() filters chained after the
 // n-th update(), i.e. the ones that scope the write itself.
 function filtrosDelUpdate(
-  ordenes: { eq: { mock: { calls: unknown[][]; invocationCallOrder: number[] } } },
+  ordenes: ReturnType<typeof createChainMock>,
   update: { mock: { invocationCallOrder: number[] } },
   n: number
 ) {
