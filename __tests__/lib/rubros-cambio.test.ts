@@ -1,0 +1,280 @@
+import { describe, it, expect, beforeEach, vi } from "vitest"
+import { seedOrganizationFromRubro } from "@/lib/rubros/seed"
+import { aplicarCambioDeRubro, type SeleccionRubro } from "@/lib/rubros/cambio"
+import { getRubro } from "@/lib/rubros"
+
+/**
+ * In-memory stand-in for the slice of supabase-js the rubro change touches.
+ * Unlike the recorder in rubros-seed.test.ts it keeps STATE: the org is seeded
+ * by the real signup seed, changed, and then the tables are asserted.
+ */
+type Row = Record<string, any>
+type Op = "select" | "insert" | "upsert" | "update" | "delete"
+interface Resultado {
+  data: any
+  error: { message: string; code?: string } | null
+}
+
+const clonar = <T>(valor: T): T => JSON.parse(JSON.stringify(valor))
+
+function crearDbFake(inicial: Record<string, Row[]> = {}) {
+  const tables: Record<string, Row[]> = clonar(inicial)
+  /** "table.op" -> error message that operation returns. */
+  const failures: Record<string, string> = {}
+  const calls: Array<{ table: string; op: Op }> = []
+  let seq = 0
+
+  const tabla = (nombre: string): Row[] => (tables[nombre] ??= [])
+
+  // The two unique keys that shape the bug: tipos (migration 014:19) and
+  // checklist templates (migration 050:8-10). A NULL tipo_dispositivo_id never
+  // collides, as in Postgres.
+  const choca = (nombre: string, fila: Row, contra: Row[]): Row | undefined => {
+    if (nombre === "tipos_dispositivo") {
+      return contra.find(
+        (r) => r.organization_id === fila.organization_id && r.codigo === fila.codigo
+      )
+    }
+    if (nombre === "checklist_templates" && fila.tipo_dispositivo_id != null) {
+      return contra.find(
+        (r) =>
+          r.organization_id === fila.organization_id &&
+          r.nombre === fila.nombre &&
+          r.tipo_dispositivo_id === fila.tipo_dispositivo_id
+      )
+    }
+    return undefined
+  }
+
+  class Query {
+    private filtros: Array<(r: Row) => boolean> = []
+    private unico = false
+
+    constructor(
+      private readonly nombre: string,
+      private readonly op: Op,
+      private readonly payload?: Row | Row[],
+      private readonly ignorarDuplicados = false
+    ) {}
+
+    select() {
+      return this
+    }
+    eq(col: string, valor: unknown) {
+      this.filtros.push((r) => r[col] === valor)
+      return this
+    }
+    in(col: string, valores: unknown[]) {
+      this.filtros.push((r) => valores.includes(r[col]))
+      return this
+    }
+    single() {
+      this.unico = true
+      return this
+    }
+    then(ok: (r: Resultado) => unknown, ko?: (e: unknown) => unknown) {
+      return Promise.resolve()
+        .then(() => this.ejecutar())
+        .then(ok, ko)
+    }
+
+    private filasDelPayload(): Row[] {
+      const p = this.payload ?? []
+      return (Array.isArray(p) ? p : [p]).map((r) => ({ ...r }))
+    }
+
+    private ejecutar(): Resultado {
+      calls.push({ table: this.nombre, op: this.op })
+      const falla = failures[`${this.nombre}.${this.op}`]
+      if (falla) return { data: null, error: { message: falla } }
+
+      const filas = tabla(this.nombre)
+      const coincide = (r: Row) => this.filtros.every((f) => f(r))
+
+      if (this.op === "select") {
+        const data = filas.filter(coincide).map((r) => ({ ...r }))
+        return { data: this.unico ? (data[0] ?? null) : data, error: null }
+      }
+      if (this.op === "update") {
+        for (const r of filas.filter(coincide)) Object.assign(r, this.payload)
+        return { data: null, error: null }
+      }
+      if (this.op === "delete") {
+        tables[this.nombre] = filas.filter((r) => !coincide(r))
+        return { data: null, error: null }
+      }
+      if (this.op === "insert") {
+        const nuevas = this.filasDelPayload()
+        // One statement is atomic: a single collision rejects every row.
+        const rechazo = nuevas.some((fila, i) =>
+          choca(this.nombre, fila, [...filas, ...nuevas.slice(0, i)])
+        )
+        if (rechazo) {
+          return {
+            data: null,
+            error: { code: "23505", message: "duplicate key value violates unique constraint" },
+          }
+        }
+        const insertadas = nuevas.map((fila) => ({ id: `${this.nombre}-${++seq}`, ...fila }))
+        filas.push(...insertadas)
+        return { data: this.unico ? insertadas[0] : insertadas, error: null }
+      }
+      // upsert ON CONFLICT on the table's unique key
+      for (const fila of this.filasDelPayload()) {
+        const existente = choca(this.nombre, fila, filas)
+        if (!existente) filas.push({ id: `${this.nombre}-${++seq}`, ...fila })
+        else if (!this.ignorarDuplicados) Object.assign(existente, fila)
+      }
+      return { data: null, error: null }
+    }
+  }
+
+  const client = {
+    from: (nombre: string) => ({
+      select: () => new Query(nombre, "select"),
+      insert: (payload: Row | Row[]) => new Query(nombre, "insert", payload),
+      upsert: (payload: Row | Row[], opciones?: { ignoreDuplicates?: boolean }) =>
+        new Query(nombre, "upsert", payload, opciones?.ignoreDuplicates === true),
+      update: (payload: Row) => new Query(nombre, "update", payload),
+      delete: () => new Query(nombre, "delete"),
+    }),
+  }
+
+  return { client, tables, failures, calls }
+}
+
+type FakeDb = ReturnType<typeof crearDbFake>
+
+const ORG = "org-1"
+
+/** The org exactly as the signup leaves it. */
+async function orgSembradaCon(rubro: string, detalle: string | null = null): Promise<FakeDb> {
+  const fake = crearDbFake({
+    organizations: [{ id: ORG, rubro, rubro_detalle: detalle, terminologia: {} }],
+  })
+  const seed = await seedOrganizationFromRubro(ORG, rubro, fake.client as any, detalle)
+  expect(seed.errors).toEqual([])
+  return fake
+}
+
+const sel = (rubro: string, rubroDetalle: string | null = null): SeleccionRubro => ({
+  rubro,
+  rubroDetalle,
+})
+
+const cambiar = (fake: FakeDb, de: SeleccionRubro, a: SeleccionRubro) =>
+  aplicarCambioDeRubro(ORG, de, a, fake.client as any)
+
+const codigosActivos = (fake: FakeDb) =>
+  fake.tables.tipos_dispositivo
+    .filter((t) => t.activo === true)
+    .map((t) => t.codigo)
+    .sort()
+
+const codigosDe = (rubro: string) =>
+  getRubro(rubro)
+    .tipos.map((t) => t.codigo)
+    .sort()
+
+const org = (fake: FakeDb) => fake.tables.organizations[0]
+
+vi.spyOn(console, "error").mockImplementation(() => {})
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
+
+describe("aplicarCambioDeRubro: tipos", () => {
+  it("deactivates the previous pack's base tipos instead of leaving them active", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+
+    await cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+
+    expect(codigosActivos(fake)).toEqual(codigosDe("electronica"))
+    // Deactivated, not deleted: inventory may still reference it (migration 014:74).
+    const heladera = fake.tables.tipos_dispositivo.find((t) => t.codigo === "HELADERA")
+    expect(heladera?.activo).toBe(false)
+  })
+
+  it("leaves the tipos the shop created by hand alone", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+    fake.tables.tipos_dispositivo.push({
+      id: "t-dron",
+      organization_id: ORG,
+      codigo: "DRON",
+      nombre: "Dron",
+      es_base: false,
+      activo: true,
+    })
+
+    await cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+
+    expect(fake.tables.tipos_dispositivo.find((t) => t.id === "t-dron")?.activo).toBe(true)
+  })
+
+  it("aborts with nothing changed when seeding the new tipos fails", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+    fake.failures["tipos_dispositivo.upsert"] = "boom"
+    const antes = clonar(fake.tables)
+
+    await expect(
+      cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+    ).rejects.toThrow("boom")
+
+    expect(fake.tables).toEqual(antes)
+  })
+
+  it("returns how many tipos the shop can pick, without the internal TODOS", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+
+    const result = await cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+
+    const esperados = getRubro("electronica").tipos.filter((t) => t.codigo !== "TODOS")
+    expect(result.tiposActivos).toBe(esperados.length)
+  })
+
+  it("reactivates the tipos an earlier change deactivated", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+
+    await cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+    await cambiar(fake, sel("electronica"), sel("electrodomesticos"))
+
+    expect(codigosActivos(fake)).toEqual(codigosDe("electrodomesticos"))
+    expect(fake.tables.tipos_dispositivo.filter((t) => t.codigo === "HELADERA")).toHaveLength(1)
+  })
+
+  it("refreshes a tipo the new pack already had instead of keeping its old name", async () => {
+    const fake = await orgSembradaCon("generico", "maquinas de cafe")
+
+    await cambiar(fake, sel("generico", "maquinas de cafe"), sel("generico", "máquinas de café"))
+
+    const maquinas = fake.tables.tipos_dispositivo.filter((t) => t.codigo === "MAQUINA_DE_CAFE")
+    expect(maquinas).toHaveLength(1)
+    expect(maquinas[0]).toMatchObject({ nombre: "Máquina de café", activo: true })
+  })
+})
+
+describe("aplicarCambioDeRubro: vocabulary and rubro", () => {
+  it("resets the vocabulary to {} when the new pack has no overrides", async () => {
+    const fake = await orgSembradaCon("electrodomesticos")
+    expect(org(fake).terminologia.equipo).toBe("Artefacto") // the signup wrote it
+
+    await cambiar(fake, sel("electrodomesticos"), sel("electronica"))
+
+    expect(org(fake).terminologia).toEqual({})
+    expect(org(fake)).toMatchObject({ rubro: "electronica", rubro_detalle: null })
+  })
+
+  it("stores the genérico trade and the vocabulary derived from it", async () => {
+    const fake = await orgSembradaCon("electronica")
+
+    await cambiar(fake, sel("electronica"), sel("generico", "maquinas de cafe"))
+
+    expect(org(fake)).toMatchObject({ rubro: "generico", rubro_detalle: "maquinas de cafe" })
+    expect(org(fake).terminologia).toEqual({
+      equipo: "Maquina de cafe",
+      equipoPlural: "Maquinas de cafe",
+    })
+    expect(codigosActivos(fake)).toEqual(["MAQUINA_DE_CAFE"])
+  })
+})

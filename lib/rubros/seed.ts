@@ -55,13 +55,12 @@ export async function seedOrganizationFromRubro(
   return { rubroId: pack.id, tiposSembrados, checklistsCreados, errors }
 }
 
-async function sembrarTipos(
-  organizationId: string,
-  pack: RubroPack,
-  client: typeof supabaseAdmin,
-  errors: string[]
-): Promise<number> {
-  const filas = pack.tipos.map((tipo) => ({
+/**
+ * `tipos_dispositivo` rows for a pack. Shared by the signup seed and the rubro
+ * change (lib/rubros/cambio.ts), so both write exactly the same shape.
+ */
+export function filasDeTipos(organizationId: string, pack: RubroPack) {
+  return pack.tipos.map((tipo) => ({
     organization_id: organizationId,
     codigo: tipo.codigo,
     nombre: tipo.nombre,
@@ -72,6 +71,15 @@ async function sembrarTipos(
     orden: tipo.orden,
     config: tipo.config,
   }))
+}
+
+async function sembrarTipos(
+  organizationId: string,
+  pack: RubroPack,
+  client: typeof supabaseAdmin,
+  errors: string[]
+): Promise<number> {
+  const filas = filasDeTipos(organizationId, pack)
 
   const { error } = await client
     .from("tipos_dispositivo")
