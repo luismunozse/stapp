@@ -19,17 +19,24 @@ const RUTAS = [
 const leer = (ruta: string) => readFileSync(join(process.cwd(), ruta), "utf8")
 
 /**
- * Each `.from("clientes")` chain, up to the next query or the end of the
- * Promise.all array it sits in.
+ * Each clientes query: a `.from("clientes")` chain or a
+ * `fetchAllRows(..., "clientes", ...)` call, up to the next query or the end
+ * of the Promise.all array it sits in.
  */
 function consultasDeClientes(src: string): string[] {
   const consultas: string[] = []
-  let desde = src.indexOf('.from("clientes")')
-  while (desde !== -1) {
-    const fines = [src.indexOf("supabaseAdmin", desde), src.indexOf("])", desde)].filter((i) => i !== -1)
-    const hasta = fines.length > 0 ? Math.min(...fines) : src.length
-    consultas.push(src.slice(desde, hasta))
-    desde = src.indexOf('.from("clientes")', hasta)
+  const inicios = [/\.from\("clientes"\)/g, /fetchAllRows<[^>]*>\("clientes"/g]
+  for (const re of inicios) {
+    for (const m of src.matchAll(re)) {
+      const desde = m.index as number
+      const fines = [
+        src.indexOf("supabaseAdmin", desde),
+        src.indexOf("fetchAllRows", desde + 1),
+        src.indexOf("])", desde),
+      ].filter((i) => i !== -1)
+      const hasta = fines.length > 0 ? Math.min(...fines) : src.length
+      consultas.push(src.slice(desde, hasta))
+    }
   }
   return consultas
 }
