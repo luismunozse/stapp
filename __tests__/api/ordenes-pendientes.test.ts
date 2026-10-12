@@ -83,4 +83,17 @@ describe("GET /api/clientes/[id]/ordenes-pendientes", () => {
 
     expect(json).toEqual([])
   })
+
+  it("excluye las órdenes de práctica del onboarding en la consulta", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    const ordenes = createChainMock([ordenRow()])
+    mockSupabaseFrom({
+      ordenes_servicio: ordenes,
+      cuenta_corriente: createChainMock([]),
+    })
+
+    await GET(createGetRequest(url), ctx)
+
+    expect(ordenes.eq).toHaveBeenCalledWith("es_practica", false)
+  })
 })
