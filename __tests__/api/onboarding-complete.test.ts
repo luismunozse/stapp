@@ -72,8 +72,11 @@ describe("POST /api/onboarding/complete", () => {
 
   it("still completes when recording the camino fails", async () => {
     preparar()
+    const logError = vi.spyOn(console, "error").mockImplementation(() => {})
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: { message: "rpc down" } } as any)
     expect((await POST(pedido(JSON.stringify({ camino: "real" })))).status).toBe(200)
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining("could not record camino"), expect.anything())
+    logError.mockRestore()
   })
 
   it("rejects a camino the wizard cannot send", async () => {

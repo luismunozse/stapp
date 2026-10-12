@@ -3,7 +3,7 @@
  * its own "Borrar práctica" action. It is never selectable for bulk state
  * changes or cobros, and the generic trash button is not offered for it.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { SWRConfig } from "swr"
 import { OrdenesList } from "@/components/ordenes/ordenes-list"
@@ -74,13 +74,33 @@ function renderList() {
   )
 }
 
+// DataTable's loading skeleton nests <tr> rows inside a <td> (a pre-existing
+// quirk that React reports as two console.error calls). Drop exactly those two
+// messages; anything else still reaches the real console.
+function esRuidoDelSkeleton([formato, ...resto]: unknown[]) {
+  if (typeof formato !== "string") return false
+  const [a, b] = resto
+  return (
+    (formato.startsWith("In HTML, %s cannot be a child of <%s>.") && a === "<tr>" && b === "td") ||
+    (formato.startsWith("<%s> cannot contain a nested %s.") && a === "td" && b === "<tr>")
+  )
+}
+
 // jsdom ignores the `hidden sm:block` / `sm:hidden` classes, so the desktop
 // table and the mobile cards both render: every practice control shows twice.
 describe("OrdenesList — practice order", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    const consoleError = console.error
+    vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      if (!esRuidoDelSkeleton(args)) consoleError(...args)
+    })
     role = "ADMIN"
     confirm.mockResolvedValue(true)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it("shows the practice badge with the deletion notice", async () => {
