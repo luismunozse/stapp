@@ -168,3 +168,31 @@ describe("countRealOrders", () => {
     await expect(real.countRealOrders("org-1", client)).rejects.toThrow("boom")
   })
 })
+
+describe("registrarCamino", () => {
+  it("records the camino through the upserting function", async () => {
+    const { client } = clienteFalso({ data: "practica" })
+    await expect(real.registrarCamino("org-1", "practica", client)).resolves.toBeUndefined()
+    expect(client.rpc).toHaveBeenCalledWith("registrar_camino_onboarding", {
+      p_org_id: "org-1",
+      p_camino: "practica",
+    })
+  })
+
+  it("logs and swallows an RPC error", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {})
+    const { client } = clienteFalso({ error: { message: "rpc down" } })
+    await expect(real.registrarCamino("org-1", "real", client)).resolves.toBeUndefined()
+    expect(log).toHaveBeenCalled()
+    log.mockRestore()
+  })
+
+  it("logs and swallows a thrown error", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {})
+    const { client } = clienteFalso()
+    client.rpc.mockRejectedValueOnce(new Error("network"))
+    await expect(real.registrarCamino("org-1", "omitido", client)).resolves.toBeUndefined()
+    expect(log).toHaveBeenCalled()
+    log.mockRestore()
+  })
+})

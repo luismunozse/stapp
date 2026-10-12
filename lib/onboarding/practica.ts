@@ -130,3 +130,25 @@ export async function countRealOrders(
   if (error) throw new Error(`countRealOrders: ${error.message}`)
   return count ?? 0
 }
+
+/**
+ * Records which onboarding path the org took. The onboarding_progress row may be
+ * missing, so this goes through registrar_camino_onboarding (migration 348), an
+ * atomic upsert by organization_id. The caller's work already happened by now:
+ * a failure is logged and swallowed, never returned.
+ */
+export async function registrarCamino(
+  organizationId: string,
+  camino: "real" | "practica" | "omitido",
+  client: DbClient = supabaseAdmin
+): Promise<void> {
+  try {
+    const { error } = await client.rpc("registrar_camino_onboarding", {
+      p_org_id: organizationId,
+      p_camino: camino,
+    })
+    if (error) console.error("[practica] could not record camino:", error.message)
+  } catch (err) {
+    console.error("[practica] could not record camino:", err)
+  }
+}
