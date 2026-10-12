@@ -54,6 +54,18 @@ describe("GET /api/ordenes", () => {
     vi.clearAllMocks()
   })
 
+  it("exposes the practice flag as esPractica", async () => {
+    mockAuthSuccess()
+    const filas = [{ id: "ord-p", numero_orden: 0, codigo_orden: "PRACTICA", es_practica: true, clientes: { id: "c1", nombre: "Luis" } }]
+    const chain = createChainMock(filas, null, 1)
+    chain.then = (resolve: any) => resolve({ data: filas, error: null, count: 1 })
+    mockSupabaseFrom({ clientes: createChainMock([]), ordenes_servicio: chain })
+
+    const { body } = await parseResponse(await GET(createGetRequest("http://localhost:3000/api/ordenes")))
+
+    expect(body.data[0].esPractica).toBe(true)
+  })
+
   it("returns 401 when not authenticated", async () => {
     mockAuthError()
 
