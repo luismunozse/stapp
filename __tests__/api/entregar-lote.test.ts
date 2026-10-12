@@ -5,7 +5,7 @@
  * Mismo mock style que Tasks 3-4 (recepcion-descuento.test.ts,
  * recepcion-multiple-atomica.test.ts): se mockea supabaseAdmin.rpc para
  * capturar los argumentos exactos que la ruta le pasa a
- * entregar_lote_recepcion (migracion 294).
+ * entregar_lote_recepcion (migracion 352).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { mockAuthSuccess, createChainMock, mockSupabaseFrom, createPostRequest, parseResponse } from "./helpers"
@@ -267,6 +267,22 @@ describe("POST /api/recepciones/[id]/entregar — entrega y cobro de lote", () =
     const { status } = await parseResponse(res)
 
     expect(status).toBe(409)
+    expect(loteCalls()).toHaveLength(0)
+  })
+
+  it("devuelve 409 con un mensaje claro (no 500) al entregar de nuevo un lote ya entregado", async () => {
+    mockTables({}, [
+      { id: "o1", estado: "ENTREGADO", costo_final: 100, descuento_cobro: 10 },
+      { id: "o2", estado: "ENTREGADO", costo_final: 200, descuento_cobro: 20 },
+      { id: "o3", estado: "ENTREGADO", costo_final: 300, descuento_cobro: 30 },
+    ])
+    mockRpc()
+
+    const res = await POST(entregarRequest({ ordenes: ordenesBody, metodoPago: "EFECTIVO" }), createParams("rec-1"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(409)
+    expect(body.error).toBe("Este lote ya fue entregado")
     expect(loteCalls()).toHaveLength(0)
   })
 

@@ -10,6 +10,8 @@ const FEATURE_KEY = "recepcion_multiple"
 
 const MENSAJE_NO_REPARADOS = "Todos los equipos del lote deben estar reparados para entregar"
 
+const MENSAJE_LOTE_YA_ENTREGADO = "Este lote ya fue entregado"
+
 const WARNING_STOCK = (numero: string) =>
   `Se entrego la orden ${numero}, pero no se pudo descontar el stock de sus repuestos. Revisa el inventario.`
 
@@ -110,6 +112,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // error distinto y merece su propio mensaje.
     const faltantes = elegiblesPendientes.filter((m) => !idsEnPayload.has(m.id))
     const excluidosEnPayload = lista.filter((m) => esEstadoExcluidoDeLote(m.estado) && idsEnPayload.has(m.id))
+    // Reintento sobre un lote que ya salio completo: mensaje propio en vez del
+    // generico de "deben estar reparados".
+    if (
+      elegiblesPendientes.length === 0 &&
+      excluidosEnPayload.length > 0 &&
+      excluidosEnPayload.every((m) => esEstadoEntregado(m.estado))
+    ) {
+      return NextResponse.json({ error: MENSAJE_LOTE_YA_ENTREGADO }, { status: 409 })
+    }
     if (faltantes.length > 0 || excluidosEnPayload.length > 0) {
       return NextResponse.json({ error: MENSAJE_NO_REPARADOS }, { status: 409 })
     }
