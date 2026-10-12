@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 type Respuesta = { data?: unknown; count?: number | null; error?: unknown }
@@ -217,5 +219,12 @@ describe("tiposParaPractica", () => {
     ])
     expect(tipo.marcas).toEqual([])
     expect(tipo.problemasComunes).toEqual(["Pierde agua"])
+  })
+})
+
+describe("wizard-props module", () => {
+  it("is guarded with server-only: it imports the admin client and sits next to the page", () => {
+    const fuente = readFileSync(join(process.cwd(), "app/(dashboard)/onboarding/wizard-props.ts"), "utf8")
+    expect(fuente).toMatch(/^import "server-only"$/m)
   })
 })

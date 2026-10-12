@@ -1,3 +1,4 @@
+import "server-only"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getRubro } from "@/lib/rubros"
 import { resolveTerminologia, type Terminologia } from "@/lib/terminologia"
