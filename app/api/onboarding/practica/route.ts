@@ -114,11 +114,44 @@ async function notificar(orgId: string, row: PracticaOrdenRow, estado: string, e
   }
 }
 
-async function practicaGanadora(orgId: string) {
+interface InsertCause {
+  code?: string
+  message?: string
+}
+
+// Returns the practice that won a concurrent submit. With no winner, the 409 is
+// no longer silent: the original error is logged, and sinGanadora can answer
+// with a more specific response first.
+async function practicaGanadora(
+  orgId: string,
+  cause: InsertCause,
+  sinGanadora?: () => Promise<NextResponse | null>
+) {
   const practica = await getPracticaOrden(orgId)
   if (practica) return NextResponse.json({ practica }, { status: 201 })
+  console.error("[practica] no winning practice after insert conflict:", cause.code, cause.message)
+  const especifica = sinGanadora ? await sinGanadora() : null
+  if (especifica) return especifica
   return NextResponse.json(
     { error: "No pudimos preparar la práctica. Probá de nuevo en un momento." },
+    { status: 409 }
+  )
+}
+
+// A practice client conserved for real work keeps telefono = "" and es_practica
+// = false, so it collides with the next practice client on UNIQUE(organization_id,
+// telefono). It is never reused: it may be a real customer.
+async function clienteSinTelefonoBloqueante(orgId: string): Promise<NextResponse | null> {
+  const { data } = await supabaseAdmin
+    .from("clientes")
+    .select("id")
+    .eq("organization_id", orgId)
+    .eq("es_practica", false)
+    .eq("telefono", "")
+    .maybeSingle()
+  if (!data) return null
+  return NextResponse.json(
+    { error: "Ya tenés un cliente cargado sin teléfono. Agregale un teléfono para poder repetir la práctica." },
     { status: 409 }
   )
 }
@@ -205,7 +238,9 @@ export async function POST(request: Request) {
     if (clienteError) {
       // 23505 on UNIQUE(organization_id, telefono): a concurrent submit created
       // the practice client first. Return its practice instead of an error.
-      if (clienteError.code === "23505") return await practicaGanadora(orgId)
+      if (clienteError.code === "23505") {
+        return await practicaGanadora(orgId, clienteError, () => clienteSinTelefonoBloqueante(orgId))
+      }
       throw clienteError
     }
 
@@ -243,7 +278,9 @@ export async function POST(request: Request) {
       // the client this submit had just created, so the order insert lost the
       // race the other way around. Same outcome: return the winner's practice.
       // Known and accepted: a later submit can still wipe an earlier finished practice.
-      if (ordenError.code === "23505" || ordenError.code === "23503") return await practicaGanadora(orgId)
+      if (ordenError.code === "23505" || ordenError.code === "23503") {
+        return await practicaGanadora(orgId, ordenError)
+      }
       throw ordenError
     }
 

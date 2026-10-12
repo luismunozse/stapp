@@ -38,7 +38,7 @@ const filaPractica = {
 const cuerpo = { tipoDispositivo: "CELULAR", dispositivo: "Moto G", problemaReportado: "No enciende" }
 
 function prepararAlta(
-  opts: { tipo?: unknown; clienteError?: unknown; ordenError?: unknown; ordenesReales?: number; ganadora?: unknown } = {}
+  opts: { tipo?: unknown; clienteError?: unknown; ordenError?: unknown; ordenesReales?: number; ganadora?: unknown; clienteSinTelefono?: unknown } = {}
 ) {
   // Base chain: countRealOrders (count) and getPracticaOrden (maybeSingle).
   const ordenes = createChainMock(opts.ganadora ?? null, null, opts.ordenesReales ?? 0)
@@ -46,7 +46,7 @@ function prepararAlta(
   const ordenInsert = vi.fn().mockReturnValue(ordenInsertChain)
   ordenes.insert = ordenInsert
 
-  const clientes = createChainMock(null)
+  const clientes = createChainMock(opts.clienteSinTelefono ?? null)
   const clienteInsertChain = createChainMock(
     opts.clienteError ? null : { id: "cli-p" },
     opts.clienteError ?? null
@@ -259,6 +259,40 @@ describe("POST /api/onboarding/practica", () => {
     expect(status).toBe(201)
     expect(body.practica.id).toBe("ord-p")
     expect(clienteDelete).toHaveBeenCalled()
+  })
+
+  it("explains the 409 when a kept client without phone blocks the practice", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {})
+    const { clientes } = prepararAlta({
+      clienteError: { code: "23505", message: "duplicate" },
+      clienteSinTelefono: { id: "cli-real" },
+    })
+    const { status, body } = await parseResponse(await POST(createPostRequest(cuerpo)))
+    expect(status).toBe(409)
+    expect(body.error).toBe("Ya tenés un cliente cargado sin teléfono. Agregale un teléfono para poder repetir la práctica.")
+    expect(clientes.eq).toHaveBeenCalledWith("organization_id", "org-1")
+    expect(clientes.eq).toHaveBeenCalledWith("es_practica", false)
+    expect(clientes.eq).toHaveBeenCalledWith("telefono", "")
+    log.mockRestore()
+  })
+
+  it("keeps the generic 409 and logs the original error when there is no winner and no blocking client", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {})
+    prepararAlta({ clienteError: { code: "23505", message: "dup telefono" } })
+    const { status, body } = await parseResponse(await POST(createPostRequest(cuerpo)))
+    expect(status).toBe(409)
+    expect(body.error).toContain("Probá de nuevo")
+    expect(log.mock.calls.flat().join(" ")).toContain("23505")
+    log.mockRestore()
+  })
+
+  it("logs the original error when the order insert loses and there is no winner", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {})
+    prepararAlta({ ordenError: { code: "23503", message: "fk gone" } })
+    const { status } = await parseResponse(await POST(createPostRequest(cuerpo)))
+    expect(status).toBe(409)
+    expect(log.mock.calls.flat().join(" ")).toContain("23503")
+    log.mockRestore()
   })
 })
 
