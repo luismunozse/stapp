@@ -25,6 +25,8 @@ export async function GET(
       .select("id, numero_orden, codigo_orden, dispositivo, costo_final, total_cobrado, estado_cobro, descuento_cobro, estado")
       .eq("organization_id", organizationId!)
       .eq("cliente_id", clienteId)
+      // The onboarding practice order is never collectable.
+      .eq("es_practica", false)
       .in("estado_cobro", ["PENDIENTE", "PARCIAL"])
       .not("costo_final", "is", null)
       .gt("costo_final", 0)

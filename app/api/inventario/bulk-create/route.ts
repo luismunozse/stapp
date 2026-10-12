@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { depositoPorDefecto, moverStockInicialADeposito } from "@/lib/depositos"
 import { formatInventario } from "@/lib/db-utils"
 import { createAuditLogger } from "@/lib/audit"
 import { z } from "zod"
@@ -53,7 +54,7 @@ function prefixFor(categoria: string) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId } = await requireInventarioAccess()
+    const { error, organizationId, userId, role, session } = await requireInventarioAccess()
     if (error) return error
 
     const body = await request.json()
@@ -61,6 +62,24 @@ export async function POST(request: Request) {
 
     const created: unknown[] = []
     const errors: { index: number; nombre: string; error: string }[] = []
+    const advertencias: { index: number; nombre: string; advertencia: string }[] = []
+
+    // Deposito destino del stock inicial: el de la sucursal de quien carga (una
+    // sola vez para todo el lote). null => se queda donde lo siembra el trigger
+    // de la migracion 291 (principal de la org).
+    let depositoDestino: string | null = null
+    if (items.some((it) => it.stock > 0)) {
+      try {
+        depositoDestino = await depositoPorDefecto({
+          organizationId: organizationId!,
+          role,
+          userSucursalId: session!.user.sucursalId ?? null,
+        })
+      } catch (e) {
+        console.error("Error resolviendo el depósito por defecto en bulk-create:", e)
+      }
+    }
+
     const auditLogger = userId ? createAuditLogger(organizationId!, userId, request) : null
 
     // Procesar secuencial para que get_next_inventory_code vea inserts previos
@@ -98,6 +117,26 @@ export async function POST(request: Request) {
           .single()
 
         if (insertError) throw insertError
+
+        // El item ya existe: si mover el stock falla no se reporta como error del
+        // item (el cliente reintentaria y duplicaria), solo como advertencia.
+        if (depositoDestino && data.stock > 0) {
+          try {
+            await moverStockInicialADeposito({
+              inventarioId: inserted.id,
+              depositoId: depositoDestino,
+              stock: data.stock,
+              organizationId: organizationId!,
+            })
+          } catch (moveError) {
+            console.error("Error moviendo stock inicial al depósito de la sucursal:", moveError)
+            advertencias.push({
+              index: i,
+              nombre: data.nombre,
+              advertencia: "El stock quedó en el depósito principal",
+            })
+          }
+        }
         // Detrás de requireInventarioAccess(): el permiso de costo ya está
         // resuelto por el guard de la ruta.
         created.push(formatInventario(inserted, true))
@@ -120,7 +159,13 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      { created, errors, createdCount: created.length, errorCount: errors.length },
+      {
+        created,
+        errors,
+        createdCount: created.length,
+        errorCount: errors.length,
+        ...(advertencias.length > 0 ? { advertencias } : {}),
+      },
       { status: errors.length === 0 ? 201 : 207 }
     )
   } catch (error) {

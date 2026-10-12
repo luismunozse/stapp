@@ -7,7 +7,13 @@ import {
   parseResponse,
 } from "./helpers"
 
+vi.mock("@/lib/depositos", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/depositos")>()),
+  depositoPermitido: vi.fn(),
+}))
+
 import { supabaseAdmin } from "@/lib/supabase"
+import { depositoPermitido, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { POST } from "@/app/api/ordenes-compra/[id]/recibir/route"
 
 function createRecibirRequest(body: any, id = "oc-1"): [Request, { params: Promise<{ id: string }> }] {
@@ -29,6 +35,69 @@ const validBody = {
 describe("POST /api/ordenes-compra/[id]/recibir", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(depositoPermitido).mockResolvedValue(true)
+  })
+
+  it("rechaza con 400 un depositoId no permitido y NO llama a la RPC", async () => {
+    mockAuthSuccess()
+    mockSupabaseFrom({
+      ordenes_compra: createChainMock({ id: "oc-1", estado: "ENVIADA" }),
+    })
+    vi.mocked(depositoPermitido).mockResolvedValue(false)
+
+    const [req, ctx] = createRecibirRequest({ ...validBody, depositoId: "dep-ajeno" })
+    const { status, body } = await parseResponse(await POST(req, ctx))
+
+    expect(status).toBe(400)
+    expect(body.error).toBe(DEPOSITO_INVALIDO)
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it("valida el depositoId con alcance sucursal, el rol y la sucursal de la sesion", async () => {
+    mockAuthSuccess({ role: "ADMIN", sucursalId: "suc-1", organizationId: "org-9" })
+    mockSupabaseFrom({
+      ordenes_compra: createChainMock({ id: "oc-1", estado: "ENVIADA" }),
+    })
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { estado: "RECIBIDA" }, error: null } as any)
+
+    const [req, ctx] = createRecibirRequest({ ...validBody, depositoId: "dep-2" })
+    await POST(req, ctx)
+
+    expect(depositoPermitido).toHaveBeenCalledWith({
+      depositoId: "dep-2",
+      organizationId: "org-9",
+      role: "ADMIN",
+      userSucursalId: "suc-1",
+      alcance: "sucursal",
+    })
+  })
+
+  it("sin depositoId no valida (queda el default del servidor)", async () => {
+    mockAuthSuccess()
+    mockSupabaseFrom({
+      ordenes_compra: createChainMock({ id: "oc-1", estado: "ENVIADA" }),
+    })
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { estado: "RECIBIDA" }, error: null } as any)
+
+    const [req, ctx] = createRecibirRequest(validBody)
+    await POST(req, ctx)
+
+    expect(depositoPermitido).not.toHaveBeenCalled()
+  })
+
+  it("responde 500 sin llamar a la RPC si la validacion del deposito falla", async () => {
+    mockAuthSuccess()
+    mockSupabaseFrom({
+      ordenes_compra: createChainMock({ id: "oc-1", estado: "ENVIADA" }),
+    })
+    vi.mocked(depositoPermitido).mockRejectedValue(new Error("db down"))
+    vi.spyOn(console, "error").mockImplementation(() => {})
+
+    const [req, ctx] = createRecibirRequest({ ...validBody, depositoId: "dep-2" })
+    const res = await POST(req, ctx)
+
+    expect(res.status).toBe(500)
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
   it("returns 401 when not authenticated", async () => {

@@ -13,7 +13,7 @@ import { isMissingColumnError } from "@/lib/db-errors"
 // columns only drops that part of the fiscal block from the remito instead
 // of breaking PDF generation entirely — see the chained retry in each
 // branch of GET below.
-const ORG_COLS = "nombre, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria"
+const ORG_COLS = "nombre, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria, pais"
 const ORG_COLS_FISCAL = `${ORG_COLS}, cuit, condicion_iva, domicilio_fiscal, cbu_alias, medios_pago_texto, plazo_pago_dias`
 const ORG_COLS_FISCAL_V2 = `${ORG_COLS_FISCAL}, ingresos_brutos, inicio_actividades`
 
@@ -197,6 +197,7 @@ export async function GET(
         moneda: org?.moneda || "ARS",
         zonaHoraria,
         cuitEmpresa: org?.cuit,
+        pais: org?.pais,
         condicionIvaEmpresa: org?.condicion_iva,
         domicilioFiscalEmpresa: org?.domicilio_fiscal,
         ingresosBrutosEmpresa: org?.ingresos_brutos,
@@ -251,6 +252,7 @@ export async function GET(
         moneda: org?.moneda || "ARS",
         zonaHoraria,
         cuitEmpresa: org?.cuit,
+        pais: org?.pais,
         condicionIvaEmpresa: org?.condicion_iva,
         domicilioFiscalEmpresa: org?.domicilio_fiscal,
         ingresosBrutosEmpresa: org?.ingresos_brutos,

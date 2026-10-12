@@ -101,22 +101,25 @@ TabsTrigger.displayName = "TabsTrigger"
 
 interface TabsContentProps extends React.HTMLAttributes<HTMLDivElement> {
   value: string
+  /** Mantiene el panel montado (oculto) al estar inactivo, para no perder estado local. */
+  forceMount?: boolean
 }
 
 const TabsContent = React.forwardRef<HTMLDivElement, TabsContentProps>(
-  ({ className, value, children, ...props }, ref) => {
+  ({ className, value, forceMount = false, children, ...props }, ref) => {
     const { value: selectedValue } = useTabsContext()
     const isSelected = selectedValue === value
 
-    if (!isSelected) return null
+    if (!isSelected && !forceMount) return null
 
     return (
       <div
         ref={ref}
         role="tabpanel"
         data-state={isSelected ? "active" : "inactive"}
+        hidden={!isSelected}
         className={cn(
-          "mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          "mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=inactive]:hidden",
           className
         )}
         tabIndex={0}

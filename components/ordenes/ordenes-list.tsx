@@ -29,6 +29,8 @@ import { CobrarMultipleDialog } from "./cobrar-multiple-dialog"
 import { useModal } from "@/contexts/modal-context"
 import { ExportButton } from "@/components/export/export-button"
 import { OrdenMobileCard } from "./orden-mobile-card"
+import { PracticaBadge } from "@/components/onboarding/practica-badge"
+import { useBorrarPractica } from "@/components/onboarding/use-borrar-practica"
 import { Card, CardContent } from "@/components/ui/card"
 import { useCurrency } from "@/contexts/currency-context"
 import type { OrdenServicio, EstadoOrden } from "@/types"
@@ -113,6 +115,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
   const { formatPrice, formatDate } = useCurrency()
   const { data: session } = useSession()
   const isTecnico = session?.user?.role === "TECNICO"
+  const isAdmin = session?.user?.role === "ADMIN"
   const [showForm, setShowForm] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const { confirm, showError } = useModal()
@@ -123,6 +126,19 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
   useEffect(() => {
     if (fromTurnoId || clienteIdParam) setShowForm(true)
   }, [fromTurnoId, clienteIdParam])
+
+  // ?nueva=1 (quick action, onboarding CTAs): open the creation form once and drop
+  // the param so a refresh or closing the modal does not reopen it.
+  const nuevaParam = searchParams?.get("nueva") === "1"
+  useEffect(() => {
+    if (!nuevaParam) return
+    setShowForm(true)
+    const next = new URLSearchParams(searchParams?.toString() ?? "")
+    next.delete("nueva")
+    const qs = next.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nuevaParam])
 
   // Placeholder rotativo cada 3 segundos
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
@@ -148,10 +164,12 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
   }
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === ordenes.length) {
+    // The practice order never joins bulk state changes or cobros.
+    const seleccionables = ordenes.filter((o) => !o.esPractica)
+    if (selectedIds.size === seleccionables.length) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(ordenes.map((o) => o.id)))
+      setSelectedIds(new Set(seleccionables.map((o) => o.id)))
     }
   }
 
@@ -313,6 +331,8 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
   // Extraer datos de la respuesta
   const ordenes: OrdenServicio[] = data?.data || []
   const total = data?.total || 0
+  const { borrar: borrarPractica, borrando: borrandoPractica } = useBorrarPractica(() => mutate())
+  const haySeleccionables = ordenes.some((o) => !o.esPractica)
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -412,18 +432,19 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
       key: "select",
       header: "",
       className: "w-[40px]",
-      render: (orden) => (
-        <input
-          type="checkbox"
-          checked={selectedIds.has(orden.id)}
-          onChange={(e) => {
-            e.stopPropagation()
-            toggleSelect(orden.id)
-          }}
-          onClick={(e) => e.stopPropagation()}
-          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-        />
-      ),
+      render: (orden) =>
+        orden.esPractica ? null : (
+          <input
+            type="checkbox"
+            checked={selectedIds.has(orden.id)}
+            onChange={(e) => {
+              e.stopPropagation()
+              toggleSelect(orden.id)
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+          />
+        ),
     },
     {
       key: "numeroOrden",
@@ -431,9 +452,12 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
       sortable: true,
       className: "font-medium min-w-[100px]",
       render: (orden) => (
-        <span className="text-primary font-semibold">
-          {orden.codigoOrden || `#${orden.numeroOrden}`}
-        </span>
+        <div className="flex flex-col items-start gap-1">
+          <span className="text-primary font-semibold">
+            {orden.codigoOrden || `#${orden.numeroOrden}`}
+          </span>
+          {orden.esPractica && <PracticaBadge conAviso className="max-w-[220px]" />}
+        </div>
       ),
     },
     {
@@ -521,27 +545,48 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
               <Eye className="h-4 w-4" />
             </Button>
           </Link>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground hover:text-primary"
-            onClick={(e) => handlePrint(e, orden)}
-            title="Imprimir"
-            aria-label="Imprimir"
-          >
-            <Printer className="h-4 w-4" />
-          </Button>
-          {!isTecnico && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground hover:text-destructive"
-              onClick={(e) => handleDelete(e, orden)}
-              disabled={deleting === orden.id}
-              aria-label="Eliminar"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+          {orden.esPractica ? (
+            isAdmin && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-destructive"
+                onClick={(e) => {
+                  // DataTable row clicks do not stop propagation: without this the row opens the order.
+                  e.stopPropagation()
+                  void borrarPractica()
+                }}
+                disabled={borrandoPractica}
+              >
+                <Trash2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                Borrar práctica
+              </Button>
+            )
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-primary"
+                onClick={(e) => handlePrint(e, orden)}
+                title="Imprimir"
+                aria-label="Imprimir"
+              >
+                <Printer className="h-4 w-4" />
+              </Button>
+              {!isTecnico && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground hover:text-destructive"
+                  onClick={(e) => handleDelete(e, orden)}
+                  disabled={deleting === orden.id}
+                  aria-label="Eliminar"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </>
           )}
         </div>
       ),
@@ -917,15 +962,17 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
       {!isLoading && total > 0 && (
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <button
-              onClick={toggleSelectAll}
-              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <CheckSquare className="h-4 w-4" />
-              {selectedIds.size > 0
-                ? `${selectedIds.size} seleccionada${selectedIds.size > 1 ? "s" : ""}`
-                : "Seleccionar"}
-            </button>
+            {haySeleccionables && (
+              <button
+                onClick={toggleSelectAll}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <CheckSquare className="h-4 w-4" />
+                {selectedIds.size > 0
+                  ? `${selectedIds.size} seleccionada${selectedIds.size > 1 ? "s" : ""}`
+                  : "Seleccionar"}
+              </button>
+            )}
             {selectedIds.size > 0 && (
               <div className="flex items-center gap-2">
                 <Select
@@ -1051,6 +1098,8 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
                   deleting={deleting === orden.id}
                   onClick={() => router.push(`/ordenes/${orden.id}`)}
                   hideDelete={isTecnico}
+                  onBorrarPractica={isAdmin ? () => void borrarPractica() : undefined}
+                  borrandoPractica={borrandoPractica}
                 />
               ))}
             </div>

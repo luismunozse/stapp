@@ -27,6 +27,7 @@ import {
   MessageCircle,
   UserSearch,
   Wrench,
+  FlaskConical,
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
@@ -34,6 +35,7 @@ import { useFocusTrap } from "@/hooks/use-focus-trap"
 import { useEscapeKey } from "@/hooks/use-escape-key"
 import { TicketBadge } from "@/components/superadmin/ticket-badge"
 import { LeadsHotBadge } from "@/components/superadmin/leads-hot-badge"
+import { BetaAndroidBadge } from "@/components/superadmin/beta-android-badge"
 import { GlobalSearch } from "@/components/superadmin/global-search"
 
 const navItems = [
@@ -53,6 +55,7 @@ const navItems = [
   { href: "/superadmin/maintenance-banner", label: "Mantenimiento", icon: Wrench },
   { href: "/superadmin/changelog", label: "Changelog", icon: Newspaper },
   { href: "/superadmin/waitlist", label: "Waitlist iOS", icon: Smartphone },
+  { href: "/superadmin/beta-android", label: "Beta Android", icon: FlaskConical },
   { href: "/superadmin/logs", label: "Auditoría", icon: FileText },
 ]
 
@@ -132,6 +135,7 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
                   {item.label}
                   {item.href === "/superadmin/soporte" && <TicketBadge />}
                   {item.href === "/superadmin/leads" && <LeadsHotBadge />}
+                  {item.href === "/superadmin/beta-android" && <BetaAndroidBadge />}
                 </Link>
               )
             })}
@@ -225,6 +229,7 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
                   {item.label}
                   {item.href === "/superadmin/soporte" && <TicketBadge />}
                   {item.href === "/superadmin/leads" && <LeadsHotBadge />}
+                  {item.href === "/superadmin/beta-android" && <BetaAndroidBadge />}
                 </Link>
               )
             })}

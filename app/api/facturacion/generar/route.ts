@@ -6,6 +6,7 @@ import { toArray } from "@/lib/db-utils"
 import { z } from "zod"
 import { construirItemsFactura } from "@/lib/facturacion/items-factura"
 import { getIvaGeneral } from "@/lib/countries"
+import { rejectIfPractica } from "@/lib/onboarding/practica"
 
 const generarFacturaSchema = z.union([
   z.object({ ordenId: z.string().min(1, "La orden es requerida") }).strict(),
@@ -50,6 +51,8 @@ export async function POST(request: Request) {
     }
 
     const { ordenId } = parsedBody
+    const practica = await rejectIfPractica(ordenId, organizationId!)
+    if (practica) return practica
 
     // Verificar que la orden existe, está completada y pertenece a la org
     const { data: orden, error: ordenError } = await supabaseAdmin

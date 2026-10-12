@@ -193,6 +193,11 @@ export default function CajaPage() {
               filtroTipo={filtroTipo}
               onFiltroMetodoChange={setFiltroMetodo}
               onFiltroTipoChange={setFiltroTipo}
+              puedeEditar={puedeOperarCaja}
+              onMovimientoActualizado={() => {
+                fetchData()
+                setMovRefreshKey((k) => k + 1)
+              }}
             />
           </TabsContent>
 

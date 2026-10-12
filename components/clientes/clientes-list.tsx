@@ -18,6 +18,7 @@ import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
 import { ClienteMobileCard } from "./cliente-mobile-card"
 import { TipoPrecioBadge } from "./tipo-precio-badge"
+import { PracticaBadge } from "@/components/onboarding/practica-badge"
 import { ClienteWhatsAppDialog } from "./cliente-whatsapp-dialog"
 import { Card, CardContent } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -25,6 +26,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import type { Cliente } from "@/types"
 import { useModal } from "@/contexts/modal-context"
 import { useCurrency } from "@/contexts/currency-context"
+import { getPersonalIdLabel } from "@/lib/countries"
 import { useHasFeature } from "@/hooks/use-subscription"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
@@ -36,7 +38,7 @@ interface ClientesListProps {
 export function ClientesList({ allowImport = true }: ClientesListProps) {
   const router = useRouter()
   const { confirm, showError } = useModal()
-  const { formatDate, formatPrice } = useCurrency()
+  const { formatDate, formatPrice, pais } = useCurrency()
   const { hasFeature: hasCotizaciones, loading: cotizacionesLoading } = useHasFeature("cotizaciones_online")
   const puedeCotizar = cotizacionesLoading || hasCotizaciones
   const [showForm, setShowForm] = useState(false)
@@ -182,12 +184,13 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                 </span>
               )}
               <TipoPrecioBadge tipoPrecio={cliente.tipoPrecio} />
+              {cliente.esPractica && <PracticaBadge />}
             </div>
             {cliente.razonSocial && (
               <div className="text-xs text-muted-foreground">{cliente.razonSocial}</div>
             )}
             {!cliente.razonSocial && cliente.dni && (
-              <div className="text-xs text-muted-foreground">DNI: {cliente.dni}</div>
+              <div className="text-xs text-muted-foreground">{getPersonalIdLabel(pais)}: {cliente.dni}</div>
             )}
           </div>
         </div>
@@ -339,32 +342,40 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                 <WhatsAppIcon className="h-4 w-4 text-success-600" />
                 Enviar WhatsApp
               </button>
-              <button
-                type="button"
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
-                onClick={(e) => { e.stopPropagation(); setCobrarCliente(cliente) }}
-              >
-                <DollarSign className="h-4 w-4 text-success-600" />
-                Cobrar órdenes
-              </button>
-              <button
-                type="button"
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
-                onClick={(e) => { e.stopPropagation(); setCuentaCorrienteCliente(cliente) }}
-              >
-                <PiggyBank className="h-4 w-4 text-info-600" />
-                Cuenta corriente
-              </button>
-              <div className="h-px bg-border my-1" />
-              <button
-                type="button"
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-destructive/10 text-destructive transition-colors"
-                onClick={(e) => handleDelete(e, cliente)}
-                disabled={deleting === cliente.id}
-              >
-                <Trash2 className="h-4 w-4" />
-                Eliminar
-              </button>
+              {!cliente.esPractica && (
+                <>
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                    onClick={(e) => { e.stopPropagation(); setCobrarCliente(cliente) }}
+                  >
+                    <DollarSign className="h-4 w-4 text-success-600" />
+                    Cobrar órdenes
+                  </button>
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                    onClick={(e) => { e.stopPropagation(); setCuentaCorrienteCliente(cliente) }}
+                  >
+                    <PiggyBank className="h-4 w-4 text-info-600" />
+                    Cuenta corriente
+                  </button>
+                </>
+              )}
+              {!cliente.esPractica && (
+                <>
+                  <div className="h-px bg-border my-1" />
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-destructive/10 text-destructive transition-colors"
+                    onClick={(e) => handleDelete(e, cliente)}
+                    disabled={deleting === cliente.id}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Eliminar
+                  </button>
+                </>
+              )}
             </PopoverContent>
           </Popover>
         </div>
@@ -381,7 +392,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por nombre, teléfono, DNI o sector..."
+              placeholder={`Buscar por nombre, teléfono, ${getPersonalIdLabel(pais)} o sector...`}
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-10 w-full sm:max-w-sm"

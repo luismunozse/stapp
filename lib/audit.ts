@@ -20,6 +20,7 @@ export type AuditEntity =
   | "turnos"
   | "recepciones"
   | "cuenta_corriente"
+  | "movimientos_caja"
 
 interface AuditLogParams {
   organizationId: string
@@ -53,6 +54,7 @@ const ENTITY_DISPLAY: Record<string, string> = {
   turnos: "turno",
   recepciones: "recepción",
   cuenta_corriente: "movimiento de cuenta corriente",
+  movimientos_caja: "movimiento de caja",
 }
 
 // Campos con labels amigables para diffs

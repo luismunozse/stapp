@@ -84,14 +84,16 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = createSchema.parse(body)
 
-    // Solo 1 principal por org: si se marca principal, demote el actual.
-    // Usa transacción implícita en RPC; acá lo hacemos secuencial — la unique
-    // index parcial protege ante carrera.
+    // Un principal por SUCURSAL (migración 221): si se marca principal, se
+    // despromueve solo el actual de ESA sucursal. Sin el filtro se caía el
+    // principal de todas las demás. Secuencial; el unique index parcial protege
+    // ante carrera.
     if (data.principal) {
       await supabaseAdmin
         .from("depositos")
         .update({ principal: false })
         .eq("organization_id", organizationId!)
+        .eq("sucursal_id", sucursalId)
         .eq("principal", true)
         .is("deleted_at", null)
     }
@@ -113,6 +115,14 @@ export async function POST(request: Request) {
 
     if (insertErr) {
       if ((insertErr as any).code === "23505") {
+        // El índice parcial de principal (uno por sucursal) y el de nombre
+        // comparten código; el mensaje de Postgres nombra el índice violado.
+        if (String((insertErr as any).message ?? "").includes("principal_unique")) {
+          return NextResponse.json(
+            { error: "Esa sucursal ya tiene un depósito principal. Intentá de nuevo." },
+            { status: 400 }
+          )
+        }
         return NextResponse.json(
           { error: "Ya existe un depósito con ese nombre" },
           { status: 400 }

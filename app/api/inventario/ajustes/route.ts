@@ -5,6 +5,9 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, getDepositoDeSucursal } from "@/lib/sucursal"
 import { z } from "zod"
 
+const STOCK_INSUFICIENTE_DEPOSITO =
+  "No hay stock suficiente en el depósito de tu sucursal para este ajuste. Si el stock está en otro depósito, transferilo primero."
+
 const ajusteSchema = z.object({
   inventarioId: z.string().min(1),
   tipo: z.enum(["MERMA", "ROTURA", "ROBO", "OBSOLESCENCIA", "DONACION", "AJUSTE_FISICO", "OTRO"]),
@@ -71,7 +74,7 @@ export async function GET(request: Request) {
 // POST - crear ajuste atómico
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId, role } = await requireInventarioAccess()
+    const { error, session, organizationId, userId, role } = await requireInventarioAccess()
     if (error) return error
 
     const body = await request.json()
@@ -91,7 +94,7 @@ export async function POST(request: Request) {
     const sucursalId = await sucursalParaEscritura({
       role: role ?? "ADMIN",
       organizationId: organizationId!,
-      userSucursalId: null,
+      userSucursalId: session?.user?.sucursalId ?? null,
     })
     // Resolve the sucursal's principal deposit so the RPC deducts from the
     // correct inventario_depositos row (not blindly the principal deposit).
@@ -110,7 +113,19 @@ export async function POST(request: Request) {
       p_deposito_id: depositoId,
     })
 
-    if (rpcError) throw rpcError
+    if (rpcError) {
+      // Mismos errores de negocio que mapea /api/inventario/[id]/stock.
+      if (rpcError.code === "P0010") {
+        return NextResponse.json({ error: STOCK_INSUFICIENTE_DEPOSITO }, { status: 400 })
+      }
+      if (rpcError.code === "P0011") {
+        return NextResponse.json(
+          { error: "La organización no tiene depósito principal configurado" },
+          { status: 400 }
+        )
+      }
+      throw rpcError
+    }
     if (result?.error) {
       return NextResponse.json({ error: result.error }, { status: 400 })
     }
