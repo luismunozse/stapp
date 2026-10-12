@@ -8,7 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useCurrency } from "@/contexts/currency-context"
 import type { PracticaOrden } from "@/lib/onboarding/practica-shared"
 import { cn } from "@/lib/utils"
+import { ListoStep } from "./listo-step"
 import { NegocioStep } from "./negocio-step"
+import { PracticaStep } from "./practica-step"
 import { PreguntaStep } from "./pregunta-step"
 import { PASOS, pasoInicial, subPasoPractica } from "./wizard-state"
 import type { CaminoCompletar, OnboardingWizardProps, PasoWizard, RubroVigente } from "./types"
@@ -89,6 +91,11 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     irA("pregunta")
   }
 
+  const handlePracticaChange = (nueva: PracticaOrden | null) => {
+    setPractica(nueva)
+    if (nueva?.estado === "ENTREGADO_SIN_COBRO") setPaso("listo")
+  }
+
   const primerNombre = props.ownerNombre.trim().split(/\s+/)[0] ?? ""
 
   return (
@@ -150,6 +157,20 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
                 onPracticar={() => irA("practica")}
                 onAtras={() => irA("negocio")}
               />
+            )}
+            {paso === "practica" && (
+              <PracticaStep
+                practica={practica}
+                tipos={props.tipos}
+                terminologia={props.terminologia}
+                ownerEmail={props.ownerEmail}
+                moneda={props.moneda}
+                onPracticaChange={handlePracticaChange}
+                onAtras={() => irA("pregunta")}
+              />
+            )}
+            {paso === "listo" && (
+              <ListoStep practica={practica} completando={completando} onCompletar={(destino) => void completar(destino)} />
             )}
           </div>
         </Card>
