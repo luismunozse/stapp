@@ -65,6 +65,21 @@ function preparar(...respuestas: unknown[]) {
   return { ordenes, maybeSingle, update, eventoInsert, progresoUpsert }
 }
 
+// The load and the updates share one chain mock, so asserting on eq() alone would
+// be satisfied by the load. This returns only the eq() filters chained after the
+// n-th update(), i.e. the ones that scope the write itself.
+function filtrosDelUpdate(
+  ordenes: { eq: { mock: { calls: unknown[][]; invocationCallOrder: number[] } } },
+  update: { mock: { invocationCallOrder: number[] } },
+  n: number
+) {
+  const desde = update.mock.invocationCallOrder[n]
+  const hasta = update.mock.invocationCallOrder[n + 1] ?? Infinity
+  return ordenes.eq.mock.calls.filter(
+    (_, i) => ordenes.eq.mock.invocationCallOrder[i] > desde && ordenes.eq.mock.invocationCallOrder[i] < hasta
+  )
+}
+
 describe("PATCH /api/onboarding/practica", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -196,5 +211,43 @@ describe("PATCH /api/onboarding/practica", () => {
     const { update } = preparar(recibida)
     expect((await PATCH(patch({ accion: "entregar" }))).status).toBe(409)
     expect(update).not.toHaveBeenCalled()
+  })
+
+  it("scopes each reparar UPDATE by org, practice flag and expected estado", async () => {
+    const { ordenes, update } = preparar(recibida, { id: "ord-p" }, reparada)
+    await PATCH(patch({ accion: "reparar", costoFinal: 15000 }))
+    expect(filtrosDelUpdate(ordenes, update, 0)).toEqual(
+      expect.arrayContaining([["organization_id", "org-1"], ["es_practica", true], ["estado", "RECIBIDO"]])
+    )
+    expect(filtrosDelUpdate(ordenes, update, 1)).toEqual(
+      expect.arrayContaining([["organization_id", "org-1"], ["es_practica", true], ["estado", "EN_REPARACION"]])
+    )
+  })
+
+  it("scopes the entregar UPDATE by org, practice flag and REPARADO", async () => {
+    const { ordenes, update } = preparar(reparada, entregada)
+    await PATCH(patch({ accion: "entregar" }))
+    expect(filtrosDelUpdate(ordenes, update, 0)).toEqual(
+      expect.arrayContaining([["organization_id", "org-1"], ["es_practica", true], ["estado", "REPARADO"]])
+    )
+  })
+
+  it("entregar returns 409 when a concurrent request delivered first, with no side effects", async () => {
+    const { update, eventoInsert, progresoUpsert } = preparar(reparada, null)
+    const { status } = await parseResponse(await PATCH(patch({ accion: "entregar" })))
+    expect(status).toBe(409)
+    expect(update).toHaveBeenCalledTimes(1)
+    expect(queueNotification).not.toHaveBeenCalled()
+    expect(eventoInsert).not.toHaveBeenCalled()
+    expect(progresoUpsert).not.toHaveBeenCalled()
+  })
+
+  it("reparar returns 409 and sends nothing when the REPARADO update loses the race", async () => {
+    const { update, eventoInsert } = preparar(enReparacion, null)
+    const { status } = await parseResponse(await PATCH(patch({ accion: "reparar", costoFinal: 15000 })))
+    expect(status).toBe(409)
+    expect(update).toHaveBeenCalledTimes(1)
+    expect(eventoInsert).not.toHaveBeenCalled()
+    expect(queueNotification).not.toHaveBeenCalled()
   })
 })
