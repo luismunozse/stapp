@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumberByType } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
 import { getPrincipalId } from "@/lib/sucursal"
+import { deletePracticeData } from "@/lib/onboarding/practica"
 import { z } from "zod"
 
 const reingresoSchema = z.object({
@@ -103,6 +104,14 @@ export async function POST(
       .single()
 
     if (insertError) throw insertError
+
+    // The first real order replaces the onboarding practice. A failure never
+    // affects this order: the next real order retries.
+    try {
+      await deletePracticeData(organizationId!)
+    } catch (err) {
+      console.error("[practica] automatic deletion failed:", err)
+    }
 
     // Registrar evento en la orden original
     await supabaseAdmin.from("orden_eventos").insert({
