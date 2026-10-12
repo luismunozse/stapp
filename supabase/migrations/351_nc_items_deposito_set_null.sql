@@ -24,8 +24,9 @@
 --   - items_nota_credito.repuesto_orden_id (NO ACTION): repuestos_orden no
 --     tiene organization_id, se borra una generacion mas tarde (organizations
 --     -> ordenes_servicio -> repuestos_orden), cuando los items ya no existen.
---   - notas_credito.orden_id (RESTRICT): las NC se borran en la generacion 1
---     directo desde organizations, antes que las ordenes.
+--   - notas_credito.orden_id (RESTRICT): las NC y las ordenes se borran en la
+--     misma generacion (las dos cascadean directo desde organizations); el
+--     chequeo RESTRICT corre en la siguiente, cuando ya no quedan NC.
 --
 -- Sin BEGIN/COMMIT: db-run.mjs envuelve el archivo en una transaccion y por
 -- default la revierte. Un BEGIN aca haria que `npm run db:dry` lo ejecute tal
