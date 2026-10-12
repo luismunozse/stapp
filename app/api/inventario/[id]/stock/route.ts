@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
 import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { depositoPermitido, DEPOSITO_INVALIDO } from "@/lib/depositos"
+import { depositoPermitido, depositoPorDefecto, DEPOSITO_INVALIDO } from "@/lib/depositos"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { z } from "zod"
 
@@ -52,6 +52,17 @@ export async function POST(
       return NextResponse.json({ error: DEPOSITO_INVALIDO }, { status: 400 })
     }
 
+    // Sin deposito explicito, el movimiento va al de la sucursal de quien opera
+    // (resuelto en el servidor: no hace falta revalidarlo). null => ADMIN viendo
+    // "todas" o sin deposito: la RPC queda en modo global como siempre.
+    const depositoDefecto = depositoId
+      ? null
+      : await depositoPorDefecto({
+          organizationId: organizationId!,
+          role,
+          userSucursalId: session?.user?.sucursalId ?? null,
+        })
+
     const { data, error: rpcErr } = await supabaseAdmin.rpc("adjust_stock_atomic", {
       p_inventario_id: id,
       p_organization_id: organizationId!,
@@ -61,7 +72,7 @@ export async function POST(
       p_motivo: motivo ?? null,
       p_tipo: tipo ?? "AJUSTE",
       p_referencia_tipo: referenciaTipo ?? "AJUSTE_MANUAL",
-      p_deposito_id: depositoId ?? null,
+      p_deposito_id: depositoId ?? depositoDefecto,
     })
 
     if (rpcErr) {
@@ -79,6 +90,15 @@ export async function POST(
         return NextResponse.json({ error: rpcErr.message }, { status: 400 })
       }
       if (rpcErr.code === "P0010") {
+        if (depositoDefecto) {
+          return NextResponse.json(
+            {
+              error:
+                "No hay stock suficiente en el depósito de tu sucursal. Transferí stock desde otro depósito o elegí uno con existencias.",
+            },
+            { status: 400 }
+          )
+        }
         return NextResponse.json(
           { error: "Stock insuficiente en el depósito seleccionado" },
           { status: 400 }
