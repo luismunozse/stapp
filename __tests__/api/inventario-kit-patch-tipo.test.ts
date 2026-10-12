@@ -62,4 +62,10 @@ describe("PATCH /api/inventario/[id]/kit — tipo required for kits", () => {
     expect(status).toBe(200)
     expect(inv.update).toHaveBeenCalledWith({ es_kit: true, tipo_kit: "VIRTUAL" })
   })
+
+  it("scopes queries to the caller's organization", async () => {
+    const inv = setup({ es_kit: true, tipo_kit: "ENSAMBLADO" })
+    await PATCH(req({ esKit: true, tipoKit: "VIRTUAL" }), ctx)
+    expect(inv.eq).toHaveBeenCalledWith("organization_id", "org-1")
+  })
 })
