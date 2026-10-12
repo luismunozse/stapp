@@ -89,6 +89,19 @@ describe("GET /api/cron/lifecycle-emails: actividad de ordenes", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  it("las ordenes de practica no cuentan para el win-back", async () => {
+    installPostgrestFake({
+      organizations: [org("o1")],
+      users: [admin("o1")],
+      ordenes_servicio: [{ ...orden("o1", daysAgo(7)), es_practica: true }],
+    })
+
+    const body = await (await GET(request())).json()
+
+    expect(body.results.winBack7).toBe(0)
+    expect(tiposResueltos()).toEqual([])
+  })
+
   it("manda WIN_BACK_30 cuando la ultima orden fue hace 30 dias", async () => {
     installPostgrestFake({
       organizations: [org("o1")],

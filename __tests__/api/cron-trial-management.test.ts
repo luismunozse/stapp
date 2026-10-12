@@ -71,6 +71,26 @@ describe("GET /api/cron/trial-management: actividad reciente", () => {
     expect(body.results.lastChanceEmails).toBe(1)
   })
 
+  // La cuenta de actividad hoy no cambia ningun resultado observable del cron, asi que
+  // el contrato se fija sobre las consultas: ordenes y clientes dejan afuera la practica.
+  it.each(["ordenes_servicio", "clientes"])(
+    "la consulta de actividad de %s filtra es_practica = false",
+    async (tabla) => {
+      const fake = installPostgrestFake({
+        subscriptions: [sub("o1")],
+        users: [admin("o1")],
+      })
+
+      await GET(request())
+
+      const consultas = fake.queries.filter((q) => q.table === tabla)
+      expect(consultas.length).toBeGreaterThan(0)
+      for (const q of consultas) {
+        expect(q.ops).toContainEqual({ op: "eq", args: ["es_practica", false] })
+      }
+    }
+  )
+
   it.each(["ordenes_servicio", "ventas", "clientes"])(
     "aborta con 500 y no manda mails si falla la consulta de %s",
     async (tabla) => {

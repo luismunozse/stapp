@@ -67,6 +67,20 @@ describe("GET /api/cron/re-engagement: actividad de ordenes", () => {
     expect(body.results.skippedDraft).toBe(1)
   })
 
+  it("una orden o un cliente de practica reciente no hacen activa a la org", async () => {
+    installPostgrestFake({
+      organizations: [org("o1")],
+      users: [admin("o1")],
+      ordenes_servicio: [{ organization_id: "o1", fecha_ingreso: daysAgo(3), es_practica: true }],
+      clientes: [{ organization_id: "o1", created_at: daysAgo(3), es_practica: true }],
+    })
+
+    const body = await (await GET(request())).json()
+
+    expect(body.results.skippedActive).toBe(0)
+    expect(body.results.skippedDraft).toBe(1)
+  })
+
   it("no consulta columnas inexistentes de ordenes_servicio", async () => {
     const fake = installPostgrestFake({ organizations: [org("o1")], users: [admin("o1")] })
 

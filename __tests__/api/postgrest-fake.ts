@@ -17,7 +17,8 @@ import { supabaseAdmin } from "@/lib/supabase"
 
 type Row = Record<string, unknown>
 
-// Columnas reales de ordenes_servicio en prod (information_schema, 2026-10-09).
+// Columnas reales de ordenes_servicio en prod (information_schema, 2026-10-09,
+// mas es_practica de la migracion 348).
 // Notar: NO existen created_at ni updated_at.
 export const ORDENES_SERVICIO_COLUMNS = new Set(
   (
@@ -30,7 +31,7 @@ export const ORDENES_SERVICIO_COLUMNS = new Set(
     "total_cobrado,estado_cobro,descuento_cobro,public_token_expires_at,orden_origen_id,es_reingreso,garantia_origen_id," +
     "telefono_contacto,porcentaje_comision,comision_pagada,fecha_pago_comision,comision_pago_notas,motivo_sin_cobro," +
     "notas_internas,sucursal_id,horas_trabajadas,costo_hora_snapshot,costo_mano_obra,recibido_por,recepcion_id," +
-    "comision_pago_movimiento_id"
+    "comision_pago_movimiento_id,es_practica"
   ).split(",")
 )
 
@@ -39,6 +40,10 @@ const TABLE_COLUMNS: Record<string, Set<string>> = {
 }
 
 const MAX_ROWS = 1000
+
+// es_practica es BOOLEAN NOT NULL DEFAULT FALSE (migracion 348) en ordenes_servicio y
+// clientes: una fila de fixture sin la clave se lee como false, igual que en la base.
+const COLUMN_DEFAULTS: Record<string, unknown> = { es_practica: false }
 
 // Soporta filtros sobre embebidos ("organizations.activo") como PostgREST.
 const get = (r: Row, c: string): unknown =>
@@ -98,7 +103,7 @@ export function createPostgrestFake(
       head = !!opts?.head
       wantCount = !!opts?.count
     })
-    add("eq", (c, v) => { track(c); filters.push((r) => get(r, c) === v) })
+    add("eq", (c, v) => { track(c); filters.push((r) => (get(r, c) ?? COLUMN_DEFAULTS[c]) === v) })
     add("neq", (c, v) => { track(c); filters.push((r) => get(r, c) !== v) })
     add("gte", (c, v) => { track(c); filters.push((r) => get(r, c) != null && String(get(r, c)) >= String(v)) })
     add("lte", (c, v) => { track(c); filters.push((r) => get(r, c) != null && String(get(r, c)) <= String(v)) })

@@ -74,6 +74,20 @@ describe("GET /api/cron/auto-archive-dormant: actividad de ordenes", () => {
     expect(fake.writes.some((w) => w.table === "organizations" && JSON.stringify(w.payload).includes("deleted_at"))).toBe(true)
   })
 
+  it("una orden o un cliente de practica reciente no frenan el archivado", async () => {
+    const fake = installPostgrestFake({
+      organizations: [warnedOrg("o1")],
+      ordenes_servicio: [{ organization_id: "o1", fecha_ingreso: daysAgo(5), es_practica: true }],
+      clientes: [{ organization_id: "o1", created_at: daysAgo(5), es_practica: true }],
+    })
+    const GET = await loadRoute(true)
+
+    const body = await (await GET(request())).json()
+
+    expect(body.results.reprieved).toBe(0)
+    expect(fake.writes.some((w) => w.table === "organizations" && JSON.stringify(w.payload).includes("deleted_at"))).toBe(true)
+  })
+
   it("no consulta columnas inexistentes de ordenes_servicio", async () => {
     const fake = installPostgrestFake({ organizations: [warnedOrg("o1")] })
     const GET = await loadRoute(false)

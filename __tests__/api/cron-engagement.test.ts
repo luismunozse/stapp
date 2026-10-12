@@ -63,6 +63,29 @@ describe("GET /api/cron/engagement: ordenes de ayer", () => {
     expect(upserts(fake)[0].payload).toMatchObject({ ordenes_creadas: 0, ordenes_completadas: 1 })
   })
 
+  it("las ordenes y clientes de practica no cuentan como actividad de ayer", async () => {
+    const fake = installPostgrestFake({
+      organizations: [org("o1")],
+      ordenes_servicio: [
+        { organization_id: "o1", estado: "PENDIENTE", fecha_ingreso: AYER, es_practica: true },
+        { organization_id: "o1", estado: "ENTREGADO", fecha_ingreso: ANTEAYER, fecha_entrega: AYER, es_practica: true },
+        { organization_id: "o1", estado: "PENDIENTE", fecha_ingreso: AYER, es_practica: false },
+      ],
+      clientes: [
+        { organization_id: "o1", created_at: AYER, es_practica: true },
+        { organization_id: "o1", created_at: AYER, es_practica: false },
+      ],
+    })
+
+    await GET(request())
+
+    expect(upserts(fake)[0].payload).toMatchObject({
+      ordenes_creadas: 1,
+      ordenes_completadas: 0,
+      clientes_nuevos: 1,
+    })
+  })
+
   it("no consulta columnas inexistentes de ordenes_servicio", async () => {
     const fake = installPostgrestFake({ organizations: [org("o1")] })
 
