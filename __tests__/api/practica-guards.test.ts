@@ -16,12 +16,14 @@ import { POST as agregarRepuesto } from "@/app/api/ordenes/[id]/repuestos/route"
 import { POST as agregarServicio, PATCH as aplicarServicios } from "@/app/api/ordenes/[id]/servicios/route"
 import { POST as crearReingreso } from "@/app/api/ordenes/[id]/reingreso/route"
 import { POST as crearCotizacion } from "@/app/api/cotizaciones/route"
+import { PUT as actualizarCotizacion } from "@/app/api/cotizaciones/[id]/route"
 import { POST as generarFactura } from "@/app/api/facturacion/generar/route"
 import { POST as crearGarantia } from "@/app/api/garantias/route"
 import { POST as crearNotaCredito } from "@/app/api/notas-credito/route"
 
 const ORDEN = "ord-practica"
 const ctx = () => ({ params: Promise.resolve({ id: ORDEN }) })
+const cotizacionCtx = () => ({ params: Promise.resolve({ id: "cot-1" }) })
 
 const casos: Array<[string, () => Promise<Response>]> = [
   ["PUT /api/ordenes/[id]", () => actualizarOrden(createPostRequest({ estado: "EN_REPARACION" }), ctx())],
@@ -32,6 +34,7 @@ const casos: Array<[string, () => Promise<Response>]> = [
   ["PATCH /api/ordenes/[id]/servicios", () => aplicarServicios(new Request("http://localhost/api/test", { method: "PATCH" }), ctx())],
   ["POST /api/ordenes/[id]/reingreso", () => crearReingreso(createPostRequest({ problemaReportado: "Volvió a fallar" }), ctx())],
   ["POST /api/cotizaciones", () => crearCotizacion(createPostRequest({ tipo: "ORDEN", ordenId: ORDEN, items: [{ descripcion: "Pantalla", cantidad: 1, precioUnitario: 100 }] }))],
+  ["PUT /api/cotizaciones/[id] (link to an order)", () => actualizarCotizacion(createPostRequest({ ordenId: ORDEN }), cotizacionCtx())],
   ["POST /api/facturacion/generar", () => generarFactura(createPostRequest({ ordenId: ORDEN }))],
   ["POST /api/garantias", () => crearGarantia(createPostRequest({ ordenId: ORDEN }))],
   ["POST /api/notas-credito", () => crearNotaCredito(createPostRequest({ ordenId: ORDEN, motivo: "DEVOLUCION", monto: 100, metodoDevolucion: "EFECTIVO" }))],
