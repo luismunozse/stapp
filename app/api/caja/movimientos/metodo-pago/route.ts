@@ -4,6 +4,7 @@ import { requireCajaAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { logAudit, type AuditEntity } from "@/lib/audit"
+import { esErrorColumnaOrigen, esOrigenNoEliminable, resolverOrigen } from "@/lib/caja-utils"
 
 // Métodos a los que se puede corregir un movimiento. CUENTA_CORRIENTE queda
 // afuera a propósito: pasar de/a fiado no es "corregir una etiqueta", mueve la
@@ -32,7 +33,16 @@ const bodySchema = z.object({
 
 type Fuente = z.infer<typeof bodySchema>["fuente"]
 
-const ES_TARJETA = (m: string) => m === "TARJETA_DEBITO" || m === "TARJETA_CREDITO"
+// Columnas de tarjeta que solo valen para TARJETA_CREDITO. Débito tampoco lleva
+// cuotas ni recargo (ver PATCH), así que se limpian al salir de crédito. Los
+// selects de abajo repiten la lista como literal para que PostgREST la tipe.
+const COLUMNAS_TARJETA = [
+  "cuotas",
+  "recargo_porcentaje",
+  "monto_original",
+  "costo_financiero_porcentaje",
+  "costo_financiero_monto",
+] as const
 
 interface Origen {
   metodoPago: string
@@ -42,10 +52,20 @@ interface Origen {
   sesionEstado?: string | null
   /** Motivo por el que el registro no es corregible (anulado, etc). */
   bloqueo?: string
+  /** Status HTTP del bloqueo (400 por defecto). */
+  bloqueoStatus?: number
+  /** Valores previos de las columnas de tarjeta (para la auditoría). */
+  previos?: Record<string, unknown>
   /** Entidad y id para la auditoría. */
   auditEntity: AuditEntity
   auditEntityId: string
   ventaId?: string
+}
+
+function extraerPrevios(row: any): Record<string, unknown> {
+  const previos: Record<string, unknown> = {}
+  for (const col of COLUMNAS_TARJETA) previos[col] = row?.[col] ?? null
+  return previos
 }
 
 // Carga el registro original scopeado a la org. `null` = no existe o es de
@@ -55,7 +75,9 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
     case "cobros_orden": {
       const { data } = await supabaseAdmin
         .from("cobros_orden")
-        .select("id, metodo_pago, created_at, anulado, orden_id, ordenes_servicio:orden_id!inner(sucursal_id)")
+        .select(
+          `id, metodo_pago, created_at, anulado, orden_id, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto, ordenes_servicio:orden_id!inner(sucursal_id)`
+        )
         .eq("id", id)
         .eq("organization_id", orgId)
         .maybeSingle()
@@ -67,13 +89,14 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
         bloqueo: data.anulado ? "El cobro está anulado" : undefined,
         auditEntity: "ordenes_servicio",
         auditEntityId: data.orden_id,
+        previos: extraerPrevios(data),
       }
     }
     case "pagos_parciales": {
       const { data } = await supabaseAdmin
         .from("pagos_parciales")
         .select(`
-          id, metodo_pago, fecha, factura_id,
+          id, metodo_pago, fecha, factura_id, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto,
           facturas!inner(estado_pago, ordenes_servicio!inner(organization_id, sucursal_id))
         `)
         .eq("id", id)
@@ -88,12 +111,15 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
         bloqueo: factura?.estado_pago === "ANULADA" ? "El remito está anulado" : undefined,
         auditEntity: "facturas",
         auditEntityId: data.factura_id,
+        previos: extraerPrevios(data),
       }
     }
     case "pagos_venta": {
       const { data } = await supabaseAdmin
         .from("pagos_venta")
-        .select("id, metodo_pago, fecha, venta_id, ventas!inner(organization_id, estado, sucursal_id)")
+        .select(
+          `id, metodo_pago, fecha, venta_id, cuotas, recargo_porcentaje, monto_original, costo_financiero_porcentaje, costo_financiero_monto, ventas!inner(organization_id, estado, sucursal_id)`
+        )
         .eq("id", id)
         .eq("ventas.organization_id", orgId)
         .maybeSingle()
@@ -107,6 +133,7 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
         auditEntity: "ventas",
         auditEntityId: data.venta_id,
         ventaId: data.venta_id,
+        previos: extraerPrevios(data),
       }
     }
     case "cuenta_corriente": {
@@ -127,20 +154,40 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
       }
     }
     case "movimientos_caja": {
-      const { data } = await supabaseAdmin
-        .from("movimientos_caja")
-        .select("id, metodo_pago, fecha, sucursal_id, sesiones_caja:sesion_caja_id(estado)")
-        .eq("id", id)
-        .eq("organization_id", orgId)
-        .maybeSingle()
+      const selectMovimiento = (columnas: string) =>
+        supabaseAdmin
+          .from("movimientos_caja")
+          .select(columnas)
+          .eq("id", id)
+          .eq("organization_id", orgId)
+          .maybeSingle()
+      const sesion = "sesiones_caja:sesion_caja_id(estado)"
+      let { data, error } = await selectMovimiento(
+        `id, metodo_pago, fecha, sucursal_id, origen, ${sesion}`
+      )
+      // Mig 335 sin aplicar: sin la columna origen se deduce del concepto
+      // (mismo respaldo que el DELETE de movimientos).
+      if (error && esErrorColumnaOrigen(error)) {
+        ;({ data, error } = await selectMovimiento(
+          `id, metodo_pago, fecha, sucursal_id, tipo, afecta_rentabilidad, es_recurrente, concepto, ${sesion}`
+        ))
+      }
       if (!data) return null
+      const mov = data as any
+      // Mismo guard que el DELETE: lo que escribe el sistema (devolución, nota
+      // de crédito, COGS) no se re-etiqueta desde caja.
+      const delSistema = esOrigenNoEliminable(resolverOrigen(mov))
       return {
-        metodoPago: data.metodo_pago,
-        fecha: data.fecha,
-        sucursalId: data.sucursal_id ?? null,
-        sesionEstado: (data as any).sesiones_caja?.estado ?? null,
+        metodoPago: mov.metodo_pago,
+        fecha: mov.fecha,
+        sucursalId: mov.sucursal_id ?? null,
+        sesionEstado: mov.sesiones_caja?.estado ?? null,
+        bloqueo: delSistema
+          ? "Este movimiento lo generó el sistema (devolución o nota de crédito) y no se puede modificar desde caja."
+          : undefined,
+        bloqueoStatus: delSistema ? 409 : undefined,
         auditEntity: "movimientos_caja",
-        auditEntityId: data.id,
+        auditEntityId: mov.id,
       }
     }
   }
@@ -150,14 +197,23 @@ async function cargarOrigen(fuente: Fuente, id: string, orgId: string): Promise<
 // congela los totales del arqueo (opened_at..closed_at, ver
 // sesiones/[id]/cerrar), así que cambiarle el método después descuadra el
 // historial. Una sesión sin sucursal abarca toda la org.
-async function caeEnSesionCerrada(orgId: string, fecha: string, sucursalId: string | null) {
-  const { data } = await supabaseAdmin
+// Devuelve null si la consulta falla: quien llama debe fallar CERRADO.
+async function caeEnSesionCerrada(
+  orgId: string,
+  fecha: string,
+  sucursalId: string | null
+): Promise<boolean | null> {
+  const { data, error } = await supabaseAdmin
     .from("sesiones_caja")
     .select("id, sucursal_id")
     .eq("organization_id", orgId)
     .eq("estado", "CERRADA")
     .lte("opened_at", fecha)
     .gte("closed_at", fecha)
+  if (error) {
+    console.error("Error consultando sesiones de caja:", error)
+    return null
+  }
   return (data || []).some(
     (s: any) => s.sucursal_id == null || sucursalId == null || s.sucursal_id === sucursalId
   )
@@ -194,7 +250,7 @@ export async function PATCH(request: Request) {
     }
 
     if (origen.bloqueo) {
-      return NextResponse.json({ error: origen.bloqueo }, { status: 400 })
+      return NextResponse.json({ error: origen.bloqueo }, { status: origen.bloqueoStatus ?? 400 })
     }
 
     if (origen.metodoPago === "CUENTA_CORRIENTE") {
@@ -208,9 +264,14 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ ok: true, metodoPago })
     }
 
-    const sesionCerrada =
-      origen.sesionEstado === "CERRADA" ||
-      (await caeEnSesionCerrada(organizationId!, origen.fecha, origen.sucursalId))
+    let sesionCerrada = origen.sesionEstado === "CERRADA"
+    if (!sesionCerrada) {
+      const cae = await caeEnSesionCerrada(organizationId!, origen.fecha, origen.sucursalId)
+      if (cae === null) {
+        return NextResponse.json({ error: "Error al verificar la sesión de caja" }, { status: 500 })
+      }
+      sesionCerrada = cae
+    }
     if (sesionCerrada) {
       return NextResponse.json(
         { error: "No se puede modificar un movimiento de una sesión de caja cerrada" },
@@ -218,28 +279,69 @@ export async function PATCH(request: Request) {
       )
     }
 
-    const update: Record<string, unknown> = { metodo_pago: metodoPago }
-    // Cuotas, recargo y costo de terminal solo tienen sentido con tarjeta:
-    // mismo criterio que MultiPagoInput al cambiar de método. Si no se
-    // limpian, un pago pasado a efectivo seguiría restando "costo terminal".
-    if (
-      (fuente === "pagos_venta" || fuente === "pagos_parciales" || fuente === "cobros_orden") &&
-      !ES_TARJETA(metodoPago)
-    ) {
-      update.cuotas = null
-      update.recargo_porcentaje = null
-      update.monto_original = null
-      update.costo_financiero_porcentaje = null
-      update.costo_financiero_monto = null
+    const esFuentePago =
+      fuente === "pagos_venta" || fuente === "pagos_parciales" || fuente === "cobros_orden"
+
+    // Un cobro de orden en cuotas tiene cronograma en cuotas_cobro. La cuota 1
+    // se marca pagada al cobrar; si hay otra pagada, el cronograma ya se usó y
+    // no se puede borrar sin perder ese registro.
+    const borrarCronograma =
+      fuente === "cobros_orden" &&
+      origen.metodoPago === "TARJETA_CREDITO" &&
+      metodoPago !== "TARJETA_CREDITO"
+    if (borrarCronograma) {
+      const { data: cuotas, error: cuotasError } = await supabaseAdmin
+        .from("cuotas_cobro")
+        .select("id, numero_cuota, pagada")
+        .eq("cobro_id", id)
+        .eq("organization_id", organizationId!)
+      if (cuotasError) {
+        console.error("Error leyendo cuotas del cobro:", cuotasError)
+        return NextResponse.json({ error: "Error al verificar las cuotas del cobro" }, { status: 500 })
+      }
+      if ((cuotas || []).some((c: any) => c.pagada && c.numero_cuota > 1)) {
+        return NextResponse.json(
+          { error: "El cobro tiene cuotas ya cobradas: no se puede cambiar el método de pago" },
+          { status: 409 }
+        )
+      }
     }
 
-    const { error: updateError } = await supabaseAdmin
-      .from(fuente)
-      .update(update)
-      .eq("id", id)
+    const update: Record<string, unknown> = { metodo_pago: metodoPago }
+    // Cuotas, recargo y costo financiero solo valen para TARJETA_CREDITO. Débito
+    // tampoco lleva cuotas ni recargo, así que al pasar de crédito a débito (o a
+    // cualquier otro método) se limpian; si no, un pago pasado a efectivo
+    // seguiría restando "costo terminal".
+    if (esFuentePago && metodoPago !== "TARJETA_CREDITO") {
+      for (const col of COLUMNAS_TARJETA) update[col] = null
+    }
+
+    let updateQuery = supabaseAdmin.from(fuente).update(update).eq("id", id)
+    // Tablas con organization_id propio; pagos_venta y pagos_parciales se
+    // validan por el join de cargarOrigen.
+    if (fuente === "cobros_orden" || fuente === "cuenta_corriente" || fuente === "movimientos_caja") {
+      updateQuery = updateQuery.eq("organization_id", organizationId!)
+    }
+    const { error: updateError } = await updateQuery
     if (updateError) {
       console.error("Error actualizando método de pago:", updateError)
       return NextResponse.json({ error: "Error al actualizar el método de pago" }, { status: 500 })
+    }
+
+    if (borrarCronograma) {
+      // No transaccional: si falla, el método ya cambió y quedan cuotas huérfanas.
+      const { error: deleteError } = await supabaseAdmin
+        .from("cuotas_cobro")
+        .delete()
+        .eq("cobro_id", id)
+        .eq("organization_id", organizationId!)
+      if (deleteError) {
+        console.error("Error borrando cuotas del cobro:", deleteError)
+        return NextResponse.json(
+          { error: "El método se actualizó pero no se pudieron borrar las cuotas del cobro" },
+          { status: 500 }
+        )
+      }
     }
 
     // ventas.metodo_pago es el método "de cabecera" que muestran el listado y
@@ -250,12 +352,18 @@ export async function PATCH(request: Request) {
         .from("pagos_venta")
         .select("id")
         .eq("venta_id", origen.ventaId)
+      // TODO: pago + cabecera no son atómicos; la atomicidad completa queda
+      // diferida a una RPC.
       if ((pagos || []).length === 1) {
-        await supabaseAdmin
+        const { error: ventaError } = await supabaseAdmin
           .from("ventas")
           .update({ metodo_pago: metodoPago })
           .eq("id", origen.ventaId)
           .eq("organization_id", organizationId!)
+        if (ventaError) {
+          console.error("Error actualizando método de la venta:", ventaError)
+          return NextResponse.json({ error: "Error al actualizar el método de pago" }, { status: 500 })
+        }
       }
     }
 
@@ -266,8 +374,8 @@ export async function PATCH(request: Request) {
       entity: origen.auditEntity,
       entityId: origen.auditEntityId,
       changes: {
-        before: { metodo_pago: origen.metodoPago },
-        after: { metodo_pago: metodoPago },
+        before: { metodo_pago: origen.metodoPago, ...(esFuentePago ? origen.previos : {}) },
+        after: { metodo_pago: metodoPago, fuente, id },
       },
       description: `Corrigió el método de pago en caja (${fuente} #${id.slice(-6)}): ${origen.metodoPago} → ${metodoPago}`,
     })
