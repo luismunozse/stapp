@@ -74,6 +74,15 @@ export async function loadOnboardingWizardProps({
     }),
   ])
 
+  if (orgRes.error || !orgRes.data) {
+    // Rendering a blank org would invite saving over real data. Throw so Next shows its
+    // error boundary; a redirect to /dashboard would loop (it sends unfinished ADMINs back here).
+    console.error("[onboarding] could not read the organization:", orgRes.error)
+    throw new Error("Could not load the organization for onboarding")
+  }
+  if (ownerRes.error) console.error("[onboarding] could not read the owner:", ownerRes.error)
+  if (tiposRes.error) console.error("[onboarding] could not read the tipos:", tiposRes.error)
+
   const org = orgRes.data
   const moneda: CurrencyCode =
     typeof org?.moneda === "string" && org.moneda in CURRENCIES ? (org.moneda as CurrencyCode) : DEFAULT_CURRENCY

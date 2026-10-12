@@ -54,6 +54,7 @@ const PRACTICA = {
 beforeEach(() => {
   llamadas.length = 0
   for (const key of Object.keys(respuestas)) delete respuestas[key]
+  respuestas.organizations = { data: { nombre: "taller-ana", moneda: "ARS" } }
   getPracticaOrden.mockReset().mockResolvedValue(null)
   countRealOrders.mockReset().mockResolvedValue(0)
 })
@@ -136,6 +137,42 @@ describe("loadOnboardingWizardProps", () => {
         ["order", "orden", { ascending: true }],
       ])
     )
+  })
+
+  it("logs and throws when the org read fails, instead of rendering a blank org", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    respuestas.organizations = { data: null, error: { message: "boom" } }
+
+    await expect(loadOnboardingWizardProps(PARAMS)).rejects.toThrow()
+    expect(error).toHaveBeenCalled()
+  })
+
+  it("logs and throws when the org row is missing", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    respuestas.organizations = { data: null, error: null }
+
+    await expect(loadOnboardingWizardProps(PARAMS)).rejects.toThrow()
+    expect(error).toHaveBeenCalled()
+  })
+
+  it("logs a tipos read error and offers no tipos", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    respuestas.tipos_dispositivo = { data: null, error: { message: "boom" } }
+
+    const props = await loadOnboardingWizardProps(PARAMS)
+
+    expect(props.tipos).toEqual([])
+    expect(error).toHaveBeenCalled()
+  })
+
+  it("logs an owner read error and falls back to the session", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    respuestas.users = { data: null, error: { message: "boom" } }
+
+    const props = await loadOnboardingWizardProps(PARAMS)
+
+    expect(props.ownerNombre).toBe("Sesión")
+    expect(error).toHaveBeenCalled()
   })
 
   it("falls back for a bare org: name, unknown rubro and currency, missing owner row", async () => {
