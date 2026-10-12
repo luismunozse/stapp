@@ -118,6 +118,22 @@ describe("PracticaStep — recibir", () => {
     expect(enviar).toBeEnabled()
   })
 
+  it("explains what is missing while the submit is disabled, linked with aria-describedby", () => {
+    render(<Harness />)
+    const enviar = screen.getByRole("button", { name: "Cargar orden de práctica" })
+
+    const ayuda = screen.getByText("Completá marca y modelo y contanos qué le pasa.")
+    expect(enviar).toHaveAttribute("aria-describedby", ayuda.id)
+
+    fireEvent.change(screen.getByLabelText("Artefacto"), { target: { value: "Gafa" } })
+    expect(screen.getByText("Contanos qué le pasa.")).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "No enfría" }))
+    expect(enviar).toBeEnabled()
+    expect(enviar).not.toHaveAttribute("aria-describedby")
+    expect(screen.queryByText(/Contanos qué le pasa|Completá marca/)).not.toBeInTheDocument()
+  })
+
   it("creates the practice and moves to reparar with the tracking link", async () => {
     routeFetch(mockFetch, { [CREAR]: [json({ practica: practica() }, 201)] })
     const onChange = vi.fn()
@@ -220,6 +236,22 @@ describe("PracticaStep — reparar", () => {
 
     expect(await screen.findByRole("heading", { name: "Última parada: la entrega" })).toBeInTheDocument()
     expect(bodyOf(callsTo(mockFetch, "PATCH", PRACTICA_URL)[0])).toEqual({ accion: "reparar", costoFinal: 15000 })
+  })
+
+  it("explains what is missing for the amount, linked to the button", () => {
+    render(<Harness inicial={practica()} />)
+    const boton = screen.getByRole("button", { name: "Marcar como reparada" })
+
+    const ayuda = screen.getByText("Ingresá cuánto cobrarías.")
+    expect(boton).toHaveAttribute("aria-describedby", ayuda.id)
+
+    fireEvent.change(screen.getByLabelText("¿Cuánto cobrarías?"), { target: { value: "0" } })
+    expect(screen.getByText("Corregí el monto para continuar.")).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText("¿Cuánto cobrarías?"), { target: { value: "500" } })
+    expect(boton).toBeEnabled()
+    expect(boton).not.toHaveAttribute("aria-describedby")
+    expect(screen.queryByText(/Corregí el monto|Ingresá cuánto/)).not.toBeInTheDocument()
   })
 
   it("reads decimals written with a comma", async () => {

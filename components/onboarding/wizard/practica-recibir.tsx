@@ -55,6 +55,15 @@ export function PracticaRecibir({ tipos, terminologia, ownerEmail, enviando, onE
   const problemas = problemasParaPractica(tipo)
   const completo = dispositivo.trim() !== "" && problema.trim() !== ""
 
+  const faltaDispositivo = dispositivo.trim() === ""
+  const faltaProblema = problema.trim() === ""
+  const ayuda =
+    faltaDispositivo && faltaProblema
+      ? "Completá marca y modelo y contanos qué le pasa."
+      : faltaDispositivo
+        ? "Completá marca y modelo."
+        : "Contanos qué le pasa."
+
   const elegirMarca = (marca: string) => {
     setDispositivo(`${marca} `)
     dispositivoRef.current?.focus()
@@ -133,8 +142,18 @@ export function PracticaRecibir({ tipos, terminologia, ownerEmail, enviando, onE
         </div>
       </fieldset>
 
+      {!completo && (
+        <p id="practica-recibir-ayuda" className="text-xs text-muted-foreground">
+          {ayuda}
+        </p>
+      )}
+
       <div className="flex flex-col gap-2 sm:flex-row-reverse sm:justify-between">
-        <Button type="submit" disabled={!completo || enviando}>
+        <Button
+          type="submit"
+          disabled={!completo || enviando}
+          aria-describedby={completo ? undefined : "practica-recibir-ayuda"}
+        >
           {enviando && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
           {enviando ? "Cargando…" : "Cargar orden de práctica"}
         </Button>

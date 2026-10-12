@@ -269,7 +269,17 @@ function PracticaReparar({
           {mostrarAyuda ? "Poné un monto mayor a cero." : "Es solo para la práctica: nadie te va a cobrar nada."}
         </p>
       </div>
-      <Button type="submit" className="w-full sm:w-auto" disabled={!valido || enviando}>
+      {!valido && (
+        <p id="practica-reparar-ayuda" className="text-xs text-muted-foreground">
+          {valor.trim() === "" ? "Ingresá cuánto cobrarías." : "Corregí el monto para continuar."}
+        </p>
+      )}
+      <Button
+        type="submit"
+        className="w-full sm:w-auto"
+        disabled={!valido || enviando}
+        aria-describedby={valido ? undefined : "practica-reparar-ayuda"}
+      >
         {enviando && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
         {enviando ? "Guardando…" : "Marcar como reparada"}
       </Button>
