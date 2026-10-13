@@ -257,6 +257,34 @@ describe("POST /api/ordenes/[id]/cobros — atomic RPC path", () => {
 
     expect(status).toBe(201)
   })
+
+  it("function-missing fallback: el pendiente descuenta lo que bajaron las NC activas", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+
+    vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
+      if (fn === "registrar_cobros_orden_atomica") {
+        return Promise.resolve({ data: null, error: FUNCTION_MISSING_ERROR })
+      }
+      return Promise.resolve({ data: null, error: null })
+    }) as any)
+
+    const ordenes = createChainMock(ordenRow({
+      costo_final: "1000",
+      total_cobrado: "0",
+      notas_credito: [{ monto_aplicado_deuda: "700", anulada: false }],
+    }))
+    mockSupabaseFrom({ ordenes_servicio: ordenes, cobros_orden: createChainMock({ id: "cob1" }) })
+
+    const response = await POST(
+      createPostRequest({ pagos: [{ monto: 500, metodo: "EFECTIVO" }] }, "http://localhost/api/ordenes/o1/cobros"),
+      createParams("o1")
+    )
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("excede el pendiente (300.00)")
+    expect(ordenes.select).toHaveBeenCalledWith(expect.stringContaining("notas_credito (monto_aplicado_deuda, anulada)"))
+  })
 })
 
 // ---------------------------------------------------------------------------
