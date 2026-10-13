@@ -52,6 +52,9 @@ export async function GET() {
       ivaTasa: org.iva_tasa ?? getIvaGeneral(org.pais),
       redondeoEfectivo: org.redondeo_efectivo ?? 0,
       garantiaDiasDefault: org.garantia_dias_default ?? 30,
+      // POS variants grouping (migration M3). Read as `!== false`: a NULL or a
+      // missing column (select("*") leaves it undefined) means grouped.
+      posAgrupaVariantes: org.pos_agrupa_variantes !== false,
       facturacionElectronicaDisponible,
     })
   } catch (error) {

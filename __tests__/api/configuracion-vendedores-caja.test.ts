@@ -109,9 +109,16 @@ describe("/api/configuracion — permiso de caja para vendedores", () => {
     expect(status).toBe(200)
     expect(body.vendedoresManejanCaja).toBe(false)
 
-    // Exactamente dos intentos: el flag es su propio escalón y el segundo ya
-    // acierta. Tres o más significa que arrastró a otra migración con él.
-    expect(chain.single).toHaveBeenCalledTimes(4)
+    // Cinco intentos: los escalones son acumulativos, así que la columna ausente
+    // viaja también en los de arriba (M3 variantes en el POS, ingresos y cobro
+    // de cotizaciones) y esos tres caen con ella, y el del propio flag también.
+    // El quinto ya acierta. Seis o más significa que arrastró a otra migración
+    // con él. Se afirma QUÉ SELECT llevó cada intento, no solo cuántos hubo.
+    expect(chain.single).toHaveBeenCalledTimes(5)
+    const selects = chain.select.mock.calls.map((c: any[]) => c[0] as string)
+    expect(selects[0]).toContain("pos_agrupa_variantes")
+    expect(selects.filter((s) => s.includes("pos_agrupa_variantes"))).toHaveLength(1)
+    expect(selects[4]).not.toContain("vendedores_manejan_caja")
 
     // Y nada de lo que sí existe se perdió en el camino.
     expect(body.tecnicosOperanPos).toBe(true)
