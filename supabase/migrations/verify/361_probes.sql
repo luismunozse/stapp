@@ -99,13 +99,14 @@ END $$;
 -- Scratch org with the depots the probes use, an UNGROUPED control row, and a second org with its
 -- own depot, group, child and supplier (the target of the cross-org probes).
 DO $$
-DECLARE v_org TEXT; v_oth TEXT; v_usr TEXT; v_pr TEXT; v_no TEXT; v_in TEXT; v_su TEXT; v_dep TEXT; v_g TEXT; v_h TEXT; v_pv TEXT;
+DECLARE v_org TEXT; v_oth TEXT; v_usr TEXT; v_pr TEXT; v_sc TEXT; v_no TEXT; v_in TEXT; v_su TEXT; v_dep TEXT; v_g TEXT; v_h TEXT; v_pv TEXT;
 BEGIN
   SELECT id INTO v_usr FROM users LIMIT 1;
   INSERT INTO organizations (nombre, slug) VALUES ('Probe M1b Org', 'probe-m1b-org') RETURNING id INTO v_org;
-  SELECT id INTO v_pr FROM depositos WHERE organization_id = v_org AND principal AND deleted_at IS NULL LIMIT 1;
-  INSERT INTO depositos (organization_id, nombre, principal, activo) VALUES (v_org, 'Probe Norte', false, true) RETURNING id INTO v_no;
-  INSERT INTO depositos (organization_id, nombre, principal, activo) VALUES (v_org, 'Probe Viejo', false, false) RETURNING id INTO v_in;
+  -- Production requires depositos.sucursal_id: the extra depots hang off the principal depot's branch.
+  SELECT id, sucursal_id INTO v_pr, v_sc FROM depositos WHERE organization_id = v_org AND principal AND deleted_at IS NULL LIMIT 1;
+  INSERT INTO depositos (organization_id, sucursal_id, nombre, principal, activo) VALUES (v_org, v_sc, 'Probe Norte', false, true) RETURNING id INTO v_no;
+  INSERT INTO depositos (organization_id, sucursal_id, nombre, principal, activo) VALUES (v_org, v_sc, 'Probe Viejo', false, false) RETURNING id INTO v_in;
   INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta)
     VALUES (v_org, 'PRB-PL', 'Probe Plain', 'PlainCat', 1, 1) RETURNING id INTO v_su;
   INSERT INTO _s VALUES (v_org, v_usr, v_pr, v_no, v_in, v_su);
