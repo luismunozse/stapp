@@ -283,7 +283,10 @@ export async function POST(
 
     // Registrar auditoría
     const audit = createAuditLogger(organizationId!, userId!, request)
-    const changes = diffObjects(orden, updatedOrden)
+    // El embed de NC solo sirve para calcular el pendiente: no es parte de la
+    // orden y no se lee en `orden`, así que no cuenta como cambio.
+    const { notas_credito: _notasCredito, ...updatedOrdenParaAuditoria } = updatedOrden
+    const changes = diffObjects(orden, updatedOrdenParaAuditoria)
     await audit.update("ordenes_servicio", id, changes.before, changes.after)
 
     // Encolar notificación de entrega

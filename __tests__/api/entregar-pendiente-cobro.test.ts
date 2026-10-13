@@ -17,6 +17,7 @@ vi.mock("@/lib/notifications/queue", () => ({
 }))
 
 import { supabaseAdmin } from "@/lib/supabase"
+import { diffObjects } from "@/lib/audit"
 import { POST } from "@/app/api/ordenes/[id]/entregar/route"
 
 function createParams(id: string) {
@@ -132,5 +133,20 @@ describe("POST /api/ordenes/[id]/entregar — devuelve el saldo para encadenar e
       expect.objectContaining({ p_monto: 60000, p_referencia_id: "o1" })
     )
     expect(ordenes.select).toHaveBeenCalledWith(expect.stringContaining("notas_credito (monto_aplicado_deuda, anulada)"))
+  })
+
+  it("la auditoría no registra el embed de NC como un cambio de la orden", async () => {
+    mockAuthSuccess()
+    mockEntrega({
+      costo_final: "100000", total_cobrado: "20000",
+      notas_credito: [{ monto_aplicado_deuda: "0", anulada: false }],
+    })
+
+    await POST(createPostRequest({}), createParams("o1"))
+
+    expect(diffObjects).toHaveBeenCalled()
+    const [antes, despues] = vi.mocked(diffObjects).mock.calls[0]
+    expect(antes).not.toHaveProperty("notas_credito")
+    expect(despues).not.toHaveProperty("notas_credito")
   })
 })
