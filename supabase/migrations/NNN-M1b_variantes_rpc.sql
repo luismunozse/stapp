@@ -10,7 +10,9 @@
 -- new function is executable by PUBLIC unless revoked). p_org is the organization of the caller's
 -- SESSION, filled in by the route (the repo's RPC pattern, as in crear_recepcion_multiple); it is
 -- never read from the request body. p_user must be a real users.id or NULL: an unknown one is refused
--- with 22023. The function is SECURITY INVOKER and filters EVERY statement by p_org, so a row of another
+-- with 22023. It is checked against users with no organization filter on purpose (support and
+-- impersonation sessions act for users of other organizations); p_org alone decides what is read or
+-- written. The function is SECURITY INVOKER and filters EVERY statement by p_org, so a row of another
 -- organization is never read or changed: an id that belongs to another organization is refused with
 -- P0002. That answer is NOT indistinguishable from the one for an id that does not exist yet (that one
 -- is created) or, for ids outside the c + 24 hex format, from the 22023 a missing id gets. Ids are
@@ -22,14 +24,19 @@
 --                  present is written to the whole group, an absent key keeps the group's value
 --   p_variantes    [{id, atributos, codigo, barcode?, precio_venta?, precio_compra?, stock_inicial?,
 --                  stock_minimo?, stock_maximo?, punto_reorden?, ubicacion?}]; an absent key means
---                  "unchanged" (a missing precio_compra never becomes 0 on an existing row)
+--                  "unchanged" (a missing precio_compra never becomes 0 on an existing row). The values
+--                  in atributos are NOT cross-checked against opciones.valores (the design only requires
+--                  the option names to match); fotoDeRespaldo tolerates a value the group does not list.
 --   p_archivar     [id] of group members to archive (never deleted; stock, history and photo stay)
 --   FULL-STATE SAVE: every ACTIVE member of an existing group must be in p_variantes or in p_archivar. A
 --   call that leaves one out is refused with 22023 and the message PAYLOAD_INVALIDO:miembros_faltantes:<ids>
---   (comma separated, sorted). A member left out would keep a stale atributos after an option is added or
---   renamed and a stale name after a base rename, and a form that loaded the group before another writer
---   changed it would silently drop that change; the caller answers 409 and the form reloads. Archived
---   members need not be listed: their managed names follow a base rename, so a restore starts current.
+--   (comma separated, sorted); the caller answers 409 and the form reloads. A member left out would keep a
+--   stale atributos after an option is added or renamed and a stale name after a base rename, so it is
+--   refused. That is ALL this protects: only MISSING members are detected. There is no version check, so a
+--   concurrent edit of a member field, of the group name or of the options is last-write-wins, and a member
+--   archived meanwhile that the stale form still lists comes back as restored. That is the accepted v1
+--   behavior (optimistic concurrency on the group's updated_at is a later option). Archived members need
+--   not be listed: their managed names follow a base rename, so a restore starts current.
 --   p_deposito_inicial  depot for the initial stock of NEW rows; NULL = the default of adjust_stock_atomic
 --   Returns {grupoId, creados, actualizados, promovidos, restaurados, archivados} (id lists).
 --   Rows are classified by what is in the database: NEW id -> INSERT (creados); standalone row ->
@@ -44,16 +51,25 @@
 -- blocks the archive (the whole save rolls back), P0034 over the limits, P0035 code taken
 -- (CODIGO_DUPLICADO:A-1,A-2 lists every offender).
 --
+-- NAMES. A child name is MANAGED when it equals the name derived from the previous base and the row's
+-- previous values; only managed names follow a rename. A custom name that happens to equal the old managed
+-- name cannot be told apart and is re-derived on a base rename.
+--
 -- KNOWN LIMIT. Because existing rows are written before new ones (and archive comes first), a rename that
 -- frees a combination or a code for a NEW row works in any payload order, and so does archiving a row and
 -- adding another one on its code and combination in the same call. Rows are still updated one at a time
--- against unique indexes that are checked per row, so a swap of two EXISTING combinations (or codes) and a
--- chain among existing rows (A -> B while B -> C) pass the checks above and then fail with a raw 23505,
--- whatever the order; the caller maps 23505 to 409.
+-- against unique indexes that are checked per row: a swap of two EXISTING combinations (or codes) always
+-- fails with a raw 23505, and a chain among existing rows (A -> B while B -> C) fails only when the mover
+-- is processed before the holder (payload order); both pass the checks above first. The caller maps 23505
+-- to 409.
 --
--- PROBES. The rollback rehearsal at the end of verify/NNN-M1b_probes.sql DROPs this function inside its
--- transaction; a save that arrives meanwhile waits on that lock until the ROLLBACK. Run the probes before
--- PR4 merges, while nothing calls the function.
+-- PROBES. verify/NNN-M1b_probes.sql runs in one transaction that always rolls back. Its rollback rehearsal
+-- at the end of verify/NNN-M1b_probes.sql DROPs this function inside that transaction and the ROLLBACK
+-- undoes it, so nothing is left behind. Run the probes after applying this file and before PR4 merges: that
+-- is the gate, the route must not depend on an RPC whose probes have never run. Do not apply or re-apply
+-- this file while they run (the DROP holds the function's object lock until the ROLLBACK). Saves in flight
+-- are not expected to wait, because calling a function takes no lock on it, but that has not been tested
+-- against live traffic.
 --
 -- LOCK ORDER. The group row first, then every touched row and every current member of the group in
 -- ORDER BY id. Two saves of one group therefore serialize on the group row. A plain UPDATE of one

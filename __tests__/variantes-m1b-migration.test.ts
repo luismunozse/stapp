@@ -8,7 +8,7 @@ import { collapse, readByMarker, readBySuffix, stripComments } from "./helpers/s
 const RAW = readBySuffix("_variantes_rpc.sql")
 const SQL = collapse(RAW)
 // The header prose (everything before the first statement), wrapped comment lines joined.
-const HEADER = RAW.slice(0, RAW.indexOf("SET LOCAL lock_timeout")).replace(/\n--\s?/g, " ")
+const HEADER = RAW.slice(0, RAW.indexOf("SET LOCAL lock_timeout")).replace(/\n--\s?/g, " ").replace(/\s+/g, " ")
 const SIGNATURE = "guardar_grupo_variantes(TEXT, TEXT, JSONB, JSONB, JSONB, JSONB, TEXT)"
 const NINE_SHARED = [
   "descripcion", "categoria", "tipo_dispositivo", "proveedor", "proveedor_id",
@@ -74,13 +74,29 @@ describe("M1b: the header says what the function really does", () => {
     expect(HEADER).toContain("PAYLOAD_INVALIDO:miembros_faltantes:<ids>")
   })
 
-  it("states truthfully what still ends in a raw 23505: swaps and chains among EXISTING rows", () => {
-    const limit = need(/KNOWN LIMIT\.(.*?)LOCK ORDER/, HEADER)[1]
+  it("says plainly that only MISSING members are detected: no version check, last-write-wins, a stale member comes back", () => {
+    expect(HEADER).toMatch(/only MISSING members are detected/)
+    expect(HEADER).toMatch(/no version check/)
+    expect(HEADER).toMatch(/last-write-wins/)
+    expect(HEADER).toMatch(/archived meanwhile that the stale form still lists comes back as restored/)
+    expect(HEADER).toMatch(/accepted v1 behavior/)
+    expect(HEADER).not.toMatch(/would silently drop that change/) // the first draft claimed more than it does
+  })
+
+  it("states truthfully what still ends in a raw 23505: every SWAP, and a chain only when the mover goes first", () => {
+    const limit = need(/KNOWN LIMIT\.(.*?)PROBES\./, HEADER)[1]
     expect(limit).toMatch(/existing rows are written before new ones/)
-    expect(limit).toMatch(/swap/)
-    expect(limit).toMatch(/chain/)
-    expect(limit).toContain("23505")
+    expect(limit).toContain("a swap of two EXISTING combinations (or codes) always fails with a raw 23505")
+    expect(limit).toContain("a chain among existing rows (A -> B while B -> C) fails only when the mover is processed before the holder")
+    expect(limit).toMatch(/The caller maps 23505 to 409/)
+    expect(limit).not.toMatch(/whatever the order/) // a chain succeeds when the holder is processed first
     expect(limit).not.toMatch(/free slot are fine/)
+  })
+
+  it("documents the naming rule's blind spot, the p_user scope and the valor/opciones gap", () => {
+    expect(HEADER).toContain("A custom name that happens to equal the old managed name cannot be told apart and is re-derived on a base rename")
+    expect(HEADER).toContain("checked against users with no organization filter on purpose")
+    expect(HEADER).toContain("NOT cross-checked against opciones.valores")
   })
 
   it("does not claim that an id of another organization is indistinguishable from a missing one", () => {
@@ -89,10 +105,13 @@ describe("M1b: the header says what the function really does", () => {
     expect(HEADER).toMatch(/unguessable/)
   })
 
-  it("warns that the DROP rehearsal in the probes blocks saves for a moment, so it runs before PR4 merges", () => {
-    expect(HEADER).toMatch(/rollback rehearsal at the end of verify\/NNN-M1b_probes\.sql DROPs this function inside its transaction/)
-    expect(HEADER).toMatch(/waits on that lock until the ROLLBACK/)
-    expect(HEADER).toMatch(/before PR4 merges/)
+  it("says when to run the probes (the gate before PR4 merges) and what the DROP rehearsal really does", () => {
+    const probes = need(/PROBES\.(.*?)LOCK ORDER/, HEADER)[1]
+    expect(probes).toMatch(/rollback rehearsal at the end of verify\/NNN-M1b_probes\.sql DROPs this function inside that transaction and the ROLLBACK undoes it/)
+    expect(probes).toMatch(/before PR4 merges: that is the gate/)
+    expect(probes).toContain("Do not apply or re-apply this file while they run")
+    expect(probes).toContain("has not been tested against live traffic")
+    expect(HEADER).not.toMatch(/waits on that lock/) // calling a function takes no lock on it: the first draft claimed saves would block
   })
 })
 
@@ -138,11 +157,11 @@ describe("M1b: validation raises clean errors before the 355 constraints can fir
 
   it("obligation 3: caps keep the btree entry small (<= 3 elements, valor <= 100 chars) and reject with 22023", () => {
     expect(BODY).toContain("jsonb_array_length(e.v -> 'atributos') <> v_nop")
-    expect(BODY).toContain("char_length(a.x ->> 'valor') > 100")
+    expect(BODY).toContain("char_length(a.x ->> 'valor') > 100 OR")
     expect(BODY).toMatch(/jsonb_array_length\(p_grupo -> 'opciones'\) > 3 THEN\s*RAISE EXCEPTION [^;]*ERRCODE = 'P0034'/)
     // codigo, barcode and ubicacion sit in btree indexes too, so they are capped as well
-    expect(BODY).toContain("char_length(e.v ->> 'codigo') <= 100")
-    expect(BODY).toContain("jsonb_typeof(x) = 'string' AND char_length(x #>> '{}') <= 100")
+    expect(BODY).toContain("char_length(e.v ->> 'codigo') <= 100)")
+    expect(BODY).toContain("jsonb_typeof(x) = 'string' AND char_length(x #>> '{}') <= 100)))")
   })
 
   it("p_compartidos accepts only the 9 columns the M1a sync trigger fires on (cross-check with M1a)", () => {
@@ -285,8 +304,8 @@ describe("M1b: review fixes", () => {
   })
 
   it("checks the RAW length of group and option names (not only the trimmed one) and refuses repeated option names", () => {
-    expect(BODY).toContain("btrim(v_base) = '' OR char_length(v_base) > 200")
-    expect(BODY).toContain("btrim(o.e ->> 'nombre') = '' OR char_length(o.e ->> 'nombre') > 100")
+    expect(BODY).toContain("btrim(v_base) = '' OR char_length(v_base) > 200 OR (p_grupo ? 'renombrar'")
+    expect(BODY).toContain("btrim(o.e ->> 'nombre') = '' OR char_length(o.e ->> 'nombre') > 100 THEN")
     expect(BODY).toMatch(/count\(DISTINCT inventario_combinacion_clave\(jsonb_build_array\(jsonb_build_object\('valor', o\.e -> 'nombre'\)\)\)\) <> count\(\*\)/)
     expect(BODY).toContain("RAISE EXCEPTION 'PAYLOAD_INVALIDO: option names must be different' USING ERRCODE = '22023';")
   })
@@ -296,6 +315,34 @@ describe("M1b: review fixes", () => {
     expect(BODY).toContain("v_max := CASE WHEN v_var ? 'stock_maximo' THEN (v_var ->> 'stock_maximo')::int ELSE r.stock_maximo END;")
     expect(BODY).toContain("IF v_min > v_max THEN RAISE EXCEPTION 'PAYLOAD_INVALIDO: stock_minimo cannot exceed stock_maximo' USING ERRCODE = '22023'; END IF;")
     expect(BODY.match(/stock_minimo cannot exceed stock_maximo/g)).toHaveLength(1)
+  })
+
+  it("pins the numeric ceilings with their delimiters (a prefix such as > 100 also matches > 1000)", () => {
+    expect(BODY).toContain("c_int CONSTANT TEXT := '^[0-9]{1,9}$';")
+    expect(BODY).toContain("IF v_prod > 100 OR jsonb_array_length(v_vars) > 100 OR jsonb_array_length(COALESCE(p_archivar, '[]'::jsonb)) > 100 THEN")
+    expect(BODY).toContain("char_length(x #>> '{}') > CASE WHEN k = 'descripcion' THEN 2000 ELSE 200 END THEN k || ' is too long'")
+  })
+
+  it("every read or write of inventario in the body is scoped to p_org; the one cross-organization lookup is deliberate", () => {
+    const windows: string[] = []
+    for (const m of BODY.matchAll(/\b(?:FROM|JOIN|UPDATE) inventario\b/g)) {
+      // the query level of this reference: up to the paren that closes it, or the end of its statement
+      let depth = 0
+      let end = BODY.length
+      for (let i = m.index; i < BODY.length; i++) {
+        const c = BODY[i]
+        if (c === "(") depth++
+        else if (c === ")") {
+          if (depth === 0) { end = i; break }
+          depth--
+        } else if (c === ";" && depth === 0) { end = i; break }
+      }
+      windows.push(BODY.slice(m.index, end))
+    }
+    expect(windows.length).toBeGreaterThanOrEqual(14)
+    const unscoped = windows.filter((w) => !/organization_id = p_org/.test(w))
+    // The existence lookup that tells an id of another organization (P0002) from one that does not exist yet.
+    expect(unscoped).toEqual(["FROM inventario WHERE id = v_ids[v_i]"])
   })
 
   it("the shared source is the group first, then the first promoted row; trackea_* are normalized once", () => {
