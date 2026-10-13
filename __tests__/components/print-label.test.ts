@@ -199,10 +199,10 @@ describe("buildLabelHtml — datos de la etiqueta", () => {
 
 describe("buildLabelHtml — problema multilínea en die-cut", () => {
   it.each([
-    ["40x30", 2],
-    ["50x30", 2],
-    ["50x40", 3],
-    ["60x40", 3],
+    ["40x30", 3],
+    ["50x30", 3],
+    ["50x40", 5],
+    ["60x40", 5],
   ] as const)("%s: line-clamp de %i líneas", (size, lines) => {
     const html = buildLabelHtml(ingresoCompleto, size)
     const prob = html.match(/\.problema\s*\{([^}]*)\}/)?.[1] ?? ""
@@ -216,6 +216,19 @@ describe("buildLabelHtml — problema multilínea en die-cut", () => {
     const info = html.match(/\.info\s*>\s*div\s*\{([^}]*)\}/)?.[1] ?? ""
     expect(info).toMatch(/white-space:\s*nowrap/)
     expect(info).toMatch(/text-overflow:\s*ellipsis/)
+  })
+
+  it.each(DIE_CUT)("%s: la fecha del pie nunca se encoge", (size) => {
+    const html = buildLabelHtml(ingresoCompleto, size)
+    const fecha = html.match(/\.fecha\s*\{([^}]*)\}/)?.[1] ?? ""
+    expect(fecha).toMatch(/flex-shrink:\s*0\b/)
+  })
+
+  it.each(DIE_CUT)("%s: el título del documento escapa el código de orden", (size) => {
+    const html = buildLabelHtml({ ...ingresoCompleto, codigoOrden: "<x>" }, size)
+    const title = html.match(/<title>([^<]*)<\/title>/)?.[1] ?? ""
+    expect(title).toContain("&lt;x&gt;")
+    expect(html.match(/<title>[\s\S]*?<\/title>/)?.[0]).not.toContain("<x>")
   })
 
   it.each(DIE_CUT)("%s: el problema ocupa todo el ancho (sin columna de QR)", (size) => {

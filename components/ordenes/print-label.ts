@@ -156,8 +156,8 @@ function dieCutStyles(cfg: SizeConfig): string {
   const scale = Math.max(0.72, Math.min(w / 60, h / 40))
   const bodyPt = (7 * scale).toFixed(1)
   const pad = scale < 0.85 ? 1.5 : 2.5
-  // Etiquetas bajas (30mm) dejan 2 líneas al problema; las de 40mm, 3.
-  const problemaLines = h >= 40 ? 3 : 2
+  // Etiquetas bajas (30mm) dejan 3 líneas al problema; las de 40mm, 5.
+  const problemaLines = h >= 40 ? 5 : 3
   // El body llena el área imprimible (100%), no la página en mm: si el diálogo
   // de impresión o el driver suman margen, un alto fijo igual a la página
   // desborda a una segunda hoja y la térmica gasta dos etiquetas. Así, lo que
