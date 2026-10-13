@@ -26,8 +26,8 @@
 -- transaction, but apply it off-peak.
 --
 -- Re-runnable: ADD COLUMN IF NOT EXISTS, and COMMENT replaces the previous comment.
--- Rollback: rollback/<NNN>_rollback.sql drops the column (only the organizations' choice
--- is lost). Probes: verify/<NNN>_probes.sql, run WITHOUT --apply after this is applied.
+-- Rollback: rollback/362_rollback.sql drops the column (only the organizations' choice
+-- is lost). Probes: verify/362_probes.sql, run WITHOUT --apply after this is applied.
 -- ============================================================================
 
 SET LOCAL lock_timeout = '3s';
