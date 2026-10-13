@@ -86,7 +86,7 @@ INSERT INTO ordenes_servicio (
 )
 SELECT v.id, v.numero, v.cliente, 'org-probe-360',
        (SELECT id FROM sucursales WHERE organization_id = 'org-probe-360' AND principal),
-       'Celular', 'CELULAR', 'Probe 360', v.estado, v.costo, v.descuento, 0, 'PENDIENTE'
+       'Celular', 'CELULAR', 'Probe 360', v.estado::estado_orden, v.costo, v.descuento, 0, 'PENDIENTE'
 FROM (VALUES
   ('ord-probe-360-1', 1, 'cli-probe-360',  'ENTREGADO',    1000::DECIMAL, 0::DECIMAL),
   ('ord-probe-360-2', 2, 'cli-probe-360',  'ENTREGADO',    1000, 0),
