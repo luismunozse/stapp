@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest"
 import { collapse, readByMarker, readBySuffix, stripComments } from "./helpers/sql-text"
 
 // M1b (guardar_grupo_variantes) is applied by hand and there is no Postgres in CI: this pins
-// by text what vitest cannot execute. verify/NNN-M1b_probes.sql covers the runtime behavior.
+// by text what vitest cannot execute. verify/359_probes.sql covers the runtime behavior.
 
 const RAW = readBySuffix("_variantes_rpc.sql")
 const SQL = collapse(RAW)
@@ -107,7 +107,7 @@ describe("M1b: the header says what the function really does", () => {
 
   it("says when to run the probes (the gate before PR4 merges) and what the DROP rehearsal really does", () => {
     const probes = need(/PROBES\.(.*?)LOCK ORDER/, HEADER)[1]
-    expect(probes).toMatch(/rollback rehearsal at the end of verify\/NNN-M1b_probes\.sql DROPs this function inside that transaction and the ROLLBACK undoes it/)
+    expect(probes).toMatch(/rollback rehearsal at the end of verify\/359_probes\.sql DROPs this function inside that transaction and the ROLLBACK undoes it/)
     expect(probes).toMatch(/before PR4 merges: that is the gate/)
     expect(probes).toContain("Do not apply or re-apply this file while they run")
     expect(probes).toContain("has not been tested against live traffic")

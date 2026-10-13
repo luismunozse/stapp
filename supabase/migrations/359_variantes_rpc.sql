@@ -63,8 +63,8 @@
 -- is processed before the holder (payload order); both pass the checks above first. The caller maps 23505
 -- to 409.
 --
--- PROBES. verify/NNN-M1b_probes.sql runs in one transaction that always rolls back. Its rollback rehearsal
--- at the end of verify/NNN-M1b_probes.sql DROPs this function inside that transaction and the ROLLBACK
+-- PROBES. verify/359_probes.sql runs in one transaction that always rolls back. Its rollback rehearsal
+-- at the end of verify/359_probes.sql DROPs this function inside that transaction and the ROLLBACK
 -- undoes it, so nothing is left behind. Run the probes after applying this file and before PR4 merges: that
 -- is the gate, the route must not depend on an RPC whose probes have never run. Do not apply or re-apply
 -- this file while they run (the DROP holds the function's object lock until the ROLLBACK). Saves in flight
