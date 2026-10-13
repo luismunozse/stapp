@@ -1,8 +1,15 @@
--- Rollback de 352_entregar_lote_recepcion.sql
+-- Rollback de 352_recepcion_descuento.sql
 --
--- Elimina la funcion entregar_lote_recepcion. Las ordenes ya entregadas por el
--- lote NO se tocan (son filas comunes de ordenes_servicio / cobros_orden).
--- Si 353 esta aplicada, correr primero 353_rollback.sql (o simplemente este: el
--- DROP elimina la version vigente sea cual sea).
+-- Quita el descuento de lote de recepciones.
+-- PERDIDA DE DATOS: se borran descuento_tipo y descuento_valor de todas las
+-- recepciones (a la fecha de la migracion ninguna tenia descuento).
+-- Antes de correrlo, deshacer 354 y 353 (la funcion entregar_lote_recepcion
+-- no depende de estas columnas, pero la ruta y la UI del lote si).
+--
+--   SELECT id, descuento_tipo, descuento_valor FROM recepciones WHERE descuento_tipo IS NOT NULL;
 
-DROP FUNCTION IF EXISTS entregar_lote_recepcion(TEXT,TEXT,TEXT,JSONB,TEXT,TEXT,TEXT,TEXT);
+ALTER TABLE recepciones DROP CONSTRAINT IF EXISTS recepciones_descuento_check;
+
+ALTER TABLE recepciones
+  DROP COLUMN IF EXISTS descuento_tipo,
+  DROP COLUMN IF EXISTS descuento_valor;

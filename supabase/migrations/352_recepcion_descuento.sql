@@ -1,14 +1,14 @@
--- 351_recepcion_descuento.sql
+-- 352_recepcion_descuento.sql
 -- Batch discount negotiated for a multi-device reception.
 -- Totals are always derived from member orders; only the discount is stored.
 --
--- YA APLICADA EN PRODUCCION (2026-08) bajo el numero 293. Se renumero a 351
--- porque 293 colisiono con otra migracion de main. Es idempotente
+-- YA APLICADA EN PRODUCCION (2026-08) bajo el numero 293. Se renumero a 352
+-- porque 293 (y luego 351) colisionaron con otras migraciones de main. Es idempotente
 -- (ADD COLUMN IF NOT EXISTS, DROP CONSTRAINT IF EXISTS): volver a correrla no
 -- cambia nada. Sin BEGIN/COMMIT propios a proposito: scripts/db-run.mjs corre
 -- en dry-run (ROLLBACK) por defecto, y un archivo que abre su propia
 -- transaccion se ejecuta tal cual y confirma aunque no se pase --apply.
--- rollback: supabase/migrations/rollback/351_rollback.sql
+-- rollback: supabase/migrations/rollback/352_rollback.sql
 
 ALTER TABLE recepciones
   ADD COLUMN IF NOT EXISTS descuento_tipo TEXT,

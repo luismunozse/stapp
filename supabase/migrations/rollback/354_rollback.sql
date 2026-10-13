@@ -1,35 +1,9 @@
--- ============================================================================
--- 353: entregar_lote_recepcion sin pago_idempotency + fecha_completado
--- ============================================================================
--- CREATE OR REPLACE de entregar_lote_recepcion (352) con la MISMA firma. Parte
--- del cuerpo que esta en produccion y cambia dos cosas, nada mas:
+-- Rollback de 354_entregar_lote_sin_pago_idempotency.sql
 --
--- 1. IDEMPOTENCIA. 352 le pasaba a registrar_cobros_orden_atomica la clave
---    p_idempotency_key || ':' || orden. Esa funcion (242/269) hace
---    INSERT INTO pago_idempotency cuando la clave no es NULL, y esa tabla NO
---    existe en produccion: toda entrega de lote con clave fallaba con
---    "relation pago_idempotency does not exist" (el dialogo siempre manda una
---    clave). Ahora se llama SIEMPRE con clave NULL. No se crea ni se toca
---    pago_idempotency (otro flujo depende de que siga ausente).
---    El parametro p_idempotency_key se conserva en la firma por compatibilidad
---    con la ruta y con 352, pero hoy NO SE USA. La proteccion ante un reintento
---    sigue siendo el guard por orden: una segunda llamada encuentra las
---    ordenes en ENTREGADO, falla con LOTE_ERROR:ORDEN_NO_REPARADA y, al ser
---    una sola transaccion, no escribe nada.
---
--- 2. FECHA_COMPLETADO. Al pasar cada orden a ENTREGADO se escribe
---    fecha_completado = COALESCE(fecha_completado, NOW()), igual que
---    POST /api/ordenes/[id]/entregar desde #399. Sin esto, una orden que llego
---    a REPARADO sin que nadie seteara fecha_completado queda fuera de los
---    reportes de resultados y de comisiones. No pisa el devengo original.
---
--- Sin BEGIN/COMMIT propios (ver nota de 352 sobre la ventana de 40 lineas de
--- scripts/db-run.mjs): el runner decide la transaccion y el dry-run revierte.
--- Permisos, comentario y resto del cuerpo: identicos a 352.
---
--- rollback: supabase/migrations/rollback/353_rollback.sql (restaura el cuerpo de 352)
--- verify:   supabase/migrations/verify/353_probes.sql
--- ============================================================================
+-- Restaura el cuerpo de entregar_lote_recepcion tal como quedo en 353 (el que
+-- hay hoy en produccion). OJO: 353 vuelve a pasar la clave de idempotencia a
+-- registrar_cobros_orden_atomica, que falla mientras pago_idempotency no
+-- exista (ver 354). Tampoco escribe fecha_completado.
 
 CREATE OR REPLACE FUNCTION entregar_lote_recepcion(
   p_organization_id TEXT,
@@ -156,7 +130,8 @@ BEGIN
         v_pagos,
         p_observaciones,
         v_descuento,
-        NULL  -- ver nota IDEMPOTENCIA del header de 353
+        CASE WHEN p_idempotency_key IS NULL THEN NULL
+             ELSE p_idempotency_key || ':' || v_orden.id END
       );
     EXCEPTION
       WHEN raise_exception THEN
@@ -179,7 +154,6 @@ BEGIN
     UPDATE ordenes_servicio
       SET estado = 'ENTREGADO',
           fecha_entrega = NOW(),
-          fecha_completado = COALESCE(fecha_completado, NOW()),
           entregado_por_user_id = p_usuario_id,
           firma_cliente_entrega = NULL,
           firma_cliente_entrega_mime = NULL,
@@ -217,10 +191,7 @@ COMMENT ON FUNCTION entregar_lote_recepcion(TEXT,TEXT,TEXT,JSONB,TEXT,TEXT,TEXT,
   'LOTE_ERROR: para que la ruta HTTP (Tarea 6) las mapee a status codes. '
   'Migracion 290.';
 
--- Invocable solo por service_role: la funcion cobra dinero y cambia el estado
--- de ordenes, y PostgREST expone por defecto toda funcion de public a anon y
--- authenticated. Mismo hardening que 352 (REVOKE de PUBLIC, anon y
--- authenticated; GRANT solo a service_role).
+-- Invocable solo por service_role — ver nota HARDENING arriba.
 REVOKE EXECUTE ON FUNCTION entregar_lote_recepcion(TEXT,TEXT,TEXT,JSONB,TEXT,TEXT,TEXT,TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION entregar_lote_recepcion(TEXT,TEXT,TEXT,JSONB,TEXT,TEXT,TEXT,TEXT) FROM anon;
 REVOKE EXECUTE ON FUNCTION entregar_lote_recepcion(TEXT,TEXT,TEXT,JSONB,TEXT,TEXT,TEXT,TEXT) FROM authenticated;

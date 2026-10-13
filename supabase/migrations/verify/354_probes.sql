@@ -1,15 +1,15 @@
 -- =============================================================================
--- Verificación de la migración 353 — entregar_lote_recepcion sin pago_idempotency
+-- Verificación de la migración 354 — entregar_lote_recepcion sin pago_idempotency
 -- y con fecha_completado.
 --
 -- CÓMO CORRERLO (ver verify/README.md):
---   - DESPUES de aplicar 353 (con 352 aplicada, el probe 1 falla: es el rojo).
+--   - DESPUES de aplicar 354 (con 353 aplicada, el probe 1 falla: es el rojo).
 --   - SIN RLS: las rutas usan supabaseAdmin (service_role), igual que este probe.
---   - node scripts/db-run.mjs supabase/migrations/verify/353_probes.sql
+--   - node scripts/db-run.mjs supabase/migrations/verify/354_probes.sql
 --     (el archivo trae su propio BEGIN y cierra con ROLLBACK: no persiste nada).
 --
 -- Todo corre dentro de BEGIN/ROLLBACK. Crea una organización/sucursal/cliente/
--- recepción de prueba ('probe-353-...') con tres órdenes REPARADO:
+-- recepción de prueba ('probe-354-...') con tres órdenes REPARADO:
 --   orden 1: costo 10000, fecha_completado ya seteada (2026-01-01)
 --   orden 2: costo 20000, fecha_completado NULL
 --   orden 3: costo 30000, fecha_completado NULL
@@ -35,12 +35,12 @@ BEGIN
   -- cobros_orden.usuario_id tiene FK a users: se reutiliza un usuario existente
   -- (solo se lee su id, no se modifica nada).
   SELECT id INTO v_usr FROM users LIMIT 1;
-  INSERT INTO organizations (nombre, slug) VALUES ('Probe 353 Org', 'probe-353-org') RETURNING id INTO v_org;
-  INSERT INTO sucursales (organization_id, nombre) VALUES (v_org, 'Probe 353 Sucursal') RETURNING id INTO v_suc;
-  INSERT INTO clientes (nombre, telefono, organization_id) VALUES ('Probe 353 Cliente', '3120000353', v_org) RETURNING id INTO v_cli;
+  INSERT INTO organizations (nombre, slug) VALUES ('Probe 354 Org', 'probe-354-org') RETURNING id INTO v_org;
+  INSERT INTO sucursales (organization_id, nombre) VALUES (v_org, 'Probe 354 Sucursal') RETURNING id INTO v_suc;
+  INSERT INTO clientes (nombre, telefono, organization_id) VALUES ('Probe 354 Cliente', '3120000353', v_org) RETURNING id INTO v_cli;
 
   INSERT INTO recepciones (organization_id, cliente_id, codigo, numero, descuento_tipo, descuento_valor)
-    VALUES (v_org, v_cli, 'PROBE-353', 1, 'porcentaje', 10) RETURNING id INTO v_rec;
+    VALUES (v_org, v_cli, 'PROBE-354', 1, 'porcentaje', 10) RETURNING id INTO v_rec;
 
   INSERT INTO ordenes_servicio (organization_id, sucursal_id, cliente_id, numero_orden, dispositivo, problema_reportado, estado, costo_final, recepcion_id, fecha_completado)
     VALUES (v_org, v_suc, v_cli, 1, 'Probe 1', 'p', 'REPARADO', 10000, v_rec, '2026-01-01T00:00:00Z') RETURNING id INTO v_o1;
@@ -59,7 +59,7 @@ INSERT INTO _r SELECT 0, 'setup: fecha_completado NULL en 2 de 3', '2',
 
 -- ---------------------------------------------------------------------------
 -- PROBE 1 — La entrega del lote CON clave de idempotencia no nula funciona.
--- (En 352 falla con: relation "pago_idempotency" does not exist.)
+-- (En 353 falla con: relation "pago_idempotency" does not exist.)
 -- ---------------------------------------------------------------------------
 DO $$
 DECLARE
@@ -75,7 +75,7 @@ BEGIN
         jsonb_build_object('id', s.o2, 'costoFinal', 20000, 'montoCobro', 18000),
         jsonb_build_object('id', s.o3, 'costoFinal', 30000, 'montoCobro', 27000)
       ),
-      'EFECTIVO', NULL, 'probe 353', 'probe-353-clave');
+      'EFECTIVO', NULL, 'probe 354', 'probe-354-clave');
     INSERT INTO _r VALUES (1, 'entrega con clave no nula: sin error', 'OK',
       'OK');
     INSERT INTO _r VALUES (1, 'respuesta lista 3 ordenes', '3', jsonb_array_length(v_res->'ordenes')::TEXT);
@@ -135,7 +135,7 @@ BEGIN
         jsonb_build_object('id', s.o2, 'costoFinal', 20000, 'montoCobro', 18000),
         jsonb_build_object('id', s.o3, 'costoFinal', 30000, 'montoCobro', 27000)
       ),
-      'EFECTIVO', NULL, 'probe 353', 'probe-353-clave');
+      'EFECTIVO', NULL, 'probe 354', 'probe-354-clave');
     INSERT INTO _r VALUES (6, 'segundo llamado falla', 'ERROR', 'sin error');
   EXCEPTION WHEN OTHERS THEN
     INSERT INTO _r VALUES (6, 'segundo llamado falla', 'ERROR', 'ERROR');

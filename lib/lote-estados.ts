@@ -2,7 +2,7 @@
  * Estados de orden que definen la membresia de un lote (recepcion multiple).
  *
  * Fuente unica: la vista del lote, la API de detalle, la API de entrega y la
- * RPC `entregar_lote_recepcion` (migracion 352) tienen que coincidir. Antes
+ * RPC `entregar_lote_recepcion` (migracion 353) tienen que coincidir. Antes
  * habia copias sincronizadas a mano en tres archivos y ya divergian.
  *
  * Semantica del lote: una orden "sale" del lote por dos vias distintas.

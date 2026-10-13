@@ -23,7 +23,7 @@ import { settle, uniqueSuffix } from "./helpers/utils"
  *     "Recibir varios equipos" ni siquiera aparece — igual que en
  *     e2e/recepcion-multiple.auth.spec.ts, este test SALTA en ese caso con un
  *     motivo explícito en vez de fallar.
- *   - 351_recepcion_descuento.sql / 352_entregar_lote_recepcion.sql: agregan
+ *   - 352_recepcion_descuento.sql / 353_entregar_lote_recepcion.sql: agregan
  *     descuento_tipo/descuento_valor a `recepciones` y el RPC
  *     entregar_lote_recepcion. Si el flag ya está pero estas dos no corrieron,
  *     GET /api/recepciones/[id] devuelve 500 (columna inexistente). Este test
@@ -32,7 +32,7 @@ import { settle, uniqueSuffix } from "./helpers/utils"
  *     rojo falso antes de que esas migraciones corran en el tenant QA. Un
  *     status no-ok distinto de 500 (404, 403, etc.) hace fallar el test: un
  *     guard `!ok()` genérico enmascararía regresiones reales para siempre,
- *     incluso después de que 351/352 ya estén aplicadas.
+ *     incluso después de que 352/353 ya estén aplicadas.
  *
  * Mover las dos órdenes a REPARADO se hace por API (request fixture), no por
  * UI: la máquina de estados (lib/orden-state-machine.ts) permite
@@ -50,7 +50,7 @@ const RAZON_FLAG_DESHABILITADO =
 
 const RAZON_MIGRACION_LOTE_PENDIENTE =
   "El flag recepcion_multiple está activo pero GET /api/recepciones/[id] respondió 500 " +
-  "(migraciones 351_recepcion_descuento.sql / 352_entregar_lote_recepcion.sql sin aplicar en el tenant QA)"
+  "(migraciones 352_recepcion_descuento.sql / 353_entregar_lote_recepcion.sql sin aplicar en el tenant QA)"
 
 const RAZON_NO_ADMIN =
   "La sesión de prueba no es ADMIN: el editor de descuento del lote no se muestra " +
@@ -121,7 +121,7 @@ test.describe("Lote mayorista — recepción a entrega", () => {
       throw new Error("No se pudo extraer el id de la recepción de la URL")
     }
 
-    // Probe directo a la API del lote: si 351/352 no corrieron, este
+    // Probe directo a la API del lote: si 352/353 no corrieron, este
     // endpoint responde específicamente 500 (columna descuento_tipo/
     // descuento_valor inexistente en `recepciones`, ver
     // app/api/recepciones/[id]/route.ts) — sólo ESE status se trata como
@@ -129,7 +129,7 @@ test.describe("Lote mayorista — recepción a entrega", () => {
     // otro status no-ok (404 por un recepcionId mal extraído de la URL, 403,
     // o un 500 genuino ya con las migraciones aplicadas) tiene que fallar el
     // test en lugar de quedar enmascarado como skip: si el guard fuera
-    // `!detalleRes.ok()` a secas, una regresión real después de que 351/352
+    // `!detalleRes.ok()` a secas, una regresión real después de que 352/353
     // corran en el tenant seguiría saltando en silencio para siempre. De
     // paso, esta misma llamada nos da los ids de las 2 órdenes del lote.
     const detalleRes = await request.get(`/api/recepciones/${recepcionId}`)

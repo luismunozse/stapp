@@ -1,5 +1,5 @@
 -- ============================================================================
--- 352: entrega atomica de lote (recepcion multiple)
+-- 353: entrega atomica de lote (recepcion multiple)
 -- ============================================================================
 -- Transiciona todas las ordenes REPARADO -> ENTREGADO de una recepcion y
 -- registra el cobro prorateado (calculado app-side por lib/lote-utils) en
@@ -23,12 +23,12 @@
 -- abajo son cada uno una sentencia atomica de por si; no necesitan una
 -- transaccion explicita, y asi el runner decide la ejecucion.
 --
--- YA APLICADA EN PRODUCCION (2026-08) bajo el numero 294. Se renumero a 352
--- porque 294 colisiono con otra migracion de main. El cuerpo de la funcion es
+-- YA APLICADA EN PRODUCCION (2026-08) bajo el numero 294. Se renumero a 353
+-- porque 294 (y luego 352) colisionaron con otras migraciones de main. El cuerpo de la funcion es
 -- identico al que esta en produccion (mismo md5 de pg_proc.prosrc). La
--- correccion del idempotency key y de fecha_completado vive en 353.
+-- correccion del idempotency key y de fecha_completado vive en 354.
 --
--- rollback: supabase/migrations/rollback/352_rollback.sql
+-- rollback: supabase/migrations/rollback/353_rollback.sql
 -- (DROP FUNCTION entregar_lote_recepcion(TEXT,TEXT,TEXT,JSONB,TEXT,TEXT,TEXT,TEXT);)
 --
 -- El UPDATE sobre ordenes_servicio replica exactamente las columnas que
