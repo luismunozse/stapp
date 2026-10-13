@@ -259,7 +259,7 @@ BEGIN
     format('T=%s P=%s B=%s drift=%s', pg_temp.total(v_t), pg_temp.dep(v_t, v_p),
            pg_temp.dep(v_t, v_b), pg_temp.drift(v_t)));
   SELECT COUNT(*) INTO n FROM inventario_depositos WHERE inventario_id = v_s;
-  INSERT INTO _r VALUES (51, 'B2: origen archivado sin detalle', 'T=0 filas=0 archivado=true',
+  INSERT INTO _r VALUES (51, 'B2: origen archivado sin detalle', 'T=0 filas=0 archivado=t',
     format('T=%s filas=%s archivado=%s', pg_temp.total(v_s), n,
            (SELECT deleted_at IS NOT NULL FROM inventario WHERE id = v_s)));
   SELECT COUNT(*) INTO n FROM movimientos_inventario
@@ -350,20 +350,20 @@ BEGIN
   v_res := crear_variantes_bulk(v_v, v_org, v_user,
     '[{"nombre":"Rojo","codigo_variante":"PROBE-R","stock":4},
       {"nombre":"Azul","codigo_variante":"PROBE-A","stock":3}]'::jsonb);
-  INSERT INTO _r VALUES (70, 'H: alta de variantes (10 legacy -> 4+3)', 'T=7 drift=0 kardex=true',
+  INSERT INTO _r VALUES (70, 'H: alta de variantes (10 legacy -> 4+3)', 'T=7 drift=0 kardex=t',
     format('T=%s drift=%s kardex=%s', pg_temp.total(v_v), pg_temp.drift(v_v), pg_temp.kardex_ok(v_v)));
 
   PERFORM ajustar_stock_variante_atomic(v_res->'ids'->>0, v_org, v_user, 'delta', 2, 'probe');
-  INSERT INTO _r VALUES (71, 'H: ajuste de variante +2', 'T=9 drift=0 kardex=true',
+  INSERT INTO _r VALUES (71, 'H: ajuste de variante +2', 'T=9 drift=0 kardex=t',
     format('T=%s drift=%s kardex=%s', pg_temp.total(v_v), pg_temp.drift(v_v), pg_temp.kardex_ok(v_v)));
 
   -- Soft-delete directo (como la ruta DELETE): el trigger mueve el detalle.
   UPDATE inventario_variantes SET deleted_at = NOW(), activo = false WHERE id = v_res->'ids'->>1;
-  INSERT INTO _r VALUES (72, 'H: soft-delete de variante (sin movimiento: gap conocido)', 'T=6 drift=0 kardex=false',
+  INSERT INTO _r VALUES (72, 'H: soft-delete de variante (sin movimiento: gap conocido)', 'T=6 drift=0 kardex=f',
     format('T=%s drift=%s kardex=%s', pg_temp.total(v_v), pg_temp.drift(v_v), pg_temp.kardex_ok(v_v)));
 
   PERFORM eliminar_variantes_y_consolidar(v_v, v_org, v_user);
-  INSERT INTO _r VALUES (73, 'H: consolidar variantes', 'T=6 drift=0 variantes=false',
+  INSERT INTO _r VALUES (73, 'H: consolidar variantes', 'T=6 drift=0 variantes=f',
     format('T=%s drift=%s variantes=%s', pg_temp.total(v_v), pg_temp.drift(v_v),
            (SELECT tiene_variantes FROM inventario WHERE id = v_v)));
 EXCEPTION WHEN OTHERS THEN
@@ -388,7 +388,7 @@ WHERE organization_id = pg_temp.id('org') AND categoria = 'PROBE-350'
 
 -- ── Permisos de la funcion nueva (solo service_role) ──
 INSERT INTO _r VALUES (95, 'Permisos: conteo_item_refrescar_sistema solo service_role',
-  'anon=false auth=false service_role=true',
+  'anon=f auth=f service_role=t',
   format('anon=%s auth=%s service_role=%s',
     has_function_privilege('anon', 'conteo_item_refrescar_sistema()', 'EXECUTE'),
     has_function_privilege('authenticated', 'conteo_item_refrescar_sistema()', 'EXECUTE'),
