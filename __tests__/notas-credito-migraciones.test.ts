@@ -9,7 +9,7 @@ import { join } from "path"
 // rollback, y que ninguna abre su propia transacción. Lo último importa:
 // db-run.mjs ejecuta TAL CUAL un archivo con BEGIN en sus primeras 40 líneas,
 // así que `npm run db:dry` sobre una migración con BEGIN/COMMIT la aplicaría.
-const MIGRACIONES = ["350_notas_credito_bases", "354_nc_numeracion_y_vista"]
+const MIGRACIONES = ["350_notas_credito_bases", "356_nc_numeracion_y_vista"]
 
 const leer = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8")
 const existe = (rel: string) => existsSync(join(process.cwd(), rel))
@@ -88,8 +88,8 @@ describe("351: el deposito de los items de NC no bloquea la purga de una organiz
   })
 })
 
-describe("354: la ruta llama con la misma firma de siempre", () => {
-  const sql = () => leer("supabase/migrations/354_nc_numeracion_y_vista.sql")
+describe("356: la ruta llama con la misma firma de siempre", () => {
+  const sql = () => leer("supabase/migrations/356_nc_numeracion_y_vista.sql")
 
   it("renombra el cuerpo vigente (330) en vez de copiarlo", () => {
     expect(sql()).toMatch(
@@ -126,7 +126,7 @@ describe("354: la ruta llama con la misma firma de siempre", () => {
   })
 
   it("el rollback quita la vista y restaura la funcion", () => {
-    const rb = leer("supabase/migrations/rollback/354_rollback.sql")
+    const rb = leer("supabase/migrations/rollback/356_rollback.sql")
     expect(rb).toContain("DROP VIEW IF EXISTS v_notas_credito;")
     expect(rb).toMatch(/RENAME TO registrar_devolucion_atomica;/)
   })

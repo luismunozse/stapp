@@ -1,4 +1,4 @@
--- Rollback de la 354. No pierde datos: las devoluciones ya numeradas NC-
+-- Rollback de la 356. No pierde datos: las devoluciones ya numeradas NC-
 -- quedan con su numero.
 --
 -- ORDEN: primero volver a desplegar el codigo anterior al PR1c, que manda su
@@ -15,6 +15,6 @@ DROP FUNCTION IF EXISTS public.registrar_devolucion_atomica(TEXT, TEXT, TEXT, TE
 ALTER FUNCTION public.registrar_devolucion_nucleo(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT)
   RENAME TO registrar_devolucion_atomica;
 
--- Estado previo a la 354: la funcion con los permisos por default.
+-- Estado previo a la 356: la funcion con los permisos por default.
 GRANT EXECUTE ON FUNCTION public.registrar_devolucion_atomica(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT)
   TO PUBLIC, anon, authenticated, service_role;

@@ -51,7 +51,7 @@ describe("POST /api/ventas/[id]/devolucion — atomic RPC path", () => {
       "registrar_devolucion_atomica",
       expect.objectContaining({
         p_venta_id: "v1",
-        // El numero lo asigna la RPC adentro de su transaccion (mig 354)
+        // El numero lo asigna la RPC adentro de su transaccion (mig 356)
         p_numero_devolucion: null,
         p_items: [{ itemVentaId: "iv1", inventarioId: "inv1", cantidad: 2, restaurarStock: true }],
       })

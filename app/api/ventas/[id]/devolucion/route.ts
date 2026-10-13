@@ -30,7 +30,7 @@ const devolucionSchema = z.object({
 
 type ResultadoDevolucion = {
   id: string
-  /** Desde la mig 354: el NC- que la RPC asignó adentro de su transacción. */
+  /** Desde la mig 356: el NC- que la RPC asignó adentro de su transacción. */
   numero: string
   tipo: string
   montoDevolucion: number
@@ -163,7 +163,7 @@ export async function POST(
       p_org_id: organizationId!,
       p_venta_id: id,
       p_user_id: userId!,
-      // El NC- lo asigna la RPC adentro de su transacción (mig 354): si la
+      // El NC- lo asigna la RPC adentro de su transacción (mig 356): si la
       // devolución falla, el número no se quema.
       p_numero_devolucion: null,
       p_motivo: data.motivo,

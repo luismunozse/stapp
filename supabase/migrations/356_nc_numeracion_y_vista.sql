@@ -1,4 +1,4 @@
--- Migration 354: numeracion NC- compartida y vista unificada.
+-- Migration 356: numeracion NC- compartida y vista unificada.
 --
 -- Spec: docs/superpowers/specs/2026-10-07-notas-de-credito-design.md
 -- Plan: docs/superpowers/plans/2026-10-07-notas-credito-pr1-bases.md (PR1c)
@@ -104,8 +104,8 @@ $function$;
 COMMENT ON FUNCTION public.registrar_devolucion_atomica(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT) IS
   'Devolucion de venta (nota de credito del motor de ventas). Asigna el numero NC- '
   'adentro de la transaccion con el contador compartido (get_next_nota_credito_number) '
-  'salvo que reciba uno (codigo anterior a la 354) y delega en registrar_devolucion_nucleo '
-  '(cuerpo de la 330). Devuelve lo mismo que la 330 mas numero. Migracion 354.';
+  'salvo que reciba uno (codigo anterior a la 356) y delega en registrar_devolucion_nucleo '
+  '(cuerpo de la 330). Devuelve lo mismo que la 330 mas numero. Migracion 356.';
 
 -- Mismo acceso que el nucleo: la unica que la llama es la ruta de devolucion,
 -- con service_role. Sin esto anon/authenticated llegaban hasta el nucleo (que
@@ -170,4 +170,4 @@ COMMENT ON VIEW v_notas_credito IS
   'Notas de credito de los dos motores (devoluciones_venta y notas_credito) con columnas '
   'normalizadas. Hereda RLS (security_invoker); solo service_role la lee. Incluye anuladas '
   'y el historial DEV-. OJO: CREATE OR REPLACE VIEW pierde security_invoker si no lo repite, '
-  'y recrearla devuelve los grants por default (repetir el REVOKE). Migracion 354.';
+  'y recrearla devuelve los grants por default (repetir el REVOKE). Migracion 356.';
