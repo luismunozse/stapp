@@ -1379,7 +1379,7 @@ COMMENT ON FUNCTION crear_variantes_bulk(TEXT, TEXT, TEXT, JSONB) IS
   'v350: crea variantes en lote y activa tiene_variantes. El detalle lo mueve el trigger de sync; el kardex registra el cambio del total del item por variante. ERRCODE: P0002 item no encontrado, 23505 codigo duplicado, 22023 payload inválido.';
 
 -- ============================================================
--- H.3 ajustar_stock_variante_atomic: lock padre->variante, kardex con totales
+-- H.3 ajustar_stock_variante_atomic: lock variante->padre, kardex con totales
 -- ============================================================
 CREATE OR REPLACE FUNCTION ajustar_stock_variante_atomic(
   p_variante_id  TEXT,
@@ -1403,24 +1403,13 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
-  SELECT inventario_id INTO v_inv_id
-  FROM inventario_variantes
-  WHERE id = p_variante_id
-    AND organization_id = p_org
-    AND deleted_at IS NULL;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Variante no encontrada'
-      USING ERRCODE = 'P0002';
-  END IF;
-
-  -- Padre primero (mismo orden que crear_variantes_bulk y el trigger de sync).
-  SELECT COALESCE(stock, 0) INTO v_item_antes
-  FROM inventario WHERE id = v_inv_id
-  FOR UPDATE;
-
-  SELECT stock, stock_reservado
-    INTO v_stock_anterior, v_reservado
+  -- Orden de locks: variante primero, padre despues. Es el mismo orden de la
+  -- produccion actual y de la ruta PATCH/DELETE de la variante (un UPDATE sobre la
+  -- variante que bloquea al padre desde el trigger de sync), asi dos operaciones
+  -- concurrentes sobre la misma variante no se cruzan. Leer la variante bajo lock
+  -- antes de tomar el padre es correcto: nadie mas puede cambiarla en el medio.
+  SELECT inventario_id, stock, stock_reservado
+    INTO v_inv_id, v_stock_anterior, v_reservado
   FROM inventario_variantes
   WHERE id = p_variante_id
     AND organization_id = p_org
@@ -1431,6 +1420,10 @@ BEGIN
     RAISE EXCEPTION 'Variante no encontrada'
       USING ERRCODE = 'P0002';
   END IF;
+
+  SELECT COALESCE(stock, 0) INTO v_item_antes
+  FROM inventario WHERE id = v_inv_id
+  FOR UPDATE;
 
   IF p_mode = 'absolute' THEN
     v_stock_posterior := p_value;
@@ -1492,7 +1485,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION ajustar_stock_variante_atomic(TEXT, TEXT, TEXT, TEXT, INTEGER, TEXT) IS
-  'v350: ajuste atómico de stock por variante (lock padre -> variante). El trigger de sync mantiene padre y detalle; el movimiento registra totales del item. Retorno con valores de la variante. ERRCODE: P0002 no encontrada, P0003 stock inválido, 22023 modo inválido.';
+  'v350: ajuste atómico de stock por variante (lock variante -> padre). El trigger de sync mantiene padre y detalle; el movimiento registra totales del item. Retorno con valores de la variante. ERRCODE: P0002 no encontrada, P0003 stock inválido, 22023 modo inválido.';
 
 -- ============================================================
 -- H.4 eliminar_variantes_y_consolidar: el delta del total va al detalle
