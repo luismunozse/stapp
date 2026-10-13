@@ -13,6 +13,11 @@
  * SELECT naming the missing column fails with 42703, a write payload naming it fails with
  * PGRST204, and a success returns ONLY the requested columns. Every call is recorded, so the
  * tests assert WHICH select and payload each attempt carried, not just how many attempts.
+ *
+ * Two more guards against tests that cannot fail. The table holds TWO organizations and `eq`
+ * really filters, so a query that loses its `.eq("id", organizationId)` reads or writes the
+ * wrong row (or two rows) and the assertions notice. And `fail` makes every query fail with an
+ * error that is NOT a missing column, to prove the M3 steps retry only on a missing column.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -26,8 +31,15 @@ interface Call {
   select: string
   columns: string[]
   update?: Record<string, unknown>
+  /** The `.eq(column, value)` filters the query carried when it ran. */
+  eq: Array<[string, unknown]>
   ok: boolean
   errorCode?: string
+}
+
+interface FakeOptions {
+  /** Makes EVERY query fail with this error (which must not look like a missing column). */
+  fail?: { code: string; message: string }
 }
 
 const columnsOf = (select: string) =>
@@ -90,15 +102,30 @@ const rowWithoutM3 = (overrides: Record<string, unknown> = {}) => {
 
 /**
  * In-memory organizations table that behaves like PostgREST for what these routes do.
- * `missing` lists the columns the database does not have.
+ * `missing` lists the columns the database does not have. The table holds two organizations:
+ * `store` is the caller's (org-1, the session of every test) and `other` belongs to org-2 with
+ * its own values. `eq` filters for real, `.single()` demands exactly one row, and a write lands
+ * on every row it matches (it is NOT rolled back when `.single()` then complains, which is the
+ * worst case), so a dropped `.eq("id", ...)` shows up both as an error and as a changed `other`.
  */
-function fakeOrganizations(initial: Record<string, unknown>, missing: string[] = []) {
+function fakeOrganizations(initial: Record<string, unknown>, missing: string[] = [], options: FakeOptions = {}) {
   const store: Record<string, unknown> = { ...initial }
+  const other: Record<string, unknown> = {
+    ...initial,
+    id: "org-2",
+    nombre_mostrar: "Other Org",
+    umbral_stock_bajo: 77,
+    cuit: "20-99999999-9",
+    ...(typeof initial[COLUMN] === "boolean" ? { [COLUMN]: !initial[COLUMN] } : {}),
+  }
+  const otherBefore: Record<string, unknown> = { ...other }
+  const rows = [store, other]
   const calls: Call[] = []
   vi.mocked(supabaseAdmin.from).mockImplementation(((table: string) => {
     if (table !== "organizations") throw new Error(`unexpected table: ${table}`)
     let select = ""
     let payload: Record<string, unknown> | undefined
+    const filters: Array<[string, unknown]> = []
     const q: any = {}
     q.update = vi.fn((p: Record<string, unknown>) => {
       payload = { ...p } // snapshot: the route deletes keys from its own object between retries
@@ -108,11 +135,18 @@ function fakeOrganizations(initial: Record<string, unknown>, missing: string[] =
       select = cols
       return q
     })
-    q.eq = vi.fn(() => q)
+    q.eq = vi.fn((column: string, value: unknown) => {
+      filters.push([column, value])
+      return q
+    })
     q.single = vi.fn(async () => {
       const columns = columnsOf(select)
-      const call: Call = { select, columns, update: payload, ok: false }
+      const call: Call = { select, columns, update: payload, eq: [...filters], ok: false }
       calls.push(call)
+      if (options.fail) {
+        call.errorCode = options.fail.code
+        return { data: null, error: { ...options.fail } }
+      }
       const badKey = payload && Object.keys(payload).find((k) => missing.includes(k))
       if (badKey) {
         call.errorCode = "PGRST204"
@@ -126,17 +160,29 @@ function fakeOrganizations(initial: Record<string, unknown>, missing: string[] =
         call.errorCode = "42703"
         return { data: null, error: { code: "42703", message: `column organizations.${badColumn} does not exist` } }
       }
-      if (payload) Object.assign(store, payload)
+      const matched = rows.filter((r) => filters.every(([column, value]) => r[column] === value))
+      if (payload) for (const r of matched) Object.assign(r, payload)
+      if (matched.length !== 1) {
+        call.errorCode = "PGRST116"
+        return {
+          data: null,
+          error: { code: "PGRST116", message: `JSON object requested, multiple (or no) rows returned (${matched.length})` },
+        }
+      }
+      const row = matched[0]
       call.ok = true
       const data = columns.includes("*")
-        ? { ...store }
-        : Object.fromEntries(columns.filter((c) => c in store).map((c) => [c, store[c]]))
+        ? { ...row }
+        : Object.fromEntries(columns.filter((c) => c in row).map((c) => [c, row[c]]))
       return { data, error: null }
     })
     return q
   }) as any)
-  return { calls, store }
+  return { calls, store, other, otherBefore }
 }
+
+/** What a correctly scoped query carries: exactly one filter, the caller's organization id. */
+const ONLY_ORG_1: Array<[string, unknown]> = [["id", "org-1"]]
 
 const without = (obj: Record<string, unknown> | undefined, key: string): Record<string, unknown> => {
   const { [key]: _dropped, ...rest } = obj ?? {}
@@ -388,7 +434,11 @@ describe("PUT /api/configuracion, write - posAgrupaVariantes", () => {
     expect(store.iva_regimen).toBe("ADITIVO")
   })
 
-  it("final minimal fallback: an older database also missing a legacy column never sees the key after its first failure", async () => {
+  // What this proves: the FIRST retry (M3 step) drops the key, so no later attempt, down to and
+  // including the minimal select, ever carries it. It does NOT exercise the `delete` that sits
+  // inside the minimal fallback itself: that line is a defensive duplicate (the key is already
+  // gone by then), unreachable with the key still present, and no test can tell it apart.
+  it("an older database also missing a legacy column: the first retry drops the key, so no later attempt (the minimal select included) carries it", async () => {
     const { calls, store } = fakeOrganizations(rowWithoutM3(), [COLUMN, "comprobante_terminos"])
     const { PUT } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse(
@@ -452,6 +502,112 @@ describe("GET /api/configuracion/operativa - posAgrupaVariantes", () => {
       garantiaDiasDefault: 30,
       posAgrupaVariantes: false,
     })
+  })
+})
+
+describe("every query of the M3 steps is scoped to the caller's organization", () => {
+  // org-2 sits in the same table with different values. A query that loses its
+  // .eq("id", organizationId) matches two rows: the fake makes that an error, applies a write to
+  // both rows, and these tests also look at the filters each call carried and at org-2 itself.
+  for (const missing of [[], [COLUMN]] as string[][]) {
+    const scenario = missing.length ? "M3 missing: the failed attempt AND its retry" : "M3 present: the single attempt"
+    const initial = () => (missing.length ? rowWithoutM3() : { ...FULL_ROW, [COLUMN]: true })
+    const attempts = missing.length ? 2 : 1
+
+    it(`GET - ${scenario} filter by id and read org-1, never org-2`, async () => {
+      const h = fakeOrganizations(initial(), missing)
+      const { GET } = await import("@/app/api/configuracion/route")
+      const { status, body } = await parseResponse((await GET()) as Response)
+
+      expect(status).toBe(200)
+      expect(body.nombreEmpresa).toBe("Test Org") // org-2 is "Other Org"
+      expect(body.cuit).toBe("30-71234567-8") // org-2 has 20-99999999-9
+      expect(body.posAgrupaVariantes).toBe(true) // org-2 is false when the column exists
+      expect(h.calls).toHaveLength(attempts)
+      expect(h.calls.map((c) => c.eq)).toEqual(h.calls.map(() => ONLY_ORG_1))
+    })
+
+    it(`PUT no-op branch - ${scenario} filter by id and read org-1, never org-2`, async () => {
+      const h = fakeOrganizations(initial(), missing)
+      const { PUT } = await import("@/app/api/configuracion/route")
+      const { status, body } = await parseResponse((await PUT(putRequest({}))) as Response)
+
+      expect(status).toBe(200)
+      expect(body.cuit).toBe("30-71234567-8")
+      expect(body.umbralStockBajo).toBe(5) // org-2 has 77
+      expect(body.posAgrupaVariantes).toBe(true)
+      expect(h.calls).toHaveLength(attempts)
+      expect(h.calls.map((c) => c.eq)).toEqual(h.calls.map(() => ONLY_ORG_1))
+      expect(h.other).toEqual(h.otherBefore)
+    })
+
+    it(`PUT write - ${scenario} filter by id and write org-1 only, org-2 stays byte for byte`, async () => {
+      const h = fakeOrganizations(initial(), missing)
+      const { PUT } = await import("@/app/api/configuracion/route")
+      const { status, body } = await parseResponse(
+        (await PUT(putRequest({ posAgrupaVariantes: false, umbralStockBajo: 9 }))) as Response,
+      )
+
+      expect(status).toBe(200)
+      expect(body.umbralStockBajo).toBe(9)
+      expect(h.store.umbral_stock_bajo).toBe(9)
+      expect(h.calls).toHaveLength(attempts)
+      expect(h.calls.map((c) => c.eq)).toEqual(h.calls.map(() => ONLY_ORG_1))
+      expect(h.other).toEqual(h.otherBefore)
+      expect(h.other.umbral_stock_bajo).toBe(77)
+    })
+  }
+})
+
+describe("an error that is NOT a missing column is never retried by the M3 steps", () => {
+  // 57014 is what a statement timeout looks like. It must not be mistaken for "M3 not applied":
+  // a retry would hide the real failure (and for a write, send the payload again). Each test
+  // pins what the route answers TODAY; none of this is a change to the routes.
+  const TIMEOUT = { code: "57014", message: "canceling statement due to statement timeout" }
+
+  it("GET: one attempt that carried the column, answered with the controlled 404 the route gives today", async () => {
+    const { calls } = fakeOrganizations({ ...FULL_ROW }, [], { fail: TIMEOUT })
+    const { GET } = await import("@/app/api/configuracion/route")
+    const { status } = await parseResponse((await GET()) as Response)
+
+    expect(status).toBe(404)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].columns).toContain(COLUMN)
+    expect(calls[0].errorCode).toBe("57014")
+    expect(calls[0].eq).toEqual(ONLY_ORG_1)
+  })
+
+  it("PUT no-op branch: one attempt that carried the column; the branch never checks the error and answers 200 with defaults (today's behavior)", async () => {
+    const { calls } = fakeOrganizations({ ...FULL_ROW }, [], { fail: TIMEOUT })
+    const { PUT } = await import("@/app/api/configuracion/route")
+    const { status, body } = await parseResponse((await PUT(putRequest({}))) as Response)
+
+    expect(status).toBe(200)
+    expect(body.cuit).toBe("") // stored value is 30-71234567-8: nothing was read, defaults came out
+    expect(body.posAgrupaVariantes).toBe(true)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].columns).toContain(COLUMN)
+    expect(calls[0].update).toBeUndefined()
+    expect(calls[0].errorCode).toBe("57014")
+    expect(calls[0].eq).toEqual(ONLY_ORG_1)
+  })
+
+  it("PUT write: one attempt with the key still in the payload, answered with a 500 that passes the message through, nothing stored", async () => {
+    const { calls, store } = fakeOrganizations({ ...FULL_ROW }, [], { fail: TIMEOUT })
+    const { PUT } = await import("@/app/api/configuracion/route")
+    const { status, body } = await parseResponse(
+      (await PUT(putRequest({ posAgrupaVariantes: false, umbralStockBajo: 9 }))) as Response,
+    )
+
+    expect(status).toBe(500)
+    expect(body.error).toContain("canceling statement due to statement timeout")
+    expect(calls).toHaveLength(1)
+    expect(calls[0].update).toEqual({ [COLUMN]: false, umbral_stock_bajo: 9 })
+    expect(calls[0].columns).toContain(COLUMN)
+    expect(calls[0].errorCode).toBe("57014")
+    expect(calls[0].eq).toEqual(ONLY_ORG_1)
+    expect(store.umbral_stock_bajo).toBe(5)
+    expect(store[COLUMN]).toBe(true)
   })
 })
 
