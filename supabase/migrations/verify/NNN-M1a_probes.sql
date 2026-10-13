@@ -8,9 +8,13 @@
 --
 -- Results accumulate in _r and come out in ONE select. Green = esperado equals obtenido,
 -- or obtenido starts with 'OK:' for the probes that expect an error.
--- Checked on a local Postgres 16 engine, with the org purge run under BOTH orders of the
--- RI cascade triggers; its DML was also dry-run on production without the new objects.
--- Still to run for real: after M1a is applied.
+-- Checked on a local Postgres 16 engine (PGlite), with the org purge run under BOTH orders of
+-- the RI cascade triggers. On production only the DML of the FIRST version of this file was
+-- preflighted (a rolled-back transaction, without the new objects: scratch org, children, the
+-- price/image/search triggers, a sale line, the organization delete). Everything added since
+-- (second scratch org, refused-shape and cross-org inserts, GUC, bulk-update, ungrouped control
+-- row and kit probes) has run on the local engine only. The first real run of the whole file
+-- is after M1a is applied.
 
 BEGIN;
 
@@ -36,10 +40,11 @@ CREATE FUNCTION pg_temp.attrs(p_valores JSONB) RETURNS JSONB LANGUAGE sql AS $$
     FROM jsonb_array_elements_text(p_valores) WITH ORDINALITY AS t(v, o)
 $$;
 
--- Scratch org with a group of 3 children: Rojo (stock 7), Azul (stock 3), Verde (archived).
-CREATE TEMP TABLE _s (org TEXT, grupo TEXT, rojo TEXT, azul TEXT, verde TEXT);
+-- Scratch org with a group of 3 children: Rojo (stock 7), Azul (stock 3), Verde (archived),
+-- plus an UNGROUPED control row in the same org that no fan-out may ever touch.
+CREATE TEMP TABLE _s (org TEXT, grupo TEXT, rojo TEXT, azul TEXT, verde TEXT, suelto TEXT);
 DO $$
-DECLARE v_org TEXT; v_g TEXT; v_ro TEXT; v_az TEXT; v_ve TEXT;
+DECLARE v_org TEXT; v_g TEXT; v_ro TEXT; v_az TEXT; v_ve TEXT; v_su TEXT;
 BEGIN
   INSERT INTO organizations (nombre, slug) VALUES ('Probe M1a Org', 'probe-m1a-org') RETURNING id INTO v_org;
   INSERT INTO inventario_grupos (organization_id, nombre, opciones)
@@ -50,7 +55,9 @@ BEGIN
     VALUES (v_org, 'PRB-AZ', 'Probe Funda - Azul', 'Fundas', 100, 200, 3, v_g, '[{"opcion":"Color","valor":"Azul"}]') RETURNING id INTO v_az;
   INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, stock, grupo_id, atributos, deleted_at)
     VALUES (v_org, 'PRB-VE', 'Probe Funda - Verde', 'Fundas', 100, 200, 1, v_g, '[{"opcion":"Color","valor":"Verde"}]', NOW()) RETURNING id INTO v_ve;
-  INSERT INTO _s VALUES (v_org, v_g, v_ro, v_az, v_ve);
+  INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta)
+    VALUES (v_org, 'PRB-PL', 'Probe Plain', 'PlainCat', 1, 1) RETURNING id INTO v_su;
+  INSERT INTO _s VALUES (v_org, v_g, v_ro, v_az, v_ve, v_su);
 END $$;
 
 -- Second scratch org with its own group and one child, all inserted in THIS transaction (the
@@ -144,6 +151,8 @@ UPDATE inventario SET precio_venta = 999 WHERE id = (SELECT rojo FROM _s);
 INSERT INTO _r SELECT 22, 'price on Rojo does not reach Azul', 'true', (precio_venta = 200)::TEXT FROM inventario WHERE id = (SELECT azul FROM _s);
 INSERT INTO _r SELECT 24, 'fan-out does not leave its group (the group of another org keeps its categoria)', 'OtherCat',
   categoria FROM inventario WHERE id = (SELECT hijo FROM _o);
+INSERT INTO _r SELECT 27, 'fan-out does not touch an ungrouped row of the same org', 'PlainCat',
+  categoria FROM inventario WHERE id = (SELECT suelto FROM _s);
 DO $$
 BEGIN
   PERFORM set_config('stapp.sync_grupo', 'on', true);
@@ -170,11 +179,14 @@ DO $$ BEGIN
   PERFORM pg_temp.probe(41, 'an ARCHIVED combination does not block a new active row', 'ok',
     $q$INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, grupo_id, atributos)
        SELECT org, 'PRB-VE2', 'again', 'Fundas', 1, 1, grupo, '[{"opcion":"Color","valor":"VERDE"}]' FROM _s$q$);
+  -- Both kit statements carry tipo_kit: production already rejects a kit without it
+  -- (inventario_kit_tipo_required_check, 177) with the same 23514, which would hide a missing
+  -- inventario_grupo_no_kit.
   PERFORM pg_temp.probe(50, 'a grouped row cannot become a kit', '23514',
-    'UPDATE inventario SET es_kit = true WHERE id = (SELECT azul FROM _s)');
+    $q$UPDATE inventario SET es_kit = true, tipo_kit = 'ENSAMBLADO' WHERE id = (SELECT azul FROM _s)$q$);
   PERFORM pg_temp.probe(51, 'a kit cannot be inserted into a group', '23514',
-    $q$INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, es_kit, grupo_id, atributos)
-       SELECT org, 'PRB-KIT', 'kit', 'Fundas', 1, 1, true, grupo, '[{"opcion":"Color","valor":"Negro"}]' FROM _s$q$);
+    $q$INSERT INTO inventario (organization_id, codigo, nombre, categoria, precio_compra, precio_venta, es_kit, tipo_kit, grupo_id, atributos)
+       SELECT org, 'PRB-KIT', 'kit', 'Fundas', 1, 1, true, 'ENSAMBLADO', grupo, '[{"opcion":"Color","valor":"Negro"}]' FROM _s$q$);
 END $$;
 
 -- PROBE 4b: shapes of atributos the database must refuse, so that no combination lacks a real
