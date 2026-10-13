@@ -77,6 +77,12 @@ describe("M1a: inventario_grupos and the new inventario columns", () => {
     )
   })
 
+  it("is re-runnable only on a schema created by this file: no claim of upgrading an older draft", () => {
+    const prose = RAW.replace(/\n--\s?/g, " ") // comment lines joined, so a phrase may wrap
+    expect(prose).toMatch(/never reached any database/i)
+    expect(prose).not.toMatch(/upgrade/i)
+  })
+
   it("grupo_id and atributos are NULL together; a grouped row carries a valid array (key holes)", () => {
     expect(SQL).toMatch(
       /ADD CONSTRAINT inventario_grupo_atributos CHECK \( CASE WHEN grupo_id IS NULL THEN atributos IS NULL ELSE inventario_atributos_validos\(atributos\) END\)/
@@ -113,6 +119,13 @@ describe("M1a: key, validity and name functions", () => {
   }
 
   const keyBody = block(/CREATE OR REPLACE FUNCTION inventario_combinacion_clave.*?AS \$\$(.*?)\$\$/)
+
+  it("the key comment warns that its body is frozen once applied (the unique index depends on it)", () => {
+    const comment = /(--[^\n]*\n)+(?=CREATE OR REPLACE FUNCTION inventario_combinacion_clave)/.exec(RAW)?.[0] ?? ""
+    expect(comment).toMatch(/must never change after (it is )?applied/i)
+    expect(comment).toMatch(/new migration/i)
+    expect(comment).toMatch(/REINDEX/)
+  })
 
   it("the key uses the explicit translate map; ñ is not folded; no NFD or unaccent", () => {
     expect(keyBody).toContain("translate(lower(btrim(")

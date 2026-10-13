@@ -62,6 +62,9 @@ CREATE TRIGGER inventario_grupos_updated_at
 -- btrim(x) alone removes only spaces. The explicit set is exactly what JavaScript's
 -- String.prototype.trim() removes (tab, VT, FF, CR, LF, NBSP, U+1680, U+2000-200A,
 -- U+2028/9, U+202F, U+205F, U+3000, BOM), so the SQL and JS keys agree on pasted text.
+-- THE BODY OF THIS FUNCTION MUST NEVER CHANGE AFTER IT IS APPLIED: the unique index on
+-- inventario_grupo_combinacion_activa_uniq stores its output, so any change to the key needs
+-- a new migration plus a REINDEX of that index (and the JS twin updated in the same change).
 CREATE OR REPLACE FUNCTION inventario_combinacion_clave(p_atributos JSONB)
 RETURNS TEXT
 LANGUAGE sql IMMUTABLE PARALLEL SAFE SET search_path = pg_catalog, pg_temp
@@ -170,9 +173,11 @@ CREATE TRIGGER inventario_grupos_before_delete
 -- atributos is an ordered array, [{"opcion":"Color","valor":"Rojo"}, ...], in option order.
 -- The FK is composite so a child can only join a group of its own org; SET NULL (grupo_id)
 -- leaves organization_id alone (the column list needs PostgreSQL 15+; production is 17).
--- The constraints are dropped and re-added in the same
--- statement: re-runnable, no gap. The existing rows have both columns NULL, so the checks
--- validate on the spot. A kit can never be a child.
+-- The constraints are dropped and re-added in the same statement, so re-running the file on
+-- a schema this file created leaves no gap. It does NOT repair an earlier draft of M1a
+-- (single-column FK, no UNIQUE (organization_id, id) on the groups table): that draft never
+-- reached any database. The existing rows have both columns NULL, so the checks validate on
+-- the spot. A kit can never be a child.
 ALTER TABLE inventario
   ADD COLUMN IF NOT EXISTS grupo_id  TEXT,
   ADD COLUMN IF NOT EXISTS atributos JSONB,
