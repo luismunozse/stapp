@@ -1,4 +1,4 @@
--- Rollback de la 357. No pierde datos. Vuelve recalcular_estado_cobro al cuerpo
+-- Rollback de la 360. No pierde datos. Vuelve recalcular_estado_cobro al cuerpo
 -- de la 345 (total_cobrado = GREATEST de cobros_orden y pagos de la factura) y
 -- get_deuda_cliente_sucursal al de la 318, y borra las dos funciones nuevas.
 -- No vuelve a la 068: eso reabriria el doble cobro que corrigio la 345.

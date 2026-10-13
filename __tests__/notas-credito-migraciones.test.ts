@@ -9,7 +9,7 @@ import { join } from "path"
 // rollback, y que ninguna abre su propia transacción. Lo último importa:
 // db-run.mjs ejecuta TAL CUAL un archivo con BEGIN en sus primeras 40 líneas,
 // así que `npm run db:dry` sobre una migración con BEGIN/COMMIT la aplicaría.
-const MIGRACIONES = ["350_notas_credito_bases", "356_nc_numeracion_y_vista", "357_pendiente_orden"]
+const MIGRACIONES = ["350_notas_credito_bases", "356_nc_numeracion_y_vista", "360_pendiente_orden"]
 
 const leer = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8")
 const existe = (rel: string) => existsSync(join(process.cwd(), rel))
@@ -132,9 +132,9 @@ describe("356: la ruta llama con la misma firma de siempre", () => {
   })
 })
 
-describe("357: pendiente de la orden con fuente unica", () => {
-  const sql = () => leer("supabase/migrations/357_pendiente_orden.sql")
-  const rollback = () => leer("supabase/migrations/rollback/357_rollback.sql")
+describe("360: pendiente de la orden con fuente unica", () => {
+  const sql = () => leer("supabase/migrations/360_pendiente_orden.sql")
+  const rollback = () => leer("supabase/migrations/rollback/360_rollback.sql")
 
   it("get_deuda_cliente_sucursal usa pendiente_orden y conserva el bloqueo a anon/authenticated", () => {
     expect(sql()).toContain("GREATEST(pendiente_orden(o.id), 0)")

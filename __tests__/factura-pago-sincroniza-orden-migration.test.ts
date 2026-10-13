@@ -82,7 +82,7 @@ describe("migracion 345: pago de factura sincroniza la orden", () => {
   it("el estado se sigue comparando contra costo_final - descuento_cobro", () => {
     const cuerpo = ultimaDefinicion("recalcular_estado_cobro")
     expect(cuerpo).toContain("v_costo_final := v_costo_final - v_descuento;")
-    // Desde la 357 el estado compara lo cubierto (cobrado + NC aplicadas a deuda),
+    // Desde la 360 el estado compara lo cubierto (cobrado + NC aplicadas a deuda),
     // pero total_cobrado sigue siendo solo plata recibida (GREATEST de la 345).
     expect(cuerpo).toContain("v_cubierto := v_total_cobrado + nc_aplicado_deuda_orden(p_orden_id);")
     expect(cuerpo).toContain("v_cubierto >= v_costo_final")

@@ -1,4 +1,4 @@
--- Migration 357: pendiente de la orden con una sola formula en SQL.
+-- Migration 360: pendiente de la orden con una sola formula en SQL.
 --
 -- Spec: docs/superpowers/specs/2026-10-07-notas-de-credito-design.md
 --       ("Pendiente de la orden, fuente unica")
@@ -61,7 +61,7 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION nc_aplicado_deuda_orden(TEXT) IS
-  'Lo que bajaron el pendiente de la orden sus notas de credito activas. Migracion 357.';
+  'Lo que bajaron el pendiente de la orden sus notas de credito activas. Migracion 360.';
 
 -- ── 2. Pendiente de la orden (crudo, sin recortar en 0) ────────────────────
 CREATE OR REPLACE FUNCTION pendiente_orden(p_orden_id TEXT)
@@ -78,8 +78,8 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION pendiente_orden(TEXT) IS
-  'Pendiente de cobro de la orden, sin recortar en 0. Espejo TS: pendienteOrden() '
-  'en lib/ordenes/pendiente.ts. Migracion 357.';
+  'Pendiente de cobro de la orden, sin recortar en 0. El espejo en TS llega con el '
+  'PR1e de notas de credito. Migracion 360.';
 
 -- ── 3. recalcular_estado_cobro (345) con las NC como cubierto ──────────────
 -- Mismo cuerpo que la 345. No llama a pendiente_orden() porque es la funcion
@@ -192,4 +192,4 @@ COMMENT ON FUNCTION get_deuda_cliente_sucursal(TEXT, TEXT, TEXT) IS
   'An order whose debt already moved to cuenta corriente (CARGO with '
   'referencia_tipo=ORDEN) is excluded from deuda_ordenes - reverted or not - '
   'so the same money is never counted twice. Supersedes migration 273. '
-  'Migracion 357: deuda_ordenes usa pendiente_orden() (descuenta las NC activas).';
+  'Migracion 360: deuda_ordenes usa pendiente_orden() (descuenta las NC activas).';
