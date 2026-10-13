@@ -8,6 +8,7 @@ import { formatOrden } from "@/lib/db-utils"
 import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos, ESTADO_LABELS, ESTADOS_COSTO_FINAL_BLOQUEADO } from "@/lib/orden-state-machine"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
+import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
 
 // Estados que solo se alcanzan por POST /api/ordenes/[id]/entregar. Ese endpoint,
 // además de cambiar el estado, registra la fecha de entrega, las firmas, el cargo
@@ -230,6 +231,7 @@ export async function PUT(
       .select(`
         *,
         clientes (*),
+        ${NOTAS_CREDITO_APLICADO_EMBED},
         organizations (id, nombre, nombre_mostrar, slug, moneda, zona_horaria)
       `)
       .eq("id", id)
@@ -341,7 +343,14 @@ export async function PUT(
       const descuentoCobroActual = Number(orden.descuento_cobro ?? 0)
       const nuevoCostoFinal = data.costoFinal === null ? 0 : data.costoFinal
 
-      if (nuevoCostoFinal - descuentoCobroActual < totalCobradoActual) {
+      // Lo que bajaron la deuda las notas de crédito activas también "cubre"
+      // el costo: bajarlo por debajo dejaría el pendiente en negativo.
+      if (pendienteOrden({
+        costoFinal: nuevoCostoFinal,
+        descuentoCobro: descuentoCobroActual,
+        totalCobrado: totalCobradoActual,
+        aplicadoNotasCredito: aplicadoNotasCreditoDeOrden(orden),
+      }) < 0) {
         return NextResponse.json(
           {
             error: `No se puede bajar el costo final por debajo de lo ya cobrado ($${totalCobradoActual.toLocaleString()}). Para devolver dinero al cliente hay que registrar una devolución, no editar el costo final.`,
@@ -478,7 +487,10 @@ export async function PUT(
 
     // Auditoría
     const audit = createAuditLogger(organizationId!, userId!, request)
-    const changes = diffObjects(orden, updatedOrden)
+    // El embed de NC solo sirve para el guard de costo_final: no es parte de la
+    // orden y no se lee en updatedOrden, así que no cuenta como cambio.
+    const { notas_credito: _notasCredito, ...ordenParaAuditoria } = orden
+    const changes = diffObjects(ordenParaAuditoria, updatedOrden)
     await audit.update("ordenes_servicio", id, changes.before, changes.after)
 
     // Notificaciones al cliente
