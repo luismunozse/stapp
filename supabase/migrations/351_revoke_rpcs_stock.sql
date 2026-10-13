@@ -17,6 +17,10 @@
 -- (pg_get_function_identity_arguments). Solo cambia permisos: no toca cuerpos ni
 -- datos. No empieza con BEGIN (db-run.mjs).
 --
+-- Son 27 funciones: los 23 RPCs de stock/ventas/compras y las 4 de variantes
+-- (ajustar_stock_variante_atomic, crear_variantes_bulk,
+-- eliminar_variantes_y_consolidar, sync_inventario_total_variantes).
+--
 -- Orden: aplicar despues de la 350 (la 350 ya trata igual a su funcion nueva).
 -- Rollback: rollback/351_rollback.sql devuelve EXECUTE a PUBLIC, anon y
 -- authenticated, el estado previo.
@@ -136,3 +140,26 @@ REVOKE EXECUTE ON FUNCTION transferir_stock_atomic(p_inventario_id text, p_organ
 REVOKE EXECUTE ON FUNCTION transferir_stock_atomic(p_inventario_id text, p_organization_id text, p_user_id text, p_deposito_origen text, p_deposito_destino text, p_cantidad integer, p_motivo text) FROM anon;
 REVOKE EXECUTE ON FUNCTION transferir_stock_atomic(p_inventario_id text, p_organization_id text, p_user_id text, p_deposito_origen text, p_deposito_destino text, p_cantidad integer, p_motivo text) FROM authenticated;
 GRANT EXECUTE ON FUNCTION transferir_stock_atomic(p_inventario_id text, p_organization_id text, p_user_id text, p_deposito_origen text, p_deposito_destino text, p_cantidad integer, p_motivo text) TO service_role;
+
+-- Variantes (RPCs de la API de variantes y funcion del trigger de sync del total).
+-- Los callers (variantes/route, consolidar-variantes, variantes/[id]/stock) usan supabaseAdmin.
+
+REVOKE EXECUTE ON FUNCTION ajustar_stock_variante_atomic(p_variante_id text, p_org text, p_user text, p_mode text, p_value integer, p_motivo text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION ajustar_stock_variante_atomic(p_variante_id text, p_org text, p_user text, p_mode text, p_value integer, p_motivo text) FROM anon;
+REVOKE EXECUTE ON FUNCTION ajustar_stock_variante_atomic(p_variante_id text, p_org text, p_user text, p_mode text, p_value integer, p_motivo text) FROM authenticated;
+GRANT EXECUTE ON FUNCTION ajustar_stock_variante_atomic(p_variante_id text, p_org text, p_user text, p_mode text, p_value integer, p_motivo text) TO service_role;
+
+REVOKE EXECUTE ON FUNCTION crear_variantes_bulk(p_inv_id text, p_org text, p_user text, p_variantes jsonb) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION crear_variantes_bulk(p_inv_id text, p_org text, p_user text, p_variantes jsonb) FROM anon;
+REVOKE EXECUTE ON FUNCTION crear_variantes_bulk(p_inv_id text, p_org text, p_user text, p_variantes jsonb) FROM authenticated;
+GRANT EXECUTE ON FUNCTION crear_variantes_bulk(p_inv_id text, p_org text, p_user text, p_variantes jsonb) TO service_role;
+
+REVOKE EXECUTE ON FUNCTION eliminar_variantes_y_consolidar(p_inv_id text, p_org text, p_user text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION eliminar_variantes_y_consolidar(p_inv_id text, p_org text, p_user text) FROM anon;
+REVOKE EXECUTE ON FUNCTION eliminar_variantes_y_consolidar(p_inv_id text, p_org text, p_user text) FROM authenticated;
+GRANT EXECUTE ON FUNCTION eliminar_variantes_y_consolidar(p_inv_id text, p_org text, p_user text) TO service_role;
+
+REVOKE EXECUTE ON FUNCTION sync_inventario_total_variantes() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION sync_inventario_total_variantes() FROM anon;
+REVOKE EXECUTE ON FUNCTION sync_inventario_total_variantes() FROM authenticated;
+GRANT EXECUTE ON FUNCTION sync_inventario_total_variantes() TO service_role;

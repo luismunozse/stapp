@@ -51,3 +51,13 @@ GRANT EXECUTE ON FUNCTION salida_serie(p_organization_id text, p_user_id text, p
 GRANT EXECUTE ON FUNCTION seed_deposito_inicial() TO PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION transferir_stock_atomic(p_inventario_id text, p_organization_id text, p_user_id text, p_deposito_origen text, p_deposito_destino text, p_cantidad integer, p_motivo text) TO PUBLIC, anon, authenticated;
+
+-- Variantes
+
+GRANT EXECUTE ON FUNCTION ajustar_stock_variante_atomic(p_variante_id text, p_org text, p_user text, p_mode text, p_value integer, p_motivo text) TO PUBLIC, anon, authenticated;
+
+GRANT EXECUTE ON FUNCTION crear_variantes_bulk(p_inv_id text, p_org text, p_user text, p_variantes jsonb) TO PUBLIC, anon, authenticated;
+
+GRANT EXECUTE ON FUNCTION eliminar_variantes_y_consolidar(p_inv_id text, p_org text, p_user text) TO PUBLIC, anon, authenticated;
+
+GRANT EXECUTE ON FUNCTION sync_inventario_total_variantes() TO PUBLIC, anon, authenticated;
