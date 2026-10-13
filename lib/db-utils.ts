@@ -2,6 +2,8 @@
  * Utilidades para transformación de datos entre DB (snake_case) y Frontend (camelCase)
  */
 
+import { aplicadoNotasCreditoDeOrden } from "@/lib/ordenes/pendiente"
+
 // Convertir snake_case a camelCase
 export function snakeToCamel(str: string): string {
   return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
@@ -117,6 +119,9 @@ export function formatOrden(orden: any, options: FormatOrdenOptions = {}) {
     totalCobrado: parseFloat(orden.total_cobrado || "0"),
     estadoCobro: orden.estado_cobro || "PENDIENTE",
     descuentoCobro: parseFloat(orden.descuento_cobro || "0"),
+    // Solo si la query trajo el embed (detalle de la orden). En los listados
+    // queda undefined: ahí no se sabe, no es 0.
+    aplicadoNotasCredito: Array.isArray(orden.notas_credito) ? aplicadoNotasCreditoDeOrden(orden) : undefined,
     fechaIngreso: orden.fecha_ingreso,
     fechaPrometida: orden.fecha_prometida,
     fechaCompletado: orden.fecha_completado,

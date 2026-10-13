@@ -1177,6 +1177,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             sena={orden.sena || 0}
             totalCobrado={orden.totalCobrado || 0}
             descuentoCobro={orden.descuentoCobro || 0}
+            aplicadoNotasCredito={orden.aplicadoNotasCredito ?? 0}
             estadoCobro={orden.estadoCobro}
             estado={orden.estado}
             origenPresupuesto={(orden as any).origenPresupuesto || null}
@@ -1235,6 +1236,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           sena={orden.sena || 0}
           totalCobrado={orden.totalCobrado || 0}
           descuentoCobro={orden.descuentoCobro || 0}
+          aplicadoNotasCredito={orden.aplicadoNotasCredito ?? 0}
           estadoCobro={orden.estadoCobro}
           estado={orden.estado}
           origenPresupuesto={(orden as any).origenPresupuesto || null}

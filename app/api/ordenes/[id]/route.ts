@@ -79,6 +79,7 @@ export async function GET(
           inventario (*)
         ),
         servicios_orden (*),
+        ${NOTAS_CREDITO_APLICADO_EMBED},
         cotizaciones!cotizaciones_orden_id_fkey (
           id,
           estado,

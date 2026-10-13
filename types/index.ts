@@ -145,6 +145,8 @@ export interface OrdenServicio {
   totalCobrado?: number
   estadoCobro?: string
   descuentoCobro?: number
+  /** Lo que bajaron la deuda las notas de crédito activas. Solo en el detalle. */
+  aplicadoNotasCredito?: number
   fechaIngreso: Date
   fechaPrometida?: Date | null
   fechaCompletado?: Date | null
