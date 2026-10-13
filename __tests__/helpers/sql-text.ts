@@ -11,7 +11,8 @@ function read(dir: string, pick: (name: string, text: string) => boolean, what: 
   const base = join(ROOT, dir)
   for (const entry of readdirSync(base, { withFileTypes: true })) {
     if (!entry.isFile() || !entry.name.endsWith(".sql")) continue
-    const text = readFileSync(join(base, entry.name), "utf8")
+    // core.autocrlf checks files out with CRLF on Windows; regexes assume LF
+    const text = readFileSync(join(base, entry.name), "utf8").replace(/\r\n/g, "\n")
     if (pick(entry.name, text)) return text
   }
   throw new Error(`No file in supabase/migrations/${dir} matches ${what}`)
