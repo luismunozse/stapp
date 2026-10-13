@@ -3,9 +3,11 @@
 // lib/variantes.ts must agree on every row. The probes file carries the same rows
 // between `-- VECTORS:BEGIN` / `-- VECTORS:END` and executes them on the real DB.
 //
-// The key folds case, surrounding spaces and the accents of the translate map
-// 'áàäâéèëêíìïîóòöôúùüû'. It does NOT use normalize("NFD"): that would turn ñ into n,
-// and SQL keeps ñ distinct.
+// The key folds case, surrounding whitespace and the accents of the translate map
+// 'áàäâéèëêíìïîóòöôúùüû'. Whitespace is exactly what String.prototype.trim() removes
+// (tab, newline, NBSP, ...): SQL btrim(x) alone only removes spaces, so the SQL key
+// passes that set explicitly. It does NOT use normalize("NFD"): that would turn ñ into
+// n, and SQL keeps ñ distinct.
 
 /** `a` and `b` are the option values of one combination, in option order. */
 export interface KeyVector {
@@ -24,9 +26,13 @@ export const KEY_VECTORS: KeyVector[] = [
   { a: ["Rojo"], b: ["rojo"], same: true },
   { a: ["Rojo"], b: ["Rojó"], same: true },
   { a: ["Rojo"], b: ["ROJÓ"], same: true },
+  { a: ["ROJÓ"], b: ["rojo"], same: true },
   { a: [" Rojo "], b: ["rojo"], same: true },
+  { a: ["\tRojo\n"], b: ["rojo"], same: true },
+  { a: ["\u00a0Rojo\u00a0"], b: ["rojo"], same: true },
   { a: ["Rojo", "M"], b: ["rojó", "m"], same: true },
   { a: ["Ñandú"], b: ["ñandu"], same: true },
+  { a: ["ÑANDÚ"], b: ["ñandu"], same: true },
   { a: ["Año"], b: ["Ano"], same: false },
   { a: ["Rojo"], b: ["Rosado"], same: false },
   { a: ["Rojo", "M"], b: ["M", "Rojo"], same: false },

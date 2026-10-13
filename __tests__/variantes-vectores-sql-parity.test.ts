@@ -28,6 +28,21 @@ describe("variant vectors: probes mirror the shared fixtures", () => {
   })
 })
 
+// The probes run by hand against a real database; these pins stop one from being deleted unnoticed.
+describe("probes: integrity and runtime checks are present", () => {
+  const sql = collapse(PROBES)
+  it.each([
+    ["every invalid atributos shape is refused with 23514", /invalid atributos refused: .* '23514'/],
+    ["a child cannot join a group of another org (23503)", /join a group of another org.*'23503'/],
+    ["GUC on suppresses the fan-out", /GUC on: the fan-out is suppressed/],
+    ["the fan-out stays inside its group", /fan-out does not leave its group/],
+    ["a bulk UPDATE with divergent values leaves identical siblings", /bulk UPDATE with divergent values/],
+    ["purging an org succeeds with a seeded group and child", /DELETE FROM organizations succeeds with a group and a child/],
+  ])("%s", (_name, re) => {
+    expect(sql).toMatch(re)
+  })
+})
+
 describe("probes: rollback rehearsal", () => {
   it("inlines the rollback statements verbatim", () => {
     const inline = PROBES.split("-- ROLLBACK:BEGIN")[1].split("-- ROLLBACK:END")[0]
