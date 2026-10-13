@@ -467,6 +467,71 @@ describe('formatInventario', () => {
   })
 })
 
+describe('formatInventario: variant groups', () => {
+  // The two JSON literals were captured from the implementation BEFORE the variant
+  // fields existed: a row that has no `grupo_id` key (the select of an org without
+  // the M1 columns) must keep serializing byte for byte, key order included.
+  const filaSuelta = {
+    id: 'inv-1', codigo: 'FX-1', nombre: 'Funda X', descripcion: 'Funda de silicona', categoria: 'Fundas',
+    tipo_dispositivo: 'CELULAR', stock: 10, stock_reservado: 2, precio_compra: 300, precio_venta: 900,
+    proveedor: 'Proveedor X', proveedor_id: 'prov-1', imagen_url: 'https://x/img.jpg', imagen_path: 'org-1/inv-1/a.jpg',
+    stock_minimo: 3, stock_maximo: 50, punto_reorden: 5, barcode: '7790001', ubicacion: 'A-1',
+    trackea_lotes: true, trackea_series: false, dias_alerta_vencimiento: 30, dias_garantia_default: 90,
+    tiene_variantes: false, es_kit: false, tipo_kit: null, deleted_at: null, deleted_by: null,
+    organization_id: 'org-1', created_at: '2024-01-01', updated_at: '2024-01-02',
+  }
+  const salidaSuelta =
+    '{"id":"inv-1","codigo":"FX-1","nombre":"Funda X","descripcion":"Funda de silicona","categoria":"Fundas","tipoDispositivo":"CELULAR","stock":10,"stockReservado":2,"precioCompra":300,"precioVenta":900,"proveedor":"Proveedor X","proveedorId":"prov-1","imagenUrl":"https://x/img.jpg","imagenPath":"org-1/inv-1/a.jpg","stockMinimo":3,"stockMaximo":50,"puntoReorden":5,"barcode":"7790001","ubicacion":"A-1","trackeaLotes":true,"trackeaSeries":false,"diasAlertaVencimiento":30,"diasGarantiaDefault":90,"tieneVariantes":false,"esKit":false,"tipoKit":null,"deletedAt":null,"deletedBy":null,"organizationId":"org-1","createdAt":"2024-01-01","updatedAt":"2024-01-02"}'
+  const filaMinima = { id: '1', codigo: 'P', nombre: 'N', organization_id: 'o' }
+  const salidaMinima =
+    '{"id":"1","codigo":"P","nombre":"N","stockReservado":0,"precioCompra":null,"proveedor":null,"proveedorId":null,"imagenUrl":null,"imagenPath":null,"stockMinimo":null,"stockMaximo":null,"puntoReorden":null,"barcode":null,"ubicacion":null,"trackeaLotes":false,"trackeaSeries":false,"diasAlertaVencimiento":null,"diasGarantiaDefault":null,"tieneVariantes":false,"esKit":false,"tipoKit":null,"deletedAt":null,"deletedBy":null,"organizationId":"o"}'
+  const atributos = [
+    { opcion: 'Color', valor: 'Azul' },
+    { opcion: 'Talle', valor: 'M' },
+  ]
+
+  it('a row without grupo_id serializes byte for byte as it always did', () => {
+    expect(JSON.stringify(formatInventario(filaSuelta, true))).toBe(salidaSuelta)
+    expect(JSON.stringify(formatInventario(filaMinima))).toBe(salidaMinima)
+  })
+
+  it('emits grupoId, atributos and etiqueta when the row carries grupo_id', () => {
+    const r = formatInventario({ ...filaSuelta, grupo_id: 'g1', atributos })
+    expect(r).toMatchObject({ grupoId: 'g1', atributos, etiqueta: 'Azul / M' })
+    // The base keys are untouched, in the same order: the new ones come last.
+    expect(Object.keys(r!).slice(0, -3)).toEqual(Object.keys(JSON.parse(salidaSuelta)))
+  })
+
+  it('a standalone row from an M1 database (grupo_id null) emits the three keys as null', () => {
+    const r = formatInventario({ ...filaSuelta, grupo_id: null, atributos: null })
+    expect(r).toMatchObject({ grupoId: null, atributos: null, etiqueta: null })
+    expect(r).toHaveProperty('grupoId')
+    expect(r).toHaveProperty('atributos')
+    expect(r).toHaveProperty('etiqueta')
+    // A key that is present but undefined (a mapped row) still reads as null, never undefined.
+    expect(formatInventario({ ...filaMinima, grupo_id: undefined })).toHaveProperty('grupoId', null)
+  })
+
+  it('grupo_id is the signal: atributos alone adds nothing', () => {
+    const r = formatInventario({ ...filaSuelta, atributos })
+    expect(r).not.toHaveProperty('grupoId')
+    expect(r).not.toHaveProperty('atributos')
+    expect(r).not.toHaveProperty('etiqueta')
+  })
+
+  it('with grupo_id but no atributos key, atributos and etiqueta come out null', () => {
+    expect(formatInventario({ ...filaMinima, grupo_id: 'g1' })).toMatchObject({
+      grupoId: 'g1', atributos: null, etiqueta: null,
+    })
+  })
+
+  it('the cost gate does not change with the group', () => {
+    const r = formatInventario({ ...filaSuelta, grupo_id: 'g1', atributos })
+    expect(r?.precioCompra).toBeNull()
+    expect(formatInventario({ ...filaSuelta, grupo_id: 'g1', atributos }, true)?.precioCompra).toBe(300)
+  })
+})
+
 describe('formatUser', () => {
   it('formatea usuario correctamente', () => {
     const input = {
