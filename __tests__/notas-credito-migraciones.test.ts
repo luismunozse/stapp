@@ -9,7 +9,7 @@ import { join } from "path"
 // rollback, y que ninguna abre su propia transacción. Lo último importa:
 // db-run.mjs ejecuta TAL CUAL un archivo con BEGIN en sus primeras 40 líneas,
 // así que `npm run db:dry` sobre una migración con BEGIN/COMMIT la aplicaría.
-const MIGRACIONES = ["350_notas_credito_bases", "356_nc_numeracion_y_vista"]
+const MIGRACIONES = ["350_notas_credito_bases", "356_nc_numeracion_y_vista", "357_pendiente_orden"]
 
 const leer = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8")
 const existe = (rel: string) => existsSync(join(process.cwd(), rel))
@@ -129,5 +129,52 @@ describe("356: la ruta llama con la misma firma de siempre", () => {
     const rb = leer("supabase/migrations/rollback/356_rollback.sql")
     expect(rb).toContain("DROP VIEW IF EXISTS v_notas_credito;")
     expect(rb).toMatch(/RENAME TO registrar_devolucion_atomica;/)
+  })
+})
+
+describe("357: pendiente de la orden con fuente unica", () => {
+  const sql = () => leer("supabase/migrations/357_pendiente_orden.sql")
+  const rollback = () => leer("supabase/migrations/rollback/357_rollback.sql")
+
+  it("get_deuda_cliente_sucursal usa pendiente_orden y conserva el bloqueo a anon/authenticated", () => {
+    expect(sql()).toContain("GREATEST(pendiente_orden(o.id), 0)")
+    expect(sql()).toContain("REVOKE EXECUTE ON FUNCTION get_deuda_cliente_sucursal(TEXT, TEXT, TEXT) FROM PUBLIC;")
+    expect(sql()).toContain("REVOKE EXECUTE ON FUNCTION get_deuda_cliente_sucursal(TEXT, TEXT, TEXT) FROM anon;")
+    expect(sql()).toContain("REVOKE EXECUTE ON FUNCTION get_deuda_cliente_sucursal(TEXT, TEXT, TEXT) FROM authenticated;")
+    expect(sql()).toContain("GRANT EXECUTE ON FUNCTION get_deuda_cliente_sucursal(TEXT, TEXT, TEXT) TO service_role;")
+  })
+
+  it("get_deuda_cliente_sucursal conserva el no-doble-conteo de la 318 y el filtro de estado de la 273", () => {
+    expect(sql()).toMatch(/cc2\.tipo\s+=\s+'CARGO'/)
+    expect(sql()).toMatch(/cc2\.referencia_tipo\s+=\s+'ORDEN'/)
+    expect(sql()).toContain("AND o.estado IN ('REPARADO', 'ENTREGADO')")
+    expect(sql()).toContain("AND o.estado_cobro IN ('PENDIENTE', 'PARCIAL')")
+    expect(sql()).toContain("SECURITY DEFINER")
+    expect(sql()).toContain("SET search_path = public")
+  })
+
+  it("recalcular_estado_cobro cuenta lo que bajaron las NC sin tocar total_cobrado", () => {
+    expect(sql()).toContain("v_cubierto := v_total_cobrado + nc_aplicado_deuda_orden(p_orden_id);")
+    expect(sql()).toContain("SET total_cobrado = v_total_cobrado,")
+  })
+
+  it("recalcular_estado_cobro conserva la regla GREATEST de la 345 (total_cobrado_orden) y el lock", () => {
+    expect(sql()).toContain("v_total_cobrado := total_cobrado_orden(p_orden_id);")
+    expect(sql()).toContain("PERFORM 1 FROM ordenes_servicio WHERE id = p_orden_id FOR UPDATE;")
+    // La suma solo de cobros_orden es el cuerpo de la 068 que la 345 reemplazo.
+    expect(sql()).not.toMatch(/SELECT COALESCE\(SUM\(monto\), 0\) INTO v_total_cobrado/)
+  })
+
+  it("no agrega foreign keys", () => {
+    expect(sql()).not.toMatch(/REFERENCES/i)
+  })
+
+  it("el rollback restaura el cuerpo de la 345 (GREATEST) y el de la 318, y borra las funciones nuevas", () => {
+    expect(rollback()).toContain("v_total_cobrado := total_cobrado_orden(p_orden_id);")
+    expect(rollback()).toContain("PERFORM 1 FROM ordenes_servicio WHERE id = p_orden_id FOR UPDATE;")
+    expect(rollback()).toContain("COALESCE(o.costo_final, 0) - COALESCE(o.descuento_cobro, 0) - COALESCE(o.total_cobrado, 0)")
+    expect(rollback()).toContain("GRANT EXECUTE ON FUNCTION get_deuda_cliente_sucursal(TEXT, TEXT, TEXT) TO service_role;")
+    expect(rollback()).toContain("DROP FUNCTION IF EXISTS pendiente_orden(TEXT);")
+    expect(rollback()).toContain("DROP FUNCTION IF EXISTS nc_aplicado_deuda_orden(TEXT);")
   })
 })
