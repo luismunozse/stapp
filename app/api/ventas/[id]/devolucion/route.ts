@@ -2,7 +2,6 @@ import { NextResponse } from "next/server"
 import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatDevolucion } from "@/lib/db-utils"
-import { getNextReturnNumber } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { aggregateReturnItems } from "@/lib/devolucion-refund"
@@ -31,6 +30,8 @@ const devolucionSchema = z.object({
 
 type ResultadoDevolucion = {
   id: string
+  /** Desde la mig 354: el NC- que la RPC asignó adentro de su transacción. */
+  numero: string
   tipo: string
   montoDevolucion: number
   /** Desde la mig 330: parte que descontó el saldo pendiente de la venta. */
@@ -157,15 +158,14 @@ export async function POST(
     // devolver (y reembolsar) más de lo vendido.
     data.items = aggregateReturnItems(data.items)
 
-    // Número de devolución antes de llamar a la RPC
-    const numeroDevolucion = await getNextReturnNumber(organizationId!)
-
     // RPC atómica (migración 247; saldo pendiente e idempotencia: 330)
     const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc("registrar_devolucion_atomica", {
       p_org_id: organizationId!,
       p_venta_id: id,
       p_user_id: userId!,
-      p_numero_devolucion: numeroDevolucion,
+      // El NC- lo asigna la RPC adentro de su transacción (mig 354): si la
+      // devolución falla, el número no se quema.
+      p_numero_devolucion: null,
       p_motivo: data.motivo,
       p_observaciones: data.observaciones ?? null,
       p_metodo_reembolso: data.metodoReembolso ?? null,
@@ -229,7 +229,7 @@ export async function POST(
     // Audit log
     const audit = createAuditLogger(organizationId!, userId!, request)
     await audit.create("devoluciones_venta", devolucionId, {
-      numero_devolucion: numeroDevolucion,
+      numero_devolucion: resultado.numero,
       venta_id: id,
       tipo: resultado.tipo,
       monto_devolucion: resultado.montoDevolucion,
@@ -240,7 +240,7 @@ export async function POST(
     emitWebhookEvent(organizationId!, "venta.devolucion", {
       id: devolucionId,
       ventaId: id,
-      numeroDevolucion,
+      numeroDevolucion: resultado.numero,
       tipo: resultado.tipo,
       montoDevolucion: resultado.montoDevolucion,
       montoAplicadoDeuda: resultado.montoAplicadoDeuda ?? 0,
@@ -255,7 +255,7 @@ export async function POST(
       sucursalId: (ventaCheck as any).sucursal_id ?? null,
       monto: resultado.montoReembolso ?? resultado.montoDevolucion,
       metodoPago: data.metodoReembolso,
-      concepto: `Devolución ${numeroDevolucion}`,
+      concepto: `Devolución ${resultado.numero}`,
       observaciones: "Reembolso en efectivo de devolución de venta",
       origen: "DEVOLUCION",
     })
