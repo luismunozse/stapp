@@ -108,6 +108,38 @@ export async function depositoPorDefecto(params: {
   return getDepositoDeSucursal(params.organizationId, lectura.sucursalId)
 }
 
+const LOTE_MOVER_STOCK = 200
+
+/**
+ * Re-apunta al deposito elegido el movimiento de alta (ENTRADA, referencia
+ * STOCK_INICIAL) que registra el trigger de la migracion 350 en el principal.
+ * Asi el kardex queda en el mismo deposito que el detalle recien movido.
+ *
+ * Antes de aplicar la 350 no existe ese movimiento: el UPDATE matchea 0 filas y
+ * es un no-op. Best-effort: el stock ya quedo bien, si falla solo queda el kardex
+ * con el deposito viejo, por eso no lanza (no corresponde avisar "quedo en el
+ * principal"). Sella `usuario_id` (el trigger lo deja NULL) cuando se conoce.
+ */
+export async function reapuntarMovimientoStockInicial(params: {
+  inventarioIds: string[]
+  depositoId: string
+  organizationId: string
+  userId?: string | null
+}): Promise<void> {
+  const { inventarioIds, depositoId, organizationId, userId } = params
+  if (inventarioIds.length === 0) return
+
+  for (let i = 0; i < inventarioIds.length; i += LOTE_MOVER_STOCK) {
+    const { error } = await supabaseAdmin
+      .from("movimientos_inventario")
+      .update({ deposito_id: depositoId, ...(userId ? { usuario_id: userId } : {}) })
+      .in("inventario_id", inventarioIds.slice(i, i + LOTE_MOVER_STOCK))
+      .eq("organization_id", organizationId)
+      .eq("referencia_tipo", "STOCK_INICIAL")
+    if (error) console.error("No se pudo re-apuntar el movimiento de alta:", error)
+  }
+}
+
 /**
  * Mueve el stock inicial de un item recien creado al deposito elegido.
  *
@@ -123,8 +155,16 @@ export async function moverStockInicialADeposito(params: {
   depositoId: string
   stock: number
   organizationId: string
+  userId?: string | null
 }): Promise<void> {
-  const { inventarioId, depositoId, stock, organizationId } = params
+  const { inventarioId, depositoId, stock, organizationId, userId } = params
+  const reapuntar = () =>
+    reapuntarMovimientoStockInicial({
+      inventarioIds: [inventarioId],
+      depositoId,
+      organizationId,
+      userId,
+    })
 
   const { data: principalId, error: principalError } = await supabaseAdmin.rpc(
     "get_deposito_principal",
@@ -143,7 +183,10 @@ export async function moverStockInicialADeposito(params: {
       .eq("organization_id", organizationId)
       .select("id")
     if (updateError) throw updateError
-    if (movidas && movidas.length > 0) return
+    if (movidas && movidas.length > 0) {
+      await reapuntar()
+      return
+    }
   }
 
   // Org sin principal (el trigger no sembro nada) o fila ausente: se crea el
@@ -158,9 +201,8 @@ export async function moverStockInicialADeposito(params: {
       organization_id: organizationId,
     })
   if (insertError) throw insertError
+  await reapuntar()
 }
-
-const LOTE_MOVER_STOCK = 200
 
 /**
  * Version por lote de `moverStockInicialADeposito` para altas masivas: mueve las
@@ -173,8 +215,9 @@ export async function moverStockInicialLote(params: {
   inventarioIds: string[]
   depositoId: string
   organizationId: string
+  userId?: string | null
 }): Promise<void> {
-  const { inventarioIds, depositoId, organizationId } = params
+  const { inventarioIds, depositoId, organizationId, userId } = params
   if (inventarioIds.length === 0) return
 
   const { data: principalId, error: principalError } = await supabaseAdmin.rpc(
@@ -193,4 +236,6 @@ export async function moverStockInicialLote(params: {
       .eq("organization_id", organizationId)
     if (error) throw error
   }
+
+  await reapuntarMovimientoStockInicial({ inventarioIds, depositoId, organizationId, userId })
 }

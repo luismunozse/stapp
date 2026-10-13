@@ -335,6 +335,7 @@ export async function POST(request: Request) {
             depositoId: destinoId,
             stock: data.stock,
             organizationId: organizationId!,
+            userId: userId ?? null,
           })
         }
       } catch (moveError) {

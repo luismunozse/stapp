@@ -319,6 +319,7 @@ export async function POST(request: Request) {
               inventarioIds: conStock,
               depositoId: depositoDestino,
               organizationId: organizationId!,
+              userId: userId ?? null,
             })
           }
         } catch (moveError) {
