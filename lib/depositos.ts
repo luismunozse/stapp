@@ -7,6 +7,9 @@ import { SUCURSAL_NINGUNA, sucursalParaLectura, getDepositoDeSucursal } from "@/
  */
 export const DEPOSITO_INVALIDO = "El depósito elegido no es válido"
 
+/** Un RPC de stock levantó P0011: la org no tiene depósito principal. */
+export const SIN_DEPOSITO_PRINCIPAL = "La organización no tiene depósito principal configurado"
+
 /**
  * "sucursal": el deposito debe ser de la sucursal del usuario (si no es ADMIN).
  * "organizacion": basta con que sea de la org (destino de una transferencia).
