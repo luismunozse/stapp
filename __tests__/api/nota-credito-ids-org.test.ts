@@ -8,7 +8,7 @@ type Rows = { data: any; error: any }
 
 /**
  * `inventario` e `items_venta` devuelven las filas que se les indique (lo que la
- * base "encontro" para el filtro de la org); el resto responde como una venta propia.
+ * base "encontro" para el filtro de la org); el resto responde como una orden propia.
  */
 function setup(opts: { inventario?: Rows; itemsVenta?: Rows } = {}) {
   const fromCalls: string[] = []
@@ -16,7 +16,7 @@ function setup(opts: { inventario?: Rows; itemsVenta?: Rows } = {}) {
   vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { id: "nc1", numero: "NC-0001" }, error: null } as any)
   vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
     fromCalls.push(table)
-    if (table === "ventas") return createChainMock({ id: "v1", total: "500", sucursal_id: "suc-1" }) as any
+    if (table === "ordenes_servicio") return createChainMock({ id: "o1", sucursal_id: "suc-1" }) as any
     if (table === "inventario") {
       const r = opts.inventario ?? { data: [], error: null }
       return (chains.inventario = createChainMock(r.data, r.error)) as any
@@ -30,7 +30,7 @@ function setup(opts: { inventario?: Rows; itemsVenta?: Rows } = {}) {
   return { fromCalls, chains }
 }
 
-const base = { ventaId: "v1", motivo: "DEVOLUCION", monto: 100, metodoDevolucion: "TRANSFERENCIA" }
+const base = { ordenId: "o1", motivo: "DEVOLUCION", monto: 100, metodoDevolucion: "TRANSFERENCIA" }
 const item = (extra: Record<string, unknown>) => ({
   descripcion: "Pantalla",
   cantidad: 1,
@@ -52,6 +52,7 @@ describe("nota de crédito — los ids de producto/ítem deben ser de la organiz
     const res = await parseResponse(await post({ ...base, items: [item({ inventarioId: "inv-ajeno" })] }))
 
     expect(res.status).toBe(400)
+    expect(res.body.error).toBe("Algún producto de la nota de crédito no es válido")
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
     expect(chains.inventario.eq).toHaveBeenCalledWith("organization_id", expect.any(String))
   })
@@ -67,14 +68,15 @@ describe("nota de crédito — los ids de producto/ítem deben ser de la organiz
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
-  it("itemVentaId que no es de la venta/org -> 400 y no llama a la RPC", async () => {
+  it("itemVentaId de otra org -> 400 y no llama a la RPC", async () => {
     const { chains } = setup({ itemsVenta: { data: [], error: null } })
 
     const res = await parseResponse(await post({ ...base, items: [item({ itemVentaId: "iv-ajeno" })] }))
 
     expect(res.status).toBe(400)
+    expect(res.body.error).toBe("Algún producto de la nota de crédito no es válido")
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
-    expect(chains.items_venta.eq).toHaveBeenCalledWith("venta_id", "v1")
+    expect(chains.items_venta.eq).toHaveBeenCalledWith("ventas.organization_id", expect.any(String))
   })
 
   it("ids propios -> llama a la RPC con el payload de siempre", async () => {

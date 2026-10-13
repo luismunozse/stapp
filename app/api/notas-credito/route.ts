@@ -15,15 +15,17 @@ const itemSchema = z.object({
 })
 
 const notaCreditoSchema = z.object({
-  ventaId: z.string().nullable().optional(),
-  ordenId: z.string().nullable().optional(),
+  ordenId: z
+    .string({
+      required_error: "La nota de crédito tiene que ser de una orden",
+      invalid_type_error: "La nota de crédito tiene que ser de una orden",
+    })
+    .min(1, "La nota de crédito tiene que ser de una orden"),
   motivo: z.enum(["DEVOLUCION", "AJUSTE_PRECIO", "GARANTIA", "ERROR_FACTURACION", "DESCUENTO_RETRO", "OTRO"]),
   monto: z.number().positive(),
   metodoDevolucion: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "MERCADOPAGO", "CUENTA_CORRIENTE", "NOTA_CREDITO_INTERNA", "OTRO"]).optional().nullable(),
   notas: z.string().optional().nullable(),
   items: z.array(itemSchema).optional(),
-}).refine((d) => !!d.ventaId !== !!d.ordenId, {
-  message: "Debe asociarse a venta o orden, no a ambas",
 })
 
 /** Mensaje unico: un sondeo no distingue "de otra org" de "inexistente". */
@@ -31,7 +33,7 @@ const ITEMS_INVALIDOS = "Algún producto de la nota de crédito no es válido"
 
 /**
  * Verifica que los `inventarioId` / `itemVentaId` enviados por el cliente sean de
- * la organizacion (y los `itemVentaId`, de la venta indicada). No filtra
+ * la organizacion. No filtra
  * `deleted_at`: reponer un producto archivado de la propia org es legitimo.
  * Un error de la query LANZA (500): nunca se permite por defecto.
  */
@@ -55,13 +57,11 @@ async function idsDeLaOrganizacion(
 
   if (itemVentaIds.length > 0) {
     // items_venta no tiene organization_id: se acota por la venta padre.
-    let query = supabaseAdmin
+    const { data: rows, error } = await supabaseAdmin
       .from("items_venta")
       .select("id, ventas!inner(organization_id)")
       .in("id", itemVentaIds)
       .eq("ventas.organization_id", organizationId)
-    if (data.ventaId) query = query.eq("venta_id", data.ventaId)
-    const { data: rows, error } = await query
     if (error) throw error
     if ((rows?.length ?? 0) !== itemVentaIds.length) return false
   }
@@ -134,24 +134,25 @@ export async function POST(request: Request) {
     if (error) return error
 
     const body = await request.json()
+    // Desde la migración 350 esta tabla es solo de órdenes: lo que se acredita
+    // sobre una venta es una devolución de la venta (otro motor, otra ruta).
+    if (body?.ventaId) {
+      return NextResponse.json(
+        { error: "Las notas de crédito de una venta se registran como devolución desde la venta" },
+        { status: 400 }
+      )
+    }
     const data = notaCreditoSchema.parse(body)
 
-    // Verificar venta/orden pertenece a org (y capturar su sucursal para el egreso)
-    let sucursalId: string | null = null
-    if (data.ventaId) {
-      const { data: v } = await supabaseAdmin
-        .from("ventas").select("id, total, sucursal_id").eq("id", data.ventaId).eq("organization_id", organizationId!).single()
-      if (!v) return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
-      sucursalId = (v as any).sucursal_id ?? null
-    }
-    if (data.ordenId) {
-      const practica = await rejectIfPractica(data.ordenId, organizationId!)
-      if (practica) return practica
-      const { data: o } = await supabaseAdmin
-        .from("ordenes_servicio").select("id, sucursal_id").eq("id", data.ordenId).eq("organization_id", organizationId!).single()
-      if (!o) return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-      sucursalId = (o as any).sucursal_id ?? null
-    }
+    // Las órdenes de práctica del onboarding no admiten notas de crédito
+    const practica = await rejectIfPractica(data.ordenId, organizationId!)
+    if (practica) return practica
+
+    // Verificar que la orden pertenece a la org (y capturar su sucursal para el egreso)
+    const { data: o } = await supabaseAdmin
+      .from("ordenes_servicio").select("id, sucursal_id").eq("id", data.ordenId).eq("organization_id", organizationId!).single()
+    if (!o) return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
+    const sucursalId: string | null = (o as any).sucursal_id ?? null
 
     // La RPC repone stock con `WHERE id = ...` sin filtrar organizacion: los ids
     // del body hay que acotarlos aca, o un ADMIN infla el stock de otra org.
@@ -161,8 +162,8 @@ export async function POST(request: Request) {
 
     const { data: result, error: rpcError } = await supabaseAdmin.rpc("crear_nota_credito", {
       p_org_id: organizationId!,
-      p_venta_id: data.ventaId || null,
-      p_orden_id: data.ordenId || null,
+      p_venta_id: null,
+      p_orden_id: data.ordenId,
       p_motivo: data.motivo,
       p_monto: data.monto,
       p_metodo_devolucion: data.metodoDevolucion || null,
