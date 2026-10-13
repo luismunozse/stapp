@@ -107,6 +107,14 @@ COMMENT ON FUNCTION public.registrar_devolucion_atomica(TEXT, TEXT, TEXT, TEXT, 
   'salvo que reciba uno (codigo anterior a la 354) y delega en registrar_devolucion_nucleo '
   '(cuerpo de la 330). Devuelve lo mismo que la 330 mas numero. Migracion 354.';
 
+-- Mismo acceso que el nucleo: la unica que la llama es la ruta de devolucion,
+-- con service_role. Sin esto anon/authenticated llegaban hasta el nucleo (que
+-- los rechaza) despues de tomar el lock de la venta.
+REVOKE EXECUTE ON FUNCTION public.registrar_devolucion_atomica(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.registrar_devolucion_atomica(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT)
+  TO service_role;
+
 -- ── 2. Vista unificada ─────────────────────────────────────────────────────
 CREATE VIEW v_notas_credito
 WITH (security_invoker = true) AS

@@ -109,6 +109,11 @@ describe("354: la ruta llama con la misma firma de siempre", () => {
     expect(sql()).toMatch(/GRANT EXECUTE ON FUNCTION public\.registrar_devolucion_nucleo\([^)]*\)\s+TO service_role;/)
   })
 
+  it("el envoltorio tampoco: solo service_role", () => {
+    expect(sql()).toMatch(/REVOKE EXECUTE ON FUNCTION public\.registrar_devolucion_atomica\([^)]*\)\s+FROM PUBLIC, anon, authenticated;/)
+    expect(sql()).toMatch(/GRANT EXECUTE ON FUNCTION public\.registrar_devolucion_atomica\([^)]*\)\s+TO service_role;/)
+  })
+
   it("la vista hereda RLS y no es legible con la anon key", () => {
     expect(sql()).toMatch(/CREATE VIEW v_notas_credito\s+WITH \(security_invoker = true\)/)
     expect(sql()).toMatch(/REVOKE ALL ON public\.v_notas_credito FROM PUBLIC, anon, authenticated;/)

@@ -68,6 +68,16 @@ INSERT INTO _r SELECT 3, 'nucleo: sin EXECUTE para anon ni authenticated, con se
   has_function_privilege('service_role',
     'public.registrar_devolucion_nucleo(text,text,text,text,text,text,text,text,jsonb,text)', 'EXECUTE')::TEXT;
 
+-- 27. El envoltorio tampoco (lo llama solo la ruta, con service_role)
+INSERT INTO _r SELECT 27, 'atomica: sin EXECUTE para anon ni authenticated, con service_role',
+  'false / false / true',
+  has_function_privilege('anon',
+    'public.registrar_devolucion_atomica(text,text,text,text,text,text,text,text,jsonb,text)', 'EXECUTE')::TEXT || ' / ' ||
+  has_function_privilege('authenticated',
+    'public.registrar_devolucion_atomica(text,text,text,text,text,text,text,text,jsonb,text)', 'EXECUTE')::TEXT || ' / ' ||
+  has_function_privilege('service_role',
+    'public.registrar_devolucion_atomica(text,text,text,text,text,text,text,text,jsonb,text)', 'EXECUTE')::TEXT;
+
 -- 4. El contador compartido se incrementa con un upsert (toma el lock de la fila)
 INSERT INTO _r SELECT 4, 'get_next_nota_credito_number: INSERT ... ON CONFLICT DO UPDATE', 'true',
   (pg_get_functiondef('public.get_next_nota_credito_number(text)'::regprocedure) ~* 'ON CONFLICT.*DO UPDATE')::TEXT;
