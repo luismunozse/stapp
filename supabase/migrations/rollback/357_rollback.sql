@@ -1,17 +1,17 @@
 -- ========================================
--- Rollback de la migracion 350
+-- Rollback de la migracion 357
 -- ========================================
--- Restaura los cuerpos originales de las funciones que la 350 reemplaza, copiados
+-- Restaura los cuerpos originales de las funciones que la 357 reemplaza, copiados
 -- tal cual de las migraciones de origen (170, 177, 123, 175, 176, 291) -- en
 -- produccion eran identicos a los del repo al 2026-10-13 -- y elimina el trigger
--- y la funcion que la 350 agrega. No toca datos.
+-- y la funcion que la 357 agrega. No toca datos.
 --
 -- Nota: los movimientos STOCK_INICIAL, CONTEO, VARIANTE, etc. ya escritos por la
--- 350 quedan en el kardex (son filas validas); solo deja de generarse el alta.
+-- 357 quedan en el kardex (son filas validas); solo deja de generarse el alta.
 -- Tampoco empieza con BEGIN: db-run.mjs lo rechaza en --apply.
 -- ========================================
 
--- Nuevo en la 350
+-- Nuevo en la 357
 DROP TRIGGER IF EXISTS conteos_items_refrescar_sistema ON conteos_items;
 DROP FUNCTION IF EXISTS conteo_item_refrescar_sistema();
 
@@ -1290,6 +1290,6 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION eliminar_variantes_y_consolidar(TEXT, TEXT, TEXT) IS
   'Consolida variantes en el stock del parent y las soft-deletea. ERRCODE: P0002 item no encontrado.';
 
--- finalizar_conteo y sync_inventario_total_variantes no tenian COMMENT antes de la 350.
+-- finalizar_conteo y sync_inventario_total_variantes no tenian COMMENT antes de la 357.
 COMMENT ON FUNCTION finalizar_conteo(TEXT, TEXT, BOOLEAN) IS NULL;
 COMMENT ON FUNCTION sync_inventario_total_variantes() IS NULL;

@@ -1,5 +1,5 @@
 -- ========================================
--- Migracion 351: cerrar a service_role los RPCs que mueven stock
+-- Migracion 358: cerrar a service_role los RPCs que mueven stock
 -- ========================================
 --
 -- Problema: estas funciones son SECURITY INVOKER y en produccion tienen EXECUTE
@@ -21,8 +21,8 @@
 -- (ajustar_stock_variante_atomic, crear_variantes_bulk,
 -- eliminar_variantes_y_consolidar, sync_inventario_total_variantes).
 --
--- Orden: aplicar despues de la 350 (la 350 ya trata igual a su funcion nueva).
--- Rollback: rollback/351_rollback.sql devuelve EXECUTE a PUBLIC, anon y
+-- Orden: aplicar despues de la 357 (la 357 ya trata igual a su funcion nueva).
+-- Rollback: rollback/358_rollback.sql devuelve EXECUTE a PUBLIC, anon y
 -- authenticated, el estado previo.
 -- ========================================
 

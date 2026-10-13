@@ -1,5 +1,5 @@
 -- ========================================
--- Migracion 350: invariante inventario.stock = SUM(inventario_depositos.stock)
+-- Migracion 357: invariante inventario.stock = SUM(inventario_depositos.stock)
 -- en todos los escritores de stock que todavia la rompian.
 -- ========================================
 --
@@ -49,15 +49,15 @@
 --      conservan el snapshot del inicio y se aplicarian contra ese valor.
 --   2. Mergear y desplegar el cambio TS de G (lib/depositos.ts): hasta que esta
 --      migracion se aplique no hace nada.
---   3. Dry-run:  node scripts/db-run.mjs supabase/migrations/350_inventario_invariante_deposito.sql
---      Luego --apply, y correr verify/350_probes.sql (BEGIN ... ROLLBACK).
---   4. Correr backfill/350_auditoria_drift_depositos.sql (solo lectura) y esperar
+--   3. Dry-run:  node scripts/db-run.mjs supabase/migrations/357_inventario_invariante_deposito.sql
+--      Luego --apply, y correr verify/357_probes.sql (BEGIN ... ROLLBACK).
+--   4. Correr backfill/357_auditoria_drift_depositos.sql (solo lectura) y esperar
 --      0 filas con drift. No hay script de reparacion: una auditoria de solo
 --      lectura en produccion (2026-10-13) no encontro items con drift ni conteos
 --      por deposito aplicados.
---   5. Despues, la 351 (REVOKE de los RPCs de stock a anon/authenticated).
+--   5. Despues, la 358 (REVOKE de los RPCs de stock a anon/authenticated).
 --
--- Reversible: rollback/350_rollback.sql restaura los cuerpos originales
+-- Reversible: rollback/357_rollback.sql restaura los cuerpos originales
 -- (170, 177, 123, 175, 176, 291) y elimina el trigger y la funcion nuevos.
 -- ========================================
 
@@ -112,7 +112,7 @@ CREATE TRIGGER conteos_items_refrescar_sistema
   FOR EACH ROW EXECUTE FUNCTION conteo_item_refrescar_sistema();
 
 COMMENT ON FUNCTION conteo_item_refrescar_sistema() IS
-  'v350: al cargar stock_contado, stock_sistema se refresca con el stock vivo (del depósito del conteo o total). La diferencia generada queda exacta al momento del conteo físico.';
+  'v357: al cargar stock_contado, stock_sistema se refresca con el stock vivo (del depósito del conteo o total). La diferencia generada queda exacta al momento del conteo físico.';
 
 -- ============================================================
 -- A.2 finalizar_conteo: aplica la diferencia en el depósito correcto
@@ -274,7 +274,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION finalizar_conteo(TEXT, TEXT, BOOLEAN) IS
-  'v350: aplica (contado - sistema) sobre el stock actual del depósito del conteo (o total si es global) vía incrementar/descontar_stock_deposito; actualiza inventario.stock por el mismo delta y registra AJUSTE con totales del item y depósito efectivo. Mantiene stock = SUM(detalle). ERRCODE: P0002 no encontrado, 22023 estado/pendientes.';
+  'v357: aplica (contado - sistema) sobre el stock actual del depósito del conteo (o total si es global) vía incrementar/descontar_stock_deposito; actualiza inventario.stock por el mismo delta y registra AJUSTE con totales del item y depósito efectivo. Mantiene stock = SUM(detalle). ERRCODE: P0002 no encontrado, 22023 estado/pendientes.';
 
 -- ========================================
 -- B1. Kits: el detalle por deposito se mueve siempre
@@ -470,7 +470,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION ensamblar_kit_atomic(TEXT,INTEGER,TEXT,TEXT,TEXT,TEXT) IS
-  'v350: ensambla N unidades de un kit ENSAMBLADO. Detalle por depósito SIEMPRE vía helpers 206 (explícito = estricto; NULL = drain principal-primero / kit al principal). Re-lee el kit tras el lock. ERRCODE: P0002 no encontrado/depósito inválido, P0003 stock insuficiente, 22023 args inválidos.';
+  'v357: ensambla N unidades de un kit ENSAMBLADO. Detalle por depósito SIEMPRE vía helpers 206 (explícito = estricto; NULL = drain principal-primero / kit al principal). Re-lee el kit tras el lock. ERRCODE: P0002 no encontrado/depósito inválido, P0003 stock insuficiente, 22023 args inválidos.';
 
 -- ============================================================
 -- B1.2 desensamblar_kit_atomic
@@ -649,7 +649,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION desensamblar_kit_atomic(TEXT,INTEGER,TEXT,TEXT,TEXT,TEXT) IS
-  'v350: desensambla N unidades de un kit. Valida disponible (stock - reservado) global y por depósito; detalle siempre vía helpers 206; componentes vuelven al depósito del que salió el kit. ERRCODE: P0002 no encontrado/depósito inválido, P0003 stock insuficiente, 22023 args inválidos.';
+  'v357: desensambla N unidades de un kit. Valida disponible (stock - reservado) global y por depósito; detalle siempre vía helpers 206; componentes vuelven al depósito del que salió el kit. ERRCODE: P0002 no encontrado/depósito inválido, P0003 stock insuficiente, 22023 args inválidos.';
 
 -- ========================================
 -- B2. consolidate_inventario_items: mueve el detalle por deposito
@@ -806,7 +806,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION consolidate_inventario_items(TEXT, TEXT, TEXT) IS
-  'v350: consolida un item duplicado: normaliza el detalle del origen, mueve cada fila de inventario_depositos al mismo depósito del destino (un par SALIDA/ENTRADA CONSOLIDACION por depósito), archiva el origen y borra su detalle. Mantiene stock = SUM(detalle) en ambos.';
+  'v357: consolida un item duplicado: normaliza el detalle del origen, mueve cada fila de inventario_depositos al mismo depósito del destino (un par SALIDA/ENTRADA CONSOLIDACION por depósito), archiva el origen y borra su detalle. Mantiene stock = SUM(detalle) en ambos.';
 
 -- ========================================
 -- F. Lotes y series: principal determinista y referencias validadas
@@ -958,7 +958,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION registrar_entrada_lote(TEXT, TEXT, TEXT, TEXT, INTEGER, NUMERIC, DATE, TEXT, TEXT, TEXT, TEXT) IS
-  'v350: entrada con lote (upsert por inventario_id+numero_lote). Depósito = explícito o get_deposito_principal(org); detalle vía incrementar_stock_deposito. Valida proveedor/OC/depósito contra la org (P0002). Requiere trackea_lotes.';
+  'v357: entrada con lote (upsert por inventario_id+numero_lote). Depósito = explícito o get_deposito_principal(org); detalle vía incrementar_stock_deposito. Valida proveedor/OC/depósito contra la org (P0002). Requiere trackea_lotes.';
 
 -- ============================================================
 -- F.2 registrar_entrada_series
@@ -1105,7 +1105,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION registrar_entrada_series(TEXT, TEXT, TEXT, TEXT[], TEXT, NUMERIC, TEXT, INTEGER) IS
-  'v350: ingresa N series. Depósito = explícito (validado contra la org) o get_deposito_principal(org); detalle vía incrementar_stock_deposito. Rechaza series duplicadas.';
+  'v357: ingresa N series. Depósito = explícito (validado contra la org) o get_deposito_principal(org); detalle vía incrementar_stock_deposito. Rechaza series duplicadas.';
 
 -- ========================================
 -- G. seed_deposito_inicial: registra el alta en el kardex
@@ -1155,7 +1155,7 @@ CREATE TRIGGER inventario_seed_deposito
   EXECUTE FUNCTION seed_deposito_inicial();
 
 COMMENT ON FUNCTION seed_deposito_inicial() IS
-  'v350: al crear un item con stock > 0 siembra inventario_depositos (principal) y registra la ENTRADA STOCK_INICIAL (0 -> stock). Mantiene la invariante y el kardex desde el primer movimiento.';
+  'v357: al crear un item con stock > 0 siembra inventario_depositos (principal) y registra la ENTRADA STOCK_INICIAL (0 -> stock). Mantiene la invariante y el kardex desde el primer movimiento.';
 
 -- ========================================
 -- H. Variantes: el delta del total acompana al detalle
@@ -1222,7 +1222,7 @@ $$ LANGUAGE plpgsql;
 -- El trigger inventario_variantes_sync_total (176:155-158) ya apunta a esta función: no se recrea.
 
 COMMENT ON FUNCTION sync_inventario_total_variantes() IS
-  'v350: recalcula stock/stock_reservado del padre como suma de variantes y aplica el delta del total a inventario_depositos (principal / drain principal-primero). Mantiene stock = SUM(detalle).';
+  'v357: recalcula stock/stock_reservado del padre como suma de variantes y aplica el delta del total a inventario_depositos (principal / drain principal-primero). Mantiene stock = SUM(detalle).';
 
 -- ============================================================
 -- H.2 crear_variantes_bulk: kardex con totales del item
@@ -1376,7 +1376,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION crear_variantes_bulk(TEXT, TEXT, TEXT, JSONB) IS
-  'v350: crea variantes en lote y activa tiene_variantes. El detalle lo mueve el trigger de sync; el kardex registra el cambio del total del item por variante. ERRCODE: P0002 item no encontrado, 23505 codigo duplicado, 22023 payload inválido.';
+  'v357: crea variantes en lote y activa tiene_variantes. El detalle lo mueve el trigger de sync; el kardex registra el cambio del total del item por variante. ERRCODE: P0002 item no encontrado, 23505 codigo duplicado, 22023 payload inválido.';
 
 -- ============================================================
 -- H.3 ajustar_stock_variante_atomic: lock variante->padre, kardex con totales
@@ -1485,7 +1485,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION ajustar_stock_variante_atomic(TEXT, TEXT, TEXT, TEXT, INTEGER, TEXT) IS
-  'v350: ajuste atómico de stock por variante (lock variante -> padre). El trigger de sync mantiene padre y detalle; el movimiento registra totales del item. Retorno con valores de la variante. ERRCODE: P0002 no encontrada, P0003 stock inválido, 22023 modo inválido.';
+  'v357: ajuste atómico de stock por variante (lock variante -> padre). El trigger de sync mantiene padre y detalle; el movimiento registra totales del item. Retorno con valores de la variante. ERRCODE: P0002 no encontrada, P0003 stock inválido, 22023 modo inválido.';
 
 -- ============================================================
 -- H.4 eliminar_variantes_y_consolidar: el delta del total va al detalle
@@ -1577,12 +1577,12 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION eliminar_variantes_y_consolidar(TEXT, TEXT, TEXT) IS
-  'v350: consolida variantes en el stock del padre (aplicando el delta también a inventario_depositos) y las soft-deletea. ERRCODE: P0002 item no encontrado.';
+  'v357: consolida variantes en el stock del padre (aplicando el delta también a inventario_depositos) y las soft-deletea. ERRCODE: P0002 item no encontrado.';
 
 -- ========================================
 -- Permisos de la funcion nueva
 -- ========================================
--- Misma politica que la 351: solo service_role ejecuta. El trigger dispara igual
+-- Misma politica que la 358: solo service_role ejecuta. El trigger dispara igual
 -- para quien escribe conteos_items (el privilegio EXECUTE no se evalua al disparar).
 REVOKE EXECUTE ON FUNCTION conteo_item_refrescar_sistema() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION conteo_item_refrescar_sistema() FROM anon;

@@ -1,15 +1,15 @@
--- Auditoria de solo lectura de la migracion 350 (invariante stock = SUM(detalle)).
+-- Auditoria de solo lectura de la migracion 357 (invariante stock = SUM(detalle)).
 --
--- Correr DESPUES de aplicar la 350:
---   node scripts/db-run.mjs supabase/migrations/backfill/350_auditoria_drift_depositos.sql
--- No modifica nada: son SELECTs independientes. Esperado tras la 350:
+-- Correr DESPUES de aplicar la 357:
+--   node scripts/db-run.mjs supabase/migrations/backfill/357_auditoria_drift_depositos.sql
+-- No modifica nada: son SELECTs independientes. Esperado tras la 357:
 --   R0.a  0 filas (toda org activa tiene deposito principal; si no, los helpers
 --         dan P0011 para esa org).
 --   R0.b / R0.c  0 filas (ningun item con total distinto de la suma del detalle).
 --   R0.d  0 filas relevantes (conteos por deposito ya aplicados con el bug A; una
 --         verificacion previa en produccion, 2026-10-13, no encontro ninguno).
 --   R0.e  0 filas (conteos EN_PROGRESO: finalizarlos o cancelarlos antes de aplicar).
---   R0.f  informativo: items cuyo alta no tiene movimiento (kardex historico; la 350
+--   R0.f  informativo: items cuyo alta no tiene movimiento (kardex historico; la 357
 --         solo arregla las altas nuevas, no reconstruye las viejas).
 --   R0.g  informativo: uso real de variantes (modelo sin dimension de deposito).
 -- No hay scripts de reparacion: el 2026-10-13 no habia items con drift. Si R0.b
@@ -105,7 +105,7 @@ WHERE c.estado = 'FINALIZADO'
   AND ci.diferencia <> 0
 ORDER BY c.finalizado_at, ci.inventario_id;
 
--- R0.e Conteos en progreso (finalizar/cancelar antes de aplicar la 350)
+-- R0.e Conteos en progreso (finalizar/cancelar antes de aplicar la 357)
 SELECT id, organization_id, nombre, deposito_id, iniciado_at, items_contados, total_items
 FROM conteos_inventario WHERE estado = 'EN_PROGRESO' ORDER BY iniciado_at;
 

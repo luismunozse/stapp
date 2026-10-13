@@ -115,10 +115,10 @@ const LOTE_MOVER_STOCK = 200
 
 /**
  * Re-apunta al deposito elegido el movimiento de alta (ENTRADA, referencia
- * STOCK_INICIAL) que registra el trigger de la migracion 350 en el principal.
+ * STOCK_INICIAL) que registra el trigger de la migracion 357 en el principal.
  * Asi el kardex queda en el mismo deposito que el detalle recien movido.
  *
- * Antes de aplicar la 350 no existe ese movimiento: el UPDATE matchea 0 filas y
+ * Antes de aplicar la 357 no existe ese movimiento: el UPDATE matchea 0 filas y
  * es un no-op. Best-effort: el stock ya quedo bien, si falla solo queda el kardex
  * con el deposito viejo, por eso no lanza (no corresponde avisar "quedo en el
  * principal"). Sella `usuario_id` (el trigger lo deja NULL) cuando se conoce.

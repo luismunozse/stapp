@@ -1,5 +1,5 @@
 -- ========================================
--- Rollback de la migracion 351
+-- Rollback de la migracion 358
 -- ========================================
 -- Devuelve EXECUTE a PUBLIC, anon y authenticated (el estado previo en produccion:
 -- la ACL tenia =X y los dos roles). service_role conserva el suyo. Sin BEGIN:

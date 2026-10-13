@@ -1,24 +1,24 @@
--- Probes de la migracion 350: invariante stock = SUM(inventario_depositos.stock),
+-- Probes de la migracion 357: invariante stock = SUM(inventario_depositos.stock),
 -- kardex encadenado y permisos.
 --
--- Se corre STANDALONE, sobre una base con la 350 (y opcionalmente la 351) ya
+-- Se corre STANDALONE, sobre una base con la 357 (y opcionalmente la 358) ya
 -- aplicada:
---   node scripts/db-run.mjs supabase/migrations/verify/350_probes.sql
+--   node scripts/db-run.mjs supabase/migrations/verify/357_probes.sql
 -- (o en el SQL editor de Supabase Studio). El archivo trae su propio
 -- BEGIN ... ROLLBACK: nada de lo que crea queda, y por eso db-run.mjs rechaza
--- --apply sobre el. Para probar ANTES de aplicar usar el bundle de dry-run (350 +
--- 351 + este cuerpo sin BEGIN/ROLLBACK), no este archivo.
+-- --apply sobre el. Para probar ANTES de aplicar usar el bundle de dry-run (357 +
+-- 358 + este cuerpo sin BEGIN/ROLLBACK), no este archivo.
 --
 -- Resultado: primero imprime la tabla de probes (resultado = OK / FALLA / SKIP) y
 -- al final aborta con RAISE EXCEPTION si alguna probe dio FALLA, listando cuales.
 -- Una probe SKIP no es OK: significa que no se pudo evaluar (falta de datos o la
--- 351 todavia sin aplicar) y hay que leer el motivo.
+-- 358 todavia sin aplicar) y hay que leer el motivo.
 --
 -- Cobertura: G (alta con stock siembra detalle + movimiento STOCK_INICIAL, sin
 -- usuario, kardex que reconcilia; tambien como service_role), A (conteo por
 -- deposito con refresco de stock_sistema y conteo global), B1 (kits sin deposito,
 -- reservas, estricto), B2 (consolidar multi-deposito y origen con drift), F
--- (lotes/series y referencias ajenas), H (variantes) y permisos (350 y 351).
+-- (lotes/series y referencias ajenas), H (variantes) y permisos (357 y 358).
 -- Cada bloque atrapa sus errores como una fila "bloque", asi una falla no oculta
 -- el resto.
 BEGIN;
@@ -51,7 +51,7 @@ $$ SELECT COALESCE((SELECT SUM(stock_posterior - stock_anterior) FROM movimiento
 
 CREATE FUNCTION pg_temp.nuevo_item(p_org TEXT, p_codigo TEXT, p_stock INTEGER) RETURNS TEXT LANGUAGE sql AS
 $$ INSERT INTO inventario (organization_id, codigo, categoria, precio_compra, nombre, stock, stock_reservado, precio_venta)
-   VALUES (p_org, p_codigo, 'PROBE-350', 0, p_codigo, p_stock, 0, 100)
+   VALUES (p_org, p_codigo, 'PROBE-357', 0, p_codigo, p_stock, 0, 100)
    RETURNING id $$;
 
 -- ── Setup: org con principal + depósito B en la misma sucursal ──
@@ -69,7 +69,7 @@ BEGIN
   v_p := get_deposito_principal(v_org);
   SELECT sucursal_id INTO v_suc FROM depositos WHERE id = v_p;
   INSERT INTO depositos (organization_id, nombre, principal, activo, sucursal_id)
-  VALUES (v_org, 'PROBE-350 B', false, true, v_suc) RETURNING id INTO v_b;
+  VALUES (v_org, 'PROBE-357 B', false, true, v_suc) RETURNING id INTO v_b;
   SELECT id INTO v_user FROM users WHERE organization_id = v_org ORDER BY id LIMIT 1;
   IF v_user IS NULL THEN
     RAISE EXCEPTION 'SETUP: la org % no tiene usuarios', v_org;
@@ -83,8 +83,8 @@ DECLARE
   v_org TEXT := pg_temp.id('org'); v_p TEXT := pg_temp.id('p'); v_b TEXT := pg_temp.id('b');
   v_inv TEXT; v_inv0 TEXT; r RECORD; n INTEGER;
 BEGIN
-  v_inv  := pg_temp.nuevo_item(v_org, 'PROBE-350-G1', 7);
-  v_inv0 := pg_temp.nuevo_item(v_org, 'PROBE-350-G0', 0);
+  v_inv  := pg_temp.nuevo_item(v_org, 'PROBE-357-G1', 7);
+  v_inv0 := pg_temp.nuevo_item(v_org, 'PROBE-357-G0', 0);
 
   INSERT INTO _r VALUES (10, 'G: alta siembra el principal, sin drift', '7/0',
     pg_temp.dep(v_inv, v_p) || '/' || pg_temp.drift(v_inv));
@@ -126,13 +126,13 @@ DECLARE
   v_b TEXT := pg_temp.id('b'); v_user TEXT := pg_temp.id('user');
   v_inv TEXT; v_conteo TEXT; v_res JSONB; r RECORD;
 BEGIN
-  v_inv := pg_temp.nuevo_item(v_org, 'PROBE-350-A1', 15);
+  v_inv := pg_temp.nuevo_item(v_org, 'PROBE-357-A1', 15);
   UPDATE inventario_depositos SET stock = 10 WHERE inventario_id = v_inv AND deposito_id = v_p;
   INSERT INTO inventario_depositos (inventario_id, deposito_id, stock, stock_reservado, organization_id)
   VALUES (v_inv, v_b, 5, 0, v_org);                              -- P10 + B5 = 15
 
-  v_res := iniciar_conteo(v_org, v_user, 'PROBE-350 conteo B', v_b, 'PARCIAL',
-                          jsonb_build_object('categoria', 'PROBE-350'), NULL, true, NULL);
+  v_res := iniciar_conteo(v_org, v_user, 'PROBE-357 conteo B', v_b, 'PARCIAL',
+                          jsonb_build_object('categoria', 'PROBE-357'), NULL, true, NULL);
   v_conteo := v_res->>'conteoId';
 
   -- Entra 1 a B entre el snapshot y el conteo físico (B 6, total 16)
@@ -168,17 +168,17 @@ DECLARE
   v_b TEXT := pg_temp.id('b'); v_user TEXT := pg_temp.id('user');
   v_i2 TEXT; v_i3 TEXT; v_conteo TEXT; v_res JSONB;
 BEGIN
-  v_i2 := pg_temp.nuevo_item(v_org, 'PROBE-350-A2', 10);
+  v_i2 := pg_temp.nuevo_item(v_org, 'PROBE-357-A2', 10);
   UPDATE inventario_depositos SET stock = 6 WHERE inventario_id = v_i2 AND deposito_id = v_p;
   INSERT INTO inventario_depositos (inventario_id, deposito_id, stock, stock_reservado, organization_id)
   VALUES (v_i2, v_b, 4, 0, v_org);                               -- P6 + B4
-  v_i3 := pg_temp.nuevo_item(v_org, 'PROBE-350-A3', 7);
+  v_i3 := pg_temp.nuevo_item(v_org, 'PROBE-357-A3', 7);
   UPDATE inventario_depositos SET stock = 2 WHERE inventario_id = v_i3 AND deposito_id = v_p;
   INSERT INTO inventario_depositos (inventario_id, deposito_id, stock, stock_reservado, organization_id)
   VALUES (v_i3, v_b, 5, 0, v_org);                               -- P2 + B5
 
-  v_res := iniciar_conteo(v_org, v_user, 'PROBE-350 conteo global', NULL, 'PARCIAL',
-                          jsonb_build_object('categoria', 'PROBE-350'), NULL, true, NULL);
+  v_res := iniciar_conteo(v_org, v_user, 'PROBE-357 conteo global', NULL, 'PARCIAL',
+                          jsonb_build_object('categoria', 'PROBE-357'), NULL, true, NULL);
   v_conteo := v_res->>'conteoId';
   UPDATE conteos_items SET stock_contado = 13 WHERE conteo_id = v_conteo AND inventario_id = v_i2;
   UPDATE conteos_items SET stock_contado = 1  WHERE conteo_id = v_conteo AND inventario_id = v_i3;
@@ -201,8 +201,8 @@ DECLARE
   v_b TEXT := pg_temp.id('b'); v_user TEXT := pg_temp.id('user');
   v_comp TEXT; v_kit TEXT; v_res JSONB; v_err TEXT; n INTEGER;
 BEGIN
-  v_comp := pg_temp.nuevo_item(v_org, 'PROBE-350-K-COMP', 10);
-  v_kit  := pg_temp.nuevo_item(v_org, 'PROBE-350-K-KIT', 0);
+  v_comp := pg_temp.nuevo_item(v_org, 'PROBE-357-K-COMP', 10);
+  v_kit  := pg_temp.nuevo_item(v_org, 'PROBE-357-K-KIT', 0);
   UPDATE inventario SET es_kit = true, tipo_kit = 'ENSAMBLADO' WHERE id = v_kit;
   INSERT INTO inventario_kit_items (kit_id, componente_id, cantidad, organization_id)
   VALUES (v_kit, v_comp, 2, v_org);
@@ -248,11 +248,11 @@ DECLARE
   v_b TEXT := pg_temp.id('b'); v_user TEXT := pg_temp.id('user');
   v_s TEXT; v_t TEXT; v_s2 TEXT; v_t2 TEXT; v_res JSONB; n INTEGER;
 BEGIN
-  v_s := pg_temp.nuevo_item(v_org, 'PROBE-350-C-SRC', 5);
+  v_s := pg_temp.nuevo_item(v_org, 'PROBE-357-C-SRC', 5);
   UPDATE inventario_depositos SET stock = 3 WHERE inventario_id = v_s AND deposito_id = v_p;
   INSERT INTO inventario_depositos (inventario_id, deposito_id, stock, stock_reservado, organization_id)
   VALUES (v_s, v_b, 2, 0, v_org);                                -- P3 + B2
-  v_t := pg_temp.nuevo_item(v_org, 'PROBE-350-C-TGT', 4);        -- P4
+  v_t := pg_temp.nuevo_item(v_org, 'PROBE-357-C-TGT', 4);        -- P4
 
   v_res := consolidate_inventario_items(v_s, v_t, v_user);
   INSERT INTO _r VALUES (50, 'B2: destino recibe por depósito', 'T=9 P=7 B=2 drift=0',
@@ -267,9 +267,9 @@ BEGIN
   INSERT INTO _r VALUES (52, 'B2: un par de movimientos por depósito', '4', n::TEXT);
 
   -- Origen con drift (total 6, detalle 4): se normaliza antes de mover
-  v_s2 := pg_temp.nuevo_item(v_org, 'PROBE-350-C-SRC2', 4);
+  v_s2 := pg_temp.nuevo_item(v_org, 'PROBE-357-C-SRC2', 4);
   UPDATE inventario SET stock = 6 WHERE id = v_s2;
-  v_t2 := pg_temp.nuevo_item(v_org, 'PROBE-350-C-TGT2', 1);
+  v_t2 := pg_temp.nuevo_item(v_org, 'PROBE-357-C-TGT2', 1);
   v_res := consolidate_inventario_items(v_s2, v_t2, v_user);
   INSERT INTO _r VALUES (53, 'B2: drift del origen normalizado', 'T=7 P=7 drift=0',
     format('T=%s P=%s drift=%s', pg_temp.total(v_t2), pg_temp.dep(v_t2, v_p), pg_temp.drift(v_t2)));
@@ -283,7 +283,7 @@ DECLARE
   v_org TEXT := pg_temp.id('org'); v_p TEXT := pg_temp.id('p'); v_user TEXT := pg_temp.id('user');
   v_l TEXT; v_res JSONB; v_ajeno TEXT; v_err TEXT;
 BEGIN
-  v_l := pg_temp.nuevo_item(v_org, 'PROBE-350-L', 0);
+  v_l := pg_temp.nuevo_item(v_org, 'PROBE-357-L', 0);
   UPDATE inventario SET trackea_lotes = true, trackea_series = true WHERE id = v_l;
 
   v_res := registrar_entrada_lote(p_organization_id => v_org, p_user_id => v_user,
@@ -346,7 +346,7 @@ DECLARE
   v_org TEXT := pg_temp.id('org'); v_user TEXT := pg_temp.id('user');
   v_v TEXT; v_res JSONB;
 BEGIN
-  v_v := pg_temp.nuevo_item(v_org, 'PROBE-350-V', 10);
+  v_v := pg_temp.nuevo_item(v_org, 'PROBE-357-V', 10);
   v_res := crear_variantes_bulk(v_v, v_org, v_user,
     '[{"nombre":"Rojo","codigo_variante":"PROBE-R","stock":4},
       {"nombre":"Azul","codigo_variante":"PROBE-A","stock":3}]'::jsonb);
@@ -375,15 +375,15 @@ INSERT INTO _r
 SELECT 90, 'Global: items PROBE con drift', 'ninguno',
        COALESCE(string_agg(codigo, ',' ORDER BY codigo), 'ninguno')
 FROM inventario
-WHERE organization_id = pg_temp.id('org') AND categoria = 'PROBE-350'
+WHERE organization_id = pg_temp.id('org') AND categoria = 'PROBE-357'
   AND pg_temp.drift(id) <> 0;
 
 INSERT INTO _r
 SELECT 91, 'Global: kardex no reconcilia (esperados: SRC2 drift artificial, V soft-delete)',
-       'PROBE-350-C-SRC2,PROBE-350-V',
+       'PROBE-357-C-SRC2,PROBE-357-V',
        COALESCE(string_agg(codigo, ',' ORDER BY codigo), 'ninguno')
 FROM inventario
-WHERE organization_id = pg_temp.id('org') AND categoria = 'PROBE-350'
+WHERE organization_id = pg_temp.id('org') AND categoria = 'PROBE-357'
   AND NOT pg_temp.kardex_ok(id);
 
 -- ── Permisos de la funcion nueva (solo service_role) ──
@@ -395,7 +395,7 @@ INSERT INTO _r VALUES (95, 'Permisos: conteo_item_refrescar_sistema solo service
     has_function_privilege('service_role', 'conteo_item_refrescar_sistema()', 'EXECUTE')));
 
 -- ── G como service_role: el trigger de alta sigue andando con los permisos de la API ──
--- La 351 revoca EXECUTE de las funciones; los triggers no lo evaluan al disparar
+-- La 358 revoca EXECUTE de las funciones; los triggers no lo evaluan al disparar
 -- y service_role conserva el suyo. Esta probe lo demuestra con el rol real.
 DO $$
 DECLARE
@@ -404,7 +404,7 @@ DECLARE
 BEGIN
   SET LOCAL ROLE service_role;
   INSERT INTO inventario (organization_id, codigo, categoria, precio_compra, nombre, stock, stock_reservado, precio_venta)
-  VALUES (v_org, 'PROBE-350-SR', 'PROBE-350', 0, 'PROBE-350-SR', 4, 0, 100)
+  VALUES (v_org, 'PROBE-357-SR', 'PROBE-357', 0, 'PROBE-357-SR', 4, 0, 100)
   RETURNING id INTO v_inv;
   SELECT COALESCE(SUM(stock), 0) INTO v_det FROM inventario_depositos
    WHERE inventario_id = v_inv AND deposito_id = v_p;
@@ -418,8 +418,8 @@ EXCEPTION WHEN OTHERS THEN
   INSERT INTO _r VALUES (96, 'G: como service_role el alta siembra detalle y movimiento', 'sin error', SQLSTATE || ' ' || SQLERRM);
 END $$;
 
--- ── Permisos de la 351: ningun RPC de stock ejecutable por anon / authenticated ──
--- Solo se evalua si la 351 esta aplicada (detectado porque anon ya no ejecuta
+-- ── Permisos de la 358: ningun RPC de stock ejecutable por anon / authenticated ──
+-- Solo se evalua si la 358 esta aplicada (detectado porque anon ya no ejecuta
 -- adjust_stock_atomic); si no, SKIP.
 DO $$
 DECLARE
@@ -432,7 +432,7 @@ BEGIN
   WHERE p.proname = 'adjust_stock_atomic' LIMIT 1;
 
   IF v_aplicada IS NOT TRUE THEN
-    INSERT INTO _r VALUES (97, 'Permisos 351: RPCs de stock solo service_role (351 sin aplicar)', 'ninguno', 'SKIP');
+    INSERT INTO _r VALUES (97, 'Permisos 358: RPCs de stock solo service_role (358 sin aplicar)', 'ninguno', 'SKIP');
     RETURN;
   END IF;
 
@@ -452,7 +452,7 @@ BEGIN
     'ajustar_stock_variante_atomic','crear_variantes_bulk','eliminar_variantes_y_consolidar',
     'sync_inventario_total_variantes');
 
-  INSERT INTO _r VALUES (97, 'Permisos 351: 27 funciones, ninguna ejecutable por anon/authenticated, todas por service_role',
+  INSERT INTO _r VALUES (97, 'Permisos 358: 27 funciones, ninguna ejecutable por anon/authenticated, todas por service_role',
     '27 funciones, ninguna con acceso indebido',
     format('%s funciones, %s', v_total, COALESCE('con acceso indebido: ' || v_malos, 'ninguna con acceso indebido')));
 END $$;
@@ -476,9 +476,9 @@ BEGIN
   SELECT string_agg('#' || orden, ', ' ORDER BY orden) INTO v_skips FROM _r WHERE obtenido = 'SKIP';
 
   IF v_fallas IS NOT NULL THEN
-    RAISE EXCEPTION E'PROBES 350 FALLIDAS:\n%', v_fallas;
+    RAISE EXCEPTION E'PROBES 357 FALLIDAS:\n%', v_fallas;
   END IF;
-  RAISE NOTICE 'Probes 350: todas OK. Salteadas: %', COALESCE(v_skips, 'ninguna');
+  RAISE NOTICE 'Probes 357: todas OK. Salteadas: %', COALESCE(v_skips, 'ninguna');
 END $$;
 
 
