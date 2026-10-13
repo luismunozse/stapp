@@ -1,24 +1,30 @@
--- Probes de la migracion 350: invariante stock = SUM(inventario_depositos.stock)
--- y kardex encadenado.
+-- Probes de la migracion 350: invariante stock = SUM(inventario_depositos.stock),
+-- kardex encadenado y permisos.
 --
--- Correr con:  node scripts/db-run.mjs supabase/migrations/verify/350_probes.sql
--- (o en el SQL editor de Supabase Studio). El BEGIN / ROLLBACK esta incluido: nada
--- de lo que crea queda; db-run.mjs detecta el BEGIN y rechaza --apply. Requiere la
--- 350 ya aplicada (o concatenada delante, sin su propio BEGIN).
+-- Se corre STANDALONE, sobre una base con la 350 (y opcionalmente la 351) ya
+-- aplicada:
+--   node scripts/db-run.mjs supabase/migrations/verify/350_probes.sql
+-- (o en el SQL editor de Supabase Studio). El archivo trae su propio
+-- BEGIN ... ROLLBACK: nada de lo que crea queda, y por eso db-run.mjs rechaza
+-- --apply sobre el. Para probar ANTES de aplicar usar el bundle de dry-run (350 +
+-- 351 + este cuerpo sin BEGIN/ROLLBACK), no este archivo.
 --
--- Verde = `esperado` igual a `obtenido` (columna `resultado` = OK) en cada fila.
+-- Resultado: primero imprime la tabla de probes (resultado = OK / FALLA / SKIP) y
+-- al final aborta con RAISE EXCEPTION si alguna probe dio FALLA, listando cuales.
+-- Una probe SKIP no es OK: significa que no se pudo evaluar (falta de datos o la
+-- 351 todavia sin aplicar) y hay que leer el motivo.
 --
 -- Cobertura: G (alta con stock siembra detalle + movimiento STOCK_INICIAL, sin
--- usuario, kardex que reconcilia), A (conteo por deposito con refresco de
--- stock_sistema y conteo global), B1 (kits sin deposito, reservas, estricto),
--- B2 (consolidar multi-deposito y origen con drift), F (lotes/series y referencias
--- ajenas), H (variantes), y los permisos de la funcion nueva.
--- Notas: cada bloque atrapa sus errores como una fila "bloque", asi una falla no
--- oculta el resto. Las probes 62-64 salen OK sin evaluar si la base no tiene datos
--- de otra organizacion (leer como "salteado").
+-- usuario, kardex que reconcilia; tambien como service_role), A (conteo por
+-- deposito con refresco de stock_sistema y conteo global), B1 (kits sin deposito,
+-- reservas, estricto), B2 (consolidar multi-deposito y origen con drift), F
+-- (lotes/series y referencias ajenas), H (variantes) y permisos (350 y 351).
+-- Cada bloque atrapa sus errores como una fila "bloque", asi una falla no oculta
+-- el resto.
 BEGIN;
 
 CREATE TEMP TABLE _r (orden INT, probe TEXT, esperado TEXT, obtenido TEXT);
+-- obtenido = 'SKIP' marca una probe no evaluable (resultado SKIP, no OK).
 CREATE TEMP TABLE _ids (k TEXT PRIMARY KEY, v TEXT);
 
 CREATE FUNCTION pg_temp.id(p_k TEXT) RETURNS TEXT LANGUAGE sql AS
@@ -53,16 +59,21 @@ DO $$
 DECLARE v_org TEXT; v_p TEXT; v_suc TEXT; v_b TEXT; v_user TEXT;
 BEGIN
   SELECT o.id INTO v_org FROM organizations o
-  WHERE o.deleted_at IS NULL AND get_deposito_principal(o.id) IS NOT NULL
+  WHERE o.deleted_at IS NULL
+    AND get_deposito_principal(o.id) IS NOT NULL
+    AND EXISTS (SELECT 1 FROM users u WHERE u.organization_id = o.id)
   ORDER BY o.created_at LIMIT 1;
   IF v_org IS NULL THEN
-    RAISE EXCEPTION 'SETUP: ninguna org con depósito principal';
+    RAISE EXCEPTION 'SETUP: ninguna org con depósito principal y al menos un usuario';
   END IF;
   v_p := get_deposito_principal(v_org);
   SELECT sucursal_id INTO v_suc FROM depositos WHERE id = v_p;
   INSERT INTO depositos (organization_id, nombre, principal, activo, sucursal_id)
   VALUES (v_org, 'PROBE-350 B', false, true, v_suc) RETURNING id INTO v_b;
   SELECT id INTO v_user FROM users WHERE organization_id = v_org ORDER BY id LIMIT 1;
+  IF v_user IS NULL THEN
+    RAISE EXCEPTION 'SETUP: la org % no tiene usuarios', v_org;
+  END IF;
   INSERT INTO _ids VALUES ('org', v_org), ('p', v_p), ('b', v_b), ('user', v_user);
 END $$;
 
@@ -289,7 +300,7 @@ BEGIN
 
   SELECT id INTO v_ajeno FROM proveedores WHERE organization_id <> v_org LIMIT 1;
   IF v_ajeno IS NULL THEN
-    INSERT INTO _r VALUES (62, 'F: proveedor de otra org rechazado', 'P0002', 'P0002');  -- SALTEADO: sin datos
+    INSERT INTO _r VALUES (62, 'F: proveedor de otra org rechazado', 'P0002', 'SKIP');  -- sin datos de otra org
   ELSE
     BEGIN
       PERFORM registrar_entrada_lote(p_organization_id => v_org, p_user_id => v_user,
@@ -302,7 +313,7 @@ BEGIN
 
   SELECT id INTO v_ajeno FROM ordenes_compra WHERE organization_id <> v_org LIMIT 1;
   IF v_ajeno IS NULL THEN
-    INSERT INTO _r VALUES (63, 'F: OC de otra org rechazada', 'P0002', 'P0002');          -- SALTEADO: sin datos
+    INSERT INTO _r VALUES (63, 'F: OC de otra org rechazada', 'P0002', 'SKIP');  -- sin datos de otra org
   ELSE
     BEGIN
       PERFORM registrar_entrada_lote(p_organization_id => v_org, p_user_id => v_user,
@@ -315,7 +326,7 @@ BEGIN
 
   SELECT id INTO v_ajeno FROM depositos WHERE organization_id <> v_org AND deleted_at IS NULL LIMIT 1;
   IF v_ajeno IS NULL THEN
-    INSERT INTO _r VALUES (64, 'F: depósito de otra org rechazado (series)', 'P0002', 'P0002');
+    INSERT INTO _r VALUES (64, 'F: depósito de otra org rechazado (series)', 'P0002', 'SKIP');  -- sin datos de otra org
   ELSE
     BEGIN
       PERFORM registrar_entrada_series(p_organization_id => v_org, p_user_id => v_user,
@@ -383,8 +394,92 @@ INSERT INTO _r VALUES (95, 'Permisos: conteo_item_refrescar_sistema solo service
     has_function_privilege('authenticated', 'conteo_item_refrescar_sistema()', 'EXECUTE'),
     has_function_privilege('service_role', 'conteo_item_refrescar_sistema()', 'EXECUTE')));
 
+-- ── G como service_role: el trigger de alta sigue andando con los permisos de la API ──
+-- La 351 revoca EXECUTE de las funciones; los triggers no lo evaluan al disparar
+-- y service_role conserva el suyo. Esta probe lo demuestra con el rol real.
+DO $$
+DECLARE
+  v_org TEXT := pg_temp.id('org'); v_p TEXT := pg_temp.id('p');
+  v_inv TEXT; v_det INTEGER; v_mov INTEGER;
+BEGIN
+  SET LOCAL ROLE service_role;
+  INSERT INTO inventario (organization_id, codigo, categoria, precio_compra, nombre, stock, stock_reservado, precio_venta)
+  VALUES (v_org, 'PROBE-350-SR', 'PROBE-350', 0, 'PROBE-350-SR', 4, 0, 100)
+  RETURNING id INTO v_inv;
+  SELECT COALESCE(SUM(stock), 0) INTO v_det FROM inventario_depositos
+   WHERE inventario_id = v_inv AND deposito_id = v_p;
+  SELECT COUNT(*) INTO v_mov FROM movimientos_inventario
+   WHERE inventario_id = v_inv AND referencia_tipo = 'STOCK_INICIAL';
+  RESET ROLE;
+  INSERT INTO _r VALUES (96, 'G: como service_role el alta siembra detalle y movimiento', 'detalle=4 movimientos=1',
+    format('detalle=%s movimientos=%s', v_det, v_mov));
+EXCEPTION WHEN OTHERS THEN
+  RESET ROLE;
+  INSERT INTO _r VALUES (96, 'G: como service_role el alta siembra detalle y movimiento', 'sin error', SQLSTATE || ' ' || SQLERRM);
+END $$;
+
+-- ── Permisos de la 351: ningun RPC de stock ejecutable por anon / authenticated ──
+-- Solo se evalua si la 351 esta aplicada (detectado porque anon ya no ejecuta
+-- adjust_stock_atomic); si no, SKIP.
+DO $$
+DECLARE
+  v_aplicada BOOLEAN;
+  v_malos TEXT;
+  v_total INTEGER;
+BEGIN
+  SELECT NOT has_function_privilege('anon', p.oid, 'EXECUTE') INTO v_aplicada
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace AND n.nspname = 'public'
+  WHERE p.proname = 'adjust_stock_atomic' LIMIT 1;
+
+  IF v_aplicada IS NOT TRUE THEN
+    INSERT INTO _r VALUES (97, 'Permisos 351: RPCs de stock solo service_role (351 sin aplicar)', 'ninguno', 'SKIP');
+    RETURN;
+  END IF;
+
+  SELECT COUNT(*),
+         string_agg(p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')', ', ' ORDER BY p.proname)
+         FILTER (WHERE has_function_privilege('anon', p.oid, 'EXECUTE')
+                    OR has_function_privilege('authenticated', p.oid, 'EXECUTE')
+                    OR NOT has_function_privilege('service_role', p.oid, 'EXECUTE'))
+    INTO v_total, v_malos
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace AND n.nspname = 'public'
+  WHERE p.proname IN ('adjust_stock_atomic','aplicar_ajuste_inventario','asegurar_fila_deposito',
+    'consolidate_inventario_items','crear_nota_credito','crear_venta_atomica','descontar_stock_deposito',
+    'desensamblar_kit_atomic','editar_venta_atomica','ensamblar_kit_atomic','finalizar_conteo',
+    'get_deposito_principal','incrementar_stock_deposito','iniciar_conteo','liberar_reserva_deposito',
+    'recibir_orden_compra','registrar_devolucion_atomica','registrar_entrada_lote','registrar_entrada_series',
+    'reservar_stock_deposito','salida_serie','seed_deposito_inicial','transferir_stock_atomic',
+    'ajustar_stock_variante_atomic','crear_variantes_bulk','eliminar_variantes_y_consolidar',
+    'sync_inventario_total_variantes');
+
+  INSERT INTO _r VALUES (97, 'Permisos 351: 27 funciones, ninguna ejecutable por anon/authenticated, todas por service_role',
+    '27 funciones, ninguna con acceso indebido',
+    format('%s funciones, %s', v_total, COALESCE('con acceso indebido: ' || v_malos, 'ninguna con acceso indebido')));
+END $$;
+
 SELECT orden, probe, esperado, obtenido,
-       CASE WHEN esperado = obtenido THEN 'OK' ELSE 'FALLA' END AS resultado
+       CASE WHEN obtenido = 'SKIP' THEN 'SKIP'
+            WHEN esperado = obtenido THEN 'OK'
+            ELSE 'FALLA' END AS resultado
 FROM _r ORDER BY orden;
+
+-- Aserción final: cualquier FALLA aborta la corrida (el ROLLBACK de abajo igual
+-- descarta todo). El mensaje lista las probes que fallaron.
+DO $$
+DECLARE v_fallas TEXT; v_skips TEXT;
+BEGIN
+  SELECT string_agg(format('#%s %s (esperado [%s], obtenido [%s])', orden, probe, esperado, obtenido),
+                    E'\n' ORDER BY orden)
+    INTO v_fallas
+  FROM _r WHERE obtenido IS DISTINCT FROM 'SKIP' AND esperado IS DISTINCT FROM obtenido;
+
+  SELECT string_agg('#' || orden, ', ' ORDER BY orden) INTO v_skips FROM _r WHERE obtenido = 'SKIP';
+
+  IF v_fallas IS NOT NULL THEN
+    RAISE EXCEPTION E'PROBES 350 FALLIDAS:\n%', v_fallas;
+  END IF;
+  RAISE NOTICE 'Probes 350: todas OK. Salteadas: %', COALESCE(v_skips, 'ninguna');
+END $$;
+
 
 ROLLBACK;
