@@ -10,10 +10,6 @@ import {
 } from "./helpers"
 import { supabaseAdmin } from "@/lib/supabase"
 
-vi.mock("@/lib/counters", () => ({
-  getNextReturnNumber: vi.fn().mockResolvedValue("DEV-000001"),
-}))
-
 vi.mock("@/lib/audit", () => ({
   createAuditLogger: vi.fn(() => ({
     create: vi.fn().mockResolvedValue(undefined),

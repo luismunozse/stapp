@@ -8,10 +8,6 @@ import {
 } from "./helpers"
 import { supabaseAdmin } from "@/lib/supabase"
 
-vi.mock("@/lib/counters", () => ({
-  getNextReturnNumber: vi.fn().mockResolvedValue("DEV-000001"),
-}))
-
 vi.mock("@/lib/audit", () => ({
   createAuditLogger: vi.fn(() => ({
     create: vi.fn().mockResolvedValue(undefined),
@@ -22,7 +18,7 @@ import { POST } from "@/app/api/ventas/[id]/devolucion/route"
 
 const createParams = (id: string) => ({ params: Promise.resolve({ id }) })
 
-const RPC_SUCCESS = { id: "d1", tipo: "PARCIAL", montoDevolucion: 20 }
+const RPC_SUCCESS = { id: "d1", numero: "NC-000001", tipo: "PARCIAL", montoDevolucion: 20 }
 const DEV_COMPLETA = { id: "d1", venta_id: "v1", numero_devolucion: "DEV-000001", motivo: "Defectuoso", tipo: "PARCIAL", monto_devolucion: "20", estado: "COMPLETADA", observaciones: null, procesado_por: "user-1", created_at: "2024-01-01", items_devolucion: [] }
 
 describe("POST /api/ventas/[id]/devolucion — atomic RPC path", () => {
@@ -55,9 +51,13 @@ describe("POST /api/ventas/[id]/devolucion — atomic RPC path", () => {
       "registrar_devolucion_atomica",
       expect.objectContaining({
         p_venta_id: "v1",
+        // El numero lo asigna la RPC adentro de su transaccion (mig 356)
+        p_numero_devolucion: null,
         p_items: [{ itemVentaId: "iv1", inventarioId: "inv1", cantidad: 2, restaurarStock: true }],
       })
     )
+    // Una sola RPC: ya no se pide un DEV- antes de llamar
+    expect(vi.mocked(supabaseAdmin.rpc).mock.calls.map((c) => c[0])).toEqual(["registrar_devolucion_atomica"])
   })
 
   it("agrega itemVentaId duplicados en p_items antes de llamar la RPC (anti over-refund)", async () => {
