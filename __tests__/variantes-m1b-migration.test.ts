@@ -7,6 +7,8 @@ import { collapse, readByMarker, readBySuffix, stripComments } from "./helpers/s
 
 const RAW = readBySuffix("_variantes_rpc.sql")
 const SQL = collapse(RAW)
+// The header prose (everything before the first statement), wrapped comment lines joined.
+const HEADER = RAW.slice(0, RAW.indexOf("SET LOCAL lock_timeout")).replace(/\n--\s?/g, " ")
 const SIGNATURE = "guardar_grupo_variantes(TEXT, TEXT, JSONB, JSONB, JSONB, JSONB, TEXT)"
 const NINE_SHARED = [
   "descripcion", "categoria", "tipo_dispositivo", "proveedor", "proveedor_id",
@@ -57,11 +59,40 @@ describe("M1b: file, signature and privileges", () => {
     expect(SQL.match(/\bGRANT\b/g)).toHaveLength(1)
   })
 
-  it("documents the contract callers rely on: org comes from the server session, 40P01 retry, lock order", () => {
-    expect(RAW).toMatch(/p_org[\s\S]*session/i)
-    expect(RAW).toMatch(/40P01/)
-    expect(RAW).toMatch(/lib\/variantes-api/)
-    expect(RAW).toMatch(/ORDER BY id/)
+})
+
+describe("M1b: the header says what the function really does", () => {
+  it("org comes from the server session; 40P01 is the caller's retry; the lock statement itself is pinned", () => {
+    expect(HEADER).toContain("p_org is the organization of the caller's SESSION")
+    expect(HEADER).toMatch(/can still deadlock with this function \(40P01\): the caller \(lib\/variantes-api\) retries once/)
+    expect(BODY).toContain("PERFORM 1 FROM inventario WHERE organization_id = p_org AND (id = ANY (v_ids || v_arch) OR grupo_id = v_gid) ORDER BY id FOR UPDATE;")
+  })
+
+  it("is a FULL-STATE save: every ACTIVE member is saved or archived, else miembros_faltantes", () => {
+    expect(HEADER).toContain("FULL-STATE")
+    expect(HEADER).toMatch(/every ACTIVE member of an existing group must be in p_variantes or in p_archivar/)
+    expect(HEADER).toContain("PAYLOAD_INVALIDO:miembros_faltantes:<ids>")
+  })
+
+  it("states truthfully what still ends in a raw 23505: swaps and chains among EXISTING rows", () => {
+    const limit = need(/KNOWN LIMIT\.(.*?)LOCK ORDER/, HEADER)[1]
+    expect(limit).toMatch(/existing rows are written before new ones/)
+    expect(limit).toMatch(/swap/)
+    expect(limit).toMatch(/chain/)
+    expect(limit).toContain("23505")
+    expect(limit).not.toMatch(/free slot are fine/)
+  })
+
+  it("does not claim that an id of another organization is indistinguishable from a missing one", () => {
+    expect(HEADER).not.toMatch(/exactly like a missing one/)
+    expect(HEADER).toMatch(/NOT indistinguishable/)
+    expect(HEADER).toMatch(/unguessable/)
+  })
+
+  it("warns that the DROP rehearsal in the probes blocks saves for a moment, so it runs before PR4 merges", () => {
+    expect(HEADER).toMatch(/rollback rehearsal at the end of verify\/NNN-M1b_probes\.sql DROPs this function inside its transaction/)
+    expect(HEADER).toMatch(/waits on that lock until the ROLLBACK/)
+    expect(HEADER).toMatch(/before PR4 merges/)
   })
 })
 
@@ -207,6 +238,71 @@ describe("M1b: writes", () => {
 
   it("returns the six lists the API turns into events", () => {
     expect(BODY).toMatch(/RETURN jsonb_build_object\('grupoId', v_gid, 'creados', to_jsonb\(v_cre\), 'actualizados', to_jsonb\(v_act\), 'promovidos', to_jsonb\(v_pro\), 'restaurados', to_jsonb\(v_res\), 'archivados', to_jsonb\(v_ar\)\)/)
+  })
+})
+
+describe("M1b: review fixes", () => {
+  it("refuses a save that leaves ACTIVE members out, naming them, after classification and before any write", () => {
+    const sel = need(/SELECT string_agg\(i\.id, ',' ORDER BY i\.id\) INTO v_falt FROM inventario i WHERE i\.organization_id = p_org AND i\.grupo_id = v_gid AND i\.deleted_at IS NULL AND NOT \(i\.id = ANY \(v_ids \|\| v_arch\)\);/, BODY)
+    const raise = at("RAISE EXCEPTION 'PAYLOAD_INVALIDO:miembros_faltantes:%', v_falt USING ERRCODE = '22023';")
+    expect(sel.index).toBeLessThan(raise)
+    expect(raise).toBeGreaterThan(at("ERRCODE = 'P0033'"))
+    expect(raise).toBeLessThan(at(/WITH a AS \(UPDATE inventario/))
+  })
+
+  it("the combination check looks at the payload only (full-state makes the unlisted-member branch dead)", () => {
+    expect(BODY).toContain(
+      "IF EXISTS (SELECT 1 FROM jsonb_array_elements(v_vars) e(v) GROUP BY inventario_combinacion_clave(e.v -> 'atributos') HAVING count(*) > 1) THEN RAISE EXCEPTION 'COMBINACION_DUPLICADA' USING ERRCODE = 'P0030';"
+    )
+  })
+
+  it("writes in this order: archive, EXISTING rows, NEW rows, archived-name sync, group-wide shared update", () => {
+    const order = [
+      at(/WITH a AS \(UPDATE inventario SET deleted_at = NOW\(\)/),
+      at("UPDATE inventario SET grupo_id = v_gid"),
+      at("INSERT INTO inventario ("),
+      at("UPDATE inventario SET nombre = inventario_nombre_variante(v_base, atributos)"),
+      at("UPDATE inventario i SET descripcion"),
+    ]
+    expect([...order].sort((a, b) => a - b)).toEqual(order)
+  })
+
+  it("keeps the managed names of ARCHIVED members current when the base changes (a restore never shows a stale base)", () => {
+    expect(BODY).toContain(
+      "IF v_prev IS NOT NULL AND v_prev <> v_base THEN UPDATE inventario SET nombre = inventario_nombre_variante(v_base, atributos) WHERE organization_id = p_org AND grupo_id = v_gid AND deleted_at IS NOT NULL AND nombre = inventario_nombre_variante(v_prev, atributos); END IF;"
+    )
+  })
+
+  it("validates p_user against users before anything is written (an unknown id would be a raw 23503)", () => {
+    const chk = at("IF p_user IS NOT NULL AND NOT EXISTS (SELECT 1 FROM users WHERE id = p_user) THEN")
+    expect(chk).toBeLessThan(at("INSERT INTO inventario_grupos"))
+    expect(BODY).toContain("RAISE EXCEPTION 'PAYLOAD_INVALIDO: p_user is not a known user' USING ERRCODE = '22023';")
+  })
+
+  it("prices take at most 8 integer digits and 2 decimals (99999999.995 would round past DECIMAL(10,2))", () => {
+    expect(BODY).toContain("c_num CONSTANT TEXT := '^[0-9]{1,8}(\\.[0-9]{1,2})?$';")
+    expect(BODY).toContain("'prices must be numbers from 0 to 99999999.99 with at most 2 decimals'")
+  })
+
+  it("checks the RAW length of group and option names (not only the trimmed one) and refuses repeated option names", () => {
+    expect(BODY).toContain("btrim(v_base) = '' OR char_length(v_base) > 200")
+    expect(BODY).toContain("btrim(o.e ->> 'nombre') = '' OR char_length(o.e ->> 'nombre') > 100")
+    expect(BODY).toMatch(/count\(DISTINCT inventario_combinacion_clave\(jsonb_build_array\(jsonb_build_object\('valor', o\.e -> 'nombre'\)\)\)\) <> count\(\*\)/)
+    expect(BODY).toContain("RAISE EXCEPTION 'PAYLOAD_INVALIDO: option names must be different' USING ERRCODE = '22023';")
+  })
+
+  it("compares the EFFECTIVE stock_minimo/stock_maximo (payload over the stored row), once, for new and existing rows", () => {
+    expect(BODY).toContain("v_min := CASE WHEN v_var ? 'stock_minimo' THEN (v_var ->> 'stock_minimo')::int ELSE r.stock_minimo END;")
+    expect(BODY).toContain("v_max := CASE WHEN v_var ? 'stock_maximo' THEN (v_var ->> 'stock_maximo')::int ELSE r.stock_maximo END;")
+    expect(BODY).toContain("IF v_min > v_max THEN RAISE EXCEPTION 'PAYLOAD_INVALIDO: stock_minimo cannot exceed stock_maximo' USING ERRCODE = '22023'; END IF;")
+    expect(BODY.match(/stock_minimo cannot exceed stock_maximo/g)).toHaveLength(1)
+  })
+
+  it("the shared source is the group first, then the first promoted row; trackea_* are normalized once", () => {
+    expect(BODY).toContain("ORDER BY (i.grupo_id = v_gid) DESC NULLS LAST, i.id LIMIT 1;")
+    expect(BODY).toContain("v_s.trackea_lotes := COALESCE(v_s.trackea_lotes, false);")
+    expect(BODY).toContain("v_s.trackea_series := COALESCE(v_s.trackea_series, false);")
+    expect(BODY.match(/COALESCE\(v_s\.trackea_/g)).toHaveLength(2)
   })
 })
 

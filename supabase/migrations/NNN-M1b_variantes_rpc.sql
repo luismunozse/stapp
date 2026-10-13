@@ -9,8 +9,12 @@
 -- WHO CALLS IT. Only the server, through service_role (anon/authenticated lose EXECUTE below, and a
 -- new function is executable by PUBLIC unless revoked). p_org is the organization of the caller's
 -- SESSION, filled in by the route (the repo's RPC pattern, as in crear_recepcion_multiple); it is
--- never read from the request body. The function is SECURITY INVOKER and filters EVERY statement by
--- p_org, so an id that belongs to another organization behaves exactly like a missing one (P0002).
+-- never read from the request body. p_user must be a real users.id or NULL: an unknown one is refused
+-- with 22023. The function is SECURITY INVOKER and filters EVERY statement by p_org, so a row of another
+-- organization is never read or changed: an id that belongs to another organization is refused with
+-- P0002. That answer is NOT indistinguishable from the one for an id that does not exist yet (that one
+-- is created) or, for ids outside the c + 24 hex format, from the 22023 a missing id gets. Ids are
+-- unguessable, so this only tells a caller who already holds an id that it is taken.
 --
 -- CONTRACT.
 --   p_grupo        {id, nombre, opciones:[{nombre, valores:[..]}], renombrar?:bool (default true)}
@@ -20,6 +24,12 @@
 --                  stock_minimo?, stock_maximo?, punto_reorden?, ubicacion?}]; an absent key means
 --                  "unchanged" (a missing precio_compra never becomes 0 on an existing row)
 --   p_archivar     [id] of group members to archive (never deleted; stock, history and photo stay)
+--   FULL-STATE SAVE: every ACTIVE member of an existing group must be in p_variantes or in p_archivar. A
+--   call that leaves one out is refused with 22023 and the message PAYLOAD_INVALIDO:miembros_faltantes:<ids>
+--   (comma separated, sorted). A member left out would keep a stale atributos after an option is added or
+--   renamed and a stale name after a base rename, and a form that loaded the group before another writer
+--   changed it would silently drop that change; the caller answers 409 and the form reloads. Archived
+--   members need not be listed: their managed names follow a base rename, so a restore starts current.
 --   p_deposito_inicial  depot for the initial stock of NEW rows; NULL = the default of adjust_stock_atomic
 --   Returns {grupoId, creados, actualizados, promovidos, restaurados, archivados} (id lists).
 --   Rows are classified by what is in the database: NEW id -> INSERT (creados); standalone row ->
@@ -27,15 +37,23 @@
 --   (actualizados); archived member -> reactivated (restaurados). A retry with the same ids converges:
 --   initial stock is applied on INSERT only, so nothing is duplicated and no second movement exists.
 --
--- ERRORS (SQLSTATE -> meaning). 22023 invalid payload (shape, caps, repeated barcode: raised BEFORE the
--- M1a CHECK or the btree row limit could fire with a raw 23514 / 54000), P0002 not found or other
+-- ERRORS (SQLSTATE -> meaning). 22023 invalid payload (shape, caps, repeated barcode, members left out, an
+-- unknown p_user, a stock_minimo above the effective stock_maximo: raised BEFORE the M1a CHECK, a column
+-- CHECK, a foreign key or the btree row limit could fire with a raw 23514 / 23503 / 54000), P0002 not found or other
 -- organization, P0030 combination taken, P0031 item in another group, P0032 kit, P0033 reserved stock
 -- blocks the archive (the whole save rolls back), P0034 over the limits, P0035 code taken
 -- (CODIGO_DUPLICADO:A-1,A-2 lists every offender).
 --
--- KNOWN LIMIT. Rows are edited one at a time and the unique indexes (combination, code) are checked per
--- row, so swapping two EXISTING combinations (or two codes) inside one save passes the checks above and
--- then fails with a raw 23505; the caller maps 23505 to 409. Renames that move a value to a free slot are fine.
+-- KNOWN LIMIT. Because existing rows are written before new ones (and archive comes first), a rename that
+-- frees a combination or a code for a NEW row works in any payload order, and so does archiving a row and
+-- adding another one on its code and combination in the same call. Rows are still updated one at a time
+-- against unique indexes that are checked per row, so a swap of two EXISTING combinations (or codes) and a
+-- chain among existing rows (A -> B while B -> C) pass the checks above and then fail with a raw 23505,
+-- whatever the order; the caller maps 23505 to 409.
+--
+-- PROBES. The rollback rehearsal at the end of verify/NNN-M1b_probes.sql DROPs this function inside its
+-- transaction; a save that arrives meanwhile waits on that lock until the ROLLBACK. Run the probes before
+-- PR4 merges, while nothing calls the function.
 --
 -- LOCK ORDER. The group row first, then every touched row and every current member of the group in
 -- ORDER BY id. Two saves of one group therefore serialize on the group row. A plain UPDATE of one
@@ -56,7 +74,7 @@ LANGUAGE plpgsql SECURITY INVOKER SET search_path = public, pg_temp
 AS $$
 DECLARE
   c_id     CONSTANT TEXT := '^c[0-9a-f]{24}$';
-  c_num    CONSTANT TEXT := '^[0-9]{1,8}(\.[0-9]+)?$';
+  c_num    CONSTANT TEXT := '^[0-9]{1,8}(\.[0-9]{1,2})?$';
   c_int    CONSTANT TEXT := '^[0-9]{1,9}$';
   c_shared CONSTANT TEXT[] := ARRAY['descripcion', 'categoria', 'tipo_dispositivo', 'proveedor', 'proveedor_id',
                                     'dias_garantia_default', 'trackea_lotes', 'trackea_series', 'dias_alerta_vencimiento'];
@@ -66,6 +84,7 @@ DECLARE
   v_vars JSONB := COALESCE(p_variantes, '[]'::jsonb);
   v_gid TEXT; v_base TEXT; v_prev TEXT; v_ren BOOLEAN; v_ops JSONB; v_nop INT; v_prod BIGINT := 1;
   v_ids TEXT[]; v_arch TEXT[]; v_codes TEXT[]; v_n INT; v_var JSONB; v_err TEXT; v_dups TEXT; v_o JSONB; v_rid TEXT; v_rres INT;
+  v_falt TEXT; v_min INT; v_max INT;
   v_cls TEXT[] := '{}'; v_nm TEXT[] := '{}'; v_sh JSONB; v_s inventario; r inventario;
   v_cre TEXT[] := '{}'; v_act TEXT[] := '{}'; v_pro TEXT[] := '{}'; v_res TEXT[] := '{}'; v_ar TEXT[] := '{}';
 BEGIN
@@ -83,7 +102,7 @@ BEGIN
   v_gid := p_grupo ->> 'id';
   v_base := p_grupo ->> 'nombre';
   IF jsonb_typeof(p_grupo -> 'id') IS DISTINCT FROM 'string' OR btrim(v_gid) = ''
-     OR jsonb_typeof(p_grupo -> 'nombre') IS DISTINCT FROM 'string' OR char_length(btrim(v_base)) NOT BETWEEN 1 AND 200
+     OR jsonb_typeof(p_grupo -> 'nombre') IS DISTINCT FROM 'string' OR btrim(v_base) = '' OR char_length(v_base) > 200
      OR (p_grupo ? 'renombrar' AND jsonb_typeof(p_grupo -> 'renombrar') <> 'boolean') THEN
     RAISE EXCEPTION 'PAYLOAD_INVALIDO: the group needs an id, a name of 1 to 200 characters and a boolean renombrar' USING ERRCODE = '22023';
   END IF;
@@ -96,7 +115,7 @@ BEGIN
   END IF;
   SELECT m INTO v_err FROM (SELECT CASE
       WHEN jsonb_typeof(o.e) <> 'object' OR jsonb_typeof(o.e -> 'nombre') IS DISTINCT FROM 'string'
-           OR char_length(btrim(o.e ->> 'nombre')) NOT BETWEEN 1 AND 100 THEN 'every option needs a name of 1 to 100 characters'
+           OR btrim(o.e ->> 'nombre') = '' OR char_length(o.e ->> 'nombre') > 100 THEN 'every option needs a name of 1 to 100 characters'
       WHEN jsonb_typeof(o.e -> 'valores') IS DISTINCT FROM 'array' THEN 'every option needs a list of values'
       WHEN jsonb_array_length(o.e -> 'valores') > 100 THEN NULL
       WHEN NOT inventario_atributos_validos((SELECT jsonb_agg(jsonb_build_object('valor', x.v)) FROM jsonb_array_elements(o.e -> 'valores') x(v)))
@@ -108,6 +127,10 @@ BEGIN
     END AS m FROM jsonb_array_elements(p_grupo -> 'opciones') o(e)) q WHERE m IS NOT NULL LIMIT 1;
   IF v_err IS NOT NULL THEN
     RAISE EXCEPTION 'PAYLOAD_INVALIDO: %', v_err USING ERRCODE = '22023';
+  END IF;
+  IF (SELECT count(DISTINCT inventario_combinacion_clave(jsonb_build_array(jsonb_build_object('valor', o.e -> 'nombre')))) <> count(*)
+        FROM jsonb_array_elements(p_grupo -> 'opciones') o(e)) THEN
+    RAISE EXCEPTION 'PAYLOAD_INVALIDO: option names must be different' USING ERRCODE = '22023';
   END IF;
   FOR v_o IN SELECT o.e FROM jsonb_array_elements(p_grupo -> 'opciones') o(e) LOOP
     IF jsonb_array_length(v_o -> 'valores') > 100 THEN v_prod := 101; EXIT; END IF;
@@ -151,13 +174,10 @@ BEGIN
         THEN 'barcode and ubicacion must be text of at most 100 characters or null'
       WHEN EXISTS (SELECT 1 FROM jsonb_each(e.v) f(k, x) WHERE k IN ('precio_venta', 'precio_compra')
                     AND NOT (jsonb_typeof(x) = 'number' AND (x #>> '{}') ~ c_num))
-        THEN 'prices must be numbers from 0 to 99999999.99'
+        THEN 'prices must be numbers from 0 to 99999999.99 with at most 2 decimals'
       WHEN EXISTS (SELECT 1 FROM jsonb_each(e.v) f(k, x) WHERE k IN ('stock_inicial', 'stock_minimo', 'stock_maximo', 'punto_reorden')
                     AND NOT ((jsonb_typeof(x) = 'number' AND (x #>> '{}') ~ c_int) OR (k <> 'stock_inicial' AND jsonb_typeof(x) = 'null')))
         THEN 'stock fields must be whole numbers from 0 to 999999999 (null is allowed only for the thresholds)'
-      WHEN (CASE WHEN (e.v ->> 'stock_minimo') ~ c_int AND (e.v ->> 'stock_maximo') ~ c_int
-                 THEN (e.v ->> 'stock_minimo')::int > (e.v ->> 'stock_maximo')::int ELSE false END)
-        THEN 'stock_minimo cannot exceed stock_maximo'
     END AS m FROM jsonb_array_elements(v_vars) e(v)) q WHERE m IS NOT NULL LIMIT 1;
   IF v_err IS NOT NULL THEN
     RAISE EXCEPTION 'PAYLOAD_INVALIDO: %', v_err USING ERRCODE = '22023';
@@ -181,7 +201,10 @@ BEGIN
   END IF;
 
   -- 2. The group: lock it (keeping the PREVIOUS base name for the naming rule), then upsert it. A group
-  -- id that another organization owns returns no row: P0002, same as a missing one.
+  -- id that another organization owns returns no row: P0002. p_user is checked here, the first read.
+  IF p_user IS NOT NULL AND NOT EXISTS (SELECT 1 FROM users WHERE id = p_user) THEN
+    RAISE EXCEPTION 'PAYLOAD_INVALIDO: p_user is not a known user' USING ERRCODE = '22023';
+  END IF;
   SELECT nombre INTO v_prev FROM inventario_grupos WHERE id = v_gid AND organization_id = p_org FOR UPDATE;
   IF NOT FOUND AND v_gid !~ c_id THEN
     RAISE EXCEPTION 'PAYLOAD_INVALIDO: a new group id looks like c + 24 hex characters' USING ERRCODE = '22023';
@@ -198,7 +221,7 @@ BEGIN
   END IF;
 
   -- 3. Lock every touched row and every current member in id order, then classify. A row of another
-  -- organization is not locked and not visible here: it is "missing".
+  -- organization is neither locked nor read here; an id found only in another organization is P0002.
   PERFORM 1 FROM inventario WHERE organization_id = p_org AND (id = ANY (v_ids || v_arch) OR grupo_id = v_gid) ORDER BY id FOR UPDATE;
   FOR v_i IN 1 .. v_n LOOP
     v_var := v_vars -> (v_i - 1);
@@ -212,6 +235,8 @@ BEGIN
       END IF;
       v_cls := v_cls || 'N'::text;
       v_nm := v_nm || inventario_nombre_variante(v_base, v_var -> 'atributos');
+      v_min := (v_var ->> 'stock_minimo')::int;
+      v_max := (v_var ->> 'stock_maximo')::int;
     ELSIF r.deleted_at IS NOT NULL AND r.grupo_id IS DISTINCT FROM v_gid THEN
       RAISE EXCEPTION 'NO_ENCONTRADO: item %', r.id USING ERRCODE = 'P0002';
     ELSIF r.grupo_id <> v_gid THEN
@@ -224,6 +249,11 @@ BEGIN
         WHEN 'P' THEN CASE WHEN v_ren THEN inventario_nombre_variante(v_base, v_var -> 'atributos') ELSE r.nombre END
         ELSE CASE WHEN r.nombre = inventario_nombre_variante(v_prev, r.atributos)
                   THEN inventario_nombre_variante(v_base, v_var -> 'atributos') ELSE r.nombre END END);
+      v_min := CASE WHEN v_var ? 'stock_minimo' THEN (v_var ->> 'stock_minimo')::int ELSE r.stock_minimo END;
+      v_max := CASE WHEN v_var ? 'stock_maximo' THEN (v_var ->> 'stock_maximo')::int ELSE r.stock_maximo END;
+    END IF;
+    IF v_min > v_max THEN
+      RAISE EXCEPTION 'PAYLOAD_INVALIDO: stock_minimo cannot exceed stock_maximo' USING ERRCODE = '22023';
     END IF;
   END LOOP;
   IF EXISTS (SELECT 1 FROM unnest(v_arch) a(id) WHERE NOT EXISTS
@@ -238,15 +268,18 @@ BEGIN
   IF FOUND THEN
     RAISE EXCEPTION 'STOCK_RESERVADO:%:%', v_rid, v_rres USING ERRCODE = 'P0033';
   END IF;
+  -- Full-state save: after this call every ACTIVE member is a payload row, so no stale member survives.
+  SELECT string_agg(i.id, ',' ORDER BY i.id) INTO v_falt FROM inventario i
+   WHERE i.organization_id = p_org AND i.grupo_id = v_gid AND i.deleted_at IS NULL AND NOT (i.id = ANY (v_ids || v_arch));
+  IF v_falt IS NOT NULL THEN
+    RAISE EXCEPTION 'PAYLOAD_INVALIDO:miembros_faltantes:%', v_falt USING ERRCODE = '22023';
+  END IF;
 
-  -- 4. Combinations and codes that would collide once the save lands: the payload rows plus the active
-  -- members it does not mention (rows archived by this call free their slot and their code).
-  IF EXISTS (SELECT 1 FROM (
-        SELECT inventario_combinacion_clave(e.v -> 'atributos') AS k FROM jsonb_array_elements(v_vars) e(v)
-        UNION ALL
-        SELECT inventario_combinacion_clave(i.atributos) FROM inventario i
-         WHERE i.organization_id = p_org AND i.grupo_id = v_gid AND i.deleted_at IS NULL AND NOT (i.id = ANY (v_ids || v_arch))
-      ) u GROUP BY k HAVING count(*) > 1) THEN
+  -- 4. Combinations and codes that would collide once the save lands. Every active member is in the
+  -- payload (or archived by this call), so the payload rows ARE the final active set of the group; the
+  -- codes are also checked against the other active rows of the organization (rows archived by this call
+  -- free their code).
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(v_vars) e(v) GROUP BY inventario_combinacion_clave(e.v -> 'atributos') HAVING count(*) > 1) THEN
     RAISE EXCEPTION 'COMBINACION_DUPLICADA' USING ERRCODE = 'P0030';
   END IF;
   v_codes := ARRAY(SELECT COALESCE(e.v ->> 'codigo', i.codigo)
@@ -263,14 +296,17 @@ BEGIN
   END IF;
 
   -- 5. Shared fields every row of the group must end with: the group's current values (or, for a new
-  -- group, those of the first promoted row) overlaid with the keys of p_compartidos.
+  -- group, those of the first promoted row) overlaid with the keys of p_compartidos. Members of a group
+  -- always agree (the M1a trigger), so which member is read does not matter.
   SELECT jsonb_build_object('descripcion', i.descripcion, 'categoria', i.categoria, 'tipo_dispositivo', i.tipo_dispositivo,
            'proveedor', i.proveedor, 'proveedor_id', i.proveedor_id, 'dias_garantia_default', i.dias_garantia_default,
            'trackea_lotes', i.trackea_lotes, 'trackea_series', i.trackea_series, 'dias_alerta_vencimiento', i.dias_alerta_vencimiento)
     INTO v_sh FROM inventario i
    WHERE i.organization_id = p_org AND (i.grupo_id = v_gid OR i.id = ANY (v_ids))
-   ORDER BY (i.grupo_id = v_gid) DESC NULLS LAST, (i.deleted_at IS NULL) DESC, i.id LIMIT 1;
+   ORDER BY (i.grupo_id = v_gid) DESC NULLS LAST, i.id LIMIT 1;
   v_s := jsonb_populate_record(NULL::inventario, COALESCE(v_sh, '{}'::jsonb) || v_comp);
+  v_s.trackea_lotes := COALESCE(v_s.trackea_lotes, false);
+  v_s.trackea_series := COALESCE(v_s.trackea_series, false);
   IF v_s.categoria IS NULL AND 'N' = ANY (v_cls) THEN
     RAISE EXCEPTION 'PAYLOAD_INVALIDO: categoria is required to create variants in a new group' USING ERRCODE = '22023';
   END IF;
@@ -285,27 +321,15 @@ BEGIN
     RAISE EXCEPTION 'NO_ENCONTRADO: deposito %', p_deposito_inicial USING ERRCODE = 'P0002';
   END IF;
 
-  -- 6. Writes. Archive first (it frees slots and codes), then the rows, then the group-wide shared update.
+  -- 6. Writes, in this order: archive (it frees slots and codes), EXISTING rows (a rename frees a slot or a
+  -- code for a new row in any payload order), NEW rows, the names of archived members, and the group-wide
+  -- shared update.
   WITH a AS (UPDATE inventario SET deleted_at = NOW(), deleted_by = p_user
               WHERE organization_id = p_org AND id = ANY (v_arch) AND deleted_at IS NULL RETURNING id)
   SELECT COALESCE(array_agg(id ORDER BY id), '{}') INTO v_ar FROM a;
   FOR v_i IN 1 .. v_n LOOP
-    v_var := v_vars -> (v_i - 1);
-    IF v_cls[v_i] = 'N' THEN
-      INSERT INTO inventario (id, organization_id, codigo, nombre, descripcion, categoria, tipo_dispositivo, proveedor, proveedor_id,
-                              dias_garantia_default, trackea_lotes, trackea_series, dias_alerta_vencimiento, stock, precio_compra,
-                              precio_venta, stock_minimo, stock_maximo, punto_reorden, barcode, ubicacion, grupo_id, atributos)
-      VALUES (v_ids[v_i], p_org, v_var ->> 'codigo', v_nm[v_i], v_s.descripcion, v_s.categoria, v_s.tipo_dispositivo, v_s.proveedor,
-              v_s.proveedor_id, v_s.dias_garantia_default, COALESCE(v_s.trackea_lotes, false), COALESCE(v_s.trackea_series, false),
-              v_s.dias_alerta_vencimiento, 0, COALESCE((v_var ->> 'precio_compra')::numeric, 0), COALESCE((v_var ->> 'precio_venta')::numeric, 0),
-              (v_var ->> 'stock_minimo')::int, (v_var ->> 'stock_maximo')::int, (v_var ->> 'punto_reorden')::int,
-              NULLIF(btrim(v_var ->> 'barcode'), ''), NULLIF(btrim(v_var ->> 'ubicacion'), ''), v_gid, v_var -> 'atributos');
-      IF COALESCE((v_var ->> 'stock_inicial')::int, 0) > 0 THEN
-        PERFORM adjust_stock_atomic(v_ids[v_i], p_org, p_user, 'delta', (v_var ->> 'stock_inicial')::int,
-                                    'Stock inicial de variante', 'ENTRADA', 'STOCK_INICIAL', p_deposito_inicial);
-      END IF;
-      v_cre := v_cre || v_ids[v_i];
-    ELSE
+    IF v_cls[v_i] <> 'N' THEN
+      v_var := v_vars -> (v_i - 1);
       UPDATE inventario SET
         grupo_id = v_gid, atributos = v_var -> 'atributos', nombre = v_nm[v_i], deleted_at = NULL, deleted_by = NULL,
         codigo = COALESCE(v_var ->> 'codigo', codigo),
@@ -322,17 +346,42 @@ BEGIN
       ELSE v_res := v_res || v_ids[v_i]; END IF;
     END IF;
   END LOOP;
+  FOR v_i IN 1 .. v_n LOOP
+    v_var := v_vars -> (v_i - 1);
+    IF v_cls[v_i] = 'N' THEN
+      INSERT INTO inventario (id, organization_id, codigo, nombre, descripcion, categoria, tipo_dispositivo, proveedor, proveedor_id,
+                              dias_garantia_default, trackea_lotes, trackea_series, dias_alerta_vencimiento, stock, precio_compra,
+                              precio_venta, stock_minimo, stock_maximo, punto_reorden, barcode, ubicacion, grupo_id, atributos)
+      VALUES (v_ids[v_i], p_org, v_var ->> 'codigo', v_nm[v_i], v_s.descripcion, v_s.categoria, v_s.tipo_dispositivo, v_s.proveedor,
+              v_s.proveedor_id, v_s.dias_garantia_default, v_s.trackea_lotes, v_s.trackea_series,
+              v_s.dias_alerta_vencimiento, 0, COALESCE((v_var ->> 'precio_compra')::numeric, 0), COALESCE((v_var ->> 'precio_venta')::numeric, 0),
+              (v_var ->> 'stock_minimo')::int, (v_var ->> 'stock_maximo')::int, (v_var ->> 'punto_reorden')::int,
+              NULLIF(btrim(v_var ->> 'barcode'), ''), NULLIF(btrim(v_var ->> 'ubicacion'), ''), v_gid, v_var -> 'atributos');
+      IF COALESCE((v_var ->> 'stock_inicial')::int, 0) > 0 THEN
+        PERFORM adjust_stock_atomic(v_ids[v_i], p_org, p_user, 'delta', (v_var ->> 'stock_inicial')::int,
+                                    'Stock inicial de variante', 'ENTRADA', 'STOCK_INICIAL', p_deposito_inicial);
+      END IF;
+      v_cre := v_cre || v_ids[v_i];
+    END IF;
+  END LOOP;
+  -- A base rename also reaches the ARCHIVED members whose name is still the managed one, so restoring
+  -- one later starts from the current base (a custom name stays as it is).
+  IF v_prev IS NOT NULL AND v_prev <> v_base THEN
+    UPDATE inventario SET nombre = inventario_nombre_variante(v_base, atributos)
+     WHERE organization_id = p_org AND grupo_id = v_gid AND deleted_at IS NOT NULL
+       AND nombre = inventario_nombre_variante(v_prev, atributos);
+  END IF;
   PERFORM set_config('stapp.sync_grupo', 'on', true);
   UPDATE inventario i SET descripcion = v_s.descripcion, categoria = v_s.categoria, tipo_dispositivo = v_s.tipo_dispositivo,
          proveedor = v_s.proveedor, proveedor_id = v_s.proveedor_id, dias_garantia_default = v_s.dias_garantia_default,
-         trackea_lotes = COALESCE(v_s.trackea_lotes, false), trackea_series = COALESCE(v_s.trackea_series, false),
+         trackea_lotes = v_s.trackea_lotes, trackea_series = v_s.trackea_series,
          dias_alerta_vencimiento = v_s.dias_alerta_vencimiento
    WHERE i.organization_id = p_org AND i.grupo_id = v_gid
      AND (i.descripcion, i.categoria, i.tipo_dispositivo, i.proveedor, i.proveedor_id, i.dias_garantia_default,
           i.trackea_lotes, i.trackea_series, i.dias_alerta_vencimiento)
          IS DISTINCT FROM
          (v_s.descripcion, v_s.categoria, v_s.tipo_dispositivo, v_s.proveedor, v_s.proveedor_id, v_s.dias_garantia_default,
-          COALESCE(v_s.trackea_lotes, false), COALESCE(v_s.trackea_series, false), v_s.dias_alerta_vencimiento);
+          v_s.trackea_lotes, v_s.trackea_series, v_s.dias_alerta_vencimiento);
   PERFORM set_config('stapp.sync_grupo', 'off', true);
 
   RETURN jsonb_build_object('grupoId', v_gid, 'creados', to_jsonb(v_cre), 'actualizados', to_jsonb(v_act),
