@@ -4,6 +4,9 @@
 -- (no --apply: the file opens its own transaction and always ends in ROLLBACK).
 -- Everything is scratch data (orgs 'probe-m1b-org' and 'probe-m1b-other') and is rolled back. There is
 -- no DDL except the rollback rehearsal at the end, which drops the function until that ROLLBACK.
+-- RUN IT BEFORE PR4 MERGES: while the rehearsal holds the DROP, a save that arrives waits on the lock
+-- until the ROLLBACK, and from PR4 on real saves arrive. A few probes SET LOCAL ROLE to service_role,
+-- anon and authenticated (the connecting role must be allowed to, as the Supabase postgres role is).
 --
 -- Results accumulate in _r and come out in ONE select. Green = esperado equals obtenido, or obtenido
 -- starts with 'OK:' for the probes that expect an error. Every error probe checks the SQLSTATE AND the
@@ -69,6 +72,27 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 CREATE FUNCTION pg_temp.ck(p_orden INT, p_probe TEXT, p_esperado TEXT, p_obtenido TEXT) RETURNS VOID LANGUAGE sql AS $$
   INSERT INTO _r VALUES (p_orden, p_probe, p_esperado, p_obtenido) $$;
+
+-- Same as probe(), but the statement runs under SET LOCAL ROLE p_role (restored either way). The statement
+-- must not read this session's temp tables: the other roles cannot see them.
+CREATE FUNCTION pg_temp.como(p_orden INT, p_probe TEXT, p_role TEXT, p_esperado TEXT, p_sql TEXT, p_msg TEXT DEFAULT NULL)
+RETURNS VOID LANGUAGE plpgsql AS $$
+DECLARE v_got TEXT := 'ok'; v_msg TEXT := '';
+BEGIN
+  IF p_esperado <> 'ok' AND p_msg IS NULL THEN
+    RAISE EXCEPTION 'probe % expects an error but names no message pattern: a bare SQLSTATE can be raised by an overlapping guard', p_orden;
+  END IF;
+  BEGIN
+    EXECUTE format('SET LOCAL ROLE %I', p_role);
+    EXECUTE p_sql;
+  EXCEPTION WHEN OTHERS THEN
+    v_got := SQLSTATE; v_msg := SQLERRM;
+  END;
+  RESET ROLE;
+  INSERT INTO _r VALUES (p_orden, p_probe, p_esperado,
+    CASE WHEN v_got = p_esperado AND (p_msg IS NULL OR v_msg LIKE p_msg) THEN 'OK: ' || v_got
+         ELSE 'FALLO: ' || v_got || ' ' || v_msg END);
+END $$;
 
 -- Scratch org with the depots the probes use, an UNGROUPED control row, and a second org with its
 -- own depot, group, child and supplier (the target of the cross-org probes).
@@ -303,7 +327,7 @@ SELECT pg_temp.ck(82, 'a freed slot accepts a new active row (no unique violatio
   ((r -> 'creados') = to_jsonb(ARRAY[pg_temp.cid(84)]) AND (r ->> 'error') IS NULL)::TEXT || COALESCE(' ' || (r ->> 'error'), '')) FROM _res WHERE k = 'a3';
 DO $$ BEGIN
   PERFORM pg_temp.probe(83, 'restore into an occupied slot is P0030 (409)', 'P0030',
-    $q$SELECT pg_temp.guardar(pg_temp.grupo(8, 'Probe Archivo'), jsonb_build_array(pg_temp.fila(81, '["Rojo"]', 'PB7-RO'), pg_temp.fila(82, '["Azul"]', 'PB7-AZ'), pg_temp.fila(83, '["Verde"]', 'PB7-VE')), '{}')$q$,
+    $q$SELECT pg_temp.guardar(pg_temp.grupo(8, 'Probe Archivo'), jsonb_build_array(pg_temp.fila(81, '["Rojo"]', 'PB7-RO'), pg_temp.fila(82, '["Azul"]', 'PB7-AZ'), pg_temp.fila(83, '["Verde"]', 'PB7-VE'), pg_temp.fila(84, '["Rojo"]', 'PB7-RO2')), '{}')$q$,
     'COMBINACION_DUPLICADA%');
 END $$;
 -- free the slot again and give another ACTIVE item Rojo's old code
@@ -398,23 +422,192 @@ BEGIN
   -- conflicts and ownership
   PERFORM pg_temp.probe(140, 'Rojo and rojo with an accent in one save is P0030', 'P0030', $q$SELECT pg_temp.guardar(pg_temp.grupo(140, 'E'), jsonb_build_array(pg_temp.fila(840, '["Rojo"]', 'PB8-40'), pg_temp.fila(841, ('["Roj' || chr(243) || '"]')::jsonb, 'PB8-41')))$q$, 'COMBINACION_DUPLICADA');
   PERFORM pg_temp.probe(141, 'an item that belongs to another group is P0031', 'P0031', $q$SELECT pg_temp.guardar(pg_temp.grupo(141, 'E'), jsonb_build_array(pg_temp.fila(11, '["Rojo"]', 'PB1-RO')))$q$, 'ITEM_EN_OTRO_GRUPO: %');
-  PERFORM pg_temp.probe(142, 'an archived id that belongs to another group is P0031', 'P0031', $q$SELECT pg_temp.guardar(pg_temp.grupo(8, 'Probe Archivo'), jsonb_build_array(pg_temp.fila(83, '["Verde"]', 'PB7-VE')), '{}', jsonb_build_array(pg_temp.cid(11)))$q$, 'ITEM_EN_OTRO_GRUPO: %');
+  PERFORM pg_temp.probe(142, 'an archived id that belongs to another group is P0031', 'P0031', $q$SELECT pg_temp.guardar(pg_temp.grupo(8, 'Probe Archivo'), jsonb_build_array(pg_temp.fila(81, '["Rojo"]', 'PB7-RO'), pg_temp.fila(82, '["Azul"]', 'PB7-AZ'), pg_temp.fila(83, '["Verde"]', 'PB7-VE')), '{}', jsonb_build_array(pg_temp.cid(11)))$q$, 'ITEM_EN_OTRO_GRUPO: %');
   PERFORM pg_temp.probe(143, 'a kit cannot join a group (P0032, before the M1a CHECK)', 'P0032', $q$SELECT pg_temp.guardar(pg_temp.grupo(143, 'E'), jsonb_build_array(jsonb_build_object('id', (SELECT id FROM inventario WHERE codigo = 'PB8-KIT' AND organization_id = (SELECT org FROM _s)), 'atributos', pg_temp.atr('["Rojo"]'))))$q$, 'KIT_NO_PERMITIDO: %');
   PERFORM pg_temp.probe(144, 'every offending code is listed, sorted (P0035)', 'P0035', $q$SELECT pg_temp.guardar(pg_temp.grupo(144, 'E'), jsonb_build_array(pg_temp.fila(844, '["Rojo"]', 'PB8-S'), pg_temp.fila(845, '["Azul"]', 'PB8-S'), pg_temp.fila(846, '["Verde"]', 'PB8-X1'), pg_temp.fila(847, '["Negro"]', 'PB8-X2')))$q$, 'CODIGO_DUPLICADO:PB8-S,PB8-X1,PB8-X2');
-  PERFORM pg_temp.probe(145, 'an item of another organization behaves like a missing one (P0002)', 'P0002', format($q$SELECT pg_temp.guardar(pg_temp.grupo(145, 'E'), jsonb_build_array(jsonb_build_object('id', %L, 'atributos', pg_temp.atr('["Rojo"]'))))$q$, (SELECT hijo FROM _o)), 'NO_ENCONTRADO: item %');
+  PERFORM pg_temp.probe(145, 'an item of another organization is refused as not found (P0002)', 'P0002', format($q$SELECT pg_temp.guardar(pg_temp.grupo(145, 'E'), jsonb_build_array(jsonb_build_object('id', %L, 'atributos', pg_temp.atr('["Rojo"]'))))$q$, (SELECT hijo FROM _o)), 'NO_ENCONTRADO: item %');
   PERFORM pg_temp.probe(146, 'a group id owned by another organization is P0002', 'P0002', format($q$SELECT pg_temp.guardar(%L::jsonb, jsonb_build_array(pg_temp.fila(846, '["Rojo"]', 'PB8-46')))$q$, jsonb_build_object('id', (SELECT grupo FROM _o), 'nombre', 'HIJACKED', 'opciones', jsonb_build_array(jsonb_build_object('nombre', 'Color', 'valores', jsonb_build_array('Rojo'))))::text), 'NO_ENCONTRADO: group %');
   PERFORM pg_temp.probe(147, 'the other org cannot use this org''s group either (P0002)', 'P0002', format($q$SELECT pg_temp.guardar(pg_temp.grupo(1, 'HIJACKED'), jsonb_build_array(pg_temp.fila(847, '["Rojo"]', 'PB8-47')), '{"categoria":"X"}', '[]', NULL, %L)$q$, (SELECT org FROM _o)), 'NO_ENCONTRADO: group %');
   PERFORM pg_temp.probe(148, 'a depot of another organization for the initial stock (P0002)', 'P0002', format($q$SELECT pg_temp.guardar(pg_temp.grupo(148, 'E'), jsonb_build_array(pg_temp.fila(848, '["Rojo"]', 'PB8-48', '{"stock_inicial":2}')), '{"categoria":"X"}', '[]', %L)$q$, (SELECT deposito FROM _o)), 'NO_ENCONTRADO: deposito %');
   PERFORM pg_temp.probe(149, 'an inactive depot for the initial stock (P0002)', 'P0002', format($q$SELECT pg_temp.guardar(pg_temp.grupo(149, 'E'), jsonb_build_array(pg_temp.fila(849, '["Rojo"]', 'PB8-49', '{"stock_inicial":2}')), '{"categoria":"X"}', '[]', %L)$q$, (SELECT inactivo FROM _s)), 'NO_ENCONTRADO: deposito %');
   PERFORM pg_temp.probe(150, 'an archived standalone item cannot be pulled into a group (P0002)', 'P0002', $q$SELECT pg_temp.guardar(pg_temp.grupo(150, 'E'), jsonb_build_array(jsonb_build_object('id', (SELECT id FROM inventario WHERE codigo = 'PB8-OLD' AND organization_id = (SELECT org FROM _s)), 'atributos', pg_temp.atr('["Rojo"]'))))$q$, 'NO_ENCONTRADO: item %');
   PERFORM pg_temp.probe(151, 'a supplier of another organization (P0002)', 'P0002', format($q$SELECT pg_temp.guardar(pg_temp.grupo(151, 'E'), jsonb_build_array(pg_temp.fila(851, '["Rojo"]', 'PB8-51')), jsonb_build_object('categoria', 'X', 'proveedor_id', %L))$q$, (SELECT proveedor FROM _o)), 'NO_ENCONTRADO: proveedor %');
-  PERFORM pg_temp.probe(152, 'archiving a standalone (ungrouped) item is P0002', 'P0002', $q$SELECT pg_temp.guardar(pg_temp.grupo(8, 'Probe Archivo'), jsonb_build_array(pg_temp.fila(83, '["Verde"]', 'PB7-VE')), '{}', jsonb_build_array((SELECT suelto FROM _s)))$q$, 'NO_ENCONTRADO: an archived id%');
-  PERFORM pg_temp.probe(153, 'archiving an item of another organization is P0002', 'P0002', format($q$SELECT pg_temp.guardar(pg_temp.grupo(8, 'Probe Archivo'), jsonb_build_array(pg_temp.fila(83, '["Verde"]', 'PB7-VE')), '{}', jsonb_build_array(%L::text))$q$, (SELECT hijo FROM _o)), 'NO_ENCONTRADO: an archived id%');
+  PERFORM pg_temp.probe(152, 'archiving a standalone (ungrouped) item is P0002', 'P0002', $q$SELECT pg_temp.guardar(pg_temp.grupo(8, 'Probe Archivo'), jsonb_build_array(pg_temp.fila(81, '["Rojo"]', 'PB7-RO'), pg_temp.fila(82, '["Azul"]', 'PB7-AZ'), pg_temp.fila(83, '["Verde"]', 'PB7-VE')), '{}', jsonb_build_array((SELECT suelto FROM _s)))$q$, 'NO_ENCONTRADO: an archived id%');
+  PERFORM pg_temp.probe(153, 'archiving an item of another organization is P0002', 'P0002', format($q$SELECT pg_temp.guardar(pg_temp.grupo(8, 'Probe Archivo'), jsonb_build_array(pg_temp.fila(81, '["Rojo"]', 'PB7-RO'), pg_temp.fila(82, '["Azul"]', 'PB7-AZ'), pg_temp.fila(83, '["Verde"]', 'PB7-VE')), '{}', jsonb_build_array(%L::text))$q$, (SELECT hijo FROM _o)), 'NO_ENCONTRADO: an archived id%');
 END $$;
 SELECT pg_temp.ck(190, 'the other org''s group and child were not touched by the P0002 probes', 'Probe Other Group/OtherCat',
   (SELECT nombre FROM inventario_grupos WHERE id = (SELECT grupo FROM _o)) || '/' || (SELECT categoria FROM inventario WHERE id = (SELECT hijo FROM _o)));
 SELECT pg_temp.ck(191, 'this org''s group kept its name through the cross-org probes', 'Probe Funda', nombre) FROM inventario_grupos WHERE id = pg_temp.cid(1);
 SELECT pg_temp.ck(199, 'no call of the error battery left a row behind', '0', count(*)::TEXT) FROM inventario WHERE codigo LIKE 'PB8-%' AND codigo NOT IN ('PB8-KIT', 'PB8-OLD', 'PB8-X1', 'PB8-X2');
+
+-- PROBE 10 (review fixes): the save is a FULL-STATE save, writes existing rows before new ones, persists
+-- thresholds and group data, refuses raw-error inputs with a clean 22023, and runs as the real caller.
+-- Every block has its own group; groups 1 and 8 are only read.
+
+-- 10a: thresholds and location are written on INSERT and on UPDATE; an absent key keeps the stored value and
+-- a JSON null clears it.
+SELECT pg_temp.run('t1', pg_temp.grupo(200, 'Probe Umbrales'),
+  jsonb_build_array(pg_temp.fila(2001, '["Rojo"]', 'PB10-RO', '{"stock_minimo":2,"stock_maximo":9,"punto_reorden":4,"ubicacion":"  A-1 "}'),
+                    pg_temp.fila(2002, '["Azul"]', 'PB10-AZ')));
+SELECT pg_temp.ck(300, 'insert writes min, max, reorder point and the trimmed location; absent stays NULL', '2/9/4/A-1|///',
+  string_agg(COALESCE(stock_minimo::TEXT, '') || '/' || COALESCE(stock_maximo::TEXT, '') || '/' || COALESCE(punto_reorden::TEXT, '') || '/' || COALESCE(ubicacion, ''), '|' ORDER BY codigo DESC))
+  FROM inventario WHERE grupo_id = pg_temp.cid(200);
+SELECT pg_temp.run('t2', pg_temp.grupo(200, 'Probe Umbrales'),
+  jsonb_build_array(pg_temp.fila(2001, '["Rojo"]', 'PB10-RO', '{"stock_minimo":3,"punto_reorden":5,"ubicacion":"B-2"}'),
+                    pg_temp.fila(2002, '["Azul"]', 'PB10-AZ', '{"stock_minimo":1,"stock_maximo":7,"punto_reorden":2,"ubicacion":"C-3"}')));
+SELECT pg_temp.ck(301, 'update writes each of the four; an absent stock_maximo keeps the stored 9', '3/9/5/B-2|1/7/2/C-3',
+  string_agg(COALESCE(stock_minimo::TEXT, '') || '/' || COALESCE(stock_maximo::TEXT, '') || '/' || COALESCE(punto_reorden::TEXT, '') || '/' || COALESCE(ubicacion, ''), '|' ORDER BY codigo DESC))
+  FROM inventario WHERE grupo_id = pg_temp.cid(200);
+SELECT pg_temp.run('t3', pg_temp.grupo(200, 'Probe Umbrales'),
+  jsonb_build_array(pg_temp.fila(2001, '["Rojo"]', 'PB10-RO', '{"stock_minimo":null,"ubicacion":null}'),
+                    pg_temp.fila(2002, '["Azul"]', 'PB10-AZ')));
+SELECT pg_temp.ck(302, 'a JSON null clears a threshold and the location, the other keys stay', '/9/5/|1/7/2/C-3',
+  string_agg(COALESCE(stock_minimo::TEXT, '') || '/' || COALESCE(stock_maximo::TEXT, '') || '/' || COALESCE(punto_reorden::TEXT, '') || '/' || COALESCE(ubicacion, ''), '|' ORDER BY codigo DESC))
+  FROM inventario WHERE grupo_id = pg_temp.cid(200);
+
+-- 10b: an edit stores the new group name, the new option values and a renamed option.
+SELECT pg_temp.run('gr1', pg_temp.grupo(201, 'Probe G201', '{"opciones":[{"nombre":"Color","valores":["Rojo","Azul"]}]}'),
+  jsonb_build_array(pg_temp.fila(2011, '["Rojo"]', 'PB10-G1')));
+SELECT pg_temp.run('gr2', pg_temp.grupo(201, 'Probe G201 b', '{"opciones":[{"nombre":"Color","valores":["Rojo","Azul","Verde"]}]}'),
+  jsonb_build_array(pg_temp.fila(2011, '["Rojo"]', 'PB10-G1')));
+SELECT pg_temp.ck(303, 'an edit stores the new group name and the new option values', 'Probe G201 b/3',
+  nombre || '/' || jsonb_array_length(opciones -> 0 -> 'valores')) FROM inventario_grupos WHERE id = pg_temp.cid(201);
+SELECT pg_temp.run('gr3', pg_temp.grupo(201, 'Probe G201 b', '{"opciones":[{"nombre":"Colour","valores":["Rojo"]}]}'),
+  jsonb_build_array(pg_temp.fila(2011, '["Rojo"]', 'PB10-G1', '{"atributos":[{"opcion":"Colour","valor":"Rojo"}]}')));
+SELECT pg_temp.ck(304, 'an edit stores a renamed option and the row follows it', 'Colour/1/Colour',
+  (opciones -> 0 ->> 'nombre') || '/' || jsonb_array_length(opciones -> 0 -> 'valores') || '/' ||
+  (SELECT atributos -> 0 ->> 'opcion' FROM inventario WHERE id = pg_temp.cid(2011))) FROM inventario_grupos WHERE id = pg_temp.cid(201);
+
+-- 10c: a standalone item joining an EXISTING group takes the group's shared values (it has the smallest id, so
+-- a source chosen by id would pick it).
+INSERT INTO inventario (id, organization_id, codigo, nombre, categoria, descripcion, trackea_series, precio_compra, precio_venta)
+  SELECT 'c' || lpad('1', 24, '0'), org, 'PB10-SOLO', 'Solo item', 'OtraCat', 'solo desc', true, 1, 1 FROM _s;
+SELECT pg_temp.run('pg1', pg_temp.grupo(203, 'Probe Join'),
+  jsonb_build_array(pg_temp.fila(2031, '["Rojo"]', 'PB10-J1'), pg_temp.fila(2032, '["Azul"]', 'PB10-J2')), '{"categoria":"GCat","descripcion":"gdesc"}');
+SELECT pg_temp.run('pg2', pg_temp.grupo(203, 'Probe Join'),
+  jsonb_build_array(pg_temp.fila(2031, '["Rojo"]', 'PB10-J1'), pg_temp.fila(2032, '["Azul"]', 'PB10-J2'),
+                    jsonb_build_object('id', 'c' || lpad('1', 24, '0'), 'atributos', pg_temp.atr('["Verde"]'))), '{}');
+SELECT pg_temp.ck(305, 'the joining item takes the group values (GCat, gdesc, no series) and the group stays uniform', 'GCat/gdesc/false/1',
+  (SELECT categoria || '/' || descripcion || '/' || trackea_series::TEXT FROM inventario WHERE id = 'c' || lpad('1', 24, '0')) || '/' ||
+  (SELECT count(DISTINCT categoria)::TEXT FROM inventario WHERE grupo_id = pg_temp.cid(203)));
+
+-- 10d: full-state save. Members left out of a save are refused, naming them; nothing changes.
+SELECT pg_temp.run('f1', pg_temp.grupo(204, 'Probe Full'),
+  jsonb_build_array(pg_temp.fila(2041, '["Rojo"]', 'PB10-F1'), pg_temp.fila(2042, '["Azul"]', 'PB10-F2'), pg_temp.fila(2043, '["Verde"]', 'PB10-F3')));
+DO $$ BEGIN
+  PERFORM pg_temp.probe(306, 'a save that leaves out active members is refused and names them', '22023',
+    $q$SELECT pg_temp.guardar(pg_temp.grupo(204, 'Probe Full'), jsonb_build_array(pg_temp.fila(2041, '["Rojo"]', 'PB10-F1')))$q$,
+    'PAYLOAD_INVALIDO:miembros_faltantes:' || pg_temp.cid(2042) || ',' || pg_temp.cid(2043));
+  PERFORM pg_temp.probe(307, 'adding an option while leaving members out is refused (they would keep a stale atributos)', '22023',
+    $q$SELECT pg_temp.guardar(pg_temp.grupo(204, 'Probe Full', '{"opciones":[{"nombre":"Color","valores":["Rojo","Azul","Verde"]},{"nombre":"Talle","valores":["M"]}]}'), jsonb_build_array(pg_temp.fila(2041, '["Rojo","M"]', 'PB10-F1')))$q$,
+    'PAYLOAD_INVALIDO:miembros_faltantes:' || pg_temp.cid(2042) || ',' || pg_temp.cid(2043));
+  PERFORM pg_temp.probe(308, 'renaming an option while leaving members out is refused', '22023',
+    $q$SELECT pg_temp.guardar(pg_temp.grupo(204, 'Probe Full', '{"opciones":[{"nombre":"Colour","valores":["Rojo","Azul","Verde"]}]}'), jsonb_build_array(pg_temp.fila(2041, '["Rojo"]', 'PB10-F1', '{"atributos":[{"opcion":"Colour","valor":"Rojo"}]}')))$q$,
+    'PAYLOAD_INVALIDO:miembros_faltantes:' || pg_temp.cid(2042) || ',' || pg_temp.cid(2043));
+END $$;
+SELECT pg_temp.ck(309, 'the refused saves left the group (1 option) and every member (1 entry) as they were', '1/1',
+  (SELECT jsonb_array_length(opciones) FROM inventario_grupos WHERE id = pg_temp.cid(204))::TEXT || '/' ||
+  (SELECT max(jsonb_array_length(atributos))::TEXT FROM inventario WHERE grupo_id = pg_temp.cid(204)));
+SELECT pg_temp.run('f2', pg_temp.grupo(204, 'Probe Full'),
+  jsonb_build_array(pg_temp.fila(2041, '["Rojo"]', 'PB10-F1'), pg_temp.fila(2042, '["Azul"]', 'PB10-F2')), '{}', jsonb_build_array(pg_temp.cid(2043)));
+SELECT pg_temp.ck(310, 'leaving a member out is fine when the same call archives it', 'true',
+  ((r -> 'archivados') = to_jsonb(ARRAY[pg_temp.cid(2043)]) AND (r ->> 'error') IS NULL)::TEXT || COALESCE(' ' || (r ->> 'error'), '')) FROM _res WHERE k = 'f2';
+
+-- 10e: restore re-derives the managed name against the CURRENT base and values; a custom name survives.
+SELECT pg_temp.run('r1', pg_temp.grupo(205, 'Probe R205'), jsonb_build_array(pg_temp.fila(2051, '["Rojo"]', 'PB10-R1'), pg_temp.fila(2052, '["Azul"]', 'PB10-R2')));
+SELECT pg_temp.run('r2', pg_temp.grupo(205, 'Probe R205'), jsonb_build_array(pg_temp.fila(2052, '["Azul"]', 'PB10-R2')), '{}', jsonb_build_array(pg_temp.cid(2051)));
+SELECT pg_temp.run('r3', pg_temp.grupo(205, 'Probe R205b'), jsonb_build_array(pg_temp.fila(2052, '["Azul"]', 'PB10-R2')), '{}');
+SELECT pg_temp.run('r4', pg_temp.grupo(205, 'Probe R205b'), jsonb_build_array(pg_temp.fila(2051, '["Rojo"]', 'PB10-R1'), pg_temp.fila(2052, '["Azul"]', 'PB10-R2')), '{}');
+SELECT pg_temp.ck(311, 'restoring after a base rename gives the row the CURRENT base name', 'Probe R205b - Rojo|Probe R205b - Azul',
+  string_agg(nombre, '|' ORDER BY codigo)) FROM inventario WHERE grupo_id = pg_temp.cid(205);
+UPDATE inventario SET nombre = 'Rojo custom' WHERE id = pg_temp.cid(2051);
+SELECT pg_temp.run('r5', pg_temp.grupo(205, 'Probe R205b'), jsonb_build_array(pg_temp.fila(2052, '["Azul"]', 'PB10-R2')), '{}', jsonb_build_array(pg_temp.cid(2051)));
+SELECT pg_temp.run('r6', pg_temp.grupo(205, 'Probe R205c'), jsonb_build_array(pg_temp.fila(2052, '["Azul"]', 'PB10-R2')), '{}');
+SELECT pg_temp.run('r7', pg_temp.grupo(205, 'Probe R205c'), jsonb_build_array(pg_temp.fila(2051, '["Rojo"]', 'PB10-R1'), pg_temp.fila(2052, '["Azul"]', 'PB10-R2')), '{}');
+SELECT pg_temp.ck(312, 'a custom name survives archive, base rename and restore; the managed one follows the base', 'Rojo custom|Probe R205c - Azul',
+  string_agg(nombre, '|' ORDER BY codigo)) FROM inventario WHERE grupo_id = pg_temp.cid(205);
+SELECT pg_temp.run('r8', pg_temp.grupo(205, 'Probe R205c'), jsonb_build_array(pg_temp.fila(2051, '["Rojo"]', 'PB10-R1')), '{}', jsonb_build_array(pg_temp.cid(2052)));
+SELECT pg_temp.run('r9', pg_temp.grupo(205, 'Probe R205c', '{"opciones":[{"nombre":"Color","valores":["Rojo","Azul marino"]}]}'),
+  jsonb_build_array(pg_temp.fila(2051, '["Rojo"]', 'PB10-R1'), pg_temp.fila(2052, '["Azul marino"]', 'PB10-R2')), '{}');
+SELECT pg_temp.ck(313, 'restoring with a new value re-derives the managed name from it', 'Probe R205c - Azul marino', nombre) FROM inventario WHERE id = pg_temp.cid(2052);
+
+-- 10f: existing rows are written before new ones, and archive comes first.
+SELECT pg_temp.run('o1', pg_temp.grupo(206, 'Probe Orden'), jsonb_build_array(pg_temp.fila(2061, '["Rojo"]', 'PB10-O1')));
+SELECT pg_temp.run('o2', pg_temp.grupo(206, 'Probe Orden'), jsonb_build_array(pg_temp.fila(2062, '["Rojo"]', 'PB10-O2'), pg_temp.fila(2061, '["Negro"]', 'PB10-O1')));
+SELECT pg_temp.ck(314, 'rename a row and give a NEW row its freed combination, new row listed FIRST', 'Negro|Rojo',
+  string_agg(atributos -> 0 ->> 'valor', '|' ORDER BY codigo)) FROM inventario WHERE grupo_id = pg_temp.cid(206);
+SELECT pg_temp.run('o3', pg_temp.grupo(206, 'Probe Orden'),
+  jsonb_build_array(pg_temp.fila(2063, '["Azul"]', 'PB10-O1'), pg_temp.fila(2061, '["Negro"]', 'PB10-O1B'), pg_temp.fila(2062, '["Rojo"]', 'PB10-O2')));
+SELECT pg_temp.ck(315, 'a code freed by an existing row can be taken by a new row listed first', 'PB10-O1B/PB10-O1',
+  (SELECT codigo FROM inventario WHERE id = pg_temp.cid(2061)) || '/' || (SELECT codigo FROM inventario WHERE id = pg_temp.cid(2063)));
+SELECT pg_temp.run('x1', pg_temp.grupo(207, 'Probe ArchNew'), jsonb_build_array(pg_temp.fila(2071, '["Rojo"]', 'PB10-A1'), pg_temp.fila(2072, '["Azul"]', 'PB10-A2')));
+SELECT pg_temp.run('x2', pg_temp.grupo(207, 'Probe ArchNew'),
+  jsonb_build_array(pg_temp.fila(2072, '["Azul"]', 'PB10-A2'), pg_temp.fila(2073, '["Rojo"]', 'PB10-A1')), '{}', jsonb_build_array(pg_temp.cid(2071)));
+SELECT pg_temp.ck(316, 'archive a row and add a new one on its code AND its combination in the same call', 'true',
+  ((r -> 'creados') = to_jsonb(ARRAY[pg_temp.cid(2073)]) AND (r -> 'archivados') = to_jsonb(ARRAY[pg_temp.cid(2071)]) AND (r ->> 'error') IS NULL)::TEXT
+  || COALESCE(' ' || (r ->> 'error'), '')) FROM _res WHERE k = 'x2';
+-- What still ends in a raw 23505 (documented in the migration header): swaps and chains among EXISTING rows.
+SELECT pg_temp.run('w1', pg_temp.grupo(208, 'Probe Swap'), jsonb_build_array(pg_temp.fila(2081, '["Rojo"]', 'PB10-W1'), pg_temp.fila(2082, '["Azul"]', 'PB10-W2')));
+DO $$ BEGIN
+  PERFORM pg_temp.probe(317, 'swapping two existing combinations in one save is still a raw 23505 (documented limit)', '23505',
+    $q$SELECT pg_temp.guardar(pg_temp.grupo(208, 'Probe Swap'), jsonb_build_array(pg_temp.fila(2081, '["Azul"]', 'PB10-W1'), pg_temp.fila(2082, '["Rojo"]', 'PB10-W2')))$q$,
+    '%duplicate key%');
+  PERFORM pg_temp.probe(318, 'a code chain among existing rows, mover first, is still a raw 23505 (documented limit)', '23505',
+    $q$SELECT pg_temp.guardar(pg_temp.grupo(208, 'Probe Swap'), jsonb_build_array(pg_temp.fila(2081, '["Rojo"]', 'PB10-W2'), pg_temp.fila(2082, '["Azul"]', 'PB10-W3')))$q$,
+    '%duplicate key%');
+END $$;
+
+-- 10g: validation that used to survive as a mutant or answered with a raw error. Own group and code per probe.
+DO $$ BEGIN
+  PERFORM pg_temp.probe(320, 'trackea_lotes must be a boolean', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(320, 'E'), jsonb_build_array(pg_temp.fila(3201, '["Rojo"]', 'PB10-X20')), '{"categoria":"X","trackea_lotes":"yes"}')$q$, 'PAYLOAD_INVALIDO: trackea_lotes must be true or false');
+  PERFORM pg_temp.probe(321, 'dias_garantia_default must be a whole number', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(321, 'E'), jsonb_build_array(pg_temp.fila(3211, '["Rojo"]', 'PB10-X21')), '{"categoria":"X","dias_garantia_default":1.5}')$q$, 'PAYLOAD_INVALIDO: dias_garantia_default must be a whole number or null');
+  PERFORM pg_temp.probe(322, 'dias_alerta_vencimiento must be a number, not text', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(322, 'E'), jsonb_build_array(pg_temp.fila(3221, '["Rojo"]', 'PB10-X22')), '{"categoria":"X","dias_alerta_vencimiento":"7"}')$q$, 'PAYLOAD_INVALIDO: dias_alerta_vencimiento must be a whole number or null');
+  PERFORM pg_temp.probe(323, 'descripcion over 2000 characters', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(323, 'E'), jsonb_build_array(pg_temp.fila(3231, '["Rojo"]', 'PB10-X23')), jsonb_build_object('categoria', 'X', 'descripcion', repeat('d', 2001)))$q$, 'PAYLOAD_INVALIDO: descripcion is too long');
+  PERFORM pg_temp.probe(324, 'categoria over 200 characters (btree)', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(324, 'E'), jsonb_build_array(pg_temp.fila(3241, '["Rojo"]', 'PB10-X24')), jsonb_build_object('categoria', repeat('c', 201)))$q$, 'PAYLOAD_INVALIDO: categoria is too long');
+  PERFORM pg_temp.probe(325, 'a blank p_org', '22023', $q$SELECT guardar_grupo_variantes('  ', NULL, pg_temp.grupo(325, 'E'), '{"categoria":"X"}', jsonb_build_array(pg_temp.fila(3251, '["Rojo"]', 'PB10-X25')), '[]', NULL)$q$, 'PAYLOAD_INVALIDO: p_org is required');
+  PERFORM pg_temp.probe(326, 'a NULL p_org', '22023', $q$SELECT guardar_grupo_variantes(NULL, NULL, pg_temp.grupo(326, 'E'), '{"categoria":"X"}', jsonb_build_array(pg_temp.fila(3261, '["Rojo"]', 'PB10-X26')), '[]', NULL)$q$, 'PAYLOAD_INVALIDO: p_org is required');
+  PERFORM pg_temp.probe(327, 'more than 100 ids to archive', 'P0034', $q$SELECT pg_temp.guardar(pg_temp.grupo(327, 'E'), jsonb_build_array(pg_temp.fila(3271, '["Rojo"]', 'PB10-X27')), '{"categoria":"X"}', (SELECT jsonb_agg(pg_temp.cid(5000 + i)) FROM generate_series(1, 101) i))$q$, 'LIMITE_EXCEDIDO: at most 100%');
+  PERFORM pg_temp.probe(328, 'stock_minimo alone above the STORED stock_maximo', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(200, 'Probe Umbrales'), jsonb_build_array(pg_temp.fila(2001, '["Rojo"]', 'PB10-RO', '{"stock_minimo":10}'), pg_temp.fila(2002, '["Azul"]', 'PB10-AZ')))$q$, 'PAYLOAD_INVALIDO: stock_minimo cannot exceed stock_maximo');
+  PERFORM pg_temp.probe(329, 'stock_maximo alone below the STORED stock_minimo', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(200, 'Probe Umbrales'), jsonb_build_array(pg_temp.fila(2001, '["Rojo"]', 'PB10-RO'), pg_temp.fila(2002, '["Azul"]', 'PB10-AZ', '{"stock_maximo":0}')))$q$, 'PAYLOAD_INVALIDO: stock_minimo cannot exceed stock_maximo');
+  PERFORM pg_temp.probe(330, 'an unknown p_user', '22023', $q$SELECT guardar_grupo_variantes((SELECT org FROM _s), 'no-such-user', pg_temp.grupo(330, 'E'), '{"categoria":"X"}', jsonb_build_array(pg_temp.fila(3301, '["Rojo"]', 'PB10-X30')), '[]', NULL)$q$, 'PAYLOAD_INVALIDO: p_user is not a known user');
+  PERFORM pg_temp.probe(331, 'a price that rounds up past the column (99999999.995)', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(331, 'E'), jsonb_build_array(pg_temp.fila(3311, '["Rojo"]', 'PB10-X31', '{"precio_venta":99999999.995}')))$q$, 'PAYLOAD_INVALIDO: prices must be numbers%');
+  PERFORM pg_temp.probe(332, 'a price with more than 2 decimals', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(332, 'E'), jsonb_build_array(pg_temp.fila(3321, '["Rojo"]', 'PB10-X32', '{"precio_compra":1.234}')))$q$, 'PAYLOAD_INVALIDO: prices must be numbers%');
+  PERFORM pg_temp.probe(333, 'a group name padded with spaces past 200 raw characters', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(333, repeat(' ', 5000) || 'x' || repeat(' ', 5000)), jsonb_build_array(pg_temp.fila(3331, '["Rojo"]', 'PB10-X33')))$q$, 'PAYLOAD_INVALIDO: the group needs an id, a name of 1 to 200 characters%');
+  PERFORM pg_temp.probe(334, 'an option name padded with spaces past 100 raw characters', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(334, 'E', jsonb_build_object('opciones', jsonb_build_array(jsonb_build_object('nombre', repeat(' ', 5000) || 'Color', 'valores', jsonb_build_array('Rojo'))))), jsonb_build_array(pg_temp.fila(3341, '["Rojo"]', 'PB10-X34')))$q$, 'PAYLOAD_INVALIDO: every option needs a name of 1 to 100 characters');
+  PERFORM pg_temp.probe(335, 'two options with the same name', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(335, 'E', '{"opciones":[{"nombre":"Color","valores":["R"]},{"nombre":"Color","valores":["S"]}]}'), jsonb_build_array(pg_temp.fila(3351, '["R","S"]', 'PB10-X35')))$q$, 'PAYLOAD_INVALIDO: option names must be different');
+  PERFORM pg_temp.probe(336, 'two options whose names differ only by case', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(336, 'E', '{"opciones":[{"nombre":"Color","valores":["R"]},{"nombre":"COLOR","valores":["S"]}]}'), jsonb_build_array(pg_temp.fila(3361, '["R","S"]', 'PB10-X36')))$q$, 'PAYLOAD_INVALIDO: option names must be different');
+END $$;
+SELECT pg_temp.ck(337, 'none of the calls above left a row behind', '0', count(*)::TEXT) FROM inventario WHERE codigo LIKE 'PB10-X%';
+-- the largest valid price and the two-decimal form are accepted and stored exactly
+SELECT pg_temp.run('zp1', pg_temp.grupo(209, 'Probe Precio'), jsonb_build_array(pg_temp.fila(2091, '["Rojo"]', 'PB10-P1', '{"precio_venta":99999999.99,"precio_compra":0.5}')));
+SELECT pg_temp.ck(338, 'the largest valid price is stored exactly', 'true/true',
+  (precio_venta = 99999999.99)::TEXT || '/' || (precio_compra = 0.5)::TEXT) FROM inventario WHERE id = pg_temp.cid(2091);
+SELECT pg_temp.ck(339, 'the initial-stock movements are labelled', '2/2',
+  (SELECT count(*) FROM movimientos_inventario WHERE observaciones = 'Stock inicial de variante' AND inventario_id IN (pg_temp.cid(11), pg_temp.cid(12)))::TEXT || '/' ||
+  (SELECT count(*) FROM movimientos_inventario WHERE inventario_id IN (pg_temp.cid(11), pg_temp.cid(12)))::TEXT);
+
+-- 10h: the real caller. service_role saves a group; anon and authenticated may not even call it.
+DO $$
+DECLARE v_s RECORD;
+BEGIN
+  SELECT * INTO v_s FROM _s;
+  PERFORM pg_temp.como(340, 'service_role, the real caller, saves a group with initial stock', 'service_role', 'ok',
+    format($f$SELECT guardar_grupo_variantes(%L, %L, %L::jsonb, '{"categoria":"Fundas"}'::jsonb, %L::jsonb, '[]'::jsonb, NULL)$f$, v_s.org, v_s.usr,
+      pg_temp.grupo(210, 'Probe Rol')::text, jsonb_build_array(pg_temp.fila(2101, '["Rojo"]', 'PB10-S1', '{"stock_inicial":2}'))::text));
+  PERFORM pg_temp.como(341, 'anon cannot call it', 'anon', '42501',
+    format($f$SELECT guardar_grupo_variantes(%L, %L, %L::jsonb, '{"categoria":"Fundas"}'::jsonb, %L::jsonb, '[]'::jsonb, NULL)$f$, v_s.org, v_s.usr,
+      pg_temp.grupo(211, 'Probe Anon')::text, jsonb_build_array(pg_temp.fila(2111, '["Rojo"]', 'PB10-S2'))::text),
+    'permission denied for function guardar_grupo_variantes%');
+  PERFORM pg_temp.como(342, 'authenticated cannot call it', 'authenticated', '42501',
+    format($f$SELECT guardar_grupo_variantes(%L, %L, %L::jsonb, '{"categoria":"Fundas"}'::jsonb, %L::jsonb, '[]'::jsonb, NULL)$f$, v_s.org, v_s.usr,
+      pg_temp.grupo(212, 'Probe Auth')::text, jsonb_build_array(pg_temp.fila(2121, '["Rojo"]', 'PB10-S3'))::text),
+    'permission denied for function guardar_grupo_variantes%');
+END $$;
+SELECT pg_temp.ck(343, 'the service_role save wrote its row, its stock and its movement; the refused callers wrote nothing', '1/2/1/0',
+  (SELECT count(*) FROM inventario WHERE grupo_id = pg_temp.cid(210))::TEXT || '/' ||
+  (SELECT COALESCE(sum(stock), 0) FROM inventario WHERE grupo_id = pg_temp.cid(210))::TEXT || '/' ||
+  (SELECT count(*) FROM movimientos_inventario WHERE inventario_id = pg_temp.cid(2101))::TEXT || '/' ||
+  (SELECT count(*) FROM inventario_grupos WHERE id IN (pg_temp.cid(211), pg_temp.cid(212)))::TEXT);
 
 -- PROBE 9 (G3): the name vectors run through the RPC; the same rows as __tests__/helpers/variantes-vectores.ts.
 -- NAMES:BEGIN
@@ -451,7 +644,7 @@ INSERT INTO _r SELECT 901, 'rehearsal: groups and children are untouched', 'true
    AND (SELECT count(*) FROM inventario_grupos WHERE id IN (pg_temp.cid(1), pg_temp.cid(8))) = 2)::TEXT;
 
 -- A check whose source query finds no row records nothing and could pass unseen: count the rows.
-INSERT INTO _r SELECT 999, 'every check recorded its row (114 before this one)', '114', count(*)::TEXT FROM _r;
+INSERT INTO _r SELECT 999, 'every check recorded its row (157 before this one)', '157', count(*)::TEXT FROM _r;
 
 SELECT orden, probe, esperado, obtenido FROM _r ORDER BY orden, probe;
 
