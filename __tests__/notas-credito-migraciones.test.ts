@@ -9,7 +9,7 @@ import { join } from "path"
 // rollback, y que ninguna abre su propia transacción. Lo último importa:
 // db-run.mjs ejecuta TAL CUAL un archivo con BEGIN en sus primeras 40 líneas,
 // así que `npm run db:dry` sobre una migración con BEGIN/COMMIT la aplicaría.
-const MIGRACIONES = ["350_notas_credito_bases"]
+const MIGRACIONES = ["350_notas_credito_bases", "356_nc_numeracion_y_vista"]
 
 const leer = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8")
 const existe = (rel: string) => existsSync(join(process.cwd(), rel))
@@ -85,5 +85,49 @@ describe("351: el deposito de los items de NC no bloquea la purga de una organiz
       /ADD CONSTRAINT items_nota_credito_deposito_id_fkey\s+FOREIGN KEY \(deposito_id\) REFERENCES depositos\(id\);/
     )
     expect(rollback()).not.toMatch(/ON DELETE SET NULL/)
+  })
+})
+
+describe("356: la ruta llama con la misma firma de siempre", () => {
+  const sql = () => leer("supabase/migrations/356_nc_numeracion_y_vista.sql")
+
+  it("renombra el cuerpo vigente (330) en vez de copiarlo", () => {
+    expect(sql()).toMatch(
+      /ALTER FUNCTION public\.registrar_devolucion_atomica\(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT\)\s+RENAME TO registrar_devolucion_nucleo;/
+    )
+  })
+
+  it("el envoltorio conserva los 10 parametros y devuelve el numero", () => {
+    expect(sql()).toMatch(/p_numero_devolucion\s+TEXT,/)
+    expect(sql()).toMatch(/p_idempotency_key\s+TEXT DEFAULT NULL/)
+    expect(sql()).toContain("get_next_nota_credito_number(p_org_id)")
+    expect(sql()).toContain("jsonb_build_object('numero', v_numero)")
+  })
+
+  it("el nucleo no queda expuesto a anon ni authenticated", () => {
+    expect(sql()).toMatch(/REVOKE EXECUTE ON FUNCTION public\.registrar_devolucion_nucleo\([^)]*\)\s+FROM PUBLIC, anon, authenticated;/)
+    expect(sql()).toMatch(/GRANT EXECUTE ON FUNCTION public\.registrar_devolucion_nucleo\([^)]*\)\s+TO service_role;/)
+  })
+
+  it("el envoltorio tampoco: solo service_role", () => {
+    expect(sql()).toMatch(/REVOKE EXECUTE ON FUNCTION public\.registrar_devolucion_atomica\([^)]*\)\s+FROM PUBLIC, anon, authenticated;/)
+    expect(sql()).toMatch(/GRANT EXECUTE ON FUNCTION public\.registrar_devolucion_atomica\([^)]*\)\s+TO service_role;/)
+  })
+
+  it("la vista hereda RLS y no es legible con la anon key", () => {
+    expect(sql()).toMatch(/CREATE VIEW v_notas_credito\s+WITH \(security_invoker = true\)/)
+    expect(sql()).toMatch(/REVOKE ALL ON public\.v_notas_credito FROM PUBLIC, anon, authenticated;/)
+    expect(sql()).toMatch(/GRANT SELECT ON public\.v_notas_credito TO service_role;/)
+  })
+
+  it("no toca los numeros ya asignados ni agrega foreign keys", () => {
+    expect(sql()).not.toMatch(/UPDATE\s+(devoluciones_venta|notas_credito)/i)
+    expect(sql()).not.toMatch(/REFERENCES/i)
+  })
+
+  it("el rollback quita la vista y restaura la funcion", () => {
+    const rb = leer("supabase/migrations/rollback/356_rollback.sql")
+    expect(rb).toContain("DROP VIEW IF EXISTS v_notas_credito;")
+    expect(rb).toMatch(/RENAME TO registrar_devolucion_atomica;/)
   })
 })

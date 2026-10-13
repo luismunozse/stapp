@@ -2,9 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { mockAuthSuccess, createChainMock, parseResponse, createPostRequest } from "./helpers"
 import { supabaseAdmin } from "@/lib/supabase"
 
-vi.mock("@/lib/counters", () => ({
-  getNextReturnNumber: vi.fn().mockResolvedValue("DEV-000001"),
-}))
 vi.mock("@/lib/audit", () => ({
   createAuditLogger: vi.fn(() => ({ create: vi.fn().mockResolvedValue(undefined) })),
 }))
@@ -12,7 +9,7 @@ vi.mock("@/lib/audit", () => ({
 import { POST } from "@/app/api/ventas/[id]/devolucion/route"
 
 const createParams = (id: string) => ({ params: Promise.resolve({ id }) })
-const RPC_SUCCESS = { id: "d1", tipo: "PARCIAL", montoDevolucion: 900 }
+const RPC_SUCCESS = { id: "d1", numero: "NC-000001", tipo: "PARCIAL", montoDevolucion: 900 }
 const DEV_COMPLETA = { id: "d1", venta_id: "v1", monto_devolucion: "900", items_devolucion: [] }
 
 function setup(movInsertPayloads: any[]) {

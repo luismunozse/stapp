@@ -2,9 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { mockAuthSuccess, createChainMock, parseResponse, createPostRequest, createGetRequest } from "./helpers"
 import { supabaseAdmin } from "@/lib/supabase"
 
-vi.mock("@/lib/counters", () => ({
-  getNextReturnNumber: vi.fn().mockResolvedValue("DEV-000002"),
-}))
 const auditCreate = vi.fn().mockResolvedValue(undefined)
 vi.mock("@/lib/audit", () => ({
   createAuditLogger: vi.fn(() => ({ create: auditCreate })),
@@ -51,6 +48,30 @@ describe("POST devolución — saldo pendiente, crédito en tienda e idempotenci
   beforeEach(() => {
     vi.clearAllMocks()
     mockAuthSuccess({ role: "ADMIN" })
+  })
+
+  it("audita, avisa por webhook y nombra el egreso con el NC- que devolvio la RPC", async () => {
+    const egresos: any[] = []
+    setup({ cliente_id: "c1" }, egresos)
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: { id: "d1", numero: "NC-000007", tipo: "PARCIAL", montoDevolucion: 200, montoAplicadoDeuda: 0, montoReembolso: 200 },
+      error: null,
+    } as any)
+
+    const { status } = await parseResponse(await POST(createPostRequest(body(), url), params))
+
+    expect(status).toBe(201)
+    expect(auditCreate).toHaveBeenCalledWith(
+      "devoluciones_venta",
+      "d1",
+      expect.objectContaining({ numero_devolucion: "NC-000007" })
+    )
+    expect(emitWebhookEvent).toHaveBeenCalledWith(
+      "org-1",
+      "venta.devolucion",
+      expect.objectContaining({ numeroDevolucion: "NC-000007" })
+    )
+    expect(egresos[0]).toMatchObject({ concepto: "Devolución NC-000007" })
   })
 
   it("solo saca de la caja lo que se reembolsa, no lo que descontó la deuda", async () => {
