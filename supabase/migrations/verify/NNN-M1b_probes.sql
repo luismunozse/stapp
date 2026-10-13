@@ -4,9 +4,11 @@
 -- (no --apply: the file opens its own transaction and always ends in ROLLBACK).
 -- Everything is scratch data (orgs 'probe-m1b-org' and 'probe-m1b-other') and is rolled back. There is
 -- no DDL except the rollback rehearsal at the end, which drops the function until that ROLLBACK.
--- RUN IT BEFORE PR4 MERGES: while the rehearsal holds the DROP, a save that arrives waits on the lock
--- until the ROLLBACK, and from PR4 on real saves arrive. A few probes SET LOCAL ROLE to service_role,
--- anon and authenticated (the connecting role must be allowed to, as the Supabase postgres role is).
+-- RUN IT BEFORE PR4 MERGES: it is the gate for the route that calls the function. Do not apply or
+-- re-apply M1b while it runs (the DROP holds the function's object lock until the ROLLBACK). Saves in
+-- flight are not expected to wait, because calling a function takes no lock on it, but that has not been
+-- tested against live traffic. A few probes SET LOCAL ROLE to service_role, anon and authenticated (the
+-- connecting role must be allowed to, as the Supabase postgres role is).
 --
 -- Results accumulate in _r and come out in ONE select. Green = esperado equals obtenido, or obtenido
 -- starts with 'OK:' for the probes that expect an error. Every error probe checks the SQLSTATE AND the
@@ -609,6 +611,109 @@ SELECT pg_temp.ck(343, 'the service_role save wrote its row, its stock and its m
   (SELECT count(*) FROM movimientos_inventario WHERE inventario_id = pg_temp.cid(2101))::TEXT || '/' ||
   (SELECT count(*) FROM inventario_grupos WHERE id IN (pg_temp.cid(211), pg_temp.cid(212)))::TEXT);
 
+-- PROBE 11 (second review): survivors of the mutation reruns, boundaries, and the behaviors the header documents.
+-- Every block has its own group; the error probes use codes PB11-X* so 369 can prove none of them left a row.
+
+-- 11a: the code check is per organization. PRB-OT is the code of a child of the OTHER org.
+SELECT pg_temp.run('c1', pg_temp.grupo(250, 'Probe Cross'), jsonb_build_array(pg_temp.fila(2501, '["Rojo"]', 'PRB-OT')));
+SELECT pg_temp.ck(344, 'a code that only ANOTHER organization uses is free here', 'true',
+  ((r -> 'creados') = to_jsonb(ARRAY[pg_temp.cid(2501)]) AND (r ->> 'error') IS NULL)::TEXT || COALESCE(' ' || (r ->> 'error'), '')) FROM _res WHERE k = 'c1';
+
+-- 11b: the full-state check fires for an empty payload and for a partial payload that also lists an id to archive.
+SELECT pg_temp.run('e1', pg_temp.grupo(251, 'Probe Empty'),
+  jsonb_build_array(pg_temp.fila(2511, '["Rojo"]', 'PB11-E1'), pg_temp.fila(2512, '["Azul"]', 'PB11-E2'), pg_temp.fila(2513, '["Verde"]', 'PB11-E3')));
+SELECT pg_temp.run('e2', pg_temp.grupo(251, 'Probe Empty'),
+  jsonb_build_array(pg_temp.fila(2511, '["Rojo"]', 'PB11-E1'), pg_temp.fila(2512, '["Azul"]', 'PB11-E2')), '{}', jsonb_build_array(pg_temp.cid(2513)));
+DO $$ BEGIN
+  PERFORM pg_temp.probe(345, 'an EMPTY payload on a populated group is refused and names every active member', '22023',
+    $q$SELECT pg_temp.guardar(pg_temp.grupo(251, 'Probe Empty'), '[]')$q$,
+    'PAYLOAD_INVALIDO:miembros_faltantes:' || pg_temp.cid(2511) || ',' || pg_temp.cid(2512));
+  PERFORM pg_temp.probe(346, 'a partial payload is refused even when the call also lists an id to archive (already archived: a no-op)', '22023',
+    $q$SELECT pg_temp.guardar(pg_temp.grupo(251, 'Probe Empty'), jsonb_build_array(pg_temp.fila(2511, '["Rojo"]', 'PB11-E1')), '{}', jsonb_build_array(pg_temp.cid(2513)))$q$,
+    'PAYLOAD_INVALIDO:miembros_faltantes:' || pg_temp.cid(2512));
+END $$;
+
+-- 11c: shapes, ceilings and caps, one probe each. Text values ("5") pass every cast, so only the shape check refuses them.
+DO $$ BEGIN
+  PERFORM pg_temp.probe(347, 'stock_minimo sent as text', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(347, 'E'), jsonb_build_array(pg_temp.fila(3471, '["Rojo"]', 'PB11-X47', '{"stock_minimo":"5"}')))$q$, 'PAYLOAD_INVALIDO: stock fields must be whole numbers%');
+  PERFORM pg_temp.probe(348, 'stock_maximo sent as text', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(348, 'E'), jsonb_build_array(pg_temp.fila(3481, '["Rojo"]', 'PB11-X48', '{"stock_maximo":"5"}')))$q$, 'PAYLOAD_INVALIDO: stock fields must be whole numbers%');
+  PERFORM pg_temp.probe(349, 'punto_reorden sent as text', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(349, 'E'), jsonb_build_array(pg_temp.fila(3491, '["Rojo"]', 'PB11-X49', '{"punto_reorden":"5"}')))$q$, 'PAYLOAD_INVALIDO: stock fields must be whole numbers%');
+  PERFORM pg_temp.probe(350, 'a 10-digit threshold (the ceiling is 999999999)', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(350, 'E'), jsonb_build_array(pg_temp.fila(3501, '["Rojo"]', 'PB11-X50', '{"punto_reorden":1000000000}')))$q$, 'PAYLOAD_INVALIDO: stock fields must be whole numbers%');
+  PERFORM pg_temp.probe(351, 'a barcode of 101 characters', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(351, 'E'), jsonb_build_array(pg_temp.fila(3511, '["Rojo"]', 'PB11-X51', jsonb_build_object('barcode', repeat('b', 101)))))$q$, 'PAYLOAD_INVALIDO: barcode and ubicacion must be text of at most 100 characters or null');
+  PERFORM pg_temp.probe(352, 'a ubicacion of 101 characters', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(352, 'E'), jsonb_build_array(pg_temp.fila(3521, '["Rojo"]', 'PB11-X52', jsonb_build_object('ubicacion', repeat('u', 101)))))$q$, 'PAYLOAD_INVALIDO: barcode and ubicacion must be text of at most 100 characters or null');
+  PERFORM pg_temp.probe(353, 'a blank codigo', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(353, 'E'), jsonb_build_array(pg_temp.fila(3531, '["Rojo"]', '   ')))$q$, 'PAYLOAD_INVALIDO: codigo must be text of 1 to 100 characters');
+  PERFORM pg_temp.probe(354, 'an empty codigo', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(354, 'E'), jsonb_build_array(pg_temp.fila(3541, '["Rojo"]', '')))$q$, 'PAYLOAD_INVALIDO: codigo must be text of 1 to 100 characters');
+  PERFORM pg_temp.probe(355, 'a codigo of 101 characters', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(355, 'E'), jsonb_build_array(pg_temp.fila(3551, '["Rojo"]', 'PB11-X55' || repeat('k', 93))))$q$, 'PAYLOAD_INVALIDO: codigo must be text of 1 to 100 characters');
+  PERFORM pg_temp.probe(356, 'an option name of 101 characters', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(356, 'E', jsonb_build_object('opciones', jsonb_build_array(jsonb_build_object('nombre', repeat('o', 101), 'valores', jsonb_build_array('Rojo'))))), jsonb_build_array(pg_temp.fila(3561, '["Rojo"]', 'PB11-X56')))$q$, 'PAYLOAD_INVALIDO: every option needs a name of 1 to 100 characters');
+  PERFORM pg_temp.probe(357, 'a group name of 201 characters', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(357, repeat('g', 201)), jsonb_build_array(pg_temp.fila(3571, '["Rojo"]', 'PB11-X57')))$q$, 'PAYLOAD_INVALIDO: the group needs an id, a name of 1 to 200 characters%');
+  PERFORM pg_temp.probe(358, 'a blank id in p_archivar', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(358, 'E'), jsonb_build_array(pg_temp.fila(3581, '["Rojo"]', 'PB11-X58')), '{"categoria":"X"}', '[""]')$q$, 'PAYLOAD_INVALIDO: p_archivar holds text ids');
+END $$;
+SELECT pg_temp.ck(369, 'none of the refused calls of this block left a row behind', '0', count(*)::TEXT) FROM inventario WHERE codigo LIKE 'PB11-X%';
+-- the other side of every boundary: the largest accepted values, stored with their full length. Thresholds of
+-- 999999999 with min = max also prove that equal min and max are accepted.
+SELECT pg_temp.run('b1', pg_temp.grupo(260, repeat('g', 200), jsonb_build_object('opciones', jsonb_build_array(jsonb_build_object('nombre', repeat('o', 100), 'valores', jsonb_build_array(repeat('v', 100)))))),
+  jsonb_build_array(jsonb_build_object('id', pg_temp.cid(2601), 'codigo', 'PB11-B1' || repeat('k', 93), 'barcode', repeat('b', 100), 'ubicacion', repeat('u', 100),
+    'atributos', jsonb_build_array(jsonb_build_object('opcion', repeat('o', 100), 'valor', repeat('v', 100))),
+    'stock_minimo', 999999999, 'stock_maximo', 999999999, 'punto_reorden', 999999999)),
+  jsonb_build_object('categoria', repeat('c', 200), 'descripcion', repeat('d', 2000)));
+SELECT pg_temp.ck(359, 'the largest accepted values are accepted', 'true',
+  ((r -> 'creados') = to_jsonb(ARRAY[pg_temp.cid(2601)]) AND (r ->> 'error') IS NULL)::TEXT || COALESCE(' ' || (r ->> 'error'), '')) FROM _res WHERE k = 'b1';
+SELECT pg_temp.ck(360, 'and stored with their full length (group 200, codigo/barcode/ubicacion 100, categoria 200, descripcion 2000)', '200/100/100/100/200/2000/true',
+  (SELECT char_length(nombre) FROM inventario_grupos WHERE id = pg_temp.cid(260))::TEXT || '/' || char_length(codigo) || '/' || char_length(barcode) || '/' ||
+  char_length(ubicacion) || '/' || char_length(categoria) || '/' || char_length(descripcion) || '/' ||
+  (stock_minimo = 999999999 AND stock_maximo = 999999999 AND punto_reorden = 999999999)::TEXT) FROM inventario WHERE id = pg_temp.cid(2601);
+
+-- 11d: equal min and max are fine, a min without a max is fine, on new rows and on existing rows (stored max NULL).
+SELECT pg_temp.run('m1', pg_temp.grupo(261, 'Probe Rango'),
+  jsonb_build_array(pg_temp.fila(2611, '["Rojo"]', 'PB11-M1', '{"stock_minimo":5,"stock_maximo":5}'), pg_temp.fila(2612, '["Azul"]', 'PB11-M2', '{"stock_minimo":5}')));
+SELECT pg_temp.ck(361, 'stock_minimo = stock_maximo is accepted, and so is a stock_minimo with no stock_maximo', '5/5|5/',
+  string_agg(stock_minimo::TEXT || '/' || COALESCE(stock_maximo::TEXT, ''), '|' ORDER BY codigo)) FROM inventario WHERE grupo_id = pg_temp.cid(261);
+SELECT pg_temp.run('m2', pg_temp.grupo(261, 'Probe Rango'),
+  jsonb_build_array(pg_temp.fila(2611, '["Rojo"]', 'PB11-M1'), pg_temp.fila(2612, '["Azul"]', 'PB11-M2', '{"stock_minimo":7}')));
+SELECT pg_temp.ck(362, 'raising stock_minimo on an existing row whose stock_maximo is NULL is accepted', '7',
+  stock_minimo::TEXT) FROM inventario WHERE id = pg_temp.cid(2612);
+
+-- 11e: the archived-name sync stays inside ITS group (another group of the same org with the same base keeps
+-- its archived row's name) and also reaches a row archived in the very call that renames the base.
+SELECT pg_temp.run('s1', pg_temp.grupo(262, 'Probe Sync'), jsonb_build_array(pg_temp.fila(2621, '["Rojo"]', 'PB11-S1'), pg_temp.fila(2622, '["Azul"]', 'PB11-S2')));
+SELECT pg_temp.run('s2', pg_temp.grupo(262, 'Probe Sync'), jsonb_build_array(pg_temp.fila(2622, '["Azul"]', 'PB11-S2')), '{}', jsonb_build_array(pg_temp.cid(2621)));
+SELECT pg_temp.run('s3', pg_temp.grupo(263, 'Probe Sync'), jsonb_build_array(pg_temp.fila(2631, '["Rojo"]', 'PB11-S3'), pg_temp.fila(2632, '["Azul"]', 'PB11-S4')));
+SELECT pg_temp.run('s4', pg_temp.grupo(263, 'Probe Sync'), jsonb_build_array(pg_temp.fila(2632, '["Azul"]', 'PB11-S4')), '{}', jsonb_build_array(pg_temp.cid(2631)));
+SELECT pg_temp.run('s5', pg_temp.grupo(262, 'Probe Sync b'), jsonb_build_array(pg_temp.fila(2622, '["Azul"]', 'PB11-S2')));
+SELECT pg_temp.ck(363, 'a base rename reaches the archived member of ITS group', 'Probe Sync b - Rojo', nombre) FROM inventario WHERE id = pg_temp.cid(2621);
+SELECT pg_temp.ck(364, 'another group of the same org with the same base keeps its archived member''s name', 'Probe Sync - Rojo', nombre) FROM inventario WHERE id = pg_temp.cid(2631);
+SELECT pg_temp.run('s6', pg_temp.grupo(264, 'Probe Sync c'), jsonb_build_array(pg_temp.fila(2641, '["Rojo"]', 'PB11-S5'), pg_temp.fila(2642, '["Azul"]', 'PB11-S6')));
+SELECT pg_temp.run('s7', pg_temp.grupo(264, 'Probe Sync c2'), jsonb_build_array(pg_temp.fila(2642, '["Azul"]', 'PB11-S6')), '{}', jsonb_build_array(pg_temp.cid(2641)));
+SELECT pg_temp.ck(365, 'archive and base rename in the SAME call: the row archived by it follows the new base', 'Probe Sync c2 - Rojo', nombre) FROM inventario WHERE id = pg_temp.cid(2641);
+SELECT pg_temp.run('s8', pg_temp.grupo(264, 'Probe Sync c2'), jsonb_build_array(pg_temp.fila(2641, '["Rojo"]', 'PB11-S5'), pg_temp.fila(2642, '["Azul"]', 'PB11-S6')));
+SELECT pg_temp.ck(366, '... and restoring it afterwards keeps the current name', 'Probe Sync c2 - Rojo|Probe Sync c2 - Azul',
+  string_agg(nombre, '|' ORDER BY codigo)) FROM inventario WHERE grupo_id = pg_temp.cid(264);
+
+-- 11f: what the header documents, pinned as behavior. A code chain among existing rows succeeds when the
+-- HOLDER is processed first (probe 318 is the same chain with the mover first and fails). A member archived
+-- meanwhile that a stale form still lists comes back as restored: there is no version check.
+SELECT pg_temp.run('w2', pg_temp.grupo(208, 'Probe Swap'), jsonb_build_array(pg_temp.fila(2082, '["Azul"]', 'PB10-W3'), pg_temp.fila(2081, '["Rojo"]', 'PB10-W2')));
+SELECT pg_temp.ck(319, 'a code chain among existing rows succeeds when the HOLDER is processed first', 'PB10-W2/PB10-W3',
+  (SELECT codigo FROM inventario WHERE id = pg_temp.cid(2081)) || '/' || (SELECT codigo FROM inventario WHERE id = pg_temp.cid(2082)));
+SELECT pg_temp.run('st1', pg_temp.grupo(266, 'Probe Stale'), jsonb_build_array(pg_temp.fila(2661, '["Rojo"]', 'PB11-T1'), pg_temp.fila(2662, '["Azul"]', 'PB11-T2')));
+SELECT pg_temp.run('st2', pg_temp.grupo(266, 'Probe Stale'), jsonb_build_array(pg_temp.fila(2661, '["Rojo"]', 'PB11-T1')), '{}', jsonb_build_array(pg_temp.cid(2662)));
+SELECT pg_temp.run('st3', pg_temp.grupo(266, 'Probe Stale'), jsonb_build_array(pg_temp.fila(2661, '["Rojo"]', 'PB11-T1'), pg_temp.fila(2662, '["Azul"]', 'PB11-T2')));
+SELECT pg_temp.ck(367, 'documented v1 behavior: a member archived meanwhile that a stale form still lists comes back as restored', 'true',
+  ((r -> 'restaurados') = to_jsonb(ARRAY[pg_temp.cid(2662)]) AND (r ->> 'error') IS NULL)::TEXT || COALESCE(' ' || (r ->> 'error'), '')) FROM _res WHERE k = 'st3';
+
+-- 11g: a few more bounds that only the text layer used to hold: option names that differ by an accent, a price with
+-- 9 integer digits, an id one character short or long, and a NULL p_user (allowed).
+DO $$ BEGIN
+  PERFORM pg_temp.probe(370, 'two options whose names differ only by an accent', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(370, 'E', ('{"opciones":[{"nombre":"Color","valores":["R"]},{"nombre":"Col' || chr(243) || 'r","valores":["S"]}]}')::jsonb), jsonb_build_array(pg_temp.fila(3701, '["R","S"]', 'PB11-X70')))$q$, 'PAYLOAD_INVALIDO: option names must be different');
+  PERFORM pg_temp.probe(371, 'a price with 9 integer digits', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(371, 'E'), jsonb_build_array(pg_temp.fila(3711, '["Rojo"]', 'PB11-X71', '{"precio_venta":100000000}')))$q$, 'PAYLOAD_INVALIDO: prices must be numbers%');
+  PERFORM pg_temp.probe(372, 'a new group id one character short', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(372, 'E', jsonb_build_object('id', 'c' || repeat('a', 23))), jsonb_build_array(pg_temp.fila(3721, '["Rojo"]', 'PB11-X72')))$q$, 'PAYLOAD_INVALIDO: a new group id looks like%');
+  PERFORM pg_temp.probe(373, 'a new group id one character long', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(373, 'E', jsonb_build_object('id', 'c' || repeat('a', 25))), jsonb_build_array(pg_temp.fila(3731, '["Rojo"]', 'PB11-X73')))$q$, 'PAYLOAD_INVALIDO: a new group id looks like%');
+  PERFORM pg_temp.probe(374, 'a new variante id one character long', '22023', $q$SELECT pg_temp.guardar(pg_temp.grupo(374, 'E'), jsonb_build_array(pg_temp.fila(3741, '["Rojo"]', 'PB11-X74', jsonb_build_object('id', 'c' || repeat('a', 25)))))$q$, 'PAYLOAD_INVALIDO: a new variante needs an id like%');
+  PERFORM pg_temp.probe(375, 'a NULL p_user is accepted', 'ok', $q$SELECT guardar_grupo_variantes((SELECT org FROM _s), NULL, pg_temp.grupo(375, 'Probe Null User'), '{"categoria":"Fundas"}', jsonb_build_array(pg_temp.fila(3751, '["Rojo"]', 'PB11-N75')), '[]', NULL)$q$);
+END $$;
+SELECT pg_temp.ck(376, 'the group saved with a NULL p_user has created_by NULL', 'true', (created_by IS NULL)::TEXT) FROM inventario_grupos WHERE id = pg_temp.cid(375);
+SELECT pg_temp.ck(377, 'none of the refused calls of this second block left a row behind', '0', count(*)::TEXT) FROM inventario WHERE codigo LIKE 'PB11-X7%';
+
 -- PROBE 9 (G3): the name vectors run through the RPC; the same rows as __tests__/helpers/variantes-vectores.ts.
 -- NAMES:BEGIN
 CREATE TEMP TABLE _v_nombre (n INT, base TEXT, valores JSONB, esperado TEXT);
@@ -644,7 +749,7 @@ INSERT INTO _r SELECT 901, 'rehearsal: groups and children are untouched', 'true
    AND (SELECT count(*) FROM inventario_grupos WHERE id IN (pg_temp.cid(1), pg_temp.cid(8))) = 2)::TEXT;
 
 -- A check whose source query finds no row records nothing and could pass unseen: count the rows.
-INSERT INTO _r SELECT 999, 'every check recorded its row (157 before this one)', '157', count(*)::TEXT FROM _r;
+INSERT INTO _r SELECT 999, 'every check recorded its row (191 before this one)', '191', count(*)::TEXT FROM _r;
 
 SELECT orden, probe, esperado, obtenido FROM _r ORDER BY orden, probe;
 

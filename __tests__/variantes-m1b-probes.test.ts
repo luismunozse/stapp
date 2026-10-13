@@ -167,10 +167,50 @@ describe("M1b probes: the review fixes and the old survivors are covered", () =>
     expect(PROBES).toMatch(/must not read this session's temp tables/)
   })
 
-  it("the header says to run the probes before PR4 merges because the DROP rehearsal holds a lock", () => {
-    const head = PROBES.slice(0, PROBES.indexOf("BEGIN;")).replace(/\n--\s?/g, " ")
-    expect(head).toMatch(/RUN IT BEFORE PR4 MERGES/)
-    expect(head).toMatch(/rehearsal holds the DROP, a save that arrives waits on the lock until the ROLLBACK/)
+  it("the header says to run the probes before PR4 merges (the gate) and claims no more about the DROP than is true", () => {
+    const head = PROBES.slice(0, PROBES.indexOf("BEGIN;")).replace(/\n--\s?/g, " ").replace(/\s+/g, " ")
+    expect(head).toMatch(/RUN IT BEFORE PR4 MERGES: it is the gate for the route that calls the function/)
+    expect(head).toContain("Do not apply or re-apply M1b while it runs")
+    expect(head).toContain("has not been tested against live traffic")
+    expect(head).not.toMatch(/waits on the lock/) // calling a function takes no lock on it
+  })
+})
+
+describe("M1b probes: a message pattern is never a bare wildcard", () => {
+  it("every error probe names its guard with at least 8 meaningful characters (so '%' cannot stand in for it)", () => {
+    expect(weakMessages(PROBES)).toEqual([])
+  })
+
+  it("the rule catches a probe weakened to '%' (the reviewer's probe 328 case) and ignores the 'ok' expectations", () => {
+    const weakened = PROBES.replace(/(probe\(328,[^\n]*?\$q\$, )'[^']*'\);/, "$1'%');")
+    expect(weakened).not.toBe(PROBES)
+    expect(weakMessages(weakened)).toEqual(["328"])
+    expect(PROBES).toMatch(/pg_temp\.como\(340, [^\n]*'service_role', 'ok',/) // an 'ok' expectation has no message and is not flagged
+  })
+})
+
+describe("M1b probes: the second review's survivors are covered", () => {
+  it.each([
+    ["a code only ANOTHER organization uses is free here", /a code that only ANOTHER organization uses is free here/],
+    ["the full-state check fires for an empty payload and for a partial one that also lists an id to archive",
+      /an EMPTY payload on a populated group is refused and names every active member.*?a partial payload is refused even when the call also lists an id to archive/],
+    ["thresholds sent as text and a 10-digit threshold",
+      /stock_minimo sent as text.*?stock_maximo sent as text.*?punto_reorden sent as text.*?a 10-digit threshold \(the ceiling is 999999999\)/],
+    ["barcode, ubicacion, blank codigo, empty codigo and 101-character codigo, option name and group name, blank archive id",
+      /a barcode of 101 characters.*?a ubicacion of 101 characters.*?a blank codigo.*?an empty codigo.*?a codigo of 101 characters.*?an option name of 101 characters.*?a group name of 201 characters.*?a blank id in p_archivar/],
+    ["the other side of the boundaries: the largest accepted values are accepted and stored in full",
+      /the largest accepted values are accepted.*?and stored with their full length \(group 200, codigo\/barcode\/ubicacion 100, categoria 200, descripcion 2000\)/],
+    ["equal min and max, and a min without a max, on new and existing rows",
+      /stock_minimo = stock_maximo is accepted, and so is a stock_minimo with no stock_maximo.*?raising stock_minimo on an existing row whose stock_maximo is NULL is accepted/],
+    ["the archived-name sync stays in its group and reaches a row archived in the same call",
+      /a base rename reaches the archived member of ITS group.*?another group of the same org with the same base keeps its archived member''s name.*?archive and base rename in the SAME call: the row archived by it follows the new base.*?restoring it afterwards keeps the current name/],
+    ["the header's documented behaviors are pinned as behavior (chain with the holder first, stale form restores)",
+      /a code chain among existing rows succeeds when the HOLDER is processed first.*?documented v1 behavior: a member archived meanwhile that a stale form still lists comes back as restored/],
+    ["the refused calls of the block leave nothing behind", /none of the refused calls of this block left a row behind/],
+    ["accent-folded option names, a 9-digit price, ids one character short or long, a NULL p_user",
+      /two options whose names differ only by an accent.*?a price with 9 integer digits.*?a new group id one character short.*?a new group id one character long.*?a new variante id one character long.*?a NULL p_user is accepted.*?has created_by NULL.*?none of the refused calls of this second block left a row behind/],
+  ])("%s", (_name, re) => {
+    expect(SQL).toMatch(re)
   })
 })
 
@@ -178,4 +218,43 @@ function need(re: RegExp): RegExpExecArray {
   const m = re.exec(SQL)
   if (!m) throw new Error(`pattern not found: ${re}`)
   return m
+}
+
+/**
+ * Orden numbers of the error probes (pg_temp.probe / pg_temp.como) whose message pattern is weak: absent, or
+ * made only of wildcards (no string literal with 8 or more characters once % and _ are removed). The calls
+ * are parsed argument by argument; the SQL bodies ($q$...$q$ and $f$...$f$) are blanked first.
+ */
+function weakMessages(sql: string): string[] {
+  const blanked = sql.replace(/\$(q|f)\$[\s\S]*?\$\1\$/g, "Q")
+  const weak: string[] = []
+  for (const m of blanked.matchAll(/PERFORM pg_temp\.(probe|como)\(/g)) {
+    const args: string[] = []
+    let depth = 0
+    let cur = ""
+    let inStr = false
+    for (let i = m.index + m[0].length; i < blanked.length; i++) {
+      const c = blanked[i]
+      if (inStr) {
+        cur += c
+        if (c === "'") {
+          if (blanked[i + 1] === "'") { cur += "'"; i++ } else inStr = false
+        }
+      } else if (c === "'") { inStr = true; cur += c }
+      else if (c === "(") { depth++; cur += c }
+      else if (c === ")") {
+        if (depth === 0) { args.push(cur.trim()); break }
+        depth--; cur += c
+      } else if (c === "," && depth === 0) { args.push(cur.trim()); cur = "" }
+      else cur += c
+    }
+    const [orden, , a3, a4, , a6] = args
+    const comoCall = m[1] === "como"
+    const esperado = (comoCall ? a4 : a3).replace(/'/g, "")
+    if (esperado === "ok") continue
+    const msg = comoCall ? a6 : args[4]
+    const literals = [...(msg ?? "").matchAll(/'((?:[^']|'')*)'/g)].map((l) => l[1].replace(/[%_]/g, ""))
+    if (!literals.some((l) => l.length >= 8)) weak.push(orden)
+  }
+  return weak
 }
