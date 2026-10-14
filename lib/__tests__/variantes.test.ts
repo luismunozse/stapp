@@ -33,17 +33,36 @@ describe("claveCombinacion (JS twin of inventario_combinacion_clave)", () => {
     expect(key(" \tÑANDÚ\n")).toBe("ñandu")
   })
 
-  it("folds exactly the accents the SQL translate() folds", () => {
+  // The translate() literal of the frozen SQL key function: [accented letters, plain letters].
+  const mapaSql = () => {
     const sql = collapse(readBySuffix("_variantes_grupos.sql"))
     const m = sql.match(/'\)\),\s*'([^']+)',\s*'([^']+)'\),\s*chr\(31\)/)
     expect(m).not.toBeNull()
-    const [from, to] = [[...m![1]], [...m![2]]]
+    return [[...m![1]], [...m![2]]] as const
+  }
+
+  it("folds exactly the accents the SQL translate() folds", () => {
+    const [from, to] = mapaSql()
     expect(from).toHaveLength(20)
     expect(to).toHaveLength(20)
     from.forEach((accented, i) => {
       expect(key(accented)).toBe(to[i])
       expect(key(accented.toUpperCase())).toBe(to[i])
     })
+  })
+
+  it("changes nothing outside that map: every other Latin-1 letter only lowercases", () => {
+    const [from] = mapaSql()
+    let checked = 0
+    for (let cp = 0xc0; cp <= 0xff; cp++) {
+      if (cp === 0xd7 || cp === 0xf7) continue // multiplication and division signs
+      const ch = String.fromCharCode(cp)
+      if (from.includes(ch.toLowerCase())) continue
+      expect(key(ch)).toBe(ch.toLowerCase())
+      checked++
+    }
+    // 62 letters minus the 40 (20 lower + 20 upper) the map folds; includes c-cedilla, a-tilde, o-slash, sharp s.
+    expect(checked).toBe(22)
   })
 
   // The SQL key trims the 25 characters String.prototype.trim() removes.
@@ -108,6 +127,23 @@ describe("generarIdCliente", () => {
     const ids = new Set(Array.from({ length: 200 }, () => generarIdCliente()))
     expect(ids.size).toBe(200)
   })
+
+  it("prints 12 bytes drawn from crypto.getRandomValues as zero-padded hex", () => {
+    const bytes = [0, 5, 15, 16, 255, 171, 1, 2, 3, 4, 250, 128]
+    const spy = vi.spyOn(globalThis.crypto, "getRandomValues").mockImplementation(((buffer: Uint8Array) => {
+      buffer.set(bytes)
+      return buffer
+    }) as never)
+    try {
+      expect(generarIdCliente()).toBe("c00050f10ffab01020304fa80")
+      expect(spy).toHaveBeenCalledTimes(1)
+      const buffer = spy.mock.calls[0][0] as Uint8Array
+      expect(buffer).toBeInstanceOf(Uint8Array)
+      expect(buffer).toHaveLength(12)
+    } finally {
+      spy.mockRestore()
+    }
+  })
 })
 
 describe("selectConFallback", () => {
@@ -150,6 +186,28 @@ describe("selectConFallback", () => {
     await listar("fts")
     await listar("ilike")
     expect(run.mock.calls).toEqual([[CON, "fts"], [BASE, "fts"], [BASE, "ilike"]])
+  })
+
+  it("concurrent calls that both fail at the first step never run past the last step", async () => {
+    type Respuesta = { data: unknown; error: unknown }
+    const enVuelo: ((r: Respuesta) => void)[] = []
+    const run = vi.fn((select: string): Promise<Respuesta> =>
+      select === CON ? new Promise((resolve) => enVuelo.push(resolve)) : Promise.resolve(ok(select))
+    )
+    const listar = selectConFallback(run, [CON, BASE])
+
+    const [a, b] = [listar(), listar()]
+    expect(run.mock.calls.map((c) => c[0])).toEqual([CON, CON])
+    enVuelo.forEach((resolve) => resolve(fail(...FALTANTES[0])))
+    const [ra, rb] = await Promise.all([a, b])
+
+    // Both retry the plain select; neither goes looking for a step that does not exist.
+    expect(run.mock.calls.map((c) => c[0])).toEqual([CON, CON, BASE, BASE])
+    expect(ra.data).toEqual([{ select: BASE }])
+    expect(rb.data).toEqual([{ select: BASE }])
+    // The downgrade still sticks.
+    await listar()
+    expect(run.mock.calls.map((c) => c[0])).toEqual([CON, CON, BASE, BASE, BASE])
   })
 
   it("keeps a working first step for later passes too", async () => {

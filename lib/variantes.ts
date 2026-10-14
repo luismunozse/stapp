@@ -69,15 +69,19 @@ export function selectConFallback<A extends unknown[], R extends { error?: unkno
 ): (...args: A) => Promise<R> {
   let nivel = 0
   return async (...args) => {
+    // Each call walks its own index: two calls in flight that fail at the same step must
+    // not push each other past the last one. The shared level only ever moves forward.
+    let i = nivel
     for (;;) {
-      const ultimo = nivel === pasos.length - 1
+      const ultimo = i === pasos.length - 1
       try {
-        const resultado = await run(pasos[nivel], ...args)
+        const resultado = await run(pasos[i], ...args)
         if (ultimo || !isMissingColumnError(resultado.error)) return resultado
       } catch (e) {
         if (ultimo || !isMissingColumnError(e)) throw e
       }
-      nivel++
+      i++
+      nivel = Math.max(nivel, i)
     }
   }
 }
