@@ -100,11 +100,60 @@ describe("registrarCreacion", () => {
     expect(emitWebhookEvent).toHaveBeenCalledTimes(1)
   })
 
-  it("never throws when the audit or the webhook reject", async () => {
-    auditoria.create.mockRejectedValue(new Error("audit down"))
-    vi.mocked(emitWebhookEvent).mockRejectedValue(new Error("webhook down"))
-    expect(() => registrarCreacion(ctx, fila())).not.toThrow()
-    await new Promise((r) => setTimeout(r, 0))
+})
+
+/**
+ * A rejected promise as a mock result. It is NOT a `Promise` instance on purpose: @vitest/spy
+ * attaches its own handlers to every Promise a mock returns, which would mark the rejection
+ * as handled behind our back and hide a missing `.catch` in the code under test. The real
+ * promise inside is unhandled unless the code calls `.catch`/`.then` on this object.
+ */
+function rechazoReal(motivo: Error) {
+  const p = Promise.reject(motivo)
+  return { then: p.then.bind(p), catch: p.catch.bind(p) }
+}
+
+/** Runs `fn` and returns the promise rejections nobody handled while it flushed. */
+async function rechazosSinManejar(fn: () => void): Promise<unknown[]> {
+  const vistos: unknown[] = []
+  const oyente = (razon: unknown) => void vistos.push(razon)
+  process.on("unhandledRejection", oyente)
+  try {
+    fn()
+    // unhandledRejection fires after the microtask queue drains: give it a few macrotasks.
+    await new Promise((r) => setTimeout(r, 25))
+  } finally {
+    process.off("unhandledRejection", oyente)
+  }
+  return vistos
+}
+
+// The events are fire-and-forget: a failing audit or webhook must never surface (an unhandled
+// rejection can take down a serverless invocation). Each helper is run with the audit failing,
+// the webhook failing, and both failing; the helper must still have TRIED both.
+describe.each([
+  ["registrarCreacion", () => registrarCreacion(ctx, fila()), "create"],
+  ["registrarActualizacion", () => registrarActualizacion(ctx, fila(), fila({ precio_venta: 1200 })), "update"],
+  ["registrarArchivado", () => registrarArchivado(ctx, fila()), "delete"],
+] as const)("%s swallows failures of the audit and of the webhook", (_nombre, correr, metodoAuditoria) => {
+  it.each([
+    ["the audit entry rejects", true, false],
+    ["the webhook rejects", false, true],
+    ["both reject", true, true],
+  ])("%s: nothing escapes", async (_caso, falla, fallaWebhook) => {
+    if (falla) auditoria[metodoAuditoria].mockImplementation(() => rechazoReal(new Error("audit down")))
+    if (fallaWebhook) vi.mocked(emitWebhookEvent).mockImplementation((() => rechazoReal(new Error("webhook down"))) as never)
+
+    const sinManejar = await rechazosSinManejar(() => expect(correr).not.toThrow())
+
+    expect(sinManejar).toEqual([])
+    expect(auditoria[metodoAuditoria]).toHaveBeenCalledTimes(1)
+    expect(emitWebhookEvent).toHaveBeenCalledTimes(1)
+  })
+
+  it("the harness does see an unhandled rejection (so the checks above are not vacuous)", async () => {
+    const sinManejar = await rechazosSinManejar(() => void Promise.reject(new Error("unhandled on purpose")))
+    expect(sinManejar).toHaveLength(1)
   })
 })
 
@@ -128,7 +177,10 @@ describe("registrarActualizacion", () => {
 
   it("lists every changed field, before and after", () => {
     registrarActualizacion(ctx, fila(), fila({ nombre: "Funda Y - Rojo", codigo: "FY-1", barcode: null }))
+    // The top-level identity of the event is the row AFTER the edit: the new code, the new name.
     expect(vi.mocked(emitWebhookEvent).mock.calls[0][2]).toMatchObject({
+      id: "i1",
+      codigo: "FY-1",
       nombre: "Funda Y - Rojo",
       changes: {
         nombre: { before: "Funda X - Rojo", after: "Funda Y - Rojo" },

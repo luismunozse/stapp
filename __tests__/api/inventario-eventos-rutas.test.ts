@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { supabaseAdmin } from "@/lib/supabase"
-import { mockAuthSuccess, createChainMock, mockSupabaseFrom, createPostRequest, parseResponse } from "./helpers"
+import {
+  mockAuthSuccess,
+  mockAuthSuccessSinUsuario,
+  createChainMock,
+  mockSupabaseFrom,
+  createPostRequest,
+  parseResponse,
+} from "./helpers"
 
 // Approval tests for the audit entries and webhooks of the single-item routes. They moved
 // out of the routes into lib/inventario-eventos.ts (shared with the group save); these
@@ -94,6 +101,19 @@ describe("POST /api/inventario emits the created events", () => {
     })
   })
 
+  it("without a user id the webhook is still sent, only the audit entry is skipped", async () => {
+    mockAuthSuccessSinUsuario({ role: "ADMIN", organizationId: "org-1" })
+    mockSupabaseFrom({ inventario: createChainMock(fila()) })
+
+    const { status } = await parseResponse(await POST(createPostRequest(cuerpo, "http://localhost:3000/api/inventario")))
+
+    expect(status).toBe(201)
+    expect(createAuditLogger).not.toHaveBeenCalled()
+    expect(auditoria.create).not.toHaveBeenCalled()
+    expect(emitWebhookEvent).toHaveBeenCalledTimes(1)
+    expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "inventario.created", expect.objectContaining({ id: "i1", codigo: "C1" }))
+  })
+
   it("a failed insert emits nothing", async () => {
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
     mockSupabaseFrom({ inventario: createChainMock(null, { code: "XX000", message: "boom" }) })
@@ -125,6 +145,17 @@ describe("PUT /api/inventario/[id] emits the updated events", () => {
     })
   })
 
+  it("without a user id a price edit emits neither the audit entry nor the webhook", async () => {
+    mockAuthSuccessSinUsuario({ role: "ADMIN", organizationId: "org-1" })
+    dosLecturas(fila(), fila({ precio_venta: 1200 }))
+
+    const { status } = await parseResponse(await PUT(putRequest({ precioVenta: 1200 }), params))
+
+    expect(status).toBe(200)
+    expect(auditoria.update).not.toHaveBeenCalled()
+    expect(emitWebhookEvent).not.toHaveBeenCalled()
+  })
+
   it("a save that changes no audited field emits nothing", async () => {
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1", userId: "user-7" })
     dosLecturas(fila(), fila({ stock_reservado: 4, imagen_url: "x.jpg" }))
@@ -152,6 +183,19 @@ describe("DELETE /api/inventario/[id]", () => {
     expect(emitWebhookEvent).toHaveBeenCalledTimes(1)
     expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "inventario.archived", {
       id: "i1", codigo: "C1", nombre: "Pantalla", archivedBy: "user-7",
+    })
+  })
+
+  it("without a user id archiving still sends the webhook (archivedBy null) and writes no audit entry", async () => {
+    mockAuthSuccessSinUsuario({ role: "ADMIN", organizationId: "org-1" })
+    mockSupabaseFrom({ inventario: createChainMock(fila()) })
+
+    const { status } = await parseResponse(await DELETE(deleteRequest("?archive=true"), params))
+
+    expect(status).toBe(200)
+    expect(auditoria.delete).not.toHaveBeenCalled()
+    expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "inventario.archived", {
+      id: "i1", codigo: "C1", nombre: "Pantalla", archivedBy: null,
     })
   })
 
