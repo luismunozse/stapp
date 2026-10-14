@@ -5,6 +5,8 @@ import { collapse, readBySuffix } from "@/__tests__/helpers/sql-text"
 import type { AtributoVariante } from "@/types"
 import {
   claveCombinacion,
+  fotoDeRespaldo,
+  imagenRespaldoDe,
   nombreVariante,
   etiquetaVariante,
   generarIdCliente,
@@ -247,5 +249,148 @@ describe("selectConFallback", () => {
     })
     await expect(selectConFallback(broken, [CON, BASE])()).rejects.toBe(boom)
     expect(broken).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("fotoDeRespaldo (display-only fallback photo of a variant without its own)", () => {
+  const COLOR = { nombre: "Color", valores: ["Rojo", "Azul", "Verde"] }
+  const TALLE = { nombre: "Talle", valores: ["S", "M"] }
+  const color = (valor: string): AtributoVariante[] => [{ opcion: "Color", valor }]
+  const colorTalle = (c: string, t: string): AtributoVariante[] => [
+    { opcion: "Color", valor: c },
+    { opcion: "Talle", valor: t },
+  ]
+  const hermano = (id: string, atributos: AtributoVariante[], foto: string | null) => ({ id, atributos, foto })
+
+  it("takes the first sibling in OPTION order, not the first one listed", () => {
+    // Listed reversed: Verde, Azul, Rojo. Rojo comes first in the option, so it lends.
+    const hermanos = [
+      hermano("verde", color("Verde"), "https://f/verde.jpg"),
+      hermano("azul", color("Azul"), "https://f/azul.jpg"),
+      hermano("rojo", color("Rojo"), "https://f/rojo.jpg"),
+    ]
+    expect(fotoDeRespaldo([COLOR], hermanos, "otro")).toEqual({ url: "https://f/rojo.jpg", deId: "rojo" })
+  })
+
+  it("lets option order beat id order (an id that sorts first loses to an earlier value)", () => {
+    const hermanos = [
+      hermano("a-id", color("Verde"), "https://f/verde.jpg"),
+      hermano("z-id", color("Rojo"), "https://f/rojo.jpg"),
+    ]
+    expect(fotoDeRespaldo([COLOR], hermanos, "otro")?.deId).toBe("z-id")
+  })
+
+  it("never lends a row its own photo and skips siblings without a photo", () => {
+    const hermanos = [
+      hermano("rojo", color("Rojo"), "https://f/rojo.jpg"),
+      hermano("azul", color("Azul"), null),
+      hermano("verde", color("Verde"), "https://f/verde.jpg"),
+    ]
+    // Rojo asks: itself is excluded, Azul has no photo, so Verde lends.
+    expect(fotoDeRespaldo([COLOR], hermanos, "rojo")).toEqual({ url: "https://f/verde.jpg", deId: "verde" })
+    // Azul asks: Rojo is first.
+    expect(fotoDeRespaldo([COLOR], hermanos, "azul")?.deId).toBe("rojo")
+  })
+
+  it("photos only on Azul and Verde: Rojo borrows Azul's, not Verde's", () => {
+    const hermanos = [
+      hermano("verde", color("Verde"), "https://f/verde.jpg"),
+      hermano("azul", color("Azul"), "https://f/azul.jpg"),
+    ]
+    expect(fotoDeRespaldo([COLOR], hermanos, "rojo")?.deId).toBe("azul")
+  })
+
+  it("returns null when no sibling has a photo, when the only owner is the row itself, and for an empty list", () => {
+    expect(fotoDeRespaldo([COLOR], [hermano("rojo", color("Rojo"), null)], "azul")).toBeNull()
+    expect(fotoDeRespaldo([COLOR], [hermano("azul", color("Azul"), "https://f/azul.jpg")], "azul")).toBeNull()
+    expect(fotoDeRespaldo([COLOR], [], "azul")).toBeNull()
+  })
+
+  it("orders by the first option, then the second (Color then Talle)", () => {
+    const hermanos = [
+      hermano("azul-s", colorTalle("Azul", "S"), "https://f/azul-s.jpg"),
+      hermano("rojo-m", colorTalle("Rojo", "M"), "https://f/rojo-m.jpg"),
+      hermano("rojo-s", colorTalle("Rojo", "S"), "https://f/rojo-s.jpg"),
+    ]
+    expect(fotoDeRespaldo([COLOR, TALLE], hermanos, "otro")?.deId).toBe("rojo-s")
+    // Without Rojo/S, Rojo/M still beats Azul/S: the first option decides first.
+    expect(fotoDeRespaldo([COLOR, TALLE], hermanos.filter((h) => h.id !== "rojo-s"), "otro")?.deId).toBe("rojo-m")
+  })
+
+  it("sorts unknown values last and breaks ties by id", () => {
+    const hermanos = [
+      hermano("desconocido", color("Violeta"), "https://f/violeta.jpg"),
+      hermano("verde", color("Verde"), "https://f/verde.jpg"),
+    ]
+    expect(fotoDeRespaldo([COLOR], hermanos, "otro")?.deId).toBe("verde")
+
+    const empate = [
+      hermano("b", color("Violeta"), "https://f/b.jpg"),
+      hermano("a", color("Naranja"), "https://f/a.jpg"),
+    ]
+    // Both values are unknown to the group: the id decides.
+    expect(fotoDeRespaldo([COLOR], empate, "otro")?.deId).toBe("a")
+    expect(fotoDeRespaldo([COLOR], [...empate].reverse(), "otro")?.deId).toBe("a")
+  })
+
+  it("matches values like the combination key does (case, accents, spaces)", () => {
+    const opciones = [{ nombre: "Color", valores: ["Rojo", "Azul"] }]
+    const hermanos = [
+      hermano("azul", color("Azul"), "https://f/azul.jpg"),
+      hermano("rojo", color(" ROJÓ "), "https://f/rojo.jpg"),
+    ]
+    expect(fotoDeRespaldo(opciones, hermanos, "otro")?.deId).toBe("rojo")
+  })
+
+  it("matches the option by name, not by position, and ranks an unknown option last", () => {
+    const opciones = [COLOR, TALLE]
+    // atributos arrive in the opposite order to the options: Talle first.
+    const hermanos = [
+      hermano("m-rojo", [{ opcion: "Talle", valor: "M" }, { opcion: "Color", valor: "Rojo" }], "https://f/m-rojo.jpg"),
+      hermano("s-azul", [{ opcion: "Talle", valor: "S" }, { opcion: "Color", valor: "Azul" }], "https://f/s-azul.jpg"),
+    ]
+    // Color decides first: Rojo (index 0) beats Azul (index 1) whatever the array order.
+    expect(fotoDeRespaldo(opciones, hermanos, "otro")?.deId).toBe("m-rojo")
+
+    const sinOpcion = [
+      hermano("raro", [{ opcion: "Material", valor: "Rojo" }], "https://f/raro.jpg"),
+      hermano("verde", color("Verde"), "https://f/verde.jpg"),
+    ]
+    expect(fotoDeRespaldo([COLOR], sinOpcion, "otro")?.deId).toBe("verde")
+  })
+
+  it("tolerates missing atributos and a missing options list", () => {
+    const hermanos = [
+      hermano("sin", null as unknown as AtributoVariante[], "https://f/sin.jpg"),
+      hermano("verde", color("Verde"), "https://f/verde.jpg"),
+    ]
+    expect(fotoDeRespaldo([COLOR], hermanos, "otro")?.deId).toBe("verde")
+    expect(fotoDeRespaldo(null, [hermano("b", color("Rojo"), "https://f/b.jpg"), hermano("a", color("Azul"), "https://f/a.jpg")], "otro")?.deId).toBe("a")
+  })
+})
+
+describe("imagenRespaldoDe (the {url, etiqueta} payload of the fallback)", () => {
+  const OPCIONES = [
+    { nombre: "Color", valores: ["Rojo", "Azul"] },
+    { nombre: "Talle", valores: ["S", "M"] },
+  ]
+  const hermano = (id: string, c: string, t: string, foto: string | null) => ({
+    id,
+    atributos: [
+      { opcion: "Color", valor: c },
+      { opcion: "Talle", valor: t },
+    ],
+    foto,
+  })
+
+  it("labels the fallback with the lending sibling's full combination", () => {
+    const hermanos = [hermano("azul-s", "Azul", "S", "https://f/a.jpg"), hermano("rojo-m", "Rojo", "M", "https://f/r.jpg")]
+    expect(imagenRespaldoDe(OPCIONES, hermanos, "otro")).toEqual({ url: "https://f/r.jpg", etiqueta: "Rojo / M" })
+    expect(imagenRespaldoDe(OPCIONES, hermanos, "rojo-m")).toEqual({ url: "https://f/a.jpg", etiqueta: "Azul / S" })
+  })
+
+  it("is null when nobody can lend", () => {
+    expect(imagenRespaldoDe(OPCIONES, [hermano("rojo-m", "Rojo", "M", null)], "otro")).toBeNull()
+    expect(imagenRespaldoDe(OPCIONES, [hermano("rojo-m", "Rojo", "M", "https://f/r.jpg")], "rojo-m")).toBeNull()
   })
 })

@@ -38,6 +38,9 @@ const azul = {
   ...base,
   id: "inv-azul",
   nombre: "Funda X - Azul / M",
+  // Own photo: these tests are about the list SELECT; the sibling-photo lookup (a grouped row
+  // WITHOUT a photo) has its own file, inventario-fotos-respaldo.test.ts.
+  imagen_url: "https://f/azul.jpg",
   grupo_id: "g-1",
   atributos: [
     { opcion: "Color", valor: "Azul" },
