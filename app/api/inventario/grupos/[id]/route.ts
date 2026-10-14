@@ -341,11 +341,18 @@ export async function DELETE(request: Request, { params }: Contexto) {
       return NextResponse.json({ error: GRUPO_NO_ENCONTRADO }, { status: 404 })
     }
 
-    // One entry for the group; the children keep their own history.
+    // One entry for the group; the children keep their own history. Awaited (a serverless
+    // runtime may cut off a pending write) and swallowed: the ungroup is already done.
     if (userId) {
-      createAuditLogger(organizationId!, userId, request)
-        .delete("inventario_grupos", id, { nombre: data[0].nombre, opciones: data[0].opciones, accion: "DESAGRUPADO" })
-        .catch(() => {})
+      try {
+        await createAuditLogger(organizationId!, userId, request).delete("inventario_grupos", id, {
+          nombre: data[0].nombre,
+          opciones: data[0].opciones,
+          accion: "DESAGRUPADO",
+        })
+      } catch (auditoriaError) {
+        console.error("Error auditando el desagrupado:", auditoriaError)
+      }
     }
 
     return NextResponse.json({ success: true })

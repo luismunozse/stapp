@@ -550,6 +550,16 @@ const cuerpoNuevo = (extra: Fila = {}) => ({
   ...extra,
 })
 
+/**
+ * A rejected promise as a mock result. It is NOT a Promise instance on purpose: @vitest/spy
+ * attaches its own handlers to every Promise a mock returns, which would mark the rejection as
+ * handled behind our back and hide a missing catch in the code under test.
+ */
+function rechazoReal(motivo: Error) {
+  const p = Promise.reject(motivo)
+  return { then: p.then.bind(p), catch: p.catch.bind(p) }
+}
+
 const eventos = () => vi.mocked(emitWebhookEvent).mock.calls.map(([, evento, payload]) => [evento, (payload as Fila).id])
 
 describe("PUT /api/inventario/grupos/[id]: access and validation", () => {
@@ -1751,12 +1761,44 @@ describe("DELETE /api/inventario/grupos/[id]: audit entry", () => {
     expect(auditoria.delete).not.toHaveBeenCalled()
   })
 
-  it("a failing audit entry never fails the ungroup", async () => {
+  it("the audit entry is awaited before the response (a serverless runtime may cut off a pending one)", async () => {
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
-    auditoria.delete.mockRejectedValue(new Error("audit down"))
+    let escrita = false
+    auditoria.delete.mockImplementation(
+      () =>
+        new Promise<void>((resolver) =>
+          setTimeout(() => {
+            escrita = true
+            resolver()
+          }, 15)
+        )
+    )
     instalarBase()
 
     expect((await del("g-1")).status).toBe(200)
-    await new Promise((r) => setTimeout(r, 0))
+
+    expect(escrita).toBe(true)
+  })
+
+  it("a failing audit entry never fails the ungroup, and is logged", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    auditoria.delete.mockImplementation(() => rechazoReal(new Error("audit down")))
+    const { tablas } = instalarBase()
+
+    expect((await del("g-1")).status).toBe(200)
+
+    expect(tablas.inventario_grupos.some((g) => g.id === "g-1")).toBe(false)
+    expect(console.error).toHaveBeenCalled()
+  })
+
+  it("an audit logger that throws synchronously never fails the ungroup either", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    createAuditLogger.mockImplementationOnce(() => {
+      throw new Error("audit factory down")
+    })
+    instalarBase()
+
+    expect((await del("g-1")).status).toBe(200)
+    expect(console.error).toHaveBeenCalled()
   })
 })
