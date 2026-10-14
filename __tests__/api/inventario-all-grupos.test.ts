@@ -56,13 +56,13 @@ interface Consulta {
   op: string
 }
 
-function fake(almacen: Almacen, opts: { errorAlSeleccionarGrupo?: { code: string; message: string }; errorAlBorrarGrupos?: { code: string; message: string } } = {}) {
+function fake(almacen: Almacen, opts: { errorAlSeleccionarGrupo?: { code: string; message: string }; errorAlBorrarGrupos?: { code: string; message: string }; truncarRestantes?: number; sinConteo?: boolean } = {}) {
   const consultas: Consulta[] = []
   vi.mocked(supabaseAdmin.from).mockImplementation(((tabla: keyof Almacen) => {
     const q: Record<string, any> = { tabla, op: "select", eq: [] as [string, unknown][], in: null, not: null, columnas: "" }
     consultas.push(q as Consulta)
     const api: any = {
-      select: (c: string) => ((q.columnas = c), api),
+      select: (c: string, o?: { count?: string }) => ((q.columnas = c), (q.conteo = o?.count), api),
       delete: () => ((q.op = "delete"), api),
       eq: (c: string, v: unknown) => (q.eq.push([c, v]), api),
       in: (c: string, v: unknown[]) => ((q.in = [c, v]), api),
@@ -100,7 +100,12 @@ function fake(almacen: Almacen, opts: { errorAlSeleccionarGrupo?: { code: string
         } else if (tabla === "inventario" && q.columnas === "grupo_id") {
           resultado = opts.errorAlSeleccionarGrupo
             ? { data: null, error: opts.errorAlSeleccionarGrupo }
-            : { data: filas.filter(coincide).map((f) => ({ grupo_id: f.grupo_id })), error: null }
+            : (() => {
+                const todas = filas.filter(coincide).map((f) => ({ grupo_id: f.grupo_id }))
+                const data = opts.truncarRestantes !== undefined ? todas.slice(0, opts.truncarRestantes) : todas
+                // count is only present when the route asks for it (count: "exact")
+                return { data, error: null, count: q.conteo === "exact" && !opts.sinConteo ? todas.length : null }
+              })()
         } else if (tabla === "inventario") {
           resultado = { data: filas.filter(coincide).map(({ id, codigo, nombre }) => ({ id, codigo, nombre })), error: null }
         } else {
@@ -268,4 +273,26 @@ describe("DELETE /api/inventario/all: variant groups", () => {
     expect(borrado.eq).toEqual([["organization_id", "org-1"]])
     expect(borrado.not).toEqual(["id", ["g-1"]])
   })
+  it("deletes no group when the server returned fewer remaining children than it counted (max_rows below 1000)", async () => {
+    const almacen = datos()
+    almacen.repuestos_orden.push({ inventario_id: "azul" }, { inventario_id: "rojo" }, { inventario_id: "negro" })
+    const { consultas } = fake(almacen, { truncarRestantes: 1 })
+
+    const { status, body } = await borrar()
+
+    expect(status).toBe(200)
+    expect(body.blocked).toHaveLength(3)
+    expect(idsGrupos(almacen, "org-1")).toEqual(["g-1", "g-2", "g-vacio"])
+    expect(consultas.some((c: any) => c.tabla === "inventario_grupos" && c.op === "delete")).toBe(false)
+    expect(console.error).toHaveBeenCalledTimes(1)
+  })
+
+  it("deletes no group when the count is unavailable", async () => {
+    const almacen = datos()
+    fake(almacen, { sinConteo: true })
+    await borrar()
+    expect(idsGrupos(almacen, "org-1")).toEqual(["g-1", "g-2", "g-vacio"])
+    expect(console.error).toHaveBeenCalledTimes(1)
+  })
+
 })

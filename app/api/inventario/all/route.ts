@@ -16,14 +16,16 @@ const LIMITE_HIJOS_RESTANTES = 1000
 // so when the remaining children cannot be listed completely nothing is deleted.
 async function borrarGruposSinHijos(organizationId: string): Promise<void> {
   try {
-    const { data: restantes, error: restantesError } = await supabaseAdmin
+    const { data: restantes, error: restantesError, count } = await supabaseAdmin
       .from("inventario")
-      .select("grupo_id")
+      .select("grupo_id", { count: "exact" })
       .eq("organization_id", organizationId)
       .not("grupo_id", "is", null)
       .limit(LIMITE_HIJOS_RESTANTES)
     if (restantesError) throw restantesError
-    if ((restantes ?? []).length >= LIMITE_HIJOS_RESTANTES) {
+    // The server may cut the answer below our own limit (its max_rows): the count says how many
+    // children really remain, and a read that does not cover all of them proves nothing.
+    if (count === null || count === undefined || count > (restantes ?? []).length || (restantes ?? []).length >= LIMITE_HIJOS_RESTANTES) {
       console.error("No se borraron los grupos de variantes: quedan demasiados productos para saber cuáles siguen en uso")
       return
     }
