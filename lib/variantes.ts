@@ -115,6 +115,26 @@ export function imagenRespaldoDe(
   return { url: prestada.url, etiqueta: etiquetaVariante(prestadora?.atributos) ?? "" }
 }
 
+/**
+ * The additive POS fields of a search row read with the variant columns (`grupo_id, atributos,
+ * grupo:inventario_grupos(nombre)`). A standalone row, or a row read without those columns, gets
+ * NO key at all, so its payload stays exactly what it was before variants.
+ */
+export function camposDeVarianteParaPos(item: {
+  grupo_id?: string | null
+  atributos?: AtributoVariante[] | null
+  grupo?: { nombre?: string | null } | { nombre?: string | null }[] | null
+}): { grupoId: string; etiqueta: string | null; atributos: AtributoVariante[] | null; grupoNombre: string | null } | Record<string, never> {
+  if (!item.grupo_id) return {}
+  const grupo = Array.isArray(item.grupo) ? item.grupo[0] : item.grupo
+  return {
+    grupoId: item.grupo_id,
+    etiqueta: etiquetaVariante(item.atributos),
+    atributos: item.atributos ?? null,
+    grupoNombre: grupo?.nombre ?? null,
+  }
+}
+
 /** Client-generated id the save RPC accepts for a new row: `^c[0-9a-f]{24}$`. */
 export function generarIdCliente(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(12))

@@ -1,3 +1,4 @@
+import type { AtributoVariante } from "@/types"
 import {
   calcularTotalesVenta,
   type DescuentoConfig,
@@ -67,6 +68,12 @@ export interface InventarioResult {
   precioVenta: number
   trackeaSeries?: boolean
   diasGarantiaDefault?: number | null
+  // Variant fields (additive): present only on a variant, absent on a standalone item and while
+  // migration 355 is not applied. `etiqueta` is e.g. "Azul / M"; `grupoNombre` is the group's base name.
+  grupoId?: string | null
+  etiqueta?: string | null
+  atributos?: AtributoVariante[] | null
+  grupoNombre?: string | null
 }
 
 /**
