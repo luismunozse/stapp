@@ -2,6 +2,44 @@ import { NextResponse } from "next/server"
 import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
+import { isMissingColumnError } from "@/lib/db-errors"
+
+// A cap on the read of the children that remain: PostgREST answers at most this many rows, and a
+// group is only deleted when the answer proves which groups still have a child.
+const LIMITE_HIJOS_RESTANTES = 1000
+
+// Deletes the variant groups of the organization that no child points at any more: the ones
+// the wipe just emptied and the empty ones a single hard delete may have left (VG-15). The group
+// of a child that could not be deleted stays. Best-effort and after the wipe: it never changes the
+// answer of the wipe. A missing migration (no table or column yet) means there is nothing to do.
+// Deleting a group a child still points at would detach that child (the foreign key sets NULL),
+// so when the remaining children cannot be listed completely nothing is deleted.
+async function borrarGruposSinHijos(organizationId: string): Promise<void> {
+  try {
+    const { data: restantes, error: restantesError } = await supabaseAdmin
+      .from("inventario")
+      .select("grupo_id")
+      .eq("organization_id", organizationId)
+      .not("grupo_id", "is", null)
+      .limit(LIMITE_HIJOS_RESTANTES)
+    if (restantesError) throw restantesError
+    if ((restantes ?? []).length >= LIMITE_HIJOS_RESTANTES) {
+      console.error("No se borraron los grupos de variantes: quedan demasiados productos para saber cuáles siguen en uso")
+      return
+    }
+
+    const conHijos = [...new Set((restantes ?? []).map((r) => r.grupo_id as string))]
+    let borrado = supabaseAdmin.from("inventario_grupos").delete().eq("organization_id", organizationId)
+    if (conHijos.length > 0) {
+      borrado = borrado.not("id", "in", `(${conHijos.map((id) => `"${id}"`).join(",")})`)
+    }
+    const { error: borradoError } = await borrado
+    if (borradoError) throw borradoError
+  } catch (e) {
+    if (isMissingColumnError(e)) return
+    console.error("Error borrando los grupos de variantes sin productos:", e)
+  }
+}
 
 // Wipe all inventario for the caller's organization.
 // FK-restricted rows (in use by órdenes / compras / devoluciones) are reported
@@ -21,6 +59,7 @@ export async function DELETE(request: Request) {
 
     const ids = (allRows ?? []).map((r) => r.id as string)
     if (ids.length === 0) {
+      await borrarGruposSinHijos(organizationId!)
       return NextResponse.json({ deleted: 0, blocked: [] })
     }
 
@@ -89,6 +128,8 @@ export async function DELETE(request: Request) {
         }
       }
     }
+
+    await borrarGruposSinHijos(organizationId!)
 
     return NextResponse.json({ deleted, blocked })
   } catch (err) {
