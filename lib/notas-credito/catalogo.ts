@@ -92,7 +92,8 @@ export function etiquetaReintegro(metodo: string | null | undefined): string {
   if (metodo === "CUENTA_CORRIENTE") return "A tu favor en cuenta corriente"
   if (metodo === "CREDITO_TIENDA" || metodo === "NOTA_CREDITO_INTERNA") return "Crédito a tu favor en el local"
   const medio = etiquetaMetodo(metodo)
-  return medio ? `Te devolvimos (${medio})` : "Te devolvimos"
+  // Sin medio (historial) no se sabe si el dinero salió: el renglón no lo afirma.
+  return medio ? `Te devolvimos (${medio})` : "Reintegro"
 }
 
 /**

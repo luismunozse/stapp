@@ -83,8 +83,9 @@ describe("etiquetaReintegro", () => {
     expect(etiquetaReintegro("NOTA_CREDITO_INTERNA")).toBe("Crédito a tu favor en el local")
   })
 
-  it("sin medio registrado (historial) no inventa uno", () => {
-    expect(etiquetaReintegro(null)).toBe("Te devolvimos")
+  it("sin medio registrado (historial) no afirma que se devolvió plata", () => {
+    expect(etiquetaReintegro(null)).toBe("Reintegro")
+    expect(etiquetaReintegro(undefined)).toBe("Reintegro")
   })
 })
 

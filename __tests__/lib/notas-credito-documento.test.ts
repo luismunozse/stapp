@@ -189,14 +189,14 @@ describe("cargarDocumentoNC — venta", () => {
     setup({ vista: vistaVenta, ventas: venta, devoluciones_venta: devolucion, sucursalesError: true })
     expect((await cargarDocumentoNC("nc-v", admin))?.sucursalNombre).toBeNull()
   })
-  // Un historial sin medio de reintegro: lo que el PDF y el ticket reciben no puede quedar vacío.
-  it("una devolución histórica sin medio no deja vacío el renglón del reintegro", async () => {
+
+  // Un historial sin medio de reintegro: sin medio no se sabe si se pagó, así que el renglón es neutro.
+  it("una devolución histórica sin medio no afirma que se devolvió plata", async () => {
     setup({ vista: { ...vistaVenta, metodo: null, monto_aplicado_deuda: "0.00", monto_reembolso: "1500.00" }, ventas: venta, devoluciones_venta: devolucion })
     const doc = await cargarDocumentoNC("nc-v", admin)
     expect(doc?.metodo).toBeNull()
-    expect(etiquetaReintegro(doc?.metodo)).toBe("Te devolvimos")
+    expect(etiquetaReintegro(doc?.metodo)).toBe("Reintegro")
   })
-
 })
 
 describe("cargarDocumentoNC — orden", () => {
