@@ -9,10 +9,12 @@ export interface PanelRoute {
 export const panelRoutes: PanelRoute[] = [
   { ruta: "/dashboard", descripcion: "Dashboard principal con métricas del taller" },
   { ruta: "/ordenes", descripcion: "Órdenes de servicio (crear, listar, gestionar reparaciones)" },
+  { ruta: "/ordenes/recepcion", descripcion: "Recibir varios equipos de un mismo cliente en una sola atención" },
   { ruta: "/clientes", descripcion: "Clientes (historial, cuenta corriente, importación)" },
   { ruta: "/tecnicos", descripcion: "Técnicos del taller y su rendimiento" },
   { ruta: "/vendedores", descripcion: "Vendedores y comisiones" },
   { ruta: "/inventario", descripcion: "Inventario, stock, depósitos y repuestos" },
+  { ruta: "/servicios", descripcion: "Catálogo de servicios que ofrece el taller (trabajo cobrado, sin stock)" },
   { ruta: "/ventas", descripcion: "Ventas realizadas y devoluciones" },
   { ruta: "/pos", descripcion: "Punto de venta (vender accesorios y repuestos)" },
   { ruta: "/cotizaciones", descripcion: "Cotizaciones y presupuestos" },
