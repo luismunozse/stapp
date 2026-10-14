@@ -4,7 +4,7 @@ import { useState, type Dispatch, type KeyboardEvent } from "react"
 import { Plus, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { LIMITES } from "@/lib/variantes-schema"
-import type { OpcionDeEstado, VariantesAccion } from "@/lib/variantes-filas"
+import { crearReductor, type OpcionDeEstado, type VariantesAccion, type VariantesState } from "@/lib/variantes-filas"
 
 /*
  * Options and values of a product with variants, as editable chips.
@@ -20,7 +20,8 @@ import type { OpcionDeEstado, VariantesAccion } from "@/lib/variantes-filas"
  */
 
 interface Props {
-  opciones: readonly OpcionDeEstado[]
+  /** The whole state: a pasted list of values is tried against it first, to report every refusal. */
+  estado: VariantesState
   dispatch: Dispatch<VariantesAccion>
   /** Locks every control (a save in flight). */
   deshabilitado?: boolean
@@ -76,16 +77,42 @@ function TextoEditable({
       onChange={(e) => setBorrador(e.target.value)}
       onBlur={confirmar}
       onKeyDown={teclas}
-      style={ancho ? { width: `${Math.max(mostrado.length, 3) + 2}ch` } : undefined}
+      style={ancho ? { width: `${Math.max(mostrado.length, 3) + 2}ch`, maxWidth: "100%" } : undefined}
       className={className}
     />
   )
 }
 
-function AgregarValor({ opcion, dispatch, deshabilitado }: { opcion: OpcionDeEstado; dispatch: Dispatch<VariantesAccion>; deshabilitado?: boolean }) {
+function AgregarValor({
+  estado,
+  opcion,
+  dispatch,
+  deshabilitado,
+}: {
+  estado: VariantesState
+  opcion: OpcionDeEstado
+  dispatch: Dispatch<VariantesAccion>
+  deshabilitado?: boolean
+}) {
   const [texto, setTexto] = useState("")
   const agregar = (crudo: string) => {
-    for (const valor of partir(crudo)) dispatch({ tipo: "agregarValor", opcionId: opcion.id, texto: valor })
+    const valores = partir(crudo)
+    const accion = (valor: string): VariantesAccion => ({ tipo: "agregarValor", opcionId: opcion.id, texto: valor })
+    if (valores.length <= 1) {
+      for (const valor of valores) dispatch(accion(valor))
+      return
+    }
+    // Several values at once: an accepted value clears the reason of a refused one before it, so the list is
+    // tried here first (the reducer is pure) and every refusal is reported together.
+    const reducir = crearReductor()
+    let actual = estado
+    const rechazos: string[] = []
+    for (const valor of valores) {
+      actual = reducir(actual, accion(valor))
+      if (actual.aviso !== null) rechazos.push(`No se agregó "${valor}": ${actual.aviso}`)
+    }
+    if (rechazos.length === 0) for (const valor of valores) dispatch(accion(valor))
+    else dispatch({ tipo: "reemplazar", estado: { ...actual, aviso: rechazos.join(" ") } })
   }
   return (
     <input
@@ -119,7 +146,17 @@ function AgregarValor({ opcion, dispatch, deshabilitado }: { opcion: OpcionDeEst
   )
 }
 
-function FilaDeOpcion({ opcion, dispatch, deshabilitado }: { opcion: OpcionDeEstado; dispatch: Dispatch<VariantesAccion>; deshabilitado?: boolean }) {
+function FilaDeOpcion({
+  estado,
+  opcion,
+  dispatch,
+  deshabilitado,
+}: {
+  estado: VariantesState
+  opcion: OpcionDeEstado
+  dispatch: Dispatch<VariantesAccion>
+  deshabilitado?: boolean
+}) {
   return (
     <div role="group" aria-label={`Opción ${opcion.nombre}`} className="space-y-2 rounded-lg border bg-muted/30 p-3">
       <div className="flex items-center gap-2">
@@ -143,14 +180,14 @@ function FilaDeOpcion({ opcion, dispatch, deshabilitado }: { opcion: OpcionDeEst
 
       <ul className="flex flex-wrap items-center gap-2">
         {opcion.valores.map((valor) => (
-          <li key={valor.id} className="flex items-center rounded-full border bg-background pl-3">
+          <li key={valor.id} className="flex min-w-0 max-w-full items-center rounded-full border bg-background pl-3">
             <TextoEditable
               valor={valor.texto}
               etiqueta={`Valor ${valor.texto}`}
               alConfirmar={(texto) => dispatch({ tipo: "renombrarValor", valorId: valor.id, texto })}
               deshabilitado={deshabilitado}
               ancho
-              className="h-9 min-w-0 bg-transparent text-sm outline-none focus-visible:underline"
+              className="h-9 min-w-0 overflow-hidden text-ellipsis bg-transparent text-sm outline-none focus-visible:underline"
             />
             <button
               type="button"
@@ -165,7 +202,7 @@ function FilaDeOpcion({ opcion, dispatch, deshabilitado }: { opcion: OpcionDeEst
         ))}
       </ul>
       {opcion.valores.length === 0 && <p className="text-xs text-amber-700 dark:text-amber-400">Agregá al menos un valor</p>}
-      <AgregarValor opcion={opcion} dispatch={dispatch} deshabilitado={deshabilitado} />
+      <AgregarValor estado={estado} opcion={opcion} dispatch={dispatch} deshabilitado={deshabilitado} />
     </div>
   )
 }
@@ -211,12 +248,13 @@ function AgregarOpcion({ dispatch, deshabilitado, hayOpciones }: { dispatch: Dis
   )
 }
 
-export function OpcionesEditor({ opciones, dispatch, deshabilitado }: Props) {
+export function OpcionesEditor({ estado, dispatch, deshabilitado }: Props) {
+  const opciones = estado.opciones
   const completo = opciones.length >= LIMITES.opciones
   return (
     <div role="group" aria-label="Opciones de las variantes" className="space-y-3">
       {opciones.map((opcion) => (
-        <FilaDeOpcion key={opcion.id} opcion={opcion} dispatch={dispatch} deshabilitado={deshabilitado} />
+        <FilaDeOpcion key={opcion.id} estado={estado} opcion={opcion} dispatch={dispatch} deshabilitado={deshabilitado} />
       ))}
       {completo ? (
         <p className="text-xs text-muted-foreground">Llegaste al máximo de {LIMITES.opciones} opciones</p>

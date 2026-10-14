@@ -8,7 +8,7 @@ const textos = (estado: ReturnType<typeof estadoColor>, opcion: string) =>
   estado.opciones.find((o) => o.nombre === opcion)?.valores.map((v) => v.texto)
 
 const montarEditor = (inicial = estadoColor(), props: { deshabilitado?: boolean } = {}) =>
-  montar(inicial, (estado, dispatch) => <OpcionesEditor opciones={estado.opciones} dispatch={dispatch} {...props} />)
+  montar(inicial, (estado, dispatch) => <OpcionesEditor estado={estado} dispatch={dispatch} {...props} />)
 
 describe("OpcionesEditor: reading the options", () => {
   it("shows every option with its values as editable chips", () => {
@@ -52,6 +52,32 @@ describe("OpcionesEditor: adding values", () => {
     fireEvent.change(entrada, { target: { value: "Verde, Negro," } })
     expect(textos(salida.estado, "Color")).toEqual(["Rojo", "Azul", "Verde", "Negro"])
     expect(screen.getByLabelText("Agregar valor a Color")).toHaveValue("")
+  })
+
+  it("a paste with a refused value keeps the reason: each refused value is named, the others are added", () => {
+    const { salida } = montarEditor()
+    const entrada = screen.getByLabelText("Agregar valor a Color")
+    fireEvent.change(entrada, { target: { value: "rojo, Verde, azul," } })
+    expect(textos(salida.estado, "Color")).toEqual(["Rojo", "Azul", "Verde"])
+    expect(salida.estado.aviso).toBe(
+      'No se agregó "rojo": El valor "rojo" está repetido en Color No se agregó "azul": El valor "azul" está repetido en Color'
+    )
+  })
+
+  it("a paste where every value goes through shows no message, and a single refused value keeps the plain reason", () => {
+    const { salida } = montarEditor()
+    const entrada = screen.getByLabelText("Agregar valor a Color")
+    fireEvent.change(entrada, { target: { value: "Verde, Negro," } })
+    expect(salida.estado.aviso).toBeNull()
+    fireEvent.change(entrada, { target: { value: "verde," } })
+    expect(salida.estado.aviso).toBe('El valor "verde" está repetido en Color')
+  })
+
+  it("a paste where the first value is refused and the last is not still reports the first", () => {
+    const { salida } = montarEditor()
+    fireEvent.change(screen.getByLabelText("Agregar valor a Color"), { target: { value: "Rojo, Negro," } })
+    expect(textos(salida.estado, "Color")).toEqual(["Rojo", "Azul", "Negro"])
+    expect(salida.estado.aviso).toBe('No se agregó "Rojo": El valor "Rojo" está repetido en Color')
   })
 
   it("what follows the last comma stays in the field to be finished", () => {
@@ -216,6 +242,22 @@ describe("OpcionesEditor: inside the product form", () => {
       expect(fireEvent.keyDown(campo, { key: "Enter" })).toBe(false)
     }
     expect(fireEvent.keyDown(screen.getByLabelText("Valor Rojo"), { key: "a" })).toBe(true)
+  })
+})
+
+describe("OpcionesEditor: a long value on a phone", () => {
+  // jsdom cannot measure a layout, so the contract is the styles that keep a chip inside the screen.
+  // Manual check for the form wiring: a 60-character value at 375px does not widen the page.
+  it("caps the chip and its input to the width of the line, and lets the text be cut with an ellipsis", () => {
+    const largo = "Edición limitada con un nombre larguísimo de color"
+    const inicial = aplicar(reductor(), estadoColor(), { tipo: "agregarValor", opcionId: opcionId(estadoColor(), "Color"), texto: largo })
+    montarEditor(inicial)
+    const chip = screen.getByLabelText(`Valor ${largo}`)
+    expect(chip).toHaveStyle({ maxWidth: "100%" })
+    expect(chip).toHaveClass("min-w-0", "overflow-hidden", "text-ellipsis")
+    expect(chip.closest("li")).toHaveClass("min-w-0", "max-w-full")
+    // The text is still the whole value, so it can be read and edited.
+    expect(chip).toHaveValue(largo)
   })
 })
 
