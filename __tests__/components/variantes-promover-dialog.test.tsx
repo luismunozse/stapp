@@ -233,6 +233,43 @@ describe("PromoverDialog: every opening starts fresh", () => {
 })
 
 describe("PromoverDialog: a product with no stock", () => {
+  it("a different product that arrives while open is decided too, once", () => {
+    const estado = estadoColor()
+    const { alConfirmar, rerender, vista } = montar(estado, { item: { ...ITEM, stock: 0 } })
+    expect(alConfirmar).toHaveBeenCalledTimes(1)
+    rerender(vista({ item: { id: "item2", nombre: "Otra", stock: 0 } }))
+    expect(alConfirmar).toHaveBeenCalledTimes(2)
+    rerender(vista({ item: { id: "item2", nombre: "Otra", stock: 0 } }))
+    expect(alConfirmar).toHaveBeenCalledTimes(2)
+    rerender(vista({ item: { id: "item1", nombre: "Funda X", stock: 0 } }))
+    expect(alConfirmar).toHaveBeenCalledTimes(3)
+  })
+
+  it("the same holds under StrictMode: one decision per product", () => {
+    const alConfirmar = vi.fn()
+    const dibujar = (id: string) => (
+      <StrictMode>
+        <PromoverDialog open item={{ id, nombre: id, stock: 0 }} estado={estadoColor()} alConfirmar={alConfirmar} alCancelar={vi.fn()} />
+      </StrictMode>
+    )
+    const { rerender } = render(dibujar("item1"))
+    expect(alConfirmar).toHaveBeenCalledTimes(1)
+    rerender(dibujar("item2"))
+    expect(alConfirmar).toHaveBeenCalledTimes(2)
+    rerender(dibujar("item2"))
+    expect(alConfirmar).toHaveBeenCalledTimes(2)
+  })
+
+  it("a product with stock that was asked, then one with none, is decided straight away", async () => {
+    const estado = estadoColor()
+    const { alConfirmar, rerender, vista } = montar(estado)
+    await screen.findByRole("dialog")
+    expect(alConfirmar).not.toHaveBeenCalled()
+    rerender(vista({ item: { id: "item2", nombre: "Otra", stock: 0 } }))
+    expect(alConfirmar).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole("dialog")).toBeNull()
+  })
+
   it("confirms exactly once even when React runs the effects twice (StrictMode)", () => {
     const alConfirmar = vi.fn()
     render(

@@ -84,15 +84,15 @@ export function PromoverDialog({ open, item, estado, alConfirmar, alCancelar }: 
 
   const preguntar = open && item.stock > 0 && candidatas.length > 0
 
-  // No question to ask: decide once per opening.
-  const decidido = useRef(false)
+  // No question to ask: decide once per opening and per product (the product it decided for is remembered).
+  const decididoPara = useRef<string | null>(null)
   useEffect(() => {
-    if (!open) {
-      decidido.current = false
+    if (!open || preguntar) {
+      decididoPara.current = null
       return
     }
-    if (preguntar || decidido.current) return
-    decidido.current = true
+    if (decididoPara.current === item.id) return
+    decididoPara.current = item.id
     alConfirmar(porDefecto?.id)
   })
 
