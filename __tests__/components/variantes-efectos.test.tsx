@@ -37,6 +37,15 @@ const cien = (): GrupoLeido => ({
 })
 
 /** 90 rows pending archive: the nine Talle values T1..T9 removed. */
+/** Color {Rojo, Azul, Verde} x Talle {S, M}; Verde / M is saved, Verde / S sits archived in the database. */
+const conArchivadas = (): GrupoLeido => ({
+  grupo: { id: "g1", nombre: "Funda X", opciones: [{ nombre: "Color", valores: ["Rojo", "Azul", "Verde"] }, { nombre: "Talle", valores: ["S", "M"] }] },
+  variantes: [["Rojo", "S"], ["Rojo", "M"], ["Azul", "S"], ["Azul", "M"], ["Verde", "M"]].map(([c, ta]) =>
+    leida(`${c}-${ta}`, [{ opcion: "Color", valor: c }, { opcion: "Talle", valor: ta }], { stock: 1 })
+  ),
+  archivadas: [{ id: "v-s", atributos: [{ opcion: "Color", valor: "Verde" }, { opcion: "Talle", valor: "S" }], stock: 4 }],
+})
+
 /** Color x Talle x Material, eight saved rows. */
 const tresOpciones = (): GrupoLeido => {
   const colores = ["Rojo", "Azul"], talles = ["S", "M"], materiales = ["Cuero", "Tela"]
@@ -87,6 +96,37 @@ describe("efectosDeDeshacer: one answer per row, the same as asking row by row",
         { tipo: "renombrarValor", valorId: valorId(e, "Talle", "M"), texto: "S" }
       )
     }],
+    ["a value renamed between two archives: same id, different snapshot text", () => {
+      const e = hidratar(grupoColorTalle())
+      const despues = aplicar(
+        reductor(),
+        e,
+        { tipo: "quitarValor", valorId: valorId(e, "Talle", "M") },
+        { tipo: "renombrarValor", valorId: valorId(e, "Color", "Azul"), texto: "Verde" },
+        { tipo: "quitarValor", valorId: valorId(e, "Color", "Azul") }
+      )
+      return aplicar(reductor(), despues, { tipo: "deshacerArchivo", filaId: filaDe(despues, "Rojo / M").id })
+    }],
+    ["a value renamed only in case between two archives", () => {
+      const e = hidratar(grupoColorTalle())
+      const despues = aplicar(
+        reductor(),
+        e,
+        { tipo: "quitarValor", valorId: valorId(e, "Talle", "M") },
+        { tipo: "renombrarValor", valorId: valorId(e, "Color", "Azul"), texto: "azul" },
+        { tipo: "quitarValor", valorId: valorId(e, "Color", "Azul") }
+      )
+      return aplicar(reductor(), despues, { tipo: "deshacerArchivo", filaId: filaDe(despues, "Rojo / M").id })
+    }],
+    ["rows brought back from the children archived in the database", () => {
+      const e = hidratar(conArchivadas())
+      return aplicar(reductor(), e, { tipo: "quitarValor", valorId: valorId(e, "Talle", "S") })
+    }],
+    ["restored rows beside new ones", () => {
+      const e = hidratar(conArchivadas())
+      const conNegro = aplicar(reductor(), e, { tipo: "agregarValor", opcionId: opcionId(e, "Color"), texto: "Negro" })
+      return aplicar(reductor(), conNegro, { tipo: "quitarValor", valorId: valorId(conNegro, "Talle", "S") })
+    }],
     ["two different options gone, each with its own pending rows", () => {
       const e = hidratar(tresOpciones())
       return aplicar(reductor(), e, { tipo: "quitarOpcion", opcionId: opcionId(e, "Talle") }, { tipo: "quitarOpcion", opcionId: opcionId(e, "Material") })
@@ -113,6 +153,41 @@ describe("efectosDeDeshacer: one answer per row, the same as asking row by row",
     const todos = efectosDeDeshacer(estado)
     expect([...todos.keys()].sort()).toEqual(pendientes.map((f) => f.id).sort())
     for (const fila of pendientes) expect(todos.get(fila.id)).toEqual(efectoDeDeshacer(estado, fila))
+  })
+
+  it("the renamed-value repro: the map gives a-m its own snapshot text, Azul", () => {
+    const e = hidratar(grupoColorTalle())
+    const despues = aplicar(
+      reductor(),
+      e,
+      { tipo: "quitarValor", valorId: valorId(e, "Talle", "M") },
+      { tipo: "renombrarValor", valorId: valorId(e, "Color", "Azul"), texto: "Verde" },
+      { tipo: "quitarValor", valorId: valorId(e, "Color", "Azul") }
+    )
+    const estado = aplicar(reductor(), despues, { tipo: "deshacerArchivo", filaId: filaDe(despues, "Rojo / M").id })
+    const aM = filasEnOrden(estado).find((f) => f.id === "a-m")!
+    expect(aM.archivar).toBe(true)
+    const mapa = efectosDeDeshacer(estado).get("a-m")!
+    expect(mapa.valores).toEqual(["Azul"])
+    expect(mapa.tambien).toEqual(["Azul / S"])
+    expect(mapa).toEqual(efectoDeDeshacer(estado, aM))
+    // And the other row of the same value says Verde: they do not share an answer.
+    expect(efectosDeDeshacer(estado).get("a-s")!.valores).toEqual(["Verde"])
+  })
+
+  it("the same holds when the rename only changes the case", () => {
+    const e = hidratar(grupoColorTalle())
+    const despues = aplicar(
+      reductor(),
+      e,
+      { tipo: "quitarValor", valorId: valorId(e, "Talle", "M") },
+      { tipo: "renombrarValor", valorId: valorId(e, "Color", "Azul"), texto: "azul" },
+      { tipo: "quitarValor", valorId: valorId(e, "Color", "Azul") }
+    )
+    const estado = aplicar(reductor(), despues, { tipo: "deshacerArchivo", filaId: filaDe(despues, "Rojo / M").id })
+    const mapa = efectosDeDeshacer(estado)
+    expect(mapa.get("a-m")!.valores).toEqual(["Azul"])
+    expect(mapa.get("a-s")!.valores).toEqual(["azul"])
   })
 
   it("rows with nothing pending give an empty map", () => {

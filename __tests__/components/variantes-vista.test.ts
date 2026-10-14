@@ -211,9 +211,27 @@ describe("describirEfecto: the sentence shown before pressing undo", () => {
     expect(describirEfecto(con({ valores: ["S"], tambien: ["Azul / S"], nuevas: ["Verde / S"], restauradas: ["Negro / S"] }))).toBe(
       "Al deshacer se vuelve a agregar S, también vuelve Azul / S, se agrega Verde / S y se restaura Negro / S"
     )
-    // A list inside a clause and the clauses together: each uses its own 'y'.
+  })
+
+  it("with a list of two or more inside a clause, the clauses are told apart with ';' and 'y' goes only before the last one", () => {
     expect(describirEfecto(con({ valores: ["S", "M"], tambien: ["Azul / S", "Azul / M"] }))).toBe(
-      "Al deshacer se vuelven a agregar S y M y también vuelven Azul / S y Azul / M"
+      "Al deshacer se vuelven a agregar S y M; y también vuelven Azul / S y Azul / M"
+    )
+    expect(describirEfecto(con({ valores: ["S", "M"], tambien: ["Azul / S", "Azul / M"], nuevas: ["Verde / S"] }))).toBe(
+      "Al deshacer se vuelven a agregar S y M; también vuelven Azul / S y Azul / M; y se agrega Verde / S"
+    )
+    expect(describirEfecto(con({ valores: ["S"], tambien: ["Azul / S", "Rojo / S"] }))).toBe(
+      "Al deshacer se vuelve a agregar S; y también vuelven Azul / S y Rojo / S"
+    )
+    expect(describirEfecto(con({ valores: ["S"], nuevas: ["Verde / S", "Verde / M", "Verde / L"], restauradas: ["Negro / S"] }))).toBe(
+      "Al deshacer se vuelve a agregar S; se agregan Verde / S, Verde / M y Verde / L; y se restaura Negro / S"
+    )
+  })
+
+  it("a list of two or more in the only clause keeps the plain form, and single items keep the comma-y form", () => {
+    expect(describirEfecto(con({ tambien: ["Azul / S", "Azul / M"] }))).toBe("Al deshacer también vuelven Azul / S y Azul / M")
+    expect(describirEfecto(con({ valores: ["S"], tambien: ["Azul / S"], nuevas: ["Verde / S"], restauradas: ["Negro / S"] }))).toBe(
+      "Al deshacer se vuelve a agregar S, también vuelve Azul / S, se agrega Verde / S y se restaura Negro / S"
     )
   })
 })

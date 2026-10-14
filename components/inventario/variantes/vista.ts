@@ -76,7 +76,9 @@ function necesidad(estado: VariantesState, fila: Fila): string | null {
     const opcion = estado.opciones.find((o) => o.id === p.opcionId)
     if (!opcion) return null
     if (p.valorId !== null && opcion.valores.some((v) => v.id === p.valorId)) continue
-    faltan.push(JSON.stringify([p.opcionId, p.valorId ?? p.valor.trim().toLowerCase()]))
+    // The undo re-adds the value with the row's OWN snapshot text, so two rows that share a value id but were
+    // archived under different names (a rename in between, even only in case) do not need the same thing.
+    faltan.push(JSON.stringify([p.opcionId, p.valorId, p.valor.trim()]))
   }
   return faltan.sort().join("|")
 }
@@ -129,5 +131,10 @@ export function describirEfecto(efecto: EfectoDeDeshacer): string | null {
   if (efecto.tambien.length > 0) partes.push(`también ${uno(efecto.tambien, "vuelve", "vuelven")} ${unir(efecto.tambien)}`)
   if (efecto.nuevas.length > 0) partes.push(`${uno(efecto.nuevas, "se agrega", "se agregan")} ${unir(efecto.nuevas)}`)
   if (efecto.restauradas.length > 0) partes.push(`${uno(efecto.restauradas, "se restaura", "se restauran")} ${unir(efecto.restauradas)}`)
-  return partes.length > 0 ? `Al deshacer ${unir(partes)}` : null
+  if (partes.length === 0) return null
+  // A clause with a list of two or more already has a "y" inside: the clauses are then told apart with ";" and
+  // the closing "y" goes only before the last clause, so "y" never reads as joining two different things.
+  const hayListas = [efecto.valores, efecto.tambien, efecto.nuevas, efecto.restauradas].some((x) => x.length >= 2)
+  if (hayListas && partes.length >= 2) return `Al deshacer ${partes.slice(0, -1).join("; ")}; y ${partes[partes.length - 1]}`
+  return `Al deshacer ${unir(partes)}`
 }
