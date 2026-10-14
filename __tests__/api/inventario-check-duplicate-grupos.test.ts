@@ -58,6 +58,8 @@ interface Intento {
   eq: [string, unknown][]
   neq: [string, unknown][]
   is: [string, unknown][]
+  or: string[]
+  limit: number | null
 }
 
 function fake(opts: { m1Aplicada: boolean; error?: { code: string; message: string }; filas?: Record<string, any>[] }) {
@@ -65,13 +67,14 @@ function fake(opts: { m1Aplicada: boolean; error?: { code: string; message: stri
   const error = opts.error ?? { code: "42703", message: AUSENTE[0][1] }
   vi.mocked(supabaseAdmin.from).mockImplementation(((tabla: string) => {
     if (tabla !== "inventario") throw new Error(`unexpected table ${tabla}`)
-    const intento: Intento = { select: "", eq: [], neq: [], is: [] }
+    const intento: Intento = { select: "", eq: [], neq: [], is: [], or: [], limit: null }
     const api: any = {
       select: (c: string) => ((intento.select = c), intentos.push(intento), api),
       eq: (c: string, v: unknown) => (intento.eq.push([c, v]), api),
       neq: (c: string, v: unknown) => (intento.neq.push([c, v]), api),
       is: (c: string, v: unknown) => (intento.is.push([c, v]), api),
-      limit: () => api,
+      or: (f: string) => (intento.or.push(f), api),
+      limit: (n: number) => ((intento.limit = n), api),
       then: (resolve: any, reject?: any) => {
         if (/\bgrupo_id\b/.test(intento.select) && !opts.m1Aplicada) {
           return Promise.resolve({ data: null, error }).then(resolve, reject)
@@ -82,8 +85,15 @@ function fake(opts: { m1Aplicada: boolean; error?: { code: string; message: stri
             (f) =>
               intento.eq.every(([c, v]) => f[c] === v) &&
               intento.neq.every(([c, v]) => f[c] !== v) &&
-              intento.is.every(([c, v]) => (f[c] ?? null) === v)
+              intento.is.every(([c, v]) => (f[c] ?? null) === v) &&
+              intento.or.every((filtro) => {
+                // Only the exact filter the route may build: grupo_id.is.null,grupo_id.neq.<id>
+                const m = /^grupo_id.is.null,grupo_id.neq.([A-Za-z0-9_-]+)$/.exec(filtro)
+                if (!m) throw new Error(`unexpected or() filter: ${filtro}`)
+                return f.grupo_id == null || f.grupo_id !== m[1]
+              })
           )
+          .slice(0, intento.limit ?? Infinity)
           .map((f) => ({ ...Object.fromEntries(Object.entries(f).filter(([k]) => pedidas.includes(k))), proveedores: f.proveedores }))
         return Promise.resolve({ data: datos, error: null }).then(resolve, reject)
       },
@@ -187,4 +197,43 @@ describe("GET /api/inventario/check-duplicate: variant groups", () => {
     expect(intentos[0].is).toContainEqual(["deleted_at", null])
     expect(intentos[0].neq).toContainEqual(["id", "x-azul"])
   })
+  describe("sibling exclusion runs in the database (inside the 500-row window)", () => {
+    it("sends the exact filter that keeps rows without a group", async () => {
+      const { intentos } = fake({ m1Aplicada: true })
+      const { body } = await consultar("nombre=Funda X&excludeGrupoId=c0123456789abcdef01234567")
+      expect(intentos).toHaveLength(1)
+      expect(intentos[0].or).toEqual(["grupo_id.is.null,grupo_id.neq.c0123456789abcdef01234567"])
+      // Standalone matches (NULL group) survive the filter.
+      expect(ids(body.matches)).toEqual(expect.arrayContaining(["suelta-1", "suelta-2"]))
+    })
+
+    it("does not let siblings take slots of the 500-row window and hide a real duplicate", async () => {
+      const grupo = "c0123456789abcdef01234567"
+      const hermanos = Array.from({ length: 500 }, (_, i) => fila(`h${i}`, "Funda X", { grupo_id: grupo }))
+      const real = fila("real", "Funda X", { codigo: "REAL" })
+      fake({ m1Aplicada: true, filas: [...hermanos, real] })
+      const { body } = await consultar(`nombre=Funda X&excludeGrupoId=${grupo}`)
+      expect(ids(body.matches)).toEqual(["real"])
+    })
+
+    it("does not apply the filter on the fallback step (the column is missing)", async () => {
+      const { intentos } = fake({ m1Aplicada: false })
+      const { status } = await consultar("nombre=Funda X&excludeGrupoId=c0123456789abcdef01234567")
+      expect(status).toBe(200)
+      expect(intentos.map((i) => i.select)).toEqual([SELECT_CON_GRUPO, SELECT_ACTUAL])
+      expect(intentos[1].or).toEqual([])
+    })
+
+    it.each(["x,grupo_id.neq.y", "a)b", "c0123456789abcdef01234567,id.eq.1", "a b", "a.b", "x".repeat(101)])(
+      "ignores a malformed excludeGrupoId (%s): it never reaches any filter",
+      async (malo) => {
+        const { intentos } = fake({ m1Aplicada: true })
+        const { status } = await consultar(`nombre=Funda X&excludeGrupoId=${encodeURIComponent(malo)}`)
+        expect(status).toBe(200)
+        expect(intentos.every((i) => i.or.length === 0)).toBe(true)
+        expect(JSON.stringify(intentos)).not.toContain(malo)
+      }
+    )
+  })
+
 })

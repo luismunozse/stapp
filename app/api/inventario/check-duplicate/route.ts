@@ -50,6 +50,9 @@ function similarity(queryTokens: string[], candTokens: string[]): number {
   return Math.max(jaccard, containment * 0.85)
 }
 
+// Characters an id may have to be put in a filter string: no comma, dot, parenthesis or space.
+const ID_SEGURO = /^[A-Za-z0-9_-]{1,100}$/
+
 const SELECT_ACTUAL =
   "id, codigo, nombre, categoria, tipo_dispositivo, stock, precio_compra, precio_venta, proveedor_id, proveedores:proveedor_id(id, nombre)"
 const SELECT_CON_GRUPO = `${SELECT_ACTUAL}, grupo_id`
@@ -87,7 +90,10 @@ export async function GET(request: Request) {
     const categoria = searchParams.get("categoria") || ""
     const excludeId = searchParams.get("excludeId") || ""
     // Group of the item being edited: its siblings are not duplicates of it.
-    const excludeGrupoId = searchParams.get("excludeGrupoId") || ""
+    // The value is interpolated into a PostgREST or() filter, so only a plain id may pass; anything
+    // else is ignored, like any other parameter that matches nothing (a bad excludeId excludes nothing).
+    const rawExcludeGrupoId = searchParams.get("excludeGrupoId") || ""
+    const excludeGrupoId = ID_SEGURO.test(rawExcludeGrupoId) ? rawExcludeGrupoId : ""
 
     const queryTokens = tokenize(nombre)
     if (queryTokens.length === 0) {
@@ -107,6 +113,12 @@ export async function GET(request: Request) {
 
         if (tipo) query = query.eq("tipo_dispositivo", tipo)
         if (excludeId) query = query.neq("id", excludeId)
+        // Siblings are excluded inside the 500-row window, not after it, so they cannot push a real
+        // duplicate out. A plain neq would drop the rows without a group too (NULL <> x is NULL).
+        // Only the step that reads grupo_id may filter on it.
+        if (excludeGrupoId && select.includes("grupo_id")) {
+          query = query.or(`grupo_id.is.null,grupo_id.neq.${excludeGrupoId}`)
+        }
         return query
       },
       [SELECT_CON_GRUPO, SELECT_ACTUAL]
