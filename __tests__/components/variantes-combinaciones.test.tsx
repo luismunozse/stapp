@@ -388,12 +388,24 @@ describe.each(VISTAS)("combinaciones (%s): rows pending archive", (_nombre, vist
     const archivado = aplicar(reductor(), inicial, { tipo: "quitarValor", valorId: valorId(inicial, "Talle", "S") })
     const { salida } = montarVista(archivado)
     const grupo = screen.getByRole("group", { name: "Se archivarán al guardar" })
-    expect(within(grupo).getByText(/Al deshacer se vuelve a agregar S y también vuelven Azul \/ S/)).toBeInTheDocument()
-    expect(within(grupo).getByText(/Al deshacer se vuelve a agregar S y también vuelven Rojo \/ S/)).toBeInTheDocument()
+    expect(within(grupo).getByText("Al deshacer se vuelve a agregar S y también vuelve Azul / S")).toBeInTheDocument()
+    expect(within(grupo).getByText("Al deshacer se vuelve a agregar S y también vuelve Rojo / S")).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "Deshacer archivo de Rojo / S" }))
     expect(salida.estado.filas[filaDe(salida.estado, "Azul / S").id].archivar).toBe(false)
     expect(screen.queryByRole("group", { name: "Se archivarán al guardar" })).toBeNull()
+  })
+
+  it("also announces the rows the undo creates again, not only the ones that come back (a Verde / S appears)", () => {
+    const inicial = hidratar(grupoColorTalle())
+    const conVerde = aplicar(reductor(), inicial, { tipo: "agregarValor", opcionId: opcionId(inicial, "Color"), texto: "Verde" })
+    const archivado = aplicar(reductor(), conVerde, { tipo: "quitarValor", valorId: valorId(conVerde, "Talle", "S") })
+    const { salida } = montarVista(archivado)
+    const grupo = screen.getByRole("group", { name: "Se archivarán al guardar" })
+    expect(within(grupo).getAllByText("Al deshacer se vuelve a agregar S, también vuelve Azul / S y se agrega Verde / S").length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole("button", { name: "Deshacer archivo de Rojo / S" }))
+    expect(screen.queryByRole("group", { name: "Se archivarán al guardar" })).toBeNull()
+    expect(salida.estado.filas[filaDe(salida.estado, "Verde / S").id]).toBeDefined()
   })
 
   it("says up front why an undo will not work when the option is gone, and the refusal reaches the state", () => {

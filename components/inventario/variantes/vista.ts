@@ -1,4 +1,4 @@
-import { etiquetaDeFila, filasEnOrden, type Fila, type PrevioDeFila, type VariantesState } from "@/lib/variantes-filas"
+import { crearReductor, etiquetaDeFila, filasEnOrden, type Fila, type VariantesState } from "@/lib/variantes-filas"
 
 /*
  * Pure read-only helpers for the variants section: what the screen can say about the state without
@@ -10,39 +10,59 @@ export interface EfectoDeDeshacer {
   valores: string[]
   /** Labels of the OTHER rows pending archive that come back with it, because they share one of those values. */
   tambien: string[]
+  /** Labels of brand-new rows the undo creates because the returning values complete new combinations. */
+  nuevas: string[]
+  /** Labels of children archived in the database that the undo restores. */
+  restauradas: string[]
   /** Why the undo would be refused, in the reducer's words, or null. */
   bloqueo: string | null
 }
 
-const SIN_EFECTO: EfectoDeDeshacer = { valores: [], tambien: [], bloqueo: null }
-
-const clave = (p: PrevioDeFila) => JSON.stringify([p.opcionId, p.valorId ?? p.valor.trim().toLowerCase()])
+const sinEfecto = (): EfectoDeDeshacer => ({ valores: [], tambien: [], nuevas: [], restauradas: [], bloqueo: null })
 
 /**
- * Undoing a row pending archive adds back every value it needs, and any other pending row whose
- * combination is complete again returns with it. This tells the user that BEFORE they press undo,
- * mirroring `deshacerArchivo` (it reads the same snapshot through the same ids).
+ * What pressing "Deshacer" on a row pending archive will do, so the user is told BEFORE pressing. It is not
+ * a second implementation of the undo: it RUNS the reducer (pure, with replay-stable ids) on the current state
+ * and compares the result with it, so the prediction can never drift from what happens.
  */
 export function efectoDeDeshacer(estado: VariantesState, fila: Fila): EfectoDeDeshacer {
-  if (!fila.archivar || !fila.previos) return SIN_EFECTO
+  if (!fila.archivar) return sinEfecto()
 
-  const opcionFalta = fila.previos.find((p) => !estado.opciones.some((o) => o.id === p.opcionId))
-  if (opcionFalta) return { valores: [], tambien: [], bloqueo: `Para deshacerlo, volvé a agregar la opción "${opcionFalta.opcion}"` }
+  const despues = crearReductor()(estado, { tipo: "deshacerArchivo", filaId: fila.id })
+  // An accepted action clears the message, so one left behind is the reason the undo was refused.
+  if (despues.aviso !== null) return { ...sinEfecto(), bloqueo: despues.aviso }
 
-  const existe = (p: PrevioDeFila) =>
-    p.valorId !== null && estado.opciones.some((o) => o.id === p.opcionId && o.valores.some((v) => v.id === p.valorId))
-  const faltantes = fila.previos.filter((p) => !existe(p))
-  const quedanAtras = new Set(faltantes.map(clave))
-  const textoActual = (p: PrevioDeFila) => estado.opciones.find((o) => o.id === p.opcionId)?.valores.find((v) => v.id === p.valorId)?.texto ?? p.valor
+  const valoresAntes = new Set(estado.opciones.flatMap((o) => o.valores.map((v) => v.id)))
+  const valores = despues.opciones.flatMap((o) => o.valores.filter((v) => !valoresAntes.has(v.id)).map((v) => v.texto))
 
-  const tambien = filasEnOrden(estado)
-    .filter((otra) => otra.id !== fila.id && otra.archivar && otra.previos && otra.previos.length > 0)
-    .filter((otra) => {
-      const previos = otra.previos ?? []
-      const vuelve = previos.some((p) => quedanAtras.has(clave(p)))
-      return vuelve && previos.every((p) => existe(p) || quedanAtras.has(clave(p)))
-    })
-    .map((otra) => etiquetaDeFila(estado, otra))
+  const efecto: EfectoDeDeshacer = { ...sinEfecto(), valores }
+  for (const otra of filasEnOrden(despues)) {
+    if (otra.id === fila.id) continue
+    const antes = estado.filas[otra.id]
+    if (antes) {
+      if (antes.archivar && !otra.archivar) efecto.tambien.push(etiquetaDeFila(despues, otra))
+    } else if (estado.archivadas[otra.id]) {
+      efecto.restauradas.push(etiquetaDeFila(despues, otra))
+    } else {
+      efecto.nuevas.push(etiquetaDeFila(despues, otra))
+    }
+  }
+  return efecto
+}
 
-  return { valores: faltantes.map(textoActual), tambien, bloqueo: null }
+const lista = (items: string[]) => items.join(", ")
+
+/** "a, b y c": the last one joined with "y". */
+const unir = (partes: string[]) => (partes.length < 2 ? (partes[0] ?? "") : `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}`)
+
+/** The sentence for the row: null when the undo is just that row coming back. */
+export function describirEfecto(efecto: EfectoDeDeshacer): string | null {
+  if (efecto.bloqueo) return efecto.bloqueo
+  const uno = (items: string[], singular: string, plural: string) => (items.length === 1 ? singular : plural)
+  const partes: string[] = []
+  if (efecto.valores.length > 0) partes.push(`${uno(efecto.valores, "se vuelve", "se vuelven")} a agregar ${lista(efecto.valores)}`)
+  if (efecto.tambien.length > 0) partes.push(`también ${uno(efecto.tambien, "vuelve", "vuelven")} ${lista(efecto.tambien)}`)
+  if (efecto.nuevas.length > 0) partes.push(`${uno(efecto.nuevas, "se agrega", "se agregan")} ${lista(efecto.nuevas)}`)
+  if (efecto.restauradas.length > 0) partes.push(`${uno(efecto.restauradas, "se restaura", "se restauran")} ${lista(efecto.restauradas)}`)
+  return partes.length > 0 ? `Al deshacer ${unir(partes)}` : null
 }

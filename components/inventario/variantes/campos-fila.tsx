@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input"
 import { QuickStockAdjust } from "@/components/inventario/quick-stock-adjust"
 import { parseMoneyInput } from "@/lib/parse-money"
 import { bloqueos, type CambiosDeFila, type Fila, type VariantesAccion, type VariantesState } from "@/lib/variantes-filas"
-import { efectoDeDeshacer } from "./vista"
+import { describirEfecto, efectoDeDeshacer } from "./vista"
 
 /*
  * The fields of ONE combination, shared by the table (desktop) and the card (phone) so both say and do
@@ -280,13 +280,8 @@ export function CamposAvanzados({ fila, etiqueta, dispatch, compacto, deshabilit
  */
 export function BloqueDeArchivo({ estado, fila, etiqueta, dispatch, compacto, deshabilitado }: PropsDeFila) {
   const bloqueo = bloqueos(estado).find((b) => b.filaId === fila.id)
-  const efecto = efectoDeDeshacer(estado, fila)
   const stock = fila.existente ? (fila.stock ?? 0) : 0
-  const aviso = efecto.bloqueo
-    ? efecto.bloqueo
-    : efecto.valores.length > 0
-      ? `Al deshacer se vuelve a agregar ${efecto.valores.join(", ")}${efecto.tambien.length > 0 ? ` y también vuelven ${efecto.tambien.join(", ")}` : ""}`
-      : null
+  const aviso = describirEfecto(efectoDeDeshacer(estado, fila))
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200">Se archivará</span>
