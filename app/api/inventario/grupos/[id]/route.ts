@@ -11,7 +11,12 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
 import { isMissingColumnError } from "@/lib/db-errors"
 import { DEPOSITO_INVALIDO, depositoPermitido, depositoPorDefecto } from "@/lib/depositos"
-import { registrarActualizacion, registrarArchivado, registrarCreacion } from "@/lib/inventario-eventos"
+import {
+  registrarActualizacion,
+  registrarArchivado,
+  registrarCreacion,
+  type ContextoEventos,
+} from "@/lib/inventario-eventos"
 import { argumentosGuardarGrupo, guardarGrupoSchema } from "@/lib/variantes-schema"
 import { conReintento, migracionPendiente, respuestaDeError, respuestaDeValidacion } from "@/lib/variantes-api"
 
@@ -102,6 +107,79 @@ export async function GET(_request: Request, { params }: Contexto) {
   }
 }
 
+// Events are dispatched in small AWAITED batches before the response: a serverless runtime may
+// cut off what is still pending when the answer goes out, and up to ~200 un-awaited calls
+// (100 rows x audit and webhook) is exactly that. The repo does not use after() from next/server.
+const LOTE_EVENTOS = 10
+
+type TareaEvento = (ctx: ContextoEventos) => void
+
+/**
+ * Created / updated / archived events per child of a committed save. Best-effort: it never
+ * throws, a failing child does not stop the others, and it logs what it cannot do.
+ * `hijos` are the rows as they are now when the group was re-read; without them (the re-read
+ * failed) they are read by the ids the RPC returned.
+ */
+async function emitirEventosDelGrupo(p: {
+  contexto: ContextoEventos
+  resultado: Fila | null
+  antes: Map<string, Fila>
+  hijos: Fila[] | null
+}): Promise<void> {
+  try {
+    const ids = (clave: string): string[] => (Array.isArray(p.resultado?.[clave]) ? p.resultado![clave] : [])
+    const creados = ids("creados")
+    const actualizados = [...ids("actualizados"), ...ids("promovidos"), ...ids("restaurados")]
+    const archivados = ids("archivados")
+
+    let filas = p.hijos
+    if (!filas) {
+      const pedidos = [...creados, ...actualizados, ...archivados]
+      if (pedidos.length === 0) return
+      const { data, error } = await supabaseAdmin
+        .from("inventario")
+        .select("*")
+        .eq("organization_id", p.contexto.organizationId)
+        .in("id", pedidos)
+      if (error) throw error
+      filas = data ?? []
+    }
+    const despues = new Map<string, Fila>(filas.map((h) => [h.id, h]))
+
+    // `actualizados` lists every row the RPC touched even when nothing changed, so the diff
+    // decides; a retry converges to no events. A row with no snapshot (it appeared between
+    // the snapshot and the RPC: a double submit) has nothing to diff against: no event.
+    const tareas: TareaEvento[] = []
+    for (const hijoId of creados) {
+      const fila = despues.get(hijoId)
+      if (fila) tareas.push((ctx) => registrarCreacion(ctx, fila))
+    }
+    for (const hijoId of actualizados) {
+      const previa = p.antes.get(hijoId)
+      const fila = despues.get(hijoId)
+      if (previa && fila) tareas.push((ctx) => void registrarActualizacion(ctx, previa, fila))
+    }
+    for (const hijoId of archivados) {
+      const fila = despues.get(hijoId)
+      if (fila) tareas.push((ctx) => registrarArchivado(ctx, fila))
+    }
+
+    for (let i = 0; i < tareas.length; i += LOTE_EVENTOS) {
+      const esperar: Promise<unknown>[] = []
+      for (const tarea of tareas.slice(i, i + LOTE_EVENTOS)) {
+        try {
+          tarea({ ...p.contexto, esperar })
+        } catch (tareaError) {
+          console.error("Error emitiendo un evento del grupo:", tareaError)
+        }
+      }
+      await Promise.allSettled(esperar)
+    }
+  } catch (eventosError) {
+    console.error("Error emitiendo los eventos del grupo:", eventosError)
+  }
+}
+
 // Create or edit a group in ONE atomic RPC call: the group row, its variants (by client id),
 // the shared fields, the initial stock of NEW variants, archive and restore. The save is
 // FULL-STATE (every active member must be in the payload) and last-write-wins: there is no
@@ -131,16 +209,21 @@ export async function PUT(request: Request, { params }: Contexto) {
     // ever relaxed, a role without cost still cannot write or read purchase prices here.
     const canViewCost = await lazyInventarioAccess(role, organizationId!)()
 
-    // Initial-stock depot: an explicit one the caller may use, else the default of their
-    // branch (null lets the RPC use the principal depot).
-    const userSucursalId = session!.user.sucursalId ?? null
-    let depositoInicial: string | null
-    if (datos.depositoId) {
-      const permitido = await depositoPermitido({ depositoId: datos.depositoId, organizationId: organizationId!, role, userSucursalId })
-      if (!permitido) return NextResponse.json({ error: DEPOSITO_INVALIDO, code: "DEPOSITO_INVALIDO" }, { status: 400 })
-      depositoInicial = datos.depositoId
-    } else {
-      depositoInicial = await depositoPorDefecto({ organizationId: organizationId!, role, userSucursalId })
+    // Initial-stock depot. The RPC only needs it when a new row brings stock, so a save that
+    // does not (an edit of existing rows) neither pays the queries nor 400s on a stale depositoId.
+    // When it is needed: an explicit one the caller may use, else the default of their branch
+    // (null lets the RPC use the principal depot).
+    const generaStock = datos.variantes.some((v) => (v.stockInicial ?? 0) > 0)
+    let depositoInicial: string | null = null
+    if (generaStock) {
+      const userSucursalId = session!.user.sucursalId ?? null
+      if (datos.depositoId) {
+        const permitido = await depositoPermitido({ depositoId: datos.depositoId, organizationId: organizationId!, role, userSucursalId })
+        if (!permitido) return NextResponse.json({ error: DEPOSITO_INVALIDO, code: "DEPOSITO_INVALIDO" }, { status: 400 })
+        depositoInicial = datos.depositoId
+      } else {
+        depositoInicial = await depositoPorDefecto({ organizationId: organizationId!, role, userSucursalId })
+      }
     }
 
     // Snapshot BEFORE the RPC, scoped by organization: the audit diff and the events of
@@ -177,29 +260,28 @@ export async function PUT(request: Request, { params }: Contexto) {
     // The save is committed: the catalog cache must not wait for what comes next.
     revalidateTag("catalogo", "max")
 
-    const lectura = await leerGrupo(id, organizationId!)
-    if (lectura.tipo !== "ok") throw new Error(`El grupo ${id} se guardó pero no se pudo releer (${lectura.tipo})`)
-
-    // Events per child, from the rows as they are now. `actualizados` lists every row the
-    // RPC touched even when nothing changed, so the diff decides; a retry converges to no events.
-    const despues = new Map<string, Fila>(lectura.hijos.map((h) => [h.id, h]))
-    const ids = (clave: string): string[] => (Array.isArray(resultado?.[clave]) ? resultado[clave] : [])
-    const eventos = { organizationId: organizationId!, userId, request }
-    for (const hijoId of ids("creados")) {
-      const fila = despues.get(hijoId)
-      if (fila) registrarCreacion(eventos, fila)
-    }
-    for (const hijoId of [...ids("actualizados"), ...ids("promovidos"), ...ids("restaurados")]) {
-      const previa = antes.get(hijoId)
-      const fila = despues.get(hijoId)
-      if (previa && fila) registrarActualizacion(eventos, previa, fila)
-    }
-    for (const hijoId of ids("archivados")) {
-      const fila = despues.get(hijoId)
-      if (fila) registrarArchivado(eventos, fila)
+    // From here nothing may turn a committed save into an error: the form would re-send, the
+    // rows would look existing and the created events (only the first call can emit them) would
+    // be lost for good. The re-read and the events are best-effort and logged.
+    let lectura: LecturaGrupo | null = null
+    try {
+      lectura = await leerGrupo(id, organizationId!)
+    } catch (relecturaError) {
+      console.error("Error releyendo el grupo tras guardarlo:", relecturaError)
     }
 
-    return NextResponse.json(cuerpoDelGrupo(lectura.grupo, lectura.hijos, canViewCost))
+    await emitirEventosDelGrupo({
+      contexto: { organizationId: organizationId!, userId, request },
+      resultado,
+      antes,
+      hijos: lectura?.tipo === "ok" ? lectura.hijos : null,
+    })
+
+    if (lectura?.tipo === "ok") {
+      return NextResponse.json(cuerpoDelGrupo(lectura.grupo, lectura.hijos, canViewCost))
+    }
+    // Saved, but the answer could not be built: the form re-hydrates with GET instead of re-sending.
+    return NextResponse.json({ guardado: true, relectura: false, grupoId: id })
   } catch (error) {
     console.error("Error guardando grupo de variantes:", error)
     return NextResponse.json({ error: "Error al guardar las variantes" }, { status: 500 })

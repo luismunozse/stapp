@@ -115,6 +115,10 @@ interface OpcionesBase {
   lecturaTrasRpc?: ErrorDb
   /** Makes the RPC answer this data (and change nothing) instead of running the model. */
   rpcDatos?: unknown
+  /** An error for the read of the group row that happens after an RPC call (the re-read of the answer). */
+  fallaRelecturaGrupo?: ErrorDb
+  /** Runs right AFTER the before-snapshot is read and BEFORE the RPC: another request committing in between. */
+  alSnapshot?: (tablas: Record<string, Fila[]>) => void
 }
 
 const ID_NUEVO = /^c[0-9a-f]{24}$/
@@ -218,11 +222,20 @@ function instalarBase(falla: Record<string, ErrorDb> = {}, opciones: OpcionesBas
     let en: [string, unknown[]][] | undefined
     const orden: string[] = []
     const ejecutar = (unica: "single" | "maybe" | null) => {
+      const resultado = ejecutarBase(unica)
+      const esInstantanea = tabla === "inventario" && en !== undefined && !log.some((e) => e.tipo === "rpc")
+      if (esInstantanea) opciones.alSnapshot?.(tablas as unknown as Record<string, Fila[]>)
+      return resultado
+    }
+    const ejecutarBase = (unica: "single" | "maybe" | null) => {
       consultas.push(c)
       log.push({ tipo: "consulta", tabla, op: c.op, columnas, filtros: c.filtros, en: en ?? [] })
       if (falla[tabla]) return { data: null, error: falla[tabla] }
       if (opciones.lecturaTrasRpc && tabla === "inventario" && log.some((e) => e.tipo === "rpc")) {
         return { data: null, error: opciones.lecturaTrasRpc }
+      }
+      if (opciones.fallaRelecturaGrupo && tabla === "inventario_grupos" && log.some((e) => e.tipo === "rpc")) {
+        return { data: null, error: opciones.fallaRelecturaGrupo }
       }
       const todas = (tablas as Record<string, Fila[]>)[tabla]
       const filas = todas
@@ -732,6 +745,34 @@ describe("PUT /api/inventario/grupos/[id]: initial deposit", () => {
     expect(rpcCalls[0].args.p_deposito_inicial).toBe("dep-sucursal-2")
   })
 
+  it("a save that creates no stock does not resolve or validate any depot (no 400 on a stale depositoId, no extra queries)", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(depositoPermitido).mockResolvedValue(false)
+    vi.mocked(depositoPorDefecto).mockResolvedValue("dep-default")
+    const { rpcCalls } = instalarBase()
+
+    const { status } = await parseResponse(await putReq("g-1", cuerpoG1({ rojo: { precioVenta: 1200 }, extra: { depositoId: "dep-viejo" } })))
+
+    expect(status).toBe(200)
+    expect(depositoPermitido).not.toHaveBeenCalled()
+    expect(depositoPorDefecto).not.toHaveBeenCalled()
+    expect(rpcCalls[0].args.p_deposito_inicial).toBeNull()
+  })
+
+  it("a stockInicial of 0 needs no depot either; any positive one does", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(depositoPorDefecto).mockResolvedValue("dep-default")
+    const { rpcCalls } = instalarBase()
+
+    await putReq("g-1", cuerpoG1({ rojo: { stockInicial: 0 } }))
+    expect(depositoPorDefecto).not.toHaveBeenCalled()
+    expect(rpcCalls[0].args.p_deposito_inicial).toBeNull()
+
+    await putReq("g-1", cuerpoG1({ azul: { stockInicial: 1 } }))
+    expect(depositoPorDefecto).toHaveBeenCalledTimes(1)
+    expect(rpcCalls[1].args.p_deposito_inicial).toBe("dep-default")
+  })
+
   it("a depot the caller may not use is a 400 and nothing runs", async () => {
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
     vi.mocked(depositoPermitido).mockResolvedValue(false)
@@ -839,6 +880,24 @@ describe("PUT /api/inventario/grupos/[id]: snapshot, events and response", () =>
     expect(revalidateTag).toHaveBeenCalledTimes(1)
     expect(revalidateTag).toHaveBeenCalledWith("catalogo", "max")
     expect(body.variantes.map((v: Fila) => v.id)).toEqual([cid(101), cid(102)])
+  })
+
+  it("the audit entries get the caller's own request (IP and user agent come from it)", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1", userId: "user-7" })
+    instalarBase()
+    const pedido = new Request(url(cid(100)), {
+      method: "PUT",
+      headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.9", "user-agent": "stapp-test" },
+      body: JSON.stringify(cuerpoNuevo()),
+    })
+
+    await PUT(pedido, params(cid(100)))
+
+    expect(createAuditLogger).toHaveBeenCalled()
+    for (const [, , solicitud] of createAuditLogger.mock.calls as unknown as [string, string, Request][]) {
+      expect(solicitud.headers.get("x-forwarded-for")).toBe("203.0.113.9")
+      expect(solicitud.headers.get("user-agent")).toBe("stapp-test")
+    }
   })
 
   it("sending the same payload again converges: no new rows and no new events", async () => {
@@ -1087,6 +1146,7 @@ describe("PUT /api/inventario/grupos/[id]: errors", () => {
     expect(body.variantes.map((v: Fila) => v.id)).toEqual(["r1", "a1"])
     expect(eventos()).toEqual([])
     expect(revalidateTag).toHaveBeenCalledTimes(1)
+    expect(console.error).not.toHaveBeenCalled()
   })
 
   it("a failure reading the snapshot is a 500 before the RPC runs", async () => {
@@ -1097,17 +1157,252 @@ describe("PUT /api/inventario/grupos/[id]: errors", () => {
     expect(rpcCalls).toEqual([])
   })
 
-  it("a save that committed but cannot be read back is a 500, yet the catalog cache is still invalidated", async () => {
+})
+
+const TIMEOUT = { code: "57014", message: "canceling statement due to statement timeout" }
+
+// The RPC has committed: from there on nothing may turn the save into an error, or the form
+// re-sends and the created events (which only the first call can emit) are lost for good.
+describe("PUT /api/inventario/grupos/[id]: after the commit", () => {
+  it("a failing group re-read still answers 200 with a pointer to GET, and the events go out exactly once", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1", userId: "user-7" })
+    const { tablas, log } = instalarBase({}, { fallaRelecturaGrupo: TIMEOUT })
+
+    const { status, body } = await parseResponse(await putReq(cid(100), cuerpoNuevo()))
+
+    expect(status).toBe(200)
+    expect(body).toEqual({ guardado: true, relectura: false, grupoId: cid(100) })
+    expect(tablas.inventario.filter((f) => f.grupo_id === cid(100))).toHaveLength(2)
+    expect(eventos()).toEqual([["inventario.created", cid(101)], ["inventario.created", cid(102)]])
+    expect(auditoria.create).toHaveBeenCalledTimes(2)
+    expect(revalidateTag).toHaveBeenCalledTimes(1)
+    expect(console.error).toHaveBeenCalled()
+    // The events came from a read of exactly the ids the RPC returned, scoped by organization.
+    const trasElRpc = log.slice(log.findIndex((e) => e.tipo === "rpc") + 1)
+    const porId = trasElRpc.find((e) => e.tipo === "consulta" && e.tabla === "inventario" && e.en.length > 0)
+    expect(porId).toMatchObject({ filtros: [["organization_id", "org-1"]], en: [["id", [cid(101), cid(102)]]] })
+  })
+
+  it("when the answer is re-read fine the events come from it: no extra read by id", async () => {
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
-    const { tablas } = instalarBase({}, { lecturaTrasRpc: { code: "57014", message: "canceling statement due to statement timeout" } })
+    const { log } = instalarBase()
 
-    const { status } = await parseResponse(await putReq(cid(100), cuerpoNuevo()))
+    await putReq(cid(100), cuerpoNuevo())
 
-    expect(status).toBe(500)
+    const trasElRpc = log.slice(log.findIndex((e) => e.tipo === "rpc") + 1)
+    expect(trasElRpc.filter((e) => e.tipo === "consulta" && e.en.length > 0)).toEqual([])
+    expect(trasElRpc).toHaveLength(2)
+  })
+
+  it("an edit that fails to re-read emits the update from the same by-id read", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    instalarBase({}, { fallaRelecturaGrupo: TIMEOUT })
+
+    const { status, body } = await parseResponse(await putReq("g-1", cuerpoG1({ rojo: { precioVenta: 1200 } })))
+
+    expect(status).toBe(200)
+    expect(body).toEqual({ guardado: true, relectura: false, grupoId: "g-1" })
+    expect(eventos()).toEqual([["inventario.updated", "r1"]])
+  })
+
+  it("an archive that fails to re-read emits the archived event from the by-id read", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1", userId: "user-7" })
+    instalarBase({}, { fallaRelecturaGrupo: TIMEOUT })
+    const cuerpo = cuerpoG1()
+
+    const { status } = await parseResponse(await putReq("g-1", { ...cuerpo, variantes: [cuerpo.variantes[0]], archivar: ["a1"] }))
+
+    expect(status).toBe(200)
+    expect(eventos()).toEqual([["inventario.archived", "a1"]])
+    expect(auditoria.delete).toHaveBeenCalledTimes(1)
+  })
+
+  it("a group that cannot be found or read after the commit (migration missing, deleted meanwhile) is the same 200 pointer", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    instalarBase({}, { fallaRelecturaGrupo: { code: "42P01", message: 'relation "inventario_grupos" does not exist' } })
+    const pendiente = await parseResponse(await putReq("g-1", cuerpoG1()))
+    expect(pendiente.status).toBe(200)
+    expect(pendiente.body).toEqual({ guardado: true, relectura: false, grupoId: "g-1" })
+
+    instalarBase({}, { rpcDatos: { grupoId: "g-404", creados: [], actualizados: [], promovidos: [], restaurados: [], archivados: [] } })
+    const desaparecido = await parseResponse(await putReq("g-404", cuerpoG1()))
+    expect(desaparecido.status).toBe(200)
+    expect(desaparecido.body).toEqual({ guardado: true, relectura: false, grupoId: "g-404" })
+  })
+
+  it("a row that vanished after the save (hard-deleted meanwhile) emits nothing and breaks nothing", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    instalarBase(
+      {},
+      {
+        alSnapshot: (t) => {
+          t.inventario.splice(t.inventario.findIndex((f) => f.id === "r1"), 1)
+        },
+        rpcDatos: { grupoId: "g-1", creados: [], actualizados: ["r1"], promovidos: [], restaurados: [], archivados: [] },
+      }
+    )
+
+    const { status, body } = await parseResponse(await putReq("g-1", cuerpoG1({ rojo: { precioVenta: 1200 } })))
+
+    expect(status).toBe(200)
+    expect(body.variantes.map((v: Fila) => v.id)).toEqual(["a1"])
+    expect(eventos()).toEqual([])
+    expect(console.error).not.toHaveBeenCalled()
+  })
+
+  it("when the by-id read fails too the save is still a 200 and the lost events are logged", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { tablas } = instalarBase({}, { lecturaTrasRpc: TIMEOUT })
+
+    const { status, body } = await parseResponse(await putReq(cid(100), cuerpoNuevo()))
+
+    expect(status).toBe(200)
+    expect(body).toEqual({ guardado: true, relectura: false, grupoId: cid(100) })
     expect(tablas.inventario.filter((f) => f.grupo_id === cid(100))).toHaveLength(2)
     expect(revalidateTag).toHaveBeenCalledTimes(1)
-    // Known limit: the created events are lost for this save (a retry sees the rows as existing).
+    // Known limit: nothing can be read, so no event can be built. It is logged, never a 500.
     expect(eventos()).toEqual([])
+    expect(vi.mocked(console.error).mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it("a webhook or audit that fails never fails the save", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    instalarBase()
+    vi.mocked(emitWebhookEvent).mockRejectedValue(new Error("webhook down"))
+    auditoria.create.mockRejectedValue(new Error("audit down"))
+
+    const { status, body } = await parseResponse(await putReq(cid(100), cuerpoNuevo()))
+
+    expect(status).toBe(200)
+    expect(body.variantes.map((v: Fila) => v.id)).toEqual([cid(101), cid(102)])
+    expect(emitWebhookEvent).toHaveBeenCalledTimes(2)
+  })
+
+  it("an event helper that throws on one child does not stop the others nor fail the save", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    instalarBase()
+    createAuditLogger.mockImplementationOnce(() => {
+      throw new Error("audit factory down")
+    })
+
+    const { status, body } = await parseResponse(await putReq(cid(100), cuerpoNuevo()))
+
+    expect(status).toBe(200)
+    expect(body.variantes).toHaveLength(2)
+    expect(eventos()).toEqual([["inventario.created", cid(102)]])
+    expect(console.error).toHaveBeenCalled()
+  })
+
+  // Two tabs submit the same new group: the second request reads its snapshot before the
+  // first one commits, then the RPC finds the rows already there and lists them as updated.
+  it("rows that appear between the snapshot and the RPC emit no update events and break nothing", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { tablas, rpcCalls } = instalarBase(
+      {},
+      {
+        alSnapshot: (t) => {
+          t.inventario_grupos.push({ id: cid(100), organization_id: "org-1", nombre: "Nueva", opciones: [] })
+          for (const [i, valor] of [[101, "Rojo"], [102, "Azul"]] as const) {
+            t.inventario.push({
+              id: cid(i), organization_id: "org-1", grupo_id: cid(100), atributos: ATR(valor), nombre: "Concurrente", codigo: `NX-${i}`,
+              precio_venta: 5, precio_compra: 0, stock: 0, stock_reservado: 0, created_at: "2026-02-01T00:00:00Z", deleted_at: null,
+            })
+          }
+        },
+      }
+    )
+
+    const { status, body } = await parseResponse(await putReq(cid(100), cuerpoNuevo()))
+
+    expect(status).toBe(200)
+    expect(rpcCalls).toHaveLength(1)
+    expect(body.variantes.map((v: Fila) => v.id)).toEqual([cid(101), cid(102)])
+    expect(tablas.inventario.filter((f) => f.grupo_id === cid(100)).map((f) => f.nombre)).toEqual(["Concurrente", "Concurrente"])
+    // No snapshot row, so no diff: 0 events, and no swallowed TypeError either.
+    expect(eventos()).toEqual([])
+    expect(auditoria.update).not.toHaveBeenCalled()
+    expect(console.error).not.toHaveBeenCalled()
+  })
+})
+
+describe("PUT /api/inventario/grupos/[id]: event fan-out", () => {
+  const cuerpoGrande = (n: number) => ({
+    grupo: { nombre: "Grande", opciones: [{ nombre: "Color", valores: Array.from({ length: n }, (_, i) => `V${i + 1}`) }] },
+    compartidos: { categoria: "Fundas" },
+    variantes: Array.from({ length: n }, (_, i) => ({ id: cid(300 + i), atributos: ATR(`V${i + 1}`), codigo: `GR-${i + 1}`, precioVenta: 100 })),
+  })
+
+  /** Webhook and audit mocks that stay pending for a tick and track how many are in flight. */
+  function seguirEnVuelo() {
+    const estado = { webhook: 0, maxWebhook: 0, audit: 0, maxAudit: 0 }
+    const tardar = (clave: "webhook" | "audit", maxima: "maxWebhook" | "maxAudit") => () => {
+      estado[clave]++
+      estado[maxima] = Math.max(estado[maxima], estado[clave])
+      return new Promise<void>((resolver) =>
+        setTimeout(() => {
+          estado[clave]--
+          resolver()
+        }, 5)
+      )
+    }
+    vi.mocked(emitWebhookEvent).mockImplementation(tardar("webhook", "maxWebhook") as never)
+    auditoria.create.mockImplementation(tardar("audit", "maxAudit"))
+    return estado
+  }
+
+  it("a 30-child save dispatches all 30 created events, 10 at a time, and waits for them before answering", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    instalarBase()
+    const estado = seguirEnVuelo()
+
+    const { status, body } = await parseResponse(await putReq(cid(299), cuerpoGrande(30)))
+
+    expect(status).toBe(200)
+    expect(body.variantes).toHaveLength(30)
+    expect(emitWebhookEvent).toHaveBeenCalledTimes(30)
+    expect(auditoria.create).toHaveBeenCalledTimes(30)
+    expect(new Set(eventos().map(([, id]) => id)).size).toBe(30)
+    // Everything settled before the response: nothing is left for a serverless runtime to cut off.
+    expect(estado.webhook).toBe(0)
+    expect(estado.audit).toBe(0)
+    // ...and never more than a batch of 10 at once.
+    expect(estado.maxWebhook).toBe(10)
+    expect(estado.maxAudit).toBe(10)
+  })
+
+  it("a save with fewer events than a batch dispatches them all together", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    instalarBase()
+    const estado = seguirEnVuelo()
+
+    await putReq(cid(299), cuerpoGrande(4))
+
+    expect(emitWebhookEvent).toHaveBeenCalledTimes(4)
+    expect(estado.maxWebhook).toBe(4)
+    expect(estado.webhook).toBe(0)
+  })
+
+  it("updates are batched like creations", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { tablas } = instalarBase()
+    for (let i = 0; i < 25; i++) {
+      tablas.inventario.push({
+        id: cid(500 + i), organization_id: "org-1", grupo_id: "g-grande", atributos: ATR(`V${i}`), nombre: `Grande ${i}`, codigo: `GG-${i}`,
+        precio_venta: 10, precio_compra: 0, stock: 0, stock_reservado: 0, created_at: "2026-02-01T00:00:00Z", deleted_at: null,
+      })
+    }
+    tablas.inventario_grupos.push({ id: "g-grande", organization_id: "org-1", nombre: "Grande", opciones: [{ nombre: "Color", valores: [] }] })
+    const estado = seguirEnVuelo()
+
+    await putReq("g-grande", {
+      grupo: { nombre: "Grande", opciones: [{ nombre: "Color", valores: Array.from({ length: 25 }, (_, i) => `V${i}`) }] },
+      variantes: Array.from({ length: 25 }, (_, i) => ({ id: cid(500 + i), atributos: ATR(`V${i}`), codigo: `GG-${i}`, precioVenta: 20 })),
+    })
+
+    expect(emitWebhookEvent).toHaveBeenCalledTimes(25)
+    expect(vi.mocked(emitWebhookEvent).mock.calls.every(([, evento]) => evento === "inventario.updated")).toBe(true)
+    expect(estado.maxWebhook).toBe(10)
+    expect(estado.webhook).toBe(0)
   })
 })
 

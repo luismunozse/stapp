@@ -35,15 +35,28 @@ export interface ContextoEventos {
   organizationId: string
   userId: string | null | undefined
   request: Request
+  /**
+   * Optional. Every audit entry and webhook the helper starts is pushed here as a promise that
+   * NEVER rejects, so a caller that must not answer before they are out (a serverless runtime
+   * may cut off what is still pending) can wait for them. Without it, nothing is collected.
+   */
+  esperar?: Promise<unknown>[]
 }
 
 type Fila = Record<string, any>
 
+/** Starts a side effect: its failure is swallowed, and the caller may wait for it through ctx.esperar. */
+function lanzar(ctx: ContextoEventos, efecto: Promise<unknown>): void {
+  const seguro = efecto.catch(() => {})
+  ctx.esperar?.push(seguro)
+}
+
 /** inventario.created + CREATE audit entry. */
 export function registrarCreacion(ctx: ContextoEventos, item: Fila): void {
   if (ctx.userId) {
-    createAuditLogger(ctx.organizationId, ctx.userId, ctx.request)
-      .create("inventario", item.id, {
+    lanzar(
+      ctx,
+      createAuditLogger(ctx.organizationId, ctx.userId, ctx.request).create("inventario", item.id, {
         codigo: item.codigo,
         nombre: item.nombre,
         categoria: item.categoria,
@@ -54,10 +67,10 @@ export function registrarCreacion(ctx: ContextoEventos, item: Fila): void {
         proveedor_id: item.proveedor_id,
         barcode: item.barcode,
       })
-      .catch(() => {})
+    )
   }
 
-  emitWebhookEvent(ctx.organizationId, "inventario.created", {
+  lanzar(ctx, emitWebhookEvent(ctx.organizationId, "inventario.created", {
     id: item.id,
     codigo: item.codigo,
     nombre: item.nombre,
@@ -68,7 +81,7 @@ export function registrarCreacion(ctx: ContextoEventos, item: Fila): void {
     precioCompra: item.precio_compra,
     proveedorId: item.proveedor_id,
     barcode: item.barcode,
-  }).catch(() => {})
+  }))
 }
 
 /**
@@ -83,34 +96,30 @@ export function registrarActualizacion(ctx: ContextoEventos, antes: Fila, despue
   const diff = diffObjects(before, after)
   if (Object.keys(diff.after).length === 0) return false
 
-  createAuditLogger(ctx.organizationId, ctx.userId, ctx.request)
-    .update("inventario", despues.id, before, after)
-    .catch(() => {})
+  lanzar(ctx, createAuditLogger(ctx.organizationId, ctx.userId, ctx.request).update("inventario", despues.id, before, after))
   // changes: diff field -> {before, after} so the consumer knows what happened.
   const changes: Record<string, { before: unknown; after: unknown }> = {}
   for (const k of Object.keys(diff.after)) {
     changes[k] = { before: diff.before[k], after: diff.after[k] }
   }
-  emitWebhookEvent(ctx.organizationId, "inventario.updated", {
+  lanzar(ctx, emitWebhookEvent(ctx.organizationId, "inventario.updated", {
     id: despues.id,
     codigo: despues.codigo,
     nombre: despues.nombre,
     changes,
-  }).catch(() => {})
+  }))
   return true
 }
 
 /** inventario.archived (soft delete) + DELETE audit entry marked ARCHIVADO. */
 export function registrarArchivado(ctx: ContextoEventos, item: Fila): void {
   if (ctx.userId) {
-    createAuditLogger(ctx.organizationId, ctx.userId, ctx.request)
-      .delete("inventario", item.id, { ...pickAudited(item), accion: "ARCHIVADO" })
-      .catch(() => {})
+    lanzar(ctx, createAuditLogger(ctx.organizationId, ctx.userId, ctx.request).delete("inventario", item.id, { ...pickAudited(item), accion: "ARCHIVADO" }))
   }
-  emitWebhookEvent(ctx.organizationId, "inventario.archived", {
+  lanzar(ctx, emitWebhookEvent(ctx.organizationId, "inventario.archived", {
     id: item.id,
     codigo: item.codigo,
     nombre: item.nombre,
     archivedBy: ctx.userId ?? null,
-  }).catch(() => {})
+  }))
 }

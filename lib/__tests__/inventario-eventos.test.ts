@@ -113,6 +113,72 @@ function rechazoReal(motivo: Error) {
   return { then: p.then.bind(p), catch: p.catch.bind(p) }
 }
 
+// Callers that must not answer before the events are out (a serverless runtime may cut off
+// what is still pending) pass `esperar`: every audit entry and webhook the helper starts
+// is pushed there as a promise that never rejects.
+describe("ctx.esperar: the promises of the events the helper started", () => {
+  it("registrarCreacion pushes the audit entry and the webhook, and they settle", async () => {
+    const esperar: Promise<unknown>[] = []
+    registrarCreacion({ ...ctx, esperar }, fila())
+    expect(esperar).toHaveLength(2)
+    await expect(Promise.all(esperar)).resolves.toBeDefined()
+  })
+
+  it("without a user only the webhook is pushed", () => {
+    const esperar: Promise<unknown>[] = []
+    registrarCreacion({ ...ctx, userId: null, esperar }, fila())
+    expect(esperar).toHaveLength(1)
+  })
+
+  it("registrarActualizacion pushes two promises when it emits and none when nothing changed", () => {
+    const esperar: Promise<unknown>[] = []
+    expect(registrarActualizacion({ ...ctx, esperar }, fila(), fila({ precio_venta: 1200 }))).toBe(true)
+    expect(esperar).toHaveLength(2)
+    expect(registrarActualizacion({ ...ctx, esperar }, fila(), fila())).toBe(false)
+    expect(esperar).toHaveLength(2)
+  })
+
+  it("registrarArchivado pushes the audit entry and the webhook (only the webhook without a user)", () => {
+    const esperar: Promise<unknown>[] = []
+    registrarArchivado({ ...ctx, esperar }, fila())
+    expect(esperar).toHaveLength(2)
+    registrarArchivado({ ...ctx, userId: null, esperar }, fila())
+    expect(esperar).toHaveLength(3)
+  })
+
+  it.each([
+    ["registrarCreacion", (esperar: Promise<unknown>[]) => registrarCreacion({ ...ctx, esperar }, fila()), "create"],
+    ["registrarActualizacion", (esperar: Promise<unknown>[]) => registrarActualizacion({ ...ctx, esperar }, fila(), fila({ precio_venta: 1 })), "update"],
+    ["registrarArchivado", (esperar: Promise<unknown>[]) => registrarArchivado({ ...ctx, esperar }, fila()), "delete"],
+  ] as const)("%s: the pushed promises never reject, whatever fails", async (_nombre, correr, metodo) => {
+    auditoria[metodo].mockRejectedValue(new Error("audit down"))
+    vi.mocked(emitWebhookEvent).mockRejectedValue(new Error("webhook down"))
+    const esperar: Promise<unknown>[] = []
+    correr(esperar)
+    expect(esperar).toHaveLength(2)
+    await expect(Promise.all(esperar)).resolves.toBeDefined()
+  })
+
+  it("a pushed promise stays pending until its audit entry or webhook settles", async () => {
+    let terminar!: () => void
+    vi.mocked(emitWebhookEvent).mockImplementation((() => new Promise<void>((r) => (terminar = r))) as never)
+    const esperar: Promise<unknown>[] = []
+    registrarCreacion({ ...ctx, userId: null, esperar }, fila())
+    let listo = false
+    void esperar[0].then(() => (listo = true))
+    await new Promise((r) => setTimeout(r, 10))
+    expect(listo).toBe(false)
+    terminar()
+    await esperar[0]
+    expect(listo).toBe(true)
+  })
+
+  it("without esperar nothing is collected and the helpers behave as before", () => {
+    expect(() => registrarCreacion(ctx, fila())).not.toThrow()
+    expect(auditoria.create).toHaveBeenCalledTimes(1)
+  })
+})
+
 /** Runs `fn` and returns the promise rejections nobody handled while it flushed. */
 async function rechazosSinManejar(fn: () => void): Promise<unknown[]> {
   const vistos: unknown[] = []
