@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { SIN_DEPOSITO_PRINCIPAL } from "@/lib/depositos"
 
 const schema = z.object({
   forzar: z.boolean().optional(),
@@ -46,6 +47,9 @@ export async function POST(
       }
       if (code === "P0002") {
         return NextResponse.json({ error: rpcErr.message }, { status: 404 })
+      }
+      if (code === "P0011") {
+        return NextResponse.json({ error: SIN_DEPOSITO_PRINCIPAL }, { status: 400 })
       }
       throw rpcErr
     }

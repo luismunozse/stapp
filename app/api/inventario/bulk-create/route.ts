@@ -127,6 +127,7 @@ export async function POST(request: Request) {
               depositoId: depositoDestino,
               stock: data.stock,
               organizationId: organizationId!,
+              userId: userId ?? null,
             })
           } catch (moveError) {
             console.error("Error moviendo stock inicial al depósito de la sucursal:", moveError)

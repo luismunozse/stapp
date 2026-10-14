@@ -6,7 +6,12 @@ import {
   resolveVendedoresHabilitados,
 } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { depositoPermitido, depositoPorDefecto, DEPOSITO_INVALIDO } from "@/lib/depositos"
+import {
+  depositoPermitido,
+  depositoPorDefecto,
+  DEPOSITO_INVALIDO,
+  SIN_DEPOSITO_PRINCIPAL,
+} from "@/lib/depositos"
 import { z } from "zod"
 
 // GET /api/inventario/[id]/series — filtros estado, search numero_serie
@@ -129,6 +134,7 @@ export async function POST(
       const msg = rpcErr.message || "Error al registrar series"
       if (code === "P0002") return NextResponse.json({ error: msg }, { status: 404 })
       if (code === "22023") return NextResponse.json({ error: msg }, { status: 400 })
+      if (code === "P0011") return NextResponse.json({ error: SIN_DEPOSITO_PRINCIPAL }, { status: 400 })
       throw rpcErr
     }
 

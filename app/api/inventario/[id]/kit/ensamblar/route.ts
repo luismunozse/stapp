@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server"
 import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { depositoPermitido, depositoPorDefecto, DEPOSITO_INVALIDO } from "@/lib/depositos"
+import {
+  depositoPermitido,
+  depositoPorDefecto,
+  DEPOSITO_INVALIDO,
+  SIN_DEPOSITO_PRINCIPAL,
+} from "@/lib/depositos"
 import { z } from "zod"
 
 const schema = z.object({
@@ -76,6 +81,9 @@ export async function POST(
       }
       if (code === "22023") {
         return NextResponse.json({ error: msg }, { status: 400 })
+      }
+      if (code === "P0011") {
+        return NextResponse.json({ error: SIN_DEPOSITO_PRINCIPAL }, { status: 400 })
       }
       throw rpcErr
     }
