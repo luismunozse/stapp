@@ -1,6 +1,6 @@
 "use client"
 
-import { useId, useState, type Dispatch } from "react"
+import { useEffect, useId, useRef, useState, type Dispatch } from "react"
 import { Layers } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -37,26 +37,54 @@ export interface PropsVariantesSection {
 
 const textoDeVariantes = (n: number) => (n === 1 ? "1 variante" : `${n} variantes`)
 
-/** "Aplicar precio a todas": asks first if it would overwrite a price somebody set. */
+/**
+ * "Aplicar precio a todas": asks first if it would overwrite a price somebody set. The question is inline
+ * and not modal, so it is a labelled group (not an alertdialog, which promises a focus trap this does not
+ * have): the question names the group, the consequence describes it, the focus moves to its first button
+ * and comes back to the trigger when it closes.
+ */
 function AplicarPrecio({ estado, dispatch, deshabilitado }: { estado: VariantesState; dispatch: Dispatch<VariantesAccion>; deshabilitado?: boolean }) {
   const [confirmando, setConfirmando] = useState(false)
+  const idPregunta = useId()
+  const idConsecuencia = useId()
+  const disparador = useRef<HTMLButtonElement>(null)
+  const primero = useRef<HTMLButtonElement>(null)
+  const devolverFoco = useRef(false)
   // A row brought back from the archive has a price the client never saw, so applying changes it for sure.
   const cambian = filasEnOrden(estado).filter((f) => !f.archivar && ((f.restaurada && !f.precioTocado) || f.precioVenta !== estado.precioBase)).length
 
+  useEffect(() => {
+    if (confirmando) primero.current?.focus()
+    else if (devolverFoco.current) {
+      devolverFoco.current = false
+      disparador.current?.focus()
+    }
+  }, [confirmando])
+
+  const cerrar = () => {
+    devolverFoco.current = true
+    setConfirmando(false)
+  }
+
   if (confirmando) {
     return (
-      <div role="group" aria-label="Confirmar el precio" className="space-y-2 rounded-md border bg-muted/40 p-3 text-sm">
-        <p className="font-medium">¿Cambiar el precio de {textoDeVariantes(cambian)}?</p>
-        <p className="text-muted-foreground">Todas pasan a tener el precio base.</p>
+      <div role="group" aria-labelledby={idPregunta} aria-describedby={idConsecuencia} className="space-y-2 rounded-md border bg-muted/40 p-3 text-sm">
+        <p id={idPregunta} className="font-medium">
+          ¿Cambiar el precio de {textoDeVariantes(cambian)}?
+        </p>
+        <p id={idConsecuencia} className="text-muted-foreground">
+          Todas pasan a tener el precio base.
+        </p>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" onClick={() => setConfirmando(false)}>
+          <Button ref={primero} type="button" variant="outline" disabled={deshabilitado} onClick={cerrar}>
             Cancelar
           </Button>
           <Button
             type="button"
+            disabled={deshabilitado}
             onClick={() => {
               dispatch({ tipo: "aplicarPrecioATodas" })
-              setConfirmando(false)
+              cerrar()
             }}
           >
             Sí, cambiar
@@ -67,6 +95,7 @@ function AplicarPrecio({ estado, dispatch, deshabilitado }: { estado: VariantesS
   }
   return (
     <Button
+      ref={disparador}
       type="button"
       variant="outline"
       disabled={deshabilitado}
@@ -74,6 +103,32 @@ function AplicarPrecio({ estado, dispatch, deshabilitado }: { estado: VariantesS
     >
       Aplicar precio a todas
     </Button>
+  )
+}
+
+// Every state object gets a number once. A refusal returns a NEW state with the same text as the last one, and
+// that new number is what makes the message a new node: a live region only announces what it did not have.
+const numeros = new WeakMap<object, number>()
+let siguienteNumero = 0
+const numeroDe = (estado: object) => {
+  let n = numeros.get(estado)
+  if (n === undefined) numeros.set(estado, (n = ++siguienteNumero))
+  return n
+}
+
+/** The reducer's reason for the last refusal, in a polite live region that exists from the start. */
+function Aviso({ estado }: { estado: VariantesState }) {
+  return (
+    <div role="status" aria-label="Aviso" aria-live="polite">
+      {estado.aviso !== null && (
+        <p
+          key={numeroDe(estado)}
+          className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+        >
+          {estado.aviso}
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -123,13 +178,7 @@ export function VariantesSection({ estado, dispatch, motivoDeshabilitado, alAjus
 
         {estado.activo && (
           <>
-            <div
-              role="status"
-              aria-live="polite"
-              className={estado.aviso ? "rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100" : undefined}
-            >
-              {estado.aviso}
-            </div>
+            <Aviso estado={estado} />
 
             <OpcionesEditor estado={estado} dispatch={dispatch} deshabilitado={guardando} />
 
@@ -151,7 +200,7 @@ export function VariantesSection({ estado, dispatch, motivoDeshabilitado, alAjus
             )}
 
             {conStock.length > 0 && (
-              <div role="alert" className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+              <div role="status" aria-label="Variantes con stock que se archivan" className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
                 <p className="font-medium">Se van a archivar variantes con stock</p>
                 <ul className="space-y-0.5">
                   {conStock.map((a) => (

@@ -301,3 +301,87 @@ describe("validezDeVariantes: what stops the product from being saved", () => {
     expect(validezDeVariantes(estado).motivos).toEqual(['Falta el código de "Rojo"', 'Falta el código de "Azul"'])
   })
 })
+
+describe("validezDeVariantes: what the save schema would reject", () => {
+  /** Sets a barcode as it could arrive from a hydrated row (the reducer trims what is typed, the database may not). */
+  const conBarcode = (estado: VariantesState, codigos: Record<string, string | null>): VariantesState => {
+    const filas = { ...estado.filas }
+    for (const [etiqueta, barcode] of Object.entries(codigos)) {
+      const fila = filaDe(estado, etiqueta)
+      filas[fila.id] = { ...fila, barcode }
+    }
+    return { ...estado, filas }
+  }
+  const REPETIDOS = "Hay códigos de barras repetidos"
+
+  it("an option without values next to one that has them is invalid, and says which", () => {
+    const estado = aplicar(reductor(), estadoColor(), { tipo: "agregarOpcion", nombre: "Talle" })
+    expect(estado.opciones.map((o) => o.valores.length)).toEqual([2, 0])
+    expect(filasEnOrden(estado)).toHaveLength(2)
+    expect(validezDeVariantes(estado)).toEqual({ valida: false, motivos: ['Falta al menos un valor en "Talle"'] })
+  })
+
+  it("names every empty option, and filling it makes the product valid again", () => {
+    const dos = aplicar(reductor(), estadoColor(), { tipo: "agregarOpcion", nombre: "Talle" }, { tipo: "agregarOpcion", nombre: "Material" })
+    expect(validezDeVariantes(dos).motivos).toEqual(['Falta al menos un valor en "Talle"', 'Falta al menos un valor en "Material"'])
+    const lleno = aplicar(reductor(), dos, { tipo: "agregarValor", opcionId: opcionId(dos, "Talle"), texto: "S" }, { tipo: "agregarValor", opcionId: opcionId(dos, "Material"), texto: "Cuero" })
+    expect(validezDeVariantes(lleno)).toEqual({ valida: true, motivos: [] })
+  })
+
+  it("with no combination at all the guide is shown, and an empty option is named too", () => {
+    const estado = aplicar(reductor(), estadoActivo(), { tipo: "agregarOpcion", nombre: "Color" })
+    expect(validezDeVariantes(estado).motivos).toEqual([
+      "Agregá una opción (por ejemplo Color) con al menos un valor para armar las variantes",
+      'Falta al menos un valor en "Color"',
+    ])
+  })
+
+  it("two rows with the same barcode are invalid, with the schema's words", () => {
+    const estado = conBarcode(estadoColor(), { Rojo: "7791", Azul: "7791" })
+    expect(validezDeVariantes(estado)).toEqual({ valida: false, motivos: [REPETIDOS] })
+    expect(validezDeVariantes(conBarcode(estado, { Azul: "7792" })).valida).toBe(true)
+  })
+
+  it("compares after the spaces at the ends are removed, as the schema does", () => {
+    const estado = conBarcode(estadoColor(), { Rojo: "7791", Azul: "  7791 " })
+    expect(validezDeVariantes(estado).motivos).toEqual([REPETIDOS])
+  })
+
+  it("is case sensitive, like the schema", () => {
+    expect(validezDeVariantes(conBarcode(estadoColor(), { Rojo: "ab-1", Azul: "AB-1" })).valida).toBe(true)
+  })
+
+  it("rows without a barcode are not duplicates of each other", () => {
+    expect(validezDeVariantes(estadoColor()).valida).toBe(true)
+    expect(validezDeVariantes(conBarcode(estadoColor(), { Rojo: "", Azul: "   " })).valida).toBe(true)
+    expect(validezDeVariantes(conBarcode(estadoColor(), { Rojo: null, Azul: null })).valida).toBe(true)
+  })
+
+  it("a barcode on a row pending archive does not collide with the others", () => {
+    const guardado = hidratar(grupoColor())
+    const sinRojo = aplicar(reductor(), guardado, { tipo: "quitarValor", valorId: valorId(guardado, "Color", "Rojo") })
+    const estado = conBarcode(sinRojo, { Rojo: "7791", Azul: "7791" })
+    expect(validezDeVariantes(estado).valida).toBe(true)
+  })
+
+  it("a saved row whose code was cleared cannot be saved", () => {
+    const guardado = hidratar(grupoColor())
+    const vacio = aplicar(reductor(), guardado, { tipo: "editarFila", filaId: filaDe(guardado, "Rojo").id, cambios: { codigo: "  " } })
+    expect(filaDe(vacio, "Rojo").codigoTocado).toBe(true)
+    expect(validezDeVariantes(vacio)).toEqual({ valida: false, motivos: ['Falta el código de "Rojo"'] })
+  })
+
+  it("a saved row whose code was never touched stays valid, even if the code is unknown to the client", () => {
+    const guardado = hidratar(grupoColor())
+    const sinCodigo = { ...guardado, filas: { ...guardado.filas, [filaDe(guardado, "Rojo").id]: { ...filaDe(guardado, "Rojo"), codigo: "", codigoTocado: false } } }
+    expect(validezDeVariantes(sinCodigo).valida).toBe(true)
+  })
+
+  it("a row brought back from the archive may keep its code, but not blank it after touching it", () => {
+    const guardado = hidratar(grupoColor())
+    const conVerde = aplicar(reductor(), guardado, { tipo: "agregarValor", opcionId: opcionId(guardado, "Color"), texto: "Verde" })
+    expect(validezDeVariantes(conVerde).valida).toBe(true)
+    const tocado = aplicar(reductor(), conVerde, { tipo: "editarFila", filaId: filaDe(conVerde, "Verde").id, cambios: { codigo: "V-1" } }, { tipo: "editarFila", filaId: filaDe(conVerde, "Verde").id, cambios: { codigo: "" } })
+    expect(validezDeVariantes(tocado)).toEqual({ valida: false, motivos: ['Falta el código de "Verde"'] })
+  })
+})

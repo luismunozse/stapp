@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest"
-import { fireEvent, screen, within } from "@testing-library/react"
+import { useReducer, useState } from "react"
+import { fireEvent, render, screen, within } from "@testing-library/react"
 import { VariantesSection } from "@/components/inventario/variantes/variantes-section"
-import { estadoInicial, stockTotal, type VariantesState } from "@/lib/variantes-filas"
+import { crearReductor, estadoInicial, stockTotal, type VariantesState } from "@/lib/variantes-filas"
 import { aplicar, reductor, filaDe, grupoColor, grupoColorTalle, hidratar, leida, opcionId, valorId } from "../helpers/variantes-filas"
 import { estadoActivo, estadoColor, montar } from "../helpers/variantes-ui"
 
@@ -170,7 +171,7 @@ describe("VariantesSection: building the variants", () => {
     fireEvent.change(entrada, { target: { value: "V11" } })
     fireEvent.keyDown(entrada, { key: "Enter" })
     expect(salida.estado.opciones[0].valores).toHaveLength(10)
-    expect(screen.getByRole("status")).toHaveTextContent("Las opciones generan 110 combinaciones y el máximo es 100")
+    expect(screen.getByRole("status", { name: "Aviso" })).toHaveTextContent("Las opciones generan 110 combinaciones y el máximo es 100")
   })
 
   it("below the limit there is no limit message, not even one short of it", () => {
@@ -192,7 +193,7 @@ describe("VariantesSection: building the variants", () => {
 describe("VariantesSection: the reason an action was refused", () => {
   it("has a status region from the start, empty, so a screen reader hears the first message", () => {
     montarSeccion(estadoColor())
-    const estado = screen.getByRole("status")
+    const estado = screen.getByRole("status", { name: "Aviso" })
     expect(estado).toBeEmptyDOMElement()
     expect(estado).toHaveAttribute("aria-live", "polite")
   })
@@ -202,14 +203,14 @@ describe("VariantesSection: the reason an action was refused", () => {
     const entrada = screen.getByLabelText("Agregar valor a Color")
     fireEvent.change(entrada, { target: { value: "rojo" } })
     fireEvent.keyDown(entrada, { key: "Enter" })
-    expect(screen.getByRole("status")).toHaveTextContent('El valor "rojo" está repetido en Color')
+    expect(screen.getByRole("status", { name: "Aviso" })).toHaveTextContent('El valor "rojo" está repetido en Color')
   })
 
   it("shows the refusal of an undo that cannot be done", () => {
     const inicial = hidratar(grupoColorTalle())
     montarSeccion(aplicar(reductor(), inicial, { tipo: "quitarOpcion", opcionId: opcionId(inicial, "Talle") }))
     fireEvent.click(screen.getAllByRole("button", { name: /^Deshacer archivo de / })[0])
-    expect(screen.getByRole("status")).toHaveTextContent('Para deshacerlo, volvé a agregar la opción "Talle"')
+    expect(screen.getByRole("status", { name: "Aviso" })).toHaveTextContent('Para deshacerlo, volvé a agregar la opción "Talle"')
   })
 
   it("clears the message once an action goes through", () => {
@@ -217,10 +218,10 @@ describe("VariantesSection: the reason an action was refused", () => {
     const entrada = screen.getByLabelText("Agregar valor a Color")
     fireEvent.change(entrada, { target: { value: "rojo" } })
     fireEvent.keyDown(entrada, { key: "Enter" })
-    expect(screen.getByRole("status")).not.toBeEmptyDOMElement()
+    expect(screen.getByRole("status", { name: "Aviso" })).not.toBeEmptyDOMElement()
     fireEvent.change(entrada, { target: { value: "Verde" } })
     fireEvent.keyDown(entrada, { key: "Enter" })
-    expect(screen.getByRole("status")).toBeEmptyDOMElement()
+    expect(screen.getByRole("status", { name: "Aviso" })).toBeEmptyDOMElement()
   })
 })
 
@@ -314,7 +315,7 @@ describe("VariantesSection: warnings before saving", () => {
 
   it("warns about saved rows that will be archived with stock, with their units", () => {
     montarSeccion(sinRojoConStock())
-    const alerta = screen.getByRole("alert")
+    const alerta = screen.getByRole("status", { name: "Variantes con stock que se archivan" })
     expect(alerta).toHaveTextContent("Se van a archivar variantes con stock")
     expect(within(alerta).getByText("Rojo")).toBeInTheDocument()
     expect(alerta).toHaveTextContent("5 unidades")
@@ -324,20 +325,20 @@ describe("VariantesSection: warnings before saving", () => {
   it("lists each row, and the warning goes away once the undo is pressed", () => {
     const inicial = hidratar(grupoColorTalle())
     montarSeccion(aplicar(reductor(), inicial, { tipo: "quitarValor", valorId: valorId(inicial, "Talle", "S") }))
-    const alerta = screen.getByRole("alert")
+    const alerta = screen.getByRole("status", { name: "Variantes con stock que se archivan" })
     expect(within(alerta).getByText("Rojo / S")).toBeInTheDocument()
     expect(within(alerta).getByText("Azul / S")).toBeInTheDocument()
     expect(alerta).toHaveTextContent("1 unidad")
     expect(alerta).toHaveTextContent("3 unidades")
 
     fireEvent.click(screen.getAllByRole("button", { name: "Deshacer archivo de Rojo / S" })[0])
-    expect(screen.queryByRole("alert")).toBeNull()
+    expect(screen.queryByRole("status", { name: "Variantes con stock que se archivan" })).toBeNull()
   })
 
   it("does not warn about new rows, rows without stock, or rows with reserved units (those block instead)", () => {
     const nuevas = estadoColor()
     const { unmount } = montarSeccion(aplicar(reductor(), nuevas, { tipo: "quitarValor", valorId: valorId(nuevas, "Color", "Rojo") }))
-    expect(screen.queryByRole("alert")).toBeNull()
+    expect(screen.queryByRole("status", { name: "Variantes con stock que se archivan" })).toBeNull()
     unmount()
 
     const guardado = hidratar({
@@ -345,7 +346,7 @@ describe("VariantesSection: warnings before saving", () => {
       variantes: [leida("r1", [{ opcion: "Color", valor: "Rojo" }], { stock: 0 }), ...grupoColor().variantes.slice(1)],
     })
     montarSeccion(aplicar(reductor(), guardado, { tipo: "quitarValor", valorId: valorId(guardado, "Color", "Rojo") }))
-    expect(screen.queryByRole("alert")).toBeNull()
+    expect(screen.queryByRole("status", { name: "Variantes con stock que se archivan" })).toBeNull()
   })
 
   it("shows why a row cannot be archived once, on the row, and not again in the list of what is missing", () => {
@@ -379,6 +380,93 @@ describe("VariantesSection: warnings before saving", () => {
   it("says nothing is missing while the switch is off", () => {
     montarSeccion(apagado())
     expect(screen.queryByText("Para guardar, falta:")).toBeNull()
+  })
+})
+
+describe("VariantesSection: the same message twice", () => {
+  const rechazar = () => {
+    const entrada = screen.getByLabelText("Agregar valor a Color")
+    fireEvent.change(entrada, { target: { value: "rojo" } })
+    fireEvent.keyDown(entrada, { key: "Enter" })
+  }
+
+  it("is announced again: the text is put in the live region as a new node each time, and the region itself stays", () => {
+    montarSeccion(estadoColor())
+    const region = screen.getByRole("status", { name: "Aviso" })
+    rechazar()
+    const primero = region.firstElementChild
+    expect(primero).toHaveTextContent('El valor "rojo" está repetido en Color')
+
+    rechazar()
+    const segundo = region.firstElementChild
+    expect(segundo).toHaveTextContent('El valor "rojo" está repetido en Color')
+    expect(segundo).not.toBe(primero)
+    expect(primero?.isConnected).toBe(false)
+    expect(screen.getByRole("status", { name: "Aviso" })).toBe(region)
+  })
+})
+
+describe("VariantesSection: confirming Aplicar precio a todas", () => {
+  const conPrecioDistinto = () => {
+    const { salida } = montarSeccion(estadoColor())
+    escribir("Precio de Rojo", "1500")
+    fireEvent.click(screen.getByRole("button", { name: "Aplicar precio a todas" }))
+    return salida
+  }
+
+  it("moves the focus to the first button of the question, so the keyboard user lands on it", () => {
+    conPrecioDistinto()
+    expect(screen.getByRole("button", { name: "Cancelar" })).toHaveFocus()
+  })
+
+  it("names the question (an inline, non-modal group read as its question) and describes what happens", () => {
+    conPrecioDistinto()
+    const grupo = screen.getByRole("group", { name: "¿Cambiar el precio de 1 variante?" })
+    expect(grupo).toHaveAccessibleDescription("Todas pasan a tener el precio base.")
+    expect(within(grupo).getAllByRole("button")).toHaveLength(2)
+  })
+
+  it("gives the focus back to the trigger on Cancelar", () => {
+    conPrecioDistinto()
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }))
+    expect(screen.getByRole("button", { name: "Aplicar precio a todas" })).toHaveFocus()
+  })
+
+  it("and on 'Sí, cambiar', after applying the price", () => {
+    const salida = conPrecioDistinto()
+    fireEvent.click(screen.getByRole("button", { name: "Sí, cambiar" }))
+    expect(filaDe(salida.estado, "Rojo").precioVenta).toBe(1000)
+    expect(screen.getByRole("button", { name: "Aplicar precio a todas" })).toHaveFocus()
+  })
+
+  it("does not steal the focus when it applies straight away", () => {
+    montarSeccion(estadoColor())
+    const boton = screen.getByRole("button", { name: "Aplicar precio a todas" })
+    boton.focus()
+    fireEvent.click(boton)
+    expect(screen.getByRole("button", { name: "Aplicar precio a todas" })).toHaveFocus()
+  })
+
+  it("locks both answers while a save runs", () => {
+    function Anfitrion() {
+      const [estado, dispatch] = useReducer(crearReductor(), estadoColor())
+      const [guardando, setGuardando] = useState(false)
+      return (
+        <>
+          <button type="button" onClick={() => setGuardando(true)}>
+            guardar
+          </button>
+          <VariantesSection estado={estado} dispatch={dispatch} guardando={guardando} />
+        </>
+      )
+    }
+    render(<Anfitrion />)
+    escribir("Precio de Rojo", "1500")
+    fireEvent.click(screen.getByRole("button", { name: "Aplicar precio a todas" }))
+    expect(screen.getByRole("button", { name: "Cancelar" })).toBeEnabled()
+    fireEvent.click(screen.getByRole("button", { name: "guardar" }))
+    expect(screen.getByRole("button", { name: "Cancelar" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Sí, cambiar" })).toBeDisabled()
   })
 })
 

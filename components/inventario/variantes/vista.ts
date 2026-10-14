@@ -145,21 +145,30 @@ export interface Validez {
   motivos: string[]
 }
 
+// What `btrim` removes in the schema (spaces only), so a barcode is compared the way `guardarGrupoSchema` does.
+const sinEspacios = (s: string) => s.replace(/^ +| +$/g, "")
+
 /**
  * Whether the variants can be saved as they are. The form disables Save with this; the section lists the
- * reasons. A product without variants (switch off) has nothing to validate. Reserved units on a row
- * pending archive come from `bloqueos`, so the reason is the reducer's.
+ * reasons. A product without variants (switch off) has nothing to validate. The rules mirror what the save
+ * schema (`guardarGrupoSchema`) rejects, so a state that passes here is not bounced by the server for a
+ * reason the screen could have said: an option needs a value, a code is needed where the client owns it,
+ * and codes and barcodes cannot repeat. Reserved units on a row pending archive come from `bloqueos`.
  */
 export function validezDeVariantes(estado: VariantesState): Validez {
   if (!estado.activo) return { valida: true, motivos: [] }
   const activas = filasEnOrden(estado).filter((f) => !f.archivar)
-  if (activas.length === 0) {
-    return { valida: false, motivos: ["Agregá una opción (por ejemplo Color) con al menos un valor para armar las variantes"] }
+  const motivos: string[] = []
+  if (activas.length === 0) motivos.push("Agregá una opción (por ejemplo Color) con al menos un valor para armar las variantes")
+  for (const opcion of estado.opciones) {
+    if (opcion.valores.length === 0) motivos.push(`Falta al menos un valor en "${opcion.nombre}"`)
   }
+  motivos.push(...bloqueos(estado).map((b) => b.motivo))
 
-  const motivos = bloqueos(estado).map((b) => b.motivo)
+  // A new row, and a saved or restored one whose code the user touched, must not end up blank. A saved row
+  // whose code was never touched keeps what the database has (a restored row's code is not known here).
   for (const fila of activas) {
-    if (!fila.existente && fila.codigo.trim() === "") motivos.push(`Falta el código de "${etiquetaDeFila(estado, fila)}"`)
+    if ((!fila.existente || fila.codigoTocado) && fila.codigo.trim() === "") motivos.push(`Falta el código de "${etiquetaDeFila(estado, fila)}"`)
   }
   const vistos = new Map<string, { codigo: string; veces: number }>()
   for (const fila of activas) {
@@ -173,5 +182,16 @@ export function validezDeVariantes(estado: VariantesState): Validez {
   for (const { codigo, veces } of vistos.values()) {
     if (veces > 1) motivos.push(`El código "${codigo}" está repetido`)
   }
+
+  const barcodes = new Set<string>()
+  let repetido = false
+  for (const fila of activas) {
+    const barcode = sinEspacios(fila.barcode ?? "")
+    if (barcode === "") continue
+    if (barcodes.has(barcode)) repetido = true
+    barcodes.add(barcode)
+  }
+  if (repetido) motivos.push("Hay códigos de barras repetidos")
+
   return { valida: motivos.length === 0, motivos }
 }
