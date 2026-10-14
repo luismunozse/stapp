@@ -3,7 +3,7 @@
  * Manual visual-sample generator. Skipped unless PDF_SAMPLES=1.
  * Usage: PDF_SAMPLES=1 PDF_SAMPLES_TAG=before npx vitest run __tests__/pdf-samples.test.ts
  *
- * Writes fully-populated orden, remito (factura), venta, devolucion,
+ * Writes fully-populated orden, remito (factura), venta, nota de crédito,
  * cotizacion, garantia and standalone entrega PDFs to
  * .tmp-preview/pdf-samples/{TAG}-orden.pdf, {TAG}-remito.pdf,
  * {TAG}-venta.pdf, {TAG}-devolucion.pdf, {TAG}-garantia.pdf and
@@ -12,7 +12,7 @@
  */
 import { describe, it, expect } from "vitest"
 import { mkdirSync, writeFileSync } from "node:fs"
-import { generateOrdenPDF, generateFacturaPDF, generateVentaPDF, generateVentaTicketPDF, generateDevolucionPDF, generateCotizacionPDF, generateGarantiaVentaPDF, generateComprobanteEntregaPDF } from "@/lib/pdf"
+import { generateOrdenPDF, generateFacturaPDF, generateVentaPDF, generateVentaTicketPDF, generateCotizacionPDF, generateGarantiaVentaPDF, generateComprobanteEntregaPDF } from "@/lib/pdf"
 import { generateNotaCreditoPDF } from "@/lib/nota-credito-react-pdf"
 import { buildOrdenFixture } from "./lib/orden-fixture"
 import { buildCotizacionOrdenFixture, buildCotizacionPresupuestoFixture } from "./lib/cotizacion-fixture"
@@ -240,27 +240,6 @@ describe.runIf(process.env.PDF_SAMPLES === "1")("pdf visual samples", () => {
     })
     writeFileSync(`${OUT_DIR}/${TAG}-venta.pdf`, venta)
     expect(venta.length).toBeGreaterThan(1000)
-
-    const devolucion = await generateDevolucionPDF({
-      numeroDevolucion: "DEV-0042",
-      fecha: new Date("2026-08-08"),
-      ventaNumero: 128,
-      motivo: "Producto con falla de fábrica",
-      tipo: "REEMBOLSO",
-      observaciones: "Cliente devuelve el vidrio templado por burbujas de aire visibles a los 2 días de uso.",
-      items: [
-        { descripcion: "VIDRIO TEMPLADO PREMIUM", cantidad: 2, precioUnitario: 4500, subtotal: 9000 },
-      ],
-      montoDevolucion: 9000,
-      cliente: { nombre: "Marcos Iglesias", telefono: "+54 9 11 6789-0123" },
-      nombreEmpresa: "Servicio Técnico Demo",
-      telefonoEmpresa: "+54 11 4000-1234",
-      direccionEmpresa: "Av. Rivadavia 5000, CABA",
-      moneda: "ARS",
-      zonaHoraria: "America/Argentina/Buenos_Aires",
-    })
-    writeFileSync(`${OUT_DIR}/${TAG}-devolucion.pdf`, devolucion)
-    expect(devolucion.length).toBeGreaterThan(1000)
 
     const notaCredito = await generateNotaCreditoPDF({
       numero: "NC-000042",
