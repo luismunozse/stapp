@@ -1447,3 +1447,55 @@ describe("PUT /api/inventario/grupos/[id]: deadlocks (40P01)", () => {
     expect(rpcCalls).toHaveLength(1)
   })
 })
+
+describe("DELETE /api/inventario/grupos/[id]: audit entry", () => {
+  it("ungrouping writes one DELETE audit entry for the group, marked DESAGRUPADO", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1", userId: "user-7" })
+    instalarBase()
+
+    expect((await del("g-1")).status).toBe(200)
+
+    expect(createAuditLogger).toHaveBeenCalledWith("org-1", "user-7", expect.any(Request))
+    expect(auditoria.delete).toHaveBeenCalledTimes(1)
+    expect(auditoria.delete).toHaveBeenCalledWith("inventario_grupos", "g-1", { nombre: "Funda X", opciones: OPCIONES_G1, accion: "DESAGRUPADO" })
+    expect(eventos()).toEqual([])
+  })
+
+  it("a 404 (missing, already ungrouped or another organization's group) writes no audit entry", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    instalarBase()
+
+    await del("g-1")
+    auditoria.delete.mockClear()
+    expect((await del("g-1")).status).toBe(404)
+    expect((await del("g-2")).status).toBe(404)
+    expect((await del("g-404")).status).toBe(404)
+
+    expect(auditoria.delete).not.toHaveBeenCalled()
+  })
+
+  it("without a user id there is no audit entry, but the ungroup still happens", async () => {
+    vi.mocked(requireInventarioAccess).mockResolvedValueOnce({
+      error: null,
+      session: { user: { sucursalId: null } },
+      organizationId: "org-1",
+      userId: null,
+      role: "ADMIN",
+    } as any)
+    const { tablas } = instalarBase()
+
+    expect((await del("g-1")).status).toBe(200)
+
+    expect(tablas.inventario_grupos.some((g) => g.id === "g-1")).toBe(false)
+    expect(auditoria.delete).not.toHaveBeenCalled()
+  })
+
+  it("a failing audit entry never fails the ungroup", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    auditoria.delete.mockRejectedValue(new Error("audit down"))
+    instalarBase()
+
+    expect((await del("g-1")).status).toBe(200)
+    await new Promise((r) => setTimeout(r, 0))
+  })
+})

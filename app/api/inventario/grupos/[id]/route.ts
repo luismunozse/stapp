@@ -9,6 +9,7 @@ import {
 } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
+import { createAuditLogger } from "@/lib/audit"
 import { isMissingColumnError } from "@/lib/db-errors"
 import { DEPOSITO_INVALIDO, depositoPermitido, depositoPorDefecto } from "@/lib/depositos"
 import {
@@ -291,9 +292,9 @@ export async function PUT(request: Request, { params }: Contexto) {
 // Ungroup. Only the group row is deleted: the BEFORE DELETE trigger of the group clears
 // `atributos` on its children and the composite foreign key frees `grupo_id`, in the
 // same statement. Names, prices, stock, codes and each child's own photo stay as they are.
-export async function DELETE(_request: Request, { params }: Contexto) {
+export async function DELETE(request: Request, { params }: Contexto) {
   try {
-    const { error, organizationId } = await requireInventarioAccess()
+    const { error, organizationId, userId } = await requireInventarioAccess()
     if (error) return error
 
     const { id } = await params
@@ -303,7 +304,7 @@ export async function DELETE(_request: Request, { params }: Contexto) {
       .delete()
       .eq("id", id)
       .eq("organization_id", organizationId!)
-      .select("id")
+      .select("id, nombre, opciones")
 
     if (dbError) {
       if (isMissingColumnError(dbError)) return migracionPendiente()
@@ -312,6 +313,13 @@ export async function DELETE(_request: Request, { params }: Contexto) {
     // Nothing deleted: unknown id, another organization's group, or already ungrouped.
     if (!data || data.length === 0) {
       return NextResponse.json({ error: GRUPO_NO_ENCONTRADO }, { status: 404 })
+    }
+
+    // One entry for the group; the children keep their own history.
+    if (userId) {
+      createAuditLogger(organizationId!, userId, request)
+        .delete("inventario_grupos", id, { nombre: data[0].nombre, opciones: data[0].opciones, accion: "DESAGRUPADO" })
+        .catch(() => {})
     }
 
     return NextResponse.json({ success: true })

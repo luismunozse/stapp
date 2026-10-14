@@ -8,6 +8,7 @@ export type AuditEntity =
   | "ordenes_servicio"
   | "clientes"
   | "inventario"
+  | "inventario_grupos"
   | "proveedores"
   | "cotizaciones"
   | "facturas"
@@ -42,6 +43,7 @@ const ENTITY_DISPLAY: Record<string, string> = {
   ordenes_servicio: "orden de servicio",
   clientes: "cliente",
   inventario: "producto",
+  inventario_grupos: "grupo de variantes",
   proveedores: "proveedor",
   cotizaciones: "cotización",
   facturas: "remito",
