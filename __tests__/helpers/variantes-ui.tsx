@@ -1,5 +1,5 @@
 import { useEffect, useReducer, type Dispatch, type ReactNode } from "react"
-import { render } from "@testing-library/react"
+import { act, render } from "@testing-library/react"
 import { crearReductor, estadoInicial, type VariantesAccion, type VariantesState } from "@/lib/variantes-filas"
 import { aplicar, reductor } from "./variantes-filas"
 
@@ -7,6 +7,8 @@ import { aplicar, reductor } from "./variantes-filas"
 export interface Salida {
   estado: VariantesState
   acciones: VariantesAccion[]
+  /** Dispatches from outside the component, the way the rest of the form would (the product's own fields). */
+  despachar: (accion: VariantesAccion) => void
 }
 
 /**
@@ -14,12 +16,16 @@ export interface Salida {
  * `salida.estado` is the live state and `salida.acciones` the actions the component dispatched, in order.
  */
 export function montar(inicial: VariantesState, dibujar: (estado: VariantesState, dispatch: Dispatch<VariantesAccion>) => ReactNode) {
-  const salida: Salida = { estado: inicial, acciones: [] }
+  let enviar: Dispatch<VariantesAccion> = () => {}
+  const salida: Salida = { estado: inicial, acciones: [], despachar: (accion) => act(() => enviar(accion)) }
   const reducir = crearReductor()
   function Anfitrion() {
     const [estado, dispatch] = useReducer(reducir, inicial)
     useEffect(() => {
       salida.estado = estado
+    })
+    useEffect(() => {
+      enviar = dispatch
     })
     const registrar: Dispatch<VariantesAccion> = (accion) => {
       salida.acciones.push(accion)

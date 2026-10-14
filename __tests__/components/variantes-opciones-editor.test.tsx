@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { fireEvent, screen, within } from "@testing-library/react"
+import { act, fireEvent, screen, within } from "@testing-library/react"
 import { OpcionesEditor } from "@/components/inventario/variantes/opciones-editor"
 import { aplicar, reductor, opcionId } from "../helpers/variantes-filas"
 import { estadoActivo, estadoColor, montar } from "../helpers/variantes-ui"
@@ -8,7 +8,7 @@ const textos = (estado: ReturnType<typeof estadoColor>, opcion: string) =>
   estado.opciones.find((o) => o.nombre === opcion)?.valores.map((v) => v.texto)
 
 const montarEditor = (inicial = estadoColor(), props: { deshabilitado?: boolean } = {}) =>
-  montar(inicial, (estado, dispatch) => <OpcionesEditor estado={estado} dispatch={dispatch} {...props} />)
+  montar(inicial, (estado, dispatch) => <OpcionesEditor opciones={estado.opciones} dispatch={dispatch} {...props} />)
 
 describe("OpcionesEditor: reading the options", () => {
   it("shows every option with its values as editable chips", () => {
@@ -60,8 +60,24 @@ describe("OpcionesEditor: adding values", () => {
     fireEvent.change(entrada, { target: { value: "rojo, Verde, azul," } })
     expect(textos(salida.estado, "Color")).toEqual(["Rojo", "Azul", "Verde"])
     expect(salida.estado.aviso).toBe(
-      'No se agregó "rojo": El valor "rojo" está repetido en Color No se agregó "azul": El valor "azul" está repetido en Color'
+      'El valor "rojo" está repetido en Color; El valor "azul" está repetido en Color'
     )
+  })
+
+  it("a paste dispatches ONE action with the whole list, so it cannot undo what was dispatched in the same batch", () => {
+    const { salida } = montarEditor()
+    const entrada = screen.getByLabelText("Agregar valor a Color")
+    act(() => {
+      salida.despachar({ tipo: "cambiarCodigoBase", codigo: "ZZ" })
+      fireEvent.change(entrada, { target: { value: "rojo, Verde," } })
+    })
+    expect(salida.estado.codigoBase).toBe("ZZ")
+    expect(textos(salida.estado, "Color")).toEqual(["Rojo", "Azul", "Verde"])
+    expect(salida.estado.aviso).toBe('El valor "rojo" está repetido en Color')
+    expect(salida.acciones.filter((a) => a.tipo === "agregarValores")).toEqual([
+      { tipo: "agregarValores", opcionId: opcionId(salida.estado, "Color"), textos: ["rojo", "Verde"] },
+    ])
+    expect(salida.acciones.some((a) => a.tipo === "reemplazar")).toBe(false)
   })
 
   it("a paste where every value goes through shows no message, and a single refused value keeps the plain reason", () => {
@@ -77,7 +93,7 @@ describe("OpcionesEditor: adding values", () => {
     const { salida } = montarEditor()
     fireEvent.change(screen.getByLabelText("Agregar valor a Color"), { target: { value: "Rojo, Negro," } })
     expect(textos(salida.estado, "Color")).toEqual(["Rojo", "Azul", "Negro"])
-    expect(salida.estado.aviso).toBe('No se agregó "Rojo": El valor "Rojo" está repetido en Color')
+    expect(salida.estado.aviso).toBe('El valor "Rojo" está repetido en Color')
   })
 
   it("what follows the last comma stays in the field to be finished", () => {

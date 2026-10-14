@@ -500,6 +500,8 @@ export type VariantesAccion =
   | { tipo: "renombrarOpcion"; opcionId: string; nombre: string }
   | { tipo: "quitarOpcion"; opcionId: string }
   | { tipo: "agregarValor"; opcionId: string; texto: string }
+  /** A list of values (a paste): applied in order over the latest state; the refused ones are reported together. */
+  | { tipo: "agregarValores"; opcionId: string; textos: readonly string[] }
   | { tipo: "renombrarValor"; valorId: string; texto: string }
   | { tipo: "quitarValor"; valorId: string }
   | { tipo: "deshacerArchivo"; filaId: string }
@@ -713,6 +715,31 @@ function agregarValor(estado: VariantesState, opcionId: string, crudo: string, g
   if (opcion.valores.length > 0) return completar(siguiente, generarId)
   // The rows gain a value: their generated codes gain its tag.
   return rederivarCodigos(completar(extenderFilas(siguiente, valor.id), generarId))
+}
+
+/**
+ * Several values at once, in order. Every accepted value stays; every refusal is collected into ONE message
+ * (the reason alone when it already names the value, else prefixed with it). Nothing accepted: the same state
+ * plus the message, and the counter does not move. Ids come from the state's own seed and counter, advanced
+ * only by the values that were accepted, so the result is a pure function of (state, action).
+ */
+function agregarValores(estado: VariantesState, opcionId: string, textos: readonly string[]): VariantesState {
+  let actual = estado
+  let contador = estado.contador
+  const rechazos: string[] = []
+  for (const texto of textos) {
+    const acuniar = acuniador(estado.semilla, contador)
+    const siguiente = agregarValor(actual, opcionId, texto, acuniar.siguiente)
+    if (typeof siguiente === "string") {
+      rechazos.push(siguiente.includes(`"${texto.trim()}"`) ? siguiente : `No se agregó "${texto.trim()}": ${siguiente}`)
+      continue
+    }
+    if (siguiente !== actual) contador = acuniar.contador
+    actual = siguiente
+  }
+  const aviso = rechazos.length > 0 ? rechazos.join("; ") : null
+  if (actual === estado) return aviso === null ? estado : { ...estado, aviso }
+  return { ...actual, aviso, contador }
 }
 
 function agregarOpcion(estado: VariantesState, nombreCrudo: string, valores: readonly string[], generarId: () => string): Resultado {
@@ -1003,6 +1030,8 @@ function reducir(estado: VariantesState, accion: VariantesAccion, generarId: () 
       return quitarOpcion(estado, accion.opcionId)
     case "agregarValor":
       return agregarValor(estado, accion.opcionId, accion.texto, generarId)
+    case "agregarValores":
+      return agregarValores(estado, accion.opcionId, accion.textos)
     case "renombrarValor":
       return renombrarValor(estado, accion.valorId, accion.texto)
     case "quitarValor":
@@ -1036,7 +1065,7 @@ export function crearReductor(): Reductor {
     const acuniar = acuniador(estado.semilla, estado.contador)
     const resultado = reducir(estado, accion, acuniar.siguiente)
     if (typeof resultado === "string") return { ...estado, aviso: resultado }
-    if (resultado === estado || accion.tipo === "reemplazar") return resultado
+    if (resultado === estado || accion.tipo === "reemplazar" || accion.tipo === "agregarValores") return resultado
     return { ...resultado, aviso: null, contador: acuniar.contador }
   }
 }
