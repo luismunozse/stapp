@@ -111,7 +111,7 @@ function separarColumnas(select: string): string[] {
 function fakeInventario(opts: { m1Aplicada: boolean; error?: { code: string; message: string }; filas?: Record<string, any>[] }) {
   const intentos: Intento[] = []
   const error = opts.error ?? { code: "42703", message: AUSENTE[0][1] }
-  const filas = opts.filas ?? TODAS
+  const filas: Record<string, any>[] = opts.filas ?? TODAS
 
   const api = () => {
     const intento: Intento = { select: "", eq: [], is: [], gt: [], or: [], limit: null }
