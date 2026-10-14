@@ -4,7 +4,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 
 const printer = vi.hoisted(() => ({
   connected: true, connecting: false, isSupported: true, error: null, device: null,
-  connect: vi.fn(), disconnect: vi.fn(), print: vi.fn(async () => true),
+  connect: vi.fn(), disconnect: vi.fn(), print: vi.fn(async (_data: Uint8Array) => true),
 }))
 vi.mock("@/components/pos/use-thermal-printer", () => ({ useThermalPrinter: () => printer }))
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
