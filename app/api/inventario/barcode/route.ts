@@ -10,6 +10,23 @@ import {
   derivarLecturaVenta,
 } from "@/lib/sucursal"
 
+// The name of a variant's group, or null. Best-effort: a scan must never fail because of it.
+async function nombreDelGrupo(organizationId: string, grupoId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("inventario_grupos")
+      .select("nombre")
+      .eq("id", grupoId)
+      .eq("organization_id", organizationId)
+      .maybeSingle()
+    if (error) throw error
+    return data?.nombre ?? null
+  } catch (e) {
+    console.warn("No se pudo leer el nombre del grupo de variantes:", e)
+    return null
+  }
+}
+
 // GET /api/inventario/barcode?code=123456
 // Search inventory by barcode
 // If VENDEDOR (or ADMIN with sucursal cookie): returns stock from that sucursal's
@@ -136,11 +153,19 @@ export async function GET(request: Request) {
       }
     }
 
+    // The row is read with select("*"), so formatInventario already carries grupoId / atributos /
+    // etiqueta when migration 355 is applied. The group name needs one best-effort lookup, and
+    // only for a variant; an item read without the migration gets no variant key at all.
+    const itemRespuesta =
+      "grupo_id" in item
+        ? { ...formattedItem, grupoNombre: item.grupo_id ? await nombreDelGrupo(organizationId!, item.grupo_id) : null }
+        : formattedItem
+
     return NextResponse.json({
       found: true,
       code,
       matchedByCodigo,
-      item: formattedItem,
+      item: itemRespuesta,
     })
   } catch (error) {
     console.error("Error searching by barcode:", error)
