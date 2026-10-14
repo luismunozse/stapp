@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { todayInTimeZone, addMonthsToDateOnly, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
+import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
 
 const pagoLineSchema = z.object({
   monto: z.number().positive("El monto debe ser mayor a 0"),
@@ -131,7 +132,7 @@ export async function POST(
     // Obtener orden
     const { data: orden, error: ordenError } = await supabaseAdmin
       .from("ordenes_servicio")
-      .select("id, costo_final, total_cobrado, estado_cobro, descuento_cobro, cliente_id, organization_id, estado, sucursal_id")
+      .select(`id, costo_final, total_cobrado, estado_cobro, descuento_cobro, cliente_id, organization_id, estado, sucursal_id, ${NOTAS_CREDITO_APLICADO_EMBED}`)
       .eq("id", ordenId)
       .eq("organization_id", organizationId!)
       .single()
@@ -260,7 +261,12 @@ async function runJsFallback(opts: {
   const descuentoNuevo = data.descuento || 0
   const descuentoTotal = descuentoAnterior + descuentoNuevo
   const totalCobrado = parseFloat(orden.total_cobrado || "0")
-  const pendiente = costoFinal - descuentoTotal - totalCobrado
+  const pendiente = pendienteOrden({
+    costoFinal,
+    descuentoCobro: descuentoTotal,
+    totalCobrado,
+    aplicadoNotasCredito: aplicadoNotasCreditoDeOrden(orden),
+  })
   const totalPagos = data.pagos.reduce((sum, p) => sum + p.monto, 0)
 
   if (totalPagos > pendiente + 0.01) {

@@ -110,3 +110,26 @@ describe("OrdenCostosCard — card consciente del estado", () => {
     expect(screen.queryByText("Horas trabajadas")).not.toBeInTheDocument()
   })
 })
+
+describe("OrdenCostosCard — notas de crédito", () => {
+  it("lo que bajaron la deuda las NC cuenta para el saldo", () => {
+    render(
+      <OrdenCostosCard
+        ordenId="o-nc"
+        presupuesto={1000}
+        costoFinal={1000}
+        sena={0}
+        totalCobrado={400}
+        descuentoCobro={0}
+        aplicadoNotasCredito={600}
+        estadoCobro="PARCIAL"
+        estado="ENTREGADO"
+        onUpdateField={vi.fn()}
+      />,
+    )
+
+    // 1000 - 400 cobrado - 600 de NC = 0: el saldo es "Pagado", no $600.
+    expect(screen.getByText("Saldo")).toBeInTheDocument()
+    expect(screen.getByText("Pagado")).toBeInTheDocument()
+  })
+})

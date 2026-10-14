@@ -96,4 +96,34 @@ describe("GET /api/clientes/[id]/ordenes-pendientes", () => {
 
     expect(ordenes.eq).toHaveBeenCalledWith("es_practica", false)
   })
+
+  it("fija el pendiente de hoy: costo - descuento - cobrado", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockSupabaseFrom({
+      ordenes_servicio: createChainMock([ordenRow({ costo_final: "10000", descuento_cobro: "500", total_cobrado: "2000" })]),
+      cuenta_corriente: createChainMock([]),
+    })
+
+    const json = await (await GET(createGetRequest(url), ctx)).json()
+
+    expect(json[0].pendiente).toBe(7500)
+  })
+
+  it("resta lo que bajaron la deuda las NC activas y no las anuladas", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    const ordenes = createChainMock([ordenRow({
+      costo_final: "10000", descuento_cobro: "500", total_cobrado: "2000",
+      notas_credito: [
+        { monto_aplicado_deuda: "3000", anulada: false },
+        { monto_aplicado_deuda: "1000", anulada: true },
+      ],
+    })])
+    mockSupabaseFrom({ ordenes_servicio: ordenes, cuenta_corriente: createChainMock([]) })
+
+    const json = await (await GET(createGetRequest(url), ctx)).json()
+
+    expect(json[0].pendiente).toBe(4500)
+    // El mock no mira el SELECT: se fija aparte que el embed se pide.
+    expect(ordenes.select).toHaveBeenCalledWith(expect.stringContaining("notas_credito (monto_aplicado_deuda, anulada)"))
+  })
 })

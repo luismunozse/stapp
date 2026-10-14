@@ -25,6 +25,7 @@ vi.mock("@/lib/webhooks/dispatcher", () => ({
 
 import { PUT } from "@/app/api/ordenes/[id]/route"
 import { queueNotification } from "@/lib/notifications/queue"
+import { diffObjects } from "@/lib/audit"
 
 function createPutRequest(body: any, url?: string) {
   return new Request(url || "http://localhost:3000/api/ordenes/o1", {
@@ -635,5 +636,81 @@ describe("PUT /api/ordenes/[id] - Guard costo_final (cobros y estado)", () => {
     const { status } = await parseResponse(response)
 
     expect(status).toBe(200)
+  })
+
+  it("cuenta las NC activas: no deja el costo por debajo de cobrado + lo que bajaron las NC", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrden({
+      estado: "REPARADO",
+      costo_final: "25000",
+      total_cobrado: "10000",
+      descuento_cobro: "0",
+      notas_credito: [{ monto_aplicado_deuda: "8000", anulada: false }],
+    })
+    const chain = createChainMock(mockOrden)
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    const response = await PUT(createPutRequest({ costoFinal: 15000 }), createParams("o1"))
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("cobrado")
+    expect(chain.update).not.toHaveBeenCalled()
+    expect(chain.select).toHaveBeenCalledWith(expect.stringContaining("notas_credito (monto_aplicado_deuda, anulada)"))
+  })
+
+  it("una NC anulada no cuenta para el guard", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrden({
+      estado: "REPARADO",
+      costo_final: "25000",
+      total_cobrado: "10000",
+      descuento_cobro: "0",
+      notas_credito: [{ monto_aplicado_deuda: "8000", anulada: true }],
+    })
+    const mockUpdated = { ...mockOrden, costo_final: 15000 }
+
+    let callCount = 0
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return Promise.resolve({ data: mockOrden, error: null })
+      return Promise.resolve({ data: mockUpdated, error: null })
+    })
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    const response = await PUT(createPutRequest({ costoFinal: 15000 }), createParams("o1"))
+
+    expect((await parseResponse(response)).status).toBe(200)
+  })
+
+  it("la auditoría no registra el embed de NC como un cambio de la orden", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrden({
+      estado: "REPARADO",
+      costo_final: "25000",
+      total_cobrado: "0",
+      descuento_cobro: "0",
+      notas_credito: [{ monto_aplicado_deuda: "0", anulada: false }],
+    })
+    const mockUpdated = { ...mockOrden, costo_final: 30000 }
+    delete (mockUpdated as any).notas_credito
+
+    let callCount = 0
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return Promise.resolve({ data: mockOrden, error: null })
+      return Promise.resolve({ data: mockUpdated, error: null })
+    })
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    await PUT(createPutRequest({ costoFinal: 30000 }), createParams("o1"))
+
+    expect(diffObjects).toHaveBeenCalled()
+    expect(vi.mocked(diffObjects).mock.calls[0][0]).not.toHaveProperty("notas_credito")
   })
 })

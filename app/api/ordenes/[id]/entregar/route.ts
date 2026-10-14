@@ -8,6 +8,7 @@ import { MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-
 import { resolverEstadoEntrega, esTransicionValida, ESTADO_LABELS } from "@/lib/orden-state-machine"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
+import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
 
 const entregarSchema = z.object({
   firmaClienteEntrega: z.string().optional().nullable(),
@@ -153,7 +154,7 @@ export async function POST(
       })
       .eq("id", id)
       .eq("organization_id", organizationId!)
-      .select(`*, clientes(*), users:entregado_por_user_id(id, nombre, email)`)
+      .select(`*, clientes(*), users:entregado_por_user_id(id, nombre, email), ${NOTAS_CREDITO_APLICADO_EMBED}`)
       .single()
 
     if (updateError) throw updateError
@@ -182,13 +183,18 @@ export async function POST(
 
     // Saldo que queda tras la entrega. Se devuelve en la respuesta para que la
     // UI pueda encadenar el cobro sin recalcularlo por su cuenta (el cliente no
-    // conoce el costo_final que se acaba de confirmar).
-    const costoFinal = parseFloat(updatedOrden.costo_final || "0")
-    const descuento = parseFloat(updatedOrden.descuento_cobro || "0")
-    const cobrado = parseFloat(updatedOrden.total_cobrado || "0")
+    // conoce el costo_final que se acaba de confirmar). Lo que ya bajaron las
+    // notas de crédito activas no se carga a cuenta corriente.
     const pendienteCobro = sinCobro
       ? 0
-      : Math.round((costoFinal - descuento - cobrado) * 100) / 100
+      : Math.round(
+          pendienteOrden({
+            costoFinal: parseFloat(updatedOrden.costo_final || "0"),
+            descuentoCobro: parseFloat(updatedOrden.descuento_cobro || "0"),
+            totalCobrado: parseFloat(updatedOrden.total_cobrado || "0"),
+            aplicadoNotasCredito: aplicadoNotasCreditoDeOrden(updatedOrden),
+          }) * 100
+        ) / 100
 
     // Fiado: si se entrega con saldo pendiente (y no es entrega sin cobro),
     // debitar la cuenta corriente del cliente.
@@ -277,7 +283,10 @@ export async function POST(
 
     // Registrar auditoría
     const audit = createAuditLogger(organizationId!, userId!, request)
-    const changes = diffObjects(orden, updatedOrden)
+    // El embed de NC solo sirve para calcular el pendiente: no es parte de la
+    // orden y no se lee en `orden`, así que no cuenta como cambio.
+    const { notas_credito: _notasCredito, ...updatedOrdenParaAuditoria } = updatedOrden
+    const changes = diffObjects(orden, updatedOrdenParaAuditoria)
     await audit.update("ordenes_servicio", id, changes.before, changes.after)
 
     // Encolar notificación de entrega

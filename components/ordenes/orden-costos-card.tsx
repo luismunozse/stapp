@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Badge, PaymentStatusBadge } from "@/components/ui/badge"
 import { DollarSign, FileText, Lock } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { pendienteOrden } from "@/lib/ordenes/pendiente"
 
 interface OrdenCostosCardProps {
   ordenId: string
@@ -15,6 +16,8 @@ interface OrdenCostosCardProps {
   sena: number
   totalCobrado?: number
   descuentoCobro?: number
+  /** Lo que bajaron la deuda las notas de crédito activas. */
+  aplicadoNotasCredito?: number
   estadoCobro?: string
   estado?: string
   origenPresupuesto?: "cotizacion" | "manual" | null
@@ -30,6 +33,7 @@ export function OrdenCostosCard({
   sena,
   totalCobrado = 0,
   descuentoCobro = 0,
+  aplicadoNotasCredito = 0,
   estadoCobro,
   estado,
   origenPresupuesto,
@@ -38,7 +42,10 @@ export function OrdenCostosCard({
   readOnly,
 }: OrdenCostosCardProps) {
   const { formatPrice } = useCurrency()
-  const pendienteReal = Math.max(0, (costoFinal || 0) - descuentoCobro - totalCobrado)
+  const pendienteReal = Math.max(
+    0,
+    pendienteOrden({ costoFinal: costoFinal || 0, descuentoCobro, totalCobrado, aplicadoNotasCredito })
+  )
   const fromCotizacion = origenPresupuesto === "cotizacion"
   const isLocked = fromCotizacion || readOnly
   // Fase cotización: el número operativo es el presupuesto (estimación previa a

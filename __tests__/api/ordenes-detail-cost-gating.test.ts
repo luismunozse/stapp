@@ -364,3 +364,29 @@ describe("PUT /api/ordenes/[id] — cost gates reach formatOrden", () => {
     expect(body.costoRepuestosCotizaciones).toBeNull()
   })
 })
+
+describe("GET /api/ordenes/[id] — lo acreditado por notas de crédito", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("expone aplicadoNotasCredito con las NC activas del embed", async () => {
+    mockRole("ADMIN")
+    const ordenChain = createChainMock({
+      ...ordenRow,
+      notas_credito: [
+        { monto_aplicado_deuda: "300", anulada: false },
+        { monto_aplicado_deuda: "200", anulada: true },
+      ],
+    })
+    mockSupabaseFrom({
+      ordenes_servicio: ordenChain,
+      orden_eventos: createChainMock(null),
+      organizations: createChainMock({ vendedores_administran_inventario: false }),
+    })
+
+    const { status, body } = await parseResponse(await GET(createGetRequest(), ctx()))
+
+    expect(status).toBe(200)
+    expect(body.aplicadoNotasCredito).toBe(300)
+    expect(ordenChain.select).toHaveBeenCalledWith(expect.stringContaining("notas_credito (monto_aplicado_deuda, anulada)"))
+  })
+})

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
 
 // GET - Obtener órdenes con cobro pendiente de un cliente
 export async function GET(
@@ -22,7 +23,7 @@ export async function GET(
 
     let query = supabaseAdmin
       .from("ordenes_servicio")
-      .select("id, numero_orden, codigo_orden, dispositivo, costo_final, total_cobrado, estado_cobro, descuento_cobro, estado")
+      .select(`id, numero_orden, codigo_orden, dispositivo, costo_final, total_cobrado, estado_cobro, descuento_cobro, estado, ${NOTAS_CREDITO_APLICADO_EMBED}`)
       .eq("organization_id", organizationId!)
       .eq("cliente_id", clienteId)
       // The onboarding practice order is never collectable.
@@ -66,7 +67,12 @@ export async function GET(
         costoFinal: parseFloat(o.costo_final || "0"),
         totalCobrado: parseFloat(o.total_cobrado || "0"),
         descuentoCobro: parseFloat(o.descuento_cobro || "0"),
-        pendiente: parseFloat(o.costo_final || "0") - parseFloat(o.descuento_cobro || "0") - parseFloat(o.total_cobrado || "0"),
+        pendiente: pendienteOrden({
+          costoFinal: parseFloat(o.costo_final || "0"),
+          descuentoCobro: parseFloat(o.descuento_cobro || "0"),
+          totalCobrado: parseFloat(o.total_cobrado || "0"),
+          aplicadoNotasCredito: aplicadoNotasCreditoDeOrden(o),
+        }),
         estadoCobro: o.estado_cobro,
         estado: o.estado,
       }))
