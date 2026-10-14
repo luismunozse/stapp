@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { PDFDocument } from "pdf-lib"
 import { generateFacturaPDFReact } from "@/lib/remito-react-pdf"
 import { generateReciboCCPDF, generateResumenCCPDF } from "@/lib/cuenta-corriente-react-pdf"
+import { generateNotaCreditoPDF } from "@/lib/nota-credito-react-pdf"
 
 // CI-only. Renders every react-pdf document from fixtures inside a real
 // production bundle — no database, no auth, no tenant. That is exactly the
@@ -46,7 +47,7 @@ export async function GET() {
   }
 
   try {
-    const [remito, reciboCC, resumenCC] = await Promise.all([
+    const [remito, reciboCC, resumenCC, notaCredito] = await Promise.all([
       generateFacturaPDFReact({
         ...EMISOR,
         numeroFactura: "0001-00000001",
@@ -84,6 +85,27 @@ export async function GET() {
         ],
         cliente: { nombre: "Cliente Smoke" },
       }),
+
+      // anulada: true on purpose — the stamp is its own View tree, and a
+      // bundle-level regression there would never show on an active note.
+      generateNotaCreditoPDF({
+        ...EMISOR,
+        numero: "NC-000001",
+        fecha: FECHA,
+        origen: "VENTA",
+        operacion: "V0001",
+        motivo: "Devolución de productos",
+        items: [{ descripcion: "Item smoke", cantidad: 1, precioUnitario: 1000, subtotal: 1000 }],
+        monto: 1000,
+        montoAplicadoDeuda: 0,
+        montoReembolso: 1000,
+        etiquetaReintegro: "Te devolvimos (Efectivo)",
+        pendienteActual: 0,
+        anulada: true,
+        anuladaAt: FECHA,
+        anuladaMotivo: "Smoke",
+        cliente: { nombre: "Cliente Smoke" },
+      }),
     ])
 
     // A non-trivial byte count alone doesn't prove the buffer is a real PDF —
@@ -91,7 +113,7 @@ export async function GET() {
     // the structure (xref table, trailer, page tree); a bundle-level failure
     // that produces a truncated or malformed buffer throws here instead of
     // slipping through as a "big enough" 500 KB of nothing.
-    await Promise.all([PDFDocument.load(remito), PDFDocument.load(reciboCC), PDFDocument.load(resumenCC)])
+    await Promise.all([PDFDocument.load(remito), PDFDocument.load(reciboCC), PDFDocument.load(resumenCC), PDFDocument.load(notaCredito)])
 
     return NextResponse.json({
       ok: true,
@@ -99,6 +121,7 @@ export async function GET() {
         remito: remito.length,
         reciboCC: reciboCC.length,
         resumenCC: resumenCC.length,
+        notaCredito: notaCredito.length,
       },
     })
   } catch (error) {

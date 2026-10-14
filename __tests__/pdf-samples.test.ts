@@ -13,6 +13,7 @@
 import { describe, it, expect } from "vitest"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { generateOrdenPDF, generateFacturaPDF, generateVentaPDF, generateVentaTicketPDF, generateDevolucionPDF, generateCotizacionPDF, generateGarantiaVentaPDF, generateComprobanteEntregaPDF } from "@/lib/pdf"
+import { generateNotaCreditoPDF } from "@/lib/nota-credito-react-pdf"
 import { buildOrdenFixture } from "./lib/orden-fixture"
 import { buildCotizacionOrdenFixture, buildCotizacionPresupuestoFixture } from "./lib/cotizacion-fixture"
 
@@ -260,6 +261,29 @@ describe.runIf(process.env.PDF_SAMPLES === "1")("pdf visual samples", () => {
     })
     writeFileSync(`${OUT_DIR}/${TAG}-devolucion.pdf`, devolucion)
     expect(devolucion.length).toBeGreaterThan(1000)
+
+    const notaCredito = await generateNotaCreditoPDF({
+      numero: "NC-000042",
+      fecha: new Date("2026-08-08"),
+      origen: "VENTA",
+      operacion: "V0128",
+      motivo: "Devolución de productos",
+      detalle: "El vidrio templado tenía burbujas de aire a los 2 días de uso.",
+      items: [{ descripcion: "VIDRIO TEMPLADO PREMIUM", cantidad: 2, precioUnitario: 4500, subtotal: 9000 }],
+      monto: 9000,
+      montoAplicadoDeuda: 3000,
+      montoReembolso: 6000,
+      etiquetaReintegro: "Te devolvimos (Efectivo)",
+      pendienteActual: 0,
+      cliente: { nombre: "Marcos Iglesias", telefono: "+54 9 11 6789-0123" },
+      nombreEmpresa: "Servicio Técnico Demo",
+      telefonoEmpresa: "+54 11 4000-1234",
+      direccionEmpresa: "Av. Rivadavia 5000, CABA",
+      moneda: "ARS",
+      zonaHoraria: "America/Argentina/Buenos_Aires",
+    })
+    writeFileSync(`${OUT_DIR}/${TAG}-nota-credito.pdf`, notaCredito)
+    expect(notaCredito.length).toBeGreaterThan(1000)
   }, 60_000)
 
   it("writes a thermal ticket sample PDF (58mm)", async () => {
