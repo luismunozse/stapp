@@ -308,6 +308,22 @@ describe("VariantesSection: Aplicar precio a todas", () => {
 })
 
 describe("VariantesSection: warnings before saving", () => {
+  it("the warning's region exists, empty, before anything is archived, and the text appears inside that same node", () => {
+    montarSeccion(hidratar(grupoColor()))
+    const region = screen.getByRole("status", { name: "Variantes con stock que se archivan" })
+    expect(region).toBeEmptyDOMElement()
+    expect(region).toHaveAttribute("aria-live", "polite")
+
+    fireEvent.click(screen.getByRole("button", { name: "Quitar Rojo de Color" }))
+    expect(screen.getByRole("status", { name: "Variantes con stock que se archivan" })).toBe(region)
+    expect(region).toHaveTextContent("Se van a archivar variantes con stock")
+    expect(region).toHaveTextContent("Rojo")
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Deshacer archivo de Rojo" })[0])
+    expect(screen.getByRole("status", { name: "Variantes con stock que se archivan" })).toBe(region)
+    expect(region).toBeEmptyDOMElement()
+  })
+
   const sinRojoConStock = () => {
     const guardado = hidratar(grupoColor())
     return aplicar(reductor(), guardado, { tipo: "quitarValor", valorId: valorId(guardado, "Color", "Rojo") })
@@ -332,13 +348,13 @@ describe("VariantesSection: warnings before saving", () => {
     expect(alerta).toHaveTextContent("3 unidades")
 
     fireEvent.click(screen.getAllByRole("button", { name: "Deshacer archivo de Rojo / S" })[0])
-    expect(screen.queryByRole("status", { name: "Variantes con stock que se archivan" })).toBeNull()
+    expect(screen.getByRole("status", { name: "Variantes con stock que se archivan" })).toBeEmptyDOMElement()
   })
 
   it("does not warn about new rows, rows without stock, or rows with reserved units (those block instead)", () => {
     const nuevas = estadoColor()
     const { unmount } = montarSeccion(aplicar(reductor(), nuevas, { tipo: "quitarValor", valorId: valorId(nuevas, "Color", "Rojo") }))
-    expect(screen.queryByRole("status", { name: "Variantes con stock que se archivan" })).toBeNull()
+    expect(screen.getByRole("status", { name: "Variantes con stock que se archivan" })).toBeEmptyDOMElement()
     unmount()
 
     const guardado = hidratar({
@@ -346,7 +362,7 @@ describe("VariantesSection: warnings before saving", () => {
       variantes: [leida("r1", [{ opcion: "Color", valor: "Rojo" }], { stock: 0 }), ...grupoColor().variantes.slice(1)],
     })
     montarSeccion(aplicar(reductor(), guardado, { tipo: "quitarValor", valorId: valorId(guardado, "Color", "Rojo") }))
-    expect(screen.queryByRole("status", { name: "Variantes con stock que se archivan" })).toBeNull()
+    expect(screen.getByRole("status", { name: "Variantes con stock que se archivan" })).toBeEmptyDOMElement()
   })
 
   it("shows why a row cannot be archived once, on the row, and not again in the list of what is missing", () => {

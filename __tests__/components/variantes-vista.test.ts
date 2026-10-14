@@ -384,4 +384,29 @@ describe("validezDeVariantes: what the save schema would reject", () => {
     const tocado = aplicar(reductor(), conVerde, { tipo: "editarFila", filaId: filaDe(conVerde, "Verde").id, cambios: { codigo: "V-1" } }, { tipo: "editarFila", filaId: filaDe(conVerde, "Verde").id, cambios: { codigo: "" } })
     expect(validezDeVariantes(tocado)).toEqual({ valida: false, motivos: ['Falta el código de "Verde"'] })
   })
+
+  const conLimites = (estado: VariantesState, etiqueta: string, stockMinimo: number | null, stockMaximo: number | null): VariantesState => {
+    const fila = filaDe(estado, etiqueta)
+    return { ...estado, filas: { ...estado.filas, [fila.id]: { ...fila, extra: { ...fila.extra, stockMinimo, stockMaximo } } } }
+  }
+
+  it("a minimum above the maximum is invalid, as in the schema (a hydrated row can carry it)", () => {
+    const estado = conLimites(estadoColor(), "Rojo", 9, 3)
+    expect(validezDeVariantes(estado)).toEqual({ valida: false, motivos: ['El stock mínimo de "Rojo" no puede superar al máximo'] })
+  })
+
+  it("equal limits, a missing one, or both missing are fine", () => {
+    expect(validezDeVariantes(conLimites(estadoColor(), "Rojo", 5, 5)).valida).toBe(true)
+    expect(validezDeVariantes(conLimites(estadoColor(), "Rojo", 5, null)).valida).toBe(true)
+    expect(validezDeVariantes(conLimites(estadoColor(), "Rojo", null, 2)).valida).toBe(true)
+    expect(validezDeVariantes(conLimites(estadoColor(), "Rojo", 0, 0)).valida).toBe(true)
+  })
+
+  it("names every row with swapped limits and ignores rows pending archive", () => {
+    const dos = conLimites(conLimites(estadoColor(), "Rojo", 9, 3), "Azul", 4, 1)
+    expect(validezDeVariantes(dos).motivos).toEqual(['El stock mínimo de "Rojo" no puede superar al máximo', 'El stock mínimo de "Azul" no puede superar al máximo'])
+    const guardado = conLimites(hidratar(grupoColor()), "Rojo", 9, 3)
+    const sinRojo = aplicar(reductor(), guardado, { tipo: "quitarValor", valorId: valorId(guardado, "Color", "Rojo") })
+    expect(validezDeVariantes(sinRojo).valida).toBe(true)
+  })
 })

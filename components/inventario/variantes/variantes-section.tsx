@@ -13,6 +13,7 @@ import { CombinacionesCards } from "./combinacion-card"
 import { CombinacionesTabla } from "./combinaciones-tabla"
 import { unidades } from "./campos-fila"
 import { OpcionesEditor } from "./opciones-editor"
+import { useEfectosDeDeshacer } from "./use-efectos-de-deshacer"
 import { validezDeVariantes } from "./vista"
 
 /*
@@ -106,27 +107,50 @@ function AplicarPrecio({ estado, dispatch, deshabilitado }: { estado: VariantesS
   )
 }
 
-// Every state object gets a number once. A refusal returns a NEW state with the same text as the last one, and
-// that new number is what makes the message a new node: a live region only announces what it did not have.
-const numeros = new WeakMap<object, number>()
-let siguienteNumero = 0
-const numeroDe = (estado: object) => {
-  let n = numeros.get(estado)
-  if (n === undefined) numeros.set(estado, (n = ++siguienteNumero))
-  return n
-}
-
-/** The reducer's reason for the last refusal, in a polite live region that exists from the start. */
+/**
+ * The reducer's reason for the last refusal, in a polite live region that exists from the start. A refusal
+ * returns a NEW state with the same text as the last one; counting those states (kept in this component, by
+ * comparing the state with the previous render's, the documented way to adjust state while rendering) makes
+ * the message a new node each time, and a live region only announces what it did not have.
+ */
 function Aviso({ estado }: { estado: VariantesState }) {
+  const [previo, setPrevio] = useState(estado)
+  const [marca, setMarca] = useState(0)
+  if (estado !== previo) {
+    setPrevio(estado)
+    if (estado.aviso !== null) setMarca(marca + 1)
+  }
   return (
     <div role="status" aria-label="Aviso" aria-live="polite">
       {estado.aviso !== null && (
         <p
-          key={numeroDe(estado)}
+          key={marca}
           className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
         >
           {estado.aviso}
         </p>
+      )}
+    </div>
+  )
+}
+
+/** Saved rows that will be archived with stock. The region is always there, so the text that appears in it is announced. */
+function AvisoDeStock({ conStock }: { conStock: ReturnType<typeof archivosConStock> }) {
+  return (
+    <div role="status" aria-label="Variantes con stock que se archivan" aria-live="polite">
+      {conStock.length > 0 && (
+        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          <p className="font-medium">Se van a archivar variantes con stock</p>
+          <ul className="space-y-0.5">
+            {conStock.map((a) => (
+              <li key={a.filaId} className="flex flex-wrap gap-x-2">
+                <strong>{a.etiqueta}</strong>
+                <span className="tabular-nums">{unidades(a.stock)}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs">El stock se conserva. Si volvés a agregar la combinación, se restaura.</p>
+        </div>
       )}
     </div>
   )
@@ -137,6 +161,8 @@ export function VariantesSection({ estado, dispatch, motivoDeshabilitado, alAjus
   const idMotivo = useId()
   const activas = filasEnOrden(estado).filter((f) => !f.archivar)
   const conStock = archivosConStock(estado)
+  // The undo previews of the pending rows are computed once here for both views, and only when the structure changes.
+  const efectos = useEfectosDeDeshacer(estado)
   const bloqueados = bloqueos(estado).map((b) => b.motivo)
   // A reserved row already says why on its own row: do not repeat it here.
   const faltan = validezDeVariantes(estado).motivos.filter((m) => !bloqueados.includes(m))
@@ -180,7 +206,7 @@ export function VariantesSection({ estado, dispatch, motivoDeshabilitado, alAjus
           <>
             <Aviso estado={estado} />
 
-            <OpcionesEditor estado={estado} dispatch={dispatch} deshabilitado={guardando} />
+            <OpcionesEditor opciones={estado.opciones} dispatch={dispatch} deshabilitado={guardando} />
 
             {activas.length > 0 && (
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -192,27 +218,14 @@ export function VariantesSection({ estado, dispatch, motivoDeshabilitado, alAjus
               </div>
             )}
 
-            <CombinacionesTabla estado={estado} dispatch={dispatch} alAjustarStock={alAjustarStock} deshabilitado={guardando} />
-            <CombinacionesCards estado={estado} dispatch={dispatch} alAjustarStock={alAjustarStock} deshabilitado={guardando} />
+            <CombinacionesTabla estado={estado} dispatch={dispatch} alAjustarStock={alAjustarStock} deshabilitado={guardando} efectos={efectos} />
+            <CombinacionesCards estado={estado} dispatch={dispatch} alAjustarStock={alAjustarStock} deshabilitado={guardando} efectos={efectos} />
 
             {activas.length >= LIMITES.combinaciones && (
               <p className="text-xs text-muted-foreground">Llegaste al máximo de {LIMITES.combinaciones} variantes</p>
             )}
 
-            {conStock.length > 0 && (
-              <div role="status" aria-label="Variantes con stock que se archivan" className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                <p className="font-medium">Se van a archivar variantes con stock</p>
-                <ul className="space-y-0.5">
-                  {conStock.map((a) => (
-                    <li key={a.filaId} className="flex flex-wrap gap-x-2">
-                      <strong>{a.etiqueta}</strong>
-                      <span className="tabular-nums">{unidades(a.stock)}</span>
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-xs">El stock se conserva. Si volvés a agregar la combinación, se restaura.</p>
-              </div>
-            )}
+            <AvisoDeStock conStock={conStock} />
 
             {faltan.length > 0 && (
               <div className="space-y-1 text-sm">

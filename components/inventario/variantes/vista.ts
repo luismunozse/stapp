@@ -170,6 +170,12 @@ export function validezDeVariantes(estado: VariantesState): Validez {
   for (const fila of activas) {
     if ((!fila.existente || fila.codigoTocado) && fila.codigo.trim() === "") motivos.push(`Falta el código de "${etiquetaDeFila(estado, fila)}"`)
   }
+  for (const fila of activas) {
+    const { stockMinimo, stockMaximo } = fila.extra
+    if (stockMinimo !== null && stockMaximo !== null && stockMinimo > stockMaximo) {
+      motivos.push(`El stock mínimo de "${etiquetaDeFila(estado, fila)}" no puede superar al máximo`)
+    }
+  }
   const vistos = new Map<string, { codigo: string; veces: number }>()
   for (const fila of activas) {
     const codigo = fila.codigo.trim()
