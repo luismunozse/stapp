@@ -4,6 +4,15 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { registrarEgresoCajaEfectivo } from "@/lib/caja-utils"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
+import { sucursalParaLectura } from "@/lib/sucursal"
+import { dayRangeUtc } from "@/lib/timezone"
+import {
+  COLUMNAS_VISTA_NC,
+  leerFilasNC,
+  parseFiltrosListadoNC,
+  zonaHorariaDeOrganizacion,
+  type FilaVistaNC,
+} from "@/lib/notas-credito/listado"
 
 const itemSchema = z.object({
   itemVentaId: z.string().nullable().optional(),
@@ -69,61 +78,63 @@ async function idsDeLaOrganizacion(
   return true
 }
 
+/**
+ * GET /api/notas-credito — listado de las NC de los dos motores
+ * (v_notas_credito), con anuladas e historial DEV-.
+ *
+ * Solo ADMIN hasta el PR7, que abre el listado al VENDEDOR habilitado con su
+ * alcance de sucursal y de ventas propias. La sucursal es la que el ADMIN
+ * eligió en el selector global (cookie); sin elección, todas.
+ */
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, role, session } = await requireAdmin()
     if (error) return error
 
-    const { searchParams } = new URL(request.url)
-    const ventaId = searchParams.get("ventaId")
-    const ordenId = searchParams.get("ordenId")
-    const desde = searchParams.get("desde")
-    const hasta = searchParams.get("hasta")
+    const filtros = parseFiltrosListadoNC(new URL(request.url).searchParams)
+    const offset = (filtros.page - 1) * filtros.limit
 
     let q = supabaseAdmin
-      .from("notas_credito")
-      .select(`
-        id, numero, motivo, monto, metodo_devolucion, fecha, notas,
-        venta_id, orden_id, anulada,
-        items:items_nota_credito(id, descripcion, cantidad, precio_unitario, restock, inventario_id),
-        users:user_id(id, nombre)
-      `)
+      .from("v_notas_credito")
+      .select(COLUMNAS_VISTA_NC, { count: "exact" })
       .eq("organization_id", organizationId!)
+
+    const lectura = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
+    if (!lectura.verTodas && lectura.sucursalId) q = q.eq("sucursal_id", lectura.sucursalId)
+
+    if (filtros.origen) q = q.eq("origen", filtros.origen)
+    if (filtros.modo) q = q.eq("modo", filtros.modo)
+    if (filtros.motivo) q = q.eq("motivo_nc", filtros.motivo)
+    if (filtros.estado) q = q.eq("anulada", filtros.estado === "ANULADA")
+    if (filtros.clienteId) q = q.eq("cliente_id", filtros.clienteId)
+    if (filtros.q) q = q.ilike("numero", `%${filtros.q}%`)
+
+    // Días de la organización: "hasta 13/10" incluye la NC de las 22:30 de
+    // ese día en Argentina, que en UTC ya es el 14.
+    if (filtros.desde || filtros.hasta) {
+      const tz = await zonaHorariaDeOrganizacion(organizationId!)
+      if (filtros.desde) q = q.gte("fecha", dayRangeUtc(filtros.desde, tz).desde)
+      if (filtros.hasta) q = q.lte("fecha", dayRangeUtc(filtros.hasta, tz).hasta)
+    }
+
+    const { data, error: dbError, count } = await q
       .order("fecha", { ascending: false })
-
-    if (ventaId) q = q.eq("venta_id", ventaId)
-    if (ordenId) q = q.eq("orden_id", ordenId)
-    if (desde) q = q.gte("fecha", desde)
-    if (hasta) q = q.lte("fecha", hasta)
-
-    const { data, error: dbError } = await q
+      .order("id", { ascending: false })
+      .range(offset, offset + filtros.limit - 1)
     if (dbError) throw dbError
 
-    return NextResponse.json(
-      (data || []).map((n: any) => ({
-        id: n.id,
-        numero: n.numero,
-        motivo: n.motivo,
-        monto: parseFloat(n.monto),
-        metodoDevolucion: n.metodo_devolucion,
-        fecha: n.fecha,
-        notas: n.notas,
-        ventaId: n.venta_id,
-        ordenId: n.orden_id,
-        anulada: n.anulada,
-        items: (n.items || []).map((i: any) => ({
-          id: i.id,
-          descripcion: i.descripcion,
-          cantidad: i.cantidad,
-          precioUnitario: parseFloat(i.precio_unitario),
-          restock: i.restock,
-          inventarioId: i.inventario_id,
-        })),
-        user: n.users ? { id: n.users.id, nombre: n.users.nombre } : null,
-      }))
-    )
+    const filas = await leerFilasNC((data ?? []) as unknown as FilaVistaNC[], organizationId!)
+    const total = count ?? 0
+
+    return NextResponse.json({
+      data: filas,
+      total,
+      page: filtros.page,
+      limit: filtros.limit,
+      totalPages: Math.ceil(total / filtros.limit),
+    })
   } catch (err) {
-    console.error("Error fetching notas credito:", err)
+    console.error("Error listando notas de credito:", err)
     return NextResponse.json({ error: "Error al obtener notas de crédito" }, { status: 500 })
   }
 }
