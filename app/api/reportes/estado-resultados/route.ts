@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { ESTADOS_ORDEN_NUNCA_DEVENGAN, NC_ORDEN_ESTADO_EMBED, notaCreditoRestaDevengado } from "@/lib/reportes/notas-credito-devengado"
 
 /**
  * Estado de Resultados (P&L) — devengado
@@ -211,14 +212,13 @@ export async function GET(request: Request) {
     if (sid) cobrosPeriodoQuery = cobrosPeriodoQuery.eq("ordenes_servicio.sucursal_id", sid)
     const { data: cobrosPeriodo } = await cobrosPeriodoQuery
 
-    const ESTADOS_NUNCA_DEVENGAN = new Set(["CANCELADO", "SIN_REPARACION", "SIN_FALLA_DETECTADA"])
     const ESTADOS_TERMINALES_DEV = new Set(["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"])
 
     for (const c of (cobrosPeriodo || []) as any[]) {
       if (terminalIdsSet.has(c.orden_id)) continue // ya contado en (A) del período actual
       const os = c.ordenes_servicio
       if (!os) continue
-      if (ESTADOS_NUNCA_DEVENGAN.has(os.estado)) continue // nunca devengará
+      if (ESTADOS_ORDEN_NUNCA_DEVENGAN.has(os.estado)) continue // nunca devengará
       // Órdenes ya terminales con devengado en período anterior:
       if (ESTADOS_TERMINALES_DEV.has(os.estado) && os.fecha_completado && os.fecha_completado <= hastaISO) {
         continue
@@ -318,7 +318,7 @@ export async function GET(request: Request) {
     // ========================================
     let notasCreditoQuery = supabaseAdmin
       .from("notas_credito")
-      .select("monto, venta_id, orden_id")
+      .select(`monto, venta_id, orden_id, ${NC_ORDEN_ESTADO_EMBED}`)
       .eq("organization_id", organizationId!)
       .eq("anulada", false)
       .gte("fecha", desdeISO)
@@ -329,6 +329,8 @@ export async function GET(request: Request) {
     let ncVentas = 0
     let ncServicios = 0
     for (const n of (notasCredito || []) as any[]) {
+      // La NC de una orden que nunca devenga no resta: su ingreso nunca entró.
+      if (!notaCreditoRestaDevengado(n)) continue
       const monto = parseFloat(n.monto || "0")
       if (n.venta_id) ncVentas += monto
       else if (n.orden_id) ncServicios += monto

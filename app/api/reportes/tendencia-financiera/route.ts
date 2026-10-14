@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { nombreMesCivil } from "@/lib/finanzas-period"
+import { ESTADOS_ORDEN_NUNCA_DEVENGAN, NC_ORDEN_ESTADO_EMBED, notaCreditoRestaDevengado } from "@/lib/reportes/notas-credito-devengado"
 
 /**
  * Tendencia financiera mensual — últimos N meses.
@@ -226,7 +227,6 @@ export async function GET(request: Request) {
     if (sid) cobrosPeriodoQuery = cobrosPeriodoQuery.eq("ordenes_servicio.sucursal_id", sid)
     const { data: cobrosPeriodo } = await cobrosPeriodoQuery
 
-    const ESTADOS_NUNCA_DEVENGAN = new Set(["CANCELADO", "SIN_REPARACION", "SIN_FALLA_DETECTADA"])
     const ESTADOS_TERMINALES_DEV = new Set(["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"])
 
     for (const c of (cobrosPeriodo || []) as any[]) {
@@ -235,7 +235,7 @@ export async function GET(request: Request) {
       if (!bucket) continue
       const os = c.ordenes_servicio
       if (!os) continue
-      if (ESTADOS_NUNCA_DEVENGAN.has(os.estado)) continue
+      if (ESTADOS_ORDEN_NUNCA_DEVENGAN.has(os.estado)) continue
 
       if (ESTADOS_TERMINALES_DEV.has(os.estado) && os.fecha_completado) {
         const mesCompletado = keyFor(os.fecha_completado)
@@ -340,7 +340,7 @@ export async function GET(request: Request) {
     // 4.5 Notas de crédito (restan ingresos del mes)
     let notasCreditoQuery = supabaseAdmin
       .from("notas_credito")
-      .select("monto, fecha, venta_id, orden_id")
+      .select(`monto, fecha, venta_id, orden_id, ${NC_ORDEN_ESTADO_EMBED}`)
       .eq("organization_id", organizationId!)
       .eq("anulada", false)
       .gte("fecha", desdeISO)
@@ -349,6 +349,8 @@ export async function GET(request: Request) {
     const { data: notasCredito } = await notasCreditoQuery
 
     for (const n of (notasCredito || []) as any[]) {
+      // La NC de una orden que nunca devenga no resta: su ingreso nunca entró.
+      if (!notaCreditoRestaDevengado(n)) continue
       const key = keyFor(n.fecha)
       const bucket = buckets[key]
       if (!bucket) continue
