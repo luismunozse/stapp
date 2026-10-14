@@ -9,6 +9,7 @@ import {
 } from "@/lib/depositos"
 import { formatInventario } from "@/lib/db-utils"
 import { selectConFallback } from "@/lib/variantes"
+import { adjuntarFotoDeRespaldo } from "@/lib/variantes-fotos"
 import { registrarCreacion } from "@/lib/inventario-eventos"
 import { z } from "zod"
 
@@ -183,7 +184,12 @@ export async function GET(request: Request) {
       count = fallback.count
     }
 
-    const data = inventario?.map((item) => formatInventario(item, canViewCost))
+    // Display-only fallback photo for variants without their own (costs nothing unless a
+    // grouped row on this page lacks a photo; best-effort).
+    const data = await adjuntarFotoDeRespaldo(
+      organizationId!,
+      (inventario ?? []).map((item) => formatInventario(item, canViewCost)!)
+    )
 
     return NextResponse.json({
       data,

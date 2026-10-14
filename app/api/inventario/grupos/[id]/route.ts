@@ -18,6 +18,7 @@ import {
   registrarCreacion,
   type ContextoEventos,
 } from "@/lib/inventario-eventos"
+import { imagenRespaldoDe } from "@/lib/variantes"
 import { argumentosGuardarGrupo, guardarGrupoSchema } from "@/lib/variantes-schema"
 import { conReintento, migracionPendiente, respuestaDeError, respuestaDeValidacion } from "@/lib/variantes-api"
 
@@ -76,9 +77,18 @@ async function leerGrupo(id: string, organizationId: string): Promise<LecturaGru
 }
 
 function cuerpoDelGrupo(grupo: Fila, hijos: Fila[], canViewCost: boolean) {
+  const activos = hijos.filter((h) => !h.deleted_at)
+  // Display-only fallback photo of a child without its own, computed in memory from the children
+  // already loaded (0 queries). Archived rows never lend: only ACTIVE siblings are candidates.
+  const hermanos = activos.map((h) => ({ id: h.id as string, atributos: h.atributos, foto: h.imagen_url as string | null }))
   return {
     grupo,
-    variantes: hijos.filter((h) => !h.deleted_at).map((h) => formatHijo(h, canViewCost)),
+    variantes: activos.map((h) => {
+      const hijoFormateado = formatHijo(h, canViewCost)
+      if (h.imagen_url) return hijoFormateado
+      const imagenRespaldo = imagenRespaldoDe(grupo.opciones, hermanos, h.id)
+      return imagenRespaldo ? { ...hijoFormateado, imagenRespaldo } : hijoFormateado
+    }),
     archivadas: hijos
       .filter((h) => h.deleted_at)
       .map((h) => ({ id: h.id, atributos: h.atributos ?? null, stock: h.stock })),

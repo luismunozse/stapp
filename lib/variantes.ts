@@ -50,6 +50,71 @@ export function nombreVariante(base: string, atributos: Atributos): string {
   return etiqueta === null ? base : `${base} - ${etiqueta}`
 }
 
+export interface OpcionDeGrupo {
+  nombre: string
+  valores: readonly string[]
+}
+
+export interface HermanoConFoto {
+  id: string
+  atributos: Atributos
+  /** The sibling's OWN principal photo; null/empty when it has none. */
+  foto: string | null | undefined
+}
+
+const SIN_ORDEN = Number.MAX_SAFE_INTEGER
+
+/** Position of each option's value for a row, in option order. Unknown values rank last. */
+function rangoDeCombinacion(opciones: readonly OpcionDeGrupo[], atributos: Atributos): number[] {
+  const lista = Array.isArray(atributos) ? atributos : []
+  return opciones.map((opcion) => {
+    const atributo = lista.find((a) => typeof a?.opcion === "string" && plegar(a.opcion) === plegar(opcion.nombre))
+    if (typeof atributo?.valor !== "string") return SIN_ORDEN
+    const posicion = opcion.valores.findIndex((v) => plegar(v) === plegar(atributo.valor))
+    return posicion === -1 ? SIN_ORDEN : posicion
+  })
+}
+
+function compararRangos(a: readonly number[], b: readonly number[]): number {
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return a[i] - b[i]
+  }
+  return 0
+}
+
+/**
+ * Display-only fallback photo of a variant without its own: the photo of the FIRST active
+ * sibling, in combination order (option order, then value order of `opciones`), that has one.
+ * The row itself never lends; unknown values rank last; ties go to the lowest id. Callers pass
+ * ACTIVE siblings only (an archived row never lends). One definition of "first" for the group
+ * GET, the inventory list and the POS sheet.
+ */
+export function fotoDeRespaldo(
+  opciones: readonly OpcionDeGrupo[] | null | undefined,
+  hermanos: readonly HermanoConFoto[],
+  excluirId: string
+): { url: string; deId: string } | null {
+  const orden = opciones ?? []
+  const candidatos = hermanos
+    .filter((h) => h.id !== excluirId && typeof h.foto === "string" && h.foto.length > 0)
+    .map((h) => ({ h, rango: rangoDeCombinacion(orden, h.atributos) }))
+    .sort((a, b) => compararRangos(a.rango, b.rango) || (a.h.id < b.h.id ? -1 : a.h.id > b.h.id ? 1 : 0))
+  const primero = candidatos[0]?.h
+  return primero ? { url: primero.foto as string, deId: primero.id } : null
+}
+
+/** `fotoDeRespaldo` in the shape the payloads carry: the photo plus the lender's label ("Rojo / M"). */
+export function imagenRespaldoDe(
+  opciones: readonly OpcionDeGrupo[] | null | undefined,
+  hermanos: readonly HermanoConFoto[],
+  excluirId: string
+): { url: string; etiqueta: string } | null {
+  const prestada = fotoDeRespaldo(opciones, hermanos, excluirId)
+  if (!prestada) return null
+  const prestadora = hermanos.find((h) => h.id === prestada.deId)
+  return { url: prestada.url, etiqueta: etiquetaVariante(prestadora?.atributos) ?? "" }
+}
+
 /** Client-generated id the save RPC accepts for a new row: `^c[0-9a-f]{24}$`. */
 export function generarIdCliente(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(12))
