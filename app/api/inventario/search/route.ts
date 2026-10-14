@@ -10,6 +10,19 @@ import {
   derivarAvisoAlcanceOrg,
   resolverIndicadorVentaCacheado,
 } from "@/lib/sucursal"
+import { camposDeVarianteParaPos, selectConFallback } from "@/lib/variantes"
+
+// Today's selects, plus the variant columns (migration 355) as their own, first step.
+const SELECT_VERTODAS =
+  "id, codigo, nombre, stock, stock_reservado, precio_venta, precio_compra, trackea_series, dias_garantia_default"
+const SELECT_DEPOSITO =
+  "id, codigo, nombre, precio_venta, precio_compra, trackea_series, dias_garantia_default, inventario_depositos!inner(stock, stock_reservado, deposito_id)"
+const COLUMNAS_VARIANTE = "grupo_id, atributos, grupo:inventario_grupos(nombre)"
+const SELECT_VERTODAS_CON_GRUPO = `${SELECT_VERTODAS}, ${COLUMNAS_VARIANTE}`
+const SELECT_DEPOSITO_CON_GRUPO = `${SELECT_DEPOSITO}, ${COLUMNAS_VARIANTE}`
+
+type ResultadoBusqueda = { data: any[] | null; error: unknown }
+const RESULTADO_VACIO: PromiseLike<ResultadoBusqueda> = Promise.resolve({ data: [], error: null })
 
 // GET /api/inventario/search?q=term&limit=10
 // Server-side search for inventory items (used by sale form)
@@ -122,28 +135,45 @@ export async function GET(request: Request) {
       .filter(Boolean)
       .slice(0, 6)
 
+    // Variant columns (migration 355) ride in their OWN select step per branch. While the
+    // migration is not applied the database answers with a missing-column error and the search
+    // falls back to today's exact select. A `grupoId` request returns the members of one group
+    // (the POS variants sheet); without the migration no group exists, so it answers empty
+    // instead of filtering a column the plain select does not have.
+    const grupoId = searchParams.get("grupoId")?.trim() || ""
+    const esGrupoSinMigracion = (select: string) => grupoId !== "" && !select.includes("grupo_id")
+
     if (verTodas || !sucursalId) {
       // ADMIN "ver todas": aggregate stock, original behavior
-      let query = supabaseAdmin
-        .from("inventario")
-        .select("id, codigo, nombre, stock, stock_reservado, precio_venta, precio_compra, trackea_series, dias_garantia_default")
-        .eq("organization_id", organizationId!)
-        .is("deleted_at", null)
+      const buscar = selectConFallback(
+        (select: string): PromiseLike<ResultadoBusqueda> => {
+          if (esGrupoSinMigracion(select)) return RESULTADO_VACIO
+          let query = supabaseAdmin
+            .from("inventario")
+            .select(select)
+            .eq("organization_id", organizationId!)
+            .is("deleted_at", null)
 
-      if (!includeZeroStock) {
-        query = query.gt("stock", 0)
-      }
+          if (grupoId) query = query.eq("grupo_id", grupoId)
 
-      query = query.order("nombre", { ascending: true }).limit(limit)
+          if (!includeZeroStock) {
+            query = query.gt("stock", 0)
+          }
 
-      for (const term of terms) {
-        query = query.or(`nombre.ilike.%${term}%,codigo.ilike.%${term}%`)
-      }
+          query = query.order("nombre", { ascending: true }).limit(limit)
 
-      const { data: items, error: dbError } = await query
+          for (const term of terms) {
+            query = query.or(`nombre.ilike.%${term}%,codigo.ilike.%${term}%`)
+          }
+          return query as unknown as PromiseLike<ResultadoBusqueda>
+        },
+        [SELECT_VERTODAS_CON_GRUPO, SELECT_VERTODAS]
+      )
+
+      const { data: items, error: dbError } = await buscar()
       if (dbError) throw dbError
 
-      const rows = items || []
+      const rows = (items || []) as any[]
       const puedeVerCosto = rows.length > 0 ? await canViewCost() : false
 
       const formatted = rows.map((item) => ({
@@ -156,6 +186,7 @@ export async function GET(request: Request) {
         precioCompra: puedeVerCosto ? (item.precio_compra ?? 0) : null,
         trackeaSeries: item.trackea_series ?? false,
         diasGarantiaDefault: (item as any).dias_garantia_default ?? null,
+        ...camposDeVarianteParaPos(item),
       }))
 
       return withVentaHeaders(NextResponse.json(formatted))
@@ -173,29 +204,36 @@ export async function GET(request: Request) {
     // Query inventario joined with inventario_depositos for this specific deposito.
     // Use !inner to ensure only items that have a row in inventario_depositos for depId.
     // PostgREST column filter on embedded resource: eq("inventario_depositos.deposito_id", depId)
-    let query = supabaseAdmin
-      .from("inventario")
-      .select(
-        "id, codigo, nombre, precio_venta, precio_compra, trackea_series, dias_garantia_default, inventario_depositos!inner(stock, stock_reservado, deposito_id)"
-      )
-      .eq("organization_id", organizationId!)
-      .is("deleted_at", null)
-      .eq("inventario_depositos.deposito_id", depId)
+    const buscarEnDeposito = selectConFallback(
+      (select: string): PromiseLike<ResultadoBusqueda> => {
+        if (esGrupoSinMigracion(select)) return RESULTADO_VACIO
+        let query = supabaseAdmin
+          .from("inventario")
+          .select(select)
+          .eq("organization_id", organizationId!)
+          .is("deleted_at", null)
+          .eq("inventario_depositos.deposito_id", depId)
 
-    if (!includeZeroStock) {
-      query = query.gt("inventario_depositos.stock", 0)
-    }
+        if (grupoId) query = query.eq("grupo_id", grupoId)
 
-    query = query.order("nombre", { ascending: true }).limit(limit)
+        if (!includeZeroStock) {
+          query = query.gt("inventario_depositos.stock", 0)
+        }
 
-    for (const term of terms) {
-      query = query.or(`nombre.ilike.%${term}%,codigo.ilike.%${term}%`)
-    }
+        query = query.order("nombre", { ascending: true }).limit(limit)
 
-    const { data: items, error: dbError } = await query
+        for (const term of terms) {
+          query = query.or(`nombre.ilike.%${term}%,codigo.ilike.%${term}%`)
+        }
+        return query as unknown as PromiseLike<ResultadoBusqueda>
+      },
+      [SELECT_DEPOSITO_CON_GRUPO, SELECT_DEPOSITO]
+    )
+
+    const { data: items, error: dbError } = await buscarEnDeposito()
     if (dbError) throw dbError
 
-    const rows = items || []
+    const rows = (items || []) as any[]
     const puedeVerCosto = rows.length > 0 ? await canViewCost() : false
 
     const formatted = rows.map((item: any) => {
@@ -215,6 +253,7 @@ export async function GET(request: Request) {
         precioCompra: puedeVerCosto ? (item.precio_compra ?? 0) : null,
         trackeaSeries: item.trackea_series ?? false,
         diasGarantiaDefault: item.dias_garantia_default ?? null,
+        ...camposDeVarianteParaPos(item),
       }
     })
 

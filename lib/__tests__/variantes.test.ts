@@ -4,6 +4,7 @@ import { KEY_VECTORS, NAME_VECTORS } from "@/__tests__/helpers/variantes-vectore
 import { collapse, readBySuffix } from "@/__tests__/helpers/sql-text"
 import type { AtributoVariante } from "@/types"
 import {
+  camposDeVarianteParaPos,
   claveCombinacion,
   fotoDeRespaldo,
   imagenRespaldoDe,
@@ -392,5 +393,32 @@ describe("imagenRespaldoDe (the {url, etiqueta} payload of the fallback)", () =>
   it("is null when nobody can lend", () => {
     expect(imagenRespaldoDe(OPCIONES, [hermano("rojo-m", "Rojo", "M", null)], "otro")).toBeNull()
     expect(imagenRespaldoDe(OPCIONES, [hermano("rojo-m", "Rojo", "M", "https://f/r.jpg")], "rojo-m")).toBeNull()
+  })
+})
+
+describe("camposDeVarianteParaPos (additive POS fields of a search row)", () => {
+  const atributos = [
+    { opcion: "Color", valor: "Azul" },
+    { opcion: "Talle", valor: "M" },
+  ]
+
+  it("gives a grouped row its four fields", () => {
+    expect(camposDeVarianteParaPos({ grupo_id: "g-1", atributos, grupo: { nombre: "Funda X" } })).toEqual({
+      grupoId: "g-1",
+      etiqueta: "Azul / M",
+      atributos,
+      grupoNombre: "Funda X",
+    })
+  })
+
+  it("adds nothing at all to a standalone row, or to a row read without the variant columns", () => {
+    expect(camposDeVarianteParaPos({ grupo_id: null, atributos: null, grupo: null })).toEqual({})
+    expect(camposDeVarianteParaPos({})).toEqual({})
+  })
+
+  it("reads the group name from an object or a one-element array embed and tolerates a missing embed", () => {
+    expect(camposDeVarianteParaPos({ grupo_id: "g-1", atributos, grupo: [{ nombre: "Funda X" }] }).grupoNombre).toBe("Funda X")
+    expect(camposDeVarianteParaPos({ grupo_id: "g-1", atributos, grupo: null })).toMatchObject({ grupoId: "g-1", grupoNombre: null })
+    expect(camposDeVarianteParaPos({ grupo_id: "g-1", atributos: null })).toMatchObject({ etiqueta: null, atributos: null, grupoNombre: null })
   })
 })
