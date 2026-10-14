@@ -76,6 +76,14 @@ const VAR_CODIGO_ORDEN: PlantillaVariable = { key: "codigo_orden", label: "Códi
 const VAR_PROBLEMA: PlantillaVariable = { key: "problema", label: "Problema reportado", example: "No carga" }
 const VAR_LINEA_PRESUPUESTO: PlantillaVariable = { key: "linea_presupuesto", label: "Línea presupuesto (auto)", example: "\nPresupuesto estimado: $45.000" }
 const VAR_LINEA_FECHA_PROMETIDA: PlantillaVariable = { key: "linea_fecha_prometida", label: "Línea fecha estimada (auto)", example: "\nFecha estimada de entrega: 31/05/2026" }
+const VAR_NUMERO_NC: PlantillaVariable = { key: "numero_nc", label: "Número de la nota de crédito", example: "NC-000123" }
+const VAR_OPERACION_NC: PlantillaVariable = { key: "operacion", label: "Compra u orden de origen", example: "compra V0042" }
+const VAR_MONTO_NC: PlantillaVariable = { key: "monto", label: "Total de la nota de crédito", example: "$15.000" }
+const VAR_DETALLE_IMPORTES_NC: PlantillaVariable = {
+  key: "detalle_importes",
+  label: "Detalle de importes (auto)",
+  example: "\n\nDescontado de tu saldo pendiente: $5.000\nTe devolvimos (Efectivo): $10.000",
+}
 
 export const PLANTILLAS_CATALOG: PlantillaDefinition[] = [
   // === Órdenes ===
@@ -552,6 +560,18 @@ Conserve estos certificados como comprobante.
 Esperamos que disfrute su compra. Si tiene alguna consulta, no dude en contactarnos.
 
 Lo esperamos pronto!
+
+{empresa}`,
+  },
+  {
+    key: "nota_credito_comprobante",
+    label: "Nota de crédito",
+    category: "ventas",
+    description: "Mensaje que acompaña el PDF de una nota de crédito al compartirlo por WhatsApp.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_NC, VAR_OPERACION_NC, VAR_MONTO_NC, VAR_DETALLE_IMPORTES_NC, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, te mandamos la nota de crédito {numero_nc} por {monto}, de tu {operacion}.{detalle_importes}
+
+Cualquier consulta, escribinos.
 
 {empresa}`,
   },

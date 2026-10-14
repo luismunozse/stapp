@@ -165,3 +165,12 @@ describe("PLANTILLAS_CATALOG integridad", () => {
     }
   })
 })
+
+describe("plantilla de nota de crédito", () => {
+  it("está en la categoría ventas, sin link (el PDF viaja como archivo)", () => {
+    const p = getPlantilla("nota_credito_comprobante")
+    expect(p?.category).toBe("ventas")
+    expect(p?.variables.map((v) => v.key)).toEqual(["cliente", "numero_nc", "operacion", "monto", "detalle_importes", "empresa"])
+    expect(p?.defaultText).not.toContain("{link_pdf}")
+  })
+})
