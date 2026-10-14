@@ -39,6 +39,8 @@ export interface TicketHtmlOptions {
   formatPrice?: (n: number) => string
   /** Solo para tests: fecha a usar cuando la venta no trae createdAt. */
   now?: Date
+  /** Logo ya binarizado (data URL); nunca la URL remota. */
+  logoDataUrl?: string | null
 }
 
 const defaultFormatPrice = (n: number) =>
@@ -93,6 +95,10 @@ export function buildTicketHTML(venta: TicketHtmlVenta, opts: TicketHtmlOptions)
       ? `<div class="center small">IVA incluido${tasaTxt}: ${escapeHtml(fmt(ivaMonto))}</div>`
       : ""
 
+  const logoHTML = opts.logoDataUrl
+    ? `<div class="center" style="margin-bottom:6px"><img src="${escapeHtml(opts.logoDataUrl)}" alt="" style="max-width:140px;max-height:90px;image-rendering:pixelated" /></div>`
+    : ""
+
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Ticket Venta #${numero}</title>
 <style>
@@ -108,6 +114,7 @@ export function buildTicketHTML(venta: TicketHtmlVenta, opts: TicketHtmlOptions)
   .big { font-size: 16px; }
   .small { font-size: 10px; color: #888; }
 </style></head><body>
+  ${logoHTML}
   <div class="center bold big">${empresa}</div>
   <div class="sep-bold"></div>
   <div class="center bold big">VENTA #${numero}</div>

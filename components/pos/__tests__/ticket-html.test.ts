@@ -66,6 +66,18 @@ describe("buildTicketHTML", () => {
     expect(html).toContain("-$0.5")
   })
 
+  it("con logo binarizado lo dibuja arriba del nombre de la empresa", () => {
+    const logo = "data:image/png;base64,iVBORw0KGgo="
+    const html = buildTicketHTML(base, { ...opts, logoDataUrl: logo })
+    expect(html).toContain(`<img src="${logo}"`)
+    expect(html.indexOf("<img")).toBeLessThan(html.indexOf("Taller Demo</div>"))
+  })
+
+  it("sin logo no dibuja ninguna imagen", () => {
+    const html = buildTicketHTML(base, { ...opts, logoDataUrl: null })
+    expect(html).not.toContain("<img")
+  })
+
   it("una venta fiada muestra el saldo pendiente", () => {
     const html = buildTicketHTML(
       { numeroVenta: 3, total: 500, saldoPendiente: 500, items: [] },

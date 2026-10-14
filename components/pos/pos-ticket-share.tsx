@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 import html2canvas from "html2canvas"
 import { Button } from "@/components/ui/button"
 import { Loader2, Share2, Download, ImageIcon } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { imageUrlToBinarizedDataUrl } from "@/lib/escpos-image"
 import {
   buildVentaContext,
   renderVentaMessageCorto,
@@ -41,6 +42,7 @@ interface TicketShareProps {
     total: number
     metodoPago: string
     organizationName?: string
+    organizationLogoUrl?: string | null
     garantias?: Array<{ numeroGarantia: string | number; diasValidez: number }>
     // IVA snapshot fields from server (migration 229)
     iva_neto?: number | null
@@ -56,6 +58,38 @@ export function PosTicketShare({ ventaData, plantillaCorta, countryCode }: Ticke
   const { formatPrice, timezone } = useCurrency()
   const ticketRef = useRef<HTMLDivElement>(null)
   const [generating, setGenerating] = useState(false)
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null)
+  // Gatea compartir/descargar mientras el logo todavía se está binarizando:
+  // sin esto, un cajero que clickea WhatsApp/descarga antes de que termine
+  // el fetch+binarizado comparte un ticket sin logo de forma no
+  // determinística (generateImage lee `logoDataUrl` en el momento del
+  // click, no espera a que se resuelva). Arranca en `true` sólo si hay logo
+  // para buscar; si la org no tiene logo no hay nada que esperar.
+  const [logoLoading, setLogoLoading] = useState(!!ventaData.organizationLogoUrl)
+
+  // html2canvas taints the canvas on a cross-origin image (canvas.toBlob()
+  // then throws/returns null, silently breaking WhatsApp share + PNG
+  // download). Pre-binarize the logo to a same-origin data: URL — same fix
+  // as the orden browser-print path (imageUrlToBinarizedDataUrl never
+  // throws, degrading to null on any fetch/CORS/rasterization failure — the
+  // hidden ticket then just renders without a logo).
+  useEffect(() => {
+    let cancelled = false
+    if (!ventaData.organizationLogoUrl) {
+      setLogoDataUrl(null)
+      setLogoLoading(false)
+      return
+    }
+    setLogoLoading(true)
+    imageUrlToBinarizedDataUrl(ventaData.organizationLogoUrl).then((dataUrl) => {
+      if (cancelled) return
+      setLogoDataUrl(dataUrl)
+      setLogoLoading(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [ventaData.organizationLogoUrl])
 
   const subtotal = ventaData.subtotal ?? ventaData.items.reduce((s, i) => s + i.cantidad * i.precioUnitario, 0)
   const descuento = ventaData.descuento ?? 0
@@ -176,6 +210,14 @@ export function PosTicketShare({ ventaData, plantillaCorta, countryCode }: Ticke
         >
           {/* Header */}
           <div style={{ textAlign: "center", marginBottom: "8px" }}>
+            {logoDataUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logoDataUrl}
+                alt=""
+                style={{ maxWidth: "160px", maxHeight: "90px", objectFit: "contain", marginBottom: "4px" }}
+              />
+            )}
             <div style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "2px" }}>
               {ventaData.organizationName || "Servicio Técnico"}
             </div>
@@ -302,7 +344,7 @@ export function PosTicketShare({ ventaData, plantillaCorta, countryCode }: Ticke
             variant="outline"
             className="flex-1 h-11 text-green-600 border-green-300"
             onClick={handleShareWhatsApp}
-            disabled={generating}
+            disabled={generating || logoLoading}
           >
             {generating ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -316,7 +358,7 @@ export function PosTicketShare({ ventaData, plantillaCorta, countryCode }: Ticke
           variant="outline"
           className="h-11"
           onClick={handleDownloadImage}
-          disabled={generating}
+          disabled={generating || logoLoading}
           title="Descargar ticket como imagen"
         >
           {generating ? (
