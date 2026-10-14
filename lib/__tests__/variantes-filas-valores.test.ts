@@ -39,18 +39,56 @@ describe("agregarValores: a list of values in one action", () => {
     expect(etiquetas(junto)).toEqual(["Rojo", "Azul", "Verde"])
   })
 
-  it("a reason that does not name the value gets the value in front of it", () => {
-    const cien = aplicar(
-      reductor(),
-      estadoInicial({ grupoId: "g", semilla: "cien" }),
-      { tipo: "activar" },
-      { tipo: "agregarOpcion", nombre: "Color", valores: Array.from({ length: 100 }, (_, i) => `V${i + 1}`) }
-    )
-    const junto = aplicar(reductor(), cien, agregarValores(cien, ["X", "Y"]))
-    expect(textos(junto)).toHaveLength(100)
-    expect(junto.aviso).toBe(
-      'No se agregó "X": Una opción puede tener hasta 100 valores; No se agregó "Y": Una opción puede tener hasta 100 valores'
-    )
+  describe("one reason for several values is said once", () => {
+    const lleno = () =>
+      aplicar(
+        reductor(),
+        estadoInicial({ grupoId: "g", semilla: "cien" }),
+        { tipo: "activar" },
+        { tipo: "agregarOpcion", nombre: "Color", valores: Array.from({ length: 100 }, (_, i) => `V${i + 1}`) }
+      )
+    const MOTIVO = "Una opción puede tener hasta 100 valores"
+    const intentar = (valores: string[]) => {
+      const cien = lleno()
+      const junto = aplicar(reductor(), cien, agregarValores(cien, valores))
+      expect(textos(junto)).toHaveLength(100)
+      return junto.aviso
+    }
+
+    it("one value: the value in front of the reason", () => {
+      expect(intentar(["X"])).toBe(`No se agregó "X": ${MOTIVO}`)
+    })
+
+    it("two values: both named, one reason, joined with y", () => {
+      expect(intentar(["X", "Y"])).toBe(`No se agregaron "X" y "Y": ${MOTIVO}`)
+    })
+
+    it("three to five values: the list uses commas and y before the last", () => {
+      expect(intentar(["X", "Y", "Z"])).toBe(`No se agregaron "X", "Y" y "Z": ${MOTIVO}`)
+      expect(intentar(["A", "B", "C", "D", "E"])).toBe(`No se agregaron "A", "B", "C", "D" y "E": ${MOTIVO}`)
+    })
+
+    it("more than five values: only how many", () => {
+      expect(intentar(["A", "B", "C", "D", "E", "F"])).toBe(`No se agregaron 6 valores: ${MOTIVO}`)
+      expect(intentar(["A", "B", "C", "D", "E", "F", "G", "H"])).toBe(`No se agregaron 8 valores: ${MOTIVO}`)
+    })
+
+    it("the same text pasted twice counts once", () => {
+      expect(intentar(["X", "X"])).toBe(`No se agregó "X": ${MOTIVO}`)
+    })
+
+    it("reasons that name their own value stay one per value, and different reasons stay apart", () => {
+      const estado = base()
+      const junto = aplicar(reductor(), estado, agregarValores(estado, ["rojo", "azul", "rojo"]))
+      expect(junto.aviso).toBe('El valor "rojo" está repetido en Color; El valor "azul" está repetido en Color')
+    })
+
+    it("a mix of reasons: each reason once, in the order they first appear", () => {
+      const estado = lleno()
+      const largo = "z".repeat(101)
+      const junto = aplicar(reductor(), estado, agregarValores(estado, ["X", largo, "Y"]))
+      expect(junto.aviso).toBe(`No se agregaron "X" y "Y": ${MOTIVO}; No se agregó "${largo}": Cada valor puede tener hasta 100 caracteres`)
+    })
   })
 
   it("all refused: the same state plus the message, and the counter does not move", () => {

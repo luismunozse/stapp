@@ -717,6 +717,35 @@ function agregarValor(estado: VariantesState, opcionId: string, crudo: string, g
   return rederivarCodigos(completar(extenderFilas(siguiente, valor.id), generarId))
 }
 
+/** Up to this many refused values are named; more are only counted. */
+const MAX_NOMBRADOS = 5
+
+/**
+ * One message for the refused values of a paste. The same reason for several values is said once ("No se
+ * agregaron "a" y "b": reason"; just "No se agregaron 7 valores: reason" past five); a reason that already
+ * names its value stands alone. Reasons keep the order in which they first appear.
+ */
+function avisoDeRechazos(rechazos: readonly { texto: string; motivo: string }[]): string {
+  const porMotivo = new Map<string, string[]>()
+  for (const { texto, motivo } of rechazos) {
+    const textos = porMotivo.get(motivo) ?? []
+    if (!textos.includes(texto)) textos.push(texto)
+    porMotivo.set(motivo, textos)
+  }
+  const frases: string[] = []
+  for (const [motivo, textos] of porMotivo) {
+    if (textos.length === 1) {
+      frases.push(motivo.includes(`"${textos[0]}"`) ? motivo : `No se agregó "${textos[0]}": ${motivo}`)
+    } else if (textos.length > MAX_NOMBRADOS) {
+      frases.push(`No se agregaron ${textos.length} valores: ${motivo}`)
+    } else {
+      const nombres = textos.map((x) => `"${x}"`)
+      frases.push(`No se agregaron ${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}: ${motivo}`)
+    }
+  }
+  return frases.join("; ")
+}
+
 /**
  * Several values at once, in order. Every accepted value stays; every refusal is collected into ONE message
  * (the reason alone when it already names the value, else prefixed with it). Nothing accepted: the same state
@@ -726,18 +755,18 @@ function agregarValor(estado: VariantesState, opcionId: string, crudo: string, g
 function agregarValores(estado: VariantesState, opcionId: string, textos: readonly string[]): VariantesState {
   let actual = estado
   let contador = estado.contador
-  const rechazos: string[] = []
+  const rechazos: { texto: string; motivo: string }[] = []
   for (const texto of textos) {
     const acuniar = acuniador(estado.semilla, contador)
     const siguiente = agregarValor(actual, opcionId, texto, acuniar.siguiente)
     if (typeof siguiente === "string") {
-      rechazos.push(siguiente.includes(`"${texto.trim()}"`) ? siguiente : `No se agregó "${texto.trim()}": ${siguiente}`)
+      rechazos.push({ texto: texto.trim(), motivo: siguiente })
       continue
     }
     if (siguiente !== actual) contador = acuniar.contador
     actual = siguiente
   }
-  const aviso = rechazos.length > 0 ? rechazos.join("; ") : null
+  const aviso = rechazos.length > 0 ? avisoDeRechazos(rechazos) : null
   if (actual === estado) return aviso === null ? estado : { ...estado, aviso }
   return { ...actual, aviso, contador }
 }
