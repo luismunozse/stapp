@@ -112,6 +112,10 @@ export async function GET(_request: Request, { params }: Contexto) {
 // cut off what is still pending when the answer goes out, and up to ~200 un-awaited calls
 // (100 rows x audit and webhook) is exactly that. The repo does not use after() from next/server.
 const LOTE_EVENTOS = 10
+// supabaseAdmin has no fetch timeout and the function has a hard limit (maxDuration): one hung
+// lookup must not hold the answer until the platform kills it after the commit. A batch that does
+// not settle within this time is abandoned (logged) and the next one goes out.
+const PLAZO_LOTE_EVENTOS_MS = 3_000
 
 type TareaEvento = (ctx: ContextoEventos) => void
 
@@ -174,7 +178,15 @@ async function emitirEventosDelGrupo(p: {
           console.error("Error emitiendo un evento del grupo:", tareaError)
         }
       }
-      await Promise.allSettled(esperar)
+      let temporizador: ReturnType<typeof setTimeout> | undefined
+      const plazo = new Promise<"plazo">((resolver) => {
+        temporizador = setTimeout(() => resolver("plazo"), PLAZO_LOTE_EVENTOS_MS)
+      })
+      const resultado = await Promise.race([Promise.allSettled(esperar).then(() => "listo" as const), plazo])
+      clearTimeout(temporizador)
+      if (resultado === "plazo") {
+        console.error(`Los eventos del grupo no terminaron a tiempo (${PLAZO_LOTE_EVENTOS_MS} ms): se sigue sin esperarlos`)
+      }
     }
   } catch (eventosError) {
     console.error("Error emitiendo los eventos del grupo:", eventosError)
@@ -210,25 +222,8 @@ export async function PUT(request: Request, { params }: Contexto) {
     // ever relaxed, a role without cost still cannot write or read purchase prices here.
     const canViewCost = await lazyInventarioAccess(role, organizationId!)()
 
-    // Initial-stock depot. The RPC only needs it when a new row brings stock, so a save that
-    // does not (an edit of existing rows) neither pays the queries nor 400s on a stale depositoId.
-    // When it is needed: an explicit one the caller may use, else the default of their branch
-    // (null lets the RPC use the principal depot).
-    const generaStock = datos.variantes.some((v) => (v.stockInicial ?? 0) > 0)
-    let depositoInicial: string | null = null
-    if (generaStock) {
-      const userSucursalId = session!.user.sucursalId ?? null
-      if (datos.depositoId) {
-        const permitido = await depositoPermitido({ depositoId: datos.depositoId, organizationId: organizationId!, role, userSucursalId })
-        if (!permitido) return NextResponse.json({ error: DEPOSITO_INVALIDO, code: "DEPOSITO_INVALIDO" }, { status: 400 })
-        depositoInicial = datos.depositoId
-      } else {
-        depositoInicial = await depositoPorDefecto({ organizationId: organizationId!, role, userSucursalId })
-      }
-    }
-
     // Snapshot BEFORE the RPC, scoped by organization: the audit diff and the events of
-    // existing rows compare against it.
+    // existing rows compare against it, and it tells which rows are new.
     const idsPedidos = [...datos.variantes.map((v) => v.id), ...(datos.archivar ?? [])]
     const antes = new Map<string, Fila>()
     if (idsPedidos.length > 0) {
@@ -239,6 +234,25 @@ export async function PUT(request: Request, { params }: Contexto) {
         .in("id", idsPedidos)
       if (previasError) throw previasError
       for (const fila of previas ?? []) antes.set(fila.id, fila)
+    }
+
+    // Initial-stock depot. The RPC takes stock_inicial from NEW rows only (an existing, restored
+    // or promoted row ignores it, and the depot is re-validated just for the new ones), so only a
+    // new row (an id the snapshot does not have) with stock makes the route resolve it: an edit
+    // of existing rows neither pays the queries nor 400s on a stale depositoId.
+    // When it is needed: an explicit one the caller may use, else the default of their branch
+    // (null lets the RPC use the principal depot).
+    const generaStock = datos.variantes.some((v) => (v.stockInicial ?? 0) > 0 && !antes.has(v.id))
+    let depositoInicial: string | null = null
+    if (generaStock) {
+      const userSucursalId = session!.user.sucursalId ?? null
+      if (datos.depositoId) {
+        const permitido = await depositoPermitido({ depositoId: datos.depositoId, organizationId: organizationId!, role, userSucursalId })
+        if (!permitido) return NextResponse.json({ error: DEPOSITO_INVALIDO, code: "DEPOSITO_INVALIDO" }, { status: 400 })
+        depositoInicial = datos.depositoId
+      } else {
+        depositoInicial = await depositoPorDefecto({ organizationId: organizationId!, role, userSucursalId })
+      }
     }
 
     const args = argumentosGuardarGrupo({
@@ -258,8 +272,13 @@ export async function PUT(request: Request, { params }: Contexto) {
       throw rpcError
     }
 
-    // The save is committed: the catalog cache must not wait for what comes next.
-    revalidateTag("catalogo", "max")
+    // The save is committed: the catalog cache must not wait for what comes next. If the
+    // invalidation itself throws, that is logged and nothing else changes.
+    try {
+      revalidateTag("catalogo", "max")
+    } catch (cacheError) {
+      console.error("Error invalidando el catálogo tras guardar el grupo:", cacheError)
+    }
 
     // From here nothing may turn a committed save into an error: the form would re-send, the
     // rows would look existing and the created events (only the first call can emit them) would
@@ -278,8 +297,15 @@ export async function PUT(request: Request, { params }: Contexto) {
       hijos: lectura?.tipo === "ok" ? lectura.hijos : null,
     })
 
+    if (lectura && lectura.tipo !== "ok") {
+      console.error(`El grupo ${id} se guardó pero no se pudo releer (${lectura.tipo})`)
+    }
     if (lectura?.tipo === "ok") {
-      return NextResponse.json(cuerpoDelGrupo(lectura.grupo, lectura.hijos, canViewCost))
+      try {
+        return NextResponse.json(cuerpoDelGrupo(lectura.grupo, lectura.hijos, canViewCost))
+      } catch (respuestaError) {
+        console.error("Error armando la respuesta del grupo guardado:", respuestaError)
+      }
     }
     // Saved, but the answer could not be built: the form re-hydrates with GET instead of re-sending.
     return NextResponse.json({ guardado: true, relectura: false, grupoId: id })

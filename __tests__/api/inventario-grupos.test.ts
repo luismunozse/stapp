@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { revalidateTag } from "next/cache"
 import { supabaseAdmin } from "@/lib/supabase"
 import { requireInventarioAccess } from "@/lib/auth-utils"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { depositoPermitido, depositoPorDefecto } from "@/lib/depositos"
+import { formatInventario } from "@/lib/db-utils"
 import { nombreVariante } from "@/lib/variantes"
 import { mockAuthSuccess, mockAuthError, parseResponse } from "./helpers"
 
@@ -18,6 +19,11 @@ vi.mock("@/lib/audit", async (importActual) => ({
 }))
 vi.mock("@/lib/webhooks/dispatcher", () => ({ emitWebhookEvent: vi.fn() }))
 vi.mock("next/cache", () => ({ revalidateTag: vi.fn() }))
+// Wrapped so one test can make the answer fail to build; it calls the real function otherwise.
+vi.mock("@/lib/db-utils", async (importActual) => {
+  const actual = await importActual<typeof import("@/lib/db-utils")>()
+  return { ...actual, formatInventario: vi.fn(actual.formatInventario) }
+})
 vi.mock("@/lib/depositos", async (importActual) => ({
   ...(await importActual<typeof import("@/lib/depositos")>()),
   depositoPermitido: vi.fn(),
@@ -759,7 +765,9 @@ describe("PUT /api/inventario/grupos/[id]: initial deposit", () => {
     expect(rpcCalls[0].args.p_deposito_inicial).toBeNull()
   })
 
-  it("a stockInicial of 0 needs no depot either; any positive one does", async () => {
+  const NUEVA_VERDE = { id: cid(150), atributos: ATR("Verde"), codigo: "FX-V2" }
+
+  it("a stockInicial of 0 needs no depot either; a positive one on a NEW row does", async () => {
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
     vi.mocked(depositoPorDefecto).mockResolvedValue("dep-default")
     const { rpcCalls } = instalarBase()
@@ -768,9 +776,109 @@ describe("PUT /api/inventario/grupos/[id]: initial deposit", () => {
     expect(depositoPorDefecto).not.toHaveBeenCalled()
     expect(rpcCalls[0].args.p_deposito_inicial).toBeNull()
 
-    await putReq("g-1", cuerpoG1({ azul: { stockInicial: 1 } }))
+    const cuerpo = cuerpoG1()
+    await putReq("g-1", { ...cuerpo, variantes: [...cuerpo.variantes, { ...NUEVA_VERDE, stockInicial: 1 }] })
     expect(depositoPorDefecto).toHaveBeenCalledTimes(1)
     expect(rpcCalls[1].args.p_deposito_inicial).toBe("dep-default")
+  })
+
+  // The RPC takes stock_inicial from NEW rows only (361: the depot is re-validated only for them
+  // and adjust_stock_atomic runs in the INSERT branch): an existing row echoing it needs no depot.
+  it("an existing row that echoes stockInicial, with a stale depositoId, is a 200 with no depot queries", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(depositoPermitido).mockResolvedValue(false)
+    vi.mocked(depositoPorDefecto).mockResolvedValue("dep-default")
+    const { rpcCalls } = instalarBase()
+
+    const { status } = await parseResponse(
+      await putReq("g-1", cuerpoG1({ rojo: { stockInicial: 5 }, azul: { stockInicial: 2 }, extra: { depositoId: "dep-viejo" } }))
+    )
+
+    expect(status).toBe(200)
+    expect(depositoPermitido).not.toHaveBeenCalled()
+    expect(depositoPorDefecto).not.toHaveBeenCalled()
+    expect(rpcCalls[0].args.p_deposito_inicial).toBeNull()
+  })
+
+  it("an archived member that is restored and a standalone item that is promoted are existing rows too", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(depositoPermitido).mockResolvedValue(false)
+    const { rpcCalls } = instalarBase()
+    const cuerpo = cuerpoG1()
+
+    await putReq("g-1", { ...cuerpo, variantes: [...cuerpo.variantes, { id: "v1", atributos: ATR("Verde"), codigo: "FX-Verde", stockInicial: 3 }], depositoId: "dep-viejo" })
+    await putReq(cid(200), {
+      grupo: { nombre: "Funda Nueva", opciones: [{ nombre: "Color", valores: ["Rojo"] }] },
+      compartidos: { categoria: "Fundas" },
+      variantes: [{ id: "s1", atributos: ATR("Rojo"), stockInicial: 4 }],
+      depositoId: "dep-viejo",
+    })
+
+    expect(depositoPermitido).not.toHaveBeenCalled()
+    expect(rpcCalls.map((c) => c.args.p_deposito_inicial)).toEqual([null, null])
+  })
+
+  it("only the NEW rows decide: existing rows without stock plus a new row with stock validate the depot", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(depositoPermitido).mockResolvedValue(true)
+    const { rpcCalls } = instalarBase()
+    const cuerpo = cuerpoG1({ rojo: { stockInicial: 0 } })
+
+    await putReq("g-1", { ...cuerpo, variantes: [...cuerpo.variantes, { ...NUEVA_VERDE, stockInicial: 2 }], depositoId: "dep-norte" })
+
+    expect(depositoPermitido).toHaveBeenCalledTimes(1)
+    expect(depositoPermitido).toHaveBeenCalledWith(expect.objectContaining({ depositoId: "dep-norte" }))
+    expect(rpcCalls[0].args.p_deposito_inicial).toBe("dep-norte")
+  })
+
+  it("new rows without stock (absent or 0) need no depot either", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(depositoPermitido).mockResolvedValue(false)
+    vi.mocked(depositoPorDefecto).mockResolvedValue("dep-default")
+    const { rpcCalls } = instalarBase()
+    const sinStock: Fila = cuerpoNuevo()
+    sinStock.variantes = sinStock.variantes.map(({ stockInicial: _s, ...resto }: Fila) => resto)
+
+    const { status } = await parseResponse(await putReq(cid(100), { ...sinStock, depositoId: "dep-viejo" }))
+    const conCero: Fila = cuerpoNuevo()
+    conCero.variantes = conCero.variantes.map((v: Fila, i: number) => ({ ...v, stockInicial: 0, id: cid(120 + i), codigo: `Z-${i}` }))
+    await putReq(cid(110), conCero)
+
+    expect(status).toBe(200)
+    expect(depositoPermitido).not.toHaveBeenCalled()
+    expect(depositoPorDefecto).not.toHaveBeenCalled()
+    expect(rpcCalls.map((c) => c.args.p_deposito_inicial)).toEqual([null, null])
+  })
+
+  it("any new row with stock counts, not just the first one", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(depositoPermitido).mockResolvedValue(true)
+    const { rpcCalls } = instalarBase()
+    const cuerpo = cuerpoG1()
+
+    await putReq("g-1", {
+      ...cuerpo,
+      variantes: [...cuerpo.variantes, { ...NUEVA_VERDE, stockInicial: 0 }, { id: cid(151), atributos: ATR("Negro"), codigo: "FX-N", stockInicial: 4 }],
+      depositoId: "dep-norte",
+    })
+
+    expect(depositoPermitido).toHaveBeenCalledTimes(1)
+    expect(rpcCalls[0].args.p_deposito_inicial).toBe("dep-norte")
+  })
+
+  it("a new row with stock and an existing row without stay a 400 when the depot is not allowed", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(depositoPermitido).mockResolvedValue(false)
+    const { rpcCalls } = instalarBase()
+    const cuerpo = cuerpoG1()
+
+    const { status, body } = await parseResponse(
+      await putReq("g-1", { ...cuerpo, variantes: [...cuerpo.variantes, { ...NUEVA_VERDE, stockInicial: 2 }], depositoId: "dep-ajeno" })
+    )
+
+    expect(status).toBe(400)
+    expect(body.code).toBe("DEPOSITO_INVALIDO")
+    expect(rpcCalls).toEqual([])
   })
 
   it("a depot the caller may not use is a 400 and nothing runs", async () => {
@@ -783,7 +891,8 @@ describe("PUT /api/inventario/grupos/[id]: initial deposit", () => {
     expect(status).toBe(400)
     expect(body.code).toBe("DEPOSITO_INVALIDO")
     expect(rpcCalls).toEqual([])
-    expect(consultas).toEqual([])
+    // The before-snapshot is read first (it tells which rows are new): a read, never a write.
+    expect(consultas.map((c) => [c.tabla, c.op])).toEqual([["inventario", "select"]])
   })
 })
 
@@ -1223,11 +1332,17 @@ describe("PUT /api/inventario/grupos/[id]: after the commit", () => {
     const pendiente = await parseResponse(await putReq("g-1", cuerpoG1()))
     expect(pendiente.status).toBe(200)
     expect(pendiente.body).toEqual({ guardado: true, relectura: false, grupoId: "g-1" })
+    // One log line that says why the answer is only a pointer, and nothing else went wrong.
+    expect(vi.mocked(console.error)).toHaveBeenCalledTimes(1)
+    expect(String(vi.mocked(console.error).mock.calls[0][0])).toMatch(/no se pudo releer \(pendiente\)/)
+    vi.mocked(console.error).mockClear()
 
     instalarBase({}, { rpcDatos: { grupoId: "g-404", creados: [], actualizados: [], promovidos: [], restaurados: [], archivados: [] } })
     const desaparecido = await parseResponse(await putReq("g-404", cuerpoG1()))
     expect(desaparecido.status).toBe(200)
     expect(desaparecido.body).toEqual({ guardado: true, relectura: false, grupoId: "g-404" })
+    expect(vi.mocked(console.error)).toHaveBeenCalledTimes(1)
+    expect(String(vi.mocked(console.error).mock.calls[0][0])).toMatch(/no se pudo releer \(no_encontrado\)/)
   })
 
   it("a row that vanished after the save (hard-deleted meanwhile) emits nothing and breaks nothing", async () => {
@@ -1321,6 +1436,152 @@ describe("PUT /api/inventario/grupos/[id]: after the commit", () => {
     // No snapshot row, so no diff: 0 events, and no swallowed TypeError either.
     expect(eventos()).toEqual([])
     expect(auditoria.update).not.toHaveBeenCalled()
+    expect(console.error).not.toHaveBeenCalled()
+  })
+})
+
+// R14 / R15: the RPC lists an id that the re-read does not have (a row hard-deleted right after
+// the save). It must be skipped quietly: no throw, no event, and the other events still go out.
+describe("PUT /api/inventario/grupos/[id]: ids the re-read does not have", () => {
+  const huerfano = (extra: Fila) => ({ grupoId: "g-1", creados: [], actualizados: [], promovidos: [], restaurados: [], archivados: [], ...extra })
+
+  /** r1 changes price after the snapshot, so its update event is real; the rest of the lists is what each test sets. */
+  function conPrecioConcurrente(resultado: Fila) {
+    return instalarBase(
+      {},
+      {
+        alSnapshot: (t) => {
+          t.inventario.find((f) => f.id === "r1")!.precio_venta = 1500
+        },
+        rpcDatos: resultado,
+      }
+    )
+  }
+
+  it("a created id missing from the store is skipped without noise; the update and the archive still emit", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1", userId: "user-7" })
+    conPrecioConcurrente(huerfano({ creados: [cid(901)], actualizados: ["r1"], archivados: ["v1"] }))
+
+    const { status } = await parseResponse(await putReq("g-1", cuerpoG1()))
+
+    expect(status).toBe(200)
+    expect(eventos()).toEqual([["inventario.updated", "r1"], ["inventario.archived", "v1"]])
+    expect(auditoria.create).not.toHaveBeenCalled()
+    expect(console.error).not.toHaveBeenCalled()
+  })
+
+  it("an archived id missing from the store is skipped without noise; the creation and the update still emit", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1", userId: "user-7" })
+    conPrecioConcurrente(huerfano({ creados: ["a1"], actualizados: ["r1"], archivados: [cid(902)] }))
+
+    const { status } = await parseResponse(await putReq("g-1", cuerpoG1()))
+
+    expect(status).toBe(200)
+    expect(eventos()).toEqual([["inventario.created", "a1"], ["inventario.updated", "r1"]])
+    expect(auditoria.delete).not.toHaveBeenCalled()
+    expect(console.error).not.toHaveBeenCalled()
+  })
+})
+
+// A throw after the commit must never become a 500 (the form would re-send and the created
+// events would be lost): revalidateTag only logs, and an answer that cannot be built is the pointer.
+describe("PUT /api/inventario/grupos/[id]: forced throws after the commit", () => {
+  it("revalidateTag failing only logs: the save answers its normal 200 and the events go out", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    instalarBase()
+    vi.mocked(revalidateTag).mockImplementationOnce(() => {
+      throw new Error("cache down")
+    })
+
+    const { status, body } = await parseResponse(await putReq(cid(100), cuerpoNuevo()))
+
+    expect(status).toBe(200)
+    expect(body.variantes.map((v: Fila) => v.id)).toEqual([cid(101), cid(102)])
+    expect(eventos()).toEqual([["inventario.created", cid(101)], ["inventario.created", cid(102)]])
+    expect(console.error).toHaveBeenCalled()
+  })
+
+  it("an answer that cannot be built is the 200 pointer, and the events were already emitted", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    instalarBase()
+    vi.mocked(formatInventario).mockImplementationOnce(() => {
+      throw new Error("cannot format")
+    })
+
+    const { status, body } = await parseResponse(await putReq(cid(100), cuerpoNuevo()))
+
+    expect(status).toBe(200)
+    expect(body).toEqual({ guardado: true, relectura: false, grupoId: cid(100) })
+    expect(eventos()).toEqual([["inventario.created", cid(101)], ["inventario.created", cid(102)]])
+    expect(revalidateTag).toHaveBeenCalledTimes(1)
+    expect(console.error).toHaveBeenCalled()
+  })
+})
+
+// Event batches are awaited before the answer, and supabaseAdmin has no fetch timeout: one hung
+// lookup must not hold the response until the platform kills it (504 after the commit).
+describe("PUT /api/inventario/grupos/[id]: deadline of an event batch", () => {
+  const cuerpoGrande = (n: number) => ({
+    grupo: { nombre: "Grande", opciones: [{ nombre: "Color", valores: Array.from({ length: n }, (_, i) => `V${i + 1}`) }] },
+    compartidos: { categoria: "Fundas" },
+    variantes: Array.from({ length: n }, (_, i) => ({ id: cid(300 + i), atributos: ATR(`V${i + 1}`), codigo: `GR-${i + 1}`, precioVenta: 100 })),
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /** The route resumes through several promise hops after a timer fires: let them all run. */
+  const vaciarMicrotareas = async () => {
+    for (let i = 0; i < 100; i++) await Promise.resolve()
+  }
+
+  it("a task that never settles costs one deadline, then the next batches still dispatch and the answer is a 200", async () => {
+    vi.useFakeTimers()
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    instalarBase()
+    vi.mocked(emitWebhookEvent)
+      .mockImplementationOnce((() => new Promise(() => {})) as never) // the first event of the first batch hangs
+      .mockResolvedValue(undefined as never)
+
+    const respuesta = putReq(cid(299), cuerpoGrande(30))
+    await vi.advanceTimersByTimeAsync(3_100)
+    await vaciarMicrotareas()
+    const resultado = await Promise.race([respuesta, Promise.resolve("colgado")])
+
+    expect(resultado).not.toBe("colgado")
+    const { status, body } = await parseResponse(resultado as Response)
+    expect(status).toBe(200)
+    expect(body.variantes).toHaveLength(30)
+    expect(emitWebhookEvent).toHaveBeenCalledTimes(30)
+    expect(auditoria.create).toHaveBeenCalledTimes(30)
+    expect(vi.mocked(console.error).mock.calls.some(([mensaje]) => /a tiempo/.test(String(mensaje)))).toBe(true)
+  })
+
+  it("it does not answer before the deadline while a task is still pending", async () => {
+    vi.useFakeTimers()
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    instalarBase()
+    vi.mocked(emitWebhookEvent).mockImplementationOnce((() => new Promise(() => {})) as never).mockResolvedValue(undefined as never)
+
+    const respuesta = putReq(cid(299), cuerpoGrande(4))
+    await vi.advanceTimersByTimeAsync(2_900)
+    await vaciarMicrotareas()
+    expect(await Promise.race([respuesta, Promise.resolve("colgado")])).toBe("colgado")
+    await vi.advanceTimersByTimeAsync(300)
+    await vaciarMicrotareas()
+    expect((await respuesta).status).toBe(200)
+  })
+
+  it("batches that settle leave no timer behind", async () => {
+    vi.useFakeTimers()
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    instalarBase()
+
+    const respuesta = await putReq(cid(299), cuerpoGrande(30))
+
+    expect(respuesta.status).toBe(200)
+    expect(vi.getTimerCount()).toBe(0)
     expect(console.error).not.toHaveBeenCalled()
   })
 })
