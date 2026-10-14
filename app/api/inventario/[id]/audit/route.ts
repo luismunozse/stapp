@@ -3,7 +3,7 @@ import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "
 import { supabaseAdmin } from "@/lib/supabase"
 import { getEntityHistory, generateDescription } from "@/lib/audit"
 
-// Campos de AUDITED_FIELDS (ver app/api/inventario/[id]/route.ts) que exponen
+// Campos de AUDITED_FIELDS (ver lib/inventario-eventos.ts) que exponen
 // costo de compra. El audit log guarda before/after crudos, así que el valor
 // vigente sale del último UPDATE — el mismo número que /api/inventario/[id]
 // ya le niega al rol.

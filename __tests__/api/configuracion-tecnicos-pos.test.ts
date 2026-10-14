@@ -100,11 +100,17 @@ describe("/api/configuracion — permiso de POS para técnicos", () => {
     expect(status).toBe(200)
     expect(body.tecnicosOperanPos).toBe(false)
 
-    // Tres intentos: los escalones son acumulativos, así que la columna
-    // ausente viaja también en el escalón de arriba (el permiso de caja para
-    // vendedores) y ese primero cae con ella. El tercero ya acierta. Cuatro o
-    // más significa que arrastró a una migración que sí está aplicada.
-    expect(chain.single).toHaveBeenCalledTimes(5)
+    // Seis intentos: los escalones son acumulativos, así que la columna
+    // ausente viaja también en todos los escalones de arriba (M3 variantes en
+    // el POS, ingresos, cobro de cotizaciones y caja) y esos cuatro caen con
+    // ella, y el del propio flag también. El sexto ya acierta. Siete o más
+    // significa que arrastró a una migración que sí está aplicada. Se afirma
+    // QUÉ SELECT llevó cada intento, no solo cuántos hubo.
+    expect(chain.single).toHaveBeenCalledTimes(6)
+    const selects = chain.select.mock.calls.map((c: any[]) => c[0] as string)
+    expect(selects[0]).toContain("pos_agrupa_variantes")
+    expect(selects.filter((s) => s.includes("pos_agrupa_variantes"))).toHaveLength(1)
+    expect(selects[5]).not.toContain("tecnicos_operan_pos")
 
     // Y nada de lo que sí existe se perdió en el camino.
     expect(body.ivaRegimen).toBe("ADITIVO")

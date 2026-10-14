@@ -7,13 +7,14 @@ import { join } from "path"
 
 const ROOT = join(process.cwd(), "supabase/migrations")
 
-function read(dir: string, pick: (name: string, text: string) => boolean, what: string): string {
+// `text` is lazy: a suffix lookup must not read the ~350 migration files it walks past.
+function read(dir: string, pick: (name: string, text: () => string) => boolean, what: string): string {
   const base = join(ROOT, dir)
   for (const entry of readdirSync(base, { withFileTypes: true })) {
     if (!entry.isFile() || !entry.name.endsWith(".sql")) continue
     // core.autocrlf checks files out with CRLF on Windows; regexes assume LF
-    const text = readFileSync(join(base, entry.name), "utf8").replace(/\r\n/g, "\n")
-    if (pick(entry.name, text)) return text
+    const text = () => readFileSync(join(base, entry.name), "utf8").replace(/\r\n/g, "\n")
+    if (pick(entry.name, text)) return text()
   }
   throw new Error(`No file in supabase/migrations/${dir} matches ${what}`)
 }
@@ -22,7 +23,7 @@ export const readBySuffix = (suffix: string) =>
   read("", (name) => name.endsWith(suffix), `suffix "${suffix}"`)
 
 export const readByMarker = (dir: "rollback" | "verify", marker: string) =>
-  read(dir, (_n, text) => text.includes(marker), `marker "${marker}"`)
+  read(dir, (_n, text) => text().includes(marker), `marker "${marker}"`)
 
 /** Drops `--` and block comments so headers cannot satisfy or trip a regex. */
 export const stripComments = (sql: string) =>

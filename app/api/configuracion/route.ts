@@ -88,12 +88,27 @@ export async function GET() {
     // Permiso de ingresos para vendedores (migracion 326). Escalon propio y
     // arriba de todo, por el mismo motivo que los de abajo.
     const ingresosSelect = `${cotizacionCobroSelect}, vendedores_ven_ingresos`
+    // POS variants grouping preference (migration M3). Its own step on top of
+    // everything, for the same reason as the ones below: inside baseSelect its
+    // 42703 would knock down every step and the cascade would bottom out at the
+    // minimal fallback, serving a gutted config.
+    const posVariantesSelect = `${ingresosSelect}, pos_agrupa_variantes`
 
     let result = await supabaseAdmin
       .from("organizations")
-      .select(ingresosSelect)
+      .select(posVariantesSelect)
       .eq("id", organizationId!)
       .single()
+
+    if (isMissingColumnError(result.error)) {
+      // M3 not applied yet: retry without the POS variants preference,
+      // keeping everything else.
+      result = await supabaseAdmin
+        .from("organizations")
+        .select(ingresosSelect)
+        .eq("id", organizationId!)
+        .single()
+    }
 
     if (isMissingColumnError(result.error)) {
       // Migracion 326 no aplicada todavia: reintentar sin el permiso de
@@ -226,6 +241,7 @@ export async function GET() {
       vendedoresManejanCaja: !!organization.vendedores_manejan_caja,
       tecnicosCobranCotizaciones: !!organization.tecnicos_cobran_cotizaciones,
       vendedoresVenIngresos: organization.vendedores_ven_ingresos !== false,
+      posAgrupaVariantes: organization.pos_agrupa_variantes !== false,
       ivaRegimen: organization.iva_regimen ?? "EXENTO",
       ivaTasa: organization.iva_tasa ?? getIvaGeneral(organization.pais),
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
@@ -265,7 +281,7 @@ export async function PUT(request: Request) {
         { status: 413 }
       )
     }
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, tecnicosCobranCotizaciones, vendedoresVenIngresos, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada, ingresosBrutos, inicioActividades } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, tecnicosCobranCotizaciones, vendedoresVenIngresos, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada, ingresosBrutos, inicioActividades, posAgrupaVariantes } = body
 
     const updateData: Record<string, any> = {}
 
@@ -422,6 +438,10 @@ export async function PUT(request: Request) {
       updateData.vendedores_ven_ingresos = !!vendedoresVenIngresos
     }
 
+    if (posAgrupaVariantes !== undefined) {
+      updateData.pos_agrupa_variantes = !!posAgrupaVariantes
+    }
+
     if (ivaRegimen !== undefined) {
       const validRegimen = ["EXENTO", "INCLUIDO", "ADITIVO"]
       if (validRegimen.includes(ivaRegimen)) {
@@ -540,6 +560,10 @@ export async function PUT(request: Request) {
     const selectColsCotizacionCobro = selectColsCaja + ", tecnicos_cobran_cotizaciones"
     // Permiso de ingresos (326). Escalon propio y arriba de todo.
     const selectColsIngresos = selectColsCotizacionCobro + ", vendedores_ven_ingresos"
+    // POS variants grouping preference (M3). Its own step on top of everything,
+    // like the ones above: the lower steps are built on `selectCols`, so a
+    // column put there would travel in ALL of them.
+    const selectColsPosVariantes = selectColsIngresos + ", pos_agrupa_variantes"
 
     // Solo actualizar si hay cambios
     if (Object.keys(updateData).length === 0) {
@@ -550,9 +574,17 @@ export async function PUT(request: Request) {
       // estuvieran cargados en la DB.
       let { data, error: selectError } = await supabaseAdmin
         .from("organizations")
-        .select(selectColsIngresos)
+        .select(selectColsPosVariantes)
         .eq("id", organizationId!)
         .single()
+      if (isMissingColumnError(selectError)) {
+        // M3 not applied: retry without the POS variants preference.
+        ;({ data, error: selectError } = await supabaseAdmin
+          .from("organizations")
+          .select(selectColsIngresos)
+          .eq("id", organizationId!)
+          .single())
+      }
       if (isMissingColumnError(selectError)) {
         // Migracion 326 no aplicada: reintentar sin el permiso de ingresos.
         ;({ data, error: selectError } = await supabaseAdmin
@@ -646,6 +678,7 @@ export async function PUT(request: Request) {
         vendedoresManejanCaja: !!org?.vendedores_manejan_caja,
         tecnicosCobranCotizaciones: !!org?.tecnicos_cobran_cotizaciones,
         vendedoresVenIngresos: org?.vendedores_ven_ingresos !== false,
+        posAgrupaVariantes: org?.pos_agrupa_variantes !== false,
         ivaRegimen: org?.iva_regimen ?? "EXENTO",
         ivaTasa: org?.iva_tasa ?? getIvaGeneral(org?.pais),
         redondeoEfectivo: org?.redondeo_efectivo ?? 0,
@@ -669,8 +702,20 @@ export async function PUT(request: Request) {
       .from("organizations")
       .update(updateData)
       .eq("id", organizationId!)
-      .select(selectColsIngresos)
+      .select(selectColsPosVariantes)
       .single()
+
+    if (isMissingColumnError(result2.error)) {
+      // M3 not applied yet: retry without the POS variants preference, keeping
+      // the rest of updateData.
+      delete updateData.pos_agrupa_variantes
+      result2 = await supabaseAdmin
+        .from("organizations")
+        .update(updateData)
+        .eq("id", organizationId!)
+        .select(selectColsIngresos)
+        .single() as any
+    }
 
     if (isMissingColumnError(result2.error)) {
       // Migracion 326 no aplicada todavia: reintentar sin el permiso de
@@ -792,6 +837,8 @@ export async function PUT(request: Request) {
       delete updateData.tecnicos_cobran_cotizaciones
       // Strip vendedor ingresos flag (migration 326) in case it doesn't exist yet
       delete updateData.vendedores_ven_ingresos
+      // Strip POS variants grouping preference (M3) in case it doesn't exist yet
+      delete updateData.pos_agrupa_variantes
       // Strip facturacion electronica flag (migration 296) in case it doesn't exist yet
       delete updateData.facturacion_electronica_habilitada
       const selectColsNoFiscal = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda"
@@ -840,6 +887,7 @@ export async function PUT(request: Request) {
       vendedoresManejanCaja: !!organization.vendedores_manejan_caja,
       tecnicosCobranCotizaciones: !!organization.tecnicos_cobran_cotizaciones,
       vendedoresVenIngresos: organization.vendedores_ven_ingresos !== false,
+      posAgrupaVariantes: organization.pos_agrupa_variantes !== false,
       ivaRegimen: organization.iva_regimen ?? "EXENTO",
       ivaTasa: organization.iva_tasa ?? getIvaGeneral(organization.pais),
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,

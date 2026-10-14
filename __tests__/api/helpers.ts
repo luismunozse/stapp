@@ -25,6 +25,23 @@ export function mockAuthSuccess(overrides?: {
   } as any)
 }
 
+/**
+ * A session whose user has NO id: the route sees `userId` undefined. For the paths that
+ * must behave differently without a user (audit entries need one, webhooks do not).
+ * mockAuthSuccess cannot do this on purpose: its id falls back to "user-1".
+ */
+export function mockAuthSuccessSinUsuario(overrides?: { organizationId?: string; role?: string; sucursalId?: string | null }) {
+  vi.mocked(auth).mockResolvedValue({
+    user: {
+      organizationId: overrides?.organizationId || "org-1",
+      role: overrides?.role || "ADMIN",
+      sucursalId: overrides?.sucursalId ?? null,
+      email: "test@test.com",
+    },
+    expires: new Date(Date.now() + 86400000).toISOString(),
+  } as any)
+}
+
 export function mockAuthError() {
   vi.mocked(auth).mockResolvedValue(null as any)
 }

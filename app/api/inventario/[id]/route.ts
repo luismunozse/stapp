@@ -3,35 +3,10 @@ import { revalidateTag } from "next/cache"
 import { requireAuth, requireInventarioAccess, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
-import { createAuditLogger, diffObjects } from "@/lib/audit"
-import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
+import { createAuditLogger } from "@/lib/audit"
+import { pickAudited, registrarActualizacion, registrarArchivado } from "@/lib/inventario-eventos"
 import { sucursalParaEscritura, getDepositoDeSucursal } from "@/lib/sucursal"
 import { z } from "zod"
-
-// Campos auditados (excluye stock — ya cubierto por movimientos_inventario).
-// Cambios en estos campos generan un audit_log UPDATE.
-const AUDITED_FIELDS = [
-  "codigo",
-  "nombre",
-  "descripcion",
-  "categoria",
-  "tipo_dispositivo",
-  "precio_compra",
-  "precio_venta",
-  "proveedor",
-  "proveedor_id",
-  "stock_minimo",
-  "stock_maximo",
-  "punto_reorden",
-  "barcode",
-  "ubicacion",
-] as const
-
-function pickAudited(row: Record<string, any>): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  for (const k of AUDITED_FIELDS) out[k] = row[k]
-  return out
-}
 
 const inventarioSchema = z.object({
   codigo: z.string().min(1).optional(),
@@ -280,29 +255,8 @@ export async function PUT(
       throw updateError
     }
 
-    // Audit log: si cambió algún campo no-stock relevante, registrar UPDATE
-    if (item && userId) {
-      const before = pickAudited(existingItem)
-      const after = pickAudited(item)
-      const diff = diffObjects(before, after)
-      if (Object.keys(diff.after).length > 0) {
-        createAuditLogger(organizationId!, userId, request)
-          .update("inventario", id, before, after)
-          .catch(() => {})
-        // Webhook outbound: solo si cambió algún campo NO-stock relevante.
-        // changes: diff field → {before, after} para que el consumidor sepa qué pasó.
-        const changes: Record<string, { before: unknown; after: unknown }> = {}
-        for (const k of Object.keys(diff.after)) {
-          changes[k] = { before: diff.before[k], after: diff.after[k] }
-        }
-        emitWebhookEvent(organizationId!, "inventario.updated", {
-          id: item.id,
-          codigo: item.codigo,
-          nombre: item.nombre,
-          changes,
-        }).catch(() => {})
-      }
-    }
+    // Audit log + webhook: si cambió algún campo no-stock relevante, registrar UPDATE.
+    if (item) registrarActualizacion({ organizationId: organizationId!, userId, request }, existingItem, item)
 
     if (stockConfirmado !== null) {
       // El update de campos ya no escribe stock, asi que se parchea el item en
@@ -363,18 +317,8 @@ export async function DELETE(
         .update({ deleted_at: new Date().toISOString(), deleted_by: userId })
         .eq("id", id)
       if (updateError) throw updateError
-      if (userId) {
-        createAuditLogger(organizationId!, userId, request)
-          .delete("inventario", id, { ...pickAudited(existing), accion: "ARCHIVADO" })
-          .catch(() => {})
-      }
-      // Webhook outbound: inventario.archived (soft-delete)
-      emitWebhookEvent(organizationId!, "inventario.archived", {
-        id,
-        codigo: existing.codigo,
-        nombre: existing.nombre,
-        archivedBy: userId ?? null,
-      }).catch(() => {})
+      // Audit log + webhook outbound: inventario.archived (soft-delete)
+      registrarArchivado({ organizationId: organizationId!, userId, request }, existing)
       return NextResponse.json({ success: true, archived: true })
     }
 

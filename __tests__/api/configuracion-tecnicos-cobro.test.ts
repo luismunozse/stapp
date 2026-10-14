@@ -110,9 +110,16 @@ describe("/api/configuracion — permiso de cobro de cotizaciones para técnicos
     expect(status).toBe(200)
     expect(body.tecnicosCobranCotizaciones).toBe(false)
 
-    // Exactamente dos intentos: el flag es su propio escalón y el segundo ya
-    // acierta. Tres o más significa que arrastró a otra migración con él.
-    expect(chain.single).toHaveBeenCalledTimes(3)
+    // Cuatro intentos: M3 (variantes en el POS), 326 (ingresos) y este flag
+    // tienen cada uno su escalón y el cuarto ya acierta. Más de cuatro
+    // significa que arrastró a otra migración con él. Se afirma QUÉ SELECT
+    // llevó cada intento, no solo cuántos hubo: M3 es posterior, así que en
+    // cualquier estado donde este flag falta, su escalón de arriba falla antes.
+    expect(chain.single).toHaveBeenCalledTimes(4)
+    const selects = chain.select.mock.calls.map((c: any[]) => c[0] as string)
+    expect(selects[0]).toContain("pos_agrupa_variantes")
+    expect(selects.filter((s) => s.includes("pos_agrupa_variantes"))).toHaveLength(1)
+    expect(selects[3]).not.toContain("tecnicos_cobran_cotizaciones")
 
     // Y nada de lo que sí existe se perdió en el camino.
     expect(body.tecnicosOperanPos).toBe(true)

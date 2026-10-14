@@ -183,6 +183,12 @@ export interface OrdenServicio {
   recepcionCodigo?: string | null
 }
 
+/** One option of a variant combination; the array keeps the group's option order. */
+export interface AtributoVariante {
+  opcion: string
+  valor: string
+}
+
 export interface Inventario {
   id: string
   codigo: string
@@ -215,6 +221,13 @@ export interface Inventario {
   tipoKit?: "ENSAMBLADO" | "VIRTUAL" | null
   deletedAt?: string | null
   deletedBy?: string | null
+  // Variant groups: present only when the API answered with the M1 columns.
+  grupoId?: string | null
+  atributos?: AtributoVariante[] | null
+  /** "Azul / M": the combination, for chips and the POS sheet. */
+  etiqueta?: string | null
+  /** Display-only photo of a sibling for a variant without its own; `imagenUrl` stays the OWN photo. */
+  imagenRespaldo?: { url: string; etiqueta: string } | null
 }
 
 export interface Factura {

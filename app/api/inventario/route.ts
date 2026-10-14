@@ -8,8 +8,8 @@ import {
   DEPOSITO_INVALIDO,
 } from "@/lib/depositos"
 import { formatInventario } from "@/lib/db-utils"
-import { createAuditLogger } from "@/lib/audit"
-import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
+import { selectConFallback } from "@/lib/variantes"
+import { registrarCreacion } from "@/lib/inventario-eventos"
 import { z } from "zod"
 
 const inventarioSchema = z.object({
@@ -42,6 +42,13 @@ const inventarioSchema = z.object({
 })
 
 const KIT_SIN_TIPO = "Un kit necesita un tipo: ensamblado o virtual"
+
+// The list reads the variant columns (migration 355) in their own select step. While
+// that migration is not applied the database answers with a missing-column error and
+// the list falls back to the plain select, which is the one the list always used.
+const LISTA_SELECT_BASE =
+  "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, stock_reservado, precio_compra, precio_venta, proveedor, proveedor_id, imagen_url, imagen_path, stock_minimo, stock_maximo, punto_reorden, ubicacion, barcode, trackea_lotes, trackea_series, dias_alerta_vencimiento, dias_garantia_default, tiene_variantes, es_kit, tipo_kit, deleted_at, deleted_by, created_at, proveedores:proveedor_id(id, nombre)"
+const LISTA_SELECT_CON_GRUPO = `${LISTA_SELECT_BASE}, grupo_id, atributos`
 
 export async function GET(request: Request) {
   try {
@@ -104,13 +111,10 @@ export async function GET(request: Request) {
     // (no son inyectables: solo afectan el patrón de match).
     const safeSearch = search.replace(/[,()\\]/g, "\\$&")
 
-    const buildQuery = (mode: "fts" | "ilike") => {
+    const buildQuery = (select: string, mode: "fts" | "ilike") => {
       let q = supabaseAdmin
         .from("inventario")
-        .select(
-          "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, stock_reservado, precio_compra, precio_venta, proveedor, proveedor_id, imagen_url, imagen_path, stock_minimo, stock_maximo, punto_reorden, ubicacion, barcode, trackea_lotes, trackea_series, dias_alerta_vencimiento, dias_garantia_default, tiene_variantes, es_kit, tipo_kit, deleted_at, deleted_by, created_at, proveedores:proveedor_id(id, nombre)",
-          { count: "exact" }
-        )
+        .select(select, { count: "exact" })
         .eq("organization_id", organizationId!)
         .order(sortBy, { ascending: sortOrder })
 
@@ -156,15 +160,22 @@ export async function GET(request: Request) {
     // busqueda incremental (type-ahead) sirva, si FTS no devuelve nada
     // reintentamos con ILIKE, que si matchea substrings. El costo extra
     // solo se paga cuando FTS ya fallo.
+    //
+    // `listar` remembers a downgrade of the select: the ILIKE retry never goes
+    // back to the variant columns that just failed.
+    const listar = selectConFallback(
+      (select, mode: "fts" | "ilike") => buildQuery(select, mode),
+      [LISTA_SELECT_CON_GRUPO, LISTA_SELECT_BASE]
+    )
     const useFts = search.trim().length >= 3
-    let { data: inventario, error: dbError, count } = await buildQuery(useFts ? "fts" : "ilike")
+    let { data: inventario, error: dbError, count } = await listar(useFts ? "fts" : "ilike")
 
     if (dbError) {
       throw dbError
     }
 
     if (useFts && !count) {
-      const fallback = await buildQuery("ilike")
+      const fallback = await listar("ilike")
       if (fallback.error) {
         throw fallback.error
       }
@@ -343,38 +354,8 @@ export async function POST(request: Request) {
       }
     }
 
-    // Audit log fire-and-forget
-    if (inventario && userId) {
-      createAuditLogger(organizationId!, userId, request)
-        .create("inventario", inventario.id, {
-          codigo: inventario.codigo,
-          nombre: inventario.nombre,
-          categoria: inventario.categoria,
-          tipo_dispositivo: inventario.tipo_dispositivo,
-          stock: inventario.stock,
-          precio_compra: inventario.precio_compra,
-          precio_venta: inventario.precio_venta,
-          proveedor_id: inventario.proveedor_id,
-          barcode: inventario.barcode,
-        })
-        .catch(() => {})
-    }
-
-    // Webhook outbound: inventario.created (fire-and-forget)
-    if (inventario) {
-      emitWebhookEvent(organizationId!, "inventario.created", {
-        id: inventario.id,
-        codigo: inventario.codigo,
-        nombre: inventario.nombre,
-        categoria: inventario.categoria,
-        tipoDispositivo: inventario.tipo_dispositivo,
-        stock: inventario.stock,
-        precioVenta: inventario.precio_venta,
-        precioCompra: inventario.precio_compra,
-        proveedorId: inventario.proveedor_id,
-        barcode: inventario.barcode,
-      }).catch(() => {})
-    }
+    // Audit log + webhook outbound: inventario.created (fire-and-forget)
+    if (inventario) registrarCreacion({ organizationId: organizationId!, userId, request }, inventario)
 
     // POST corre detrás de requireInventarioAccess(): el permiso de costo ya
     // está resuelto por el guard.
