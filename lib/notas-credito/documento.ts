@@ -17,6 +17,7 @@ import { hasPosAccess, resolveTecnicosOperanPos, soloVeSusVentas } from "@/lib/a
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { saldoPendienteVenta } from "@/lib/db-utils"
 import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
+import { isMissingColumnError } from "@/lib/db-errors"
 import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { CONSUMIDOR_FINAL, esMotivoNC, numeroOperacion, type ModoNC, type MotivoNC, type OrigenNC } from "./catalogo"
 import { COLUMNAS_VISTA_NC, dinero, type FilaVistaNC } from "./listado"
@@ -224,12 +225,24 @@ async function clienteDe(
   return { nombre: contacto.nombre || CONSUMIDOR_FINAL, dni: null, telefono: contacto.telefono, email: null, direccion: null }
 }
 
+// Emisor en dos escalones: las columnas fiscales de la migración 295 pueden no estar aplicadas
+// todavía y el documento tiene que salir igual (mismo patrón que el recibo de cuenta corriente).
+const ORG_COLS = "nombre, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria, pais"
+const ORG_COLS_FISCAL = `${ORG_COLS}, cuit, condicion_iva, domicilio_fiscal`
+
 async function emisorDe(organizationId: string): Promise<EmisorDocumentoNC> {
-  const { data, error } = await supabaseAdmin
+  let { data, error } = await supabaseAdmin
     .from("organizations")
-    .select("nombre, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria, pais, cuit, condicion_iva, domicilio_fiscal")
+    .select(ORG_COLS_FISCAL)
     .eq("id", organizationId)
     .single()
+  if (error && isMissingColumnError(error)) {
+    ;({ data, error } = (await supabaseAdmin
+      .from("organizations")
+      .select(ORG_COLS)
+      .eq("id", organizationId)
+      .single()) as { data: typeof data; error: typeof error })
+  }
   if (error) throw error
   const o = (data ?? {}) as Record<string, string | null | undefined>
   return {

@@ -44,6 +44,8 @@ interface Tablas {
   clientes?: unknown
   organizations?: unknown
   sucursalesError?: boolean
+  /** La migración 295 no está aplicada: el primer SELECT de organizations falla con 42703. */
+  sinColumnasFiscales?: boolean
 }
 
 function setup(t: Tablas) {
@@ -59,10 +61,16 @@ function setup(t: Tablas) {
     sucursales: { nombre: "Centro" },
     users: { nombre: "Ana" },
   }
+  let llamadasOrg = 0
   vi.mocked(supabaseAdmin.from).mockImplementation((tabla: string) => {
+    if (tabla === "organizations") llamadasOrg++
     const chain = tabla === "sucursales" && t.sucursalesError
       ? createChainMock(null, { message: "boom" })
-      : createChainMock(filas[tabla] ?? null)
+      : tabla === "organizations" && t.sinColumnasFiscales && llamadasOrg === 1
+        ? createChainMock(null, { code: "42703", message: "column organizations.cuit does not exist" })
+        : tabla === "organizations" && t.sinColumnasFiscales
+          ? createChainMock(Object.fromEntries(Object.entries(ORG).filter(([k]) => !["cuit", "condicion_iva", "domicilio_fiscal"].includes(k))))
+          : createChainMock(filas[tabla] ?? null)
     chains[tabla] = chain
     return chain as any
   })
@@ -188,6 +196,12 @@ describe("cargarDocumentoNC — venta", () => {
   it("si falla el nombre de la sucursal, el documento sale igual", async () => {
     setup({ vista: vistaVenta, ventas: venta, devoluciones_venta: devolucion, sucursalesError: true })
     expect((await cargarDocumentoNC("nc-v", admin))?.sucursalNombre).toBeNull()
+  })
+
+  it("sin la migración 295 el documento sale igual, con los datos fiscales vacíos", async () => {
+    setup({ vista: vistaVenta, ventas: venta, devoluciones_venta: devolucion, sinColumnasFiscales: true })
+    const doc = await cargarDocumentoNC("nc-v", admin)
+    expect(doc?.emisor).toMatchObject({ nombreEmpresa: "Taller Sol", cuitEmpresa: null, condicionIvaEmpresa: null, domicilioFiscalEmpresa: null })
   })
 
   // Un historial sin medio de reintegro: sin medio no se sabe si se pagó, así que el renglón es neutro.
