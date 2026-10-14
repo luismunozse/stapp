@@ -3,6 +3,8 @@
 import { useState, type Dispatch } from "react"
 import { ChevronDown } from "lucide-react"
 import { etiquetaDeFila, filasEnOrden, type Fila, type VariantesAccion, type VariantesState } from "@/lib/variantes-filas"
+import { useEfectosDeDeshacer } from "./use-efectos-de-deshacer"
+import type { EfectoDeDeshacer } from "./vista"
 import { BloqueDeArchivo, CamposAvanzados, CampoCodigo, CampoCosto, CampoPrecio, CampoStock } from "./campos-fila"
 
 /*
@@ -17,6 +19,8 @@ export interface PropsCombinaciones {
   /** A saved row's stock was adjusted: the form should reload the group to see the new number. */
   alAjustarStock?: () => void
   deshabilitado?: boolean
+  /** The undo preview of every pending row, if the caller already has it; else the table computes it. */
+  efectos?: ReadonlyMap<string, EfectoDeDeshacer>
 }
 
 interface PropsFila extends PropsCombinaciones {
@@ -75,7 +79,7 @@ function FilaActiva({ estado, fila, dispatch, alAjustarStock, deshabilitado, col
   )
 }
 
-function FilaPorArchivar({ estado, fila, dispatch, deshabilitado, columnas }: PropsFila) {
+function FilaPorArchivar({ estado, fila, dispatch, deshabilitado, columnas, efectos }: PropsFila) {
   const etiqueta = etiquetaDeFila(estado, fila)
   return (
     <tr className="border-t align-middle">
@@ -83,20 +87,21 @@ function FilaPorArchivar({ estado, fila, dispatch, deshabilitado, columnas }: Pr
         {etiqueta}
       </th>
       <td colSpan={columnas - 1} className="px-2 py-2">
-        <BloqueDeArchivo estado={estado} fila={fila} etiqueta={etiqueta} dispatch={dispatch} deshabilitado={deshabilitado} compacto />
+        <BloqueDeArchivo estado={estado} fila={fila} etiqueta={etiqueta} dispatch={dispatch} deshabilitado={deshabilitado} compacto efecto={efectos?.get(fila.id)} />
       </td>
     </tr>
   )
 }
 
-export function CombinacionesTabla({ estado, dispatch, alAjustarStock, deshabilitado }: PropsCombinaciones) {
+export function CombinacionesTabla({ estado, dispatch, alAjustarStock, deshabilitado, efectos }: PropsCombinaciones) {
+  const propios = useEfectosDeDeshacer(estado, efectos === undefined)
   const filas = filasEnOrden(estado)
   const activas = filas.filter((f) => !f.archivar)
   const porArchivar = filas.filter((f) => f.archivar)
   if (filas.length === 0) return null
 
   const columnas = estado.costoCargado ? 6 : 5
-  const comunes = { estado, dispatch, alAjustarStock, deshabilitado, columnas }
+  const comunes = { estado, dispatch, alAjustarStock, deshabilitado, columnas, efectos: efectos ?? propios }
   return (
     <div className="hidden overflow-x-auto rounded-lg border sm:block">
       <table className="w-full min-w-[40rem] text-sm">

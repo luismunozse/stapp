@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input"
 import { QuickStockAdjust } from "@/components/inventario/quick-stock-adjust"
 import { parseMoneyInput } from "@/lib/parse-money"
 import { bloqueos, type CambiosDeFila, type Fila, type VariantesAccion, type VariantesState } from "@/lib/variantes-filas"
-import { describirEfecto, efectoDeDeshacer } from "./vista"
+import { describirEfecto, type EfectoDeDeshacer } from "./vista"
 
 /*
  * The fields of ONE combination, shared by the table (desktop) and the card (phone) so both say and do
@@ -278,10 +278,18 @@ export function CamposAvanzados({ fila, etiqueta, dispatch, compacto, deshabilit
  * What a row pending archive shows instead of its fields: the mark, the stock it keeps, why an archive
  * is blocked, what the undo would also bring back (BEFORE pressing it) and the undo itself.
  */
-export function BloqueDeArchivo({ estado, fila, etiqueta, dispatch, compacto, deshabilitado }: PropsDeFila) {
+export function BloqueDeArchivo({
+  estado,
+  fila,
+  etiqueta,
+  dispatch,
+  compacto,
+  deshabilitado,
+  efecto,
+}: PropsDeFila & { /** What the undo will do; computed once for all rows by the caller. */ efecto?: EfectoDeDeshacer }) {
   const bloqueo = bloqueos(estado).find((b) => b.filaId === fila.id)
   const stock = fila.existente ? (fila.stock ?? 0) : 0
-  const aviso = describirEfecto(efectoDeDeshacer(estado, fila))
+  const aviso = efecto ? describirEfecto(efecto) : null
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200">Se archivará</span>

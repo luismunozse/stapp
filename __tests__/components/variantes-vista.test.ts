@@ -185,15 +185,22 @@ describe("describirEfecto: the sentence shown before pressing undo", () => {
     expect(describirEfecto(con({ bloqueo: "No se puede", valores: ["S"] }))).toBe("No se puede")
   })
 
-  it("uses the singular for one and the plural for several", () => {
-    expect(describirEfecto(con({ valores: ["S"] }))).toBe("Al deshacer se vuelve a agregar S")
-    expect(describirEfecto(con({ valores: ["S", "M"] }))).toBe("Al deshacer se vuelven a agregar S, M")
-    expect(describirEfecto(con({ tambien: ["Azul / S"] }))).toBe("Al deshacer también vuelve Azul / S")
-    expect(describirEfecto(con({ tambien: ["Azul / S", "Rojo / S"] }))).toBe("Al deshacer también vuelven Azul / S, Rojo / S")
-    expect(describirEfecto(con({ nuevas: ["Verde / S"] }))).toBe("Al deshacer se agrega Verde / S")
-    expect(describirEfecto(con({ nuevas: ["Verde / S", "Verde / M"] }))).toBe("Al deshacer se agregan Verde / S, Verde / M")
-    expect(describirEfecto(con({ restauradas: ["Negro / S"] }))).toBe("Al deshacer se restaura Negro / S")
-    expect(describirEfecto(con({ restauradas: ["Negro / S", "Negro / M"] }))).toBe("Al deshacer se restauran Negro / S, Negro / M")
+  it("uses the singular for one and the plural for several, and 'y' before the last item of every list", () => {
+    const casos: [Partial<EfectoDeDeshacer>, string[]][] = [
+      [{ valores: ["S"] }, ["Al deshacer se vuelve a agregar S"]],
+      [{ valores: ["S", "M"] }, ["Al deshacer se vuelven a agregar S y M"]],
+      [{ valores: ["S", "M", "L"] }, ["Al deshacer se vuelven a agregar S, M y L"]],
+      [{ tambien: ["Azul / S"] }, ["Al deshacer también vuelve Azul / S"]],
+      [{ tambien: ["Azul / S", "Rojo / S"] }, ["Al deshacer también vuelven Azul / S y Rojo / S"]],
+      [{ tambien: ["Azul / S", "Rojo / S", "Negro / S"] }, ["Al deshacer también vuelven Azul / S, Rojo / S y Negro / S"]],
+      [{ nuevas: ["Verde / S"] }, ["Al deshacer se agrega Verde / S"]],
+      [{ nuevas: ["Verde / S", "Verde / M"] }, ["Al deshacer se agregan Verde / S y Verde / M"]],
+      [{ nuevas: ["Verde / S", "Verde / M", "Verde / L"] }, ["Al deshacer se agregan Verde / S, Verde / M y Verde / L"]],
+      [{ restauradas: ["Negro / S"] }, ["Al deshacer se restaura Negro / S"]],
+      [{ restauradas: ["Negro / S", "Negro / M"] }, ["Al deshacer se restauran Negro / S y Negro / M"]],
+      [{ restauradas: ["Negro / S", "Negro / M", "Negro / L"] }, ["Al deshacer se restauran Negro / S, Negro / M y Negro / L"]],
+    ]
+    for (const [parcial, [esperado]] of casos) expect(describirEfecto(con(parcial))).toBe(esperado)
   })
 
   it("joins everything that happens in one sentence", () => {
@@ -203,6 +210,10 @@ describe("describirEfecto: the sentence shown before pressing undo", () => {
     )
     expect(describirEfecto(con({ valores: ["S"], tambien: ["Azul / S"], nuevas: ["Verde / S"], restauradas: ["Negro / S"] }))).toBe(
       "Al deshacer se vuelve a agregar S, también vuelve Azul / S, se agrega Verde / S y se restaura Negro / S"
+    )
+    // A list inside a clause and the clauses together: each uses its own 'y'.
+    expect(describirEfecto(con({ valores: ["S", "M"], tambien: ["Azul / S", "Azul / M"] }))).toBe(
+      "Al deshacer se vuelven a agregar S y M y también vuelven Azul / S y Azul / M"
     )
   })
 })

@@ -4,6 +4,7 @@ import { useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { etiquetaDeFila, filasEnOrden, type Fila } from "@/lib/variantes-filas"
 import type { PropsCombinaciones } from "./combinaciones-tabla"
+import { useEfectosDeDeshacer } from "./use-efectos-de-deshacer"
 import { BloqueDeArchivo, CamposAvanzados, CampoCodigo, CampoCosto, CampoPrecio, CampoStock } from "./campos-fila"
 
 /*
@@ -17,7 +18,7 @@ interface PropsCard extends PropsCombinaciones {
 
 const ROTULO = "grid gap-1 text-xs font-medium text-muted-foreground"
 
-export function CombinacionCard({ estado, fila, dispatch, alAjustarStock, deshabilitado }: PropsCard) {
+export function CombinacionCard({ estado, fila, dispatch, alAjustarStock, deshabilitado, efectos }: PropsCard) {
   const [abierta, setAbierta] = useState(false)
   const etiqueta = etiquetaDeFila(estado, fila)
   const comunes = { estado, fila, etiqueta, dispatch, deshabilitado }
@@ -26,7 +27,7 @@ export function CombinacionCard({ estado, fila, dispatch, alAjustarStock, deshab
     return (
       <article className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3 sm:hidden dark:border-amber-900 dark:bg-amber-950/20">
         <h3 className="text-sm font-semibold text-muted-foreground line-through">{etiqueta}</h3>
-        <BloqueDeArchivo {...comunes} />
+        <BloqueDeArchivo {...comunes} efecto={efectos?.get(fila.id)} />
       </article>
     )
   }
@@ -79,13 +80,14 @@ export function CombinacionCard({ estado, fila, dispatch, alAjustarStock, deshab
   )
 }
 
-export function CombinacionesCards({ estado, dispatch, alAjustarStock, deshabilitado }: PropsCombinaciones) {
+export function CombinacionesCards({ estado, dispatch, alAjustarStock, deshabilitado, efectos }: PropsCombinaciones) {
+  const propios = useEfectosDeDeshacer(estado, efectos === undefined)
   const filas = filasEnOrden(estado)
   const activas = filas.filter((f) => !f.archivar)
   const porArchivar = filas.filter((f) => f.archivar)
   if (filas.length === 0) return null
 
-  const comunes = { estado, dispatch, alAjustarStock, deshabilitado }
+  const comunes = { estado, dispatch, alAjustarStock, deshabilitado, efectos: efectos ?? propios }
   return (
     <div className="space-y-3 sm:hidden">
       {activas.map((fila) => (
