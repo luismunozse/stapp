@@ -9,8 +9,7 @@ import {
 } from "@/lib/depositos"
 import { formatInventario } from "@/lib/db-utils"
 import { selectConFallback } from "@/lib/variantes"
-import { createAuditLogger } from "@/lib/audit"
-import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
+import { registrarCreacion } from "@/lib/inventario-eventos"
 import { z } from "zod"
 
 const inventarioSchema = z.object({
@@ -355,38 +354,8 @@ export async function POST(request: Request) {
       }
     }
 
-    // Audit log fire-and-forget
-    if (inventario && userId) {
-      createAuditLogger(organizationId!, userId, request)
-        .create("inventario", inventario.id, {
-          codigo: inventario.codigo,
-          nombre: inventario.nombre,
-          categoria: inventario.categoria,
-          tipo_dispositivo: inventario.tipo_dispositivo,
-          stock: inventario.stock,
-          precio_compra: inventario.precio_compra,
-          precio_venta: inventario.precio_venta,
-          proveedor_id: inventario.proveedor_id,
-          barcode: inventario.barcode,
-        })
-        .catch(() => {})
-    }
-
-    // Webhook outbound: inventario.created (fire-and-forget)
-    if (inventario) {
-      emitWebhookEvent(organizationId!, "inventario.created", {
-        id: inventario.id,
-        codigo: inventario.codigo,
-        nombre: inventario.nombre,
-        categoria: inventario.categoria,
-        tipoDispositivo: inventario.tipo_dispositivo,
-        stock: inventario.stock,
-        precioVenta: inventario.precio_venta,
-        precioCompra: inventario.precio_compra,
-        proveedorId: inventario.proveedor_id,
-        barcode: inventario.barcode,
-      }).catch(() => {})
-    }
+    // Audit log + webhook outbound: inventario.created (fire-and-forget)
+    if (inventario) registrarCreacion({ organizationId: organizationId!, userId, request }, inventario)
 
     // POST corre detrás de requireInventarioAccess(): el permiso de costo ya
     // está resuelto por el guard.
