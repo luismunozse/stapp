@@ -33,6 +33,7 @@ import {
   CreditCard,
   Monitor,
   BookMarked,
+  FileMinus,
 } from "lucide-react"
 import { manualSections, type Role, type ManualSection as ManualSectionData } from "@/lib/manual-content"
 
@@ -59,6 +60,7 @@ const sectionIcons: Record<string, React.ElementType> = {
   vendedores: Store,
   inventario: Package,
   ventas: ShoppingCart,
+  "notas-credito": FileMinus,
   pos: Monitor,
   cotizaciones: FileText,
   facturacion: Receipt,

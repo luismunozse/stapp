@@ -322,8 +322,43 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Anulación de ventas",
-        body: "Si necesitás anular una venta, podés cambiar su estado a \"Anulada\". Esto es útil para corregir errores o procesar devoluciones.",
+        body: "Si una venta se cargó por error, podés anularla: cambia su estado a \"Anulada\". Para devolver productos o plata de una venta que sí ocurrió, usá una nota de crédito.",
         roles: ["ADMIN"],
+        seeAlso: ["notas-credito"],
+      },
+    ],
+  },
+  {
+    id: "notas-credito",
+    title: "Notas de crédito",
+    roles: ["ADMIN", "TECNICO", "VENDEDOR"],
+    content: [
+      {
+        subtitle: "Qué es una nota de crédito",
+        body: "Una nota de crédito deja constancia de lo que le devolvés o le acreditás a un cliente sobre una venta o una orden: productos que vuelven, un trabajo que no se hizo, un ajuste de precio. Cada una lleva su número NC- (las devoluciones registradas antes conservan su número DEV-). Es un comprobante interno: no reemplaza una factura ni una nota de crédito fiscal.",
+        tip: "Si el cliente todavía debía parte de la venta o de la orden, la nota de crédito primero baja esa deuda y solo el resto se le devuelve.",
+      },
+      {
+        subtitle: "Emitir una nota de crédito",
+        body: "Se emite siempre desde la operación que corrige.",
+        steps: [
+          "Desde una venta: abrí la venta y tocá \"Devolución\". Elegí los productos y las cantidades que vuelven y cómo le devolvés la plata",
+          "Desde el POS: tocá \"Devolución\" y buscá la venta",
+          "Desde una orden: en el detalle de la orden, abrí el menú de acciones y elegí \"Emitir nota de crédito\" (aparece cuando la orden tiene cobros)",
+        ],
+        roles: ["ADMIN"],
+        seeAlso: ["ventas", "pos", "ordenes"],
+      },
+      {
+        subtitle: "Encontrar una nota de crédito",
+        body: "En Notas de crédito (/notas-credito, menú Finanzas) están todas las del taller, de ventas y de órdenes, incluidas las anuladas y las devoluciones anteriores. Podés buscar por número y filtrar por fecha, origen, tipo, motivo y estado. Cada fila te lleva a su venta u orden. Desde la ficha de un cliente, el botón \"Notas de crédito\" te muestra solo las suyas.",
+        roles: ["ADMIN"],
+        seeAlso: ["clientes"],
+      },
+      {
+        subtitle: "Imprimir o enviar una nota de crédito",
+        body: "En el detalle de la venta o de la orden, el bloque \"Notas de crédito\" muestra las que tiene, con tres botones: PDF (hoja A4), Ticket (impresora térmica de 58 u 80 mm, por USB o desde el navegador) y WhatsApp. WhatsApp comparte el PDF con un mensaje que podés cambiar en Configuración > Plantillas WhatsApp; desde la compu se descarga el PDF y se abre el chat del cliente para que lo adjuntes. El PDF muestra el saldo pendiente de la operación al día en que lo imprimís.",
+        seeAlso: ["configuracion"],
       },
     ],
   },

@@ -23,4 +23,30 @@ describe('manualSections', () => {
   it('es data pura serializable (sin componentes React)', () => {
     expect(() => JSON.stringify(manualSections)).not.toThrow()
   })
+
+  it('tiene la sección de notas de crédito para los tres roles, con el bloque del listado solo para el ADMIN', () => {
+    const s = manualSections.find((x) => x.id === 'notas-credito')
+    expect(s).toBeDefined()
+    expect(s!.roles).toEqual(['ADMIN', 'TECNICO', 'VENDEDOR'])
+    const texto = JSON.stringify(s)
+    expect(texto).toContain('NC-')
+    expect(texto).toContain('DEV-')
+    expect(texto).toContain('/notas-credito')
+    expect(texto).toMatch(/no reemplaza una factura/i)
+    const listado = s!.content.find((b) => b.subtitle === 'Encontrar una nota de crédito')
+    expect(listado?.roles).toEqual(['ADMIN'])
+  })
+
+  it('las referencias cruzadas de la sección apuntan a secciones que existen', () => {
+    const ids = new Set(manualSections.map((x) => x.id))
+    const s = manualSections.find((x) => x.id === 'notas-credito')!
+    for (const b of s.content) for (const ref of b.seeAlso ?? []) expect(ids.has(ref), ref).toBe(true)
+  })
+
+  it('anular una venta ya no se presenta como la forma de hacer una devolución', () => {
+    const ventas = manualSections.find((x) => x.id === 'ventas')!
+    const anulacion = ventas.content.find((b) => b.subtitle === 'Anulación de ventas')!
+    expect(anulacion.body).not.toMatch(/procesar devoluciones/)
+    expect(anulacion.seeAlso).toContain('notas-credito')
+  })
 })
