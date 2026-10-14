@@ -75,6 +75,8 @@ import { OrdenServiciosTab } from "@/components/ordenes/orden-servicios-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
 import { ConfirmarReparadoDialog } from "@/components/ordenes/confirmar-reparado-dialog"
 import { NotaCreditoDialog } from "@/components/notas-credito/nota-credito-dialog"
+import { NotasCreditoOrden } from "@/components/notas-credito/notas-credito-orden"
+import { mutate } from "swr"
 import { PatternDisplay } from "@/components/ui/pattern-display"
 import { StatusBanner } from "@/components/ui/status-banner"
 import { MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
@@ -1110,6 +1112,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           {!isRetiro && !isSinCobro && (
             <GarantiaCard ordenId={ordenId} ordenEstado={orden.estado} garantiaDiasDefault={(orden as any).organizationGarantiaDiasDefault ?? 30} />
           )}
+
+          {/* Notas de crédito: las ve quien ve la orden (spec, Permisos). */}
+          <NotasCreditoOrden ordenId={orden.id} />
         </div>
 
         {/* Right Column - Management (hidden on mobile, shown above) */}
@@ -1311,7 +1316,10 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           onOpenChange={setShowNCDialog}
           ordenId={orden.id}
           montoMaximo={orden.totalCobrado || 0}
-          onSuccess={() => fetchOrden()}
+          onSuccess={() => {
+            fetchOrden()
+            void mutate(`/api/ordenes/${orden.id}/notas-credito`)
+          }}
         />
       )}
 

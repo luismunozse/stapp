@@ -1,5 +1,6 @@
 "use client"
 
+import { NotaCreditoAcciones } from "@/components/notas-credito/nota-credito-acciones"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
@@ -878,13 +879,13 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
         </Card>
       )}
 
-      {/* Devoluciones */}
+      {/* Notas de crédito (devoluciones de la venta) */}
       {venta.devoluciones && venta.devoluciones.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <RotateCcw className="h-5 w-5" />
-              Devoluciones ({venta.devoluciones.length})
+              Notas de crédito ({venta.devoluciones.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -925,21 +926,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   <div className="text-xs text-muted-foreground">
                     {formatDate(dev.createdAt)} — {dev.items.length} item(s) devueltos
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        window.open(
-                          `/api/ventas/${ventaId}/devolucion/${dev.id}/pdf`,
-                          "_blank"
-                        )
-                      }
-                    >
-                      <Download className="mr-1 h-3 w-3" />
-                      Nota de crédito
-                    </Button>
-                  </div>
+                  <NotaCreditoAcciones id={dev.id} />
                 </div>
               ))}
             </div>
