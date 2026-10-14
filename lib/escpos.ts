@@ -7,6 +7,7 @@
  */
 
 import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
+import { formatCurrencyValue, type CurrencyCode } from "@/lib/currency"
 
 const CHARS_PER_LINE_58 = 32
 const CHARS_PER_LINE_80 = 48
@@ -479,5 +480,132 @@ export function generateTicketCommands(data: TicketData, printerWidth: 58 | 80 =
   // Cut (cut command provides minimal feed for cutter clearance)
   add(CMD.CUT)
 
+  return new Uint8Array(buf)
+}
+
+/**
+ * Plata para el ticket con la moneda de la organización. Intl separa el
+ * símbolo con espacios no separables (U+00A0 / U+202F), que la code page 858
+ * no tiene: textToBytes los mandaría como '?'. Se cambian por espacios
+ * comunes. Los tickets de venta y de orden siguen con su "$" fijo
+ * (formatMoney); este es el primero que respeta la moneda.
+ */
+export function formatMontoTicket(monto: number, moneda: string | null | undefined): string {
+  const codigo = (moneda || "ARS") as CurrencyCode
+  return formatCurrencyValue(monto, codigo).replace(/[\u00a0\u202f]/g, " ")
+}
+
+export interface NotaCreditoTicketData {
+  numero: string
+  /** Ya formateada en la zona de la organización. */
+  fecha: string
+  /** Fecha de impresión, para el renglón del pendiente. */
+  hoy: string
+  origen: "VENTA" | "ORDEN"
+  /** "Venta V0042" | "Orden CEL099". */
+  operacion: string
+  cliente: string
+  motivo: string
+  items: Array<{ descripcion: string; cantidad: number; subtotal: number }>
+  monto: number
+  montoAplicadoDeuda: number
+  montoReembolso: number
+  etiquetaReintegro: string
+  pendienteActual: number | null
+  anulada: boolean
+  moneda: string | null
+  nombreEmpresa?: string | null
+  telefonoEmpresa?: string | null
+  direccionEmpresa?: string | null
+}
+
+/**
+ * Ticket de una nota de crédito (58 u 80 mm). Lo lee el cliente: mismas
+ * palabras que el PDF ("Te devolvimos", "tu saldo") y la leyenda no fiscal.
+ */
+export function generateNotaCreditoTicketCommands(
+  data: NotaCreditoTicketData,
+  ancho: 58 | 80 = 58
+): Uint8Array {
+  const W = ancho === 58 ? CHARS_PER_LINE_58 : CHARS_PER_LINE_80
+  const buf: number[] = []
+  const add = (...cmds: number[][]) => { for (const cmd of cmds) buf.push(...cmd) }
+  const plata = (n: number) => formatMontoTicket(n, data.moneda)
+  // Un renglón "etiqueta ... monto"; si la etiqueta no entra al lado del
+  // monto, va sola y el monto abajo a la derecha (nunca se corta el número).
+  const fila = (label: string, monto: string): number[] => {
+    if (label.length + 1 + monto.length <= W) return columns(label, monto, W)
+    const out: number[] = []
+    for (const l of wrapText(label, W)) out.push(...line(l))
+    out.push(...rightAlign(monto, W))
+    return out
+  }
+  const parrafo = (texto: string) => { for (const l of wrapText(texto, W)) add(line(l)) }
+
+  add(CMD.INIT, CMD.CHARSET_LATIN)
+
+  // === EMPRESA ===
+  add(CMD.ALIGN_CENTER, CMD.BOLD_ON, CMD.DOUBLE_ON)
+  add(line((data.nombreEmpresa || "Servicio Tecnico").substring(0, W / 2)))
+  add(CMD.DOUBLE_OFF, CMD.BOLD_OFF)
+  if (data.telefonoEmpresa) add(line(`Tel: ${data.telefonoEmpresa}`.substring(0, W)))
+  if (data.direccionEmpresa) add(line(data.direccionEmpresa.substring(0, W)))
+  add(doubleSeparator(W))
+
+  // === DOCUMENTO ===
+  add(CMD.BOLD_ON, CMD.DOUBLE_ON)
+  add(line("NOTA DE CRÉDITO".substring(0, W / 2)))
+  add(CMD.DOUBLE_OFF)
+  add(line(data.numero.substring(0, W)))
+  add(CMD.BOLD_OFF)
+  add(line(data.fecha.substring(0, W)))
+  if (data.anulada) {
+    add(CMD.BOLD_ON, CMD.DOUBLE_ON)
+    add(line("ANULADA"))
+    add(CMD.DOUBLE_OFF, CMD.BOLD_OFF)
+  }
+  add(separator(W))
+
+  // === DATOS ===
+  add(CMD.ALIGN_LEFT)
+  parrafo(data.operacion)
+  parrafo(`Cliente: ${data.cliente}`)
+  parrafo(`Motivo: ${data.motivo}`)
+  add(separator(W))
+
+  // === ITEMS ===
+  if (data.items.length > 0) {
+    for (const item of data.items) {
+      add(CMD.BOLD_ON)
+      add(line(item.descripcion.substring(0, W)))
+      add(CMD.BOLD_OFF)
+      add(fila(` ${item.cantidad} u.`, plata(item.subtotal)))
+    }
+    add(separator(W))
+  }
+
+  // === IMPORTES ===
+  if (data.montoAplicadoDeuda > 0) add(fila("Descontado de tu saldo:", plata(data.montoAplicadoDeuda)))
+  if (data.montoReembolso > 0) add(fila(data.etiquetaReintegro, plata(data.montoReembolso)))
+  add(CMD.BOLD_ON, CMD.DOUBLE_ON)
+  add(columns("TOTAL:", plata(data.monto), W / 2))
+  add(CMD.DOUBLE_OFF, CMD.BOLD_OFF)
+  if (data.pendienteActual !== null) {
+    const operacion = data.origen === "VENTA" ? "venta" : "orden"
+    parrafo(
+      data.pendienteActual > 0
+        ? `Saldo pendiente de la ${operacion} al ${data.hoy}: ${plata(data.pendienteActual)}`
+        : `Al ${data.hoy} la ${operacion} no tiene saldo pendiente.`
+    )
+  }
+  add(doubleSeparator(W))
+
+  // === PIE ===
+  add(CMD.ALIGN_CENTER)
+  add(line("Nota de crédito interna"))
+  parrafo("No válido como comprobante fiscal")
+  if (data.telefonoEmpresa) add(line(`Consultas: ${data.telefonoEmpresa}`.substring(0, W)))
+
+  add(CMD.CUT)
   return new Uint8Array(buf)
 }
