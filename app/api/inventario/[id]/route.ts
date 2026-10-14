@@ -6,6 +6,7 @@ import { formatInventario } from "@/lib/db-utils"
 import { createAuditLogger } from "@/lib/audit"
 import { pickAudited, registrarActualizacion, registrarArchivado } from "@/lib/inventario-eventos"
 import { sucursalParaEscritura, getDepositoDeSucursal } from "@/lib/sucursal"
+import { esViolacionKitEnGrupo, MENSAJE_KIT_EN_GRUPO } from "@/lib/variantes"
 import { z } from "zod"
 
 const inventarioSchema = z.object({
@@ -110,6 +111,13 @@ export async function PUT(
         { error: "Un kit necesita un tipo: ensamblado o virtual" },
         { status: 400 }
       )
+    }
+
+    // A variant can never be a kit (CHECK inventario_grupo_no_kit, migration 355). Said here, before
+    // the stock adjustment below, so a rejected change does not leave a half-applied save. The
+    // database CHECK stays the backstop for a group created after this read.
+    if (esKitFinal === true && existingItem.grupo_id) {
+      return NextResponse.json({ error: MENSAJE_KIT_EN_GRUPO }, { status: 400 })
     }
 
     // Preparar datos para update
@@ -245,6 +253,9 @@ export async function PUT(
     }
 
     if (updateError) {
+      if (esViolacionKitEnGrupo(updateError)) {
+        return NextResponse.json({ error: MENSAJE_KIT_EN_GRUPO }, { status: 400 })
+      }
       // Codigo duplicado: error amigable en vez de 500.
       if ((updateError as any).code === "23505") {
         return NextResponse.json(

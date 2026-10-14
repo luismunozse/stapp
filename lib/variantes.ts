@@ -135,6 +135,20 @@ export function camposDeVarianteParaPos(item: {
   }
 }
 
+/** Shown when a kit would end up inside a variant group (the CHECK of migration 355). */
+export const MENSAJE_KIT_EN_GRUPO = "Un producto con variantes no puede ser kit"
+
+/**
+ * True for the CHECK violation `inventario_grupo_no_kit` (a grouped row made a kit) and for no other
+ * error: other 23514 violations (a stock range, the kit type check of migration 177) keep their own path.
+ */
+export function esViolacionKitEnGrupo(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false
+  const e = error as Record<string, unknown>
+  if (String(e.code ?? "") !== "23514") return false
+  return `${String(e.message ?? "")} ${String(e.details ?? "")}`.includes("inventario_grupo_no_kit")
+}
+
 /** Client-generated id the save RPC accepts for a new row: `^c[0-9a-f]{24}$`. */
 export function generarIdCliente(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(12))
