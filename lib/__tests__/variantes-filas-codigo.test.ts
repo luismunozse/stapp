@@ -79,6 +79,21 @@ describe("generarCodigoVariante", () => {
     expect(segundo).toBe("FX-AC-2")
   })
 
+  it("cuts by code points: no lone surrogate at the boundary, and the cap counts characters", () => {
+    // 95 letters + 2 emoji: the room left for the base is 96 code points, so exactly one emoji fits.
+    const base = "B".repeat(95) + "😀😀"
+    const codigo = generarCodigoVariante(base, ["Rojo"], [])
+    expect(codigo).toBe("B".repeat(95) + "😀-ROJ")
+    expect(codigo.isWellFormed()).toBe(true)
+    expect(Array.from(codigo)).toHaveLength(100)
+    // Only emoji: 100 code points are 200 UTF-16 units and still a valid code.
+    const todos = generarCodigoVariante("😀".repeat(120), [], [])
+    expect(Array.from(todos)).toHaveLength(100)
+    expect(todos.isWellFormed()).toBe(true)
+    const conSufijo = generarCodigoVariante("😀".repeat(120), ["Rojo"], ["😀".repeat(96) + "-ROJ"])
+    expect(conSufijo).toBe("😀".repeat(94) + "-ROJ-2")
+  })
+
   it("never exceeds the 100 character cap, suffix included", () => {
     const base = "B".repeat(120)
     const sinColision = generarCodigoVariante(base, ["Rojo"], [])

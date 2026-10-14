@@ -15,6 +15,9 @@ function palabrasAscii(valor: string): string[] {
 
 const esNumero = (palabra: string) => /^[0-9]+$/.test(palabra)
 
+/** The first `max` code points: a UTF-16 slice could leave half of an emoji. The cap counts characters, like the database. */
+const cortar = (texto: string, max: number) => Array.from(texto).slice(0, max).join("")
+
 /**
  * Short ASCII tag of one value: "Rojo" -> ROJ, "Azul marino" -> AM, "128 GB" -> 128G, "M" -> M.
  * One word keeps three letters (so Rojo and Rosado differ); several words keep the initials and
@@ -42,10 +45,10 @@ export function generarCodigoVariante(base: string, valores: readonly string[], 
 
   const armar = (sufijoNumerico: string) => {
     const cola = [etiqueta, sufijoNumerico].filter((p) => p !== "").join("-")
-    if (cola === "") return prefijo.slice(0, LIMITES.codigo)
-    if (prefijo === "") return cola.slice(0, LIMITES.codigo)
+    if (cola === "") return cortar(prefijo, LIMITES.codigo)
+    if (prefijo === "") return cortar(cola, LIMITES.codigo)
     const espacio = Math.max(0, LIMITES.codigo - cola.length - 1)
-    return `${prefijo.slice(0, espacio)}-${cola}`.slice(0, LIMITES.codigo)
+    return cortar(`${cortar(prefijo, espacio)}-${cola}`, LIMITES.codigo)
   }
 
   let candidato = armar("")
