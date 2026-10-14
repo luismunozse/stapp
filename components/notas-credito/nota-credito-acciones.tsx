@@ -1,8 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import { FileDown, Receipt } from "lucide-react"
+import { FileDown, Loader2, MessageCircle, Receipt } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { mensajeNotaCredito, compartirNotaCredito } from "@/lib/notas-credito/whatsapp"
+import type { NotaCreditoDocumento } from "@/lib/notas-credito/documento"
 import { NotaCreditoTicketDialog } from "./nota-credito-ticket-dialog"
 
 export interface NotaCreditoAccionesProps {
@@ -21,6 +24,38 @@ export function NotaCreditoAcciones({ id, compacto = false }: NotaCreditoAccione
   const [ticketAbierto, setTicketAbierto] = useState(false)
   const abrirPdf = () => window.open(`/api/notas-credito/${encodeURIComponent(id)}/pdf`, "_blank")
 
+  const [compartiendo, setCompartiendo] = useState(false)
+
+  const compartir = async () => {
+    setCompartiendo(true)
+    try {
+      const [docRes, configRes] = await Promise.all([
+        fetch(`/api/notas-credito/${encodeURIComponent(id)}`),
+        // La plantilla del taller es opcional: sin ella va la de STApp. Esta
+        // ruta es requireAdmin, así que para el vendedor y el técnico responde
+        // 403 y sale la de STApp (igual que el link de seguimiento de la orden).
+        fetch("/api/notificaciones/config").catch(() => null),
+      ])
+      if (!docRes.ok) throw new Error("documento")
+      const doc = (await docRes.json()) as NotaCreditoDocumento
+      const config = configRes && configRes.ok ? await configRes.json() : null
+      const resultado = await compartirNotaCredito({
+        id,
+        numero: doc.numero,
+        telefono: doc.cliente.telefono,
+        pais: doc.emisor.pais,
+        mensaje: mensajeNotaCredito(doc, config?.plantillasWhatsapp ?? null),
+      })
+      if (resultado === "descargado") {
+        toast.info("Se descargó el PDF. El cliente no tiene teléfono cargado: adjuntalo en WhatsApp.")
+      }
+    } catch (err) {
+      if ((err as Error)?.name !== "AbortError") toast.error("No se pudo preparar la nota de crédito para WhatsApp")
+    } finally {
+      setCompartiendo(false)
+    }
+  }
+
   return (
     <div className="flex flex-wrap gap-2" data-no-row-click>
       <Button variant="outline" size="sm" onClick={abrirPdf} aria-label="PDF" title="Ver PDF">
@@ -30,6 +65,10 @@ export function NotaCreditoAcciones({ id, compacto = false }: NotaCreditoAccione
       <Button variant="outline" size="sm" onClick={() => setTicketAbierto(true)} aria-label="Ticket" title="Imprimir ticket">
         <Receipt className="h-4 w-4" />
         {compacto ? null : <span className="ml-1">Ticket</span>}
+      </Button>
+      <Button variant="outline" size="sm" onClick={compartir} disabled={compartiendo} aria-label="WhatsApp" title="Enviar por WhatsApp">
+        {compartiendo ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+        {compacto ? null : <span className="ml-1">WhatsApp</span>}
       </Button>
       {ticketAbierto ? (
         <NotaCreditoTicketDialog notaCreditoId={id} open={ticketAbierto} onOpenChange={setTicketAbierto} />
