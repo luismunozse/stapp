@@ -276,7 +276,7 @@ Todo incluido en el plan:
 - Gestión de proveedores
 - Facturación con numeración automática e IVA
 - Importación y exportación de datos (Excel/CSV)
-- Impresión de etiquetas con QR para identificar equipos
+- Impresión de etiquetas para identificar equipos
 - 5GB de almacenamiento en la nube
 - Notificaciones por WhatsApp (API oficial de Meta)
 - Campañas de email automáticas
@@ -292,7 +292,7 @@ CARACTERÍSTICAS PRINCIPALES:
 1. SERVICIO TÉCNICO:
 - Órdenes de Servicio: gestión de cada reparación de principio a fin con 12 estados (recibido, en diagnóstico, presupuestado, aprobado, en reparación, esperando repuesto, reparado, entregado, sin reparación, entregado sin reparación, cancelado). Checklists personalizados por tipo de dispositivo (celular, computadora, tablet, consola, smartwatch, accesorios). Asignación de técnicos, seguimiento completo y numeración automática por organización. Los cambios en las órdenes quedan guardados al instante y disponibles al recargar desde cualquier dispositivo. Problema reportado editable desde el detalle de la orden
 - Orden de Retiro (Sin Reparación): cuando un equipo no se puede reparar, se genera una orden de retiro especial. El cliente firma la recepción del equipo sin reparar y se genera un comprobante PDF de retiro. El estado pasa de "sin reparación" a "entregado sin reparación"
-- Impresión de Etiquetas: generación de etiquetas para identificar equipos con código de orden, cliente, dispositivo, problema reportado, fecha de ingreso y código QR que lleva al portal de seguimiento público. Compatibles con impresoras térmicas de 58mm (etiquetas de 60x40mm y 70x40mm)
+- Impresión de Etiquetas: generación de etiquetas para identificar equipos con código de orden, cliente, teléfono, IMEI o número de serie, problema reportado y fecha de ingreso. El link de seguimiento le llega al cliente por el comprobante y WhatsApp, no va en la etiqueta. Se imprimen por el driver de cualquier impresora térmica: etiquetas de 40x30, 50x30, 50x40 o 60x40 mm, o rollos de 58 y 80 mm
 - Impresión de Órdenes: botón para generar e imprimir el PDF de la orden directamente desde el detalle
 - Cotizaciones y Presupuestos: sistema independiente de presupuestos con ítems detallados, descuentos (fijos o porcentuales), impuestos configurables (IVA), condiciones, términos y fecha de vencimiento. El cliente los aprueba o rechaza online desde un link único, sin necesidad de crear cuenta. Si rechaza, puede indicar el motivo y la orden vuelve a diagnóstico automáticamente. Estados: borrador, enviada, aceptada, rechazada. Exportación a PDF y envío por WhatsApp
 - Fotos por Etapa: documentación visual en 5 etapas (ingreso, diagnóstico, componentes, reparación y entrega). Protección ante reclamos con evidencia fotográfica almacenada en la nube. Cámara integrada en la app móvil
@@ -391,7 +391,7 @@ VENTAJAS COMPETITIVAS vs Excel/Papel/Competencia:
 - Soporte en español argentino con asistente virtual (yo!) y sistema de tickets
 - Multi-moneda: soporte para pesos argentinos (ARS) y dólares (USD)
 - Sincronización en la nube: tus datos disponibles en todos tus dispositivos
-- Impresión de etiquetas con QR para identificar equipos en el taller
+- Impresión de etiquetas para identificar equipos en el taller
 - Soporte para impresoras térmicas: imprimí tickets y etiquetas directo desde el navegador sin drivers
 - Orden de retiro para equipos sin reparación con comprobante firmado
 

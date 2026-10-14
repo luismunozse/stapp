@@ -78,7 +78,7 @@ describe("ConfirmarReparadoDialog", () => {
       <ConfirmarReparadoDialog
         open
         onOpenChange={vi.fn()}
-        orden={{ ...baseOrden, costoFinal: 15000, dispositivo: "iPhone 12", problemaReportado: "No carga", publicToken: "tok" }}
+        orden={{ ...baseOrden, costoFinal: 15000, problemaReportado: "No carga", imei: "356938035643809", telefono: "+54 9 351 555-1234" }}
         onSuccess={vi.fn()}
       />,
     )
@@ -87,7 +87,11 @@ describe("ConfirmarReparadoDialog", () => {
     await waitFor(() => expect(printDeviceLabel).toHaveBeenCalled())
     const [data] = (printDeviceLabel as any).mock.calls[0]
     expect(data.variant).toBe("reparado")
-    expect(data.dispositivo).toBe("iPhone 12")
+    expect(data.imei).toBe("356938035643809")
+    expect(data.telefono).toBe("+54 9 351 555-1234")
+    expect(data.publicToken).toBeUndefined()
+    // La firma nueva ya no recibe baseUrl: sólo (data, opts?).
+    expect((printDeviceLabel as any).mock.calls[0]).toHaveLength(1)
   })
 
   it("no imprime la etiqueta si se destilda el checkbox", async () => {

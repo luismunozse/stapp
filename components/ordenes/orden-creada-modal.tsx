@@ -223,7 +223,6 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
 
   const handlePrintLabel = async () => {
     if (!orden) return
-    const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
     const fecha = new Date().toLocaleDateString("es-AR", {
       day: "2-digit", month: "2-digit", year: "numeric",
       timeZone: timezone,
@@ -237,12 +236,12 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
         codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
         numeroOrden: orden.numeroOrden,
         clienteNombre: orden.cliente.nombre,
-        dispositivo: orden.dispositivo,
+        telefono: orden.telefonoContacto || orden.cliente.telefono,
+        imei: orden.imei,
         problemaReportado: orden.problemaReportado,
         fechaIngreso: fecha,
-        publicToken: orden.publicToken,
         organizationName: orden.organizationName,
-      }, baseUrl)
+      })
     } catch (error) {
       console.error("Error imprimiendo la etiqueta:", error)
       await showError("No se pudo imprimir la etiqueta. La orden ya está creada: revisá la impresora e intentá de nuevo.")
