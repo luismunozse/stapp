@@ -30,7 +30,9 @@ function stubDocumento(config: unknown = { plantillasWhatsapp: {} }) {
   vi.stubGlobal("fetch", vi.fn(async (url: string) =>
     url === "/api/notificaciones/config"
       ? { ok: true, json: async () => config }
-      : { ok: true, json: async () => documento }
+      : url.endsWith("/pdf")
+        ? { ok: true, blob: async () => new Blob(["%PDF"], { type: "application/pdf" }) }
+        : { ok: true, json: async () => documento }
   ))
 }
 
@@ -65,7 +67,7 @@ describe("NotaCreditoAcciones", () => {
     fireEvent.click(screen.getByRole("button", { name: "WhatsApp" }))
     await waitFor(() =>
       expect(compartirNotaCredito).toHaveBeenCalledWith({
-        id: "nc-1", numero: "NC-000010", telefono: "1155550000", pais: "AR", mensaje: "Tu NC NC-000010",
+        numero: "NC-000010", telefono: "1155550000", pais: "AR", mensaje: "Tu NC NC-000010", pdf: expect.any(Blob),
       })
     )
   })
@@ -93,5 +95,25 @@ describe("NotaCreditoAcciones", () => {
     fireEvent.click(screen.getByRole("button", { name: "WhatsApp" }))
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("No se pudo preparar la nota de crédito para WhatsApp"))
     expect(compartirNotaCredito).not.toHaveBeenCalled()
+  })
+
+  // El gesto del click vence en unos segundos: documento, plantilla y PDF salen juntos, no en cadena.
+  it("pide el documento, la plantilla y el PDF a la vez", () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})))
+    render(<NotaCreditoAcciones id="nc-1" />)
+    fireEvent.click(screen.getByRole("button", { name: "WhatsApp" }))
+    const urls = vi.mocked(fetch).mock.calls.map((c) => c[0])
+    expect(urls).toEqual(expect.arrayContaining([
+      "/api/notas-credito/nc-1", "/api/notificaciones/config", "/api/notas-credito/nc-1/pdf",
+    ]))
+    expect(urls).toHaveLength(3)
+  })
+
+  it("si el navegador bloqueó la ventana de WhatsApp, avisa que abra WhatsApp a mano", async () => {
+    stubDocumento()
+    vi.mocked(compartirNotaCredito).mockResolvedValue("bloqueado")
+    render(<NotaCreditoAcciones id="nc-1" />)
+    fireEvent.click(screen.getByRole("button", { name: "WhatsApp" }))
+    await waitFor(() => expect(toast.info).toHaveBeenCalledWith(expect.stringContaining("abrí WhatsApp")))
   })
 })

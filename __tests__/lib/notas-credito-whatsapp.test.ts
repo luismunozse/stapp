@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { formatCurrencyValue } from "@/lib/currency"
 import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
-import { mensajeNotaCredito, compartirNotaCredito } from "@/lib/notas-credito/whatsapp"
+import { mensajeNotaCredito, compartirNotaCredito, descargarPdfNotaCredito } from "@/lib/notas-credito/whatsapp"
 import type { NotaCreditoDocumento } from "@/lib/notas-credito/documento"
 
 const doc: NotaCreditoDocumento = {
@@ -50,13 +50,27 @@ describe("mensajeNotaCredito", () => {
   })
 })
 
+describe("descargarPdfNotaCredito", () => {
+  it("trae el PDF de esa NC", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, blob: async () => new Blob(["%PDF"], { type: "application/pdf" }) })))
+    const blob = await descargarPdfNotaCredito("nc-1")
+    expect(fetch).toHaveBeenCalledWith("/api/notas-credito/nc-1/pdf")
+    expect(blob.type).toBe("application/pdf")
+  })
+
+  it("si el PDF no sale, falla", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false })))
+    await expect(descargarPdfNotaCredito("nc-1")).rejects.toThrow("No se pudo generar el PDF")
+  })
+})
+
 describe("compartirNotaCredito", () => {
-  const opts = { id: "nc-1", numero: "NC-000010", telefono: "1155550000", pais: "AR", mensaje: "Hola" }
+  const pdf = new Blob(["%PDF"], { type: "application/pdf" })
+  const opts = { numero: "NC-000010", telefono: "1155550000", pais: "AR", mensaje: "Hola", pdf }
 
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, blob: async () => new Blob(["%PDF"], { type: "application/pdf" }) })))
-    vi.stubGlobal("open", vi.fn())
+    vi.stubGlobal("open", vi.fn(() => ({})))
     URL.createObjectURL = vi.fn(() => "blob:nc")
     URL.revokeObjectURL = vi.fn()
   })
@@ -65,7 +79,6 @@ describe("compartirNotaCredito", () => {
     const share = vi.fn(async () => {})
     Object.assign(navigator, { share, canShare: () => true })
     expect(await compartirNotaCredito({ ...opts, telefono: null })).toBe("compartido")
-    expect(fetch).toHaveBeenCalledWith("/api/notas-credito/nc-1/pdf")
     const arg = (share.mock.calls[0] as unknown[])[0] as { text: string; files: File[] }
     expect(arg.text).toBe("Hola")
     expect(arg.files[0].name).toBe("nota-credito-NC-000010.pdf")
@@ -87,9 +100,32 @@ describe("compartirNotaCredito", () => {
     expect(window.open).not.toHaveBeenCalled()
   })
 
-  it("si el PDF no sale, falla sin abrir nada", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false })))
-    await expect(compartirNotaCredito(opts)).rejects.toThrow("No se pudo generar el PDF")
-    expect(window.open).not.toHaveBeenCalled()
+  // La hoja de compartir exige un gesto reciente: si el navegador la rechaza, el PDF no se pierde.
+  it("si el navegador no deja compartir (NotAllowedError), cae a la descarga y abre WhatsApp", async () => {
+    const share = vi.fn(async () => { throw Object.assign(new Error("no"), { name: "NotAllowedError" }) })
+    Object.assign(navigator, { share, canShare: () => true })
+    expect(await compartirNotaCredito(opts)).toBe("whatsapp")
+    expect(URL.createObjectURL).toHaveBeenCalled()
+    expect(window.open).toHaveBeenCalledWith(generateWhatsAppUrl("1155550000", "Hola", "AR"), "_blank")
+  })
+
+  it("NotAllowedError sin teléfono: solo descarga", async () => {
+    const share = vi.fn(async () => { throw Object.assign(new Error("no"), { name: "NotAllowedError" }) })
+    Object.assign(navigator, { share, canShare: () => true })
+    expect(await compartirNotaCredito({ ...opts, telefono: null })).toBe("descargado")
+  })
+
+  it("cancelar la hoja de compartir sigue siendo un AbortError (no descarga)", async () => {
+    const share = vi.fn(async () => { throw Object.assign(new Error("cancelado"), { name: "AbortError" }) })
+    Object.assign(navigator, { share, canShare: () => true })
+    await expect(compartirNotaCredito(opts)).rejects.toMatchObject({ name: "AbortError" })
+    expect(URL.createObjectURL).not.toHaveBeenCalled()
+  })
+
+  it("si el navegador bloquea la ventana de WhatsApp, lo informa (el PDF ya se descargó)", async () => {
+    Object.assign(navigator, { share: undefined, canShare: undefined })
+    vi.stubGlobal("open", vi.fn(() => null))
+    expect(await compartirNotaCredito(opts)).toBe("bloqueado")
+    expect(URL.createObjectURL).toHaveBeenCalled()
   })
 })

@@ -34,33 +34,44 @@ export function mensajeNotaCredito(doc: NotaCreditoDocumento, plantillas?: Recor
   ).replace(/^Hola ,/, "Hola,")
 }
 
-export type ResultadoCompartir = "compartido" | "whatsapp" | "descargado"
+export type ResultadoCompartir = "compartido" | "whatsapp" | "descargado" | "bloqueado"
+
+/** El PDF de una NC. Se pide junto con el documento para no gastar el gesto del click en cadena. */
+export async function descargarPdfNotaCredito(id: string): Promise<Blob> {
+  const res = await fetch(`/api/notas-credito/${encodeURIComponent(id)}/pdf`)
+  if (!res.ok) throw new Error("No se pudo generar el PDF")
+  return res.blob()
+}
 
 /**
  * Comparte el PDF de una NC. En el celular, la hoja de compartir del sistema
- * (el taller elige el chat: no hace falta el teléfono). En la compu, descarga
- * el PDF y abre WhatsApp con el texto para que lo adjunte; sin teléfono, solo
- * descarga. Mismo camino que el ticket del POS (components/pos/pos-ticket-share.tsx).
+ * (el taller elige el chat: no hace falta el teléfono). En la compu, o si el
+ * navegador no deja compartir (NotAllowedError: el gesto del click ya venció),
+ * descarga el PDF y abre WhatsApp con el texto para que lo adjunte; sin
+ * teléfono, solo descarga. "bloqueado": el navegador no dejó abrir WhatsApp.
+ * Mismo camino que el ticket del POS (components/pos/pos-ticket-share.tsx).
  */
 export async function compartirNotaCredito(opts: {
-  id: string
   numero: string
   telefono: string | null
   pais: string | null
   mensaje: string
+  pdf: Blob
 }): Promise<ResultadoCompartir> {
-  const res = await fetch(`/api/notas-credito/${encodeURIComponent(opts.id)}/pdf`)
-  if (!res.ok) throw new Error("No se pudo generar el PDF")
-  const blob = await res.blob()
   const nombre = `nota-credito-${opts.numero.replace(/[^A-Za-z0-9-]/g, "")}.pdf`
-  const archivo = new File([blob], nombre, { type: "application/pdf" })
+  const archivo = new File([opts.pdf], nombre, { type: "application/pdf" })
 
   if (typeof navigator.share === "function" && navigator.canShare?.({ files: [archivo] })) {
-    await navigator.share({ text: opts.mensaje, files: [archivo] })
-    return "compartido"
+    try {
+      await navigator.share({ text: opts.mensaje, files: [archivo] })
+      return "compartido"
+    } catch (err) {
+      // Cancelar la hoja no es un fallo; un rechazo por falta de gesto sí cae a la descarga.
+      if ((err as Error)?.name !== "NotAllowedError") throw err
+    }
   }
 
-  const url = URL.createObjectURL(blob)
+  const url = URL.createObjectURL(opts.pdf)
   const a = document.createElement("a")
   a.href = url
   a.download = nombre
@@ -70,6 +81,6 @@ export async function compartirNotaCredito(opts: {
   URL.revokeObjectURL(url)
 
   if (!opts.telefono) return "descargado"
-  window.open(generateWhatsAppUrl(opts.telefono, opts.mensaje, opts.pais), "_blank")
-  return "whatsapp"
+  const ventana = window.open(generateWhatsAppUrl(opts.telefono, opts.mensaje, opts.pais), "_blank")
+  return ventana ? "whatsapp" : "bloqueado"
 }
