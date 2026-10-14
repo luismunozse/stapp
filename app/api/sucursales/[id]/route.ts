@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { avisoCambioDePrincipal } from "@/lib/sucursal-principal"
 import { z } from "zod"
 
 const updateSchema = z.object({
@@ -11,6 +12,8 @@ const updateSchema = z.object({
   notas: z.string().trim().max(500).nullable().optional(),
   principal: z.boolean().optional(),
   activo: z.boolean().optional(),
+  // Confirmacion del aviso PRINCIPAL_CON_STOCK; nunca se escribe a la base.
+  confirmarCambioPrincipal: z.boolean().optional(),
 })
 
 function formatSucursal(row: any) {
@@ -69,6 +72,10 @@ export async function PUT(
 
     // Promote: demote la actual principal antes
     if (data.principal === true && !existing.principal) {
+      // Promover no mueve stock: avisar ANTES de escribir si la actual tiene.
+      const aviso = await avisoCambioDePrincipal(organizationId!, data.confirmarCambioPrincipal)
+      if (aviso) return aviso
+
       await supabaseAdmin
         .from("sucursales")
         .update({ principal: false })

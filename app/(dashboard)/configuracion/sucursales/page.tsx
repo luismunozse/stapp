@@ -31,6 +31,12 @@ export default function SucursalesPage() {
   const [editing, setEditing] = useState<Sucursal | null>(null)
   const [archiveId, setArchiveId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [confirmPrincipal, setConfirmPrincipal] = useState<{
+    sucursalActual: string
+    items: number
+    unidades: number
+    nuevaNombre: string
+  } | null>(null)
 
   const [nombre, setNombre] = useState("")
   const [codigo, setCodigo] = useState("")
@@ -82,7 +88,9 @@ export default function SucursalesPage() {
     setDialogOpen(true)
   }
 
-  const handleSave = async () => {
+  // `confirmarCambioPrincipal`: el usuario ya vio el aviso PRINCIPAL_CON_STOCK
+  // y eligio "Cambiar igual"; se reenvia el mismo body con el flag.
+  const handleSave = async (confirmarCambioPrincipal = false) => {
     setError("")
     if (!nombre.trim()) {
       setError("Nombre requerido")
@@ -98,6 +106,7 @@ export default function SucursalesPage() {
         notas: notas.trim() || null,
         principal,
         ...(editing ? { activo } : {}),
+        ...(confirmarCambioPrincipal ? { confirmarCambioPrincipal: true } : {}),
       }
       const res = editing
         ? await fetch(`/api/sucursales/${editing.id}`, {
@@ -112,12 +121,24 @@ export default function SucursalesPage() {
           })
       if (!res.ok) {
         const d = await res.json()
+        // Cambiar la principal no mueve stock: no es un error, pide confirmacion.
+        if (res.status === 409 && d.code === "PRINCIPAL_CON_STOCK") {
+          setConfirmPrincipal({
+            sucursalActual: d.sucursalActual,
+            items: d.items,
+            unidades: d.unidades,
+            nuevaNombre: body.nombre,
+          })
+          return
+        }
         // Gate de plan: el mensaje del backend ya trae el CTA ("Subí a Pro...").
         throw new Error(d.error || "Error al guardar")
       }
+      setConfirmPrincipal(null)
       setDialogOpen(false)
       fetchSucursales()
     } catch (err) {
+      setConfirmPrincipal(null)
       setError(err instanceof Error ? err.message : "Error al guardar")
     } finally {
       setSaving(false)
@@ -248,7 +269,7 @@ export default function SucursalesPage() {
                   Principal
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Solo una puede ser principal. Es el default cuando una operación no especifica sucursal.
+                  Solo una puede ser principal. Es el default cuando una operación no especifica sucursal. No mueve el stock entre depósitos.
                 </div>
               </div>
               <Switch
@@ -272,13 +293,25 @@ export default function SucursalesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={saving}>
+            <Button onClick={() => handleSave()} disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
               Guardar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmPrincipal}
+        onOpenChange={(o) => !o && setConfirmPrincipal(null)}
+        title="¿Cambiar la sucursal principal?"
+        description={confirmPrincipal ? descripcionCambioPrincipal(confirmPrincipal) : ""}
+        confirmText="Cambiar igual"
+        cancelText="Cancelar"
+        variant="warning"
+        loading={saving}
+        onConfirm={() => handleSave(true)}
+      />
 
       <ConfirmDialog
         open={!!archiveId}
@@ -292,6 +325,23 @@ export default function SucursalesPage() {
         onConfirm={handleArchive}
       />
     </div>
+  )
+}
+
+function descripcionCambioPrincipal(c: {
+  sucursalActual: string
+  items: number
+  unidades: number
+  nuevaNombre: string
+}) {
+  const n = (v: number) => v.toLocaleString("es-AR")
+  const productos = `${n(c.items)} ${c.items === 1 ? "producto" : "productos"}`
+  const unidades = `${n(c.unidades)} ${c.unidades === 1 ? "unidad" : "unidades"}`
+  return (
+    `${c.sucursalActual} tiene ${productos} (${unidades}) en su depósito. ` +
+    `Cambiar la principal no mueve el stock: va a seguir en ${c.sucursalActual}. ` +
+    `Desde ahora, el POS y las altas en "Todas las sucursales" usan ${c.nuevaNombre}. ` +
+    `Si la mercadería está físicamente en ${c.nuevaNombre}, transferila antes.`
   )
 }
 
