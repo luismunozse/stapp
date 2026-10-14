@@ -422,6 +422,34 @@ describe("VariantesSection: the same message twice", () => {
   })
 })
 
+describe("VariantesSection: the message across unrelated renders", () => {
+  it("keeps the very same node when the parent re-renders without a new refusal", () => {
+    function Anfitrion() {
+      const [estado, dispatch] = useReducer(crearReductor(), estadoColor())
+      const [guardando, setGuardando] = useState(false)
+      return (
+        <>
+          <button type="button" onClick={() => setGuardando((g) => !g)}>
+            alternar
+          </button>
+          <VariantesSection estado={estado} dispatch={dispatch} guardando={guardando} />
+        </>
+      )
+    }
+    render(<Anfitrion />)
+    const entrada = screen.getByLabelText("Agregar valor a Color")
+    fireEvent.change(entrada, { target: { value: "rojo" } })
+    fireEvent.keyDown(entrada, { key: "Enter" })
+    const region = screen.getByRole("status", { name: "Aviso" })
+    const nodo = region.firstElementChild
+    expect(nodo).toHaveTextContent('El valor "rojo" está repetido en Color')
+
+    fireEvent.click(screen.getByRole("button", { name: "alternar" }))
+    fireEvent.click(screen.getByRole("button", { name: "alternar" }))
+    expect(region.firstElementChild).toBe(nodo)
+  })
+})
+
 describe("VariantesSection: confirming Aplicar precio a todas", () => {
   const conPrecioDistinto = () => {
     const { salida } = montarSeccion(estadoColor())
