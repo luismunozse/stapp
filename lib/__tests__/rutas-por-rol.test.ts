@@ -11,6 +11,14 @@ import { redirigirPorRol } from '../rutas-por-rol'
  * puerta gruesa, el servidor decide de verdad.
  */
 describe('redirigirPorRol', () => {
+  it('el listado de notas de crédito es del ADMIN hasta que el PR7 lo abra al vendedor habilitado', () => {
+    for (const ruta of ['/notas-credito', '/notas-credito/algo']) {
+      expect(redirigirPorRol(ruta, 'VENDEDOR')).toBe(true)
+      expect(redirigirPorRol(ruta, 'TECNICO')).toBe(true)
+      expect(redirigirPorRol(ruta, 'ADMIN')).toBe(false)
+    }
+  })
+
   it('deja pasar cualquier ruta no protegida', () => {
     expect(redirigirPorRol('/dashboard', 'TECNICO')).toBe(false)
     expect(redirigirPorRol('/ordenes', 'VENDEDOR')).toBe(false)
