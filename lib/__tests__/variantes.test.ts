@@ -6,6 +6,8 @@ import type { AtributoVariante } from "@/types"
 import {
   camposDeVarianteParaPos,
   claveCombinacion,
+  esViolacionKitEnGrupo,
+  MENSAJE_KIT_EN_GRUPO,
   fotoDeRespaldo,
   imagenRespaldoDe,
   nombreVariante,
@@ -420,5 +422,27 @@ describe("camposDeVarianteParaPos (additive POS fields of a search row)", () => 
     expect(camposDeVarianteParaPos({ grupo_id: "g-1", atributos, grupo: [{ nombre: "Funda X" }] }).grupoNombre).toBe("Funda X")
     expect(camposDeVarianteParaPos({ grupo_id: "g-1", atributos, grupo: null })).toMatchObject({ grupoId: "g-1", grupoNombre: null })
     expect(camposDeVarianteParaPos({ grupo_id: "g-1", atributos: null })).toMatchObject({ etiqueta: null, atributos: null, grupoNombre: null })
+  })
+})
+
+describe("esViolacionKitEnGrupo (the CHECK that keeps kits out of groups)", () => {
+  const MENSAJE = 'new row for relation "inventario" violates check constraint "inventario_grupo_no_kit"'
+
+  it("recognizes the group/kit CHECK by code and constraint name, in the message or the details", () => {
+    expect(esViolacionKitEnGrupo({ code: "23514", message: MENSAJE })).toBe(true)
+    expect(esViolacionKitEnGrupo({ code: "23514", message: "check violation", details: 'Failing row contains (...) "inventario_grupo_no_kit"' })).toBe(true)
+  })
+
+  it("does not claim any other check violation or error", () => {
+    // 177's own kit check, a stock range check, a unique violation, nothing at all.
+    expect(esViolacionKitEnGrupo({ code: "23514", message: 'violates check constraint "inventario_kit_tipo_required_check"' })).toBe(false)
+    expect(esViolacionKitEnGrupo({ code: "23514", message: 'violates check constraint "chk_inventario_stock_maximo"' })).toBe(false)
+    expect(esViolacionKitEnGrupo({ code: "23505", message: MENSAJE })).toBe(false)
+    expect(esViolacionKitEnGrupo(null)).toBe(false)
+    expect(esViolacionKitEnGrupo("inventario_grupo_no_kit")).toBe(false)
+  })
+
+  it("carries the customer message", () => {
+    expect(MENSAJE_KIT_EN_GRUPO).toBe("Un producto con variantes no puede ser kit")
   })
 })

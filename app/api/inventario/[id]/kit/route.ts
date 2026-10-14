@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { esViolacionKitEnGrupo, MENSAJE_KIT_EN_GRUPO } from "@/lib/variantes"
 
 // GET /api/inventario/[id]/kit
 // Devuelve receta del kit + costo calculado.
@@ -193,6 +194,10 @@ export async function PATCH(
       .select("id, es_kit, tipo_kit")
       .single()
 
+    // CHECK inventario_grupo_no_kit (migration 355): a variant can never be a kit.
+    if (esViolacionKitEnGrupo(dbErr)) {
+      return NextResponse.json({ error: MENSAJE_KIT_EN_GRUPO }, { status: 400 })
+    }
     if (dbErr) throw dbErr
     if (!row) {
       return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
