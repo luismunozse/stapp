@@ -50,8 +50,10 @@ export async function GET(_request: Request, { params }: Contexto) {
     // Another organization's group looks exactly like a missing one.
     if (!grupo) return NextResponse.json({ error: GRUPO_NO_ENCONTRADO }, { status: 404 })
 
-    // Active and archived children in one query, split below. Creation order is stable;
-    // the form lays the rows out from the group options, not from this order.
+    // Active and archived children in one query, split below. Oldest first, ties by id:
+    // the children of one RPC save share created_at (the transaction NOW()), so within a
+    // save the order is by id, not creation order. The form lays the rows out from the
+    // group options, not from this order.
     const { data: hijos, error: hijosError } = await supabaseAdmin
       .from("inventario")
       .select("*, proveedores:proveedor_id(id, nombre)")
