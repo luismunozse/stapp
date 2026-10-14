@@ -1,3 +1,4 @@
+import { StrictMode } from "react"
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest"
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { PromoverDialog } from "@/components/inventario/variantes/promover-dialog"
@@ -185,7 +186,63 @@ describe("PromoverDialog: the depósitos", () => {
   })
 })
 
+describe("PromoverDialog: every opening starts fresh", () => {
+  it("a choice made in one opening is not carried into the next", async () => {
+    const estado = estadoColor()
+    const { vista, rerender } = montar(estado)
+    fireEvent.click(await screen.findByLabelText("Azul"))
+    expect(screen.getByLabelText("Azul")).toBeChecked()
+    rerender(vista({ open: false }))
+    expect(screen.queryByRole("dialog")).toBeNull()
+    rerender(vista({ open: true }))
+    expect(await screen.findByLabelText("Rojo")).toBeChecked()
+    expect(screen.getByLabelText("Azul")).not.toBeChecked()
+  })
+
+  it("a choice made for one product is not kept when the dialog moves to another", async () => {
+    const estado = estadoColor()
+    const { vista, rerender, alConfirmar } = montar(estado)
+    fireEvent.click(await screen.findByLabelText("Azul"))
+    rerender(vista({ item: { id: "item2", nombre: "Otra", stock: 4 } }))
+    expect(await screen.findByLabelText("Rojo")).toBeChecked()
+    fireEvent.click(screen.getByRole("button", { name: "Usar esta combinación" }))
+    expect(alConfirmar).toHaveBeenCalledWith(filaDe(estado, "Rojo").id)
+  })
+
+  it("the depósitos of the previous opening are not shown while the new request runs", async () => {
+    const estado = estadoColor()
+    const { vista, rerender } = montar(estado)
+    await screen.findByText("Norte")
+    rerender(vista({ open: false }))
+    fetchMock.mockImplementation(() => new Promise<Response>(() => {}))
+    rerender(vista({ open: true }))
+    expect(await screen.findByText("Cargando el stock por depósito…")).toBeInTheDocument()
+    expect(screen.queryByText("Norte")).toBeNull()
+  })
+
+  it("when the depósitos hold nothing at all it falls back to the total instead of an empty box", async () => {
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ ...DEPOSITOS, data: DEPOSITOS.data.map((d) => ({ ...d, stock: 0 })), discrepancia: 10 }), { status: 200 })
+    )
+    montar(estadoColor())
+    expect(await screen.findByText(/En total tiene 10 unidades/)).toBeInTheDocument()
+    expect(screen.queryByRole("list")).toBeNull()
+    expect(screen.queryByText("Cargando el stock por depósito…")).toBeNull()
+  })
+})
+
 describe("PromoverDialog: a product with no stock", () => {
+  it("confirms exactly once even when React runs the effects twice (StrictMode)", () => {
+    const alConfirmar = vi.fn()
+    render(
+      <StrictMode>
+        <PromoverDialog open item={{ ...ITEM, stock: 0 }} estado={estadoColor()} alConfirmar={alConfirmar} alCancelar={vi.fn()} />
+      </StrictMode>
+    )
+    expect(alConfirmar).toHaveBeenCalledTimes(1)
+  })
+
   it("shows no dialog, asks nothing and picks the first new combination", () => {
     const estado = estadoColor()
     const { alConfirmar } = montar(estado, { item: { ...ITEM, stock: 0 } })

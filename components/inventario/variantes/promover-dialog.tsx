@@ -10,7 +10,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@/components/ui/responsive-dialog"
-import { etiquetaDeFila, filasEnOrden, type VariantesState } from "@/lib/variantes-filas"
+import { etiquetaDeFila, filasEnOrden, type Fila, type VariantesState } from "@/lib/variantes-filas"
 import { unidades } from "./campos-fila"
 
 /*
@@ -81,11 +81,8 @@ export function PromoverDialog({ open, item, estado, alConfirmar, alCancelar }: 
   const candidatas = filasEnOrden(estado).filter((f) => !f.archivar && (!f.existente || f.id === estado.promocionId))
   // Where the product already sits comes first, else the first new combination.
   const porDefecto = candidatas.find((f) => f.id === estado.promocionId) ?? candidatas[0]
-  const [elegida, setElegida] = useState<string | null>(null)
-  const seleccion = candidatas.find((f) => f.id === elegida) ?? porDefecto
 
   const preguntar = open && item.stock > 0 && candidatas.length > 0
-  const desglose = useDesglose(item.id, preguntar)
 
   // No question to ask: decide once per opening.
   const decidido = useRef(false)
@@ -99,7 +96,24 @@ export function PromoverDialog({ open, item, estado, alConfirmar, alCancelar }: 
     alConfirmar(porDefecto?.id)
   })
 
+  // The question has its own state (the choice, the depósitos): it is mounted per opening and per product,
+  // so nothing from the last time can show up in this one.
   if (!preguntar) return null
+  return <Pregunta key={item.id} item={item} estado={estado} candidatas={candidatas} porDefecto={porDefecto} alConfirmar={alConfirmar} alCancelar={alCancelar} />
+}
+
+function Pregunta({
+  item,
+  estado,
+  candidatas,
+  porDefecto,
+  alConfirmar,
+  alCancelar,
+}: Pick<Props, "item" | "estado" | "alConfirmar" | "alCancelar"> & { candidatas: Fila[]; porDefecto: Fila | undefined }) {
+  const [elegida, setElegida] = useState<string | null>(null)
+  const seleccion = candidatas.find((f) => f.id === elegida) ?? porDefecto
+  const desglose = useDesglose(item.id, true)
+  const sinDetalle = desglose.tipo === "listo" && desglose.depositos.length === 0
 
   return (
     <ResponsiveDialog open onOpenChange={(abierto) => !abierto && alCancelar()}>
@@ -119,7 +133,8 @@ export function PromoverDialog({ open, item, estado, alConfirmar, alCancelar }: 
               No pudimos ver el stock por depósito. En total tiene {unidades(item.stock)}.
             </p>
           )}
-          {desglose.tipo === "listo" && (
+          {sinDetalle && <p className="text-muted-foreground">En total tiene {unidades(item.stock)}, sin detalle por depósito.</p>}
+          {desglose.tipo === "listo" && !sinDetalle && (
             <ul className="divide-y rounded-md border">
               {desglose.depositos.map((d) => (
                 <li key={d.id} className="flex items-center justify-between gap-3 px-3 py-2">
