@@ -1,4 +1,4 @@
-import { crearReductor, etiquetaDeFila, filasEnOrden, type Fila, type VariantesState } from "@/lib/variantes-filas"
+import { bloqueos, crearReductor, etiquetaDeFila, filasEnOrden, type Fila, type VariantesState } from "@/lib/variantes-filas"
 
 /*
  * Pure read-only helpers for the variants section: what the screen can say about the state without
@@ -137,4 +137,41 @@ export function describirEfecto(efecto: EfectoDeDeshacer): string | null {
   const hayListas = [efecto.valores, efecto.tambien, efecto.nuevas, efecto.restauradas].some((x) => x.length >= 2)
   if (hayListas && partes.length >= 2) return `Al deshacer ${partes.slice(0, -1).join("; ")}; y ${partes[partes.length - 1]}`
   return `Al deshacer ${unir(partes)}`
+}
+
+export interface Validez {
+  valida: boolean
+  /** What stops the save, in the words the user reads. */
+  motivos: string[]
+}
+
+/**
+ * Whether the variants can be saved as they are. The form disables Save with this; the section lists the
+ * reasons. A product without variants (switch off) has nothing to validate. Reserved units on a row
+ * pending archive come from `bloqueos`, so the reason is the reducer's.
+ */
+export function validezDeVariantes(estado: VariantesState): Validez {
+  if (!estado.activo) return { valida: true, motivos: [] }
+  const activas = filasEnOrden(estado).filter((f) => !f.archivar)
+  if (activas.length === 0) {
+    return { valida: false, motivos: ["Agregá una opción (por ejemplo Color) con al menos un valor para armar las variantes"] }
+  }
+
+  const motivos = bloqueos(estado).map((b) => b.motivo)
+  for (const fila of activas) {
+    if (!fila.existente && fila.codigo.trim() === "") motivos.push(`Falta el código de "${etiquetaDeFila(estado, fila)}"`)
+  }
+  const vistos = new Map<string, { codigo: string; veces: number }>()
+  for (const fila of activas) {
+    const codigo = fila.codigo.trim()
+    if (codigo === "") continue
+    const clave = codigo.toLowerCase()
+    const visto = vistos.get(clave)
+    if (visto) visto.veces++
+    else vistos.set(clave, { codigo, veces: 1 })
+  }
+  for (const { codigo, veces } of vistos.values()) {
+    if (veces > 1) motivos.push(`El código "${codigo}" está repetido`)
+  }
+  return { valida: motivos.length === 0, motivos }
 }
