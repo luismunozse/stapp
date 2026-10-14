@@ -13,6 +13,8 @@ export interface NotaCreditoAccionesProps {
   id: string
   /** Solo íconos, para la fila de una tabla. */
   compacto?: boolean
+  /** Una NC anulada ya no se manda al cliente: sin WhatsApp (PDF y ticket siguen). */
+  anulada?: boolean
 }
 
 /**
@@ -20,7 +22,7 @@ export interface NotaCreditoAccionesProps {
  * bloques del detalle. El servidor decide quién ve qué: cada botón pega a una
  * ruta con el alcance de la operación de origen.
  */
-export function NotaCreditoAcciones({ id, compacto = false }: NotaCreditoAccionesProps) {
+export function NotaCreditoAcciones({ id, compacto = false, anulada = false }: NotaCreditoAccionesProps) {
   const [ticketAbierto, setTicketAbierto] = useState(false)
   const abrirPdf = () => window.open(`/api/notas-credito/${encodeURIComponent(id)}/pdf`, "_blank")
 
@@ -70,10 +72,12 @@ export function NotaCreditoAcciones({ id, compacto = false }: NotaCreditoAccione
         <Receipt className="h-4 w-4" />
         {compacto ? null : <span className="ml-1">Ticket</span>}
       </Button>
-      <Button variant="outline" size="sm" onClick={compartir} disabled={compartiendo} aria-label="WhatsApp" title="Enviar por WhatsApp">
-        {compartiendo ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-        {compacto ? null : <span className="ml-1">WhatsApp</span>}
-      </Button>
+      {anulada ? null : (
+        <Button variant="outline" size="sm" onClick={compartir} disabled={compartiendo} aria-label="WhatsApp" title="Enviar por WhatsApp">
+          {compartiendo ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+          {compacto ? null : <span className="ml-1">WhatsApp</span>}
+        </Button>
+      )}
       {ticketAbierto ? (
         <NotaCreditoTicketDialog notaCreditoId={id} open={ticketAbierto} onOpenChange={setTicketAbierto} />
       ) : null}

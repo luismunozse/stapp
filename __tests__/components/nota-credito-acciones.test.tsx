@@ -116,4 +116,11 @@ describe("NotaCreditoAcciones", () => {
     fireEvent.click(screen.getByRole("button", { name: "WhatsApp" }))
     await waitFor(() => expect(toast.info).toHaveBeenCalledWith(expect.stringContaining("abrí WhatsApp")))
   })
+
+  it("una NC anulada no se envía por WhatsApp; PDF y Ticket siguen", () => {
+    render(<NotaCreditoAcciones id="nc-1" anulada />)
+    expect(screen.queryByRole("button", { name: "WhatsApp" })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "PDF" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Ticket" })).toBeInTheDocument()
+  })
 })

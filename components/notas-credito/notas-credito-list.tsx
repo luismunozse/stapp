@@ -166,7 +166,7 @@ export function NotasCreditoList({ clienteId }: { clienteId: string | null }) {
       render: (f) => <span className="text-muted-foreground">{f.motivo}</span>,
     },
     { key: "monto", header: "Monto", className: "text-right", headerClassName: "text-right", render: monto },
-    { key: "acciones", header: "", render: (f) => <NotaCreditoAcciones id={f.id} compacto /> },
+    { key: "acciones", header: "", render: (f) => <NotaCreditoAcciones id={f.id} compacto anulada={f.anulada} /> },
   ]
 
   // DataTable ya envuelve cada tarjeta mobile en su propio recuadro.
@@ -183,7 +183,7 @@ export function NotasCreditoList({ clienteId }: { clienteId: string | null }) {
         {f.anulada ? <Badge variant="destructive">Anulada</Badge> : null}
       </div>
       <div className="text-xs text-muted-foreground">{f.motivo}</div>
-      <NotaCreditoAcciones id={f.id} />
+      <NotaCreditoAcciones id={f.id} anulada={f.anulada} />
     </div>
   )
 
