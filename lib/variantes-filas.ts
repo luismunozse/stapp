@@ -1,5 +1,5 @@
 import type { AtributoVariante } from "@/types"
-import { claveCombinacion, etiquetaVariante, generarIdCliente } from "@/lib/variantes"
+import { claveCombinacion, etiquetaVariante } from "@/lib/variantes"
 import { LIMITES } from "@/lib/variantes-schema"
 
 // PURE and client-importable: no I/O, no React, no server-only imports. The state of the
@@ -85,6 +85,18 @@ export interface FilaExtra {
   ubicacion: string | null
 }
 
+/**
+ * One attribute of a combination as it was when the row left the active ones. The ids resolve later
+ * renames; the text is the fallback for a value or option that no longer exists. The ids are null for
+ * a child archived in the database whose value is not among the options.
+ */
+export interface PrevioDeFila {
+  opcionId: string | null
+  valorId: string | null
+  opcion: string
+  valor: string
+}
+
 /** One combination of the group. The key of `filas` is the child id (client-generated for a new row). */
 export interface Fila {
   id: string
@@ -94,8 +106,11 @@ export interface Fila {
   existente: boolean
   /** Will be archived on save ("Se archivará"). It keeps its place but is out of the combinations. */
   archivar: boolean
-  /** The combination it had when it was marked, so undo and re-adding can find it again. Only while `archivar`. */
-  atributosPrevios?: AtributoVariante[]
+  /**
+   * The combination it had when it was marked, so undo and re-adding can find it again. Only while `archivar`.
+   * It holds ids: a later rename of an option or a value cannot detach the row from its combination.
+   */
+  previos?: PrevioDeFila[]
   /**
    * Brought back from the archive: the client never saw its code, price or cost, so `codigo` is ""
    * and the base price does not reach it. The form must send those fields only once the user edits them.
@@ -135,12 +150,55 @@ export interface VariantesState {
   filas: Record<string, Fila>
   /** Row ids: the combinations in option order then value order, then the rows pending archive. */
   orden: string[]
-  /** Children archived in the database, by id, with the canonical key of their combination. */
-  archivadas: Record<string, { clave: string; stock: number }>
+  /** Children archived in the database, by id, with the combination they had (as ids where the options know them). */
+  archivadas: Record<string, { previos: PrevioDeFila[]; stock: number }>
+  /** Random, set once when the state is born (never inside the reducer). Every id minted later derives from it. */
+  semilla: string
+  /** How many ids were minted from `semilla`. The next id is hash(semilla, contador). */
+  contador: number
+}
+
+// Ids come from (semilla, contador) so that the reducer is a pure function of (state, action): the same
+// action on the same state gives the same state, ids included (React may replay a reducer). The hash is
+// cyrb128 (public domain), 128 bits of state of which 96 are used: a client id is "c" + 24 hex.
+function hashDeId(texto: string): string {
+  let h1 = 1779033703
+  let h2 = 3144134277
+  let h3 = 1013904242
+  let h4 = 2773480762
+  for (let i = 0; i < texto.length; i++) {
+    const k = texto.charCodeAt(i)
+    h1 = h2 ^ Math.imul(h1 ^ k, 597399067)
+    h2 = h3 ^ Math.imul(h2 ^ k, 2869860233)
+    h3 = h4 ^ Math.imul(h3 ^ k, 951274213)
+    h4 = h1 ^ Math.imul(h4 ^ k, 2716044179)
+  }
+  h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067)
+  h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233)
+  h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213)
+  h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179)
+  h1 ^= h2 ^ h3 ^ h4
+  h2 ^= h1
+  h3 ^= h1
+  const hex = (n: number) => (n >>> 0).toString(16).padStart(8, "0")
+  return "c" + hex(h1) + hex(h2) + hex(h3)
+}
+
+/** A fresh random seed. Call it when a state is created, never from a reducer. */
+function semillaAleatoria(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("")
+}
+
+/** Mints ids from a seed and a counter; `contador` is where it stands. Local to one reducer call or one hydration. */
+function acuniador(semilla: string, desde: number) {
+  const a = { contador: desde, siguiente: () => hashDeId(`${semilla}:${a.contador++}`) }
+  return a
 }
 
 export interface ParametrosEstadoInicial {
   grupoId: string
+  /** Fixes the ids (tests). By default a random seed is drawn. */
+  semilla?: string
   codigoBase?: string
   precioBase?: number
   costoBase?: number
@@ -161,6 +219,8 @@ export function estadoInicial(p: ParametrosEstadoInicial): VariantesState {
     filas: {},
     orden: [],
     archivadas: {},
+    semilla: p.semilla ?? semillaAleatoria(),
+    contador: 0,
   }
 }
 
@@ -192,6 +252,8 @@ export interface GrupoLeido {
 
 export interface OpcionesHidratacion {
   costoCargado: boolean
+  /** Fixes the ids (tests). By default a random seed is drawn. */
+  semilla?: string
   codigoBase?: string
   precioBase?: number
   costoBase?: number
@@ -215,7 +277,10 @@ function urlGuardada(url: string | null | undefined): string | null {
 const sinExtra = (): FilaExtra => ({ stockMinimo: null, stockMaximo: null, puntoReorden: null, ubicacion: null })
 
 /** Builds the state of an existing group. Option and value ids are internal keys, minted here. */
-export function estadoDesdeGrupo(lectura: GrupoLeido, opts: OpcionesHidratacion, generarId: () => string = generarIdCliente): VariantesState {
+export function estadoDesdeGrupo(lectura: GrupoLeido, opts: OpcionesHidratacion): VariantesState {
+  const semilla = opts.semilla ?? semillaAleatoria()
+  const acuniar = acuniador(semilla, 0)
+  const generarId = acuniar.siguiente
   const opciones: OpcionDeEstado[] = lectura.grupo.opciones.map((o) => ({
     id: generarId(),
     nombre: o.nombre,
@@ -268,7 +333,7 @@ export function estadoDesdeGrupo(lectura: GrupoLeido, opts: OpcionesHidratacion,
 
   const archivadas: VariantesState["archivadas"] = {}
   for (const a of lectura.archivadas) {
-    if (a.atributos && a.atributos.length > 0) archivadas[a.id] = { clave: claveCombinacion(a.atributos), stock: a.stock }
+    if (a.atributos && a.atributos.length > 0) archivadas[a.id] = { previos: a.atributos.map((x) => previoDeAtributo(opciones, x)), stock: a.stock }
   }
 
   const primera = lectura.variantes[0]
@@ -285,6 +350,8 @@ export function estadoDesdeGrupo(lectura: GrupoLeido, opts: OpcionesHidratacion,
     filas,
     orden: [],
     archivadas,
+    semilla,
+    contador: acuniar.contador,
   }
   return { ...estado, orden: calcularOrden(estado) }
 }
@@ -296,19 +363,38 @@ export function estadoDesdeGrupo(lectura: GrupoLeido, opts: OpcionesHidratacion,
 interface Ubicacion {
   opcionIdx: number
   valorIdx: number
+  opcionId: string
   opcion: string
   texto: string
 }
 
 function indiceDeValores(opciones: readonly OpcionDeEstado[]): Map<string, Ubicacion> {
   const indice = new Map<string, Ubicacion>()
-  opciones.forEach((o, opcionIdx) => o.valores.forEach((v, valorIdx) => indice.set(v.id, { opcionIdx, valorIdx, opcion: o.nombre, texto: v.texto })))
+  opciones.forEach((o, opcionIdx) =>
+    o.valores.forEach((v, valorIdx) => indice.set(v.id, { opcionIdx, valorIdx, opcionId: o.id, opcion: o.nombre, texto: v.texto }))
+  )
   return indice
+}
+
+/** An attribute of a child read from the database, tied to the option and value ids that already exist. */
+function previoDeAtributo(opciones: readonly OpcionDeEstado[], atributo: AtributoVariante): PrevioDeFila {
+  const opcion = opciones.find((o) => plegar(o.nombre) === plegar(atributo.opcion))
+  const valor = opcion?.valores.find((v) => plegar(v.texto) === plegar(atributo.valor))
+  return { opcionId: opcion?.id ?? null, valorId: valor?.id ?? null, opcion: atributo.opcion, valor: atributo.valor }
+}
+
+/** What a snapshot reads as NOW: renamed options and values show their current text; gone ones keep the old one. */
+function atributosActuales(estado: VariantesState, previos: readonly PrevioDeFila[]): AtributoVariante[] {
+  const indice = indiceDeValores(estado.opciones)
+  return previos.map((p) => ({
+    opcion: estado.opciones.find((o) => o.id === p.opcionId)?.nombre ?? p.opcion,
+    valor: (p.valorId ? indice.get(p.valorId)?.texto : undefined) ?? p.valor,
+  }))
 }
 
 /** The combination of a row as {opcion, valor} pairs in option order. */
 function atributosDe(estado: VariantesState, fila: Fila): AtributoVariante[] {
-  if (fila.archivar) return fila.atributosPrevios ?? []
+  if (fila.archivar) return atributosActuales(estado, fila.previos ?? [])
   const indice = indiceDeValores(estado.opciones)
   return fila.valorIds
     .flatMap((id) => {
@@ -474,12 +560,23 @@ function filaNueva(estado: VariantesState, id: string, valorIds: string[], codig
   return fila
 }
 
+/** The client never saw the cost of an archived child: the key stays absent until the user types one. */
 function filaRestaurada(estado: VariantesState, id: string, valorIds: string[], stock: number): Fila {
-  return { ...filaNueva(estado, id, valorIds, ""), existente: true, restaurada: true, stock, stockReservado: 0 }
+  const fila: Fila = { ...filaNueva(estado, id, valorIds, ""), existente: true, restaurada: true, stock, stockReservado: 0 }
+  delete fila.precioCompra
+  return fila
 }
 
 function archivarFila(estado: VariantesState, fila: Fila): Fila {
-  return { ...fila, archivar: true, valorIds: [], atributosPrevios: atributosDe(estado, fila) }
+  const indice = indiceDeValores(estado.opciones)
+  const previos = fila.valorIds
+    .flatMap((id) => {
+      const u = indice.get(id)
+      return u ? [{ id, u }] : []
+    })
+    .sort((a, b) => a.u.opcionIdx - b.u.opcionIdx)
+    .map(({ id, u }) => ({ opcionId: u.opcionId, valorId: id, opcion: u.opcion, valor: u.texto }))
+  return { ...fila, archivar: true, valorIds: [], previos }
 }
 
 /** Creates the rows the options ask for and no row has yet, reusing archived ones for the same combination. */
@@ -498,14 +595,16 @@ function completar(estado: VariantesState, generarId: () => string): VariantesSt
     const atributos = combinacion.map((v, i) => ({ opcion: conValores[i].nombre, valor: v.texto }))
     const clave = claveCombinacion(atributos)
 
-    const pendiente = Object.values(filas).find((f) => f.archivar && f.atributosPrevios && claveCombinacion(f.atributosPrevios) === clave)
+    // A snapshot reads through the ids, so a rename since the row was archived still matches.
+    const esDeLaCombinacion = (previos: readonly PrevioDeFila[]) => claveCombinacion(atributosActuales(estado, previos)) === clave
+    const pendiente = Object.values(filas).find((f) => f.archivar && f.previos && esDeLaCombinacion(f.previos))
     if (pendiente) {
-      const { atributosPrevios: _previos, ...resto } = pendiente
+      const { previos: _previos, ...resto } = pendiente
       void _previos
       filas[pendiente.id] = { ...resto, archivar: false, valorIds }
       continue
     }
-    const guardada = Object.entries(archivadas).find(([, a]) => a.clave === clave)
+    const guardada = Object.entries(archivadas).find(([, a]) => esDeLaCombinacion(a.previos))
     if (guardada) {
       const [id, { stock }] = guardada
       filas[id] = filaRestaurada(estado, id, valorIds, stock)
@@ -550,7 +649,7 @@ function colapsar(estado: VariantesState, quitar: ReadonlySet<string>, opciones:
       else delete filas[otra.id]
     }
   }
-  return reordenar({ ...estado, opciones, filas })
+  return rederivarCodigos(reordenar({ ...estado, opciones, filas }))
 }
 
 /** New rows still on their generated code follow the texts; saved or hand-edited codes stay. */
@@ -570,7 +669,8 @@ function rederivarCodigos(estado: VariantesState): VariantesState {
   return { ...estado, filas }
 }
 
-function agregarValor(estado: VariantesState, opcionId: string, crudo: string, generarId: () => string): Resultado {
+/** `idForzado` brings back a value under the id the archived rows remember. */
+function agregarValor(estado: VariantesState, opcionId: string, crudo: string, generarId: () => string, idForzado?: string): Resultado {
   const idx = estado.opciones.findIndex((o) => o.id === opcionId)
   if (idx === -1) return estado
   const validado = validarValor(crudo)
@@ -580,13 +680,15 @@ function agregarValor(estado: VariantesState, opcionId: string, crudo: string, g
   const clave = plegar(validado.texto)
   if (opcion.valores.some((v) => plegar(v.texto) === clave)) return `El valor "${validado.texto}" está repetido en ${opcion.nombre}`
 
-  const valor: ValorDeOpcion = { id: generarId(), texto: validado.texto }
+  const valor: ValorDeOpcion = { id: idForzado ?? generarId(), texto: validado.texto }
   const opciones = estado.opciones.map((o, i) => (i === idx ? { ...o, valores: [...o.valores, valor] } : o))
   const combinaciones = totalDeCombinaciones(opciones)
   if (combinaciones > LIMITES.combinaciones) return `Las opciones generan ${combinaciones} combinaciones y el máximo es 100`
 
   const siguiente = { ...estado, opciones }
-  return completar(opcion.valores.length === 0 ? extenderFilas(siguiente, valor.id) : siguiente, generarId)
+  if (opcion.valores.length > 0) return completar(siguiente, generarId)
+  // The rows gain a value: their generated codes gain its tag.
+  return rederivarCodigos(completar(extenderFilas(siguiente, valor.id), generarId))
 }
 
 function agregarOpcion(estado: VariantesState, nombreCrudo: string, valores: readonly string[], generarId: () => string): Resultado {
@@ -611,16 +713,8 @@ function renombrarOpcion(estado: VariantesState, opcionId: string, nombreCrudo: 
   if ("aviso" in validado) return validado.aviso
   if (estado.opciones.some((o) => o.id !== opcionId && plegar(o.nombre) === plegar(validado.texto))) return "Las opciones no pueden repetirse"
 
-  const anterior = plegar(opcion.nombre)
-  const filas = Object.fromEntries(
-    Object.entries(estado.filas).map(([id, f]) => [
-      id,
-      f.atributosPrevios
-        ? { ...f, atributosPrevios: f.atributosPrevios.map((a) => (plegar(a.opcion) === anterior ? { ...a, opcion: validado.texto } : a)) }
-        : f,
-    ])
-  )
-  return { ...estado, filas, opciones: estado.opciones.map((o) => (o.id === opcionId ? { ...o, nombre: validado.texto } : o)) }
+  // Rows pending archive and archived children point at the option by id: nothing else to update.
+  return { ...estado, opciones: estado.opciones.map((o) => (o.id === opcionId ? { ...o, nombre: validado.texto } : o)) }
 }
 
 function quitarOpcion(estado: VariantesState, opcionId: string): Resultado {
@@ -655,7 +749,8 @@ function quitarValor(estado: VariantesState, valorId: string): Resultado {
     if (fila.existente) filas[fila.id] = archivarFila(estado, fila)
     else delete filas[fila.id]
   }
-  return reordenar({ ...estado, opciones, filas })
+  // A suffix a dropped row forced on another one is free again.
+  return rederivarCodigos(reordenar({ ...estado, opciones, filas }))
 }
 
 function deshacerArchivo(estado: VariantesState, filaId: string, generarId: () => string): Resultado {
@@ -663,11 +758,12 @@ function deshacerArchivo(estado: VariantesState, filaId: string, generarId: () =
   if (!fila || !fila.archivar) return estado
 
   let actual: VariantesState = estado
-  for (const atributo of fila.atributosPrevios ?? []) {
-    const opcion = actual.opciones.find((o) => plegar(o.nombre) === plegar(atributo.opcion))
-    if (!opcion) return `Para deshacerlo, volvé a agregar la opción "${atributo.opcion}"`
-    if (opcion.valores.some((v) => plegar(v.texto) === plegar(atributo.valor))) continue
-    const agregado = agregarValor(actual, opcion.id, atributo.valor, generarId)
+  for (const previo of fila.previos ?? []) {
+    // By id: a rename of the option or of any value since the row was archived changes nothing here.
+    const opcion = actual.opciones.find((o) => o.id === previo.opcionId)
+    if (!opcion) return `Para deshacerlo, volvé a agregar la opción "${previo.opcion}"`
+    if (previo.valorId && opcion.valores.some((v) => v.id === previo.valorId)) continue
+    const agregado = agregarValor(actual, opcion.id, previo.valor, generarId, previo.valorId ?? undefined)
     if (typeof agregado === "string") return agregado
     actual = agregado
   }
@@ -702,15 +798,18 @@ function reducir(estado: VariantesState, accion: VariantesAccion, generarId: () 
 }
 
 /**
- * The reducer of the variants section. Pure: new row, option and value ids come from `generarId`
- * (inject a counter in tests). A refused action returns the same state plus the reason in `aviso`;
- * an accepted one clears it. An action aimed at an id that does not exist changes nothing.
+ * The reducer of the variants section. Pure, no randomness: new row, option and value ids derive from
+ * (`estado.semilla`, `estado.contador`), and the returned state carries the advanced counter, so the same
+ * action on the same state always gives the same state, ids included. A refused action returns the same
+ * state plus the reason in `aviso` (the counter does not move); an accepted one clears it. An action aimed
+ * at an id that does not exist changes nothing.
  */
-export function crearReductor(generarId: () => string = generarIdCliente): Reductor {
+export function crearReductor(): Reductor {
   return (estado, accion) => {
-    const resultado = reducir(estado, accion, generarId)
+    const acuniar = acuniador(estado.semilla, estado.contador)
+    const resultado = reducir(estado, accion, acuniar.siguiente)
     if (typeof resultado === "string") return { ...estado, aviso: resultado }
     if (resultado === estado || accion.tipo === "reemplazar") return resultado
-    return { ...resultado, aviso: null }
+    return { ...resultado, aviso: null, contador: acuniar.contador }
   }
 }

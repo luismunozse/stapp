@@ -11,13 +11,7 @@ import {
   type VariantesState,
 } from "@/lib/variantes-filas"
 
-/** Deterministic ids: id1, id2, ... (another prefix keeps two counters from colliding) */
-export const contador = (prefijo = "id") => {
-  let n = 0
-  return () => `${prefijo}${++n}`
-}
-
-export const reductor = () => crearReductor(contador())
+export const reductor = () => crearReductor()
 
 function congelar<T>(valor: T): T {
   if (valor && typeof valor === "object" && !Object.isFrozen(valor)) {
@@ -125,5 +119,6 @@ export const grupoColorTalle = (over: Partial<GrupoLeido> = {}): GrupoLeido => (
   ...over,
 })
 
-export const hidratar = (lectura: GrupoLeido, opciones: { costoCargado?: boolean; codigoBase?: string; precioBase?: number } = {}) =>
-  estadoDesdeGrupo(lectura, { costoCargado: true, codigoBase: "FX", precioBase: 1000, ...opciones }, contador("h"))
+/** Hydrates with a fixed seed, so ids are the same in every run. */
+export const hidratar = (lectura: GrupoLeido, opciones: { costoCargado?: boolean; codigoBase?: string; precioBase?: number; semilla?: string } = {}) =>
+  estadoDesdeGrupo(lectura, { costoCargado: true, codigoBase: "FX", precioBase: 1000, semilla: "hidratado-de-prueba", ...opciones })

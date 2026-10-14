@@ -9,12 +9,12 @@ import {
   filasEnOrden,
   stockTotal,
   type Fila,
+  type VariantesAccion,
   type VariantesState,
 } from "@/lib/variantes-filas"
 import { LIMITES } from "@/lib/variantes-schema"
 import {
   aplicar,
-  contador,
   etiquetas,
   filaDe,
   grupoColor,
@@ -28,7 +28,7 @@ import {
 } from "@/__tests__/helpers/variantes-filas"
 
 const nuevo = (over: Partial<Parameters<typeof estadoInicial>[0]> = {}) =>
-  estadoInicial({ grupoId: "cg1", codigoBase: "FX", precioBase: 1000, ...over })
+  estadoInicial({ grupoId: "cg1", codigoBase: "FX", precioBase: 1000, semilla: "nuevo-de-prueba", ...over })
 
 /** A new product with Color {Rojo, Azul} typed in the form. */
 function conColor(reducir = reductor()) {
@@ -140,15 +140,16 @@ describe("estadoDesdeGrupo", () => {
 
   it("indexes the archived children by their canonical key", () => {
     const e = hidratar(grupoColor())
-    expect(e.archivadas).toEqual({ v1: { clave: "verde", stock: 7 } })
+    // Verde is not among the options: the snapshot keeps the text and no ids.
+    expect(e.archivadas).toEqual({ v1: { previos: [{ opcionId: opcionId(e, "Color"), valorId: null, opcion: "Color", valor: "Verde" }], stock: 7 } })
     expect(Object.keys(hidratar(grupoColor({ archivadas: [] })).archivadas)).toEqual([])
   })
 
   it("takes the base price from the first child when none is given, and 0 for an empty group", () => {
-    const sinBase = estadoDesdeGrupo(grupoColor({ variantes: [leida("r1", [{ opcion: "Color", valor: "Rojo" }], { precioVenta: 1234 })] }), { costoCargado: false }, contador("x"))
+    const sinBase = estadoDesdeGrupo(grupoColor({ variantes: [leida("r1", [{ opcion: "Color", valor: "Rojo" }], { precioVenta: 1234 })] }), { costoCargado: false })
     expect(sinBase.precioBase).toBe(1234)
-    expect(estadoDesdeGrupo(grupoColor({ variantes: [] }), { costoCargado: false }, contador("x")).precioBase).toBe(0)
-    expect(estadoDesdeGrupo(grupoColor(), { costoCargado: false, precioBase: 50 }, contador("x")).precioBase).toBe(50)
+    expect(estadoDesdeGrupo(grupoColor({ variantes: [] }), { costoCargado: false }).precioBase).toBe(0)
+    expect(estadoDesdeGrupo(grupoColor(), { costoCargado: false, precioBase: 50 }).precioBase).toBe(50)
   })
 
   it("ignores an archived child with no combination to match against", () => {
@@ -336,9 +337,9 @@ describe("options and values", () => {
     expect(e.filas["r-s"]).toMatchObject({ archivar: false, existente: true, stock: 1, valorIds: [valorId(e, "Color", "Rojo")] })
     expect(e.filas["r-m"]).toMatchObject({ archivar: true, stock: 2 })
     expect(e.filas["a-m"]).toMatchObject({ archivar: true, stock: 4 })
-    expect(e.filas["r-m"].atributosPrevios).toEqual([
-      { opcion: "Color", valor: "Rojo" },
-      { opcion: "Talle", valor: "M" },
+    expect(e.filas["r-m"].previos).toEqual([
+      { opcionId: opcionId(saved, "Color"), valorId: valorId(saved, "Color", "Rojo"), opcion: "Color", valor: "Rojo" },
+      { opcionId: opcionId(saved, "Talle"), valorId: valorId(saved, "Talle", "M"), opcion: "Talle", valor: "M" },
     ])
   })
 
@@ -401,7 +402,8 @@ describe("options and values", () => {
     const saved = hidratar(grupoColor())
     let e = aplicar(reducir, saved, { tipo: "quitarValor", valorId: valorId(saved, "Color", "Azul") })
     e = aplicar(reducir, e, { tipo: "renombrarOpcion", opcionId: opcionId(e, "Color"), nombre: "Tono" })
-    expect(e.filas["a1"].atributosPrevios).toEqual([{ opcion: "Tono", valor: "Azul" }])
+    expect(etiquetas(e).slice(1)).toEqual(["Azul"])
+    expect(e.filas["a1"].previos).toEqual([{ opcionId: opcionId(e, "Tono"), valorId: valorId(saved, "Color", "Azul"), opcion: "Color", valor: "Azul" }])
     e = aplicar(reducir, e, { tipo: "deshacerArchivo", filaId: "a1" })
     expect(e.aviso).toBeNull()
     expect(etiquetas(e)).toEqual(["Rojo", "Azul"])
@@ -438,7 +440,7 @@ describe("options and values", () => {
     e = aplicar(reducir, e, { tipo: "agregarValor", opcionId: opcionId(e, "Color"), texto: "AZUL" })
     expect(etiquetas(e)).toEqual(["Rojo", "AZUL"])
     expect(e.filas["a1"]).toMatchObject({ archivar: false, existente: true, stock: 3, codigo: "FX-A1" })
-    expect(e.filas["a1"].atributosPrevios).toBeUndefined()
+    expect(e.filas["a1"].previos).toBeUndefined()
     expect(e.orden).toEqual(["r1", "a1"])
     expect(Object.keys(e.filas)).toHaveLength(2)
   })
@@ -505,13 +507,14 @@ describe("options and values", () => {
     const quitada = aplicar(reducir, saved, { tipo: "quitarValor", valorId: valorId(saved, "Talle", "M") })
     // Only the value M is back (by hand): the combination slot is free and the row is still pending archive.
     const talle = quitada.opciones[1]
+    const idM = valorId(saved, "Talle", "M") // the value comes back under the id the archived rows remember
     const manual: VariantesState = {
       ...quitada,
-      opciones: [quitada.opciones[0], { ...talle, valores: [...talle.valores, { id: "m-nuevo", texto: "M" }] }],
+      opciones: [quitada.opciones[0], { ...talle, valores: [...talle.valores, { id: idM, texto: "M" }] }],
     }
     const e = aplicar(reducir, manual, { tipo: "deshacerArchivo", filaId: "r-m" })
     expect(e.aviso).toBeNull()
-    expect(e.filas["r-m"]).toMatchObject({ archivar: false, valorIds: [quitada.filas["r-s"].valorIds[0], "m-nuevo"] })
+    expect(e.filas["r-m"]).toMatchObject({ archivar: false, valorIds: [quitada.filas["r-s"].valorIds[0], idM] })
   })
 
   it("undo is refused when another row already holds the combination", () => {
@@ -520,10 +523,11 @@ describe("options and values", () => {
     const quitada = aplicar(reducir, saved, { tipo: "quitarValor", valorId: valorId(saved, "Talle", "M") })
     // A row for Rojo / M appears behind the archived one (it cannot happen through the actions, so the state is built by hand).
     const talle = quitada.opciones[1]
-    const ocupante: Fila = { ...quitada.filas["r-s"], id: "intruso", valorIds: [quitada.filas["r-s"].valorIds[0], "m-nuevo"], existente: false }
+    const idM = valorId(saved, "Talle", "M") // the value comes back under the id the archived rows remember
+    const ocupante: Fila = { ...quitada.filas["r-s"], id: "intruso", valorIds: [quitada.filas["r-s"].valorIds[0], idM], existente: false }
     const manual: VariantesState = {
       ...quitada,
-      opciones: [quitada.opciones[0], { ...talle, valores: [...talle.valores, { id: "m-nuevo", texto: "M" }] }],
+      opciones: [quitada.opciones[0], { ...talle, valores: [...talle.valores, { id: idM, texto: "M" }] }],
       filas: { ...quitada.filas, intruso: ocupante },
       orden: [...quitada.orden, "intruso"],
     }
@@ -549,8 +553,7 @@ describe("options and values", () => {
 
 describe("limits and validation (the state stays put and says why)", () => {
   function rechazada(e: VariantesState, accion: Parameters<ReturnType<typeof reductor>>[1], texto: RegExp) {
-    // Its own id range: a refusal that reused the ids of `e` would hide behind them.
-    const reducir = crearReductor(contador("r"))
+    const reducir = reductor()
     const resultado = aplicar(reducir, e, accion)
     expect(resultado.aviso).toMatch(texto)
     expect({ ...resultado, aviso: null }).toEqual({ ...e, aviso: null })
@@ -623,7 +626,7 @@ describe("limits and validation (the state stays put and says why)", () => {
   it("refuses a repeated option name", () => {
     const e = conColor()
     rechazada(e, { tipo: "agregarOpcion", nombre: " color " }, /no pueden repetirse/)
-    const dos = aplicar(crearReductor(contador("t")), e, { tipo: "agregarOpcion", nombre: "Talle" })
+    const dos = aplicar(reductor(), e, { tipo: "agregarOpcion", nombre: "Talle" })
     rechazada(dos, { tipo: "renombrarOpcion", opcionId: opcionId(dos, "Talle"), nombre: "COLOR" }, /no pueden repetirse/)
   })
 
@@ -755,10 +758,251 @@ describe("selectors", () => {
   })
 })
 
-describe("estadoDesdeGrupo wiring with the reducer", () => {
-  it("uses the injected generator for option and value ids", () => {
-    const e = estadoDesdeGrupo(grupoColor(), { costoCargado: false }, contador("x"))
-    expect(e.opciones[0].id).toMatch(/^x\d+$/)
-    expect(e.opciones[0].valores.every((v) => /^x\d+$/.test(v.id))).toBe(true)
+describe("undo and re-adding go through ids, not through the text a row had", () => {
+  it("undo after renaming ANOTHER value brings the row back without ghost values or rows", () => {
+    const reducir = reductor()
+    const saved = hidratar(grupoColorTalle())
+    let e = aplicar(reducir, saved, { tipo: "quitarValor", valorId: valorId(saved, "Talle", "S") })
+    e = aplicar(reducir, e, { tipo: "renombrarValor", valorId: valorId(e, "Color", "Rojo"), texto: "Colorado" })
+    e = aplicar(reducir, e, { tipo: "deshacerArchivo", filaId: "r-s" })
+    expect(e.aviso).toBeNull()
+    expect(e.opciones.map((o) => [o.nombre, o.valores.map((v) => v.texto)])).toEqual([
+      ["Color", ["Colorado", "Azul"]],
+      ["Talle", ["M", "S"]],
+    ])
+    expect(Object.keys(e.filas).sort()).toEqual(["a-m", "a-s", "r-m", "r-s"])
+    // The value S comes back under the id the archived rows remember.
+    expect(valorId(e, "Talle", "S")).toBe(valorId(saved, "Talle", "S"))
+    expect(etiquetas(e)).toEqual(["Colorado / M", "Colorado / S", "Azul / M", "Azul / S"])
+    expect(e.filas["r-s"]).toMatchObject({ archivar: false, existente: true, stock: 1 })
+  })
+
+  it("undo after renaming the OPTION finds the option by id", () => {
+    const reducir = reductor()
+    const saved = hidratar(grupoColorTalle())
+    let e = aplicar(reducir, saved, { tipo: "quitarValor", valorId: valorId(saved, "Talle", "S") })
+    e = aplicar(reducir, e, { tipo: "renombrarOpcion", opcionId: opcionId(e, "Talle"), nombre: "Tamaño" })
+    e = aplicar(reducir, e, { tipo: "deshacerArchivo", filaId: "r-s" })
+    expect(e.aviso).toBeNull()
+    expect(e.opciones.map((o) => [o.nombre, o.valores.map((v) => v.texto)])).toEqual([
+      ["Color", ["Rojo", "Azul"]],
+      ["Tamaño", ["M", "S"]],
+    ])
+    expect(Object.keys(e.filas).sort()).toEqual(["a-m", "a-s", "r-m", "r-s"])
+    expect(filaDe(e, "Rojo / S").id).toBe("r-s")
+  })
+
+  it("the label of a row pending archive follows the renames", () => {
+    const reducir = reductor()
+    const saved = hidratar(grupoColorTalle())
+    let e = aplicar(reducir, saved, { tipo: "quitarValor", valorId: valorId(saved, "Talle", "S") })
+    e = aplicar(reducir, e, { tipo: "renombrarValor", valorId: valorId(e, "Color", "Rojo"), texto: "Colorado" })
+    expect(etiquetas(e).slice(2)).toEqual(["Colorado / S", "Azul / S"])
+  })
+
+  it("re-adding a combination after a rename restores the archived child instead of creating a row", () => {
+    const reducir = reductor()
+    const saved = hidratar(
+      grupoColorTalle({
+        grupo: { id: "g1", nombre: "Funda X", opciones: [{ nombre: "Color", valores: ["Rojo", "Azul"] }, { nombre: "Talle", valores: ["S"] }] },
+        variantes: [
+          leida("r-s", [{ opcion: "Color", valor: "Rojo" }, { opcion: "Talle", valor: "S" }], { stock: 1 }),
+          leida("a-s", [{ opcion: "Color", valor: "Azul" }, { opcion: "Talle", valor: "S" }], { stock: 3 }),
+        ],
+        archivadas: [{ id: "r-m", atributos: [{ opcion: "Color", valor: "Rojo" }, { opcion: "Talle", valor: "M" }], stock: 9 }],
+      })
+    )
+    let e = aplicar(reducir, saved, { tipo: "renombrarValor", valorId: valorId(saved, "Color", "Rojo"), texto: "Colorado" })
+    e = aplicar(reducir, e, { tipo: "agregarValor", opcionId: opcionId(e, "Talle"), texto: "M" })
+    expect(filaDe(e, "Colorado / M")).toMatchObject({ id: "r-m", existente: true, restaurada: true, stock: 9 })
+    expect(filaDe(e, "Azul / M")).toMatchObject({ existente: false })
+    expect(e.archivadas).toEqual({})
+  })
+
+  it("renaming the value of a combination that was archived by hand keeps the match by text working", () => {
+    const reducir = reductor()
+    const saved = hidratar(grupoColor())
+    let e = aplicar(reducir, saved, { tipo: "quitarValor", valorId: valorId(saved, "Color", "Azul") })
+    e = aplicar(reducir, e, { tipo: "agregarValor", opcionId: opcionId(e, "Color"), texto: "Azul" })
+    expect(e.filas["a1"]).toMatchObject({ archivar: false, stock: 3 })
+    expect(Object.keys(e.filas).sort()).toEqual(["a1", "r1"])
+  })
+})
+
+describe("generated codes follow the rows (typed codes never move)", () => {
+  it("folding an option re-derives the generated codes", () => {
+    const reducir = reductor()
+    let e = aplicar(reducir, nuevo(), { tipo: "agregarOpcion", nombre: "Color", valores: ["Rojo"] }, { tipo: "agregarOpcion", nombre: "Talle", valores: ["S", "M"] })
+    expect(filasEnOrden(e).map((f) => f.codigo)).toEqual(["FX-ROJ-S", "FX-ROJ-M"])
+    e = aplicar(reducir, e, { tipo: "quitarOpcion", opcionId: opcionId(e, "Talle") })
+    expect(filasEnOrden(e).map((f) => f.codigo)).toEqual(["FX-ROJ"])
+  })
+
+  it("giving rows their first value of a new option re-derives the generated codes", () => {
+    const reducir = reductor()
+    const e0 = conColor(reducir)
+    const e = aplicar(reducir, e0, { tipo: "agregarOpcion", nombre: "Talle", valores: ["S"] })
+    expect(filasEnOrden(e).map((f) => f.codigo)).toEqual(["FX-ROJ-S", "FX-AZU-S"])
+  })
+
+  it("removing a value frees the suffix a later row had to take", () => {
+    const reducir = reductor()
+    let e = aplicar(reducir, nuevo(), { tipo: "agregarOpcion", nombre: "Color", valores: ["Rojo", "Rojizo"] })
+    expect(filaDe(e, "Rojizo").codigo).toBe("FX-ROJ-2")
+    e = aplicar(reducir, e, { tipo: "quitarValor", valorId: valorId(e, "Color", "Rojo") })
+    expect(filaDe(e, "Rojizo").codigo).toBe("FX-ROJ")
+  })
+
+  it("a typed code survives the fold, the extension and the removal", () => {
+    const reducir = reductor()
+    const e0 = aplicar(reducir, nuevo(), { tipo: "agregarOpcion", nombre: "Color", valores: ["Rojo", "Azul"] }, { tipo: "agregarOpcion", nombre: "Talle", valores: ["S", "M"] })
+    const rojoS = filaDe(e0, "Rojo / S")
+    const tipeado = { ...e0, filas: { ...e0.filas, [rojoS.id]: { ...rojoS, codigo: "MIO", codigoTocado: true } } }
+    const plegado = aplicar(reducir, tipeado, { tipo: "quitarOpcion", opcionId: opcionId(tipeado, "Talle") })
+    expect(filaDe(plegado, "Rojo").codigo).toBe("MIO")
+    expect(filaDe(plegado, "Azul").codigo).toBe("FX-AZU")
+    const extendido = aplicar(reducir, plegado, { tipo: "agregarOpcion", nombre: "Material", valores: ["Lana"] })
+    expect(filaDe(extendido, "Rojo / Lana").codigo).toBe("MIO")
+    expect(filaDe(extendido, "Azul / Lana").codigo).toBe("FX-AZU-LAN")
+    const sinAzul = aplicar(reducir, extendido, { tipo: "quitarValor", valorId: valorId(extendido, "Color", "Azul") })
+    expect(filaDe(sinAzul, "Rojo / Lana").codigo).toBe("MIO")
+  })
+})
+
+describe("a row restored from the archive", () => {
+  it("has no cost of its own until the user types one", () => {
+    const reducir = reductor()
+    const saved = hidratar(grupoColor())
+    const e = aplicar(reducir, saved, { tipo: "agregarValor", opcionId: opcionId(saved, "Color"), texto: "Verde" })
+    const f = filaDe(e, "Verde")
+    expect(f.restaurada).toBe(true)
+    expect("precioCompra" in f).toBe(false)
+    // A brand new row on the same state does take the base cost.
+    const otra = aplicar(reducir, e, { tipo: "agregarValor", opcionId: opcionId(e, "Color"), texto: "Negro" })
+    expect("precioCompra" in filaDe(otra, "Negro")).toBe(true)
+  })
+})
+
+describe("ids are replay-stable: the same action on the same state gives the same state", () => {
+  const FORMATO = /^c[0-9a-f]{24}$/
+  const semillado = (over: Partial<Parameters<typeof estadoInicial>[0]> = {}) =>
+    estadoInicial({ grupoId: "cg1", codigoBase: "FX", precioBase: 1000, semilla: "semilla-de-prueba", ...over })
+  const idsDe = (e: VariantesState) => [...e.opciones.flatMap((o) => [o.id, ...o.valores.map((v) => v.id)]), ...Object.keys(e.filas)]
+
+  /** A state and an action that mints ids in a different way each. */
+  function casos(): [string, VariantesState, VariantesAccion][] {
+    const reducir = reductor()
+    const vacio = aplicar(reducir, semillado(), { tipo: "activar" })
+    const conColorRojo = aplicar(reducir, vacio, { tipo: "agregarOpcion", nombre: "Color", valores: ["Rojo"] })
+    const guardado = hidratar(grupoColor({ archivadas: [] }), { semilla: "hidratado" })
+    // Rojo/S and Rojo/M saved, M removed, Azul added (Azul/S is new): undoing M must mint Azul/M.
+    const base = hidratar(
+      grupoColorTalle({
+        grupo: { id: "g1", nombre: "Funda X", opciones: [{ nombre: "Color", valores: ["Rojo"] }, { nombre: "Talle", valores: ["S", "M"] }] },
+        variantes: [
+          leida("r-s", [{ opcion: "Color", valor: "Rojo" }, { opcion: "Talle", valor: "S" }]),
+          leida("r-m", [{ opcion: "Color", valor: "Rojo" }, { opcion: "Talle", valor: "M" }]),
+        ],
+      }),
+      { semilla: "deshacer" }
+    )
+    let paraDeshacer = aplicar(reducir, base, { tipo: "quitarValor", valorId: valorId(base, "Talle", "M") })
+    paraDeshacer = aplicar(reducir, paraDeshacer, { tipo: "agregarValor", opcionId: opcionId(paraDeshacer, "Color"), texto: "Azul" })
+    return [
+      ["add an option with values", vacio, { tipo: "agregarOpcion", nombre: "Color", valores: ["Rojo", "Azul"] }],
+      ["add a value that creates rows", conColorRojo, { tipo: "agregarValor", opcionId: opcionId(conColorRojo, "Color"), texto: "Azul" }],
+      ["add the first value of an option (rows extend)", aplicar(reducir, guardado, { tipo: "agregarOpcion", nombre: "Talle" }), { tipo: "agregarValor", opcionId: "", texto: "S" }],
+      ["undo that mints a row", paraDeshacer, { tipo: "deshacerArchivo", filaId: "r-m" }],
+    ]
+  }
+
+  it("replays to a deep-equal state, ids included", () => {
+    const reducir = reductor()
+    for (const [nombre, estado, accion] of casos()) {
+      const accionLista =
+        accion.tipo === "agregarValor" && accion.opcionId === "" ? { ...accion, opcionId: estado.opciones.at(-1)!.id } : accion
+      const a = reducir(estado, accionLista)
+      const b = reducir(estado, accionLista)
+      expect(a.aviso, nombre).toBeNull()
+      expect(b, nombre).toEqual(a)
+      expect(idsDe(a).length, nombre).toBeGreaterThan(idsDe(estado).length)
+    }
+  })
+
+  it("two reducers made apart agree too", () => {
+    for (const [nombre, estado, accion] of casos()) {
+      const accionLista =
+        accion.tipo === "agregarValor" && accion.opcionId === "" ? { ...accion, opcionId: estado.opciones.at(-1)!.id } : accion
+      expect(reductor()(estado, accionLista), nombre).toEqual(reductor()(estado, accionLista))
+    }
+  })
+
+  it("every id is shaped like a client id and none repeats along a session", () => {
+    const reducir = reductor()
+    let e = aplicar(reducir, semillado(), { tipo: "agregarOpcion", nombre: "Color", valores: ["Rojo", "Azul"] }, { tipo: "agregarOpcion", nombre: "Talle", valores: ["S", "M", "L"] })
+    e = aplicar(reducir, e, { tipo: "quitarValor", valorId: valorId(e, "Talle", "M") }, { tipo: "agregarValor", opcionId: opcionId(e, "Talle"), texto: "XL" })
+    const ids = idsDe(e)
+    expect(ids.length).toBeGreaterThan(10)
+    for (const id of ids) expect(id).toMatch(FORMATO)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it("uses the whole 96 bits: the three 32-bit words of an id are different", () => {
+    const reducir = reductor()
+    const e = aplicar(reducir, semillado(), { tipo: "agregarOpcion", nombre: "Color", valores: Array.from({ length: 30 }, (_, i) => `v${i}`) })
+    const ids = idsDe(e)
+    expect(ids.length).toBe(61)
+    for (const id of ids) {
+      const palabras = [id.slice(1, 9), id.slice(9, 17), id.slice(17, 25)]
+      expect(new Set(palabras).size).toBe(3)
+    }
+  })
+
+  it("the counter moves only when ids were minted", () => {
+    const reducir = reductor()
+    const e0 = semillado()
+    expect(e0.contador).toBe(0)
+    const e1 = aplicar(reducir, e0, { tipo: "agregarOpcion", nombre: "Color", valores: ["Rojo"] })
+    expect(e1.contador).toBe(3) // option, value, row
+    const refusal = aplicar(reducir, e1, { tipo: "agregarValor", opcionId: opcionId(e1, "Color"), texto: "rojo" })
+    expect(refusal.aviso).not.toBeNull()
+    expect(refusal.contador).toBe(3)
+    const parcial = aplicar(reducir, e1, { tipo: "agregarOpcion", nombre: "Talle", valores: ["S", "s"] })
+    expect(parcial.aviso).not.toBeNull()
+    expect(parcial.contador).toBe(3)
+    expect(aplicar(reducir, e1, { tipo: "renombrarValor", valorId: valorId(e1, "Color", "Rojo"), texto: "Rosa" }).contador).toBe(3)
+    expect(aplicar(reducir, e1, { tipo: "quitarValor", valorId: "nada" })).toBe(e1)
+  })
+
+  it("the seed is random per state unless given, and different seeds give different ids", () => {
+    const a = estadoInicial({ grupoId: "cg1" })
+    const b = estadoInicial({ grupoId: "cg1" })
+    expect(a.semilla).toMatch(/^[0-9a-f]{32}$/)
+    expect(a.semilla).not.toBe(b.semilla)
+    const reducir = reductor()
+    const accion = { tipo: "agregarOpcion", nombre: "Color", valores: ["Rojo"] } as const
+    expect(idsDe(reducir(a, accion))).not.toEqual(idsDe(reducir(b, accion)))
+    expect(idsDe(reducir(semillado(), accion))).toEqual(idsDe(reducir(semillado(), accion)))
+  })
+
+  it("hydration is deterministic for a given seed and advances the counter", () => {
+    const uno = hidratar(grupoColor(), { semilla: "mismo" })
+    const dos = hidratar(grupoColor(), { semilla: "mismo" })
+    expect(dos).toEqual(uno)
+    expect(uno.contador).toBeGreaterThan(0)
+    for (const o of uno.opciones) {
+      expect(o.id).toMatch(FORMATO)
+      for (const v of o.valores) expect(v.id).toMatch(FORMATO)
+    }
+    expect(idsDe(hidratar(grupoColor(), { semilla: "otro" }))).not.toEqual(idsDe(uno))
+    const sin = estadoDesdeGrupo(grupoColor(), { costoCargado: false })
+    expect(sin.semilla).toMatch(/^[0-9a-f]{32}$/)
+  })
+
+  it("a state minted by hydration keeps minting without repeating its own ids", () => {
+    const reducir = reductor()
+    const e = aplicar(reducir, hidratar(grupoColor(), { semilla: "mismo" }), { tipo: "agregarValor", opcionId: opcionId(hidratar(grupoColor(), { semilla: "mismo" }), "Color"), texto: "Negro" })
+    const ids = idsDe(e)
+    expect(new Set(ids).size).toBe(ids.length)
   })
 })
