@@ -2,6 +2,8 @@
  * Utilidades para transformación de datos entre DB (snake_case) y Frontend (camelCase)
  */
 
+import { etiquetaVariante } from "@/lib/variantes"
+
 // Convertir snake_case a camelCase
 export function snakeToCamel(str: string): string {
   return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
@@ -319,6 +321,16 @@ export function formatInventario(item: any, includeCost = false) {
     organizationId: item.organization_id,
     createdAt: item.created_at,
     updatedAt: item.updated_at,
+    // Variant groups (migration 355). The signal is the `grupo_id` KEY, not its value:
+    // a select that never asked for the column (M1 not applied) leaves the output of a
+    // standalone row exactly as it always was.
+    ...("grupo_id" in item
+      ? {
+          grupoId: item.grupo_id ?? null,
+          atributos: item.atributos ?? null,
+          etiqueta: etiquetaVariante(item.atributos),
+        }
+      : {}),
   }
 }
 
