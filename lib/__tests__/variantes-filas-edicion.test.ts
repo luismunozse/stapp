@@ -1,9 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { crearReductor, estadoInicial, filasEnOrden, stockTotal } from "@/lib/variantes-filas"
+import { estadoInicial, filasEnOrden, stockTotal } from "@/lib/variantes-filas"
 import {
   aplicar,
-  contador,
   etiquetas,
   filaDe,
   grupoColor,
@@ -16,7 +15,7 @@ import {
 } from "@/__tests__/helpers/variantes-filas"
 
 const nuevo = (over: Partial<Parameters<typeof estadoInicial>[0]> = {}) =>
-  estadoInicial({ grupoId: "cg1", codigoBase: "FX", precioBase: 1000, ...over })
+  estadoInicial({ grupoId: "cg1", codigoBase: "FX", precioBase: 1000, semilla: "edicion-de-prueba", ...over })
 
 /** A new product with Color {Rojo, Azul, Verde}. */
 function nuevoConColor(over: Partial<Parameters<typeof estadoInicial>[0]> = {}, reducir = reductor()) {
@@ -53,6 +52,34 @@ describe("cambiarCodigoBase", () => {
     e = aplicar(reducir, e, { tipo: "editarFila", filaId: filaDe(e, "Rojo").id, cambios: { codigo: "MIO-1" } })
     e = aplicar(reducir, e, { tipo: "renombrarValor", valorId: valorId(e, "Color", "Rojo"), texto: "Rosado" })
     expect(filaDe(e, "Rosado").codigo).toBe("MIO-1")
+  })
+})
+
+describe("cambiarCodigoBase validation", () => {
+  it("refuses control characters, with a reason and the state unchanged", () => {
+    const reducir = reductor()
+    const e = nuevoConColor({}, reducir)
+    for (const malo of [0, 10, 9, 127].map((c) => String.fromCharCode(c))) {
+      const r = aplicar(reducir, e, { tipo: "cambiarCodigoBase", codigo: `FX${malo}` })
+      expect(r.aviso).toBe("Hay un texto con un carácter que no se admite")
+      expect(r.codigoBase).toBe("FX")
+      expect({ ...r, aviso: null }).toEqual(e)
+    }
+  })
+
+  it("counts the limit in code points: 100 emoji fit, 101 do not", () => {
+    const reducir = reductor()
+    const e = nuevoConColor({}, reducir)
+    const justo = aplicar(reducir, e, { tipo: "cambiarCodigoBase", codigo: "😀".repeat(100) })
+    expect(justo.aviso).toBeNull()
+    expect(justo.codigoBase).toBe("😀".repeat(100))
+    for (const f of filasEnOrden(justo)) {
+      expect(f.codigo.isWellFormed()).toBe(true)
+      expect(Array.from(f.codigo).length).toBeLessThanOrEqual(100)
+    }
+    const largo = aplicar(reducir, e, { tipo: "cambiarCodigoBase", codigo: "😀".repeat(101) })
+    expect(largo.aviso).toBe("El código puede tener hasta 100 caracteres")
+    expect(largo.codigoBase).toBe("FX")
   })
 })
 
@@ -121,9 +148,32 @@ describe("aplicarPrecioATodas", () => {
     let e = aplicar(reducir, saved, { tipo: "agregarValor", opcionId: opcionId(saved, "Color"), texto: "Verde" })
     e = aplicar(reducir, e, { tipo: "quitarValor", valorId: valorId(e, "Color", "Azul") })
     e = aplicar(reducir, e, { tipo: "aplicarPrecioATodas" })
-    expect(filaDe(e, "Rojo")).toMatchObject({ precioVenta: 3000, precioTocado: false })
+    // Saved rows (restored ones too) stay "touched": the base must never reprice them again.
+    expect(filaDe(e, "Rojo")).toMatchObject({ precioVenta: 3000, precioTocado: true })
     expect(filaDe(e, "Verde")).toMatchObject({ precioVenta: 3000, precioTocado: true })
     expect(e.filas["a1"]).toMatchObject({ precioVenta: 999, archivar: true })
+  })
+})
+
+describe("after \"apply the price to all\", the base only moves the new rows", () => {
+  it("never reprices saved, restored or promoted rows when the base changes again", () => {
+    const reducir = reductor()
+    const saved = hidratar(grupoColor({ variantes: [rojoAzul("r1", "Rojo", { precioVenta: 1234 }), rojoAzul("a1", "Azul", { precioVenta: 999 })] }), { precioBase: 3000 })
+    let e = aplicar(reducir, saved, { tipo: "agregarValor", opcionId: opcionId(saved, "Color"), texto: "Verde" }, { tipo: "agregarValor", opcionId: opcionId(saved, "Color"), texto: "Negro" })
+    e = aplicar(reducir, e, { tipo: "aplicarPrecioATodas" }, { tipo: "cambiarPrecioBase", precio: 4000 })
+    expect(filaDe(e, "Rojo").precioVenta).toBe(3000)
+    expect(filaDe(e, "Azul").precioVenta).toBe(3000)
+    expect(filaDe(e, "Verde").precioVenta).toBe(3000)
+    expect(filaDe(e, "Negro")).toMatchObject({ precioVenta: 4000, precioTocado: false })
+  })
+
+  it("same for a promoted item: its price stays, a new row follows the new base", () => {
+    const reducir = reductor()
+    const item = { id: "p1", codigo: "P-1", precioVenta: 7000, stock: 3 }
+    let e = aplicar(reducir, nuevoConColor({}, reducir), { tipo: "promover", item })
+    e = aplicar(reducir, e, { tipo: "aplicarPrecioATodas" }, { tipo: "cambiarPrecioBase", precio: 2000 })
+    expect(e.filas["p1"]).toMatchObject({ precioVenta: 1000, precioTocado: true })
+    expect(filaDe(e, "Azul")).toMatchObject({ precioVenta: 2000, precioTocado: false })
   })
 })
 
@@ -139,6 +189,19 @@ describe("cambiarCostoBase", () => {
     const saved = hidratar(grupoColor({ variantes: [rojoAzul("r1", "Rojo", { precioCompra: 100 }), rojoAzul("a1", "Azul", { precioCompra: 100 })] }), { costoCargado: true })
     const guardado = aplicar(reducir, { ...saved, costoBase: 100 }, { tipo: "cambiarCostoBase", costo: 300 })
     expect(filasEnOrden(guardado).map((f) => f.precioCompra)).toEqual([100, 100])
+  })
+
+  it("never reaches a restored row, which has no cost key until the user types one", () => {
+    const reducir = reductor()
+    const saved = hidratar(grupoColor())
+    let e = aplicar(reducir, { ...saved, costoBase: 0 }, { tipo: "agregarValor", opcionId: opcionId(saved, "Color"), texto: "Verde" })
+    expect("precioCompra" in filaDe(e, "Verde")).toBe(false)
+    e = aplicar(reducir, e, { tipo: "cambiarCostoBase", costo: 500 })
+    expect("precioCompra" in filaDe(e, "Verde")).toBe(false)
+    e = aplicar(reducir, e, { tipo: "editarFila", filaId: "v1", cambios: { precioCompra: 80 } })
+    expect(filaDe(e, "Verde").precioCompra).toBe(80)
+    e = aplicar(reducir, e, { tipo: "cambiarCostoBase", costo: 900 })
+    expect(filaDe(e, "Verde").precioCompra).toBe(80)
   })
 
   it("keeps the cost out of the rows without cost access, and refuses a bad cost", () => {
@@ -230,27 +293,27 @@ describe("editarFila", () => {
 
   it("refuses what the save would refuse, with a reason, and changes nothing", () => {
     const e = nuevoConColor()
-    // A fresh id range per call: a refusal must not hide behind ids already in `e`.
-    const crear = () => crearReductor(contador("r"))
     const id = filaDe(e, "Rojo").id
     const casos: [Record<string, unknown>, string][] = [
       [{ precioVenta: -1 }, "El precio no puede ser negativo"],
-      [{ precioVenta: Number.NaN }, "Tiene que ser un número"],
-      [{ stockInicial: -1 }, "No puede ser negativo"],
-      [{ stockInicial: 1.5 }, "Tiene que ser un número entero"],
-      [{ stockInicial: 1_000_000_000 }, "El número es demasiado grande"],
+      [{ precioVenta: Number.NaN }, "El precio tiene que ser un número"],
+      [{ stockInicial: -1 }, "El stock inicial no puede ser negativo"],
+      [{ stockInicial: 1.5 }, "El stock inicial tiene que ser un número entero"],
+      [{ stockInicial: 1_000_000_000 }, "El stock inicial es demasiado grande"],
       [{ barcode: "x".repeat(101) }, "El código de barras puede tener hasta 100 caracteres"],
       [{ ubicacion: "u".repeat(101) }, "La ubicación puede tener hasta 100 caracteres"],
       [{ codigo: "c".repeat(101) }, "El código puede tener hasta 100 caracteres"],
-      [{ stockMinimo: 1.5 }, "Tiene que ser un número entero"],
-      [{ puntoReorden: -2 }, "No puede ser negativo"],
+      [{ stockMinimo: 1.5 }, "El stock mínimo tiene que ser un número entero"],
+      [{ stockMaximo: -1 }, "El stock máximo no puede ser negativo"],
+      [{ puntoReorden: -2 }, "El punto de reorden no puede ser negativo"],
+      [{ puntoReorden: 1_000_000_000 }, "El punto de reorden es demasiado grande"],
       [{ stockMinimo: 9, stockMaximo: 3 }, "El stock mínimo no puede superar al máximo"],
       [{ codigo: `a${String.fromCharCode(0)}b` }, "Hay un texto con un carácter que no se admite"],
       [{ barcode: `a${String.fromCharCode(0)}b` }, "Hay un texto con un carácter que no se admite"],
       [{ ubicacion: `a${String.fromCharCode(0)}b` }, "Hay un texto con un carácter que no se admite"],
     ]
     for (const [cambios, aviso] of casos) {
-      const r = aplicar(crear(), e, { tipo: "editarFila", filaId: id, cambios })
+      const r = aplicar(reductor(), e, { tipo: "editarFila", filaId: id, cambios })
       expect(r.aviso).toBe(aviso)
       expect({ ...r, aviso: null }).toEqual({ ...e, aviso: null })
     }
@@ -288,6 +351,14 @@ describe("editarFila", () => {
     const e = aplicar(reducir, e0, { tipo: "editarFila", filaId: id, cambios: { ubicacion: "Estante  2 " } })
     expect(filaDe(e, "Rojo").extra.ubicacion).toBe("Estante  2 ")
     expect(filaDe(aplicar(reducir, e, { tipo: "editarFila", filaId: id, cambios: { ubicacion: "   " } }), "Rojo").extra.ubicacion).toBeNull()
+  })
+
+  it("names the cost in its own messages", () => {
+    const reducir = reductor()
+    const e = nuevoConColor({ costoCargado: true }, reducir)
+    const id = filaDe(e, "Rojo").id
+    expect(aplicar(reducir, e, { tipo: "editarFila", filaId: id, cambios: { precioCompra: Number.NaN } }).aviso).toBe("El costo tiene que ser un número")
+    expect(aplicar(reducir, e, { tipo: "editarFila", filaId: id, cambios: { precioCompra: -1 } }).aviso).toBe("El costo no puede ser negativo")
   })
 
   it("checks the stock range against the value the row already has", () => {
@@ -417,6 +488,21 @@ describe("promover", () => {
     expect(sobreGuardada.aviso).toBe("Elegí una combinación nueva para el producto")
     expect(sobreGuardada.promocionId).toBeNull()
     expect(sobreGuardada.filas["r1"].id).toBe("r1")
+  })
+
+  it("no new row keeps the code of the promoted item", () => {
+    const reducir = reductor()
+    const e0 = nuevoConColor({}, reducir)
+    expect(filaDe(e0, "Azul").codigo).toBe("FX-AZU")
+    const e = aplicar(reducir, e0, { tipo: "promover", item: { ...item, codigo: "FX-AZU" } })
+    expect(e.filas["p1"].codigo).toBe("FX-AZU")
+    expect(filaDe(e, "Azul").codigo).toBe("FX-AZU-2")
+    const codigos = filasEnOrden(e).map((f) => f.codigo)
+    expect(new Set(codigos).size).toBe(codigos.length)
+    // A code somebody typed is not touched.
+    const tipeado = aplicar(reducir, e0, { tipo: "editarFila", filaId: filaDe(e0, "Azul").id, cambios: { codigo: "FX-AZU" } })
+    const promovido = aplicar(reducir, tipeado, { tipo: "promover", item: { ...item, codigo: "FX-AZU" } })
+    expect(filaDe(promovido, "Azul").codigo).toBe("FX-AZU")
   })
 
   it("does not let the base code or price reach the promoted row", () => {

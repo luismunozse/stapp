@@ -805,24 +805,38 @@ type Validado<T> = { valor: T } | { aviso: string }
 
 /** A price or a cost: finite, not negative, at most the RPC cap, rounded to cents like a person would. */
 function validarMonto(n: number, sustantivo: "precio" | "costo"): Validado<number> {
-  if (typeof n !== "number" || !Number.isFinite(n)) return { aviso: "Tiene que ser un número" }
+  if (typeof n !== "number" || !Number.isFinite(n)) return { aviso: `El ${sustantivo} tiene que ser un número` }
   if (n < 0) return { aviso: `El ${sustantivo} no puede ser negativo` }
   const redondeado = redondearPrecio(n)
   if (redondeado > LIMITES.precioMax) return { aviso: `El ${sustantivo} es demasiado grande` }
   return { valor: redondeado }
 }
 
-function validarEntero(n: number): Validado<number> {
-  if (typeof n !== "number" || !Number.isInteger(n)) return { aviso: "Tiene que ser un número entero" }
-  if (n < 0) return { aviso: "No puede ser negativo" }
-  if (n > LIMITES.enteroMax) return { aviso: "El número es demasiado grande" }
+/** `campo` is the name the user knows, with its article: "El stock inicial", "El punto de reorden". */
+function validarEntero(n: number, campo: string): Validado<number> {
+  if (typeof n !== "number" || !Number.isInteger(n)) return { aviso: `${campo} tiene que ser un número entero` }
+  if (n < 0) return { aviso: `${campo} no puede ser negativo` }
+  if (n > LIMITES.enteroMax) return { aviso: `${campo} es demasiado grande` }
   return { valor: n }
 }
+
+const CAMPO_ENTERO = {
+  stockInicial: "El stock inicial",
+  stockMinimo: "El stock mínimo",
+  stockMaximo: "El stock máximo",
+  puntoReorden: "El punto de reorden",
+} as const
 
 function validarTextoDeFila(texto: string, max: number, largo: string): Validado<string> {
   if (longitud(texto) > max) return { aviso: largo }
   if (texto.includes(NUL)) return { aviso: NO_ADMITIDO }
   return { valor: texto }
+}
+
+function cambiarCodigoBase(estado: VariantesState, codigo: string): Resultado {
+  if (/\p{Cc}/u.test(codigo)) return NO_ADMITIDO
+  if (longitud(codigo) > LIMITES.codigo) return "El código puede tener hasta 100 caracteres"
+  return rederivarCodigos({ ...estado, codigoBase: codigo })
 }
 
 function cambiarPrecioBase(estado: VariantesState, precio: number): Resultado {
@@ -851,8 +865,9 @@ function aplicarPrecioATodas(estado: VariantesState): Resultado {
   const filas = Object.fromEntries(
     Object.entries(estado.filas).map(([id, f]) => [
       id,
-      // A restored row has no price the client knows: the new one must be sent, so it stays marked.
-      f.archivar ? f : { ...f, precioVenta: estado.precioBase, precioTocado: f.restaurada === true },
+      // Only new rows go back to following the base. A saved row (restored and promoted ones too) stays marked:
+      // the base never reprices it again, and a restored row's new price is the one that gets sent.
+      f.archivar ? f : { ...f, precioVenta: estado.precioBase, precioTocado: f.existente },
     ])
   )
   return { ...estado, filas }
@@ -892,7 +907,7 @@ function editarFila(estado: VariantesState, filaId: string, c: CambiosDeFila): R
     cambio = true
   }
   if (c.stockInicial !== undefined && !fila.existente) {
-    const v = validarEntero(c.stockInicial)
+    const v = validarEntero(c.stockInicial, CAMPO_ENTERO.stockInicial)
     if ("aviso" in v) return v.aviso
     siguiente.stockInicial = v.valor
     cambio = true
@@ -902,7 +917,7 @@ function editarFila(estado: VariantesState, filaId: string, c: CambiosDeFila): R
     if (crudo === undefined) continue
     if (crudo === null) siguiente.extra[campo] = null
     else {
-      const v = validarEntero(crudo)
+      const v = validarEntero(crudo, CAMPO_ENTERO[campo])
       if ("aviso" in v) return v.aviso
       siguiente.extra[campo] = v.valor
     }
@@ -968,7 +983,8 @@ function promover(estado: VariantesState, item: ItemPromovido, filaId: string | 
     const id = generarId()
     filas[id] = filaNueva(estado, id, previa.valorIds, generarCodigoVariante(estado.codigoBase, texto, usados))
   }
-  return reordenar({ ...estado, promocionId: item.id, filas })
+  // A generated code that equals the promoted item's code is re-derived around it.
+  return rederivarCodigos(reordenar({ ...estado, promocionId: item.id, filas }))
 }
 
 function reducir(estado: VariantesState, accion: VariantesAccion, generarId: () => string): Resultado {
@@ -994,7 +1010,7 @@ function reducir(estado: VariantesState, accion: VariantesAccion, generarId: () 
     case "deshacerArchivo":
       return deshacerArchivo(estado, accion.filaId, generarId)
     case "cambiarCodigoBase":
-      return rederivarCodigos({ ...estado, codigoBase: accion.codigo })
+      return cambiarCodigoBase(estado, accion.codigo)
     case "cambiarPrecioBase":
       return cambiarPrecioBase(estado, accion.precio)
     case "cambiarCostoBase":
