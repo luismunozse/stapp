@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { supabaseAdmin } from "@/lib/supabase"
 import { mockAuthSuccess, createGetRequest, parseResponse } from "./helpers"
 
-import { adjuntarFotoDeRespaldo } from "@/lib/variantes-fotos"
+import { adjuntarFotoDeRespaldo, type ItemParaRespaldo } from "@/lib/variantes-fotos"
 import { GET } from "@/app/api/inventario/route"
 
 // The fallback photo is display-only: `imagenUrl` keeps meaning "the row's OWN photo" and the
@@ -111,7 +111,7 @@ function fakeHermanos(opts: { filasDeLista?: Record<string, unknown>[]; fallar?:
   return { intentos }
 }
 
-const item = (id: string, grupoId: string | null, valor: string | null, imagenUrl: string | null) => ({
+const item = (id: string, grupoId: string | null, valor: string | null, imagenUrl: string | null): ItemParaRespaldo => ({
   id,
   grupoId,
   atributos: valor ? color(valor) : null,
