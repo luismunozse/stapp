@@ -134,6 +134,14 @@ describe("GET /api/notas-credito — lectura", () => {
     expect(res.status).toBe(500)
   })
 
+  // PGRST103 = rango no satisfacible: la página pedida está más allá de la última.
+  it("una página más allá de la última responde 200 vacío con el total real", async () => {
+    setup({ filas: [], count: 41, vistaError: { code: "PGRST103", message: "Requested range not satisfiable" } })
+    const res = await parseResponse(await get("?page=9&limit=20"))
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ data: [], total: 41, page: 9, limit: 20, totalPages: 3 })
+  })
+
   it("sin resultados devuelve una página vacía", async () => {
     setup({ filas: [], count: 0 })
     const res = await parseResponse(await get())
