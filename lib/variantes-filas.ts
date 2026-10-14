@@ -1,6 +1,6 @@
 import type { AtributoVariante } from "@/types"
 import { claveCombinacion, etiquetaVariante } from "@/lib/variantes"
-import { LIMITES } from "@/lib/variantes-schema"
+import { LIMITES, redondearPrecio } from "@/lib/variantes-schema"
 
 // PURE and client-importable: no I/O, no React, no server-only imports. The state of the
 // variants section of the product form (rows keyed by child id) and the pure functions
@@ -503,6 +503,30 @@ export type VariantesAccion =
   | { tipo: "renombrarValor"; valorId: string; texto: string }
   | { tipo: "quitarValor"; valorId: string }
   | { tipo: "deshacerArchivo"; filaId: string }
+  | { tipo: "cambiarCodigoBase"; codigo: string }
+  | { tipo: "cambiarPrecioBase"; precio: number }
+  | { tipo: "cambiarCostoBase"; costo: number }
+  | { tipo: "aplicarPrecioATodas" }
+  | { tipo: "editarFila"; filaId: string; cambios: CambiosDeFila }
+  | { tipo: "promover"; item: ItemPromovido; filaId?: string }
+
+/** What the form can type into a row. Stock, photo and ids are not here on purpose. */
+export interface CambiosDeFila {
+  codigo?: string
+  barcode?: string | null
+  precioVenta?: number
+  /** Ignored without cost access. */
+  precioCompra?: number
+  /** New rows only; ignored on a saved row. */
+  stockInicial?: number
+  stockMinimo?: number | null
+  stockMaximo?: number | null
+  puntoReorden?: number | null
+  ubicacion?: string | null
+}
+
+/** A standalone item being turned into the first combination (the data the form already loaded). */
+export type ItemPromovido = Omit<VarianteLeida, "atributos">
 
 export type Reductor = (estado: VariantesState, accion: VariantesAccion) => VariantesState
 
@@ -630,8 +654,8 @@ function extenderFilas(estado: VariantesState, valorId: string): VariantesState 
 
 /**
  * A dimension disappears (an option was removed, or its last value): rows that now share a combination
- * collapse. The promoted item survives first, then the first saved row, then the first row. Other saved
- * rows are archived; the others are dropped.
+ * collapse. A saved row survives first (in a new group that is the promoted item), then the first row. Other
+ * saved rows are archived; the others are dropped.
  */
 function colapsar(estado: VariantesState, quitar: ReadonlySet<string>, opciones: OpcionDeEstado[]): VariantesState {
   const filas = { ...estado.filas }
@@ -641,7 +665,7 @@ function colapsar(estado: VariantesState, quitar: ReadonlySet<string>, opciones:
     grupos.set(clave, [...(grupos.get(clave) ?? []), fila])
   }
   for (const miembros of grupos.values()) {
-    const sobreviviente = miembros.find((f) => f.id === estado.promocionId) ?? miembros.find((f) => f.existente) ?? miembros[0]
+    const sobreviviente = miembros.find((f) => f.existente) ?? miembros[0]
     filas[sobreviviente.id] = { ...sobreviviente, valorIds: sobreviviente.valorIds.filter((id) => !quitar.has(id)) }
     for (const otra of miembros) {
       if (otra.id === sobreviviente.id) continue
@@ -740,6 +764,11 @@ function renombrarValor(estado: VariantesState, valorId: string, crudo: string):
 function quitarValor(estado: VariantesState, valorId: string): Resultado {
   const opcion = estado.opciones.find((o) => o.valores.some((v) => v.id === valorId))
   if (!opcion) return estado
+  const promovida = estado.promocionId ? estado.filas[estado.promocionId] : undefined
+  if (promovida?.valorIds.includes(valorId)) {
+    const texto = opcion.valores.find((v) => v.id === valorId)?.texto ?? ""
+    return `El producto que estás convirtiendo tiene que quedar en una combinación: elegí otra antes de quitar "${texto}"`
+  }
   const opciones = estado.opciones.map((o) => (o.id === opcion.id ? { ...o, valores: o.valores.filter((v) => v.id !== valorId) } : o))
   if (opcion.valores.length === 1) return colapsar(estado, new Set([valorId]), opciones)
 
@@ -772,6 +801,192 @@ function deshacerArchivo(estado: VariantesState, filaId: string, generarId: () =
   return actual
 }
 
+type Validado<T> = { valor: T } | { aviso: string }
+
+/** A price or a cost: finite, not negative, at most the RPC cap, rounded to cents like a person would. */
+function validarMonto(n: number, sustantivo: "precio" | "costo"): Validado<number> {
+  if (typeof n !== "number" || !Number.isFinite(n)) return { aviso: `El ${sustantivo} tiene que ser un número` }
+  if (n < 0) return { aviso: `El ${sustantivo} no puede ser negativo` }
+  const redondeado = redondearPrecio(n)
+  if (redondeado > LIMITES.precioMax) return { aviso: `El ${sustantivo} es demasiado grande` }
+  return { valor: redondeado }
+}
+
+/** `campo` is the name the user knows, with its article: "El stock inicial", "El punto de reorden". */
+function validarEntero(n: number, campo: string): Validado<number> {
+  if (typeof n !== "number" || !Number.isInteger(n)) return { aviso: `${campo} tiene que ser un número entero` }
+  if (n < 0) return { aviso: `${campo} no puede ser negativo` }
+  if (n > LIMITES.enteroMax) return { aviso: `${campo} es demasiado grande` }
+  return { valor: n }
+}
+
+const CAMPO_ENTERO = {
+  stockInicial: "El stock inicial",
+  stockMinimo: "El stock mínimo",
+  stockMaximo: "El stock máximo",
+  puntoReorden: "El punto de reorden",
+} as const
+
+function validarTextoDeFila(texto: string, max: number, largo: string): Validado<string> {
+  if (longitud(texto) > max) return { aviso: largo }
+  if (texto.includes(NUL)) return { aviso: NO_ADMITIDO }
+  return { valor: texto }
+}
+
+function cambiarCodigoBase(estado: VariantesState, codigo: string): Resultado {
+  if (/\p{Cc}/u.test(codigo)) return NO_ADMITIDO
+  if (longitud(codigo) > LIMITES.codigo) return "El código puede tener hasta 100 caracteres"
+  return rederivarCodigos({ ...estado, codigoBase: codigo })
+}
+
+function cambiarPrecioBase(estado: VariantesState, precio: number): Resultado {
+  const validado = validarMonto(precio, "precio")
+  if ("aviso" in validado) return validado.aviso
+  const filas = Object.fromEntries(
+    // Saved rows (restored ones included) are never "untouched": the client does not own their price.
+    Object.entries(estado.filas).map(([id, f]) => [id, !f.precioTocado && !f.restaurada ? { ...f, precioVenta: validado.valor } : f])
+  )
+  return { ...estado, precioBase: validado.valor, filas }
+}
+
+/** New rows still on the old base cost follow the new one; a cost somebody typed, or a saved one, stays. */
+function cambiarCostoBase(estado: VariantesState, costo: number): Resultado {
+  const validado = validarMonto(costo, "costo")
+  if ("aviso" in validado) return validado.aviso
+  if (!estado.costoCargado) return { ...estado, costoBase: validado.valor }
+  const filas = Object.fromEntries(
+    Object.entries(estado.filas).map(([id, f]) => [id, !f.existente && f.precioCompra === estado.costoBase ? { ...f, precioCompra: validado.valor } : f])
+  )
+  return { ...estado, costoBase: validado.valor, filas }
+}
+
+/** "Aplicar precio a todas": every active row takes the base price and goes back to following it. */
+function aplicarPrecioATodas(estado: VariantesState): Resultado {
+  const filas = Object.fromEntries(
+    Object.entries(estado.filas).map(([id, f]) => [
+      id,
+      // Only new rows go back to following the base. A saved row (restored and promoted ones too) stays marked:
+      // the base never reprices it again, and a restored row's new price is the one that gets sent.
+      f.archivar ? f : { ...f, precioVenta: estado.precioBase, precioTocado: f.existente },
+    ])
+  )
+  return { ...estado, filas }
+}
+
+function editarFila(estado: VariantesState, filaId: string, c: CambiosDeFila): Resultado {
+  const fila = estado.filas[filaId]
+  if (!fila || fila.archivar) return estado
+  const siguiente: Fila = { ...fila, extra: { ...fila.extra } }
+  let cambio = false
+
+  if (c.codigo !== undefined) {
+    const v = validarTextoDeFila(c.codigo, LIMITES.codigo, "El código puede tener hasta 100 caracteres")
+    if ("aviso" in v) return v.aviso
+    siguiente.codigo = v.valor
+    siguiente.codigoTocado = true
+    cambio = true
+  }
+  if (c.barcode !== undefined) {
+    const texto = c.barcode === null ? "" : c.barcode.trim()
+    const v = validarTextoDeFila(texto, LIMITES.barcode, "El código de barras puede tener hasta 100 caracteres")
+    if ("aviso" in v) return v.aviso
+    siguiente.barcode = v.valor === "" ? null : v.valor
+    cambio = true
+  }
+  if (c.precioVenta !== undefined) {
+    const v = validarMonto(c.precioVenta, "precio")
+    if ("aviso" in v) return v.aviso
+    siguiente.precioVenta = v.valor
+    siguiente.precioTocado = true
+    cambio = true
+  }
+  if (c.precioCompra !== undefined && estado.costoCargado) {
+    const v = validarMonto(c.precioCompra, "costo")
+    if ("aviso" in v) return v.aviso
+    siguiente.precioCompra = v.valor
+    cambio = true
+  }
+  if (c.stockInicial !== undefined && !fila.existente) {
+    const v = validarEntero(c.stockInicial, CAMPO_ENTERO.stockInicial)
+    if ("aviso" in v) return v.aviso
+    siguiente.stockInicial = v.valor
+    cambio = true
+  }
+  for (const campo of ["stockMinimo", "stockMaximo", "puntoReorden"] as const) {
+    const crudo = c[campo]
+    if (crudo === undefined) continue
+    if (crudo === null) siguiente.extra[campo] = null
+    else {
+      const v = validarEntero(crudo, CAMPO_ENTERO[campo])
+      if ("aviso" in v) return v.aviso
+      siguiente.extra[campo] = v.valor
+    }
+    cambio = true
+  }
+  if (c.ubicacion !== undefined) {
+    const v = validarTextoDeFila(c.ubicacion ?? "", LIMITES.ubicacion, "La ubicación puede tener hasta 100 caracteres")
+    if ("aviso" in v) return v.aviso
+    siguiente.extra.ubicacion = v.valor.trim() === "" ? null : v.valor
+    cambio = true
+  }
+
+  const { stockMinimo, stockMaximo } = siguiente.extra
+  if (stockMinimo !== null && stockMaximo !== null && stockMinimo > stockMaximo) return "El stock mínimo no puede superar al máximo"
+  if (!cambio) return estado
+  return { ...estado, filas: { ...estado.filas, [filaId]: siguiente } }
+}
+
+/**
+ * A standalone item becomes one combination of the new group: it takes over a NEW row (the one given, else
+ * the first), keeping its id, code, price, stock and photo. Promoting again moves it and hands the slot it
+ * left back as a new row. It never replaces a saved row of the group.
+ */
+function promover(estado: VariantesState, item: ItemPromovido, filaId: string | undefined, generarId: () => string): Resultado {
+  const activas = filasEnOrden(estado).filter((f) => !f.archivar)
+  if (activas.length === 0) return "Primero agregá las opciones y los valores del producto"
+
+  const previa = estado.promocionId ? estado.filas[estado.promocionId] : undefined
+  const sitioActual = previa && previa.id === item.id ? previa : undefined
+  const destino = filaId !== undefined ? estado.filas[filaId] : sitioActual ?? activas.find((f) => !f.existente)
+  if (!destino || (destino.existente && destino.id !== previa?.id)) return "Elegí una combinación nueva para el producto"
+
+  const promovida: Fila = {
+    id: item.id,
+    valorIds: destino.valorIds,
+    existente: true,
+    archivar: false,
+    codigo: item.codigo,
+    codigoTocado: true,
+    barcode: item.barcode && item.barcode.trim() !== "" ? item.barcode : null,
+    precioVenta: item.precioVenta,
+    precioTocado: true,
+    stockInicial: 0,
+    stock: item.stock,
+    stockReservado: item.stockReservado ?? 0,
+    imagenUrl: urlGuardada(item.imagenUrl),
+    extra: {
+      stockMinimo: item.stockMinimo ?? null,
+      stockMaximo: item.stockMaximo ?? null,
+      puntoReorden: item.puntoReorden ?? null,
+      ubicacion: item.ubicacion ?? null,
+    },
+  }
+  if (estado.costoCargado && typeof item.precioCompra === "number") promovida.precioCompra = item.precioCompra
+
+  const filas = { ...estado.filas }
+  delete filas[destino.id]
+  if (previa) delete filas[previa.id]
+  filas[item.id] = promovida
+  if (previa && previa.id !== destino.id) {
+    const usados = Object.values(filas).map((f) => f.codigo).filter((c) => c !== "")
+    const texto = atributosDe(estado, previa).map((a) => a.valor)
+    const id = generarId()
+    filas[id] = filaNueva(estado, id, previa.valorIds, generarCodigoVariante(estado.codigoBase, texto, usados))
+  }
+  // A generated code that equals the promoted item's code is re-derived around it.
+  return rederivarCodigos(reordenar({ ...estado, promocionId: item.id, filas }))
+}
+
 function reducir(estado: VariantesState, accion: VariantesAccion, generarId: () => string): Resultado {
   switch (accion.tipo) {
     case "reemplazar":
@@ -794,6 +1009,18 @@ function reducir(estado: VariantesState, accion: VariantesAccion, generarId: () 
       return quitarValor(estado, accion.valorId)
     case "deshacerArchivo":
       return deshacerArchivo(estado, accion.filaId, generarId)
+    case "cambiarCodigoBase":
+      return cambiarCodigoBase(estado, accion.codigo)
+    case "cambiarPrecioBase":
+      return cambiarPrecioBase(estado, accion.precio)
+    case "cambiarCostoBase":
+      return cambiarCostoBase(estado, accion.costo)
+    case "aplicarPrecioATodas":
+      return aplicarPrecioATodas(estado)
+    case "editarFila":
+      return editarFila(estado, accion.filaId, accion.cambios)
+    case "promover":
+      return promover(estado, accion.item, accion.filaId, generarId)
   }
 }
 
