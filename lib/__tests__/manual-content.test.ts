@@ -24,6 +24,14 @@ describe('manualSections', () => {
     expect(() => JSON.stringify(manualSections)).not.toThrow()
   })
 
+  it('el bloque de imprimir o enviar una NC dice quién cambia el mensaje y qué pasa en la compu', () => {
+    const s = manualSections.find((x) => x.id === 'notas-credito')!
+    const b = s.content.find((x) => x.subtitle === 'Imprimir o enviar una nota de crédito')!
+    expect(b.body).toMatch(/administrador/i)
+    expect(b.body).toContain('menú de compartir del sistema')
+    expect(b.body).not.toContain('que podés cambiar')
+  })
+
   it('tiene la sección de notas de crédito para los tres roles, con el bloque del listado solo para el ADMIN', () => {
     const s = manualSections.find((x) => x.id === 'notas-credito')
     expect(s).toBeDefined()

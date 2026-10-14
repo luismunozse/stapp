@@ -357,7 +357,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Imprimir o enviar una nota de crédito",
-        body: "En el detalle de la venta o de la orden, el bloque \"Notas de crédito\" muestra las que tiene, con tres botones: PDF (hoja A4), Ticket (impresora térmica de 58 u 80 mm, por USB o desde el navegador) y WhatsApp. WhatsApp comparte el PDF con un mensaje que podés cambiar en Configuración > Plantillas WhatsApp; desde la compu se descarga el PDF y se abre el chat del cliente para que lo adjuntes. El PDF muestra el saldo pendiente de la operación al día en que lo imprimís.",
+        body: "En el detalle de la venta o de la orden, el bloque \"Notas de crédito\" muestra las que tiene, con tres botones: PDF (hoja A4), Ticket (impresora térmica de 58 u 80 mm, por USB o desde el navegador) y WhatsApp. WhatsApp comparte el PDF con un mensaje; el administrador puede cambiarlo en Configuración > Plantillas WhatsApp y los demás roles envían el texto estándar de STApp. En la compu, según el navegador se abre el menú de compartir del sistema o se descarga el PDF y se abre el chat del cliente para que lo adjuntes. El PDF muestra el saldo pendiente de la operación al día en que lo imprimís.",
         seeAlso: ["configuracion"],
       },
     ],
