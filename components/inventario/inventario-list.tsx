@@ -297,18 +297,22 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         .replace(/\s+/g, " ")
         .trim()}|${it.tipoDispositivo}|${it.categoria}`
       const arr = groups.get(key) || []
-      // The children of one group share a base name by design: only one of them stands for the group.
-      if (it.grupoId && arr.some((otro) => otro.grupoId === it.grupoId)) continue
       arr.push(it)
       groups.set(key, arr)
     }
     const dup = new Set<string>()
     const byId = new Map<string, Inventario[]>()
     for (const list of groups.values()) {
-      if (list.length > 1) {
+      // The children of one group share a base name by design: together they count as ONE product, so
+      // siblings never flag each other, but each of them still repeats a standalone product with its name.
+      const productos = new Set(list.map((it) => it.grupoId ?? it.id)).size
+      if (productos > 1) {
+        // Consolidating moves stock and archives the source: never for the members of a group. The badge only
+        // opens the dialog when there are two or more standalone products to merge.
+        const consolidables = list.filter((it) => !it.grupoId)
         list.forEach((it) => {
           dup.add(it.id)
-          byId.set(it.id, list)
+          if (!it.grupoId && consolidables.length > 1) byId.set(it.id, consolidables)
         })
       }
     }
@@ -383,7 +387,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                     if (group) setConsolidateGroup(group)
                   }}
                   className="shrink-0"
-                  title="Clic para consolidar los duplicados detectados en esta página."
+                  title={duplicateGroupByItemId.has(item.id) ? "Clic para consolidar los duplicados detectados en esta página." : "Se repite con una variante. Para unirlos, primero desagrupala."}
                 >
                   <Badge
                     variant="outline"
@@ -1245,7 +1249,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                                     if (group) setConsolidateGroup(group)
                                   }}
                                   className="shrink-0"
-                                  title="Clic para consolidar los duplicados detectados en esta página."
+                                  title={duplicateGroupByItemId.has(item.id) ? "Clic para consolidar los duplicados detectados en esta página." : "Se repite con una variante. Para unirlos, primero desagrupala."}
                                 >
                                   <Badge
                                     variant="outline"

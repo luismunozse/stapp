@@ -50,6 +50,14 @@ vi.mock("@/components/inventario/inventario-form", () => ({
   },
 }))
 
+const { propsConsolidar } = vi.hoisted(() => ({ propsConsolidar: [] as Record<string, any>[] }))
+vi.mock("@/components/inventario/consolidate-duplicates-dialog", () => ({
+  ConsolidateDuplicatesDialog: (props: Record<string, any>) => {
+    propsConsolidar.push(props)
+    return props.open ? <div data-testid="consolidar" data-ids={props.group.map((i: { id: string }) => i.id).join(",")} /> : null
+  },
+}))
+
 const { propsAgrupar } = vi.hoisted(() => ({ propsAgrupar: [] as Record<string, any>[] }))
 vi.mock("@/components/inventario/agrupar-dialog", () => ({
   AgruparDialog: (props: Record<string, any>) => {
@@ -117,6 +125,7 @@ beforeEach(() => {
   localStorage.setItem("inventario-view-mode", "list")
   propsForm.length = 0
   propsAgrupar.length = 0
+  propsConsolidar.length = 0
   data = [ROJO, AZUL, VERDE, SUELTO]
   stubFetch()
 })
@@ -210,6 +219,29 @@ describe("InventarioList: siblings are not duplicates", () => {
     renderList()
     await esperarLista()
     expect(screen.queryAllByText("Duplicado")).toHaveLength(0)
+  })
+
+  it("a standalone product that repeats the name of two siblings flags all three", async () => {
+    data = [{ ...SUELTO, id: "s9", codigo: "S-9", nombre: "Funda", categoria: "Fundas", tieneVariantes: false }, { ...ROJO, nombre: "Funda" }, { ...AZUL, nombre: "Funda" }]
+    renderList()
+    await waitFor(() => expect(screen.getAllByText("Funda").length).toBeGreaterThan(0))
+    expect(screen.getAllByText("Duplicado")).toHaveLength(3)
+  })
+
+  it("a flagged pair that includes a variant cannot be consolidated from the badge", async () => {
+    data = [{ ...ROJO, nombre: "Funda" }, { ...SUELTO, id: "s9", codigo: "S-9", nombre: "Funda", categoria: "Fundas", tieneVariantes: false }]
+    renderList()
+    await waitFor(() => expect(screen.getAllByText("Funda").length).toBeGreaterThan(0))
+    fireEvent.click(screen.getAllByText("Duplicado")[0])
+    expect(screen.queryByTestId("consolidar")).toBeNull()
+  })
+
+  it("two standalone duplicates still open the consolidation, without any variant in it", async () => {
+    data = [{ ...ROJO, nombre: "Funda" }, { ...SUELTO, id: "s8", codigo: "S-8", nombre: "Funda", categoria: "Fundas", tieneVariantes: false }, { ...SUELTO, id: "s9", codigo: "S-9", nombre: "Funda", categoria: "Fundas", tieneVariantes: false }]
+    renderList()
+    await waitFor(() => expect(screen.getAllByText("Funda").length).toBeGreaterThan(0))
+    fireEvent.click(screen.getAllByText("Duplicado")[1])
+    expect((await screen.findByTestId("consolidar")).getAttribute("data-ids")?.split(",").sort()).toEqual(["s8", "s9"])
   })
 
   it("control: two standalone products with the same name still are", async () => {
