@@ -4,6 +4,8 @@ import { useState, type Dispatch } from "react"
 import { ChevronDown } from "lucide-react"
 import { etiquetaDeFila, filasEnOrden, type Fila, type VariantesAccion, type VariantesState } from "@/lib/variantes-filas"
 import { useEfectosDeDeshacer } from "./use-efectos-de-deshacer"
+import { FotoDeFila } from "./foto-variante"
+import type { FotosVariantes } from "./use-fotos-variantes"
 import type { EfectoDeDeshacer } from "./vista"
 import { BloqueDeArchivo, CamposAvanzados, CampoCodigo, CampoCosto, CampoPrecio, CampoStock } from "./campos-fila"
 
@@ -21,6 +23,8 @@ export interface PropsCombinaciones {
   deshabilitado?: boolean
   /** The undo preview of every pending row, if the caller already has it; else the table computes it. */
   efectos?: ReadonlyMap<string, EfectoDeDeshacer>
+  /** The photo hook. Without it the photo slot is not rendered. */
+  fotos?: FotosVariantes
 }
 
 interface PropsFila extends PropsCombinaciones {
@@ -28,7 +32,7 @@ interface PropsFila extends PropsCombinaciones {
   columnas: number
 }
 
-function FilaActiva({ estado, fila, dispatch, alAjustarStock, deshabilitado, columnas }: PropsFila) {
+function FilaActiva({ estado, fila, dispatch, alAjustarStock, deshabilitado, columnas, fotos }: PropsFila) {
   const [abierta, setAbierta] = useState(false)
   const etiqueta = etiquetaDeFila(estado, fila)
   const comunes = { estado, fila, etiqueta, dispatch, deshabilitado, compacto: true }
@@ -41,6 +45,11 @@ function FilaActiva({ estado, fila, dispatch, alAjustarStock, deshabilitado, col
             <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">Es este producto</span>
           )}
         </th>
+        {fotos && (
+          <td className="w-10 px-2 py-2">
+            <FotoDeFila estado={estado} fila={fila} fotos={fotos} tamano="tabla" deshabilitado={deshabilitado} />
+          </td>
+        )}
         <td className="min-w-[9rem] px-2 py-2">
           <CampoCodigo {...comunes} />
         </td>
@@ -93,21 +102,24 @@ function FilaPorArchivar({ estado, fila, dispatch, deshabilitado, columnas, efec
   )
 }
 
-export function CombinacionesTabla({ estado, dispatch, alAjustarStock, deshabilitado, efectos }: PropsCombinaciones) {
+export function CombinacionesTabla({ estado, dispatch, alAjustarStock, deshabilitado, efectos, fotos }: PropsCombinaciones) {
   const propios = useEfectosDeDeshacer(estado, efectos === undefined)
   const filas = filasEnOrden(estado)
   const activas = filas.filter((f) => !f.archivar)
   const porArchivar = filas.filter((f) => f.archivar)
   if (filas.length === 0) return null
 
-  const columnas = estado.costoCargado ? 6 : 5
-  const comunes = { estado, dispatch, alAjustarStock, deshabilitado, columnas, efectos: efectos ?? propios }
+  const columnas = (estado.costoCargado ? 6 : 5) + (fotos ? 1 : 0)
+  const comunes = { estado, dispatch, alAjustarStock, deshabilitado, columnas, efectos: efectos ?? propios, fotos }
   return (
     <div className="hidden overflow-x-auto rounded-lg border sm:block">
       <table className="w-full min-w-[40rem] text-sm">
         <thead className="bg-muted/50 text-xs text-muted-foreground">
           <tr>
             <th scope="col" className="px-3 py-2 text-left font-medium">Variante</th>
+            {fotos && (
+              <th scope="col" className="px-2 py-2 text-left font-medium">Foto</th>
+            )}
             <th scope="col" className="px-2 py-2 text-left font-medium">Código</th>
             <th scope="col" className="px-2 py-2 text-left font-medium">Precio</th>
             {estado.costoCargado && (

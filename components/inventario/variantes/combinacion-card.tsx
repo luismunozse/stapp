@@ -5,6 +5,7 @@ import { ChevronDown } from "lucide-react"
 import { etiquetaDeFila, filasEnOrden, type Fila } from "@/lib/variantes-filas"
 import type { PropsCombinaciones } from "./combinaciones-tabla"
 import { useEfectosDeDeshacer } from "./use-efectos-de-deshacer"
+import { FotoDeFila } from "./foto-variante"
 import { BloqueDeArchivo, CamposAvanzados, CampoCodigo, CampoCosto, CampoPrecio, CampoStock } from "./campos-fila"
 
 /*
@@ -18,7 +19,7 @@ interface PropsCard extends PropsCombinaciones {
 
 const ROTULO = "grid gap-1 text-xs font-medium text-muted-foreground"
 
-export function CombinacionCard({ estado, fila, dispatch, alAjustarStock, deshabilitado, efectos }: PropsCard) {
+export function CombinacionCard({ estado, fila, dispatch, alAjustarStock, deshabilitado, efectos, fotos }: PropsCard) {
   const [abierta, setAbierta] = useState(false)
   const etiqueta = etiquetaDeFila(estado, fila)
   const comunes = { estado, fila, etiqueta, dispatch, deshabilitado }
@@ -35,7 +36,8 @@ export function CombinacionCard({ estado, fila, dispatch, alAjustarStock, deshab
   return (
     <article className="space-y-3 rounded-lg border bg-card p-3 sm:hidden">
       <header className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold">
+        {fotos && <FotoDeFila estado={estado} fila={fila} fotos={fotos} tamano="card" deshabilitado={deshabilitado} />}
+        <h3 className="min-w-0 flex-1 text-sm font-semibold">
           {etiqueta}
           {estado.promocionId === fila.id && (
             <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">Es este producto</span>
@@ -80,14 +82,14 @@ export function CombinacionCard({ estado, fila, dispatch, alAjustarStock, deshab
   )
 }
 
-export function CombinacionesCards({ estado, dispatch, alAjustarStock, deshabilitado, efectos }: PropsCombinaciones) {
+export function CombinacionesCards({ estado, dispatch, alAjustarStock, deshabilitado, efectos, fotos }: PropsCombinaciones) {
   const propios = useEfectosDeDeshacer(estado, efectos === undefined)
   const filas = filasEnOrden(estado)
   const activas = filas.filter((f) => !f.archivar)
   const porArchivar = filas.filter((f) => f.archivar)
   if (filas.length === 0) return null
 
-  const comunes = { estado, dispatch, alAjustarStock, deshabilitado, efectos: efectos ?? propios }
+  const comunes = { estado, dispatch, alAjustarStock, deshabilitado, efectos: efectos ?? propios, fotos }
   return (
     <div className="space-y-3 sm:hidden">
       {activas.map((fila) => (

@@ -11,6 +11,7 @@ import { LIMITES } from "@/lib/variantes-schema"
 import { archivosConStock, bloqueos, filasEnOrden, stockTotal, type VariantesAccion, type VariantesState } from "@/lib/variantes-filas"
 import { CombinacionesCards } from "./combinacion-card"
 import { CombinacionesTabla } from "./combinaciones-tabla"
+import type { FotosVariantes } from "./use-fotos-variantes"
 import { unidades } from "./campos-fila"
 import { OpcionesEditor } from "./opciones-editor"
 import { useEfectosDeDeshacer } from "./use-efectos-de-deshacer"
@@ -34,6 +35,8 @@ export interface PropsVariantesSection {
   alAjustarStock?: () => void
   /** A save is running: everything is locked. */
   guardando?: boolean
+  /** The photo hook (`useFotosVariantes`). Without it the combinations show no photo slot. */
+  fotos?: FotosVariantes
 }
 
 const textoDeVariantes = (n: number) => (n === 1 ? "1 variante" : `${n} variantes`)
@@ -156,7 +159,7 @@ function AvisoDeStock({ conStock }: { conStock: ReturnType<typeof archivosConSto
   )
 }
 
-export function VariantesSection({ estado, dispatch, motivoDeshabilitado, alAjustarStock, guardando }: PropsVariantesSection) {
+export function VariantesSection({ estado, dispatch, motivoDeshabilitado, alAjustarStock, guardando, fotos }: PropsVariantesSection) {
   const idInterruptor = useId()
   const idMotivo = useId()
   const activas = filasEnOrden(estado).filter((f) => !f.archivar)
@@ -218,8 +221,8 @@ export function VariantesSection({ estado, dispatch, motivoDeshabilitado, alAjus
               </div>
             )}
 
-            <CombinacionesTabla estado={estado} dispatch={dispatch} alAjustarStock={alAjustarStock} deshabilitado={guardando} efectos={efectos} />
-            <CombinacionesCards estado={estado} dispatch={dispatch} alAjustarStock={alAjustarStock} deshabilitado={guardando} efectos={efectos} />
+            <CombinacionesTabla estado={estado} dispatch={dispatch} alAjustarStock={alAjustarStock} deshabilitado={guardando} efectos={efectos} fotos={fotos} />
+            <CombinacionesCards estado={estado} dispatch={dispatch} alAjustarStock={alAjustarStock} deshabilitado={guardando} efectos={efectos} fotos={fotos} />
 
             {activas.length >= LIMITES.combinaciones && (
               <p className="text-xs text-muted-foreground">Llegaste al máximo de {LIMITES.combinaciones} variantes</p>
