@@ -808,8 +808,8 @@ describe('formatVenta — facturaId from facturas embed', () => {
 })
 
 describe('formatInventario: tieneVariantes derives from the group (VL-3)', () => {
-  // The legacy per-product flag (migration 176) is dead: the 7 items that still carry it
-  // are plain standalone products. The only variant signal left is membership of a group.
+  // The legacy per-product flag (migration 176) is dead: any item that still carries it
+  // (the design notes mention a handful) is a plain standalone product. The only variant signal left is membership of a group.
   const base = { id: 'i1', codigo: 'C', nombre: 'N', organization_id: 'o' }
 
   it('is true only for a row that belongs to a group', () => {
