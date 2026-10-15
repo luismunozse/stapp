@@ -317,7 +317,10 @@ export function formatInventario(item: any, includeCost = false) {
     trackeaSeries: item.trackea_series ?? false,
     diasAlertaVencimiento: item.dias_alerta_vencimiento ?? null,
     diasGarantiaDefault: item.dias_garantia_default ?? null,
-    tieneVariantes: item.tiene_variantes ?? false,
+    // True only for a child of a variant group. The legacy per-product flag
+    // (`inventario.tiene_variantes`, migration 176) is no longer read: the items that
+    // still carry it are plain standalone products.
+    tieneVariantes: !!item.grupo_id,
     esKit: item.es_kit ?? false,
     tipoKit: item.tipo_kit ?? null,
     deletedAt: item.deleted_at ?? null,

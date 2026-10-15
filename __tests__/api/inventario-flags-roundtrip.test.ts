@@ -93,7 +93,6 @@ describe("GET /api/inventario — flags survive the list SELECT", () => {
 
     expect(status).toBe(200)
     expect(body.data[0]).toMatchObject({
-      tieneVariantes: true,
       trackeaLotes: true,
       trackeaSeries: true,
       esKit: true,
@@ -101,6 +100,27 @@ describe("GET /api/inventario — flags survive the list SELECT", () => {
       diasAlertaVencimiento: 30,
       diasGarantiaDefault: 90,
     })
+  })
+})
+
+// VL-3: the legacy per-product flag no longer means anything. A row is a variant only
+// when it belongs to a group, so a stale `tiene_variantes: true` reads false.
+describe("GET /api/inventario — tieneVariantes follows the group, not the legacy flag", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  async function listar(row: Record<string, any>) {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockSupabaseFrom({ inventario: createChainMock([row], null, 1) })
+    const res = await GET(createGetRequest("http://localhost:3000/api/inventario"))
+    return (await parseResponse(res)).body.data[0]
+  }
+
+  it("a row flagged tiene_variantes without a group is a plain product", async () => {
+    expect(await listar({ ...fullRow, tiene_variantes: true, grupo_id: null })).toMatchObject({ tieneVariantes: false })
+  })
+
+  it("a child of a group reports tieneVariantes even when the legacy flag is off", async () => {
+    expect(await listar({ ...fullRow, tiene_variantes: false, grupo_id: "g1" })).toMatchObject({ tieneVariantes: true })
   })
 })
 
@@ -125,7 +145,6 @@ describe("POST /api/inventario — flags are persisted on create", () => {
     const res = await POST(
       createPostRequest({
         ...baseBody,
-        tieneVariantes: true,
         trackeaLotes: true,
         trackeaSeries: true,
         esKit: true,
@@ -137,7 +156,6 @@ describe("POST /api/inventario — flags are persisted on create", () => {
     expect(res.status).toBe(201)
     expect(inv.insert).toHaveBeenCalledWith(
       expect.objectContaining({
-        tiene_variantes: true,
         trackea_lotes: true,
         trackea_series: true,
         es_kit: true,
@@ -145,6 +163,20 @@ describe("POST /api/inventario — flags are persisted on create", () => {
         dias_alerta_vencimiento: 15,
       })
     )
+  })
+
+  // VL-3: one release of accept-and-ignore for clients that still send the old flag
+  // (a cached PWA bundle): no validation error, and nothing written.
+  it("accepts tieneVariantes for old clients and never writes it", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    const inv = createChainMock(fullRow)
+    mockSupabaseFrom({ inventario: inv })
+
+    const res = await POST(createPostRequest({ ...baseBody, tieneVariantes: true }))
+
+    expect(res.status).toBe(201)
+    expect(inv.insert.mock.calls[0][0]).not.toHaveProperty("tiene_variantes")
+    expect(inv.insert.mock.calls[0][0]).toHaveProperty("codigo", "C1")
   })
 
   it("does not write flags that were not sent (DB defaults apply)", async () => {
@@ -192,14 +224,16 @@ describe("PUT /api/inventario/[id] — flags", () => {
     }
   })
 
-  it.each([true, false])("writes tieneVariantes=%s when sent", async (value) => {
+  it.each([true, false])("accepts tieneVariantes=%s and never writes the legacy flag", async (value) => {
     mockAuthSuccess({ role: "ADMIN" })
     const inv = createChainMock(fullRow)
     mockSupabaseFrom({ inventario: inv })
 
-    await put({ tieneVariantes: value })
+    const res = await put({ nombre: "Otro nombre", tieneVariantes: value })
 
-    expect(inv.update).toHaveBeenCalledWith(expect.objectContaining({ tiene_variantes: value }))
+    expect(res.status).toBe(200)
+    expect(inv.update).toHaveBeenCalledWith(expect.objectContaining({ nombre: "Otro nombre" }))
+    expect(inv.update.mock.calls[0][0]).not.toHaveProperty("tiene_variantes")
   })
 
   // VL-3: the legacy flag is only a flag. Sending it answers 200 and never creates a group.

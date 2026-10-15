@@ -217,6 +217,7 @@ export interface Inventario {
   trackeaSeries?: boolean
   diasAlertaVencimiento?: number | null
   diasGarantiaDefault?: number | null
+  /** True when the item is a child of a variant group (derived from `grupoId`). */
   tieneVariantes?: boolean
   esKit?: boolean
   tipoKit?: "ENSAMBLADO" | "VIRTUAL" | null
