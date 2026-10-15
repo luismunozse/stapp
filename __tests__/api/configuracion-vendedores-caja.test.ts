@@ -109,16 +109,19 @@ describe("/api/configuracion — permiso de caja para vendedores", () => {
     expect(status).toBe(200)
     expect(body.vendedoresManejanCaja).toBe(false)
 
-    // Cinco intentos: los escalones son acumulativos, así que la columna ausente
-    // viaja también en los de arriba (M3 variantes en el POS, ingresos y cobro
-    // de cotizaciones) y esos tres caen con ella, y el del propio flag también.
-    // El quinto ya acierta. Seis o más significa que arrastró a otra migración
-    // con él. Se afirma QUÉ SELECT llevó cada intento, no solo cuántos hubo.
-    expect(chain.single).toHaveBeenCalledTimes(5)
+    // Seis intentos: los escalones son acumulativos, así que la columna ausente
+    // viaja también en los de arriba (tamaño de hoja de la orden, M3 variantes
+    // en el POS, ingresos y cobro de cotizaciones) y esos cuatro caen con ella,
+    // y el del propio flag también. El sexto ya acierta. Siete o más significa
+    // que arrastró a otra migración con él. Se afirma QUÉ SELECT llevó cada
+    // intento, no solo cuántos hubo.
+    expect(chain.single).toHaveBeenCalledTimes(6)
     const selects = chain.select.mock.calls.map((c: any[]) => c[0] as string)
-    expect(selects[0]).toContain("pos_agrupa_variantes")
-    expect(selects.filter((s) => s.includes("pos_agrupa_variantes"))).toHaveLength(1)
-    expect(selects[4]).not.toContain("vendedores_manejan_caja")
+    expect(selects[0]).toContain("orden_formato_papel")
+    expect(selects.filter((s) => s.includes("orden_formato_papel"))).toHaveLength(1)
+    expect(selects[1]).toContain("pos_agrupa_variantes")
+    expect(selects.filter((s) => s.includes("pos_agrupa_variantes"))).toHaveLength(2)
+    expect(selects[5]).not.toContain("vendedores_manejan_caja")
 
     // Y nada de lo que sí existe se perdió en el camino.
     expect(body.tecnicosOperanPos).toBe(true)

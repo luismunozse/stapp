@@ -167,6 +167,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
       // GET is a pure SELECT (no .update()): a real PostgREST/Postgres
       // missing-column error here is 42703, not PGRST204 — PGRST204 only
       // fires for write payloads naming an unknown column.
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.orden_formato_papel does not exist" } }) // paper size of the printed order
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.pos_agrupa_variantes does not exist" } }) // M3, POS variants preference
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
@@ -189,8 +190,8 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     expect(body.ingresosBrutos).toBe("")
     expect(body.inicioActividades).toBe("")
     expect(body.facturacionElectronicaHabilitada).toBe(false)
-    expect(chain.single).toHaveBeenCalledTimes(9)
-    // Pin down that the succeeding (9th) attempt is genuinely the base
+    expect(chain.single).toHaveBeenCalledTimes(10)
+    // Pin down that the succeeding (10th) attempt is genuinely the base
     // select and not the much older pre-072 legacy fallback further down in
     // the route — both happen to also sit at "4 total attempts" here, so
     // without this the test would pass by call-count coincidence alone
@@ -198,10 +199,12 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     // `cuit` is what tells the base select apart from the fiscal one above it,
     // which also contains recepcion_terminos.
     const selectCallArgs = chain.select.mock.calls.map((c: any[]) => c[0])
-    expect(selectCallArgs[0]).toContain("pos_agrupa_variantes")
-    expect(selectCallArgs[1]).not.toContain("pos_agrupa_variantes")
-    expect(selectCallArgs[8]).toContain("recepcion_terminos")
-    expect(selectCallArgs[8]).not.toContain("cuit")
+    expect(selectCallArgs[0]).toContain("orden_formato_papel")
+    expect(selectCallArgs[1]).not.toContain("orden_formato_papel")
+    expect(selectCallArgs[1]).toContain("pos_agrupa_variantes")
+    expect(selectCallArgs[2]).not.toContain("pos_agrupa_variantes")
+    expect(selectCallArgs[9]).toContain("recepcion_terminos")
+    expect(selectCallArgs[9]).not.toContain("cuit")
   })
 
   it("GET degrades gracefully when only migration 296 hasn't run (295 applied) — the six fiscal fields stay intact, only the toggle and the 297 pair degrade", async () => {
@@ -223,6 +226,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     const chain = createChainMock()
     chain.single = vi
       .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.orden_formato_papel does not exist" } }) // paper size of the printed order
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.pos_agrupa_variantes does not exist" } }) // M3, POS variants preference
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
@@ -247,18 +251,20 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     expect(body.ingresosBrutos).toBe("")
     expect(body.inicioActividades).toBe("")
     expect(body.facturacionElectronicaHabilitada).toBe(false)
-    expect(chain.single).toHaveBeenCalledTimes(8)
+    expect(chain.single).toHaveBeenCalledTimes(9)
     // Pin down that the succeeding (3rd) attempt is genuinely the 295-only
     // fiscal select (has cuit, lacks the toggle and the 297 pair) — a bug
     // that skipped straight to the base select would still pass the body
     // assertions above since the mocked `data` is fixed regardless of what
     // was selected.
     const selectCallArgs = chain.select.mock.calls.map((c: any[]) => c[0])
-    expect(selectCallArgs[0]).toContain("pos_agrupa_variantes")
-    expect(selectCallArgs[7]).toContain("cuit")
-    expect(selectCallArgs[7]).not.toContain("pos_agrupa_variantes")
-    expect(selectCallArgs[7]).not.toContain("facturacion_electronica_habilitada")
-    expect(selectCallArgs[7]).not.toContain("ingresos_brutos")
+    expect(selectCallArgs[0]).toContain("orden_formato_papel")
+    expect(selectCallArgs[1]).toContain("pos_agrupa_variantes")
+    expect(selectCallArgs[8]).toContain("cuit")
+    expect(selectCallArgs[8]).not.toContain("orden_formato_papel")
+    expect(selectCallArgs[8]).not.toContain("pos_agrupa_variantes")
+    expect(selectCallArgs[8]).not.toContain("facturacion_electronica_habilitada")
+    expect(selectCallArgs[8]).not.toContain("ingresos_brutos")
   })
 
   it("GET degrades gracefully when only migration 297 hasn't run (295 + 296 applied) — fiscal fields and the toggle stay intact, only ingresosBrutos/inicioActividades degrade", async () => {
@@ -277,6 +283,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     const chain = createChainMock()
     chain.single = vi
       .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.orden_formato_papel does not exist" } }) // paper size of the printed order
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.pos_agrupa_variantes does not exist" } }) // M3, POS variants preference
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
@@ -296,14 +303,16 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     expect(body.facturacionElectronicaHabilitada).toBe(true)
     expect(body.ingresosBrutos).toBe("")
     expect(body.inicioActividades).toBe("")
-    expect(chain.single).toHaveBeenCalledTimes(7)
+    expect(chain.single).toHaveBeenCalledTimes(8)
     // Pin down which columns were actually requested at each tier — a bug
     // that dropped the toggle instead of just the 297 pair would still pass
     // the assertions above, since this harness's mocked data doesn't depend
     // on what was selected.
     expect(chain.select.mock.calls[0][0]).toContain("ingresos_brutos")
+    expect(chain.select.mock.calls[0][0]).toContain("orden_formato_papel")
     expect(chain.select.mock.calls[0][0]).toContain("pos_agrupa_variantes")
-    const retrySelectCall = chain.select.mock.calls[6][0] as string
+    const retrySelectCall = chain.select.mock.calls[7][0] as string
+    expect(retrySelectCall).not.toContain("orden_formato_papel")
     expect(retrySelectCall).not.toContain("pos_agrupa_variantes")
     expect(retrySelectCall).not.toContain("ingresos_brutos")
     expect(retrySelectCall).toContain("facturacion_electronica_habilitada")
@@ -455,6 +464,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
       // precheck — unlike the SELECT-only sites above/below.
       // M3's column is not in this payload (the body has no posAgrupaVariantes),
       // so its step fails on the RETURNING list: 42703, not PGRST204.
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.orden_formato_papel does not exist" } }) // paper size of the printed order
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.pos_agrupa_variantes does not exist" } }) // M3, POS variants preference
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
@@ -477,7 +487,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
 
     expect(status).toBe(200)
     expect(body.telefono).toBe("123456")
-    expect(chain.single).toHaveBeenCalledTimes(9)
+    expect(chain.single).toHaveBeenCalledTimes(10)
     // Pin down that the succeeding attempt is genuinely the (new) pre-295
     // tier and not the much older pre-072 legacy fallback a few lines below
     // it in the route — both happen to also sit at "4 total attempts" for
@@ -486,10 +496,12 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     // select() string was actually sent). `cuit` tells the pre-295 tier apart
     // from the full one above it, which also contains recepcion_terminos.
     const selectCallArgs = chain.select.mock.calls.map((c: any[]) => c[0])
-    expect(selectCallArgs[0]).toContain("pos_agrupa_variantes")
-    expect(selectCallArgs[1]).not.toContain("pos_agrupa_variantes")
-    expect(selectCallArgs[8]).toContain("recepcion_terminos")
-    expect(selectCallArgs[8]).not.toContain("cuit")
+    expect(selectCallArgs[0]).toContain("orden_formato_papel")
+    expect(selectCallArgs[1]).not.toContain("orden_formato_papel")
+    expect(selectCallArgs[1]).toContain("pos_agrupa_variantes")
+    expect(selectCallArgs[2]).not.toContain("pos_agrupa_variantes")
+    expect(selectCallArgs[9]).toContain("recepcion_terminos")
+    expect(selectCallArgs[9]).not.toContain("cuit")
   })
 
   it("PUT degrades gracefully when only migration 296 hasn't run (295 applied, 297 therefore not either) — fiscal fields are still persisted, only the toggle and the 297 pair are dropped", async () => {
@@ -508,6 +520,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     })
     chain.single = vi
       .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.orden_formato_papel does not exist" } }) // paper size of the printed order (RETURNING-only: the body has no such key)
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.pos_agrupa_variantes does not exist" } }) // M3, POS variants preference (RETURNING-only: the body has no such key)
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
@@ -530,18 +543,20 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     expect(status).toBe(200)
     expect(body.cuit).toBe("30-71234567-8")
     expect(body.facturacionElectronicaHabilitada).toBe(false)
-    expect(chain.single).toHaveBeenCalledTimes(8)
+    expect(chain.single).toHaveBeenCalledTimes(9)
     // Pin down that the succeeding attempt's ACTUAL write payload still
     // names cuit — without this, a bug that let the 295-drop tier fire
     // instead (stripping cuit for real) would still pass, since the mocked
     // `data` a test hands back is fixed regardless of what was written.
-    expect(updateCalls).toHaveLength(8)
-    expect(updateCalls[7]).toHaveProperty("cuit", "30-71234567-8")
-    // And that the leading M3 attempt asked for its column while the winning
-    // one does not.
+    expect(updateCalls).toHaveLength(9)
+    expect(updateCalls[8]).toHaveProperty("cuit", "30-71234567-8")
+    // And that the leading attempts asked for the paper-size and M3 columns
+    // while the winning one asks for neither.
     const selectCallArgs = chain.select.mock.calls.map((c: any[]) => c[0])
-    expect(selectCallArgs[0]).toContain("pos_agrupa_variantes")
-    expect(selectCallArgs[7]).not.toContain("pos_agrupa_variantes")
+    expect(selectCallArgs[0]).toContain("orden_formato_papel")
+    expect(selectCallArgs[1]).toContain("pos_agrupa_variantes")
+    expect(selectCallArgs[8]).not.toContain("orden_formato_papel")
+    expect(selectCallArgs[8]).not.toContain("pos_agrupa_variantes")
   })
 
   it("PUT degrades gracefully when only migration 297 hasn't run (295 + 296 applied) — fiscal fields and the toggle persist, only the 297 pair is dropped", async () => {
@@ -558,6 +573,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     })
     chain.single = vi
       .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.orden_formato_papel does not exist" } }) // paper size of the printed order (RETURNING-only: the body has no such key)
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.pos_agrupa_variantes does not exist" } }) // M3, POS variants preference (RETURNING-only: the body has no such key)
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
@@ -585,25 +601,28 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
 
     expect(status).toBe(200)
     expect(body.cuit).toBe("30-71234567-8")
-    expect(chain.single).toHaveBeenCalledTimes(7)
-    expect(updateCalls).toHaveLength(7)
-    expect(updateCalls[5]).toEqual(
+    expect(chain.single).toHaveBeenCalledTimes(8)
+    expect(updateCalls).toHaveLength(8)
+    expect(updateCalls[6]).toEqual(
       expect.objectContaining({
         cuit: "30-71234567-8",
         ingresos_brutos: "902-123456-7",
         inicio_actividades: "01/2020",
       })
     )
-    expect(updateCalls[6]).toEqual(expect.objectContaining({ cuit: "30-71234567-8" }))
-    expect(updateCalls[6]).not.toHaveProperty("ingresos_brutos")
-    expect(updateCalls[6]).not.toHaveProperty("inicio_actividades")
-    // Which select each attempt carried: the leading M3 attempt asked for its
-    // column, the winning one asks for neither it nor the 297 pair.
+    expect(updateCalls[7]).toEqual(expect.objectContaining({ cuit: "30-71234567-8" }))
+    expect(updateCalls[7]).not.toHaveProperty("ingresos_brutos")
+    expect(updateCalls[7]).not.toHaveProperty("inicio_actividades")
+    // Which select each attempt carried: the leading attempts asked for the
+    // paper-size and M3 columns, the winning one asks for neither them nor
+    // the 297 pair.
     const selectCallArgs = chain.select.mock.calls.map((c: any[]) => c[0])
-    expect(selectCallArgs[0]).toContain("pos_agrupa_variantes")
-    expect(selectCallArgs[6]).not.toContain("pos_agrupa_variantes")
-    expect(selectCallArgs[6]).not.toContain("ingresos_brutos")
-    expect(selectCallArgs[6]).toContain("facturacion_electronica_habilitada")
+    expect(selectCallArgs[0]).toContain("orden_formato_papel")
+    expect(selectCallArgs[1]).toContain("pos_agrupa_variantes")
+    expect(selectCallArgs[7]).not.toContain("orden_formato_papel")
+    expect(selectCallArgs[7]).not.toContain("pos_agrupa_variantes")
+    expect(selectCallArgs[7]).not.toContain("ingresos_brutos")
+    expect(selectCallArgs[7]).toContain("facturacion_electronica_habilitada")
   })
 
   it("PUT persists the fiscal fields, the toggle, and the 297 pair with no degradation when migrations 295, 296 and 297 are all applied", async () => {
@@ -663,6 +682,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     const chain = createChainMock()
     chain.single = vi
       .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.orden_formato_papel does not exist" } }) // paper size of the printed order
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.pos_agrupa_variantes does not exist" } }) // M3, POS variants preference
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
@@ -683,10 +703,12 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
 
     expect(status).toBe(200)
     expect(body.telefono).toBe("555-0100")
-    expect(chain.single).toHaveBeenCalledTimes(7)
+    expect(chain.single).toHaveBeenCalledTimes(8)
     const selectCallArgs = chain.select.mock.calls.map((c: any[]) => c[0])
-    expect(selectCallArgs[0]).toContain("pos_agrupa_variantes")
-    expect(selectCallArgs[1]).not.toContain("pos_agrupa_variantes")
+    expect(selectCallArgs[0]).toContain("orden_formato_papel")
+    expect(selectCallArgs[1]).not.toContain("orden_formato_papel")
+    expect(selectCallArgs[1]).toContain("pos_agrupa_variantes")
+    expect(selectCallArgs[2]).not.toContain("pos_agrupa_variantes")
   })
 
   it("PUT with no changed fields (no-op branch) selects the fiscal + legacy-fiscal columns, not the narrow base list", async () => {
@@ -727,6 +749,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     chain.single = vi
       .fn()
       // No-op branch is a pure SELECT too (no .update()): real error is 42703.
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.orden_formato_papel does not exist" } }) // paper size of the printed order
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.pos_agrupa_variantes does not exist" } }) // M3, POS variants preference
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
@@ -750,19 +773,21 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     expect(status).toBe(200)
     expect(body.recepcionTerminos).toBe("Ver adjunto")
     const selectCallArgs = chain.select.mock.calls.map((c: any[]) => c[0])
-    expect(selectCallArgs).toHaveLength(9)
-    expect(selectCallArgs[0]).toContain("pos_agrupa_variantes") // M3 step: the first attempt, on top of everything
-    expect(selectCallArgs[1]).not.toContain("pos_agrupa_variantes")
-    expect(selectCallArgs[5]).toContain("cuit") // first attempt: full select (295 + 296 + 297)
-    expect(selectCallArgs[5]).toContain("facturacion_electronica_habilitada")
-    expect(selectCallArgs[5]).toContain("ingresos_brutos")
-    expect(selectCallArgs[6]).toContain("cuit") // retry: 297 pair dropped, 295 + 296 kept
+    expect(selectCallArgs).toHaveLength(10)
+    expect(selectCallArgs[0]).toContain("orden_formato_papel") // paper-size step: the first attempt, on top of everything
+    expect(selectCallArgs[1]).not.toContain("orden_formato_papel")
+    expect(selectCallArgs[1]).toContain("pos_agrupa_variantes") // M3 step
+    expect(selectCallArgs[2]).not.toContain("pos_agrupa_variantes")
+    expect(selectCallArgs[6]).toContain("cuit") // first attempt: full select (295 + 296 + 297)
     expect(selectCallArgs[6]).toContain("facturacion_electronica_habilitada")
-    expect(selectCallArgs[6]).not.toContain("ingresos_brutos")
-    expect(selectCallArgs[7]).toContain("cuit") // retry: 296 toggle dropped too, fiscal columns kept
-    expect(selectCallArgs[7]).not.toContain("facturacion_electronica_habilitada")
-    expect(selectCallArgs[8]).not.toContain("cuit") // final retry: pre-295, fiscal columns dropped too
-    expect(selectCallArgs[8]).toContain("recepcion_terminos") // but the rest survives
+    expect(selectCallArgs[6]).toContain("ingresos_brutos")
+    expect(selectCallArgs[7]).toContain("cuit") // retry: 297 pair dropped, 295 + 296 kept
+    expect(selectCallArgs[7]).toContain("facturacion_electronica_habilitada")
+    expect(selectCallArgs[7]).not.toContain("ingresos_brutos")
+    expect(selectCallArgs[8]).toContain("cuit") // retry: 296 toggle dropped too, fiscal columns kept
+    expect(selectCallArgs[8]).not.toContain("facturacion_electronica_habilitada")
+    expect(selectCallArgs[9]).not.toContain("cuit") // final retry: pre-295, fiscal columns dropped too
+    expect(selectCallArgs[9]).toContain("recepcion_terminos") // but the rest survives
   })
 
   it("PUT no-op branch keeps the fiscal columns and only degrades the toggle and the 297 pair when only migration 296 hasn't run", async () => {
@@ -773,6 +798,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     const chain = createChainMock()
     chain.single = vi
       .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.orden_formato_papel does not exist" } }) // paper size of the printed order
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.pos_agrupa_variantes does not exist" } }) // M3, POS variants preference
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
@@ -798,11 +824,13 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     expect(body.facturacionElectronicaHabilitada).toBe(false)
     expect(body.ingresosBrutos).toBe("")
     const selectCallArgs = chain.select.mock.calls.map((c: any[]) => c[0])
-    expect(selectCallArgs).toHaveLength(8)
-    expect(selectCallArgs[0]).toContain("pos_agrupa_variantes")
-    expect(selectCallArgs[7]).toContain("cuit")
-    expect(selectCallArgs[7]).not.toContain("pos_agrupa_variantes")
-    expect(selectCallArgs[7]).not.toContain("facturacion_electronica_habilitada")
+    expect(selectCallArgs).toHaveLength(9)
+    expect(selectCallArgs[0]).toContain("orden_formato_papel")
+    expect(selectCallArgs[1]).toContain("pos_agrupa_variantes")
+    expect(selectCallArgs[8]).toContain("cuit")
+    expect(selectCallArgs[8]).not.toContain("orden_formato_papel")
+    expect(selectCallArgs[8]).not.toContain("pos_agrupa_variantes")
+    expect(selectCallArgs[8]).not.toContain("facturacion_electronica_habilitada")
   })
 
   it("PUT no-op branch keeps the fiscal columns and the toggle, degrading only the 297 pair when only migration 297 hasn't run", async () => {
@@ -812,6 +840,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     const chain = createChainMock()
     chain.single = vi
       .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.orden_formato_papel does not exist" } }) // paper size of the printed order
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.pos_agrupa_variantes does not exist" } }) // M3, POS variants preference
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
@@ -839,12 +868,14 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     expect(body.ingresosBrutos).toBe("")
     expect(body.inicioActividades).toBe("")
     const selectCallArgs = chain.select.mock.calls.map((c: any[]) => c[0])
-    expect(selectCallArgs).toHaveLength(7)
-    expect(selectCallArgs[0]).toContain("pos_agrupa_variantes")
-    expect(selectCallArgs[6]).toContain("cuit")
-    expect(selectCallArgs[6]).not.toContain("pos_agrupa_variantes")
-    expect(selectCallArgs[6]).toContain("facturacion_electronica_habilitada")
-    expect(selectCallArgs[6]).not.toContain("ingresos_brutos")
+    expect(selectCallArgs).toHaveLength(8)
+    expect(selectCallArgs[0]).toContain("orden_formato_papel")
+    expect(selectCallArgs[1]).toContain("pos_agrupa_variantes")
+    expect(selectCallArgs[7]).toContain("cuit")
+    expect(selectCallArgs[7]).not.toContain("orden_formato_papel")
+    expect(selectCallArgs[7]).not.toContain("pos_agrupa_variantes")
+    expect(selectCallArgs[7]).toContain("facturacion_electronica_habilitada")
+    expect(selectCallArgs[7]).not.toContain("ingresos_brutos")
   })
 
   it("PUT under PGRST204 retains an at-risk existing field (ivaRegimen) while dropping the fiscal field", async () => {
@@ -877,6 +908,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     })
     chain.single = vi
       .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.orden_formato_papel does not exist" } }) // paper size of the printed order (RETURNING-only: the body has no such key)
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.pos_agrupa_variantes does not exist" } }) // M3, POS variants preference (RETURNING-only: the body has no such key)
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
@@ -898,16 +930,19 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     const { status } = await parseResponse(res as Response)
 
     expect(status).toBe(200)
-    expect(updateCalls).toHaveLength(9)
-    expect(updateCalls[5]).toEqual(expect.objectContaining({ iva_regimen: "INCLUIDO", cuit: "30-71234567-8" }))
+    expect(updateCalls).toHaveLength(10)
     expect(updateCalls[6]).toEqual(expect.objectContaining({ iva_regimen: "INCLUIDO", cuit: "30-71234567-8" }))
     expect(updateCalls[7]).toEqual(expect.objectContaining({ iva_regimen: "INCLUIDO", cuit: "30-71234567-8" }))
-    expect(updateCalls[8]).toEqual(expect.objectContaining({ iva_regimen: "INCLUIDO" }))
-    expect(updateCalls[8]).not.toHaveProperty("cuit")
-    // The leading M3 attempt is the only one whose select names its column.
+    expect(updateCalls[8]).toEqual(expect.objectContaining({ iva_regimen: "INCLUIDO", cuit: "30-71234567-8" }))
+    expect(updateCalls[9]).toEqual(expect.objectContaining({ iva_regimen: "INCLUIDO" }))
+    expect(updateCalls[9]).not.toHaveProperty("cuit")
+    // The leading paper-size attempt is the only one whose select names its column; M3's
+    // column rides in that one and in the step right below it, and in nothing after.
     const selectCallArgs = chain.select.mock.calls.map((c: any[]) => c[0])
-    expect(selectCallArgs[0]).toContain("pos_agrupa_variantes")
-    expect(selectCallArgs.slice(1).some((s: string) => s.includes("pos_agrupa_variantes"))).toBe(false)
+    expect(selectCallArgs[0]).toContain("orden_formato_papel")
+    expect(selectCallArgs.slice(1).some((s: string) => s.includes("orden_formato_papel"))).toBe(false)
+    expect(selectCallArgs[1]).toContain("pos_agrupa_variantes")
+    expect(selectCallArgs.slice(2).some((s: string) => s.includes("pos_agrupa_variantes"))).toBe(false)
   })
 
   it("PUT under PGRST204 drops only the toggle (keeps cuit) when just migration 296 hasn't run", async () => {
@@ -924,6 +959,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     })
     chain.single = vi
       .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.orden_formato_papel does not exist" } }) // paper size of the printed order (RETURNING-only: the body has no such key)
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.pos_agrupa_variantes does not exist" } }) // M3, POS variants preference (RETURNING-only: the body has no such key)
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
@@ -944,18 +980,20 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     const { status } = await parseResponse(res as Response)
 
     expect(status).toBe(200)
-    expect(updateCalls).toHaveLength(8)
-    expect(updateCalls[5]).toEqual(
-      expect.objectContaining({ iva_regimen: "INCLUIDO", cuit: "30-71234567-8", facturacion_electronica_habilitada: true })
-    )
+    expect(updateCalls).toHaveLength(9)
     expect(updateCalls[6]).toEqual(
       expect.objectContaining({ iva_regimen: "INCLUIDO", cuit: "30-71234567-8", facturacion_electronica_habilitada: true })
     )
-    expect(updateCalls[7]).toEqual(expect.objectContaining({ iva_regimen: "INCLUIDO", cuit: "30-71234567-8" }))
-    expect(updateCalls[7]).not.toHaveProperty("facturacion_electronica_habilitada")
+    expect(updateCalls[7]).toEqual(
+      expect.objectContaining({ iva_regimen: "INCLUIDO", cuit: "30-71234567-8", facturacion_electronica_habilitada: true })
+    )
+    expect(updateCalls[8]).toEqual(expect.objectContaining({ iva_regimen: "INCLUIDO", cuit: "30-71234567-8" }))
+    expect(updateCalls[8]).not.toHaveProperty("facturacion_electronica_habilitada")
     const selectCallArgs = chain.select.mock.calls.map((c: any[]) => c[0])
-    expect(selectCallArgs[0]).toContain("pos_agrupa_variantes")
-    expect(selectCallArgs.slice(1).some((s: string) => s.includes("pos_agrupa_variantes"))).toBe(false)
+    expect(selectCallArgs[0]).toContain("orden_formato_papel")
+    expect(selectCallArgs.slice(1).some((s: string) => s.includes("orden_formato_papel"))).toBe(false)
+    expect(selectCallArgs[1]).toContain("pos_agrupa_variantes")
+    expect(selectCallArgs.slice(2).some((s: string) => s.includes("pos_agrupa_variantes"))).toBe(false)
   })
 
   it("PUT under PGRST204 drops only the 297 pair (keeps cuit and the toggle) when just migration 297 hasn't run", async () => {
@@ -971,6 +1009,7 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     })
     chain.single = vi
       .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.orden_formato_papel does not exist" } }) // paper size of the printed order (RETURNING-only: the body has no such key)
       .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.pos_agrupa_variantes does not exist" } }) // M3, POS variants preference (RETURNING-only: the body has no such key)
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.vendedores_ven_ingresos does not exist" } }) // 326, permiso de ingresos
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204", message: "column organizations.tecnicos_cobran_cotizaciones does not exist" } }) // 322, permiso de cobro de cotizaciones
@@ -998,8 +1037,8 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     const { status } = await parseResponse(res as Response)
 
     expect(status).toBe(200)
-    expect(updateCalls).toHaveLength(7)
-    expect(updateCalls[5]).toEqual(
+    expect(updateCalls).toHaveLength(8)
+    expect(updateCalls[6]).toEqual(
       expect.objectContaining({
         iva_regimen: "INCLUIDO",
         cuit: "30-71234567-8",
@@ -1007,12 +1046,14 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
         ingresos_brutos: "902-123456-7",
       })
     )
-    expect(updateCalls[6]).toEqual(
+    expect(updateCalls[7]).toEqual(
       expect.objectContaining({ iva_regimen: "INCLUIDO", cuit: "30-71234567-8", facturacion_electronica_habilitada: true })
     )
-    expect(updateCalls[6]).not.toHaveProperty("ingresos_brutos")
+    expect(updateCalls[7]).not.toHaveProperty("ingresos_brutos")
     const selectCallArgs = chain.select.mock.calls.map((c: any[]) => c[0])
-    expect(selectCallArgs[0]).toContain("pos_agrupa_variantes")
-    expect(selectCallArgs.slice(1).some((s: string) => s.includes("pos_agrupa_variantes"))).toBe(false)
+    expect(selectCallArgs[0]).toContain("orden_formato_papel")
+    expect(selectCallArgs.slice(1).some((s: string) => s.includes("orden_formato_papel"))).toBe(false)
+    expect(selectCallArgs[1]).toContain("pos_agrupa_variantes")
+    expect(selectCallArgs.slice(2).some((s: string) => s.includes("pos_agrupa_variantes"))).toBe(false)
   })
 })

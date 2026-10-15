@@ -111,18 +111,21 @@ describe("/api/configuracion — permiso de ingresos para vendedores", () => {
     // reportes a todos los vendedores por una migración que no corrió.
     expect(body.vendedoresVenIngresos).toBe(true)
 
-    // Tres intentos: M3 (variantes en el POS) viaja ENCIMA de este flag, así
-    // que su escalón contiene la columna ausente y cae con ella; el del propio
-    // flag también; el tercero ya acierta. Cuatro o más significa que arrastró
-    // a otra migración con él. Se afirma QUÉ SELECT llevó cada intento, no solo
-    // cuántos hubo.
-    expect(chain.single).toHaveBeenCalledTimes(3)
+    // Cuatro intentos: el tamaño de hoja de la orden y M3 (variantes en el POS)
+    // viajan ENCIMA de este flag, así que sus escalones contienen la columna
+    // ausente y caen con ella; el del propio flag también; el cuarto ya acierta.
+    // Cinco o más significa que arrastró a otra migración con él. Se afirma QUÉ
+    // SELECT llevó cada intento, no solo cuántos hubo.
+    expect(chain.single).toHaveBeenCalledTimes(4)
     const selects = chain.select.mock.calls.map((c: any[]) => c[0] as string)
+    expect(selects[0]).toContain("orden_formato_papel")
     expect(selects[0]).toContain("pos_agrupa_variantes")
     expect(selects[0]).toContain("vendedores_ven_ingresos")
-    expect(selects[1]).not.toContain("pos_agrupa_variantes")
-    expect(selects[1]).toContain("vendedores_ven_ingresos")
-    expect(selects[2]).not.toContain("vendedores_ven_ingresos")
+    expect(selects[1]).not.toContain("orden_formato_papel")
+    expect(selects[1]).toContain("pos_agrupa_variantes")
+    expect(selects[2]).not.toContain("pos_agrupa_variantes")
+    expect(selects[2]).toContain("vendedores_ven_ingresos")
+    expect(selects[3]).not.toContain("vendedores_ven_ingresos")
 
     // Y nada de lo que sí existe se perdió en el camino.
     expect(body.tecnicosOperanPos).toBe(true)

@@ -26,6 +26,12 @@ import { mockAuthError, mockAuthSuccess, parseResponse } from "./helpers"
 vi.mock("@/lib/subscriptions", () => ({ hasPlanFeature: vi.fn().mockResolvedValue(false) }))
 
 const COLUMN = "pos_agrupa_variantes"
+// The paper-size column (orden_formato_papel) has its own step ABOVE M3's. Migrations are applied in
+// increasing order, so in any database that lacks M3 that newer column is missing too: the failing
+// state of every "M3 missing" test below is both columns, and the cascade spends one extra attempt
+// on the newer step before it reaches M3's.
+const NEWER = "orden_formato_papel"
+const BEFORE_M3 = [COLUMN, NEWER]
 
 interface Call {
   select: string
@@ -237,8 +243,8 @@ describe("GET /api/configuracion - posAgrupaVariantes", () => {
     expect(body.posAgrupaVariantes).toBe(true)
   })
 
-  it("M3 missing: its own step, so exactly two attempts and the second is the first minus ONLY the column", async () => {
-    const { calls } = fakeOrganizations(rowWithoutM3(), [COLUMN])
+  it("M3 missing: its own step, so the step above it fails first and the one that follows is its select minus ONLY the column", async () => {
+    const { calls } = fakeOrganizations(rowWithoutM3(), BEFORE_M3)
     const { GET } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse((await GET()) as Response)
 
@@ -246,19 +252,23 @@ describe("GET /api/configuracion - posAgrupaVariantes", () => {
     expect(body.posAgrupaVariantes).toBe(true) // reads grouped without the column
     expectOtherSettingsSurvived(body)
 
-    expect(calls).toHaveLength(2)
+    expect(calls).toHaveLength(3)
     expect(calls[0].errorCode).toBe("42703")
-    expect(calls[0].columns).toContain(COLUMN)
-    expect(calls[0].columns).toContain("vendedores_ven_ingresos") // the top step stacks on the 326 step
-    expect(calls[1].ok).toBe(true)
-    expect(calls[1].columns).not.toContain(COLUMN)
-    expect(calls[1].columns).toContain("vendedores_ven_ingresos")
-    // Nothing else was dropped or added between the two attempts.
-    expect(calls[0].columns).toEqual([...calls[1].columns, COLUMN])
+    expect(calls[0].columns).toContain(NEWER)
+    expect(calls[1].errorCode).toBe("42703")
+    expect(calls[1].columns).toContain(COLUMN)
+    expect(calls[1].columns).not.toContain(NEWER)
+    expect(calls[1].columns).toContain("vendedores_ven_ingresos") // M3's step stacks on the 326 step
+    expect(calls[2].ok).toBe(true)
+    expect(calls[2].columns).not.toContain(COLUMN)
+    expect(calls[2].columns).toContain("vendedores_ven_ingresos")
+    // Nothing else was dropped or added between the attempts.
+    expect(calls[1].columns).toEqual([...calls[2].columns, COLUMN])
+    expect(calls[0].columns).toEqual([...calls[1].columns, NEWER])
   })
 
   it("M3 and 326 both missing: the chain continues one step at a time, still keeping everything older", async () => {
-    const { calls } = fakeOrganizations(rowWithoutM3({ vendedores_ven_ingresos: undefined }), [COLUMN, "vendedores_ven_ingresos"])
+    const { calls } = fakeOrganizations(rowWithoutM3({ vendedores_ven_ingresos: undefined }), [...BEFORE_M3, "vendedores_ven_ingresos"])
     const { GET } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse((await GET()) as Response)
 
@@ -268,17 +278,19 @@ describe("GET /api/configuracion - posAgrupaVariantes", () => {
     expect(body.terminologiaOverrides).toEqual({ orden: "Trabajo" })
     expect(body.tecnicosCobranCotizaciones).toBe(true)
 
-    expect(calls).toHaveLength(3)
-    expect(calls[0].columns).toContain(COLUMN)
-    expect(calls[1].columns).not.toContain(COLUMN)
-    expect(calls[1].columns).toContain("vendedores_ven_ingresos")
+    expect(calls).toHaveLength(4)
+    expect(calls[0].columns).toContain(NEWER)
+    expect(calls[1].columns).not.toContain(NEWER)
+    expect(calls[1].columns).toContain(COLUMN)
     expect(calls[2].columns).not.toContain(COLUMN)
-    expect(calls[2].columns).not.toContain("vendedores_ven_ingresos")
-    expect(calls[2].columns).toContain("tecnicos_cobran_cotizaciones")
+    expect(calls[2].columns).toContain("vendedores_ven_ingresos")
+    expect(calls[3].columns).not.toContain(COLUMN)
+    expect(calls[3].columns).not.toContain("vendedores_ven_ingresos")
+    expect(calls[3].columns).toContain("tecnicos_cobran_cotizaciones")
   })
 
   it("an older database that also misses a legacy column bottoms out at the minimal select without the new column", async () => {
-    const { calls } = fakeOrganizations(rowWithoutM3(), [COLUMN, "comprobante_terminos"])
+    const { calls } = fakeOrganizations(rowWithoutM3(), [...BEFORE_M3, "comprobante_terminos"])
     const { GET } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse((await GET()) as Response)
 
@@ -288,7 +300,8 @@ describe("GET /api/configuracion - posAgrupaVariantes", () => {
     expect(last.ok).toBe(true)
     expect(last.columns).not.toContain(COLUMN)
     expect(last.columns).not.toContain("comprobante_terminos")
-    expect(calls.filter((c) => c.columns.includes(COLUMN))).toHaveLength(1) // only the top step carries it
+    // Only the two top steps carry it: the newer step (stacked on M3's) and M3's own.
+    expect(calls.filter((c) => c.columns.includes(COLUMN))).toHaveLength(2)
   })
 })
 
@@ -305,8 +318,8 @@ describe("PUT /api/configuracion, no-op branch - posAgrupaVariantes", () => {
     expect(calls[0].update).toBeUndefined()
   })
 
-  it("M3 missing: two attempts, the second without the column, nothing written, other settings intact", async () => {
-    const { calls } = fakeOrganizations(rowWithoutM3(), [COLUMN])
+  it("M3 missing: three attempts (the newer step, M3's, the rest), the last without the column, nothing written, other settings intact", async () => {
+    const { calls } = fakeOrganizations(rowWithoutM3(), BEFORE_M3)
     const { PUT } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse((await PUT(putRequest({}))) as Response)
 
@@ -314,11 +327,13 @@ describe("PUT /api/configuracion, no-op branch - posAgrupaVariantes", () => {
     expect(body.posAgrupaVariantes).toBe(true)
     expectOtherSettingsSurvived(body)
 
-    expect(calls).toHaveLength(2)
-    expect(calls[0].columns).toContain(COLUMN)
-    expect(calls[1].ok).toBe(true)
-    expect(calls[1].columns).not.toContain(COLUMN)
-    expect(calls[0].columns).toEqual([...calls[1].columns, COLUMN])
+    expect(calls).toHaveLength(3)
+    expect(calls[0].columns).toContain(NEWER)
+    expect(calls[1].columns).toContain(COLUMN)
+    expect(calls[1].columns).not.toContain(NEWER)
+    expect(calls[2].ok).toBe(true)
+    expect(calls[2].columns).not.toContain(COLUMN)
+    expect(calls[1].columns).toEqual([...calls[2].columns, COLUMN])
     expect(calls.every((c) => c.update === undefined)).toBe(true)
   })
 })
@@ -364,7 +379,7 @@ describe("PUT /api/configuracion, write - posAgrupaVariantes", () => {
   it("M3 missing: the retry drops ONLY the key from payload and select; every other setting is saved and returned", async () => {
     const { calls, store } = fakeOrganizations(
       rowWithoutM3({ iva_regimen: "EXENTO", terminologia: {}, cuit: null, vendedores_ven_ingresos: true }),
-      [COLUMN],
+      BEFORE_M3,
     )
     const { PUT } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse(
@@ -390,18 +405,25 @@ describe("PUT /api/configuracion, write - posAgrupaVariantes", () => {
     expect(store.cuit).toBe("30-71234567-8")
     expect(store.vendedores_ven_ingresos).toBe(false)
 
-    expect(calls).toHaveLength(2)
+    // The newer step goes first and, with M3 missing, fails on the key M3 put in the payload; the
+    // same payload then goes to M3's step, which fails the same way; only dropping the key works.
+    expect(calls).toHaveLength(3)
     expect(calls[0].errorCode).toBe("PGRST204")
     expect(calls[0].update).toHaveProperty(COLUMN, false)
-    expect(calls[0].columns).toContain(COLUMN)
-    expect(calls[1].ok).toBe(true)
-    expect(calls[1].update).toEqual(without(calls[0].update, COLUMN))
-    expect(calls[1].columns).not.toContain(COLUMN)
-    expect(calls[0].columns).toEqual([...calls[1].columns, COLUMN])
+    expect(calls[0].columns).toContain(NEWER)
+    expect(calls[1].errorCode).toBe("PGRST204")
+    expect(calls[1].update).toHaveProperty(COLUMN, false)
+    expect(calls[1].columns).toContain(COLUMN)
+    expect(calls[1].columns).not.toContain(NEWER)
+    expect(calls[2].ok).toBe(true)
+    expect(calls[2].update).toEqual(without(calls[1].update, COLUMN))
+    expect(calls[2].columns).not.toContain(COLUMN)
+    expect(calls[1].columns).toEqual([...calls[2].columns, COLUMN])
+    expect(calls[0].columns).toEqual([...calls[1].columns, NEWER])
   })
 
-  it("M3 missing and the body does not carry the key: the RETURNING-only 42703 still triggers the retry, with the same payload", async () => {
-    const { calls, store } = fakeOrganizations(rowWithoutM3(), [COLUMN])
+  it("M3 missing and the body does not carry the key: the RETURNING-only 42703 still triggers the retries, with the same payload", async () => {
+    const { calls, store } = fakeOrganizations(rowWithoutM3(), BEFORE_M3)
     const { PUT } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse((await PUT(putRequest({ umbralStockBajo: 9 }))) as Response)
 
@@ -409,15 +431,16 @@ describe("PUT /api/configuracion, write - posAgrupaVariantes", () => {
     expect(body.umbralStockBajo).toBe(9)
     expect(store.umbral_stock_bajo).toBe(9)
     expect(body.posAgrupaVariantes).toBe(true)
-    expect(calls).toHaveLength(2)
+    expect(calls).toHaveLength(3)
     expect(calls[0].errorCode).toBe("42703")
-    expect(calls[1].update).toEqual({ umbral_stock_bajo: 9 })
-    expect(calls[1].columns).not.toContain(COLUMN)
+    expect(calls[1].errorCode).toBe("42703")
+    expect(calls[2].update).toEqual({ umbral_stock_bajo: 9 })
+    expect(calls[2].columns).not.toContain(COLUMN)
   })
 
   it("M3 and 326 both missing: the chain continues and the payload loses exactly those two keys", async () => {
     const { calls, store } = fakeOrganizations(rowWithoutM3({ vendedores_ven_ingresos: undefined, iva_regimen: "EXENTO" }), [
-      COLUMN,
+      ...BEFORE_M3,
       "vendedores_ven_ingresos",
     ])
     const { PUT } = await import("@/app/api/configuracion/route")
@@ -426,11 +449,12 @@ describe("PUT /api/configuracion, write - posAgrupaVariantes", () => {
     )
 
     expect(status).toBe(200)
-    expect(calls).toHaveLength(3)
+    expect(calls).toHaveLength(4)
     expect(calls[0].update).toEqual({ [COLUMN]: false, vendedores_ven_ingresos: false, iva_regimen: "ADITIVO" })
-    expect(calls[1].update).toEqual({ vendedores_ven_ingresos: false, iva_regimen: "ADITIVO" })
-    expect(calls[2].update).toEqual({ iva_regimen: "ADITIVO" })
-    expect(calls[2].ok).toBe(true)
+    expect(calls[1].update).toEqual({ [COLUMN]: false, vendedores_ven_ingresos: false, iva_regimen: "ADITIVO" }) // the newer step dropped nothing: the key was never in the payload
+    expect(calls[2].update).toEqual({ vendedores_ven_ingresos: false, iva_regimen: "ADITIVO" })
+    expect(calls[3].update).toEqual({ iva_regimen: "ADITIVO" })
+    expect(calls[3].ok).toBe(true)
     expect(store.iva_regimen).toBe("ADITIVO")
   })
 
@@ -439,7 +463,7 @@ describe("PUT /api/configuracion, write - posAgrupaVariantes", () => {
   // inside the minimal fallback itself: that line is a defensive duplicate (the key is already
   // gone by then), unreachable with the key still present, and no test can tell it apart.
   it("an older database also missing a legacy column: the first retry drops the key, so no later attempt (the minimal select included) carries it", async () => {
-    const { calls, store } = fakeOrganizations(rowWithoutM3(), [COLUMN, "comprobante_terminos"])
+    const { calls, store } = fakeOrganizations(rowWithoutM3(), [...BEFORE_M3, "comprobante_terminos"])
     const { PUT } = await import("@/app/api/configuracion/route")
     const { status, body } = await parseResponse(
       (await PUT(putRequest({ posAgrupaVariantes: false, umbralStockBajo: 9, ivaRegimen: "ADITIVO" }))) as Response,
@@ -454,10 +478,12 @@ describe("PUT /api/configuracion, write - posAgrupaVariantes", () => {
     expect(last.update).toHaveProperty("umbral_stock_bajo", 9)
     expect(last.update).not.toHaveProperty(COLUMN)
     expect(store.umbral_stock_bajo).toBe(9)
-    // Only the first attempt carried the key; every retry after it is clean.
+    // The first two attempts (the newer step and M3's own) carried the key; once M3's step drops it,
+    // every retry after that is clean.
     expect(calls[0].update).toHaveProperty(COLUMN, false)
-    expect(calls.slice(1).every((c) => !c.update || !(COLUMN in c.update))).toBe(true)
-    expect(calls.filter((c) => c.columns.includes(COLUMN))).toHaveLength(1)
+    expect(calls[1].update).toHaveProperty(COLUMN, false)
+    expect(calls.slice(2).every((c) => !c.update || !(COLUMN in c.update))).toBe(true)
+    expect(calls.filter((c) => c.columns.includes(COLUMN))).toHaveLength(2)
   })
 })
 
@@ -509,10 +535,10 @@ describe("every query of the M3 steps is scoped to the caller's organization", (
   // org-2 sits in the same table with different values. A query that loses its
   // .eq("id", organizationId) matches two rows: the fake makes that an error, applies a write to
   // both rows, and these tests also look at the filters each call carried and at org-2 itself.
-  for (const missing of [[], [COLUMN]] as string[][]) {
-    const scenario = missing.length ? "M3 missing: the failed attempt AND its retry" : "M3 present: the single attempt"
+  for (const missing of [[], BEFORE_M3] as string[][]) {
+    const scenario = missing.length ? "M3 missing: every failed attempt AND the retry that works" : "M3 present: the single attempt"
     const initial = () => (missing.length ? rowWithoutM3() : { ...FULL_ROW, [COLUMN]: true })
-    const attempts = missing.length ? 2 : 1
+    const attempts = missing.length ? 3 : 1
 
     it(`GET - ${scenario} filter by id and read org-1, never org-2`, async () => {
       const h = fakeOrganizations(initial(), missing)

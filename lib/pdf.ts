@@ -11,6 +11,7 @@ import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
 import { MONO, TYPE, RULE_WIDTH, drawRule, drawSectionLabel, drawOutlinedBadge, measureBadgeWidth } from "@/lib/pdf-style"
 import { ESTADO_FLOW, ESTADOS_COMPLETADOS, MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
 import { esInforme } from "@/lib/cotizacion-informe"
+import { normalizeOrdenPapel, type OrdenPapel } from "@/lib/orden-papel"
 
 // Compatibilidad: algunos bundlers ponen el default dentro de .default
 const fontkit = (fontkitModule as any).default || fontkitModule
@@ -1003,9 +1004,23 @@ interface OrdenPDFData {
   cobros?: Array<{ fecha: Date; metodo: string; referencia?: string | null; monto: number }> | null
   /** orden_tiempos_estado: primera ocurrencia de cada estado, ordenado por inicio. */
   timeline?: Array<{ estado: string; fecha: Date }> | null
+  /**
+   * Hoja de impresion. Sin valor (o cualquier cosa que no sea A5/A6) es A4: el dibujo de
+   * siempre, abajo. A5 y A6 usan el layout de una columna de lib/pdf-orden-compact.ts.
+   */
+  paperSize?: OrdenPapel | null
 }
 
 export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
+  // Hoja chica: otro layout (una columna, letra a escala de la hoja, fluye a mas paginas).
+  // Import dinamico porque ese modulo importa embedExpedienteFonts de este archivo; A4 no
+  // pasa por aca y su camino queda sin tocar.
+  const papel = normalizeOrdenPapel(data.paperSize)
+  if (papel !== "A4") {
+    const { generateOrdenCompactPDF } = await import("@/lib/pdf-orden-compact")
+    return generateOrdenCompactPDF(data, papel)
+  }
+
   const term = resolveTerminologia(data.terminologia ?? null)
 
   // Helper para texto seguro

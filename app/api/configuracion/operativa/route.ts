@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getIvaGeneral } from "@/lib/countries"
 import { resolveTerminologia } from "@/lib/terminologia"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { normalizeOrdenPapel } from "@/lib/orden-papel"
 
 /**
  * GET /api/configuracion/operativa — lo que cualquier usuario de la org necesita
@@ -55,6 +56,9 @@ export async function GET() {
       // POS variants grouping (migration M3). Read as `!== false`: a NULL or a
       // missing column (select("*") leaves it undefined) means grouped.
       posAgrupaVariantes: org.pos_agrupa_variantes !== false,
+      // Paper size of the printed order (migration orden_formato_papel). select("*") leaves a
+      // missing column undefined; anything that is not a known size reads A4.
+      ordenFormatoPapel: normalizeOrdenPapel(org.orden_formato_papel),
       facturacionElectronicaDisponible,
     })
   } catch (error) {

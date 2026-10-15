@@ -19,6 +19,8 @@ import { CONFIG_TABS, FORM_TABS, parseConfigTab, type ConfigTab } from "@/compon
 import { CURRENCY_OPTIONS } from "@/lib/currency"
 import { TIMEZONE_OPTIONS } from "@/lib/timezone"
 import { COUNTRY_OPTIONS, getCountryConfig, getIvaGeneral } from "@/lib/countries"
+import { ORDEN_PAPEL_OPCIONES, normalizeOrdenPapel, type OrdenPapel } from "@/lib/orden-papel"
+import { useCurrency } from "@/contexts/currency-context"
 
 // Condición frente al IVA del emisor: texto libre (organizations.condicion_iva
 // es TEXT, sin enum en DB) impreso tal cual en el remito — a diferencia de
@@ -64,6 +66,9 @@ export function ConfiguracionForm({
   seguridad,
 }: ConfiguracionFormProps) {
   const { confirm } = useModal()
+  // El proveedor lee /api/configuracion/operativa una sola vez: sin esto, lo guardado acá (la hoja
+  // de las órdenes) no llega a las pantallas que ya están montadas hasta recargar.
+  const { refreshConfig } = useCurrency()
   const [tab, setTab] = useState<ConfigTab>(() => parseConfigTab(initialTab))
   const [config, setConfig] = useState<Config | null>(null)
   const [loading, setLoading] = useState(true)
@@ -82,6 +87,8 @@ export function ConfiguracionForm({
   const [cotizacionValidezDias, setCotizacionValidezDias] = useState("30")
   const [cotizacionTerminos, setCotizacionTerminos] = useState("")
   const [recepcionTerminos, setRecepcionTerminos] = useState("")
+  // Hoja en la que se imprimen las órdenes. A4 es lo de siempre; A5 y A6 son opt-in.
+  const [ordenFormatoPapel, setOrdenFormatoPapel] = useState<OrdenPapel>("A4")
   const [comprobanteTerminos, setComprobanteTerminos] = useState("")
   const [garantiaDiasDefault, setGarantiaDiasDefault] = useState("30")
   const [politicaAbandonoDiasDefault, setPoliticaAbandonoDiasDefault] = useState("60")
@@ -192,6 +199,7 @@ export function ConfiguracionForm({
         setCotizacionValidezDias(String(data.cotizacionValidezDias ?? 30))
         setCotizacionTerminos(data.cotizacionTerminos || "")
         setRecepcionTerminos(data.recepcionTerminos || "")
+        setOrdenFormatoPapel(normalizeOrdenPapel(data.ordenFormatoPapel))
         setComprobanteTerminos(data.comprobanteTerminos || "")
         setGarantiaDiasDefault(String(data.garantiaDiasDefault ?? 30))
         setPoliticaAbandonoDiasDefault(String(data.politicaAbandonoDiasDefault ?? 60))
@@ -375,12 +383,13 @@ export function ConfiguracionForm({
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, tecnicosCobranCotizaciones, vendedoresVenIngresos, posAgrupaVariantes, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, tecnicosCobranCotizaciones, vendedoresVenIngresos, posAgrupaVariantes, ordenFormatoPapel, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias }),
       })
 
       if (res.ok) {
         setMessage({ type: "success", text: "Configuración guardada exitosamente" })
         fetchConfig()
+        refreshConfig()
         // Notificar al sidebar que las features de la org cambiaron
         // (ej: activar/desactivar módulo agenda muestra/oculta el item del menú)
         if (typeof window !== "undefined") {
@@ -1279,6 +1288,27 @@ export function ConfiguracionForm({
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
+              <div>
+                <Label htmlFor="ordenFormatoPapel" className="text-sm">Tamaño de hoja para las órdenes</Label>
+                {/* <select> nativo a propósito: un Select de Radix devuelve valor vacío si se lo
+                    setea con el dropdown cerrado y blanquea el campo. Se guarda con el resto del form. */}
+                <select
+                  id="ordenFormatoPapel"
+                  value={ordenFormatoPapel}
+                  onChange={(e) => setOrdenFormatoPapel(normalizeOrdenPapel(e.target.value))}
+                  disabled={!allowEdit}
+                  className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {ORDEN_PAPEL_OPCIONES.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  A6 es un cuarto de una hoja A4. Con A5 y A6 la orden sale en una sola columna y con letra más grande. Igual podés elegir otro tamaño cada vez que imprimís.
+                </p>
+              </div>
               <div>
                 <Label htmlFor="recepcionTerminos" className="text-sm">Terminos y Condiciones</Label>
                 <Textarea

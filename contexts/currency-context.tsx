@@ -15,6 +15,7 @@ import {
 } from "@/lib/timezone"
 import { DEFAULT_COUNTRY, getCountryConfig, type CountryCode } from "@/lib/countries"
 import { resolveTerminologia, t as tLookup, type Terminologia } from "@/lib/terminologia"
+import { ORDEN_PAPEL_DEFAULT, normalizeOrdenPapel, type OrdenPapel } from "@/lib/orden-papel"
 
 interface CurrencyContextType {
   currency: CurrencyCode
@@ -22,6 +23,8 @@ interface CurrencyContextType {
   pais: CountryCode
   organizationName: string
   terminologia: Terminologia
+  /** Hoja en la que la organización imprime las órdenes (A4 si el servidor no la informa). */
+  ordenFormatoPapel: OrdenPapel
   formatPrice: (amount: number | string | null | undefined) => string
   formatDate: (date: Date | string | null | undefined) => string
   formatDateTime: (date: Date | string | null | undefined) => string
@@ -35,6 +38,7 @@ const CurrencyContext = createContext<CurrencyContextType>({
   pais: DEFAULT_COUNTRY,
   organizationName: "",
   terminologia: resolveTerminologia(null),
+  ordenFormatoPapel: ORDEN_PAPEL_DEFAULT,
   formatPrice: (amount) => formatCurrencyValue(amount, DEFAULT_CURRENCY),
   formatDate: (date) => formatDateValue(date, DEFAULT_TIMEZONE),
   formatDateTime: (date) => formatDateTimeValue(date, DEFAULT_TIMEZONE),
@@ -48,6 +52,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   const [pais, setPais] = useState<CountryCode>(DEFAULT_COUNTRY)
   const [organizationName, setOrganizationName] = useState<string>("")
   const [terminologia, setTerminologia] = useState<Terminologia>(resolveTerminologia(null))
+  const [ordenFormatoPapel, setOrdenFormatoPapel] = useState<OrdenPapel>(ORDEN_PAPEL_DEFAULT)
   const [configVersion, setConfigVersion] = useState(0)
   const refreshConfig = useCallback(() => setConfigVersion((v) => v + 1), [])
 
@@ -80,6 +85,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
         if (data.terminologia) {
           setTerminologia(data.terminologia as Terminologia)
         }
+        setOrdenFormatoPapel(normalizeOrdenPapel(data.ordenFormatoPapel))
       } catch (error) {
         if (controller.signal.aborted) return
         if (error instanceof SyntaxError) return
@@ -115,7 +121,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   )
 
   return (
-    <CurrencyContext.Provider value={{ currency, timezone, pais, organizationName, terminologia, formatPrice, formatDate, formatDateTime, refreshConfig }}>
+    <CurrencyContext.Provider value={{ currency, timezone, pais, organizationName, terminologia, ordenFormatoPapel, formatPrice, formatDate, formatDateTime, refreshConfig }}>
       {children}
     </CurrencyContext.Provider>
   )
