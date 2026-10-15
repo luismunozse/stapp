@@ -336,6 +336,16 @@ describe("validezDeVariantes: what the save schema would reject", () => {
     ])
   })
 
+  it("removing every option leaves one row with no combination: the guide is shown (the schema needs an option)", () => {
+    const sinOpciones = aplicar(reductor(), estadoColor(), { tipo: "quitarOpcion", opcionId: opcionId(estadoColor(), "Color") })
+    expect(sinOpciones.opciones).toHaveLength(0)
+    expect(filasEnOrden(sinOpciones).filter((f) => !f.archivar)).toHaveLength(1)
+    expect(validezDeVariantes(sinOpciones)).toEqual({
+      valida: false,
+      motivos: ["Agregá una opción (por ejemplo Color) con al menos un valor para armar las variantes"],
+    })
+  })
+
   it("two rows with the same barcode are invalid, with the schema's words", () => {
     const estado = conBarcode(estadoColor(), { Rojo: "7791", Azul: "7791" })
     expect(validezDeVariantes(estado)).toEqual({ valida: false, motivos: [REPETIDOS] })
