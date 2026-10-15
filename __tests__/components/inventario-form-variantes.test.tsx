@@ -388,6 +388,50 @@ describe("InventarioForm: sección de variantes", () => {
       expect(posts().filter((p) => p.url.includes(`/${azul}/`))).toHaveLength(2)
     })
 
+    it("promover, fallar una foto y Guardar de nuevo: un solo PUT más, sin volver a abrir el diálogo", async () => {
+      renderForm({ item: itemSuelto(), permiteVariantes: true })
+      fireEvent.click(await interruptor())
+      const nombreOpcion = await screen.findByLabelText("Nombre de la nueva opción")
+      fireEvent.change(nombreOpcion, { target: { value: "Color" } })
+      fireEvent.keyDown(nombreOpcion, { key: "Enter" })
+      const campo = await screen.findByLabelText("Agregar valor a Color")
+      for (const v of ["Rojo", "Azul"]) {
+        fireEvent.change(campo, { target: { value: v } })
+        fireEvent.keyDown(campo, { key: "Enter" })
+      }
+      await waitFor(() => expect(guardar()).not.toBeDisabled())
+      const [, azul] = idsDeFotos()
+      elegirFoto(azul)
+      falla = (url) => url.includes(`/${azul}/imagen`)
+      respuestaGet = () => ({ status: 200, body: grupoGuardado([hijo("s1", "Rojo"), hijo(azul, "Azul")]) })
+      fireEvent.click(guardar())
+      fireEvent.click(await screen.findByRole("button", { name: "Usar esta combinación" }))
+      await waitFor(() => expect(showWarningMock).toHaveBeenCalled())
+      expect(puts()).toHaveLength(1)
+      const grupoUrl = puts()[0].url
+
+      falla = () => false
+      await waitFor(() => expect(guardar()).not.toBeDisabled())
+      fireEvent.click(guardar())
+      await waitFor(() => expect(onSuccess).toHaveBeenCalled())
+      expect(screen.queryByText("¿Qué variante es este producto?")).not.toBeInTheDocument()
+      expect(puts()).toHaveLength(2)
+      expect(puts()[1].url).toBe(grupoUrl)
+      expect(puts()[1].body.variantes.map((v: any) => v.id).sort()).toEqual(["s1", azul].sort())
+    })
+
+    it("si no se puede releer el grupo tras fallar una foto, lo dice", async () => {
+      await nuevoConColor()
+      const [rojo] = idsDeFotos()
+      elegirFoto(rojo)
+      falla = (url) => url.includes(`/${rojo}/imagen`)
+      respuestaGet = () => ({ status: 500, body: { error: "x" } })
+      fireEvent.click(guardar())
+      await waitFor(() => expect(showErrorMock).toHaveBeenCalled())
+      expect(showErrorMock.mock.calls[0][0]).toMatch(/no pudimos volver a leer/i)
+      expect(onSuccess).not.toHaveBeenCalled()
+    })
+
     it("cerrar con fotos sin subir pide confirmación", async () => {
       await nuevoConColor()
       elegirFoto(idsDeFotos()[0])
@@ -633,6 +677,13 @@ describe("InventarioForm: sección de variantes", () => {
   // ---- ungroup and duplicates ---------------------------------------------------------------
 
   describe("desagrupar y duplicados", () => {
+    it("con la función apagada, abrir una variante no pide depósitos (igual que antes)", async () => {
+      renderForm({ item: itemAgrupado() })
+      await screen.findByLabelText("Nombre *")
+      await new Promise((r) => setTimeout(r, 30))
+      expect(llamadas.some((l) => l.url.includes("/api/depositos"))).toBe(false)
+    })
+
     it("apagar las variantes de un grupo guardado confirma y desagrupa sin tocar el producto", async () => {
       renderForm({ item: itemAgrupado(), permiteVariantes: true })
       await screen.findAllByLabelText("Precio de Rojo")

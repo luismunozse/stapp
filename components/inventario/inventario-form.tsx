@@ -423,7 +423,8 @@ export function InventarioForm({
   // Depósito del stock inicial (solo alta, o filas nuevas de un grupo). Se muestra con 2+
   // depósitos activos; con uno solo no hay nada que elegir y el servidor usa el principal.
   const { data: depositos = [] } = useSWR<DepositoLite[]>(
-    item && !item.grupoId && !variantesActivo ? null : "/api/depositos",
+    // With the feature off nothing changes: only a new product needs them.
+    (permiteVariantes ? item && !item.grupoId && !variantesActivo : !!item) ? null : "/api/depositos",
     depositosFetcher,
     { revalidateOnFocus: false }
   )
@@ -1020,7 +1021,8 @@ export function InventarioForm({
   /** Guardar con variantes prendidas: un solo PUT del grupo, después las fotos por variante. */
   const guardarVariantes = async (data: InventarioFormData) => {
     // Un producto suelto que pasa a ser una variante: primero se pregunta cuál, y recién después se guarda.
-    if (item && !item.grupoId && !variantes.estado.promocionId) {
+    // Once the group exists (saved in this session) there is nothing left to promote.
+    if (item && !item.grupoId && !variantes.estado.promocionId && !guardadoEnSesion.current) {
       setPromoviendo(true)
       return
     }
@@ -1069,7 +1071,11 @@ export function InventarioForm({
     if (fallidas.length > 0) {
       // Los datos ya están guardados, así que el borrador no sirve más; el formulario sigue abierto para reintentar las fotos.
       clearDraft()
-      await variantes.recargar()
+      const releido = await variantes.recargar()
+      if (!releido) {
+        await showError(`Se guardó el producto, pero ${textoDeFotos(fallidas.length).toLowerCase()} Además, no pudimos volver a leer las variantes: cerrá y volvé a abrir el producto.`)
+        return
+      }
       await showWarning(`Se guardó el producto. ${textoDeFotos(fallidas.length)}`)
       return
     }

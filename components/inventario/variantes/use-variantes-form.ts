@@ -91,10 +91,20 @@ export function useVariantesForm(p: ParametrosVariantesForm): VariantesDelForm {
   })
   const grupoId = estado.grupoId
 
+  // Aborted when the form goes away: an answer that comes back later must not touch anything.
+  const control = useRef<AbortController | null>(null)
+  useEffect(() => {
+    const propio = new AbortController()
+    control.current = propio
+    return () => propio.abort()
+  }, [])
+
   const recargar = useCallback(async (): Promise<GrupoLeido | null> => {
+    const senal = control.current?.signal
     try {
-      const res = await fetch(`/api/inventario/grupos/${grupoId}`)
+      const res = await fetch(`/api/inventario/grupos/${grupoId}`, { signal: senal })
       const cuerpo = await jsonONulo(res)
+      if (senal?.aborted) return null
       if (res.status === 503 || cuerpo?.code === "MIGRACION_PENDIENTE") {
         setPendiente(true)
         return null
@@ -117,7 +127,7 @@ export function useVariantesForm(p: ParametrosVariantesForm): VariantesDelForm {
       actual.alHidratar?.(lectura)
       return lectura
     } catch {
-      setErrorDeCarga(true)
+      if (!senal?.aborted) setErrorDeCarga(true)
       return null
     }
   }, [grupoId])
