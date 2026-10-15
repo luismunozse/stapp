@@ -29,7 +29,7 @@ describe("GET /api/public/pdf-smoke", () => {
     for (const [nombre, bytes] of Object.entries(body.documentos)) {
       expect(bytes, `${nombre} rendered nothing`).toBeGreaterThan(1000)
     }
-    expect(Object.keys(body.documentos).sort()).toEqual(["reciboCC", "remito", "resumenCC"])
+    expect(Object.keys(body.documentos).sort()).toEqual(["notaCredito", "reciboCC", "remito", "resumenCC"])
   })
 
   // Two halves, because one assertion can't carry both:

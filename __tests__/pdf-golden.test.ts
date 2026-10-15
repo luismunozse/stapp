@@ -23,6 +23,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 import { generateFacturaPDFReact } from "@/lib/remito-react-pdf"
 import { generateReciboCCPDF, generateResumenCCPDF } from "@/lib/cuenta-corriente-react-pdf"
+import { generateNotaCreditoPDF } from "@/lib/nota-credito-react-pdf"
 import { dumpPositions, dumpGraphics, diffDumps, type GoldenDump } from "./lib/pdf-golden-helper"
 
 const OUT = process.env.PDF_GOLDEN_OUT ?? ".tmp-preview/golden-head.json"
@@ -287,6 +288,38 @@ const resumenFixtures: Record<string, unknown> = {
   },
 }
 
+// The credit note's four shapes: by items, by amount, a DEV- record with the
+// legacy refund method, and voided (the stamp moves everything under it).
+const notaCreditoBase = {
+  numero: "NC-000010",
+  fecha: new Date("2026-10-13"),
+  origen: "VENTA",
+  operacion: "V0042",
+  motivo: "Devolución de productos",
+  detalle: "La funda vino fallada",
+  cliente: { nombre: "Juan Pérez", dni: "20123456", telefono: "1122334455" },
+  nombreEmpresa: "Taller Central",
+  telefonoEmpresa: "011-4444-5555",
+  sucursalNombre: "Sucursal Centro",
+  atendidoPor: "María González",
+  items: [
+    { descripcion: "Funda silicona transparente", cantidad: 2, precioUnitario: 750, subtotal: 1500 },
+    { descripcion: "Vidrio templado premium", cantidad: 1, precioUnitario: 4500, subtotal: 4500 },
+  ],
+  monto: 6000,
+  montoAplicadoDeuda: 2000,
+  montoReembolso: 4000,
+  etiquetaReintegro: "Te devolvimos (Efectivo)",
+  pendienteActual: 1500,
+}
+
+const notaCreditoFixtures: Record<string, unknown> = {
+  "01-items": notaCreditoBase,
+  "02-monto": { ...notaCreditoBase, origen: "ORDEN", operacion: "CEL099", items: [], motivo: "Trabajo no realizado", detalle: null, montoAplicadoDeuda: 0, montoReembolso: 6000, etiquetaReintegro: "Te devolvimos (Transferencia)", pendienteActual: 0 },
+  "03-dev-historica": { ...notaCreditoBase, numero: "DEV-0042", motivo: "Producto con falla", detalle: "Producto con falla", etiquetaReintegro: "Crédito a tu favor en el local", pendienteActual: null, logoUrl: tinyPngDataUri },
+  "04-anulada": { ...notaCreditoBase, anulada: true, anuladaAt: new Date("2026-10-14"), anuladaMotivo: "Error de carga" },
+}
+
 describe.runIf(process.env.PDF_GOLDEN === "1")("pdf golden positions", () => {
   it("renders every fixture and, given a baseline, matches it exactly", async () => {
     const dump: GoldenDump = {}
@@ -308,6 +341,9 @@ describe.runIf(process.env.PDF_GOLDEN === "1")("pdf golden positions", () => {
     }
     for (const [name, data] of Object.entries(resumenFixtures)) {
       await registrar(`resumen/${name}`, await generateResumenCCPDF(data as never))
+    }
+    for (const [name, data] of Object.entries(notaCreditoFixtures)) {
+      await registrar(`nota-credito/${name}`, await generateNotaCreditoPDF(data as never))
     }
 
     mkdirSync(dirname(OUT), { recursive: true })
