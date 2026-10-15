@@ -93,6 +93,8 @@ export function ConfiguracionForm({
   const [tecnicosCobranCotizaciones, setTecnicosCobranCotizaciones] = useState(false)
   // Arranca en true: este permiso QUITA algo que el vendedor ya tiene.
   const [vendedoresVenIngresos, setVendedoresVenIngresos] = useState(true)
+  // Arranca en true: el POS agrupa las variantes salvo que el taller pida la lista plana.
+  const [posAgrupaVariantes, setPosAgrupaVariantes] = useState(true)
   const [comisionAplicaSinReparacion, setComisionAplicaSinReparacion] = useState(false)
   const [ivaRegimen, setIvaRegimen] = useState<"EXENTO" | "INCLUIDO" | "ADITIVO">("EXENTO")
   const [ivaTasa, setIvaTasa] = useState("")
@@ -200,6 +202,7 @@ export function ConfiguracionForm({
         setVendedoresManejanCaja(!!data.vendedoresManejanCaja)
         setTecnicosCobranCotizaciones(!!data.tecnicosCobranCotizaciones)
         setVendedoresVenIngresos(data.vendedoresVenIngresos !== false)
+        setPosAgrupaVariantes(data.posAgrupaVariantes !== false)
         setComisionAplicaSinReparacion(!!data.comisionAplicaSinReparacion)
         setIvaRegimen(data.ivaRegimen ?? "EXENTO")
         setIvaTasa(String(data.ivaTasa ?? getIvaGeneral(data.pais)))
@@ -372,7 +375,7 @@ export function ConfiguracionForm({
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, tecnicosCobranCotizaciones, vendedoresVenIngresos, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, tecnicosCobranCotizaciones, vendedoresVenIngresos, posAgrupaVariantes, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias }),
       })
 
       if (res.ok) {
@@ -793,6 +796,21 @@ export function ConfiguracionForm({
                   <div className="text-sm font-medium">Los vendedores pueden ver los ingresos</div>
                   <div className="text-xs text-muted-foreground mt-0.5">
                     Viene activado. Si lo desactivás, los usuarios con rol Vendedor dejan de ver en Reportes la facturación del taller y cuánto gastó cada cliente. Siguen viendo los reportes operativos —tiempos de reparación, fallas comunes, desempeño de técnicos, inventario— y sus propias ventas en el Punto de Venta. Los precios de compra y los márgenes ya estaban reservados a los administradores, con o sin este permiso.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+                <input
+                  type="checkbox"
+                  checked={posAgrupaVariantes}
+                  onChange={(e) => setPosAgrupaVariantes(e.target.checked)}
+                  disabled={!allowEdit}
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Agrupar variantes en el punto de venta</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Viene activado. En el Punto de Venta, los productos con variantes (por ejemplo, una funda en varios colores) aparecen en una sola tarjeta y al tocarla elegís cuál vender. Si lo desactivás, cada variante aparece como un producto aparte en la lista.
                   </div>
                 </div>
               </label>
