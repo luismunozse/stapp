@@ -74,6 +74,9 @@ export interface InventarioResult {
   etiqueta?: string | null
   atributos?: AtributoVariante[] | null
   grupoNombre?: string | null
+  // The variant's own photo, and (grupoId page only) the borrowed photo of a sibling when it has none.
+  imagenUrl?: string | null
+  imagenRespaldo?: { url: string; etiqueta: string } | null
 }
 
 /**

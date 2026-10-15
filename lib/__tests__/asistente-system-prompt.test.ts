@@ -27,6 +27,15 @@ describe('buildAsistenteSystemPrompt', () => {
     expect(withoutKnownStatic).not.toMatch(/\$\s?\d/)
   })
 
+  it('incluye la sección de variantes con las fotos por variante', () => {
+    const prompt = buildAsistenteSystemPrompt()
+    expect(prompt).toContain('## Variantes de producto')
+    expect(prompt).toMatch(/cada variante tiene su propia foto/i)
+    expect(prompt).toMatch(/foto de otra variante/i)
+    expect(prompt).toMatch(/Sumar productos existentes/)
+    expect(prompt).toMatch(/control de series y de lotes/i)
+  })
+
   it('incluye las rutas del panel', () => {
     const prompt = buildAsistenteSystemPrompt()
     expect(prompt).toContain('# Rutas del panel')

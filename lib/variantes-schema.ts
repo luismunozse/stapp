@@ -166,11 +166,18 @@ export const guardarGrupoSchema = z
     variantes: z.array(varianteSchema).max(LIMITES.filas, "Se pueden guardar hasta 100 variantes"),
     archivar: z.array(idTexto).max(LIMITES.archivar, "Se pueden archivar hasta 100 variantes por vez").optional(),
     depositoId: idTexto.nullable().optional(),
+    // "Agrupar existentes": the item whose shared fields every member takes. The route reads it
+    // and builds the compartidos itself, so a client never sends both.
+    fuenteCompartidosId: idTexto.optional(),
   })
   .strict(SIN_CAMPOS_EXTRA)
   .superRefine((datos, ctx) => {
     const problema = (path: (string | number)[], message: string) => ctx.addIssue({ code: "custom", path, message })
     const { opciones } = datos.grupo
+
+    if (datos.fuenteCompartidosId !== undefined && datos.compartidos !== undefined) {
+      problema(["fuenteCompartidosId"], "Los datos compartidos salen de un producto o se indican a mano, no las dos cosas")
+    }
 
     const nombres = new Set<string>()
     opciones.forEach((o, i) => {
@@ -242,6 +249,23 @@ const FILA_A_SQL = {
   puntoReorden: "punto_reorden",
   ubicacion: "ubicacion",
 } as const
+
+/**
+ * The shared fields of an `inventario` row as the `compartidos` object of the schema. ONLY the nine
+ * whitelisted columns are read, so a photo, a price or the stock of the source can never travel.
+ * A null optional field is kept as null ("clear"); a null categoria or tracking flag has nothing
+ * valid to copy and is left out (the RPC reads absence as "unchanged").
+ */
+export function compartidosDeFila(fila: Record<string, unknown>): NonNullable<GuardarGrupoInput["compartidos"]> {
+  const compartidos: Record<string, unknown> = {}
+  for (const [camel, snake] of Object.entries(COMPARTIDOS_A_SQL)) {
+    const valorFila = fila[snake]
+    if (valorFila === undefined) continue
+    if (valorFila === null && (camel === "categoria" || camel === "trackeaLotes" || camel === "trackeaSeries")) continue
+    compartidos[camel] = valorFila
+  }
+  return compartidos as NonNullable<GuardarGrupoInput["compartidos"]>
+}
 
 export interface ArgsGuardarGrupo {
   p_org: string

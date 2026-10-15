@@ -41,7 +41,6 @@ import {
   Images,
   Calendar,
   Hash,
-  Layers,
   Boxes,
   ChevronDown,
   FileSpreadsheet,
@@ -69,7 +68,8 @@ import { AuditHistorial } from "./audit-historial"
 import { GaleriaImagenes } from "./galeria-imagenes"
 import { LotesDialog } from "./lotes-dialog"
 import { SeriesDialog } from "./series-dialog"
-import { VariantesDialog } from "./variantes-dialog"
+import { AgruparDialog } from "./agrupar-dialog"
+import { ChipVariante, FotoInventario } from "./variante-visual"
 import { KitDialog } from "./kit-dialog"
 import { WipeInventarioDialog } from "./wipe-inventario-dialog"
 import { ImportModal } from "@/components/import/import-modal"
@@ -152,7 +152,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [galeriaItem, setGaleriaItem] = useState<{ id: string; nombre: string } | null>(null)
   const [lotesItem, setLotesItem] = useState<{ id: string; nombre: string } | null>(null)
   const [seriesItem, setSeriesItem] = useState<{ id: string; nombre: string } | null>(null)
-  const [variantesItem, setVariantesItem] = useState<{ id: string; nombre: string } | null>(null)
+  const [agruparItems, setAgruparItems] = useState<Inventario[] | null>(null)
   const [kitItem, setKitItem] = useState<{ id: string; nombre: string } | null>(null)
   const [showScanner, setShowScanner] = useState(false)
   const [showWipe, setShowWipe] = useState(false)
@@ -303,10 +303,16 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     const dup = new Set<string>()
     const byId = new Map<string, Inventario[]>()
     for (const list of groups.values()) {
-      if (list.length > 1) {
+      // The children of one group share a base name by design: together they count as ONE product, so
+      // siblings never flag each other, but each of them still repeats a standalone product with its name.
+      const productos = new Set(list.map((it) => it.grupoId ?? it.id)).size
+      if (productos > 1) {
+        // Consolidating moves stock and archives the source: never for the members of a group. The badge only
+        // opens the dialog when there are two or more standalone products to merge.
+        const consolidables = list.filter((it) => !it.grupoId)
         list.forEach((it) => {
           dup.add(it.id)
-          byId.set(it.id, list)
+          if (!it.grupoId && consolidables.length > 1) byId.set(it.id, consolidables)
         })
       }
     }
@@ -366,20 +372,12 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       render: (item) => (
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 shrink-0 rounded overflow-hidden bg-muted/50 flex items-center justify-center border">
-            {item.imagenUrl ? (
-              <img
-                src={item.imagenUrl}
-                alt={item.nombre}
-                className="h-full w-full object-cover"
-                loading="lazy"
-              />
-            ) : (
-              <Package className="h-4 w-4 text-muted-foreground/50" />
-            )}
+            <FotoInventario item={item} iconClassName="h-4 w-4 text-muted-foreground/50" />
           </div>
           <div className="min-w-0">
             <div className="font-medium text-sm truncate flex items-center gap-1.5">
               <span className="truncate">{item.nombre}</span>
+              <ChipVariante item={item} />
               {duplicateIds.has(item.id) && (
                 <button
                   type="button"
@@ -389,7 +387,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                     if (group) setConsolidateGroup(group)
                   }}
                   className="shrink-0"
-                  title="Clic para consolidar los duplicados detectados en esta página."
+                  title={duplicateGroupByItemId.has(item.id) ? "Clic para consolidar los duplicados detectados en esta página." : "Se repite con una variante. Para unirlos, primero desagrupala."}
                 >
                   <Badge
                     variant="outline"
@@ -581,12 +579,6 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                   <DropdownMenuItem onClick={() => setSeriesItem({ id: item.id, nombre: item.nombre })}>
                     <Hash className="h-4 w-4 mr-2" />
                     Números de serie
-                  </DropdownMenuItem>
-                )}
-                {!isArchived && item.tieneVariantes && (
-                  <DropdownMenuItem onClick={() => setVariantesItem({ id: item.id, nombre: item.nombre })}>
-                    <Layers className="h-4 w-4 mr-2" />
-                    Variantes
                   </DropdownMenuItem>
                 )}
                 {!isArchived && item.esKit && (
@@ -912,6 +904,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       {showForm && (
         <InventarioForm
           item={editingItem}
+          permiteVariantes
           initialBarcode={editingItem ? null : pendingBarcode}
           onClose={() => {
             setShowForm(false)
@@ -1038,15 +1031,16 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         />
       )}
 
-      {variantesItem && (
-        <VariantesDialog
-          open={!!variantesItem}
-          onOpenChange={(open) => { if (!open) setVariantesItem(null) }}
-          inventarioId={variantesItem.id}
-          inventarioNombre={variantesItem.nombre}
-          onChange={() => setRefreshKey((k) => k + 1)}
-        />
-      )}
+      <AgruparDialog
+        open={!!agruparItems}
+        items={agruparItems ?? []}
+        onClose={() => setAgruparItems(null)}
+        onAgrupado={() => {
+          setAgruparItems(null)
+          setSelectedKeys([])
+          setRefreshKey((k) => k + 1)
+        }}
+      />
 
       {kitItem && (
         <KitDialog
@@ -1114,6 +1108,10 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             const selected = items.filter((i) => selectedKeys.includes(i.id))
             if (selected.length > 0) setLabelItems(selected)
           }}
+          onAgrupar={() => {
+            const selected = items.filter((i) => selectedKeys.includes(i.id))
+            if (selected.length > 1) setAgruparItems(selected)
+          }}
         />
       )}
 
@@ -1165,14 +1163,13 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                 return (
                   <div className="flex items-start gap-3">
                     <div className="h-11 w-11 shrink-0 rounded-md overflow-hidden bg-muted/50 flex items-center justify-center border">
-                      {item.imagenUrl ? (
-                        <img src={item.imagenUrl} alt={item.nombre} className="h-full w-full object-cover" loading="lazy" />
-                      ) : (
-                        <Package className="h-5 w-5 text-muted-foreground/50" />
-                      )}
+                      <FotoInventario item={item} iconClassName="h-5 w-5 text-muted-foreground/50" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium text-sm truncate">{item.nombre}</div>
+                      <div className="font-medium text-sm flex items-center gap-1.5">
+                        <span className="truncate">{item.nombre}</span>
+                        <ChipVariante item={item} />
+                      </div>
                       <div className="text-xs text-muted-foreground truncate">{item.codigo}</div>
                       <div className="mt-1.5 flex items-center gap-2 text-sm">
                         <span className="font-semibold">{formatPrice(item.precioVenta)}</span>
@@ -1234,16 +1231,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                     >
                       {/* Hero image */}
                       <div className="aspect-[16/9] w-full bg-muted/40 flex items-center justify-center border-b">
-                        {item.imagenUrl ? (
-                          <img
-                            src={item.imagenUrl}
-                            alt={item.nombre}
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <Package className="h-10 w-10 text-muted-foreground/40" />
-                        )}
+                        <FotoInventario item={item} iconClassName="h-10 w-10 text-muted-foreground/40" />
                       </div>
                       <CardContent className="p-4">
                         {/* Row 1: Name + Actions */}
@@ -1251,6 +1239,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                           <div className="min-w-0 flex-1">
                             <div className="font-semibold text-sm leading-tight truncate flex items-center gap-1.5">
                               <span className="truncate">{item.nombre}</span>
+                              <ChipVariante item={item} />
                               {duplicateIds.has(item.id) && (
                                 <button
                                   type="button"
@@ -1260,7 +1249,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                                     if (group) setConsolidateGroup(group)
                                   }}
                                   className="shrink-0"
-                                  title="Clic para consolidar los duplicados detectados en esta página."
+                                  title={duplicateGroupByItemId.has(item.id) ? "Clic para consolidar los duplicados detectados en esta página." : "Se repite con una variante. Para unirlos, primero desagrupala."}
                                 >
                                   <Badge
                                     variant="outline"

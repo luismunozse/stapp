@@ -11,13 +11,17 @@ import {
   resolverIndicadorVentaCacheado,
 } from "@/lib/sucursal"
 import { camposDeVarianteParaPos, selectConFallback } from "@/lib/variantes"
+import { adjuntarFotoDeRespaldo } from "@/lib/variantes-fotos"
 
 // Today's selects, plus the variant columns (migration 355) as their own, first step.
 const SELECT_VERTODAS =
   "id, codigo, nombre, stock, stock_reservado, precio_venta, precio_compra, trackea_series, dias_garantia_default"
 const SELECT_DEPOSITO =
   "id, codigo, nombre, precio_venta, precio_compra, trackea_series, dias_garantia_default, inventario_depositos!inner(stock, stock_reservado, deposito_id)"
-const COLUMNAS_VARIANTE = "grupo_id, atributos, grupo:inventario_grupos(nombre)"
+const COLUMNAS_VARIANTE = "grupo_id, atributos, imagen_url, grupo:inventario_grupos(nombre)"
+// A typed search stays small; a group page (the POS variants sheet) holds a whole group.
+const LIMITE_BUSQUEDA = 50
+const LIMITE_GRUPO = 100
 const SELECT_VERTODAS_CON_GRUPO = `${SELECT_VERTODAS}, ${COLUMNAS_VARIANTE}`
 const SELECT_DEPOSITO_CON_GRUPO = `${SELECT_DEPOSITO}, ${COLUMNAS_VARIANTE}`
 
@@ -55,7 +59,8 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const q = searchParams.get("q") || ""
-    const limit = Math.min(parseInt(searchParams.get("limit") || "10"), 50)
+    const grupoId = searchParams.get("grupoId")?.trim() || ""
+    const limit = Math.min(parseInt(searchParams.get("limit") || "10"), grupoId ? LIMITE_GRUPO : LIMITE_BUSQUEDA)
     const includeZeroStock = searchParams.get("includeZeroStock") === "true"
     const scopeVenta = searchParams.get("scope") === "venta"
     // Resolving the sucursal NAME costs an extra query, and only the POS mount
@@ -140,7 +145,13 @@ export async function GET(request: Request) {
     // falls back to today's exact select. A `grupoId` request returns the members of one group
     // (the POS variants sheet); without the migration no group exists, so it answers empty
     // instead of filtering a column the plain select does not have.
-    const grupoId = searchParams.get("grupoId")?.trim() || ""
+    // Only the variants sheet (a grupoId page) borrows a sibling's photo for a row without one. It is
+    // computed on the server, organization-wide, because the rows of this answer are scoped to one
+    // deposito and a sibling with no stock record there still lends its photo. A typed search and
+    // the barcode lookup never ask for it.
+    const conFotoDeRespaldo = <T extends { id: string }>(filas: T[]): Promise<T[]> =>
+      grupoId ? (adjuntarFotoDeRespaldo(organizationId!, filas as any[]) as Promise<T[]>) : Promise.resolve(filas)
+
     const esGrupoSinMigracion = (select: string) => grupoId !== "" && !select.includes("grupo_id")
 
     if (verTodas || !sucursalId) {
@@ -189,7 +200,7 @@ export async function GET(request: Request) {
         ...camposDeVarianteParaPos(item),
       }))
 
-      return withVentaHeaders(NextResponse.json(formatted))
+      return withVentaHeaders(NextResponse.json(await conFotoDeRespaldo(formatted)))
     }
 
     // Sucursal-scoped: resolve the principal deposito of this sucursal
@@ -257,7 +268,7 @@ export async function GET(request: Request) {
       }
     })
 
-    return withVentaHeaders(NextResponse.json(formatted))
+    return withVentaHeaders(NextResponse.json(await conFotoDeRespaldo(formatted)))
   } catch (error) {
     console.error("Error searching inventario:", error)
     return NextResponse.json(

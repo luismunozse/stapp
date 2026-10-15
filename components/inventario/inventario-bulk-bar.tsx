@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Archive, Tag, Percent, X, Printer, Truck, Trash2 } from "lucide-react"
+import { Archive, Tag, Percent, X, Printer, Truck, Trash2, Layers } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
 import { ExportButton } from "@/components/export/export-button"
 
@@ -23,6 +23,8 @@ interface InventarioBulkBarProps {
   onClear: () => void
   onSuccess: () => void
   onGenerateLabels?: () => void
+  /** Opens the dialog that groups the selected products as variants. Offered with 2 or more selected. */
+  onAgrupar?: () => void
 }
 
 export function InventarioBulkBar({
@@ -33,6 +35,7 @@ export function InventarioBulkBar({
   onClear,
   onSuccess,
   onGenerateLabels,
+  onAgrupar,
 }: InventarioBulkBarProps) {
   const { confirm, showError, showSuccess } = useModal()
   const [pending, setPending] = useState(false)
@@ -202,7 +205,10 @@ export function InventarioBulkBar({
   }
 
   return (
-    <div className="sticky top-0 z-10 flex items-center gap-2 rounded-lg border bg-primary/5 px-4 py-2 shadow-sm">
+    // Below `lg` the fixed mobile header (h-14 + safe-area) covers the top; from `lg` the floating top-right
+    // bar (top-3, ~2.75rem tall, z-40) does. Stick under whichever applies. z-10 keeps popovers/dialogs above.
+    // The background is opaque so the rows scrolling underneath don't show through the bar.
+    <div className="sticky top-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:top-16 z-10 flex items-center gap-2 rounded-lg border bg-card px-4 py-2 shadow-sm">
       <span className="text-sm font-medium">
         {selectedCount} seleccionado{selectedCount === 1 ? "" : "s"}
       </span>
@@ -322,6 +328,14 @@ export function InventarioBulkBar({
           <Button size="sm" variant="outline" onClick={onGenerateLabels} disabled={pending}>
             <Printer className="mr-2 h-4 w-4" />
             Etiquetas
+          </Button>
+        )}
+
+        {/* Agrupar como variantes */}
+        {onAgrupar && selectedCount >= 2 && (
+          <Button size="sm" variant="outline" onClick={onAgrupar} disabled={pending}>
+            <Layers className="mr-2 h-4 w-4" />
+            Agrupar productos existentes como variantes
           </Button>
         )}
 

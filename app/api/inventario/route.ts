@@ -37,6 +37,8 @@ const inventarioSchema = z.object({
   trackeaLotes: z.boolean().optional(),
   trackeaSeries: z.boolean().optional(),
   diasAlertaVencimiento: z.number().int().min(1).max(365).nullable().optional(),
+  // Legacy: accepted and ignored so a client from before the variant groups (a cached
+  // PWA bundle) still saves. It is never written; groups are the only variants now.
   tieneVariantes: z.boolean().optional(),
   esKit: z.boolean().optional(),
   tipoKit: z.enum(["ENSAMBLADO", "VIRTUAL"]).nullable().optional(),
@@ -272,7 +274,6 @@ export async function POST(request: Request) {
       if (data.trackeaLotes !== undefined) insertPayload.trackea_lotes = data.trackeaLotes
       if (data.trackeaSeries !== undefined) insertPayload.trackea_series = data.trackeaSeries
       if (data.diasAlertaVencimiento !== undefined) insertPayload.dias_alerta_vencimiento = data.diasAlertaVencimiento
-      if (data.tieneVariantes !== undefined) insertPayload.tiene_variantes = data.tieneVariantes
       if (data.esKit !== undefined) insertPayload.es_kit = data.esKit
       if (data.tipoKit !== undefined) insertPayload.tipo_kit = data.tipoKit
 
