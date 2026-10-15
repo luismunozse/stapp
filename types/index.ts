@@ -216,6 +216,7 @@ export interface Inventario {
   trackeaLotes?: boolean
   trackeaSeries?: boolean
   diasAlertaVencimiento?: number | null
+  diasGarantiaDefault?: number | null
   tieneVariantes?: boolean
   esKit?: boolean
   tipoKit?: "ENSAMBLADO" | "VIRTUAL" | null

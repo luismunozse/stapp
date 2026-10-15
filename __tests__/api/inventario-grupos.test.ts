@@ -1802,3 +1802,285 @@ describe("DELETE /api/inventario/grupos/[id]: audit entry", () => {
     expect(console.error).toHaveBeenCalled()
   })
 })
+
+// ---- Agrupar existentes: PUT with fuenteCompartidosId (PR10) ---------------------------------
+
+const COMPARTIDOS_SQL = [
+  "categoria",
+  "descripcion",
+  "dias_alerta_vencimiento",
+  "dias_garantia_default",
+  "proveedor",
+  "proveedor_id",
+  "tipo_dispositivo",
+  "trackea_lotes",
+  "trackea_series",
+]
+
+/** Three standalone items of org-1 (one with every shared field filled and loud non-shared columns), a kit and an item of org-2. */
+function sembrarSueltos(tablas: Record<string, Fila[]>) {
+  const suelto = (id: string, color: string, extra: Fila = {}): Fila => ({
+    id,
+    organization_id: "org-1",
+    grupo_id: null,
+    atributos: null,
+    nombre: `Funda X ${color}`,
+    codigo: `PX-${color}`,
+    barcode: `779${id}`,
+    stock: 7,
+    stock_reservado: 0,
+    precio_compra: 300,
+    precio_venta: 900,
+    imagen_url: `https://storage.test/${id}.jpg`,
+    imagen_path: `org-1/${id}/foto.jpg`,
+    categoria: "Fundas",
+    descripcion: "Funda de silicona",
+    tipo_dispositivo: "Celular",
+    proveedor: "Mayorista Sur",
+    proveedor_id: "prov-1",
+    dias_garantia_default: 30,
+    trackea_lotes: false,
+    trackea_series: true,
+    dias_alerta_vencimiento: 15,
+    created_at: "2026-01-01T00:00:00Z",
+    deleted_at: null,
+    ...extra,
+  })
+  tablas.inventario.push(
+    suelto("p1", "Rojo"),
+    suelto("p2", "Azul", { categoria: "Accesorios" }),
+    suelto("p3", "Verde"),
+    suelto("pk", "Kit", { tipo_kit: "VIRTUAL" }),
+    suelto("pa", "Archivada", { deleted_at: "2026-02-01T00:00:00Z" }),
+    { ...suelto("po", "Ajena"), organization_id: "org-2" }
+  )
+}
+
+const OPCIONES_AGRUPAR = [{ nombre: "Color", valores: ["Rojo", "Azul", "Verde"] }]
+const cuerpoAgrupar = (extra: Fila = {}, grupo: Fila = {}) => ({
+  grupo: { nombre: "Funda X", opciones: OPCIONES_AGRUPAR, ...grupo },
+  fuenteCompartidosId: "p1",
+  variantes: [
+    { id: "p1", atributos: ATR("Rojo") },
+    { id: "p2", atributos: ATR("Azul") },
+    { id: "p3", atributos: ATR("Verde") },
+  ],
+  ...extra,
+})
+
+function conSueltos(opciones: OpcionesBase = {}) {
+  const base = instalarBase({}, opciones)
+  sembrarSueltos(base.tablas as unknown as Record<string, Fila[]>)
+  return base
+}
+
+describe("PUT /api/inventario/grupos/[id]: agrupar existentes (fuenteCompartidosId, G2)", () => {
+  it("sends the 9 shared fields of the source and nothing else; joining items go as {id, atributos} only", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { rpcCalls } = conSueltos()
+
+    const { status } = await parseResponse(await putReq(cid(200), cuerpoAgrupar()))
+
+    expect(status).toBe(200)
+    expect(rpcCalls).toHaveLength(1)
+    const { p_compartidos, p_variantes } = rpcCalls[0].args
+    expect(Object.keys(p_compartidos).sort()).toEqual(COMPARTIDOS_SQL)
+    expect(p_compartidos).toStrictEqual({
+      categoria: "Fundas",
+      descripcion: "Funda de silicona",
+      tipo_dispositivo: "Celular",
+      proveedor: "Mayorista Sur",
+      proveedor_id: "prov-1",
+      dias_garantia_default: 30,
+      trackea_lotes: false,
+      trackea_series: true,
+      dias_alerta_vencimiento: 15,
+    })
+    expect(p_variantes).toStrictEqual([
+      { id: "p1", atributos: ATR("Rojo") },
+      { id: "p2", atributos: ATR("Azul") },
+      { id: "p3", atributos: ATR("Verde") },
+    ])
+  })
+
+  it("applies the source's values to every item, leaving stock, codes, prices and photos untouched", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { tablas } = conSueltos()
+    const filas = tablas.inventario as Fila[]
+    const intactas = ["stock", "codigo", "barcode", "precio_venta", "precio_compra", "imagen_url", "imagen_path"]
+    const antes = ["p1", "p2", "p3"].map((id) => Object.fromEntries(intactas.map((k) => [k, filas.find((f) => f.id === id)![k]])))
+
+    await putReq(cid(200), cuerpoAgrupar())
+
+    const despues = ["p1", "p2", "p3"].map((id) => filas.find((f) => f.id === id)!)
+    expect(despues.map((f) => f.categoria)).toEqual(["Fundas", "Fundas", "Fundas"])
+    expect(despues.map((f) => Object.fromEntries(intactas.map((k) => [k, f[k]])))).toEqual(antes)
+    expect(despues.map((f) => f.grupo_id)).toEqual([cid(200), cid(200), cid(200)])
+    expect(despues.map((f) => f.nombre)).toEqual(["Funda X - Rojo", "Funda X - Azul", "Funda X - Verde"])
+  })
+
+  it("reads the source scoped by organization and sends nothing when it is another organization's: 404, RPC not called", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { tablas, log, rpcCalls } = conSueltos()
+    const antes = structuredClone(tablas)
+
+    const { status, body } = await parseResponse(await putReq(cid(200), cuerpoAgrupar({ fuenteCompartidosId: "po" })))
+
+    expect(status).toBe(404)
+    expect(body.code).toBe("NO_ENCONTRADO")
+    expect(rpcCalls).toEqual([])
+    expect(tablas).toEqual(antes)
+    expect(eventos()).toEqual([])
+    const lecturaFuente = log.find((e) => e.tipo === "consulta" && e.tabla === "inventario" && e.filtros.some(([c, v]) => c === "id" && v === "po"))
+    expect(lecturaFuente).toMatchObject({ columnas: "*" })
+    expect((lecturaFuente as { filtros: [string, unknown][] }).filtros).toContainEqual(["organization_id", "org-1"])
+  })
+
+  it.each([
+    ["an archived source", "pa"],
+    ["a source that does not exist", "no-existe"],
+  ])("%s is a 404 and nothing is written", async (_t, fuente) => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { rpcCalls } = conSueltos()
+
+    const { status } = await parseResponse(await putReq(cid(200), cuerpoAgrupar({ fuenteCompartidosId: fuente })))
+
+    expect(status).toBe(404)
+    expect(rpcCalls).toEqual([])
+  })
+
+  it("a source that is not one of the items being grouped is a 400 and nothing is written", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { rpcCalls, tablas } = conSueltos()
+    ;(tablas.inventario as Fila[]).push({ ...(tablas.inventario as Fila[]).find((f) => f.id === "p1")!, id: "p9" })
+
+    const { status, body } = await parseResponse(await putReq(cid(200), cuerpoAgrupar({ fuenteCompartidosId: "p9" })))
+
+    expect(status).toBe(400)
+    expect(body.code).toBe("PAYLOAD_INVALIDO")
+    expect(body.campo).toBe("fuenteCompartidosId")
+    expect(rpcCalls).toEqual([])
+  })
+
+  it("fuenteCompartidosId together with compartidos is a 400 (one source of shared values)", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { rpcCalls, consultas } = conSueltos()
+
+    const { status, body } = await parseResponse(await putReq(cid(200), cuerpoAgrupar({ compartidos: { categoria: "Otra" } })))
+
+    expect(status).toBe(400)
+    expect(body.code).toBe("PAYLOAD_INVALIDO")
+    expect(rpcCalls).toEqual([])
+    expect(consultas).toEqual([])
+  })
+
+  it("a blank fuenteCompartidosId is a 400 before any read", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { rpcCalls, consultas } = conSueltos()
+
+    expect((await putReq(cid(200), cuerpoAgrupar({ fuenteCompartidosId: " " }))).status).toBe(400)
+    expect(rpcCalls).toEqual([])
+    expect(consultas).toEqual([])
+  })
+
+  it("grupo.renombrar false passes through as false and the names stay as they were", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { rpcCalls, tablas } = conSueltos()
+
+    await putReq(cid(200), cuerpoAgrupar({}, { renombrar: false }))
+
+    expect(rpcCalls[0].args.p_grupo).toStrictEqual({ id: cid(200), nombre: "Funda X", opciones: OPCIONES_AGRUPAR, renombrar: false })
+    expect(["p1", "p2", "p3"].map((id) => (tablas.inventario as Fila[]).find((f) => f.id === id)!.nombre)).toEqual([
+      "Funda X Rojo",
+      "Funda X Azul",
+      "Funda X Verde",
+    ])
+  })
+
+  it("an item grouped by someone else meanwhile (P0031) is a 409 with zero events", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { rpcCalls, tablas } = conSueltos({ rpcErrores: [{ code: "P0031", message: "EN_OTRO_GRUPO:p2" }] })
+    const antes = structuredClone(tablas)
+
+    const { status } = await parseResponse(await putReq(cid(200), cuerpoAgrupar()))
+
+    expect(status).toBe(409)
+    expect(rpcCalls).toHaveLength(1)
+    expect(tablas).toEqual(antes)
+    expect(eventos()).toEqual([])
+    expect(revalidateTag).not.toHaveBeenCalled()
+  })
+
+  it("a kit among the items (P0032) is a 422", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    conSueltos({ rpcErrores: [{ code: "P0032", message: "KIT_EN_GRUPO:pk" }] })
+
+    const { status } = await parseResponse(await putReq(cid(200), cuerpoAgrupar()))
+
+    expect(status).toBe(422)
+  })
+
+  it("emits inventario.updated exactly once per changed item (3 items, 3 events) and none for created", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    conSueltos()
+
+    await putReq(cid(200), cuerpoAgrupar())
+
+    expect(eventos().sort()).toEqual([
+      ["inventario.updated", "p1"],
+      ["inventario.updated", "p2"],
+      ["inventario.updated", "p3"],
+    ])
+  })
+
+  it("a retry with the same new group id converges: one group, same values, no further events", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { tablas, rpcCalls } = conSueltos()
+
+    await putReq(cid(200), cuerpoAgrupar())
+    vi.mocked(emitWebhookEvent).mockClear()
+    const { status } = await parseResponse(await putReq(cid(200), cuerpoAgrupar()))
+
+    expect(status).toBe(200)
+    expect(tablas.inventario_grupos.filter((g) => g.id === cid(200))).toHaveLength(1)
+    expect(rpcCalls).toHaveLength(2)
+    expect(rpcCalls[1].args.p_compartidos).toEqual(rpcCalls[0].args.p_compartidos)
+    expect(eventos()).toEqual([])
+  })
+
+  it("a source with null optional fields clears them; a null categoria or tracking flag is left out", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const { rpcCalls, tablas } = conSueltos()
+    Object.assign((tablas.inventario as Fila[]).find((f) => f.id === "p1")!, {
+      descripcion: null,
+      proveedor: null,
+      proveedor_id: null,
+      tipo_dispositivo: null,
+      dias_garantia_default: null,
+      dias_alerta_vencimiento: null,
+      categoria: null,
+      trackea_lotes: null,
+    })
+
+    await putReq(cid(200), cuerpoAgrupar())
+
+    expect(rpcCalls[0].args.p_compartidos).toStrictEqual({
+      descripcion: null,
+      proveedor: null,
+      proveedor_id: null,
+      tipo_dispositivo: null,
+      dias_garantia_default: null,
+      dias_alerta_vencimiento: null,
+      trackea_series: true,
+    })
+  })
+
+  it("a role without cost access never sends precio_compra, with or without a source", async () => {
+    mockAuthSuccess({ role: "VENDEDOR", organizationId: "org-1" })
+    const { rpcCalls, tablas } = conSueltos()
+    tablas.organizations[0].vendedores_administran_inventario = false
+
+    expect((await putReq(cid(200), cuerpoAgrupar())).status).toBe(403)
+    expect(rpcCalls).toEqual([])
+  })
+})
