@@ -167,6 +167,28 @@ export function atributosDe(
   return atributos
 }
 
+export interface SeguimientoQueSeApaga {
+  itemId: string
+  tipo: "series" | "lotes"
+}
+
+/**
+ * Items that track series or lots while the chosen source does not: taking the source's shared fields
+ * turns that tracking off for them. The series and lots already loaded are never touched; the dialog
+ * checks which of these items actually have some and warns.
+ */
+export function seguimientoQueSeApaga(items: readonly ItemAgrupable[], fuenteId: string | null): SeguimientoQueSeApaga[] {
+  const fuente = items.find((i) => i.id === fuenteId)
+  if (!fuente) return []
+  const apagados: SeguimientoQueSeApaga[] = []
+  for (const item of items) {
+    if (item.id === fuente.id) continue
+    if (item.trackeaSeries && !fuente.trackeaSeries) apagados.push({ itemId: item.id, tipo: "series" })
+    if (item.trackeaLotes && !fuente.trackeaLotes) apagados.push({ itemId: item.id, tipo: "lotes" })
+  }
+  return apagados
+}
+
 export interface Problema {
   clave:
     | "sin_opciones"

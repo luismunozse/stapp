@@ -389,3 +389,108 @@ describe("AgruparDialog: saving", () => {
     expect(screen.queryByRole("dialog")).toBeNull()
   })
 })
+
+describe("AgruparDialog: tracking-off warning (VB-3 S2)", () => {
+  const CON_SERIES = item("a1", "Funda X Rojo", { trackeaSeries: true, trackeaLotes: false })
+  const SIN_SERIES = item("a2", "Funda X Azul", { trackeaSeries: false, trackeaLotes: false })
+
+  function responder(respuestas: Record<string, unknown>, fallos: string[] = []) {
+    fetchMock.mockImplementation(async (url: unknown) => {
+      const href = String(url)
+      if (fallos.some((f) => href.includes(f))) return new Response("{}", { status: 500 })
+      const clave = Object.keys(respuestas).find((k) => href.startsWith(k))
+      return new Response(JSON.stringify(clave ? respuestas[clave] : { data: [] }), { status: 200 })
+    })
+  }
+
+  function elegirOrigen(nombre: string) {
+    fireEvent.click(within(screen.getByTestId("datos-distintos")).getByRole("radio", { name: `Usar los datos de ${nombre}` }))
+  }
+
+  it("asks nothing before a source is chosen", async () => {
+    responder({})
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    await act(async () => {})
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("warns when the source turns series tracking off for an item that has series loaded, and keeps them", async () => {
+    responder({ "/api/inventario/a1/series": { data: [{ id: "s1" }, { id: "s2" }] } })
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    elegirOrigen("Funda X Azul")
+
+    const aviso = await screen.findByTestId("aviso-seguimiento")
+    expect(within(aviso).getByText(/Funda X Rojo/)).toBeInTheDocument()
+    expect(aviso.textContent).toMatch(/números de serie/)
+    expect(aviso.textContent).toMatch(/se conservan/i)
+    expect(String(fetchMock.mock.calls[0][0])).toBe("/api/inventario/a1/series?limit=1")
+    // It is a warning: the confirm stays available.
+    expect(confirmar()).toBeEnabled()
+  })
+
+  it("warns about lots too", async () => {
+    responder({ "/api/inventario/a1/lotes": { data: [{ id: "l1" }] } })
+    abrir([item("a1", "Funda X Rojo", { trackeaLotes: true }), item("a2", "Funda X Azul", { trackeaLotes: false })])
+    completar()
+    elegirOrigen("Funda X Azul")
+    const aviso = await screen.findByTestId("aviso-seguimiento")
+    expect(aviso.textContent).toMatch(/lotes/)
+    expect(String(fetchMock.mock.calls[0][0])).toBe("/api/inventario/a1/lotes")
+  })
+
+  it("no warning when the item tracks but has no series loaded", async () => {
+    responder({ "/api/inventario/a1/series": { data: [] } })
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    elegirOrigen("Funda X Azul")
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await act(async () => {})
+    expect(screen.queryByTestId("aviso-seguimiento")).toBeNull()
+  })
+
+  it("no warning, and no request, when the chosen source tracks series too", async () => {
+    responder({})
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    elegirOrigen("Funda X Rojo")
+    await act(async () => {})
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(screen.queryByTestId("aviso-seguimiento")).toBeNull()
+  })
+
+  it("if the check fails it says it could not verify, and does not block", async () => {
+    responder({}, ["/series"])
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    elegirOrigen("Funda X Azul")
+    const aviso = await screen.findByTestId("aviso-seguimiento")
+    expect(aviso.textContent).toMatch(/no pudimos revisar/i)
+    expect(confirmar()).toBeEnabled()
+  })
+
+  it("changing the source re-evaluates the warning", async () => {
+    responder({ "/api/inventario/a1/series": { data: [{ id: "s1" }] } })
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    elegirOrigen("Funda X Azul")
+    await screen.findByTestId("aviso-seguimiento")
+    elegirOrigen("Funda X Rojo")
+    await waitFor(() => expect(screen.queryByTestId("aviso-seguimiento")).toBeNull())
+  })
+
+  it("nothing is written for the series or lots: the save sends no tracking data of its own", async () => {
+    responder({ "/api/inventario/a1/series": { data: [{ id: "s1" }] } })
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    elegirOrigen("Funda X Azul")
+    await screen.findByTestId("aviso-seguimiento")
+    fireEvent.click(confirmar())
+    await waitFor(() => expect(fetchMock.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === "PUT")).toBe(true))
+    const put = fetchMock.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === "PUT")!
+    const cuerpo = JSON.parse((put[1] as RequestInit).body as string)
+    expect(cuerpo.fuenteCompartidosId).toBe("a2")
+    expect(JSON.stringify(cuerpo)).not.toMatch(/serie|lote/i)
+  })
+})

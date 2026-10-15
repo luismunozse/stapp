@@ -4,6 +4,7 @@ import {
   camposQueDifieren,
   construirCuerpoAgrupar,
   motivoDeBloqueo,
+  seguimientoQueSeApaga,
   prefijoComun,
   validarAgrupacion,
   vistaPrevia,
@@ -133,6 +134,38 @@ describe("camposQueDifieren (VB-3)", () => {
 
   it("two providers with the same id but a missing name are the same provider", () => {
     expect(camposQueDifieren([item("a", "A", { proveedorId: "p1", proveedor: "Sur" }), item("b", "B", { proveedorId: "p1", proveedor: null })])).toEqual([])
+  })
+})
+
+describe("seguimientoQueSeApaga (VB-3 S2)", () => {
+  const con = (id: string, extra: Partial<ItemAgrupable>) => item(id, id, extra)
+
+  it("lists the items whose series or lots tracking the source would turn off", () => {
+    const items = [
+      con("a", { trackeaSeries: true, trackeaLotes: true }),
+      con("b", { trackeaSeries: false, trackeaLotes: false }),
+      con("c", { trackeaSeries: true, trackeaLotes: false }),
+    ]
+    expect(seguimientoQueSeApaga(items, "b")).toEqual([
+      { itemId: "a", tipo: "series" },
+      { itemId: "a", tipo: "lotes" },
+      { itemId: "c", tipo: "series" },
+    ])
+  })
+
+  it("nothing when the source tracks at least as much as the item", () => {
+    const items = [con("a", { trackeaSeries: false }), con("b", { trackeaSeries: true, trackeaLotes: true })]
+    expect(seguimientoQueSeApaga(items, "b")).toEqual([])
+  })
+
+  it("nothing without a source, or with a source that is not in the list", () => {
+    const items = [con("a", { trackeaSeries: true }), con("b", {})]
+    expect(seguimientoQueSeApaga(items, null)).toEqual([])
+    expect(seguimientoQueSeApaga(items, "zzz")).toEqual([])
+  })
+
+  it("never lists the source itself", () => {
+    expect(seguimientoQueSeApaga([con("a", { trackeaSeries: true }), con("b", { trackeaSeries: false })], "a")).toEqual([])
   })
 })
 

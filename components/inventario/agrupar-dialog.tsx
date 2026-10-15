@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Package, Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,6 +22,7 @@ import {
   construirCuerpoAgrupar,
   motivoDeBloqueo,
   prefijoComun,
+  seguimientoQueSeApaga,
   TEXTO_MOTIVO,
   validarAgrupacion,
   vistaPrevia,
@@ -50,6 +51,21 @@ interface Props {
 const MENSAJE_RED = "No pudimos agrupar los productos. Revisá la conexión y probá de nuevo"
 const MENSAJE_GENERICO = "No pudimos agrupar los productos. Probá de nuevo"
 const FALTA_FUENTE = "Elegí de qué producto se toman los datos"
+
+type Revision = "con" | "sin" | "error"
+
+/** Does the item have series or lots loaded? One small request per item and kind, only when the source would turn that tracking off. */
+async function revisarSeguimiento(itemId: string, tipo: "series" | "lotes", senal: AbortSignal): Promise<Revision> {
+  try {
+    const url = tipo === "series" ? `/api/inventario/${itemId}/series?limit=1` : `/api/inventario/${itemId}/lotes`
+    const res = await fetch(url, { signal: senal })
+    if (!res.ok) return "error"
+    const cuerpo = await res.json()
+    return Array.isArray(cuerpo?.data) && cuerpo.data.length > 0 ? "con" : "sin"
+  } catch {
+    return "error"
+  }
+}
 
 let contadorOpciones = 0
 const nuevaOpcion = (nombre: string): OpcionAgrupar => ({ id: `opcion-${++contadorOpciones}`, nombre, valores: [] })
@@ -94,6 +110,34 @@ function Contenido({ items: itemsIniciales, onClose, onAgrupado }: Omit<Props, "
   const diferencias = camposQueDifieren(elegibles)
   const fuenteId = elegibles.some((i) => i.id === fuenteElegida) ? fuenteElegida : null
   const faltaFuente = diferencias.length > 0 && fuenteId === null
+
+  const apagados = seguimientoQueSeApaga(elegibles, fuenteId)
+  const claveApagados = apagados.map((a) => `${a.itemId}:${a.tipo}`).join(",")
+  const [revisiones, setRevisiones] = useState<Record<string, Revision>>({})
+  useEffect(() => {
+    const control = new AbortController()
+    for (const { itemId, tipo } of seguimientoQueSeApaga(elegibles, fuenteId)) {
+      const clave = `${itemId}:${tipo}`
+      if (revisiones[clave] !== undefined) continue
+      void revisarSeguimiento(itemId, tipo, control.signal).then((resultado) => {
+        if (!control.signal.aborted) setRevisiones((previas) => ({ ...previas, [clave]: resultado }))
+      })
+    }
+    return () => control.abort()
+    // Re-runs when the set of items at risk changes; the closure reads the lists of that render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claveApagados])
+  const avisosSeguimiento = apagados.flatMap((a) => {
+    const resultado = revisiones[`${a.itemId}:${a.tipo}`]
+    const item = elegibles.find((i) => i.id === a.itemId)
+    if (!item || (resultado !== "con" && resultado !== "error")) return []
+    const que = a.tipo === "series" ? "números de serie" : "lotes"
+    return [
+      resultado === "con"
+        ? { clave: `${a.itemId}:${a.tipo}`, nombre: item.nombre, texto: `tiene ${que} cargados. Al tomar los datos del producto elegido se apaga ese control. Los ${que} que ya cargaste se conservan.` }
+        : { clave: `${a.itemId}:${a.tipo}`, nombre: item.nombre, texto: `no pudimos revisar si tiene ${que} cargados. Si los tiene, se conservan, pero ese control se apaga.` },
+    ]
+  })
 
   const entrada = { base, opciones, items, asignacion }
   const problemas = validarAgrupacion(entrada)
@@ -356,6 +400,19 @@ function Contenido({ items: itemsIniciales, onClose, onAgrupado }: Omit<Props, "
                   </label>
                 ))}
               </div>
+            </section>
+          )}
+
+          {avisosSeguimiento.length > 0 && (
+            <section data-testid="aviso-seguimiento" role="status" className="space-y-1 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
+              <p className="font-medium">Ojo con el control de stock</p>
+              <ul className="space-y-1">
+                {avisosSeguimiento.map((aviso) => (
+                  <li key={aviso.clave}>
+                    <span className="font-medium">{aviso.nombre}</span> {aviso.texto}
+                  </li>
+                ))}
+              </ul>
             </section>
           )}
 
