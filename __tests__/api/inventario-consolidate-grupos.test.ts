@@ -15,7 +15,7 @@ function responder(filas: Record<string, unknown>[], errorEnLaPrimera?: { code: 
   const selects: string[] = []
   vi.mocked(supabaseAdmin.from).mockImplementation((() => {
     const cadena = createChainMock(filas, null)
-    const original = cadena.select
+    const original = cadena.select as unknown as (c: string) => unknown
     let columnas = ""
     cadena.select = vi.fn((c: string) => {
       columnas = c
