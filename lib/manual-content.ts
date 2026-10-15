@@ -295,6 +295,56 @@ export const manualSections: ManualSection[] = [
     ],
   },
   {
+    id: "variantes",
+    title: "Variantes de producto",
+    roles: ["ADMIN"],
+    content: [
+      {
+        subtitle: "Qué son las variantes",
+        body: "Una variante es una versión de un mismo producto: la funda en rojo y en azul, el cargador de 20 W y de 65 W. Cada variante tiene su propio código, su precio, su stock, su código de barras y su foto, y se vende y se descuenta por separado. Lo que es común al producto (categoría, tipo, proveedor, garantía, descripción y seguimiento de series o lotes) se mantiene igual en todas.",
+      },
+      {
+        subtitle: "Crear un producto con variantes",
+        body: "Desde \"Inventario\" > \"Nuevo Item\":",
+        steps: [
+          "Completá el nombre del producto, la categoría y el tipo",
+          "Prendé \"Este producto tiene variantes\"",
+          "Agregá una opción (por ejemplo Color) y sus valores (Rojo, Azul)",
+          "Para cada variante revisá el código, el precio y el stock inicial",
+          "Elegí una foto para cada variante, si querés",
+          "Guardá: se crea un producto por cada combinación, con el nombre armado (por ejemplo \"Funda X - Rojo\")",
+        ],
+        tip: "El precio y el costo base se aplican a las variantes que todavía no tocaste. Si una variante tiene otro precio, escribilo en su fila y no se pisa.",
+      },
+      {
+        subtitle: "Fotos por variante",
+        body: "Cada variante tiene su propia foto, que se sube desde su fila. Si una variante no tiene foto, en la lista de inventario y en el formulario se muestra la foto de otra variante del mismo producto, atenuada y con la leyenda \"Foto de Rojo\" (por ejemplo), para que no la confundas con una propia. Esa foto prestada no se copia: en cuanto subas la de la variante, deja de usarse. Quitar la foto de una variante no toca las de las demás.",
+      },
+      {
+        subtitle: "Agrupar productos que ya tenés",
+        body: "Si ya cargaste varios productos sueltos que en realidad son versiones de uno, podés agruparlos sin perder nada:",
+        steps: [
+          "En la lista de inventario (vista de lista) seleccioná dos o más productos",
+          "Tocá \"Agrupar productos existentes como variantes\"",
+          "Definí las opciones y asigná a cada producto su variante",
+          "Elegí si querés \"Renombrar productos\": vas a ver cómo queda cada nombre antes de confirmar",
+          "Si los productos tienen datos distintos (por ejemplo la categoría), elegí de cuál se toman",
+          "Confirmá",
+        ],
+        tip: "Cada producto conserva su código, su stock, sus precios, su historial y su foto. Si dejás \"Renombrar productos\" sin marcar, los nombres quedan como están.",
+      },
+      {
+        subtitle: "Cambiar o archivar variantes",
+        body: "Abrí cualquiera de las variantes y vas a ver todo el producto. Podés agregar valores, cambiar precios o códigos y quitar una variante: si tiene stock te avisamos cuántas unidades quedan, y se archiva sin perder su historial. Una variante con unidades reservadas no se puede archivar.",
+        seeAlso: ["inventario"],
+      },
+      {
+        subtitle: "Desagrupar",
+        body: "Si apagás \"Este producto tiene variantes\" en un producto ya guardado, te pedimos confirmación y se desagrupa: cada variante sigue existiendo como producto común, con su nombre, su stock, su precio y su foto. No se archiva ni se borra nada.",
+      },
+    ],
+  },
+  {
     id: "ventas",
     title: "Ventas",
     roles: ["ADMIN", "VENDEDOR"],

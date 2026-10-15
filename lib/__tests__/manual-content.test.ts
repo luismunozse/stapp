@@ -20,6 +20,34 @@ describe('manualSections', () => {
     }
   })
 
+  describe('variantes de producto (VF-9)', () => {
+    const seccion = manualSections.find((s) => s.id === 'variantes')
+    const texto = JSON.stringify(seccion?.content ?? [])
+
+    it('existe una sección de variantes que apunta al inventario', () => {
+      expect(seccion).toBeDefined()
+      expect(seccion!.title).toBe('Variantes de producto')
+      expect(texto).toContain('"inventario"')
+    })
+
+    it('explica la foto propia de cada variante y la foto prestada cuando una no tiene', () => {
+      expect(texto).toMatch(/cada variante tiene su propia foto/i)
+      expect(texto).toMatch(/foto de otra variante/i)
+      expect(texto).toMatch(/atenuada|opaca/i)
+    })
+
+    it('explica crear, agrupar productos que ya existen, y desagrupar', () => {
+      expect(texto).toMatch(/este producto tiene variantes/i)
+      expect(texto).toMatch(/Agrupar productos existentes como variantes/)
+      expect(texto).toMatch(/Renombrar productos/)
+      expect(texto).toMatch(/desagrup/i)
+    })
+
+    it('no mezcla jerga interna', () => {
+      expect(texto).not.toMatch(/grupo_id|atributos|RPC|migraci/i)
+    })
+  })
+
   it('es data pura serializable (sin componentes React)', () => {
     expect(() => JSON.stringify(manualSections)).not.toThrow()
   })
