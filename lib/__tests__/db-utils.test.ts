@@ -806,3 +806,24 @@ describe('formatVenta — facturaId from facturas embed', () => {
     expect(result?.items?.[0]?.inventario?.codigo).toBe('C1')
   })
 })
+
+describe('formatInventario: tieneVariantes derives from the group (VL-3)', () => {
+  // The legacy per-product flag (migration 176) is dead: the 7 items that still carry it
+  // are plain standalone products. The only variant signal left is membership of a group.
+  const base = { id: 'i1', codigo: 'C', nombre: 'N', organization_id: 'o' }
+
+  it('is true only for a row that belongs to a group', () => {
+    expect(formatInventario({ ...base, grupo_id: 'g1' })).toHaveProperty('tieneVariantes', true)
+    expect(formatInventario({ ...base, grupo_id: null })).toHaveProperty('tieneVariantes', false)
+  })
+
+  it('ignores the legacy tiene_variantes column in both directions', () => {
+    expect(formatInventario({ ...base, tiene_variantes: true })).toHaveProperty('tieneVariantes', false)
+    expect(formatInventario({ ...base, tiene_variantes: true, grupo_id: null })).toHaveProperty('tieneVariantes', false)
+    expect(formatInventario({ ...base, tiene_variantes: false, grupo_id: 'g1' })).toHaveProperty('tieneVariantes', true)
+  })
+
+  it('a select that never asked for grupo_id reads false (M1 not applied)', () => {
+    expect(formatInventario(base)).toHaveProperty('tieneVariantes', false)
+  })
+})
