@@ -7,9 +7,11 @@ import { SWRConfig } from "swr"
 import { InventarioForm } from "@/components/inventario/inventario-form"
 import type { Inventario } from "@/types"
 
+const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }))
+
 vi.mock("@/contexts/modal-context", () => ({
   useModal: () => ({
-    confirm: vi.fn().mockResolvedValue(true),
+    confirm: confirmMock,
     alert: vi.fn().mockResolvedValue(undefined),
     showSuccess: vi.fn().mockResolvedValue(undefined),
     showError: vi.fn().mockResolvedValue(undefined),
@@ -51,6 +53,7 @@ describe("InventarioForm: Sumar productos existentes", () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    confirmMock.mockResolvedValue(true)
     propsElegir.length = 0
     propsAgrupar.length = 0
     window.localStorage.clear()
@@ -112,6 +115,52 @@ describe("InventarioForm: Sumar productos existentes", () => {
     renderForm({ permiteVariantes: true })
     fireEvent.click(await screen.findByRole("button", { name: "Sumar productos existentes" }))
     expect((await screen.findByTestId("elegir")).getAttribute("data-incluir")).toBe("")
+  })
+
+  describe("unsaved work", () => {
+    const PREGUNTA = "Lo que cargaste en este formulario no se guarda. ¿Seguís?"
+
+    it("a clean form opens the picker directly, without asking", async () => {
+      renderForm({ permiteVariantes: true })
+      fireEvent.click(await screen.findByRole("button", { name: "Sumar productos existentes" }))
+      expect(await screen.findByTestId("elegir")).toBeInTheDocument()
+      expect(confirmMock).not.toHaveBeenCalled()
+    })
+
+    it("a form with typed data asks first, and opens the picker only if the user goes on", async () => {
+      renderForm({ permiteVariantes: true })
+      fireEvent.change(await screen.findByLabelText("Nombre *"), { target: { value: "Funda a medio cargar" } })
+      fireEvent.click(screen.getByRole("button", { name: "Sumar productos existentes" }))
+      await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1))
+      expect(confirmMock.mock.calls[0][0].description).toBe(PREGUNTA)
+      expect(await screen.findByTestId("elegir")).toBeInTheDocument()
+    })
+
+    it("declining keeps the form as it is and does not open the picker", async () => {
+      confirmMock.mockResolvedValue(false)
+      renderForm({ permiteVariantes: true })
+      fireEvent.change(await screen.findByLabelText("Nombre *"), { target: { value: "Funda a medio cargar" } })
+      fireEvent.click(screen.getByRole("button", { name: "Sumar productos existentes" }))
+      await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1))
+      await new Promise((r) => setTimeout(r, 50))
+      expect(screen.queryByTestId("elegir")).toBeNull()
+      expect(screen.getByLabelText("Nombre *")).toHaveValue("Funda a medio cargar")
+    })
+
+    it("a restored draft counts as work too", async () => {
+      window.localStorage.setItem(KEY_ALTA, JSON.stringify({ version: 3, savedAt: Date.now(), data: { values: { nombre: "Borrador", categoria: "Baterías", tipoDispositivo: "CELULAR", stock: 0, precioVenta: 1 }, ui: { showStockConfig: false, showNewTipo: false, newTipo: "", showNewCategoria: false, newCategoria: "", imagenPendiente: false } } }))
+      renderForm({ permiteVariantes: true })
+      await screen.findByText(/se restauró un borrador no guardado/i)
+      fireEvent.click(screen.getByRole("button", { name: "Sumar productos existentes" }))
+      await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1))
+    })
+
+    it("an edited saved product asks as well", async () => {
+      renderForm({ permiteVariantes: true, item: suelto })
+      fireEvent.change(await screen.findByLabelText("Nombre *"), { target: { value: "Funda suelta editada" } })
+      fireEvent.click(screen.getByRole("button", { name: "Sumar productos existentes" }))
+      await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1))
+    })
   })
 
   it("the chosen products open the grouping dialog, and the picker closes", async () => {

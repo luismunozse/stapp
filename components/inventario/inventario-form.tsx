@@ -875,6 +875,24 @@ export function InventarioForm({
     onEditExisting(match.id)
   }
 
+  // Agrupar productos existentes guarda el grupo y cierra este formulario: lo que se estaba cargando aca
+  // no se guarda. Con trabajo sin guardar se avisa antes de abrir el selector (mismo criterio que arriba).
+  const abrirSumarExistentes = async () => {
+    // Sin hasUnsavedWork(): el click en el boton ya cuenta como interaccion para el hook. Un borrador
+    // restaurado que sigue en pantalla si es trabajo (reset() deja isDirty en false).
+    const hayTrabajoSinGuardar = isDirty || pendingFile !== null || draftNoticeVisible
+    if (hayTrabajoSinGuardar) {
+      const confirmado = await confirm({
+        title: "Sumar productos existentes",
+        description: "Lo que cargaste en este formulario no se guarda. ¿Seguís?",
+        confirmText: "Seguir",
+        cancelText: "Volver al formulario",
+      })
+      if (!confirmado) return
+    }
+    setSumando("elegir")
+  }
+
   const handleAddTipo = async () => {
     const nombre = newTipo.trim()
     if (!nombre) return
@@ -1645,7 +1663,7 @@ export function InventarioForm({
               alAjustarStock={() => void variantes.recargar()}
               guardando={loading || variantes.cargando}
               fotos={fotos}
-              alSumarExistentes={item?.grupoId ? undefined : () => setSumando("elegir")}
+              alSumarExistentes={item?.grupoId ? undefined : () => void abrirSumarExistentes()}
             />
           )}
           {permiteVariantes && (
