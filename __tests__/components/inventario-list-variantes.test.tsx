@@ -232,8 +232,11 @@ describe("InventarioList: siblings are not duplicates", () => {
     data = [{ ...ROJO, nombre: "Funda" }, { ...SUELTO, id: "s9", codigo: "S-9", nombre: "Funda", categoria: "Fundas", tieneVariantes: false }]
     renderList()
     await waitFor(() => expect(screen.getAllByText("Funda").length).toBeGreaterThan(0))
-    fireEvent.click(screen.getAllByText("Duplicado")[0])
-    expect(screen.queryByTestId("consolidar")).toBeNull()
+    for (const insignia of screen.getAllByText("Duplicado")) {
+      fireEvent.click(insignia)
+      expect(screen.queryByTestId("consolidar")).toBeNull()
+    }
+    expect(propsConsolidar.some((p) => p.open)).toBe(false)
   })
 
   it("two standalone duplicates still open the consolidation, without any variant in it", async () => {

@@ -454,7 +454,7 @@ describe("AgruparDialog: tracking changes need an acknowledgement (VB-3 S2)", ()
 
     await waitFor(() => expect(casillas()).toHaveLength(1))
     expect(aviso().textContent).toContain("Entiendo que Funda X Rojo deja de controlar series: las ventas van a descontar stock sin marcar series vendidas")
-    expect(aviso().textContent).toMatch(/se conservan/i)
+    expect(aviso().textContent).toContain("Las series que ya cargaste se conservan")
     expect(String(fetchMock.mock.calls[0][0])).toBe("/api/inventario/a1/series?limit=1")
     expect(confirmar()).toBeDisabled()
     fireEvent.click(casillas()[0])
@@ -469,10 +469,32 @@ describe("AgruparDialog: tracking changes need an acknowledgement (VB-3 S2)", ()
     completar()
     elegirOrigen("Funda X Azul")
     await waitFor(() => expect(casillas()).toHaveLength(1))
-    expect(aviso().textContent).toMatch(/deja de controlar lotes/)
+    expect(aviso().textContent).toContain("Entiendo que Funda X Rojo deja de controlar lotes: no vas a ver sus lotes ni sus avisos de vencimiento. Los lotes que ya cargaste se conservan.")
+    // Sales never read lots: the text must not claim they do.
+    expect(aviso().textContent).not.toMatch(/ventas/)
     expect(confirmar()).toBeDisabled()
     fireEvent.click(casillas()[0])
     expect(confirmar()).toBeEnabled()
+  })
+
+  it("lots failed check ('error') needs the checkbox with the accurate effect", async () => {
+    responder({}, ["/lotes"])
+    abrir([item("a1", "Funda X Rojo", { trackeaLotes: true }), item("a2", "Funda X Azul", { trackeaLotes: false })])
+    completar()
+    elegirOrigen("Funda X Azul")
+    await waitFor(() => expect(casillas()).toHaveLength(1))
+    expect(aviso().textContent).toMatch(/no pudimos revisar/i)
+    expect(aviso().textContent).toMatch(/no vas a ver sus lotes ni sus avisos de vencimiento/)
+    expect(aviso().textContent).not.toMatch(/ventas/)
+  })
+
+  it("a failed series check uses the feminine: series cargadas", async () => {
+    responder({}, ["/series"])
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    elegirOrigen("Funda X Azul")
+    await waitFor(() => expect(casillas()).toHaveLength(1))
+    expect(aviso().textContent).toContain("si tiene series cargadas, las ventas no las van a marcar como vendidas")
   })
 
   it("a failed check ('error') needs the checkbox and says it could not verify", async () => {
@@ -504,35 +526,105 @@ describe("AgruparDialog: tracking changes need an acknowledgement (VB-3 S2)", ()
     completar()
     elegirOrigen("Funda X Rojo")
     await waitFor(() => expect(casillas()).toHaveLength(1))
-    expect(aviso().textContent).toContain("Entiendo que Funda X Azul va a pedir series al venderlo")
-    expect(aviso().textContent).toMatch(/no se va a poder vender hasta cargarlos/i)
+    expect(aviso().textContent).toContain("Entiendo que Funda X Azul va a pedir series al venderlo: si no tiene series cargadas")
+    expect(aviso().textContent).toMatch(/no se va a poder vender hasta cargarlas/i)
     expect(fetchMock).not.toHaveBeenCalled()
     expect(confirmar()).toBeDisabled()
     fireEvent.click(casillas()[0])
     expect(confirmar()).toBeEnabled()
   })
 
-  it("lots turned ON need it as well", async () => {
+  it("lots turned ON are informative only: no checkbox, the button stays enabled, and nothing claims sales ask for lots", async () => {
     responder({})
     abrir([item("a1", "Funda X Rojo", { trackeaLotes: true }), item("a2", "Funda X Azul", { trackeaLotes: false })])
     completar()
     elegirOrigen("Funda X Rojo")
-    await waitFor(() => expect(casillas()).toHaveLength(1))
-    expect(aviso().textContent).toMatch(/va a pedir lotes al venderlo/)
+    await waitFor(() => expect(aviso().textContent).toContain("Funda X Azul va a controlar lotes: vas a ver sus lotes y vencimientos."))
+    expect(casillas()).toHaveLength(0)
+    expect(aviso().textContent).not.toMatch(/Entiendo|vender/)
+    expect(confirmar()).toBeEnabled()
   })
 
-  it("both directions at once: every consequence has its own checkbox and all must be ticked", async () => {
+  it("both directions at once: the series OFF needs its checkbox, the lots ON is only a note", async () => {
     responder({ "/api/inventario/a1/series": { data: [{ id: "s1" }] } })
     const a = item("a1", "Funda X Rojo", { trackeaSeries: true, trackeaLotes: false })
     const b = item("a2", "Funda X Azul", { trackeaSeries: false, trackeaLotes: true })
     abrir([a, b])
     completar()
     elegirOrigen("Funda X Azul")
-    await waitFor(() => expect(casillas()).toHaveLength(2))
-    fireEvent.click(casillas()[0])
+    await waitFor(() => expect(casillas()).toHaveLength(1))
+    expect(aviso().textContent).toContain("Funda X Rojo va a controlar lotes")
     expect(confirmar()).toBeDisabled()
-    fireEvent.click(casillas()[1])
+    fireEvent.click(casillas()[0])
     expect(confirmar()).toBeEnabled()
+  })
+
+  it("switching to another source and back requires ticking again", async () => {
+    responder({ "/api/inventario/a1/series": { data: [{ id: "s1" }] } })
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    elegirOrigen("Funda X Azul")
+    await waitFor(() => expect(casillas()).toHaveLength(1))
+    fireEvent.click(casillas()[0])
+    expect(confirmar()).toBeEnabled()
+    elegirOrigen("Funda X Rojo")
+    await waitFor(() => expect(aviso().textContent).toMatch(/va a pedir series/))
+    elegirOrigen("Funda X Azul")
+    await waitFor(() => expect(casillas()).toHaveLength(1))
+    expect(casillas()[0]).not.toBeChecked()
+    expect(confirmar()).toBeDisabled()
+  })
+
+  describe("why the button is off", () => {
+    const quefalta = () => screen.getByLabelText("Qué falta")
+
+    it("while a check is pending it says to wait", async () => {
+      pendiente("/api/inventario/a1/series")
+      abrir([CON_SERIES, SIN_SERIES])
+      completar()
+      elegirOrigen("Funda X Azul")
+      await screen.findByRole("button", { name: "Revisando…" })
+      expect(quefalta().textContent).toContain("Esperá que terminemos de revisar series y lotes")
+    })
+
+    it("with an acknowledgement missing it says to confirm, and the line goes away once ticked", async () => {
+      responder({ "/api/inventario/a1/series": { data: [{ id: "s1" }] } })
+      abrir([CON_SERIES, SIN_SERIES])
+      completar()
+      elegirOrigen("Funda X Azul")
+      await waitFor(() => expect(casillas()).toHaveLength(1))
+      expect(quefalta().textContent).toContain("Confirmá los cambios de series y lotes")
+      fireEvent.click(casillas()[0])
+      expect(screen.queryByLabelText("Qué falta")).toBeNull()
+    })
+  })
+
+  describe("a check that never answers", () => {
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => vi.useRealTimers())
+
+    it("after 8 seconds it counts as 'error': the button leaves 'Revisando…' and asks for the checkbox", async () => {
+      fetchMock.mockImplementation((url: unknown) =>
+        String(url).includes("/series") ? new Promise<Response>(() => {}) : Promise.resolve(new Response("{}", { status: 200 }))
+      )
+      abrir([CON_SERIES, SIN_SERIES])
+      completar()
+      elegirOrigen("Funda X Azul")
+      expect(screen.getByRole("button", { name: "Revisando…" })).toBeDisabled()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(7_900)
+      })
+      expect(screen.getByRole("button", { name: "Revisando…" })).toBeDisabled()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200)
+      })
+      expect(screen.queryByRole("button", { name: "Revisando…" })).toBeNull()
+      expect(casillas()).toHaveLength(1)
+      expect(aviso().textContent).toMatch(/no pudimos revisar/i)
+      expect(confirmar()).toBeDisabled()
+      fireEvent.click(casillas()[0])
+      expect(confirmar()).toBeEnabled()
+    })
   })
 
   it("changing the source re-evaluates: a new set of consequences needs its own acknowledgement", async () => {

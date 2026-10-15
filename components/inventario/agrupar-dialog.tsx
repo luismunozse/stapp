@@ -56,39 +56,70 @@ const FALTA_FUENTE = "Elegí de qué producto se toman los datos"
 
 type Revision = "con" | "sin" | "error"
 
+/** A check that does not answer in this time counts as failed: the button must never wait forever. */
+const PLAZO_REVISION_MS = 8_000
+
 /** Does the item have series or lots loaded? One small request per item and kind, only when the source would turn that tracking off. */
 async function revisarSeguimiento(itemId: string, tipo: "series" | "lotes", senal: AbortSignal): Promise<Revision> {
+  const propio = new AbortController()
+  const alAbortar = () => propio.abort()
+  senal.addEventListener("abort", alAbortar)
+  let temporizador: ReturnType<typeof setTimeout> | undefined
+  const vencido = new Promise<Revision>((resolver) => {
+    temporizador = setTimeout(() => {
+      propio.abort()
+      resolver("error")
+    }, PLAZO_REVISION_MS)
+  })
+  const consulta = (async (): Promise<Revision> => {
+    try {
+      const url = tipo === "series" ? `/api/inventario/${itemId}/series?limit=1` : `/api/inventario/${itemId}/lotes`
+      const res = await fetch(url, { signal: propio.signal })
+      if (!res.ok) return "error"
+      const cuerpo = await res.json()
+      return Array.isArray(cuerpo?.data) && cuerpo.data.length > 0 ? "con" : "sin"
+    } catch {
+      return "error"
+    }
+  })()
   try {
-    const url = tipo === "series" ? `/api/inventario/${itemId}/series?limit=1` : `/api/inventario/${itemId}/lotes`
-    const res = await fetch(url, { signal: senal })
-    if (!res.ok) return "error"
-    const cuerpo = await res.json()
-    return Array.isArray(cuerpo?.data) && cuerpo.data.length > 0 ? "con" : "sin"
-  } catch {
-    return "error"
+    return await Promise.race([consulta, vencido])
+  } finally {
+    clearTimeout(temporizador)
+    senal.removeEventListener("abort", alAbortar)
   }
 }
 
 interface RiesgoDeSeguimiento {
   clave: string
   texto: string
+  /** true = needs its own "Entiendo" checkbox; false = an informative note. */
+  requiere: boolean
 }
 
-const nombreDeSeguimiento = (tipo: "series" | "lotes") => (tipo === "series" ? "series" : "lotes")
+// Only SERIES gate a sale (a product that tracks them asks for serial numbers at the register). Lots are
+// never read by a sale: they show in the lots screen and drive the expiry alerts. The copy says only that.
 
 function textoDeApagado(nombre: string, tipo: "series" | "lotes", resultado: "con" | "error"): string {
-  const que = nombreDeSeguimiento(tipo)
-  if (resultado === "error") {
-    return `Entiendo que ${nombre} deja de controlar ${que} y que, si tiene ${que} cargados, las ventas no los van a marcar como vendidos (no pudimos revisar si tiene).`
+  if (tipo === "series") {
+    return resultado === "error"
+      ? `Entiendo que ${nombre} deja de controlar series y que, si tiene series cargadas, las ventas no las van a marcar como vendidas (no pudimos revisar si tiene).`
+      : `Entiendo que ${nombre} deja de controlar series: las ventas van a descontar stock sin marcar series vendidas. Las series que ya cargaste se conservan.`
   }
-  return tipo === "series"
-    ? `Entiendo que ${nombre} deja de controlar series: las ventas van a descontar stock sin marcar series vendidas. Los números de serie que ya cargaste se conservan.`
-    : `Entiendo que ${nombre} deja de controlar lotes: las ventas van a descontar stock sin tocar los lotes. Los lotes que ya cargaste se conservan.`
+  return resultado === "error"
+    ? `Entiendo que ${nombre} deja de controlar lotes (no pudimos revisar si tiene lotes cargados): no vas a ver sus lotes ni sus avisos de vencimiento. Si tiene lotes cargados, se conservan.`
+    : `Entiendo que ${nombre} deja de controlar lotes: no vas a ver sus lotes ni sus avisos de vencimiento. Los lotes que ya cargaste se conservan.`
 }
 
-function textoDePrendido(nombre: string, tipo: "series" | "lotes"): string {
-  const que = nombreDeSeguimiento(tipo)
-  return `Entiendo que ${nombre} va a pedir ${que} al venderlo: si no tiene ${que} cargados, no se va a poder vender hasta cargarlos.`
+function riesgoDePrendido(clave: string, nombre: string, tipo: "series" | "lotes"): RiesgoDeSeguimiento {
+  if (tipo === "series") {
+    return {
+      clave,
+      requiere: true,
+      texto: `Entiendo que ${nombre} va a pedir series al venderlo: si no tiene series cargadas, no se va a poder vender hasta cargarlas.`,
+    }
+  }
+  return { clave, requiere: false, texto: `${nombre} va a controlar lotes: vas a ver sus lotes y vencimientos.` }
 }
 
 let contadorOpciones = 0
@@ -162,20 +193,22 @@ function Contenido({ items: itemsIniciales, onClose, onAgrupado }: Omit<Props, "
       const resultado = revisiones[`${a.itemId}:${a.tipo}`]
       const item = elegibles.find((i) => i.id === a.itemId)
       if (!item || (resultado !== "con" && resultado !== "error")) return []
-      return [{ clave: `${fuenteId}:${a.itemId}:${a.tipo}:apaga`, texto: textoDeApagado(item.nombre, a.tipo, resultado) }]
+      return [{ clave: `${fuenteId}:${a.itemId}:${a.tipo}:apaga`, requiere: true, texto: textoDeApagado(item.nombre, a.tipo, resultado) }]
     }),
     ...seguimientoQueSePrende(elegibles, fuenteId).flatMap((a): RiesgoDeSeguimiento[] => {
       const item = elegibles.find((i) => i.id === a.itemId)
-      return item ? [{ clave: `${fuenteId}:${a.itemId}:${a.tipo}:prende`, texto: textoDePrendido(item.nombre, a.tipo) }] : []
+      return item ? [riesgoDePrendido(`${fuenteId}:${a.itemId}:${a.tipo}:prende`, item.nombre, a.tipo)] : []
     }),
   ]
-  const faltaReconocer = riesgos.some((r) => !reconocidos.has(r.clave))
+  const faltaReconocer = riesgos.some((r) => r.requiere && !reconocidos.has(r.clave))
 
   const entrada = { base, opciones, items, asignacion }
   const problemas = validarAgrupacion(entrada)
   const mensajes = [...new Set(problemas.map((p) => p.mensaje))]
   if (faltaFuente) mensajes.push(FALTA_FUENTE)
-  const listo = mensajes.length === 0 && !guardando && !revisando && !faltaReconocer
+  if (revisando) mensajes.push("Esperá que terminemos de revisar series y lotes")
+  else if (faltaReconocer) mensajes.push("Confirmá los cambios de series y lotes")
+  const listo = mensajes.length === 0 && !guardando
 
   const cambiarOpcion = (id: string, cambio: Partial<OpcionAgrupar>) =>
     setOpciones((previas) => previas.map((o) => (o.id === id ? { ...o, ...cambio } : o)))
@@ -426,7 +459,11 @@ function Contenido({ items: itemsIniciales, onClose, onAgrupado }: Omit<Props, "
                       name="agrupar-fuente"
                       aria-label={`Usar los datos de ${item.nombre}`}
                       checked={fuenteId === item.id}
-                      onChange={() => setFuenteElegida(item.id)}
+                      onChange={() => {
+                        // What was acknowledged was about the previous source: every acknowledgement starts over.
+                        setReconocidos(new Set())
+                        setFuenteElegida(item.id)
+                      }}
                     />
                     Usar los datos de {item.nombre}
                   </label>
@@ -434,7 +471,10 @@ function Contenido({ items: itemsIniciales, onClose, onAgrupado }: Omit<Props, "
               </div>
               {/* A live region that exists before its content, so what appears in it is announced. */}
               <div data-testid="aviso-seguimiento" role="status" aria-live="polite" className={riesgos.length > 0 ? "space-y-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm" : undefined}>
-                {riesgos.map((riesgo) => (
+                {riesgos.map((riesgo) =>
+                  !riesgo.requiere ? (
+                    <p key={riesgo.clave}>{riesgo.texto}</p>
+                  ) : (
                   <label key={riesgo.clave} className="flex min-h-11 cursor-pointer items-start gap-3">
                     <input
                       type="checkbox"
@@ -451,7 +491,8 @@ function Contenido({ items: itemsIniciales, onClose, onAgrupado }: Omit<Props, "
                     />
                     <span>{riesgo.texto}</span>
                   </label>
-                ))}
+                  )
+                )}
               </div>
             </section>
           )}

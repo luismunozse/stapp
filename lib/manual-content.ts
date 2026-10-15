@@ -331,7 +331,7 @@ export const manualSections: ManualSection[] = [
           "Si los productos tienen datos distintos (por ejemplo la categoría), elegí de cuál se toman",
           "Confirmá",
         ],
-        tip: "Cada producto conserva su código, su stock, sus precios, su historial y su foto. Si dejás \"Renombrar productos\" sin marcar, los nombres quedan como están. Todos toman los datos del producto que elijas, incluido el control de series y de lotes: si eso cambia algo para alguno (deja de controlar series, o empieza a pedirlas al vender), el diálogo te avisa y tenés que marcar \"Entiendo\" para seguir. Los números de serie y los lotes ya cargados no se borran.",
+        tip: "Cada producto conserva su código, su stock, sus precios, su historial y su foto. Si dejás \"Renombrar productos\" sin marcar, los nombres quedan como están. Todos toman los datos del producto que elijas, incluido el control de series y de lotes: si eso cambia algo para alguno, el diálogo te avisa. Si un producto deja de controlar series o empieza a pedir series al vender, tenés que marcar \"Entiendo\" para seguir; lo mismo si deja de controlar lotes, porque ya no vas a ver sus lotes y los avisos de vencimiento. Las series y los lotes ya cargados no se borran.",
       },
       {
         subtitle: "Agrupar desde el formulario (también en el celular)",

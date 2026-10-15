@@ -53,6 +53,10 @@ describe('manualSections', () => {
       expect(texto).toMatch(/del producto que elijas/i)
       expect(texto).toMatch(/te avisa|te avisamos/i)
       expect(texto).toMatch(/Entiendo/)
+      // Only series gate a sale: lots do not.
+      expect(texto).toMatch(/empieza a pedir series al vender/i)
+      expect(texto).not.toMatch(/pedirlas/)
+      expect(texto).toMatch(/lotes y los avisos de vencimiento/i)
     })
 
     it('no mezcla jerga interna', () => {
