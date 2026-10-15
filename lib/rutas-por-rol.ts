@@ -23,6 +23,11 @@ const RUTAS_ADMIN = [
   "/emails",
   "/facturacion",
   "/finanzas",
+  // Listado de notas de credito: solo ADMIN hasta que el PR7 lo pase a
+  // RUTAS_VENDEDOR para el vendedor con `vendedores_emiten_notas_credito`.
+  // El bloque de NC del detalle de una venta u orden no pasa por aca: lo ve
+  // quien ve la operacion.
+  "/notas-credito",
 ]
 
 /**

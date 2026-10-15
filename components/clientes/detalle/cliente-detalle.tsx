@@ -16,6 +16,7 @@ import { ClienteOrdenesPendientes } from "./cliente-ordenes-pendientes"
 import { ClienteOrdenesHistorial } from "./cliente-ordenes-historial"
 import { ClienteCotizaciones } from "./cliente-cotizaciones"
 import { ClienteSectores } from "./cliente-sectores"
+import { ClienteNotasCreditoLink } from "./cliente-notas-credito-link"
 import type { Cliente } from "@/types"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -94,11 +95,14 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Cuenta corriente</CardTitle>
-            {canReparacionesExpress && (
-              <Button variant="outline" size="sm" onClick={() => setShowExpress(true)} className="gap-1.5">
-                <Wrench className="h-4 w-4" /> Cargar reparaciones
-              </Button>
-            )}
+            <div className="flex flex-wrap gap-2">
+              <ClienteNotasCreditoLink clienteId={clienteId} />
+              {canReparacionesExpress && (
+                <Button variant="outline" size="sm" onClick={() => setShowExpress(true)} className="gap-1.5">
+                  <Wrench className="h-4 w-4" /> Cargar reparaciones
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             <CuentaCorrientePanel cliente={cliente} onDeposito={() => mutateCC()} />

@@ -121,10 +121,19 @@ export async function GET(request: Request) {
       .order("fecha", { ascending: false })
       .order("id", { ascending: false })
       .range(offset, offset + filtros.limit - 1)
-    if (dbError) throw dbError
 
-    const filas = await leerFilasNC((data ?? []) as unknown as FilaVistaNC[], organizationId!)
-    const total = count ?? 0
+    // PGRST103: la página pedida está más allá de la última. No es una falla:
+    // se responde vacía con el total real (una consulta mínima solo para contar).
+    let filasVista = (data ?? []) as unknown as FilaVistaNC[]
+    let total = count ?? 0
+    if (dbError) {
+      if ((dbError as { code?: string }).code !== "PGRST103") throw dbError
+      const { count: totalReal } = await q.range(0, 0)
+      filasVista = []
+      total = totalReal ?? 0
+    }
+
+    const filas = await leerFilasNC(filasVista, organizationId!)
 
     return NextResponse.json({
       data: filas,

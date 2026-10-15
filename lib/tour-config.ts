@@ -114,6 +114,16 @@ export const tourSteps: DriveStep[] = [
     },
   },
   {
+    element: "#nav-notas-credito",
+    popover: {
+      title: "Notas de crédito",
+      description:
+        "Todas las devoluciones y créditos de ventas y órdenes en un solo lugar, para encontrarlos y reimprimirlos.",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
     element: "#nav-reportes",
     popover: {
       title: "Reportes",
