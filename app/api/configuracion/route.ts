@@ -6,6 +6,7 @@ import { COUNTRIES, getIvaGeneral } from "@/lib/countries"
 import { resolveTerminologia, sanitizeTerminologia } from "@/lib/terminologia"
 import { isMissingColumnError } from "@/lib/db-errors"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { normalizeOrdenPapel, parseOrdenPapel } from "@/lib/orden-papel"
 
 // GET - Obtener configuraciÃ³n (solo ADMIN)
 export async function GET() {
@@ -93,12 +94,25 @@ export async function GET() {
     // 42703 would knock down every step and the cascade would bottom out at the
     // minimal fallback, serving a gutted config.
     const posVariantesSelect = `${ingresosSelect}, pos_agrupa_variantes`
+    // Paper size of the printed order (migration orden_formato_papel). Its own step on
+    // top of everything, for the same reason as the ones below: inside baseSelect its 42703
+    // would knock down every step and the cascade would bottom out at the minimal fallback.
+    const ordenPapelSelect = `${posVariantesSelect}, orden_formato_papel`
 
     let result = await supabaseAdmin
       .from("organizations")
-      .select(posVariantesSelect)
+      .select(ordenPapelSelect)
       .eq("id", organizationId!)
       .single()
+
+    if (isMissingColumnError(result.error)) {
+      // Paper-size migration not applied yet: retry without it, keeping everything else.
+      result = await supabaseAdmin
+        .from("organizations")
+        .select(posVariantesSelect)
+        .eq("id", organizationId!)
+        .single()
+    }
 
     if (isMissingColumnError(result.error)) {
       // M3 not applied yet: retry without the POS variants preference,
@@ -242,6 +256,7 @@ export async function GET() {
       tecnicosCobranCotizaciones: !!organization.tecnicos_cobran_cotizaciones,
       vendedoresVenIngresos: organization.vendedores_ven_ingresos !== false,
       posAgrupaVariantes: organization.pos_agrupa_variantes !== false,
+      ordenFormatoPapel: normalizeOrdenPapel(organization.orden_formato_papel),
       ivaRegimen: organization.iva_regimen ?? "EXENTO",
       ivaTasa: organization.iva_tasa ?? getIvaGeneral(organization.pais),
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
@@ -281,7 +296,7 @@ export async function PUT(request: Request) {
         { status: 413 }
       )
     }
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, tecnicosCobranCotizaciones, vendedoresVenIngresos, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada, ingresosBrutos, inicioActividades, posAgrupaVariantes } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, tecnicosCobranCotizaciones, vendedoresVenIngresos, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias, facturacionElectronicaHabilitada, ingresosBrutos, inicioActividades, posAgrupaVariantes, ordenFormatoPapel } = body
 
     const updateData: Record<string, any> = {}
 
@@ -442,6 +457,13 @@ export async function PUT(request: Request) {
       updateData.pos_agrupa_variantes = !!posAgrupaVariantes
     }
 
+    // Only a valid size is written: the column has a CHECK, and anything else (a typo, a
+    // size we do not support) is dropped so the stored value stays.
+    const papel = parseOrdenPapel(ordenFormatoPapel)
+    if (papel) {
+      updateData.orden_formato_papel = papel
+    }
+
     if (ivaRegimen !== undefined) {
       const validRegimen = ["EXENTO", "INCLUIDO", "ADITIVO"]
       if (validRegimen.includes(ivaRegimen)) {
@@ -564,6 +586,8 @@ export async function PUT(request: Request) {
     // like the ones above: the lower steps are built on `selectCols`, so a
     // column put there would travel in ALL of them.
     const selectColsPosVariantes = selectColsIngresos + ", pos_agrupa_variantes"
+    // Paper size of the printed order. Its own step on top of everything, like the ones above.
+    const selectColsOrdenPapel = selectColsPosVariantes + ", orden_formato_papel"
 
     // Solo actualizar si hay cambios
     if (Object.keys(updateData).length === 0) {
@@ -574,9 +598,17 @@ export async function PUT(request: Request) {
       // estuvieran cargados en la DB.
       let { data, error: selectError } = await supabaseAdmin
         .from("organizations")
-        .select(selectColsPosVariantes)
+        .select(selectColsOrdenPapel)
         .eq("id", organizationId!)
         .single()
+      if (isMissingColumnError(selectError)) {
+        // Paper-size migration not applied: retry without it.
+        ;({ data, error: selectError } = await supabaseAdmin
+          .from("organizations")
+          .select(selectColsPosVariantes)
+          .eq("id", organizationId!)
+          .single())
+      }
       if (isMissingColumnError(selectError)) {
         // M3 not applied: retry without the POS variants preference.
         ;({ data, error: selectError } = await supabaseAdmin
@@ -679,6 +711,7 @@ export async function PUT(request: Request) {
         tecnicosCobranCotizaciones: !!org?.tecnicos_cobran_cotizaciones,
         vendedoresVenIngresos: org?.vendedores_ven_ingresos !== false,
         posAgrupaVariantes: org?.pos_agrupa_variantes !== false,
+        ordenFormatoPapel: normalizeOrdenPapel(org?.orden_formato_papel),
         ivaRegimen: org?.iva_regimen ?? "EXENTO",
         ivaTasa: org?.iva_tasa ?? getIvaGeneral(org?.pais),
         redondeoEfectivo: org?.redondeo_efectivo ?? 0,
@@ -702,8 +735,20 @@ export async function PUT(request: Request) {
       .from("organizations")
       .update(updateData)
       .eq("id", organizationId!)
-      .select(selectColsPosVariantes)
+      .select(selectColsOrdenPapel)
       .single()
+
+    if (isMissingColumnError(result2.error)) {
+      // Paper-size migration not applied yet: retry without the key, keeping the rest of
+      // updateData.
+      delete updateData.orden_formato_papel
+      result2 = await supabaseAdmin
+        .from("organizations")
+        .update(updateData)
+        .eq("id", organizationId!)
+        .select(selectColsPosVariantes)
+        .single() as any
+    }
 
     if (isMissingColumnError(result2.error)) {
       // M3 not applied yet: retry without the POS variants preference, keeping
@@ -839,6 +884,8 @@ export async function PUT(request: Request) {
       delete updateData.vendedores_ven_ingresos
       // Strip POS variants grouping preference (M3) in case it doesn't exist yet
       delete updateData.pos_agrupa_variantes
+      // Strip the order paper size in case it doesn't exist yet
+      delete updateData.orden_formato_papel
       // Strip facturacion electronica flag (migration 296) in case it doesn't exist yet
       delete updateData.facturacion_electronica_habilitada
       const selectColsNoFiscal = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda"
@@ -888,6 +935,7 @@ export async function PUT(request: Request) {
       tecnicosCobranCotizaciones: !!organization.tecnicos_cobran_cotizaciones,
       vendedoresVenIngresos: organization.vendedores_ven_ingresos !== false,
       posAgrupaVariantes: organization.pos_agrupa_variantes !== false,
+      ordenFormatoPapel: normalizeOrdenPapel(organization.orden_formato_papel),
       ivaRegimen: organization.iva_regimen ?? "EXENTO",
       ivaTasa: organization.iva_tasa ?? getIvaGeneral(organization.pais),
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,

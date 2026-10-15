@@ -25,10 +25,10 @@ export const ORDEN_PAGE_POINTS: Record<OrdenPapel, readonly [number, number]> = 
 }
 
 /** What the user can pick. Labels are screen copy, in the voice of the app. */
-export const ORDEN_PAPEL_OPCIONES: ReadonlyArray<{ value: OrdenPapel; label: string; hint: string }> = [
-  { value: "A4", label: "A4 (hoja entera)", hint: "La orden completa, con la parte del cliente y el talón del taller." },
-  { value: "A5", label: "A5 (media hoja)", hint: "Una columna, letra más grande. Entra en media hoja A4." },
-  { value: "A6", label: "A6 (un cuarto de hoja)", hint: "Una columna, pensada para hojas chicas. Es un cuarto de A4." },
+export const ORDEN_PAPEL_OPCIONES: ReadonlyArray<{ value: OrdenPapel; label: string }> = [
+  { value: "A4", label: "A4 (hoja entera)" },
+  { value: "A5", label: "A5 (media hoja)" },
+  { value: "A6", label: "A6 (un cuarto de hoja)" },
 ]
 
 /** Strict parse of what a client sends: the size, or null when it is not a valid one. */

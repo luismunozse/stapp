@@ -110,16 +110,19 @@ describe("/api/configuracion — permiso de cobro de cotizaciones para técnicos
     expect(status).toBe(200)
     expect(body.tecnicosCobranCotizaciones).toBe(false)
 
-    // Cuatro intentos: M3 (variantes en el POS), 326 (ingresos) y este flag
-    // tienen cada uno su escalón y el cuarto ya acierta. Más de cuatro
-    // significa que arrastró a otra migración con él. Se afirma QUÉ SELECT
-    // llevó cada intento, no solo cuántos hubo: M3 es posterior, así que en
-    // cualquier estado donde este flag falta, su escalón de arriba falla antes.
-    expect(chain.single).toHaveBeenCalledTimes(4)
+    // Cinco intentos: el tamaño de hoja de la orden, M3 (variantes en el POS),
+    // 326 (ingresos) y este flag tienen cada uno su escalón y el quinto ya
+    // acierta. Más de cinco significa que arrastró a otra migración con él. Se
+    // afirma QUÉ SELECT llevó cada intento, no solo cuántos hubo: las otras son
+    // posteriores, así que en cualquier estado donde este flag falta, sus
+    // escalones de arriba fallan antes.
+    expect(chain.single).toHaveBeenCalledTimes(5)
     const selects = chain.select.mock.calls.map((c: any[]) => c[0] as string)
-    expect(selects[0]).toContain("pos_agrupa_variantes")
-    expect(selects.filter((s) => s.includes("pos_agrupa_variantes"))).toHaveLength(1)
-    expect(selects[3]).not.toContain("tecnicos_cobran_cotizaciones")
+    expect(selects[0]).toContain("orden_formato_papel")
+    expect(selects.filter((s) => s.includes("orden_formato_papel"))).toHaveLength(1)
+    expect(selects[1]).toContain("pos_agrupa_variantes")
+    expect(selects.filter((s) => s.includes("pos_agrupa_variantes"))).toHaveLength(2)
+    expect(selects[4]).not.toContain("tecnicos_cobran_cotizaciones")
 
     // Y nada de lo que sí existe se perdió en el camino.
     expect(body.tecnicosOperanPos).toBe(true)
