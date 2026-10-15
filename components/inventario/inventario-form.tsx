@@ -21,6 +21,13 @@ import { ignoreSelectEcho } from "@/lib/radix-select-echo"
 import useSWR from "swr"
 import { useModal } from "@/contexts/modal-context"
 import { useFormDraft, fingerprintRecord } from "@/hooks/use-form-draft"
+import { archivosConStock, filasEnOrden, stockTotal, type VarianteLeida } from "@/lib/variantes-filas"
+import type { CompartidosForm } from "@/lib/variantes-guardado"
+import { VariantesSection } from "@/components/inventario/variantes/variantes-section"
+import { PromoverDialog } from "@/components/inventario/variantes/promover-dialog"
+import { useFotosVariantes } from "@/components/inventario/variantes/use-fotos-variantes"
+import { useVariantesForm } from "@/components/inventario/variantes/use-variantes-form"
+import { validezDeVariantes } from "@/components/inventario/variantes/vista"
 
 interface ProveedorLite {
   id: string
@@ -87,7 +94,6 @@ const inventarioSchema = z.object({
   diasGarantiaDefault: z.number().int().min(0).nullable().optional(),
   trackeaLotes: z.boolean().optional(),
   trackeaSeries: z.boolean().optional(),
-  tieneVariantes: z.boolean().optional(),
   esKit: z.boolean().optional(),
   tipoKit: z.enum(["ENSAMBLADO", "VIRTUAL"]).nullable().optional(),
 })
@@ -129,7 +135,6 @@ function inventarioFormDefaults(
         ubicacion: item.ubicacion ?? null,
         trackeaLotes: item.trackeaLotes ?? false,
         trackeaSeries: item.trackeaSeries ?? false,
-        tieneVariantes: item.tieneVariantes ?? false,
         esKit: item.esKit ?? false,
         tipoKit: item.tipoKit ?? null,
       }
@@ -150,7 +155,6 @@ function inventarioFormDefaults(
         depositoId: null,
         trackeaLotes: false,
         trackeaSeries: false,
-        tieneVariantes: false,
         esKit: false,
         tipoKit: null,
       }
@@ -254,6 +258,39 @@ const categoriasPorTipo: Record<string, string[]> = {
   TODOS: ["Pantallas", "Baterías", "Fundas", "Teclados", "Memorias", "Cargadores", "Otros"],
 }
 
+/** The fields every variant of a group shares, as the form holds them. */
+function compartidosDe(values: InventarioFormData | InventarioDraftValues): CompartidosForm {
+  return {
+    categoria: values.categoria,
+    tipoDispositivo: values.tipoDispositivo,
+    proveedorId: values.proveedorId ?? null,
+    diasGarantiaDefault: values.diasGarantiaDefault ?? null,
+    trackeaLotes: !!values.trackeaLotes,
+    trackeaSeries: !!values.trackeaSeries,
+  }
+}
+
+/** The standalone product that becomes one of the variants, as the reducer wants it. */
+function itemPromovido(item: Inventario): VarianteLeida {
+  return {
+    id: item.id,
+    atributos: null,
+    codigo: item.codigo,
+    barcode: item.barcode ?? null,
+    precioVenta: item.precioVenta,
+    precioCompra: item.precioCompra ?? undefined,
+    stock: item.stock,
+    stockReservado: item.stockReservado ?? 0,
+    stockMinimo: item.stockMinimo ?? null,
+    stockMaximo: item.stockMaximo ?? null,
+    puntoReorden: item.puntoReorden ?? null,
+    ubicacion: item.ubicacion ?? null,
+    imagenUrl: item.imagenUrl ?? null,
+  }
+}
+
+const textoDeFotos = (n: number) => (n === 1 ? "No se pudo subir 1 foto." : `No se pudieron subir ${n} fotos.`)
+
 export interface ItemGuardado {
   id: string
   codigo: string
@@ -276,6 +313,11 @@ interface InventarioFormProps {
   // Disparado al pedir editar un duplicado detectado. El padre debe cargar
   // ese item y reabrir el form en modo edición.
   onEditExisting?: (id: string) => void
+  /**
+   * Muestra la sección "Variantes". Apagado por defecto: sólo la lista de inventario lo
+   * prende, y recién cuando la función se abre a los clientes.
+   */
+  permiteVariantes?: boolean
 }
 
 export function InventarioForm({
@@ -284,6 +326,7 @@ export function InventarioForm({
   onClose,
   onSuccess,
   onEditExisting,
+  permiteVariantes = false,
 }: InventarioFormProps) {
   const { showError, showWarning, confirm } = useModal()
   const { tipos: tiposDispositivo, loading: tiposLoading, error: tiposError, refetch: refetchTipos } = useTiposDispositivo({ incluirTodos: true })
@@ -333,18 +376,63 @@ export function InventarioForm({
   const categoria = watch("categoria")
   const tipoDispositivo = watch("tipoDispositivo")
 
-  // Depósito del stock inicial (solo alta). Se muestra con 2+ depósitos activos;
-  // con uno solo no hay nada que elegir y el servidor usa el principal.
+  // ¿La fuente expuso el costo de este item? Un item nuevo no tiene costo
+  // previo que proteger, así que su 0 es un valor real. Un item cargado con
+  // `precioCompra: null` llega sin costo porque el rol no puede verlo.
+  //
+  // Manda sobre el input y sobre el payload a la vez: si no se muestra, no se
+  // manda (ver onSubmit). Antes vivía sólo en onSubmit, y el input se pintaba
+  // igual sembrado en 0 — un costo inventado a la vista del operador.
+  const costoCargado = !item || (item.precioCompra !== null && item.precioCompra !== undefined)
+
+  // --- Variantes -------------------------------------------------------------
+  //
+  // El estado vive en el formulario (no en la sección: se desmonta al plegarla) y los
+  // archivos de las fotos viven en su hook, fuera del estado y del borrador. Con
+  // `permiteVariantes` apagado nada de esto se ve ni se llama.
+  const precioVentaActual = Number(watch("precioVenta"))
+  const precioCompraActual = Number(watch("precioCompra"))
+  const esKitActual = !!watch("esKit")
+  const fotos = useFotosVariantes()
+  const guardadoEnSesion = useRef(false)
+  const variantes = useVariantesForm({
+    permite: permiteVariantes,
+    item,
+    costoCargado,
+    codigoBase: item?.codigo ?? generatedCode,
+    precioBase: precioVentaActual,
+    costoBase: costoCargado ? precioCompraActual : 0,
+    esKit: esKitActual,
+    // Opening a variant: the product's name is the group's base name, not the variant's.
+    alHidratar: (lectura) => {
+      setValue("nombre", lectura.grupo.nombre)
+      compartidosGuardados.current =
+        item && !guardadoEnSesion.current ? compartidosDe(inventarioFormDefaults(item)) : compartidosDe(getValues())
+    },
+  })
+  const variantesActivo = permiteVariantes && variantes.estado.activo
+  const validezVariantes = variantesActivo ? validezDeVariantes(variantes.estado) : null
+  const [promoviendo, setPromoviendo] = useState(false)
+  const [guardarTrasPromover, setGuardarTrasPromover] = useState(false)
+  /** Lo que valían los campos compartidos al leer el grupo (o al guardarlo): lo que no cambió no se manda. */
+  const compartidosGuardados = useRef<CompartidosForm | null>(null)
+  const filasNuevasConStock = variantesActivo
+    ? filasEnOrden(variantes.estado).some((f) => !f.archivar && !f.existente && f.stockInicial > 0)
+    : false
+
+  // Depósito del stock inicial (solo alta, o filas nuevas de un grupo). Se muestra con 2+
+  // depósitos activos; con uno solo no hay nada que elegir y el servidor usa el principal.
   const { data: depositos = [] } = useSWR<DepositoLite[]>(
-    item ? null : "/api/depositos",
+    // With the feature off nothing changes: only a new product needs them.
+    (permiteVariantes ? item && !item.grupoId && !variantesActivo : !!item) ? null : "/api/depositos",
     depositosFetcher,
     { revalidateOnFocus: false }
   )
   const depositosActivos = depositos.filter((d) => d.activo !== false)
-  const mostrarDeposito = !item && depositosActivos.length >= 2
+  const mostrarDeposito = variantesActivo ? depositosActivos.length >= 2 && filasNuevasConStock : !item && depositosActivos.length >= 2
   const depositoElegido = watch("depositoId")
   const stockActual = Number(watch("stock"))
-  const hayStockInicial = Number.isFinite(stockActual) && stockActual > 0
+  const hayStockInicial = variantesActivo ? filasNuevasConStock : Number.isFinite(stockActual) && stockActual > 0
   // El valor mostrado se deriva: lo elegido si todavía existe y está activo
   // (un borrador viejo puede apuntar a uno que ya no), si no el principal. Así
   // no hay un setValue asíncrono sobre un Select ya montado.
@@ -355,16 +443,6 @@ export function InventarioForm({
   /** Lo que viaja al servidor: nada si no se muestra el Select o no hay stock. */
   const depositoAEnviar = (stock: number) =>
     mostrarDeposito && depositoEfectivo && stock > 0 ? { depositoId: depositoEfectivo } : {}
-
-
-  // ¿La fuente expuso el costo de este item? Un item nuevo no tiene costo
-  // previo que proteger, así que su 0 es un valor real. Un item cargado con
-  // `precioCompra: null` llega sin costo porque el rol no puede verlo.
-  //
-  // Manda sobre el input y sobre el payload a la vez: si no se muestra, no se
-  // manda (ver onSubmit). Antes vivía sólo en onSubmit, y el input se pintaba
-  // igual sembrado en 0 — un costo inventado a la vista del operador.
-  const costoCargado = !item || (item.precioCompra !== null && item.precioCompra !== undefined)
 
   // --- Borrador local (useFormDraft) ----------------------------------------
   //
@@ -634,7 +712,8 @@ export function InventarioForm({
   // son filtros opcionales que acotan si están presentes.
   const nombre = watch("nombre")
   const checkDuplicates = useCallback(async () => {
-    if (item) return
+    // Editing a variant also looks for duplicates, but never against itself or its siblings.
+    if (item && !(permiteVariantes && item.grupoId)) return
     const trimmed = (nombre || "").trim()
     if (trimmed.length < 2) {
       setDuplicates([])
@@ -644,12 +723,16 @@ export function InventarioForm({
       const params = new URLSearchParams({ nombre: trimmed })
       if (tipoDispositivo) params.set("tipo", tipoDispositivo)
       if (categoria) params.set("categoria", categoria)
+      if (item) {
+        params.set("excludeId", item.id)
+        if (item.grupoId) params.set("excludeGrupoId", item.grupoId)
+      }
       const res = await fetch(`/api/inventario/check-duplicate?${params}`)
       if (!res.ok) return
       const data = await res.json()
       setDuplicates(data.matches || [])
     } catch { /* network error */ }
-  }, [nombre, tipoDispositivo, categoria, item])
+  }, [nombre, tipoDispositivo, categoria, item, permiteVariantes])
 
   // Si el usuario sigue escribiendo tras ver el aviso, limpiamos el warning
   // para evitar mostrar matches desactualizados.
@@ -890,9 +973,129 @@ export function InventarioForm({
     }
   }
 
+  // Guardar queda trabado mientras se lee el grupo, si no se pudo leer, o si lo que hay en pantalla no se puede guardar.
+  const bloqueadoPorVariantes =
+    permiteVariantes &&
+    (variantes.cargando || (!!item?.grupoId && !variantes.agrupado) || (validezVariantes !== null && !validezVariantes.valida))
+
+  // Al confirmar la combinación del producto promovido, el guardado sigue donde había quedado.
+  useEffect(() => {
+    if (!guardarTrasPromover) return
+    setGuardarTrasPromover(false)
+    if (variantes.estado.promocionId) formRef.current?.requestSubmit()
+  }, [guardarTrasPromover, variantes.estado.promocionId])
+
+  /** Cerrar con fotos de variantes sin subir se pierde: se pregunta antes. */
+  const cerrar = async () => {
+    if (permiteVariantes && fotos.idsConFotoPendiente().length > 0) {
+      const confirmado = await confirm({
+        title: "Hay fotos sin subir",
+        description: "Si cerrás ahora, las fotos de las variantes que todavía no se subieron se pierden.",
+        confirmText: "Cerrar igual",
+        cancelText: "Seguir acá",
+      })
+      if (!confirmado) return
+    }
+    onClose()
+  }
+
+  /** Apagar las variantes de un grupo guardado: cada variante queda como un producto suelto. */
+  const desagruparGrupo = async () => {
+    const confirmado = await confirm({
+      title: "Desagrupar las variantes",
+      description:
+        "Cada variante queda como un producto suelto, con su stock, su precio y su foto. No se borra nada. Los otros cambios de esta pantalla no se guardan.",
+      confirmText: "Desagrupar",
+      cancelText: "Seguir editando",
+    })
+    if (!confirmado) return
+    const resultado = await variantes.desagrupar()
+    if (!resultado.ok) {
+      await showError(resultado.mensaje)
+      return
+    }
+    clearDraft()
+    onSuccess({ id: item?.id ?? "", codigo: item?.codigo ?? "", nombre: item?.nombre ?? "", precioCompra: null })
+  }
+
+  /** Guardar con variantes prendidas: un solo PUT del grupo, después las fotos por variante. */
+  const guardarVariantes = async (data: InventarioFormData) => {
+    // Un producto suelto que pasa a ser una variante: primero se pregunta cuál, y recién después se guarda.
+    // Once the group exists (saved in this session) there is nothing left to promote.
+    if (item && !item.grupoId && !variantes.estado.promocionId && !guardadoEnSesion.current) {
+      setPromoviendo(true)
+      return
+    }
+    const conStock = archivosConStock(variantes.estado)
+    if (conStock.length > 0) {
+      const detalle = conStock.map((a) => `${a.etiqueta} (${a.stock})`).join(", ")
+      const confirmado = await confirm({
+        title: "Archivar variantes con stock",
+        description: `Se van a archivar: ${detalle}. El stock se conserva y, si volvés a agregar la combinación, se restaura.`,
+        confirmText: "Archivar y guardar",
+        cancelText: "Volver",
+      })
+      if (!confirmado) return
+    }
+
+    // La foto del producto pasa a la variante que lo representa: el producto promovido o la primera.
+    if (pendingFile) {
+      const destino = variantes.estado.promocionId ?? filasEnOrden(variantes.estado).find((f) => !f.archivar)?.id
+      if (destino && !fotos.de(destino).pendiente) {
+        const elegida = await fotos.elegir(destino, pendingFile)
+        if (elegida.ok) {
+          setPendingFile(null)
+          setImagenPreview(null)
+        }
+      }
+    }
+
+    const compartidos = compartidosDe(data)
+    const salida = await variantes.guardar({
+      nombre: data.nombre,
+      compartidos,
+      compartidosPrevios: compartidosGuardados.current,
+      depositoId: mostrarDeposito && depositoEfectivo && filasNuevasConStock ? depositoEfectivo : null,
+    })
+    if (salida.tipo !== "guardado") {
+      const mensaje = salida.tipo === "pendiente" ? "Variantes todavía no está disponible. No se guardó nada." : salida.mensaje
+      await showError(mensaje)
+      return
+    }
+
+    // Ya está guardado: de acá en más un "Guardar" repite el mismo grupo y las mismas filas.
+    guardadoEnSesion.current = true
+    compartidosGuardados.current = compartidos
+    const filas = filasEnOrden(variantes.estado)
+    const { fallidas } = await fotos.subirTodas(filas.map((f) => ({ id: f.id, imagenUrl: f.imagenUrl, archivar: f.archivar })))
+    if (fallidas.length > 0) {
+      // Los datos ya están guardados, así que el borrador no sirve más; el formulario sigue abierto para reintentar las fotos.
+      clearDraft()
+      const releido = await variantes.recargar()
+      if (!releido) {
+        await showError(`Se guardó el producto, pero ${textoDeFotos(fallidas.length).toLowerCase()} Además, no pudimos volver a leer las variantes: cerrá y volvé a abrir el producto.`)
+        return
+      }
+      await showWarning(`Se guardó el producto. ${textoDeFotos(fallidas.length)}`)
+      return
+    }
+
+    clearDraft()
+    const principal = (variantes.estado.promocionId ? variantes.estado.filas[variantes.estado.promocionId] : undefined) ?? filas.find((f) => !f.archivar)
+    onSuccess({
+      id: principal?.id ?? "",
+      codigo: principal?.codigo ?? "",
+      nombre: data.nombre,
+      precioCompra: null,
+    })
+  }
+
   const onSubmit = async (data: InventarioFormData) => {
     setLoading(true)
     try {
+      if (variantesActivo) return await guardarVariantes(data)
+      if (permiteVariantes && variantes.agrupado) return await desagruparGrupo()
+
       const url = item ? `/api/inventario/${item.id}` : "/api/inventario"
       const method = item ? "PUT" : "POST"
 
@@ -1003,7 +1206,7 @@ export function InventarioForm({
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <CardTitle>{item ? "Editar Item" : "Nuevo Item"}</CardTitle>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <Button variant="ghost" size="icon" onClick={cerrar}>
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -1034,7 +1237,8 @@ export function InventarioForm({
 
           {/* Fila con imagen + nombre */}
           <div className="flex gap-4 items-start">
-            <div className="shrink-0">
+            {/* Con variantes la foto es de cada variante (ver la sección), no del producto. */}
+            {!variantesActivo && <div className="shrink-0">
               <Label className="mb-1 block">Imagen</Label>
               <div className="relative h-24 w-24 rounded-lg border-2 border-dashed border-border bg-muted/30 overflow-hidden flex items-center justify-center group">
                 {imagenPreview ? (
@@ -1076,7 +1280,7 @@ export function InventarioForm({
                 <ImagePlus className="h-3 w-3" />
                 {imagenPreview ? "Cambiar" : "Subir foto"}
               </button>
-            </div>
+            </div>}
             <div className="flex-1">
               <Label htmlFor="nombre">Nombre *</Label>
               <Input
@@ -1093,7 +1297,7 @@ export function InventarioForm({
             </div>
           </div>
 
-          {!item && duplicates.length > 0 && (
+          {duplicates.length > 0 && (!item || (permiteVariantes && item.grupoId)) && (
             <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
               <div className="flex items-start gap-2 text-sm">
                 <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
@@ -1122,21 +1326,23 @@ export function InventarioForm({
                       </div>
                     </div>
                     <div className="flex gap-1.5 shrink-0">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="default"
-                        className="h-8 gap-1"
-                        onClick={() => handleConsolidate(match)}
-                        disabled={consolidating !== null}
-                      >
-                        {consolidating === match.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <PlusCircle className="h-3.5 w-3.5" />
-                        )}
-                        Sumar stock
-                      </Button>
+                      {!item && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="default"
+                          className="h-8 gap-1"
+                          onClick={() => handleConsolidate(match)}
+                          disabled={consolidating !== null}
+                        >
+                          {consolidating === match.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <PlusCircle className="h-3.5 w-3.5" />
+                          )}
+                          Sumar stock
+                        </Button>
+                      )}
                       {onEditExisting && (
                         <Button
                           type="button"
@@ -1317,25 +1523,34 @@ export function InventarioForm({
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <Label htmlFor="stock">Stock *</Label>
-              <Input
-                id="stock"
-                type="text"
-                inputMode="numeric"
-                {...register("stock", { valueAsNumber: true })}
-                min={0}
-              />
-              {errors.stock && (
-                <p className="text-sm text-destructive mt-1">
-                  {errors.stock.message}
-                </p>
+              {variantesActivo ? (
+                <>
+                  <Label htmlFor="stock-total">Stock total</Label>
+                  <Input id="stock-total" type="text" readOnly value={stockTotal(variantes.estado)} className="bg-muted/40" />
+                </>
+              ) : (
+                <>
+                  <Label htmlFor="stock">Stock *</Label>
+                  <Input
+                    id="stock"
+                    type="text"
+                    inputMode="numeric"
+                    {...register("stock", { valueAsNumber: true })}
+                    min={0}
+                  />
+                  {errors.stock && (
+                    <p className="text-sm text-destructive mt-1">
+                      {errors.stock.message}
+                    </p>
+                  )}
+                </>
               )}
             </div>
 
             <div>
               {costoCargado ? (
                 <>
-                  <Label htmlFor="precioCompra">Costo *</Label>
+                  <Label htmlFor="precioCompra">{variantesActivo ? "Costo base" : "Costo *"}</Label>
                   <Input
                     id="precioCompra"
                     type="text"
@@ -1366,7 +1581,7 @@ export function InventarioForm({
             </div>
 
             <div>
-              <Label htmlFor="precioVenta">Precio Venta *</Label>
+              <Label htmlFor="precioVenta">{variantesActivo ? "Precio base" : "Precio Venta *"}</Label>
               <Input
                 id="precioVenta"
                 type="text"
@@ -1383,6 +1598,30 @@ export function InventarioForm({
               )}
             </div>
           </div>
+
+          {permiteVariantes && (
+            <VariantesSection
+              estado={variantes.estado}
+              dispatch={variantes.dispatch}
+              motivoDeshabilitado={variantes.motivoDeshabilitado}
+              alAjustarStock={() => void variantes.recargar()}
+              guardando={loading || variantes.cargando}
+              fotos={fotos}
+            />
+          )}
+          {permiteVariantes && item && !item.grupoId && (
+            <PromoverDialog
+              open={promoviendo}
+              item={{ id: item.id, nombre: item.nombre, stock: item.stock }}
+              estado={variantes.estado}
+              alConfirmar={(filaId) => {
+                setPromoviendo(false)
+                variantes.dispatch({ tipo: "promover", item: itemPromovido(item), filaId })
+                setGuardarTrasPromover(true)
+              }}
+              alCancelar={() => setPromoviendo(false)}
+            />
+          )}
 
           {/* Proveedor */}
           <div>
@@ -1411,8 +1650,8 @@ export function InventarioForm({
             </Select>
           </div>
 
-          {/* Stock thresholds (collapsible) */}
-          <div>
+          {/* Stock thresholds (collapsible). Con variantes cada una trae los suyos. */}
+          {!variantesActivo && <div>
             <button
               type="button"
               className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -1464,7 +1703,7 @@ export function InventarioForm({
                 </div>
               </div>
             )}
-          </div>
+          </div>}
 
           {mostrarDeposito && (
             <div className="space-y-1.5">
@@ -1495,7 +1734,7 @@ export function InventarioForm({
             </div>
           )}
 
-          <div className="space-y-1.5">
+          {!variantesActivo && <div className="space-y-1.5">
             <Label htmlFor="ubicacion" className="flex items-center gap-1.5 text-sm font-medium">
               <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
               Ubicación en depósito
@@ -1514,9 +1753,9 @@ export function InventarioForm({
             {errors.ubicacion && (
               <p className="text-sm text-destructive">{errors.ubicacion.message}</p>
             )}
-          </div>
+          </div>}
 
-          <div>
+          {!variantesActivo && <div>
             <Label htmlFor="barcode">Código de Barras</Label>
             <Input
               id="barcode"
@@ -1570,7 +1809,7 @@ export function InventarioForm({
               }
               return null
             })()}
-          </div>
+          </div>}
 
           {/* Warranty default */}
           <div>
@@ -1627,23 +1866,13 @@ export function InventarioForm({
               </label>
               <label className="flex items-center justify-between gap-3 p-2 rounded hover:bg-muted/30 cursor-pointer">
                 <div>
-                  <div className="text-sm">Tiene variantes</div>
-                  <div className="text-[11px] text-muted-foreground">Color/talle/capacidad con stock + precio + barcode propios.</div>
-                </div>
-                <input
-                  type="checkbox"
-                  className="h-4 w-4"
-                  {...register("tieneVariantes")}
-                />
-              </label>
-              <label className="flex items-center justify-between gap-3 p-2 rounded hover:bg-muted/30 cursor-pointer">
-                <div>
                   <div className="text-sm">Es kit / combo</div>
                   <div className="text-[11px] text-muted-foreground">Item compuesto por N componentes con cantidades.</div>
                 </div>
                 <input
                   type="checkbox"
                   className="h-4 w-4"
+                  disabled={variantesActivo}
                   {...register("esKit")}
                 />
               </label>
@@ -1668,10 +1897,10 @@ export function InventarioForm({
           </details>
 
           <FormActionBar className="pt-2">
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={cerrar}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading || uploadingImage || (!item && !generatedCode)}>
+            <Button type="submit" disabled={loading || uploadingImage || (!item && !generatedCode) || bloqueadoPorVariantes}>
               {uploadingImage ? "Subiendo imagen..." : loading ? "Guardando..." : "Guardar"}
             </Button>
           </FormActionBar>
