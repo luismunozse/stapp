@@ -413,6 +413,14 @@ describe("camposDeVarianteParaPos (additive POS fields of a search row)", () => 
     })
   })
 
+  it("adds the own photo (null when empty) to a grouped row read with imagen_url, and no key without it", () => {
+    expect(camposDeVarianteParaPos({ grupo_id: "g-1", atributos, imagen_url: "https://img.test/a.jpg" })).toMatchObject({ imagenUrl: "https://img.test/a.jpg" })
+    expect(camposDeVarianteParaPos({ grupo_id: "g-1", atributos, imagen_url: null })).toHaveProperty("imagenUrl", null)
+    expect(camposDeVarianteParaPos({ grupo_id: "g-1", atributos })).not.toHaveProperty("imagenUrl")
+    // A standalone row never gets it, even when the photo column was read.
+    expect(camposDeVarianteParaPos({ grupo_id: null, imagen_url: "https://img.test/a.jpg" })).toEqual({})
+  })
+
   it("adds nothing at all to a standalone row, or to a row read without the variant columns", () => {
     expect(camposDeVarianteParaPos({ grupo_id: null, atributos: null, grupo: null })).toEqual({})
     expect(camposDeVarianteParaPos({})).toEqual({})

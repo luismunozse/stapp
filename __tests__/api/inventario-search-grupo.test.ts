@@ -20,7 +20,13 @@ const SELECT_VERTODAS_ACTUAL =
   "id, codigo, nombre, stock, stock_reservado, precio_venta, precio_compra, trackea_series, dias_garantia_default"
 const SELECT_DEPOSITO_ACTUAL =
   "id, codigo, nombre, precio_venta, precio_compra, trackea_series, dias_garantia_default, inventario_depositos!inner(stock, stock_reservado, deposito_id)"
-const COLUMNAS_VARIANTE = "grupo_id, atributos, grupo:inventario_grupos(nombre)"
+const COLUMNAS_VARIANTE = "grupo_id, atributos, imagen_url, grupo:inventario_grupos(nombre)"
+// The group's options, in the order the sheet lists the combinations (Rojo first).
+const OPCIONES_G1 = [
+  { nombre: "Color", valores: ["Rojo", "Azul", "Verde"] },
+  { nombre: "Talle", valores: ["M"] },
+]
+const SELECT_HERMANAS = "id, grupo_id, atributos, imagen_url"
 const SELECT_VERTODAS_CON_GRUPO = `${SELECT_VERTODAS_ACTUAL}, ${COLUMNAS_VARIANTE}`
 const SELECT_DEPOSITO_CON_GRUPO = `${SELECT_DEPOSITO_ACTUAL}, ${COLUMNAS_VARIANTE}`
 
@@ -37,6 +43,7 @@ const fila = (id: string, extra: Record<string, unknown> = {}) => ({
   precio_compra: 60,
   trackea_series: false,
   dias_garantia_default: null,
+  imagen_url: null,
   deleted_at: null,
   grupo_id: null,
   atributos: null,
@@ -59,6 +66,7 @@ const rojo = fila("rojo", {
     { opcion: "Talle", valor: "M" },
   ],
   stock: 0,
+  imagen_url: "https://img.test/rojo.jpg", // the only photo of the group
   depositos: [], // no stock record in the selling deposito
 })
 const verde = fila("verde", {
@@ -90,6 +98,8 @@ interface Intento {
   gt: [string, unknown][]
   or: string[]
   limit: number | null
+  in: [string, unknown[]][]
+  notNull: string[]
 }
 
 function separarColumnas(select: string): string[] {
@@ -108,15 +118,19 @@ function separarColumnas(select: string): string[] {
   return salida
 }
 
-function fakeInventario(opts: { m1Aplicada: boolean; error?: { code: string; message: string }; filas?: Record<string, any>[] }) {
-  const intentos: Intento[] = []
+function fakeInventario(opts: { m1Aplicada: boolean; error?: { code: string; message: string }; filas?: Record<string, any>[]; errorGrupos?: boolean }) {
+  const intentos: Intento[] = [] // the search queries
+  const hermanas: Intento[] = [] // the sibling-photo lookups of the fallback helper
+  const tablasLeidas: string[] = []
   const error = opts.error ?? { code: "42703", message: AUSENTE[0][1] }
   const filas: Record<string, any>[] = opts.filas ?? TODAS
 
   const api = () => {
-    const intento: Intento = { select: "", eq: [], is: [], gt: [], or: [], limit: null }
+    const intento: Intento = { select: "", eq: [], is: [], gt: [], or: [], limit: null, in: [], notNull: [] }
     const q: any = {
-      select: (columnas: string) => ((intento.select = columnas), intentos.push(intento), q),
+      select: (columnas: string) => ((intento.select = columnas), (columnas === SELECT_HERMANAS ? hermanas : intentos).push(intento), q),
+      in: (c: string, v: unknown[]) => (intento.in.push([c, v]), q),
+      not: (c: string, op: string, v: unknown) => (op === "is" && v === null ? intento.notNull.push(c) : undefined, q),
       eq: (c: string, v: unknown) => (intento.eq.push([c, v]), q),
       is: (c: string, v: unknown) => (intento.is.push([c, v]), q),
       gt: (c: string, v: unknown) => (intento.gt.push([c, v]), q),
@@ -136,6 +150,8 @@ function fakeInventario(opts: { m1Aplicada: boolean; error?: { code: string; mes
             if (f[c] !== v) return false
           }
           if (!intento.is.every(([c, v]) => (f[c] ?? null) === v)) return false
+          if (!intento.in.every(([c, vs]) => vs.includes(f[c]))) return false
+          if (!intento.notNull.every((c) => (f[c] ?? null) !== null)) return false
           for (const [c, v] of intento.gt) {
             const valor = c === "inventario_depositos.stock" ? f.depositos.find((d: any) => d.deposito_id === depositoPedido)?.stock : f[c]
             if (!(valor > (v as number))) return false
@@ -173,12 +189,20 @@ function fakeInventario(opts: { m1Aplicada: boolean; error?: { code: string; mes
   depositos.maybeSingle = vi.fn().mockResolvedValue({ data: { id: "dep-1" }, error: null })
 
   vi.mocked(supabaseAdmin.from).mockImplementation(((tabla: string) => {
+    tablasLeidas.push(tabla)
     if (tabla === "inventario") return api()
+    if (tabla === "inventario_grupos") {
+      const g: any = {}
+      for (const m of ["select", "eq", "in"]) g[m] = vi.fn().mockReturnValue(g)
+      g.then = (resolve: any, reject?: any) =>
+        Promise.resolve(opts.errorGrupos ? { data: null, error: { message: "boom" } } : { data: [{ id: "g-1", opciones: OPCIONES_G1 }], error: null }).then(resolve, reject)
+      return g
+    }
     if (tabla === "sucursales") return sucursales
     if (tabla === "depositos") return depositos
     throw new Error(`unexpected table ${tabla}`)
   }) as any)
-  return { intentos }
+  return { intentos, hermanas, tablasLeidas }
 }
 
 const BUSCAR = "http://localhost:3000/api/inventario/search"
@@ -291,5 +315,109 @@ describe("GET /api/inventario/search: variant fields and the grupoId filter", ()
     expect(ids(body)).not.toContain("rojo")
     // And the stock is the deposito's, not the aggregate.
     expect(body.find((r: any) => r.id === "azul")).toMatchObject({ stock: 5, stockReservado: 1 })
+  })
+})
+
+// PR13: the variants sheet (grupoId mode) gets the borrowed photo and a bigger page; every other
+// search stays as it was.
+describe("GET /api/inventario/search: sheet data (photo fallback, cap 100)", () => {
+  const variantes = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      fila(`v-${i}`, { nombre: `Variante ${i}`, grupo_id: "g-1", atributos: [{ opcion: "Color", valor: `C${i}` }] })
+    )
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetCacheResolucionVenta()
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(cookies).mockResolvedValue({ get: vi.fn(() => undefined), set: vi.fn() } as any)
+  })
+
+  it("lends Rojo's photo to Azul even though Rojo has no stock record in the selling deposito", async () => {
+    const { hermanas } = fakeInventario({ m1Aplicada: true })
+
+    const { status, body } = await buscar("q=&grupoId=g-1&includeZeroStock=true&scope=venta")
+
+    expect(status).toBe(200)
+    // Rojo is not a row of this answer (no stock record in dep-1), yet it still lends its photo.
+    expect(ids(body)).toEqual(["azul", "verde"])
+    const porId = Object.fromEntries(body.map((r: any) => [r.id, r]))
+    expect(porId.azul.imagenRespaldo).toEqual({ url: "https://img.test/rojo.jpg", etiqueta: "Rojo / M" })
+    expect(porId.verde.imagenRespaldo).toEqual({ url: "https://img.test/rojo.jpg", etiqueta: "Rojo / M" })
+    expect(porId.azul.imagenUrl).toBeNull()
+    // One organization-wide lookup for the whole page, not one per row.
+    expect(hermanas).toHaveLength(1)
+    expect(hermanas[0].in).toEqual([["grupo_id", ["g-1"]]])
+    expect(hermanas[0].eq).toContainEqual(["organization_id", "org-1"])
+  })
+
+  it("a row with its own photo keeps it and borrows nothing", async () => {
+    const conFoto = [
+      fila("azul", { nombre: "Funda X - Azul", grupo_id: "g-1", atributos: [{ opcion: "Color", valor: "Azul" }], imagen_url: "https://img.test/azul.jpg" }),
+    ]
+    const { hermanas, tablasLeidas } = fakeInventario({ m1Aplicada: true, filas: conFoto })
+
+    const { body } = await buscar("q=&grupoId=g-1&includeZeroStock=true")
+
+    expect(body).toHaveLength(1)
+    expect(body[0].imagenUrl).toBe("https://img.test/azul.jpg")
+    expect(body[0]).not.toHaveProperty("imagenRespaldo")
+    // Every row has its own photo: zero extra queries.
+    expect(hermanas).toHaveLength(0)
+    expect(tablasLeidas).not.toContain("inventario_grupos")
+  })
+
+  it("returns 200 without imagenRespaldo when the fallback lookup fails", async () => {
+    fakeInventario({ m1Aplicada: true, errorGrupos: true })
+    const aviso = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const { status, body } = await buscar("q=&grupoId=g-1&includeZeroStock=true")
+    aviso.mockRestore()
+
+    expect(status).toBe(200)
+    expect(ids(body)).toEqual(["azul", "rojo", "verde"])
+    for (const r of body) expect(r).not.toHaveProperty("imagenRespaldo")
+  })
+
+  it("lets a group page reach 100 rows while a typed search stays capped at 50", async () => {
+    const { intentos } = fakeInventario({ m1Aplicada: true, filas: variantes(120) })
+
+    const grupo = await buscar("q=&grupoId=g-1&includeZeroStock=true&limit=500")
+    const escrito = await buscar("q=variante&includeZeroStock=true&limit=500")
+
+    expect(grupo.body).toHaveLength(100)
+    expect(escrito.body).toHaveLength(50)
+    expect(intentos.map((i) => i.limit)).toEqual([100, 50])
+  })
+
+  it("returns a whole 80-variant group with limit=100", async () => {
+    fakeInventario({ m1Aplicada: true, filas: variantes(80) })
+    const { body } = await buscar("q=&grupoId=g-1&includeZeroStock=true&limit=100")
+    expect(body).toHaveLength(80)
+  })
+
+  it("a typed search never computes the fallback but still tells each variant its own photo", async () => {
+    const { hermanas, tablasLeidas } = fakeInventario({ m1Aplicada: true })
+
+    const { body } = await buscar("q=funda&includeZeroStock=true")
+
+    const porId = Object.fromEntries(body.map((r: any) => [r.id, r]))
+    expect(porId.rojo.imagenUrl).toBe("https://img.test/rojo.jpg")
+    expect(porId.azul).toHaveProperty("imagenUrl", null)
+    expect(porId.azul).not.toHaveProperty("imagenRespaldo")
+    expect(hermanas).toHaveLength(0)
+    expect(tablasLeidas).not.toContain("inventario_grupos")
+  })
+
+  it("a standalone row never carries imagenUrl, and the select without the migration never names imagen_url", async () => {
+    const { intentos } = fakeInventario({ m1Aplicada: false })
+
+    const { body } = await buscar("q=pantalla&includeZeroStock=true")
+
+    expect(ids(body)).toEqual(["suelto"])
+    expect(body[0]).not.toHaveProperty("imagenUrl")
+    expect(intentos.map((i) => i.select)).toEqual([SELECT_VERTODAS_CON_GRUPO, SELECT_VERTODAS_ACTUAL])
+    expect(SELECT_VERTODAS_ACTUAL).not.toContain("imagen_url")
+    expect(SELECT_DEPOSITO_ACTUAL).not.toContain("imagen_url")
   })
 })

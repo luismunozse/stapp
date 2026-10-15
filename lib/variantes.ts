@@ -122,9 +122,16 @@ export function imagenRespaldoDe(
  */
 export function camposDeVarianteParaPos(item: {
   grupo_id?: string | null
+  imagen_url?: string | null
   atributos?: AtributoVariante[] | null
   grupo?: { nombre?: string | null } | { nombre?: string | null }[] | null
-}): { grupoId: string; etiqueta: string | null; atributos: AtributoVariante[] | null; grupoNombre: string | null } | Record<string, never> {
+}): {
+  grupoId: string
+  etiqueta: string | null
+  atributos: AtributoVariante[] | null
+  grupoNombre: string | null
+  imagenUrl?: string | null
+} | Record<string, never> {
   if (!item.grupo_id) return {}
   const grupo = Array.isArray(item.grupo) ? item.grupo[0] : item.grupo
   return {
@@ -132,6 +139,8 @@ export function camposDeVarianteParaPos(item: {
     etiqueta: etiquetaVariante(item.atributos),
     atributos: item.atributos ?? null,
     grupoNombre: grupo?.nombre ?? null,
+    // The row's OWN photo, only when the select asked for it (a variant row; never a standalone one).
+    ...("imagen_url" in item ? { imagenUrl: item.imagen_url ?? null } : {}),
   }
 }
 

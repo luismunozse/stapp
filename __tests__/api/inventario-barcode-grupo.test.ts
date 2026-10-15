@@ -128,6 +128,17 @@ describe("GET /api/inventario/barcode: variant fields", () => {
     ])
   })
 
+  it("carries the variant's own photo (and null when it has none), never a borrowed one", async () => {
+    fake([{ ...AZUL, imagen_url: "https://img.test/azul.jpg" }])
+    const conFoto = await escanear("7790001")
+    expect(conFoto.body.item.imagenUrl).toBe("https://img.test/azul.jpg")
+
+    fake([{ ...AZUL, imagen_url: null }])
+    const sinFoto = await escanear("7790001")
+    expect(sinFoto.body.item.imagenUrl).toBeNull()
+    expect(sinFoto.body.item).not.toHaveProperty("imagenRespaldo")
+  })
+
   it("finds a variant by its code too", async () => {
     fake([AZUL])
     const { body } = await escanear("fx-az")

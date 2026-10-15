@@ -85,6 +85,7 @@ describe("who can reach the fallback photo code (PI-3)", () => {
     "lib/variantes-fotos.ts", // defines the lookup
     "app/api/inventario/route.ts", // the inventory list
     "app/api/inventario/grupos/[id]/route.ts", // the group read (form)
+    "app/api/inventario/search/route.ts", // the POS variants sheet (grupoId mode only)
   ]
   const todos = ["app", "components", "hooks", "lib", "contexts", "providers"].flatMap((d) => archivos(join(RAIZ, d)))
 
