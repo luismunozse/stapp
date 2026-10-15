@@ -16,16 +16,24 @@
  *   b. tighter spacing (smaller gaps, paddings and line height);
  *   c. smaller terms and conditions, down to their own floor;
  *   d. every font and gap scaled down together, down to the text floor;
- *   e. last resort, cutting the longest free text with an ellipsis: the terms first, then the
- *      observaciones, then the minor notes (checklist, delivery notes, extra fields), then the
- *      falla / diagnostico / accesorios; and, only if even that is not enough, the detail rows of the budget (summed in a "+N more" row) and finally
- *      absurdly long names.
+ *   e. last resort, cutting the longest free text with an ellipsis, in this order: the terms
+ *      (the first one stays and a line says where to get the rest), the observaciones, the minor
+ *      notes (delivery notes, extra fields, warranty note), the details of who attended, the
+ *      branch address, the e-mail and the payment references, then the falla / diagnostico /
+ *      accesorios, and last the reception checklist (it is liability evidence);
+ *   f. the detail rows of the budget, shown up to a limit and the rest summed in one "+N more"
+ *      row (the totals are never touched);
+ *   g. absurdly long names (workshop, customer, razon social, device);
+ *   h. the GUARANTEE: if even that does not fit, the scale keeps going down below the usual
+ *      floor, to a hard minimum, then every paragraph is clamped to a maximum number of lines.
+ *      An overflowing sheet is never drawn.
  *
  * Every search is a bisection over one parameter and the measuring passes are cheap (the width
- * of a string is memoized), so a fit costs a handful of passes, not a walk.
+ * of a string is memoized), so a fit costs a handful of passes, not a walk. Stages left at their
+ * minimum get room back from the stage that settles it, most important first.
  *
- * Never cut (outside the absurd case above): workshop name, order number, dates, customer name
- * and phone, device, the budget / deposit / balance lines, the QR and the signature lines.
+ * Never cut before step g: workshop name, order number, dates, customer name and phone, device,
+ * the budget / deposit / balance amounts, the QR and the signature lines.
  *
  * It is reached only through generateOrdenPDF({ ..., paperSize: "A5" | "A6" }); the A4
  * path in lib/pdf.ts does not run for these, and this file is not used for A4.
@@ -93,12 +101,18 @@ const LINE_TIGHT = 1.12
 const GAP_TIGHT = 0.4
 /** How much of the signature area a fully tightened layout gives back. */
 const SIG_TIGHT = 0.3
-/** The minimum progress of a character-count bisection: a cut field is within this many characters of the longest that fits. */
+/** A character-limit bisection stops when the limit that fits and the one that does not are this close: a cut field loses at most this many characters it could have kept. */
 const CAP_TOLERANCE = 8
-/** The smallest a cut falla / diagnostico / accesorios is left (characters), so it is never just an ellipsis. */
-const MIN_KEEP_FALLA = 40
+/** The least a cut field keeps (characters), so it is never just an ellipsis: terms (the first one), details, falla / diagnostico / accesorios, checklist. */
+const MIN_KEEP = { terms: 40, details: 30, falla: 40, checklist: 24 } as const
 /** The longest a name may be in the absurd case where nothing else is left to cut. */
 const IDENTITY_FLOOR = 60
+/** The smallest any text is ever drawn, reached only by the last-resort guarantee. */
+const HARD_MIN_FONT = 5
+/** Upper bound of the paragraph-length search of the guarantee. */
+const MAX_LINES_BOUND = 400
+/** Printed under the terms when they were cut. */
+const TERMS_CUT_NOTE = "Términos completos: pedíselos al taller."
 
 /**
  * Length of the longest prefix of `s` that fits in `maxWidth` (at least 1, so a glyph wider than
@@ -200,6 +214,19 @@ function bisect(good: number, bad: number, ok: (v: number) => boolean, tolerance
   return good
 }
 
+/**
+ * The first `n` of `lines`, the last one closed with an ellipsis that still fits `maxWidth`
+ * (`lines` itself when it already has `n` or fewer). Pure: the caller supplies how to measure.
+ */
+export function clampLines(lines: string[], n: number, measure: (s: string) => number, maxWidth: number): string[] {
+  if (lines.length <= n) return lines
+  const kept = lines.slice(0, Math.max(n, 1))
+  const last = kept[kept.length - 1]
+  const cut = measure(last + "…") <= maxWidth ? last : last.slice(0, fitPrefix(last, (x) => measure(x + "…"), maxWidth))
+  kept[kept.length - 1] = cut.trimEnd() + "…"
+  return kept
+}
+
 const safe = (val: unknown): string => {
   if (val === null || val === undefined) return ""
   if (typeof val === "string") return val.replace(/[\r\n]+/g, " ").trim()
@@ -208,7 +235,21 @@ const safe = (val: unknown): string => {
 }
 
 /** Free-text fields that can be cut, with the order they are cut in (see CUT_STAGES). */
-type CapKey = "terms" | "observaciones" | "falla" | "diagnostico" | "notes" | "accesorios" | "checklist" | "metadata"
+type CapKey =
+  | "terms"
+  | "observaciones"
+  | "notes" // delivery notes
+  | "metadata"
+  | "garantia" // warranty note
+  | "shop" // branch name and address
+  | "people" // who received, who repaired, who delivered
+  | "email"
+  | "rowtext" // names of work items, payment method / reference, reason for no charge, deposit method
+  | "falla"
+  | "diagnostico"
+  | "accesorios"
+  | "checklist"
+  | "checklistNotes"
 
 /** Everything the fit decides. `layout()` is a pure function of this and the order data. */
 interface FitParams {
@@ -222,19 +263,40 @@ interface FitParams {
   caps: Partial<Record<CapKey, number>>
   /** Most detail rows (work done, payments) shown; the rest are summed in one row. Missing = all. */
   rows?: number
-  /** Longest workshop / customer / device name, in characters. Missing = whole. */
+  /** Longest workshop / customer / razon social / device name, in characters. Missing = whole. */
   identity?: number
+  /** Most lines any paragraph may have (the guarantee). Missing = as many as it needs. */
+  maxLines?: number
 }
 
 /** The order of the last resort: each stage cuts its fields with one common character limit. */
 const CUT_STAGES: Array<{ keys: CapKey[]; min: number }> = [
-  { keys: ["terms"], min: 0 },
+  { keys: ["terms"], min: MIN_KEEP.terms },
   { keys: ["observaciones"], min: 0 },
-  { keys: ["notes", "checklist", "metadata"], min: 0 },
-  { keys: ["falla", "diagnostico", "accesorios"], min: MIN_KEEP_FALLA },
+  { keys: ["notes", "metadata", "garantia"], min: 0 },
+  { keys: ["shop", "people", "email", "rowtext"], min: MIN_KEEP.details },
+  { keys: ["falla", "diagnostico", "accesorios"], min: MIN_KEEP.falla },
+  // after the falla: the device condition at reception is evidence if the customer disputes it
+  { keys: ["checklist", "checklistNotes"], min: MIN_KEEP.checklist },
 ]
 
-export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: CompactPapel): Promise<Buffer> {
+/** What the fit decided; handed to `options.report` (tests and diagnostics). */
+export interface FitReport {
+  /** Space left between the end of the content and the signature block. Never negative in a returned sheet. */
+  slack: number
+  /** Measuring passes spent. */
+  attempts: number
+  /** Scale of fonts and gaps that was drawn (1 = normal). */
+  scale: number
+  /** The step that settled it. */
+  step: "normal" | "tight" | "terms" | "scale" | "cut" | "rows" | "names" | "guarantee"
+}
+
+export async function generateOrdenCompactPDF(
+  data: OrdenPDFData,
+  papel: CompactPapel,
+  options: { report?: (r: FitReport) => void } = {},
+): Promise<Buffer> {
   const [width, height] = ORDEN_PAGE_POINTS[papel]
   const M = METRICS[papel]
   const floors = FLOORS[papel]
@@ -295,6 +357,18 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
   const sucursalNombre = data.sucursal ? safe(data.sucursal.nombre) : ""
   const sucursalDireccion = data.sucursal ? safe(data.sucursal.direccion) : ""
   const sucursalTelefono = data.sucursal ? safe(data.sucursal.telefono) : ""
+  // Branch address, city and phone run together and wrap (on a narrow sheet one line per datum
+  // costs more height than the information is worth).
+  const shopAddress = [
+    sucursalDireccion || safe(data.direccionEmpresa),
+    [safe(data.ciudadEmpresa), safe(data.provinciaEmpresa)].filter(Boolean).join(", "),
+    sucursalTelefono || safe(data.telefonoEmpresa),
+  ]
+    .filter(Boolean)
+    .join(" · ")
+  const garantiaNotas = isEntrega && data.garantia ? safe(data.garantia.notas) : ""
+  const metodoSena = safe(data.metodoPagoSena)
+  const motivoSinCobro = data.motivoSinCobro ? safe(MOTIVO_SIN_COBRO_LABELS[data.motivoSinCobro as MotivoSinCobro] || data.motivoSinCobro) : ""
 
   // Work done and payments (delivered orders), same rules as the A4 ENTREGA sheet.
   const trabajosRaw = Array.isArray(data.trabajos) ? data.trabajos : []
@@ -369,13 +443,10 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
   const caption = isEntrega ? "Historial completo, fotos y garantía online. Escaneá el código." : "Escaneá el código para seguir tu reparación"
 
   type Sig = { label: string; image: PDFImage | null }
-  const sigs: Sig[] = isEntrega
-    ? [
-        { label: data.firmaRecepcion ? "Cliente — recepción (en archivo)" : "Cliente — recepción", image: null },
-        { label: "Cliente — entrega", image: await embedImage(data.firmaClienteEntrega) },
-        { label: entregadoPor ? `Entregó — ${entregadoPor}` : "Entregó", image: await embedImage(data.firmaEncargadoEntrega) },
-      ]
-    : [{ label: "Firma del cliente", image: await embedImage(data.firmaRecepcion) }]
+  // the images of the signature lines, in the order they are drawn (the labels are built per pass)
+  const sigImages: Array<PDFImage | null> = isEntrega
+    ? [null, await embedImage(data.firmaClienteEntrega), await embedImage(data.firmaEncargadoEntrega)]
+    : [await embedImage(data.firmaRecepcion)]
 
   // ---- measuring, memoized ----
   // The width of a string is linear in the font size, so it is measured once per (font, string)
@@ -411,11 +482,12 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
   // matter did not change, so the lines are memoized too (the drawing pass reuses the last
   // measuring pass).
   const wrapMemo = new Map<string, string[]>()
-  const wrap = (text: string, font: PDFFont, size: number, maxWidth: number): string[] => {
-    const key = `${fontId(font)}|${size}|${maxWidth}|${text}`
+  const wrap = (text: string, font: PDFFont, size: number, maxWidth: number, maxLines?: number): string[] => {
+    const key = `${fontId(font)}|${size}|${maxWidth}|${maxLines ?? ""}|${text}`
     let lines = wrapMemo.get(key)
     if (!lines) {
       lines = wrapText(text, measure(font, size), maxWidth)
+      if (maxLines !== undefined) lines = clampLines(lines, maxLines, measure(font, size), maxWidth)
       wrapMemo.set(key, lines)
     }
     return lines
@@ -424,6 +496,28 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
   const left = M.margin
   const right = width - M.margin
   const contentW = width - M.margin * 2
+
+  /** Length of each cuttable field: what a stage of the last resort cuts between its minimum and this. */
+  const textLengths: Record<CapKey, number> = {
+    terms: terminos.reduce((n, t) => n + t.length, 0),
+    observaciones: isEntrega ? 0 : observaciones.length,
+    notes: notasEntrega.length,
+    metadata: metadataText.length,
+    garantia: garantiaNotas.length,
+    shop: Math.max(sucursalNombre.length, shopAddress.length),
+    people: Math.max(recibidoPor.length, tecnico.length, entregadoPor.length),
+    email: isEntrega ? clienteEmail.length : 0,
+    rowtext: Math.max(
+      isEntrega ? motivoSinCobro.length : 0,
+      isEntrega ? Math.max(0, ...trabajos.map((it) => safe(it.nombre).length)) : metodoSena.length,
+      isEntrega ? Math.max(0, ...cobros.map((c) => Math.max(safe(c.metodo).length, safe(c.referencia).length))) : 0,
+    ),
+    falla: problema.length,
+    diagnostico: isEntrega ? diagnostico.length : 0,
+    accesorios: accesorios.length,
+    checklist: Math.max(0, ...checklistLines.map((g) => g.text.length)),
+    checklistNotes: checklistNotas.length,
+  }
 
   /** A page that draws nothing: measuring passes run the whole layout against it. */
   const DRY = {
@@ -468,12 +562,15 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
     }
     const name = (s: string) => (P.identity === undefined ? s : cutText(s, P.identity))
 
+    /** `wrap` with the guarantee's limit on the lines of any paragraph. */
+    const wr = (text: string, font: PDFFont, size: number, maxWidth: number) => wrap(text, font, size, maxWidth, P.maxLines)
+
     let y = height - M.margin
 
     /** Wrapped text, line by line. */
     const para = (text: string, font: PDFFont, size: number, color: RGB, opts: { x?: number; width?: number } = {}) => {
       const x = opts.x ?? left
-      for (const l of wrap(text, font, size, opts.width ?? contentW)) {
+      for (const l of wr(text, font, size, opts.width ?? contentW)) {
         page.drawText(l, { x, y: y - size, size, font, color })
         y -= lh(size)
       }
@@ -494,7 +591,7 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
       const labelFont = o.labelFont ?? reg
       const amountFont = o.amountFont ?? mono
       const aw = textW(amountFont, size, amount)
-      const lines = wrap(label, labelFont, size, Math.max(contentW - aw - 8 * f, contentW * 0.3))
+      const lines = wr(label, labelFont, size, Math.max(contentW - aw - 8 * f, contentW * 0.3))
       lines.forEach((l, i) => {
         page.drawText(l, { x: left, y: y - size - i * lh(size), size, font: labelFont, color: o.color ?? MONO.ink })
       })
@@ -511,7 +608,7 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
         amountRow(label, fmtMoney(amount))
       }
       const hidden = rows.slice(shown.length)
-      if (hidden.length > 0) amountRow(summary(hidden.length), fmtMoney(hidden.reduce((sum, r) => sum + row(r)[1], 0)), { color: MONO.label })
+      if (hidden.length > 0) amountRow(summary(hidden.length), fmtMoney(hidden.reduce((sum, r) => sum + (Number(row(r)[1]) || 0), 0)), { color: MONO.label })
     }
 
     /**
@@ -551,7 +648,7 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
     // bottom margin: the content flows down to it.
     // ============================================================
     /** Height of a signature area, its rule and the label (wrapped) under it, in a column of width w. */
-    const sigHeight = (s: Sig, w: number) => F.sigArea + gp(3) + wrap(s.label.toUpperCase(), bold, F.label, w).length * lh(F.label) + gp(4)
+    const sigHeight = (s: Sig, w: number) => F.sigArea + gp(3) + wr(s.label.toUpperCase(), bold, F.label, w).length * lh(F.label) + gp(4)
     /** Draws it inside [x, x + w] from `top` down. */
     const drawSig = (s: Sig, x: number, w: number, top: number) => {
       if (s.image) {
@@ -561,17 +658,26 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
       }
       drawRule(page, x, x + w, top - F.sigArea, { color: MONO.ink })
       let ly = top - F.sigArea - gp(3)
-      for (const l of wrap(s.label.toUpperCase(), bold, F.label, w)) {
+      for (const l of wr(s.label.toUpperCase(), bold, F.label, w)) {
         page.drawText(l, { x, y: ly - F.label, size: F.label, font: bold, color: MONO.label })
         ly -= lh(F.label)
       }
     }
 
+    const entregadoShown = cap("people", entregadoPor)
+    const sigs: Sig[] = isEntrega
+      ? [
+          { label: data.firmaRecepcion ? "Cliente — recepción (en archivo)" : "Cliente — recepción", image: sigImages[0] },
+          { label: "Cliente — entrega", image: sigImages[1] },
+          { label: entregadoShown ? `Entregó — ${entregadoShown}` : "Entregó", image: sigImages[2] },
+        ]
+      : [{ label: "Firma del cliente", image: sigImages[0] }]
+
     // QR on the left; on the right the caption and the signature line(s): one on the reception
     // sheet, three on the delivery sheet (as on A4, where they close the page).
     const colX = qr ? left + F.qr + 12 * f : left
     const colW = right - colX
-    const capLines = qr ? wrap(caption, reg, F.small, colW) : []
+    const capLines = qr ? wr(caption, reg, F.small, colW) : []
     const capH = capLines.length ? capLines.length * lh(F.small) + gp(2) : 0
     const sigsH = sigs.reduce((sum, s) => sum + sigHeight(s, colW), 0)
     const blockH = Math.max(qr ? F.qr : 0, capH + sigsH)
@@ -621,24 +727,14 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
     const bizX = left + (logo ? F.logo + 8 * f : 0)
     const bizW = right - rightColW - 8 * f - bizX
     let by = headerTop
-    for (const l of wrap(name(empresaNombre), black, F.heading, bizW)) {
+    for (const l of wr(name(empresaNombre), black, F.heading, bizW)) {
       page.drawText(l, { x: bizX, y: by - F.heading, size: F.heading, font: black, color: MONO.ink })
       by -= lh(F.heading)
     }
-    // Branch name on its own line; address, city and phone run together and wrap (on a narrow
-    // sheet one line per datum costs more height than the information is worth).
-    const shopLines = [
-      sucursalNombre,
-      [
-        sucursalDireccion || safe(data.direccionEmpresa),
-        [safe(data.ciudadEmpresa), safe(data.provinciaEmpresa)].filter(Boolean).join(", "),
-        sucursalTelefono || safe(data.telefonoEmpresa),
-      ]
-        .filter(Boolean)
-        .join(" · "),
-    ].filter(Boolean)
+    // Branch name on its own line, then the address line.
+    const shopLines = [cap("shop", sucursalNombre), cap("shop", shopAddress)].filter(Boolean)
     for (const text of shopLines) {
-      for (const l of wrap(text, reg, F.small, bizW)) {
+      for (const l of wr(text, reg, F.small, bizW)) {
         page.drawText(l, { x: bizX, y: by - F.small, size: F.small, font: reg, color: MONO.label })
         by -= lh(F.small)
       }
@@ -681,7 +777,7 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
     // ============================================================
     section("Cliente")
     if (isEmpresa) {
-      para(name(`${clienteRazonSocial}${clienteCuit ? ` · ${labelIdFiscal} ${clienteCuit}` : ""}`), bold, F.body, MONO.ink)
+      para(`${name(clienteRazonSocial)}${clienteCuit ? ` · ${labelIdFiscal} ${clienteCuit}` : ""}`, bold, F.body, MONO.ink)
       para(`Contacto: ${name(clienteNombre)}${clienteDni ? ` · ${labelIdPersonal} ${clienteDni}` : ""}`, reg, F.small, MONO.label)
     } else {
       const idSuffix = clienteDni ? ` · ${labelIdPersonal} ${clienteDni}` : clienteCuit ? ` · ${labelIdFiscal} ${clienteCuit}` : ""
@@ -690,7 +786,7 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
     const tel = [clienteTelefono]
     if (telefonoContacto && telefonoContacto !== clienteTelefono) tel.push(`tel. de esta orden: ${telefonoContacto}`)
     para(tel.join(" · "), reg, F.small, MONO.label)
-    if (isEntrega && clienteEmail) para(clienteEmail, reg, F.small, MONO.label)
+    if (isEntrega && clienteEmail) para(cap("email", clienteEmail), reg, F.small, MONO.label)
 
     section(t(term, "equipo"))
     para(name(equipoTitle || dispositivo), bold, F.body, MONO.ink)
@@ -728,7 +824,7 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
             trabajos,
             (item) => {
               const qty = item.cantidad ? `x${item.cantidad}` : ""
-              return [`${safe(item.nombre) || "—"}${qty ? ` ${qty}` : ""}`, item.importe]
+              return [`${cap("rowtext", safe(item.nombre)) || "—"}${qty ? ` ${qty}` : ""}`, item.importe]
             },
             (n) => `+${n} ítem${n === 1 ? "" : "s"} más`,
           )
@@ -757,8 +853,7 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
         const saldoLabel = data.costoFinal != null ? "SALDO" : "SALDO ESTIMADO"
         let saldoText: string
         if (data.motivoSinCobro) {
-          const motivo = MOTIVO_SIN_COBRO_LABELS[data.motivoSinCobro as MotivoSinCobro] || data.motivoSinCobro
-          saldoText = `SIN COBRO — ${motivo}`
+          saldoText = `SIN COBRO — ${cap("rowtext", motivoSinCobro)}`
         } else {
           const saldo = Math.max((totalValue as number) - (data.descuentoCobro ?? 0) - (data.totalCobrado ?? 0), 0)
           saldoText = saldo <= 0 ? `${fmtMoney(0)} — PAGADO` : fmtMoney(saldo)
@@ -768,7 +863,7 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
         const sw = textW(condBold, size, saldoText)
         const labelW = textW(bold, size, saldoLabel)
         const fitsOneLine = labelW + sw + 20 * f <= contentW
-        const textLines = fitsOneLine ? [saldoText] : wrap(saldoText, condBold, size, contentW - 12 * f)
+        const textLines = fitsOneLine ? [saldoText] : wr(saldoText, condBold, size, contentW - 12 * f)
         const pad = gp(4)
         const bandH = lh(size) * (fitsOneLine ? 1 : 1 + textLines.length) + pad * 2
         y -= gp(3)
@@ -790,7 +885,9 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
           cobros,
           (c) => {
             const fecha = c.fecha instanceof Date ? c.fecha : new Date(c.fecha as unknown as string)
-            const label = [Number.isNaN(fecha.getTime()) ? "" : fmtShort(fecha), safe(c.metodo), c.referencia ? safe(c.referencia) : ""].filter(Boolean).join(" · ")
+            const label = [Number.isNaN(fecha.getTime()) ? "" : fmtShort(fecha), cap("rowtext", safe(c.metodo)), c.referencia ? cap("rowtext", safe(c.referencia)) : ""]
+              .filter(Boolean)
+              .join(" · ")
             return [label, c.monto]
           },
           (n) => `+${n} pago${n === 1 ? "" : "s"} más`,
@@ -801,7 +898,7 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
       const sena = Number(data.sena) || 0
       section("Presupuesto")
       amountRow("Presupuesto estimado", fmtMoney(presup))
-      amountRow(`Seña abonada${data.metodoPagoSena ? " · " + data.metodoPagoSena : ""}`, fmtMoney(sena))
+      amountRow(`Seña abonada${metodoSena ? " · " + cap("rowtext", metodoSena) : ""}`, fmtMoney(sena))
       drawRule(page, left, right, y - gp(1) - lost, { color: MONO.ink, thickness: 1.2 })
       y -= gp(4) + lost
       amountRow("Saldo estimado", fmtMoney(Math.max(presup - sena, 0)), { labelFont: bold, amountFont: condBold, size: (M.body + 1.5) * f })
@@ -820,7 +917,7 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
     // ============================================================
     // CHECKLIST (delivered orders only)
     // ============================================================
-    const notasChecklist = cap("notes", checklistNotas)
+    const notasChecklist = cap("checklistNotes", checklistNotas)
     const groupsShown = checklistLines.map((g) => ({ title: g.title, text: cap("checklist", g.text) })).filter((g) => g.text)
     if (groupsShown.length > 0 || notasChecklist) {
       section("Chequeo de recepción")
@@ -837,12 +934,12 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
     // ============================================================
     if (isEntrega && data.garantia) {
       const head = `GARANTÍA ${data.garantia.dias} DÍAS`
-      const notas = [safe(data.garantia.notas), `Presentá este comprobante o el código ${codigoOrden || numeroOrdenPadded} para reclamos.`].filter(Boolean).join(" ")
+      const notas = [cap("garantia", garantiaNotas), `Presentá este comprobante o el código ${codigoOrden || numeroOrdenPadded} para reclamos.`].filter(Boolean).join(" ")
       const innerW = contentW - 12 * f
-      const headLines = wrap(head, condBlack, F.heading, innerW)
+      const headLines = wr(head, condBlack, F.heading, innerW)
       const vigente = `Vigente hasta el ${fmtDate(data.garantia.fechaVencimiento)}`
-      const vigenteLines = wrap(vigente, bold, F.body, innerW)
-      const notasLines = wrap(notas, reg, F.small, innerW)
+      const vigenteLines = wr(vigente, bold, F.body, innerW)
+      const notasLines = wr(notas, reg, F.small, innerW)
       const boxH = gp(12) + lh(F.heading) * headLines.length + lh(F.body) * vigenteLines.length + lh(F.small) * notasLines.length
       y -= gp(6)
       page.drawRectangle({ x: left, y: y - boxH, width: contentW, height: boxH, borderColor: MONO.ink, borderWidth: 1.2 })
@@ -866,12 +963,14 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
     // WHO / NOTES
     // ============================================================
     const notasEntregaShown = cap("notes", notasEntrega)
-    if (recibidoPor || tecnico || entregadoPor || notasEntregaShown) {
+    const recibidoShown = cap("people", recibidoPor)
+    const tecnicoShown = cap("people", tecnico)
+    if (recibidoShown || tecnicoShown || entregadoShown || notasEntregaShown) {
       y -= gp(4)
       const who: Array<[string, string]> = []
-      if (recibidoPor) who.push(["Recibió: ", recibidoPor])
-      if (tecnico) who.push(["Técnico: ", tecnico])
-      if (entregadoPor) who.push(["Entregó: ", entregadoPor])
+      if (recibidoShown) who.push(["Recibió: ", recibidoShown])
+      if (tecnicoShown) who.push(["Técnico: ", tecnicoShown])
+      if (entregadoShown) who.push(["Entregó: ", entregadoShown])
       labelValues(who, F.body)
       if (notasEntregaShown) para(`Notas de entrega: ${notasEntregaShown}`, reg, F.small, MONO.label)
     }
@@ -879,11 +978,17 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
     // ============================================================
     // TERMS
     // ============================================================
+    // Terms are never removed in silence: when they are cut, one line says where to get the rest.
+    const termsCut = P.caps.terms !== undefined && P.caps.terms < textLengths.terms
     const shownTerms = cutTerms(terminos, P.caps.terms)
-    if (shownTerms.length > 0) {
+    if (shownTerms.length > 0 || termsCut) {
       section("Términos y condiciones")
       for (const raw of shownTerms) {
         para(raw, reg, F.terms, MONO.label)
+        y -= gp(1.5)
+      }
+      if (termsCut) {
+        para(TERMS_CUT_NOTE, bold, F.terms, MONO.label)
         y -= gp(1.5)
       }
     }
@@ -897,86 +1002,114 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
   // ============================================================
   // FIT
   // ============================================================
-  const fits = (P: FitParams) => layout(DRY, P) >= -0.01
-
-  const textLengths: Record<CapKey, number> = {
-    terms: terminos.reduce((n, s) => n + s.length, 0),
-    observaciones: isEntrega ? 0 : observaciones.length,
-    falla: problema.length,
-    diagnostico: isEntrega ? diagnostico.length : 0,
-    notes: Math.max(checklistNotas.length, notasEntrega.length),
-    accesorios: accesorios.length,
-    checklist: Math.max(0, ...checklistLines.map((g) => g.text.length)),
-    metadata: metadataText.length,
+  let attempts = 0
+  const fits = (P: FitParams) => {
+    attempts += 1
+    return layout(DRY, P) >= -0.01
   }
 
-  const chooseParams = (): FitParams => {
+  /** One stage of the last resort that was left at its minimum, to be given room back to. */
+  interface Spent {
+    apply: (base: FitParams, limit: number) => FitParams
+    min: number
+    longest: number
+  }
+
+  const chooseParams = (): { P: FitParams; step: FitReport["step"] } => {
     const normal: FitParams = { scale: 1, tight: 0, termsSize: M.terms, caps: {} }
-    if (fits(normal)) return normal // a. as designed
+    if (fits(normal)) return { P: normal, step: "normal" } // a. as designed
 
     // b. tighter spacing
     const tightest = { ...normal, tight: 1 }
-    if (fits(tightest)) return { ...normal, tight: bisect(1, 0, (v) => fits({ ...normal, tight: v }), 0.1) }
+    if (fits(tightest)) return { P: { ...normal, tight: bisect(1, 0, (v) => fits({ ...normal, tight: v }), 0.1) }, step: "tight" }
 
     // c. smaller terms (spacing stays tight)
     const smallTerms = { ...tightest, termsSize: floors.terms }
-    if (fits(smallTerms)) return { ...tightest, termsSize: bisect(floors.terms, M.terms, (v) => fits({ ...tightest, termsSize: v }), 0.25) }
+    if (fits(smallTerms)) {
+      return { P: { ...tightest, termsSize: bisect(floors.terms, M.terms, (v) => fits({ ...tightest, termsSize: v }), 0.25) }, step: "terms" }
+    }
 
     // d. everything scaled down together, to the floor of the smallest text
     const minScale = floors.text / Math.min(M.body, M.small, M.label)
     const smallest = { ...smallTerms, scale: minScale }
-    if (fits(smallest)) return { ...smallTerms, scale: bisect(minScale, 1, (v) => fits({ ...smallTerms, scale: v }), 0.02) }
+    if (fits(smallest)) return { P: { ...smallTerms, scale: bisect(minScale, 1, (v) => fits({ ...smallTerms, scale: v }), 0.02) }, step: "scale" }
 
     // e. last resort: cut the longest free text, in a fixed order, each stage with one common
     // limit so the longest field gives first. A stage that cannot fix it alone is left at its
     // minimum and the next one starts from there. The stage that does fix it leaves some room
-    // over (the limit is a bisection), which is handed back to the earlier stages, the most
-    // important first, so a short cut is not paid for with a field that did not need to go.
+    // over (the limit is a bisection), which is handed back to the stages left at their minimum,
+    // the most important first, so a short cut is not paid for with a field that did not need to go.
     let P = smallest
-    const spent: Array<(base: FitParams, limit: number) => FitParams> = []
-    const spentLongest: number[] = []
-    const spentMin: number[] = []
+    const spent: Spent[] = []
+    const reclaim = (settled: FitParams): FitParams => {
+      let result = settled
+      for (let i = spent.length - 1; i >= 0; i--) {
+        const { apply, min, longest } = spent[i]
+        const base = result
+        result = apply(base, Math.floor(bisect(min, longest, (v) => fits(apply(base, Math.floor(v))), CAP_TOLERANCE)))
+      }
+      return result
+    }
     for (const stage of CUT_STAGES) {
       const longest = Math.max(...stage.keys.map((k) => textLengths[k]))
       if (longest <= stage.min) continue
-      const withCap = (base: FitParams, limit: number): FitParams => ({
+      const apply = (base: FitParams, limit: number): FitParams => ({
         ...base,
         caps: { ...base.caps, ...Object.fromEntries(stage.keys.map((k) => [k, limit])) },
       })
-      if (!fits(withCap(P, stage.min))) {
-        P = withCap(P, stage.min)
-        spent.push(withCap)
-        spentLongest.push(longest)
-        spentMin.push(stage.min)
+      if (!fits(apply(P, stage.min))) {
+        P = apply(P, stage.min)
+        spent.push({ apply, min: stage.min, longest })
         continue
       }
-      let result = withCap(P, Math.floor(bisect(stage.min, longest, (v) => fits(withCap(P, Math.floor(v))), CAP_TOLERANCE)))
-      for (let i = spent.length - 1; i >= 0; i--) {
-        const base = result
-        result = spent[i](base, Math.floor(bisect(spentMin[i], spentLongest[i], (v) => fits(spent[i](base, Math.floor(v))), CAP_TOLERANCE)))
-      }
-      return result
+      return { P: reclaim(apply(P, Math.floor(bisect(stage.min, longest, (v) => fits(apply(P, Math.floor(v))), CAP_TOLERANCE)))), step: "cut" }
     }
 
     // f. the budget detail rows: shown up to a limit, the rest summed (the totals are never touched)
     const mostRows = Math.max(trabajos.length, cobros.length)
     if (mostRows > 0) {
-      if (!fits({ ...P, rows: 0 })) P = { ...P, rows: 0 }
-      else return { ...P, rows: Math.floor(bisect(0, mostRows, (v) => fits({ ...P, rows: Math.floor(v) }), 1)) }
+      const base = P
+      if (fits({ ...base, rows: 0 })) {
+        return { P: reclaim({ ...base, rows: Math.floor(bisect(0, mostRows, (v) => fits({ ...base, rows: Math.floor(v) }), 1)) }), step: "rows" }
+      }
+      P = { ...base, rows: 0 }
     }
 
     // g. absurd names (hundreds of characters) in the fields that are otherwise never cut
     const longestName = Math.max(empresaNombre.length, clienteNombre.length, clienteRazonSocial.length, equipoTitle.length)
     if (longestName > IDENTITY_FLOOR) {
-      if (!fits({ ...P, identity: IDENTITY_FLOOR })) return { ...P, identity: IDENTITY_FLOOR }
-      return { ...P, identity: Math.floor(bisect(IDENTITY_FLOOR, longestName, (v) => fits({ ...P, identity: Math.floor(v) }), CAP_TOLERANCE)) }
+      const base = P
+      if (fits({ ...base, identity: IDENTITY_FLOOR })) {
+        return {
+          P: reclaim({ ...base, identity: Math.floor(bisect(IDENTITY_FLOOR, longestName, (v) => fits({ ...base, identity: Math.floor(v) }), CAP_TOLERANCE)) }),
+          step: "names",
+        }
+      }
+      P = { ...base, identity: IDENTITY_FLOOR }
     }
-    return P
+
+    // h. the guarantee: an overflowing sheet is never drawn. Below the usual floor, then every paragraph clamped.
+    const hardScale = HARD_MIN_FONT / Math.min(M.body, M.small, M.label)
+    // first the scale alone (the terms keep their size), then the terms go down to the hard minimum too
+    for (const termsSize of [P.termsSize, Math.min(P.termsSize, HARD_MIN_FONT)]) {
+      const G: FitParams = { ...P, termsSize }
+      if (fits({ ...G, scale: hardScale })) {
+        return { P: { ...G, scale: bisect(hardScale, G.scale, (v) => fits({ ...G, scale: v }), 0.01) }, step: "guarantee" }
+      }
+    }
+    const small: FitParams = { ...P, termsSize: Math.min(P.termsSize, HARD_MIN_FONT), scale: hardScale }
+    const clamped = (n: number): FitParams => ({ ...small, maxLines: n })
+    if (fits(clamped(1))) {
+      return { P: clamped(Math.floor(bisect(1, MAX_LINES_BOUND, (v) => fits(clamped(Math.floor(v))), 1))), step: "guarantee" }
+    }
+    // Not even one line per paragraph: the checklist and the terms go (the terms note stays).
+    return { P: { ...clamped(1), caps: { ...P.caps, terms: 0, checklist: 0, checklistNotes: 0 } }, step: "guarantee" }
   }
 
-  const params = chooseParams()
+  const { P: params, step } = chooseParams()
   const page = pdfDoc.addPage([width, height])
   layout(page, params)
+  options.report?.({ slack: layout(DRY, params), attempts, scale: params.scale, step })
 
   const bytes = await pdfDoc.save()
   return Buffer.from(bytes)
