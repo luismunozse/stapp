@@ -15,7 +15,7 @@
 --
 -- The app degrades without it: each of the three configuration cascades (GET and PUT
 -- /api/configuracion, /api/configuracion/operativa) has its own fallback step for this column,
--- and the order PDF routes read it from `organizations (*)`, so applying this file before or
+-- and the order PDF route reads it from `organizations (*)`, so applying this file before or
 -- after the deploy that plumbs it changes nothing for the other settings. Until it is applied
 -- the selector in Configuracion saves nothing (the PUT drops the key and answers A4) and each
 -- print can still choose its size.

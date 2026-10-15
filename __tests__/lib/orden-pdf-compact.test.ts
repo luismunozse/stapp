@@ -13,7 +13,8 @@ import { describe, it, expect } from "vitest"
 import { readFileSync } from "fs"
 import { join } from "path"
 import fontkitModule from "@pdf-lib/fontkit"
-import { PDFDocument } from "pdf-lib"
+import { PDFDocument, PDFDict, PDFName } from "pdf-lib"
+import QRCode from "qrcode"
 import { generateOrdenPDF } from "@/lib/pdf"
 import { wrapText } from "@/lib/pdf-orden-compact"
 import { formatCurrencyValue } from "@/lib/currency"
@@ -163,6 +164,83 @@ describe("wrapText", () => {
     expect(lines.join("")).toContain("x".repeat(25).slice(0, 10))
     expect(lines.join("").replace(/\s/g, "")).toBe("a" + "x".repeat(25) + "b")
   })
+})
+
+/** Number of images (XObjects) drawn on the first page. */
+function imageCount(doc: PDFDocument): number {
+  const xobjects = doc.getPage(0).node.Resources()?.lookup(PDFName.of("XObject"), PDFDict)
+  return xobjects ? xobjects.entries().length : 0
+}
+
+describe("device access code and logo", () => {
+  for (const key of ["A5", "A6"] as Compact[]) {
+    it(`${key}: neither a pattern nor a PIN is printed, on either sheet`, async () => {
+      for (const extra of [{}, ENTREGA]) {
+        for (const code of ["Patrón: 1-2-5-8-9", "4821"]) {
+          const { text } = await render(key, { ...extra, codigoAccesoDispositivo: code })
+          expect(text).not.toContain("1-2-5-8-9")
+          expect(text).not.toContain("4821")
+        }
+      }
+    })
+
+    it(`${key}: the workshop logo is embedded when there is one and nothing is drawn when there is none`, async () => {
+      const logoUrl = await QRCode.toDataURL("logo", { width: 80, margin: 1 }) // a real PNG, served as a data: URL
+      const without = await render(key, MINIMAL)
+      const withLogo = await render(key, { ...MINIMAL, logoUrl })
+      expect(imageCount(withLogo.doc)).toBe(imageCount(without.doc) + 1)
+      // an unreachable logo is skipped without breaking the page
+      const broken = await render(key, { ...MINIMAL, logoUrl: "data:image/png;base64,AAAA" })
+      expect(imageCount(broken.doc)).toBe(imageCount(without.doc))
+      expect(broken.pages).toEqual([SIZES[key].page])
+    })
+  }
+})
+
+describe("wrapText cost", () => {
+  it("measures a long unbroken token in near-linear total work, not cubic", () => {
+    // Real measuring (fontkit layout) costs time proportional to the length of the string it is
+    // given, so what has to stay small is the total number of characters handed to `measure`.
+    let work = 0
+    const measure = (s: string) => {
+      work += s.length
+      return s.length * 5
+    }
+    const token = "x".repeat(3000)
+    const lines = wrapText(token, measure, 250) // 50 chars per line
+    expect(lines).toHaveLength(60)
+    for (const l of lines) expect(l.length).toBeLessThanOrEqual(50)
+    expect(lines.join("")).toBe(token)
+    expect(work).toBeLessThan(2_000_000) // the old walk-down spent ~270 million
+  })
+
+  it("a single glyph wider than the line still advances one character at a time", () => {
+    const lines = wrapText("abc", (s) => s.length * 100, 50)
+    expect(lines).toEqual(["a", "b", "c"])
+  })
+})
+
+describe("a 3000-character unbroken token", () => {
+  it("generates on A6 in under 2 seconds with every run inside the page", async () => {
+    const monster = "Q".repeat(3000)
+    const started = Date.now()
+    const out = await render("A6", { ...MINIMAL, problemaReportado: monster })
+    expect(Date.now() - started).toBeLessThan(2000)
+    expect(out.pages.length).toBeGreaterThan(1) // the token needs many lines and flows onto more pages
+    // every character is there (the running header of page 2 sits in the middle of the token, so
+    // count them instead of looking for one contiguous string)
+    expect(out.runs.filter((r) => /^Q+$/.test(r.text)).reduce((n, r) => n + r.text.length, 0)).toBe(3000)
+    for (let i = 0; i < out.pages.length; i++) {
+      expectNoClippingNoOverlap(out.runs.filter((r) => r.page === i), out.pages[i])
+    }
+  }, 20000)
+
+  it("a very long workshop name does not stall the running header of a continuation page", async () => {
+    const started = Date.now()
+    const out = await render("A6", { nombreEmpresa: "N".repeat(1500), recepcionTerminos: Array.from({ length: 30 }, (_, i) => `${i + 1}. ${LOREM}`).join("\n") })
+    expect(Date.now() - started).toBeLessThan(2000)
+    expect(out.pages.length).toBeGreaterThan(1)
+  }, 20000)
 })
 
 describe("page size of each format", () => {

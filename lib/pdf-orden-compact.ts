@@ -60,6 +60,35 @@ const METRICS: Record<CompactPapel, Metrics> = {
 const LINE = 1.25
 
 /**
+ * Length of the longest prefix of `s` that fits in `maxWidth` (at least 1, so a glyph wider than
+ * the line still advances; `s.length` when all of it fits). Width grows with the prefix, so it
+ * gallops (doubling) to bracket the cut and then bisects: the cost is proportional to the
+ * length of the CHUNK that fits, not to the length of `s`, which keeps wrapping a very long
+ * token roughly linear (a walk-down from the full length was cubic: a 1500-character token
+ * took 38 s).
+ */
+export function fitPrefix(s: string, measure: (s: string) => number, maxWidth: number): number {
+  if (s.length <= 1) return s.length
+  let lo = 1 // known to be acceptable (the minimum progress)
+  let hi = 2
+  while (hi < s.length && measure(s.slice(0, hi)) <= maxWidth) {
+    lo = hi
+    hi *= 2
+  }
+  if (hi >= s.length) {
+    if (measure(s) <= maxWidth) return s.length
+    hi = s.length
+  }
+  // lo fits (or is the minimum), hi does not
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1
+    if (measure(s.slice(0, mid)) <= maxWidth) lo = mid
+    else hi = mid
+  }
+  return lo
+}
+
+/**
  * Greedy word wrap with a hard split for a word wider than the line, so that no returned
  * line is wider than `maxWidth` (a pasted URL or a mash of characters cannot overflow).
  * Pure: the caller supplies how to measure.
@@ -68,9 +97,9 @@ export function wrapText(text: string, measure: (s: string) => number, maxWidth:
   const lines: string[] = []
   let line = ""
   for (let word of text.split(/\s+/).filter(Boolean)) {
-    while (measure(word) > maxWidth && word.length > 1) {
-      let n = word.length - 1
-      while (n > 1 && measure(word.slice(0, n)) > maxWidth) n--
+    while (word.length > 1) {
+      const n = fitPrefix(word, measure, maxWidth)
+      if (n >= word.length) break // the rest fits on one line
       if (line) {
         lines.push(line)
         line = ""
@@ -174,8 +203,9 @@ export async function generateOrdenCompactPDF(data: OrdenPDFData, papel: Compact
       let head = `${numeroOrdenPadded} · ${empresaNombre}`
       const maxW = contentW - 40 // leaves room for the page counter
       if (textW(bold, M.small, head) > maxW) {
-        while (head.length > 1 && textW(bold, M.small, head + "…") > maxW) head = head.slice(0, -1)
-        head += "…"
+        // longest prefix that still fits together with the ellipsis (bisected, not walked down)
+        const n = fitPrefix(head, (s) => textW(bold, M.small, s + "…"), maxW)
+        head = head.slice(0, n) + "…"
       }
       page.drawText(head, { x: left, y: y - M.small, size: M.small, font: bold, color: MONO.ink })
       y -= lh(M.small) + 2
