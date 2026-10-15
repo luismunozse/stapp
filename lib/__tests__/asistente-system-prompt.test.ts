@@ -32,6 +32,8 @@ describe('buildAsistenteSystemPrompt', () => {
     expect(prompt).toContain('## Variantes de producto')
     expect(prompt).toMatch(/cada variante tiene su propia foto/i)
     expect(prompt).toMatch(/foto de otra variante/i)
+    expect(prompt).toMatch(/Sumar productos existentes/)
+    expect(prompt).toMatch(/control de series y de lotes/i)
   })
 
   it('incluye las rutas del panel', () => {

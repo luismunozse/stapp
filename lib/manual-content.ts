@@ -331,7 +331,11 @@ export const manualSections: ManualSection[] = [
           "Si los productos tienen datos distintos (por ejemplo la categoría), elegí de cuál se toman",
           "Confirmá",
         ],
-        tip: "Cada producto conserva su código, su stock, sus precios, su historial y su foto. Si dejás \"Renombrar productos\" sin marcar, los nombres quedan como están.",
+        tip: "Cada producto conserva su código, su stock, sus precios, su historial y su foto. Si dejás \"Renombrar productos\" sin marcar, los nombres quedan como están. Todos toman los datos del producto que elijas, incluido el control de series y de lotes: si eso cambia algo para alguno (deja de controlar series, o empieza a pedirlas al vender), el diálogo te avisa y tenés que marcar \"Entiendo\" para seguir. Los números de serie y los lotes ya cargados no se borran.",
+      },
+      {
+        subtitle: "Agrupar desde el formulario (también en el celular)",
+        body: "En el celular la lista no permite seleccionar varios productos. Para agrupar desde ahí, abrí el formulario de un producto y, con \"Este producto tiene variantes\" apagado, tocá \"Sumar productos existentes\": buscá, marcá dos o más productos y seguí con los mismos pasos de arriba. Si en el formulario tenés datos sin guardar, te preguntamos antes de seguir, porque esos datos no se guardan.",
       },
       {
         subtitle: "Cambiar o archivar variantes",

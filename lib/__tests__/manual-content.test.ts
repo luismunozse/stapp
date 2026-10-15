@@ -43,6 +43,18 @@ describe('manualSections', () => {
       expect(texto).toMatch(/desagrup/i)
     })
 
+    it('explica el camino desde el formulario (el del celular): Sumar productos existentes', () => {
+      expect(texto).toMatch(/Sumar productos existentes/)
+      expect(texto).toMatch(/celular/i)
+    })
+
+    it('avisa que agrupar aplica el control de series y lotes del producto elegido a todos, y que el diálogo avisa', () => {
+      expect(texto).toMatch(/control de series y de lotes/i)
+      expect(texto).toMatch(/del producto que elijas/i)
+      expect(texto).toMatch(/te avisa|te avisamos/i)
+      expect(texto).toMatch(/Entiendo/)
+    })
+
     it('no mezcla jerga interna', () => {
       expect(texto).not.toMatch(/grupo_id|atributos|RPC|migraci/i)
     })
