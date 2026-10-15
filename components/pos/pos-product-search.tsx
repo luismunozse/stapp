@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from "react"
 import { Input } from "@/components/ui/input"
 import { parseMoneyInput } from "@/lib/parse-money"
 import { Button } from "@/components/ui/button"
@@ -9,10 +9,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { Search, Package, Loader2, Plus, Barcode, PenLine, X, ScanLine, MapPin } from "lucide-react"
+import { Search, Package, Layers, Loader2, Plus, Barcode, PenLine, X, ScanLine, MapPin } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import type { InventarioResult } from "./pos-types"
 import { EmptyState } from "@/components/ui/empty-state"
+import { agruparResultados } from "@/lib/pos-agrupar"
+import { PosVariantesSheet, type GrupoAbierto } from "./pos-variantes-sheet"
 
 interface ManualProduct {
   nombre: string
@@ -41,6 +43,8 @@ interface PosProductSearchProps {
   scanSuccess?: { nombre: string } | null
   /** Reports the sale's resolved sucursal once, from the initial products load. */
   onVentaSucursal?: (info: VentaSucursalInfo) => void
+  /** Groups the variants of one product into a single card (default). False lists every variant on its own. */
+  agruparVariantes?: boolean
 }
 
 /** Reads the X-Venta-* headers set by search/route.ts under scope=venta. */
@@ -169,7 +173,7 @@ function StockOtrasSucursales({ inventarioId, productName }: StockOtrasSucursale
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearchProps>(
-  function PosProductSearch({ onAddProduct, onAddManualProduct, onOpenScanner, scanSuccess, onVentaSucursal }, ref) {
+  function PosProductSearch({ onAddProduct, onAddManualProduct, onOpenScanner, scanSuccess, onVentaSucursal, agruparVariantes = true }, ref) {
     const { formatPrice } = useCurrency()
     const inputRef = useRef<HTMLInputElement>(null)
     const manualNameRef = useRef<HTMLInputElement>(null)
@@ -193,6 +197,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     const pedidoCatalogo = useRef(0)
     const catalogoAplicado = useRef(0)
     const [showManualForm, setShowManualForm] = useState(false)
+    const [grupoAbierto, setGrupoAbierto] = useState<GrupoAbierto | null>(null)
     const [manualNombre, setManualNombre] = useState("")
     // Draft en string para permitir escribir decimales (coma es-AR) sin que el
     // valor se colapse al parsear en cada tecla. Se parsea al agregar.
@@ -395,6 +400,10 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     }
 
     const displayProducts = query.trim() ? results : recentProducts
+    const tarjetas = useMemo(
+      () => agruparResultados(displayProducts, { agrupar: agruparVariantes }),
+      [displayProducts, agruparVariantes]
+    )
 
     return (
       <div className="flex flex-col h-full">
@@ -553,7 +562,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                 <div key={i} className="h-24 rounded-lg bg-muted animate-pulse" />
               ))}
             </div>
-          ) : displayProducts.length === 0 ? (
+          ) : tarjetas.length === 0 ? (
             <EmptyState
               icon={Package}
               title={query.trim() ? "Sin resultados" : "Sin productos"}
@@ -563,7 +572,28 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
             />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-2 pb-20 lg:pb-0">
-              {displayProducts.map((product) => (
+              {tarjetas.map((tarjeta) => {
+                if (tarjeta.tipo === "grupo") {
+                  return (
+                    <button
+                      key={`grupo-${tarjeta.grupoId}`}
+                      type="button"
+                      onClick={() => setGrupoAbierto({ grupoId: tarjeta.grupoId, nombre: tarjeta.nombre })}
+                      className="group relative flex flex-col items-start rounded-xl border bg-card p-3 text-left transition-all hover:border-primary hover:shadow-md active:scale-[0.97] min-h-[5.5rem]"
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Layers className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="text-[10px] font-medium text-muted-foreground">Variantes</span>
+                      </div>
+                      <span className="text-sm font-medium line-clamp-2 leading-tight mb-auto">{tarjeta.nombre}</span>
+                      <span className="mt-2 text-sm font-bold text-primary">
+                        {`${tarjeta.cantidad} variantes · desde ${formatPrice(tarjeta.desde)}`}
+                      </span>
+                    </button>
+                  )
+                }
+                const product = tarjeta.producto
+                return (
                 <button
                   key={product.id}
                   type="button"
@@ -604,10 +634,12 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                     </div>
                   </div>
                 </button>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
+        <PosVariantesSheet grupo={grupoAbierto} onClose={() => setGrupoAbierto(null)} onAdd={handleAdd} devolverFoco={() => inputRef.current?.focus()} />
       </div>
     )
   }

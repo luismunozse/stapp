@@ -73,6 +73,20 @@ describe("PosTerminal — escaneo de código de barras", () => {
     expect(itemsDelCarrito()[0]).toMatchObject({ inventarioId: "p1", trackeaSeries: true, diasGarantia: 90 })
   })
 
+  it("escanear una variante la agrega a ella, con su nombre completo, sin abrir la hoja de variantes", async () => {
+    stubFetch({
+      id: "azul", codigo: "FX-AZ", nombre: "Funda X - Azul", stock: 4, precioVenta: 12000,
+      grupoId: "g-1", etiqueta: "Azul", grupoNombre: "Funda X",
+    })
+    render(<PosTerminal />)
+
+    escanear("7790001")
+
+    await waitFor(() => expect(itemsDelCarrito()).toHaveLength(1))
+    expect(itemsDelCarrito()[0]).toMatchObject({ inventarioId: "azul", nombre: "Funda X - Azul", precioUnitario: 12000, cantidad: 1 })
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  })
+
   it("avisa cuando ya no hay más stock en vez de mostrar 'agregado'", async () => {
     stubFetch({ id: "p2", codigo: "C2", nombre: "Cable", stock: 1, precioVenta: 50 })
     render(<PosTerminal />)

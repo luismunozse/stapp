@@ -152,6 +152,8 @@ export function PosTerminal() {
   // un total que el server rechazaba. Si la config no carga no se cobra: un
   // total calculado sin ella no coincide con el del server.
   const [configEstado, setConfigEstado] = useState<"cargando" | "ok" | "error">("cargando")
+  // El taller decide: agrupado por defecto; si la config no carga tampoco se desagrupa.
+  const [agruparVariantes, setAgruparVariantes] = useState(true)
   useEffect(() => {
     fetch("/api/configuracion/operativa")
       .then((r) => {
@@ -168,6 +170,7 @@ export function PosTerminal() {
         })
         setOrgGarantiaDefault(Number(data.garantiaDiasDefault) || 0)
         setFacturacionDisponible(!!data.facturacionElectronicaDisponible)
+        setAgruparVariantes(data.posAgrupaVariantes !== false)
         setConfigEstado("ok")
       })
       .catch((err) => {
@@ -916,7 +919,7 @@ export function PosTerminal() {
       <div className="hidden lg:flex flex-1 overflow-hidden">
         {/* Left: Product search */}
         <div className="w-[60%] border-r overflow-hidden flex flex-col">
-          <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} onVentaSucursal={handleVentaSucursal} />
+          <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} onVentaSucursal={handleVentaSucursal} agruparVariantes={agruparVariantes} />
         </div>
         {/* Right: Cart */}
         <div className="w-[40%] overflow-hidden flex flex-col">
@@ -957,7 +960,7 @@ export function PosTerminal() {
             style={{ display: mobileTab === "products" ? "block" : "none" }}
             className="absolute inset-0 overflow-hidden"
           >
-            <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} onVentaSucursal={handleVentaSucursal} />
+            <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} onVentaSucursal={handleVentaSucursal} agruparVariantes={agruparVariantes} />
           </div>
           <div
             style={{ display: mobileTab === "cart" ? "block" : "none" }}
