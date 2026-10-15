@@ -19,7 +19,7 @@ import {
   type ContextoEventos,
 } from "@/lib/inventario-eventos"
 import { imagenRespaldoDe } from "@/lib/variantes"
-import { argumentosGuardarGrupo, guardarGrupoSchema } from "@/lib/variantes-schema"
+import { argumentosGuardarGrupo, compartidosDeFila, guardarGrupoSchema } from "@/lib/variantes-schema"
 import { conReintento, migracionPendiente, respuestaDeError, respuestaDeValidacion } from "@/lib/variantes-api"
 
 type Contexto = { params: Promise<{ id: string }> }
@@ -225,7 +225,30 @@ export async function PUT(request: Request, { params }: Contexto) {
     }
     const validado = guardarGrupoSchema.safeParse(cuerpo)
     if (!validado.success) return respuestaDeValidacion(validado.error)
-    const datos = validado.data
+    let datos = validado.data
+
+    // "Agrupar existentes": the shared fields come from the chosen item of THIS organization, read
+    // here with the session's organization. Only the nine whitelisted fields are copied out of the
+    // row (compartidosDeFila); its photo, prices, stock and codes never reach the RPC.
+    if (datos.fuenteCompartidosId) {
+      const { data: fuente, error: fuenteError } = await supabaseAdmin
+        .from("inventario")
+        .select("*")
+        .eq("id", datos.fuenteCompartidosId)
+        .eq("organization_id", organizationId!)
+        .maybeSingle()
+      if (fuenteError) throw fuenteError
+      if (!fuente || fuente.deleted_at) {
+        return NextResponse.json({ error: "No encontramos el producto de origen", code: "NO_ENCONTRADO" }, { status: 404 })
+      }
+      if (!datos.variantes.some((v) => v.id === datos.fuenteCompartidosId)) {
+        return NextResponse.json(
+          { error: "El producto de origen tiene que ser parte del grupo", code: "PAYLOAD_INVALIDO", campo: "fuenteCompartidosId" },
+          { status: 400 }
+        )
+      }
+      datos = { ...datos, compartidos: compartidosDeFila(fuente) }
+    }
 
     // The guard above already limits this route to roles with inventory access, which today
     // are the roles with cost access. The gate is resolved again on purpose: if the guard is
