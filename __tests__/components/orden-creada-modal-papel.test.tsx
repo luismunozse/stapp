@@ -63,11 +63,12 @@ describe("OrdenCreadaModal: paper size of this print", () => {
     expect(Array.from(select.options).map((o) => o.textContent)).toContain("A6 (un cuarto de hoja) · la del taller")
   })
 
-  it("Imprimir without choosing asks for no size", async () => {
+  it("Imprimir without choosing asks for the size the selector shows", async () => {
     orgDefault = "A5"
-    renderModal()
+    const select = renderModal()
+    expect(select.value).toBe("A5")
     fireEvent.click(screen.getByRole("button", { name: /Imprimir/ }))
-    await waitFor(() => expect(pdfRequests()).toEqual(["/api/ordenes/ord-9/pdf"]))
+    await waitFor(() => expect(pdfRequests()).toEqual(["/api/ordenes/ord-9/pdf?papel=A5"]))
   })
 
   it("Imprimir after choosing A6 asks for A6", async () => {

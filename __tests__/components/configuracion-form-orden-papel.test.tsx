@@ -12,6 +12,13 @@ import { ModalProvider } from "@/contexts/modal-context"
 const mockFetch = vi.fn()
 global.fetch = mockFetch as unknown as typeof fetch
 
+// The provider that holds the default the print buttons show is refreshed after a save.
+const { refreshConfig } = vi.hoisted(() => ({ refreshConfig: vi.fn() }))
+vi.mock("@/contexts/currency-context", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/contexts/currency-context")>()
+  return { ...actual, useCurrency: () => ({ ...actual.useCurrency(), refreshConfig }) }
+})
+
 const LABEL = /Tamaño de hoja para las órdenes/i
 
 function configResponse(overrides: Record<string, any> = {}) {
@@ -121,6 +128,31 @@ describe("ConfiguracionForm: tamaño de hoja para las órdenes", () => {
     await guardar()
 
     expect(putBody().ordenFormatoPapel).toBe("A5")
+  })
+
+  it("a successful save refreshes the configuration the rest of the app reads (the print buttons' default)", async () => {
+    const select = await renderForm()
+    expect(refreshConfig).not.toHaveBeenCalled()
+
+    fireEvent.change(select, { target: { value: "A6" } })
+    await guardar()
+
+    await waitFor(() => expect(refreshConfig).toHaveBeenCalledTimes(1))
+  })
+
+  it("a failed save does not refresh anything", async () => {
+    const select = await renderForm()
+    mockFetch.mockImplementation(async (_url: string, init?: RequestInit) =>
+      init?.method === "PUT"
+        ? { ok: false, status: 500, json: async () => ({ error: "boom" }) }
+        : { ok: true, json: async () => configResponse() },
+    )
+
+    fireEvent.change(select, { target: { value: "A6" } })
+    await guardar()
+    await screen.findByText(/boom/)
+
+    expect(refreshConfig).not.toHaveBeenCalled()
   })
 
   it("is disabled when the user cannot edit the configuration", async () => {

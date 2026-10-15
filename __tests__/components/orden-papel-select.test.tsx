@@ -42,19 +42,32 @@ describe("OrdenPapelSelect", () => {
 })
 
 describe("useOrdenPapel", () => {
-  it("starts on the organization default and builds a URL that names no size", () => {
+  it("starts on the organization default and the URL ALWAYS names the size the selector shows", () => {
     orgDefault = "A6"
     const { result } = renderHook(() => useOrdenPapel())
     expect(result.current.papel).toBe("A6")
     expect(result.current.orgDefault).toBe("A6")
-    expect(result.current.pdfUrl("ord-1")).toBe("/api/ordenes/ord-1/pdf")
+    expect(result.current.pdfUrl("ord-1")).toBe("/api/ordenes/ord-1/pdf?papel=A6")
   })
 
-  it("is A4 when the organization has no default (old server, column missing)", () => {
+  it("is A4 when the organization has no default (old server, column missing), and says so in the URL", () => {
     orgDefault = undefined
     const { result } = renderHook(() => useOrdenPapel())
     expect(result.current.papel).toBe("A4")
-    expect(result.current.pdfUrl("ord-1")).toBe("/api/ordenes/ord-1/pdf")
+    expect(result.current.pdfUrl("ord-1")).toBe("/api/ordenes/ord-1/pdf?papel=A4")
+  })
+
+  it("the URL and the selector can never disagree: whatever papel says is what pdfUrl sends", () => {
+    for (const def of [undefined, "A4", "A5", "A6"]) {
+      orgDefault = def
+      const { result } = renderHook(() => useOrdenPapel())
+      expect(result.current.pdfUrl("o")).toBe(`/api/ordenes/o/pdf?papel=${result.current.papel}`)
+      for (const picked of ["A4", "A5", "A6"] as const) {
+        act(() => result.current.setPapel(picked))
+        expect(result.current.pdfUrl("o")).toBe(`/api/ordenes/o/pdf?papel=${result.current.papel}`)
+        expect(result.current.papel).toBe(picked)
+      }
+    }
   })
 
   it("a size picked for this print is the one that goes in the URL, even if it equals the default", () => {
@@ -64,6 +77,10 @@ describe("useOrdenPapel", () => {
     act(() => result.current.setPapel("A4"))
     expect(result.current.papel).toBe("A4")
     expect(result.current.pdfUrl("ord-1")).toBe("/api/ordenes/ord-1/pdf?papel=A4")
+    act(() => result.current.setPapel("A6"))
+    act(() => result.current.setPapel("A5"))
+    expect(result.current.pdfUrl("ord-1")).toBe("/api/ordenes/ord-1/pdf?papel=A5")
+    act(() => result.current.setPapel("A4"))
 
     act(() => result.current.setPapel("A6"))
     expect(result.current.pdfUrl("ord-1")).toBe("/api/ordenes/ord-1/pdf?papel=A6")

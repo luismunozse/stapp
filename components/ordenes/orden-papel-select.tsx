@@ -10,19 +10,21 @@ import { ORDEN_PAPEL_OPCIONES, normalizeOrdenPapel, ordenPdfUrl, parseOrdenPapel
  * carga después de la pantalla. Lo que se elige acá vale para esta pantalla y no
  * se guarda.
  *
- * `pdfUrl` no manda ningún tamaño mientras no se haya elegido: el servidor usa el
- * default del taller. Si se eligió uno, viaja como ?papel= (aunque coincida con el
- * default: lo que el usuario ve en el selector es lo que sale).
+ * `pdfUrl` SIEMPRE manda el tamaño que muestra el selector (?papel=), elegido o no.
+ * Dejarlo al server cuando no se eligió hacía que pantalla e impresión pudieran
+ * discrepar si el default de la pantalla estaba viejo (el taller guardó A6 y esta
+ * pantalla todavía leía A4): lo que el usuario ve es lo que sale.
  */
 export function useOrdenPapel() {
   const { ordenFormatoPapel } = useCurrency()
   const orgDefault = normalizeOrdenPapel(ordenFormatoPapel)
   const [elegido, setElegido] = useState<OrdenPapel | null>(null)
+  const papel = elegido ?? orgDefault
   return {
-    papel: elegido ?? orgDefault,
+    papel,
     orgDefault,
-    setPapel: (papel: OrdenPapel) => setElegido(parseOrdenPapel(papel)),
-    pdfUrl: (ordenId: string) => ordenPdfUrl(ordenId, elegido),
+    setPapel: (nuevo: OrdenPapel) => setElegido(parseOrdenPapel(nuevo)),
+    pdfUrl: (ordenId: string) => ordenPdfUrl(ordenId, papel),
   }
 }
 

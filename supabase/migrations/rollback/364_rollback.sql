@@ -12,7 +12,7 @@
 --
 -- No code change is needed to run this: with the column missing, each of the three
 -- configuration cascades drops to its fallback step and every order prints on A4 (the order
--- PDF routes read the size from `organizations (*)`), so nothing breaks. Revert the PR that
+-- PDF route reads the size from `organizations (*)`), so nothing breaks. Revert the PR that
 -- plumbs the setting only if the selector should disappear from the screen too.
 --
 -- LOCKS (held until the transaction ends): ACCESS EXCLUSIVE on `organizations` for the

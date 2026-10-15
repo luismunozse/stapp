@@ -20,6 +20,7 @@ import { CURRENCY_OPTIONS } from "@/lib/currency"
 import { TIMEZONE_OPTIONS } from "@/lib/timezone"
 import { COUNTRY_OPTIONS, getCountryConfig, getIvaGeneral } from "@/lib/countries"
 import { ORDEN_PAPEL_OPCIONES, normalizeOrdenPapel, type OrdenPapel } from "@/lib/orden-papel"
+import { useCurrency } from "@/contexts/currency-context"
 
 // Condición frente al IVA del emisor: texto libre (organizations.condicion_iva
 // es TEXT, sin enum en DB) impreso tal cual en el remito — a diferencia de
@@ -65,6 +66,9 @@ export function ConfiguracionForm({
   seguridad,
 }: ConfiguracionFormProps) {
   const { confirm } = useModal()
+  // El proveedor lee /api/configuracion/operativa una sola vez: sin esto, lo guardado acá (la hoja
+  // de las órdenes) no llega a las pantallas que ya están montadas hasta recargar.
+  const { refreshConfig } = useCurrency()
   const [tab, setTab] = useState<ConfigTab>(() => parseConfigTab(initialTab))
   const [config, setConfig] = useState<Config | null>(null)
   const [loading, setLoading] = useState(true)
@@ -385,6 +389,7 @@ export function ConfiguracionForm({
       if (res.ok) {
         setMessage({ type: "success", text: "Configuración guardada exitosamente" })
         fetchConfig()
+        refreshConfig()
         // Notificar al sidebar que las features de la org cambiaron
         // (ej: activar/desactivar módulo agenda muestra/oculta el item del menú)
         if (typeof window !== "undefined") {

@@ -112,13 +112,26 @@ describe("OrdenDetail: paper size of this print", () => {
     ])
   })
 
-  it("Imprimir without choosing asks for no size: the server uses the workshop's", async () => {
+  it("Imprimir without choosing asks for the size the selector shows (the workshop's), never leaving it to the server", async () => {
     orgDefault = "A6"
-    await renderOrden()
+    const select = await renderOrden()
+    expect(select.value).toBe("A6")
 
     fireEvent.click(screen.getByRole("button", { name: /Imprimir/ }))
 
-    await waitFor(() => expect(pdfRequests()).toEqual(["/api/ordenes/ord-1/pdf"]))
+    await waitFor(() => expect(pdfRequests()).toEqual(["/api/ordenes/ord-1/pdf?papel=A6"]))
+  })
+
+  it("what the selector shows is what is printed, even when the screen's default is stale", async () => {
+    // The provider read A4 before the admin saved A6 and was not refreshed: the selector shows A4 and
+    // the print asks for A4. The two can no longer disagree (the server would have printed A6).
+    orgDefault = "A4"
+    const select = await renderOrden()
+    expect(select.value).toBe("A4")
+
+    fireEvent.click(screen.getByRole("button", { name: /Imprimir/ }))
+
+    await waitFor(() => expect(pdfRequests()).toEqual(["/api/ordenes/ord-1/pdf?papel=A4"]))
   })
 
   it("Imprimir after choosing A6 asks for A6", async () => {
