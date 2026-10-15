@@ -159,7 +159,8 @@ export function validezDeVariantes(estado: VariantesState): Validez {
   if (!estado.activo) return { valida: true, motivos: [] }
   const activas = filasEnOrden(estado).filter((f) => !f.archivar)
   const motivos: string[] = []
-  if (activas.length === 0) motivos.push("Agregá una opción (por ejemplo Color) con al menos un valor para armar las variantes")
+  // No option at all can leave one lonely row behind (the last option was removed); the schema needs an option.
+  if (activas.length === 0 || estado.opciones.length === 0) motivos.push("Agregá una opción (por ejemplo Color) con al menos un valor para armar las variantes")
   for (const opcion of estado.opciones) {
     if (opcion.valores.length === 0) motivos.push(`Falta al menos un valor en "${opcion.nombre}"`)
   }
