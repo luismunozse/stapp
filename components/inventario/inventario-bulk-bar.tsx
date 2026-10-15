@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Archive, Tag, Percent, X, Printer, Truck, Trash2 } from "lucide-react"
+import { Archive, Tag, Percent, X, Printer, Truck, Trash2, Layers } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
 import { ExportButton } from "@/components/export/export-button"
 
@@ -23,6 +23,8 @@ interface InventarioBulkBarProps {
   onClear: () => void
   onSuccess: () => void
   onGenerateLabels?: () => void
+  /** Opens the dialog that groups the selected products as variants. Offered with 2 or more selected. */
+  onAgrupar?: () => void
 }
 
 export function InventarioBulkBar({
@@ -33,6 +35,7 @@ export function InventarioBulkBar({
   onClear,
   onSuccess,
   onGenerateLabels,
+  onAgrupar,
 }: InventarioBulkBarProps) {
   const { confirm, showError, showSuccess } = useModal()
   const [pending, setPending] = useState(false)
@@ -322,6 +325,14 @@ export function InventarioBulkBar({
           <Button size="sm" variant="outline" onClick={onGenerateLabels} disabled={pending}>
             <Printer className="mr-2 h-4 w-4" />
             Etiquetas
+          </Button>
+        )}
+
+        {/* Agrupar como variantes */}
+        {onAgrupar && selectedCount >= 2 && (
+          <Button size="sm" variant="outline" onClick={onAgrupar} disabled={pending}>
+            <Layers className="mr-2 h-4 w-4" />
+            Agrupar productos existentes como variantes
           </Button>
         )}
 

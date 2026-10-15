@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Package, Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,6 +22,9 @@ import {
   construirCuerpoAgrupar,
   motivoDeBloqueo,
   prefijoComun,
+  fuentePorDefecto,
+  seguimientoQueSeApaga,
+  seguimientoQueSePrende,
   TEXTO_MOTIVO,
   validarAgrupacion,
   vistaPrevia,
@@ -50,6 +53,74 @@ interface Props {
 const MENSAJE_RED = "No pudimos agrupar los productos. Revisá la conexión y probá de nuevo"
 const MENSAJE_GENERICO = "No pudimos agrupar los productos. Probá de nuevo"
 const FALTA_FUENTE = "Elegí de qué producto se toman los datos"
+
+type Revision = "con" | "sin" | "error"
+
+/** A check that does not answer in this time counts as failed: the button must never wait forever. */
+const PLAZO_REVISION_MS = 8_000
+
+/** Does the item have series or lots loaded? One small request per item and kind, only when the source would turn that tracking off. */
+async function revisarSeguimiento(itemId: string, tipo: "series" | "lotes", senal: AbortSignal): Promise<Revision> {
+  const propio = new AbortController()
+  const alAbortar = () => propio.abort()
+  senal.addEventListener("abort", alAbortar)
+  let temporizador: ReturnType<typeof setTimeout> | undefined
+  const vencido = new Promise<Revision>((resolver) => {
+    temporizador = setTimeout(() => {
+      propio.abort()
+      resolver("error")
+    }, PLAZO_REVISION_MS)
+  })
+  const consulta = (async (): Promise<Revision> => {
+    try {
+      const url = tipo === "series" ? `/api/inventario/${itemId}/series?limit=1` : `/api/inventario/${itemId}/lotes`
+      const res = await fetch(url, { signal: propio.signal })
+      if (!res.ok) return "error"
+      const cuerpo = await res.json()
+      return Array.isArray(cuerpo?.data) && cuerpo.data.length > 0 ? "con" : "sin"
+    } catch {
+      return "error"
+    }
+  })()
+  try {
+    return await Promise.race([consulta, vencido])
+  } finally {
+    clearTimeout(temporizador)
+    senal.removeEventListener("abort", alAbortar)
+  }
+}
+
+interface RiesgoDeSeguimiento {
+  clave: string
+  texto: string
+  /** true = needs its own "Entiendo" checkbox; false = an informative note. */
+  requiere: boolean
+}
+
+// Only SERIES gate a sale (a product that tracks them asks for serial numbers at the register). Lots are
+// never read by a sale: they show in the lots screen and drive the expiry alerts. The copy says only that.
+
+function textoDeApagado(nombre: string, tipo: "series" | "lotes", resultado: "con" | "error"): string {
+  if (tipo === "series") {
+    return resultado === "error"
+      ? `Entiendo que ${nombre} deja de controlar series y que, si tiene series cargadas, las ventas no las van a marcar como vendidas (no pudimos revisar si tiene).`
+      : `Entiendo que ${nombre} deja de controlar series: las ventas van a descontar stock sin marcar series vendidas. Las series que ya cargaste se conservan.`
+  }
+  return resultado === "error"
+    ? `Entiendo que ${nombre} deja de controlar lotes (no pudimos revisar si tiene lotes cargados): no vas a ver sus lotes ni sus avisos de vencimiento. Si tiene lotes cargados, se conservan.`
+    : `Entiendo que ${nombre} deja de controlar lotes: no vas a ver sus lotes ni sus avisos de vencimiento. Los lotes que ya cargaste se conservan.`
+}
+
+function riesgoDePrendido(clave: string, nombre: string, tipo: "series" | "lotes"): RiesgoDeSeguimiento {
+  if (tipo === "series") {
+    return {
+      clave,
+      requiere: true,
+      texto: `Entiendo que ${nombre} va a pedir series al venderlo: si no tiene series cargadas, no se va a poder vender hasta cargarlas.`,
+    }
+  }
+  return { clave, requiere: false, texto: `${nombre} va a controlar lotes: vas a ver sus lotes y vencimientos.` }
+}
 
 let contadorOpciones = 0
 const nuevaOpcion = (nombre: string): OpcionAgrupar => ({ id: `opcion-${++contadorOpciones}`, nombre, valores: [] })
@@ -84,7 +155,7 @@ function Contenido({ items: itemsIniciales, onClose, onAgrupado }: Omit<Props, "
   const [asignacion, setAsignacion] = useState<AsignacionAgrupar>({})
   const [base, setBase] = useState(() => prefijoComun(itemsIniciales.map((i) => i.nombre)))
   const [renombrar, setRenombrar] = useState(true)
-  const [fuenteElegida, setFuenteElegida] = useState<string | null>(null)
+  const [fuenteElegida, setFuenteElegida] = useState<string | null>(() => fuentePorDefecto(itemsIniciales))
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const enCurso = useRef(false)
@@ -95,10 +166,48 @@ function Contenido({ items: itemsIniciales, onClose, onAgrupado }: Omit<Props, "
   const fuenteId = elegibles.some((i) => i.id === fuenteElegida) ? fuenteElegida : null
   const faltaFuente = diferencias.length > 0 && fuenteId === null
 
+  const apagados = seguimientoQueSeApaga(elegibles, fuenteId)
+  const claveApagados = apagados.map((a) => `${a.itemId}:${a.tipo}`).join(",")
+  const [revisiones, setRevisiones] = useState<Record<string, Revision>>({})
+  useEffect(() => {
+    const control = new AbortController()
+    for (const { itemId, tipo } of seguimientoQueSeApaga(elegibles, fuenteId)) {
+      const clave = `${itemId}:${tipo}`
+      if (revisiones[clave] !== undefined) continue
+      void revisarSeguimiento(itemId, tipo, control.signal).then((resultado) => {
+        if (!control.signal.aborted) setRevisiones((previas) => ({ ...previas, [clave]: resultado }))
+      })
+    }
+    return () => control.abort()
+    // Re-runs when the set of items at risk changes; the closure reads the lists of that render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claveApagados])
+  // While a check is open the answer to "does it have serials or lots?" is unknown: nothing can be confirmed.
+  const revisando = apagados.some((a) => revisiones[`${a.itemId}:${a.tipo}`] === undefined)
+
+  // Every consequence of the source's tracking that touches stock control needs its own explicit "Entiendo":
+  // tracking turned OFF for a product that has serials or lots (or whose check failed), and tracking turned ON.
+  const [reconocidos, setReconocidos] = useState<ReadonlySet<string>>(new Set())
+  const riesgos: RiesgoDeSeguimiento[] = [
+    ...apagados.flatMap((a): RiesgoDeSeguimiento[] => {
+      const resultado = revisiones[`${a.itemId}:${a.tipo}`]
+      const item = elegibles.find((i) => i.id === a.itemId)
+      if (!item || (resultado !== "con" && resultado !== "error")) return []
+      return [{ clave: `${fuenteId}:${a.itemId}:${a.tipo}:apaga`, requiere: true, texto: textoDeApagado(item.nombre, a.tipo, resultado) }]
+    }),
+    ...seguimientoQueSePrende(elegibles, fuenteId).flatMap((a): RiesgoDeSeguimiento[] => {
+      const item = elegibles.find((i) => i.id === a.itemId)
+      return item ? [riesgoDePrendido(`${fuenteId}:${a.itemId}:${a.tipo}:prende`, item.nombre, a.tipo)] : []
+    }),
+  ]
+  const faltaReconocer = riesgos.some((r) => r.requiere && !reconocidos.has(r.clave))
+
   const entrada = { base, opciones, items, asignacion }
   const problemas = validarAgrupacion(entrada)
   const mensajes = [...new Set(problemas.map((p) => p.mensaje))]
   if (faltaFuente) mensajes.push(FALTA_FUENTE)
+  if (revisando) mensajes.push("Esperá que terminemos de revisar series y lotes")
+  else if (faltaReconocer) mensajes.push("Confirmá los cambios de series y lotes")
   const listo = mensajes.length === 0 && !guardando
 
   const cambiarOpcion = (id: string, cambio: Partial<OpcionAgrupar>) =>
@@ -350,11 +459,40 @@ function Contenido({ items: itemsIniciales, onClose, onAgrupado }: Omit<Props, "
                       name="agrupar-fuente"
                       aria-label={`Usar los datos de ${item.nombre}`}
                       checked={fuenteId === item.id}
-                      onChange={() => setFuenteElegida(item.id)}
+                      onChange={() => {
+                        // What was acknowledged was about the previous source: every acknowledgement starts over.
+                        setReconocidos(new Set())
+                        setFuenteElegida(item.id)
+                      }}
                     />
                     Usar los datos de {item.nombre}
                   </label>
                 ))}
+              </div>
+              {/* A live region that exists before its content, so what appears in it is announced. */}
+              <div data-testid="aviso-seguimiento" role="status" aria-live="polite" className={riesgos.length > 0 ? "space-y-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm" : undefined}>
+                {riesgos.map((riesgo) =>
+                  !riesgo.requiere ? (
+                    <p key={riesgo.clave}>{riesgo.texto}</p>
+                  ) : (
+                  <label key={riesgo.clave} className="flex min-h-11 cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1 size-4 shrink-0"
+                      checked={reconocidos.has(riesgo.clave)}
+                      onChange={(e) =>
+                        setReconocidos((previos) => {
+                          const siguientes = new Set(previos)
+                          if (e.target.checked) siguientes.add(riesgo.clave)
+                          else siguientes.delete(riesgo.clave)
+                          return siguientes
+                        })
+                      }
+                    />
+                    <span>{riesgo.texto}</span>
+                  </label>
+                  )
+                )}
               </div>
             </section>
           )}
@@ -378,7 +516,7 @@ function Contenido({ items: itemsIniciales, onClose, onAgrupado }: Omit<Props, "
             Cancelar
           </Button>
           <Button type="button" onClick={guardar} disabled={!listo}>
-            {guardando ? "Agrupando…" : "Agrupar"}
+            {guardando ? "Agrupando…" : revisando ? "Revisando…" : "Agrupar"}
           </Button>
         </ResponsiveDialogFooter>
       </ResponsiveDialogContent>

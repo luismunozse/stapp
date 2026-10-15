@@ -718,8 +718,8 @@ describe("InventarioForm: sección de variantes", () => {
 
   // ---- 9.7 draft isolation ------------------------------------------------------------------
 
-  describe("borrador mientras está oculto", () => {
-    it("el borrador guardado no lleva variantes, costo, blob: ni data:image", async () => {
+  describe("borrador con variantes (el detalle está en inventario-form-variantes-draft)", () => {
+    it("el borrador guardado no lleva costo, blob: ni data:image", async () => {
       await nuevoConColor()
       elegirFoto(idsDeFotos()[0])
       fireEvent.change(screen.getByLabelText("Nombre *"), { target: { value: "Funda editada" } })
@@ -728,12 +728,10 @@ describe("InventarioForm: sección de variantes", () => {
         expect(guardado).toContain("Funda editada")
       }, { timeout: 4000 })
       const texto = window.localStorage.getItem(KEY_ALTA)!
-      expect(texto).not.toContain("variantes")
       expect(texto).not.toContain("precioCompra")
       expect(texto).not.toContain("blob:")
       expect(texto).not.toContain("data:image")
       expect(texto).not.toContain("tieneVariantes")
-      expect(texto).not.toContain("atributos")
     })
   })
 })

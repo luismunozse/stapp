@@ -167,6 +167,66 @@ export function atributosDe(
   return atributos
 }
 
+export interface SeguimientoQueSeApaga {
+  itemId: string
+  tipo: "series" | "lotes"
+}
+
+/**
+ * Items that track series or lots while the chosen source does not: taking the source's shared fields
+ * turns that tracking off for them. The series and lots already loaded are never touched; the dialog
+ * checks which of these items actually have some and warns.
+ */
+export function seguimientoQueSeApaga(items: readonly ItemAgrupable[], fuenteId: string | null): SeguimientoQueSeApaga[] {
+  const fuente = items.find((i) => i.id === fuenteId)
+  if (!fuente) return []
+  const apagados: SeguimientoQueSeApaga[] = []
+  for (const item of items) {
+    if (item.id === fuente.id) continue
+    if (item.trackeaSeries && !fuente.trackeaSeries) apagados.push({ itemId: item.id, tipo: "series" })
+    if (item.trackeaLotes && !fuente.trackeaLotes) apagados.push({ itemId: item.id, tipo: "lotes" })
+  }
+  return apagados
+}
+
+/**
+ * The mirror case: items that do NOT track series or lots while the chosen source does. After grouping they
+ * ask for serial numbers or lots at every sale, and a sale of a product with none loaded is refused.
+ */
+export function seguimientoQueSePrende(items: readonly ItemAgrupable[], fuenteId: string | null): SeguimientoQueSeApaga[] {
+  const fuente = items.find((i) => i.id === fuenteId)
+  if (!fuente) return []
+  const prendidos: SeguimientoQueSeApaga[] = []
+  for (const item of items) {
+    if (item.id === fuente.id) continue
+    if (!item.trackeaSeries && fuente.trackeaSeries) prendidos.push({ itemId: item.id, tipo: "series" })
+    if (!item.trackeaLotes && fuente.trackeaLotes) prendidos.push({ itemId: item.id, tipo: "lotes" })
+  }
+  return prendidos
+}
+
+/**
+ * The source to preselect when the products disagree on series or lots tracking: the one that changes the
+ * fewest of the others (the majority's). null when they all agree (the choice does not touch stock control,
+ * the user picks) or when candidates with different tracking tie (nobody is the obvious one).
+ */
+export function fuentePorDefecto(items: readonly ItemAgrupable[]): string | null {
+  const candidatos = items.filter((i) => motivoDeBloqueo(i) === null)
+  const cambios = candidatos.map((c) => ({
+    id: c.id,
+    n: seguimientoQueSeApaga(candidatos, c.id).length + seguimientoQueSePrende(candidatos, c.id).length,
+  }))
+  if (cambios.length < 2 || cambios.every((c) => c.n === 0)) return null
+  const minimo = Math.min(...cambios.map((c) => c.n))
+  const mejores = cambios.filter((c) => c.n === minimo)
+  // Several candidates with the same tracking are the same choice: the first stands for them.
+  const perfil = (id: string) => {
+    const i = candidatos.find((c) => c.id === id)
+    return `${!!i?.trackeaSeries}|${!!i?.trackeaLotes}`
+  }
+  return mejores.every((m) => perfil(m.id) === perfil(mejores[0].id)) ? mejores[0].id : null
+}
+
 export interface Problema {
   clave:
     | "sin_opciones"

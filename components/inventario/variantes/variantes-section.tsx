@@ -37,6 +37,8 @@ export interface PropsVariantesSection {
   guardando?: boolean
   /** The photo hook (`useFotosVariantes`). Without it the combinations show no photo slot. */
   fotos?: FotosVariantes
+  /** Opens the way to group products that already exist (also the phone path). Offered while the section is off. */
+  alSumarExistentes?: () => void
 }
 
 const textoDeVariantes = (n: number) => (n === 1 ? "1 variante" : `${n} variantes`)
@@ -159,7 +161,7 @@ function AvisoDeStock({ conStock }: { conStock: ReturnType<typeof archivosConSto
   )
 }
 
-export function VariantesSection({ estado, dispatch, motivoDeshabilitado, alAjustarStock, guardando, fotos }: PropsVariantesSection) {
+export function VariantesSection({ estado, dispatch, motivoDeshabilitado, alAjustarStock, guardando, fotos, alSumarExistentes }: PropsVariantesSection) {
   const idInterruptor = useId()
   const idMotivo = useId()
   const activas = filasEnOrden(estado).filter((f) => !f.archivar)
@@ -201,6 +203,11 @@ export function VariantesSection({ estado, dispatch, motivoDeshabilitado, alAjus
                   Armá variantes de un mismo producto (por ejemplo por color o talle), cada una con su precio y su stock.
                 </p>
               )
+            )}
+            {alSumarExistentes && !estado.activo && !motivoDeshabilitado && (
+              <Button type="button" variant="link" className="mt-1 h-auto p-0 text-xs" disabled={guardando} onClick={alSumarExistentes}>
+                Sumar productos existentes
+              </Button>
             )}
           </div>
         </div>

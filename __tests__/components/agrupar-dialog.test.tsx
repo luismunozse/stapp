@@ -389,3 +389,308 @@ describe("AgruparDialog: saving", () => {
     expect(screen.queryByRole("dialog")).toBeNull()
   })
 })
+
+describe("AgruparDialog: tracking changes need an acknowledgement (VB-3 S2)", () => {
+  const CON_SERIES = item("a1", "Funda X Rojo", { trackeaSeries: true, trackeaLotes: false })
+  const SIN_SERIES = item("a2", "Funda X Azul", { trackeaSeries: false, trackeaLotes: false })
+
+  function responder(respuestas: Record<string, unknown>, fallos: string[] = []) {
+    fetchMock.mockImplementation(async (url: unknown) => {
+      const href = String(url)
+      if (fallos.some((f) => href.includes(f))) return new Response("{}", { status: 500 })
+      const clave = Object.keys(respuestas).find((k) => href.startsWith(k))
+      return new Response(JSON.stringify(clave ? respuestas[clave] : { data: [] }), { status: 200 })
+    })
+  }
+
+  /** A request that stays open until the test resolves it. */
+  function pendiente(prefijo: string) {
+    let resolver: (r: Response) => void = () => {}
+    fetchMock.mockImplementation((url: unknown) => {
+      if (String(url).startsWith(prefijo)) return new Promise<Response>((r) => (resolver = r))
+      return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }))
+    })
+    return (cuerpo: unknown) => act(async () => resolver(new Response(JSON.stringify(cuerpo), { status: 200 })))
+  }
+
+  function elegirOrigen(nombre: string) {
+    fireEvent.click(within(screen.getByTestId("datos-distintos")).getByRole("radio", { name: `Usar los datos de ${nombre}` }))
+  }
+  const aviso = () => screen.getByTestId("aviso-seguimiento")
+  const casillas = () => within(aviso()).queryAllByRole("checkbox")
+
+  it("the status region exists from the start, empty, so what appears in it is announced", () => {
+    responder({})
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    expect(aviso()).toHaveAttribute("role", "status")
+    expect(aviso()).toBeEmptyDOMElement()
+  })
+
+  it("asks nothing before a source is chosen", async () => {
+    responder({})
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    await act(async () => {})
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("while the check runs 'Agrupar' is off and says 'Revisando…'", async () => {
+    const resolver = pendiente("/api/inventario/a1/series")
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    elegirOrigen("Funda X Azul")
+    const boton = await screen.findByRole("button", { name: "Revisando…" })
+    expect(boton).toBeDisabled()
+    await resolver({ data: [] })
+    await waitFor(() => expect(confirmar()).toBeEnabled())
+  })
+
+  it("series loaded ('con'): names the product, states the consequence, and needs the checkbox", async () => {
+    responder({ "/api/inventario/a1/series": { data: [{ id: "s1" }] } })
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    elegirOrigen("Funda X Azul")
+
+    await waitFor(() => expect(casillas()).toHaveLength(1))
+    expect(aviso().textContent).toContain("Entiendo que Funda X Rojo deja de controlar series: las ventas van a descontar stock sin marcar series vendidas")
+    expect(aviso().textContent).toContain("Las series que ya cargaste se conservan")
+    expect(String(fetchMock.mock.calls[0][0])).toBe("/api/inventario/a1/series?limit=1")
+    expect(confirmar()).toBeDisabled()
+    fireEvent.click(casillas()[0])
+    expect(confirmar()).toBeEnabled()
+    fireEvent.click(casillas()[0])
+    expect(confirmar()).toBeDisabled()
+  })
+
+  it("lots loaded ('con') need the checkbox too", async () => {
+    responder({ "/api/inventario/a1/lotes": { data: [{ id: "l1" }] } })
+    abrir([item("a1", "Funda X Rojo", { trackeaLotes: true }), item("a2", "Funda X Azul", { trackeaLotes: false })])
+    completar()
+    elegirOrigen("Funda X Azul")
+    await waitFor(() => expect(casillas()).toHaveLength(1))
+    expect(aviso().textContent).toContain("Entiendo que Funda X Rojo deja de controlar lotes: no vas a ver sus lotes ni sus avisos de vencimiento. Los lotes que ya cargaste se conservan.")
+    // Sales never read lots: the text must not claim they do.
+    expect(aviso().textContent).not.toMatch(/ventas/)
+    expect(confirmar()).toBeDisabled()
+    fireEvent.click(casillas()[0])
+    expect(confirmar()).toBeEnabled()
+  })
+
+  it("lots failed check ('error') needs the checkbox with the accurate effect", async () => {
+    responder({}, ["/lotes"])
+    abrir([item("a1", "Funda X Rojo", { trackeaLotes: true }), item("a2", "Funda X Azul", { trackeaLotes: false })])
+    completar()
+    elegirOrigen("Funda X Azul")
+    await waitFor(() => expect(casillas()).toHaveLength(1))
+    expect(aviso().textContent).toMatch(/no pudimos revisar/i)
+    expect(aviso().textContent).toMatch(/no vas a ver sus lotes ni sus avisos de vencimiento/)
+    expect(aviso().textContent).not.toMatch(/ventas/)
+  })
+
+  it("a failed series check uses the feminine: series cargadas", async () => {
+    responder({}, ["/series"])
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    elegirOrigen("Funda X Azul")
+    await waitFor(() => expect(casillas()).toHaveLength(1))
+    expect(aviso().textContent).toContain("si tiene series cargadas, las ventas no las van a marcar como vendidas")
+  })
+
+  it("a failed check ('error') needs the checkbox and says it could not verify", async () => {
+    responder({}, ["/series"])
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    elegirOrigen("Funda X Azul")
+    await waitFor(() => expect(casillas()).toHaveLength(1))
+    expect(aviso().textContent).toMatch(/no pudimos revisar/i)
+    expect(confirmar()).toBeDisabled()
+    fireEvent.click(casillas()[0])
+    expect(confirmar()).toBeEnabled()
+  })
+
+  it("nothing loaded ('sin'): no checkbox and the button is enabled once the check ends", async () => {
+    responder({ "/api/inventario/a1/series": { data: [] } })
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    elegirOrigen("Funda X Azul")
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await waitFor(() => expect(confirmar()).toBeEnabled())
+    expect(casillas()).toHaveLength(0)
+    expect(aviso()).toBeEmptyDOMElement()
+  })
+
+  it("tracking turned ON: the item will ask for series when sold; it needs the checkbox and no request is made", async () => {
+    responder({})
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    elegirOrigen("Funda X Rojo")
+    await waitFor(() => expect(casillas()).toHaveLength(1))
+    expect(aviso().textContent).toContain("Entiendo que Funda X Azul va a pedir series al venderlo: si no tiene series cargadas")
+    expect(aviso().textContent).toMatch(/no se va a poder vender hasta cargarlas/i)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(confirmar()).toBeDisabled()
+    fireEvent.click(casillas()[0])
+    expect(confirmar()).toBeEnabled()
+  })
+
+  it("lots turned ON are informative only: no checkbox, the button stays enabled, and nothing claims sales ask for lots", async () => {
+    responder({})
+    abrir([item("a1", "Funda X Rojo", { trackeaLotes: true }), item("a2", "Funda X Azul", { trackeaLotes: false })])
+    completar()
+    elegirOrigen("Funda X Rojo")
+    await waitFor(() => expect(aviso().textContent).toContain("Funda X Azul va a controlar lotes: vas a ver sus lotes y vencimientos."))
+    expect(casillas()).toHaveLength(0)
+    expect(aviso().textContent).not.toMatch(/Entiendo|vender/)
+    expect(confirmar()).toBeEnabled()
+  })
+
+  it("both directions at once: the series OFF needs its checkbox, the lots ON is only a note", async () => {
+    responder({ "/api/inventario/a1/series": { data: [{ id: "s1" }] } })
+    const a = item("a1", "Funda X Rojo", { trackeaSeries: true, trackeaLotes: false })
+    const b = item("a2", "Funda X Azul", { trackeaSeries: false, trackeaLotes: true })
+    abrir([a, b])
+    completar()
+    elegirOrigen("Funda X Azul")
+    await waitFor(() => expect(casillas()).toHaveLength(1))
+    expect(aviso().textContent).toContain("Funda X Rojo va a controlar lotes")
+    expect(confirmar()).toBeDisabled()
+    fireEvent.click(casillas()[0])
+    expect(confirmar()).toBeEnabled()
+  })
+
+  it("switching to another source and back requires ticking again", async () => {
+    responder({ "/api/inventario/a1/series": { data: [{ id: "s1" }] } })
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    elegirOrigen("Funda X Azul")
+    await waitFor(() => expect(casillas()).toHaveLength(1))
+    fireEvent.click(casillas()[0])
+    expect(confirmar()).toBeEnabled()
+    elegirOrigen("Funda X Rojo")
+    await waitFor(() => expect(aviso().textContent).toMatch(/va a pedir series/))
+    elegirOrigen("Funda X Azul")
+    await waitFor(() => expect(casillas()).toHaveLength(1))
+    expect(casillas()[0]).not.toBeChecked()
+    expect(confirmar()).toBeDisabled()
+  })
+
+  describe("why the button is off", () => {
+    const quefalta = () => screen.getByLabelText("Qué falta")
+
+    it("while a check is pending it says to wait", async () => {
+      pendiente("/api/inventario/a1/series")
+      abrir([CON_SERIES, SIN_SERIES])
+      completar()
+      elegirOrigen("Funda X Azul")
+      await screen.findByRole("button", { name: "Revisando…" })
+      expect(quefalta().textContent).toContain("Esperá que terminemos de revisar series y lotes")
+    })
+
+    it("with an acknowledgement missing it says to confirm, and the line goes away once ticked", async () => {
+      responder({ "/api/inventario/a1/series": { data: [{ id: "s1" }] } })
+      abrir([CON_SERIES, SIN_SERIES])
+      completar()
+      elegirOrigen("Funda X Azul")
+      await waitFor(() => expect(casillas()).toHaveLength(1))
+      expect(quefalta().textContent).toContain("Confirmá los cambios de series y lotes")
+      fireEvent.click(casillas()[0])
+      expect(screen.queryByLabelText("Qué falta")).toBeNull()
+    })
+  })
+
+  describe("a check that never answers", () => {
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => vi.useRealTimers())
+
+    it("after 8 seconds it counts as 'error': the button leaves 'Revisando…' and asks for the checkbox", async () => {
+      fetchMock.mockImplementation((url: unknown) =>
+        String(url).includes("/series") ? new Promise<Response>(() => {}) : Promise.resolve(new Response("{}", { status: 200 }))
+      )
+      abrir([CON_SERIES, SIN_SERIES])
+      completar()
+      elegirOrigen("Funda X Azul")
+      expect(screen.getByRole("button", { name: "Revisando…" })).toBeDisabled()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(7_900)
+      })
+      expect(screen.getByRole("button", { name: "Revisando…" })).toBeDisabled()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200)
+      })
+      expect(screen.queryByRole("button", { name: "Revisando…" })).toBeNull()
+      expect(casillas()).toHaveLength(1)
+      expect(aviso().textContent).toMatch(/no pudimos revisar/i)
+      expect(confirmar()).toBeDisabled()
+      fireEvent.click(casillas()[0])
+      expect(confirmar()).toBeEnabled()
+    })
+  })
+
+  it("changing the source re-evaluates: a new set of consequences needs its own acknowledgement", async () => {
+    responder({ "/api/inventario/a1/series": { data: [{ id: "s1" }] } })
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    elegirOrigen("Funda X Azul")
+    await waitFor(() => expect(casillas()).toHaveLength(1))
+    fireEvent.click(casillas()[0])
+    expect(confirmar()).toBeEnabled()
+    elegirOrigen("Funda X Rojo")
+    await waitFor(() => expect(aviso().textContent).toMatch(/va a pedir series/))
+    expect(casillas()[0]).not.toBeChecked()
+    expect(confirmar()).toBeDisabled()
+  })
+
+  it("the warning sits with the source choice, inside the same block", () => {
+    responder({})
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    expect(screen.getByTestId("datos-distintos").contains(aviso())).toBe(true)
+  })
+
+  it("nothing is written for series or lots: the save sends no tracking data of its own", async () => {
+    responder({ "/api/inventario/a1/series": { data: [{ id: "s1" }] } })
+    abrir([CON_SERIES, SIN_SERIES])
+    completar()
+    elegirOrigen("Funda X Azul")
+    await waitFor(() => expect(casillas()).toHaveLength(1))
+    fireEvent.click(casillas()[0])
+    fireEvent.click(confirmar())
+    await waitFor(() => expect(fetchMock.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === "PUT")).toBe(true))
+    const put = fetchMock.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === "PUT")!
+    const cuerpo = JSON.parse((put[1] as RequestInit).body as string)
+    expect(cuerpo.fuenteCompartidosId).toBe("a2")
+    expect(JSON.stringify(cuerpo)).not.toMatch(/serie|lote/i)
+  })
+
+  describe("default source", () => {
+    const tres = () => [
+      item("a1", "Funda X Rojo", { trackeaSeries: true }),
+      item("a2", "Funda X Azul", { trackeaSeries: true }),
+      item("a3", "Funda X Verde", { trackeaSeries: false }),
+    ]
+
+    it("with a majority, the source that flips the fewest is preselected", () => {
+      responder({})
+      abrir(tres())
+      expect(screen.getByRole("radio", { name: "Usar los datos de Funda X Rojo" })).toBeChecked()
+      expect(screen.getByRole("radio", { name: "Usar los datos de Funda X Azul" })).not.toBeChecked()
+    })
+
+    it("on a tie nothing is preselected and the choice stays required", () => {
+      responder({})
+      abrir([CON_SERIES, SIN_SERIES])
+      completar()
+      expect(screen.getByRole("radio", { name: "Usar los datos de Funda X Rojo" })).not.toBeChecked()
+      expect(screen.getByRole("radio", { name: "Usar los datos de Funda X Azul" })).not.toBeChecked()
+      expect(screen.getByText("Elegí de qué producto se toman los datos")).toBeInTheDocument()
+    })
+
+    it("the user can change the preselected source", () => {
+      responder({})
+      abrir(tres())
+      fireEvent.click(screen.getByRole("radio", { name: "Usar los datos de Funda X Verde" }))
+      expect(screen.getByRole("radio", { name: "Usar los datos de Funda X Verde" })).toBeChecked()
+    })
+  })
+})
