@@ -1,4 +1,4 @@
-import { crearReductor, etiquetaDeFila, filasEnOrden, type Fila, type VariantesState } from "@/lib/variantes-filas"
+import { bloqueos, crearReductor, etiquetaDeFila, filasEnOrden, type Fila, type VariantesState } from "@/lib/variantes-filas"
 
 /*
  * Pure read-only helpers for the variants section: what the screen can say about the state without
@@ -137,4 +137,67 @@ export function describirEfecto(efecto: EfectoDeDeshacer): string | null {
   const hayListas = [efecto.valores, efecto.tambien, efecto.nuevas, efecto.restauradas].some((x) => x.length >= 2)
   if (hayListas && partes.length >= 2) return `Al deshacer ${partes.slice(0, -1).join("; ")}; y ${partes[partes.length - 1]}`
   return `Al deshacer ${unir(partes)}`
+}
+
+export interface Validez {
+  valida: boolean
+  /** What stops the save, in the words the user reads. */
+  motivos: string[]
+}
+
+// What `btrim` removes in the schema (spaces only), so a barcode is compared the way `guardarGrupoSchema` does.
+const sinEspacios = (s: string) => s.replace(/^ +| +$/g, "")
+
+/**
+ * Whether the variants can be saved as they are. The form disables Save with this; the section lists the
+ * reasons. A product without variants (switch off) has nothing to validate. The rules mirror what the save
+ * schema (`guardarGrupoSchema`) rejects, so a state that passes here is not bounced by the server for a
+ * reason the screen could have said: an option needs a value, a code is needed where the client owns it,
+ * and codes and barcodes cannot repeat. Reserved units on a row pending archive come from `bloqueos`.
+ */
+export function validezDeVariantes(estado: VariantesState): Validez {
+  if (!estado.activo) return { valida: true, motivos: [] }
+  const activas = filasEnOrden(estado).filter((f) => !f.archivar)
+  const motivos: string[] = []
+  if (activas.length === 0) motivos.push("Agregá una opción (por ejemplo Color) con al menos un valor para armar las variantes")
+  for (const opcion of estado.opciones) {
+    if (opcion.valores.length === 0) motivos.push(`Falta al menos un valor en "${opcion.nombre}"`)
+  }
+  motivos.push(...bloqueos(estado).map((b) => b.motivo))
+
+  // A new row, and a saved or restored one whose code the user touched, must not end up blank. A saved row
+  // whose code was never touched keeps what the database has (a restored row's code is not known here).
+  for (const fila of activas) {
+    if ((!fila.existente || fila.codigoTocado) && fila.codigo.trim() === "") motivos.push(`Falta el código de "${etiquetaDeFila(estado, fila)}"`)
+  }
+  for (const fila of activas) {
+    const { stockMinimo, stockMaximo } = fila.extra
+    if (stockMinimo !== null && stockMaximo !== null && stockMinimo > stockMaximo) {
+      motivos.push(`El stock mínimo de "${etiquetaDeFila(estado, fila)}" no puede superar al máximo`)
+    }
+  }
+  const vistos = new Map<string, { codigo: string; veces: number }>()
+  for (const fila of activas) {
+    const codigo = fila.codigo.trim()
+    if (codigo === "") continue
+    const clave = codigo.toLowerCase()
+    const visto = vistos.get(clave)
+    if (visto) visto.veces++
+    else vistos.set(clave, { codigo, veces: 1 })
+  }
+  for (const { codigo, veces } of vistos.values()) {
+    if (veces > 1) motivos.push(`El código "${codigo}" está repetido`)
+  }
+
+  const barcodes = new Set<string>()
+  let repetido = false
+  for (const fila of activas) {
+    const barcode = sinEspacios(fila.barcode ?? "")
+    if (barcode === "") continue
+    if (barcodes.has(barcode)) repetido = true
+    barcodes.add(barcode)
+  }
+  if (repetido) motivos.push("Hay códigos de barras repetidos")
+
+  return { valida: motivos.length === 0, motivos }
 }

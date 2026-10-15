@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest"
 import { fireEvent, screen } from "@testing-library/react"
 import { CombinacionesCards } from "@/components/inventario/variantes/combinacion-card"
+import { VariantesSection } from "@/components/inventario/variantes/variantes-section"
 import { CombinacionesTabla } from "@/components/inventario/variantes/combinaciones-tabla"
 import { efectoDeDeshacer, efectosDeDeshacer } from "@/components/inventario/variantes/vista"
 import { etiquetaDeFila, filasEnOrden, type GrupoLeido, type VariantesState } from "@/lib/variantes-filas"
@@ -297,6 +298,26 @@ describe("the rows do not recompute the preview on every edit", () => {
     contador.deshacer = 0
     fireEvent.change(screen.getByLabelText("Código de Rojo"), { target: { value: "R-1" } })
     expect(salida.estado.filas[filaDe(salida.estado, "Rojo").id].codigo).toBe("R-1")
+    expect(contador.deshacer).toBe(0)
+  })
+})
+
+describe("the section computes the previews once for both views", () => {
+  it("90 pending rows over 9 values: at most 9 reducer runs in total, not 9 per view", () => {
+    contador.deshacer = 0
+    montar(noventaPendientes(), (estado, dispatch) => <VariantesSection estado={estado} dispatch={dispatch} />)
+    expect(contador.deshacer).toBeGreaterThan(0)
+    expect(contador.deshacer).toBeLessThanOrEqual(9)
+    // And both views show the text.
+    expect(screen.getAllByText(/Al deshacer se vuelve a agregar T4/).length).toBe(20)
+  })
+
+  it("typing a code in the section does not ask the reducer again", () => {
+    const { salida } = montar(noventaPendientes(), (estado, dispatch) => <VariantesSection estado={estado} dispatch={dispatch} />)
+    contador.deshacer = 0
+    fireEvent.change(screen.getAllByLabelText("Código de V1 / T10")[0], { target: { value: "OTRO-1" } })
+    fireEvent.change(screen.getAllByLabelText("Código de V1 / T10")[0], { target: { value: "OTRO-12" } })
+    expect(salida.estado.filas[filaDe(salida.estado, "V1 / T10").id].codigo).toBe("OTRO-12")
     expect(contador.deshacer).toBe(0)
   })
 })
