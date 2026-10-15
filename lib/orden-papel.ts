@@ -47,3 +47,13 @@ export function normalizeOrdenPapel(value: unknown): OrdenPapel {
 export function resolveOrdenPapel(requested: unknown, orgDefault: unknown): OrdenPapel {
   return parseOrdenPapel(requested) ?? normalizeOrdenPapel(orgDefault)
 }
+
+/**
+ * URL of the order PDF for one print. With no size (or an invalid one) it names none and the
+ * server prints on the organization default; with one, that size is used for this print only.
+ */
+export function ordenPdfUrl(ordenId: string, papel?: OrdenPapel | null): string {
+  const base = `/api/ordenes/${encodeURIComponent(ordenId)}/pdf`
+  const size = parseOrdenPapel(papel)
+  return size ? `${base}?papel=${size}` : base
+}

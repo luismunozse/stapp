@@ -5,9 +5,30 @@ import {
   ORDEN_PAPEL_OPCIONES,
   ORDEN_PAGE_POINTS,
   normalizeOrdenPapel,
+  ordenPdfUrl,
   parseOrdenPapel,
   resolveOrdenPapel,
 } from "@/lib/orden-papel"
+
+describe("ordenPdfUrl: the URL of the order PDF for one print", () => {
+  it("names no size when none was chosen, so the server uses the organization default", () => {
+    expect(ordenPdfUrl("ord-1", null)).toBe("/api/ordenes/ord-1/pdf")
+    expect(ordenPdfUrl("ord-1")).toBe("/api/ordenes/ord-1/pdf")
+  })
+
+  it("carries the size chosen for this print", () => {
+    expect(ordenPdfUrl("ord-1", "A6")).toBe("/api/ordenes/ord-1/pdf?papel=A6")
+    expect(ordenPdfUrl("ord-1", "A4")).toBe("/api/ordenes/ord-1/pdf?papel=A4")
+  })
+
+  it("drops a size that is not valid instead of sending it", () => {
+    expect(ordenPdfUrl("ord-1", "A3" as never)).toBe("/api/ordenes/ord-1/pdf")
+  })
+
+  it("encodes the id", () => {
+    expect(ordenPdfUrl("a b/c", "A5")).toBe("/api/ordenes/a%20b%2Fc/pdf?papel=A5")
+  })
+})
 
 describe("normalizeOrdenPapel: anything that is not a known size is A4", () => {
   it("keeps the three known sizes, case and spaces aside", () => {

@@ -64,6 +64,7 @@ import {
 } from "@/components/ordenes/print-label"
 import { useEtiquetaSize } from "@/components/ordenes/use-etiqueta-size"
 import { ThermalPrintOrden } from "@/components/ordenes/thermal-print-orden"
+import { OrdenPapelSelect, useOrdenPapel } from "@/components/ordenes/orden-papel-select"
 import { NotificationHistory } from "@/components/ordenes/notification-history"
 import { PracticaOrdenDetail } from "@/components/ordenes/practica-orden-detail"
 import { OrdenEstadoCard } from "@/components/ordenes/orden-estado-card"
@@ -117,6 +118,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [deleting, setDeleting] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [printingPdf, setPrintingPdf] = useState(false)
+  // Hoja de esta impresión: arranca en la del taller y solo cambia lo que se le pide al server.
+  const ordenPapel = useOrdenPapel()
   const [activeTab, setActiveTab] = useState("repuestos")
   const [showEntregaDialog, setShowEntregaDialog] = useState(false)
   const [sinCobroEntrega, setSinCobroEntrega] = useState(false)
@@ -481,7 +484,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const handleDownloadPdf = async () => {
     setDownloadingPdf(true)
     try {
-      const res = await fetch(`/api/ordenes/${ordenId}/pdf`)
+      const res = await fetch(ordenPapel.pdfUrl(ordenId))
       if (!res.ok) throw new Error("Error al generar PDF")
       const blob = await res.blob()
       const url = window.URL.createObjectURL(blob)
@@ -500,7 +503,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const handlePrintPdf = async () => {
     setPrintingPdf(true)
     try {
-      const res = await fetch(`/api/ordenes/${ordenId}/pdf`)
+      const res = await fetch(ordenPapel.pdfUrl(ordenId))
       if (!res.ok) throw new Error("Error al generar PDF")
       const blob = await res.blob()
       const url = window.URL.createObjectURL(blob)
@@ -709,6 +712,12 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             <Printer className="h-4 w-4 mr-2" />
             {printingPdf ? "..." : "Imprimir"}
           </Button>
+          <OrdenPapelSelect
+            value={ordenPapel.papel}
+            onChange={ordenPapel.setPapel}
+            orgDefault={ordenPapel.orgDefault}
+            disabled={downloadingPdf || printingPdf}
+          />
           <ThermalPrintOrden orden={orden as any} />
           <select
             value={etiquetaSize}

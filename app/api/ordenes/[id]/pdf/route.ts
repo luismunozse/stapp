@@ -6,6 +6,7 @@ import { getDeviceTypeLabel } from "@/lib/device-types"
 import { headers } from "next/headers"
 import { getTerminologia } from "@/lib/terminologia-server"
 import { construirTrabajos } from "@/lib/ordenes/trabajos-orden"
+import { resolveOrdenPapel } from "@/lib/orden-papel"
 
 export async function GET(
   request: Request,
@@ -305,6 +306,11 @@ export async function GET(
       cobros,
       timeline,
     }
+
+    // Hoja de esta impresión: la que pide el request (?papel=) o, si no pide ninguna válida,
+    // el default de la organización. `org` viene de `organizations (*)`: con la migración sin
+    // aplicar la clave no existe y resolveOrdenPapel devuelve A4.
+    pdfData.paperSize = resolveOrdenPapel(new URL(request.url).searchParams.get("papel"), org?.orden_formato_papel)
 
     // Resolver terminología configurable y generar PDF
     const terminologia = await getTerminologia(organizationId!)

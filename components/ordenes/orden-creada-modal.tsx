@@ -23,6 +23,7 @@ import {
 } from "lucide-react"
 import { printDeviceLabel } from "./print-label"
 import { ThermalPrintOrden } from "./thermal-print-orden"
+import { OrdenPapelSelect, useOrdenPapel } from "./orden-papel-select"
 import { generateWhatsAppUrl, formatPhoneForWhatsApp } from "@/lib/notifications/whatsapp-templates"
 import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 import { useCurrency } from "@/contexts/currency-context"
@@ -115,6 +116,8 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [printing, setPrinting] = useState(false)
+  // Hoja de esta impresión: arranca en la del taller y solo cambia lo que se le pide al server.
+  const ordenPapel = useOrdenPapel()
   const [mensaje, setMensaje] = useState("")
   const [plantillas, setPlantillas] = useState<Record<string, string> | null>(null)
   const { formatPrice, formatDate, timezone, pais } = useCurrency()
@@ -183,7 +186,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
 
     setDownloading(true)
     try {
-      const response = await fetch(`/api/ordenes/${orden.id}/pdf`)
+      const response = await fetch(ordenPapel.pdfUrl(orden.id))
       if (!response.ok) throw new Error("Error al generar PDF")
 
       const blob = await response.blob()
@@ -202,7 +205,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
 
     setPrinting(true)
     try {
-      const response = await fetch(`/api/ordenes/${orden.id}/pdf`)
+      const response = await fetch(ordenPapel.pdfUrl(orden.id))
       if (!response.ok) throw new Error("Error al generar PDF")
 
       const blob = await response.blob()
@@ -323,6 +326,13 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
               )}
               Imprimir
             </Button>
+            <OrdenPapelSelect
+              value={ordenPapel.papel}
+              onChange={ordenPapel.setPapel}
+              orgDefault={ordenPapel.orgDefault}
+              disabled={downloading || printing}
+              className="h-10 rounded-md border bg-background px-2 text-sm min-w-[110px]"
+            />
             <Button
               variant="outline"
               className="flex-1 min-w-[110px]"
