@@ -201,3 +201,14 @@ export function validezDeVariantes(estado: VariantesState): Validez {
 
   return { valida: motivos.length === 0, motivos }
 }
+
+/**
+ * The photo a row borrows while it has none of its own: the first ACTIVE sibling, in combination order, with a
+ * saved photo, plus that sibling's label. Display only (the server computes the same for the list and the POS).
+ * A row pending archive never lends and never borrows.
+ */
+export function respaldoDeFila(estado: VariantesState, fila: Fila): { url: string; etiqueta: string } | null {
+  if (fila.archivar || fila.imagenUrl) return null
+  const prestadora = filasEnOrden(estado).find((f) => f.id !== fila.id && !f.archivar && !!f.imagenUrl)
+  return prestadora?.imagenUrl ? { url: prestadora.imagenUrl, etiqueta: etiquetaDeFila(estado, prestadora) } : null
+}
