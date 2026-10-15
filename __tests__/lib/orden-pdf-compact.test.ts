@@ -87,6 +87,24 @@ const SIZES = {
 } as const
 type Compact = keyof typeof SIZES
 
+/**
+ * Where the fit may shrink the text to: `text` for everything but the terms (the smallest the
+ * body can get), `terms` for the terms block, which shrinks first and goes further.
+ */
+const FLOORS = {
+  A5: { text: 7.5, terms: 6.5 },
+  A6: { text: 6.5, terms: 5.5 },
+} as const
+
+/** Normal (full-size) font sizes of the layout. */
+const NORMAL = {
+  A5: { body: 10, terms: 9, heading: 15, number: 24 },
+  A6: { body: 8.5, terms: 8, heading: 12, number: 19 },
+} as const
+
+/** An order that fits its sheet at full size. */
+const TYPICAL = { A5: LEAN, A6: MINIMAL } as const
+
 async function render(paperSize: "A4" | Compact, overrides: Record<string, unknown> = {}) {
   const buffer = await generateOrdenPDF({ ...fixture(overrides), paperSize } as any)
   const doc = await PDFDocument.load(buffer)
@@ -221,25 +239,25 @@ describe("wrapText cost", () => {
 })
 
 describe("a 3000-character unbroken token", () => {
-  it("generates on A6 in under 2 seconds with every run inside the page", async () => {
+  it("generates on A6 in under 2 seconds, on ONE page, with every run inside it", async () => {
     const monster = "Q".repeat(3000)
     const started = Date.now()
     const out = await render("A6", { ...MINIMAL, problemaReportado: monster })
     expect(Date.now() - started).toBeLessThan(2000)
-    expect(out.pages.length).toBeGreaterThan(1) // the token needs many lines and flows onto more pages
-    // every character is there (the running header of page 2 sits in the middle of the token, so
-    // count them instead of looking for one contiguous string)
-    expect(out.runs.filter((r) => /^Q+$/.test(r.text)).reduce((n, r) => n + r.text.length, 0)).toBe(3000)
-    for (let i = 0; i < out.pages.length; i++) {
-      expectNoClippingNoOverlap(out.runs.filter((r) => r.page === i), out.pages[i])
-    }
+    expect(out.pages).toEqual([[298, 420]]) // the token cannot fit: it is cut, it does not flow onto a second page
+    const qs = out.runs.filter((r) => /^Q+…?$/.test(r.text))
+    expect(qs.length).toBeGreaterThan(3)
+    expect(qs.reduce((n, r) => n + r.text.replace("…", "").length, 0)).toBeLessThan(3000)
+    expect(qs[qs.length - 1].text.endsWith("…")).toBe(true)
+    expectNoClippingNoOverlap(out.runs, out.pages[0])
   }, 20000)
 
-  it("a very long workshop name does not stall the running header of a continuation page", async () => {
+  it("a very long workshop name (a protected field) does not stall the layout and still gives ONE page", async () => {
     const started = Date.now()
     const out = await render("A6", { nombreEmpresa: "N".repeat(1500), recepcionTerminos: Array.from({ length: 30 }, (_, i) => `${i + 1}. ${LOREM}`).join("\n") })
     expect(Date.now() - started).toBeLessThan(2000)
-    expect(out.pages.length).toBeGreaterThan(1)
+    expect(out.pages).toEqual([[298, 420]])
+    expectNoClippingNoOverlap(out.runs, out.pages[0])
   }, 20000)
 })
 
@@ -250,17 +268,17 @@ describe("page size of each format", () => {
     expect((await render("A6", MINIMAL)).pages).toEqual([[298, 420]])
   })
 
-  it("an order with money and remarks takes a second A6 sheet instead of shrinking the text", async () => {
+  it("an order with money and remarks that does not fit at full size is squeezed onto ONE A6 sheet", async () => {
     const out = await render("A6", LEAN)
-    expect(out.pages).toEqual([[298, 420], [298, 420]])
-    expect(Math.min(...out.runs.map((r) => r.size))).toBeGreaterThanOrEqual(SIZES.A6.minFont)
+    expect(out.pages).toEqual([[298, 420]])
+    expect(out.text).toContain("FIRMA DEL CLIENTE")
+    expect(Math.min(...out.runs.map((r) => r.size))).toBeGreaterThanOrEqual(FLOORS.A6.terms - 0.01)
   })
 
-  it("every page of a longer document keeps the size of its paper", async () => {
+  it("the fully populated order is one page with the size of its paper", async () => {
     for (const key of ["A5", "A6"] as Compact[]) {
-      const out = await render(key) // the fully populated fixture
-      expect(out.pages.length).toBeGreaterThan(0)
-      for (const p of out.pages) expect(p).toEqual(SIZES[key].page)
+      const out = await render(key)
+      expect(out.pages).toEqual([SIZES[key].page])
     }
   })
 
@@ -280,17 +298,15 @@ describe("legibility: the reason this format exists", () => {
   for (const key of ["A5", "A6"] as Compact[]) {
     const { minFont, minBody } = SIZES[key]
 
-    it(`${key}: every text is drawn at ${minFont}pt or more, on both sheets`, async () => {
-      for (const extra of [{}, ENTREGA]) {
-        const { runs } = await render(key, extra)
-        expect(runs.length).toBeGreaterThan(25)
-        const smallest = Math.min(...runs.map((r) => r.size))
-        expect(smallest).toBeGreaterThanOrEqual(minFont)
-      }
+    it(`${key}: an order that fits is drawn at ${minFont}pt or more`, async () => {
+      const { runs } = await render(key, TYPICAL[key])
+      expect(runs.length).toBeGreaterThan(20)
+      const smallest = Math.min(...runs.map((r) => r.size))
+      expect(smallest).toBeGreaterThanOrEqual(minFont)
     })
 
     it(`${key}: the problem description (the body text) is at least ${minBody}pt`, async () => {
-      const { runs } = await render(key)
+      const { runs } = await render(key, TYPICAL[key])
       const falla = runs.find((r) => r.text.startsWith("El equipo no enciende"))
       expect(falla, "problem description not found").toBeDefined()
       expect(falla!.size).toBeGreaterThanOrEqual(minBody)
@@ -298,8 +314,8 @@ describe("legibility: the reason this format exists", () => {
   }
 
   it("A5 reads bigger than A6, and both bigger than the half-size A4-on-A6 print (4.5pt of the 9pt A4 body)", async () => {
-    const a5 = (await render("A5")).runs.find((r) => r.text.startsWith("El equipo no enciende"))!
-    const a6 = (await render("A6")).runs.find((r) => r.text.startsWith("El equipo no enciende"))!
+    const a5 = (await render("A5", TYPICAL.A5)).runs.find((r) => r.text.startsWith("El equipo no enciende"))!
+    const a6 = (await render("A6", TYPICAL.A6)).runs.find((r) => r.text.startsWith("El equipo no enciende"))!
     expect(a5.size).toBeGreaterThan(a6.size)
     expect(a6.size).toBeGreaterThan(9 * 0.7071 * 0.7071 * 1.5) // A4 -> A6 scale is 0.5: 4.5pt
   })
@@ -404,51 +420,222 @@ describe("nothing clipped, nothing overlapping", () => {
   })
 })
 
-describe("long content flows onto extra pages", () => {
-  const longTerms = Array.from({ length: 30 }, (_, i) => `${i + 1}. ${LOREM}`).join("\n")
 
+// ============================================================
+// ALWAYS ONE PAGE
+// ============================================================
+// The owner printed an A6 order that came out on two sheets: "tiene que entrar todo en una sola
+// pagina". The sheet is fitted in steps, stopping at the first that works: full size, tighter
+// spacing, smaller terms, everything scaled down together, and only then cutting the longest
+// free text with an ellipsis. The workshop, the order number, the customer, the device, the
+// money, the QR and the signatures are never cut.
+
+const CLAUSE = "cláusula"
+const clauseTerms = (n: number) => Array.from({ length: n }, (_, i) => `${i + 1}. ${Array(30).fill(CLAUSE).join(" ")}`).join("\n")
+const loremTerms = (n: number) => Array.from({ length: n }, (_, i) => `${i + 1}. ${LOREM}`).join("\n")
+/** `n` characters of readable, breakable text. */
+const prose = (n: number) => LOREM.repeat(Math.ceil(n / LOREM.length)).slice(0, n)
+const trabajos = (n: number) => Array.from({ length: n }, (_, i) => ({ nombre: `Reparación de módulo número ${i + 1}`, cantidad: 1, importe: 1000 + i }))
+const cobros = (n: number) => Array.from({ length: n }, () => ({ fecha: FIXED, metodo: "EFECTIVO", referencia: null, monto: 1000 }))
+
+type Sheet = "RECEPCION" | "ENTREGA"
+const SHEETS: Sheet[] = ["RECEPCION", "ENTREGA"]
+const sheetExtra = (sheet: Sheet) => (sheet === "ENTREGA" ? ENTREGA : {})
+
+/** The six inputs that used to overflow a small sheet. */
+const OVERFLOW_CASES: Record<string, (key: Compact) => Record<string, unknown>> = {
+  "typical order": (key) => TYPICAL[key],
+  "30 long terms": () => ({ ...LEAN, recepcionTerminos: loremTerms(30) }),
+  "long falla and long observaciones": () => ({
+    ...LEAN,
+    problemaReportado: prose(2000),
+    observaciones: prose(2000),
+    diagnostico: prose(2000),
+  }),
+  "many budget lines": () => ({ ...LEAN, trabajos: trabajos(14), cobros: cobros(6) }),
+  "a long unbroken token": () => ({ ...LEAN, problemaReportado: "Q".repeat(3000), diagnostico: "Z".repeat(3000) }),
+  "everything at once": () => ({
+    problemaReportado: prose(2000),
+    observaciones: prose(2000),
+    diagnostico: prose(2000),
+    accesorios: prose(600),
+    recepcionTerminos: loremTerms(30),
+    trabajos: trabajos(14),
+    cobros: cobros(6),
+    checklistNotas: prose(400),
+    notasEntrega: prose(400),
+  }),
+}
+
+/** What must survive any amount of squeezing. */
+function expectProtectedContent(text: string, sheet: Sheet, out: Awaited<ReturnType<typeof render>>) {
+  for (const piece of ["Servicio Técnico Demo", "#1042", "Ingreso", "Juan Pérez", "+54 9 11 2345-6789", "Apple iPhone 13 · Negro"]) {
+    expect(text, `missing: ${piece}`).toContain(norm(piece))
+  }
+  expect(imageCount(out.doc), "the QR is gone").toBeGreaterThanOrEqual(1)
+  if (sheet === "RECEPCION") {
+    expect(text).toContain("FIRMA DEL CLIENTE")
+  } else {
+    for (const piece of ["TOTAL FINAL", formatCurrencyValue(48000, "ARS"), "SALDO", formatCurrencyValue(38000, "ARS"), "CLIENTE — ENTREGA", "ENTREGÓ — M. GOMEZ"]) {
+      expect(text, `missing: ${piece}`).toContain(norm(piece))
+    }
+  }
+}
+
+describe("always exactly one page", () => {
   for (const key of ["A5", "A6"] as Compact[]) {
-    it(`${key}: long terms add pages and keep every term, instead of overflowing the first one`, async () => {
-      const out = await render(key, { recepcionTerminos: longTerms })
-      expect(out.pages.length).toBeGreaterThan(1)
-      for (const p of out.pages) expect(p).toEqual(SIZES[key].page)
-      expect(out.text).toContain("1. Lorem ipsum dolor sit amet")
-      expect(out.text).toContain("30. Lorem ipsum dolor sit amet")
-      expect(out.text).toContain(`${out.pages.length}/${out.pages.length}`)
-      // geometry holds page by page
-      for (let i = 0; i < out.pages.length; i++) {
-        expectNoClippingNoOverlap(out.runs.filter((r) => r.page === i), out.pages[i])
+    for (const sheet of SHEETS) {
+      for (const [name, build] of Object.entries(OVERFLOW_CASES)) {
+        it(`${key} ${sheet}: ${name} is ONE page, inside the margins, with the protected content`, async () => {
+          const out = await render(key, { ...build(key), ...sheetExtra(sheet) })
+          expect(out.pages).toEqual([SIZES[key].page])
+          expectNoClippingNoOverlap(out.runs, out.pages[0])
+          // smallest text: the terms floor (the terms shrink further than the rest)
+          expect(Math.min(...out.runs.map((r) => r.size))).toBeGreaterThanOrEqual(FLOORS[key].terms - 0.01)
+          expectProtectedContent(out.text, sheet, out)
+        }, 20000)
       }
-      // every text, on every page, still respects the minimum size
-      expect(Math.min(...out.runs.map((r) => r.size))).toBeGreaterThanOrEqual(SIZES[key].minFont)
-    })
+    }
   }
 
-  it("a continuation page says which order it belongs to", async () => {
-    const out = await render("A6", { recepcionTerminos: longTerms })
-    const secondPage = out.runs.filter((r) => r.page === 1).map((r) => r.text).join(" ")
-    expect(secondPage).toContain("#1042")
-    expect(secondPage).toContain("2/")
-  })
+  it("a sheet with 60 budget lines is one page; the lines that do not fit are summed, the totals stay", async () => {
+    const out = await render("A6", { ...LEAN, ...ENTREGA, trabajos: trabajos(60), cobros: cobros(20) })
+    expect(out.pages).toEqual([[298, 420]])
+    expectNoClippingNoOverlap(out.runs, out.pages[0])
+    expect(out.text).toContain("TOTAL FINAL")
+    expect(out.text).toContain("SALDO")
+    expect(out.text).toMatch(/\+\d+ ítems? más/)
+  }, 20000)
+})
 
-  it("a single long field (problem) flows across pages and every word survives", async () => {
-    const huge = Array.from({ length: 60 }, (_, i) => `palabra${i}`).join(" ").repeat(6)
-    const out = await render("A6", { problemaReportado: huge })
-    expect(out.pages.length).toBeGreaterThan(1)
-    expect(out.text).toContain("palabra59")
-    expectNoClippingNoOverlap(out.runs.filter((r) => r.page === 0), out.pages[0])
-  })
-
-  it("a normal order stays on ONE page and prints no page counter", async () => {
-    for (const [key, extra] of [["A5", LEAN], ["A6", MINIMAL]] as const) {
-      const out = await render(key, extra)
+describe("no multi-page chrome: no continuation header and no i/n counter", () => {
+  it("a squeezed sheet prints no 1/1 and nothing but the sheet itself", async () => {
+    for (const key of ["A5", "A6"] as Compact[]) {
+      const out = await render(key, OVERFLOW_CASES["everything at once"](key))
       expect(out.pages).toHaveLength(1)
-      expect(out.text).not.toContain("1/1")
+      expect(out.runs.some((r) => /^\d+\/\d+$/.test(r.text.trim()))).toBe(false)
+      // the order number appears once: there is no running header repeating it
+      expect(out.runs.filter((r) => r.text.includes("#1042"))).toHaveLength(1)
     }
   })
 
-  it("A4 is not touched by the long terms: still one page of 595x842", async () => {
-    const out = await render("A4", { recepcionTerminos: longTerms })
-    expect(out.pages).toEqual([[595, 842]])
+  it("the signature block sits at the bottom of the page, under everything else", async () => {
+    for (const key of ["A5", "A6"] as Compact[]) {
+      const { runs, text } = await render(key, TYPICAL[key])
+      expect(text).toContain("FIRMA DEL CLIENTE")
+      const sig = runs.find((r) => r.text.includes("FIRMA DEL CLIENTE"))!
+      const lowest = Math.min(...runs.map((r) => r.y))
+      expect(sig.y).toBe(lowest) // nothing is drawn below the signature label
+      expect(sig.y).toBeLessThan(SIZES[key].page[1] * 0.12 + 16) // and it is down at the margin
+    }
+  })
+})
+
+describe("the fit stops at the first step that works", () => {
+  for (const key of ["A5", "A6"] as Compact[]) {
+    const N = NORMAL[key]
+
+    it(`${key}: an order that fits keeps the normal fonts (step a), nothing is cut`, async () => {
+      const out = await render(key, TYPICAL[key])
+      const falla = out.runs.find((r) => r.text.startsWith("El equipo no enciende"))!
+      const terms = out.runs.find((r) => r.text.startsWith("1. Conserve este comprobante"))!
+      const order = out.runs.find((r) => r.text === "#1042")!
+      expect(falla.size).toBe(N.body)
+      expect(terms.size).toBe(N.terms)
+      expect(order.size).toBe(N.number)
+      expect(out.text).not.toContain("…")
+    })
+
+    it(`${key}: long terms are drawn smaller than the body BEFORE the body shrinks`, async () => {
+      const out = await render(key, { ...LEAN, recepcionTerminos: clauseTerms(2) + "\n" + loremTerms(3) })
+      const falla = out.runs.find((r) => r.text.startsWith("El equipo no enciende"))!
+      const term = out.runs.find((r) => r.text.includes(CLAUSE))!
+      expect(out.pages).toHaveLength(1)
+      expect(term.size).toBeLessThan(N.terms)
+      expect(term.size).toBeGreaterThanOrEqual(FLOORS[key].terms - 0.01)
+      expect(falla.size).toBe(N.body) // the body kept its normal size
+      expect(out.text).not.toContain("…")
+    })
+
+    it(`${key}: when the terms alone cannot absorb it, the body shrinks, never below ${FLOORS[key].text}pt`, async () => {
+      const out = await render(key, { ...LEAN, recepcionTerminos: loremTerms(30), problemaReportado: prose(900), observaciones: prose(500) })
+      const body = out.runs.filter((r) => r.size > FLOORS[key].terms + 0.01 && !r.text.includes("Lorem"))
+      expect(out.pages).toHaveLength(1)
+      expect(body.length).toBeGreaterThan(10)
+      expect(Math.min(...body.map((r) => r.size))).toBeGreaterThanOrEqual(FLOORS[key].text - 0.01)
+      const term = out.runs.find((r) => r.text.startsWith("1. Lorem"))!
+      expect(term.size).toBeCloseTo(FLOORS[key].terms, 1) // already at its own floor
+    })
+
+    it(`${key}: fonts never go below the floors, whatever the content`, async () => {
+      for (const sheet of SHEETS) {
+        const out = await render(key, { ...OVERFLOW_CASES["everything at once"](key), ...sheetExtra(sheet) })
+        const small = out.runs.filter((r) => r.size < FLOORS[key].text - 0.01)
+        for (const r of small) {
+          expect(r.text, `"${r.text}" is below the body floor and is not the terms`).toMatch(/Lorem|ipsum|dolor|consequat|…/i)
+          expect(r.size).toBeGreaterThanOrEqual(FLOORS[key].terms - 0.01)
+        }
+        expect(Math.min(...out.runs.map((r) => r.size))).toBeGreaterThanOrEqual(FLOORS[key].terms - 0.01)
+      }
+    })
+  }
+})
+
+describe("truncation is the last resort, in a fixed order", () => {
+  it("the terms are cut before observaciones and falla: those stay whole", async () => {
+    const falla = prose(300)
+    const obs = prose(250)
+    const out = await render("A6", { ...LEAN, problemaReportado: falla, observaciones: obs, recepcionTerminos: loremTerms(30) })
+    expect(out.pages).toHaveLength(1)
+    expect(out.text).toContain(falla)
+    expect(out.text).toContain(obs)
+    // the terms are what got cut: the first survives, the last does not, and the cut ends with an ellipsis
+    expect(out.text).toContain("1. Lorem ipsum dolor sit amet")
+    expect(out.text).not.toContain("30. Lorem ipsum")
+    const termRuns = out.runs.filter((r) => /Lorem|ipsum|dolor|consequat|…/.test(r.text) && r.size < FLOORS.A6.text)
+    expect(termRuns.length).toBeGreaterThan(3)
+    expect(termRuns[termRuns.length - 1].text.endsWith("…")).toBe(true)
+  })
+
+  it("then observaciones, then falla and diagnostico: every cut field ends with an ellipsis", async () => {
+    const out = await render("A6", OVERFLOW_CASES["everything at once"]("A6"))
+    expect(out.pages).toHaveLength(1)
+    expect(out.runs.filter((r) => r.text.endsWith("…")).length).toBeGreaterThanOrEqual(1)
+    // the falla keeps its start and loses its end
+    expect(out.text).toContain(LOREM.slice(0, 60))
+    expect(out.text).not.toContain(prose(2000).slice(-60))
+    // an ellipsis only ever closes a run
+    for (const r of out.runs) expect(r.text.includes("…") ? r.text.endsWith("…") : true).toBe(true)
+  })
+
+  it("an order that fits is never cut: no ellipsis in the typical or the moderately long cases", async () => {
+    for (const key of ["A5", "A6"] as Compact[]) {
+      expect((await render(key, TYPICAL[key])).text).not.toContain("…")
+    }
+    expect((await render("A5", { ...LEAN, recepcionTerminos: loremTerms(4) })).text).not.toContain("…")
+  })
+})
+
+describe("fitting is fast", () => {
+  it("'everything at once' on A6 finishes in under 2 seconds, on both sheets", async () => {
+    for (const sheet of SHEETS) {
+      const started = Date.now()
+      const out = await render("A6", { ...OVERFLOW_CASES["everything at once"]("A6"), ...sheetExtra(sheet) })
+      expect(Date.now() - started).toBeLessThan(2000)
+      expect(out.pages).toHaveLength(1)
+    }
+  }, 20000)
+
+  it("a 3000-character token in two fields, on A5, stays fast too", async () => {
+    const started = Date.now()
+    const out = await render("A5", { ...LEAN, problemaReportado: "Q".repeat(3000), observaciones: "W".repeat(3000) })
+    expect(Date.now() - started).toBeLessThan(2000)
+    expect(out.pages).toHaveLength(1)
+  }, 20000)
+})
+
+describe("A4 is not touched by any of this", () => {
+  it("long terms keep A4 at one page of 595x842", async () => {
+    expect((await render("A4", { recepcionTerminos: loremTerms(30) })).pages).toEqual([[595, 842]])
   })
 })
