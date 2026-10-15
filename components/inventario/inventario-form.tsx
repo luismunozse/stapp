@@ -26,6 +26,8 @@ import type { CompartidosForm } from "@/lib/variantes-guardado"
 import { aBorrador, esVariantesDeBorrador, restaurarVariantes, type VariantesDeBorrador } from "@/lib/variantes-borrador"
 import { VariantesSection } from "@/components/inventario/variantes/variantes-section"
 import { PromoverDialog } from "@/components/inventario/variantes/promover-dialog"
+import { ElegirExistentesDialog } from "@/components/inventario/elegir-existentes-dialog"
+import { AgruparDialog } from "@/components/inventario/agrupar-dialog"
 import { useFotosVariantes } from "@/components/inventario/variantes/use-fotos-variantes"
 import { useVariantesForm } from "@/components/inventario/variantes/use-variantes-form"
 import { validezDeVariantes } from "@/components/inventario/variantes/vista"
@@ -418,6 +420,8 @@ export function InventarioForm({
   const variantesActivo = permiteVariantes && variantes.estado.activo
   const validezVariantes = variantesActivo ? validezDeVariantes(variantes.estado) : null
   const [promoviendo, setPromoviendo] = useState(false)
+  /** "Sumar productos existentes": eligiendo los productos, o ya con ellos en el dialogo de agrupar. */
+  const [sumando, setSumando] = useState<"elegir" | Inventario[] | null>(null)
   const [guardarTrasPromover, setGuardarTrasPromover] = useState(false)
   /** Lo que valían los campos compartidos al leer el grupo (o al guardarlo): lo que no cambió no se manda. */
   const compartidosGuardados = useRef<CompartidosForm | null>(null)
@@ -1640,7 +1644,29 @@ export function InventarioForm({
               alAjustarStock={() => void variantes.recargar()}
               guardando={loading || variantes.cargando}
               fotos={fotos}
+              alSumarExistentes={item?.grupoId ? undefined : () => setSumando("elegir")}
             />
+          )}
+          {permiteVariantes && (
+            <>
+              <ElegirExistentesDialog
+                open={sumando === "elegir"}
+                incluir={item && !item.grupoId ? item : null}
+                onClose={() => setSumando(null)}
+                onElegidos={(elegidos) => setSumando(elegidos)}
+              />
+              <AgruparDialog
+                open={Array.isArray(sumando)}
+                items={Array.isArray(sumando) ? sumando : []}
+                onClose={() => setSumando(null)}
+                onAgrupado={() => {
+                  // Los productos quedaron agrupados: lo que se estaba cargando ya no hace falta.
+                  clearDraft()
+                  setSumando(null)
+                  onSuccess()
+                }}
+              />
+            </>
           )}
           {permiteVariantes && item && !item.grupoId && (
             <PromoverDialog
