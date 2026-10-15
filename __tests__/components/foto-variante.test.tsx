@@ -174,6 +174,21 @@ describe("FotoVariante: picking", () => {
     await waitFor(() => expect(screen.queryByRole("alert")).toBeNull())
   })
 
+  it("clears a refusal when the pending photo is discarded", async () => {
+    const alElegir = vi.fn<PropsFotoVariante["alElegir"]>().mockResolvedValue({ ok: false, mensaje: "No." })
+    const { rerender, props } = dibujar({ alElegir })
+    fireEvent.change(entrada(), { target: { files: [archivo()] } })
+    await screen.findByRole("alert")
+    rerender(<FotoVariante {...props} vista={{ ...vacia, pendiente: { previa: "blob:p", estado: "pendiente" } }} />)
+    fireEvent.click(screen.getByRole("button", { name: "Descartar foto de Rojo / M" }))
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  it("the secondary controls keep a 44px hit area in the table too", () => {
+    dibujar({ tamano: "tabla", propia: "https://cdn/rojo.jpg" })
+    expect(screen.getByRole("button", { name: "Quitar foto de Rojo / M" }).className).toContain("min-h-11")
+  })
+
   it("ignores an empty selection", () => {
     const { props } = dibujar()
     fireEvent.change(entrada(), { target: { files: [] } })

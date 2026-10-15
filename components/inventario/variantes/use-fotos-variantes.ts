@@ -76,6 +76,7 @@ const VACIA: VistaFoto = Object.freeze({ pendiente: null, quitar: false, subida:
 const MENSAJE_TIPO = "Elegí una foto en formato JPG, PNG o WebP."
 const MENSAJE_PESO = "La foto pesa más de 5 MB. Elegí una más liviana."
 const MENSAJE_PROCESO = "No pudimos preparar la foto. Probá con otra."
+const MENSAJE_CERRADA = "Se cerró la pantalla antes de terminar. Elegí la foto de nuevo."
 const MENSAJE_SUBIDA = "No se pudo subir la foto. Probá de nuevo."
 const MENSAJE_QUITAR = "No se pudo quitar la foto. Probá de nuevo."
 
@@ -90,6 +91,8 @@ export function useFotosVariantes(): FotosVariantes {
   const entradas = useRef(new Map<string, Entrada>())
   const [version, setVersion] = useState(0)
   const montado = useRef(true)
+  // One send per row at a time: a second caller gets the first one's promise.
+  const enCurso = useRef(new Map<string, Promise<boolean | null>>())
 
   const avisar = useCallback(() => {
     if (montado.current) setVersion((v) => v + 1)
@@ -134,6 +137,8 @@ export function useFotosVariantes(): FotosVariantes {
       } catch {
         return { ok: false, mensaje: MENSAJE_PROCESO }
       }
+      // The screen closed while the file was being prepared: keep no object URL nobody will revoke.
+      if (!montado.current) return { ok: false, mensaje: MENSAJE_CERRADA }
       const e = tomar(id)
       soltarArchivo(e)
       e.archivo = comprimido
@@ -160,18 +165,24 @@ export function useFotosVariantes(): FotosVariantes {
       const e = tomar(id)
       e.quitar = !e.quitar
       if (e.quitar) soltarArchivo(e)
+      else if (e.archivo === null) {
+        e.estado = "pendiente"
+        e.mensaje = undefined
+      }
       avisar()
     },
     [avisar]
   )
 
   // One request for one row. Never throws: a failure is recorded on the row and reported as `false`.
-  const enviar = useCallback(
+  const enviarUna = useCallback(
     async (fila: FilaParaFotos): Promise<boolean | null> => {
       const e = entradas.current.get(fila.id)
       if (!e || fila.archivar) return null
       const subiendo = e.archivo !== null
-      const borrando = !subiendo && e.quitar && !!fila.imagenUrl
+      // The photo the row has NOW: the one uploaded in this session wins over the saved one ("" = removed).
+      const vigente = e.subida !== null ? e.subida : fila.imagenUrl
+      const borrando = !subiendo && e.quitar && !!vigente
       if (!subiendo && !borrando) return null
 
       const archivo = e.archivo
@@ -211,6 +222,17 @@ export function useFotosVariantes(): FotosVariantes {
       }
     },
     [avisar]
+  )
+
+  const enviar = useCallback(
+    (fila: FilaParaFotos): Promise<boolean | null> => {
+      const previo = enCurso.current.get(fila.id)
+      if (previo) return previo
+      const p = enviarUna(fila).finally(() => enCurso.current.delete(fila.id))
+      enCurso.current.set(fila.id, p)
+      return p
+    },
+    [enviarUna]
   )
 
   const subirTodas = useCallback(

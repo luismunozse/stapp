@@ -408,6 +408,158 @@ describe("useFotosVariantes: upload", () => {
     expect(result.current.de("a")).toMatchObject({ quitar: false, subida: "", errorAlQuitar: null })
   })
 
+  it("a photo removed after an upload in the same session gets exactly one DELETE", async () => {
+    const { result } = montar()
+    await elegir(result, "a")
+    let fin!: Promise<unknown>
+    act(() => {
+      fin = result.current.subirTodas([fila("a")])
+    })
+    await vaciar()
+    await act(async () => {
+      pedidos[0].resolver({ ok: true, json: { imagenUrl: "https://cdn/a.jpg" } })
+      await fin
+    })
+    act(() => result.current.alternarQuitar("a"))
+    act(() => {
+      fin = result.current.subirTodas([fila("a")])
+    })
+    await vaciar()
+    expect(pedidos).toHaveLength(2)
+    expect(pedidos[1].metodo).toBe("DELETE")
+    await act(async () => {
+      pedidos[1].resolver({ ok: true, json: { success: true } })
+      await fin
+    })
+    expect(result.current.de("a")).toMatchObject({ quitar: false, subida: "" })
+  })
+
+  it("after a removal in the session, marking again sends nothing (the effective photo is gone)", async () => {
+    const { result } = montar()
+    act(() => result.current.alternarQuitar("a"))
+    let fin!: Promise<unknown>
+    act(() => {
+      fin = result.current.subirTodas([fila("a", { imagenUrl: "https://cdn/a.jpg" })])
+    })
+    await vaciar()
+    await act(async () => {
+      pedidos[0].resolver({ ok: true, json: {} })
+      await fin
+    })
+    act(() => result.current.alternarQuitar("a"))
+    await act(async () => {
+      await result.current.subirTodas([fila("a", { imagenUrl: "https://cdn/a.jpg" })])
+    })
+    expect(pedidos).toHaveLength(1)
+  })
+
+  it("two concurrent rounds send one request per row and share the outcome", async () => {
+    const { result } = montar()
+    await elegir(result, "a")
+    await elegir(result, "b")
+    const filas = [fila("a"), fila("b")]
+    let p1!: Promise<{ hechas: string[]; fallidas: string[] }>
+    let p2!: Promise<{ hechas: string[]; fallidas: string[] }>
+    act(() => {
+      p1 = result.current.subirTodas(filas)
+      p2 = result.current.subirTodas(filas)
+    })
+    await vaciar()
+    expect(pedidos).toHaveLength(2)
+    let r1!: { hechas: string[]; fallidas: string[] }
+    let r2!: { hechas: string[]; fallidas: string[] }
+    await act(async () => {
+      pedidos[0].resolver({ ok: true, json: { imagenUrl: "ua" } })
+      pedidos[1].resolver({ ok: false })
+      r1 = await p1
+      r2 = await p2
+    })
+    expect(pedidos).toHaveLength(2)
+    expect(r1).toEqual({ hechas: ["a"], fallidas: ["b"] })
+    expect(r2).toEqual(r1)
+    expect(result.current.de("a").subida).toBe("ua")
+    expect(result.current.de("b").pendiente?.estado).toBe("error")
+  })
+
+  it("reintentar while that row is sending sends nothing extra and reports the same outcome", async () => {
+    const { result } = montar()
+    await elegir(result, "a")
+    let fin!: Promise<unknown>
+    let reintento!: Promise<boolean>
+    act(() => {
+      fin = result.current.subirTodas([fila("a")])
+      reintento = result.current.reintentar(fila("a"))
+    })
+    await vaciar()
+    expect(pedidos).toHaveLength(1)
+    await act(async () => {
+      pedidos[0].resolver({ ok: true, json: { imagenUrl: "ua" } })
+      await fin
+      expect(await reintento).toBe(true)
+    })
+    expect(pedidos).toHaveLength(1)
+    expect(result.current.de("a").subida).toBe("ua")
+  })
+
+  it("a row can be sent again once its previous send finished", async () => {
+    const { result } = montar()
+    await elegir(result, "a")
+    let fin!: Promise<unknown>
+    act(() => {
+      fin = result.current.subirTodas([fila("a")])
+    })
+    await vaciar()
+    await act(async () => {
+      pedidos[0].resolver({ ok: false })
+      await fin
+    })
+    act(() => {
+      fin = result.current.subirTodas([fila("a")])
+    })
+    await vaciar()
+    expect(pedidos).toHaveLength(2)
+    await act(async () => {
+      pedidos[1].resolver({ ok: true, json: { imagenUrl: "u" } })
+      await fin
+    })
+  })
+
+  it("elegir finishing after unmount leaves no object URL behind", async () => {
+    let soltar!: (f: File) => void
+    comprimir.mockImplementationOnce(() => new Promise<File>((r) => (soltar = r)))
+    const { result, unmount } = montar()
+    let p!: Promise<unknown>
+    act(() => {
+      p = result.current.elegir("a", archivo())
+    })
+    unmount()
+    await act(async () => {
+      soltar(archivo())
+      await p
+    })
+    expect(urls).toEqual([])
+  })
+
+  it("turning the removal mark off clears a previous failure", async () => {
+    const { result } = montar()
+    act(() => result.current.alternarQuitar("a"))
+    const f = fila("a", { imagenUrl: "https://cdn/a.jpg" })
+    let fin!: Promise<unknown>
+    act(() => {
+      fin = result.current.subirTodas([f])
+    })
+    await vaciar()
+    await act(async () => {
+      pedidos[0].resolver({ ok: false })
+      await fin
+    })
+    expect(result.current.de("a").errorAlQuitar).toBeTruthy()
+    act(() => result.current.alternarQuitar("a"))
+    expect(result.current.de("a")).toMatchObject({ quitar: false, errorAlQuitar: null })
+    act(() => result.current.alternarQuitar("a"))
+    expect(result.current.de("a").errorAlQuitar).toBeNull()
+  })
+
   it("retry of an id with nothing to send does nothing", async () => {
     const { result } = montar()
     await act(async () => {

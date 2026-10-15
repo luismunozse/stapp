@@ -74,7 +74,7 @@ export function FotoVariante({
   }
 
   const medida = card ? "h-14 w-14" : "h-10 w-10"
-  const secundario = `rounded px-1 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-50 ${card ? "min-h-11" : ""}`
+  const secundario = "min-h-11 rounded px-1 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-50"
   const reintento = pendiente?.estado === "error" ? pendiente.mensaje : errorAlQuitar
   const textoDeReintento = pendiente ? "subir" : "quitar"
 
@@ -133,7 +133,10 @@ export function FotoVariante({
           </button>
         )}
         {pendiente && (
-          <button type="button" aria-label={`Descartar foto de ${etiqueta}`} disabled={bloqueado || subiendo} onClick={() => alDescartar(id)} className={secundario}>
+          <button type="button" aria-label={`Descartar foto de ${etiqueta}`} disabled={bloqueado || subiendo} onClick={() => {
+              setRechazo(null)
+              alDescartar(id)
+            }} className={secundario}>
             Descartar
           </button>
         )}
