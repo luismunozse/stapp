@@ -12,6 +12,7 @@ vi.mock("@/lib/webhooks/dispatcher", () => ({
   emitWebhookEvent: vi.fn().mockResolvedValue(undefined),
 }))
 
+import { supabaseAdmin } from "@/lib/supabase"
 import { GET, POST } from "@/app/api/inventario/route"
 import { PUT } from "@/app/api/inventario/[id]/route"
 
@@ -199,6 +200,20 @@ describe("PUT /api/inventario/[id] — flags", () => {
     await put({ tieneVariantes: value })
 
     expect(inv.update).toHaveBeenCalledWith(expect.objectContaining({ tiene_variantes: value }))
+  })
+
+  // VL-3: the legacy flag is only a flag. Sending it answers 200 and never creates a group.
+  it("tieneVariantes: true answers 200 and creates no group", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    const inv = createChainMock(fullRow)
+    mockSupabaseFrom({ inventario: inv })
+
+    const res = await put({ tieneVariantes: true })
+
+    expect(res.status).toBe(200)
+    const tablas = vi.mocked(supabaseAdmin.from).mock.calls.map((c) => c[0])
+    expect(tablas).not.toContain("inventario_grupos")
+    expect(inv.update.mock.calls[0][0]).not.toHaveProperty("grupo_id")
   })
 })
 
