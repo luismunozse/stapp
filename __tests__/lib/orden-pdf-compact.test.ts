@@ -16,7 +16,8 @@ import fontkitModule from "@pdf-lib/fontkit"
 import { PDFDocument, PDFDict, PDFName } from "pdf-lib"
 import QRCode from "qrcode"
 import { generateOrdenPDF } from "@/lib/pdf"
-import { wrapText, cutText, clampLines, generateOrdenCompactPDF } from "@/lib/pdf-orden-compact"
+import { wrapText, cutText, clampLines, summarizeChecklist, generateOrdenCompactPDF } from "@/lib/pdf-orden-compact"
+import { DEFAULT_RECEPCION_TERMINOS } from "@/lib/terminos"
 import { formatCurrencyValue } from "@/lib/currency"
 import { extractPdfText, extractPdfTextPositions, type PositionedText } from "./pdf-text-helper"
 import { buildOrdenFixture } from "./orden-fixture"
@@ -402,7 +403,7 @@ describe("content: the same information as the A4 sheet, stacked in one column",
       for (const piece of [
         "#1042",
         "ENTREGADO",
-        key === "A5" ? "Bateria agotada, se reemplaza por una nueva." : "Bateria agotada", // A6 keeps the start of it
+        "Bateria agotada, se reemplaza por una nueva.",
         "Batería iPhone 13",
         "TOTAL FINAL",
         formatCurrencyValue(48000, "ARS"),
@@ -413,12 +414,12 @@ describe("content: the same information as the A4 sheet, stacked in one column",
         "Vigente hasta",
         "CLIENTE — ENTREGA",
         "ENTREGÓ — M. GOMEZ",
-        // A5 keeps the checklist and the terms whole. The fully populated order does not fit A6 at
-        // all: there the free text is cut (see the checklist and terms tests) and only the start of
-        // each survives.
+        // A5 keeps the checklist and the terms whole. On A6 they do not fit whole: the terms body
+        // goes (a line says where to get it) and the checklist becomes one summary line (see the
+        // checklist and terms tests).
         ...(key === "A5"
           ? ["CHEQUEO DE RECEPCIÓN", "Pantalla táctil funciona: OK", "Cámara trasera funciona: NO", "Conserve este comprobante"]
-          : ["CHEQUEO DE RECEPCIÓN", "Pantalla táctil funciona", "TÉRMINOS Y CONDICIONES"]),
+          : ["Checklist de ingreso", "Términos completos: pedíselos al taller."]),
       ]) {
         expect(text, `missing: ${piece}`).toContain(norm(piece))
       }
@@ -527,11 +528,10 @@ describe("always exactly one page", () => {
           const out = await renderFit(key, { ...build(key), ...sheetExtra(sheet) })
           expect(out.pages).toEqual([SIZES[key].page])
           expectNoClippingNoOverlap(out.runs, out.pages[0])
-          // smallest text: the terms floor (the terms shrink further than the rest), unless the
-          // guarantee had to step in, which only the absurd "everything at once" ENTREGA on A6 needs
-          const floor = out.report!.step === "guarantee" ? HARD_MIN : FLOORS[key].terms
-          expect(Math.min(...out.runs.map((r) => r.size))).toBeGreaterThanOrEqual(floor - 0.01)
-          if (out.report!.step === "guarantee") expect([name, sheet, key]).toEqual(["everything at once", "ENTREGA", "A6"])
+          // smallest text: the terms floor (the terms shrink further than the rest); the guarantee
+          // that goes below it is for absurd input and none of these six cases is
+          expect(out.report!.step, `reached ${out.report!.step} at scale ${out.report!.scale}`).not.toBe("guarantee")
+          expect(Math.min(...out.runs.map((r) => r.size))).toBeGreaterThanOrEqual(FLOORS[key].terms - 0.01)
           expectProtectedContent(out.text, sheet, out)
         }, 20000)
       }
@@ -617,14 +617,10 @@ describe("the fit stops at the first step that works", () => {
       expect(out.text).not.toContain("…")
     })
 
-    it(`${key}: fonts never go below the floors, whatever the content (the guarantee aside)`, async () => {
+    it(`${key}: fonts never go below the floors, whatever the content`, async () => {
       for (const sheet of SHEETS) {
         const out = await renderFit(key, { ...OVERFLOW_CASES["everything at once"](key), ...sheetExtra(sheet) })
-        if (out.report!.step === "guarantee") {
-          // the last resort, only when nothing else fits: down to the hard minimum and no further
-          expect(Math.min(...out.runs.map((r) => r.size))).toBeGreaterThanOrEqual(HARD_MIN - 0.01)
-          continue
-        }
+        expect(out.report!.step).not.toBe("guarantee")
         const small = out.runs.filter((r) => r.size < FLOORS[key].text - 0.01)
         for (const r of small) {
           expect(r.text, `"${r.text}" is below the body floor and is not the terms`).toMatch(/Lorem|ipsum|dolor|consequat|…|Términos completos/i)
@@ -809,27 +805,26 @@ describe("the fit never draws an overflowing page", () => {
 })
 
 describe("the very last resort: content that no font size can hold", () => {
-  const categories = Array.from({ length: 70 }, (_, i) => ({ label: `Chequeo ${i + 1}`, valor: i % 2 === 0, categoria: `CATEGORIA_${i}` }))
-
   for (const key of ["A5", "A6"] as Compact[]) {
-    it(`${key}: 70 checklist categories still give ONE page that fits; the checklist is what goes, the core stays`, async () => {
-      const out = await renderFit(key, { ...SHEET_ORDERS.ENTREGA, checklistItems: categories })
-      expect(out.pages).toEqual([SIZES[key].page])
-      expect(out.report!.step).toBe("guarantee")
-      expect(out.report!.slack).toBeGreaterThanOrEqual(-0.01)
-      expect(Math.min(...out.runs.map((r) => r.size))).toBeGreaterThanOrEqual(HARD_MIN - 0.01)
-      expectNoClippingNoOverlap(out.runs, out.pages[0])
-      expectCore(out, "ENTREGA")
-    }, 20000)
+    for (const sheet of SHEETS) {
+      it(`${key} ${sheet}: a contact phone of thousands of characters (a field that is never cut) still gives ONE page that fits`, async () => {
+        const out = await renderFit(key, { ...SHEET_ORDERS[sheet], telefonoContacto: prose(key === "A5" ? 12000 : 3000) })
+        expect(out.pages).toEqual([SIZES[key].page])
+        expect(out.report!.step).toBe("guarantee")
+        expect(out.report!.slack).toBeGreaterThanOrEqual(-0.01)
+        expect(Math.min(...out.runs.map((r) => r.size))).toBeGreaterThanOrEqual(HARD_MIN - 0.01)
+        expectNoClippingNoOverlap(out.runs, out.pages[0])
+        expectCore(out, sheet)
+      }, 20000)
+    }
   }
 })
 
 describe("the terms are never removed in silence", () => {
   for (const key of ["A5", "A6"] as Compact[]) {
-    it(`${key}: when the terms are cut the first one stays and a line says where to get the rest`, async () => {
+    it(`${key}: when the terms are cut a line always says where to get the rest`, async () => {
       const out = await renderFit(key, { ...LEAN, recepcionTerminos: loremTerms(30), problemaReportado: prose(1200), observaciones: prose(1200) })
       expect(out.pages).toHaveLength(1)
-      expect(out.text).toContain("1. Lorem ipsum dolor sit amet")
       expect(out.text).toContain("Términos completos: pedíselos al taller.")
       expect(out.text).not.toContain("30. Lorem ipsum")
     }, 20000)
@@ -840,31 +835,18 @@ describe("the terms are never removed in silence", () => {
     })
   }
 
-  it("even when everything else is at its limit the terms section is there, with the line", async () => {
+  it("the terms body may go entirely, the line stays, even when everything else is at its limit", async () => {
     const out = await renderFit("A6", { ...SHEET_ORDERS.ENTREGA, ...everyFieldLong(), ...OVERFLOW_CASES["everything at once"]("A6") })
-    expect(out.text).toContain("TÉRMINOS Y CONDICIONES")
     expect(out.text).toContain("Términos completos: pedíselos al taller.")
   }, 20000)
 })
 
-describe("the reception checklist is liability evidence: it is cut after the falla, not before", () => {
+describe("the reception checklist is liability evidence: detail first, then a summary, never silence", () => {
   const checklistItems = [
     { label: "Pantalla táctil funciona", valor: true, categoria: "FUNCIONAL" },
     { label: "Cámara trasera funciona", valor: false, categoria: "FUNCIONAL" },
     { label: "Estado de la carcasa", valor: "Rayones leves en el borde superior", categoria: "CONDICION_FISICA" },
   ]
-
-  it("the fully populated delivered order on A6 does not fit whole: the checklist is cut with an ellipsis, never dropped", async () => {
-    const out = await renderFit("A6", ENTREGA)
-    expect(out.pages).toHaveLength(1)
-    expect(out.text).toContain("CHEQUEO DE RECEPCIÓN")
-    // every group of the checklist is still there, even if only its start
-    for (const group of ["Funcional", "Condición física"]) expect(out.text, `group ${group} was dropped`).toContain(group)
-    expect(out.text).toContain("Pantalla táctil funciona")
-    const checklist = /CHEQUEO DE RECEPCIÓN (.*?) GARANTÍA/.exec(out.text)![1]
-    expect(checklist.includes("Cámara trasera funciona: NO") || checklist.includes("…"), "a cut checklist must say so").toBe(true)
-    expect(out.text).toContain("El equipo no enciende") // the falla keeps (at least) its start
-  })
 
   it("the fully populated delivered order on A5 keeps the checklist whole", async () => {
     const out = await renderFit("A5", ENTREGA)
@@ -872,30 +854,98 @@ describe("the reception checklist is liability evidence: it is cut after the fal
     expect(out.text).toContain("Cámara trasera funciona: NO")
     expect(out.text).toContain("Estado de la carcasa: Rayones leves en el borde superior")
     expect(out.text).toContain("Accesorios entregados por el cliente: Cargador original, funda transparente")
+    expect(out.text).not.toContain("Checklist de ingreso")
   })
 
-  it("the checklist is only cut once the falla is already at its minimum", async () => {
-    const longValue = prose(400)
-    const out = await renderFit("A6", {
-      ...ENTREGA,
-      problemaReportado: prose(500),
-      checklistItems: checklistItems.map((it) => (typeof it.valor === "string" ? { ...it, valor: longValue } : it)),
-      recepcionTerminos: loremTerms(30),
-    })
+  it("when it does not fit whole it becomes ONE summary line with the counts and the problem items, before the falla is touched", async () => {
+    const falla = prose(300)
+    const out = await renderFit("A5", { ...LEAN, ...ENTREGA, problemaReportado: falla, checklistItems, recepcionTerminos: loremTerms(30), observaciones: null })
     expect(out.pages).toHaveLength(1)
-    expect(out.text).toContain("CHEQUEO DE RECEPCIÓN") // never dropped while the falla still has text
-    const falla = /FALLA DECLARADA (.*?) (?:DIAGNÓSTICO|ACCESORIOS)/.exec(out.text)![1]
-    const checklistWhole = out.text.includes(longValue)
-    // either the checklist survived whole, or the falla had to be cut down to its minimum first
-    expect(checklistWhole || falla.replace("…", "").length <= 45, `falla has ${falla.length} chars but the checklist was cut`).toBe(true)
+    expect(out.text).toContain("Checklist de ingreso: 1 OK · 1 NO (Cámara trasera funciona) · 1 con nota (Estado de la carcasa)")
+    expect(out.text).toContain(falla) // the falla is whole: the summary came first
+    expect(out.text).not.toContain("Rayones leves en el borde superior")
   }, 20000)
 
-  it("A5: a checklist that fits whole next to a long falla is untouched while the falla gives way", async () => {
-    const out = await renderFit("A5", { ...LEAN, ...ENTREGA, problemaReportado: prose(1500), checklistItems, recepcionTerminos: loremTerms(30) })
-    expect(out.text).not.toContain(prose(1500).slice(0, 1200)) // the falla is what gave way
-    expect(out.text).toContain("Estado de la carcasa: Rayones leves en el borde superior")
-    expect(out.text).toContain("Cámara trasera funciona: NO")
+  it("the summary is only used once the terms body is already gone", async () => {
+    const out = await renderFit("A5", { ...LEAN, ...ENTREGA, problemaReportado: prose(300), checklistItems, recepcionTerminos: loremTerms(30) })
+    expect(out.text).toContain("Checklist de ingreso")
+    expect(out.text).toContain("Términos completos: pedíselos al taller.")
+    expect(out.text).not.toContain("1. Lorem ipsum")
   }, 20000)
+
+  it("a checklist that is never cut says nothing about a summary", async () => {
+    const out = await renderFit("A5", { ...LEAN, ...ENTREGA, checklistItems })
+    expect(out.text).toContain("Cámara trasera funciona: NO")
+    expect(out.text).not.toContain("Checklist de ingreso")
+  })
+
+  it("an enormous checklist is still ONE page: the summary keeps its counts and cuts the names", async () => {
+    const items = Array.from({ length: 80 }, (_, i) => ({ label: `Revisión número ${i + 1} del equipo`, valor: i % 4 !== 0, categoria: "FUNCIONAL" }))
+    const out = await renderFit("A6", { ...SHEET_ORDERS.ENTREGA, checklistItems: items })
+    expect(out.pages).toHaveLength(1)
+    expect(out.report!.step).not.toBe("guarantee")
+    expect(out.text).toContain("Checklist de ingreso: 60 OK · 20 NO")
+  }, 20000)
+})
+
+describe("summarizeChecklist", () => {
+  it("counts OK and NO and names the items that are not OK, comma separated", () => {
+    const items = [
+      { label: "Pantalla", valor: true },
+      { label: "Cámara trasera", valor: false },
+      { label: "Batería", valor: true },
+      { label: "Puerto de carga", valor: false },
+    ]
+    expect(summarizeChecklist(items)).toBe("Checklist de ingreso: 2 OK · 2 NO (Cámara trasera, Puerto de carga)")
+  })
+
+  it("says only the OK count when nothing is wrong", () => {
+    expect(summarizeChecklist([{ label: "A", valor: true }, { label: "B", valor: true }])).toBe("Checklist de ingreso: 2 OK")
+  })
+
+  it("items with a written value are notes, not OK or NO", () => {
+    expect(summarizeChecklist([{ label: "Carcasa", valor: "rayones" }, { label: "Pantalla", valor: true }])).toBe(
+      "Checklist de ingreso: 1 OK · 1 con nota (Carcasa)",
+    )
+  })
+
+  it("cuts the names, never the counts, and drops the parentheses when no name is left", () => {
+    const items = [{ label: "Cámara trasera con un nombre muy largo", valor: false }, { label: "Otro", valor: true }]
+    expect(summarizeChecklist(items, 10)).toBe("Checklist de ingreso: 1 OK · 1 NO (Cámara tra…)")
+    expect(summarizeChecklist(items, 0)).toBe("Checklist de ingreso: 1 OK · 1 NO")
+  })
+})
+
+describe("an ordinary order never reaches the below-the-floor guarantee", () => {
+  const FALLA = "El equipo no enciende desde que se mojó levemente con la lluvia. Además, la pantalla parpadea de forma intermitente cada vez que se intenta reiniciarlo."
+  const DIAGNOSTICO = "Bateria agotada, se reemplaza por una nueva."
+  // the extraction mangles the "fi" ligature, so compare without f, i and spaces
+  const strip = (x: string) => x.replace(/[fi]/g, "").replace(/\s+/g, "")
+  const termsText = strip(DEFAULT_RECEPCION_TERMINOS.join(" ") + " Términos completos: pedíselos al taller.")
+
+  for (const [sheet, extra] of [["RECEPCION", {}], ["ENTREGA", ENTREGA]] as const) {
+    it(`A6 ${sheet}: the stock fixture keeps the floors, the whole falla${sheet === "ENTREGA" ? " and diagnostico" : ""} and its checklist`, async () => {
+      const out = await renderFit("A6", extra)
+      expect(out.pages).toEqual([SIZES.A6.page])
+      expect(out.report!.step, `reached ${out.report!.step} at scale ${out.report!.scale}`).not.toBe("guarantee")
+      expect(out.report!.scale).toBeGreaterThanOrEqual(0.8)
+      // everything but the terms is at the text floor or above
+      const small = out.runs.filter((r) => r.size < FLOORS.A6.text - 0.01)
+      for (const r of small) expect(termsText.includes(strip(r.text)), `"${r.text}" is under ${FLOORS.A6.text}pt and is not the terms`).toBe(true)
+      expect(Math.min(...out.runs.map((r) => r.size))).toBeGreaterThanOrEqual(FLOORS.A6.terms - 0.01)
+      expect(out.text).toContain(FALLA)
+      if (sheet === "ENTREGA") {
+        expect(out.text).toContain(DIAGNOSTICO)
+        // the checklist: whole, or ONE summary line with the right counts and the problem items
+        const whole = out.text.includes("Cámara trasera funciona: NO") && out.text.includes("Pantalla táctil funciona: OK")
+        if (!whole) {
+          expect(out.text).toContain("Checklist de ingreso: 2 OK · 2 NO (Cámara trasera funciona, Puerto de carga funciona) · 2 con nota (Estado de la carcasa, Accesorios entregados por el cliente)")
+        }
+        expect(out.text).toContain("Cámara trasera funciona")
+        expect(out.text).toContain("Puerto de carga funciona")
+      }
+    }, 20000)
+  }
 })
 
 describe("the rows that do not fit are summed exactly, and the totals are untouched", () => {
@@ -963,18 +1013,14 @@ describe("the last resort for names keeps the tax id", () => {
 describe("fonts of the heavy fixtures stay at or above their floors", () => {
   for (const key of ["A5", "A6"] as Compact[]) {
     for (const sheet of SHEETS) {
-      it(`${key} ${sheet}: the fully populated order (and the heavy ones) are never drawn under the floors, unless the guarantee had to step in`, async () => {
+      it(`${key} ${sheet}: the fully populated order and the heavy ones are never drawn under the floors, the guarantee included`, async () => {
         for (const extra of [sheetExtra(sheet), { ...sheetExtra(sheet), ...OVERFLOW_CASES["everything at once"](key) }]) {
           const out = await renderFit(key, extra)
-          const guarantee = out.report!.step === "guarantee"
-          // the guarantee is the last resort of the absurd: it never touches the reception sheet or A5
-          if (sheet === "RECEPCION" || key === "A5") expect(guarantee).toBe(false)
-          const floor = guarantee ? HARD_MIN : FLOORS[key].terms
-          expect(Math.min(...out.runs.map((r) => r.size))).toBeGreaterThanOrEqual(floor - 0.01)
-          if (!guarantee) {
-            const small = out.runs.filter((r) => r.size < FLOORS[key].text - 0.01)
-            for (const r of small) expect(r.text, `"${r.text}" is under the text floor and is not terms`).toMatch(/Lorem|ipsum|dolor|consequat|…|Términos completos|^\d+\./i)
-          }
+          // the guarantee is for absurd input only (see "the very last resort"), none of these is
+          expect(out.report!.step, `reached ${out.report!.step} at scale ${out.report!.scale}`).not.toBe("guarantee")
+          expect(Math.min(...out.runs.map((r) => r.size))).toBeGreaterThanOrEqual(FLOORS[key].terms - 0.01)
+          const small = out.runs.filter((r) => r.size < FLOORS[key].text - 0.01)
+          for (const r of small) expect(r.text, `"${r.text}" is under the text floor and is not terms`).toMatch(/Lorem|ipsum|dolor|consequat|…|Términos completos|^\d+\./i)
         }
       }, 20000)
     }
