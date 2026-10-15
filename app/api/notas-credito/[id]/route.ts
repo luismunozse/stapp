@@ -1,6 +1,36 @@
 import { NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireAdmin, requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { cargarDocumentoNC, NC_NO_ENCONTRADA } from "@/lib/notas-credito/documento"
+
+/**
+ * GET /api/notas-credito/[id] — el documento de una NC de cualquiera de los
+ * dos motores: lo usan el ticket y el envío por WhatsApp. Lo ve quien ve la
+ * operación de origen (ver lib/notas-credito/documento.ts).
+ */
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { error, organizationId, userId, role, session } = await requireAuth()
+    if (error) return error
+
+    const { id } = await params
+    const documento = await cargarDocumentoNC(id, {
+      organizationId: organizationId!,
+      userId: userId!,
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    if (!documento) return NextResponse.json({ error: NC_NO_ENCONTRADA }, { status: 404 })
+
+    return NextResponse.json(documento, { headers: { "Cache-Control": "no-store" } })
+  } catch (err) {
+    console.error("Error leyendo nota de credito:", err)
+    return NextResponse.json({ error: "Error al obtener la nota de crédito" }, { status: 500 })
+  }
+}
 
 export async function DELETE(
   request: Request,
