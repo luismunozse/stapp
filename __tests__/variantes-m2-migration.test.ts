@@ -80,6 +80,13 @@ describe("M2 migration: the drop", () => {
     expect(collapse(migRaw())).not.toMatch(/\bCOMMIT\b/i)
   })
 
+  it("turns row security off right after the lock_timeout, so no RLS policy can hide rows from the guard's count", () => {
+    const s = statements(migRaw())
+    expect(s[1]).toBe("SET LOCAL row_security = off")
+    // ...and it is in force before the guard looks at the table.
+    expect(s.indexOf("SET LOCAL row_security = off")).toBeLessThan(s.findIndex((x) => /^DO\b/.test(x)))
+  })
+
   it("refuses to run while the legacy table holds ANY row: the guard raises an exception", () => {
     const guard = statements(migRaw()).find((s) => /^DO\b/.test(s))
     expect(guard).toBeDefined()
@@ -156,6 +163,16 @@ describe("M2 migration: the drop", () => {
     expect(s.filter((x) => /^UPDATE\b/.test(x))).toHaveLength(1)
   })
 
+  it("clears the flag AFTER the guard and BEFORE the DROP TABLE, so the exclusive lock on the table is held for less", () => {
+    const s = statements(migRaw())
+    const guard = s.findIndex((x) => /^DO\b/.test(x))
+    const update = s.indexOf("UPDATE inventario SET tiene_variantes = false WHERE tiene_variantes IS TRUE")
+    const dropTable = s.indexOf("DROP TABLE IF EXISTS inventario_variantes")
+    expect(guard).toBeGreaterThan(-1)
+    expect(update).toBeGreaterThan(guard)
+    expect(update).toBeLessThan(dropTable)
+  })
+
   it("retires the stale column comment, which still promises the trigger that is gone", () => {
     const comment = statements(migRaw()).find((s) => s.startsWith("COMMENT ON COLUMN inventario.tiene_variantes IS"))
     expect(comment).toBeDefined()
@@ -180,6 +197,13 @@ describe("M2 migration: the drop", () => {
     expect(h).toMatch(/precheck/i)
     expect(h).toMatch(/tiene_variantes/)
     expect(h).toMatch(/CASCADE/)
+  })
+
+  it("does not claim a production state nobody checked: the expected count is 0 and the pre-check must confirm it", () => {
+    const h = header(migRaw(), "SET LOCAL lock_timeout")
+    expect(h).toMatch(/expected count is 0/i)
+    expect(h).toMatch(/precheck\.sql[^.]*\bconfirm/i)
+    expect(h).not.toMatch(/was empty/i)
   })
 })
 

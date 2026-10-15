@@ -17,8 +17,11 @@
 --
 -- IT ABORTS INSTEAD OF DROPPING DATA. The first thing it does is lock the table and count its rows,
 -- soft-deleted ones included. If there is even one row the DO block raises an exception, the
--- transaction rolls back and the schema is exactly as it was. The expected count is 0: the legacy
--- UI and routes were removed in the PR before this one, and the table was empty when that PR shipped.
+-- transaction rolls back and the schema is exactly as it was. The expected count is 0, because the
+-- legacy UI and routes were removed in the PR before this one, but that is an expectation, not a
+-- checked fact: verify/<NNN>_precheck.sql must confirm it against production before applying.
+-- Row security is switched off for the transaction so that no policy can filter the count: with it
+-- off, PostgreSQL raises an error instead of silently hiding rows from a role that is subject to RLS.
 --
 -- NO BLIND CASCADE. Every dependent object is dropped by name, in dependency order: triggers and
 -- policies, then the trigger function, then the RPCs, then the table with a plain DROP TABLE. If
@@ -45,6 +48,7 @@
 -- ============================================================================
 
 SET LOCAL lock_timeout = '3s';
+SET LOCAL row_security = off;
 
 -- GUARD:BEGIN
 DO $$
@@ -65,6 +69,10 @@ BEGIN
 END $$;
 -- GUARD:END
 
+-- Right after the guard and before the DROP TABLE: the exclusive locks that DROP TABLE takes on
+-- `inventario` start as late as possible, so they are held for less time.
+UPDATE inventario SET tiene_variantes = false WHERE tiene_variantes IS TRUE;
+
 DROP TRIGGER IF EXISTS inventario_variantes_sync_total ON inventario_variantes;
 DROP TRIGGER IF EXISTS inventario_variantes_updated_at ON inventario_variantes;
 
@@ -77,8 +85,6 @@ DROP FUNCTION IF EXISTS ajustar_stock_variante_atomic(TEXT, TEXT, TEXT, TEXT, IN
 DROP FUNCTION IF EXISTS eliminar_variantes_y_consolidar(TEXT, TEXT, TEXT);
 
 DROP TABLE IF EXISTS inventario_variantes;
-
-UPDATE inventario SET tiene_variantes = false WHERE tiene_variantes IS TRUE;
 
 COMMENT ON COLUMN inventario.tiene_variantes IS
   'Legacy flag from migration 176, no longer read or written. It used to mark an item whose stock was the sum of inventario_variantes; that table and its sync trigger are gone (M2). Variants now live in inventario_grupos, and an item is a variant when grupo_id is set.';

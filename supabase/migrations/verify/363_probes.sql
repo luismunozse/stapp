@@ -601,6 +601,7 @@ INSERT INTO _r SELECT 93, 'rehearsal: after the refusal the sync function and th
 DELETE FROM inventario_variantes WHERE codigo_variante = 'PRB-M2-V1';
 -- MIGRATION:BEGIN
 SET LOCAL lock_timeout = '3s';
+SET LOCAL row_security = off;
 
 -- GUARD:BEGIN
 DO $$
@@ -621,6 +622,10 @@ BEGIN
 END $$;
 -- GUARD:END
 
+-- Right after the guard and before the DROP TABLE: the exclusive locks that DROP TABLE takes on
+-- `inventario` start as late as possible, so they are held for less time.
+UPDATE inventario SET tiene_variantes = false WHERE tiene_variantes IS TRUE;
+
 DROP TRIGGER IF EXISTS inventario_variantes_sync_total ON inventario_variantes;
 DROP TRIGGER IF EXISTS inventario_variantes_updated_at ON inventario_variantes;
 
@@ -633,8 +638,6 @@ DROP FUNCTION IF EXISTS ajustar_stock_variante_atomic(TEXT, TEXT, TEXT, TEXT, IN
 DROP FUNCTION IF EXISTS eliminar_variantes_y_consolidar(TEXT, TEXT, TEXT);
 
 DROP TABLE IF EXISTS inventario_variantes;
-
-UPDATE inventario SET tiene_variantes = false WHERE tiene_variantes IS TRUE;
 
 COMMENT ON COLUMN inventario.tiene_variantes IS
   'Legacy flag from migration 176, no longer read or written. It used to mark an item whose stock was the sum of inventario_variantes; that table and its sync trigger are gone (M2). Variants now live in inventario_grupos, and an item is a variant when grupo_id is set.';
