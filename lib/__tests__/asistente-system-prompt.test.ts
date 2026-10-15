@@ -46,4 +46,8 @@ describe('buildAsistenteSystemPrompt', () => {
   it('declara el formato permitido de respuesta', () => {
     expect(buildAsistenteSystemPrompt()).toContain('Formato permitido')
   })
+
+  it('el asistente puede linkear el listado de notas de crédito', () => {
+    expect(buildAsistenteSystemPrompt()).toContain('/notas-credito')
+  })
 })

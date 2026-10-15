@@ -66,7 +66,7 @@ export function NotasCreditoOrden({ ordenId }: { ordenId: string }) {
               {formatDate(nc.fecha)}
               {nc.usuarioNombre ? ` — ${nc.usuarioNombre}` : ""}
             </div>
-            <NotaCreditoAcciones id={nc.id} />
+            <NotaCreditoAcciones id={nc.id} anulada={nc.anulada} />
           </div>
         ))}
       </CardContent>

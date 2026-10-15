@@ -14,6 +14,7 @@ export const panelRoutes: PanelRoute[] = [
   { ruta: "/vendedores", descripcion: "Vendedores y comisiones" },
   { ruta: "/inventario", descripcion: "Inventario, stock, depósitos y repuestos" },
   { ruta: "/ventas", descripcion: "Ventas realizadas y devoluciones" },
+  { ruta: "/notas-credito", descripcion: "Notas de crédito de ventas y órdenes: listado, PDF, ticket y WhatsApp (solo administradores)" },
   { ruta: "/pos", descripcion: "Punto de venta (vender accesorios y repuestos)" },
   { ruta: "/cotizaciones", descripcion: "Cotizaciones y presupuestos" },
   { ruta: "/facturacion", descripcion: "Remitos y cobros" },
