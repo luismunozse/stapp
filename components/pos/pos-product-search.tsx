@@ -639,7 +639,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
             </div>
           )}
         </div>
-        <PosVariantesSheet grupo={grupoAbierto} onClose={() => setGrupoAbierto(null)} onAdd={handleAdd} />
+        <PosVariantesSheet grupo={grupoAbierto} onClose={() => setGrupoAbierto(null)} onAdd={handleAdd} devolverFoco={() => inputRef.current?.focus()} />
       </div>
     )
   }

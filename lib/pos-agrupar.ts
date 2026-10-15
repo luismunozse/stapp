@@ -42,6 +42,7 @@ export function agruparResultados(resultados: readonly InventarioResult[], opcio
       tipo: "grupo",
       grupoId: r.grupoId,
       nombre: miembros.find((m) => m.grupoNombre)?.grupoNombre ?? miembros[0].nombre,
+      // Count and price reflect the variants in the VISIBLE search results, not the whole group.
       cantidad: miembros.length,
       desde: Math.min(...miembros.map((m) => m.precioVenta)),
       miembros,

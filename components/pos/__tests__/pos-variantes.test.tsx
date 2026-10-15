@@ -182,6 +182,49 @@ describe("POS: grouped variants", () => {
     expect(pedidos.filter((p) => p.includes("grupoId="))).toHaveLength(2)
   })
 
+  it("returns focus to the search input after picking a variant, so the cashier can keep scanning", async () => {
+    stubFetch()
+    render(<PosTerminal />)
+    const buscador = screen.getAllByPlaceholderText(/Buscar producto/i)[0]
+
+    fireEvent.click(await tarjetaDeGrupo())
+    const hoja = within(await screen.findByRole("dialog"))
+    fireEvent.click(await hoja.findByRole("button", { name: /^Rojo/ }))
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(buscador))
+  })
+
+  it("returns focus to the search input when the sheet is closed with Escape or Cerrar", async () => {
+    stubFetch()
+    render(<PosTerminal />)
+    const buscador = screen.getAllByPlaceholderText(/Buscar producto/i)[0]
+
+    fireEvent.click(await tarjetaDeGrupo())
+    fireEvent.keyDown(await screen.findByRole("dialog"), { key: "Escape" })
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(buscador))
+
+    ;(buscador as HTMLInputElement).blur()
+    fireEvent.click(await tarjetaDeGrupo())
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Cerrar" }))
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(buscador))
+    expect(carrito()).toHaveLength(0)
+  })
+
+  it("names a row without stock with 'Sin stock' so a screen reader hears why it is disabled", async () => {
+    stubFetch()
+    render(<PosTerminal />)
+    fireEvent.click(await tarjetaDeGrupo())
+
+    const hoja = within(await screen.findByRole("dialog"))
+    const verde = await hoja.findByRole("button", { name: /Verde.*Sin stock|Sin stock.*Verde/ })
+
+    expect(verde).toHaveProperty("disabled", true)
+    expect(hoja.getAllByRole("button", { name: /Sin stock/ })).toHaveLength(1)
+  })
+
   it("still adds the variant when its photo fails to load", async () => {
     stubFetch()
     render(<PosTerminal />)

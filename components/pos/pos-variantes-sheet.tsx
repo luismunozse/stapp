@@ -20,6 +20,8 @@ interface Props {
   onClose: () => void
   /** Called with the CHOSEN CHILD (its own id, price and full name), never with the group. */
   onAdd: (producto: InventarioResult) => void
+  /** Where focus goes once the sheet has closed (the search input), instead of the vanished card. */
+  devolverFoco?: () => void
 }
 
 // A whole group in one page, in the selling deposito, including the variants with no stock
@@ -41,14 +43,19 @@ export function urlDeGrupo(grupoId: string): string {
  * Bottom sheet of the POS grouped card: one big row per variant (label, price, stock, photo). The
  * whole row is the tap target (>= 56px). A variant without stock is shown but disabled.
  */
-export function PosVariantesSheet({ grupo, onClose, onAdd }: Props) {
+export function PosVariantesSheet({ grupo, onClose, onAdd, devolverFoco }: Props) {
   const { formatPrice } = useCurrency()
   const [respuesta, setRespuesta] = useState<{ clave: string; filas: InventarioResult[] | null } | null>(null)
   const [intento, setIntento] = useState(0)
+  // While the sheet slides out `grupo` is already null: keep drawing the last group so the title
+  // and rows do not flash to "Variantes" / "Cargando variantes...".
+  const [ultimo, setUltimo] = useState<GrupoAbierto | null>(null)
+  if (grupo && grupo !== ultimo) setUltimo(grupo)
+  const mostrado = grupo ?? ultimo
   const grupoId = grupo?.grupoId ?? null
   // The answer is keyed by (group, attempt): the rows of another group, or of a failed attempt, are
   // never shown as if they were the current ones, and no state is reset inside the effect.
-  const clave = `${grupoId}#${intento}`
+  const clave = `${mostrado?.grupoId ?? null}#${intento}`
   const actual = respuesta?.clave === clave ? respuesta : null
   const filas = actual?.filas ?? null
   const fallo = actual !== null && actual.filas === null
@@ -56,7 +63,8 @@ export function PosVariantesSheet({ grupo, onClose, onAdd }: Props) {
   useEffect(() => {
     if (!grupoId) return
     let cancelado = false
-    fetch(urlDeGrupo(grupoId))
+    const controlador = new AbortController()
+    fetch(urlDeGrupo(grupoId), { signal: controlador.signal })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return res.json()
@@ -69,6 +77,7 @@ export function PosVariantesSheet({ grupo, onClose, onAdd }: Props) {
       })
     return () => {
       cancelado = true
+      controlador.abort()
     }
   }, [grupoId, intento, clave])
 
@@ -84,10 +93,15 @@ export function PosVariantesSheet({ grupo, onClose, onAdd }: Props) {
     <Sheet open={grupo !== null} onOpenChange={(abierto) => !abierto && onClose()}>
       <SheetContent
         side="bottom"
+        onCloseAutoFocus={(e) => {
+          // Radix would hand focus back to the card that opened the sheet, which is gone by now.
+          e.preventDefault()
+          devolverFoco?.()
+        }}
         className="data-[state=open]:duration-200 data-[state=closed]:duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none motion-reduce:animate-none"
       >
         <SheetHeader>
-          <SheetTitle>{grupo?.nombre ?? "Variantes"}</SheetTitle>
+          <SheetTitle>{mostrado?.nombre ?? "Variantes"}</SheetTitle>
           <SheetDescription>Elegí la variante que vas a vender.</SheetDescription>
         </SheetHeader>
 
@@ -118,18 +132,18 @@ export function PosVariantesSheet({ grupo, onClose, onAdd }: Props) {
                   onClick={() => elegir(fila)}
                   className={cn(
                     "flex min-h-14 w-full items-center gap-3 rounded-xl border bg-card p-2 text-left transition-colors active:scale-[0.98] hover:border-primary",
-                    sinStock && "cursor-not-allowed opacity-60 hover:border-border active:scale-100"
+                    sinStock && "cursor-not-allowed bg-muted/40 hover:border-border active:scale-100"
                   )}
                 >
                   <PosVarianteMiniatura etiqueta={etiqueta} imagenUrl={fila.imagenUrl} imagenRespaldo={fila.imagenRespaldo} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{etiqueta}</span>
-                    <span className="block text-sm font-bold text-primary">{formatPrice(fila.precioVenta)}</span>
+                    <span className={cn("block truncate text-sm font-medium", sinStock && "text-muted-foreground")}>{etiqueta}</span>
+                    <span className={cn("block text-sm font-bold", sinStock ? "text-muted-foreground" : "text-primary")}>{formatPrice(fila.precioVenta)}</span>
                   </span>
                   <span
                     className={cn(
                       "shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium",
-                      fila.stock <= 3 ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"
+                      fila.stock <= 3 ? "bg-destructive/10 text-destructive" : "bg-muted text-foreground"
                     )}
                   >
                     {sinStock ? "Sin stock" : `Stock: ${fila.stock}`}
