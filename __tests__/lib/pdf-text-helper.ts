@@ -105,6 +105,27 @@ export interface PositionedText {
   x: number
   /** Y of the `Tm` immediately preceding this Tj — same space as pdf-lib's drawText y. */
   y: number
+  /** Font size of the last `Tf` before this Tj, in points. */
+  size: number
+  /** BaseFont of the font resource in use, e.g. `ABCDEF+Archivo-Bold` (subset tag included). */
+  font: string
+  /** Zero-based page this run was drawn on. */
+  page: number
+}
+
+// Resource key -> BaseFont name, so a test can tell WHICH font a run was drawn in
+// (and measure its width with the same TTF).
+function buildPageFontNames(loaded: PDFDocument, page: PDFPage): Record<string, string> {
+  const fontDict = page.node.Resources()?.lookup(PDFName.of("Font"), PDFDict)
+  const names: Record<string, string> = {}
+  if (!fontDict) return names
+  for (const [key, ref] of fontDict.entries()) {
+    const fd = loaded.context.lookup(ref, PDFDict)
+    const base = fd.get(PDFName.of("BaseFont"))
+    const keyStr = (key.asString ? key.asString() : String(key)).replace(/^\//, "")
+    names[keyStr] = base ? String(base).replace(/^\//, "") : ""
+  }
+  return names
 }
 
 // Same content-stream walk as extractPageText, but also tracks the most
@@ -119,15 +140,20 @@ export interface PositionedText {
 function extractPagePositions(loaded: PDFDocument, pageIndex: number): PositionedText[] {
   const page = loaded.getPage(pageIndex)
   const cmaps = buildPageCmaps(loaded, page)
+  const fontNames = buildPageFontNames(loaded, page)
   const contentText = getPageContentText(loaded, page)
 
   let currentFont: string | null = null
+  let currentSize = 0
   let currentX = 0
   let currentY = 0
   const out: PositionedText[] = []
   for (const line of contentText.split("\n")) {
-    const tfMatch = line.match(/^\/(\S+)\s+[\d.]+\s+Tf/)
-    if (tfMatch) currentFont = tfMatch[1]
+    const tfMatch = line.match(/^\/(\S+)\s+([\d.]+)\s+Tf/)
+    if (tfMatch) {
+      currentFont = tfMatch[1]
+      currentSize = parseFloat(tfMatch[2])
+    }
     const tmMatch = line.match(/^1 0 0 1 (-?[\d.]+) (-?[\d.]+) Tm$/)
     if (tmMatch) {
       currentX = parseFloat(tmMatch[1])
@@ -136,7 +162,9 @@ function extractPagePositions(loaded: PDFDocument, pageIndex: number): Positione
     const tjMatch = line.match(/<([0-9A-Fa-f]+)>\s*Tj/)
     if (tjMatch && currentFont && cmaps[currentFont]) {
       const text = decodeTj(tjMatch[1], cmaps[currentFont])
-      if (text) out.push({ text, x: currentX, y: currentY })
+      if (text) {
+        out.push({ text, x: currentX, y: currentY, size: currentSize, font: fontNames[currentFont] ?? "", page: pageIndex })
+      }
     }
   }
 

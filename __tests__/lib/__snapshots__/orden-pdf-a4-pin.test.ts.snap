@@ -1,0 +1,787 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`generateOrdenPDF: the A4 drawing is pinned > ENTREGA sheet: one 595x842 page and every text run where it was 1`] = `
+{
+  "pages": [
+    [
+      595,
+      842,
+    ],
+  ],
+  "runs": [
+    [
+      "Servicio Técnico Demo",
+      28,
+      801,
+    ],
+    [
+      "Sucursal Centro",
+      217.96,
+      802,
+    ],
+    [
+      "Av. Rivadavia 5000, CABA",
+      28,
+      785,
+    ],
+    [
+      "Rosario, Santa Fe",
+      28,
+      774,
+    ],
+    [
+      "+54 11 4000-1234",
+      28,
+      763,
+    ],
+    [
+      "#1042",
+      515.62,
+      798,
+    ],
+    [
+      "CEL-1042",
+      528.6,
+      787,
+    ],
+    [
+      "ENTREGADO",
+      516.16,
+      766,
+    ],
+    [
+      "RECIBIDO",
+      54.49,
+      724,
+    ],
+    [
+      "10/03 12:00",
+      50.68,
+      715,
+    ],
+    [
+      "DIAGNÓSTICO",
+      121.72,
+      724,
+    ],
+    [
+      "—",
+      140.5,
+      715,
+    ],
+    [
+      "PRESUPUESTADO",
+      192.87,
+      724,
+    ],
+    [
+      "—",
+      217.5,
+      715,
+    ],
+    [
+      "APROBADO",
+      279.78,
+      724,
+    ],
+    [
+      "—",
+      294.5,
+      715,
+    ],
+    [
+      "EN REPARACIÓN",
+      349.04,
+      724,
+    ],
+    [
+      "—",
+      371.5,
+      715,
+    ],
+    [
+      "REPARADO",
+      434.09,
+      724,
+    ],
+    [
+      "—",
+      448.5,
+      715,
+    ],
+    [
+      "ENTREGADO",
+      508.85,
+      724,
+    ],
+    [
+      "12/03 12:00",
+      512.7,
+      715,
+    ],
+    [
+      "CLIENTE",
+      36,
+      687,
+    ],
+    [
+      "Juan Pérez · DNI 28.456.789",
+      36,
+      675,
+    ],
+    [
+      "+54 9 11 2345-6789 · tel. de esta orden: +54 9 11 9988-7766",
+      36,
+      665,
+    ],
+    [
+      "juan.perez@example.com",
+      36,
+      655,
+    ],
+    [
+      "EQUIPO",
+      305.5,
+      687,
+    ],
+    [
+      "Apple iPhone 13 · Negro",
+      305.5,
+      675,
+    ],
+    [
+      "IMEI 358400123456789",
+      305.5,
+      665,
+    ],
+    [
+      "Batería: 78%",
+      305.5,
+      655,
+    ],
+    [
+      "FALLA DECLARADA",
+      36,
+      631,
+    ],
+    [
+      "El equipo no enciende desde que se mojó levemente con la",
+      36,
+      619,
+    ],
+    [
+      "lluvia. Además, la pantalla parpadea de forma intermitente cada",
+      36,
+      609,
+    ],
+    [
+      "vez que se intenta reiniciarlo.",
+      36,
+      599,
+    ],
+    [
+      "DIAGNÓSTICO TÉCNICO",
+      305.5,
+      631,
+    ],
+    [
+      "Bateria agotada, se reemplaza.",
+      305.5,
+      619,
+    ],
+    [
+      "ACCESORIOS RECIBIDOS",
+      36,
+      575,
+    ],
+    [
+      "Cargador, funda, chip claro",
+      36,
+      563,
+    ],
+    [
+      "TRABAJO REALIZADO — DETALLE",
+      28,
+      544,
+    ],
+    [
+      "DETALLE",
+      28,
+      532,
+    ],
+    [
+      "CANT.",
+      197.47,
+      532,
+    ],
+    [
+      "IMPORTE",
+      304.01,
+      532,
+    ],
+    [
+      "Batería iPhone 13",
+      28,
+      517,
+    ],
+    [
+      "1",
+      214.26,
+      517,
+    ],
+    [
+      "$ 48.000,00",
+      279.88,
+      517,
+    ],
+    [
+      "Presupuesto estimado",
+      159.98,
+      499,
+    ],
+    [
+      "$ 45.000,00",
+      276.58,
+      499,
+    ],
+    [
+      "Subtotal trabajo",
+      159.98,
+      488,
+    ],
+    [
+      "$ 48.000,00",
+      276.58,
+      488,
+    ],
+    [
+      "TOTAL FINAL",
+      159.98,
+      465,
+    ],
+    [
+      "$ 48.000,00",
+      288.11,
+      465,
+    ],
+    [
+      "SALDO",
+      165.98,
+      435,
+    ],
+    [
+      "$ 38.000,00",
+      282.01,
+      435,
+    ],
+    [
+      "PAGOS REGISTRADOS",
+      351.98,
+      532,
+    ],
+    [
+      "10/03 · EFECTIVO",
+      351.98,
+      520,
+    ],
+    [
+      "$ 10.000,00",
+      502.9,
+      520,
+    ],
+    [
+      "CHEQUEO DE RECEPCIÓN",
+      351.98,
+      489,
+    ],
+    [
+      "Funcional",
+      351.98,
+      477,
+    ],
+    [
+      "Pantalla táctil funciona: OK · Botón de encendido",
+      351.98,
+      468,
+    ],
+    [
+      "funciona: OK · Cámara trasera funciona: NO · Puerto",
+      351.98,
+      458,
+    ],
+    [
+      "de carga funciona: NO",
+      351.98,
+      448,
+    ],
+    [
+      "Condición física",
+      351.98,
+      435,
+    ],
+    [
+      "Estado de la carcasa: Rayones leves en el borde",
+      351.98,
+      426,
+    ],
+    [
+      "superior",
+      351.98,
+      416,
+    ],
+    [
+      "Accesorios",
+      351.98,
+      403,
+    ],
+    [
+      "Accesorios entregados por el cliente: Cargador",
+      351.98,
+      394,
+    ],
+    [
+      "original, funda transparente",
+      351.98,
+      384,
+    ],
+    [
+      "GARANTÍA 90 DÍAS",
+      38,
+      328,
+    ],
+    [
+      "Vigente hasta el 08/06/2026",
+      167.3,
+      340,
+    ],
+    [
+      "Presentá este comprobante o el código CEL-1042 para reclamos.",
+      167.3,
+      330,
+    ],
+    [
+      "Recibió: ",
+      28,
+      145,
+    ],
+    [
+      "M. Gómez",
+      59.09,
+      145,
+    ],
+    [
+      "Técnico: ",
+      113.36,
+      145,
+    ],
+    [
+      "L. Ferreyra",
+      145.8,
+      145,
+    ],
+    [
+      "Entregó: ",
+      203.01,
+      145,
+    ],
+    [
+      "M. Gomez",
+      235.39,
+      145,
+    ],
+    [
+      "Ingreso 10/03/2026 · Completado 12/03/2026 · Entrega 12/03/2026",
+      343.64,
+      145,
+    ],
+    [
+      "Historial completo, fotos y",
+      78,
+      117,
+    ],
+    [
+      "garantía online:",
+      78,
+      109,
+    ],
+    [
+      "demo.stapp.com.ar/seguimiento/sample-public-token-1234",
+      78,
+      101,
+    ],
+    [
+      "CLIENTE — RECEPCIÓN",
+      198,
+      83,
+    ],
+    [
+      "CLIENTE — ENTREGA",
+      323.67,
+      83,
+    ],
+    [
+      "ENTREGÓ — M. GOMEZ",
+      449.33,
+      83,
+    ],
+    [
+      "1. Conserve este comprobante para retirar su equipo. El plazo de retiro es de 30 días.",
+      28,
+      70,
+    ],
+    [
+      "2. No nos hacemos responsables por datos perdidos. Realice backup antes de entregar el equipo.",
+      28,
+      62,
+    ],
+    [
+      "3. Al frmar, el cliente declara haber revisado el estado del equipo al momento de la entrega.",
+      28,
+      54,
+    ],
+    [
+      "4. El presupuesto puede variar según el diagnóstico fnal del equipo.",
+      28,
+      46,
+    ],
+  ],
+}
+`;
+
+exports[`generateOrdenPDF: the A4 drawing is pinned > RECEPCION sheet: one 595x842 page and every text run where it was 1`] = `
+{
+  "pages": [
+    [
+      595,
+      842,
+    ],
+  ],
+  "runs": [
+    [
+      "Servicio Técnico Demo",
+      28,
+      801,
+    ],
+    [
+      "Sucursal Centro",
+      217.96,
+      802,
+    ],
+    [
+      "Av. Rivadavia 5000, CABA",
+      28,
+      785,
+    ],
+    [
+      "Rosario, Santa Fe",
+      28,
+      774,
+    ],
+    [
+      "+54 11 4000-1234",
+      28,
+      763,
+    ],
+    [
+      "#1042",
+      515.62,
+      798,
+    ],
+    [
+      "CEL-1042",
+      528.6,
+      787,
+    ],
+    [
+      "RECIBIDO",
+      526.99,
+      766,
+    ],
+    [
+      "CLIENTE",
+      36,
+      721,
+    ],
+    [
+      "Juan Pérez · DNI 28.456.789",
+      36,
+      709,
+    ],
+    [
+      "+54 9 11 2345-6789 · tel. de esta orden: +54 9 11 9988-7766",
+      36,
+      699,
+    ],
+    [
+      "EQUIPO",
+      305.5,
+      721,
+    ],
+    [
+      "Apple iPhone 13 · Negro",
+      305.5,
+      709,
+    ],
+    [
+      "IMEI 358400123456789",
+      305.5,
+      699,
+    ],
+    [
+      "Batería: 78%",
+      305.5,
+      689,
+    ],
+    [
+      "FALLA DECLARADA",
+      36,
+      665,
+    ],
+    [
+      "El equipo no enciende desde que se mojó levemente con la lluvia. Además, la pantalla parpadea de forma intermitente cada vez que",
+      36,
+      653,
+    ],
+    [
+      "se intenta reiniciarlo.",
+      36,
+      643,
+    ],
+    [
+      "OBSERVACIONES",
+      36,
+      619,
+    ],
+    [
+      "El cliente solicita que se lo contacte únicamente por WhatsApp.",
+      36,
+      607,
+    ],
+    [
+      "ACCESORIOS RECIBIDOS",
+      36,
+      583,
+    ],
+    [
+      "Cargador, funda, chip claro",
+      36,
+      571,
+    ],
+    [
+      "PRESUPUESTO ESTIMADO",
+      36,
+      470,
+    ],
+    [
+      "$ 45.000,00",
+      36,
+      456,
+    ],
+    [
+      "SEÑA ABONADA · EFECTIVO",
+      215.67,
+      470,
+    ],
+    [
+      "$ 10.000,00",
+      215.67,
+      456,
+    ],
+    [
+      "SALDO ESTIMADO",
+      395.33,
+      470,
+    ],
+    [
+      "$ 35.000,00",
+      395.33,
+      456,
+    ],
+    [
+      "Retiro estimado: ",
+      28,
+      432,
+    ],
+    [
+      "13/03/2026",
+      95.82,
+      432,
+    ],
+    [
+      " — te avisamos ante cada cambio de estado.",
+      144.11,
+      432,
+    ],
+    [
+      "Escaneá el código para seguir tu",
+      83,
+      350,
+    ],
+    [
+      "reparación",
+      83,
+      341,
+    ],
+    [
+      "FIRMA DEL CLIENTE",
+      260.25,
+      312,
+    ],
+    [
+      "1. Conserve este comprobante para retirar su equipo. El plazo de retiro es de 30 días.",
+      28,
+      304,
+    ],
+    [
+      "2. No nos hacemos responsables por datos perdidos. Realice backup antes de entregar el equipo.",
+      28,
+      296,
+    ],
+    [
+      "3. Al frmar, el cliente declara haber revisado el estado del equipo al momento de la entrega.",
+      28,
+      288,
+    ],
+    [
+      "4. El presupuesto puede variar según el diagnóstico fnal del equipo.",
+      28,
+      280,
+    ],
+    [
+      "PARTE SUPERIOR · CLIENTE",
+      44,
+      257,
+    ],
+    [
+      "TALÓN INFERIOR · NEGOCIO",
+      474.72,
+      257,
+    ],
+    [
+      "TALÓN INTERNO — RECEPCIÓN",
+      28,
+      246,
+    ],
+    [
+      "#1042",
+      533.6,
+      245,
+    ],
+    [
+      "CEL-1042 · 10/03/2026 · Sucursal Centro",
+      403.2,
+      232,
+    ],
+    [
+      "CLIENTE",
+      36,
+      207,
+    ],
+    [
+      "Juan Pérez · +54 9 11 2345-6789",
+      36,
+      195,
+    ],
+    [
+      "DNI 28.456.789",
+      36,
+      185,
+    ],
+    [
+      "EQUIPO",
+      305.5,
+      207,
+    ],
+    [
+      "Apple iPhone 13 · Negro",
+      305.5,
+      195,
+    ],
+    [
+      "IMEI 358400123456789",
+      305.5,
+      185,
+    ],
+    [
+      "CÓDIGO DE ACCESO",
+      36,
+      161,
+    ],
+    [
+      "Patrón — solo talón interno",
+      36,
+      135,
+    ],
+    [
+      "CHEQUEO RÁPIDO",
+      305.5,
+      161,
+    ],
+    [
+      "Pantalla táctil funciona: OK · Botón de encendido funciona: OK · Cámara",
+      305.5,
+      149,
+    ],
+    [
+      "trasera funciona: NO · Puerto de carga funciona: NO · Estado de la carcasa:",
+      305.5,
+      139,
+    ],
+    [
+      "Rayones leves en el borde superior · Accesorios entregados por el cliente:",
+      305.5,
+      129,
+    ],
+    [
+      "Cargador original, funda transparente · El cliente indica que el equipo se",
+      305.5,
+      119,
+    ],
+    [
+      "FALLA / NOTAS DE MOSTRADOR",
+      36,
+      95,
+    ],
+    [
+      "El equipo no enciende desde que se mojó levemente con la lluvia. Además,",
+      36,
+      83,
+    ],
+    [
+      "la pantalla parpadea de forma intermitente cada vez que se intenta",
+      36,
+      73,
+    ],
+    [
+      "reiniciarlo.. Técnico asignado: L. Ferreyra",
+      36,
+      63,
+    ],
+    [
+      "OBS: El cliente solicita que se lo contacte únicamente por WhatsApp.",
+      36,
+      53,
+    ],
+    [
+      "PRESUPUESTO / SEÑA",
+      305.5,
+      95,
+    ],
+    [
+      "$ 45.000,00 / $ 10.000,00",
+      305.5,
+      83,
+    ],
+    [
+      "PROMETIDA",
+      440.25,
+      95,
+    ],
+    [
+      "13/03/2026",
+      440.25,
+      83,
+    ],
+  ],
+}
+`;
