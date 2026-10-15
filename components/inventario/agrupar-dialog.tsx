@@ -22,7 +22,9 @@ import {
   construirCuerpoAgrupar,
   motivoDeBloqueo,
   prefijoComun,
+  fuentePorDefecto,
   seguimientoQueSeApaga,
+  seguimientoQueSePrende,
   TEXTO_MOTIVO,
   validarAgrupacion,
   vistaPrevia,
@@ -67,6 +69,28 @@ async function revisarSeguimiento(itemId: string, tipo: "series" | "lotes", sena
   }
 }
 
+interface RiesgoDeSeguimiento {
+  clave: string
+  texto: string
+}
+
+const nombreDeSeguimiento = (tipo: "series" | "lotes") => (tipo === "series" ? "series" : "lotes")
+
+function textoDeApagado(nombre: string, tipo: "series" | "lotes", resultado: "con" | "error"): string {
+  const que = nombreDeSeguimiento(tipo)
+  if (resultado === "error") {
+    return `Entiendo que ${nombre} deja de controlar ${que} y que, si tiene ${que} cargados, las ventas no los van a marcar como vendidos (no pudimos revisar si tiene).`
+  }
+  return tipo === "series"
+    ? `Entiendo que ${nombre} deja de controlar series: las ventas van a descontar stock sin marcar series vendidas. Los números de serie que ya cargaste se conservan.`
+    : `Entiendo que ${nombre} deja de controlar lotes: las ventas van a descontar stock sin tocar los lotes. Los lotes que ya cargaste se conservan.`
+}
+
+function textoDePrendido(nombre: string, tipo: "series" | "lotes"): string {
+  const que = nombreDeSeguimiento(tipo)
+  return `Entiendo que ${nombre} va a pedir ${que} al venderlo: si no tiene ${que} cargados, no se va a poder vender hasta cargarlos.`
+}
+
 let contadorOpciones = 0
 const nuevaOpcion = (nombre: string): OpcionAgrupar => ({ id: `opcion-${++contadorOpciones}`, nombre, valores: [] })
 
@@ -100,7 +124,7 @@ function Contenido({ items: itemsIniciales, onClose, onAgrupado }: Omit<Props, "
   const [asignacion, setAsignacion] = useState<AsignacionAgrupar>({})
   const [base, setBase] = useState(() => prefijoComun(itemsIniciales.map((i) => i.nombre)))
   const [renombrar, setRenombrar] = useState(true)
-  const [fuenteElegida, setFuenteElegida] = useState<string | null>(null)
+  const [fuenteElegida, setFuenteElegida] = useState<string | null>(() => fuentePorDefecto(itemsIniciales))
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const enCurso = useRef(false)
@@ -127,23 +151,31 @@ function Contenido({ items: itemsIniciales, onClose, onAgrupado }: Omit<Props, "
     // Re-runs when the set of items at risk changes; the closure reads the lists of that render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [claveApagados])
-  const avisosSeguimiento = apagados.flatMap((a) => {
-    const resultado = revisiones[`${a.itemId}:${a.tipo}`]
-    const item = elegibles.find((i) => i.id === a.itemId)
-    if (!item || (resultado !== "con" && resultado !== "error")) return []
-    const que = a.tipo === "series" ? "números de serie" : "lotes"
-    return [
-      resultado === "con"
-        ? { clave: `${a.itemId}:${a.tipo}`, nombre: item.nombre, texto: `tiene ${que} cargados. Al tomar los datos del producto elegido se apaga ese control. Los ${que} que ya cargaste se conservan.` }
-        : { clave: `${a.itemId}:${a.tipo}`, nombre: item.nombre, texto: `no pudimos revisar si tiene ${que} cargados. Si los tiene, se conservan, pero ese control se apaga.` },
-    ]
-  })
+  // While a check is open the answer to "does it have serials or lots?" is unknown: nothing can be confirmed.
+  const revisando = apagados.some((a) => revisiones[`${a.itemId}:${a.tipo}`] === undefined)
+
+  // Every consequence of the source's tracking that touches stock control needs its own explicit "Entiendo":
+  // tracking turned OFF for a product that has serials or lots (or whose check failed), and tracking turned ON.
+  const [reconocidos, setReconocidos] = useState<ReadonlySet<string>>(new Set())
+  const riesgos: RiesgoDeSeguimiento[] = [
+    ...apagados.flatMap((a): RiesgoDeSeguimiento[] => {
+      const resultado = revisiones[`${a.itemId}:${a.tipo}`]
+      const item = elegibles.find((i) => i.id === a.itemId)
+      if (!item || (resultado !== "con" && resultado !== "error")) return []
+      return [{ clave: `${fuenteId}:${a.itemId}:${a.tipo}:apaga`, texto: textoDeApagado(item.nombre, a.tipo, resultado) }]
+    }),
+    ...seguimientoQueSePrende(elegibles, fuenteId).flatMap((a): RiesgoDeSeguimiento[] => {
+      const item = elegibles.find((i) => i.id === a.itemId)
+      return item ? [{ clave: `${fuenteId}:${a.itemId}:${a.tipo}:prende`, texto: textoDePrendido(item.nombre, a.tipo) }] : []
+    }),
+  ]
+  const faltaReconocer = riesgos.some((r) => !reconocidos.has(r.clave))
 
   const entrada = { base, opciones, items, asignacion }
   const problemas = validarAgrupacion(entrada)
   const mensajes = [...new Set(problemas.map((p) => p.mensaje))]
   if (faltaFuente) mensajes.push(FALTA_FUENTE)
-  const listo = mensajes.length === 0 && !guardando
+  const listo = mensajes.length === 0 && !guardando && !revisando && !faltaReconocer
 
   const cambiarOpcion = (id: string, cambio: Partial<OpcionAgrupar>) =>
     setOpciones((previas) => previas.map((o) => (o.id === id ? { ...o, ...cambio } : o)))
@@ -400,19 +432,27 @@ function Contenido({ items: itemsIniciales, onClose, onAgrupado }: Omit<Props, "
                   </label>
                 ))}
               </div>
-            </section>
-          )}
-
-          {avisosSeguimiento.length > 0 && (
-            <section data-testid="aviso-seguimiento" role="status" className="space-y-1 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
-              <p className="font-medium">Ojo con el control de stock</p>
-              <ul className="space-y-1">
-                {avisosSeguimiento.map((aviso) => (
-                  <li key={aviso.clave}>
-                    <span className="font-medium">{aviso.nombre}</span> {aviso.texto}
-                  </li>
+              {/* A live region that exists before its content, so what appears in it is announced. */}
+              <div data-testid="aviso-seguimiento" role="status" aria-live="polite" className={riesgos.length > 0 ? "space-y-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm" : undefined}>
+                {riesgos.map((riesgo) => (
+                  <label key={riesgo.clave} className="flex min-h-11 cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1 size-4 shrink-0"
+                      checked={reconocidos.has(riesgo.clave)}
+                      onChange={(e) =>
+                        setReconocidos((previos) => {
+                          const siguientes = new Set(previos)
+                          if (e.target.checked) siguientes.add(riesgo.clave)
+                          else siguientes.delete(riesgo.clave)
+                          return siguientes
+                        })
+                      }
+                    />
+                    <span>{riesgo.texto}</span>
+                  </label>
                 ))}
-              </ul>
+              </div>
             </section>
           )}
 
@@ -435,7 +475,7 @@ function Contenido({ items: itemsIniciales, onClose, onAgrupado }: Omit<Props, "
             Cancelar
           </Button>
           <Button type="button" onClick={guardar} disabled={!listo}>
-            {guardando ? "Agrupando…" : "Agrupar"}
+            {guardando ? "Agrupando…" : revisando ? "Revisando…" : "Agrupar"}
           </Button>
         </ResponsiveDialogFooter>
       </ResponsiveDialogContent>

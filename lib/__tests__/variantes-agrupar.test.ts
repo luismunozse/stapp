@@ -5,6 +5,8 @@ import {
   construirCuerpoAgrupar,
   motivoDeBloqueo,
   seguimientoQueSeApaga,
+  seguimientoQueSePrende,
+  fuentePorDefecto,
   prefijoComun,
   validarAgrupacion,
   vistaPrevia,
@@ -166,6 +168,67 @@ describe("seguimientoQueSeApaga (VB-3 S2)", () => {
 
   it("never lists the source itself", () => {
     expect(seguimientoQueSeApaga([con("a", { trackeaSeries: true }), con("b", { trackeaSeries: false })], "a")).toEqual([])
+  })
+})
+
+describe("seguimientoQueSePrende (tracking turned ON by grouping)", () => {
+  const con = (id: string, extra: Partial<ItemAgrupable>) => item(id, id, extra)
+
+  it("lists the items that do not track series or lots while the source does", () => {
+    const items = [
+      con("a", { trackeaSeries: false, trackeaLotes: false }),
+      con("b", { trackeaSeries: true, trackeaLotes: true }),
+      con("c", { trackeaSeries: true, trackeaLotes: false }),
+    ]
+    expect(seguimientoQueSePrende(items, "b")).toEqual([
+      { itemId: "a", tipo: "series" },
+      { itemId: "a", tipo: "lotes" },
+      { itemId: "c", tipo: "lotes" },
+    ])
+  })
+
+  it("nothing when the source tracks less, equal, or there is no source", () => {
+    const items = [con("a", { trackeaSeries: true }), con("b", { trackeaSeries: false })]
+    expect(seguimientoQueSePrende(items, "b")).toEqual([])
+    expect(seguimientoQueSePrende(items, null)).toEqual([])
+  })
+
+  it("is the mirror of seguimientoQueSeApaga", () => {
+    const items = [con("a", { trackeaSeries: true }), con("b", { trackeaSeries: false })]
+    expect(seguimientoQueSePrende(items, "a")).toEqual([{ itemId: "b", tipo: "series" }])
+    expect(seguimientoQueSeApaga(items, "a")).toEqual([])
+  })
+})
+
+describe("fuentePorDefecto", () => {
+  const con = (id: string, extra: Partial<ItemAgrupable>) => item(id, id, extra)
+
+  it("is null when tracking is the same everywhere: the choice does not matter for stock control, the user picks", () => {
+    expect(fuentePorDefecto([con("a", {}), con("b", {})])).toBeNull()
+    expect(fuentePorDefecto([con("a", { trackeaSeries: true }), con("b", { trackeaSeries: true })])).toBeNull()
+  })
+
+  it("picks the source that flips the fewest others (the majority's tracking)", () => {
+    const items = [con("a", { trackeaSeries: true }), con("b", { trackeaSeries: true }), con("c", { trackeaSeries: false })]
+    expect(fuentePorDefecto(items)).toBe("a")
+  })
+
+  it("counts series and lots together", () => {
+    const items = [
+      con("a", { trackeaSeries: true, trackeaLotes: false }),
+      con("b", { trackeaSeries: false, trackeaLotes: true }),
+      con("c", { trackeaSeries: false, trackeaLotes: true }),
+    ]
+    expect(fuentePorDefecto(items)).toBe("b")
+  })
+
+  it("is null on a tie: nobody is the obvious choice", () => {
+    expect(fuentePorDefecto([con("a", { trackeaSeries: true }), con("b", { trackeaSeries: false })])).toBeNull()
+  })
+
+  it("ignores items that cannot join (kits, archived, grouped)", () => {
+    const items = [con("a", { trackeaSeries: true }), con("b", { trackeaSeries: false }), con("k", { trackeaSeries: false, esKit: true })]
+    expect(fuentePorDefecto(items)).toBeNull()
   })
 })
 
