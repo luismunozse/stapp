@@ -23,6 +23,7 @@ import { useModal } from "@/contexts/modal-context"
 import { useFormDraft, fingerprintRecord } from "@/hooks/use-form-draft"
 import { archivosConStock, filasEnOrden, stockTotal, type VarianteLeida } from "@/lib/variantes-filas"
 import type { CompartidosForm } from "@/lib/variantes-guardado"
+import { aBorrador, esVariantesDeBorrador, restaurarVariantes, type VariantesDeBorrador } from "@/lib/variantes-borrador"
 import { VariantesSection } from "@/components/inventario/variantes/variantes-section"
 import { PromoverDialog } from "@/components/inventario/variantes/promover-dialog"
 import { useFotosVariantes } from "@/components/inventario/variantes/use-fotos-variantes"
@@ -180,6 +181,10 @@ interface InventarioDraftUi {
    *  snapshot del hook, mas abajo): esto es solo la marca que le permite al
    *  aviso decir que hay que volver a elegirla. */
   imagenPendiente: boolean
+  /** La seccion de variantes SIN costos (ver lib/variantes-borrador.ts). Solo con el interruptor prendido. */
+  variantes?: VariantesDeBorrador
+  /** Ids de las filas que tenian una foto elegida sin subir. Ids y nada mas: los archivos no se persisten. */
+  fotosPendientes?: string[]
 }
 
 /**
@@ -512,6 +517,8 @@ export function InventarioForm({
         newCategoria,
         // LIMITE DE PERSISTENCIA: la marca, nunca el archivo (ver punto 1).
         imagenPendiente: pendingFile !== null,
+        // LIMITE DE PERSISTENCIA: sin costos y sin archivos (ver lib/variantes-borrador.ts).
+        ...(variantesActivo ? { variantes: aBorrador(variantes.estado), fotosPendientes: fotos.idsConFotoPendiente() } : {}),
       },
     }),
     rootRef: formRef,
@@ -552,6 +559,7 @@ export function InventarioForm({
    * costo real. Cuando el rol no puede ver el costo el campo ni existe en la
    * pantalla, y ahi mencionarlo es mandar a alguien a un campo que no tiene.
    */
+  const fotosDeVariantes = Array.isArray(appliedDraft?.ui?.fotosPendientes) ? appliedDraft.ui.fotosPendientes.length : 0
   const detalleDelAviso = [
     costoCargado ? "El costo no se guarda en el borrador: volvé a cargarlo." : null,
     // La foto queda afuera por ser un `File`. Se dice solo cuando habia una:
@@ -559,6 +567,11 @@ export function InventarioForm({
     appliedDraft?.ui?.imagenPendiente
       ? "La foto no se guarda en el borrador: volvé a seleccionarla."
       : null,
+    fotosDeVariantes === 1
+      ? "La foto de 1 variante no se guarda en el borrador: volvé a elegirla."
+      : fotosDeVariantes > 1
+        ? `Las fotos de ${fotosDeVariantes} variantes no se guardan en el borrador: volvé a elegirlas.`
+        : null,
   ]
     .filter(Boolean)
     .join(" ")
@@ -687,6 +700,26 @@ export function InventarioForm({
     // en curso, que es el que corresponde.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftReady, draft, reset, clearDraft])
+
+  // Las variantes del borrador se aplican DESPUES del borrador y, en un grupo guardado, despues de leer el
+  // grupo: antes, la lectura las pisaria. Se restauran sobre lo que el servidor tiene hoy (costo, stock y
+  // foto guardados quedan como estan). Un borrador de otra forma se ignora; los archivos no vuelven nunca.
+  const variantesRestauradas = useRef<InventarioDraftValue | null>(null)
+  useEffect(() => {
+    if (!permiteVariantes || !appliedDraft || variantesRestauradas.current === appliedDraft) return
+    const guardado = !!item?.grupoId
+    if (guardado && (variantes.cargando || !variantes.agrupado)) return
+    variantesRestauradas.current = appliedDraft
+    const delBorrador = appliedDraft.ui?.variantes
+    if (!esVariantesDeBorrador(delBorrador)) return
+    const restaurado = restaurarVariantes(delBorrador, variantes.estado, { guardado })
+    if (restaurado) variantes.dispatch({ tipo: "reemplazar", estado: restaurado })
+  }, [permiteVariantes, appliedDraft, item?.grupoId, variantes])
+
+  // La seccion vive fuera de react-hook-form: sus cambios y los de las fotos elegidas tambien programan el borrador.
+  useEffect(() => {
+    if (variantesActivo) notifyChange()
+  }, [variantesActivo, variantes.estado, fotos.pendientes, notifyChange])
 
   /** Vuelve el formulario ENTERO al estado base -- incluido lo que vive fuera de
    *  react-hook-form. Resetear solo RHF dejaba el input de "nuevo tipo" abierto
