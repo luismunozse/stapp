@@ -5,8 +5,8 @@
  *
  * What the customer complained about: the A4 page printed on an A6 sheet comes out at half
  * size, "you can hardly read anything". So the tests that matter here are about legibility
- * and about never losing content: page sizes, minimum font sizes, long text flowing onto an
- * extra page instead of overflowing, and a geometric check (using the real TTF metrics) that
+ * and about never losing content: page sizes, minimum font sizes, everything fitted on ONE page
+ * instead of overflowing, and a geometric check (using the real TTF metrics) that
  * no text run leaves the page or lands on top of another one.
  */
 import { describe, it, expect } from "vitest"
@@ -16,7 +16,7 @@ import fontkitModule from "@pdf-lib/fontkit"
 import { PDFDocument, PDFDict, PDFName } from "pdf-lib"
 import QRCode from "qrcode"
 import { generateOrdenPDF } from "@/lib/pdf"
-import { wrapText, cutText } from "@/lib/pdf-orden-compact"
+import { wrapText, cutText, generateOrdenCompactPDF } from "@/lib/pdf-orden-compact"
 import { formatCurrencyValue } from "@/lib/currency"
 import { extractPdfText, extractPdfTextPositions, type PositionedText } from "./pdf-text-helper"
 import { buildOrdenFixture } from "./orden-fixture"
@@ -674,4 +674,241 @@ describe("A4 is not touched by any of this", () => {
   it("long terms keep A4 at one page of 595x842", async () => {
     expect((await render("A4", { recepcionTerminos: loremTerms(30) })).pages).toEqual([[595, 842]])
   })
+})
+
+// ============================================================
+// THE GUARANTEE: the sheet never overflows, whatever the field
+// ============================================================
+// Review finding: the fit only knew how to cut some fields. A long warranty note, address, name
+// of who attended, e-mail, payment reference or reason for no charge was in no stage, so the
+// content ran into the signature block (or off the page) and was drawn that way. Now every free
+// text is cut, and if that is not enough the layout keeps reducing (below the usual floor, then
+// to a maximum number of lines per paragraph) until it fits. It never draws an overflowing page.
+
+/** The hard minimum of the last-resort scale: nothing is ever drawn below this. */
+const HARD_MIN = 5
+
+/** Renders through the compact generator directly to read what the fit decided. */
+async function renderFit(paper: Compact, overrides: Record<string, unknown> = {}) {
+  let report: { slack: number; attempts: number; step: string } | undefined
+  const data = { ...fixture(overrides), paperSize: paper }
+  const buffer = await generateOrdenCompactPDF(data as any, paper, { report: (r) => (report = r) })
+  const doc = await PDFDocument.load(buffer)
+  const runs = await extractPdfTextPositions(buffer)
+  const text = (await extractPdfText(buffer)).replace(/\s+/g, " ")
+  return { buffer, doc, runs, text, pages: doc.getPages().map((p) => [p.getWidth(), p.getHeight()]), report }
+}
+
+const SHEET_ORDERS: Record<Sheet, Record<string, unknown>> = {
+  RECEPCION: { ...LEAN },
+  ENTREGA: { ...LEAN, ...ENTREGA, trabajos: trabajos(8), cobros: cobros(3) },
+}
+
+/** The fields that were in no cut stage, each 500 characters. */
+function everyFieldLong() {
+  const base = buildOrdenFixture()
+  return {
+    garantia: { dias: 90, fechaVencimiento: new Date("2026-06-08T15:00:00.000Z"), notas: prose(500) },
+    sucursal: { nombre: "Sucursal Centro", direccion: prose(500), telefono: "+54 11 4000-1234" },
+    direccionEmpresa: prose(500),
+    recibidoPorNombre: prose(500),
+    tecnicoNombre: prose(500),
+    entregadoPor: prose(500),
+    cliente: { ...base.cliente, email: "juan" + ".perez".repeat(80) + "@example.com" },
+    cobros: [1, 2, 3].map(() => ({ fecha: FIXED, metodo: "EFECTIVO", referencia: prose(500), monto: 1000 })),
+    motivoSinCobro: prose(500),
+    metodoPagoSena: prose(500),
+  }
+}
+
+/** The core of the sheet, which no amount of squeezing may remove. */
+function expectCore(out: Awaited<ReturnType<typeof renderFit>>, sheet: Sheet) {
+  for (const piece of ["Servicio Técnico Demo", "#1042", "Juan Pérez", "+54 9 11 2345-6789", "Apple iPhone 13 · Negro"]) {
+    expect(out.text, `missing: ${piece}`).toContain(norm(piece))
+  }
+  expect(imageCount(out.doc), "the QR is gone").toBeGreaterThanOrEqual(1)
+  expect(out.text).toContain(sheet === "RECEPCION" ? "FIRMA DEL CLIENTE" : "CLIENTE — ENTREGA")
+  if (sheet === "ENTREGA") {
+    expect(out.text).toContain("TOTAL FINAL")
+    expect(out.text).toContain("SALDO")
+  }
+}
+
+describe("the fit never draws an overflowing page", () => {
+  for (const key of ["A5", "A6"] as Compact[]) {
+    for (const sheet of SHEETS) {
+      it(`${key} ${sheet}: a 600-character warranty note still fits (slack >= 0, nothing overlaps)`, async () => {
+        const garantia = { dias: 90, fechaVencimiento: new Date("2026-06-08T15:00:00.000Z"), notas: prose(600) }
+        const out = await renderFit(key, { ...SHEET_ORDERS[sheet], garantia })
+        expect(out.pages).toEqual([SIZES[key].page])
+        expect(out.report, "the fit reports what it decided").toBeDefined()
+        expect(out.report!.slack).toBeGreaterThanOrEqual(-0.01)
+        expectNoClippingNoOverlap(out.runs, out.pages[0])
+        expectCore(out, sheet)
+      }, 20000)
+
+      it(`${key} ${sheet}: every free-text field at 500 characters at once still fits, inside the page, nothing overlapping`, async () => {
+        const out = await renderFit(key, { ...SHEET_ORDERS[sheet], ...everyFieldLong() })
+        expect(out.pages).toEqual([SIZES[key].page])
+        expect(out.report!.slack).toBeGreaterThanOrEqual(-0.01)
+        expect(Math.min(...out.runs.map((r) => r.size))).toBeGreaterThanOrEqual(HARD_MIN - 0.01)
+        expectNoClippingNoOverlap(out.runs, out.pages[0])
+        expectCore(out, sheet)
+      }, 20000)
+    }
+  }
+
+  it("a tiny sheet of an ordinary order does not go anywhere near the guarantee", async () => {
+    for (const key of ["A5", "A6"] as Compact[]) {
+      const out = await renderFit(key, TYPICAL[key])
+      expect(out.report!.step).toBe("normal")
+      expect(out.report!.slack).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it("the number of measuring passes stays small even in the worst case", async () => {
+    const out = await renderFit("A6", { ...SHEET_ORDERS.ENTREGA, ...everyFieldLong(), ...OVERFLOW_CASES["everything at once"]("A6") })
+    expect(out.report!.attempts).toBeLessThan(120)
+    expect(out.report!.slack).toBeGreaterThanOrEqual(-0.01)
+  }, 20000)
+})
+
+describe("the terms are never removed in silence", () => {
+  for (const key of ["A5", "A6"] as Compact[]) {
+    it(`${key}: when the terms are cut the first one stays and a line says where to get the rest`, async () => {
+      const out = await renderFit(key, { ...LEAN, recepcionTerminos: loremTerms(30), problemaReportado: prose(1200), observaciones: prose(1200) })
+      expect(out.pages).toHaveLength(1)
+      expect(out.text).toContain("1. Lorem ipsum dolor sit amet")
+      expect(out.text).toContain("Términos completos: pedíselos al taller.")
+      expect(out.text).not.toContain("30. Lorem ipsum")
+    }, 20000)
+
+    it(`${key}: an order whose terms fit whole shows no such line`, async () => {
+      const out = await renderFit(key, TYPICAL[key])
+      expect(out.text).not.toContain("Términos completos")
+    })
+  }
+
+  it("even when everything else is at its limit the terms section is there, with the line", async () => {
+    const out = await renderFit("A6", { ...SHEET_ORDERS.ENTREGA, ...everyFieldLong(), ...OVERFLOW_CASES["everything at once"]("A6") })
+    expect(out.text).toContain("TÉRMINOS Y CONDICIONES")
+    expect(out.text).toContain("Términos completos: pedíselos al taller.")
+  }, 20000)
+})
+
+describe("the reception checklist is liability evidence: it is cut after the falla, not before", () => {
+  const checklistItems = [
+    { label: "Pantalla táctil funciona", valor: true, categoria: "FUNCIONAL" },
+    { label: "Cámara trasera funciona", valor: false, categoria: "FUNCIONAL" },
+    { label: "Estado de la carcasa", valor: "Rayones leves en el borde superior", categoria: "CONDICION_FISICA" },
+  ]
+
+  it("the fully populated delivered order on A6 keeps its checklist (nothing of it dropped) and the falla", async () => {
+    const out = await renderFit("A6", ENTREGA)
+    expect(out.pages).toHaveLength(1)
+    expect(out.text).toContain("CHEQUEO DE RECEPCIÓN")
+    expect(out.text).toContain("Pantalla táctil funciona")
+    expect(out.text).toContain("Cámara trasera funciona")
+    expect(out.text).toContain("Estado de la carcasa")
+    expect(out.text).toContain("El equipo no enciende")
+  })
+
+  it("the checklist is only cut once the falla is already at its minimum", async () => {
+    const longValue = prose(400)
+    const out = await renderFit("A6", {
+      ...ENTREGA,
+      problemaReportado: prose(500),
+      checklistItems: checklistItems.map((it) => (typeof it.valor === "string" ? { ...it, valor: longValue } : it)),
+      recepcionTerminos: loremTerms(30),
+    })
+    expect(out.pages).toHaveLength(1)
+    expect(out.text).toContain("CHEQUEO DE RECEPCIÓN") // never dropped while the falla still has text
+    const falla = /FALLA DECLARADA (.*?) (?:DIAGNÓSTICO|ACCESORIOS)/.exec(out.text)![1]
+    const checklistWhole = out.text.includes(longValue)
+    // either the checklist survived whole, or the falla had to be cut down to its minimum first
+    expect(checklistWhole || falla.replace("…", "").length <= 45, `falla has ${falla.length} chars but the checklist was cut`).toBe(true)
+  }, 20000)
+
+  it("a checklist that fits whole next to a long falla is untouched while the falla gives way", async () => {
+    const out = await renderFit("A6", { ...ENTREGA, problemaReportado: prose(900), checklistItems })
+    expect(out.text).toContain("Estado de la carcasa: Rayones leves en el borde superior")
+    expect(out.text).toContain("Cámara trasera funciona: NO")
+  }, 20000)
+})
+
+describe("the rows that do not fit are summed exactly, and the totals are untouched", () => {
+  // Cents on purpose, with negatives: 0.1 + 0.2 style float drift must not reach the paper.
+  const cents = (i: number) => (((i * 7919) % 9973) - 1500 + (i % 3 === 0 ? 0.35 : 0.07)) / 1
+  const items = Array.from({ length: 40 }, (_, i) => ({ nombre: `Item ${i + 1}`, cantidad: 1, importe: Math.round(cents(i) * 100) / 100 || 1.01 }))
+  const pagos = Array.from({ length: 12 }, (_, i) => ({ fecha: FIXED, metodo: "EFECTIVO", referencia: null, monto: i === 5 ? -250.1 : Math.round((100.1 + i * 3.37) * 100) / 100 }))
+  const sum = (xs: number[]) => xs.reduce((n, x) => n + Math.round(x * 100), 0) / 100
+
+  for (const key of ["A5", "A6"] as Compact[]) {
+    it(`${key}: "+N ítems más" and "+N pagos más" carry the exact sum of the rows they hide`, async () => {
+      const costoFinal = Math.round((sum(items.map((i) => i.importe)) + 5000.55) * 100) / 100
+      const out = await render(key, { ...LEAN, ...ENTREGA, trabajos: items, cobros: pagos, costoFinal, totalCobrado: sum(pagos.map((p) => p.monto)), presupuesto: 45000 })
+      const itemsRow = /\+(\d+) ítems más (\S+ \S+)/.exec(out.text)
+      const pagosRow = /\+(\d+) pagos más (\S+ \S+)/.exec(out.text)
+      expect(itemsRow, "items were not collapsed: the test data is too small").not.toBeNull()
+      expect(pagosRow, "payments were not collapsed: the test data is too small").not.toBeNull()
+      const hiddenItems = Number(itemsRow![1])
+      const hiddenPagos = Number(pagosRow![1])
+      expect(out.text).toContain(norm(`+${hiddenItems} ítems más ${formatCurrencyValue(sum(items.slice(items.length - hiddenItems).map((i) => i.importe)), "ARS")}`))
+      expect(out.text).toContain(norm(`+${hiddenPagos} pagos más ${formatCurrencyValue(sum(pagos.slice(pagos.length - hiddenPagos).map((p) => p.monto)), "ARS")}`))
+      // what is shown is exactly the first rows, in order
+      for (let i = 0; i < items.length - hiddenItems; i++) expect(out.text).toContain(`Item ${i + 1} x1`)
+      expect(out.text).not.toContain(`Item ${items.length} x1`)
+    }, 20000)
+
+    it(`${key}: subtotal, total, deposit and balance read the same as without collapsing`, async () => {
+      const subtotal = sum(items.map((i) => i.importe))
+      const costoFinal = Math.round((subtotal + 5000.55) * 100) / 100
+      const totalCobrado = sum(pagos.map((p) => p.monto))
+      const out = await render(key, { ...LEAN, ...ENTREGA, trabajos: items, cobros: pagos, costoFinal, totalCobrado, presupuesto: 45000 })
+      for (const piece of [
+        `Subtotal trabajo ${formatCurrencyValue(subtotal, "ARS")}`,
+        `Mano de obra y otros ${formatCurrencyValue(Math.round((costoFinal - subtotal) * 100) / 100, "ARS")}`,
+        `TOTAL FINAL ${formatCurrencyValue(costoFinal, "ARS")}`,
+        `SALDO ${formatCurrencyValue(Math.round((costoFinal - totalCobrado) * 100) / 100, "ARS")}`,
+        `Presupuesto estimado ${formatCurrencyValue(45000, "ARS")}`,
+      ]) {
+        expect(out.text, `missing: ${piece}`).toContain(norm(piece))
+      }
+      // the deposit sheet: the deposit and the balance are not rows, so they are never summarised
+      const recepcion = await render(key, { ...LEAN, trabajos: items, cobros: pagos })
+      expect(recepcion.text).toContain(norm(`Seña abonada · EFECTIVO ${formatCurrencyValue(10000, "ARS")}`))
+      expect(recepcion.text).toContain(norm(`Saldo estimado ${formatCurrencyValue(35000, "ARS")}`))
+    }, 20000)
+  }
+})
+
+describe("the last resort for names keeps the tax id", () => {
+  for (const key of ["A5", "A6"] as Compact[]) {
+    it(`${key}: a very long razón social is cut by itself; the CUIT after it survives`, async () => {
+      const out = await renderFit(key, {
+        ...OVERFLOW_CASES["everything at once"](key),
+        cliente: { ...buildOrdenFixture().cliente, tipoCliente: "EMPRESA", razonSocial: prose(1500).replace(/ /g, "_"), cuit: "30-12345678-9", dni: null },
+        nombreEmpresa: prose(900),
+      })
+      expect(out.pages).toHaveLength(1)
+      expect(out.text).toContain("30-12345678-9")
+      expect(out.report!.slack).toBeGreaterThanOrEqual(-0.01)
+      expectNoClippingNoOverlap(out.runs, out.pages[0])
+    }, 20000)
+  }
+})
+
+describe("fonts of the heavy fixtures stay at or above their floors", () => {
+  for (const key of ["A5", "A6"] as Compact[]) {
+    for (const sheet of SHEETS) {
+      it(`${key} ${sheet}: the fully populated order (and the heavy ones) are never drawn under the terms floor`, async () => {
+        for (const extra of [sheetExtra(sheet), { ...sheetExtra(sheet), ...OVERFLOW_CASES["everything at once"](key) }]) {
+          const out = await render(key, extra)
+          expect(Math.min(...out.runs.map((r) => r.size))).toBeGreaterThanOrEqual(FLOORS[key].terms - 0.01)
+          const small = out.runs.filter((r) => r.size < FLOORS[key].text - 0.01)
+          for (const r of small) expect(r.text, `"${r.text}" is under the text floor and is not terms`).toMatch(/Lorem|ipsum|dolor|consequat|…|Términos completos|^\d+\./i)
+        }
+      }, 20000)
+    }
+  }
 })
