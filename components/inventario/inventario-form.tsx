@@ -721,9 +721,10 @@ export function InventarioForm({
   }, [permiteVariantes, appliedDraft, item?.grupoId, variantes])
 
   // La seccion vive fuera de react-hook-form: sus cambios y los de las fotos elegidas tambien programan el borrador.
+  const marcaDeFotos = fotos.idsConFotoPendiente().join(",")
   useEffect(() => {
     if (variantesActivo) notifyChange()
-  }, [variantesActivo, variantes.estado, fotos.pendientes, notifyChange])
+  }, [variantesActivo, variantes.estado, marcaDeFotos, notifyChange])
 
   /** Vuelve el formulario ENTERO al estado base -- incluido lo que vive fuera de
    *  react-hook-form. Resetear solo RHF dejaba el input de "nuevo tipo" abierto
