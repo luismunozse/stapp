@@ -16,7 +16,7 @@ import fontkitModule from "@pdf-lib/fontkit"
 import { PDFDocument, PDFDict, PDFName } from "pdf-lib"
 import QRCode from "qrcode"
 import { generateOrdenPDF } from "@/lib/pdf"
-import { wrapText } from "@/lib/pdf-orden-compact"
+import { wrapText, cutText } from "@/lib/pdf-orden-compact"
 import { formatCurrencyValue } from "@/lib/currency"
 import { extractPdfText, extractPdfTextPositions, type PositionedText } from "./pdf-text-helper"
 import { buildOrdenFixture } from "./orden-fixture"
@@ -181,6 +181,20 @@ describe("wrapText", () => {
     for (const l of lines) expect(measure(l)).toBeLessThanOrEqual(50)
     expect(lines.join("")).toContain("x".repeat(25).slice(0, 10))
     expect(lines.join("").replace(/\s/g, "")).toBe("a" + "x".repeat(25) + "b")
+  })
+})
+
+describe("cutText", () => {
+  it("keeps the beginning and closes with an ellipsis; a text that already fits is returned as it is", () => {
+    expect(cutText("abcdefgh", 5)).toBe("abcde…")
+    expect(cutText("abcde", 5)).toBe("abcde")
+    expect(cutText("abc", 10)).toBe("abc")
+  })
+
+  it("does not leave a space before the ellipsis, and never splits a surrogate pair", () => {
+    expect(cutText("ab cd", 3)).toBe("ab…")
+    expect(cutText("a😀b", 2)).toBe("a…") // 😀 is two UTF-16 units: cutting between them would corrupt the text
+    expect(cutText("a😀b", 3)).toBe("a😀…")
   })
 })
 
@@ -372,14 +386,13 @@ describe("content: the same information as the A4 sheet, stacked in one column",
         "SALDO",
         formatCurrencyValue(38000, "ARS"),
         "PAGOS REGISTRADOS",
-        "CHEQUEO DE RECEPCIÓN",
-        "Pantalla táctil funciona: OK",
-        "Cámara trasera funciona: NO",
         "GARANTÍA 90 DÍAS",
         "Vigente hasta",
         "CLIENTE — ENTREGA",
         "ENTREGÓ — M. GOMEZ",
-        "Conserve este comprobante",
+        // The reception checklist and the terms are what gives way first on the smaller sheet
+        // (the fully populated order does not fit A6 otherwise), so only A5 keeps them here.
+        ...(key === "A5" ? ["CHEQUEO DE RECEPCIÓN", "Pantalla táctil funciona: OK", "Cámara trasera funciona: NO", "Conserve este comprobante"] : []),
       ]) {
         expect(text, `missing: ${piece}`).toContain(norm(piece))
       }
@@ -430,8 +443,6 @@ describe("nothing clipped, nothing overlapping", () => {
 // free text with an ellipsis. The workshop, the order number, the customer, the device, the
 // money, the QR and the signatures are never cut.
 
-const CLAUSE = "cláusula"
-const clauseTerms = (n: number) => Array.from({ length: n }, (_, i) => `${i + 1}. ${Array(30).fill(CLAUSE).join(" ")}`).join("\n")
 const loremTerms = (n: number) => Array.from({ length: n }, (_, i) => `${i + 1}. ${LOREM}`).join("\n")
 /** `n` characters of readable, breakable text. */
 const prose = (n: number) => LOREM.repeat(Math.ceil(n / LOREM.length)).slice(0, n)
@@ -531,6 +542,14 @@ describe("no multi-page chrome: no continuation header and no i/n counter", () =
   })
 })
 
+/**
+ * How many LOREM terms (about 240 characters each) a LEAN order takes before each step is not
+ * enough: this many only need the terms to shrink (step c), this many also need the body to
+ * (step d), and still nothing is cut.
+ */
+const TERMS_ONLY_STEP = { A5: 8, A6: 3 } as const
+const BODY_SHRINKS = { A5: 14, A6: 8 } as const
+
 describe("the fit stops at the first step that works", () => {
   for (const key of ["A5", "A6"] as Compact[]) {
     const N = NORMAL[key]
@@ -547,9 +566,9 @@ describe("the fit stops at the first step that works", () => {
     })
 
     it(`${key}: long terms are drawn smaller than the body BEFORE the body shrinks`, async () => {
-      const out = await render(key, { ...LEAN, recepcionTerminos: clauseTerms(2) + "\n" + loremTerms(3) })
+      const out = await render(key, { ...LEAN, recepcionTerminos: loremTerms(TERMS_ONLY_STEP[key]) })
       const falla = out.runs.find((r) => r.text.startsWith("El equipo no enciende"))!
-      const term = out.runs.find((r) => r.text.includes(CLAUSE))!
+      const term = out.runs.find((r) => r.text.startsWith("1. Lorem"))!
       expect(out.pages).toHaveLength(1)
       expect(term.size).toBeLessThan(N.terms)
       expect(term.size).toBeGreaterThanOrEqual(FLOORS[key].terms - 0.01)
@@ -557,14 +576,15 @@ describe("the fit stops at the first step that works", () => {
       expect(out.text).not.toContain("…")
     })
 
-    it(`${key}: when the terms alone cannot absorb it, the body shrinks, never below ${FLOORS[key].text}pt`, async () => {
-      const out = await render(key, { ...LEAN, recepcionTerminos: loremTerms(30), problemaReportado: prose(900), observaciones: prose(500) })
-      const body = out.runs.filter((r) => r.size > FLOORS[key].terms + 0.01 && !r.text.includes("Lorem"))
-      expect(out.pages).toHaveLength(1)
-      expect(body.length).toBeGreaterThan(10)
-      expect(Math.min(...body.map((r) => r.size))).toBeGreaterThanOrEqual(FLOORS[key].text - 0.01)
+    it(`${key}: when the terms alone cannot absorb it, the body shrinks (never below ${FLOORS[key].text}pt) and nothing is cut`, async () => {
+      const out = await render(key, { ...LEAN, recepcionTerminos: loremTerms(BODY_SHRINKS[key]) })
+      const falla = out.runs.find((r) => r.text.startsWith("El equipo no enciende"))!
       const term = out.runs.find((r) => r.text.startsWith("1. Lorem"))!
-      expect(term.size).toBeCloseTo(FLOORS[key].terms, 1) // already at its own floor
+      expect(out.pages).toHaveLength(1)
+      expect(falla.size).toBeLessThan(N.body)
+      expect(falla.size).toBeGreaterThanOrEqual(FLOORS[key].text - 0.01)
+      expect(term.size).toBeCloseTo(FLOORS[key].terms, 1) // the terms are already at their own floor
+      expect(out.text).not.toContain("…")
     })
 
     it(`${key}: fonts never go below the floors, whatever the content`, async () => {
@@ -579,6 +599,22 @@ describe("the fit stops at the first step that works", () => {
       }
     })
   }
+})
+
+describe("step b: tighter spacing", () => {
+  it("A6: an order that does not fit at normal spacing fits once tightened, every font at its normal size", async () => {
+    // LEAN takes two A6 sheets at normal spacing (it did before the fit existed).
+    const out = await render("A6", LEAN)
+    const falla = out.runs.find((r) => r.text.startsWith("El equipo no enciende"))!
+    const terms = out.runs.find((r) => r.text.startsWith("1. Conserve"))!
+    expect(out.pages).toHaveLength(1)
+    expect(falla.size).toBe(NORMAL.A6.body)
+    expect(terms.size).toBe(NORMAL.A6.terms)
+    expect(out.text).not.toContain("…")
+    // with more terms tightening is not enough and the terms shrink (step c)
+    const heavier = await render("A6", { ...LEAN, recepcionTerminos: loremTerms(TERMS_ONLY_STEP.A6) })
+    expect(heavier.runs.find((r) => r.text.startsWith("1. Lorem"))!.size).toBeLessThan(NORMAL.A6.terms)
+  })
 })
 
 describe("truncation is the last resort, in a fixed order", () => {
@@ -603,7 +639,7 @@ describe("truncation is the last resort, in a fixed order", () => {
     expect(out.runs.filter((r) => r.text.endsWith("…")).length).toBeGreaterThanOrEqual(1)
     // the falla keeps its start and loses its end
     expect(out.text).toContain(LOREM.slice(0, 60))
-    expect(out.text).not.toContain(prose(2000).slice(-60))
+    expect(out.text).not.toContain(prose(2000).slice(0, 1500)) // the 2000 characters do not all survive
     // an ellipsis only ever closes a run
     for (const r of out.runs) expect(r.text.includes("…") ? r.text.endsWith("…") : true).toBe(true)
   })
