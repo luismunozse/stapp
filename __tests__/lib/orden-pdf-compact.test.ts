@@ -16,7 +16,7 @@ import fontkitModule from "@pdf-lib/fontkit"
 import { PDFDocument, PDFDict, PDFName } from "pdf-lib"
 import QRCode from "qrcode"
 import { generateOrdenPDF } from "@/lib/pdf"
-import { wrapText, cutText, clampLines, summarizeChecklist, generateOrdenCompactPDF } from "@/lib/pdf-orden-compact"
+import { wrapText, cutText, clampLines, summarizeChecklist, generateOrdenCompactPDF, type FitReport } from "@/lib/pdf-orden-compact"
 import { DEFAULT_RECEPCION_TERMINOS } from "@/lib/terminos"
 import { formatCurrencyValue } from "@/lib/currency"
 import { extractPdfText, extractPdfTextPositions, type PositionedText } from "./pdf-text-helper"
@@ -721,7 +721,7 @@ const HARD_MIN = 5
 
 /** Renders through the compact generator directly to read what the fit decided. */
 async function renderFit(paper: Compact, overrides: Record<string, unknown> = {}) {
-  let report: { slack: number; attempts: number; step: string } | undefined
+  let report: FitReport | undefined
   const data = { ...fixture(overrides), paperSize: paper }
   const buffer = await generateOrdenCompactPDF(data as any, paper, { report: (r) => (report = r) })
   const doc = await PDFDocument.load(buffer)
@@ -820,6 +820,26 @@ describe("the very last resort: content that no font size can hold", () => {
   }
 })
 
+describe("defensive limits on the small fixed fields", () => {
+  for (const key of ["A5", "A6"] as Compact[]) {
+    it(`${key}: an absurd order number and internal code cannot push the workshop name out of the header`, async () => {
+      const out = await renderFit(key, { ...TYPICAL[key], numeroOrden: "9".repeat(400), codigoOrden: "C".repeat(300) })
+      expect(out.pages).toEqual([SIZES[key].page])
+      expectNoClippingNoOverlap(out.runs, out.pages[0])
+      expect(out.text).toContain("Servicio Técnico Demo")
+      expect(out.text).toContain("#" + "9".repeat(12))
+      expect(out.text).not.toContain("9".repeat(13))
+      expect(out.text).not.toContain("C".repeat(25))
+    })
+
+    it(`${key}: a checklist category title with no spaces wraps instead of running off the page`, async () => {
+      const out = await renderFit(key, { ...ENTREGA, checklistItems: [{ label: "Pantalla", valor: true, categoria: "X".repeat(200) }] })
+      expect(out.pages).toEqual([SIZES[key].page])
+      expectNoClippingNoOverlap(out.runs, out.pages[0])
+    })
+  }
+})
+
 describe("the terms are never removed in silence", () => {
   for (const key of ["A5", "A6"] as Compact[]) {
     it(`${key}: when the terms are cut a line always says where to get the rest`, async () => {
@@ -858,19 +878,27 @@ describe("the reception checklist is liability evidence: detail first, then a su
   })
 
   it("when it does not fit whole it becomes ONE summary line with the counts and the problem items, before the falla is touched", async () => {
-    const falla = prose(300)
-    const out = await renderFit("A5", { ...LEAN, ...ENTREGA, problemaReportado: falla, checklistItems, recepcionTerminos: loremTerms(30), observaciones: null })
-    expect(out.pages).toHaveLength(1)
-    expect(out.text).toContain("Checklist de ingreso: 1 OK · 1 NO (Cámara trasera funciona) · 1 con nota (Estado de la carcasa)")
-    expect(out.text).toContain(falla) // the falla is whole: the summary came first
+    const out = await renderFit("A6", ENTREGA) // the stock delivered order: 6 checklist items, 150-character falla
+    expect(out.report!.step).toBe("cut")
+    expect(out.text).toContain(
+      "Checklist de ingreso: 2 OK · 2 NO (Cámara trasera funciona, Puerto de carga funciona) · 2 con nota (Estado de la carcasa, Accesorios entregados por el cliente)",
+    )
+    expect(out.text).toContain("El equipo no enciende desde que se mojó levemente con la lluvia. Además, la pantalla parpadea de forma intermitente cada vez que se intenta reiniciarlo.")
     expect(out.text).not.toContain("Rayones leves en el borde superior")
   }, 20000)
 
-  it("the summary is only used once the terms body is already gone", async () => {
-    const out = await renderFit("A5", { ...LEAN, ...ENTREGA, problemaReportado: prose(300), checklistItems, recepcionTerminos: loremTerms(30) })
+  it("the summary comes after the terms body: it is gone and a line says where to get it", async () => {
+    const out = await renderFit("A6", ENTREGA)
     expect(out.text).toContain("Checklist de ingreso")
     expect(out.text).toContain("Términos completos: pedíselos al taller.")
-    expect(out.text).not.toContain("1. Lorem ipsum")
+    expect(out.text).not.toContain("1. Conserve este comprobante")
+  }, 20000)
+
+  it("the names of the items that are not OK are shortened before the falla, and left out only after it gave all it can", async () => {
+    const items = Array.from({ length: 6 }, (_, i) => ({ label: `Revisión de la pieza número ${i + 1} del equipo`, valor: false, categoria: "FUNCIONAL" }))
+    const out = await renderFit("A6", { ...ENTREGA, checklistItems: items, problemaReportado: prose(260) })
+    expect(out.text).toContain("Checklist de ingreso: 0 OK · 6 NO")
+    expect(out.report!.step).not.toBe("guarantee")
   }, 20000)
 
   it("a checklist that is never cut says nothing about a summary", async () => {

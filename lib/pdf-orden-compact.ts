@@ -16,17 +16,18 @@
  *   b. tighter spacing (smaller gaps, paddings and line height);
  *   c. smaller terms and conditions, down to their own floor;
  *   d. every font and gap scaled down together, down to the text floor;
- *   e. last resort, cutting the longest free text with an ellipsis, in this order: the terms
- *      (the first one stays and a line says where to get the rest), the observaciones, the minor
- *      notes (delivery notes, extra fields, warranty note), the details of who attended, the
- *      branch address, the e-mail and the payment references, then the falla / diagnostico /
- *      accesorios, and last the reception checklist (it is liability evidence);
+ *   e. last resort, cutting free text with an ellipsis, in this order: the terms body (a line
+ *      says where to get the rest), the observaciones, the minor notes (delivery notes, extra
+ *      fields, warranty note), the details of who attended, the branch address, the e-mail and
+ *      the payment references, then the reception checklist is replaced by ONE summary line
+ *      (counts and the items that are not OK), and only then the falla / diagnostico / accesorios;
  *   f. the detail rows of the budget, shown up to a limit and the rest summed in one "+N more"
  *      row (the totals are never touched);
  *   g. absurdly long names (workshop, customer, razon social, device);
- *   h. the GUARANTEE: if even that does not fit, the scale keeps going down below the usual
- *      floor, to a hard minimum, then every paragraph is clamped to a maximum number of lines.
- *      An overflowing sheet is never drawn.
+ *   h. the GUARANTEE, for absurd input only: the scale keeps going down below the usual floor,
+ *      to a hard minimum, then every paragraph is clamped to a maximum number of lines. An
+ *      overflowing sheet is never drawn. An ordinary order never gets here: legibility is the
+ *      point of this layout.
  *
  * Every search is a bisection over one parameter and the measuring passes are cheap (the width
  * of a string is memoized), so a fit costs a handful of passes, not a walk. Stages left at their
@@ -103,10 +104,15 @@ const GAP_TIGHT = 0.4
 const SIG_TIGHT = 0.3
 /** A character-limit bisection stops when the limit that fits and the one that does not are this close: a cut field loses at most this many characters it could have kept. */
 const CAP_TOLERANCE = 8
-/** The least a cut field keeps (characters), so it is never just an ellipsis: terms (the first one), details, falla / diagnostico / accesorios, checklist. */
-const MIN_KEEP = { terms: 40, details: 30, falla: 40, checklist: 24 } as const
+/** The least a cut field keeps (characters), so it is never just an ellipsis: details, falla / diagnostico / accesorios. */
+const MIN_KEEP = { details: 30, falla: 40, checklistNames: 40 } as const
 /** The longest a name may be in the absurd case where nothing else is left to cut. */
 const IDENTITY_FLOOR = 60
+/** The longest a name may be when even that was not enough. */
+const IDENTITY_MIN = 20
+/** The longest the order number and the internal code are drawn (they are never this long in practice). */
+const NUMBER_CHARS = 12
+const CODE_CHARS = 24
 /** The smallest any text is ever drawn, reached only by the last-resort guarantee. */
 const HARD_MIN_FONT = 5
 /** Upper bound of the paragraph-length search of the guarantee. */
@@ -234,6 +240,38 @@ const safe = (val: unknown): string => {
   return ""
 }
 
+/** The checklist split by how each item stands: OK, NO (false) or with a written note. */
+function classifyChecklist(items: Array<{ label?: unknown; valor?: unknown }>) {
+  let ok = 0
+  const no: string[] = []
+  const notes: string[] = []
+  for (const it of items) {
+    const label = safe(it.label)
+    if (it.valor === true) ok += 1
+    else if (it.valor === false) no.push(label)
+    else if (safe(it.valor)) notes.push(label)
+  }
+  return { ok, no, notes }
+}
+
+/**
+ * The reception checklist as ONE line: how many items are OK and which are not, e.g.
+ * "Checklist de ingreso: 5 OK · 1 NO (Cámara trasera)". Items with a written value are notes,
+ * listed apart. `maxNames` cuts each list of names (the counts are never cut); 0 leaves them out.
+ */
+export function summarizeChecklist(items: Array<{ label?: unknown; valor?: unknown }>, maxNames?: number): string {
+  const { ok, no, notes } = classifyChecklist(items)
+  const names = (list: string[]) => {
+    const joined = list.join(", ")
+    const shown = maxNames === undefined ? joined : maxNames <= 0 ? "" : cutText(joined, maxNames)
+    return shown ? ` (${shown})` : ""
+  }
+  const parts = [`${ok} OK`]
+  if (no.length > 0) parts.push(`${no.length} NO${names(no)}`)
+  if (notes.length > 0) parts.push(`${notes.length} con nota${names(notes)}`)
+  return `Checklist de ingreso: ${parts.join(" · ")}`
+}
+
 /** Free-text fields that can be cut, with the order they are cut in (see CUT_STAGES). */
 type CapKey =
   | "terms"
@@ -267,17 +305,29 @@ interface FitParams {
   identity?: number
   /** Most lines any paragraph may have (the guarantee). Missing = as many as it needs. */
   maxLines?: number
+  /** The reception checklist as one summary line instead of its detail. */
+  checklistSummary?: boolean
+  /** No checklist at all (the very last fallback of the guarantee). */
+  noChecklist?: boolean
 }
 
-/** The order of the last resort: each stage cuts its fields with one common character limit. */
-const CUT_STAGES: Array<{ keys: CapKey[]; min: number }> = [
-  { keys: ["terms"], min: MIN_KEEP.terms },
+/**
+ * The order of the last resort: each stage cuts its fields with one common character limit.
+ * `summary` marks the stage that turns the checklist into one line (its fields are then the
+ * notes that may follow it).
+ */
+const CUT_STAGES: Array<{ keys: CapKey[]; min: number; summary?: boolean }> = [
+  // the terms body may go entirely: a line says where to get it
+  { keys: ["terms"], min: 0 },
   { keys: ["observaciones"], min: 0 },
   { keys: ["notes", "metadata", "garantia"], min: 0 },
   { keys: ["shop", "people", "email", "rowtext"], min: MIN_KEEP.details },
+  // the checklist is evidence: its detail becomes ONE line (counts and what is not OK) BEFORE the falla is touched
+  { keys: ["checklistNotes"], min: 0, summary: true },
+  // in summary mode, the names of the items that are not OK: shortened first, left out only after the falla gave all it can
+  { keys: ["checklist"], min: MIN_KEEP.checklistNames },
   { keys: ["falla", "diagnostico", "accesorios"], min: MIN_KEEP.falla },
-  // after the falla: the device condition at reception is evidence if the customer disputes it
-  { keys: ["checklist", "checklistNotes"], min: MIN_KEEP.checklist },
+  { keys: ["checklist"], min: 0 },
 ]
 
 /** What the fit decided; handed to `options.report` (tests and diagnostics). */
@@ -314,8 +364,8 @@ export async function generateOrdenCompactPDF(
 
   // ---- data, read the same way the A4 sheets read it ----
   const empresaNombre = safe(data.nombreEmpresa) || "Servicio Técnico"
-  const numeroOrdenPadded = `#${String(safe(data.numeroOrden)).padStart(4, "0")}`
-  const codigoOrden = safe(data.codigoOrden)
+  const numeroOrdenPadded = `#${safe(data.numeroOrden).slice(0, NUMBER_CHARS).padStart(4, "0")}`
+  const codigoOrden = safe(data.codigoOrden).slice(0, CODE_CHARS)
   const estadoRaw = safe(data.estado).toUpperCase()
   const estadoDisplay = (estadoRaw || "RECIBIDO").replace(/_/g, " ")
   const isEntrega = ESTADOS_COMPLETADOS.has(estadoRaw)
@@ -396,6 +446,7 @@ export async function generateOrdenCompactPDF(
     if (!checklistGroups.has(cat)) checklistGroups.set(cat, [])
     checklistGroups.get(cat)!.push(`${item.label}: ${v}`)
   }
+  const checklistSplit = classifyChecklist(checklist)
   const checklistLines = [...checklistGroups].map(([cat, items]) => ({ title: CATEGORIAS[cat] || cat, text: items.join(" · ") }))
 
   const terminos = parseRecepcionTerminos(data.recepcionTerminos)
@@ -515,7 +566,7 @@ export async function generateOrdenCompactPDF(
     falla: problema.length,
     diagnostico: isEntrega ? diagnostico.length : 0,
     accesorios: accesorios.length,
-    checklist: Math.max(0, ...checklistLines.map((g) => g.text.length)),
+    checklist: Math.max(checklistSplit.no.join(", ").length, checklistSplit.notes.join(", ").length),
     checklistNotes: checklistNotas.length,
   }
 
@@ -918,12 +969,18 @@ export async function generateOrdenCompactPDF(
     // CHECKLIST (delivered orders only)
     // ============================================================
     const notasChecklist = cap("checklistNotes", checklistNotas)
-    const groupsShown = checklistLines.map((g) => ({ title: g.title, text: cap("checklist", g.text) })).filter((g) => g.text)
-    if (groupsShown.length > 0 || notasChecklist) {
+    if (!P.noChecklist && P.checklistSummary && checklist.length > 0) {
+      // one line (the detail did not fit): counts, and the items that are not OK
+      y -= gp(3)
+      para(summarizeChecklist(checklist, P.caps.checklist), reg, F.body, MONO.ink)
+      if (notasChecklist) para(notasChecklist, reg, F.small, MONO.label)
+    } else if (!P.noChecklist && (checklistLines.length > 0 || notasChecklist)) {
       section("Chequeo de recepción")
-      for (const group of groupsShown) {
-        page.drawText(group.title, { x: left, y: y - F.small, size: F.small, font: bold, color: MONO.label })
-        y -= lh(F.small)
+      for (const group of checklistLines) {
+        for (const l of wr(group.title, bold, F.small, contentW)) {
+          page.drawText(l, { x: left, y: y - F.small, size: F.small, font: bold, color: MONO.label })
+          y -= lh(F.small)
+        }
         para(group.text, reg, F.body, MONO.ink)
       }
       if (notasChecklist) para(notasChecklist, reg, F.small, MONO.label)
@@ -981,16 +1038,18 @@ export async function generateOrdenCompactPDF(
     // Terms are never removed in silence: when they are cut, one line says where to get the rest.
     const termsCut = P.caps.terms !== undefined && P.caps.terms < textLengths.terms
     const shownTerms = cutTerms(terminos, P.caps.terms)
-    if (shownTerms.length > 0 || termsCut) {
+    if (shownTerms.length > 0) {
       section("Términos y condiciones")
       for (const raw of shownTerms) {
         para(raw, reg, F.terms, MONO.label)
         y -= gp(1.5)
       }
-      if (termsCut) {
-        para(TERMS_CUT_NOTE, bold, F.terms, MONO.label)
-        y -= gp(1.5)
-      }
+    } else if (termsCut) {
+      y -= gp(3) + lost // the body went entirely: the note stands alone
+    }
+    if (termsCut) {
+      para(TERMS_CUT_NOTE, bold, F.terms, MONO.label)
+      y -= gp(1.5)
     }
 
     // The signature block closes the sheet, at the bottom margin, under what the customer agrees to.
@@ -1046,15 +1105,19 @@ export async function generateOrdenCompactPDF(
       for (let i = spent.length - 1; i >= 0; i--) {
         const { apply, min, longest } = spent[i]
         const base = result
-        result = apply(base, Math.floor(bisect(min, longest, (v) => fits(apply(base, Math.floor(v))), CAP_TOLERANCE)))
+        // the bisection trusts its lower end: a stage that shares fields with a later one may not hold there, so verify
+        const regained = apply(base, Math.floor(bisect(min, longest, (v) => fits(apply(base, Math.floor(v))), CAP_TOLERANCE)))
+        if (fits(regained)) result = regained
       }
       return result
     }
     for (const stage of CUT_STAGES) {
       const longest = Math.max(...stage.keys.map((k) => textLengths[k]))
-      if (longest <= stage.min) continue
+      if (stage.summary ? checklist.length === 0 : longest <= stage.min) continue
+      if (stage.keys.includes("checklist") && !P.checklistSummary) continue // only the summary has names to cut
       const apply = (base: FitParams, limit: number): FitParams => ({
         ...base,
+        ...(stage.summary ? { checklistSummary: true } : {}),
         caps: { ...base.caps, ...Object.fromEntries(stage.keys.map((k) => [k, limit])) },
       })
       if (!fits(apply(P, stage.min))) {
@@ -1088,22 +1151,32 @@ export async function generateOrdenCompactPDF(
       P = { ...base, identity: IDENTITY_FLOOR }
     }
 
-    // h. the guarantee: an overflowing sheet is never drawn. Below the usual floor, then every paragraph clamped.
+    // h. the guarantee, for absurd input only: an overflowing sheet is never drawn. Below the
+    // usual floor, then every paragraph clamped; what room is left goes back to the cut fields.
     const hardScale = HARD_MIN_FONT / Math.min(M.body, M.small, M.label)
     // first the scale alone (the terms keep their size), then the terms go down to the hard minimum too
     for (const termsSize of [P.termsSize, Math.min(P.termsSize, HARD_MIN_FONT)]) {
       const G: FitParams = { ...P, termsSize }
       if (fits({ ...G, scale: hardScale })) {
-        return { P: { ...G, scale: bisect(hardScale, G.scale, (v) => fits({ ...G, scale: v }), 0.01) }, step: "guarantee" }
+        return { P: reclaim({ ...G, scale: bisect(hardScale, G.scale, (v) => fits({ ...G, scale: v }), 0.01) }), step: "guarantee" }
       }
     }
     const small: FitParams = { ...P, termsSize: Math.min(P.termsSize, HARD_MIN_FONT), scale: hardScale }
     const clamped = (n: number): FitParams => ({ ...small, maxLines: n })
     if (fits(clamped(1))) {
-      return { P: clamped(Math.floor(bisect(1, MAX_LINES_BOUND, (v) => fits(clamped(Math.floor(v))), 1))), step: "guarantee" }
+      return { P: reclaim(clamped(Math.floor(bisect(1, MAX_LINES_BOUND, (v) => fits(clamped(Math.floor(v))), 1)))), step: "guarantee" }
     }
-    // Not even one line per paragraph: the checklist and the terms go (the terms note stays).
-    return { P: { ...clamped(1), caps: { ...P.caps, terms: 0, checklist: 0, checklistNotes: 0 } }, step: "guarantee" }
+    // Not even one line per paragraph: the checklist and the terms body go (the terms note stays).
+    const dropped: FitParams = { ...clamped(1), noChecklist: true, caps: { ...P.caps, terms: 0 } }
+    if (fits(dropped)) return { P: dropped, step: "guarantee" }
+    // Nothing is left to protect: the names, the rows and the free text go to a sliver.
+    const sliver: FitParams = {
+      ...dropped,
+      rows: 0,
+      identity: IDENTITY_MIN,
+      caps: { ...dropped.caps, falla: IDENTITY_MIN, diagnostico: IDENTITY_MIN, accesorios: IDENTITY_MIN, shop: 0, people: 0, email: 0, rowtext: 0, notes: 0, metadata: 0, garantia: 0, observaciones: 0 },
+    }
+    return { P: sliver, step: "guarantee" }
   }
 
   const { P: params, step } = chooseParams()
