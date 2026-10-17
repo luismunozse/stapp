@@ -663,6 +663,16 @@ export function Navbar() {
             ))}
           </nav>
           <div className="border-t border-border p-3 space-y-1">
+            {/* The avatar dropdown is `hidden lg:flex`, so on a phone this is the
+                only route to /perfil (and the account deletion section in it). */}
+            <Link
+              href="/perfil"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-colors touch-target active:scale-[0.98]"
+            >
+              <User className="mr-3 h-5 w-5 flex-shrink-0" />
+              Mi perfil
+            </Link>
             <Link
               href="/ayuda/manual"
               onClick={() => setMobileMenuOpen(false)}
@@ -671,6 +681,17 @@ export function Navbar() {
               <BookOpen className="mr-3 h-5 w-5 flex-shrink-0" />
               Manual de uso
             </Link>
+            <Button
+              variant="ghost"
+              className="w-full justify-start py-2.5 text-foreground hover:bg-accent hover:text-accent-foreground touch-target active:scale-[0.98]"
+              onClick={() => {
+                setMobileMenuOpen(false)
+                window.dispatchEvent(new Event("start-tour"))
+              }}
+            >
+              <HelpCircle className="mr-3 h-5 w-5" />
+              Tour guiado
+            </Button>
             <Button
               variant="ghost"
               className="w-full justify-start py-2.5 text-destructive hover:text-destructive hover:bg-destructive/10 touch-target active:scale-[0.98]"
