@@ -30,7 +30,7 @@ export function buildPayload(creds: FacturacionCredenciales, input: EmitirInput,
         // TusFacturas SIN IVA —lo suma el proveedor—; la C no discrimina.
         const bruto = it.importe ?? it.importeUnitario * it.cantidad
         const importe = tipo === "B" ? round2(bruto / (1 + it.alicuotaIva / 100)) : round2(it.importeUnitario * it.cantidad)
-        const unitario = tipo === "B" ? round2(importe / it.cantidad) : round2(it.importeUnitario)
+        const unitario = tipo === "B" ? round2(importe / (it.cantidad > 0 ? it.cantidad : 1)) : round2(it.importeUnitario)
         return {
           cantidad: String(it.cantidad),
           afip_scheme: AFIP_SCHEME[it.alicuotaIva] ?? "05",

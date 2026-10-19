@@ -30,6 +30,19 @@ describe("buildPayload", () => {
   })
 })
 
+describe("buildPayload — cantidad invalida", () => {
+  it.each([0, -1])("Factura B con cantidad %s no manda Infinity ni NaN", (cantidad) => {
+    const p = buildPayload(
+      creds,
+      { ...input, items: [{ cantidad, descripcion: "Cable", importeUnitario: 100, importe: 121, alicuotaIva: 21 }] },
+      "B"
+    )
+    const json = JSON.stringify(p.comprobante.detalle)
+    expect(json).not.toMatch(/Infinity|NaN|null/)
+    expect(p.comprobante.detalle[0].producto.precio_unitario_sin_iva).toMatch(/^-?\d+\.\d{2}$/)
+  })
+})
+
 describe("buildPayload — Factura B manda el neto", () => {
   // Las líneas del EmitirInput traen el IVA incluido (suman el total cobrado);
   // TusFacturas recibe el precio SIN IVA y suma el IVA él.
