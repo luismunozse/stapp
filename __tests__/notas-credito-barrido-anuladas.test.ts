@@ -112,21 +112,28 @@ describe("barrido: las funciones y vistas vivas que leen NC de venta ignoran las
     return out.sort((a, b) => a.en - b.en)
   }
 
-  // La ultima definicion de cada funcion o vista: como queda la base.
-  const vivas = new Map<string, { archivo: string; cuerpo: string }>()
-  for (const archivo of readdirSync(DIR).filter((f) => /^\d{3}_.*\.sql$/.test(f)).sort()) {
-    for (const e of eventos(sinComentarios(readFileSync(join(DIR, archivo), "utf8")))) {
-      if (e.tipo === "crear") vivas.set(e.nombre, { archivo, cuerpo: e.cuerpo })
-      else if (e.tipo === "borrar") vivas.delete(e.nombre)
-      else {
-        const d = vivas.get(e.nombre)
-        if (d) {
-          vivas.set(e.nuevo, d)
-          vivas.delete(e.nombre)
+  /** La ultima definicion de cada funcion o vista con las migraciones de numero menor a `tope`. */
+  function vivasHasta(tope = Infinity) {
+    const out = new Map<string, { archivo: string; cuerpo: string }>()
+    const archivos = readdirSync(DIR).filter((f) => /^\d{3}_.*\.sql$/.test(f) && Number(f.slice(0, 3)) < tope)
+    for (const archivo of archivos.sort()) {
+      for (const e of eventos(sinComentarios(readFileSync(join(DIR, archivo), "utf8")))) {
+        if (e.tipo === "crear") out.set(e.nombre, { archivo, cuerpo: e.cuerpo })
+        else if (e.tipo === "borrar") out.delete(e.nombre)
+        else {
+          const d = out.get(e.nombre)
+          if (d) {
+            out.set(e.nuevo, d)
+            out.delete(e.nombre)
+          }
         }
       }
     }
+    return out
   }
+
+  // La ultima definicion de cada funcion o vista: como queda la base.
+  const vivas = vivasHasta()
   const leen = [...vivas].filter(([, d]) => TABLAS.test(d.cuerpo)).map(([n]) => n).sort()
 
   // Minimo de "anulada = false" en la ultima definicion de cada una.
@@ -154,5 +161,22 @@ describe("barrido: las funciones y vistas vivas que leen NC de venta ignoran las
     const d = vivas.get(nombre)
     expect(d, `${nombre} no esta viva`).toBeDefined()
     expect(d!.cuerpo.match(/\b(?:\w+\.)?anulada\s*=\s*false\b/gi)?.length ?? 0, d!.archivo).toBeGreaterThanOrEqual(minimo)
+  })
+
+  // La 368 redefine estos cinco objetos copiando una version fija (notas-credito-
+  // migraciones.test.ts compara contra esos archivos). Si una migracion anterior a
+  // la 368 los redefine despues (otra rama mergeada antes), la copia volveria
+  // atras ese cambio sin que nadie lo note: este test lo frena.
+  it("la 368 copia la ultima definicion anterior de cada objeto que redefine", () => {
+    const COPIADAS: Record<string, string> = {
+      registrar_devolucion_nucleo: "330_devolucion_descuenta_saldo.sql",
+      registrar_pagos_venta_atomica: "331_cobros_venta_idempotencia_y_cliente.sql",
+      restore_stock_on_cancel: "334_anular_venta_series_y_garantias.sql",
+      v_comisiones_ventas: "333_comision_neta_de_devoluciones.sql",
+      v_cc_drift: "245_v_cc_drift.sql",
+    }
+    const antes = vivasHasta(368)
+    const ultima = Object.fromEntries(Object.keys(COPIADAS).map((n) => [n, antes.get(n)?.archivo]))
+    expect(ultima, "una migracion anterior a la 368 redefine un objeto que la 368 copia: rehacer la copia").toEqual(COPIADAS)
   })
 })
