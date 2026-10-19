@@ -5,7 +5,12 @@ vi.mock("@/lib/subscriptions", () => ({
   hasPlanFeature: vi.fn(),
 }))
 
+vi.mock("@/lib/facturacion/access", () => ({
+  canEmitirFacturaElectronica: vi.fn(),
+}))
+
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { canEmitirFacturaElectronica } from "@/lib/facturacion/access"
 import { GET } from "@/app/api/configuracion/operativa/route"
 
 const orgAditivo = {
@@ -26,6 +31,7 @@ describe("GET /api/configuracion/operativa", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(hasPlanFeature).mockResolvedValue(true)
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
   })
 
   it("un VENDEDOR recibe el régimen fiscal y la moneda de su org (antes: 403 y POS como EXENTO)", async () => {
@@ -55,16 +61,50 @@ describe("GET /api/configuracion/operativa", () => {
     expect(status).toBe(200)
   })
 
-  it("la facturación electrónica solo se ofrece al ADMIN de una org argentina con el plan", async () => {
+  describe("facturacionElectronicaDisponible (gate real de emisión)", () => {
     const orgAR = { ...orgAditivo, pais: "AR" }
 
-    mockAuthSuccess({ role: "VENDEDOR" })
-    mockSupabaseFrom({ organizations: createChainMock(orgAR) })
-    expect((await parseResponse(await GET())).body.facturacionElectronicaDisponible).toBe(false)
+    it("ADMIN con emisión habilitada (plan, AR, toggle, credenciales) => true, evaluada para su org", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+      mockSupabaseFrom({ organizations: createChainMock(orgAR) })
 
-    mockAuthSuccess({ role: "ADMIN" })
-    mockSupabaseFrom({ organizations: createChainMock(orgAR) })
-    expect((await parseResponse(await GET())).body.facturacionElectronicaDisponible).toBe(true)
+      const { body } = await parseResponse(await GET())
+
+      expect(body.facturacionElectronicaDisponible).toBe(true)
+      expect(canEmitirFacturaElectronica).toHaveBeenCalledWith("org-1")
+    })
+
+    it("ADMIN cuando canEmitir da false (toggle apagado, sin credenciales, no AR, sin plan) => false", async () => {
+      vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(false)
+      mockAuthSuccess({ role: "ADMIN" })
+      mockSupabaseFrom({ organizations: createChainMock(orgAR) })
+
+      const { status, body } = await parseResponse(await GET())
+
+      expect(status).toBe(200)
+      expect(body.facturacionElectronicaDisponible).toBe(false)
+    })
+
+    it("un no-ADMIN recibe false sin siquiera evaluar el acceso", async () => {
+      for (const role of ["VENDEDOR", "TECNICO"]) {
+        mockAuthSuccess({ role })
+        mockSupabaseFrom({ organizations: createChainMock(orgAR) })
+        expect((await parseResponse(await GET())).body.facturacionElectronicaDisponible).toBe(false)
+      }
+      expect(canEmitirFacturaElectronica).not.toHaveBeenCalled()
+    })
+
+    it("si el chequeo de acceso tira, responde false y el endpoint sigue en 200", async () => {
+      vi.mocked(canEmitirFacturaElectronica).mockRejectedValue(new Error("boom"))
+      mockAuthSuccess({ role: "ADMIN" })
+      mockSupabaseFrom({ organizations: createChainMock(orgAR) })
+
+      const { status, body } = await parseResponse(await GET())
+
+      expect(status).toBe(200)
+      expect(body.facturacionElectronicaDisponible).toBe(false)
+      expect(body.moneda).toBe("CRC")
+    })
   })
 
   it("sin tasa propia usa la del país, y sin config cae a EXENTO / 30 días", async () => {
