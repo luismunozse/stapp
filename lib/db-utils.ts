@@ -485,6 +485,11 @@ export function formatDevolucion(d: any) {
     montoReembolso:
       Math.round((parseFloat(d.monto_devolucion) - (parseFloat(d.monto_aplicado_deuda ?? "0") || 0)) * 100) / 100,
     estado: d.estado,
+    // Mig 350: ITEMS devuelve productos, MONTO acredita un importe (PR3).
+    // Sin la columna (historial, select viejo) es una devolución de productos.
+    modo: d.modo === "MONTO" ? "MONTO" : "ITEMS",
+    motivoNc: d.motivo_nc ?? null,
+    anulada: d.anulada === true,
     observaciones: d.observaciones,
     procesadoPor: d.procesado_por,
     metodoReembolso: d.metodo_reembolso || null,
