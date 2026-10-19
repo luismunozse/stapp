@@ -38,7 +38,8 @@ import { StatusBanner } from "@/components/ui/status-banner"
 import { VentaEstadoBadge } from "@/components/ventas/venta-estado-badge"
 import { WhatsAppDialog } from "@/components/ordenes/whatsapp-dialog"
 import { VentaEditForm } from "@/components/ventas/venta-edit-form"
-import { DevolucionForm } from "@/components/ventas/devolucion-form"
+import { NotaCreditoVentaDialog } from "@/components/notas-credito/nota-credito-venta-dialog"
+import { MODO_NC_LABELS, etiquetaMotivo } from "@/lib/notas-credito/catalogo"
 import { PagosHistorial } from "@/components/facturacion/pagos-historial"
 import { VentaPagoForm } from "@/components/ventas/venta-pago-form"
 import type { MetodoPagoVenta } from "@/lib/notifications/types"
@@ -104,12 +105,17 @@ interface Devolucion {
   observaciones: string | null
   items: DevolucionItem[]
   createdAt: string
+  /** Desde el PR3 (mig 350): devolución de productos o crédito por monto. */
+  modo?: "ITEMS" | "MONTO"
+  motivoNc?: string | null
+  anulada?: boolean
 }
 
 interface VentaDetail {
   id: string
   numeroVenta: number
   clienteId: string | null
+  sucursalId?: string | null
   clienteNombre: string
   clienteTelefono: string | null
   vendedor: { id: string; nombre: string; email: string } | null
@@ -380,8 +386,9 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                 Editar
               </Button>
             )}
-            {/* Devolución, anulación y cobro son solo de ADMIN en la API:
-                mostrarlos a otros roles terminaba en un 403. */}
+            {/* Nota de crédito, anulación y cobro son solo de ADMIN en la API
+                (el vendedor habilitado llega en el PR7): mostrarlos a otros
+                roles terminaba en un 403. */}
             {isAdmin && (
               <>
                 <Button
@@ -389,7 +396,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   onClick={() => setShowDevolucionModal(true)}
                 >
                   <RotateCcw className="mr-2 h-4 w-4" />
-                  Devolución
+                  Nota de crédito
                 </Button>
                 <Button
                   variant="destructive"
@@ -442,22 +449,24 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
         />
       )}
 
-      {/* Modal de devolución */}
+      {/* Nota de crédito: devolver productos o por monto */}
       {venta && (
-        <DevolucionForm
+        <NotaCreditoVentaDialog
           open={showDevolucionModal}
           onOpenChange={setShowDevolucionModal}
           venta={{
             id: venta.id,
             numeroVenta: venta.numeroVenta,
+            sucursalId: venta.sucursalId ?? null,
             total: venta.total,
             clienteId: venta.clienteId,
             saldoPendiente,
             devoluciones: (venta.devoluciones || []).map((d) => ({
               montoDevolucion: d.montoDevolucion,
+              anulada: d.anulada === true,
               items: d.items.map((i) => ({ itemVentaId: i.itemVentaId, cantidad: i.cantidad })),
             })),
-            items: venta.items.map(item => ({
+            items: venta.items.map((item) => ({
               id: item.id,
               inventarioId: item.inventarioId,
               descripcion: item.descripcion,
@@ -468,7 +477,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
               porcentajeDescuento: item.porcentajeDescuento,
             })),
           }}
-          onSuccess={() => fetchVenta()}
+          onEmitida={() => fetchVenta()}
         />
       )}
 
@@ -910,8 +919,11 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                     </div>
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    <span className="font-medium">Motivo:</span> {dev.motivo}
+                    <span className="font-medium">Motivo:</span> {etiquetaMotivo(dev.motivoNc, dev.motivo)}
                   </div>
+                  {dev.motivoNc && dev.motivo && dev.motivo !== etiquetaMotivo(dev.motivoNc, null) ? (
+                    <div className="text-sm text-muted-foreground">{dev.motivo}</div>
+                  ) : null}
                   {dev.observaciones && (
                     <div className="text-sm text-muted-foreground">
                       {dev.observaciones}
@@ -924,7 +936,8 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                     </div>
                   )}
                   <div className="text-xs text-muted-foreground">
-                    {formatDate(dev.createdAt)} — {dev.items.length} item(s) devueltos
+                    {formatDate(dev.createdAt)} —{" "}
+                    {dev.modo === "MONTO" ? MODO_NC_LABELS.MONTO : `${dev.items.length} item(s) devueltos`}
                   </div>
                   <NotaCreditoAcciones id={dev.id} />
                 </div>
