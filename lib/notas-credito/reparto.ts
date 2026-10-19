@@ -1,10 +1,10 @@
 /**
  * Reglas de plata de una nota de crédito (spec, "Reglas de plata"), espejo TS
- * de registrar_devolucion_monto (migración 365). Lo usa el diálogo para
+ * de registrar_devolucion_monto (migración 367). Lo usa el diálogo para
  * mostrar en vivo lo que la base va a hacer; la base es la que decide.
  *
  * Los casos de __tests__/lib/notas-credito-reparto.test.ts son los de los
- * probes de la 365: si cambia uno, cambia el otro.
+ * probes de la 367: si cambia uno, cambia el otro.
  */
 
 /**
