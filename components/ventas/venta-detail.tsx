@@ -39,6 +39,8 @@ import { VentaEstadoBadge } from "@/components/ventas/venta-estado-badge"
 import { WhatsAppDialog } from "@/components/ordenes/whatsapp-dialog"
 import { VentaEditForm } from "@/components/ventas/venta-edit-form"
 import { NotaCreditoVentaDialog } from "@/components/notas-credito/nota-credito-venta-dialog"
+import { AnularNotaCreditoDialog } from "@/components/notas-credito/anular-nota-credito-dialog"
+import { bloqueoAnulacionNC } from "@/lib/notas-credito/anulacion"
 import { MODO_NC_LABELS, etiquetaMotivo } from "@/lib/notas-credito/catalogo"
 import { PagosHistorial } from "@/components/facturacion/pagos-historial"
 import { VentaPagoForm } from "@/components/ventas/venta-pago-form"
@@ -109,6 +111,10 @@ interface Devolucion {
   modo?: "ITEMS" | "MONTO"
   motivoNc?: string | null
   anulada?: boolean
+  /** Desde el PR4 (mig 369): cuándo y por qué se anuló, y cómo se había devuelto la plata. */
+  anuladaAt?: string | null
+  anuladaMotivo?: string | null
+  metodoReembolso?: string | null
 }
 
 interface VentaDetail {
@@ -118,6 +124,8 @@ interface VentaDetail {
   sucursalId?: string | null
   clienteNombre: string
   clienteTelefono: string | null
+  /** El cliente con el saldo de su cuenta corriente: el diálogo de anular avisa si queda debiendo. */
+  cliente?: { saldoCuenta?: number } | null
   vendedor: { id: string; nombre: string; email: string } | null
   items: VentaItem[]
   garantias: Garantia[]
@@ -173,6 +181,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
   const [generandoFactura, setGenerandoFactura] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDevolucionModal, setShowDevolucionModal] = useState(false)
+  const [ncAAnular, setNcAAnular] = useState<Devolucion | null>(null)
   const [showPagoForm, setShowPagoForm] = useState(false)
   const [expandedPagos, setExpandedPagos] = useState(false)
 
@@ -485,6 +494,40 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
           onEmitida={() => fetchVenta()}
         />
       )}
+
+      {/* Anular una NC: el botón está en el bloque de NC (solo ADMIN, la más reciente) */}
+      {ncAAnular ? (
+        <AnularNotaCreditoDialog
+          open
+          // Al cerrar (anulada o no, con error o sin él) se relee la venta: si la
+          // respuesta se perdió, la NC ya puede estar anulada en la base.
+          onOpenChange={(abierto) => {
+            if (!abierto) {
+              setNcAAnular(null)
+              fetchVenta()
+            }
+          }}
+          ventaId={venta.id}
+          sucursalId={venta.sucursalId ?? null}
+          nc={{
+            id: ncAAnular.id,
+            numeroDevolucion: ncAAnular.numeroDevolucion,
+            montoAplicadoDeuda: ncAAnular.montoAplicadoDeuda ?? 0,
+            montoReembolso: ncAAnular.montoReembolso ?? ncAAnular.montoDevolucion - (ncAAnular.montoAplicadoDeuda ?? 0),
+            metodoReembolso: ncAAnular.metodoReembolso ?? null,
+            items: ncAAnular.items.map((i) => ({
+              descripcion: venta.items.find((it) => it.id === i.itemVentaId)?.descripcion ?? "Producto",
+              cantidad: i.cantidad,
+              // Sin inventario (servicio) la base no mueve stock: no se promete.
+              restaurarStock: i.restaurarStock && i.inventarioId !== null,
+            })),
+          }}
+          tieneCliente={Boolean(venta.clienteId)}
+          saldoCliente={venta.cliente?.saldoCuenta ?? null}
+          // La venta se relee en onOpenChange(false), que el diálogo llama antes.
+          onAnulada={() => setNcAAnular(null)}
+        />
+      ) : null}
 
       {/* Grid de información */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -915,14 +958,24 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                       <Badge variant={dev.tipo === "TOTAL" ? "destructive" : "secondary"}>
                         {dev.tipo}
                       </Badge>
-                      <Badge variant={dev.estado === "COMPLETADA" ? "success" : "outline"}>
-                        {dev.estado}
-                      </Badge>
+                      {dev.anulada ? (
+                        <Badge variant="destructive">Anulada</Badge>
+                      ) : (
+                        <Badge variant={dev.estado === "COMPLETADA" ? "success" : "outline"}>
+                          {dev.estado}
+                        </Badge>
+                      )}
                     </div>
-                    <div className="font-bold text-destructive">
+                    <div className={dev.anulada ? "font-bold text-muted-foreground line-through" : "font-bold text-destructive"}>
                       -{formatPrice(dev.montoDevolucion)}
                     </div>
                   </div>
+                  {dev.anulada ? (
+                    <div className="text-sm text-muted-foreground">
+                      Anulada{dev.anuladaAt ? ` el ${formatDate(dev.anuladaAt)}` : ""}
+                      {dev.anuladaMotivo ? `: ${dev.anuladaMotivo}` : ""}
+                    </div>
+                  ) : null}
                   <div className="text-sm text-muted-foreground">
                     <span className="font-medium">Motivo:</span> {etiquetaMotivo(dev.motivoNc, dev.motivo)}
                   </div>
@@ -944,7 +997,14 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                     {formatDate(dev.createdAt)} —{" "}
                     {dev.modo === "MONTO" ? MODO_NC_LABELS.MONTO : `${dev.items.length} item(s) devueltos`}
                   </div>
-                  <NotaCreditoAcciones id={dev.id} />
+                  <NotaCreditoAcciones
+                    id={dev.id}
+                    numero={dev.numeroDevolucion}
+                    anulada={dev.anulada === true}
+                    // Anular es solo del ADMIN (spec, Permisos), y de la más reciente a la primera.
+                    onAnular={isAdmin ? () => setNcAAnular(dev) : undefined}
+                    bloqueoAnular={bloqueoAnulacionNC(dev, venta.devoluciones ?? [], venta.estado)}
+                  />
                 </div>
               ))}
             </div>

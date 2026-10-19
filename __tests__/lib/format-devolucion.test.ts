@@ -19,4 +19,20 @@ describe("formatDevolucion — lo que el detalle de la venta necesita de cada NC
     const nc = formatDevolucion({ id: "d0", numero_devolucion: "DEV-000001", motivo: "Falla", monto_devolucion: "100" })
     expect(nc).toMatchObject({ modo: "ITEMS", motivoNc: null, anulada: false })
   })
+
+  it("una NC anulada expone cuándo y por qué se anuló", () => {
+    const nc = formatDevolucion({
+      id: "d1", numero_devolucion: "NC-000012", monto_devolucion: "50", anulada: true,
+      anulada_at: "2026-10-20T15:00:00+00:00", anulada_motivo: "Se cargó por error", metodo_reembolso: "EFECTIVO",
+    })
+    expect(nc).toMatchObject({
+      anulada: true, anuladaAt: "2026-10-20T15:00:00+00:00", anuladaMotivo: "Se cargó por error", metodoReembolso: "EFECTIVO",
+    })
+  })
+
+  it("una activa no trae datos de anulación", () => {
+    expect(formatDevolucion({ id: "d2", numero_devolucion: "NC-000013", monto_devolucion: "10" })).toMatchObject({
+      anulada: false, anuladaAt: null, anuladaMotivo: null,
+    })
+  })
 })

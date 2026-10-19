@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { FileDown, Loader2, MessageCircle, Receipt } from "lucide-react"
+import { useId, useState } from "react"
+import { Ban, FileDown, Loader2, MessageCircle, Receipt } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { mensajeNotaCredito, compartirNotaCredito, descargarPdfNotaCredito } from "@/lib/notas-credito/whatsapp"
@@ -15,6 +15,12 @@ export interface NotaCreditoAccionesProps {
   compacto?: boolean
   /** Una NC anulada ya no se manda al cliente: sin WhatsApp (PDF y ticket siguen). */
   anulada?: boolean
+  /** Abre la anulación. Sin él no hay botón (listado, roles que no anulan). */
+  onAnular?: () => void
+  /** Por qué todavía no se puede anular: el botón queda deshabilitado con ese motivo. */
+  bloqueoAnular?: string | null
+  /** Número de la NC, para el nombre accesible de "Anular". */
+  numero?: string
 }
 
 /**
@@ -22,8 +28,9 @@ export interface NotaCreditoAccionesProps {
  * bloques del detalle. El servidor decide quién ve qué: cada botón pega a una
  * ruta con el alcance de la operación de origen.
  */
-export function NotaCreditoAcciones({ id, compacto = false, anulada = false }: NotaCreditoAccionesProps) {
+export function NotaCreditoAcciones({ id, compacto = false, anulada = false, onAnular, bloqueoAnular = null, numero }: NotaCreditoAccionesProps) {
   const [ticketAbierto, setTicketAbierto] = useState(false)
+  const motivoId = useId()
   const abrirPdf = () => window.open(`/api/notas-credito/${encodeURIComponent(id)}/pdf`, "_blank")
 
   const [compartiendo, setCompartiendo] = useState(false)
@@ -78,6 +85,30 @@ export function NotaCreditoAcciones({ id, compacto = false, anulada = false }: N
           {compacto ? null : <span className="ml-1">WhatsApp</span>}
         </Button>
       )}
+      {onAnular && !anulada ? (
+        <>
+          {/* El span lleva el title para el mouse; el texto de abajo y aria-describedby, para el dedo y el teclado. */}
+          <span title={bloqueoAnular ?? undefined} className="inline-flex">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive"
+              onClick={onAnular}
+              disabled={Boolean(bloqueoAnular)}
+              aria-label={numero ? `Anular la nota de crédito ${numero}` : "Anular la nota de crédito"}
+              aria-describedby={bloqueoAnular ? motivoId : undefined}
+            >
+              <Ban className="h-4 w-4" />
+              {compacto ? null : <span className="ml-1">Anular</span>}
+            </Button>
+          </span>
+          {bloqueoAnular ? (
+            <p id={motivoId} className={compacto ? "sr-only" : "basis-full text-xs text-muted-foreground"}>
+              {bloqueoAnular}
+            </p>
+          ) : null}
+        </>
+      ) : null}
       {ticketAbierto ? (
         <NotaCreditoTicketDialog notaCreditoId={id} open={ticketAbierto} onOpenChange={setTicketAbierto} />
       ) : null}

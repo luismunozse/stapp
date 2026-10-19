@@ -114,4 +114,17 @@ describe('manualSections', () => {
     expect(anulacion.body).not.toMatch(/procesar devoluciones/)
     expect(anulacion.seeAlso).toContain('notas-credito')
   })
+
+  it('anular una nota de crédito: solo el ADMIN, de la última a la primera, qué se revierte y cuándo no se puede', () => {
+    const s = manualSections.find((x) => x.id === 'notas-credito')!
+    const b = s.content.find((x) => x.subtitle === 'Anular una nota de crédito')!
+    const texto = [b.body, ...(b.steps ?? []), b.tip ?? ''].join(' ')
+    expect(b.roles).toEqual(['ADMIN'])
+    expect(texto).toContain('de la última a la primera')
+    expect(texto).toContain('sello ANULADA')
+    expect(texto).toMatch(/vuelve a entrar a la caja/i)
+    expect(texto).toMatch(/recuperala por fuera/)
+    expect(texto).toMatch(/DEV-/)
+    expect(texto).not.toMatch(/LIFO|RPC|anulada = false/)
+  })
 })
