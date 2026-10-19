@@ -13,6 +13,7 @@
 // que mantener una copia local del tipo que derive en silencio.
 import type { INextVoucher } from "@arcasdk/core/lib/domain/types/voucher.types"
 
+import { ErrorDeNegocioFacturacion } from "@/lib/facturacion/errores"
 import { deriveTipo } from "@/lib/facturacion/derive"
 import type { ArcaCredenciales, DatosFiscales, EmitirInput } from "@/lib/facturacion/types"
 
@@ -73,7 +74,7 @@ function round2(n: number): number {
  */
 function alicuotaId(alicuota: number): number {
   const id = ALICUOTA_ID[alicuota]
-  if (id === undefined) throw new Error(`Alícuota de IVA no soportada por ARCA: ${alicuota}%`)
+  if (id === undefined) throw new ErrorDeNegocioFacturacion(`Alícuota de IVA no soportada por ARCA: ${alicuota}%`)
   return id
 }
 

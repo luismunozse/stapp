@@ -7,6 +7,7 @@
  * comprobante already exists for the venta.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { MENSAJE_ERROR_TECNICO } from "@/lib/facturacion/errores"
 import {
   mockAuthSuccess,
   mockAuthError,
@@ -387,7 +388,7 @@ describe("POST /api/facturacion-electronica/emitir", () => {
     expect(status).toBe(422)
     expect(body.error).toBeDefined()
     expect(updateChain.update).toHaveBeenCalledWith(
-      expect.objectContaining({ estado: "rechazado", error_msg: "boom" })
+      expect.objectContaining({ estado: "rechazado", error_msg: MENSAJE_ERROR_TECNICO })
     )
     expect(updateChain.delete).not.toHaveBeenCalled()
   })

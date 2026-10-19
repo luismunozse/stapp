@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { buildPayload, tusFacturasProvider } from "@/lib/facturacion/tusfacturas-provider"
+import { MENSAJE_ERROR_TECNICO } from "@/lib/facturacion/errores"
 import type { FacturacionCredenciales, EmitirInput } from "@/lib/facturacion/types"
 
 const creds: FacturacionCredenciales = { apitoken: "a", apikey: "k", usertoken: "u", puntoVenta: 3, condicionFiscal: "MONOTRIBUTO" }
@@ -104,7 +105,6 @@ describe("tusFacturasProvider.emitir", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("boom")))
     const r = await tusFacturasProvider.emitir(creds, input)
     expect(r.ok).toBe(false)
-    expect(r.errores).toBeDefined()
-    expect(r.errores!.length).toBeGreaterThan(0)
+    expect(r.errores).toEqual([MENSAJE_ERROR_TECNICO])
   })
 })

@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, afterEach } from "vitest"
 
 import { createArcaDirectProvider } from "@/lib/facturacion/arca/arca-direct-provider"
+import { MENSAJE_ERROR_TECNICO } from "@/lib/facturacion/errores"
 import type { ArcaCredenciales, EmitirInput } from "@/lib/facturacion/types"
 
 const creds: ArcaCredenciales = {
@@ -176,6 +177,9 @@ describe("arcaDirectProvider.emitir", () => {
 })
 
 describe("arcaDirectProvider.emitir — caminos de error", () => {
+  const spyError = vi.spyOn(console, "error").mockImplementation(() => {})
+  afterEach(() => spyError.mockClear())
+
   it("reporta las observaciones cuando ARCA rechaza el comprobante", async () => {
     const sdk = fakeSdk({
       cae: "",
@@ -221,8 +225,45 @@ describe("arcaDirectProvider.emitir — caminos de error", () => {
     const result = await provider.emitir(creds, input)
 
     expect(result.ok).toBe(false)
-    expect(result.errores).toEqual(["lease ocupado"])
+    // Una excepcion tecnica no se muestra cruda al admin: se guarda un mensaje
+    // generico y el detalle va al log.
+    expect(result.errores).toEqual([MENSAJE_ERROR_TECNICO])
+    expect(spyError).toHaveBeenCalled()
     expect(sdk.contextos).toHaveLength(0)
+  })
+
+  it("una excepcion del SDK al emitir no filtra su mensaje tecnico", async () => {
+    const provider = createArcaDirectProvider({
+      renewTicket: async () => ticket,
+      createArca: () => ({
+        electronicBillingService: {
+          createNextVoucher: async () => {
+            throw new Error("getaddrinfo ENOTFOUND servicios1.afip.gov.ar")
+          },
+        },
+      }) as any,
+    })
+
+    const result = await provider.emitir(creds, input)
+
+    expect(result.ok).toBe(false)
+    expect(JSON.stringify(result.errores)).not.toContain("ENOTFOUND")
+    expect(result.errores).toEqual([MENSAJE_ERROR_TECNICO])
+  })
+
+  it("un rechazo de negocio de ARCA conserva su texto accionable", async () => {
+    const sdk = fakeSdk({
+      response: {
+        FeDetResp: {
+          FECAEDetResponse: [{ Resultado: "R", Observaciones: { Obs: [{ Code: 10015, Msg: "Doc invalido" }] } }],
+        },
+      },
+    })
+    const provider = createArcaDirectProvider({ renewTicket: async () => ticket, createArca: sdk.createArca })
+
+    const result = await provider.emitir(creds, input)
+
+    expect(result.errores?.join(" ")).toContain("10015")
   })
 
   it("una alícuota no soportada vuelve como rechazo con el motivo y sin llamar a ARCA", async () => {

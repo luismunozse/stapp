@@ -1,5 +1,6 @@
 import type { FacturacionProvider, FacturacionCredenciales, EmitirInput, ComprobanteResult, TipoComprobante } from "./types"
 import { deriveTipo } from "./derive"
+import { mensajeSeguroDeError } from "./errores"
 
 const ENDPOINT = "https://www.tusfacturas.app/app/api/v2/facturacion/nuevo"
 // AFIP IVA scheme codes by rate (confirm against spike output).
@@ -62,7 +63,7 @@ export const tusFacturasProvider: FacturacionProvider = {
       }
       return { ok: false, tipo, errores: data?.errores ?? ["Error desconocido del proveedor"], raw: data }
     } catch (e: any) {
-      return { ok: false, tipo, errores: [e?.message ?? "Fallo de red"], raw: null }
+      return { ok: false, tipo, errores: [mensajeSeguroDeError(e, "fallo emitiendo por TusFacturas")], raw: null }
     }
   },
 }

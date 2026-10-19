@@ -28,6 +28,7 @@ import {
   type RenewWsaaTicketOptions,
   type WsaaTicket,
 } from "@/lib/facturacion/arca/wsaa-ticket-store"
+import { mensajeSeguroDeError } from "@/lib/facturacion/errores"
 import { deriveTipo } from "@/lib/facturacion/derive"
 import type {
   ArcaCredenciales,
@@ -204,7 +205,7 @@ export function createArcaDirectProvider(
 
         return { ok: false, tipo, errores: extraerErrores(resultado?.response), raw: resultado?.response ?? null }
       } catch (e: any) {
-        return { ok: false, tipo, errores: [e?.message ?? "Fallo emitiendo contra ARCA"], raw: null }
+        return { ok: false, tipo, errores: [mensajeSeguroDeError(e, "fallo emitiendo contra ARCA")], raw: null }
       }
     },
   }

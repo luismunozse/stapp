@@ -11,6 +11,7 @@ import {
   CredencialesIncompletasError,
   type CredencialesResueltas,
 } from "@/lib/facturacion/resolver-credenciales"
+import { mensajeSeguroDeError } from "@/lib/facturacion/errores"
 import { mapVentaToEmitirInput } from "@/lib/facturacion/map-venta"
 import { isMissingColumnError } from "@/lib/db-errors"
 import type { DatosFiscales, EmitirInput } from "@/lib/facturacion/types"
@@ -220,7 +221,7 @@ export async function POST(request: Request) {
       .from("comprobantes_fiscales")
       .update({
         estado: "rechazado",
-        error_msg: err instanceof Error ? err.message : "Error desconocido al emitir",
+        error_msg: mensajeSeguroDeError(err, "el proveedor lanzo una excepcion al emitir"),
         updated_at: new Date().toISOString(),
       })
       .eq("id", pend.id)
