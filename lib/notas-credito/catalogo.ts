@@ -24,6 +24,11 @@ export const MOTIVOS_NC = [
 
 export type MotivoNC = (typeof MOTIVOS_NC)[number]
 
+/** Motivos que ofrece una NC de venta: "trabajo no realizado" es solo de órdenes. */
+export const MOTIVOS_NC_VENTA = MOTIVOS_NC.filter(
+  (m): m is Exclude<MotivoNC, "TRABAJO_NO_REALIZADO"> => m !== "TRABAJO_NO_REALIZADO"
+) as unknown as readonly [Exclude<MotivoNC, "TRABAJO_NO_REALIZADO">, ...Exclude<MotivoNC, "TRABAJO_NO_REALIZADO">[]]
+
 export const MOTIVO_NC_LABELS: Record<MotivoNC, string> = {
   DEVOLUCION: "Devolución de productos",
   AJUSTE_PRECIO: "Ajuste de precio",

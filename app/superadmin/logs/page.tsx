@@ -132,6 +132,7 @@ const ENTITY_LABELS: Record<string, string> = {
   ventas: "Ventas",
   checklist_templates: "Checklists",
   devoluciones_venta: "Devoluciones",
+  notas_credito: "Notas de crédito",
   movimientos_inventario: "Mov. Inventario",
   changelog: "Changelog",
   waitlist: "Waitlist",

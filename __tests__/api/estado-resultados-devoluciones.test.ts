@@ -87,4 +87,16 @@ describe("estado-resultados — devoluciones de ventas", () => {
     expect(chain.eq).toHaveBeenCalledWith("ventas.sucursal_id", "suc-A")
     expect(chain.eq).toHaveBeenCalledWith("ventas.estado", "COMPLETADA")
   })
+
+  // Spec, Mapa de integración → Ventas: "La NC por monto no toca COGS".
+  it("una NC por monto baja el ingreso y deja el costo de venta como estaba", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockCookie("todas")
+    setup([{ monto_devolucion: "200", items_devolucion: [] }])
+
+    const { body } = await parseResponse(await GET(createGetRequest(url)))
+    expect(body.devoluciones).toEqual({ ventas: 200, costoDevueltoAStock: 0 })
+    expect(body.ingresos.ventas).toBe(800) // 1000 − 200 acreditados por monto
+    expect(body.costos.productos).toBe(600)
+  })
 })

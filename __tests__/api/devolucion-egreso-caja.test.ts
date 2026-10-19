@@ -9,24 +9,15 @@ vi.mock("@/lib/audit", () => ({
 import { POST } from "@/app/api/ventas/[id]/devolucion/route"
 
 const createParams = (id: string) => ({ params: Promise.resolve({ id }) })
-const RPC_SUCCESS = { id: "d1", numero: "NC-000001", tipo: "PARCIAL", montoDevolucion: 900 }
+const RPC_SUCCESS = { id: "d1", numero: "NC-000001", tipo: "PARCIAL", montoDevolucion: 900, montoReembolso: 900, movimientoCajaId: "mov-1" }
 const DEV_COMPLETA = { id: "d1", venta_id: "v1", monto_devolucion: "900", items_devolucion: [] }
 
-function setup(movInsertPayloads: any[]) {
+function setup(tablas: string[]) {
   vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: RPC_SUCCESS, error: null } as any)
   vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+    tablas.push(table)
     if (table === "ventas") return createChainMock({ id: "v1", sucursal_id: "suc-1", cliente_id: "c1" }) as any
     if (table === "devoluciones_venta") return createChainMock(DEV_COMPLETA) as any
-    if (table === "sesiones_caja") return createChainMock({ id: "ses-1" }) as any
-    if (table === "movimientos_caja") {
-      const chain: any = {
-        insert: vi.fn().mockImplementation((payload: any) => {
-          movInsertPayloads.push(payload)
-          return Promise.resolve({ data: null, error: null })
-        }),
-      }
-      return chain
-    }
     return createChainMock(null) as any
   })
 }
@@ -37,41 +28,27 @@ const bodyCon = (metodoReembolso: string) => ({
   items: [{ itemVentaId: "iv1", cantidad: 2, precioUnitario: 10, restaurarStock: false }],
 })
 
-describe("devolución — egreso de caja en reembolso EFECTIVO (arqueo parte b)", () => {
+// Desde la mig 367 el egreso de efectivo va adentro de la RPC, en la misma
+// transacción que la NC (probes 8-12 de la 367). La ruta solo lo pide.
+describe("devolución — el egreso de caja lo hace la RPC", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("reembolso EFECTIVO genera un movimiento_caja EGRESO por el monto devuelto", async () => {
-    const payloads: any[] = []
+  it.each(["EFECTIVO", "CUENTA_CORRIENTE"])("con %s pide el egreso a la RPC y no escribe en la caja", async (metodo) => {
+    const tablas: string[] = []
     mockAuthSuccess({ role: "ADMIN" })
-    setup(payloads)
+    setup(tablas)
 
     const res = await POST(
-      createPostRequest(bodyCon("EFECTIVO"), "http://localhost/api/ventas/v1/devolucion"),
+      createPostRequest(bodyCon(metodo), "http://localhost/api/ventas/v1/devolucion"),
       createParams("v1")
     )
     expect((await parseResponse(res)).status).toBe(201)
 
-    expect(payloads).toHaveLength(1)
-    expect(payloads[0]).toMatchObject({
-      tipo: "EGRESO",
-      monto: 900,
-      metodo_pago: "EFECTIVO",
-      sucursal_id: "suc-1",
-      afecta_rentabilidad: false,
-      origen: "DEVOLUCION",
+    expect(vi.mocked(supabaseAdmin.rpc).mock.calls[0][1]).toMatchObject({
+      p_registrar_egreso: true,
+      p_metodo_reembolso: metodo,
     })
-  })
-
-  it("reembolso CUENTA_CORRIENTE NO genera egreso de caja (no es efectivo)", async () => {
-    const payloads: any[] = []
-    mockAuthSuccess({ role: "ADMIN" })
-    setup(payloads)
-
-    await POST(
-      createPostRequest(bodyCon("CUENTA_CORRIENTE"), "http://localhost/api/ventas/v1/devolucion"),
-      createParams("v1")
-    )
-
-    expect(payloads).toHaveLength(0)
+    expect(tablas).not.toContain("movimientos_caja")
+    expect(tablas).not.toContain("sesiones_caja")
   })
 })

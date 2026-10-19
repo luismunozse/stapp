@@ -5,8 +5,8 @@ import { formatDevolucion } from "@/lib/db-utils"
 import { createAuditLogger } from "@/lib/audit"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { aggregateReturnItems } from "@/lib/devolucion-refund"
-import { registrarEgresoCajaEfectivo } from "@/lib/caja-utils"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
+import { MOTIVOS_NC_VENTA, MOTIVO_NC_LABELS } from "@/lib/notas-credito/catalogo"
 import { z } from "zod"
 
 const itemDevolucionSchema = z.object({
@@ -19,25 +19,54 @@ const itemDevolucionSchema = z.object({
   restaurarStock: z.boolean(),
 })
 
-const devolucionSchema = z.object({
-  motivo: z.string().min(1, "El motivo es requerido"),
-  observaciones: z.string().optional(),
-  items: z.array(itemDevolucionSchema).min(1, "Debe incluir al menos un item"),
-  metodoReembolso: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "CREDITO_TIENDA", "CUENTA_CORRIENTE", "OTRO"]).optional(),
-  reembolsoReferencia: z.string().optional(),
-  idempotencyKey: z.string().max(100).optional(),
-})
+const devolucionSchema = z
+  .object({
+    // Sin modo: cliente anterior al PR3 (DevolucionForm), devolución de productos.
+    modo: z.enum(["ITEMS", "MONTO"]).default("ITEMS"),
+    // Motivo del catálogo (mig 350). Obligatorio por monto; los clientes anteriores no lo mandan.
+    motivoNc: z
+      .enum(MOTIVOS_NC_VENTA, { errorMap: () => ({ message: "Motivo de nota de crédito inválido" }) })
+      .optional(),
+    // Detalle libre. Para los clientes anteriores es el único motivo.
+    motivo: z.string().trim().max(500).optional(),
+    observaciones: z.string().optional(),
+    items: z.array(itemDevolucionSchema).optional(),
+    monto: z.number().finite().optional(),
+    metodoReembolso: z
+      .enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "CREDITO_TIENDA", "CUENTA_CORRIENTE", "OTRO"])
+      .optional(),
+    reembolsoReferencia: z.string().optional(),
+    idempotencyKey: z.string().max(100).optional(),
+  })
+  .superRefine((d, ctx) => {
+    const falta = (message: string, campo: string) =>
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: [campo] })
+    if (d.modo === "ITEMS") {
+      if (!d.motivo && !d.motivoNc) falta("El motivo es requerido", "motivo")
+      if (!d.items || d.items.length === 0) falta("Debe incluir al menos un item", "items")
+      return
+    }
+    if (!d.motivoNc) falta("El motivo es requerido", "motivoNc")
+    if (d.monto === undefined || Math.round(d.monto * 100) <= 0) {
+      falta("El monto tiene que ser mayor a cero", "monto")
+    }
+    if (d.items && d.items.length > 0) falta("Una nota de crédito por monto no lleva productos", "items")
+  })
 
 type ResultadoDevolucion = {
   id: string
   /** Desde la mig 356: el NC- que la RPC asignó adentro de su transacción. */
   numero: string
+  /** Desde la mig 367. */
+  modo?: "ITEMS" | "MONTO"
   tipo: string
   montoDevolucion: number
   /** Desde la mig 330: parte que descontó el saldo pendiente de la venta. */
   montoAplicadoDeuda?: number
   /** Desde la mig 330: lo que efectivamente se devuelve al cliente. */
   montoReembolso?: number
+  /** Desde la mig 367: el egreso de caja del reintegro en efectivo, si hubo. */
+  movimientoCajaId?: string | null
   replayed?: boolean
 }
 
@@ -55,6 +84,53 @@ function isFunctionMissingError(err: unknown): boolean {
     msg.includes("does not exist") ||
     msg.includes("schema cache")
   )
+}
+
+// Errores de negocio que levanta la RPC (migs 330, 356 y 367). El texto se
+// devuelve tal cual: la base lo escribe para el taller.
+const ERRORES_409 = ["supera lo disponible", "no tiene saldo para acreditar", "clave de reintento"]
+const ERRORES_400 = [
+  "excede lo permitido",
+  "no encontrado",
+  "tiene que tener un cliente",
+  "Falta el medio de reintegro",
+  "motivo de la nota de crédito",
+  "mayor a cero",
+  "al menos un producto",
+]
+
+// La NC ya quedó registrada aunque falle su relectura: la respuesta igual la
+// identifica con lo que devolvió la RPC (el diálogo y el POS usan id y número).
+// Sin esto respondía null y el diálogo daba por fallida una NC emitida.
+function cuerpoNc(fila: unknown, r: ResultadoDevolucion, ventaId: string, modoPedido: "ITEMS" | "MONTO") {
+  const montoAplicadoDeuda = r.montoAplicadoDeuda ?? 0
+  return (
+    formatDevolucion(fila) ?? {
+      id: r.id,
+      ventaId,
+      numeroDevolucion: r.numero,
+      tipo: r.tipo,
+      modo: r.modo ?? modoPedido,
+      montoDevolucion: r.montoDevolucion,
+      montoAplicadoDeuda,
+      montoReembolso: r.montoReembolso ?? r.montoDevolucion - montoAplicadoDeuda,
+    }
+  )
+}
+
+function errorDeNegocio(msg: string): NextResponse | null {
+  if (msg.includes("no encontrada")) {
+    return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
+  }
+  if (msg.includes("completadas")) {
+    return NextResponse.json(
+      { error: "Solo se pueden crear devoluciones para ventas completadas" },
+      { status: 400 }
+    )
+  }
+  if (ERRORES_409.some((f) => msg.includes(f))) return NextResponse.json({ error: msg }, { status: 409 })
+  if (ERRORES_400.some((f) => msg.includes(f))) return NextResponse.json({ error: msg }, { status: 400 })
+  return null
 }
 
 // GET: Get all returns for a sale
@@ -111,7 +187,8 @@ export async function GET(
   }
 }
 
-// POST: Create a return (only ADMIN)
+// POST: emitir una nota de crédito sobre la venta, devolviendo productos o
+// por monto (solo ADMIN hasta el PR7)
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -156,9 +233,11 @@ export async function POST(
     // Agregar líneas con el mismo itemVentaId: sin esto, entradas duplicadas
     // pasan cada una la validación de máximo devolvible por separado y permiten
     // devolver (y reembolsar) más de lo vendido.
-    data.items = aggregateReturnItems(data.items)
+    const items = data.modo === "ITEMS" ? aggregateReturnItems(data.items ?? []) : []
+    // La columna motivo es NOT NULL: sin detalle, la etiqueta del motivo del catálogo.
+    const motivoTexto = data.motivo || (data.motivoNc ? MOTIVO_NC_LABELS[data.motivoNc] : "")
 
-    // RPC atómica (migración 247; saldo pendiente e idempotencia: 330)
+    // RPC atómica (247; saldo pendiente e idempotencia: 330; número: 356; modo y caja: 367)
     const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc("registrar_devolucion_atomica", {
       p_org_id: organizationId!,
       p_venta_id: id,
@@ -166,23 +245,27 @@ export async function POST(
       // El NC- lo asigna la RPC adentro de su transacción (mig 356): si la
       // devolución falla, el número no se quema.
       p_numero_devolucion: null,
-      p_motivo: data.motivo,
+      p_motivo: motivoTexto,
       p_observaciones: data.observaciones ?? null,
       p_metodo_reembolso: data.metodoReembolso ?? null,
       p_reembolso_referencia: data.reembolsoReferencia ?? null,
-      p_items: data.items.map((i) => ({
+      p_items: items.map((i) => ({
         itemVentaId: i.itemVentaId,
         inventarioId: i.inventarioId ?? null,
         cantidad: i.cantidad,
         restaurarStock: i.restaurarStock,
       })),
       p_idempotency_key: data.idempotencyKey ?? null,
+      p_modo: data.modo,
+      p_monto: data.modo === "MONTO" ? Math.round(data.monto! * 100) / 100 : null,
+      p_motivo_nc: data.motivoNc ?? null,
+      // El efectivo sale de la caja adentro de la RPC, en la misma transacción
+      // que la NC (mig 367). Antes lo grababa esta ruta después, best-effort.
+      p_registrar_egreso: true,
     })
 
     if (rpcError) {
-      // Sin la RPC no hay devolución posible. El fallback JS que había acá
-      // acreditaba el monto entero a cuenta corriente, sin descontar el saldo
-      // pendiente de la venta (lo que la 330 corrigió en la RPC).
+      // Sin la RPC no hay devolución posible: se responde 503.
       if (isFunctionMissingError(rpcError)) {
         console.error("registrar_devolucion_atomica no disponible:", rpcError)
         return NextResponse.json(
@@ -190,26 +273,11 @@ export async function POST(
           { status: 503 }
         )
       }
-
-      // Map domain errors raised by the RPC
-      const msg = rpcError.message ?? ""
-      if (msg.includes("no encontrada")) {
-        return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
-      }
-      if (msg.includes("completadas")) {
-        return NextResponse.json(
-          { error: "Solo se pueden crear devoluciones para ventas completadas" },
-          { status: 400 }
-        )
-      }
-      if (msg.includes("excede lo permitido") || msg.includes("no encontrado") || msg.includes("tiene que tener un cliente")) {
-        return NextResponse.json({ error: msg }, { status: 400 })
-      }
-
+      const respuesta = errorDeNegocio(rpcError.message ?? "")
+      if (respuesta) return respuesta
       throw rpcError
     }
 
-    // RPC succeeded
     const resultado = rpcData as ResultadoDevolucion
     const devolucionId = resultado.id
 
@@ -223,44 +291,58 @@ export async function POST(
     // Reintento del mismo pedido: ya se registró (y se auditó y se sacó la
     // plata de la caja) la primera vez.
     if (resultado.replayed) {
-      return NextResponse.json(formatDevolucion(devolucionCompleta), { status: 200 })
+      return NextResponse.json(cuerpoNc(devolucionCompleta, resultado, id, data.modo), { status: 200 })
     }
 
-    // Audit log
+    const modo = resultado.modo ?? data.modo
+    const montoAplicadoDeuda = resultado.montoAplicadoDeuda ?? 0
+    const montoReembolso = resultado.montoReembolso ?? resultado.montoDevolucion - montoAplicadoDeuda
+    // Sin reintegro la base no guarda medio (mig 367): el aviso tampoco lo inventa.
+    const metodoReembolso = montoReembolso > 0 ? (data.metodoReembolso ?? null) : null
+
+    // Auditoría: una NC, sea del motor que sea (spec, Plataforma)
     const audit = createAuditLogger(organizationId!, userId!, request)
-    await audit.create("devoluciones_venta", devolucionId, {
-      numero_devolucion: resultado.numero,
+    await audit.create("notas_credito", devolucionId, {
+      origen: "VENTA",
+      numero: resultado.numero,
       venta_id: id,
+      modo,
+      motivo_nc: data.motivoNc ?? null,
       tipo: resultado.tipo,
-      monto_devolucion: resultado.montoDevolucion,
-      monto_aplicado_deuda: resultado.montoAplicadoDeuda ?? 0,
-      items_count: data.items.length,
+      monto: resultado.montoDevolucion,
+      monto_aplicado_deuda: montoAplicadoDeuda,
+      monto_reembolso: montoReembolso,
+      metodo_reembolso: metodoReembolso,
+      items_count: items.length,
+      egreso_caja_id: resultado.movimientoCajaId ?? null,
     })
 
+    emitWebhookEvent(organizationId!, "nota_credito.creada", {
+      id: devolucionId,
+      numero: resultado.numero,
+      origen: "VENTA",
+      origenId: id,
+      modo,
+      motivoNc: data.motivoNc ?? null,
+      monto: resultado.montoDevolucion,
+      montoAplicadoDeuda,
+      montoReembolso,
+      metodoReembolso,
+    }).catch(() => {})
+
+    // El evento de siempre, para quien ya lo consume (spec: se sigue emitiendo)
     emitWebhookEvent(organizationId!, "venta.devolucion", {
       id: devolucionId,
       ventaId: id,
       numeroDevolucion: resultado.numero,
       tipo: resultado.tipo,
       montoDevolucion: resultado.montoDevolucion,
-      montoAplicadoDeuda: resultado.montoAplicadoDeuda ?? 0,
-      metodoReembolso: data.metodoReembolso ?? null,
+      montoAplicadoDeuda,
+      metodoReembolso,
+      modo,
     }).catch(() => {})
 
-    // Reembolso en efectivo → egreso de caja (para que el arqueo cuadre). Solo
-    // lo que se devuelve: la parte que descontó el saldo pendiente nunca entró.
-    await registrarEgresoCajaEfectivo({
-      organizationId: organizationId!,
-      userId: userId!,
-      sucursalId: (ventaCheck as any).sucursal_id ?? null,
-      monto: resultado.montoReembolso ?? resultado.montoDevolucion,
-      metodoPago: data.metodoReembolso,
-      concepto: `Devolución ${resultado.numero}`,
-      observaciones: "Reembolso en efectivo de devolución de venta",
-      origen: "DEVOLUCION",
-    })
-
-    return NextResponse.json(formatDevolucion(devolucionCompleta), { status: 201 })
+    return NextResponse.json(cuerpoNc(devolucionCompleta, resultado, id, data.modo), { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
