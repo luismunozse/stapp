@@ -12,12 +12,32 @@ import {
   type CredencialesResueltas,
 } from "@/lib/facturacion/resolver-credenciales"
 import { mapVentaToEmitirInput } from "@/lib/facturacion/map-venta"
+import { isMissingColumnError } from "@/lib/db-errors"
+import type { DatosFiscales, EmitirInput } from "@/lib/facturacion/types"
 
 // Columnas seguras para devolver un comprobante al cliente. NUNCA incluir
 // provider_response acá: es la respuesta cruda del proveedor y puede traer
 // datos internos que no corresponde exponer.
 const SAFE_COLUMNS =
   "id, venta_id, tipo, punto_venta, numero, cae, cae_vencimiento, estado, pdf_url, receptor_doc_tipo, receptor_doc_nro, receptor_condicion_iva, total, provider, error_msg, created_at, updated_at"
+
+/** Columnas de la foto fiscal (migración comprobantes_fiscales_datos_qr). */
+function columnasFiscales(fiscal: DatosFiscales, detalle: EmitirInput["items"]) {
+  return {
+    fecha_emision: fiscal.fechaEmision,
+    cuit_emisor: fiscal.cuitEmisor,
+    cbte_tipo: fiscal.cbteTipo,
+    concepto: fiscal.concepto,
+    moneda: fiscal.moneda,
+    cotizacion: fiscal.cotizacion,
+    importe_neto: fiscal.importeNeto,
+    importe_iva: fiscal.importeIva,
+    importe_total: fiscal.importeTotal,
+    receptor_doc_tipo_cod: fiscal.receptorDocTipoCod,
+    receptor_doc_nro_cod: fiscal.receptorDocNro,
+    detalle,
+  }
+}
 
 // Código de Postgres para violación de constraint UNIQUE.
 const UNIQUE_VIOLATION = "23505"
@@ -216,21 +236,34 @@ export async function POST(request: Request) {
   }
 
   if (result.ok) {
-    const { data: updated, error: updErr } = await supabaseAdmin
-      .from("comprobantes_fiscales")
-      .update({
-        estado: "emitido",
-        tipo: result.tipo,
-        numero: result.numero,
-        cae: result.cae,
-        cae_vencimiento: result.caeVencimiento,
-        pdf_url: result.pdfUrl,
-        provider_response: result.raw as any,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", pend.id)
-      .select(SAFE_COLUMNS)
-      .single()
+    const basePayload = {
+      estado: "emitido",
+      tipo: result.tipo,
+      numero: result.numero,
+      cae: result.cae,
+      cae_vencimiento: result.caeVencimiento,
+      pdf_url: result.pdfUrl,
+      provider_response: result.raw as any,
+      updated_at: new Date().toISOString(),
+    }
+    const escribirEmitido = (payload: Record<string, unknown>) =>
+      supabaseAdmin
+        .from("comprobantes_fiscales")
+        .update(payload)
+        .eq("id", pend.id)
+        .select(SAFE_COLUMNS)
+        .single()
+
+    // Foto fiscal (lo que ARCA autorizó) junto al CAE. Antes de aplicar la
+    // migración esas columnas no existen: PostgREST rechaza el payload entero
+    // con PGRST204 y, como el CAE ya es real, se reintenta con el payload de
+    // siempre en vez de dejar la fila pendiente para siempre.
+    let { data: updated, error: updErr } = await escribirEmitido(
+      result.fiscal ? { ...basePayload, ...columnasFiscales(result.fiscal, input.items) } : basePayload
+    )
+    if (updErr && result.fiscal && isMissingColumnError(updErr)) {
+      ;({ data: updated, error: updErr } = await escribirEmitido(basePayload))
+    }
     if (updErr) {
       // El proveedor SÍ emitió un CAE real acá: nunca se borra el pendiente
       // (perderíamos la única referencia a esa emisión). Se loguea todo lo

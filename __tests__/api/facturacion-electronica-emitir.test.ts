@@ -610,4 +610,157 @@ describe("POST /api/facturacion-electronica/emitir", () => {
     expect(status).toBe(500)
     expect(body.error).toMatch(/certificado de plataforma/i)
   })
+
+  /**
+   * Foto fiscal: lo que ARCA autorizó se persiste en la misma UPDATE que
+   * guarda el CAE. Hasta que se aplique la migración las columnas no existen:
+   * esa UPDATE no puede fallar por eso, porque el CAE ya es real.
+   */
+  describe("foto fiscal en la UPDATE de éxito", () => {
+    const SNAPSHOT_KEYS = [
+      "fecha_emision",
+      "cuit_emisor",
+      "cbte_tipo",
+      "concepto",
+      "moneda",
+      "cotizacion",
+      "importe_neto",
+      "importe_iva",
+      "importe_total",
+      "receptor_doc_tipo_cod",
+      "receptor_doc_nro_cod",
+      "detalle",
+    ]
+    const FISCAL = {
+      fechaEmision: "2026-08-29",
+      cuitEmisor: "30710955057",
+      cbteTipo: 6,
+      concepto: 1,
+      moneda: "PES",
+      cotizacion: 1,
+      importeNeto: 82.64,
+      importeIva: 17.36,
+      importeTotal: 100,
+      receptorDocTipoCod: 99,
+      receptorDocNro: "0",
+    }
+    const updatePayloads = (chain: ReturnType<typeof createChainMock>) =>
+      vi.mocked(chain.update).mock.calls.map((c) => c[0] as Record<string, unknown>)
+
+    function arrancar(updates: Array<ReturnType<typeof createChainMock>>) {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+      vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+      vi.mocked(getCertificadoStapp).mockReturnValue({
+        cuit: "23944498389",
+        certPem: "C",
+        keyPem: "K",
+        notAfter: "2028-09-12T22:16:31.000Z",
+        subject: "CN=stapp-prod",
+      } as any)
+      vi.mocked(arcaDirectProvider.emitir).mockResolvedValue({
+        ok: true, cae: "75123456789012", numero: "0002-00000001", tipo: "B", raw: {}, fiscal: FISCAL,
+      } as any)
+      mockSupabaseSequenced({
+        comprobantes_fiscales: [createChainMock(null), createChainMock({ id: "cmp-1" }), ...updates],
+        ventas: [createChainMock(VENTA)],
+        items_venta: [createChainMock(ITEMS)],
+        facturacion_credenciales: [createChainMock(CREDENCIALES_DELEGADO)],
+      })
+    }
+
+    it("la UPDATE de éxito lleva los importes autorizados y el detalle de la venta", async () => {
+      const tier1 = createChainMock({ id: "cmp-1", estado: "emitido" })
+      arrancar([tier1])
+
+      const { status } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+      expect(status).toBe(200)
+      const [payload] = updatePayloads(tier1)
+      expect(payload).toMatchObject({
+        estado: "emitido",
+        cae: "75123456789012",
+        fecha_emision: "2026-08-29",
+        cuit_emisor: "30710955057",
+        cbte_tipo: 6,
+        concepto: 1,
+        moneda: "PES",
+        cotizacion: 1,
+        importe_neto: 82.64,
+        importe_iva: 17.36,
+        importe_total: 100,
+        receptor_doc_tipo_cod: 99,
+        receptor_doc_nro_cod: "0",
+        detalle: MAPPED_INPUT.items,
+      })
+      expect(tier1.select).toHaveBeenCalledWith(SAFE_COLUMNS)
+      expect(tier1.eq).toHaveBeenCalledWith("id", "cmp-1")
+    })
+
+    it("sin la migración (PGRST204) reintenta SIN ninguna columna nueva y responde 200 con el CAE", async () => {
+      const tier1 = createChainMock(null, { code: "PGRST204", message: "Could not find the 'cbte_tipo' column" })
+      const tier0 = createChainMock({ id: "cmp-1", estado: "emitido", cae: "75123456789012" })
+      arrancar([tier1, tier0])
+
+      const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+      expect(status).toBe(200)
+      expect(body.comprobante.cae).toBe("75123456789012")
+      const [retry] = updatePayloads(tier0)
+      for (const key of SNAPSHOT_KEYS) expect(Object.keys(retry)).not.toContain(key)
+      expect(retry).toMatchObject({ estado: "emitido", cae: "75123456789012", numero: "0002-00000001" })
+      expect(tier0.select).toHaveBeenCalledWith(SAFE_COLUMNS)
+      expect(tier0.eq).toHaveBeenCalledWith("id", "cmp-1")
+    })
+
+    it("si ni el reintento puede guardar: 500 con el CAE y la fila pendiente NO se borra", async () => {
+      const tier1 = createChainMock(null, { code: "PGRST204", message: "schema cache" })
+      const tier0 = createChainMock(null, { message: "connection reset" })
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+      arrancar([tier1, tier0])
+
+      const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+      expect(status).toBe(500)
+      expect(body.cae).toBe("75123456789012")
+      expect(tier1.delete).not.toHaveBeenCalled()
+      expect(tier0.delete).not.toHaveBeenCalled()
+      consoleSpy.mockRestore()
+    })
+
+    it("un error que no es de columna faltante NO reintenta: 500 con el CAE", async () => {
+      const tier1 = createChainMock(null, { code: "57014", message: "statement timeout" })
+      const tier0 = createChainMock({ id: "cmp-1" })
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+      arrancar([tier1, tier0])
+
+      const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+      expect(status).toBe(500)
+      expect(body.cae).toBe("75123456789012")
+      expect(updatePayloads(tier0)).toHaveLength(0)
+      consoleSpy.mockRestore()
+    })
+
+    it("un proveedor sin foto fiscal (TusFacturas) escribe la UPDATE de siempre, sin columnas nuevas", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+      vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+      vi.mocked(tusFacturasProvider.emitir).mockResolvedValue({
+        ok: true, cae: "1", numero: "0003-1", tipo: "C", pdfUrl: "http://p", raw: {},
+      } as any)
+      const update = createChainMock({ id: "cmp-1", estado: "emitido" })
+      mockSupabaseSequenced({
+        comprobantes_fiscales: [createChainMock(null), createChainMock({ id: "cmp-1" }), update],
+        ventas: [createChainMock(VENTA)],
+        items_venta: [createChainMock(ITEMS)],
+        facturacion_credenciales: [createChainMock(CREDENCIALES)],
+      })
+
+      const { status } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+      expect(status).toBe(200)
+      const payloads = updatePayloads(update)
+      expect(payloads).toHaveLength(1)
+      for (const key of SNAPSHOT_KEYS) expect(Object.keys(payloads[0])).not.toContain(key)
+    })
+  })
 })

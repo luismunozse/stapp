@@ -20,7 +20,7 @@ import type { ArcaServiceName } from "@arcasdk/core"
 // que mantener una copia local del tipo que derive en silencio.
 import type { INextVoucher } from "@arcasdk/core/lib/domain/types/voucher.types"
 
-import { buildVoucher } from "@/lib/facturacion/arca/voucher"
+import { buildVoucher, datosFiscalesDesdeVoucher } from "@/lib/facturacion/arca/voucher"
 import { toLoginCredentials, wsaaLogin } from "@/lib/facturacion/arca/wsaa-login"
 import {
   renewWsaaTicket,
@@ -197,6 +197,8 @@ export function createArcaDirectProvider(
             cae: resultado.cae,
             caeVencimiento: resultado.caeFchVto,
             raw: resultado.response,
+            // Mismo CUIT que va en `Auth.Cuit`: el representado si hay delegación.
+            fiscal: datosFiscalesDesdeVoucher(voucher, creds.cuitRepresentado ?? creds.cuit),
           }
         }
 

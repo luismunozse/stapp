@@ -86,6 +86,53 @@ describe("arcaDirectProvider.emitir", () => {
     expect(result.numero).toBe("0001-00000007")
   })
 
+  describe("foto fiscal (fiscal)", () => {
+    const emitirCon = async (c: ArcaCredenciales) => {
+      const sdk = fakeSdk(respuestaAprobada(7))
+      const provider = createArcaDirectProvider({
+        renewTicket: async () => ticket,
+        createArca: sdk.createArca,
+        now: () => new Date("2026-08-29T15:00:00Z"),
+      })
+      return { result: await provider.emitir(c, input), sdk }
+    }
+
+    it("devuelve los importes y la fecha que se mandaron a ARCA", async () => {
+      const { result, sdk } = await emitirCon(creds)
+      const enviado = sdk.requests[0]
+
+      expect(result.fiscal).toEqual({
+        fechaEmision: "2026-08-29",
+        cuitEmisor: "23944498389",
+        cbteTipo: 11,
+        concepto: 1,
+        moneda: "PES",
+        cotizacion: 1,
+        importeNeto: enviado.ImpNeto,
+        importeIva: enviado.ImpIVA,
+        importeTotal: enviado.ImpTotal,
+        receptorDocTipoCod: 99,
+        receptorDocNro: "0",
+      })
+    })
+
+    it("el emisor es el CUIT representado cuando la org delegó", async () => {
+      const { result } = await emitirCon({ ...creds, cuitRepresentado: "30-71095505-7" })
+
+      expect(result.fiscal?.cuitEmisor).toBe("30710955057")
+    })
+
+    it("un rechazo no trae foto fiscal", async () => {
+      const sdk = fakeSdk({ response: { Errors: { Err: [{ Code: 10, Msg: "x" }] } } })
+      const provider = createArcaDirectProvider({ renewTicket: async () => ticket, createArca: sdk.createArca })
+
+      const result = await provider.emitir(creds, input)
+
+      expect(result.ok).toBe(false)
+      expect(result.fiscal).toBeUndefined()
+    })
+  })
+
   /**
    * AFIP deriva la identidad del WSAA del subject del CERTIFICADO, no del
    * `Auth.Cuit`. En el modelo de delegación un solo certificado representa a

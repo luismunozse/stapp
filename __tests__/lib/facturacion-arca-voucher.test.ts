@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 
-import { buildVoucher } from "@/lib/facturacion/arca/voucher"
+import { buildVoucher, datosFiscalesDesdeVoucher } from "@/lib/facturacion/arca/voucher"
 import type { ArcaCredenciales, EmitirInput } from "@/lib/facturacion/types"
 
 const round2 = (n: number) => Math.round(n * 100) / 100
@@ -250,5 +250,57 @@ describe("buildVoucher — receptor", () => {
     expect(voucher.DocTipo).toBe(96)
     expect(voucher.DocNro).toBe(27123456)
     expect(voucher.CondicionIVAReceptorId).toBe(6)
+  })
+})
+
+describe("datosFiscalesDesdeVoucher", () => {
+  const credsRI: ArcaCredenciales = { ...credsMonotributo, condicionFiscal: "RESPONSABLE_INSCRIPTO" }
+
+  it("Factura C: copia exacto lo que se mandó a ARCA", () => {
+    const voucher = buildVoucher(credsMonotributo, inputConsumidorFinal, { cbteFch: "20260829" })
+
+    expect(datosFiscalesDesdeVoucher(voucher, "30710955057")).toEqual({
+      fechaEmision: "2026-08-29",
+      cuitEmisor: "30710955057",
+      cbteTipo: 11,
+      concepto: 1,
+      moneda: "PES",
+      cotizacion: 1,
+      importeNeto: 1000,
+      importeIva: 0,
+      importeTotal: 1000,
+      receptorDocTipoCod: 99,
+      receptorDocNro: "0",
+    })
+  })
+
+  it("Factura B: importes del voucher (neto + IVA = total) y receptor identificado", () => {
+    const voucher = buildVoucher(
+      credsRI,
+      {
+        ...inputConsumidorFinal,
+        total: 1210,
+        items: [{ cantidad: 1, descripcion: "Pantalla", importeUnitario: 1210, importe: 1210, alicuotaIva: 21 }],
+        receptor: { razonSocial: "Taller SRL", documentoTipo: "CUIT", documentoNro: "30-71095505-7", condicionIva: "RI" },
+      },
+      { cbteFch: "20260101" }
+    )
+
+    const datos = datosFiscalesDesdeVoucher(voucher, "30710955057")
+
+    expect(datos.cbteTipo).toBe(6)
+    expect(datos.fechaEmision).toBe("2026-01-01")
+    expect(datos.importeTotal).toBe(voucher.ImpTotal)
+    expect(datos.importeNeto).toBe(voucher.ImpNeto)
+    expect(datos.importeIva).toBe(voucher.ImpIVA)
+    expect(round2(datos.importeNeto + datos.importeIva)).toBe(datos.importeTotal)
+    expect(datos.receptorDocTipoCod).toBe(80)
+    expect(datos.receptorDocNro).toBe("30710955057")
+  })
+
+  it("el CUIT emisor se normaliza a solo dígitos", () => {
+    const voucher = buildVoucher(credsMonotributo, inputConsumidorFinal, { cbteFch: "20260829" })
+
+    expect(datosFiscalesDesdeVoucher(voucher, "30-71095505-7").cuitEmisor).toBe("30710955057")
   })
 })

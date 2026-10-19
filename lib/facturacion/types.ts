@@ -42,6 +42,31 @@ export interface EmitirInput {
   desgloseIva?: { neto: number; iva: number; alicuota: number }
 }
 
+/**
+ * Foto fiscal del comprobante: lo que ARCA efectivamente autorizó. Se persiste
+ * al emitir y es la única fuente del PDF y del QR (la venta puede editarse
+ * después, el comprobante no).
+ */
+export interface DatosFiscales {
+  /** YYYY-MM-DD, la fecha del comprobante (CbteFch). */
+  fechaEmision: string
+  /** CUIT del emisor, solo dígitos: el representado si la org delegó. */
+  cuitEmisor: string
+  /** Código ARCA del tipo de comprobante (B = 6, C = 11). */
+  cbteTipo: number
+  concepto: number
+  /** Código de moneda ARCA ("PES"). */
+  moneda: string
+  cotizacion: number
+  importeNeto: number
+  importeIva: number
+  importeTotal: number
+  /** Código ARCA del tipo de documento del receptor (99 = consumidor final). */
+  receptorDocTipoCod: number
+  /** Número de documento del receptor, solo dígitos ("0" para consumidor final). */
+  receptorDocNro: string
+}
+
 export interface ComprobanteResult {
   ok: boolean
   tipo: TipoComprobante
@@ -50,6 +75,8 @@ export interface ComprobanteResult {
   caeVencimiento?: string
   pdfUrl?: string
   afipQr?: string
+  /** Solo lo llena el proveedor ARCA directo. */
+  fiscal?: DatosFiscales
   errores?: string[]
   raw: unknown
 }
