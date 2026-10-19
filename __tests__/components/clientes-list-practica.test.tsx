@@ -5,6 +5,7 @@ import { ClientesList } from "@/components/clientes/clientes-list"
 import { ClienteMobileCard } from "@/components/clientes/cliente-mobile-card"
 import type { Cliente } from "@/types"
 
+vi.mock("@/hooks/use-puede-cobrar", () => ({ usePuedeCobrar: () => true }))
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }) }))
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}`, formatDate: (d: string) => d, pais: "AR" }),
