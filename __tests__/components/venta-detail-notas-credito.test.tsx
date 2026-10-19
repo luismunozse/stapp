@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, fireEvent } from "@testing-library/react"
+import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import React from "react"
 
 let rol = "VENDEDOR"
@@ -88,6 +88,36 @@ describe("VentaDetail — nota de crédito por monto y botón de emitir", () => 
     fireEvent.click(await screen.findByRole("button", { name: "Nota de crédito" }))
     expect(screen.getByRole("dialog", { name: /Nota de crédito · Venta V0009/ })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Devolución" })).not.toBeInTheDocument()
+  })
+
+  it("al cerrar el diálogo recarga la venta: reabierto no trabaja con datos viejos", async () => {
+    rol = "ADMIN"
+    // La NC de $50 se emitió pero su respuesta se perdió: la base ya la tiene y
+    // el detalle no. Hasta recargar, el diálogo seguiría ofreciendo esos $50.
+    const conLaPerdida = { ...venta, devoluciones: [...venta.devoluciones, ...ventaConMonto.devoluciones] }
+    let lecturas = 0
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/ventas/v1") {
+          lecturas++
+          const v = lecturas === 1 ? venta : conLaPerdida
+          return { ok: true, json: async () => v }
+        }
+        return { ok: true, json: async () => ({ organization: { id: "org-1", slug: "demo", nombre: "Demo" } }) }
+      })
+    )
+    const { VentaDetail } = await import("@/components/ventas/venta-detail")
+    render(<VentaDetail ventaId="v1" />)
+
+    fireEvent.click(await screen.findByRole("button", { name: "Nota de crédito" }))
+    expect(screen.getByText(/Disponible para acreditar: \D*200\b/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }))
+
+    await waitFor(() => expect(lecturas).toBe(2))
+    expect(await screen.findByText("NC-000012")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Nota de crédito" }))
+    expect(screen.getByText(/Disponible para acreditar: \D*150\b/)).toBeInTheDocument()
   })
 
   it("el VENDEDOR no ve el botón de emitir (lo habilita el PR7)", async () => {

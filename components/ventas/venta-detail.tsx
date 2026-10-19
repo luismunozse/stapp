@@ -453,7 +453,12 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
       {venta && (
         <NotaCreditoVentaDialog
           open={showDevolucionModal}
-          onOpenChange={setShowDevolucionModal}
+          // Al cerrar se relee la venta: si una respuesta se perdió, la NC ya
+          // existe y el diálogo reabierto no puede ofrecer de nuevo ese saldo.
+          onOpenChange={(abierto) => {
+            setShowDevolucionModal(abierto)
+            if (!abierto) fetchVenta()
+          }}
           venta={{
             id: venta.id,
             numeroVenta: venta.numeroVenta,
