@@ -138,6 +138,8 @@ describe("barrido: las funciones y vistas vivas que leen NC de venta ignoran las
 
   // Minimo de "anulada = false" en la ultima definicion de cada una.
   const FILTROS_SQL: Record<string, number> = {
+    // LIFO, lo devuelto por las otras NC de la linea (garantia) y la cobertura de estado_pago.
+    anular_devolucion_venta: 3,
     registrar_devolucion_atomica: 1,
     registrar_devolucion_monto: 1,
     registrar_devolucion_nucleo: 5,
