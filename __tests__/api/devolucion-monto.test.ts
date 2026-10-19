@@ -33,13 +33,17 @@ const RPC_OK = {
 
 let tablas: string[] = []
 let ventas = createChainMock(null)
-function setup(venta: Record<string, unknown> | null = { cliente_id: "c1" }) {
+function setup(
+  venta: Record<string, unknown> | null = { cliente_id: "c1" },
+  // null: la relectura de la NC recién emitida falla
+  dev: Record<string, unknown> | null = DEV,
+) {
   tablas = []
   ventas = createChainMock(venta ? { id: "v1", sucursal_id: "suc-1", ...venta } : null, venta ? null : { message: "no rows" })
   vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
     tablas.push(table)
     if (table === "ventas") return ventas as any
-    if (table === "devoluciones_venta") return createChainMock(DEV) as any
+    if (table === "devoluciones_venta") return createChainMock(dev, dev ? null : { message: "timeout" }) as any
     return createChainMock(null) as any
   })
   vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: RPC_OK, error: null } as any)
@@ -193,6 +197,24 @@ describe("POST /api/ventas/[id]/devolucion — nota de crédito por monto", () =
     const { status } = await enviar(porMonto())
     expect(status).toBe(200)
     expect(auditCreate).not.toHaveBeenCalled()
+  })
+
+  it("si falla la relectura de la NC, responde 201 igual con su id y su número: la NC ya existe", async () => {
+    setup(undefined, null)
+    const { status, body } = await enviar(porMonto())
+    expect(status).toBe(201)
+    expect(body).toMatchObject({
+      id: "d1", ventaId: "v1", numeroDevolucion: "NC-000012", modo: "MONTO", tipo: "PARCIAL",
+      montoDevolucion: 50, montoAplicadoDeuda: 40, montoReembolso: 10,
+    })
+  })
+
+  it("un reintento cuya relectura falla responde 200 con el id y el número de la NC ya emitida", async () => {
+    setup(undefined, null)
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ...RPC_OK, replayed: true }, error: null } as any)
+    const { status, body } = await enviar(porMonto())
+    expect(status).toBe(200)
+    expect(body).toMatchObject({ id: "d1", numeroDevolucion: "NC-000012" })
   })
 
   it("un VENDEDOR no emite (403) y no llega a la RPC", async () => {
