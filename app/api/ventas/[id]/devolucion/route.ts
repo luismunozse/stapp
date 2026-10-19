@@ -57,7 +57,7 @@ type ResultadoDevolucion = {
   id: string
   /** Desde la mig 356: el NC- que la RPC asignó adentro de su transacción. */
   numero: string
-  /** Desde la mig 365. */
+  /** Desde la mig 367. */
   modo?: "ITEMS" | "MONTO"
   tipo: string
   montoDevolucion: number
@@ -65,7 +65,7 @@ type ResultadoDevolucion = {
   montoAplicadoDeuda?: number
   /** Desde la mig 330: lo que efectivamente se devuelve al cliente. */
   montoReembolso?: number
-  /** Desde la mig 365: el egreso de caja del reintegro en efectivo, si hubo. */
+  /** Desde la mig 367: el egreso de caja del reintegro en efectivo, si hubo. */
   movimientoCajaId?: string | null
   replayed?: boolean
 }
@@ -260,7 +260,7 @@ export async function POST(
       p_monto: data.modo === "MONTO" ? Math.round(data.monto! * 100) / 100 : null,
       p_motivo_nc: data.motivoNc ?? null,
       // El efectivo sale de la caja adentro de la RPC, en la misma transacción
-      // que la NC (mig 365). Antes lo grababa esta ruta después, best-effort.
+      // que la NC (mig 367). Antes lo grababa esta ruta después, best-effort.
       p_registrar_egreso: true,
     })
 
@@ -297,7 +297,7 @@ export async function POST(
     const modo = resultado.modo ?? data.modo
     const montoAplicadoDeuda = resultado.montoAplicadoDeuda ?? 0
     const montoReembolso = resultado.montoReembolso ?? resultado.montoDevolucion - montoAplicadoDeuda
-    // Sin reintegro la base no guarda medio (mig 365): el aviso tampoco lo inventa.
+    // Sin reintegro la base no guarda medio (mig 367): el aviso tampoco lo inventa.
     const metodoReembolso = montoReembolso > 0 ? (data.metodoReembolso ?? null) : null
 
     // Auditoría: una NC, sea del motor que sea (spec, Plataforma)
