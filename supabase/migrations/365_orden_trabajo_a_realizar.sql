@@ -1,4 +1,4 @@
--- 349: "Trabajo a realizar" en la orden de ingreso.
+-- 365: "Trabajo a realizar" en la orden de ingreso.
 --
 -- El comprobante de recepción ahora muestra, además de la falla declarada, el
 -- trabajo que el taller planea hacer (texto libre: "Cambio de pantalla +
@@ -46,6 +46,8 @@ BEGIN
     RAISE EXCEPTION 'recepcion_multiple: se requieren al menos 2 equipos';
   END IF;
 
+  -- (1) Número propio, independiente del contador de órdenes, vía contador
+  -- atómico (evita el race de MAX+1 entre terminales concurrentes).
   v_numero := get_next_recepcion_number(p_organization_id);
   v_codigo := 'REC' || LPAD(v_numero::TEXT, 3, '0');
 
@@ -59,6 +61,7 @@ BEGIN
     p_recibido_por, p_observaciones, p_created_by
   ) RETURNING id INTO v_recepcion_id;
 
+  -- (2) Una orden por equipo
   FOR v_equipo IN SELECT * FROM jsonb_array_elements(p_equipos)
   LOOP
     IF COALESCE(v_equipo->>'publicToken', '') = '' THEN
@@ -76,6 +79,7 @@ BEGIN
     v_numero_orden := get_next_order_number(p_organization_id);
     v_codigo_orden := v_prefijo || LPAD(v_numero_orden::TEXT, 3, '0');
 
+    -- tipo_dispositivo es TEXT desde la migración 033: sin cast a enum
     INSERT INTO ordenes_servicio (
       numero_orden, codigo_orden, cliente_id, organization_id, sucursal_id,
       recepcion_id, dispositivo, tipo_dispositivo, marca, color, imei,
@@ -119,3 +123,6 @@ BEGIN
   );
 END;
 $$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION crear_recepcion_multiple IS
+  'Crea una recepción y sus N órdenes en una sola transacción. Rollback total ante cualquier fallo, incluido el límite de órdenes del plan.';
