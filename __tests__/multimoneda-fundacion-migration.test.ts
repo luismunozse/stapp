@@ -51,14 +51,14 @@ describe("migration 365: multimoneda foundation", () => {
       const block = CODE.match(new RegExp(`ALTER TABLE ${table}\\b[\\s\\S]*?;`, "i"))?.[0] ?? ""
       expect(block, table).toMatch(/moneda_origen/)
       expect(block, table).toMatch(/precio_origen NUMERIC\(12,2\)/i)
-      expect(block, table).toMatch(/tipo_cambio NUMERIC\(14,4\)/i)
+      expect(block, table).toMatch(/tipo_cambio NUMERIC\(14,6\)/i)
     }
   })
 
   it("adds the rate snapshot to ventas and ordenes_servicio, and the payment currency columns", () => {
     for (const table of ["ventas", "ordenes_servicio"]) {
       const block = CODE.match(new RegExp(`ALTER TABLE ${table}\\b[\\s\\S]*?;`, "i"))?.[0] ?? ""
-      expect(block, table).toMatch(/tipo_cambio NUMERIC\(14,4\)/i)
+      expect(block, table).toMatch(/tipo_cambio NUMERIC\(14,6\)/i)
       expect(block, table).toMatch(/tipo_cambio_fuente/)
     }
     const pagos = CODE.match(/ALTER TABLE pagos_venta\b[\s\S]*?;/i)?.[0] ?? ""

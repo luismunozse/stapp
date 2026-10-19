@@ -8,6 +8,7 @@
 -- (default false), so applying this file changes no behavior.
 --
 -- DESIGN DECISIONS
+--   * Rates are NUMERIC(14,6): the app accepts up to 6 decimals (REQ-1.6), so storage must not truncate.
 --   * moneda CHAR(3) NULL, NULL = the organization's local currency, CHECK NULL or 'USD'.
 --     No DEFAULT and no backfill: an insert path that forgets the column (import, bulk,
 --     v1 API, onboarding seed) must not label CLP/EUR items as ARS. Existing rows are NOT
@@ -42,9 +43,9 @@ CREATE TABLE IF NOT EXISTS organizacion_moneda (
   organization_id        TEXT PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
   multimoneda_habilitada BOOLEAN NOT NULL DEFAULT false,
   tipo_cambio_fuente     TEXT CHECK (tipo_cambio_fuente IN ('MANUAL', 'OFICIAL', 'BLUE', 'MEP')),
-  tipo_cambio_manual     NUMERIC(14,4) CHECK (tipo_cambio_manual IS NULL OR tipo_cambio_manual > 0),
+  tipo_cambio_manual     NUMERIC(14,6) CHECK (tipo_cambio_manual IS NULL OR tipo_cambio_manual > 0),
   -- Last confirmed rate, kept for the fallback chain when the rate service is down.
-  tipo_cambio_referencia NUMERIC(14,4) CHECK (tipo_cambio_referencia IS NULL OR tipo_cambio_referencia > 0),
+  tipo_cambio_referencia NUMERIC(14,6) CHECK (tipo_cambio_referencia IS NULL OR tipo_cambio_referencia > 0),
   referencia_en          TIMESTAMPTZ,
   redondeo_conversion    NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (redondeo_conversion >= 0),
   acepta_usd_efectivo    BOOLEAN NOT NULL DEFAULT false,
@@ -81,29 +82,29 @@ ALTER TABLE movimientos_caja
 ALTER TABLE items_venta
   ADD COLUMN IF NOT EXISTS moneda_origen CHAR(3) CHECK (moneda_origen IS NULL OR moneda_origen = 'USD'),
   ADD COLUMN IF NOT EXISTS precio_origen NUMERIC(12,2),
-  ADD COLUMN IF NOT EXISTS tipo_cambio NUMERIC(14,4) CHECK (tipo_cambio IS NULL OR tipo_cambio > 0);
+  ADD COLUMN IF NOT EXISTS tipo_cambio NUMERIC(14,6) CHECK (tipo_cambio IS NULL OR tipo_cambio > 0);
 ALTER TABLE servicios_orden
   ADD COLUMN IF NOT EXISTS moneda_origen CHAR(3) CHECK (moneda_origen IS NULL OR moneda_origen = 'USD'),
   ADD COLUMN IF NOT EXISTS precio_origen NUMERIC(12,2),
-  ADD COLUMN IF NOT EXISTS tipo_cambio NUMERIC(14,4) CHECK (tipo_cambio IS NULL OR tipo_cambio > 0);
+  ADD COLUMN IF NOT EXISTS tipo_cambio NUMERIC(14,6) CHECK (tipo_cambio IS NULL OR tipo_cambio > 0);
 ALTER TABLE repuestos_orden
   ADD COLUMN IF NOT EXISTS moneda_origen CHAR(3) CHECK (moneda_origen IS NULL OR moneda_origen = 'USD'),
   ADD COLUMN IF NOT EXISTS precio_origen NUMERIC(12,2),
-  ADD COLUMN IF NOT EXISTS tipo_cambio NUMERIC(14,4) CHECK (tipo_cambio IS NULL OR tipo_cambio > 0);
+  ADD COLUMN IF NOT EXISTS tipo_cambio NUMERIC(14,6) CHECK (tipo_cambio IS NULL OR tipo_cambio > 0);
 -- items_cotizacion.moneda_item already exists (082); quotes reuse it and cotizaciones.tipo_cambio.
 ALTER TABLE items_cotizacion
   ADD COLUMN IF NOT EXISTS moneda_origen CHAR(3) CHECK (moneda_origen IS NULL OR moneda_origen = 'USD'),
   ADD COLUMN IF NOT EXISTS precio_origen NUMERIC(12,2),
-  ADD COLUMN IF NOT EXISTS tipo_cambio NUMERIC(14,4) CHECK (tipo_cambio IS NULL OR tipo_cambio > 0);
+  ADD COLUMN IF NOT EXISTS tipo_cambio NUMERIC(14,6) CHECK (tipo_cambio IS NULL OR tipo_cambio > 0);
 
 -- ----------------------------------------------------------------------------
 -- 4. Documents: the rate used at creation, immutable afterwards by convention
 -- ----------------------------------------------------------------------------
 ALTER TABLE ventas
-  ADD COLUMN IF NOT EXISTS tipo_cambio NUMERIC(14,4) CHECK (tipo_cambio IS NULL OR tipo_cambio > 0),
+  ADD COLUMN IF NOT EXISTS tipo_cambio NUMERIC(14,6) CHECK (tipo_cambio IS NULL OR tipo_cambio > 0),
   ADD COLUMN IF NOT EXISTS tipo_cambio_fuente TEXT;
 ALTER TABLE ordenes_servicio
-  ADD COLUMN IF NOT EXISTS tipo_cambio NUMERIC(14,4) CHECK (tipo_cambio IS NULL OR tipo_cambio > 0),
+  ADD COLUMN IF NOT EXISTS tipo_cambio NUMERIC(14,6) CHECK (tipo_cambio IS NULL OR tipo_cambio > 0),
   ADD COLUMN IF NOT EXISTS tipo_cambio_fuente TEXT;
 
 -- ----------------------------------------------------------------------------
@@ -112,7 +113,7 @@ ALTER TABLE ordenes_servicio
 ALTER TABLE pagos_venta
   ADD COLUMN IF NOT EXISTS moneda CHAR(3) CHECK (moneda IS NULL OR moneda = 'USD'),
   ADD COLUMN IF NOT EXISTS monto_moneda NUMERIC(12,2),
-  ADD COLUMN IF NOT EXISTS tipo_cambio NUMERIC(14,4) CHECK (tipo_cambio IS NULL OR tipo_cambio > 0),
+  ADD COLUMN IF NOT EXISTS tipo_cambio NUMERIC(14,6) CHECK (tipo_cambio IS NULL OR tipo_cambio > 0),
   ADD COLUMN IF NOT EXISTS vuelto_monto NUMERIC(12,2),
   ADD COLUMN IF NOT EXISTS vuelto_moneda CHAR(3) CHECK (vuelto_moneda IS NULL OR vuelto_moneda = 'USD');
 
