@@ -51,14 +51,14 @@ function stubFetch() {
 describe("VentaDetail — acciones que la API reserva al ADMIN", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("un vendedor no ve Editar, Devolución, Anular ni Registrar Pago (todas terminaban en 403)", async () => {
+  it("un vendedor no ve Editar, Nota de crédito, Anular ni Registrar Pago (todas terminaban en 403)", async () => {
     rol = "VENDEDOR"
     stubFetch()
     const { VentaDetail } = await import("@/components/ventas/venta-detail")
     render(<VentaDetail ventaId="v1" />)
 
     expect(await screen.findByText(/Pendiente de pago/i)).toBeInTheDocument()
-    for (const nombre of [/^editar$/i, /devolución/i, /^anular$/i, /registrar pago/i]) {
+    for (const nombre of [/^editar$/i, /nota de crédito/i, /^anular$/i, /registrar pago/i]) {
       expect(screen.queryByRole("button", { name: nombre })).not.toBeInTheDocument()
     }
   })
@@ -71,7 +71,7 @@ describe("VentaDetail — acciones que la API reserva al ADMIN", () => {
 
     expect(await screen.findByRole("button", { name: /registrar pago/i })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /^anular$/i })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /devolución/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /nota de crédito/i })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /^editar$/i })).toBeInTheDocument()
   })
 })

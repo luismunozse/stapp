@@ -25,7 +25,7 @@ vi.mock("@/components/pos/pos-checkout-dialog", () => ({ PosCheckoutDialog: () =
 vi.mock("@/components/pos/pos-held-sales", () => ({ PosHeldSales: () => null }))
 vi.mock("@/components/pos/pos-ticket-share", () => ({ PosTicketShare: () => null }))
 vi.mock("@/components/pos/pos-devolucion-search", () => ({ PosDevolucionSearch: () => null }))
-vi.mock("@/components/ventas/devolucion-form", () => ({ DevolucionForm: () => null }))
+vi.mock("@/components/notas-credito/nota-credito-venta-dialog", () => ({ NotaCreditoVentaDialog: () => null }))
 vi.mock("@/components/inventario/barcode-scanner", () => ({ BarcodeScanner: () => null }))
 
 const hijo = (id: string, etiqueta: string, precioVenta: number, stock: number, extra: Record<string, unknown> = {}) => ({
