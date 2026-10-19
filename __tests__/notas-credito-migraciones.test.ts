@@ -9,7 +9,7 @@ import { join } from "path"
 // rollback, y que ninguna abre su propia transacción. Lo último importa:
 // db-run.mjs ejecuta TAL CUAL un archivo con BEGIN en sus primeras 40 líneas,
 // así que `npm run db:dry` sobre una migración con BEGIN/COMMIT la aplicaría.
-const MIGRACIONES = ["350_notas_credito_bases", "356_nc_numeracion_y_vista", "360_pendiente_orden", "367_nc_monto_ventas", "368_nc_anuladas_no_cuentan"]
+const MIGRACIONES = ["350_notas_credito_bases", "356_nc_numeracion_y_vista", "360_pendiente_orden", "367_nc_monto_ventas", "368_nc_anuladas_no_cuentan", "369_nc_anular_venta"]
 
 const leer = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8")
 const existe = (rel: string) => existsSync(join(process.cwd(), rel))
@@ -474,5 +474,67 @@ describe("368: las NC anuladas no cuentan en SQL y el nucleo registra las series
     expect(rollback()).toContain("to_regprocedure('public.anular_devolucion_venta(text,text,text,text,text)') IS NOT NULL")
     expect(rollback()).not.toMatch(/DROP COLUMN/i)
     expect(rollback()).not.toMatch(/DROP CONSTRAINT/i)
+  })
+})
+
+describe("369: anular una NC de venta", () => {
+  const sql = () => leer("supabase/migrations/369_nc_anular_venta.sql")
+  const rollback = () => leer("supabase/migrations/rollback/369_rollback.sql")
+  const FIRMA = "anular_devolucion_venta(TEXT, TEXT, TEXT, TEXT, TEXT)"
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+
+  it("crea una sola funcion nueva, sin OR REPLACE: un segundo apply falla y no cambia nada", () => {
+    expect(sql()).toContain("CREATE FUNCTION public.anular_devolucion_venta(")
+    expect(sql()).not.toMatch(/CREATE OR REPLACE FUNCTION/i)
+  })
+
+  it("solo service_role la ejecuta", () => {
+    expect(sql()).toMatch(new RegExp(`REVOKE EXECUTE ON FUNCTION public\\.${esc(FIRMA)}\\s+FROM PUBLIC, anon, authenticated;`))
+    expect(sql()).toMatch(new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${esc(FIRMA)}\\s+TO service_role;`))
+  })
+
+  it("aborta sin la 368", () => {
+    expect(sql()).toContain("Aplicar la 368 antes de la 369.")
+  })
+
+  it("bloquea la venta antes de mirar la NC y anula de la mas reciente a la primera, por numero", () => {
+    const s = sql()
+    expect(s.indexOf("FOR UPDATE")).toBeLessThan(s.indexOf("IF v_dev.anulada THEN"))
+    // created_at es now(), el inicio de la transaccion: no sigue el orden del lock de la venta.
+    expect(s).toMatch(/WHERE venta_id = p_venta_id AND anulada = false\s+ORDER BY numero_devolucion COLLATE "C" DESC\s+LIMIT 1;/)
+    expect(s).not.toMatch(/ORDER BY created_at DESC/)
+  })
+
+  it("el egreso que grababa la ruta se busca por su concepto exacto, su monto y su fecha, entre los que no tienen enlace", () => {
+    expect(sql()).toContain("AND metodo_pago = 'EFECTIVO' AND concepto = 'Devolución ' || v_dev.numero_devolucion")
+    expect(sql()).toContain("WHERE organization_id = p_org_id AND tipo = 'EGRESO' AND devolucion_id IS NULL")
+    expect(sql()).toContain("AND monto = v_reembolso AND created_at >= v_dev.created_at")
+  })
+
+  it("valida las series antes que el stock, con los locks en el orden de la venta: inventario antes que series", () => {
+    const s = sql()
+    const lockInventario = s.search(/PERFORM 1 FROM inventario\s+WHERE organization_id = p_org_id/)
+    expect(lockInventario).toBeGreaterThan(0)
+    expect(lockInventario).toBeLessThan(s.indexOf("SELECT * INTO v_actual FROM inventario_series"))
+    expect(s.indexOf("ya no está como la dejó la nota de crédito")).toBeLessThan(s.indexOf("No hay stock de"))
+  })
+
+  it("los probes van del 1 al 30 sin huecos y el ultimo cuenta que no falte ninguna fila", () => {
+    const probes = leer("supabase/migrations/verify/369_probes.sql")
+    const numeros = [...probes.matchAll(/INSERT INTO _r (?:SELECT |VALUES \()(\d+)/g)].map((m) => Number(m[1])).sort((a, b) => a - b)
+    expect(numeros).toEqual(Array.from({ length: 30 }, (_, i) => i + 1))
+    expect(probes).toMatch(/INSERT INTO _r SELECT 30, [^;]*FROM _r WHERE orden BETWEEN 1 AND 29;/)
+  })
+
+  it("los CARGO van con referencia a la venta: la anulacion de la venta (334) los neta", () => {
+    expect(sql()).toMatch(
+      /cargar_deuda_cuenta_corriente\(\s*p_org_id, v_venta\.cliente_id, v_dev\.monto_aplicado_deuda, 'VENTA', p_venta_id/
+    )
+    expect(sql()).toMatch(/cargar_deuda_cuenta_corriente\(\s*p_org_id, v_venta\.cliente_id, v_reembolso, 'VENTA', p_venta_id/)
+  })
+
+  it("el rollback solo borra la funcion", () => {
+    expect(rollback()).toContain(`DROP FUNCTION IF EXISTS public.${FIRMA};`)
+    expect(plano(rollback()).match(/\b(DROP|ALTER|CREATE|UPDATE|DELETE|INSERT)\b/g)).toEqual(["DROP"])
   })
 })
