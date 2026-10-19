@@ -331,6 +331,12 @@ describe("page size of each format", () => {
     expect((await render("A6", { ...LEAN, ...ENTREGA })).pages[0]).toEqual([298, 420])
   })
 
+  it("A4 stub: a falla ending in a period does not double it before the assigned technician", async () => {
+    const out = await render("A4", { problemaReportado: "No enciende.", tecnicoNombre: "Ana", observaciones: null })
+    expect(out.text).toContain("No enciende. Técnico asignado: Ana")
+    expect(out.text).not.toContain("..")
+  })
+
   it("soloCliente (the WhatsApp variant) does not apply to a small paper: the page is the paper", async () => {
     const out = await render("A6", { ...MINIMAL, soloCliente: true })
     expect(out.pages).toEqual([[298, 420]])
@@ -1156,6 +1162,25 @@ describe("copy for the shop (second page of the A5 / A6 order)", () => {
         })
         expect(out.pages).toHaveLength(2)
         expect(await out.pageText(1)).toContain("PIN 4471")
+        expectNoClippingNoOverlap(out.runsOf(1), out.pages[1])
+      }, 20000)
+
+      it("a falla ending in a period does not double it before the assigned technician", async () => {
+        const out = await renderShop(key, { ...TYPICAL[key], problemaReportado: "No enciende.", tecnicoNombre: "Ana" })
+        const shop = await out.pageText(1)
+        expect(shop).toContain("No enciende. Técnico asignado: Ana")
+        expect(shop).not.toContain("..")
+      })
+
+      it("long content uses the room page 2 has: well past the old fixed limits, still inside the page", async () => {
+        const out = await renderShop(key, {
+          ...TYPICAL[key],
+          problemaReportado: LOREM.repeat(3),
+          checklistItems: Array.from({ length: 30 }, (_, i) => ({ label: `Componente ${i + 1}`, valor: i % 4 !== 0, categoria: "FUNCIONAL" })),
+        })
+        expect(out.pages).toHaveLength(2)
+        const fallaLines = out.runsOf(1).filter((r) => /Lorem|ipsum|dolor|consequat|…/.test(r.text) && !r.text.startsWith("Componente"))
+        expect(fallaLines.length).toBeGreaterThan(6) // the old limit
         expectNoClippingNoOverlap(out.runsOf(1), out.pages[1])
       }, 20000)
 
