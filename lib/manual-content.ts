@@ -394,14 +394,16 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Emitir una nota de crédito",
-        body: "Se emite siempre desde la operación que corrige.",
+        body: "Se emite siempre desde la operación que corrige. En una venta tenés dos formas: \"Devolver productos\" (marcás qué vuelve y si repone stock; el monto lo calcula el sistema con lo que el cliente pagó) o \"Por monto\" (un cobro de más, una bonificación o un error de precio: cargás el monto y el motivo, y el stock no se toca).",
         steps: [
-          "Desde una venta: abrí la venta y tocá \"Devolución\". Elegí los productos y las cantidades que vuelven y cómo le devolvés la plata",
-          "Desde el POS: tocá \"Devolución\" y buscá la venta",
+          "Desde una venta: abrí la venta y tocá \"Nota de crédito\". Elegí \"Devolver productos\" o \"Por monto\" y el motivo",
+          "Antes de confirmar, mirá el resumen: cuánto se acredita, cuánto baja la deuda de la venta y cuánto se le devuelve al cliente. Si se le devuelve plata, elegí cómo",
+          "Desde el POS: tocá \"Devolución\" y buscá la venta. Al confirmar sale el ticket de la nota de crédito si la impresora térmica está conectada; si no, se abre para imprimirlo desde el navegador",
           "Desde una orden: en el detalle de la orden, abrí el menú de acciones y elegí \"Emitir nota de crédito\" (aparece cuando la orden tiene cobros)",
         ],
+        tip: "Si devolvés en efectivo, la salida queda registrada en la caja de la sucursal de la venta. Sin caja abierta se registra igual, pero no entra en ningún arqueo: el diálogo te avisa antes.",
         roles: ["ADMIN"],
-        seeAlso: ["ventas", "pos", "ordenes"],
+        seeAlso: ["ventas", "pos", "ordenes", "caja"],
       },
       {
         subtitle: "Encontrar una nota de crédito",

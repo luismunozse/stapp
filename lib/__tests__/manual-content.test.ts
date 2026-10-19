@@ -95,6 +95,19 @@ describe('manualSections', () => {
     for (const b of s.content) for (const ref of b.seeAlso ?? []) expect(ids.has(ref), ref).toBe(true)
   })
 
+  it('emitir una nota de crédito explica los dos modos, el reparto, la caja y el ticket del POS', () => {
+    const s = manualSections.find((x) => x.id === 'notas-credito')!
+    const b = s.content.find((x) => x.subtitle === 'Emitir una nota de crédito')!
+    const texto = [b.body, ...(b.steps ?? []), b.tip ?? ''].join(' ')
+    expect(texto).toContain('tocá "Nota de crédito"')
+    expect(texto).toContain('"Por monto"')
+    expect(texto).toMatch(/baja la deuda/i)
+    expect(texto).toMatch(/no entra en ningún arqueo/)
+    expect(texto).toMatch(/ticket de la nota de crédito/)
+    expect(texto).not.toContain('abrí la venta y tocá "Devolución"')
+    expect(b.roles).toEqual(['ADMIN'])
+  })
+
   it('anular una venta ya no se presenta como la forma de hacer una devolución', () => {
     const ventas = manualSections.find((x) => x.id === 'ventas')!
     const anulacion = ventas.content.find((b) => b.subtitle === 'Anulación de ventas')!
