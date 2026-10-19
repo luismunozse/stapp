@@ -68,7 +68,7 @@ const MEDIOS: ReadonlyArray<{ value: string; label: string; requiereCliente?: bo
   { value: "OTRO", label: "Otro" },
 ]
 
-// <select> nativo, como DevolucionForm: el Select de Radix vacía el valor si se
+// <select> nativo, como el formulario anterior: el Select de Radix vacía el valor si se
 // setea con el desplegable cerrado.
 const SELECT_CLASS =
   "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"

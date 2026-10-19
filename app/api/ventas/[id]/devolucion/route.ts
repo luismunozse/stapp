@@ -21,7 +21,7 @@ const itemDevolucionSchema = z.object({
 
 const devolucionSchema = z
   .object({
-    // Sin modo: cliente anterior al PR3 (DevolucionForm), devolución de productos.
+    // Sin modo: cliente anterior al PR3 (el formulario viejo), devolución de productos.
     modo: z.enum(["ITEMS", "MONTO"]).default("ITEMS"),
     // Motivo del catálogo (mig 350). Obligatorio por monto; los clientes anteriores no lo mandan.
     motivoNc: z

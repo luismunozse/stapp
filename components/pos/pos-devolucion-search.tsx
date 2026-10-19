@@ -14,34 +14,13 @@ import {
 } from "@/components/ui/responsive-dialog"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
-
-// Shape that DevolucionForm expects
-export interface VentaForDevolucion {
-  id: string
-  numeroVenta: number
-  total: number
-  clienteId?: string | null
-  saldoPendiente?: number
-  devoluciones?: Array<{
-    montoDevolucion: number
-    items: Array<{ itemVentaId: string; cantidad: number }>
-  }>
-  items: Array<{
-    id: string
-    inventarioId: string | null
-    descripcion: string
-    cantidad: number
-    precioUnitario: number
-    descuento?: number
-    tipoDescuento?: "MONTO" | "PORCENTAJE"
-    porcentajeDescuento?: number
-  }>
-}
+import type { VentaParaNotaCredito } from "@/components/notas-credito/nota-credito-venta-dialog"
 
 // Raw venta shape returned by GET /api/ventas
 interface VentaFromApi {
   id: string
   numeroVenta: number
+  sucursalId?: string | null
   estado: string
   clienteId?: string | null
   clienteNombre?: string | null
@@ -49,6 +28,7 @@ interface VentaFromApi {
   saldoPendiente?: number
   devoluciones?: Array<{
     montoDevolucion: number
+    anulada?: boolean
     items?: Array<{ itemVentaId: string; cantidad: number }>
   }>
   items: Array<{
@@ -68,20 +48,23 @@ interface VentaFromApi {
 interface PosDevolucionSearchProps {
   open: boolean
   onClose: () => void
-  onVentaFound: (venta: VentaForDevolucion) => void
+  onVentaFound: (venta: VentaParaNotaCredito) => void
 }
 
-function mapVenta(v: VentaFromApi): VentaForDevolucion {
+function mapVenta(v: VentaFromApi): VentaParaNotaCredito {
   return {
     id: v.id,
     numeroVenta: v.numeroVenta,
+    // El efectivo de la NC sale de la caja de la sucursal de la venta.
+    sucursalId: v.sucursalId ?? null,
     total: v.total,
-    // Igual que el detalle de la venta: el formulario descuenta lo ya devuelto
-    // y muestra cuánto va al saldo pendiente y cuánto se reembolsa.
+    // Igual que el detalle de la venta: el diálogo descuenta lo ya acreditado
+    // y muestra cuánto baja la deuda y cuánto se devuelve.
     clienteId: v.clienteId ?? null,
-    saldoPendiente: v.saldoPendiente,
+    saldoPendiente: v.saldoPendiente ?? 0,
     devoluciones: (v.devoluciones ?? []).map((d) => ({
       montoDevolucion: d.montoDevolucion,
+      anulada: d.anulada === true,
       items: (d.items ?? []).map((i) => ({ itemVentaId: i.itemVentaId, cantidad: i.cantidad })),
     })),
     items: v.items.map((i) => ({
@@ -199,7 +182,7 @@ export function PosDevolucionSearch({ open, onClose, onVentaFound }: PosDevoluci
             Buscar venta para devolución
           </ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
-            Ingresá el número de venta para procesar una devolución.
+            Ingresá el número de venta para emitir la nota de crédito.
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
 

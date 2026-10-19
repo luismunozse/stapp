@@ -14,8 +14,7 @@ vi.mock("next-auth/react", () => ({
   useSession: () => ({ data: { user: { role: "ADMIN" } } }),
 }))
 // VentaDetail reads useModal() unconditionally; useContext throws without a
-// ModalProvider ancestor, so mock it the same way devolucion-form-preview
-// already does for this component tree.
+// ModalProvider ancestor, so mock it for this component tree.
 vi.mock("@/contexts/modal-context", () => ({
   useModal: () => ({ confirm: vi.fn(), showError: vi.fn(), showSuccess: vi.fn() }),
 }))

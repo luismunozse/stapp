@@ -64,7 +64,7 @@ vi.mock("@/components/pos/pos-checkout-dialog", () => ({
 vi.mock("@/components/pos/pos-held-sales", () => ({ PosHeldSales: () => null }))
 vi.mock("@/components/pos/pos-ticket-share", () => ({ PosTicketShare: () => null }))
 vi.mock("@/components/pos/pos-devolucion-search", () => ({ PosDevolucionSearch: () => null }))
-vi.mock("@/components/ventas/devolucion-form", () => ({ DevolucionForm: () => null }))
+vi.mock("@/components/notas-credito/nota-credito-venta-dialog", () => ({ NotaCreditoVentaDialog: () => null }))
 vi.mock("@/components/inventario/barcode-scanner", () => ({ BarcodeScanner: () => null }))
 
 function stubFetch() {
@@ -127,6 +127,6 @@ describe("PosTerminal — botones del header con aria-label en mobile", () => {
     expect(screen.getByLabelText("Salir")).toBeInTheDocument()
     expect(screen.getByLabelText("Impresora")).toBeInTheDocument()
     expect(screen.getByLabelText("Reimprimir")).toBeInTheDocument()
-    expect(screen.getByLabelText("Devolución")).toBeInTheDocument()
+    expect(screen.getByLabelText("Devolución (nota de crédito)")).toBeInTheDocument()
   })
 })
