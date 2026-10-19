@@ -309,7 +309,7 @@ describe("conAjuste — las líneas del documento suman lo que se acreditó", ()
     descripcion, cantidad, precioUnitario: subtotal / cantidad, subtotal,
   })
 
-  it("por productos después de una NC por monto: el renglón descuenta lo ya acreditado (probe 19 de la 365)", () => {
+  it("por productos después de una NC por monto: el renglón descuenta lo ya acreditado (probe 19 de la 367)", () => {
     expect(conAjuste([linea("Funda", 9, 90)], 40)).toEqual([
       linea("Funda", 9, 90),
       { descripcion: "Ajuste por lo ya acreditado en notas de crédito anteriores", cantidad: 1, precioUnitario: -50, subtotal: -50 },

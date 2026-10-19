@@ -17,7 +17,7 @@ describe("origenPorConcepto — el respaldo de la columna origen (335)", () => {
   // Caracterización: lo que ya clasificaba sigue igual.
   it.each([
     ["egreso de una devolución (ruta anterior al PR3b)", { tipo: "EGRESO", afecta_rentabilidad: false, concepto: "Devolución NC-000001" }, "DEVOLUCION"],
-    ["egreso de una NC (365)", { tipo: "EGRESO", afecta_rentabilidad: false, concepto: "Nota de crédito NC-000002 - Venta V0042" }, "NOTA_CREDITO"],
+    ["egreso de una NC (367)", { tipo: "EGRESO", afecta_rentabilidad: false, concepto: "Nota de crédito NC-000002 - Venta V0042" }, "NOTA_CREDITO"],
     ["costo de mercadería", { tipo: "EGRESO", afecta_rentabilidad: false, concepto: "Costo de mercadería V0042" }, "COGS"],
     ["retiro de socio", { tipo: "EGRESO", afecta_rentabilidad: false, concepto: "Retiro de socio" }, "MANUAL"],
     ["recurrente", { tipo: "EGRESO", afecta_rentabilidad: true, es_recurrente: true, concepto: "Alquiler" }, "RECURRENTE"],
