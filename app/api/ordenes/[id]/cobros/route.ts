@@ -124,10 +124,15 @@ export async function POST(
     if (error) return error
 
     const { id: ordenId } = await params
-    const practica = await rejectIfPractica(ordenId, organizationId!)
-    if (practica) return practica
     const body = await request.json()
     const data = cobrosSchema.parse(body)
+
+    // El descuento baja lo que debe la orden (el RPC lo suma a descuento_cobro) y
+    // no tiene tope: con descuento 999.99 + un pago de 0.01 un VENDEDOR saldaría
+    // una orden de 1000. Es decisión del dueño, igual que anular cobros.
+    if (role !== "ADMIN" && (data.descuento ?? 0) > 0) {
+      return NextResponse.json({ error: "Solo administradores pueden aplicar descuentos" }, { status: 403 })
+    }
 
     // Obtener orden
     const { data: orden, error: ordenError } = await supabaseAdmin
@@ -154,6 +159,11 @@ export async function POST(
         return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
       }
     }
+
+    // DESPUÉS del guard de sucursal: si va antes, un VENDEDOR distingue una
+    // orden de práctica ajena (409) de una inexistente (404) cambiando el id.
+    const practica = await rejectIfPractica(ordenId, organizationId!)
+    if (practica) return practica
 
     // --- Atomic RPC path (migration 242) ---
     const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc(

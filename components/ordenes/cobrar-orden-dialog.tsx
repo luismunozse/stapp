@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,
@@ -49,6 +50,9 @@ export function CobrarOrdenDialog({
   const { offlineFetch } = useOffline()
   const [loading, setLoading] = useState(false)
   const [observaciones, setObservaciones] = useState("")
+  // El descuento es decisión del ADMIN; el servidor lo rechaza para el resto.
+  const { data: session } = useSession()
+  const puedeDescontar = session?.user?.role === "ADMIN"
   const [descuento, setDescuento] = useState("")
   const [saldoCuenta, setSaldoCuenta] = useState(0)
   const [cobrosHistorial, setCobrosHistorial] = useState<any[]>([])
@@ -150,7 +154,7 @@ export function CobrarOrdenDialog({
           costoFinanciero: p.costoFinanciero,
         })),
         observaciones: observaciones || undefined,
-        descuento: descuentoNum > 0 ? descuentoNum : undefined,
+        descuento: puedeDescontar && descuentoNum > 0 ? descuentoNum : undefined,
       }
 
       const res = await offlineFetch(`/api/ordenes/${orden.id}/cobros`, {
@@ -248,7 +252,7 @@ export function CobrarOrdenDialog({
             />
 
             {/* Descuento al cobrar (oculto detrás de un toggle para evitar tipeos accidentales) */}
-            {!mostrarDescuento ? (
+            {!puedeDescontar ? null : !mostrarDescuento ? (
               <Button
                 type="button"
                 variant="ghost"

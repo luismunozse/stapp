@@ -6,7 +6,7 @@
  * the URL, so the branch scope must be enforced server-side). DELETE (anular)
  * stays ADMIN-only.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import {
   mockAuthSuccess,
   createChainMock,
@@ -14,6 +14,8 @@ import {
   parseResponse,
 } from "./helpers"
 import { supabaseAdmin } from "@/lib/supabase"
+import { rejectIfPractica } from "@/lib/onboarding/practica"
+import { NextResponse } from "next/server"
 
 vi.mock("next/cache", () => ({
   revalidateTag: vi.fn(),
@@ -84,8 +86,8 @@ function mockTables(opts: { flag?: boolean | null; unresolvable?: "throw" | "err
 const rpcCobro = () =>
   vi.mocked(supabaseAdmin.rpc).mock.calls.filter(([fn]) => fn === "registrar_cobros_orden_atomica")
 
-async function post() {
-  const res = await POST(createPostRequest(body, "http://localhost/api/ordenes/o1/cobros"), createParams("o1"))
+async function post(payload: unknown = body) {
+  const res = await POST(createPostRequest(payload, "http://localhost/api/ordenes/o1/cobros"), createParams("o1"))
   return parseResponse(res)
 }
 
@@ -175,6 +177,72 @@ describe("POST /api/ordenes/[id]/cobros — alcance por sucursal del VENDEDOR", 
     const { status } = await post()
     expect(status).toBe(404)
     expect(rpcCobro()).toHaveLength(0)
+  })
+})
+
+describe("POST /api/ordenes/[id]/cobros — descuento solo ADMIN", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const conDescuento = { pagos: [{ monto: 0.01, metodo: "EFECTIVO" }], descuento: 999.99 }
+
+  it("VENDEDOR con descuento > 0: 403 y el RPC no se llama", async () => {
+    mockAuthSuccess({ role: "VENDEDOR", sucursalId: "suc-B" })
+    mockTables({ flag: true })
+    const { status, body: b } = await post(conDescuento)
+    expect(status).toBe(403)
+    expect(b.error).toBe("Solo administradores pueden aplicar descuentos")
+    expect(rpcCobro()).toHaveLength(0)
+  })
+
+  it("VENDEDOR con descuento 0 explícito: ok", async () => {
+    mockAuthSuccess({ role: "VENDEDOR", sucursalId: "suc-B" })
+    mockTables({ flag: true })
+    const { status } = await post({ ...body, descuento: 0 })
+    expect(status).toBe(201)
+    expect(rpcCobro()).toHaveLength(1)
+  })
+
+  it("ADMIN con descuento: ok y el descuento llega al RPC", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockTables()
+    const { status } = await post(conDescuento)
+    expect(status).toBe(201)
+    expect(rpcCobro()[0][1]).toMatchObject({ p_descuento: 999.99 })
+  })
+})
+
+describe("POST /api/ordenes/[id]/cobros — orden de práctica y alcance", () => {
+  // vitest.setup stubs rejectIfPractica to null globally; here it answers 409 for
+  // practice orders, as the real helper does, so the ORDER of the checks is what is tested.
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(rejectIfPractica).mockImplementation(
+      async () => NextResponse.json({ error: "orden de práctica" }, { status: 409 })
+    )
+  })
+  afterEach(() => vi.mocked(rejectIfPractica).mockImplementation(async () => null))
+
+  it("VENDEDOR sondeando una práctica de OTRA sucursal: 404, no 409", async () => {
+    mockAuthSuccess({ role: "VENDEDOR", sucursalId: "suc-A" })
+    mockTables({ flag: true, orden: ordenRow({ es_practica: true }) }) // de suc-B
+    const { status } = await post()
+    expect(status).toBe(404)
+    expect(rpcCobro()).toHaveLength(0)
+  })
+
+  it("VENDEDOR sobre una práctica de SU sucursal: 409", async () => {
+    mockAuthSuccess({ role: "VENDEDOR", sucursalId: "suc-B" })
+    mockTables({ flag: true, orden: ordenRow({ es_practica: true }) })
+    const { status } = await post()
+    expect(status).toBe(409)
+    expect(rpcCobro()).toHaveLength(0)
+  })
+
+  it("ADMIN sobre una práctica: 409", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockTables({ orden: ordenRow({ es_practica: true }) })
+    const { status } = await post()
+    expect(status).toBe(409)
   })
 })
 

@@ -109,3 +109,22 @@ describe("ClienteOrdenesPendientes — Cobrar todo gated by usePuedeCobrar", () 
     expect(screen.queryByText(/Cobrar todo/)).not.toBeInTheDocument()
   })
 })
+
+describe("ClienteMobileCard — Cobrar without handler", () => {
+  it("renders no Cobrar action when onCobrar is undefined", async () => {
+    const { ClienteMobileCard } = await import("@/components/clientes/cliente-mobile-card")
+    render(
+      <ClienteMobileCard
+        cliente={REAL as never}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onWhatsApp={vi.fn()}
+        onCuentaCorriente={vi.fn()}
+        deleting={false}
+      />
+    )
+    fireEvent.click(screen.getByTitle("Más acciones"))
+    expect(screen.queryByText("Cobrar órdenes")).not.toBeInTheDocument()
+    expect(screen.getByText("Cuenta corriente")).toBeInTheDocument()
+  })
+})

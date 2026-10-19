@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
 
+const sessionRole = vi.fn(() => "ADMIN")
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({ data: { user: { role: sessionRole() } } }),
+}))
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}` }),
 }))
@@ -24,6 +28,7 @@ const orden = {
 
 describe("CobrarOrdenDialog — descuento al cobrar con coma decimal", () => {
   beforeEach(() => {
+    sessionRole.mockReturnValue("ADMIN")
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }))
   })
 
@@ -39,5 +44,23 @@ describe("CobrarOrdenDialog — descuento al cobrar con coma decimal", () => {
     fireEvent.change(inputs[inputs.length - 1], { target: { value: "100,50" } })
 
     expect(screen.getByText(/Nuevo pendiente/).textContent).toContain("$899.5")
+  })
+})
+
+describe("CobrarOrdenDialog — el descuento es solo del ADMIN", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }))
+  })
+
+  it("el ADMIN ve el botón de descuento", () => {
+    sessionRole.mockReturnValue("ADMIN")
+    render(<CobrarOrdenDialog open onOpenChange={() => {}} orden={orden} onSuccess={() => {}} />)
+    expect(screen.getByText("+ Aplicar descuento")).toBeInTheDocument()
+  })
+
+  it("el VENDEDOR no ve el botón de descuento", () => {
+    sessionRole.mockReturnValue("VENDEDOR")
+    render(<CobrarOrdenDialog open onOpenChange={() => {}} orden={orden} onSuccess={() => {}} />)
+    expect(screen.queryByText("+ Aplicar descuento")).not.toBeInTheDocument()
   })
 })
