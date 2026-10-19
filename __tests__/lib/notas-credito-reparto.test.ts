@@ -30,7 +30,7 @@ describe("round2: igual que ROUND(x, 2) de SQL", () => {
   })
 })
 
-// Mismos casos que supabase/migrations/verify/365_probes.sql (probes 6-19).
+// Mismos casos que supabase/migrations/verify/367_probes.sql (probes 6-19).
 // Si cambia la regla, cambian los dos lados (spec, Riesgos: "tablas de casos
 // compartidas entre el unit TS y el probe SQL").
 describe("repartoNC: primero baja la deuda, el resto se devuelve", () => {

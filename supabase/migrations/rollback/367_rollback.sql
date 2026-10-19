@@ -1,4 +1,4 @@
--- Rollback de la 365.
+-- Rollback de la 367.
 --
 -- ORDEN: primero volver a desplegar el codigo anterior al PR3b, que llama con
 -- 10 parametros y saca el egreso desde la ruta. Con el codigo del 3b en
@@ -11,7 +11,7 @@
 -- de la 356 son inertes: la ruta graba sus egresos sin devolucion_id y el
 -- indice es parcial (devolucion_id IS NOT NULL). Borrarlos perderia que egreso
 -- salio de que NC, que es lo que la anulacion (PR4) necesita para revertir la
--- plata exacta. Si se vuelve a aplicar la 365, su ADD COLUMN y su CREATE INDEX
+-- plata exacta. Si se vuelve a aplicar la 367, su ADD COLUMN y su CREATE INDEX
 -- son IF NOT EXISTS. Tampoco toma locks sobre movimientos_caja.
 
 DROP FUNCTION IF EXISTS public.registrar_devolucion_atomica(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, TEXT, NUMERIC, TEXT, BOOLEAN);

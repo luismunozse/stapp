@@ -9,7 +9,7 @@ import { join } from "path"
 // rollback, y que ninguna abre su propia transacción. Lo último importa:
 // db-run.mjs ejecuta TAL CUAL un archivo con BEGIN en sus primeras 40 líneas,
 // así que `npm run db:dry` sobre una migración con BEGIN/COMMIT la aplicaría.
-const MIGRACIONES = ["350_notas_credito_bases", "356_nc_numeracion_y_vista", "360_pendiente_orden", "365_nc_monto_ventas"]
+const MIGRACIONES = ["350_notas_credito_bases", "356_nc_numeracion_y_vista", "360_pendiente_orden", "367_nc_monto_ventas"]
 
 const leer = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8")
 const existe = (rel: string) => existsSync(join(process.cwd(), rel))
@@ -179,9 +179,9 @@ describe("360: pendiente de la orden con fuente unica", () => {
   })
 })
 
-describe("365: NC por monto y egreso de caja adentro de la RPC", () => {
-  const sql = () => leer("supabase/migrations/365_nc_monto_ventas.sql")
-  const rollback = () => leer("supabase/migrations/rollback/365_rollback.sql")
+describe("367: NC por monto y egreso de caja adentro de la RPC", () => {
+  const sql = () => leer("supabase/migrations/367_nc_monto_ventas.sql")
+  const rollback = () => leer("supabase/migrations/rollback/367_rollback.sql")
   const FIRMA_10 = "TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT"
   const FIRMA_14 = `${FIRMA_10}, TEXT, NUMERIC, TEXT, BOOLEAN`
   const FIRMA_MONTO = "TEXT, TEXT, TEXT, TEXT, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT"
