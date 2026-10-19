@@ -18,9 +18,21 @@ describe("ultimaActiva — la única que se puede anular", () => {
     expect(ultimaActiva(todas)?.id).toBe("b")
   })
 
-  it("con la misma fecha desempata el número, como la base", () => {
-    const t = "2026-10-01T10:00:00+00:00"
-    expect(ultimaActiva([nc("a", "NC-000010", t), nc("b", "NC-000011", t)])?.id).toBe("b")
+  it("gana el número más alto aunque su fecha sea anterior", () => {
+    const todas = [
+      nc("a", "NC-000010", "2026-10-03T10:00:00+00:00"),
+      nc("b", "NC-000011", "2026-10-01T10:00:00+00:00"),
+    ]
+    expect(ultimaActiva(todas)?.id).toBe("b")
+  })
+
+  it("una DEV- nunca es la más reciente", () => {
+    const todas = [
+      nc("a", "NC-000010", "2026-10-01T10:00:00+00:00"),
+      nc("d", "DEV-0099", "2026-10-05T10:00:00+00:00"),
+    ]
+    expect(ultimaActiva(todas)?.id).toBe("a")
+    expect(ultimaActiva([nc("d", "DEV-0099", "2026-10-05T10:00:00+00:00")])).toBeNull()
   })
 
   it("sin activas, ninguna", () => {
@@ -45,6 +57,13 @@ describe("bloqueoAnulacionNC — los mismos motivos y el mismo orden que la base
   it("la venta anulada", () => {
     expect(bloqueoAnulacionNC(nueva, [vieja, nueva], "ANULADA")).toBe(
       "La venta está anulada: sus notas de crédito ya no se pueden anular."
+    )
+  })
+
+  it("con una DEV- más nueva, la hint apunta a una NC-", () => {
+    const dev = nc("d", "DEV-0007", "2026-10-09T10:00:00+00:00")
+    expect(bloqueoAnulacionNC(vieja, [vieja, nueva, dev], "COMPLETADA")).toBe(
+      "Se anulan de la más reciente a la primera: primero anulá la NC-000011."
     )
   })
 

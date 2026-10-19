@@ -14,20 +14,17 @@ export interface NotaCreditoAnulable {
   anulada?: boolean
 }
 
-const momento = (iso: string) => new Date(iso).getTime() || 0
-
-/** La NC activa más reciente: la única que se puede anular (spec, "Anulación": LIFO). */
+/**
+ * La NC activa más reciente: la única que se puede anular (spec, "Anulación": LIFO).
+ * Se ordena solo por número, con comparación de texto (orden de bytes, como
+ * COLLATE "C" en la base): el número crece con cada emisión y no depende de la
+ * fecha. Las DEV- no se anulan, así que nunca cuentan como "la más reciente".
+ */
 export function ultimaActiva<T extends NotaCreditoAnulable>(ncs: readonly T[]): T | null {
   let ultima: T | null = null
   for (const nc of ncs) {
-    if (nc.anulada) continue
-    if (
-      !ultima ||
-      momento(nc.createdAt) > momento(ultima.createdAt) ||
-      (momento(nc.createdAt) === momento(ultima.createdAt) && nc.numeroDevolucion > ultima.numeroDevolucion)
-    ) {
-      ultima = nc
-    }
+    if (nc.anulada || !nc.numeroDevolucion.startsWith("NC-")) continue
+    if (!ultima || nc.numeroDevolucion > ultima.numeroDevolucion) ultima = nc
   }
   return ultima
 }
