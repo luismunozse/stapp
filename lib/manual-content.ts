@@ -406,6 +406,18 @@ export const manualSections: ManualSection[] = [
         seeAlso: ["ventas", "pos", "ordenes", "caja"],
       },
       {
+        subtitle: "Anular una nota de crédito",
+        body: "Si una nota de crédito se emitió por error, el administrador la anula desde el bloque \"Notas de crédito\" de la venta. Anularla deja la venta, el stock, las series, la garantía, la caja y la cuenta corriente como estaban antes de emitirla. La nota de crédito anulada se sigue viendo, con su número, y su PDF sale con el sello ANULADA.",
+        steps: [
+          "Abrí la venta y, en el bloque \"Notas de crédito\", tocá \"Anular\" en la más reciente: se anulan de la última a la primera",
+          "Leé qué se revierte, escribí el motivo y confirmá",
+          "Si se le había devuelto efectivo, la plata vuelve a entrar a la caja de la sucursal; si fue por transferencia o tarjeta, el sistema no la mueve: recuperala por fuera",
+        ],
+        tip: "No se puede anular si la venta está anulada, si es una devolución anterior a las notas de crédito (DEV-) o si lo que volvió al stock ya se vendió: el sistema te dice cuál es el caso.",
+        roles: ["ADMIN"],
+        seeAlso: ["ventas", "caja"],
+      },
+      {
         subtitle: "Encontrar una nota de crédito",
         body: "En Notas de crédito (/notas-credito, menú Finanzas) están todas las del taller, de ventas y de órdenes, incluidas las anuladas y las devoluciones anteriores. Podés buscar por número y filtrar por fecha, origen, tipo, motivo y estado. Cada fila te lleva a su venta u orden. Desde la ficha de un cliente, el botón \"Notas de crédito\" te muestra solo las suyas.",
         roles: ["ADMIN"],
