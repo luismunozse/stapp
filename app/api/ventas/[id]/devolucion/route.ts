@@ -275,25 +275,52 @@ export async function POST(
       return NextResponse.json(formatDevolucion(devolucionCompleta), { status: 200 })
     }
 
-    // Audit log
+    const modo = resultado.modo ?? data.modo
+    const montoAplicadoDeuda = resultado.montoAplicadoDeuda ?? 0
+    const montoReembolso = resultado.montoReembolso ?? resultado.montoDevolucion - montoAplicadoDeuda
+    // Sin reintegro la base no guarda medio (mig 365): el aviso tampoco lo inventa.
+    const metodoReembolso = montoReembolso > 0 ? (data.metodoReembolso ?? null) : null
+
+    // Auditoría: una NC, sea del motor que sea (spec, Plataforma)
     const audit = createAuditLogger(organizationId!, userId!, request)
-    await audit.create("devoluciones_venta", devolucionId, {
-      numero_devolucion: resultado.numero,
+    await audit.create("notas_credito", devolucionId, {
+      origen: "VENTA",
+      numero: resultado.numero,
       venta_id: id,
+      modo,
+      motivo_nc: data.motivoNc ?? null,
       tipo: resultado.tipo,
-      monto_devolucion: resultado.montoDevolucion,
-      monto_aplicado_deuda: resultado.montoAplicadoDeuda ?? 0,
+      monto: resultado.montoDevolucion,
+      monto_aplicado_deuda: montoAplicadoDeuda,
+      monto_reembolso: montoReembolso,
+      metodo_reembolso: metodoReembolso,
       items_count: items.length,
+      egreso_caja_id: resultado.movimientoCajaId ?? null,
     })
 
+    emitWebhookEvent(organizationId!, "nota_credito.creada", {
+      id: devolucionId,
+      numero: resultado.numero,
+      origen: "VENTA",
+      origenId: id,
+      modo,
+      motivoNc: data.motivoNc ?? null,
+      monto: resultado.montoDevolucion,
+      montoAplicadoDeuda,
+      montoReembolso,
+      metodoReembolso,
+    }).catch(() => {})
+
+    // El evento de siempre, para quien ya lo consume (spec: se sigue emitiendo)
     emitWebhookEvent(organizationId!, "venta.devolucion", {
       id: devolucionId,
       ventaId: id,
       numeroDevolucion: resultado.numero,
       tipo: resultado.tipo,
       montoDevolucion: resultado.montoDevolucion,
-      montoAplicadoDeuda: resultado.montoAplicadoDeuda ?? 0,
-      metodoReembolso: data.metodoReembolso ?? null,
+      montoAplicadoDeuda,
+      metodoReembolso,
+      modo,
     }).catch(() => {})
 
     return NextResponse.json(formatDevolucion(devolucionCompleta), { status: 201 })

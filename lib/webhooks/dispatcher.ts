@@ -22,6 +22,9 @@ export const EVENT_TYPES = [
   "venta.anulada",
   "venta.editada",
   "venta.devolucion",
+  // Nota de crédito de cualquier motor (hoy ventas; órdenes desde el PR5). Se
+  // emite además de venta.devolucion, que sigue igual para quien ya lo usa.
+  "nota_credito.creada",
   "orden.estado_cambiado",
   "cotizacion.aceptada",
   // Reservado: el endpoint /test fuerza este evento sin requerir suscripción.
@@ -104,6 +107,24 @@ export interface VentaDevolucionPayload {
   montoDevolucion: number
   /** Parte que descontó saldo pendiente de la venta (no se reembolsó). */
   montoAplicadoDeuda: number
+  metodoReembolso: string | null
+  /** Desde el PR3: ITEMS devuelve productos; MONTO acredita un importe sin productos. */
+  modo: "ITEMS" | "MONTO"
+}
+
+export interface NotaCreditoCreadaPayload {
+  id: string
+  numero: string
+  origen: "VENTA" | "ORDEN"
+  /** id de la venta o de la orden. */
+  origenId: string
+  modo: "ITEMS" | "MONTO"
+  motivoNc: string | null
+  monto: number
+  /** Parte que bajó lo que el cliente debía. */
+  montoAplicadoDeuda: number
+  /** Parte que se le devolvió al cliente. */
+  montoReembolso: number
   metodoReembolso: string | null
 }
 

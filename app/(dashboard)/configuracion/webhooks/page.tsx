@@ -42,6 +42,7 @@ const EVENT_TYPES = [
   { id: "venta.anulada", label: "Venta anulada" },
   { id: "venta.editada", label: "Venta editada" },
   { id: "venta.devolucion", label: "Devolución de venta" },
+  { id: "nota_credito.creada", label: "Nota de crédito emitida" },
   { id: "orden.estado_cambiado", label: "Cambio estado orden" },
   { id: "cotizacion.aceptada", label: "Cotización aceptada" },
 ] as const

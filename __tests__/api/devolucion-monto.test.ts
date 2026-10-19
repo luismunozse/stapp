@@ -15,6 +15,7 @@ vi.mock("@/lib/caja-utils", () => ({
   registrarEgresoCajaEfectivo: vi.fn().mockResolvedValue(undefined),
 }))
 
+import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { registrarEgresoCajaEfectivo } from "@/lib/caja-utils"
 import { POST } from "@/app/api/ventas/[id]/devolucion/route"
 
@@ -140,6 +141,39 @@ describe("POST /api/ventas/[id]/devolucion — nota de crédito por monto", () =
     expect(res.status).toBe(status)
     expect(res.body.error).toBe(mensaje)
     expect(auditCreate).not.toHaveBeenCalled()
+  })
+
+  it("audita como nota de crédito y avisa por los dos webhooks", async () => {
+    setup()
+    await enviar(porMonto())
+
+    expect(auditCreate).toHaveBeenCalledWith("notas_credito", "d1", {
+      origen: "VENTA", numero: "NC-000012", venta_id: "v1", modo: "MONTO", motivo_nc: "AJUSTE_PRECIO",
+      tipo: "PARCIAL", monto: 50, monto_aplicado_deuda: 40, monto_reembolso: 10,
+      metodo_reembolso: "EFECTIVO", items_count: 0, egreso_caja_id: "mov-1",
+    })
+    expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "nota_credito.creada", {
+      id: "d1", numero: "NC-000012", origen: "VENTA", origenId: "v1", modo: "MONTO", motivoNc: "AJUSTE_PRECIO",
+      monto: 50, montoAplicadoDeuda: 40, montoReembolso: 10, metodoReembolso: "EFECTIVO",
+    })
+    // El evento de siempre se sigue emitiendo (spec), ahora con el modo
+    expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "venta.devolucion", expect.objectContaining({
+      id: "d1", ventaId: "v1", numeroDevolucion: "NC-000012", modo: "MONTO", montoDevolucion: 50,
+    }))
+  })
+
+  it("sin reintegro (todo bajó la deuda) no registra medio de reintegro en la auditoría ni en los webhooks", async () => {
+    setup()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: { ...RPC_OK, montoAplicadoDeuda: 50, montoReembolso: 0, movimientoCajaId: null }, error: null,
+    } as any)
+    await enviar(porMonto())
+
+    expect(auditCreate).toHaveBeenCalledWith("notas_credito", "d1", expect.objectContaining({
+      metodo_reembolso: null, monto_reembolso: 0, egreso_caja_id: null,
+    }))
+    expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "nota_credito.creada", expect.objectContaining({ metodoReembolso: null }))
+    expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "venta.devolucion", expect.objectContaining({ metodoReembolso: null }))
   })
 
   it("un reintento (replayed) responde 200 sin auditar de nuevo", async () => {

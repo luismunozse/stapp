@@ -17,6 +17,7 @@ export type AuditEntity =
   | "checklist_templates"
   | "ventas"
   | "devoluciones_venta"
+  | "notas_credito"
   | "movimientos_inventario"
   | "turnos"
   | "recepciones"
@@ -52,6 +53,7 @@ const ENTITY_DISPLAY: Record<string, string> = {
   checklist_templates: "checklist",
   ventas: "venta",
   devoluciones_venta: "devolución",
+  notas_credito: "nota de crédito",
   movimientos_inventario: "movimiento de inventario",
   turnos: "turno",
   recepciones: "recepción",

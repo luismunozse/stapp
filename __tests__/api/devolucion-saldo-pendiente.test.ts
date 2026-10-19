@@ -62,9 +62,9 @@ describe("POST devolución — saldo pendiente, crédito en tienda e idempotenci
 
     expect(status).toBe(201)
     expect(auditCreate).toHaveBeenCalledWith(
-      "devoluciones_venta",
+      "notas_credito",
       "d1",
-      expect.objectContaining({ numero_devolucion: "NC-000007" })
+      expect.objectContaining({ origen: "VENTA", numero: "NC-000007", modo: "ITEMS" })
     )
     expect(emitWebhookEvent).toHaveBeenCalledWith(
       "org-1",

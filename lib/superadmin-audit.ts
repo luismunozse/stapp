@@ -51,6 +51,7 @@ export type SuperadminAuditEntity =
   | "checklist_templates"
   | "ventas"
   | "devoluciones_venta"
+  | "notas_credito"
   | "movimientos_inventario"
 
 interface SuperadminAuditParams {
