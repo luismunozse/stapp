@@ -86,7 +86,7 @@ function isFunctionMissingError(err: unknown): boolean {
   )
 }
 
-// Errores de negocio que levanta la RPC (migs 330, 356 y 365). El texto se
+// Errores de negocio que levanta la RPC (migs 330, 356 y 367). El texto se
 // devuelve tal cual: la base lo escribe para el taller.
 const ERRORES_409 = ["supera lo disponible", "no tiene saldo para acreditar", "clave de reintento"]
 const ERRORES_400 = [
@@ -237,7 +237,7 @@ export async function POST(
     // La columna motivo es NOT NULL: sin detalle, la etiqueta del motivo del catálogo.
     const motivoTexto = data.motivo || (data.motivoNc ? MOTIVO_NC_LABELS[data.motivoNc] : "")
 
-    // RPC atómica (247; saldo pendiente e idempotencia: 330; número: 356; modo y caja: 365)
+    // RPC atómica (247; saldo pendiente e idempotencia: 330; número: 356; modo y caja: 367)
     const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc("registrar_devolucion_atomica", {
       p_org_id: organizationId!,
       p_venta_id: id,

@@ -152,7 +152,7 @@ async function parteDeVenta(fila: FilaVistaNC, lector: LectorNC): Promise<ParteM
  * Las líneas de una NC por productos suman lo que vale cada unidad devuelta;
  * el total es lo que efectivamente se acreditó. No coinciden cuando una NC
  * anterior por monto ya acreditó parte de la venta (el núcleo topea el total
- * con lo que queda: probe 19 de la 365) o por redondeo de centavos. Un renglón
+ * con lo que queda: probe 19 de la 367) o por redondeo de centavos. Un renglón
  * de ajuste hace que el PDF y el ticket sumen el total que muestran.
  */
 export function conAjuste(items: ItemDocumentoNC[], monto: number): ItemDocumentoNC[] {
