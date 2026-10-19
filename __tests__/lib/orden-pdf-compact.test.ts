@@ -106,8 +106,14 @@ const NORMAL = {
 /** An order that fits its sheet at full size. */
 const TYPICAL = { A5: LEAN, A6: MINIMAL } as const
 
+/**
+ * Everything but the shop-copy tests at the bottom pins the CUSTOMER sheet, which is what
+ * `soloCliente` returns on its own (no second page). A4 ignores the flag here: it would crop the page.
+ */
+const customerCopy = (paperSize: "A4" | Compact) => (paperSize === "A4" ? {} : { soloCliente: true })
+
 async function render(paperSize: "A4" | Compact, overrides: Record<string, unknown> = {}) {
-  const buffer = await generateOrdenPDF({ ...fixture(overrides), paperSize } as any)
+  const buffer = await generateOrdenPDF({ ...customerCopy(paperSize), ...fixture(overrides), paperSize } as any)
   const doc = await PDFDocument.load(buffer)
   const runs = await extractPdfTextPositions(buffer)
   const text = (await extractPdfText(buffer)).replace(/\s+/g, " ")
@@ -722,7 +728,7 @@ const HARD_MIN = 5
 /** Renders through the compact generator directly to read what the fit decided. */
 async function renderFit(paper: Compact, overrides: Record<string, unknown> = {}) {
   let report: FitReport | undefined
-  const data = { ...fixture(overrides), paperSize: paper }
+  const data = { ...customerCopy(paper), ...fixture(overrides), paperSize: paper }
   const buffer = await generateOrdenCompactPDF(data as any, paper, { report: (r) => (report = r) })
   const doc = await PDFDocument.load(buffer)
   const runs = await extractPdfTextPositions(buffer)
@@ -1052,5 +1058,117 @@ describe("fonts of the heavy fixtures stay at or above their floors", () => {
         }
       }, 20000)
     }
+  }
+})
+
+// ---------------------------------------------------------------------------------------------
+// The copy for the shop: a second page with what the A4 internal stub prints, the device access
+// code included. The customer takes page 1 home, so the code is only ever on page 2.
+// ---------------------------------------------------------------------------------------------
+
+const SHOP_TITLE = "COPIA PARA EL LOCAL"
+
+/** Renders for the shop (no `soloCliente`). `customerCopy` is overridden on purpose. */
+async function renderShop(paper: Compact, overrides: Record<string, unknown> = {}) {
+  const out = await render(paper, { soloCliente: false, ...overrides })
+  const pageText = async (n: number) => {
+    const single = await PDFDocument.create()
+    const [copied] = await single.copyPages(out.doc, [n])
+    single.addPage(copied)
+    return (await extractPdfText(Buffer.from(await single.save()))).replace(/\s+/g, " ")
+  }
+  const runsOf = (n: number) => out.runs.filter((r) => r.page === n)
+  return { ...out, pageText, runsOf }
+}
+
+describe("copy for the shop (second page of the A5 / A6 order)", () => {
+  for (const key of ["A5", "A6"] as Compact[]) {
+    describe(key, () => {
+      it("a reception order printed for the shop has two pages of the sheet size", async () => {
+        const out = await renderShop(key, { ...TYPICAL[key], codigoAccesoDispositivo: "PIN 4471" })
+        expect(out.pages).toEqual([SIZES[key].page, SIZES[key].page])
+      })
+
+      it("page 2 is titled as the shop copy and carries the order number, the customer, the device and the PIN", async () => {
+        const out = await renderShop(key, { ...TYPICAL[key], codigoAccesoDispositivo: "PIN 4471" })
+        const shop = await out.pageText(1)
+        expect(shop).toContain(SHOP_TITLE)
+        expect(shop).toContain("#1042")
+        expect(shop).toContain("Juan Pérez")
+        expect(shop).toContain("iPhone 13")
+        expect(shop).toContain("358400123456789")
+        expect(shop).toMatch(/c[óo]digo de acceso/i)
+        expect(shop).toContain("PIN 4471")
+      })
+
+      it("the access code is NOT on the customer page", async () => {
+        const out = await renderShop(key, { ...TYPICAL[key], codigoAccesoDispositivo: "PIN 4471" })
+        const customer = await out.pageText(0)
+        expect(customer).not.toContain("4471")
+        expect(customer).not.toMatch(/c[óo]digo de acceso/i)
+        expect(customer).not.toContain(SHOP_TITLE)
+      })
+
+      it("a drawn unlock pattern renders on page 2 without crashing and never as text on page 1", async () => {
+        const out = await renderShop(key, { ...TYPICAL[key], codigoAccesoDispositivo: "Patrón: 1-2-5-8-9" })
+        expect(out.pages).toHaveLength(2)
+        const shop = await out.pageText(1)
+        expect(shop).toMatch(/c[óo]digo de acceso/i)
+        expect(shop).toMatch(/patr[óo]n/i)
+        expect(await out.pageText(0)).not.toMatch(/patr[óo]n/i)
+      })
+
+      it("no access code on the order: page 2 shows a dash, still two pages", async () => {
+        const out = await renderShop(key, { ...TYPICAL[key], codigoAccesoDispositivo: null })
+        expect(out.pages).toHaveLength(2)
+        expect(await out.pageText(1)).toMatch(/c[óo]digo de acceso/i)
+      })
+
+      it("soloCliente (WhatsApp / customer share): one page, no shop copy, no access code anywhere", async () => {
+        const out = await render(key, { ...TYPICAL[key], codigoAccesoDispositivo: "PIN 4471", soloCliente: true })
+        expect(out.pages).toEqual([SIZES[key].page])
+        expect(out.text).not.toContain("4471")
+        expect(out.text).not.toContain(SHOP_TITLE)
+      })
+
+      it("a delivered order (ENTREGA) has no shop copy, like the A4 sheet has no stub", async () => {
+        const out = await renderShop(key, { ...TYPICAL[key], ...ENTREGA, codigoAccesoDispositivo: "PIN 4471" })
+        expect(out.pages).toHaveLength(1)
+        expect(out.text).not.toContain("4471")
+      })
+
+      it("page 1 is the same customer copy with or without the shop page", async () => {
+        const shop = await renderShop(key, { ...TYPICAL[key], codigoAccesoDispositivo: "PIN 4471" })
+        const customer = await render(key, { ...TYPICAL[key], codigoAccesoDispositivo: "PIN 4471" })
+        const strip = (runs: PositionedText[]) => runs.map(({ text, x, y, size, font }) => ({ text, x, y, size, font }))
+        expect(strip(shop.runsOf(0))).toEqual(strip(customer.runs))
+      })
+
+      it("a long falla, notes and checklist still fit page 2: two pages, nothing clipped or overlapping", async () => {
+        const out = await renderShop(key, {
+          ...TYPICAL[key],
+          codigoAccesoDispositivo: "PIN 4471",
+          problemaReportado: LOREM.repeat(6),
+          observaciones: LOREM.repeat(4),
+          tecnicoNombre: "Técnico con un nombre bastante largo para ocupar lugar",
+          checklistItems: Array.from({ length: 40 }, (_, i) => ({ label: `Componente numero ${i + 1}`, valor: i % 3 !== 0, categoria: "FUNCIONAL" })),
+          checklistNotas: LOREM,
+        })
+        expect(out.pages).toHaveLength(2)
+        expect(await out.pageText(1)).toContain("PIN 4471")
+        expectNoClippingNoOverlap(out.runsOf(1), out.pages[1])
+      }, 20000)
+
+      it("absurd names on page 2 are cut instead of leaving the page", async () => {
+        const out = await renderShop(key, {
+          ...TYPICAL[key],
+          cliente: { ...buildOrdenFixture().cliente, nombre: "N".repeat(400) },
+          dispositivo: "D".repeat(400),
+          codigoAccesoDispositivo: "P".repeat(80),
+        })
+        expect(out.pages).toHaveLength(2)
+        expectNoClippingNoOverlap(out.runsOf(1), out.pages[1])
+      }, 20000)
+    })
   }
 })
