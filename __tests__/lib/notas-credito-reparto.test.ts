@@ -1,6 +1,34 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { disponibleParaAcreditar, repartoNC } from "@/lib/notas-credito/reparto"
+import { disponibleParaAcreditar, repartoNC, round2 } from "@/lib/notas-credito/reparto"
+
+// La base redondea con ROUND(x, 2) sobre el decimal: la mitad se aleja del cero.
+// En binario 2.135 es 2.13499999…, así que un Math.round(x * 100) daría 2.13 y
+// el diálogo mostraría un centavo distinto del que guarda la base.
+describe("round2: igual que ROUND(x, 2) de SQL", () => {
+  it.each([
+    [2.135, 2.14],
+    [2.175, 2.18],
+    [4.015, 4.02],
+    [1.005, 1.01],
+    [-2.135, -2.14],
+    [-4.015, -4.02],
+    [66.67, 66.67],
+    [0.1 + 0.2, 0.3],
+    [100, 100],
+  ])("round2(%s) = %s", (n, esperado) => {
+    expect(round2(n)).toBe(esperado)
+  })
+
+  it("no devuelve -0", () => {
+    expect(Object.is(round2(-0.001), 0)).toBe(true)
+  })
+
+  it("un número enorme (sin centavos representables) vuelve igual, no NaN", () => {
+    expect(round2(1e21)).toBe(1e21)
+    expect(round2(-1e21)).toBe(-1e21)
+  })
+})
 
 // Mismos casos que supabase/migrations/verify/365_probes.sql (probes 6-19).
 // Si cambia la regla, cambian los dos lados (spec, Riesgos: "tablas de casos
