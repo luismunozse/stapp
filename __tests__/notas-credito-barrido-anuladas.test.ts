@@ -43,6 +43,7 @@ const FILTRAN = [
 const EXCEPCIONES: Record<string, string> = {
   "app/superadmin/logs/page.tsx": "solo la etiqueta de la entidad de auditoría",
   "lib/audit.ts": "solo el tipo y la etiqueta de la entidad de auditoría",
+  "app/api/ventas/[id]/devolucion/[devolucionId]/anular/route.ts": "anula: relee por id la NC recién anulada para responderla",
   "lib/superadmin-audit.ts": "solo el tipo de la entidad",
   "lib/devolucion-refund.ts": "solo comentarios",
   "lib/ventas/bloqueos.ts":

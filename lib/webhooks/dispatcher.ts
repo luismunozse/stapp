@@ -25,6 +25,9 @@ export const EVENT_TYPES = [
   // Nota de crédito de cualquier motor (hoy ventas; órdenes desde el PR5). Se
   // emite además de venta.devolucion, que sigue igual para quien ya lo usa.
   "nota_credito.creada",
+  // La anulación de una NC (hoy ventas; órdenes desde el PR6): el sistema
+  // externo tiene que deshacer lo que registró con nota_credito.creada.
+  "nota_credito.anulada",
   "orden.estado_cambiado",
   "cotizacion.aceptada",
   // Reservado: el endpoint /test fuerza este evento sin requerir suscripción.
@@ -126,6 +129,21 @@ export interface NotaCreditoCreadaPayload {
   /** Parte que se le devolvió al cliente. */
   montoReembolso: number
   metodoReembolso: string | null
+}
+
+export interface NotaCreditoAnuladaPayload {
+  id: string
+  numero: string
+  origen: "VENTA" | "ORDEN"
+  /** id de la venta o de la orden. */
+  origenId: string
+  /** Por qué se anuló (lo carga el ADMIN). */
+  motivo: string
+  monto: number
+  montoAplicadoDeuda: number
+  montoReembolso: number
+  metodoReembolso: string | null
+  anuladaAt: string
 }
 
 export interface OrdenEstadoCambiadoPayload {

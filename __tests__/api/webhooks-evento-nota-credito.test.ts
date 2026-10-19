@@ -20,4 +20,19 @@ describe("POST /api/webhooks — evento de nota de crédito", () => {
     expect(status).toBe(201)
     expect(body.events).toEqual(["nota_credito.creada"])
   })
+
+  it("un integrador se puede suscribir a nota_credito.anulada", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockSupabaseFrom({
+      webhooks: createChainMock({ id: "w2", name: "Contable", url: "https://contable.example/hook", events: ["nota_credito.anulada"], activo: true, secret: "s" }),
+    })
+    const { status, body } = await parseResponse(
+      await POST(createPostRequest(
+        { name: "Contable", url: "https://contable.example/hook", events: ["nota_credito.anulada"] },
+        "http://localhost/api/webhooks"
+      ))
+    )
+    expect(status).toBe(201)
+    expect(body.events).toEqual(["nota_credito.anulada"])
+  })
 })
