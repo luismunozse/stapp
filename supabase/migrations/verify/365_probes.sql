@@ -44,6 +44,7 @@ VALUES ('cli-probe-365', 'Cliente probe 365', '365-0001', 'org-probe-365');
 -- 7: pagada, un producto (ventana de deploy)
 -- 8: pagada entera, con cliente (reintegro a cuenta corriente)
 -- 9: ANULADA (no admite NC)
+-- 10: pagada, un producto x3 a $50 (por productos sin medio de reintegro)
 INSERT INTO ventas (id, numero_venta, cliente_id, cliente_nombre, vendedor_id, subtotal, total,
                     metodo_pago, estado, organization_id, sucursal_id, monto_abonado, estado_pago)
 SELECT v.id, v.numero, v.cliente, 'Probe 365', 'usr-probe-365', v.total, v.total,
@@ -59,7 +60,8 @@ FROM (VALUES
   ('vta-probe-365-6', 6, 'cli-probe-365', 100.00, 100.00, 'COMPLETADA', 'PAGADO'),
   ('vta-probe-365-7', 7, 'cli-probe-365', 100.00, 100.00, 'COMPLETADA', 'PAGADO'),
   ('vta-probe-365-8', 8, 'cli-probe-365', 100.00, 100.00, 'COMPLETADA', 'PAGADO'),
-  ('vta-probe-365-9', 9, 'cli-probe-365', 100.00, 100.00, 'ANULADA', 'ANULADA')
+  ('vta-probe-365-9', 9, 'cli-probe-365', 100.00, 100.00, 'ANULADA', 'ANULADA'),
+  ('vta-probe-365-10', 10, 'cli-probe-365', 150.00, 150.00, 'COMPLETADA', 'PAGADO')
 ) AS v(id, numero, cliente, total, abonado, estado, estado_pago);
 
 -- Otro taller, para ver que nadie emite sobre una venta ajena (probe 33).
@@ -68,7 +70,8 @@ VALUES ('org-probe-365-x', 'Probe 365 X', 'Probe 365 X', 'probe-365-x-' || subst
 
 INSERT INTO items_venta (id, venta_id, descripcion, cantidad, precio_unitario, subtotal)
 VALUES ('iv-probe-365-6', 'vta-probe-365-6', 'Producto probe 365', 10, 10, 100),
-       ('iv-probe-365-7', 'vta-probe-365-7', 'Producto probe 365', 1, 100, 100);
+       ('iv-probe-365-7', 'vta-probe-365-7', 'Producto probe 365', 1, 100, 100),
+       ('iv-probe-365-10', 'vta-probe-365-10', 'Producto probe 365', 3, 50, 150);
 
 INSERT INTO garantias_venta (id, venta_id, item_venta_id, numero_garantia, dias_validez,
                              fecha_vencimiento, estado, organization_id)
@@ -385,6 +388,25 @@ INSERT INTO _r SELECT 34, 'venta anulada: por monto / por productos',
 INSERT INTO _r SELECT 35, 'clave de reintento ya usada en otra venta',
   'La clave de reintento ya se uso en una nota de credito de otra venta',
   pg_temp.error_de($q$SELECT pg_temp.nc_monto('vta-probe-365-1', 5, 'OTRO', NULL, 'k-365-3')$q$);
+
+-- 36. Por productos desde el dialogo nuevo (manda el motivo del catalogo), con
+-- reintegro y sin medio: se rechaza como en el modo monto. Sin esto quedaba una
+-- NC con plata devuelta, sin medio guardado y sin egreso de caja. Quien no manda
+-- el motivo no cambia (ventana de deploy): la ruta nueva atendiendo al
+-- formulario anterior y la ruta anterior con sus 10 parametros.
+INSERT INTO _r SELECT 36,
+  'por productos con reintegro y sin medio: dialogo nuevo / formulario anterior / ruta anterior',
+  'Falta el medio de reintegro / sin error / sin error',
+  pg_temp.error_de($q$SELECT pg_temp.nc_items('vta-probe-365-10',
+    '[{"itemVentaId":"iv-probe-365-10","cantidad":1,"restaurarStock":false}]', 'DEVOLUCION', NULL, 'k-365-10a')$q$) || ' / ' ||
+  pg_temp.error_de($q$SELECT pg_temp.nc_items('vta-probe-365-10',
+    '[{"itemVentaId":"iv-probe-365-10","cantidad":1,"restaurarStock":false}]', NULL, NULL, 'k-365-10b')$q$) || ' / ' ||
+  pg_temp.error_de($q$SELECT registrar_devolucion_atomica(
+    p_org_id => 'org-probe-365', p_venta_id => 'vta-probe-365-10', p_user_id => 'usr-probe-365',
+    p_numero_devolucion => NULL, p_motivo => 'Probe 365 codigo anterior', p_observaciones => NULL,
+    p_metodo_reembolso => NULL, p_reembolso_referencia => NULL,
+    p_items => '[{"itemVentaId":"iv-probe-365-10","cantidad":1,"restaurarStock":false}]'::jsonb,
+    p_idempotency_key => 'k-365-10c')$q$);
 
 -- ── Integracion ────────────────────────────────────────────────────────────
 -- 27. La vista unificada (listado, PDF, ticket del PR2) muestra la NC por monto.
