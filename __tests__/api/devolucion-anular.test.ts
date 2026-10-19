@@ -87,12 +87,13 @@ describe("POST /api/ventas/[id]/devolucion/[devolucionId]/anular", () => {
       expect.objectContaining({
         anulada: true, numero: "NC-000012", origen: "VENTA", venta_id: "v1", motivo: "Se cargó por error",
         monto: 50, monto_aplicado_deuda: 40, monto_reembolso: 10, metodo_reembolso: "EFECTIVO", ingreso_caja_id: "mov-9",
+        efectivo_sin_egreso: false,
       })
     )
     expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "nota_credito.anulada", {
       id: "d1", numero: "NC-000012", origen: "VENTA", origenId: "v1", motivo: "Se cargó por error",
       monto: 50, montoAplicadoDeuda: 40, montoReembolso: 10, metodoReembolso: "EFECTIVO",
-      anuladaAt: "2026-10-20T15:00:00+00:00",
+      efectivoSinEgreso: false, anuladaAt: "2026-10-20T15:00:00+00:00",
     })
   })
 
@@ -186,6 +187,28 @@ describe("POST /api/ventas/[id]/devolucion/[devolucionId]/anular", () => {
     expect(status).toBe(503)
     expect(console.error).toHaveBeenCalled()
   })
+
+  it("un error al buscar la venta → 500 (no 404) sin llegar a la RPC", async () => {
+    setup()
+    ventas = createChainMock(null, { message: "connection reset by peer", code: "08006" })
+    const { status } = await enviar()
+    expect(status).toBe(500)
+    expect(console.error).toHaveBeenCalled()
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it.each([["40P01", "deadlock detected"], ["55P03", "canceling statement due to lock timeout"]])(
+    "la base se traba (%s) → 409 con el mensaje de venta ocupada",
+    async (code, message) => {
+      setup()
+      rpcFalla(message, code)
+      const { status, body } = await enviar()
+      expect(status).toBe(409)
+      expect(body.error).toBe("La venta está ocupada en otra operación. Reintentá en unos segundos.")
+      expect(auditUpdate).not.toHaveBeenCalled()
+      expect(emitWebhookEvent).not.toHaveBeenCalled()
+    }
+  )
 
   it("un error que no es de negocio → 500 sin auditar", async () => {
     setup()
