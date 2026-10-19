@@ -41,6 +41,7 @@ import { VentaEditForm } from "@/components/ventas/venta-edit-form"
 import { DevolucionForm } from "@/components/ventas/devolucion-form"
 import { PagosHistorial } from "@/components/facturacion/pagos-historial"
 import { VentaPagoForm } from "@/components/ventas/venta-pago-form"
+import { ComprobanteFiscalCard } from "@/components/ventas/comprobante-fiscal-card"
 import type { MetodoPagoVenta } from "@/lib/notifications/types"
 import { descuentoGlobalDeVenta, esCobroEnEfectivo } from "@/lib/ventas/totales"
 
@@ -526,6 +527,15 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Factura electrónica (ARCA): solo ADMIN; el bloque se oculta solo si no aplica */}
+      {isAdmin && (
+        <ComprobanteFiscalCard
+          ventaId={ventaId}
+          estadoVenta={venta.estado}
+          tieneDevoluciones={(venta.devoluciones?.length ?? 0) > 0}
+        />
+      )}
 
       {/* Sección de Pagos */}
       <Card>
