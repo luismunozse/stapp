@@ -29,7 +29,7 @@ const bodyCon = (metodoReembolso: string) => ({
 })
 
 // Desde la mig 367 el egreso de efectivo va adentro de la RPC, en la misma
-// transacción que la NC (probes 8-12 de la 365). La ruta solo lo pide.
+// transacción que la NC (probes 8-12 de la 367). La ruta solo lo pide.
 describe("devolución — el egreso de caja lo hace la RPC", () => {
   beforeEach(() => vi.clearAllMocks())
 
