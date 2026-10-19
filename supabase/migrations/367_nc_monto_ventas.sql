@@ -1,4 +1,4 @@
--- Migration 365: nota de credito por monto en ventas y egreso de caja atomico.
+-- Migration 367: nota de credito por monto en ventas y egreso de caja atomico.
 --
 -- Spec: docs/superpowers/specs/2026-10-07-notas-de-credito-design.md
 -- Plan: docs/superpowers/plans/2026-10-19-notas-credito-pr3-ventas-monto.md (PR3a)
@@ -58,7 +58,7 @@ SET LOCAL lock_timeout = '3s';
 DO $$
 BEGIN
   IF to_regprocedure('public.registrar_devolucion_nucleo(text,text,text,text,text,text,text,text,jsonb,text)') IS NULL THEN
-    RAISE EXCEPTION 'Abort: falta registrar_devolucion_nucleo. Aplicar la 356 antes de la 365.';
+    RAISE EXCEPTION 'Abort: falta registrar_devolucion_nucleo. Aplicar la 356 antes de la 367.';
   END IF;
 END $$;
 
@@ -73,7 +73,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS movimientos_caja_devolucion_tipo_unique
 COMMENT ON COLUMN movimientos_caja.devolucion_id IS
   'NC de venta (devoluciones_venta) que genero este movimiento: el EGRESO del reintegro en efectivo y, '
   'desde el PR4, el INGRESO de su anulacion. Uno por tipo (indice unico). SET NULL: si la NC se borra '
-  'con su venta, el movimiento queda porque la plata se movio igual. Migracion 365.';
+  'con su venta, el movimiento queda porque la plata se movio igual. Migracion 367.';
 
 -- ── 2. Modo MONTO ──────────────────────────────────────────────────────────
 CREATE FUNCTION public.registrar_devolucion_monto(
@@ -206,7 +206,7 @@ $function$;
 COMMENT ON FUNCTION public.registrar_devolucion_monto(TEXT, TEXT, TEXT, TEXT, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) IS
   'Nota de credito por monto sobre una venta (sin productos). Tope, reparto entre deuda y reintegro, '
   'cuenta corriente y estado_pago con las reglas de la 330. Solo la llama registrar_devolucion_atomica, '
-  'con el lock de la venta tomado y el numero ya asignado. Migracion 365.';
+  'con el lock de la venta tomado y el numero ya asignado. Migracion 367.';
 
 REVOKE EXECUTE ON FUNCTION public.registrar_devolucion_monto(TEXT, TEXT, TEXT, TEXT, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT)
   FROM PUBLIC, anon, authenticated;
@@ -333,7 +333,7 @@ BEGIN
   -- Caja: solo el efectivo que sale del cajon, adentro de la transaccion. Se
   -- engancha a la caja abierta de la sucursal de la venta; sin caja abierta
   -- queda sin sesion, como hacia la ruta. Con p_registrar_egreso false (codigo
-  -- anterior a la 365) el egreso lo sigue haciendo la ruta.
+  -- anterior a la 367) el egreso lo sigue haciendo la ruta.
   IF p_registrar_egreso AND v_metodo = 'EFECTIVO' AND v_reembolso > 0 THEN
     SELECT id INTO v_sesion_id
     FROM sesiones_caja
@@ -363,7 +363,7 @@ COMMENT ON FUNCTION public.registrar_devolucion_atomica(TEXT, TEXT, TEXT, TEXT, 
   'adentro de la transaccion, modo ITEMS (registrar_devolucion_nucleo, 330) o MONTO '
   '(registrar_devolucion_monto) y, con p_registrar_egreso, el egreso de caja del reintegro en efectivo '
   'enlazado a la NC. Los 4 ultimos parametros tienen default: el codigo anterior llama con 10 y hace '
-  'lo mismo que con la 356. Migracion 365.';
+  'lo mismo que con la 356. Migracion 367.';
 
 REVOKE EXECUTE ON FUNCTION public.registrar_devolucion_atomica(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, TEXT, NUMERIC, TEXT, BOOLEAN)
   FROM PUBLIC, anon, authenticated;
