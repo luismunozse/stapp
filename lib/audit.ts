@@ -111,6 +111,13 @@ export function generateDescription(
     return `Eliminó ${entityLabel}${name ? ` "${name}"` : ""} #${entityId.slice(-6)}`
   }
 
+  // Anular (anulada false → true) se lee como tal, no como un campo que cambió:
+  // es lo que el ADMIN busca en el log (spec, Plataforma: "acciones emitir y anular").
+  if (action === "UPDATE" && changes?.before?.anulada === false && changes?.after?.anulada === true) {
+    const numero = typeof changes.after.numero === "string" ? ` ${changes.after.numero}` : ""
+    return `Anuló ${entityLabel}${numero} #${entityId.slice(-6)}`
+  }
+
   // UPDATE — mostrar campos que cambiaron
   if (action === "UPDATE" && changes?.before && changes?.after) {
     const changedFields: string[] = []
