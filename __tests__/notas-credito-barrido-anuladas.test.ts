@@ -19,6 +19,15 @@ function fuentes(dir: string): string[] {
     return /\.tsx?$/.test(nombre) && !/\.test\.tsx?$/.test(nombre) ? [ruta] : []
   })
 }
+const sinComentarios = (codigo: string) =>
+  codigo.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"\x27\x60])\/\/.*$/gm, "$1")
+
+// Forma del filtro en el CODIGO (un comentario que diga "anulada" no cuenta).
+const FILTROS_ANULADA = [
+  /\.eq\(\s*["\x27]anulada["\x27]\s*,\s*false\s*\)/, // filtro en la consulta
+  /(devoluciones_venta|items_devolucion)\s*\([^"\x27\x60]*\banulada\b[^"\x27\x60]*\)/, // embed que pide anulada
+  /\banulada\s*!==\s*true\b|!\s*\w+\??\.anulada\b/, // filtro en memoria
+]
 const relativo = (ruta: string) => relative(RAIZ, ruta).split(sep).join("/")
 
 // Filtran: miran `anulada` (en la consulta o en el embed que recorren).
@@ -47,8 +56,8 @@ const EXCEPCIONES: Record<string, string> = {
   "app/api/inventario/all/route.ts": "un producto con NC no se borra, aunque la NC esté anulada",
 }
 
-describe("barrido: las NC anuladas no cuentan en app/ ni en lib/", () => {
-  const lectores = [...fuentes(join(RAIZ, "app")), ...fuentes(join(RAIZ, "lib"))]
+describe("barrido: las NC anuladas no cuentan en app/ ni en lib/, components/ ni hooks/", () => {
+  const lectores = [...fuentes(join(RAIZ, "app")), ...fuentes(join(RAIZ, "lib")), ...fuentes(join(RAIZ, "components")), ...fuentes(join(RAIZ, "hooks"))]
     .filter((ruta) => TABLAS.test(readFileSync(ruta, "utf8")))
     .map(relativo)
     .sort()
@@ -58,8 +67,9 @@ describe("barrido: las NC anuladas no cuentan en app/ ni en lib/", () => {
     expect(sinDecidir, "agregalo a FILTRAN (con su filtro de anulada) o a EXCEPCIONES con el motivo").toEqual([])
   })
 
-  it.each(FILTRAN)("%s mira anulada", (archivo) => {
-    expect(readFileSync(join(RAIZ, archivo), "utf8")).toMatch(/\banulada\b/)
+  it.each(FILTRAN)("%s filtra anulada en el codigo", (archivo) => {
+    const codigo = sinComentarios(readFileSync(join(RAIZ, archivo), "utf8"))
+    expect(FILTROS_ANULADA.some((f) => f.test(codigo)), 'falta .eq("anulada", false), un embed con anulada o un filtro en memoria').toBe(true)
   })
 
   it("las listas no nombran archivos que ya no leen esas tablas", () => {
