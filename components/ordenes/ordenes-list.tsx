@@ -26,6 +26,7 @@ import Link from "next/link"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { OrdenForm } from "./orden-form"
 import { CobrarMultipleDialog } from "./cobrar-multiple-dialog"
+import { usePuedeCobrar } from "@/hooks/use-puede-cobrar"
 import { useModal } from "@/contexts/modal-context"
 import { ExportButton } from "@/components/export/export-button"
 import { OrdenMobileCard } from "./orden-mobile-card"
@@ -116,6 +117,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
   const { data: session } = useSession()
   const isTecnico = session?.user?.role === "TECNICO"
   const isAdmin = session?.user?.role === "ADMIN"
+  const puedeCobrar = usePuedeCobrar()
   const [showForm, setShowForm] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const { confirm, showError } = useModal()
@@ -991,7 +993,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
                     ))}
                   </SelectContent>
                 </Select>
-                {!isTecnico && (
+                {puedeCobrar && (
                   <Button
                     variant="outline"
                     size="sm"

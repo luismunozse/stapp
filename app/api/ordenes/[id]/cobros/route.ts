@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, requireCajaAccess } from "@/lib/auth-utils"
+import { sucursalParaLectura } from "@/lib/sucursal"
 import { supabaseAdmin } from "@/lib/supabase"
 import { todayInTimeZone, addMonthsToDateOnly, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
@@ -116,18 +117,22 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    // ADMIN siempre; VENDEDOR solo si la org prendió `vendedores_manejan_caja`
+    // (fail-closed si el flag no se puede leer). Cobrar mueve plata de caja, y
+    // es el mismo permiso que ya gobierna la operativa de caja.
+    const { error, organizationId, userId, role, session } = await requireCajaAccess()
     if (error) return error
 
-    if (role !== "ADMIN") {
-      return NextResponse.json({ error: "Solo administradores pueden registrar cobros" }, { status: 403 })
-    }
-
     const { id: ordenId } = await params
-    const practica = await rejectIfPractica(ordenId, organizationId!)
-    if (practica) return practica
     const body = await request.json()
     const data = cobrosSchema.parse(body)
+
+    // El descuento baja lo que debe la orden (el RPC lo suma a descuento_cobro) y
+    // no tiene tope: con descuento 999.99 + un pago de 0.01 un VENDEDOR saldaría
+    // una orden de 1000. Es decisión del dueño, igual que anular cobros.
+    if (role !== "ADMIN" && (data.descuento ?? 0) > 0) {
+      return NextResponse.json({ error: "Solo administradores pueden aplicar descuentos" }, { status: 403 })
+    }
 
     // Obtener orden
     const { data: orden, error: ordenError } = await supabaseAdmin
@@ -140,6 +145,25 @@ export async function POST(
     if (ordenError || !orden) {
       return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
     }
+
+    // Alcance por sucursal para los roles atados a una. El id de la orden viaja
+    // en la URL: sin esto, un VENDEDOR cobra en una orden de otra sucursal
+    // escribiendo otro id. 404 y no 403, para no confirmar que existe.
+    // El ADMIN queda fuera del guard: su alcance no cambia con este permiso.
+    if (role !== "ADMIN") {
+      const filtro = await sucursalParaLectura({
+        role,
+        userSucursalId: session!.user.sucursalId ?? null,
+      })
+      if (!orden.sucursal_id || orden.sucursal_id !== filtro.sucursalId) {
+        return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
+      }
+    }
+
+    // DESPUÉS del guard de sucursal: si va antes, un VENDEDOR distingue una
+    // orden de práctica ajena (409) de una inexistente (404) cambiando el id.
+    const practica = await rejectIfPractica(ordenId, organizationId!)
+    if (practica) return practica
 
     // --- Atomic RPC path (migration 242) ---
     const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc(

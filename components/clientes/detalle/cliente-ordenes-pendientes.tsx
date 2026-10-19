@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { DollarSign, CheckCircle2 } from "lucide-react"
 import { CobrarMultipleDialog } from "@/components/ordenes/cobrar-multiple-dialog"
 import { useCurrency } from "@/contexts/currency-context"
+import { usePuedeCobrar } from "@/hooks/use-puede-cobrar"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -29,6 +30,7 @@ interface Props {
 
 export function ClienteOrdenesPendientes({ clienteId, clienteNombre, onCobrado }: Props) {
   const { formatPrice } = useCurrency()
+  const puedeCobrar = usePuedeCobrar()
   const [showCobrar, setShowCobrar] = useState(false)
   const { data, mutate } = useSWR<OrdenPendiente[]>(
     `/api/clientes/${clienteId}/ordenes-pendientes`, fetcher, { revalidateOnFocus: false }
@@ -41,7 +43,7 @@ export function ClienteOrdenesPendientes({ clienteId, clienteNombre, onCobrado }
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base">Órdenes pendientes de cobro</CardTitle>
-        {ordenes.length > 0 && (
+        {ordenes.length > 0 && puedeCobrar && (
           <Button size="sm" onClick={() => setShowCobrar(true)} className="gap-1.5">
             <DollarSign className="h-4 w-4" /> Cobrar todo ({formatPrice(totalPendiente)})
           </Button>

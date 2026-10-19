@@ -109,7 +109,7 @@ describe("POST /api/ordenes/[id]/cobros", () => {
     )
     const { status, body } = await parseResponse(response)
     expect(status).toBe(403)
-    expect(body.error).toContain("administradores")
+    expect(body.error).toBe("Acceso denegado")
   })
 
   it("validates required fields", async () => {

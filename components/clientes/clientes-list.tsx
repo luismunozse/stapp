@@ -17,6 +17,7 @@ import { CobrarMultipleDialog } from "@/components/ordenes/cobrar-multiple-dialo
 import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
 import { ClienteMobileCard } from "./cliente-mobile-card"
+import { usePuedeCobrar } from "@/hooks/use-puede-cobrar"
 import { TipoPrecioBadge } from "./tipo-precio-badge"
 import { PracticaBadge } from "@/components/onboarding/practica-badge"
 import { ClienteWhatsAppDialog } from "./cliente-whatsapp-dialog"
@@ -36,6 +37,7 @@ interface ClientesListProps {
 }
 
 export function ClientesList({ allowImport = true }: ClientesListProps) {
+  const puedeCobrar = usePuedeCobrar()
   const router = useRouter()
   const { confirm, showError } = useModal()
   const { formatDate, formatPrice, pais } = useCurrency()
@@ -344,14 +346,16 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
               </button>
               {!cliente.esPractica && (
                 <>
-                  <button
-                    type="button"
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
-                    onClick={(e) => { e.stopPropagation(); setCobrarCliente(cliente) }}
-                  >
-                    <DollarSign className="h-4 w-4 text-success-600" />
-                    Cobrar órdenes
-                  </button>
+                  {puedeCobrar && (
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                      onClick={(e) => { e.stopPropagation(); setCobrarCliente(cliente) }}
+                    >
+                      <DollarSign className="h-4 w-4 text-success-600" />
+                      Cobrar órdenes
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
@@ -603,7 +607,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                   onDelete={handleDelete}
                   onWhatsApp={(e, c) => { e.stopPropagation(); setWhatsappCliente(c) }}
                   onCuentaCorriente={(e, c) => { e.stopPropagation(); setCuentaCorrienteCliente(c) }}
-                  onCobrar={(e, c) => { e.stopPropagation(); setCobrarCliente(c) }}
+                  onCobrar={puedeCobrar ? (e, c) => { e.stopPropagation(); setCobrarCliente(c) } : undefined}
                   deleting={deleting === cliente.id}
                 />
               ))}
