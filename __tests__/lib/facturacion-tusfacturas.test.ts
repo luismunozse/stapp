@@ -30,6 +30,47 @@ describe("buildPayload", () => {
   })
 })
 
+describe("buildPayload — Factura B manda el neto", () => {
+  // Las líneas del EmitirInput traen el IVA incluido (suman el total cobrado);
+  // TusFacturas recibe el precio SIN IVA y suma el IVA él.
+  const inputB = (items: EmitirInput["items"]): EmitirInput => ({ ...input, items })
+
+  it("despeja el IVA del importe de la línea y del precio unitario", () => {
+    const p = buildPayload(creds, inputB([{ cantidad: 2, descripcion: "Cable", importeUnitario: 605, importe: 1210, alicuotaIva: 21 }]), "B")
+
+    expect(p.comprobante.tipo).toBe("FACTURA B")
+    expect(p.comprobante.detalle[0].importe).toBe("1000.00")
+    expect(p.comprobante.detalle[0].producto.precio_unitario_sin_iva).toBe("500.00")
+  })
+
+  it("redondea a centavos con otra alícuota y cantidad", () => {
+    const p = buildPayload(creds, inputB([{ cantidad: 3, descripcion: "Servicio", importeUnitario: 36.666667, importe: 110, alicuotaIva: 10.5 }]), "B")
+
+    expect(p.comprobante.detalle[0].importe).toBe("99.55") // 110 / 1.105
+    expect(p.comprobante.detalle[0].producto.precio_unitario_sin_iva).toBe("33.18") // 99.55 / 3
+  })
+
+  it("sin importe en la línea usa importeUnitario x cantidad", () => {
+    const p = buildPayload(creds, inputB([{ cantidad: 2, descripcion: "Cable", importeUnitario: 605, alicuotaIva: 21 }]), "B")
+
+    expect(p.comprobante.detalle[0].importe).toBe("1000.00")
+  })
+
+  it("alícuota 0 no divide nada", () => {
+    const p = buildPayload(creds, inputB([{ cantidad: 1, descripcion: "Libro", importeUnitario: 500, importe: 500, alicuotaIva: 0 }]), "B")
+
+    expect(p.comprobante.detalle[0].importe).toBe("500.00")
+    expect(p.comprobante.detalle[0].producto.precio_unitario_sin_iva).toBe("500.00")
+  })
+
+  it("Factura C no toca los importes", () => {
+    const p = buildPayload(creds, inputB([{ cantidad: 2, descripcion: "Cable", importeUnitario: 605, importe: 1210, alicuotaIva: 21 }]), "C")
+
+    expect(p.comprobante.detalle[0].importe).toBe("1210.00")
+    expect(p.comprobante.detalle[0].producto.precio_unitario_sin_iva).toBe("605.00")
+  })
+})
+
 describe("tusFacturasProvider.emitir", () => {
   beforeEach(() => { vi.unstubAllGlobals() })
   it("maps a success response", async () => {

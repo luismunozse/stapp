@@ -21,26 +21,33 @@ function importeLinea(it: any): number {
 
 /**
  * Reparte `totalCentavos` entre las líneas en proporción a su peso, sin perder
- * ni inventar un centavo: el resto cae en la última línea con peso. Así el
- * descuento global, el IVA aditivo y el redondeo de efectivo quedan metidos en
- * las líneas y estas suman exactamente el total de la venta.
+ * ni inventar un centavo (método del mayor resto): cada línea recibe el piso de
+ * su parte y los centavos que sobran van de a uno a las de mayor fracción
+ * (empate: la última). Ninguna línea queda negativa. Así el descuento global,
+ * el IVA aditivo y el redondeo de efectivo quedan metidos en las líneas y estas
+ * suman exactamente el total de la venta.
  */
 function repartir(totalCentavos: number, pesos: number[]): number[] {
-  const sumaPesos = pesos.reduce((a, b) => a + b, 0)
-  const conPeso = pesos.map((p, i) => (p > 0 ? i : -1)).filter((i) => i >= 0)
   if (pesos.length === 0) return []
-  if (sumaPesos <= 0 || conPeso.length === 0) {
+  const sumaPesos = pesos.reduce((a, b) => a + b, 0)
+  if (sumaPesos <= 0) {
     // Nada que prorratear: todo a la última línea.
     return pesos.map((_, i) => (i === pesos.length - 1 ? totalCentavos : 0))
   }
-  const ultima = conPeso[conPeso.length - 1]
-  const reparto = pesos.map((p) => Math.round((totalCentavos * p) / sumaPesos))
-  const resto = totalCentavos - reparto.reduce((a, b) => a + b, 0)
-  reparto[ultima] += resto
+  const partes = pesos.map((p) => (totalCentavos * p) / sumaPesos)
+  const reparto = partes.map(Math.floor)
+  let sobran = totalCentavos - reparto.reduce((a, b) => a + b, 0)
+  const porFraccion = partes
+    .map((parte, i) => ({ i, fraccion: parte - reparto[i], peso: pesos[i] }))
+    .filter((x) => x.peso > 0)
+    .sort((a, b) => b.fraccion - a.fraccion || b.i - a.i)
+  for (let k = 0; sobran > 0; k = (k + 1) % porFraccion.length, sobran--) reparto[porFraccion[k].i] += 1
   return reparto
 }
 
 export function mapVentaToEmitirInput(venta: any, items: any[]): EmitirInput {
+  // iva_tasa NULL (régimen EXENTO sin snapshot) = 21%: el precio final de un
+  // emisor RI incluye IVA, y un emisor realmente exento emite Factura C.
   const alic = venta.iva_tasa == null ? 21 : Number(venta.iva_tasa)
   const total = Number(venta.total) || 0
   const lista = items || []

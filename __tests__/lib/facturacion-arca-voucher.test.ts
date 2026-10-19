@@ -152,6 +152,28 @@ describe("buildVoucher — Factura B (responsable inscripto)", () => {
     expect(voucher.ImpIVA).toBe(210.87)
   })
 
+  it("una alícuota que ARCA no tiene mapeada tira un error claro en vez de mandar 21%", () => {
+    expect(() =>
+      buildVoucher(
+        credsRI,
+        inputB(1150, [{ cantidad: 1, descripcion: "A", importeUnitario: 1150, importe: 1150, alicuotaIva: 15 }]),
+        { cbteFch: "20260829" }
+      )
+    ).toThrow("Alícuota de IVA no soportada por ARCA: 15%")
+  })
+
+  it("lo mismo cuando la alícuota viene en el desglose guardado", () => {
+    expect(() =>
+      buildVoucher(
+        credsRI,
+        inputB(1150, [{ cantidad: 1, descripcion: "A", importeUnitario: 1150, importe: 1150, alicuotaIva: 15 }], {
+          desgloseIva: { neto: 1000, iva: 150, alicuota: 15 },
+        }),
+        { cbteFch: "20260829" }
+      )
+    ).toThrow("Alícuota de IVA no soportada por ARCA: 15%")
+  })
+
   it("alícuota 0 (exento) no suma IVA", () => {
     const voucher = buildVoucher(
       credsRI,

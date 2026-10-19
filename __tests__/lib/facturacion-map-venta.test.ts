@@ -188,6 +188,31 @@ describe("mapVentaToEmitirInput — importes de las líneas", () => {
     expect(input.desgloseIva).toEqual({ neto: 1000, iva: 105, alicuota: 10.5 })
   })
 
+  it("muchas líneas de un centavo con un total chico: ninguna queda negativa y suman exacto", () => {
+    const venta = { id: "t1", total: 0.02, subtotal: 0.04, descuento: 0.02, iva_regimen: null, iva_tasa: null }
+    const items = [1, 2, 3, 4].map((n) => ({ cantidad: 1, descripcion: `L${n}`, precio_unitario: 0.01, descuento: 0 }))
+
+    const input = mapVentaToEmitirInput(venta, items)
+
+    expect(input.items.every((i) => (i.importe ?? -1) >= 0)).toBe(true)
+    expect(sumaLineas(input.items)).toBe(centavos(0.02))
+    expect(input.items.filter((i) => i.importe === 0.01)).toHaveLength(2)
+  })
+
+  it("muchas líneas diminutas junto a una grande: el resto se reparte de a un centavo", () => {
+    const venta = { id: "t2", total: 10.03, subtotal: 10.07, descuento: 0.04, iva_regimen: null, iva_tasa: null }
+    const items = [
+      { cantidad: 1, descripcion: "Grande", precio_unitario: 10, descuento: 0 },
+      ...[1, 2, 3, 4, 5, 6, 7].map((n) => ({ cantidad: 1, descripcion: `m${n}`, precio_unitario: 0.01, descuento: 0 })),
+    ]
+
+    const input = mapVentaToEmitirInput(venta, items)
+
+    expect(input.items.every((i) => (i.importe ?? -1) >= 0)).toBe(true)
+    expect(sumaLineas(input.items)).toBe(centavos(10.03))
+    expect(input.items[0].importe).toBeGreaterThanOrEqual(9.96)
+  })
+
   it("el remanente no cae en una última línea gratuita", () => {
     const venta = { id: "k", total: 100, subtotal: 99.99, descuento: 0, iva_regimen: null, iva_tasa: null }
     const items = [

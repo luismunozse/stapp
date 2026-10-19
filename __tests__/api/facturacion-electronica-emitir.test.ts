@@ -200,6 +200,52 @@ describe("POST /api/facturacion-electronica/emitir", () => {
     expect(tusFacturasProvider.emitir).not.toHaveBeenCalled()
   })
 
+  it.each([0, -50, null])("422 sin crear comprobante cuando la venta es de cero o menos (total %s)", async (total) => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [createChainMock(null)],
+      ventas: [createChainMock({ ...VENTA, total })],
+      items_venta: [createChainMock(ITEMS)],
+      facturacion_credenciales: [createChainMock(CREDENCIALES)],
+    })
+
+    const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+    expect(status).toBe(422)
+    expect(body.error).toBe("No se puede facturar una venta en $0")
+    // Solo la consulta de idempotencia: nunca se llegó al INSERT del pendiente.
+    const tablas = vi.mocked(supabaseAdmin.from).mock.calls.map((c) => c[0])
+    expect(tablas.filter((t) => t === "comprobantes_fiscales")).toHaveLength(1)
+    expect(tusFacturasProvider.emitir).not.toHaveBeenCalled()
+    expect(arcaDirectProvider.emitir).not.toHaveBeenCalled()
+  })
+
+  it("422 + rechazado con el motivo cuando el proveedor ARCA rechaza por alícuota no soportada", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    vi.mocked(arcaDirectProvider.emitir).mockResolvedValue({
+      ok: false,
+      tipo: "B",
+      errores: ["Alícuota de IVA no soportada por ARCA: 15%"],
+      raw: null,
+    } as any)
+    const updateChain = createChainMock({ id: "cmp-1", estado: "rechazado" })
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [createChainMock(null), createChainMock({ id: "cmp-1" }), updateChain],
+      ventas: [createChainMock(VENTA)],
+      items_venta: [createChainMock(ITEMS)],
+      facturacion_credenciales: [createChainMock(CREDENCIALES_ARCA)],
+    })
+
+    const { status } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+    expect(status).toBe(422)
+    expect(updateChain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ estado: "rechazado", error_msg: "Alícuota de IVA no soportada por ARCA: 15%" })
+    )
+  })
+
   it("409 when insert hits a unique violation (23505) — in-flight/duplicate, does not call the provider", async () => {
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
     vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)

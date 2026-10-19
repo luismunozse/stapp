@@ -67,6 +67,16 @@ function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100
 }
 
+/**
+ * Id de `FEParamGetTiposIva` para una alícuota. Una desconocida NO cae en 21%:
+ * mandar el Id equivocado autorizaría un IVA distinto del cobrado.
+ */
+function alicuotaId(alicuota: number): number {
+  const id = ALICUOTA_ID[alicuota]
+  if (id === undefined) throw new Error(`Alícuota de IVA no soportada por ARCA: ${alicuota}%`)
+  return id
+}
+
 function aCentavos(n: number): number {
   return Math.round(n * 100)
 }
@@ -97,7 +107,7 @@ function desglosarIva(input: EmitirInput): DesgloseIva {
     const neto = round2(desgloseIva.neto)
     const impuesto = round2(desgloseIva.iva)
     return {
-      iva: [{ Id: ALICUOTA_ID[desgloseIva.alicuota] ?? ALICUOTA_ID[21], BaseImp: neto, Importe: impuesto }],
+      iva: [{ Id: alicuotaId(desgloseIva.alicuota), BaseImp: neto, Importe: impuesto }],
       neto,
       impuestoIva: impuesto,
     }
@@ -120,7 +130,7 @@ function desglosarIva(input: EmitirInput): DesgloseIva {
     const bruto = centavos / 100
     const neto = round2(bruto / (1 + alicuota / 100))
     return {
-      Id: ALICUOTA_ID[alicuota] ?? ALICUOTA_ID[21],
+      Id: alicuotaId(alicuota),
       BaseImp: neto,
       Importe: round2(bruto - neto),
     }
