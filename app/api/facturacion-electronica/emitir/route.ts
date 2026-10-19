@@ -14,13 +14,8 @@ import {
 import { mensajeSeguroDeError } from "@/lib/facturacion/errores"
 import { mapVentaToEmitirInput } from "@/lib/facturacion/map-venta"
 import { isMissingColumnError } from "@/lib/db-errors"
+import { SAFE_COLUMNS } from "@/lib/facturacion/comprobante-columns"
 import type { DatosFiscales, EmitirInput } from "@/lib/facturacion/types"
-
-// Columnas seguras para devolver un comprobante al cliente. NUNCA incluir
-// provider_response acá: es la respuesta cruda del proveedor y puede traer
-// datos internos que no corresponde exponer.
-const SAFE_COLUMNS =
-  "id, venta_id, tipo, punto_venta, numero, cae, cae_vencimiento, estado, pdf_url, receptor_doc_tipo, receptor_doc_nro, receptor_condicion_iva, total, provider, error_msg, created_at, updated_at"
 
 /** Columnas de la foto fiscal (migración comprobantes_fiscales_datos_qr). */
 function columnasFiscales(fiscal: DatosFiscales, detalle: EmitirInput["items"]) {
