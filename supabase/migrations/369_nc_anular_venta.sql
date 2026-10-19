@@ -29,8 +29,9 @@
 --   caja      el egreso en efectivo vuelve como INGRESO enlazado a la NC (el
 --             indice unico de la 367 admite uno). Una NC sin egreso enlazado
 --             (la ruta lo grababa, antes del PR3b) busca el que grabo la ruta,
---             "Devolución NC-...", y lo enlaza; si no hay ninguno no entra plata
---             y la respuesta lo avisa (efectivoSinEgreso).
+--             "Devolución NC-...", por el mismo monto y posterior a la NC, y lo
+--             enlaza; si no hay ninguno no entra plata y la respuesta lo avisa
+--             (efectivoSinEgreso).
 --
 -- Sin BEGIN/COMMIT. Sin tablas, columnas ni FK nuevas.
 
@@ -126,12 +127,15 @@ BEGIN
     RAISE EXCEPTION 'Las devoluciones anteriores a las notas de crédito (DEV-) no se pueden anular';
   END IF;
 
-  -- LIFO. Dos NC de una venta nunca comparten created_at (cada una es su propia
-  -- transaccion); el numero desempata dentro de una sola (los probes).
+  -- LIFO por numero. El NC- se asigna adentro de la transaccion que emite, con
+  -- la venta bloqueada (367): dentro de una venta sigue el orden de emision.
+  -- created_at no sirve: es now(), el inicio de la transaccion, y una que empezo
+  -- antes pudo esperar el lock y emitir despues. Todos tienen el mismo ancho
+  -- (NC-000123) y las DEV- quedan debajo; COLLATE "C" compara por bytes.
   SELECT id, numero_devolucion INTO v_ultima_id, v_ultima
   FROM devoluciones_venta
   WHERE venta_id = p_venta_id AND anulada = false
-  ORDER BY created_at DESC, numero_devolucion DESC
+  ORDER BY numero_devolucion COLLATE "C" DESC
   LIMIT 1;
   IF v_ultima_id IS DISTINCT FROM v_dev.id THEN
     RAISE EXCEPTION 'Solo se puede anular la nota de crédito más reciente de la venta: primero anulá la %', v_ultima;
@@ -151,7 +155,53 @@ BEGIN
     RAISE EXCEPTION 'La nota de crédito devolvió "%" antes de que el sistema guardara qué números de serie volvían: no se puede anular', v_nombre;
   END IF;
 
-  -- 4. Stock: lo que la NC repuso sale de nuevo, del mismo deposito.
+  -- 4. Locks en el orden de la venta (332) y de la emision (368): primero los
+  --    productos que la NC repuso, despues sus series y su stock por deposito.
+  PERFORM 1 FROM inventario
+  WHERE organization_id = p_org_id
+    AND id IN (SELECT m.inventario_id FROM movimientos_inventario m
+               WHERE m.referencia_id = v_dev.id AND m.tipo = 'DEVOLUCION' AND m.organization_id = p_org_id)
+  ORDER BY id
+  FOR UPDATE;
+
+  -- 5. Series: vuelven al estado que guardo la NC (368). Antes que el stock: una
+  --    serie revendida tambien bajo el stock, y el mensaje tiene que nombrar la
+  --    serie, no la falta de stock.
+  FOR v_linea IN
+    SELECT idv.restaurar_stock, idv.series_devueltas
+    FROM items_devolucion idv
+    WHERE idv.devolucion_id = v_dev.id
+      AND jsonb_array_length(COALESCE(idv.series_devueltas, '[]'::jsonb)) > 0
+  LOOP
+    FOR v_serie IN SELECT * FROM jsonb_array_elements(v_linea.series_devueltas)
+    LOOP
+      SELECT * INTO v_actual FROM inventario_series
+      WHERE id = v_serie->>'id' AND organization_id = p_org_id
+      FOR UPDATE;
+      -- La NC la dejo DISPONIBLE y sin venta (volvio al stock) o DEVUELTO con la
+      -- venta (no volvio). Si ya no esta asi, se vendio, se reservo o se borro.
+      IF NOT FOUND
+         OR (COALESCE(v_linea.restaurar_stock, false)
+             AND NOT (v_actual.estado = 'DISPONIBLE' AND v_actual.venta_id IS NULL))
+         OR (NOT COALESCE(v_linea.restaurar_stock, false)
+             AND NOT (v_actual.estado = 'DEVUELTO' AND v_actual.venta_id IS NOT DISTINCT FROM p_venta_id)) THEN
+        RAISE EXCEPTION 'La serie % ya no está como la dejó la nota de crédito (se volvió a vender, se reservó o se borró): no se puede anular',
+          COALESCE(v_serie->>'numero_serie', v_serie->>'id');
+      END IF;
+
+      UPDATE inventario_series
+      SET estado = v_serie->>'estado',
+          venta_id = p_venta_id,
+          cliente_id = (SELECT c.id FROM clientes c WHERE c.id = v_serie->>'cliente_id'),
+          fecha_venta = (v_serie->>'fecha_venta')::TIMESTAMPTZ,
+          fecha_garantia_vence = (v_serie->>'fecha_garantia_vence')::DATE,
+          updated_at = now()
+      WHERE id = v_actual.id;
+      v_series := v_series + 1;
+    END LOOP;
+  END LOOP;
+
+  -- 6. Stock: lo que la NC repuso sale de nuevo, del mismo deposito.
   FOR v_mov IN
     SELECT m.inventario_id, m.deposito_id, SUM(m.cantidad)::INTEGER AS cantidad
     FROM movimientos_inventario m
@@ -192,42 +242,7 @@ BEGIN
     v_unidades := v_unidades + v_mov.cantidad;
   END LOOP;
 
-  -- 5. Series: vuelven al estado que guardo la NC (368).
-  FOR v_linea IN
-    SELECT idv.restaurar_stock, idv.series_devueltas
-    FROM items_devolucion idv
-    WHERE idv.devolucion_id = v_dev.id
-      AND jsonb_array_length(COALESCE(idv.series_devueltas, '[]'::jsonb)) > 0
-  LOOP
-    FOR v_serie IN SELECT * FROM jsonb_array_elements(v_linea.series_devueltas)
-    LOOP
-      SELECT * INTO v_actual FROM inventario_series
-      WHERE id = v_serie->>'id' AND organization_id = p_org_id
-      FOR UPDATE;
-      -- La NC la dejo DISPONIBLE y sin venta (volvio al stock) o DEVUELTO con la
-      -- venta (no volvio). Si ya no esta asi, se vendio, se reservo o se borro.
-      IF NOT FOUND
-         OR (COALESCE(v_linea.restaurar_stock, false)
-             AND NOT (v_actual.estado = 'DISPONIBLE' AND v_actual.venta_id IS NULL))
-         OR (NOT COALESCE(v_linea.restaurar_stock, false)
-             AND NOT (v_actual.estado = 'DEVUELTO' AND v_actual.venta_id IS NOT DISTINCT FROM p_venta_id)) THEN
-        RAISE EXCEPTION 'La serie % ya no está como la dejó la nota de crédito (se volvió a vender, se reservó o se borró): no se puede anular',
-          COALESCE(v_serie->>'numero_serie', v_serie->>'id');
-      END IF;
-
-      UPDATE inventario_series
-      SET estado = v_serie->>'estado',
-          venta_id = p_venta_id,
-          cliente_id = (SELECT c.id FROM clientes c WHERE c.id = v_serie->>'cliente_id'),
-          fecha_venta = (v_serie->>'fecha_venta')::TIMESTAMPTZ,
-          fecha_garantia_vence = (v_serie->>'fecha_garantia_vence')::DATE,
-          updated_at = now()
-      WHERE id = v_actual.id;
-      v_series := v_series + 1;
-    END LOOP;
-  END LOOP;
-
-  -- 6. Garantia: la linea que la NC dejo devuelta entera vuelve a estar vendida.
+  -- 7. Garantia: la linea que la NC dejo devuelta entera vuelve a estar vendida.
   --    Solo esa NC la pudo pasar a ANULADA (la venta no esta anulada).
   FOR v_linea IN
     SELECT idv.item_venta_id, SUM(idv.cantidad)::INTEGER AS cantidad
@@ -252,7 +267,7 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- 7. Cuenta corriente: un CARGO por cada credito que hizo la NC (330 paso 7 y
+  -- 8. Cuenta corriente: un CARGO por cada credito que hizo la NC (330 paso 7 y
   --    367), con referencia a la venta. Si el cliente ya uso el saldo a favor,
   --    queda debiendo (spec).
   IF v_venta.cliente_id IS NOT NULL AND v_dev.monto_aplicado_deuda > 0 THEN
@@ -272,7 +287,7 @@ BEGIN
     v_cc := v_cc + v_reembolso;
   END IF;
 
-  -- 8. La deuda vuelve: estado_pago sin esta NC. La NC lo toco solo si bajo deuda.
+  -- 9. La deuda vuelve: estado_pago sin esta NC. La NC lo toco solo si bajo deuda.
   IF v_dev.monto_aplicado_deuda > 0 THEN
     SELECT COALESCE(v_venta.monto_abonado, 0) + COALESCE(SUM(monto_aplicado_deuda), 0) INTO v_cobertura
     FROM devoluciones_venta
@@ -286,7 +301,7 @@ BEGIN
     WHERE id = p_venta_id;
   END IF;
 
-  -- 9. Caja: el efectivo que salio vuelve a entrar, enlazado a la NC.
+  -- 10. Caja: el efectivo que salio vuelve a entrar, enlazado a la NC.
   IF v_dev.metodo_reembolso::TEXT = 'EFECTIVO' AND v_reembolso > 0 THEN
     SELECT * INTO v_egreso FROM movimientos_caja
     WHERE devolucion_id = v_dev.id AND tipo = 'EGRESO';
@@ -294,9 +309,13 @@ BEGIN
       -- Sin egreso enlazado: lo grababa la ruta, fuera de la RPC, con este
       -- concepto (antes del PR3b). La regla es "no hay egreso enlazado", no la
       -- fecha de la NC: la 367 pudo estar aplicada con la ruta vieja en produccion.
+      -- La ruta lo grababa por el reintegro exacto y despues de la RPC (otro
+      -- pedido, mas tarde): un egreso manual con el mismo texto, por otro monto o
+      -- anterior a la NC, no es ese.
       SELECT * INTO v_egreso FROM movimientos_caja
       WHERE organization_id = p_org_id AND tipo = 'EGRESO' AND devolucion_id IS NULL
         AND metodo_pago = 'EFECTIVO' AND concepto = 'Devolución ' || v_dev.numero_devolucion
+        AND monto = v_reembolso AND created_at >= v_dev.created_at
       ORDER BY created_at, id
       LIMIT 1
       FOR UPDATE;
@@ -328,7 +347,7 @@ BEGIN
     END IF;
   END IF;
 
-  -- 10. La NC queda anulada: visible, con su numero, sin efecto.
+  -- 11. La NC queda anulada: visible, con su numero, sin efecto.
   UPDATE devoluciones_venta
   SET anulada = true, anulada_at = now(), anulada_por = p_user_id, anulada_motivo = v_motivo, updated_at = now()
   WHERE id = v_dev.id;

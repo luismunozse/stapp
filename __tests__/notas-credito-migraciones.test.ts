@@ -497,15 +497,33 @@ describe("369: anular una NC de venta", () => {
     expect(sql()).toContain("Aplicar la 368 antes de la 369.")
   })
 
-  it("bloquea la venta antes de mirar la NC y anula de la mas reciente a la primera", () => {
+  it("bloquea la venta antes de mirar la NC y anula de la mas reciente a la primera, por numero", () => {
     const s = sql()
     expect(s.indexOf("FOR UPDATE")).toBeLessThan(s.indexOf("IF v_dev.anulada THEN"))
-    expect(s).toMatch(/ORDER BY created_at DESC, numero_devolucion DESC/)
+    // created_at es now(), el inicio de la transaccion: no sigue el orden del lock de la venta.
+    expect(s).toMatch(/WHERE venta_id = p_venta_id AND anulada = false\s+ORDER BY numero_devolucion COLLATE "C" DESC\s+LIMIT 1;/)
+    expect(s).not.toMatch(/ORDER BY created_at DESC/)
   })
 
-  it("el egreso que grababa la ruta se busca por su concepto exacto, entre los que no tienen enlace", () => {
+  it("el egreso que grababa la ruta se busca por su concepto exacto, su monto y su fecha, entre los que no tienen enlace", () => {
     expect(sql()).toContain("AND metodo_pago = 'EFECTIVO' AND concepto = 'Devolución ' || v_dev.numero_devolucion")
     expect(sql()).toContain("WHERE organization_id = p_org_id AND tipo = 'EGRESO' AND devolucion_id IS NULL")
+    expect(sql()).toContain("AND monto = v_reembolso AND created_at >= v_dev.created_at")
+  })
+
+  it("valida las series antes que el stock, con los locks en el orden de la venta: inventario antes que series", () => {
+    const s = sql()
+    const lockInventario = s.search(/PERFORM 1 FROM inventario\s+WHERE organization_id = p_org_id/)
+    expect(lockInventario).toBeGreaterThan(0)
+    expect(lockInventario).toBeLessThan(s.indexOf("SELECT * INTO v_actual FROM inventario_series"))
+    expect(s.indexOf("ya no está como la dejó la nota de crédito")).toBeLessThan(s.indexOf("No hay stock de"))
+  })
+
+  it("los probes van del 1 al 30 sin huecos y el ultimo cuenta que no falte ninguna fila", () => {
+    const probes = leer("supabase/migrations/verify/369_probes.sql")
+    const numeros = [...probes.matchAll(/INSERT INTO _r (?:SELECT |VALUES \()(\d+)/g)].map((m) => Number(m[1])).sort((a, b) => a - b)
+    expect(numeros).toEqual(Array.from({ length: 30 }, (_, i) => i + 1))
+    expect(probes).toMatch(/INSERT INTO _r SELECT 30, [^;]*FROM _r WHERE orden BETWEEN 1 AND 29;/)
   })
 
   it("los CARGO van con referencia a la venta: la anulacion de la venta (334) los neta", () => {

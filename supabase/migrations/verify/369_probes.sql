@@ -7,6 +7,7 @@
 -- El invariante del spec: emitir una NC y despues anularla deja stock por
 -- deposito, series, garantias, caja, cuenta corriente, pendiente, estado_pago y
 -- comision exactamente como estaban (probes 2 y 10: foto antes = foto despues).
+-- Salen 30 filas, todas OK: el probe 30 cuenta que no falte ninguna de las demas.
 --
 -- Fixture propia (org-probe-369, y org-probe-369-x como taller ajeno). La
 -- sucursal y el deposito principales los crea el alta de la org (217/221); se
@@ -292,9 +293,13 @@ INSERT INTO _r SELECT 12, 'B2: el cliente ya uso $20 del saldo a favor: queda de
 
 -- ── LIFO ───────────────────────────────────────────────────────────────────
 -- 13 y 14. Venta C: dos NC por monto. La primera no se anula mientras la segunda
--- este activa; en orden inverso, las dos.
+-- este activa; en orden inverso, las dos. La segunda es la mas reciente aunque
+-- su transaccion haya empezado antes: created_at es now(), el inicio de la
+-- transaccion; el numero se asigna con la venta bloqueada.
 INSERT INTO _nc SELECT 'c1', pg_temp.nc_monto('vta-probe-369-c', 10, 'TRANSFERENCIA', 'k-369-c1');
 INSERT INTO _nc SELECT 'c2', pg_temp.nc_monto('vta-probe-369-c', 10, 'TRANSFERENCIA', 'k-369-c2');
+UPDATE devoluciones_venta SET created_at = created_at - interval '1 minute'
+WHERE id = (SELECT res->>'id' FROM _nc WHERE clave = 'c2');
 INSERT INTO _r SELECT 13, 'LIFO: anular la primera con la segunda activa',
   'Solo se puede anular la nota de crédito más reciente de la venta: primero anulá la ' ||
     (SELECT res->>'numero' FROM _nc WHERE clave = 'c2'),
@@ -317,11 +322,15 @@ INSERT INTO _r SELECT 15, 'sin stock para volver a descontar: mensaje / la NC si
      LIKE 'No hay stock de "Producto probe 369 D" en % para volver a descontar lo que devolvió la nota de crédito: hay 0, hacen falta 1')::TEXT
   || ' / ' || (SELECT anulada::TEXT FROM devoluciones_venta WHERE id = (SELECT res->>'id' FROM _nc WHERE clave = 'd'));
 
--- 16. Venta E: la serie que la NC devolvio al stock se volvio a vender.
+-- 16. Venta E: la serie que la NC devolvio al stock se volvio a vender. Era la
+-- unica unidad que quedaba en Norte: revenderla deja Norte en 0. El mensaje
+-- nombra la serie, no la falta de stock.
 INSERT INTO _nc SELECT 'e', pg_temp.nc_items('vta-probe-369-e',
   '[{"itemVentaId":"iv-probe-369-e","cantidad":1,"restaurarStock":true}]', 'TRANSFERENCIA', 'k-369-e');
 UPDATE inventario_series SET estado = 'VENDIDO', venta_id = 'vta-probe-369-f', fecha_venta = now()
 WHERE id = 'ser-probe-369-e1';
+UPDATE inventario_depositos SET stock = 0
+WHERE inventario_id = 'inv-probe-369-s' AND deposito_id = 'dep-probe-369-n';
 INSERT INTO _r SELECT 16, 'serie revendida: mensaje / la NC sigue activa / el stock no se toco', 'true / false / true',
   (pg_temp.error_de($q$SELECT pg_temp.anular('vta-probe-369-e', 'e')$q$)
      LIKE 'La serie IMEI-369-E1 ya no está como la dejó la nota de crédito%')::TEXT || ' / ' ||
@@ -390,13 +399,23 @@ INSERT INTO _r SELECT 23, 'el ingreso no va a la caja de otra sucursal: sesion /
   WHERE m.devolucion_id = (SELECT res->>'id' FROM _nc WHERE clave = 'i') AND m.tipo = 'INGRESO';
 
 -- 24. Venta J: nunca se grabo el egreso (la ruta lo hacia best-effort). Un
--- ingreso dejaria un sobrante en la caja: no entra plata y se avisa.
+-- ingreso dejaria un sobrante en la caja: no entra plata y se avisa. Dos
+-- egresos manuales con el mismo concepto no son el de la ruta y no se toman:
+-- uno por otro monto y otro anterior a la NC.
 INSERT INTO _nc SELECT 'j', pg_temp.nc_monto('vta-probe-369-j', 25, 'EFECTIVO', 'k-369-j', false);
+INSERT INTO movimientos_caja (organization_id, tipo, monto, metodo_pago, concepto, usuario_id,
+                              afecta_rentabilidad, sucursal_id, origen, created_at)
+SELECT 'org-probe-369', 'EGRESO', e.monto, 'EFECTIVO', 'Devolución ' || (SELECT res->>'numero' FROM _nc WHERE clave = 'j'),
+       'usr-probe-369', false, (SELECT id FROM sucursales WHERE organization_id = 'org-probe-369' AND principal),
+       'MANUAL', e.creado
+FROM (VALUES (99.00, now()), (25.00, now() - interval '1 day')) AS e(monto, creado);
 INSERT INTO _nc SELECT 'j-anulada', pg_temp.anular('vta-probe-369-j', 'j');
-INSERT INTO _r SELECT 24, 'sin egreso: anulada / ingresos / aviso', 'true / 0 / true',
+INSERT INTO _r SELECT 24, 'sin egreso: anulada / ingresos / aviso / egresos manuales parecidos sin tomar', 'true / 0 / true / 2',
   (SELECT anulada::TEXT FROM devoluciones_venta WHERE id = (SELECT res->>'id' FROM _nc WHERE clave = 'j')) || ' / ' ||
   (SELECT COUNT(*)::TEXT FROM movimientos_caja WHERE devolucion_id = (SELECT res->>'id' FROM _nc WHERE clave = 'j')) || ' / ' ||
-  (SELECT res->>'efectivoSinEgreso' FROM _nc WHERE clave = 'j-anulada');
+  (SELECT res->>'efectivoSinEgreso' FROM _nc WHERE clave = 'j-anulada') || ' / ' ||
+  (SELECT COUNT(*)::TEXT FROM movimientos_caja
+    WHERE concepto = 'Devolución ' || (SELECT res->>'numero' FROM _nc WHERE clave = 'j') AND devolucion_id IS NULL);
 
 -- ── La NC siguiente ve lo mismo que la app ─────────────────────────────────
 -- 25. Venta N (fiada, dos fundas): devolver las dos baja toda la deuda; se anula.
@@ -470,6 +489,11 @@ INSERT INTO _r SELECT 27, 'la cascada se llevo NC, movimientos de caja y de stoc
   (SELECT COUNT(*)::TEXT FROM movimientos_caja WHERE organization_id = 'org-probe-369') || ' / ' ||
   (SELECT COUNT(*)::TEXT FROM movimientos_inventario WHERE organization_id = 'org-probe-369') || ' / ' ||
   (SELECT COUNT(*)::TEXT FROM cuenta_corriente WHERE organization_id = 'org-probe-369');
+
+-- 30. Ningun probe se quedo sin fila (los que leen un movimiento que no esta no
+-- insertan nada) ni inserto dos.
+INSERT INTO _r SELECT 30, 'filas de los probes 1 a 29: total / distintas', '29 / 29',
+  COUNT(*)::TEXT || ' / ' || COUNT(DISTINCT orden)::TEXT FROM _r WHERE orden BETWEEN 1 AND 29;
 
 SELECT orden, probe, esperado, obtenido,
        CASE WHEN obtenido LIKE 'SALTEADO%' THEN 'SALTEADO'
