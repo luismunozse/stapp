@@ -121,6 +121,8 @@ const CODE_CHARS = 24
 const HARD_MIN_FONT = 5
 /** Upper bound of the paragraph-length search of the guarantee. */
 const MAX_LINES_BOUND = 400
+/** Most lines the falla may take on the shop copy before the fit shrinks it (the page decides the real limit). */
+const MAX_SHOP_LINES = 40
 /** Printed under the terms when they were cut. */
 const TERMS_CUT_NOTE = "Términos completos: pedíselos al taller."
 
@@ -1212,7 +1214,8 @@ export async function generateOrdenCompactPDF(
       ...items.map((it) => `${safe(it.label)}: ${it.valor === true ? "OK" : it.valor === false ? "NO" : safe(it.valor)}`),
       ...(notasChecklist ? [notasChecklist] : []),
     ].join(" · ")
-    const notasMostrador = [problema, tecnico ? `Técnico asignado: ${tecnico}` : ""].filter(Boolean).join(". ")
+    // a falla already ending in "." must not get a second one before the technician
+    const notasMostrador = [problema.replace(/[.\s]+$/, ""), tecnico ? `Técnico asignado: ${tecnico}` : ""].filter(Boolean).join(". ")
     const presupuestoText = fmtMoney(Number(data.presupuesto) || 0)
     const senaText = data.sena ? fmtMoney(Number(data.sena)) : "—"
     const lh = (size: number) => size * LINE
@@ -1288,13 +1291,11 @@ export async function generateOrdenCompactPDF(
       return y - M.margin
     }
 
-    const attempts = [
-      { falla: 6, chequeo: 4 },
-      { falla: 4, chequeo: 3 },
-      { falla: 3, chequeo: 2 },
-      { falla: 2, chequeo: 1 },
-      { falla: 1, chequeo: 1 },
-    ]
+    // Start generous and shrink only when the content does not fit: the falla gets twice the
+    // lines of the checklist. The smallest attempt (1 and 1) is the guarantee.
+    const attempts = []
+    for (let falla = MAX_SHOP_LINES; falla > 1; falla = Math.floor(falla * 0.8)) attempts.push({ falla, chequeo: Math.max(1, Math.ceil(falla / 2)) })
+    attempts.push({ falla: 1, chequeo: 1 })
     const caps = attempts.find((c) => drawAll(DRY, c) >= -0.01) ?? attempts[attempts.length - 1]
     drawAll(page2, caps)
   }

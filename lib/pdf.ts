@@ -1935,7 +1935,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const isPatternCode = !!codigoAccesoDispositivo && isPatternLockCode(codigoAccesoDispositivo)
   const row2H = Math.max(58, 12 + chequeoLines.length * 10 + rxCellPadY * 2)
 
-  const notasMostrador = [problemaReportado, tecnicoNombre ? `Técnico asignado: ${tecnicoNombre}` : ""].filter(Boolean).join(". ")
+  const notasMostrador = [problemaReportado.replace(/[.\s]+$/, ""), tecnicoNombre ? `Técnico asignado: ${tecnicoNombre}` : ""].filter(Boolean).join(". ")
   const notasLines: RxCellLine[] = rxWrap(notasMostrador, archivoRegular, 7.5, rxContentW * 0.5 - rxCellPadX * 2)
     .slice(0, 3)
     .map(l => ({ text: l, font: archivoRegular, size: 7.5, color: MONO.ink }))

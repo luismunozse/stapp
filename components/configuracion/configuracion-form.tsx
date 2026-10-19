@@ -1306,7 +1306,7 @@ export function ConfiguracionForm({
                   ))}
                 </select>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  A6 es un cuarto de una hoja A4. Con A5 y A6 la orden sale en una sola columna y con letra más grande. Igual podés elegir otro tamaño cada vez que imprimís.
+                  A6 es un cuarto de una hoja A4. Con A5 y A6 la orden sale en una sola columna y con letra más grande, y la orden de ingreso suma una segunda página, la copia para el local, con el código de acceso del equipo. Igual podés elegir otro tamaño cada vez que imprimís.
                 </p>
               </div>
               <div>
