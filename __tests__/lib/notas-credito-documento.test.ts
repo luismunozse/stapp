@@ -3,7 +3,7 @@ import { cookies } from "next/headers"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createChainMock } from "../api/helpers"
 import { etiquetaReintegro } from "@/lib/notas-credito/catalogo"
-import { cargarDocumentoNC, type LectorNC } from "@/lib/notas-credito/documento"
+import { cargarDocumentoNC, conAjuste, type LectorNC } from "@/lib/notas-credito/documento"
 
 type Chain = ReturnType<typeof createChainMock>
 
@@ -183,6 +183,36 @@ describe("cargarDocumentoNC — venta", () => {
     expect((await cargarDocumentoNC("nc-v", admin))?.pendienteActual).toBeNull()
   })
 
+  it("el saldo pendiente no descuenta lo que bajó una NC anulada", async () => {
+    const chains = setup({
+      vista: vistaVenta,
+      ventas: { ...venta, devoluciones_venta: [{ monto_aplicado_deuda: "500.00", anulada: true }] },
+      devoluciones_venta: devolucion,
+    })
+    const doc = await cargarDocumentoNC("nc-v", admin)
+    expect(doc!.pendienteActual).toBe(2000) // 3000 − 1000 cobrado; la NC anulada ya no descuenta
+    expect(chains.ventas.select).toHaveBeenCalledWith(
+      expect.stringContaining("devoluciones_venta (monto_aplicado_deuda, anulada)")
+    )
+  })
+
+  it("una NC por productos topeada por una NC anterior suma su total con un renglón de ajuste", async () => {
+    // Líneas por $1500 y una NC de $1000: una NC por monto ya había acreditado parte de la venta.
+    setup({
+      vista: { ...vistaVenta, monto: "1000.00", monto_aplicado_deuda: "0.00", monto_reembolso: "1000.00" },
+      ventas: venta,
+      devoluciones_venta: devolucion,
+    })
+    const doc = await cargarDocumentoNC("nc-v", admin)
+    expect(doc!.items.reduce((s, i) => s + i.subtotal, 0)).toBe(1000)
+    expect(doc!.items.at(-1)).toEqual({
+      descripcion: "Ajuste por lo ya acreditado en notas de crédito anteriores",
+      cantidad: 1,
+      precioUnitario: -500,
+      subtotal: -500,
+    })
+  })
+
   it("una NC anulada trae cuándo y por qué", async () => {
     setup({
       vista: { ...vistaVenta, anulada: true },
@@ -271,5 +301,34 @@ describe("cargarDocumentoNC — orden", () => {
       vista: vistaOrden, ordenes_servicio: { ...orden, total_cobrado: "12000.00" }, notas_credito: ncOrden, clientes: { nombre: "Juan" },
     })
     expect((await cargarDocumentoNC("nc-o", admin))?.pendienteActual).toBe(0)
+  })
+})
+
+describe("conAjuste — las líneas del documento suman lo que se acreditó", () => {
+  const linea = (descripcion: string, cantidad: number, subtotal: number) => ({
+    descripcion, cantidad, precioUnitario: subtotal / cantidad, subtotal,
+  })
+
+  it("por productos después de una NC por monto: el renglón descuenta lo ya acreditado (probe 19 de la 367)", () => {
+    expect(conAjuste([linea("Funda", 9, 90)], 40)).toEqual([
+      linea("Funda", 9, 90),
+      { descripcion: "Ajuste por lo ya acreditado en notas de crédito anteriores", cantidad: 1, precioUnitario: -50, subtotal: -50 },
+    ])
+  })
+
+  it("centavos de redondeo: un renglón de redondeo", () => {
+    const items = [linea("A", 1, 33.33), linea("B", 1, 33.33), linea("C", 1, 33.33)]
+    expect(conAjuste(items, 100).at(-1)).toEqual({
+      descripcion: "Ajuste por redondeo", cantidad: 1, precioUnitario: 0.01, subtotal: 0.01,
+    })
+  })
+
+  it("si las líneas ya suman el total, no agrega nada", () => {
+    const items = [linea("Funda", 2, 100)]
+    expect(conAjuste(items, 100)).toEqual(items)
+  })
+
+  it("una NC por monto (sin líneas) sigue sin líneas", () => {
+    expect(conAjuste([], 50)).toEqual([])
   })
 })

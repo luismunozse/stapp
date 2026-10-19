@@ -50,6 +50,40 @@ describe("GET /api/reportes/ventas-analytics — día de la organización y devo
     expect(body.ventasMes.total).toBe(1100)
   })
 
+  it("una NC anulada no descuenta: ni del total vendido ni de las unidades", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    const itemsChain = createChainMock([
+      {
+        id: "i1", descripcion: "Funda", cantidad: 3, subtotal: 300, precio_unitario: 100, inventario_id: "inv1",
+        venta_id: "v1", costo_unitario_snapshot: 50,
+        items_devolucion: [
+          { cantidad: 1, devoluciones_venta: { anulada: false } },
+          { cantidad: 1, devoluciones_venta: { anulada: true } },
+        ],
+        ventas: { organization_id: "org-1", estado: "COMPLETADA", created_at: "2026-10-03T01:30:00Z" },
+      },
+    ])
+    mockSupabaseFrom({
+      organizations: createChainMock({ zona_horaria: "America/Argentina/Buenos_Aires", vendedores_ven_ingresos: true }),
+      ventas: createChainMock([
+        {
+          id: "v1", total: 1000, estado: "COMPLETADA", metodo_pago: "EFECTIVO", created_at: "2026-10-03T01:30:00Z",
+          descuento: 0, devoluciones_venta: [{ monto_devolucion: 400 }, { monto_devolucion: 300, anulada: true }],
+        },
+      ]),
+      items_venta: itemsChain,
+      users: createChainMock([]),
+    })
+
+    const { body } = await parseResponse(await GET())
+
+    expect(body.ventasHoy.total).toBe(600) // 1000 − 400; la de 300 está anulada
+    expect(body.topProductos[0]).toMatchObject({ descripcion: "Funda", cantidad: 2 })
+    expect(itemsChain.select).toHaveBeenCalledWith(
+      expect.stringContaining("items_devolucion(cantidad, devoluciones_venta(anulada))")
+    )
+  })
+
   it("un vendedor de una org que oculta los ingresos recibe 403, como en los demás reportes", async () => {
     mockAuthSuccess({ role: "VENDEDOR" })
     setup({ vendedores_ven_ingresos: false })

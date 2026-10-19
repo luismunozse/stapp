@@ -341,12 +341,16 @@ export function formatInventario(item: any, includeCost = false) {
   }
 }
 
-/** Saldo que el cliente todavía debe de una venta (fila cruda de ventas). */
+/**
+ * Saldo que el cliente todavía debe de una venta (fila cruda de ventas). Lo
+ * que bajó una NC anulada se vuelve a deber: se ignora, igual que en el núcleo
+ * de la devolución (mig 366). Si los dos no coinciden, la RPC rechaza la NC
+ * siguiente con "Falta el medio de reintegro" (367).
+ */
 export function saldoPendienteVenta(venta: any): number {
-  const aplicado = toArray(venta?.devoluciones_venta).reduce(
-    (s: number, d: any) => s + (parseFloat(d?.monto_aplicado_deuda ?? "0") || 0),
-    0
-  )
+  const aplicado = toArray(venta?.devoluciones_venta)
+    .filter((d: any) => d?.anulada !== true)
+    .reduce((s: number, d: any) => s + (parseFloat(d?.monto_aplicado_deuda ?? "0") || 0), 0)
   const saldo = (parseFloat(venta?.total) || 0) - (parseFloat(venta?.monto_abonado || "0") || 0) - aplicado
   return Math.max(Math.round(saldo * 100) / 100, 0)
 }

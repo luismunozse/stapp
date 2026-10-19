@@ -59,7 +59,7 @@ export async function GET(request: Request) {
         id, total, iva_neto, created_at, estado,
         porcentaje_comision, vendedor_id, comision_pagada,
         items_venta (cantidad, precio_unitario, costo_unitario_snapshot),
-        devoluciones_venta (monto_devolucion)
+        devoluciones_venta (monto_devolucion, anulada)
       `)
       .eq("organization_id", organizationId!)
       .eq("estado", "COMPLETADA")
@@ -95,10 +95,10 @@ export async function GET(request: Request) {
         const pct = parseFloat(v.porcentaje_comision || "0")
         if (pct > 0) {
           const neto = v.iva_neto != null ? parseFloat(v.iva_neto) : total
-          const devuelto = ((v.devoluciones_venta || []) as any[]).reduce(
-            (s, d) => s + parseFloat(d.monto_devolucion || "0"),
-            0
-          )
+          const devuelto = ((v.devoluciones_venta || []) as any[])
+            // Una NC anulada no devolvió nada (PR4).
+            .filter((d) => d.anulada !== true)
+            .reduce((s, d) => s + parseFloat(d.monto_devolucion || "0"), 0)
           const base = v.comision_pagada || total <= 0 || devuelto === 0
             ? neto
             : Math.max(neto * (1 - devuelto / total), 0)
@@ -353,6 +353,9 @@ export async function GET(request: Request) {
         items_devolucion (cantidad, restaurar_stock, items_venta (costo_unitario_snapshot))
       `)
       .eq("organization_id", organizationId!)
+      // Una NC anulada no resta ingresos ni costo (PR4). El reporte de su mes
+      // cambia al anularla: la anulación es retroactiva.
+      .eq("anulada", false)
       .eq("ventas.estado", "COMPLETADA")
       .gte("created_at", desdeISO)
       .lte("created_at", hastaISO)

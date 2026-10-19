@@ -102,7 +102,8 @@ async function parteDeVenta(fila: FilaVistaNC, lector: LectorNC): Promise<ParteM
 
   let qVenta = supabaseAdmin
     .from("ventas")
-    .select("id, cliente_nombre, cliente_telefono, total, monto_abonado, estado, devoluciones_venta (monto_aplicado_deuda)")
+    // anulada: saldoPendienteVenta ignora lo que bajaron las NC anuladas (PR4).
+    .select("id, cliente_nombre, cliente_telefono, total, monto_abonado, estado, devoluciones_venta (monto_aplicado_deuda, anulada)")
     .eq("id", fila.origen_id)
     .eq("organization_id", lector.organizationId)
   if (soloVeSusVentas(lector.role)) qVenta = qVenta.eq("vendedor_id", lector.userId)
@@ -122,26 +123,48 @@ async function parteDeVenta(fila: FilaVistaNC, lector: LectorNC): Promise<ParteM
   if (devError) throw devError
   if (!dev) return null
 
+  const items = ((dev.items_devolucion ?? []) as unknown as Array<{
+    cantidad: number
+    precio_unitario: string | number
+    subtotal: string | number
+    items_venta: { descripcion: string | null } | null
+  }>).map((i) => ({
+    descripcion: i.items_venta?.descripcion || "Producto",
+    cantidad: Number(i.cantidad) || 0,
+    precioUnitario: dinero(i.precio_unitario),
+    subtotal: dinero(i.subtotal),
+  }))
+
   return {
     observaciones: dev.observaciones ?? null,
-    items: ((dev.items_devolucion ?? []) as unknown as Array<{
-      cantidad: number
-      precio_unitario: string | number
-      subtotal: string | number
-      items_venta: { descripcion: string | null } | null
-    }>).map((i) => ({
-      descripcion: i.items_venta?.descripcion || "Producto",
-      cantidad: Number(i.cantidad) || 0,
-      precioUnitario: dinero(i.precio_unitario),
-      subtotal: dinero(i.subtotal),
-    })),
+    // Las líneas valen lo que valía cada unidad; el total es lo que se acreditó.
+    items: conAjuste(items, dinero(fila.monto)),
     // saldoPendienteVenta es la fuente única del saldo de una venta (resta lo
-    // que ya descontaron sus NC). Una venta anulada no tiene saldo que mostrar.
+    // que ya descontaron sus NC activas). Una venta anulada no tiene saldo que mostrar.
     pendienteActual: venta.estado === "ANULADA" ? null : saldoPendienteVenta(venta),
     anuladaAt: dev.anulada_at ?? null,
     anuladaMotivo: dev.anulada_motivo ?? null,
     contacto: { nombre: venta.cliente_nombre ?? null, telefono: venta.cliente_telefono ?? null },
   }
+}
+
+/**
+ * Las líneas de una NC por productos suman lo que vale cada unidad devuelta;
+ * el total es lo que efectivamente se acreditó. No coinciden cuando una NC
+ * anterior por monto ya acreditó parte de la venta (el núcleo topea el total
+ * con lo que queda: probe 19 de la 367) o por redondeo de centavos. Un renglón
+ * de ajuste hace que el PDF y el ticket sumen el total que muestran.
+ */
+export function conAjuste(items: ItemDocumentoNC[], monto: number): ItemDocumentoNC[] {
+  if (items.length === 0) return items
+  const suma = items.reduce((s, i) => s + i.subtotal, 0)
+  const diferencia = Math.round((monto - suma) * 100) / 100
+  if (diferencia === 0) return items
+  const descripcion =
+    Math.abs(diferencia) <= 0.01 * items.length
+      ? "Ajuste por redondeo"
+      : "Ajuste por lo ya acreditado en notas de crédito anteriores"
+  return [...items, { descripcion, cantidad: 1, precioUnitario: diferencia, subtotal: diferencia }]
 }
 
 async function parteDeOrden(fila: FilaVistaNC, lector: LectorNC): Promise<ParteMotor | null> {

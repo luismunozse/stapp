@@ -21,18 +21,19 @@ function sumarDias(fecha: string, dias: number): string {
   return new Date(Date.UTC(y, m - 1, d + dias)).toISOString().split("T")[0]
 }
 
-/** Lo que quedó vendido de cada venta: total menos lo devuelto. */
+/** Lo que quedó vendido de cada venta: total menos lo devuelto por NC activas. */
 function totalNeto(v: any): number {
-  const devuelto = ((v.devoluciones_venta || []) as any[]).reduce(
-    (s, d) => s + (Number(d.monto_devolucion) || 0),
-    0
-  )
+  const devuelto = ((v.devoluciones_venta || []) as any[])
+    .filter((d) => d.anulada !== true)
+    .reduce((s, d) => s + (Number(d.monto_devolucion) || 0), 0)
   return Math.max((Number(v.total) || 0) - devuelto, 0)
 }
 
-/** Unidades de un item que no se devolvieron. */
+/** Unidades de un item que no se devolvieron (las NC anuladas no devolvieron nada). */
 function cantidadNeta(item: any): number {
-  const devueltas = ((item.items_devolucion || []) as any[]).reduce((s, d) => s + (d.cantidad || 0), 0)
+  const devueltas = ((item.items_devolucion || []) as any[])
+    .filter((d) => d.devoluciones_venta?.anulada !== true)
+    .reduce((s, d) => s + (d.cantidad || 0), 0)
   return Math.max((item.cantidad || 0) - devueltas, 0)
 }
 
@@ -66,7 +67,7 @@ export async function GET() {
     const ventasMesQuery = () => {
       let q = supabaseAdmin
         .from("ventas")
-        .select("id, total, descuento, tipo_descuento, porcentaje_descuento, estado, metodo_pago, vendedor_id, created_at, monto_abonado, estado_pago, devoluciones_venta(monto_devolucion)")
+        .select("id, total, descuento, tipo_descuento, porcentaje_descuento, estado, metodo_pago, vendedor_id, created_at, monto_abonado, estado_pago, devoluciones_venta(monto_devolucion, anulada)")
         .eq("organization_id", organizationId!)
         .gte("created_at", inicioMes)
         .order("id")
@@ -77,7 +78,7 @@ export async function GET() {
     const ventasDiaQuery = () => {
       let q = supabaseAdmin
         .from("ventas")
-        .select("id, total, estado, created_at, devoluciones_venta(monto_devolucion)")
+        .select("id, total, estado, created_at, devoluciones_venta(monto_devolucion, anulada)")
         .eq("organization_id", organizationId!)
         .eq("estado", "COMPLETADA")
         .gte("created_at", hace30Dias)
@@ -90,7 +91,7 @@ export async function GET() {
     const itemsVentaMesQuery = () => {
       let q = supabaseAdmin
         .from("items_venta")
-        .select("id, descripcion, cantidad, subtotal, inventario_id, precio_unitario, venta_id, items_devolucion(cantidad), ventas!inner(organization_id, estado, created_at, vendedor_id, sucursal_id)")
+        .select("id, descripcion, cantidad, subtotal, inventario_id, precio_unitario, venta_id, items_devolucion(cantidad, devoluciones_venta(anulada)), ventas!inner(organization_id, estado, created_at, vendedor_id, sucursal_id)")
         .eq("ventas.organization_id", organizationId!)
         .eq("ventas.estado", "COMPLETADA")
         .gte("ventas.created_at", inicioMes)
@@ -104,7 +105,7 @@ export async function GET() {
     const margenQuery = () => {
       let q = supabaseAdmin
         .from("items_venta")
-        .select("id, cantidad, precio_unitario, subtotal, inventario_id, costo_unitario_snapshot, items_devolucion(cantidad), inventario!inner(precio_compra), ventas!inner(organization_id, estado, created_at, sucursal_id)")
+        .select("id, cantidad, precio_unitario, subtotal, inventario_id, costo_unitario_snapshot, items_devolucion(cantidad, devoluciones_venta(anulada)), inventario!inner(precio_compra), ventas!inner(organization_id, estado, created_at, sucursal_id)")
         .eq("ventas.organization_id", organizationId!)
         .eq("ventas.estado", "COMPLETADA")
         .gte("ventas.created_at", inicioMes)
