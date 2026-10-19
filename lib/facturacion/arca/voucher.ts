@@ -64,7 +64,11 @@ function soloDigitos(valor: string | undefined): number {
 }
 
 function round2(n: number): number {
-  return Math.round(n * 100) / 100
+  return Math.round((n + Number.EPSILON) * 100) / 100
+}
+
+function aCentavos(n: number): number {
+  return Math.round(n * 100)
 }
 
 interface DesgloseIva {
@@ -74,23 +78,53 @@ interface DesgloseIva {
 }
 
 /**
- * Agrupa las líneas POR ALICUOTA, no por ítem: `FECAESolicitar` espera un
- * array de `AlicIva` con una entrada por alícuota distinta, y AFIP rechaza
- * el comprobante si la misma se repite.
+ * Factura B: las líneas ya traen el IVA adentro y suman `input.total` (lo que
+ * pagó el cliente), así que el IVA se DESPEJA del total en vez de sumarse
+ * encima. Antes se trataban como netas y la factura salía un 21% por encima de
+ * lo cobrado, sin descuentos ni redondeo.
+ *
+ * Agrupa POR ALICUOTA, no por ítem: `FECAESolicitar` espera un array de
+ * `AlicIva` con una entrada por alícuota distinta, y AFIP rechaza el
+ * comprobante si la misma se repite. Si las líneas no cierran con el total, la
+ * diferencia se absorbe en el grupo más grande: el total manda.
  */
 function desglosarIva(input: EmitirInput): DesgloseIva {
-  const basePorAlicuota = new Map<number, number>()
+  const totalCentavos = aCentavos(input.total)
+  const { desgloseIva } = input
 
-  for (const item of input.items) {
-    const base = item.importeUnitario * item.cantidad
-    basePorAlicuota.set(item.alicuotaIva, (basePorAlicuota.get(item.alicuotaIva) ?? 0) + base)
+  // Neto e IVA que la venta ya guardó: se respetan si cierran al centavo.
+  if (desgloseIva && aCentavos(desgloseIva.neto + desgloseIva.iva) === totalCentavos) {
+    const neto = round2(desgloseIva.neto)
+    const impuesto = round2(desgloseIva.iva)
+    return {
+      iva: [{ Id: ALICUOTA_ID[desgloseIva.alicuota] ?? ALICUOTA_ID[21], BaseImp: neto, Importe: impuesto }],
+      neto,
+      impuestoIva: impuesto,
+    }
   }
 
-  const iva = [...basePorAlicuota].map(([alicuota, base]) => ({
-    Id: ALICUOTA_ID[alicuota] ?? ALICUOTA_ID[21],
-    BaseImp: round2(base),
-    Importe: round2((base * alicuota) / 100),
-  }))
+  const brutoPorAlicuota = new Map<number, number>()
+  for (const item of input.items) {
+    const bruto = aCentavos(item.importe ?? item.importeUnitario * item.cantidad)
+    brutoPorAlicuota.set(item.alicuotaIva, (brutoPorAlicuota.get(item.alicuotaIva) ?? 0) + bruto)
+  }
+  if (brutoPorAlicuota.size === 0) brutoPorAlicuota.set(21, 0)
+
+  const diferencia = totalCentavos - [...brutoPorAlicuota.values()].reduce((a, b) => a + b, 0)
+  if (diferencia !== 0) {
+    const [mayor] = [...brutoPorAlicuota].sort((x, y) => y[1] - x[1])[0]
+    brutoPorAlicuota.set(mayor, (brutoPorAlicuota.get(mayor) ?? 0) + diferencia)
+  }
+
+  const iva = [...brutoPorAlicuota].map(([alicuota, centavos]) => {
+    const bruto = centavos / 100
+    const neto = round2(bruto / (1 + alicuota / 100))
+    return {
+      Id: ALICUOTA_ID[alicuota] ?? ALICUOTA_ID[21],
+      BaseImp: neto,
+      Importe: round2(bruto - neto),
+    }
+  })
 
   return {
     iva,
@@ -128,10 +162,10 @@ export function buildVoucher(
     DocTipo: DOC_TIPO[normalizar(input.receptor.documentoTipo)] ?? 99,
     DocNro: soloDigitos(input.receptor.documentoNro),
     CbteFch: options.cbteFch,
-    // AFIP valida ImpTotal = ImpNeto + ImpIVA + ImpTrib + ImpOpEx + ImpTotConc
-    // y rechaza el comprobante si no cierra, así que el total se recalcula
-    // desde las partes en vez de copiar `input.total`.
-    ImpTotal: round2(neto + impuestoIva),
+    // AFIP valida ImpTotal = ImpNeto + ImpIVA + ImpTrib + ImpOpEx + ImpTotConc.
+    // El desglose se arma para cerrar exacto con `input.total` (lo cobrado), que
+    // es el que se informa: nunca se recalcula por encima.
+    ImpTotal: round2(input.total),
     ImpTotConc: 0,
     ImpNeto: neto,
     ImpOpEx: 0,
