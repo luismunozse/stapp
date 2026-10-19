@@ -9,7 +9,7 @@ import { join } from "path"
 // rollback, y que ninguna abre su propia transacción. Lo último importa:
 // db-run.mjs ejecuta TAL CUAL un archivo con BEGIN en sus primeras 40 líneas,
 // así que `npm run db:dry` sobre una migración con BEGIN/COMMIT la aplicaría.
-const MIGRACIONES = ["350_notas_credito_bases", "356_nc_numeracion_y_vista", "360_pendiente_orden", "367_nc_monto_ventas", "366_nc_anuladas_no_cuentan"]
+const MIGRACIONES = ["350_notas_credito_bases", "356_nc_numeracion_y_vista", "360_pendiente_orden", "367_nc_monto_ventas", "368_nc_anuladas_no_cuentan"]
 
 const leer = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8")
 const existe = (rel: string) => existsSync(join(process.cwd(), rel))
@@ -234,10 +234,10 @@ describe("367: NC por monto y egreso de caja adentro de la RPC", () => {
   })
 })
 
-// ── Copias textuales (366) ─────────────────────────────────────────────────
-// La 366 redefine cinco objetos copiando su ultima version con una lista
+// ── Copias textuales (368) ─────────────────────────────────────────────────
+// La 368 redefine cinco objetos copiando su ultima version con una lista
 // contada de cambios, y su rollback los copia tal cual. Se compara sin
-// comentarios ni espacios: los comentarios "-- 366: ..." son libres. Lo que se
+// comentarios ni espacios: los comentarios "-- 368: ..." son libres. Lo que se
 // revisa en el PR son estas listas, no las copias.
 const plano = (s: string) => s.replace(/--[^\n]*/g, "").replace(/\s+/g, " ").trim()
 
@@ -409,9 +409,9 @@ const CAMBIOS_DRIFT: Cambios = [
   ["WHERE dv.estado::text = 'COMPLETADA'", "WHERE dv.estado::text = 'COMPLETADA' AND dv.anulada = false"],
 ]
 
-describe("366: las NC anuladas no cuentan en SQL y el nucleo registra las series", () => {
-  const sql = () => leer("supabase/migrations/366_nc_anuladas_no_cuentan.sql")
-  const rollback = () => leer("supabase/migrations/rollback/366_rollback.sql")
+describe("368: las NC anuladas no cuentan en SQL y el nucleo registra las series", () => {
+  const sql = () => leer("supabase/migrations/368_nc_anuladas_no_cuentan.sql")
+  const rollback = () => leer("supabase/migrations/rollback/368_rollback.sql")
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 
   it("el nucleo es la 330 con sus cambios contados: nombre, cinco filtros y las series del paso 6", () => {
@@ -462,7 +462,7 @@ describe("366: las NC anuladas no cuentan en SQL y el nucleo registra las series
     expect(r).toContain(conCambios(DRIFT_245(), [INVOKER_DRIFT]))
   })
 
-  it("el rollback no corre con NC anuladas ni con la 367, y no deshace la columna ni la FK", () => {
+  it("el rollback no corre con NC anuladas ni con la 369, y no deshace la columna ni la FK", () => {
     expect(rollback()).toContain("IF EXISTS (SELECT 1 FROM devoluciones_venta WHERE anulada) THEN")
     expect(rollback()).toContain("to_regprocedure('public.anular_devolucion_venta(text,text,text,text,text)') IS NOT NULL")
     expect(rollback()).not.toMatch(/DROP COLUMN/i)

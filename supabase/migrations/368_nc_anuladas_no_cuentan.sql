@@ -1,39 +1,76 @@
--- Rollback de la 366.
+-- Migration 368: las notas de credito anuladas dejan de contar, y cada NC
+-- guarda que numeros de serie devolvio.
 --
--- Solo mientras ninguna NC de venta este anulada: las versiones de abajo
--- vuelven a sumar TODAS las NC, y con una anulada mentirian (pendiente, tope,
--- comision, stock al anular la venta). Con anuladas, la salida es una
--- migracion hacia adelante, no este archivo. Si la 367 esta aplicada, revertir
--- primero la 367.
+-- Spec: docs/superpowers/specs/2026-10-07-notas-de-credito-design.md (Anulacion)
+-- Plan: docs/superpowers/plans/2026-10-20-notas-credito-pr4-ventas-anular.md (PR4b)
+-- Requiere la 367 (envoltorio de 14 parametros) y la 350 (columna anulada).
 --
--- Vuelve a las ultimas versiones anteriores, tal cual: el cuerpo de la 330
--- (registrar_devolucion_nucleo, renombrado en la 356), la 331, la 334, la 333 y
--- la 245, con el security_invoker de la 347 (lo verifica
--- __tests__/notas-credito-migraciones.test.ts). El comentario del nucleo vuelve
--- a ser el de la 330. Los permisos quedan como los dejo la 366 (solo
--- service_role): la 331 y la 334 tenian los de por defecto.
+-- Hasta hoy ninguna NC de venta se anula (anulada es false en todas), asi que
+-- los lectores de devoluciones_venta suman todas. La 369 trae la anulacion;
+-- antes, esta migracion hace que los lectores en SQL ignoren las anuladas:
+--   1. registrar_devolucion_nucleo (cuerpo de la 330): sus cinco sumas (ya
+--      devuelto por linea, devolucion TOTAL, tope, lo que ya bajo la deuda y el
+--      retiro de garantia).
+--   2. registrar_pagos_venta_atomica (331): el pendiente que se puede cobrar.
+--   3. restore_stock_on_cancel (334): lo devuelto al anular la venta.
+--   4. v_comisiones_ventas (333) y el chequeo 4 de v_cc_drift (245).
+-- Con anulada = false en todas las filas, cada una hace exactamente lo mismo que
+-- su version anterior: aplicarla no cambia nada de lo que ya anda.
 --
--- items_devolucion.series_devueltas NO se borra: con el nucleo de la 330 queda
--- inerte (nadie la escribe), y borrarla perderia que series devolvio cada NC
--- emitida mientras la 366 estuvo aplicada, que es lo que la 367 necesita.
+-- Ademas el nucleo guarda en items_devolucion.series_devueltas las series que
+-- retira cada linea, con su estado anterior. Al volver al stock la serie pierde
+-- venta_id y cliente_id: sin este registro la anulacion no sabria cuales eran.
 --
--- La FK items_devolucion.inventario_id queda en ON DELETE SET NULL (seccion 1b):
--- volver a NO ACTION romperia otra vez la purga de los talleres que devolvieron
--- productos de su inventario.
-
-DO $$
-BEGIN
-  IF to_regprocedure('public.anular_devolucion_venta(text,text,text,text,text)') IS NOT NULL THEN
-    RAISE EXCEPTION 'Abort: la 367 esta aplicada. Revertir primero la 367.';
-  END IF;
-  IF EXISTS (SELECT 1 FROM devoluciones_venta WHERE anulada) THEN
-    RAISE EXCEPTION 'Abort: hay notas de credito de venta anuladas. Revertir la 366 las volveria a contar.';
-  END IF;
-END $$;
+-- Las funciones y vistas son copias textuales de su ultima version con los
+-- cambios marcados "368:" (lo verifica __tests__/notas-credito-migraciones.test.ts).
+-- Misma firma: CREATE OR REPLACE conserva los permisos; igual se repiten, solo
+-- service_role. Las vistas repiten security_invoker (347): CREATE OR REPLACE
+-- VIEW sin la opcion la pierde.
+--
+-- Sin BEGIN/COMMIT: db-run.mjs y el editor SQL corren el archivo en una sola
+-- transaccion. Locks, hasta el final de la transaccion (aplicar fuera del pico
+-- del POS): ACCESS EXCLUSIVE sobre items_devolucion (ADD COLUMN nula, sin
+-- reescritura) y sobre las dos vistas; SHARE ROW EXCLUSIVE sobre inventario (la
+-- FK de la seccion 1b se valida contra items_devolucion, que es chica: mientras
+-- tanto no se escribe inventario). lock_timeout acota la ESPERA de esos locks:
+-- si aborta por timeout no se aplico nada; re-correr.
 
 SET LOCAL lock_timeout = '3s';
 
--- El cuerpo de la 330, tal cual, con el nombre de la 356.
+-- ── 0. Requiere la 367 ─────────────────────────────────────────────────────
+DO $$
+BEGIN
+  IF to_regprocedure('public.registrar_devolucion_atomica(text,text,text,text,text,text,text,text,jsonb,text,text,numeric,text,boolean)') IS NULL THEN
+    RAISE EXCEPTION 'Abort: falta el envoltorio de 14 parametros. Aplicar la 367 antes de la 368.';
+  END IF;
+END $$;
+
+-- ── 1. Series que devolvio cada linea ──────────────────────────────────────
+ALTER TABLE items_devolucion ADD COLUMN IF NOT EXISTS series_devueltas JSONB;
+
+COMMENT ON COLUMN items_devolucion.series_devueltas IS
+  'Series que retiro esta linea, con su estado anterior: [{id, numero_serie, estado, cliente_id, '
+  'fecha_venta, fecha_garantia_vence}]. [] si no habia; NULL en las lineas anteriores a la 368 (no se '
+  'sabe cuales). La anulacion de la NC (369) las deja como estaban. Migracion 368.';
+
+-- ── 1b. Purga de un taller que devolvio productos de su inventario ────────
+-- items_devolucion.inventario_id (043) es NO ACTION. Al borrar la org (purga de
+-- la eliminacion de cuenta), la cascada borra inventario en la generacion 1 y su
+-- chequeo NO ACTION contra items_devolucion corre en la 2, ANTES que la cascada
+-- devoluciones_venta -> items_devolucion: la purga falla con
+--   violates foreign key constraint "items_devolucion_inventario_id_fkey"
+-- en todo taller que haya devuelto un producto de su inventario. Mismo arreglo
+-- que la 351: SET NULL no depende del orden de la cola de triggers RI. Desde la
+-- app un producto con devoluciones no se borra (guards de inventario), asi que
+-- el SET NULL solo actua en la purga. Sin IF EXISTS: si el nombre no es el del
+-- pre-flight, tiene que fallar fuerte.
+ALTER TABLE items_devolucion DROP CONSTRAINT items_devolucion_inventario_id_fkey;
+ALTER TABLE items_devolucion ADD CONSTRAINT items_devolucion_inventario_id_fkey
+  FOREIGN KEY (inventario_id) REFERENCES inventario(id) ON DELETE SET NULL;
+
+-- ── 2. Nucleo: las anuladas no cuentan y las series quedan registradas ─────
+-- Copia textual de 330_devolucion_descuenta_saldo.sql (lineas 45-448) con el
+-- nombre que le dio la 356 y los cambios marcados "368:".
 CREATE OR REPLACE FUNCTION public.registrar_devolucion_nucleo(
   p_org_id              TEXT,
   p_venta_id            TEXT,
@@ -82,6 +119,9 @@ DECLARE
   v_aplicado            DECIMAL := 0;
   v_reembolso           DECIMAL := 0;
   v_cobertura           DECIMAL := 0;
+  -- 368: las series que retira cada linea (paso 6), con su estado anterior
+  v_serie_ids           TEXT[];
+  v_series              JSONB;
 BEGIN
   -- ----------------------------------------------------------------
   -- Step 1: Lock the sale row to serialize concurrent returns (H-1)
@@ -142,6 +182,7 @@ BEGIN
     FROM items_devolucion id2
     JOIN devoluciones_venta dv ON dv.id = id2.devolucion_id
     WHERE dv.venta_id = p_venta_id
+      AND dv.anulada = false  -- 368: lo que devolvio una NC anulada se puede volver a devolver
       AND id2.item_venta_id = elem->>'itemVentaId';
 
     v_max_returnable := v_item_original.cantidad - v_already_returned;
@@ -184,6 +225,7 @@ BEGIN
     FROM items_devolucion id3
     JOIN devoluciones_venta dv3 ON dv3.id = id3.devolucion_id
     WHERE dv3.venta_id = p_venta_id
+      AND dv3.anulada = false  -- 368
       AND id3.item_venta_id = v_iv.id;
 
     SELECT COALESCE((elem2->>'cantidad')::integer, 0)
@@ -207,8 +249,9 @@ BEGIN
   -- Reembolso = porción proporcional de venta.total (pliega global + IVA), con
   -- cap contra lo ya devuelto y true-up exacto en la devolución TOTAL, de modo
   -- que la suma de reembolsos de una venta nunca supere venta.total.
+  -- 368: el tope no descuenta lo que acredito una NC anulada.
   SELECT COALESCE(SUM(monto_devolucion), 0) INTO v_prior_refunded
-  FROM devoluciones_venta WHERE venta_id = p_venta_id;
+  FROM devoluciones_venta WHERE venta_id = p_venta_id AND anulada = false;
 
   v_remaining := GREATEST(ROUND(COALESCE(v_venta.total, 0) - v_prior_refunded, 2), 0);
 
@@ -226,8 +269,9 @@ BEGIN
   -- 330: lo que el cliente todavia debe de esta venta se descuenta primero; solo
   -- se reembolsa lo que exceda. Antes una venta fiada devuelta entera se
   -- "reembolsaba" en efectivo y la deuda seguia en la cuenta del cliente.
+  -- 368: lo que bajo una NC anulada se vuelve a deber.
   SELECT COALESCE(SUM(monto_aplicado_deuda), 0) INTO v_aplicado_prev
-  FROM devoluciones_venta WHERE venta_id = p_venta_id;
+  FROM devoluciones_venta WHERE venta_id = p_venta_id AND anulada = false;
 
   v_pendiente := GREATEST(
     COALESCE(v_venta.total, 0) - COALESCE(v_venta.monto_abonado, 0) - v_aplicado_prev, 0);
@@ -329,6 +373,27 @@ BEGIN
     -- si la puso esta venta — si la serie vuelve al stock con la fecha del
     -- comprador anterior, marcar_serie_vendida (175) la relee al revenderla y
     -- la marca GARANTIA_ACTIVA heredando una garantía que nadie compró.
+    -- 368: las series que retira esta linea se eligen primero, con el mismo
+    -- criterio de la 330, y se guarda como estaban (items_devolucion.series_devueltas):
+    -- la anulacion de la NC (369) las deja exactamente asi.
+    SELECT COALESCE(array_agg(s.id), ARRAY[]::TEXT[]),
+           COALESCE(jsonb_agg(jsonb_build_object(
+             'id', s.id, 'numero_serie', s.numero_serie, 'estado', s.estado,
+             'cliente_id', s.cliente_id, 'fecha_venta', s.fecha_venta,
+             'fecha_garantia_vence', s.fecha_garantia_vence)), '[]'::jsonb)
+    INTO v_serie_ids, v_series
+    FROM (
+      SELECT id, numero_serie, estado, cliente_id, fecha_venta, fecha_garantia_vence
+      FROM inventario_series
+      WHERE organization_id = p_org_id
+        AND inventario_id   = v_inv_id
+        AND venta_id        = p_venta_id
+        AND estado::text   IN ('VENDIDO', 'GARANTIA_ACTIVA')
+      ORDER BY fecha_venta DESC
+      LIMIT (elem->>'cantidad')::integer
+      FOR UPDATE
+    ) s;
+
     IF (elem->>'restaurarStock')::boolean THEN
       -- Vuelve a stock: se corta el vínculo con la venta, si no una devolución
       -- posterior de otra línea podría re-elegir la misma serie.
@@ -337,15 +402,7 @@ BEGIN
           cliente_id = NULL, fecha_garantia_vence = CASE
             WHEN COALESCE(v_line_warranty_days, 0) > 0 THEN NULL
             ELSE fecha_garantia_vence END, updated_at = now()
-      WHERE id IN (
-        SELECT id FROM inventario_series
-        WHERE organization_id = p_org_id
-          AND inventario_id   = v_inv_id
-          AND venta_id        = p_venta_id
-          AND estado::text   IN ('VENDIDO', 'GARANTIA_ACTIVA')
-        ORDER BY fecha_venta DESC
-        LIMIT (elem->>'cantidad')::integer
-      );
+      WHERE id = ANY(v_serie_ids);
     ELSE
       -- Sin reposición no vuelve al stock vendible: queda DEVUELTO, y se
       -- conserva venta_id como rastro de de dónde salió.
@@ -353,16 +410,22 @@ BEGIN
       SET estado = 'DEVUELTO', fecha_garantia_vence = CASE
             WHEN COALESCE(v_line_warranty_days, 0) > 0 THEN NULL
             ELSE fecha_garantia_vence END, updated_at = now()
-      WHERE id IN (
-        SELECT id FROM inventario_series
-        WHERE organization_id = p_org_id
-          AND inventario_id   = v_inv_id
-          AND venta_id        = p_venta_id
-          AND estado::text   IN ('VENDIDO', 'GARANTIA_ACTIVA')
-        ORDER BY fecha_venta DESC
-        LIMIT (elem->>'cantidad')::integer
-      );
+      WHERE id = ANY(v_serie_ids);
     END IF;
+
+    -- 368: una fila de items_devolucion por elemento: la primera de esta linea
+    -- que todavia no tiene series registradas (un mismo item repetido en
+    -- p_items llena una fila cada vez).
+    UPDATE items_devolucion
+    SET series_devueltas = v_series
+    WHERE id = (
+      SELECT id FROM items_devolucion
+      WHERE devolucion_id = v_dev_id
+        AND item_venta_id = elem->>'itemVentaId'
+        AND series_devueltas IS NULL
+      ORDER BY id
+      LIMIT 1
+    );
   END LOOP;
 
   -- ----------------------------------------------------------------
@@ -383,6 +446,7 @@ BEGIN
     FROM items_devolucion id4
     JOIN devoluciones_venta dv4 ON dv4.id = id4.devolucion_id
     WHERE dv4.venta_id = p_venta_id
+      AND dv4.anulada = false  -- 368
       AND id4.item_venta_id = elem->>'itemVentaId';
 
     IF v_line_sold IS NOT NULL AND v_line_returned >= v_line_sold THEN
@@ -439,30 +503,19 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION public.registrar_devolucion_nucleo(TEXT,TEXT,TEXT,TEXT,TEXT,TEXT,TEXT,TEXT,JSONB,TEXT) IS
-  'Atomic return registration with FOR UPDATE lock on venta. '
-  'Fixes H-1 (TOCTOU) and H-2 (non-atomic writes). Migration 247. '
-  'Migration 269: forwards v_venta.sucursal_id to devolver_cuenta_corriente. '
-  'Migración 272: monto_devolucion = porción proporcional de venta.total (neto '
-  'de descuentos de línea + global + IVA), no el precio bruto. '
-  'Migración 316: la devolución retira la garantía — garantias_venta pasa a '
-  'ANULADA cuando la línea queda 100% devuelta, fecha_garantia_vence se limpia '
-  'siempre, y sin reposición la serie queda DEVUELTO en vez de GARANTIA_ACTIVA. '
-  'Espeja computeDevolucionMonto() y fullyReturnedItemIds() de '
-  'lib/devolucion-refund.ts. '
-  'Migración 317: fecha_garantia_vence solo se limpia si la línea se vendió '
-  'CON garantía — con 0 días la fecha es la del proveedor (alta de serie) y '
-  'borrarla destruía dato bueno. '
-  'Migración 330: lo devuelto descuenta primero el saldo pendiente '
-  '(monto_aplicado_deuda) y solo se reembolsa el resto; CREDITO_TIENDA = '
-  'cuenta corriente; inventario del item vendido; p_idempotency_key.';
+COMMENT ON FUNCTION public.registrar_devolucion_nucleo(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT) IS
+  'Devolucion de productos de una venta: cuerpo de la 330 (renombrado en la 356). Migracion 368: las NC '
+  'anuladas no cuentan en ninguna suma, y cada linea guarda en items_devolucion.series_devueltas las series '
+  'que retiro con su estado anterior. Solo la llama registrar_devolucion_atomica.';
 
 REVOKE EXECUTE ON FUNCTION public.registrar_devolucion_nucleo(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.registrar_devolucion_nucleo(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT)
   TO service_role;
 
--- La 331, tal cual.
+-- ── 3. Cobros de una venta: lo que bajo una NC anulada se vuelve a deber ────
+-- Copia textual de 331_cobros_venta_idempotencia_y_cliente.sql (lineas 33-222)
+-- con el cambio marcado "368:".
 CREATE OR REPLACE FUNCTION registrar_pagos_venta_atomica(
   p_org_id       TEXT,
   p_venta_id     TEXT,
@@ -532,8 +585,9 @@ BEGIN
 
   -- 3. Validate amount. Lo que las devoluciones descontaron del saldo (330)
   --    ya no se debe.
+  --    368: salvo lo de una NC anulada, que se vuelve a deber.
   SELECT COALESCE(SUM(monto_aplicado_deuda), 0) INTO v_aplicado_dev
-  FROM devoluciones_venta WHERE venta_id = p_venta_id;
+  FROM devoluciones_venta WHERE venta_id = p_venta_id AND anulada = false;
 
   v_pendiente   := v_venta.total - COALESCE(v_venta.monto_abonado, 0) - v_aplicado_dev;
   v_total_pagos := COALESCE((SELECT SUM((p->>'monto')::DECIMAL) FROM jsonb_array_elements(p_pagos) AS p), 0);
@@ -654,7 +708,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- La 334, tal cual.
+REVOKE EXECUTE ON FUNCTION public.registrar_pagos_venta_atomica(TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.registrar_pagos_venta_atomica(TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT)
+  TO service_role;
+
+-- ── 4. Anular una venta: lo devuelto por una NC anulada volvio a salir ─────
+-- Copia textual de 334_anular_venta_series_y_garantias.sql (lineas 17-122) con
+-- el cambio marcado "368:". Sin el UPDATE de garantias del final de la 334.
 CREATE OR REPLACE FUNCTION restore_stock_on_cancel()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -686,6 +747,7 @@ BEGIN
       FROM items_devolucion id2
       JOIN devoluciones_venta dv ON dv.id = id2.devolucion_id
       WHERE dv.venta_id = NEW.id
+        AND dv.anulada = false  -- 368: lo que devolvio una NC anulada volvio a salir
         AND id2.item_venta_id = v_item.item_id;
 
       IF GREATEST(v_item.cantidad - v_ya_devuelto, 0) = 0 THEN CONTINUE; END IF;
@@ -762,7 +824,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- La 333, tal cual, con el security_invoker de la 347.
+-- Como toda funcion que se redefine, solo service_role. Es la funcion de un
+-- trigger: Postgres no chequea EXECUTE al dispararlo, asi que anular una venta
+-- anda igual con cualquier rol que pueda actualizar ventas.
+REVOKE EXECUTE ON FUNCTION public.restore_stock_on_cancel()
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.restore_stock_on_cancel()
+  TO service_role;
+
+-- ── 5. Comision del vendedor ───────────────────────────────────────────────
+-- Copia textual de 333_comision_neta_de_devoluciones.sql (lineas 19-48) con el
+-- security_invoker de la 347 y el cambio marcado "368:".
 CREATE OR REPLACE VIEW v_comisiones_ventas WITH (security_invoker = true) AS
 SELECT
   v.id AS venta_id,
@@ -791,13 +863,16 @@ CROSS JOIN LATERAL (
   SELECT COALESCE(SUM(d.monto_devolucion), 0) AS devuelto
   FROM devoluciones_venta d
   WHERE d.venta_id = v.id
+    AND d.anulada = false  -- 368: una NC anulada no descuenta comision
 ) dev
 WHERE v.estado = 'COMPLETADA';
 
 REVOKE ALL ON public.v_comisiones_ventas FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.v_comisiones_ventas TO service_role;
 
--- La 245, tal cual, con el security_invoker de la 347.
+-- ── 6. Reconciliacion de cuenta corriente ──────────────────────────────────
+-- Copia textual de 245_v_cc_drift.sql (lineas 18-118) con el security_invoker
+-- de la 347 y el cambio marcado "368:" en el chequeo 4.
 CREATE OR REPLACE VIEW v_cc_drift WITH (security_invoker = true) AS
 
 -- 1. SALDO_DESCUADRADO: el saldo denormalizado (clientes.saldo_cuenta) no coincide
@@ -893,6 +968,7 @@ FROM devoluciones_venta dv
 JOIN ventas v ON v.id = dv.venta_id
 LEFT JOIN clientes cl ON cl.id = v.cliente_id
 WHERE dv.estado::text = 'COMPLETADA'
+  AND dv.anulada = false  -- 368: una NC anulada no acredita nada
   AND dv.metodo_reembolso::text = 'CUENTA_CORRIENTE'
   AND v.cliente_id IS NOT NULL
   AND NOT EXISTS (
