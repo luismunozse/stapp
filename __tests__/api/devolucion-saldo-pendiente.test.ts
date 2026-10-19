@@ -50,7 +50,7 @@ describe("POST devolución — saldo pendiente, crédito en tienda e idempotenci
     mockAuthSuccess({ role: "ADMIN" })
   })
 
-  it("audita, avisa por webhook y nombra el egreso con el NC- que devolvio la RPC", async () => {
+  it("audita y avisa por webhook con el NC- que devolvio la RPC, sin tocar la caja", async () => {
     const egresos: any[] = []
     setup({ cliente_id: "c1" }, egresos)
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
@@ -71,10 +71,10 @@ describe("POST devolución — saldo pendiente, crédito en tienda e idempotenci
       "venta.devolucion",
       expect.objectContaining({ numeroDevolucion: "NC-000007" })
     )
-    expect(egresos[0]).toMatchObject({ concepto: "Devolución NC-000007" })
+    expect(egresos).toHaveLength(0)
   })
 
-  it("solo saca de la caja lo que se reembolsa, no lo que descontó la deuda", async () => {
+  it("devuelve el reparto de la RPC y no saca plata de la caja desde la ruta", async () => {
     const egresos: any[] = []
     setup({ cliente_id: "c1" }, egresos)
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
@@ -85,26 +85,13 @@ describe("POST devolución — saldo pendiente, crédito en tienda e idempotenci
     const { status, body: dev } = await parseResponse(await POST(createPostRequest(body(), url), params))
 
     expect(status).toBe(201)
-    expect(egresos).toHaveLength(1)
-    expect(egresos[0]).toMatchObject({ tipo: "EGRESO", monto: 50 })
+    expect(egresos).toHaveLength(0)
     expect(emitWebhookEvent).toHaveBeenCalledWith(
       "org-1",
       "venta.devolucion",
       expect.objectContaining({ ventaId: "v1", montoDevolucion: 200, montoAplicadoDeuda: 150 })
     )
     expect(dev).toMatchObject({ montoDevolucion: 200, montoAplicadoDeuda: 150, montoReembolso: 50 })
-  })
-
-  it("venta fiada devuelta entera: no hay egreso de caja", async () => {
-    const egresos: any[] = []
-    setup({ cliente_id: "c1" }, egresos)
-    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
-      data: { id: "d1", tipo: "TOTAL", montoDevolucion: 200, montoAplicadoDeuda: 200, montoReembolso: 0 },
-      error: null,
-    } as any)
-
-    await POST(createPostRequest(body(), url), params)
-    expect(egresos).toHaveLength(0)
   })
 
   it("'crédito en tienda' viaja como cuenta corriente y exige cliente", async () => {

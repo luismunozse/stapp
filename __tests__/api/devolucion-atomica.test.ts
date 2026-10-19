@@ -54,6 +54,8 @@ describe("POST /api/ventas/[id]/devolucion — atomic RPC path", () => {
         // El numero lo asigna la RPC adentro de su transaccion (mig 356)
         p_numero_devolucion: null,
         p_items: [{ itemVentaId: "iv1", inventarioId: "inv1", cantidad: 2, restaurarStock: true }],
+        p_modo: "ITEMS",
+        p_registrar_egreso: true,
       })
     )
     // Una sola RPC: ya no se pide un DEV- antes de llamar
