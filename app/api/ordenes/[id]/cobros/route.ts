@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, requireCajaAccess } from "@/lib/auth-utils"
+import { sucursalParaLectura } from "@/lib/sucursal"
 import { supabaseAdmin } from "@/lib/supabase"
 import { todayInTimeZone, addMonthsToDateOnly, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
@@ -116,12 +117,11 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    // ADMIN siempre; VENDEDOR solo si la org prendió `vendedores_manejan_caja`
+    // (fail-closed si el flag no se puede leer). Cobrar mueve plata de caja, y
+    // es el mismo permiso que ya gobierna la operativa de caja.
+    const { error, organizationId, userId, role, session } = await requireCajaAccess()
     if (error) return error
-
-    if (role !== "ADMIN") {
-      return NextResponse.json({ error: "Solo administradores pueden registrar cobros" }, { status: 403 })
-    }
 
     const { id: ordenId } = await params
     const practica = await rejectIfPractica(ordenId, organizationId!)
@@ -139,6 +139,20 @@ export async function POST(
 
     if (ordenError || !orden) {
       return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
+    }
+
+    // Alcance por sucursal para los roles atados a una. El id de la orden viaja
+    // en la URL: sin esto, un VENDEDOR cobra en una orden de otra sucursal
+    // escribiendo otro id. 404 y no 403, para no confirmar que existe.
+    // El ADMIN queda fuera del guard: su alcance no cambia con este permiso.
+    if (role !== "ADMIN") {
+      const filtro = await sucursalParaLectura({
+        role,
+        userSucursalId: session!.user.sucursalId ?? null,
+      })
+      if (!orden.sucursal_id || orden.sucursal_id !== filtro.sucursalId) {
+        return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
+      }
     }
 
     // --- Atomic RPC path (migration 242) ---
