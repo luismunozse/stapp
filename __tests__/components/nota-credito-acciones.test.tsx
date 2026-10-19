@@ -123,4 +123,30 @@ describe("NotaCreditoAcciones", () => {
     expect(screen.getByRole("button", { name: "PDF" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Ticket" })).toBeInTheDocument()
   })
+
+  it("con onAnular, el botón Anular lleva el número de la NC y la anula", () => {
+    const onAnular = vi.fn()
+    render(<NotaCreditoAcciones id="nc-1" numero="NC-000010" onAnular={onAnular} />)
+    fireEvent.click(screen.getByRole("button", { name: "Anular la nota de crédito NC-000010" }))
+    expect(onAnular).toHaveBeenCalledTimes(1)
+  })
+
+  it("si todavía no se puede anular, el botón queda deshabilitado y dice por qué", () => {
+    const motivo = "Se anulan de la más reciente a la primera: primero anulá la NC-000011."
+    render(<NotaCreditoAcciones id="nc-1" numero="NC-000010" onAnular={vi.fn()} bloqueoAnular={motivo} />)
+    const boton = screen.getByRole("button", { name: "Anular la nota de crédito NC-000010" })
+    expect(boton).toBeDisabled()
+    expect(boton.closest("span")).toHaveAttribute("title", motivo)
+  })
+
+  it("caracterización: una NC anulada no ofrece WhatsApp, y tampoco anularla otra vez", () => {
+    render(<NotaCreditoAcciones id="nc-1" numero="NC-000010" anulada onAnular={vi.fn()} />)
+    expect(screen.queryByRole("button", { name: /Anular/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "WhatsApp" })).not.toBeInTheDocument()
+  })
+
+  it("caracterización: sin onAnular (listado, otros roles) no hay botón Anular", () => {
+    render(<NotaCreditoAcciones id="nc-1" />)
+    expect(screen.queryByRole("button", { name: /Anular/ })).not.toBeInTheDocument()
+  })
 })
