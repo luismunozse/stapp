@@ -130,3 +130,90 @@ describe("VentaDetail — nota de crédito por monto y botón de emitir", () => 
     expect(screen.queryByRole("button", { name: "Nota de crédito" })).not.toBeInTheDocument()
   })
 })
+
+const ncMonto = (id: string, numero: string, createdAt: string, extra: Record<string, unknown> = {}) => ({
+  id, ventaId: "v1", numeroDevolucion: numero, motivo: "Ajuste", motivoNc: "AJUSTE_PRECIO", modo: "MONTO",
+  tipo: "PARCIAL", montoDevolucion: 10, montoAplicadoDeuda: 0, montoReembolso: 10, estado: "COMPLETADA",
+  anulada: false, metodoReembolso: "TRANSFERENCIA", observaciones: null, createdAt, items: [], ...extra,
+})
+const ventaConAnulada = {
+  ...venta,
+  devoluciones: [
+    ncMonto("dev-3", "NC-000020", "2026-10-04T00:00:00Z", {
+      anulada: true, anuladaAt: "2026-10-05T12:00:00Z", anuladaMotivo: "Se cargó en la venta equivocada",
+    }),
+  ],
+}
+const ventaConDos = {
+  ...venta,
+  devoluciones: [ncMonto("dev-4", "NC-000021", "2026-10-04T00:00:00Z"), ncMonto("dev-5", "NC-000022", "2026-10-05T00:00:00Z")],
+}
+
+describe("VentaDetail — anular notas de crédito", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("una NC anulada se ve anulada, con su motivo, sin WhatsApp ni Anular", async () => {
+    rol = "ADMIN"
+    stubFetch(ventaConAnulada)
+    const { VentaDetail } = await import("@/components/ventas/venta-detail")
+    render(<VentaDetail ventaId="v1" />)
+    expect(await screen.findByText("NC-000020")).toBeInTheDocument()
+    expect(screen.getByText("Anulada")).toBeInTheDocument()
+    expect(screen.getByText(/Se cargó en la venta equivocada/)).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "WhatsApp" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /Anular la nota de crédito/ })).not.toBeInTheDocument()
+  })
+
+  it("el ADMIN anula solo la más reciente; la anterior dice por qué no", async () => {
+    rol = "ADMIN"
+    stubFetch(ventaConDos)
+    const { VentaDetail } = await import("@/components/ventas/venta-detail")
+    render(<VentaDetail ventaId="v1" />)
+    const ultima = await screen.findByRole("button", { name: "Anular la nota de crédito NC-000022" })
+    const anterior = screen.getByRole("button", { name: "Anular la nota de crédito NC-000021" })
+    expect(ultima).toBeEnabled()
+    expect(anterior).toBeDisabled()
+    expect(anterior.closest("span")).toHaveAttribute(
+      "title", "Se anulan de la más reciente a la primera: primero anulá la NC-000022."
+    )
+  })
+
+  it("anular desde el bloque pega a la ruta de esa NC y relee la venta", async () => {
+    rol = "ADMIN"
+    let lecturas = 0
+    const posts: string[] = []
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url === "/api/ventas/v1") {
+          lecturas++
+          return { ok: true, json: async () => ventaConDos }
+        }
+        if (init?.method === "POST") {
+          posts.push(url)
+          return { ok: true, status: 200, json: async () => ({ efectivoSinEgreso: false, replayed: false }) }
+        }
+        return { ok: true, json: async () => ({ organization: { id: "org-1", slug: "demo", nombre: "Demo" } }) }
+      })
+    )
+    vi.stubGlobal("open", vi.fn())
+    const { VentaDetail } = await import("@/components/ventas/venta-detail")
+    render(<VentaDetail ventaId="v1" />)
+
+    fireEvent.click(await screen.findByRole("button", { name: "Anular la nota de crédito NC-000022" }))
+    fireEvent.change(screen.getByLabelText("Motivo de la anulación"), { target: { value: "Error de carga" } })
+    fireEvent.click(screen.getByRole("button", { name: "Anular nota de crédito" }))
+
+    await waitFor(() => expect(lecturas).toBe(2))
+    expect(posts).toEqual(["/api/ventas/v1/devolucion/dev-5/anular"])
+  })
+
+  it("el VENDEDOR no ve Anular", async () => {
+    rol = "VENDEDOR"
+    stubFetch(ventaConDos)
+    const { VentaDetail } = await import("@/components/ventas/venta-detail")
+    render(<VentaDetail ventaId="v1" />)
+    expect(await screen.findByText("NC-000022")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /Anular la nota de crédito/ })).not.toBeInTheDocument()
+  })
+})

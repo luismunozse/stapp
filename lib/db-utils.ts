@@ -496,6 +496,9 @@ export function formatDevolucion(d: any) {
     modo: d.modo === "MONTO" ? "MONTO" : "ITEMS",
     motivoNc: d.motivo_nc ?? null,
     anulada: d.anulada === true,
+    // PR4 (mig 369): cuándo y por qué se anuló.
+    anuladaAt: d.anulada_at ?? null,
+    anuladaMotivo: d.anulada_motivo ?? null,
     observaciones: d.observaciones,
     procesadoPor: d.procesado_por,
     metodoReembolso: d.metodo_reembolso || null,
