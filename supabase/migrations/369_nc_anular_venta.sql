@@ -155,8 +155,10 @@ BEGIN
     RAISE EXCEPTION 'La nota de crédito devolvió "%" antes de que el sistema guardara qué números de serie volvían: no se puede anular', v_nombre;
   END IF;
 
-  -- 4. Locks en el orden de la venta (332) y de la emision (368): primero los
-  --    productos que la NC repuso, despues sus series y su stock por deposito.
+  -- 4. Orden de locks: venta -> NC -> inventario (por id) -> series -> deposito.
+  --    332 y 368 toman inventario -> deposito -> series por producto; aca series
+  --    va antes que deposito, y no importa: todo escritor que toca ambos toma
+  --    primero el lock de inventario, que serializa a los demas.
   PERFORM 1 FROM inventario
   WHERE organization_id = p_org_id
     AND id IN (SELECT m.inventario_id FROM movimientos_inventario m

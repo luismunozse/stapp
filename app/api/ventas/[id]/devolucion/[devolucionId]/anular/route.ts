@@ -78,7 +78,11 @@ export async function POST(
     const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
     let ventaQuery = supabaseAdmin.from("ventas").select("id").eq("id", id).eq("organization_id", organizationId!)
     if (!filtro.verTodas && filtro.sucursalId) ventaQuery = ventaQuery.eq("sucursal_id", filtro.sucursalId)
-    const { data: venta } = await ventaQuery.maybeSingle()
+    const { data: venta, error: ventaError } = await ventaQuery.maybeSingle()
+    if (ventaError) {
+      console.error("Error buscando la venta a anular:", ventaError)
+      return NextResponse.json({ error: "Error al anular la nota de crédito" }, { status: 500 })
+    }
     if (!venta) return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
 
     const { motivo } = anularSchema.parse(await request.json().catch(() => ({})))
@@ -95,6 +99,14 @@ export async function POST(
       if (esRpcFaltante(rpcError)) {
         console.error("anular_devolucion_venta no disponible:", rpcError)
         return NextResponse.json({ error: "Anular notas de crédito no está disponible en este momento" }, { status: 503 })
+      }
+      // Deadlock (40P01) o lock timeout (55P03): otra operación tiene la venta tomada.
+      if (rpcError.code === "40P01" || rpcError.code === "55P03") {
+        console.error("anular_devolucion_venta: venta ocupada:", rpcError)
+        return NextResponse.json(
+          { error: "La venta está ocupada en otra operación. Reintentá en unos segundos." },
+          { status: 409 }
+        )
       }
       const mensaje = rpcError.message ?? ""
       if (NO_ENCONTRADA.some((f) => mensaje.includes(f))) return NextResponse.json({ error: mensaje }, { status: 404 })
@@ -140,6 +152,7 @@ export async function POST(
         montoAplicadoDeuda: resultado.montoAplicadoDeuda,
         montoReembolso: resultado.montoReembolso,
         metodoReembolso: resultado.metodoReembolso,
+        efectivoSinEgreso: resultado.efectivoSinEgreso,
         anuladaAt: resultado.anuladaAt,
       }).catch(() => {})
     }
