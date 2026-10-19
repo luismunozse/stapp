@@ -69,11 +69,12 @@ const documento = {
 }
 
 function stubFetch() {
-  vi.stubGlobal("fetch", vi.fn(async (url: string) =>
-    url === "/api/notas-credito/nc-9"
-      ? { ok: true, status: 200, json: async () => documento }
-      : { ok: false, status: 404, json: async () => ({}) }
-  ))
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (url === "/api/notas-credito/nc-9") return { ok: true, status: 200, json: async () => documento }
+    // La config operativa con sus defaults: sin ella el POS loguea un error en cada test.
+    if (url === "/api/configuracion/operativa") return { ok: true, status: 200, json: async () => ({}) }
+    return { ok: false, status: 404, json: async () => ({}) }
+  }))
 }
 
 async function emitirDesdeElPos() {

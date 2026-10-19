@@ -55,6 +55,8 @@ describe("VentaDetail — Generar remito button", () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ventaResponse() })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ organization: { id: "org-1", slug: "demo", nombre: "Demo" } }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "f-new" }) })
+      // The detail reloads after generating: the venta now has its factura.
+      .mockResolvedValueOnce({ ok: true, json: async () => ventaResponse({ facturaId: "f-new" }) })
 
     const { VentaDetail } = await import("@/components/ventas/venta-detail")
     render(<VentaDetail ventaId="v1" />)
@@ -68,6 +70,7 @@ describe("VentaDetail — Generar remito button", () => {
         expect.objectContaining({ method: "POST", body: JSON.stringify({ ventaId: "v1" }) })
       )
     })
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Generar remito/i })).not.toBeInTheDocument())
   })
 
   it("hides the button once the venta already has a factura", async () => {
