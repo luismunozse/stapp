@@ -1140,7 +1140,7 @@ describe("copy for the shop (second page of the A5 / A6 order)", () => {
       it("page 1 is the same customer copy with or without the shop page", async () => {
         const shop = await renderShop(key, { ...TYPICAL[key], codigoAccesoDispositivo: "PIN 4471" })
         const customer = await render(key, { ...TYPICAL[key], codigoAccesoDispositivo: "PIN 4471" })
-        const strip = (runs: PositionedText[]) => runs.map(({ text, x, y, size, font }) => ({ text, x, y, size, font }))
+        const strip = (runs: PositionedText[]) => runs.map(({ text, x, y, size, font }) => ({ text, x, y, size, font: font.replace(/-\d+$/, "") })) // embedded font names carry a random suffix
         expect(strip(shop.runsOf(0))).toEqual(strip(customer.runs))
       })
 
