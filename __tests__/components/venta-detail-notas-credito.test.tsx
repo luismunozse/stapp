@@ -208,6 +208,34 @@ describe("VentaDetail — anular notas de crédito", () => {
     expect(posts).toEqual(["/api/ventas/v1/devolucion/dev-5/anular"])
   })
 
+  it("al cerrar el diálogo de anular, aun después de un error, relee la venta", async () => {
+    rol = "ADMIN"
+    let lecturas = 0
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url === "/api/ventas/v1") {
+          lecturas++
+          return { ok: true, json: async () => ventaConDos }
+        }
+        if (init?.method === "POST") return { ok: false, status: 409, json: async () => ({ error: "La venta está anulada" }) }
+        return { ok: true, json: async () => ({ organization: { id: "org-1", slug: "demo", nombre: "Demo" } }) }
+      })
+    )
+    vi.stubGlobal("open", vi.fn())
+    const { VentaDetail } = await import("@/components/ventas/venta-detail")
+    render(<VentaDetail ventaId="v1" />)
+
+    fireEvent.click(await screen.findByRole("button", { name: "Anular la nota de crédito NC-000022" }))
+    fireEvent.change(screen.getByLabelText("Motivo de la anulación"), { target: { value: "Error de carga" } })
+    fireEvent.click(screen.getByRole("button", { name: "Anular nota de crédito" }))
+    expect(await screen.findByText("La venta está anulada")).toBeInTheDocument()
+    expect(lecturas).toBe(1)
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }))
+    await waitFor(() => expect(lecturas).toBe(2))
+  })
+
   it("el VENDEDOR no ve Anular", async () => {
     rol = "VENDEDOR"
     stubFetch(ventaConDos)

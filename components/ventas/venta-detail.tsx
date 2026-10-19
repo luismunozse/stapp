@@ -499,10 +499,16 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
       {ncAAnular ? (
         <AnularNotaCreditoDialog
           open
+          // Al cerrar (anulada o no, con error o sin él) se relee la venta: si la
+          // respuesta se perdió, la NC ya puede estar anulada en la base.
           onOpenChange={(abierto) => {
-            if (!abierto) setNcAAnular(null)
+            if (!abierto) {
+              setNcAAnular(null)
+              fetchVenta()
+            }
           }}
           ventaId={venta.id}
+          sucursalId={venta.sucursalId ?? null}
           nc={{
             id: ncAAnular.id,
             numeroDevolucion: ncAAnular.numeroDevolucion,
@@ -518,10 +524,8 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
           }}
           tieneCliente={Boolean(venta.clienteId)}
           saldoCliente={venta.cliente?.saldoCuenta ?? null}
-          onAnulada={() => {
-            setNcAAnular(null)
-            fetchVenta()
-          }}
+          // La venta se relee en onOpenChange(false), que el diálogo llama antes.
+          onAnulada={() => setNcAAnular(null)}
         />
       ) : null}
 
