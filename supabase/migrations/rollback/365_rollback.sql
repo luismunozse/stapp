@@ -22,6 +22,24 @@ SET LOCAL lock_timeout = '3s';
 DROP TABLE IF EXISTS sesion_caja_saldos;
 DROP TABLE IF EXISTS organizacion_moneda;
 
+-- Named CHECKs go with their columns; dropped explicitly first so a partial state also cleans up.
+ALTER TABLE inventario DROP CONSTRAINT IF EXISTS inventario_moneda_chk;
+ALTER TABLE servicios DROP CONSTRAINT IF EXISTS servicios_moneda_chk;
+ALTER TABLE movimientos_caja DROP CONSTRAINT IF EXISTS movimientos_caja_moneda_chk;
+ALTER TABLE items_venta DROP CONSTRAINT IF EXISTS items_venta_moneda_origen_chk;
+ALTER TABLE items_venta DROP CONSTRAINT IF EXISTS items_venta_tipo_cambio_chk;
+ALTER TABLE servicios_orden DROP CONSTRAINT IF EXISTS servicios_orden_moneda_origen_chk;
+ALTER TABLE servicios_orden DROP CONSTRAINT IF EXISTS servicios_orden_tipo_cambio_chk;
+ALTER TABLE repuestos_orden DROP CONSTRAINT IF EXISTS repuestos_orden_moneda_origen_chk;
+ALTER TABLE repuestos_orden DROP CONSTRAINT IF EXISTS repuestos_orden_tipo_cambio_chk;
+ALTER TABLE items_cotizacion DROP CONSTRAINT IF EXISTS items_cotizacion_moneda_origen_chk;
+ALTER TABLE items_cotizacion DROP CONSTRAINT IF EXISTS items_cotizacion_tipo_cambio_chk;
+ALTER TABLE ventas DROP CONSTRAINT IF EXISTS ventas_tipo_cambio_chk;
+ALTER TABLE ordenes_servicio DROP CONSTRAINT IF EXISTS ordenes_servicio_tipo_cambio_chk;
+ALTER TABLE pagos_venta DROP CONSTRAINT IF EXISTS pagos_venta_moneda_chk;
+ALTER TABLE pagos_venta DROP CONSTRAINT IF EXISTS pagos_venta_tipo_cambio_chk;
+ALTER TABLE pagos_venta DROP CONSTRAINT IF EXISTS pagos_venta_vuelto_moneda_chk;
+
 ALTER TABLE pagos_venta
   DROP COLUMN IF EXISTS vuelto_moneda,
   DROP COLUMN IF EXISTS vuelto_monto,
