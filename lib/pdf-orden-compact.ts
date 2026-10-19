@@ -55,6 +55,7 @@ import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/
 import { formatDateValue, getZonedParts, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { getTaxIdLabel, getPersonalIdLabel } from "@/lib/countries"
 import { parseRecepcionTerminos } from "@/lib/terminos"
+import { garantiaDesdeEntregaTexto, normalizarTrabajoARealizar } from "@/lib/orden-ingreso"
 import { resolveTerminologia, t } from "@/lib/terminologia"
 import { ESTADOS_COMPLETADOS, MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
 
@@ -123,6 +124,8 @@ const HARD_MIN_FONT = 5
 const MAX_LINES_BOUND = 400
 /** Most lines the falla may take on the shop copy before the fit shrinks it (the page decides the real limit). */
 const MAX_SHOP_LINES = 40
+/** Most lines "Trabajo a realizar" takes on the customer copy before it ends in an ellipsis (A4 caps it at 3). */
+const TRABAJO_MAX_LINES = 6
 /** Printed under the terms when they were cut. */
 const TERMS_CUT_NOTE = "Términos completos: pedíselos al taller."
 
@@ -290,6 +293,7 @@ type CapKey =
   | "email"
   | "rowtext" // names of work items, payment method / reference, reason for no charge, deposit method
   | "falla"
+  | "trabajo" // work to be done (intake order)
   | "diagnostico"
   | "accesorios"
   | "checklist"
@@ -332,7 +336,7 @@ const CUT_STAGES: Array<{ keys: CapKey[]; min: number; summary?: boolean }> = [
   { keys: ["checklistNotes"], min: 0, summary: true },
   // in summary mode, the names of the items that are not OK: shortened first, left out only after the falla gave all it can
   { keys: ["checklist"], min: MIN_KEEP.checklistNames },
-  { keys: ["falla", "diagnostico", "accesorios"], min: MIN_KEEP.falla },
+  { keys: ["falla", "diagnostico", "accesorios", "trabajo"], min: MIN_KEEP.falla },
   { keys: ["checklist"], min: 0 },
 ]
 
@@ -403,6 +407,8 @@ export async function generateOrdenCompactPDF(
   const metadataCampos = Array.isArray(data.metadataCampos) ? data.metadataCampos : []
   const metadataText = metadataCampos.map((m) => `${m.label}: ${m.valor}`).join(" · ")
   const diagnostico = safe(data.diagnostico)
+  // Intake order only, like the A4 sheet: the delivery sheet prints neither the work to be done nor the warranty line.
+  const trabajoARealizar = normalizarTrabajoARealizar(safe(data.trabajoARealizar)) ?? ""
   const observaciones = safe(data.observaciones)
 
   const recibidoPor = safe(data.recibidoPorNombre)
@@ -456,6 +462,7 @@ export async function generateOrdenCompactPDF(
   const checklistLines = [...checklistGroups].map(([cat, items]) => ({ title: CATEGORIAS[cat] || cat, text: items.join(" · ") }))
 
   const terminos = parseRecepcionTerminos(data.recepcionTerminos)
+  const garantiaLinea = isEntrega ? null : garantiaDesdeEntregaTexto(data.garantiaDiasDefault)
 
   // ---- document, fonts, images ----
   const pdfDoc = await PDFLib.create()
@@ -570,6 +577,7 @@ export async function generateOrdenCompactPDF(
       isEntrega ? Math.max(0, ...cobros.map((c) => Math.max(safe(c.metodo).length, safe(c.referencia).length))) : 0,
     ),
     falla: problema.length,
+    trabajo: isEntrega ? 0 : trabajoARealizar.length,
     diagnostico: isEntrega ? diagnostico.length : 0,
     accesorios: accesorios.length,
     checklist: Math.max(checklistSplit.no.join(", ").length, checklistSplit.notes.join(", ").length),
@@ -855,6 +863,16 @@ export async function generateOrdenCompactPDF(
     section("Falla declarada")
     para(cap("falla", problema), reg, F.body, MONO.ink)
 
+    const trabajo = isEntrega ? "" : cap("trabajo", trabajoARealizar)
+    if (trabajo) {
+      section("Trabajo a realizar")
+      // a few lines at most, the last one ending in an ellipsis, as on A4
+      for (const l of wrap(trabajo, reg, F.body, contentW, Math.min(P.maxLines ?? TRABAJO_MAX_LINES, TRABAJO_MAX_LINES))) {
+        page.drawText(l, { x: left, y: y - F.body, size: F.body, font: reg, color: MONO.ink })
+        y -= lh(F.body)
+      }
+    }
+
     const diag = isEntrega ? cap("diagnostico", diagnostico) : ""
     if (diag) {
       section("Diagnóstico técnico")
@@ -1043,6 +1061,11 @@ export async function generateOrdenCompactPDF(
     // TERMS
     // ============================================================
     // Terms are never removed in silence: when they are cut, one line says where to get the rest.
+    // The warranty commitment sits right above the terms that set the conditions; never cut.
+    if (garantiaLinea) {
+      y -= gp(3) + lost
+      para(garantiaLinea, bold, F.body, MONO.ink)
+    }
     const termsCut = P.caps.terms !== undefined && P.caps.terms < textLengths.terms
     const shownTerms = cutTerms(terminos, P.caps.terms)
     if (shownTerms.length > 0) {
@@ -1181,7 +1204,7 @@ export async function generateOrdenCompactPDF(
       ...dropped,
       rows: 0,
       identity: IDENTITY_MIN,
-      caps: { ...dropped.caps, falla: IDENTITY_MIN, diagnostico: IDENTITY_MIN, accesorios: IDENTITY_MIN, shop: 0, people: 0, email: 0, rowtext: 0, notes: 0, metadata: 0, garantia: 0, observaciones: 0 },
+      caps: { ...dropped.caps, falla: IDENTITY_MIN, trabajo: IDENTITY_MIN, diagnostico: IDENTITY_MIN, accesorios: IDENTITY_MIN, shop: 0, people: 0, email: 0, rowtext: 0, notes: 0, metadata: 0, garantia: 0, observaciones: 0 },
     }
     return { P: sliver, step: "guarantee" }
   }
@@ -1282,6 +1305,10 @@ export async function generateOrdenCompactPDF(
 
       section("Falla / notas de mostrador")
       para(notasMostrador, reg, M.body, MONO.ink, caps.falla)
+      if (trabajoARealizar) {
+        section("Trabajo a realizar")
+        para(trabajoARealizar, reg, M.body, MONO.ink, caps.chequeo)
+      }
       if (observaciones) para(`OBS: ${observaciones}`, reg, M.small, MONO.label, 1)
 
       section("Presupuesto / Seña")
