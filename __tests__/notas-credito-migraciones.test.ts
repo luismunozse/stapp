@@ -438,6 +438,13 @@ describe("368: las NC anuladas no cuentan en SQL y el nucleo registra las series
     expect(s.indexOf("SET LOCAL lock_timeout = '3s';")).toBeLessThan(s.indexOf("ALTER TABLE items_devolucion"))
   })
 
+  it("el cambio de la FK va al final: el ACCESS EXCLUSIVE sobre inventario dura lo minimo", () => {
+    const s = sql()
+    const fk = s.indexOf("ALTER TABLE items_devolucion DROP CONSTRAINT items_devolucion_inventario_id_fkey;")
+    expect(fk).toBeGreaterThan(s.lastIndexOf("CREATE OR REPLACE"))
+    expect(fk).toBeGreaterThan(s.lastIndexOf("GRANT "))
+  })
+
   it("nucleo, cobros y el trigger de anular la venta solo para service_role; las vistas sin acceso para anon ni authenticated", () => {
     for (const firma of [
       "registrar_devolucion_nucleo(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT)",

@@ -30,9 +30,12 @@
 -- Sin BEGIN/COMMIT: db-run.mjs y el editor SQL corren el archivo en una sola
 -- transaccion. Locks, hasta el final de la transaccion (aplicar fuera del pico
 -- del POS): ACCESS EXCLUSIVE sobre items_devolucion (ADD COLUMN nula, sin
--- reescritura) y sobre las dos vistas; SHARE ROW EXCLUSIVE sobre inventario (la
--- FK de la seccion 1b se valida contra items_devolucion, que es chica: mientras
--- tanto no se escribe inventario). lock_timeout acota la ESPERA de esos locks:
+-- reescritura) y sobre las dos vistas; y ACCESS EXCLUSIVE sobre inventario: al
+-- borrar la FK vieja (seccion 7) se borran sus triggers RI, que viven en la
+-- tabla referenciada. Mientras dura, nadie lee ni escribe inventario (POS,
+-- stock, listados). Por eso la FK va al FINAL del archivo: ese lock se toma
+-- despues de todo lo demas y solo dura lo que tarda validar la FK nueva contra
+-- items_devolucion, que es chica. lock_timeout acota la ESPERA de esos locks:
 -- si aborta por timeout no se aplico nada; re-correr.
 
 SET LOCAL lock_timeout = '3s';
@@ -50,23 +53,9 @@ ALTER TABLE items_devolucion ADD COLUMN IF NOT EXISTS series_devueltas JSONB;
 
 COMMENT ON COLUMN items_devolucion.series_devueltas IS
   'Series que retiro esta linea, con su estado anterior: [{id, numero_serie, estado, cliente_id, '
-  'fecha_venta, fecha_garantia_vence}]. [] si no habia; NULL en las lineas anteriores a la 368 (no se '
-  'sabe cuales). La anulacion de la NC (369) las deja como estaban. Migracion 368.';
-
--- ── 1b. Purga de un taller que devolvio productos de su inventario ────────
--- items_devolucion.inventario_id (043) es NO ACTION. Al borrar la org (purga de
--- la eliminacion de cuenta), la cascada borra inventario en la generacion 1 y su
--- chequeo NO ACTION contra items_devolucion corre en la 2, ANTES que la cascada
--- devoluciones_venta -> items_devolucion: la purga falla con
---   violates foreign key constraint "items_devolucion_inventario_id_fkey"
--- en todo taller que haya devuelto un producto de su inventario. Mismo arreglo
--- que la 351: SET NULL no depende del orden de la cola de triggers RI. Desde la
--- app un producto con devoluciones no se borra (guards de inventario), asi que
--- el SET NULL solo actua en la purga. Sin IF EXISTS: si el nombre no es el del
--- pre-flight, tiene que fallar fuerte.
-ALTER TABLE items_devolucion DROP CONSTRAINT items_devolucion_inventario_id_fkey;
-ALTER TABLE items_devolucion ADD CONSTRAINT items_devolucion_inventario_id_fkey
-  FOREIGN KEY (inventario_id) REFERENCES inventario(id) ON DELETE SET NULL;
+  'fecha_venta, fecha_garantia_vence}]. [] si no habia; NULL si la linea no es de un producto del '
+  'inventario, o si es anterior a la 368 (no se sabe cuales). La anulacion de la NC (369) las deja como '
+  'estaban. Migracion 368.';
 
 -- ── 2. Nucleo: las anuladas no cuentan y las series quedan registradas ─────
 -- Copia textual de 330_devolucion_descuenta_saldo.sql (lineas 45-448) con el
@@ -978,3 +967,21 @@ WHERE dv.estado::text = 'COMPLETADA'
 
 REVOKE ALL ON public.v_cc_drift FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.v_cc_drift TO service_role;
+
+-- ── 7. Purga de un taller que devolvio productos de su inventario ─────────
+-- items_devolucion.inventario_id (043) es NO ACTION. Al borrar la org (purga de
+-- la eliminacion de cuenta), la cascada borra inventario en la generacion 1 y su
+-- chequeo NO ACTION contra items_devolucion corre en la 2, ANTES que la cascada
+-- devoluciones_venta -> items_devolucion: la purga falla con
+--   violates foreign key constraint "items_devolucion_inventario_id_fkey"
+-- en todo taller que haya devuelto un producto de su inventario. Mismo arreglo
+-- que la 351: SET NULL no depende del orden de la cola de triggers RI.
+-- Desde la app, borrar un producto con NC lo frena el chequeo previo de las
+-- rutas de inventario, ya no la base: si una NC entra entre ese chequeo y el
+-- DELETE, el producto se borra y la linea de la NC solo pierde inventario_id
+-- (conserva item_venta_id, que la describe, y sus montos).
+-- Al final del archivo: ver "Locks" arriba. Sin IF EXISTS: si el nombre no es
+-- el del pre-flight, tiene que fallar fuerte.
+ALTER TABLE items_devolucion DROP CONSTRAINT items_devolucion_inventario_id_fkey;
+ALTER TABLE items_devolucion ADD CONSTRAINT items_devolucion_inventario_id_fkey
+  FOREIGN KEY (inventario_id) REFERENCES inventario(id) ON DELETE SET NULL;

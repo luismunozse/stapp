@@ -44,9 +44,9 @@ async function borrarGruposSinHijos(organizationId: string): Promise<void> {
 }
 
 // Wipe all inventario for the caller's organization.
-// FK-restricted rows (in use by órdenes / compras / devoluciones) are reported
-// back as "blocked" so the UI can offer to archive them instead — mirrors the
-// behavior of /api/inventario/bulk?action=delete.
+// Rows in use by órdenes / compras / devoluciones are reported back as "blocked"
+// so the UI can offer to archive them instead — mirrors the behavior of
+// /api/inventario/bulk?action=delete.
 export async function DELETE(request: Request) {
   try {
     const { error, organizationId, userId } = await requireInventarioAccess()
@@ -65,6 +65,10 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ deleted: 0, blocked: [] })
     }
 
+    // repuestos_orden / items_orden_compra: the database rejects the delete (FK
+    // without ON DELETE). items_devolucion is ON DELETE SET NULL since migration
+    // 368 (account purge): the database no longer stops it, this check does — a
+    // product with credit notes is not deleted.
     const [repuestos, devoluciones, ordenesCompra] = await Promise.all([
       supabaseAdmin.from("repuestos_orden").select("inventario_id").in("inventario_id", ids),
       supabaseAdmin.from("items_devolucion").select("inventario_id").in("inventario_id", ids),
@@ -102,6 +106,9 @@ export async function DELETE(request: Request) {
         .eq("organization_id", organizationId!)
 
       if (delErr) {
+        // A service or purchase order that appeared between the check and the
+        // delete. A credit note created in that window does not end up here: the
+        // delete goes through and its line loses the product (SET NULL, 368).
         if ((delErr as any).code === "23503") {
           return NextResponse.json(
             {

@@ -137,7 +137,10 @@ export async function PATCH(request: Request) {
       if (dbError) throw dbError
       updatedCount = data?.length || 0
     } else if (action === "delete") {
-      // Hard-delete bulk: bloquear ids con FK RESTRICT (mismo set que single delete).
+      // Hard-delete bulk: bloquear ids con referencias que impiden borrar (mismo
+      // set que single delete). repuestos_orden / items_orden_compra: la base
+      // rechaza el delete. items_devolucion es SET NULL desde la migracion 368: la
+      // base ya no lo frena, lo frena este chequeo (un producto con NC no se borra).
       // items_venta / items_cotizacion son SET NULL, movimientos / historial son CASCADE.
       const [repuestos, devoluciones, ordenesCompra] = await Promise.all([
         supabaseAdmin.from("repuestos_orden").select("inventario_id").in("inventario_id", ids),
@@ -186,7 +189,9 @@ export async function PATCH(request: Request) {
           .in("id", safeIds)
           .eq("organization_id", organizationId!)
         if (delError) {
-          // Fallback defensivo: FK nueva apareció entre chequeo y delete.
+          // Fallback defensivo: orden de servicio o de compra nueva entre chequeo
+          // y delete. Una NC nueva no frena el delete: su línea queda sin
+          // producto (ON DELETE SET NULL, 368).
           if ((delError as any).code === "23503") {
             return NextResponse.json(
               {

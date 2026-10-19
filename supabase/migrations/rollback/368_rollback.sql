@@ -17,7 +17,7 @@
 -- inerte (nadie la escribe), y borrarla perderia que series devolvio cada NC
 -- emitida mientras la 368 estuvo aplicada, que es lo que la 369 necesita.
 --
--- La FK items_devolucion.inventario_id queda en ON DELETE SET NULL (seccion 1b):
+-- La FK items_devolucion.inventario_id queda en ON DELETE SET NULL (seccion 7):
 -- volver a NO ACTION romperia otra vez la purga de los talleres que devolvieron
 -- productos de su inventario.
 

@@ -240,7 +240,8 @@ INSERT INTO _r SELECT 10, 'segunda NC sobre la fiada: tipo / acredita / baja deu
   FROM _nc WHERE clave = 'v3b';
 
 -- 11. Venta 4: devolver las dos lineas anula la garantia; esa NC se anula (y la
--- garantia vuelve, como hara la 369). Devolver una sola ya no la anula.
+-- garantia vuelve, como hara la 369). Devolver una sola ya no la anula, y es
+-- PARCIAL por $50 (si el TOTAL contara la anulada: TOTAL por $100).
 INSERT INTO _nc SELECT 'v4a', pg_temp.nc_items('vta-probe-368-4',
   '[{"itemVentaId":"iv-probe-368-4","cantidad":2,"restaurarStock":false}]', 'TRANSFERENCIA', 'k-368-4a');
 CREATE TEMP TABLE _gar4 AS SELECT estado::TEXT AS devuelta_entera FROM garantias_venta WHERE id = 'gar-probe-368-4';
@@ -248,10 +249,11 @@ UPDATE devoluciones_venta SET anulada = true WHERE id = (SELECT res->>'id' FROM 
 UPDATE garantias_venta SET estado = 'ACTIVA'::estado_garantia_venta WHERE id = 'gar-probe-368-4';
 INSERT INTO _nc SELECT 'v4b', pg_temp.nc_items('vta-probe-368-4',
   '[{"itemVentaId":"iv-probe-368-4","cantidad":1,"restaurarStock":false}]', 'TRANSFERENCIA', 'k-368-4b');
-INSERT INTO _r SELECT 11, 'garantia: devuelta entera / despues de anular esa NC y devolver una sola',
-  'ANULADA / ACTIVA',
+INSERT INTO _r SELECT 11, 'garantia: devuelta entera / despues de anular esa NC y devolver una sola / tipo / acredita',
+  'ANULADA / ACTIVA / PARCIAL / 50.00',
   (SELECT devuelta_entera FROM _gar4) || ' / ' ||
-  (SELECT estado::TEXT FROM garantias_venta WHERE id = 'gar-probe-368-4');
+  (SELECT estado::TEXT FROM garantias_venta WHERE id = 'gar-probe-368-4') || ' / ' ||
+  (SELECT (res->>'tipo') || ' / ' || (res->>'montoDevolucion')::NUMERIC(12,2)::TEXT FROM _nc WHERE clave = 'v4b');
 
 -- ── Los demas lectores ─────────────────────────────────────────────────────
 -- 12. Venta 6 (fiada): una NC de $40 bajo la deuda y se anula. Se pueden cobrar
