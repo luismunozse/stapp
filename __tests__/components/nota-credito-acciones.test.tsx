@@ -139,6 +139,20 @@ describe("NotaCreditoAcciones", () => {
     expect(boton.closest("span")).toHaveAttribute("title", motivo)
   })
 
+  it("el motivo del bloqueo se ve en pantalla y el botón lo declara, sin depender del title", () => {
+    const motivo = "Se anulan de la más reciente a la primera: primero anulá la NC-000011."
+    render(<NotaCreditoAcciones id="nc-1" numero="NC-000010" onAnular={vi.fn()} bloqueoAnular={motivo} />)
+    const boton = screen.getByRole("button", { name: "Anular la nota de crédito NC-000010" })
+    const texto = screen.getByText(motivo)
+    expect(texto).toBeVisible()
+    expect(boton).toHaveAttribute("aria-describedby", texto.id)
+  })
+
+  it("sin bloqueo no hay texto de motivo ni descripción", () => {
+    render(<NotaCreditoAcciones id="nc-1" numero="NC-000010" onAnular={vi.fn()} />)
+    expect(screen.getByRole("button", { name: "Anular la nota de crédito NC-000010" })).not.toHaveAttribute("aria-describedby")
+  })
+
   it("caracterización: una NC anulada no ofrece WhatsApp, y tampoco anularla otra vez", () => {
     render(<NotaCreditoAcciones id="nc-1" numero="NC-000010" anulada onAnular={vi.fn()} />)
     expect(screen.queryByRole("button", { name: /Anular/ })).not.toBeInTheDocument()

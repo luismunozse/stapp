@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useId, useState } from "react"
 import { Ban, FileDown, Loader2, MessageCircle, Receipt } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -30,6 +30,7 @@ export interface NotaCreditoAccionesProps {
  */
 export function NotaCreditoAcciones({ id, compacto = false, anulada = false, onAnular, bloqueoAnular = null, numero }: NotaCreditoAccionesProps) {
   const [ticketAbierto, setTicketAbierto] = useState(false)
+  const motivoId = useId()
   const abrirPdf = () => window.open(`/api/notas-credito/${encodeURIComponent(id)}/pdf`, "_blank")
 
   const [compartiendo, setCompartiendo] = useState(false)
@@ -85,20 +86,28 @@ export function NotaCreditoAcciones({ id, compacto = false, anulada = false, onA
         </Button>
       )}
       {onAnular && !anulada ? (
-        // El span lleva el motivo: un botón deshabilitado no muestra su title.
-        <span title={bloqueoAnular ?? undefined} className="inline-flex">
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-destructive"
-            onClick={onAnular}
-            disabled={Boolean(bloqueoAnular)}
-            aria-label={numero ? `Anular la nota de crédito ${numero}` : "Anular la nota de crédito"}
-          >
-            <Ban className="h-4 w-4" />
-            {compacto ? null : <span className="ml-1">Anular</span>}
-          </Button>
-        </span>
+        <>
+          {/* El span lleva el title para el mouse; el texto de abajo y aria-describedby, para el dedo y el teclado. */}
+          <span title={bloqueoAnular ?? undefined} className="inline-flex">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive"
+              onClick={onAnular}
+              disabled={Boolean(bloqueoAnular)}
+              aria-label={numero ? `Anular la nota de crédito ${numero}` : "Anular la nota de crédito"}
+              aria-describedby={bloqueoAnular ? motivoId : undefined}
+            >
+              <Ban className="h-4 w-4" />
+              {compacto ? null : <span className="ml-1">Anular</span>}
+            </Button>
+          </span>
+          {bloqueoAnular ? (
+            <p id={motivoId} className={compacto ? "sr-only" : "basis-full text-xs text-muted-foreground"}>
+              {bloqueoAnular}
+            </p>
+          ) : null}
+        </>
       ) : null}
       {ticketAbierto ? (
         <NotaCreditoTicketDialog notaCreditoId={id} open={ticketAbierto} onOpenChange={setTicketAbierto} />
