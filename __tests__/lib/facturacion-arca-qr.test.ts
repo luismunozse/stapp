@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { datosQrDesdeComprobante, urlQrArca, type ComprobanteQrRow } from "@/lib/facturacion/arca/qr"
+import { datosQrDesdeComprobante, urlQrArca, pdfFiscalDisponible, type ComprobanteQrRow } from "@/lib/facturacion/arca/qr"
 
 // Ejemplo oficial de la especificacion del QR de ARCA (RG 4892).
 const EJEMPLO_OFICIAL = {
@@ -117,5 +117,26 @@ describe("urlQrArca", () => {
     expect(json).toBe(JSON.stringify(EJEMPLO_OFICIAL))
     expect(json).toContain('"cuit":30000000007')
     expect(json).toContain('"codAut":70417054367476')
+  })
+})
+
+describe("pdfFiscalDisponible", () => {
+  const completa = { ...filaOficial, tipo: "B", cae_vencimiento: "20261029", importe_iva: 21 }
+
+  it("true con foto completa", () => {
+    expect(pdfFiscalDisponible(completa)).toBe(true)
+  })
+
+  it("false si falta cualquier dato del QR (fila legacy)", () => {
+    expect(pdfFiscalDisponible({ ...completa, cuit_emisor: null })).toBe(false)
+  })
+
+  it("false sin vencimiento del CAE", () => {
+    expect(pdfFiscalDisponible({ ...completa, cae_vencimiento: null })).toBe(false)
+  })
+
+  it("B exige importe_iva; C no", () => {
+    expect(pdfFiscalDisponible({ ...completa, importe_iva: null })).toBe(false)
+    expect(pdfFiscalDisponible({ ...completa, tipo: "C", importe_iva: null })).toBe(true)
   })
 })

@@ -108,3 +108,20 @@ export function datosQrDesdeComprobante(row: ComprobanteQrRow): DatosQr | null {
 export function urlQrArca(datos: DatosQr): string {
   return `${URL_QR_ARCA}?p=${Buffer.from(JSON.stringify(datos), "utf8").toString("base64")}`
 }
+
+/** Campos extra que el PDF fiscal exige ademas de los del QR. */
+export interface ComprobantePdfRow extends ComprobanteQrRow {
+  tipo?: string | null
+  cae_vencimiento?: string | null
+  importe_iva?: number | string | null
+}
+
+/**
+ * Una fila puede renderizar el PDF fiscal solo con la foto completa: datos del
+ * QR, vencimiento del CAE y, en B, el IVA contenido. Fuente unica para el
+ * generador (que tira ComprobanteIncompletoError) y el listado (pdfDisponible).
+ */
+export function pdfFiscalDisponible(row: ComprobantePdfRow): boolean {
+  const ivaOk = row.tipo === "C" || (row.importe_iva !== null && row.importe_iva !== undefined)
+  return datosQrDesdeComprobante(row) !== null && ivaOk && !REQUERIDO_VACIO(row.cae_vencimiento)
+}
