@@ -17,7 +17,8 @@
 --    (330): tope = lo facturado menos lo acreditado por las NC activas; primero
 --    baja la deuda y el resto se reintegra.
 --    Modo ITEMS: sigue en registrar_devolucion_nucleo (330), sin copiarlo; el
---    envoltorio le guarda el motivo del catalogo.
+--    envoltorio le guarda el motivo del catalogo y, si lo recibio (dialogo
+--    nuevo), rechaza un reintegro sin medio como el modo monto (probe 36).
 --
 -- 3. Caja: con p_registrar_egreso, el reintegro en efectivo sale de la caja
 --    ADENTRO de la transaccion (antes lo grababa la ruta despues, fuera de
@@ -308,6 +309,16 @@ BEGIN
       p_metodo_reembolso, p_reembolso_referencia, p_items, p_idempotency_key);
     IF NULLIF(p_motivo_nc, '') IS NOT NULL THEN
       UPDATE devoluciones_venta SET motivo_nc = p_motivo_nc WHERE id = v_res->>'id';
+    END IF;
+    -- El reintegro lo calcula el nucleo. Si el dialogo nuevo (el unico que manda
+    -- el motivo) lo previo en cero con datos viejos, no manda medio: rechazar,
+    -- como el modo monto, en vez de guardar plata devuelta sin medio ni egreso.
+    -- La excepcion revierte tambien lo que hizo el nucleo. Sin motivo (codigo
+    -- anterior, ventana de deploy) sigue igual que con la 356.
+    IF NULLIF(p_motivo_nc, '') IS NOT NULL
+       AND COALESCE((v_res->>'montoReembolso')::DECIMAL, 0) > 0
+       AND NULLIF(p_metodo_reembolso, '') IS NULL THEN
+      RAISE EXCEPTION 'Falta el medio de reintegro';
     END IF;
   ELSE
     v_res := registrar_devolucion_monto(

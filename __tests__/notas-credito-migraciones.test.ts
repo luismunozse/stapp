@@ -215,6 +215,14 @@ describe("365: NC por monto y egreso de caja adentro de la RPC", () => {
     expect(sql()).toMatch(/IF v_existente\.venta_id <> p_venta_id THEN\s+RAISE EXCEPTION/)
   })
 
+  it("por productos, el dialogo nuevo (manda el motivo) no deja una NC con reintegro y sin medio; sin motivo no cambia", () => {
+    const items = sql().match(/IF v_modo = 'ITEMS' THEN([\s\S]*?)\n\s*ELSE\s*\n\s*v_res := registrar_devolucion_monto/)
+    expect(items).not.toBeNull()
+    expect(items![1]).toMatch(
+      /IF NULLIF\(p_motivo_nc, ''\) IS NOT NULL[^;]*montoReembolso[^;]*NULLIF\(p_metodo_reembolso, ''\) IS NULL THEN\s+RAISE EXCEPTION 'Falta el medio de reintegro';/,
+    )
+  })
+
   it("el rollback vuelve a la firma de 10 con sus permisos y conserva el vinculo egreso-NC", () => {
     expect(rollback()).toContain(`DROP FUNCTION IF EXISTS public.registrar_devolucion_atomica(${FIRMA_14});`)
     expect(rollback()).toMatch(/p_idempotency_key\s+TEXT DEFAULT NULL\s*\)\s*RETURNS JSONB/)

@@ -99,6 +99,25 @@ const ERRORES_400 = [
   "al menos un producto",
 ]
 
+// La NC ya quedó registrada aunque falle su relectura: la respuesta igual la
+// identifica con lo que devolvió la RPC (el diálogo y el POS usan id y número).
+// Sin esto respondía null y el diálogo daba por fallida una NC emitida.
+function cuerpoNc(fila: unknown, r: ResultadoDevolucion, ventaId: string, modoPedido: "ITEMS" | "MONTO") {
+  const montoAplicadoDeuda = r.montoAplicadoDeuda ?? 0
+  return (
+    formatDevolucion(fila) ?? {
+      id: r.id,
+      ventaId,
+      numeroDevolucion: r.numero,
+      tipo: r.tipo,
+      modo: r.modo ?? modoPedido,
+      montoDevolucion: r.montoDevolucion,
+      montoAplicadoDeuda,
+      montoReembolso: r.montoReembolso ?? r.montoDevolucion - montoAplicadoDeuda,
+    }
+  )
+}
+
 function errorDeNegocio(msg: string): NextResponse | null {
   if (msg.includes("no encontrada")) {
     return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
@@ -272,7 +291,7 @@ export async function POST(
     // Reintento del mismo pedido: ya se registró (y se auditó y se sacó la
     // plata de la caja) la primera vez.
     if (resultado.replayed) {
-      return NextResponse.json(formatDevolucion(devolucionCompleta), { status: 200 })
+      return NextResponse.json(cuerpoNc(devolucionCompleta, resultado, id, data.modo), { status: 200 })
     }
 
     const modo = resultado.modo ?? data.modo
@@ -323,7 +342,7 @@ export async function POST(
       modo,
     }).catch(() => {})
 
-    return NextResponse.json(formatDevolucion(devolucionCompleta), { status: 201 })
+    return NextResponse.json(cuerpoNc(devolucionCompleta, resultado, id, data.modo), { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
