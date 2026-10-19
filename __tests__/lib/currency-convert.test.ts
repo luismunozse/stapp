@@ -6,19 +6,20 @@ import {
   roundUnit,
   calcularTotalesMultimoneda,
   TipoCambioInvalidoError,
+  PrecioOrigenInvalidoError,
 } from "@/lib/currency/convert"
 import type { EntradaTotalesMultimoneda } from "@/lib/currency/convert"
 import { calcularTotalesVenta } from "@/lib/ventas/totales"
 import casos from "@/fixtures/currency/conversion-cases.json"
 
 describe("validarTipoCambio (REQ-1.6)", () => {
-  it.each([1, 1300, 1300.5, 0.0001, "1300", "1300.25", 1300.123456])("accepts %s", (v) => {
+  it.each([1, 1300, 1300.5, 0.0001, "1300", "1300.25", 1300.123456, 99999999.999999, " 1300 ", ".5"])("accepts %s", (v) => {
     const r = validarTipoCambio(v)
     expect(r.ok).toBe(true)
-    if (r.ok) expect(r.valor).toBe(Number(v))
+    if (r.ok) expect(r.valor).toBe(Number(typeof v === "string" ? v.trim() : v))
   })
 
-  it.each([0, -5, NaN, Infinity, -Infinity, "abc", "", "  ", null, undefined, {}, [], true, 1300.1234567, "1e3x"])(
+  it.each([0, -5, NaN, Infinity, -Infinity, "abc", "", "  ", null, undefined, {}, [], true, 1300.1234567, "1e3x", 1e8, 123456789, "1e3", "0x10", "0b11", "1_000", "Infinity", "100000000", "1,5"])(
     "rejects %s",
     (v) => {
       expect(validarTipoCambio(v as unknown).ok).toBe(false)
@@ -128,5 +129,57 @@ describe("calcularTotalesMultimoneda: order roundUnit -> recargo -> discounts ->
     const input = { lineas: [{ cantidad: 1, precioUnitario: 0, moneda: "USD" as const, precioOrigen: 10 }] }
     expect(() => calcularTotalesMultimoneda({ ...input, tipoCambio: null })).toThrow(TipoCambioInvalidoError)
     expect(() => calcularTotalesMultimoneda({ ...input, tipoCambio: 0 })).toThrow(TipoCambioInvalidoError)
+  })
+
+  it.each([null, undefined, NaN, Infinity, -1, -0.01, "10"])(
+    "a USD line with an invalid origin price (%s) is blocked, never priced at 0",
+    (po) => {
+      const input = {
+        lineas: [{ cantidad: 1, precioUnitario: 0, moneda: "USD" as const, precioOrigen: po as number | null | undefined }],
+        tipoCambio: 1300,
+      }
+      expect(() => calcularTotalesMultimoneda(input)).toThrow(PrecioOrigenInvalidoError)
+    }
+  )
+
+  it("a USD line explicitly priced 0 is a legitimate free item", () => {
+    const r = calcularTotalesMultimoneda({
+      lineas: [{ cantidad: 1, precioUnitario: 0, moneda: "USD", precioOrigen: 0 }],
+      tipoCambio: 1300,
+    })
+    expect(r.lineas[0]).toMatchObject({ precioUnitario: 0, precioOrigen: 0, moneda: "USD" })
+  })
+
+  it("a 0-decimal local currency (CLP) rounds converted prices to whole units by default", () => {
+    const entrada = {
+      lineas: [{ cantidad: 1, precioUnitario: 0, moneda: "USD" as const, precioOrigen: 10.5 }],
+      tipoCambio: 950.5,
+    }
+    // 10.5 x 950.5 = 9980.25
+    expect(calcularTotalesMultimoneda({ ...entrada, monedaLocal: "CLP" }).lineas[0].precioUnitario).toBe(9980)
+    expect(calcularTotalesMultimoneda({ ...entrada, monedaLocal: "CLP", redondeoConversion: 0 }).lineas[0].precioUnitario).toBe(9980)
+    expect(calcularTotalesMultimoneda({ ...entrada, monedaLocal: "ARS" }).lineas[0].precioUnitario).toBe(9980.25)
+    expect(calcularTotalesMultimoneda(entrada).lineas[0].precioUnitario).toBe(9980.25)
+    expect(calcularTotalesMultimoneda({ ...entrada, monedaLocal: "CLP", redondeoConversion: 100 }).lineas[0].precioUnitario).toBe(10000)
+  })
+
+  it("a line whose moneda equals the local currency is never converted", () => {
+    const r = calcularTotalesMultimoneda({
+      lineas: [{ cantidad: 2, precioUnitario: 50, moneda: "USD", precioOrigen: 50 }],
+      monedaLocal: "USD",
+      tipoCambio: null,
+    })
+    expect(r.lineas[0]).toMatchObject({ precioUnitario: 50, moneda: null, precioOrigen: null, tipoCambio: null })
+    expect(r.totales.total).toBe(100)
+  })
+
+  it("a USD line in a USD-local org ignores even a garbage rate", () => {
+    expect(() =>
+      calcularTotalesMultimoneda({
+        lineas: [{ cantidad: 1, precioUnitario: 10, moneda: "USD" }],
+        monedaLocal: "USD",
+        tipoCambio: NaN,
+      })
+    ).not.toThrow()
   })
 })

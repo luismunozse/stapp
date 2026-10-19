@@ -23,11 +23,11 @@ describe("resolverConfigMoneda", () => {
     expect(c).toMatchObject({ habilitada: true, fuente: "MEP", redondeoConversion: 0, tipoCambioManual: 1300 })
   })
 
-  it("S1.d: a CLP org only offers MANUAL and rounds to nothing", () => {
+  it("S1.d: a CLP org only offers MANUAL and rounds to whole pesos (0-decimal currency)", () => {
     const c = resolverConfigMoneda({ multimoneda_habilitada: true, tipo_cambio_fuente: "BLUE" }, "CL")
     expect(c.fuentesDisponibles).toEqual(["MANUAL"])
     expect(c.fuente).toBe("MANUAL")
-    expect(c.redondeoConversion).toBe(0)
+    expect(c.redondeoConversion).toBe(1)
     expect(c.monedaLocal).toBe("CLP")
     expect(c.habilitada).toBe(true)
   })
@@ -72,5 +72,15 @@ describe("resolverConfigMoneda", () => {
     const c = resolverConfigMoneda(null, undefined)
     expect(c.fuentesDisponibles).toEqual(["MANUAL"])
     expect(c.redondeoConversion).toBe(0)
+  })
+
+  it("a stored rounding choice is kept even for a 0-decimal currency", () => {
+    expect(resolverConfigMoneda({ redondeo_conversion: 100 }, "CL").redondeoConversion).toBe(100)
+  })
+
+  it("an inherited Object.prototype key is not a currency code", () => {
+    const c = resolverConfigMoneda(null, "CL", "constructor")
+    expect(c.monedaLocal).toBe("CLP")
+    expect(resolverConfigMoneda(null, "CL", "toString").monedaLocal).toBe("CLP")
   })
 })

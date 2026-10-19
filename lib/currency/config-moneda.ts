@@ -47,7 +47,7 @@ const TODAS: FuenteTipoCambio[] = ["MANUAL", "OFICIAL", "BLUE", "MEP"]
 const FUENTES = new Set<string>(TODAS)
 
 function monedaLocalDe(pais: string | null | undefined, monedaLocal?: string | null): CurrencyCode {
-  if (monedaLocal && monedaLocal in CURRENCIES) return monedaLocal as CurrencyCode
+  if (monedaLocal && Object.hasOwn(CURRENCIES, monedaLocal)) return monedaLocal as CurrencyCode
   return pais ? getCountryConfig(pais).defaultCurrency : DEFAULT_CURRENCY
 }
 
@@ -74,7 +74,9 @@ export function resolverConfigMoneda(
       ? redondeoGuardado
       : esAR
         ? 10
-        : 0
+        : CURRENCIES[local].decimals === 0
+          ? 1
+          : 0
 
   const habilitada = local !== "USD" && fila?.multimoneda_habilitada === true
 
