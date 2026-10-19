@@ -204,10 +204,24 @@ describe("365: NC por monto y egreso de caja adentro de la RPC", () => {
     expect(sql()).toMatch(/ADD COLUMN IF NOT EXISTS devolucion_id TEXT REFERENCES devoluciones_venta\(id\) ON DELETE SET NULL;/)
   })
 
-  it("el rollback vuelve a la firma de 10 con sus permisos y saca la columna", () => {
+  it("acota la espera de locks antes de tocar movimientos_caja: si no consigue el lock, aborta sin aplicar nada", () => {
+    const s = sql()
+    const lock = s.indexOf("SET LOCAL lock_timeout = '3s';")
+    expect(lock).toBeGreaterThan(-1)
+    expect(lock).toBeLessThan(s.indexOf("ALTER TABLE movimientos_caja"))
+  })
+
+  it("el reintento con una clave ya usada en OTRA venta se rechaza en vez de devolver esa NC", () => {
+    expect(sql()).toMatch(/IF v_existente\.venta_id <> p_venta_id THEN\s+RAISE EXCEPTION/)
+  })
+
+  it("el rollback vuelve a la firma de 10 con sus permisos y conserva el vinculo egreso-NC", () => {
     expect(rollback()).toContain(`DROP FUNCTION IF EXISTS public.registrar_devolucion_atomica(${FIRMA_14});`)
     expect(rollback()).toMatch(/p_idempotency_key\s+TEXT DEFAULT NULL\s*\)\s*RETURNS JSONB/)
     expect(rollback()).toMatch(new RegExp(`REVOKE EXECUTE ON FUNCTION public\\.registrar_devolucion_atomica\\(${esc(FIRMA_10)}\\)\\s+FROM PUBLIC, anon, authenticated;`))
-    expect(rollback()).toContain("ALTER TABLE movimientos_caja DROP COLUMN IF EXISTS devolucion_id;")
+    // La columna y el indice quedan: con el codigo de la 356 nadie los escribe, y
+    // borrarlos perderia que egreso salio de que NC (lo que el PR4 revierte).
+    expect(rollback()).not.toMatch(/^\s*ALTER TABLE movimientos_caja DROP COLUMN/im)
+    expect(rollback()).not.toMatch(/^\s*DROP INDEX[^;]*movimientos_caja_devolucion_tipo_unique/im)
   })
 })

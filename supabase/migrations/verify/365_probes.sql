@@ -5,9 +5,10 @@
 -- Contra una base sin la 365 corta al crear pg_temp.nc_monto: la funcion no
 -- tiene p_modo.
 --
--- Fixture propia (org-probe-365). La sucursal y el deposito principales los
--- crea el trigger de alta de la org (217); se agrega una sucursal B con su caja
--- abierta para ver que un egreso nunca se engancha a la caja de otra sucursal.
+-- Fixture propia (org-probe-365, y org-probe-365-x como taller ajeno). La
+-- sucursal y el deposito principales los crea el trigger de alta de la org
+-- (217); se agrega una sucursal B con su caja abierta para ver que un egreso
+-- nunca se engancha a la caja de otra sucursal.
 -- Los casos de plata son los de __tests__/lib/notas-credito-reparto.test.ts.
 -- Los literales que van a columnas enum (ventas.estado, ventas.metodo_pago,
 -- garantias_venta.estado) llevan su cast: salidos de un VALUES como tabla son
@@ -41,21 +42,29 @@ VALUES ('cli-probe-365', 'Cliente probe 365', '365-0001', 'org-probe-365');
 -- 5: pagada entera, con cliente (centavos)
 -- 6: un producto x10 a $10, pagada, con garantia (productos y monto mezclados)
 -- 7: pagada, un producto (ventana de deploy)
+-- 8: pagada entera, con cliente (reintegro a cuenta corriente)
+-- 9: ANULADA (no admite NC)
 INSERT INTO ventas (id, numero_venta, cliente_id, cliente_nombre, vendedor_id, subtotal, total,
                     metodo_pago, estado, organization_id, sucursal_id, monto_abonado, estado_pago)
 SELECT v.id, v.numero, v.cliente, 'Probe 365', 'usr-probe-365', v.total, v.total,
-       'EFECTIVO'::metodo_pago_venta, 'COMPLETADA'::estado_venta, 'org-probe-365',
+       'EFECTIVO'::metodo_pago_venta, v.estado::estado_venta, 'org-probe-365',
        (SELECT id FROM sucursales WHERE organization_id = 'org-probe-365' AND principal),
        v.abonado, v.estado_pago
 FROM (VALUES
-  ('vta-probe-365-1', 1, 'cli-probe-365', 100.00, 60.00, 'PAGADO_PARCIAL'),
-  ('vta-probe-365-2', 2, 'cli-probe-365', 100.00, 60.00, 'PAGADO_PARCIAL'),
-  ('vta-probe-365-3', 3, NULL, 1000.00, 1000.00, 'PAGADO'),
-  ('vta-probe-365-4', 4, 'cli-probe-365', 500.00, 0.00, 'PENDIENTE'),
-  ('vta-probe-365-5', 5, 'cli-probe-365', 100.00, 100.00, 'PAGADO'),
-  ('vta-probe-365-6', 6, 'cli-probe-365', 100.00, 100.00, 'PAGADO'),
-  ('vta-probe-365-7', 7, 'cli-probe-365', 100.00, 100.00, 'PAGADO')
-) AS v(id, numero, cliente, total, abonado, estado_pago);
+  ('vta-probe-365-1', 1, 'cli-probe-365', 100.00, 60.00, 'COMPLETADA', 'PAGADO_PARCIAL'),
+  ('vta-probe-365-2', 2, 'cli-probe-365', 100.00, 60.00, 'COMPLETADA', 'PAGADO_PARCIAL'),
+  ('vta-probe-365-3', 3, NULL, 1000.00, 1000.00, 'COMPLETADA', 'PAGADO'),
+  ('vta-probe-365-4', 4, 'cli-probe-365', 500.00, 0.00, 'COMPLETADA', 'PENDIENTE'),
+  ('vta-probe-365-5', 5, 'cli-probe-365', 100.00, 100.00, 'COMPLETADA', 'PAGADO'),
+  ('vta-probe-365-6', 6, 'cli-probe-365', 100.00, 100.00, 'COMPLETADA', 'PAGADO'),
+  ('vta-probe-365-7', 7, 'cli-probe-365', 100.00, 100.00, 'COMPLETADA', 'PAGADO'),
+  ('vta-probe-365-8', 8, 'cli-probe-365', 100.00, 100.00, 'COMPLETADA', 'PAGADO'),
+  ('vta-probe-365-9', 9, 'cli-probe-365', 100.00, 100.00, 'ANULADA', 'ANULADA')
+) AS v(id, numero, cliente, total, abonado, estado, estado_pago);
+
+-- Otro taller, para ver que nadie emite sobre una venta ajena (probe 33).
+INSERT INTO organizations (id, nombre, nombre_mostrar, slug)
+VALUES ('org-probe-365-x', 'Probe 365 X', 'Probe 365 X', 'probe-365-x-' || substr(md5(random()::text), 1, 8));
 
 INSERT INTO items_venta (id, venta_id, descripcion, cantidad, precio_unitario, subtotal)
 VALUES ('iv-probe-365-6', 'vta-probe-365-6', 'Producto probe 365', 10, 10, 100),
@@ -132,10 +141,17 @@ INSERT INTO _r SELECT 4, 'movimientos_caja.devolucion_id: FK a devoluciones_vent
                                       WHERE attrelid = 'public.movimientos_caja'::regclass
                                         AND attname = 'devolucion_id')]::int2[]), 'no existe');
 
-INSERT INTO _r SELECT 5, 'indice unico (devolucion_id, tipo) para los movimientos de una NC', 'true',
-  (EXISTS (SELECT 1 FROM pg_indexes
-            WHERE schemaname = 'public' AND indexname = 'movimientos_caja_devolucion_tipo_unique'
-              AND indexdef LIKE 'CREATE UNIQUE INDEX%'))::TEXT;
+-- 5. El indice que impide sacar dos veces la plata de una NC: unico, sobre
+-- (devolucion_id, tipo) en ese orden y parcial (los egresos sin NC no cuentan).
+INSERT INTO _r SELECT 5, 'indice de los movimientos de una NC: tabla / unico / columnas / predicado',
+  'movimientos_caja / true / devolucion_id,tipo / (devolucion_id IS NOT NULL)',
+  COALESCE((SELECT i.indrelid::regclass::TEXT || ' / ' || i.indisunique::TEXT || ' / ' ||
+                   (SELECT string_agg(a.attname::TEXT, ',' ORDER BY k.ord)
+                      FROM unnest(i.indkey::int2[]) WITH ORDINALITY AS k(attnum, ord)
+                      JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum) || ' / ' ||
+                   COALESCE(pg_get_expr(i.indpred, i.indrelid), 'sin predicado')
+              FROM pg_index i
+             WHERE i.indexrelid = to_regclass('public.movimientos_caja_devolucion_tipo_unique')), 'no existe');
 
 -- ── Casos de plata (los mismos del test TS) ────────────────────────────────
 -- 6 y 7. Spec: venta de $100 con $60 cobrados. NC de $30: baja la deuda, no reintegra.
@@ -267,13 +283,17 @@ INSERT INTO _r SELECT 18, 'por monto no toca productos: items / garantia / movim
 -- 19. Despues de la NC por monto, devolver lo que queda cierra en TOTAL por el
 -- resto: la suma de la venta nunca pasa lo facturado. La linea queda devuelta
 -- entera y su garantia se retira (paso 6b de la 330).
+-- Deuda conocida y aceptada (PR5): las lineas de esta NC suman 90 (9 x $10, el
+-- precio pagado) aunque acredita 40, porque los otros 50 ya los acredito la NC
+-- por monto. El probe fija ese desfase para que un cambio no pase inadvertido.
 INSERT INTO _nc SELECT 'v6c', pg_temp.nc_items('vta-probe-365-6',
   '[{"itemVentaId":"iv-probe-365-6","cantidad":9,"restaurarStock":false}]', 'DEVOLUCION', 'TRANSFERENCIA', 'k-365-6c');
-INSERT INTO _r SELECT 19, 'productos despues de monto: tipo / monto / suma de la venta / garantia',
-  'TOTAL / 40.00 / 100.00 / ANULADA',
+INSERT INTO _r SELECT 19, 'productos despues de monto: tipo / monto / suma de la venta / garantia / suma de sus lineas',
+  'TOTAL / 40.00 / 100.00 / ANULADA / 90.00',
   (n.res->>'tipo') || ' / ' || (n.res->>'montoDevolucion')::NUMERIC(12,2)::TEXT || ' / ' ||
   (SELECT SUM(monto_devolucion)::TEXT FROM devoluciones_venta WHERE venta_id = 'vta-probe-365-6') || ' / ' ||
-  (SELECT estado::TEXT FROM garantias_venta WHERE id = 'gar-probe-365-6')
+  (SELECT estado::TEXT FROM garantias_venta WHERE id = 'gar-probe-365-6') || ' / ' ||
+  COALESCE((SELECT SUM(subtotal)::TEXT FROM items_devolucion WHERE devolucion_id = n.res->>'id'), 'sin lineas')
   FROM _nc n WHERE n.clave = 'v6c';
 
 -- ── Validaciones del modo monto (venta 3: pagada, sin cliente, $700 disponibles) ─
@@ -315,6 +335,56 @@ INSERT INTO _r SELECT 26, 'segundo egreso de la misma NC',
     VALUES ('org-probe-365', 'EGRESO', 10, 'EFECTIVO', 'duplicado', 'usr-probe-365', false,
             (SELECT id FROM sucursales WHERE organization_id = 'org-probe-365' AND principal),
             'DEVOLUCION', %L)$q$, (SELECT res->>'id' FROM _nc WHERE clave = 'v2')));
+
+-- ── Reintegro a cuenta corriente, aislamiento y estado de la venta ─────────
+-- 32. Venta pagada con cliente, reintegro elegido como "credito en tienda": se
+-- guarda como cuenta corriente, la plata queda a favor del cliente y no sale de
+-- la caja aunque la principal tenga una abierta (la de la probe 10).
+INSERT INTO _nc SELECT 'v8', pg_temp.nc_monto('vta-probe-365-8', 40, 'OTRO', 'CREDITO_TIENDA', 'k-365-8');
+INSERT INTO _r SELECT 32,
+  'reintegro a cuenta corriente: medio / baja deuda / reintegra / movimientos CC / concepto CC / egresos / egreso en la respuesta',
+  'CUENTA_CORRIENTE / 0.00 / 40.00 / 1 x 40.00 / true / 0 / sin egreso',
+  dv.metodo_reembolso::TEXT || ' / ' || dv.monto_aplicado_deuda::TEXT || ' / ' ||
+  (dv.monto_devolucion - dv.monto_aplicado_deuda)::TEXT || ' / ' ||
+  (SELECT COUNT(*)::TEXT || ' x ' || COALESCE(SUM(monto)::TEXT, '0') FROM cuenta_corriente
+    WHERE organization_id = 'org-probe-365' AND referencia_tipo = 'VENTA'
+      AND referencia_id = 'vta-probe-365-8' AND tipo::TEXT = 'DEVOLUCION') || ' / ' ||
+  COALESCE((SELECT bool_and(observaciones = 'Nota de credito ' || dv.numero_devolucion)::TEXT FROM cuenta_corriente
+             WHERE referencia_tipo = 'VENTA' AND referencia_id = 'vta-probe-365-8'), 'sin movimiento') || ' / ' ||
+  (SELECT COUNT(*)::TEXT FROM movimientos_caja WHERE devolucion_id = dv.id) || ' / ' ||
+  COALESCE(n.res->>'movimientoCajaId', 'sin egreso')
+  FROM _nc n JOIN devoluciones_venta dv ON dv.id = n.res->>'id'
+  WHERE n.clave = 'v8';
+
+-- 33. Otro taller no emite sobre una venta ajena, ni con la firma nueva ni con
+-- la de 10 parametros: para el, la venta no existe.
+INSERT INTO _r SELECT 33, 'venta de otro taller: firma nueva / firma de 10',
+  'Venta no encontrada / Venta no encontrada',
+  pg_temp.error_de($q$SELECT registrar_devolucion_atomica(
+    p_org_id => 'org-probe-365-x', p_venta_id => 'vta-probe-365-8', p_user_id => 'usr-probe-365',
+    p_numero_devolucion => NULL, p_motivo => 'Probe 365', p_observaciones => NULL,
+    p_metodo_reembolso => 'EFECTIVO', p_reembolso_referencia => NULL, p_items => '[]'::jsonb,
+    p_idempotency_key => 'k-365-x1', p_modo => 'MONTO', p_monto => 10,
+    p_motivo_nc => 'OTRO', p_registrar_egreso => true)$q$) || ' / ' ||
+  pg_temp.error_de($q$SELECT registrar_devolucion_atomica(
+    p_org_id => 'org-probe-365-x', p_venta_id => 'vta-probe-365-7', p_user_id => 'usr-probe-365',
+    p_numero_devolucion => NULL, p_motivo => 'Probe 365', p_observaciones => NULL,
+    p_metodo_reembolso => 'EFECTIVO', p_reembolso_referencia => NULL,
+    p_items => '[{"itemVentaId":"iv-probe-365-7","cantidad":1,"restaurarStock":false}]'::jsonb,
+    p_idempotency_key => 'k-365-x2')$q$);
+
+-- 34. Una venta anulada no admite NC, por monto ni por productos.
+INSERT INTO _r SELECT 34, 'venta anulada: por monto / por productos',
+  'Solo se pueden crear devoluciones para ventas completadas / Solo se pueden crear devoluciones para ventas completadas',
+  pg_temp.error_de($q$SELECT pg_temp.nc_monto('vta-probe-365-9', 10, 'OTRO', 'EFECTIVO', 'k-365-9a')$q$) || ' / ' ||
+  pg_temp.error_de($q$SELECT pg_temp.nc_items('vta-probe-365-9',
+    '[{"itemVentaId":"no-existe","cantidad":1,"restaurarStock":false}]', 'DEVOLUCION', 'EFECTIVO', 'k-365-9b')$q$);
+
+-- 35. La clave de reintento es unica por taller, no por venta: reusarla en otra
+-- venta no devuelve la NC de la primera (haria creer que se acredito esta).
+INSERT INTO _r SELECT 35, 'clave de reintento ya usada en otra venta',
+  'La clave de reintento ya se uso en una nota de credito de otra venta',
+  pg_temp.error_de($q$SELECT pg_temp.nc_monto('vta-probe-365-1', 5, 'OTRO', NULL, 'k-365-3')$q$);
 
 -- ── Integracion ────────────────────────────────────────────────────────────
 -- 27. La vista unificada (listado, PDF, ticket del PR2) muestra la NC por monto.

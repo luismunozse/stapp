@@ -40,6 +40,18 @@
 -- editor SQL de Supabase lo manda como una sola consulta, que Postgres corre
 -- en una transaccion implicita. Entre el DROP y el CREATE del envoltorio no
 -- queda un instante sin funcion.
+--
+-- Locks (aplicar fuera del pico del POS), todos hasta el final de la transaccion:
+--   * ACCESS EXCLUSIVE sobre movimientos_caja (ADD COLUMN e indice): mientras
+--     tanto nadie lee ni escribe esa tabla (movimientos, resumen, arqueo);
+--   * SHARE ROW EXCLUSIVE sobre devoluciones_venta (la FK nueva).
+-- Con la columna nula y el indice parcial, el archivo corre en segundos. El
+-- riesgo es la ESPERA: si el ALTER queda encolado detras de una consulta larga,
+-- todo lo que toque la caja se encola detras de el. lock_timeout acota esa
+-- espera: si aborta por el timeout ("canceling statement due to lock
+-- timeout"), no se aplico nada; re-correr el archivo.
+
+SET LOCAL lock_timeout = '3s';
 
 -- ── 0. Requiere la 356 ─────────────────────────────────────────────────────
 DO $$
@@ -249,6 +261,11 @@ BEGIN
     SELECT * INTO v_existente FROM devoluciones_venta
     WHERE organization_id = p_org_id AND idempotency_key = p_idempotency_key;
     IF FOUND THEN
+      -- La clave es unica por org, no por venta. Una clave reusada en otra venta
+      -- no es un reintento: devolver esa NC haria creer que se acredito esta.
+      IF v_existente.venta_id <> p_venta_id THEN
+        RAISE EXCEPTION 'La clave de reintento ya se uso en una nota de credito de otra venta';
+      END IF;
       RETURN jsonb_build_object(
         'id', v_existente.id, 'numero', v_existente.numero_devolucion,
         'modo', v_existente.modo, 'tipo', v_existente.tipo,

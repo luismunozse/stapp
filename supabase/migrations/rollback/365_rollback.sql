@@ -5,7 +5,14 @@
 -- produccion y sin la firma de 14, toda nota de credito de venta responde 503.
 --
 -- No borra datos: las NC por monto quedan (la vista, el listado, el PDF y el
--- ticket del PR2 ya las muestran) y los egresos quedan, sin el vinculo a su NC.
+-- ticket del PR2 ya las muestran) y los egresos quedan con su vinculo a la NC.
+--
+-- movimientos_caja.devolucion_id y su indice unico NO se borran. Con el codigo
+-- de la 356 son inertes: la ruta graba sus egresos sin devolucion_id y el
+-- indice es parcial (devolucion_id IS NOT NULL). Borrarlos perderia que egreso
+-- salio de que NC, que es lo que la anulacion (PR4) necesita para revertir la
+-- plata exacta. Si se vuelve a aplicar la 365, su ADD COLUMN y su CREATE INDEX
+-- son IF NOT EXISTS. Tampoco toma locks sobre movimientos_caja.
 
 DROP FUNCTION IF EXISTS public.registrar_devolucion_atomica(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, TEXT, NUMERIC, TEXT, BOOLEAN);
 DROP FUNCTION IF EXISTS public.registrar_devolucion_monto(TEXT, TEXT, TEXT, TEXT, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT);
@@ -74,5 +81,3 @@ REVOKE EXECUTE ON FUNCTION public.registrar_devolucion_atomica(TEXT, TEXT, TEXT,
 GRANT EXECUTE ON FUNCTION public.registrar_devolucion_atomica(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT)
   TO service_role;
 
-DROP INDEX IF EXISTS movimientos_caja_devolucion_tipo_unique;
-ALTER TABLE movimientos_caja DROP COLUMN IF EXISTS devolucion_id;
