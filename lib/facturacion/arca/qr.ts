@@ -76,13 +76,16 @@ export function datosQrDesdeComprobante(row: ComprobanteQrRow): DatosQr | null {
     ptoVta === null ||
     importe === null ||
     ctz === null ||
-    !partes
+    !partes ||
+    Number(partes[2]) < 1
   ) {
     return null
   }
 
   const tipoDocRec = numero(row.receptor_doc_tipo_cod)
   const nroDocRec = digitos(row.receptor_doc_nro_cod)
+  // Un documento fuera del rango entero seguro perderia digitos al serializarse.
+  if (nroDocRec !== null && !Number.isSafeInteger(nroDocRec)) return null
   const conReceptor = tipoDocRec !== null && nroDocRec !== null
 
   return {

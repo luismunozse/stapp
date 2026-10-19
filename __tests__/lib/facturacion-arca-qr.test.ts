@@ -93,6 +93,16 @@ describe("datosQrDesdeComprobante", () => {
     expect(datosQrDesdeComprobante({ ...filaOficial, numero: "abc" })).toBeNull()
     expect(datosQrDesdeComprobante({ ...filaOficial, cae: "no-es-numero" })).toBeNull()
   })
+
+  it("devuelve null si el numero de comprobante es 0 (no hay QR valido)", () => {
+    expect(datosQrDesdeComprobante({ ...filaOficial, numero: "0001-00000000" })).toBeNull()
+  })
+
+  it("devuelve null si el documento del receptor no es un entero seguro", () => {
+    expect(
+      datosQrDesdeComprobante({ ...filaOficial, receptor_doc_nro_cod: "99999999999999999999" })
+    ).toBeNull()
+  })
 })
 
 describe("urlQrArca", () => {
