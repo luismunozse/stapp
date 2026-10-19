@@ -49,7 +49,8 @@ export function sinOrigen<T extends { origen?: unknown }>(payload: T): Omit<T, "
  * Deduce el origen de una fila a partir de su concepto. Es el respaldo para
  * cuando la columna `origen` no existe (mig 335 sin aplicar). Debe coincidir
  * con el backfill de la migracion: un "Retiro de socio" tambien tiene
- * afecta_rentabilidad=false y sigue siendo MANUAL.
+ * afecta_rentabilidad=false y sigue siendo MANUAL. El INGRESO de la anulacion
+ * de una NC (mig 367) tiene el origen de su egreso: no se puede borrar.
  */
 export function origenPorConcepto(row: {
   tipo?: string | null
@@ -58,8 +59,13 @@ export function origenPorConcepto(row: {
   concepto?: string | null
 }): OrigenMovimientoCaja {
   if (row.es_recurrente === true) return "RECURRENTE"
-  if (row.tipo !== "EGRESO" || row.afecta_rentabilidad !== false) return "MANUAL"
+  if (row.afecta_rentabilidad !== false) return "MANUAL"
   const concepto = typeof row.concepto === "string" ? row.concepto.trim() : ""
+  if (row.tipo === "INGRESO") {
+    if (!/^anulaci[oó]n de nota de cr[eé]dito\s/i.test(concepto)) return "MANUAL"
+    return /\s-\sventa\s/i.test(concepto) ? "DEVOLUCION" : "NOTA_CREDITO"
+  }
+  if (row.tipo !== "EGRESO") return "MANUAL"
   if (/^devoluci[oó]n\s/i.test(concepto)) return "DEVOLUCION"
   if (/^nota de cr[eé]dito\s/i.test(concepto)) return "NOTA_CREDITO"
   if (/^costo de mercader/i.test(concepto)) return "COGS"
