@@ -769,6 +769,11 @@ describe('formatVenta — facturaId from facturas embed', () => {
     expect(formatVenta(null)).toBe(null)
   })
 
+  it('expone la sucursal de la venta (el efectivo de una NC sale de su caja)', () => {
+    expect(formatVenta(ventaBase({ sucursal_id: 'suc-2' }))!.sucursalId).toBe('suc-2')
+    expect(formatVenta(ventaBase())!.sucursalId).toBe(null)
+  })
+
   it('facturaId null cuando no hay factura (array vacío)', () => {
     const result = formatVenta(ventaBase({ facturas: [] }))
     expect(result?.facturaId).toBe(null)
