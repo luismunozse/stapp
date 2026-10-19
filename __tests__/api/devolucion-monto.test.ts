@@ -94,6 +94,7 @@ describe("POST /api/ventas/[id]/devolucion — nota de crédito por monto", () =
     ["sin monto", { monto: undefined }, "El monto tiene que ser mayor a cero"],
     ["con monto cero", { monto: 0 }, "El monto tiene que ser mayor a cero"],
     ["con medio centavo", { monto: 0.004 }, "El monto tiene que ser mayor a cero"],
+    ["con un motivo que es solo de órdenes", { motivoNc: "TRABAJO_NO_REALIZADO" }, "Motivo de nota de crédito inválido"],
     ["con productos", { items: [{ itemVentaId: "iv1", cantidad: 1, precioUnitario: 10, restaurarStock: false }] }, "Una nota de crédito por monto no lleva productos"],
   ])("rechaza un pedido %s sin llamar a la RPC", async (_caso, extra, mensaje) => {
     setup()
@@ -174,6 +175,16 @@ describe("POST /api/ventas/[id]/devolucion — nota de crédito por monto", () =
     }))
     expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "nota_credito.creada", expect.objectContaining({ metodoReembolso: null }))
     expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "venta.devolucion", expect.objectContaining({ metodoReembolso: null }))
+  })
+
+  it("CREDITO_TIENDA se reporta como el medio guardado (CUENTA_CORRIENTE) en auditoría y webhooks", async () => {
+    setup()
+    await enviar(porMonto({ metodoReembolso: "CREDITO_TIENDA" }))
+
+    expect(rpcArgs()).toMatchObject({ p_metodo_reembolso: "CUENTA_CORRIENTE" })
+    expect(auditCreate).toHaveBeenCalledWith("notas_credito", "d1", expect.objectContaining({ metodo_reembolso: "CUENTA_CORRIENTE" }))
+    expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "nota_credito.creada", expect.objectContaining({ metodoReembolso: "CUENTA_CORRIENTE" }))
+    expect(emitWebhookEvent).toHaveBeenCalledWith("org-1", "venta.devolucion", expect.objectContaining({ metodoReembolso: "CUENTA_CORRIENTE" }))
   })
 
   it("un reintento (replayed) responde 200 sin auditar de nuevo", async () => {

@@ -6,7 +6,7 @@ import { createAuditLogger } from "@/lib/audit"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { aggregateReturnItems } from "@/lib/devolucion-refund"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
-import { MOTIVOS_NC, MOTIVO_NC_LABELS } from "@/lib/notas-credito/catalogo"
+import { MOTIVOS_NC_VENTA, MOTIVO_NC_LABELS } from "@/lib/notas-credito/catalogo"
 import { z } from "zod"
 
 const itemDevolucionSchema = z.object({
@@ -25,7 +25,7 @@ const devolucionSchema = z
     modo: z.enum(["ITEMS", "MONTO"]).default("ITEMS"),
     // Motivo del catálogo (mig 350). Obligatorio por monto; los clientes anteriores no lo mandan.
     motivoNc: z
-      .enum(MOTIVOS_NC, { errorMap: () => ({ message: "Motivo de nota de crédito inválido" }) })
+      .enum(MOTIVOS_NC_VENTA, { errorMap: () => ({ message: "Motivo de nota de crédito inválido" }) })
       .optional(),
     // Detalle libre. Para los clientes anteriores es el único motivo.
     motivo: z.string().trim().max(500).optional(),
