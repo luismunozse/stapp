@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -94,12 +95,6 @@ export function ConfiguracionForm({
   const [politicaAbandonoDiasDefault, setPoliticaAbandonoDiasDefault] = useState("60")
   const [anticipoPorcentajeDefault, setAnticipoPorcentajeDefault] = useState("50")
   const [moduloAgenda, setModuloAgenda] = useState(false)
-  const [vendedoresAdministranInventario, setVendedoresAdministranInventario] = useState(false)
-  const [tecnicosOperanPos, setTecnicosOperanPos] = useState(false)
-  const [vendedoresManejanCaja, setVendedoresManejanCaja] = useState(false)
-  const [tecnicosCobranCotizaciones, setTecnicosCobranCotizaciones] = useState(false)
-  // Arranca en true: este permiso QUITA algo que el vendedor ya tiene.
-  const [vendedoresVenIngresos, setVendedoresVenIngresos] = useState(true)
   // Arranca en true: el POS agrupa las variantes salvo que el taller pida la lista plana.
   const [posAgrupaVariantes, setPosAgrupaVariantes] = useState(true)
   const [comisionAplicaSinReparacion, setComisionAplicaSinReparacion] = useState(false)
@@ -205,11 +200,6 @@ export function ConfiguracionForm({
         setPoliticaAbandonoDiasDefault(String(data.politicaAbandonoDiasDefault ?? 60))
         setAnticipoPorcentajeDefault(String(data.anticipoPorcentajeDefault ?? 50))
         setModuloAgenda(!!data.moduloAgenda)
-        setVendedoresAdministranInventario(!!data.vendedoresAdministranInventario)
-        setTecnicosOperanPos(!!data.tecnicosOperanPos)
-        setVendedoresManejanCaja(!!data.vendedoresManejanCaja)
-        setTecnicosCobranCotizaciones(!!data.tecnicosCobranCotizaciones)
-        setVendedoresVenIngresos(data.vendedoresVenIngresos !== false)
         setPosAgrupaVariantes(data.posAgrupaVariantes !== false)
         setComisionAplicaSinReparacion(!!data.comisionAplicaSinReparacion)
         setIvaRegimen(data.ivaRegimen ?? "EXENTO")
@@ -383,7 +373,7 @@ export function ConfiguracionForm({
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, tecnicosOperanPos, vendedoresManejanCaja, tecnicosCobranCotizaciones, vendedoresVenIngresos, posAgrupaVariantes, ordenFormatoPapel, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, posAgrupaVariantes, ordenFormatoPapel, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias }),
       })
 
       if (res.ok) {
@@ -733,81 +723,13 @@ export function ConfiguracionForm({
                   </div>
                 </div>
               </label>
-              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-                <input
-                  type="checkbox"
-                  checked={vendedoresAdministranInventario}
-                  onChange={(e) => setVendedoresAdministranInventario(e.target.checked)}
-                  disabled={!allowEdit}
-                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">Los vendedores pueden administrar inventario</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Permite a los usuarios con rol Vendedor gestionar productos, stock, depósitos, ajustes y conteos. Apagado, solo los administradores acceden.
-                  </div>
-                </div>
-              </label>
-              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-                <input
-                  type="checkbox"
-                  checked={tecnicosOperanPos}
-                  onChange={(e) => setTecnicosOperanPos(e.target.checked)}
-                  disabled={!allowEdit}
-                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">Los técnicos pueden operar el POS</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Permite a los usuarios con rol Técnico vender desde el Punto de Venta y ver sus propias ventas, sin dejar de ser técnicos: siguen recibiendo órdenes asignadas y conservando sus comisiones. No incluye anular ni editar ventas, registrar pagos ni crear devoluciones, que siguen siendo solo de administradores.
-                  </div>
-                </div>
-              </label>
-              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-                <input
-                  type="checkbox"
-                  checked={vendedoresManejanCaja}
-                  onChange={(e) => setVendedoresManejanCaja(e.target.checked)}
-                  disabled={!allowEdit}
-                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">Los vendedores pueden manejar la caja</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Permite a los usuarios con rol Vendedor abrir la caja de su sucursal, cerrarla con arqueo y cargar movimientos manuales. No incluye el historial de cierres ni la exportación, que siguen siendo solo de administradores.
-                  </div>
-                </div>
-              </label>
-              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-                <input
-                  type="checkbox"
-                  checked={tecnicosCobranCotizaciones}
-                  onChange={(e) => setTecnicosCobranCotizaciones(e.target.checked)}
-                  disabled={!allowEdit}
-                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">Los técnicos pueden cobrar sus cotizaciones</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Permite a los usuarios con rol Técnico convertir en venta las cotizaciones aceptadas que ellos mismos crearon, sin depender de un administrador para cerrar el cobro. No incluye eliminar cotizaciones, revisarlas ni convertirlas en orden de servicio, que siguen siendo solo de administradores, ni las cotizaciones de otros técnicos. La venta se les acredita como vendedor; para que además la vean listada en Ventas necesitan también el permiso de POS de acá arriba.
-                  </div>
-                </div>
-              </label>
-              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-                <input
-                  type="checkbox"
-                  checked={vendedoresVenIngresos}
-                  onChange={(e) => setVendedoresVenIngresos(e.target.checked)}
-                  disabled={!allowEdit}
-                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">Los vendedores pueden ver los ingresos</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Viene activado. Si lo desactivás, los usuarios con rol Vendedor dejan de ver en Reportes la facturación del taller y cuánto gastó cada cliente. Siguen viendo los reportes operativos —tiempos de reparación, fallas comunes, desempeño de técnicos, inventario— y sus propias ventas en el Punto de Venta. Los precios de compra y los márgenes ya estaban reservados a los administradores, con o sin este permiso.
-                  </div>
-                </div>
-              </label>
+              <p className="text-xs text-muted-foreground mt-3">
+                Los permisos de técnicos y vendedores se configuran en{" "}
+                <Link href="/configuracion/roles" className="underline underline-offset-2 hover:text-foreground">
+                  Roles y permisos
+                </Link>
+                .
+              </p>
               <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
                 <input
                   type="checkbox"
