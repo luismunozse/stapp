@@ -12,6 +12,8 @@ import {
 // react-pdf necesita el runtime de Node (no Edge).
 export const runtime = "nodejs"
 
+const FORMA_ID = /^[A-Za-z0-9_-]{1,64}$/
+
 const DATOS_INCOMPLETOS = "El comprobante tiene datos incompletos: no se puede generar el PDF con QR."
 
 // Mismo SELECT en dos escalones: con la foto fiscal y, si la migracion aun no
@@ -38,6 +40,12 @@ export async function GET(
 
     const { id } = await params
 
+    // Los ids son TEXT (cuid). Una forma imposible no tiene nada que buscar:
+    // 404 sin tocar la DB.
+    if (!FORMA_ID.test(id)) {
+      return NextResponse.json({ error: "Comprobante no encontrado" }, { status: 404 })
+    }
+
     // Se filtra por id Y organizacion: los numeros de comprobante se repiten
     // entre orgs y supabaseAdmin no pasa por RLS.
     let conFoto = true
@@ -45,6 +53,9 @@ export async function GET(
     if (dbError && isMissingColumnError(dbError)) {
       conFoto = false
       ;({ data: fila, error: dbError } = await buscarComprobante(id, organizationId!, false))
+    }
+    if (dbError?.code === "22P02") {
+      return NextResponse.json({ error: "Comprobante no encontrado" }, { status: 404 })
     }
     if (dbError) {
       console.error("Error loading comprobante for PDF:", dbError)

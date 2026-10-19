@@ -126,6 +126,21 @@ describe("GET /api/facturacion-electronica/comprobantes/[id]/pdf", () => {
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 
+  it.each(["", "a b", "x,y", "abc'--", "a".repeat(65), "../etc"])(
+    "404 sin tocar la DB cuando el id tiene forma invalida (%j)",
+    async (id) => {
+      const res = await GET(createGetRequest(), ctx(id))
+      expect(res.status).toBe(404)
+      expect(supabaseAdmin.from).not.toHaveBeenCalled()
+    }
+  )
+
+  it("404 (no 500) si Postgres rechaza el id con 22P02", async () => {
+    mockDb({ comprobante: () => ({ data: null, error: { code: "22P02", message: "invalid input syntax" } }) })
+    const res = await GET(createGetRequest(), ctx("cabc123"))
+    expect(res.status).toBe(404)
+  })
+
   it("200 application/pdf inline con nombre factura-B-0001-00000123.pdf", async () => {
     mockDb({ comprobante: () => ({ data: FILA, error: null }) })
     const res = await GET(createGetRequest(), ctx())
