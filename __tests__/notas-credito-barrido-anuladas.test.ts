@@ -76,3 +76,107 @@ describe("barrido: las NC anuladas no cuentan en app/ ni en lib/, components/ ni
     for (const archivo of [...FILTRAN, ...Object.keys(EXCEPCIONES)]) expect(lectores, archivo).toContain(archivo)
   })
 })
+
+describe("barrido: las funciones y vistas vivas que leen NC de venta ignoran las anuladas", () => {
+  const DIR = join(RAIZ, "supabase", "migrations")
+  const sinComentarios = (sql: string) => sql.replace(/--[^\n]*/g, "")
+
+  type Evento =
+    | { en: number; tipo: "crear"; nombre: string; cuerpo: string }
+    | { en: number; tipo: "renombrar"; nombre: string; nuevo: string }
+    | { en: number; tipo: "borrar"; nombre: string }
+
+  /** CREATE, RENAME y DROP de funciones y vistas de un archivo, en orden. */
+  function eventos(sql: string): Evento[] {
+    const out: Evento[] = []
+    for (const m of sql.matchAll(/CREATE\s+(?:OR\s+REPLACE\s+)?(FUNCTION|VIEW)\s+(?:public\.)?(\w+)/gi)) {
+      const desde = m.index!
+      let hasta: number
+      if (m[1].toUpperCase() === "FUNCTION") {
+        const resto = sql.slice(desde)
+        const tag = /\bAS\s+(\$[A-Za-z_]*\$)/i.exec(resto)
+        if (!tag) continue
+        const cierra = resto.indexOf(tag[1], tag.index + tag[0].length)
+        hasta = desde + resto.indexOf(";", cierra) + 1
+      } else {
+        hasta = sql.indexOf(";", desde) + 1
+      }
+      out.push({ en: desde, tipo: "crear", nombre: m[2].toLowerCase(), cuerpo: sql.slice(desde, hasta) })
+    }
+    for (const m of sql.matchAll(/ALTER\s+FUNCTION\s+(?:public\.)?(\w+)\s*\([^)]*\)\s*RENAME\s+TO\s+(\w+)/gi)) {
+      out.push({ en: m.index!, tipo: "renombrar", nombre: m[1].toLowerCase(), nuevo: m[2].toLowerCase() })
+    }
+    for (const m of sql.matchAll(/DROP\s+(?:FUNCTION|VIEW)\s+(?:IF\s+EXISTS\s+)?(?:public\.)?(\w+)/gi)) {
+      out.push({ en: m.index!, tipo: "borrar", nombre: m[1].toLowerCase() })
+    }
+    return out.sort((a, b) => a.en - b.en)
+  }
+
+  /** La ultima definicion de cada funcion o vista con las migraciones de numero menor a `tope`. */
+  function vivasHasta(tope = Infinity) {
+    const out = new Map<string, { archivo: string; cuerpo: string }>()
+    const archivos = readdirSync(DIR).filter((f) => /^\d{3}_.*\.sql$/.test(f) && Number(f.slice(0, 3)) < tope)
+    for (const archivo of archivos.sort()) {
+      for (const e of eventos(sinComentarios(readFileSync(join(DIR, archivo), "utf8")))) {
+        if (e.tipo === "crear") out.set(e.nombre, { archivo, cuerpo: e.cuerpo })
+        else if (e.tipo === "borrar") out.delete(e.nombre)
+        else {
+          const d = out.get(e.nombre)
+          if (d) {
+            out.set(e.nuevo, d)
+            out.delete(e.nombre)
+          }
+        }
+      }
+    }
+    return out
+  }
+
+  // La ultima definicion de cada funcion o vista: como queda la base.
+  const vivas = vivasHasta()
+  const leen = [...vivas].filter(([, d]) => TABLAS.test(d.cuerpo)).map(([n]) => n).sort()
+
+  // Minimo de "anulada = false" en la ultima definicion de cada una.
+  const FILTROS_SQL: Record<string, number> = {
+    registrar_devolucion_atomica: 1,
+    registrar_devolucion_monto: 1,
+    registrar_devolucion_nucleo: 5,
+    registrar_pagos_venta_atomica: 1,
+    restore_stock_on_cancel: 1,
+    v_cc_drift: 1,
+    v_comisiones_ventas: 1,
+  }
+  const EXCEPCIONES_SQL: Record<string, string> = {
+    editar_venta_atomica:
+      "editar sigue bloqueado con cualquier NC, tambien anulada: las lineas de una NC anulada referencian items_venta",
+    v_notas_credito: "el listado muestra las anuladas con su estado",
+  }
+
+  it("cada funcion o vista viva que lee esas tablas filtra o esta justificada", () => {
+    const sinDecidir = leen.filter((n) => !(n in FILTROS_SQL) && !(n in EXCEPCIONES_SQL))
+    expect(sinDecidir, "agregala a FILTROS_SQL (con su minimo de anulada = false) o a EXCEPCIONES_SQL").toEqual([])
+  })
+
+  it.each(Object.entries(FILTROS_SQL))("%s filtra anulada = false al menos %i veces", (nombre, minimo) => {
+    const d = vivas.get(nombre)
+    expect(d, `${nombre} no esta viva`).toBeDefined()
+    expect(d!.cuerpo.match(/\b(?:\w+\.)?anulada\s*=\s*false\b/gi)?.length ?? 0, d!.archivo).toBeGreaterThanOrEqual(minimo)
+  })
+
+  // La 368 redefine estos cinco objetos copiando una version fija (notas-credito-
+  // migraciones.test.ts compara contra esos archivos). Si una migracion anterior a
+  // la 368 los redefine despues (otra rama mergeada antes), la copia volveria
+  // atras ese cambio sin que nadie lo note: este test lo frena.
+  it("la 368 copia la ultima definicion anterior de cada objeto que redefine", () => {
+    const COPIADAS: Record<string, string> = {
+      registrar_devolucion_nucleo: "330_devolucion_descuenta_saldo.sql",
+      registrar_pagos_venta_atomica: "331_cobros_venta_idempotencia_y_cliente.sql",
+      restore_stock_on_cancel: "334_anular_venta_series_y_garantias.sql",
+      v_comisiones_ventas: "333_comision_neta_de_devoluciones.sql",
+      v_cc_drift: "245_v_cc_drift.sql",
+    }
+    const antes = vivasHasta(368)
+    const ultima = Object.fromEntries(Object.keys(COPIADAS).map((n) => [n, antes.get(n)?.archivo]))
+    expect(ultima, "una migracion anterior a la 368 redefine un objeto que la 368 copia: rehacer la copia").toEqual(COPIADAS)
+  })
+})

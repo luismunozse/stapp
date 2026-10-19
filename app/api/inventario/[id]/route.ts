@@ -334,7 +334,11 @@ export async function DELETE(
       return NextResponse.json({ success: true, archived: true })
     }
 
-    // Modo hard-delete: primero chequear referencias bloqueantes (FK RESTRICT).
+    // Modo hard-delete: primero chequear las referencias que impiden borrar.
+    // repuestos_orden e items_orden_compra tienen FK sin ON DELETE: la base
+    // rechaza el delete (23503). items_devolucion es ON DELETE SET NULL desde la
+    // migracion 368 (para la purga de cuentas): la base ya no lo frena, lo frena
+    // este chequeo — un producto con NC no se borra.
     // items_venta y items_cotizacion usan ON DELETE SET NULL — no bloquean.
     // movimientos_inventario e historial_precios usan CASCADE — se limpian solos.
     const [repuestos, devoluciones, ordenesCompra] = await Promise.all([
@@ -381,7 +385,9 @@ export async function DELETE(
       .eq("organization_id", organizationId!)
 
     if (deleteError) {
-      // Fallback defensivo: si una FK nueva apareció entre el chequeo y el delete.
+      // Fallback defensivo: una orden de servicio o de compra que apareció entre
+      // el chequeo y el delete. Una NC creada en ese intervalo no llega acá: el
+      // delete pasa y su línea queda sin producto (ON DELETE SET NULL, 368).
       if ((deleteError as any).code === "23503") {
         return NextResponse.json(
           {

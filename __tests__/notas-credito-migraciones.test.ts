@@ -9,7 +9,7 @@ import { join } from "path"
 // rollback, y que ninguna abre su propia transacción. Lo último importa:
 // db-run.mjs ejecuta TAL CUAL un archivo con BEGIN en sus primeras 40 líneas,
 // así que `npm run db:dry` sobre una migración con BEGIN/COMMIT la aplicaría.
-const MIGRACIONES = ["350_notas_credito_bases", "356_nc_numeracion_y_vista", "360_pendiente_orden", "367_nc_monto_ventas"]
+const MIGRACIONES = ["350_notas_credito_bases", "356_nc_numeracion_y_vista", "360_pendiente_orden", "367_nc_monto_ventas", "368_nc_anuladas_no_cuentan"]
 
 const leer = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8")
 const existe = (rel: string) => existsSync(join(process.cwd(), rel))
@@ -231,5 +231,248 @@ describe("367: NC por monto y egreso de caja adentro de la RPC", () => {
     // borrarlos perderia que egreso salio de que NC (lo que el PR4 revierte).
     expect(rollback()).not.toMatch(/^\s*ALTER TABLE movimientos_caja DROP COLUMN/im)
     expect(rollback()).not.toMatch(/^\s*DROP INDEX[^;]*movimientos_caja_devolucion_tipo_unique/im)
+  })
+})
+
+// ── Copias textuales (368) ─────────────────────────────────────────────────
+// La 368 redefine cinco objetos copiando su ultima version con una lista
+// contada de cambios, y su rollback los copia tal cual. Se compara sin
+// comentarios ni espacios: los comentarios "-- 368: ..." son libres. Lo que se
+// revisa en el PR son estas listas, no las copias.
+const plano = (s: string) => s.replace(/--[^\n]*/g, "").replace(/\s+/g, " ").trim()
+
+function tramo(rel: string, desde: string, hasta: string, incluirHasta = true): string {
+  const texto = leer(rel).replace(/\r\n/g, "\n")
+  const i = texto.indexOf(desde)
+  if (i < 0) throw new Error(`${rel}: no esta "${desde}"`)
+  const j = texto.indexOf(hasta, i + desde.length)
+  if (j < 0) throw new Error(`${rel}: no esta "${hasta}"`)
+  return texto.slice(i, incluirHasta ? j + hasta.length : j)
+}
+
+type Cambios = ReadonlyArray<readonly [string, string]>
+
+/** La copia esperada: el original con cada cambio aplicado exactamente una vez. */
+function conCambios(original: string, cambios: Cambios): string {
+  let out = plano(original)
+  for (const [viejo, nuevo] of cambios) {
+    const v = plano(viejo)
+    const veces = out.split(v).length - 1
+    if (veces !== 1) throw new Error(`"${v.slice(0, 60)}..." aparece ${veces} veces en el original`)
+    out = out.replace(v, () => plano(nuevo))
+  }
+  return out
+}
+
+const NUCLEO_330 = () =>
+  tramo("supabase/migrations/330_devolucion_descuenta_saldo.sql", "CREATE OR REPLACE FUNCTION public.registrar_devolucion_atomica(", "$function$;")
+const PAGOS_331 = () =>
+  tramo("supabase/migrations/331_cobros_venta_idempotencia_y_cliente.sql", "CREATE OR REPLACE FUNCTION registrar_pagos_venta_atomica(", "$$ LANGUAGE plpgsql;")
+const TRIGGER_334 = () =>
+  tramo("supabase/migrations/334_anular_venta_series_y_garantias.sql", "CREATE OR REPLACE FUNCTION restore_stock_on_cancel()", "$$ LANGUAGE plpgsql;")
+const COMISIONES_333 = () =>
+  tramo("supabase/migrations/333_comision_neta_de_devoluciones.sql", "CREATE OR REPLACE VIEW v_comisiones_ventas AS", "WHERE v.estado = 'COMPLETADA';")
+const DRIFT_245 = () =>
+  tramo("supabase/migrations/245_v_cc_drift.sql", "CREATE OR REPLACE VIEW v_cc_drift AS", "COMMENT ON VIEW v_cc_drift", false)
+
+// Los cambios de cada copia, contados. Cada viejo tiene que aparecer exactamente una
+// vez en el original (sin comentarios ni espacios); si no, conCambios tira.
+const RENOMBRE = [
+  "CREATE OR REPLACE FUNCTION public.registrar_devolucion_atomica(",
+  "CREATE OR REPLACE FUNCTION public.registrar_devolucion_nucleo(",
+] as const
+const CAMBIOS_NUCLEO: Cambios = [
+  RENOMBRE,
+  [
+    "v_cobertura DECIMAL := 0; BEGIN",
+    "v_cobertura DECIMAL := 0; v_serie_ids TEXT[]; v_series JSONB; BEGIN",
+  ],
+  [
+    "WHERE dv.venta_id = p_venta_id AND id2.item_venta_id = elem->>'itemVentaId';",
+    "WHERE dv.venta_id = p_venta_id AND dv.anulada = false AND id2.item_venta_id = elem->>'itemVentaId';",
+  ],
+  [
+    "WHERE dv3.venta_id = p_venta_id AND id3.item_venta_id = v_iv.id;",
+    "WHERE dv3.venta_id = p_venta_id AND dv3.anulada = false AND id3.item_venta_id = v_iv.id;",
+  ],
+  [
+    "INTO v_prior_refunded FROM devoluciones_venta WHERE venta_id = p_venta_id;",
+    "INTO v_prior_refunded FROM devoluciones_venta WHERE venta_id = p_venta_id AND anulada = false;",
+  ],
+  [
+    "INTO v_aplicado_prev FROM devoluciones_venta WHERE venta_id = p_venta_id;",
+    "INTO v_aplicado_prev FROM devoluciones_venta WHERE venta_id = p_venta_id AND anulada = false;",
+  ],
+  [
+    "WHERE dv4.venta_id = p_venta_id AND id4.item_venta_id = elem->>'itemVentaId';",
+    "WHERE dv4.venta_id = p_venta_id AND dv4.anulada = false AND id4.item_venta_id = elem->>'itemVentaId';",
+  ],
+  [
+    `IF (elem->>'restaurarStock')::boolean THEN
+      UPDATE inventario_series
+      SET estado = 'DISPONIBLE', fecha_venta = NULL, venta_id = NULL,
+          cliente_id = NULL, fecha_garantia_vence = CASE
+            WHEN COALESCE(v_line_warranty_days, 0) > 0 THEN NULL
+            ELSE fecha_garantia_vence END, updated_at = now()
+      WHERE id IN (
+        SELECT id FROM inventario_series
+        WHERE organization_id = p_org_id
+          AND inventario_id   = v_inv_id
+          AND venta_id        = p_venta_id
+          AND estado::text   IN ('VENDIDO', 'GARANTIA_ACTIVA')
+        ORDER BY fecha_venta DESC
+        LIMIT (elem->>'cantidad')::integer
+      );
+    ELSE
+      UPDATE inventario_series
+      SET estado = 'DEVUELTO', fecha_garantia_vence = CASE
+            WHEN COALESCE(v_line_warranty_days, 0) > 0 THEN NULL
+            ELSE fecha_garantia_vence END, updated_at = now()
+      WHERE id IN (
+        SELECT id FROM inventario_series
+        WHERE organization_id = p_org_id
+          AND inventario_id   = v_inv_id
+          AND venta_id        = p_venta_id
+          AND estado::text   IN ('VENDIDO', 'GARANTIA_ACTIVA')
+        ORDER BY fecha_venta DESC
+        LIMIT (elem->>'cantidad')::integer
+      );
+    END IF;`,
+    `SELECT COALESCE(array_agg(s.id), ARRAY[]::TEXT[]),
+           COALESCE(jsonb_agg(jsonb_build_object(
+             'id', s.id, 'numero_serie', s.numero_serie, 'estado', s.estado,
+             'cliente_id', s.cliente_id, 'fecha_venta', s.fecha_venta,
+             'fecha_garantia_vence', s.fecha_garantia_vence)), '[]'::jsonb)
+    INTO v_serie_ids, v_series
+    FROM (
+      SELECT id, numero_serie, estado, cliente_id, fecha_venta, fecha_garantia_vence
+      FROM inventario_series
+      WHERE organization_id = p_org_id
+        AND inventario_id   = v_inv_id
+        AND venta_id        = p_venta_id
+        AND estado::text   IN ('VENDIDO', 'GARANTIA_ACTIVA')
+      ORDER BY fecha_venta DESC
+      LIMIT (elem->>'cantidad')::integer
+      FOR UPDATE
+    ) s;
+
+    IF (elem->>'restaurarStock')::boolean THEN
+      UPDATE inventario_series
+      SET estado = 'DISPONIBLE', fecha_venta = NULL, venta_id = NULL,
+          cliente_id = NULL, fecha_garantia_vence = CASE
+            WHEN COALESCE(v_line_warranty_days, 0) > 0 THEN NULL
+            ELSE fecha_garantia_vence END, updated_at = now()
+      WHERE id = ANY(v_serie_ids);
+    ELSE
+      UPDATE inventario_series
+      SET estado = 'DEVUELTO', fecha_garantia_vence = CASE
+            WHEN COALESCE(v_line_warranty_days, 0) > 0 THEN NULL
+            ELSE fecha_garantia_vence END, updated_at = now()
+      WHERE id = ANY(v_serie_ids);
+    END IF;
+
+    UPDATE items_devolucion
+    SET series_devueltas = v_series
+    WHERE id = (
+      SELECT id FROM items_devolucion
+      WHERE devolucion_id = v_dev_id
+        AND item_venta_id = elem->>'itemVentaId'
+        AND series_devueltas IS NULL
+      ORDER BY id
+      LIMIT 1
+    );`,
+  ],
+]
+const CAMBIOS_PAGOS: Cambios = [
+  [
+    "INTO v_aplicado_dev FROM devoluciones_venta WHERE venta_id = p_venta_id;",
+    "INTO v_aplicado_dev FROM devoluciones_venta WHERE venta_id = p_venta_id AND anulada = false;",
+  ],
+]
+const CAMBIOS_TRIGGER: Cambios = [
+  [
+    "WHERE dv.venta_id = NEW.id AND id2.item_venta_id = v_item.item_id;",
+    "WHERE dv.venta_id = NEW.id AND dv.anulada = false AND id2.item_venta_id = v_item.item_id;",
+  ],
+]
+const INVOKER_COMISIONES = [
+  "CREATE OR REPLACE VIEW v_comisiones_ventas AS",
+  "CREATE OR REPLACE VIEW v_comisiones_ventas WITH (security_invoker = true) AS",
+] as const
+const CAMBIOS_COMISIONES: Cambios = [INVOKER_COMISIONES, ["WHERE d.venta_id = v.id", "WHERE d.venta_id = v.id AND d.anulada = false"]]
+const INVOKER_DRIFT = [
+  "CREATE OR REPLACE VIEW v_cc_drift AS",
+  "CREATE OR REPLACE VIEW v_cc_drift WITH (security_invoker = true) AS",
+] as const
+const CAMBIOS_DRIFT: Cambios = [
+  INVOKER_DRIFT,
+  ["WHERE dv.estado::text = 'COMPLETADA'", "WHERE dv.estado::text = 'COMPLETADA' AND dv.anulada = false"],
+]
+
+describe("368: las NC anuladas no cuentan en SQL y el nucleo registra las series", () => {
+  const sql = () => leer("supabase/migrations/368_nc_anuladas_no_cuentan.sql")
+  const rollback = () => leer("supabase/migrations/rollback/368_rollback.sql")
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+
+  it("el nucleo es la 330 con sus cambios contados: nombre, cinco filtros y las series del paso 6", () => {
+    expect(plano(sql())).toContain(conCambios(NUCLEO_330(), CAMBIOS_NUCLEO))
+  })
+
+  it("cobros (331), anular venta (334), comision (333) y reconciliacion (245): copias con su filtro", () => {
+    expect(plano(sql())).toContain(conCambios(PAGOS_331(), CAMBIOS_PAGOS))
+    expect(plano(sql())).toContain(conCambios(TRIGGER_334(), CAMBIOS_TRIGGER))
+    expect(plano(sql())).toContain(conCambios(COMISIONES_333(), CAMBIOS_COMISIONES))
+    expect(plano(sql())).toContain(conCambios(DRIFT_245(), CAMBIOS_DRIFT))
+  })
+
+  it("la FK de items_devolucion a inventario pasa a SET NULL, sin IF EXISTS", () => {
+    expect(sql()).toContain("ALTER TABLE items_devolucion DROP CONSTRAINT items_devolucion_inventario_id_fkey;")
+    expect(sql()).toMatch(
+      /ADD CONSTRAINT items_devolucion_inventario_id_fkey\s+FOREIGN KEY \(inventario_id\) REFERENCES inventario\(id\) ON DELETE SET NULL;/
+    )
+  })
+
+  it("lock_timeout antes del primer ALTER", () => {
+    const s = sql()
+    expect(s.indexOf("SET LOCAL lock_timeout = '3s';")).toBeGreaterThan(-1)
+    expect(s.indexOf("SET LOCAL lock_timeout = '3s';")).toBeLessThan(s.indexOf("ALTER TABLE items_devolucion"))
+  })
+
+  it("el cambio de la FK va al final: el ACCESS EXCLUSIVE sobre inventario dura lo minimo", () => {
+    const s = sql()
+    const fk = s.indexOf("ALTER TABLE items_devolucion DROP CONSTRAINT items_devolucion_inventario_id_fkey;")
+    expect(fk).toBeGreaterThan(s.lastIndexOf("CREATE OR REPLACE"))
+    expect(fk).toBeGreaterThan(s.lastIndexOf("GRANT "))
+  })
+
+  it("nucleo, cobros y el trigger de anular la venta solo para service_role; las vistas sin acceso para anon ni authenticated", () => {
+    for (const firma of [
+      "registrar_devolucion_nucleo(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT)",
+      "registrar_pagos_venta_atomica(TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT)",
+      "restore_stock_on_cancel()",
+    ]) {
+      expect(sql()).toMatch(new RegExp(`REVOKE EXECUTE ON FUNCTION public\\.${esc(firma)}\\s+FROM PUBLIC, anon, authenticated;`))
+      expect(sql()).toMatch(new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${esc(firma)}\\s+TO service_role;`))
+    }
+    for (const vista of ["v_comisiones_ventas", "v_cc_drift"]) {
+      expect(sql()).toContain(`REVOKE ALL ON public.${vista} FROM PUBLIC, anon, authenticated;`)
+      expect(sql()).toContain(`GRANT SELECT ON public.${vista} TO service_role;`)
+    }
+  })
+
+  it("el rollback vuelve a las versiones anteriores tal cual", () => {
+    const r = plano(rollback())
+    expect(r).toContain(conCambios(NUCLEO_330(), [RENOMBRE]))
+    expect(r).toContain(plano(PAGOS_331()))
+    expect(r).toContain(plano(TRIGGER_334()))
+    expect(r).toContain(conCambios(COMISIONES_333(), [INVOKER_COMISIONES]))
+    expect(r).toContain(conCambios(DRIFT_245(), [INVOKER_DRIFT]))
+  })
+
+  it("el rollback no corre con NC anuladas ni con la 369, y no deshace la columna ni la FK", () => {
+    expect(rollback()).toContain("IF EXISTS (SELECT 1 FROM devoluciones_venta WHERE anulada) THEN")
+    expect(rollback()).toContain("to_regprocedure('public.anular_devolucion_venta(text,text,text,text,text)') IS NOT NULL")
+    expect(rollback()).not.toMatch(/DROP COLUMN/i)
+    expect(rollback()).not.toMatch(/DROP CONSTRAINT/i)
   })
 })

@@ -344,7 +344,7 @@ export function formatInventario(item: any, includeCost = false) {
 /**
  * Saldo que el cliente todavía debe de una venta (fila cruda de ventas). Lo
  * que bajó una NC anulada se vuelve a deber: se ignora, igual que en el núcleo
- * de la devolución (mig 366). Si los dos no coinciden, la RPC rechaza la NC
+ * de la devolución (mig 368). Si los dos no coinciden, la RPC rechaza la NC
  * siguiente con "Falta el medio de reintegro" (367).
  */
 export function saldoPendienteVenta(venta: any): number {
