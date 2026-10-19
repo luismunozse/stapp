@@ -200,6 +200,22 @@ describe("POST /api/facturacion-electronica/emitir", () => {
     expect(tusFacturasProvider.emitir).not.toHaveBeenCalled()
   })
 
+  it("solo las NC activas bloquean la factura: la consulta excluye las anuladas", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    const devoluciones = createChainMock(null, null, 1)
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [createChainMock(null)],
+      ventas: [createChainMock(VENTA)],
+      devoluciones_venta: [devoluciones],
+    })
+
+    await POST(createPostRequest({ ventaId: "venta-1" }))
+
+    expect(devoluciones.eq).toHaveBeenCalledWith("venta_id", "venta-1")
+    expect(devoluciones.eq).toHaveBeenCalledWith("anulada", false)
+  })
+
   it("409 when insert hits a unique violation (23505) — in-flight/duplicate, does not call the provider", async () => {
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
     vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)

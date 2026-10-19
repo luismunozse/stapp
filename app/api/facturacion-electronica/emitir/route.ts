@@ -62,7 +62,7 @@ export async function POST(request: Request) {
 
   // Solo ventas vigentes y sin devoluciones: la factura sale por el total y
   // los items originales, así que con productos devueltos facturaría de más
-  // (y una venta anulada no se factura).
+  // (y una venta anulada no se factura). Una NC anulada ya no devolvió nada (PR4).
   if (venta.estado !== "COMPLETADA") {
     return NextResponse.json({ error: "Solo se pueden facturar ventas completadas" }, { status: 409 })
   }
@@ -70,6 +70,7 @@ export async function POST(request: Request) {
     .from("devoluciones_venta")
     .select("id", { count: "exact", head: true })
     .eq("venta_id", ventaId)
+    .eq("anulada", false)
   if (devErr) {
     return NextResponse.json({ error: "No se pudieron verificar las devoluciones de la venta" }, { status: 500 })
   }

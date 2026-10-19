@@ -77,6 +77,43 @@ describe("estado-resultados — devoluciones de ventas", () => {
     expect(body.costos.productos).toBe(600)
   })
 
+  it("las NC anuladas no restan: ni ingreso, ni costo devuelto, ni comisión", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockCookie("todas")
+    const ventasChain = createChainMock([
+      {
+        id: "v1", total: "1000", iva_neto: null, estado: "COMPLETADA",
+        vendedor_id: "u1", porcentaje_comision: "10", comision_pagada: false,
+        items_venta: [{ cantidad: 2, precio_unitario: "500", costo_unitario_snapshot: "300" }],
+        // El embed trae la NC con su estado: la comisión la ignora porque está anulada.
+        devoluciones_venta: [{ monto_devolucion: "500", anulada: true }],
+      },
+    ])
+    // Las devoluciones del período ya vienen filtradas por la base (.eq("anulada", false)).
+    const devolucionesChain = createChainMock([])
+    mockSupabaseFrom({
+      ventas: ventasChain,
+      devoluciones_venta: devolucionesChain,
+      ordenes_servicio: createChainMock([]),
+      cobros_orden: createChainMock([]),
+      movimientos_caja: createChainMock([]),
+      pagos_venta: createChainMock([]),
+      pagos_parciales: createChainMock([]),
+      facturas: createChainMock([]),
+      notas_credito: createChainMock([]),
+      ajustes_inventario: createChainMock([]),
+      organizations: createChainMock({ comision_aplica_sin_reparacion: false }),
+    })
+
+    const { status, body } = await parseResponse(await GET(createGetRequest(url)))
+
+    expect(status).toBe(200)
+    expect(ventasChain.select).toHaveBeenCalledWith(expect.stringContaining("devoluciones_venta (monto_devolucion, anulada)"))
+    expect(devolucionesChain.eq).toHaveBeenCalledWith("anulada", false)
+    expect(body.ingresos.ventas).toBe(1000)
+    expect(body.comisiones.vendedores).toBe(100) // 10% de la venta entera
+  })
+
   it("con una sucursal elegida filtra las devoluciones por la sucursal de la venta", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     mockCookie("suc-A")
