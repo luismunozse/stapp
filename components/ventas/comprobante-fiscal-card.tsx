@@ -5,6 +5,7 @@ import { AlertTriangle, ExternalLink, FileCheck, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { CONTACT_EMAIL } from "@/lib/contact"
 import { emitirComprobanteArca } from "@/lib/facturacion/emitir-comprobante-client"
 import {
   etiquetaEstadoComprobante,
@@ -101,7 +102,8 @@ export function ComprobanteFiscalCard({ ventaId, estadoVenta, tieneDevoluciones 
 
         {comprobante?.estado === "pendiente" && (
           <p className="text-sm text-muted-foreground">
-            La factura se está procesando. Si no se actualiza en unos minutos, recargá la página.
+            La factura se está procesando. Recargá la página en unos minutos. Si sigue así, escribinos a{" "}
+            {CONTACT_EMAIL} y lo revisamos antes de volver a emitir, para no duplicar la factura.
           </p>
         )}
 

@@ -196,6 +196,14 @@ describe("ComprobanteFiscalCard", () => {
       expect(await screen.findByText(/En proceso/)).toBeInTheDocument()
       expect(screen.queryByRole("button")).not.toBeInTheDocument()
     })
+
+    it("avisa que se esta procesando y, si sigue asi, que escriba a soporte (sin liberar ni reintentar)", async () => {
+      montarFetch([listado([item({ estado: "pendiente", cae: null, caeVencimiento: null, numero: null, pdfDisponible: false })], true)])
+      renderCard()
+      expect(await screen.findByText(/se está procesando/)).toBeInTheDocument()
+      expect(screen.getByText(/soporte@stapp\.com\.ar/)).toBeInTheDocument()
+      expect(screen.queryByRole("button", { name: /emitir|reintentar|liberar/i })).not.toBeInTheDocument()
+    })
   })
 
   describe("rechazado", () => {
