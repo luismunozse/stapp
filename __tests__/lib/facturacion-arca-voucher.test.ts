@@ -38,6 +38,13 @@ describe("buildVoucher — Factura C (monotributo)", () => {
     expect(voucher.ImpIVA).toBe(0)
     expect(voucher.Iva).toBeUndefined()
   })
+
+  it("ImpNeto es igual a ImpTotal aun con un total con decimales sucios", () => {
+    const voucher = buildVoucher(credsMonotributo, { ...inputConsumidorFinal, total: 0.1 + 0.2 }, { cbteFch: "20260829" })
+
+    expect(voucher.ImpTotal).toBe(0.3)
+    expect(voucher.ImpNeto).toBe(voucher.ImpTotal)
+  })
 })
 
 describe("buildVoucher — Factura B (responsable inscripto)", () => {

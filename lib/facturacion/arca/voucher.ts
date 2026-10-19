@@ -159,7 +159,7 @@ export function buildVoucher(
   // el array `Iva` NO se manda (AFIP rechaza una C que lo traiga).
   const { iva, neto, impuestoIva } =
     tipo === "C"
-      ? { iva: undefined, neto: input.total, impuestoIva: 0 }
+      ? { iva: undefined, neto: round2(input.total), impuestoIva: 0 }
       : desglosarIva(input)
 
   return {
