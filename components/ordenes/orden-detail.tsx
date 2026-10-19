@@ -74,6 +74,7 @@ import { OrdenComisionCard } from "@/components/ordenes/orden-comision-card"
 import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
 import { OrdenServiciosTab } from "@/components/ordenes/orden-servicios-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
+import { usePuedeCobrar } from "@/hooks/use-puede-cobrar"
 import { ConfirmarReparadoDialog } from "@/components/ordenes/confirmar-reparado-dialog"
 import { NotaCreditoDialog } from "@/components/notas-credito/nota-credito-dialog"
 import { NotasCreditoOrden } from "@/components/notas-credito/notas-credito-orden"
@@ -132,6 +133,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const etiquetaOpts = etiquetaSizeReady ? { size: etiquetaSize } : undefined
 
   const isAdmin = session?.user?.role === "ADMIN"
+  const puedeCobrar = usePuedeCobrar()
   const userRole = session?.user?.role
 
   const seguimientoUrl = orden?.publicToken
@@ -349,7 +351,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     // El cobro es parte del flujo de entrega, no un trámite aparte: si quedó
     // saldo, se abre solo. Sigue siendo opcional — cerrarlo deja el saldo en
     // la cuenta corriente del cliente, igual que antes.
-    if (!sinCobroEntrega && (pendienteCobro ?? 0) > 0) {
+    if (puedeCobrar && !sinCobroEntrega && (pendienteCobro ?? 0) > 0) {
       setShowCobrarDialog(true)
     }
     setSinCobroEntrega(false)
@@ -1196,7 +1198,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             estado={orden.estado}
             origenPresupuesto={(orden as any).origenPresupuesto || null}
             onUpdateField={handleUpdateField}
-            onCobrar={() => setShowCobrarDialog(true)}
+            onCobrar={puedeCobrar ? () => setShowCobrarDialog(true) : undefined}
             readOnly={userRole === "TECNICO"}
           />
 
@@ -1255,7 +1257,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           estado={orden.estado}
           origenPresupuesto={(orden as any).origenPresupuesto || null}
           onUpdateField={handleUpdateField}
-          onCobrar={() => setShowCobrarDialog(true)}
+          onCobrar={puedeCobrar ? () => setShowCobrarDialog(true) : undefined}
           readOnly={userRole === "TECNICO"}
         />
         {isAdmin && (
