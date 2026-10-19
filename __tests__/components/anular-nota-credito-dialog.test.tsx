@@ -37,8 +37,8 @@ const confirmar = () => screen.getByRole("button", { name: "Anular nota de créd
 describe("AnularNotaCreditoDialog", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("muestra qué se revierte y no deja confirmar sin motivo", () => {
-    vi.stubGlobal("fetch", vi.fn())
+  it("muestra qué se revierte y no deja confirmar sin motivo", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => respuesta(200, { sesion: { id: "s1" } })))
     abrir()
     expect(screen.getByRole("dialog", { name: "Anular la nota de crédito NC-000012" })).toBeInTheDocument()
     expect(screen.getByText("Vuelven a salir del stock: 2 × Celular.")).toBeInTheDocument()
@@ -46,6 +46,7 @@ describe("AnularNotaCreditoDialog", () => {
     expect(confirmar()).toBeDisabled()
     fireEvent.change(motivo(), { target: { value: "   " } })
     expect(confirmar()).toBeDisabled()
+    await act(async () => {})
   })
 
   it("anula con el motivo sin espacios, avisa, cierra y pide releer la venta", async () => {
@@ -87,7 +88,11 @@ describe("AnularNotaCreditoDialog", () => {
 
   it("doble click: un solo pedido", async () => {
     let resolver: (v: unknown) => void = () => {}
-    const fetchMock = vi.fn(() => new Promise((r) => { resolver = r }))
+    const fetchMock = vi.fn((url: string) =>
+      String(url).startsWith("/api/caja/")
+        ? Promise.resolve(respuesta(200, { sesion: { id: "s1" } }))
+        : new Promise((r) => { resolver = r })
+    )
     vi.stubGlobal("fetch", fetchMock)
     abrir()
     fireEvent.change(motivo(), { target: { value: "Error" } })
@@ -96,8 +101,47 @@ describe("AnularNotaCreditoDialog", () => {
       boton.click()
       boton.click()
     })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).includes("/anular"))).toHaveLength(1)
     await act(async () => resolver(respuesta(200, { efectivoSinEgreso: false, replayed: false })))
+  })
+
+  it("mientras anula, no se puede cancelar ni cerrar", async () => {
+    let resolver: (v: unknown) => void = () => {}
+    vi.stubGlobal("fetch", vi.fn(() => new Promise((r) => { resolver = r })))
+    const { onOpenChange } = abrir({ nc: { ...NC, metodoReembolso: "TARJETA" } })
+    fireEvent.change(motivo(), { target: { value: "Error" } })
+    fireEvent.click(confirmar())
+    const cancelar = await screen.findByRole("button", { name: "Cancelar" })
+    expect(cancelar).toBeDisabled()
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" })
+    expect(onOpenChange).not.toHaveBeenCalled()
+    await act(async () => resolver(respuesta(200, { efectivoSinEgreso: false, replayed: false })))
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it("devolución en efectivo sin caja abierta en la sucursal de la venta: avisa que el ingreso no entra en ningún arqueo", async () => {
+    const fetchMock = vi.fn(async () => respuesta(200, { sesion: null }))
+    vi.stubGlobal("fetch", fetchMock)
+    abrir({ sucursalId: "suc-2" })
+    expect(await screen.findByText(/No hay caja abierta en esta sucursal/)).toBeInTheDocument()
+    expect(screen.getByText(/no entra en ningún arqueo/)).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith("/api/caja/sesiones?current=true&sucursalId=suc-2")
+  })
+
+  it("con la caja abierta no avisa nada", async () => {
+    const fetchMock = vi.fn(async () => respuesta(200, { sesion: { id: "s1" } }))
+    vi.stubGlobal("fetch", fetchMock)
+    abrir({ sucursalId: "suc-2" })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await act(async () => {})
+    expect(screen.queryByText(/No hay caja abierta/)).not.toBeInTheDocument()
+  })
+
+  it("si el reembolso no es en efectivo, no consulta la caja", () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    abrir({ nc: { ...NC, metodoReembolso: "TARJETA" }, sucursalId: "suc-2" })
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it("si el cliente ya usó el saldo a favor, avisa que queda debiendo", () => {
