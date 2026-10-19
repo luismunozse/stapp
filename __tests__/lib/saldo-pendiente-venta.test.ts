@@ -19,4 +19,17 @@ describe("saldoPendienteVenta", () => {
   it("nunca es negativo", () => {
     expect(saldoPendienteVenta({ total: "100", monto_abonado: "100", devoluciones_venta: [{ monto_aplicado_deuda: "10" }] })).toBe(0)
   })
+
+  it("una NC anulada ya no descuenta: lo que bajó de la deuda se vuelve a deber", () => {
+    const venta = {
+      total: "1000",
+      monto_abonado: "300",
+      devoluciones_venta: [
+        { monto_devolucion: "500", monto_aplicado_deuda: "500", anulada: true },
+        { monto_devolucion: "100", monto_aplicado_deuda: "100", anulada: false },
+      ],
+    }
+    expect(saldoPendienteVenta(venta)).toBe(600)
+    expect(formatVenta(venta)).toMatchObject({ saldoPendiente: 600 })
+  })
 })
