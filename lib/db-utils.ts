@@ -361,6 +361,8 @@ export function formatVenta(venta: any) {
     clienteNombre: venta.cliente_nombre,
     clienteTelefono: venta.cliente_telefono,
     vendedorId: venta.vendedor_id,
+    // La sucursal de la venta: el efectivo de una NC sale de su caja (PR3).
+    sucursalId: venta.sucursal_id ?? null,
     subtotal: parseFloat(venta.subtotal),
     descuento: parseFloat(venta.descuento),
     tipoDescuento: venta.tipo_descuento || "MONTO",

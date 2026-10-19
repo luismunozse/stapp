@@ -17,6 +17,9 @@ const aperturaSchema = z.object({
 //                     (components/pos/pos-terminal.tsx) para enganchar la venta
 //                     a la sesión. Va por requirePosAccess: si la cerráramos
 //                     detrás del permiso de caja, el vendedor no podría vender.
+//                     &sucursalId=X: la de una sucursal puntual, solo para
+//                     quien ve todas (el diálogo de NC pregunta por la de la
+//                     venta). A un usuario atado se le ignora: no mira cajas ajenas.
 //
 //   sin ?current   -> historial de sesiones CERRADAS. Es histórico financiero
 //                     de la organización, del mismo lado del corte que el
@@ -38,13 +41,14 @@ export async function GET(request: Request) {
     const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
     if (current === "true") {
+      const sucursalConsulta = filtro.verTodas ? searchParams.get("sucursalId") : filtro.sucursalId
       let currentQuery = supabaseAdmin
         .from("sesiones_caja")
         .select("*, users!sesiones_caja_usuario_apertura_id_fkey(id, nombre)")
         .eq("organization_id", organizationId!)
         .eq("estado", "ABIERTA")
-      if (!filtro.verTodas && filtro.sucursalId) {
-        currentQuery = currentQuery.eq("sucursal_id", filtro.sucursalId)
+      if (sucursalConsulta) {
+        currentQuery = currentQuery.eq("sucursal_id", sucursalConsulta)
       }
       const { data: sesion } = await currentQuery.maybeSingle()
 
