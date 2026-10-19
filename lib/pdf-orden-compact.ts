@@ -4,11 +4,12 @@
  * The A4 order (generateOrdenPDF in lib/pdf.ts) is a fixed two-zone page: customer part on
  * top, a cut line, the workshop stub below. Printed on an A6 sheet every text shrinks to
  * half its size and nobody can read it. This is a different layout, not a scaled copy:
- * ONE column, one customer copy, fonts sized for the sheet it is printed on.
+ * ONE column, one customer copy, fonts sized for the sheet it is printed on, plus a second
+ * page, the copy for the shop (see below).
  *
- * It is ALWAYS exactly one page. The workshop prints these on a single small sheet and an order
- * that spills onto a second one is useless to them, so the layout is fitted to the page instead
- * of flowing: `layout()` can run without drawing (it only measures and moves the cursor) and
+ * The CUSTOMER copy is ALWAYS exactly one page. The workshop prints these on a single small sheet
+ * and an order that spills onto a second one is useless to them, so the layout is fitted to the
+ * page instead of flowing: `layout()` can run without drawing (it only measures and moves the cursor) and
  * `chooseParams()` uses that to find the gentlest parameters that fit, trying in this order and
  * stopping at the first that works:
  *
@@ -39,14 +40,17 @@
  * It is reached only through generateOrdenPDF({ ..., paperSize: "A5" | "A6" }); the A4
  * path in lib/pdf.ts does not run for these, and this file is not used for A4.
  *
- * What it leaves out on purpose: the device access code (PIN/pattern). On A4 it is printed
- * only on the workshop stub, never on the customer part; this sheet is the customer copy.
+ * The copy for the shop is page 2, drawn after the fit and independent of it: it mirrors the A4
+ * internal stub and is the only place the device access code (PIN/pattern) is printed. The
+ * customer copy (page 1) leaves it out on purpose, as the A4 customer part does, because the
+ * customer takes that sheet home. Page 2 is skipped for a delivered order (A4 has no stub there
+ * either) and for `soloCliente` (the customer-only variant shared by WhatsApp).
  */
 import { PDFDocument as PDFLib, type PDFFont, type PDFImage, type PDFPage, type RGB } from "pdf-lib"
 import QRCode from "qrcode"
 import { embedExpedienteFonts, type OrdenPDFData } from "@/lib/pdf"
 import { ORDEN_PAGE_POINTS } from "@/lib/orden-papel"
-import { MONO, drawRule } from "@/lib/pdf-style"
+import { MONO, drawRule, drawPatternLock, isPatternLockCode } from "@/lib/pdf-style"
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
 import { formatDateValue, getZonedParts, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { getTaxIdLabel, getPersonalIdLabel } from "@/lib/countries"
@@ -117,6 +121,8 @@ const CODE_CHARS = 24
 const HARD_MIN_FONT = 5
 /** Upper bound of the paragraph-length search of the guarantee. */
 const MAX_LINES_BOUND = 400
+/** Most lines the falla may take on the shop copy before the fit shrinks it (the page decides the real limit). */
+const MAX_SHOP_LINES = 40
 /** Printed under the terms when they were cut. */
 const TERMS_CUT_NOTE = "Términos completos: pedíselos al taller."
 
@@ -576,6 +582,7 @@ export async function generateOrdenCompactPDF(
     drawRectangle() {},
     drawImage() {},
     drawLine() {},
+    drawCircle() {},
   } as unknown as PDFPage
 
   /**
@@ -1184,6 +1191,112 @@ export async function generateOrdenCompactPDF(
   layout(page, params)
   options.report?.({ slack: layout(DRY, params), attempts, scale: params.scale, step })
 
+  // The copy for the shop is a second sheet: it never takes room from the customer copy above.
+  // A delivered order has none (A4 has no stub there either); soloCliente is the customer-only variant.
+  if (!isEntrega && !data.soloCliente) drawShopCopy()
+
   const bytes = await pdfDoc.save()
   return Buffer.from(bytes)
+
+  /**
+   * Page 2: what the A4 internal stub prints (order number, customer, device, access code, quick
+   * checklist, falla / counter notes, budget / deposit, promised date). The customer takes page 1
+   * home, so the device access code (PIN or drawn pattern) lives only here. Fixed sizes: the
+   * paragraphs that can grow (checklist, falla) get a line limit, the same for every field, and
+   * the roomiest limits that fit the page are used.
+   */
+  function drawShopCopy() {
+    const page2 = pdfDoc.addPage([width, height])
+    const accessCode = safe(data.codigoAccesoDispositivo)
+    const items = Array.isArray(data.checklistItems) ? data.checklistItems : []
+    const notasChecklist = safe(data.checklistNotas)
+    const fullChecklist = [
+      ...items.map((it) => `${safe(it.label)}: ${it.valor === true ? "OK" : it.valor === false ? "NO" : safe(it.valor)}`),
+      ...(notasChecklist ? [notasChecklist] : []),
+    ].join(" · ")
+    // a falla already ending in "." must not get a second one before the technician
+    const notasMostrador = [problema.replace(/[.\s]+$/, ""), tecnico ? `Técnico asignado: ${tecnico}` : ""].filter(Boolean).join(". ")
+    const presupuestoText = fmtMoney(Number(data.presupuesto) || 0)
+    const senaText = data.sena ? fmtMoney(Number(data.sena)) : "—"
+    const lh = (size: number) => size * LINE
+
+    const drawAll = (pg: PDFPage, caps: { falla: number; chequeo: number }): number => {
+      let y = height - M.margin
+      const para = (text: string, font: PDFFont, size: number, color: RGB, maxLines: number, x = left) => {
+        for (const l of wrap(text, font, size, right - x, maxLines)) {
+          pg.drawText(l, { x, y: y - size, size, font, color })
+          y -= lh(size)
+        }
+      }
+      const section = (label: string) => {
+        y -= 3
+        drawRule(pg, left, right, y)
+        y -= 5
+        pg.drawText(label.toUpperCase(), { x: left, y: y - M.label, size: M.label, font: bold, color: MONO.label })
+        y -= lh(M.label) + 1
+      }
+
+      // title and order number
+      const numW = textW(condBlack, M.heading + 1, numeroOrdenPadded)
+      pg.drawText(numeroOrdenPadded, { x: right - numW, y: y - (M.heading + 1), size: M.heading + 1, font: condBlack, color: MONO.ink })
+      const titleLines = wrap("COPIA PARA EL LOCAL — RECEPCIÓN", black, M.label, contentW - numW - 8)
+      let ty = y
+      for (const l of titleLines) {
+        pg.drawText(l, { x: left, y: ty - M.label, size: M.label, font: black, color: MONO.ink })
+        ty -= lh(M.label)
+      }
+      y = Math.min(ty, y - lh(M.heading + 1))
+      const sub = [codigoOrden, fmtDate(data.fechaIngreso), sucursalNombre].filter(Boolean).join(" · ")
+      if (sub) para(sub, mono, M.small, MONO.label, 1)
+      para("Uso interno: no se entrega al cliente.", reg, M.small, MONO.label, 1)
+      y -= 2
+      drawRule(pg, left, right, y, { color: MONO.ink, thickness: 1.3 })
+
+      section("Cliente")
+      para(`${clienteNombre} · ${clienteTelefono}`, bold, M.body, MONO.ink, 2)
+      if (clienteDni) para(`${labelIdPersonal} ${clienteDni}`, reg, M.small, MONO.label, 1)
+
+      section(t(term, "equipo"))
+      para(equipoTitle || dispositivo, bold, M.body, MONO.ink, 2)
+      if (imei) para(`${identificadorLabel} ${imei}`, mono, M.small, MONO.ink, 1)
+
+      section("Código de acceso")
+      if (accessCode && isPatternLockCode(accessCode)) {
+        drawPatternLock(pg, accessCode, left + 14, y - 4)
+        pg.drawText("Patrón — solo copia del local", { x: left + 40, y: y - 4 - M.small, size: M.small, font: reg, color: MONO.label })
+        y -= 3 * 11 + 6
+      } else if (accessCode) {
+        para(accessCode, mono, M.body, MONO.ink, 2)
+      } else {
+        para("—", reg, M.body, MONO.faint, 1)
+      }
+
+      section("Chequeo rápido")
+      if (!fullChecklist) {
+        para("Sin chequeo registrado", reg, M.body, MONO.faint, 1)
+      } else {
+        // the whole list when it fits its lines; otherwise the counts and what is not OK
+        const whole = wrap(fullChecklist, reg, M.small, contentW)
+        para(whole.length <= caps.chequeo ? fullChecklist : `${summarizeChecklist(items)}${notasChecklist ? ` · ${notasChecklist}` : ""}`, reg, M.small, MONO.ink, caps.chequeo)
+      }
+
+      section("Falla / notas de mostrador")
+      para(notasMostrador, reg, M.body, MONO.ink, caps.falla)
+      if (observaciones) para(`OBS: ${observaciones}`, reg, M.small, MONO.label, 1)
+
+      section("Presupuesto / Seña")
+      para(`${presupuestoText} / ${senaText}`, bold, M.body, MONO.ink, 1)
+      const prometida = fmtDate(data.fechaPrometida)
+      para(`Prometida: ${prometida || "—"}`, reg, M.small, MONO.label, 1)
+      return y - M.margin
+    }
+
+    // Start generous and shrink only when the content does not fit: the falla gets twice the
+    // lines of the checklist. The smallest attempt (1 and 1) is the guarantee.
+    const attempts = []
+    for (let falla = MAX_SHOP_LINES; falla > 1; falla = Math.floor(falla * 0.8)) attempts.push({ falla, chequeo: Math.max(1, Math.ceil(falla / 2)) })
+    attempts.push({ falla: 1, chequeo: 1 })
+    const caps = attempts.find((c) => drawAll(DRY, c) >= -0.01) ?? attempts[attempts.length - 1]
+    drawAll(page2, caps)
+  }
 }

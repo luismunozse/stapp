@@ -98,3 +98,32 @@ export function drawOutlinedBadge(
   });
   return { width, height };
 }
+
+/** True when the stored device access code is a drawn unlock pattern ("Patrón: 1-2-5-8-9") rather than a PIN. */
+export function isPatternLockCode(code: string): boolean {
+  return /^patr[oó]n:/i.test(code);
+}
+
+/**
+ * Draws the 3x3 unlock-pattern grid for `code` ("Patrón: 1-2-5-8-9", dots numbered 1-9 row by row):
+ * the visited dots in ink, joined in order, the rest in hairline grey. `centerX` is the middle
+ * column, `topY` the top row.
+ */
+export function drawPatternLock(page: PDFPage, code: string, centerX: number, topY: number): void {
+  const match = code.match(/[\d-]+$/);
+  const numbers = match
+    ? match[0].split("-").map((n) => parseInt(n.trim(), 10)).filter((n) => n >= 1 && n <= 9)
+    : [];
+  const cellSize = 11;
+  const dotR = 2.2;
+  const pos = (num: number) => ({ x: centerX + (((num - 1) % 3) - 1) * cellSize, y: topY - Math.floor((num - 1) / 3) * cellSize });
+  for (let i = 0; i < numbers.length - 1; i++) {
+    page.drawLine({ start: pos(numbers[i]), end: pos(numbers[i + 1]), thickness: 1, color: MONO.ink });
+  }
+  for (let num = 1; num <= 9; num++) {
+    const { x, y } = pos(num);
+    const visited = numbers.includes(num);
+    page.drawCircle({ x, y, size: dotR, color: visited ? MONO.ink : MONO.rule, borderWidth: 0 });
+    if (visited) page.drawCircle({ x, y, size: dotR - 1, color: MONO.white, borderWidth: 0 });
+  }
+}
