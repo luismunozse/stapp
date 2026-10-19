@@ -9,7 +9,7 @@ import { join } from "path"
 // rollback, y que ninguna abre su propia transacción. Lo último importa:
 // db-run.mjs ejecuta TAL CUAL un archivo con BEGIN en sus primeras 40 líneas,
 // así que `npm run db:dry` sobre una migración con BEGIN/COMMIT la aplicaría.
-const MIGRACIONES = ["350_notas_credito_bases", "356_nc_numeracion_y_vista", "360_pendiente_orden"]
+const MIGRACIONES = ["350_notas_credito_bases", "356_nc_numeracion_y_vista", "360_pendiente_orden", "367_nc_monto_ventas"]
 
 const leer = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8")
 const existe = (rel: string) => existsSync(join(process.cwd(), rel))
@@ -176,5 +176,60 @@ describe("360: pendiente de la orden con fuente unica", () => {
     expect(rollback()).toContain("GRANT EXECUTE ON FUNCTION get_deuda_cliente_sucursal(TEXT, TEXT, TEXT) TO service_role;")
     expect(rollback()).toContain("DROP FUNCTION IF EXISTS pendiente_orden(TEXT);")
     expect(rollback()).toContain("DROP FUNCTION IF EXISTS nc_aplicado_deuda_orden(TEXT);")
+  })
+})
+
+describe("367: NC por monto y egreso de caja adentro de la RPC", () => {
+  const sql = () => leer("supabase/migrations/367_nc_monto_ventas.sql")
+  const rollback = () => leer("supabase/migrations/rollback/367_rollback.sql")
+  const FIRMA_10 = "TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT"
+  const FIRMA_14 = `${FIRMA_10}, TEXT, NUMERIC, TEXT, BOOLEAN`
+  const FIRMA_MONTO = "TEXT, TEXT, TEXT, TEXT, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT"
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+
+  it("cambia la firma de 10 por la de 14 en la misma migracion: una sola candidata para PostgREST", () => {
+    expect(sql()).toContain(`DROP FUNCTION public.registrar_devolucion_atomica(${FIRMA_10});`)
+    expect(sql()).toMatch(/p_modo\s+TEXT\s+DEFAULT 'ITEMS'/)
+    expect(sql()).toMatch(/p_registrar_egreso\s+BOOLEAN DEFAULT false/)
+  })
+
+  it("las dos funciones quedan solo para service_role", () => {
+    for (const firma of [`registrar_devolucion_atomica(${FIRMA_14})`, `registrar_devolucion_monto(${FIRMA_MONTO})`]) {
+      expect(sql()).toMatch(new RegExp(`REVOKE EXECUTE ON FUNCTION public\\.${esc(firma)}\\s+FROM PUBLIC, anon, authenticated;`))
+      expect(sql()).toMatch(new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${esc(firma)}\\s+TO service_role;`))
+    }
+  })
+
+  it("la FK nueva no traba la purga de la organizacion: ON DELETE SET NULL", () => {
+    expect(sql()).toMatch(/ADD COLUMN IF NOT EXISTS devolucion_id TEXT REFERENCES devoluciones_venta\(id\) ON DELETE SET NULL;/)
+  })
+
+  it("acota la espera de locks antes de tocar movimientos_caja: si no consigue el lock, aborta sin aplicar nada", () => {
+    const s = sql()
+    const lock = s.indexOf("SET LOCAL lock_timeout = '3s';")
+    expect(lock).toBeGreaterThan(-1)
+    expect(lock).toBeLessThan(s.indexOf("ALTER TABLE movimientos_caja"))
+  })
+
+  it("el reintento con una clave ya usada en OTRA venta se rechaza en vez de devolver esa NC", () => {
+    expect(sql()).toMatch(/IF v_existente\.venta_id <> p_venta_id THEN\s+RAISE EXCEPTION/)
+  })
+
+  it("por productos, el dialogo nuevo (manda el motivo) no deja una NC con reintegro y sin medio; sin motivo no cambia", () => {
+    const items = sql().match(/IF v_modo = 'ITEMS' THEN([\s\S]*?)\n\s*ELSE\s*\n\s*v_res := registrar_devolucion_monto/)
+    expect(items).not.toBeNull()
+    expect(items![1]).toMatch(
+      /IF NULLIF\(p_motivo_nc, ''\) IS NOT NULL[^;]*montoReembolso[^;]*NULLIF\(p_metodo_reembolso, ''\) IS NULL THEN\s+RAISE EXCEPTION 'Falta el medio de reintegro';/,
+    )
+  })
+
+  it("el rollback vuelve a la firma de 10 con sus permisos y conserva el vinculo egreso-NC", () => {
+    expect(rollback()).toContain(`DROP FUNCTION IF EXISTS public.registrar_devolucion_atomica(${FIRMA_14});`)
+    expect(rollback()).toMatch(/p_idempotency_key\s+TEXT DEFAULT NULL\s*\)\s*RETURNS JSONB/)
+    expect(rollback()).toMatch(new RegExp(`REVOKE EXECUTE ON FUNCTION public\\.registrar_devolucion_atomica\\(${esc(FIRMA_10)}\\)\\s+FROM PUBLIC, anon, authenticated;`))
+    // La columna y el indice quedan: con el codigo de la 356 nadie los escribe, y
+    // borrarlos perderia que egreso salio de que NC (lo que el PR4 revierte).
+    expect(rollback()).not.toMatch(/^\s*ALTER TABLE movimientos_caja DROP COLUMN/im)
+    expect(rollback()).not.toMatch(/^\s*DROP INDEX[^;]*movimientos_caja_devolucion_tipo_unique/im)
   })
 })
