@@ -50,7 +50,7 @@ export function sinOrigen<T extends { origen?: unknown }>(payload: T): Omit<T, "
  * cuando la columna `origen` no existe (mig 335 sin aplicar). Debe coincidir
  * con el backfill de la migracion: un "Retiro de socio" tambien tiene
  * afecta_rentabilidad=false y sigue siendo MANUAL. El INGRESO de la anulacion
- * de una NC (mig 367) tiene el origen de su egreso: no se puede borrar.
+ * de una NC (mig 369) tiene el origen de su egreso: no se puede borrar.
  */
 export function origenPorConcepto(row: {
   tipo?: string | null
