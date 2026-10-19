@@ -6,6 +6,7 @@ import { canEmitirFacturaElectronica } from "@/lib/facturacion/access"
 import { SAFE_COLUMNS, SNAPSHOT_COLUMNS } from "@/lib/facturacion/comprobante-columns"
 import { pdfFiscalDisponible } from "@/lib/facturacion/arca/qr"
 
+const FORMA_ID = /^[A-Za-z0-9_-]{1,64}$/
 const ESTADOS = ["pendiente", "emitido", "rechazado"] as const
 const LIMIT_DEFAULT = 20
 const LIMIT_MAX = 100
@@ -41,6 +42,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Estado inválido" }, { status: 400 })
   }
   const ventaId = searchParams.get("ventaId")
+  // Los ids de venta son TEXT (cuid): una forma imposible no tiene nada que buscar.
+  if (ventaId && !FORMA_ID.test(ventaId)) {
+    return NextResponse.json({ error: "ventaId inválido" }, { status: 400 })
+  }
 
   const offset = (page - 1) * limit
   const buscar = (conFoto: boolean) => {
@@ -61,6 +66,9 @@ export async function GET(request: Request) {
     // Migracion de la foto fiscal sin aplicar (42703): se lista igual, con
     // pdfDisponible=false porque sin foto no hay QR valido.
     ;({ data, error: dbError, count } = await buscar(false))
+  }
+  if (dbError?.code === "22P02") {
+    return NextResponse.json({ error: "Parámetros inválidos" }, { status: 400 })
   }
   if (dbError) {
     console.error("Error listing comprobantes fiscales:", dbError)

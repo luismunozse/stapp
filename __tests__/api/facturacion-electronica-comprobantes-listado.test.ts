@@ -146,6 +146,17 @@ describe("GET /api/facturacion-electronica/comprobantes", () => {
     expect((await get("estado=cualquiera")).status).toBe(400)
   })
 
+  it.each(["a b", "x,y", "abc'--", "a".repeat(65)])("ventaId con forma invalida (%j) -> 400 sin tocar la DB", async (v) => {
+    const res = await get(`ventaId=${encodeURIComponent(v)}`)
+    expect(res.status).toBe(400)
+    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+  })
+
+  it("22P02 de Postgres -> 400 (no 500)", async () => {
+    mockDb(() => ({ data: null, error: { code: "22P02", message: "invalid input syntax" } }))
+    expect((await get("ventaId=cabc123")).status).toBe(400)
+  })
+
   it("sin estado no filtra por estado", async () => {
     const chains = mockDb(() => ({ data: [], error: null, count: 0 }))
     await get()
