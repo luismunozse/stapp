@@ -80,6 +80,45 @@ describe("PUT /api/ventas/[id] — qué no se puede editar", () => {
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
+  // Hasta la migracion 372 el RPC cuenta las notas de credito electronicas como "factura emitida":
+  // el pre-check explica lo que hay de verdad (D14) y no llama al RPC.
+  it("factura anulada con su nota de crédito electrónica emitida: se explica con la nota de crédito (ARCA)", async () => {
+    mockVenta({
+      comprobantes_fiscales: [
+        { id: "cf1", estado: "anulado", cbte_tipo: 6 },
+        { id: "cf2", estado: "emitido", cbte_tipo: 8 },
+      ],
+    })
+    const { status, body } = await parseResponse(await PUT(...put(edicion())))
+    expect(status).toBe(409)
+    expect(body.error).toBe("No se puede editar: La venta tiene una nota de crédito electrónica (ARCA).")
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it("factura emitida con una nota de crédito pendiente: se explica con la factura", async () => {
+    mockVenta({
+      comprobantes_fiscales: [
+        { id: "cf1", estado: "emitido", cbte_tipo: 6 },
+        { id: "cf2", estado: "pendiente", cbte_tipo: 8 },
+      ],
+    })
+    const { status, body } = await parseResponse(await PUT(...put(edicion())))
+    expect(status).toBe(409)
+    expect(body.error).toMatch(/factura electrónica emitida/)
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+  })
+
+  it("factura anulada con una nota de crédito rechazada no bloquea", async () => {
+    mockVenta({
+      comprobantes_fiscales: [
+        { id: "cf1", estado: "anulado", cbte_tipo: 6 },
+        { id: "cf2", estado: "rechazado", cbte_tipo: 8 },
+      ],
+    })
+    const { status } = await parseResponse(await PUT(...put(edicion())))
+    expect(status).toBe(200)
+  })
+
   it("una nota de crédito anulada no bloquea", async () => {
     mockVenta({ notas_credito: [{ id: "nc1", anulada: true }] })
     const { status } = await parseResponse(await PUT(...put(edicion())))
