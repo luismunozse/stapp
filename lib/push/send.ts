@@ -247,12 +247,37 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
   return result
 }
 
-/** Convenience helper: dispatch to multiple users in parallel. */
+export interface SendToUsersOptions {
+  /**
+   * Máximo de usuarios procesados a la vez. Sin valor = todos en paralelo
+   * (comportamiento original, pensado para listas chicas). Un barrido con miles
+   * de usuarios tiene que pasarlo para no abrir miles de consultas y envíos juntos.
+   */
+  concurrency?: number
+}
+
+/** Convenience helper: dispatch to multiple users in parallel (optionally bounded). */
 export async function sendPushToUsers(
   userIds: string[],
-  payload: PushPayload
+  payload: PushPayload,
+  options: SendToUsersOptions = {}
 ): Promise<SendResult> {
-  const results = await Promise.all(userIds.map((id) => sendPushToUser(id, payload)))
+  const limite = options.concurrency
+  let results: SendResult[]
+  if (!limite || limite < 1 || limite >= userIds.length) {
+    results = await Promise.all(userIds.map((id) => sendPushToUser(id, payload)))
+  } else {
+    // Pool de workers: cada uno toma el siguiente usuario cuando termina el suyo.
+    results = new Array<SendResult>(userIds.length)
+    let siguiente = 0
+    const worker = async () => {
+      while (siguiente < userIds.length) {
+        const i = siguiente++
+        results[i] = await sendPushToUser(userIds[i], payload)
+      }
+    }
+    await Promise.all(Array.from({ length: limite }, worker))
+  }
   return results.reduce<SendResult>(
     (acc, r) => ({
       sent: acc.sent + r.sent,

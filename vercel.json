@@ -46,6 +46,10 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/cron/avisos-push",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/subscription-sweep",
       "schedule": "0 6 * * *"
     },
