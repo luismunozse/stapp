@@ -239,6 +239,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // El CUIT que emite es el representado si la org delegó. La NC tiene que salir por el
   // mismo emisor que la factura: ARCA numera por CUIT + punto de venta + tipo.
   const cuitEmisor = creds.cuitRepresentado ?? creds.cuit
+  if (!factura.cuit_emisor) {
+    // Fila legada: no hay CUIT guardado con que cruzar. El cruce por CAE contra ARCA sigue vigente.
+    console.warn("[facturacion] factura sin cuit_emisor: se omitió el cruce del CUIT al anular (el CAE se verifica igual)", {
+      facturaId: factura.id,
+    })
+  }
   if (factura.cuit_emisor && soloDigitos(factura.cuit_emisor) !== soloDigitos(cuitEmisor)) {
     return json(
       {
@@ -453,6 +459,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       .select(COLUMNAS_NC)
       .single()
     if (rechazoError || !rechazada) {
+      // El UPDATE era condicional: sin filas puede significar que otro request (verificar) ya
+      // resolvió la NC. Se relee antes de borrar nada: una NC emitida JAMÁS se borra.
+      const { data: actual, error: relecturaError } = await supabaseAdmin
+        .from("comprobantes_fiscales")
+        .select(COLUMNAS_NC)
+        .eq("id", nc.id)
+        .eq("organization_id", org)
+        .maybeSingle()
+      const estadoActual = relecturaError ? null : ((actual as { estado?: string } | null)?.estado ?? null)
+      if (actual && estadoActual && estadoActual !== "pendiente") {
+        if (estadoActual === "rechazado") return json({ error: mensaje, comprobante: actual }, 422)
+        return json(
+          {
+            resultado: "cambio",
+            error: "La nota de crédito cambió mientras la anulabas. Actualizá la pantalla para ver cómo quedó.",
+            comprobante: actual,
+          },
+          409
+        )
+      }
       // Aquí nunca hubo CAE (ARCA dijo que no, o ni salió): dejar el pendiente colgado trabaría
       // el punto de venta en el índice de NC en vuelo, así que se borra para liberarlo.
       console.error("[facturacion] no se pudo registrar el rechazo de la nota de crédito", rechazoError)

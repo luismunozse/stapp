@@ -589,6 +589,28 @@ describe("POST /api/facturacion-electronica/comprobantes/[id]/anular", () => {
 
       expect(payloads(insercion, "insert")[0]).toMatchObject({ cuit_emisor: CUIT_EMISOR })
     })
+
+    it("una factura legada sin cuit_emisor avisa por log que se omitió el cruce del CUIT (el del CAE sigue vigente)", async () => {
+      const aviso = vi.spyOn(console, "warn").mockImplementation(() => {})
+      montar({ factura: FACTURA_LEGADA })
+
+      await anular()
+
+      expect(aviso).toHaveBeenCalledTimes(1)
+      expect(String(aviso.mock.calls[0][0])).toMatch(/cuit/i)
+      expect(JSON.stringify(aviso.mock.calls[0])).toContain(FACTURA_ID)
+      aviso.mockRestore()
+    })
+
+    it("con cuit_emisor guardado no hay aviso", async () => {
+      const aviso = vi.spyOn(console, "warn").mockImplementation(() => {})
+      montar()
+
+      await anular()
+
+      expect(aviso).not.toHaveBeenCalled()
+      aviso.mockRestore()
+    })
   })
 
   // ------------------------------------------------------ consulta a ARCA
@@ -1148,8 +1170,9 @@ describe("POST /api/facturacion-electronica/comprobantes/[id]/anular", () => {
     it("si ni siquiera se puede registrar el rechazo (sin CAE, certero) se borra la fila pendiente y se responde 422 igual", async () => {
       const consola = vi.spyOn(console, "error").mockImplementation(() => {})
       const fallido = createChainMock(null, { message: "update caído" })
+      const relectura = createChainMock({ ...NC_EMITIDA, estado: "pendiente", cae: null, numero: null })
       const borrado = createChainMock(null, null)
-      montar({ despues: [fallido, borrado] })
+      montar({ despues: [fallido, relectura, borrado] })
       vi.mocked(arcaDirectProvider.emitirNotaCredito).mockResolvedValue(rechazada)
 
       const { status, body } = await anular()
@@ -1161,6 +1184,75 @@ describe("POST /api/facturacion-electronica/comprobantes/[id]/anular", () => {
       expect(borrado.eq).toHaveBeenCalledWith("estado", "pendiente")
       escritoSobreOrg(borrado)
       consola.mockRestore()
+    })
+
+    describe("el UPDATE condicional a rechazado no afecta ninguna fila", () => {
+      it("la NC ya está emitida (la adoptó verificar): 409 cambio con la fila releída, NUNCA se borra", async () => {
+        const consola = vi.spyOn(console, "error").mockImplementation(() => {})
+        const sinFilas = createChainMock(null, { code: "PGRST116", message: "0 rows" })
+        const relectura = createChainMock(NC_EMITIDA)
+        montar({ despues: [sinFilas, relectura] })
+        vi.mocked(arcaDirectProvider.emitirNotaCredito).mockResolvedValue(rechazada)
+
+        const { status, body } = await anular()
+
+        expect(status).toBe(409)
+        expect(body.resultado).toBe("cambio")
+        expect(body.comprobante).toMatchObject({ id: NC_ID, estado: "emitido", cae: CAE_NC })
+        expect(typeof body.error).toBe("string")
+        expect(escrituras("delete")).toHaveLength(0)
+        expect(relectura.eq).toHaveBeenCalledWith("id", NC_ID)
+        escritoSobreOrg(relectura)
+        expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+        consola.mockRestore()
+      })
+
+      it("la NC quedó rechazada por otro request: 422 con esa fila y sin borrar nada", async () => {
+        const consola = vi.spyOn(console, "error").mockImplementation(() => {})
+        const sinFilas = createChainMock(null, { code: "PGRST116", message: "0 rows" })
+        const relectura = createChainMock({ ...NC_EMITIDA, estado: "rechazado", cae: null, numero: null })
+        montar({ despues: [sinFilas, relectura] })
+        vi.mocked(arcaDirectProvider.emitirNotaCredito).mockResolvedValue(rechazada)
+
+        const { status, body } = await anular()
+
+        expect(status).toBe(422)
+        expect(body.comprobante).toMatchObject({ id: NC_ID, estado: "rechazado" })
+        expect(escrituras("delete")).toHaveLength(0)
+        consola.mockRestore()
+      })
+
+      it("la releída sigue pendiente: se borra (condicional) y 422 como antes", async () => {
+        const consola = vi.spyOn(console, "error").mockImplementation(() => {})
+        const sinFilas = createChainMock(null, { code: "PGRST116", message: "0 rows" })
+        const relectura = createChainMock({ ...NC_EMITIDA, estado: "pendiente", cae: null, numero: null })
+        const borrado = createChainMock(null, null)
+        montar({ despues: [sinFilas, relectura, borrado] })
+        vi.mocked(arcaDirectProvider.emitirNotaCredito).mockResolvedValue(rechazada)
+
+        const { status } = await anular()
+
+        expect(status).toBe(422)
+        expect(borrado.delete).toHaveBeenCalled()
+        expect(borrado.eq).toHaveBeenCalledWith("estado", "pendiente")
+        consola.mockRestore()
+      })
+
+      it("si la relectura falla no se sabe qué pasó: se cae al borrado condicional y 422", async () => {
+        const consola = vi.spyOn(console, "error").mockImplementation(() => {})
+        const sinFilas = createChainMock(null, { code: "PGRST116", message: "0 rows" })
+        const relectura = createChainMock(null, { message: "lectura caída" })
+        const borrado = createChainMock(null, null)
+        montar({ despues: [sinFilas, relectura, borrado] })
+        vi.mocked(arcaDirectProvider.emitirNotaCredito).mockResolvedValue(rechazada)
+
+        const { status } = await anular()
+
+        expect(status).toBe(422)
+        expect(borrado.delete).toHaveBeenCalled()
+        expect(borrado.eq).toHaveBeenCalledWith("estado", "pendiente")
+        consola.mockRestore()
+      })
     })
 
     it("un fallo previo al envío (ARCA nunca la recibió) es un rechazo: se puede reintentar", async () => {
