@@ -247,6 +247,21 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
   return result
 }
 
+/** sendPushToUser sin rechazo: una falla inesperada de un usuario se cuenta como fallida. */
+export async function sendPushToUserSafe(userId: string, payload: PushPayload): Promise<SendResult> {
+  try {
+    return await sendPushToUser(userId, payload)
+  } catch (err) {
+    return {
+      sent: 0,
+      failed: 1,
+      skipped: 0,
+      byTransport: { web: 0, fcm: 0 },
+      errors: [`user ${userId}: ${(err as Error)?.message ?? "error"}`],
+    }
+  }
+}
+
 export interface SendToUsersOptions {
   /**
    * Máximo de usuarios procesados a la vez. Sin valor = todos en paralelo
@@ -265,7 +280,7 @@ export async function sendPushToUsers(
   const limite = options.concurrency
   let results: SendResult[]
   if (!limite || limite < 1 || limite >= userIds.length) {
-    results = await Promise.all(userIds.map((id) => sendPushToUser(id, payload)))
+    results = await Promise.all(userIds.map((id) => sendPushToUserSafe(id, payload)))
   } else {
     // Pool de workers: cada uno toma el siguiente usuario cuando termina el suyo.
     results = new Array<SendResult>(userIds.length)
@@ -273,7 +288,7 @@ export async function sendPushToUsers(
     const worker = async () => {
       while (siguiente < userIds.length) {
         const i = siguiente++
-        results[i] = await sendPushToUser(userIds[i], payload)
+        results[i] = await sendPushToUserSafe(userIds[i], payload)
       }
     }
     await Promise.all(Array.from({ length: limite }, worker))

@@ -20,6 +20,9 @@ export async function GET(request: Request) {
     if (result.error) {
       return NextResponse.json({ error: "Error reclamando avisos para push", ...result }, { status: 500 })
     }
+    if (result.sinConfiguracion) {
+      return NextResponse.json({ error: "Push sin configurar (VAPID/FCM): los avisos reclamados no salieron", ...result }, { status: 500 })
+    }
     return NextResponse.json({ success: true, ...result, timestamp: new Date().toISOString() })
   } catch (error) {
     console.error("Error en cron de avisos-push:", error)

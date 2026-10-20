@@ -51,4 +51,31 @@ describe("sendPushToUsers concurrencia", () => {
     const r = await sendPushToUsers(["a", "b", "c", "d"], { title: "t", body: "b" }, { concurrency: 2 })
     expect(r).toEqual({ sent: 0, failed: 0, skipped: 0, byTransport: { web: 0, fcm: 0 }, errors: [] })
   })
+
+  describe("aislamiento de fallas por usuario", () => {
+    function mockUnoFalla() {
+      vi.mocked(supabaseAdmin.from).mockImplementation(() => {
+        let userId = ""
+        const chain: any = {
+          select: () => chain,
+          eq: (col: string, v: string) => {
+            if (col === "user_id") userId = v
+            return chain
+          },
+          then: (resolve: (v: unknown) => void, reject: (e: unknown) => void) => {
+            if (userId === "malo") reject(new Error("db caida"))
+            else resolve({ data: [], error: null })
+          },
+        }
+        return chain
+      })
+    }
+
+    it.each([[undefined], [2]])("un usuario que tira cuenta 1 fallido y no rechaza (concurrency=%s)", async (concurrency) => {
+      mockUnoFalla()
+      const r = await sendPushToUsers(["a", "malo", "c"], { title: "t", body: "b" }, concurrency ? { concurrency } : {})
+      expect(r.failed).toBe(1)
+      expect(r.errors.join(" ")).toContain("db caida")
+    })
+  })
 })

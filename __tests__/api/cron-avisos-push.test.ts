@@ -44,6 +44,13 @@ describe("GET /api/cron/avisos-push", () => {
     expect(res.status).toBe(500)
   })
 
+  it("500 si el transporte push no esta configurado (queda en los logs de Vercel)", async () => {
+    enviarPushDeAvisos.mockResolvedValue({ claimed: 3, usuarios: 3, enviados: 0, fallidos: 0, sinConfiguracion: true })
+    const res = await GET(req())
+    expect(res.status).toBe(500)
+    expect(await res.json()).toMatchObject({ sinConfiguracion: true })
+  })
+
   it("500 si el barrido tira", async () => {
     enviarPushDeAvisos.mockRejectedValue(new Error("x"))
     const res = await GET(req())
