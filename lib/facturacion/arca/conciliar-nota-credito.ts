@@ -15,6 +15,15 @@
  *    incluidos. Se confirma con el último número autorizado.
  *  - No se rechaza dentro del período de gracia desde el último envío: ARCA
  *    puede seguir procesando un pedido cuya respuesta no recibimos.
+ *
+ * LÍMITE CONOCIDO de la adopción: `FECompConsultar` (`mapVoucherInfo` del SDK)
+ * descarta `CbtesAsoc`, así que NO se puede comprobar que el comprobante que ARCA
+ * muestra en ese número esté asociado a la factura que se quiso anular. La
+ * protección descansa en el número exacto que se solicitó, en el índice único
+ * `uq_comprobante_nc_numero` y en que coincidan total, tipo y número de documento
+ * y fecha. Una NC emitida FUERA de STApp con el mismo CUIT, punto de venta y tipo,
+ * y con total, documento y fecha idénticos, podría adoptarse por error. Cuando
+ * `verificar` informa `soporte`, soporte debe revisar "Mis comprobantes" en ARCA.
  */
 
 import { formatearNumeroComprobante } from "@/lib/facturacion/numero-comprobante"
