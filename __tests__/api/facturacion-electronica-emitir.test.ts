@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { MENSAJE_ERROR_TECNICO } from "@/lib/facturacion/errores"
+import { FILTRO_SIN_NC } from "@/lib/facturacion/cbte-tipo"
 import {
   mockAuthSuccess,
   mockAuthError,
@@ -762,6 +763,118 @@ describe("POST /api/facturacion-electronica/emitir", () => {
       const payloads = updatePayloads(update)
       expect(payloads).toHaveLength(1)
       for (const key of SNAPSHOT_KEYS) expect(Object.keys(payloads[0])).not.toContain(key)
+    })
+  })
+
+  /**
+   * Anular una factura deja en la MISMA venta una nota de crédito fiscal
+   * (cbte_tipo 8/13) además de la factura. Emitir decide "¿ya está emitida?"
+   * mirando comprobantes de la venta: si cuenta la NC, una venta con factura
+   * anulada + NC emitida respondería "ya emitida" con la NC y no se podría
+   * refacturar; y con varias filas históricas un `maybeSingle` pelado falla.
+   */
+  describe("ignora las notas de crédito fiscales", () => {
+    const FACTURA_VIGENTE = { id: "cmp-2", venta_id: "venta-1", estado: "emitido", cae: "222" }
+
+    it("el atajo 'ya emitida' mira solo facturas de ESTA venta y organización", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+      vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+      const existente = createChainMock(FACTURA_VIGENTE)
+      mockSupabaseSequenced({ comprobantes_fiscales: [existente] })
+
+      const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+      expect(status).toBe(409)
+      expect(body.yaEmitido).toBe(true)
+      expect(body.comprobante).toEqual(FACTURA_VIGENTE)
+      expect(existente.or).toHaveBeenCalledWith(FILTRO_SIN_NC)
+      expect(existente.eq).toHaveBeenCalledWith("estado", "emitido")
+      expect(existente.eq).toHaveBeenCalledWith("venta_id", "venta-1")
+      expect(existente.eq).toHaveBeenCalledWith("organization_id", "org-1")
+      expect(existente.select).toHaveBeenCalledWith(SAFE_COLUMNS)
+    })
+
+    it("con varias filas históricas pide UNA (la más nueva) en vez de reventar en maybeSingle", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+      vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+      const existente = createChainMock(FACTURA_VIGENTE)
+      mockSupabaseSequenced({ comprobantes_fiscales: [existente] })
+
+      await POST(createPostRequest({ ventaId: "venta-1" }))
+
+      expect(existente.order).toHaveBeenCalledWith("created_at", { ascending: false })
+      expect(existente.limit).toHaveBeenCalledWith(1)
+    })
+
+    it("el atajo se omite SOLO si falta cbte_tipo (migración 370 sin aplicar): reintenta sin el filtro y sigue emitiendo", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+      vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+      const conFiltro = createChainMock(null, { code: "42703", message: "column comprobantes_fiscales.cbte_tipo does not exist" })
+      const sinFiltro = createChainMock(FACTURA_VIGENTE)
+      mockSupabaseSequenced({ comprobantes_fiscales: [conFiltro, sinFiltro] })
+
+      const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+      expect(status).toBe(409)
+      expect(body.comprobante).toEqual(FACTURA_VIGENTE)
+      expect(sinFiltro.or).not.toHaveBeenCalled()
+      expect(sinFiltro.eq).toHaveBeenCalledWith("estado", "emitido")
+      expect(sinFiltro.eq).toHaveBeenCalledWith("organization_id", "org-1")
+    })
+
+    it("otro error de base de datos en el atajo no se reintenta: 500", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+      vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+      const consulta = createChainMock(null, { code: "57014", message: "statement timeout" })
+      const reintento = createChainMock(FACTURA_VIGENTE)
+      mockSupabaseSequenced({ comprobantes_fiscales: [consulta, reintento] })
+
+      const { status } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+      expect(status).toBe(500)
+      expect(reintento.eq).not.toHaveBeenCalled()
+    })
+
+    it("al perder la carrera (23505) devuelve la factura activa, nunca una NC en vuelo", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+      vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+      const activa = createChainMock({ id: "cmp-2", venta_id: "venta-1", estado: "pendiente", cae: null })
+      mockSupabaseSequenced({
+        comprobantes_fiscales: [
+          createChainMock(null),
+          createChainMock(null, { code: "23505", message: 'duplicate key value violates unique constraint "uq_comprobante_venta_activo"' }),
+          activa,
+        ],
+        ventas: [createChainMock(VENTA)],
+        items_venta: [createChainMock(ITEMS)],
+        facturacion_credenciales: [createChainMock(CREDENCIALES)],
+      })
+
+      const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+      expect(status).toBe(409)
+      expect(body.comprobante.id).toBe("cmp-2")
+      expect(activa.or).toHaveBeenCalledWith(FILTRO_SIN_NC)
+      expect(activa.in).toHaveBeenCalledWith("estado", ["pendiente", "emitido"])
+      expect(activa.eq).toHaveBeenCalledWith("organization_id", "org-1")
+      expect(activa.order).toHaveBeenCalledWith("created_at", { ascending: false })
+      expect(activa.limit).toHaveBeenCalledWith(1)
+    })
+
+    it("la consulta de devoluciones NO se toca: sigue siendo solo por venta, sin filtro de NC", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+      vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+      const devoluciones = createChainMock(null, null, 1)
+      mockSupabaseSequenced({
+        comprobantes_fiscales: [createChainMock(null)],
+        ventas: [createChainMock(VENTA)],
+        devoluciones_venta: [devoluciones],
+      })
+
+      await POST(createPostRequest({ ventaId: "venta-1" }))
+
+      expect(devoluciones.eq).toHaveBeenCalledWith("venta_id", "venta-1")
+      expect(devoluciones.or).not.toHaveBeenCalled()
     })
   })
 })
