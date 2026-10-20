@@ -1,3 +1,8 @@
+// `IVoucher` no se re-exporta limpio desde la raíz del paquete; se importa por
+// ruta interna como `INextVoucher` (ver arca/voucher.ts). Solo tipos: se borra al
+// compilar, así que este módulo sigue siendo importable desde el cliente.
+import type { IVoucher } from "@arcasdk/core/lib/domain/types/voucher.types"
+
 export type CondicionFiscalEmisor = "MONOTRIBUTO" | "RESPONSABLE_INSCRIPTO"
 export type TipoComprobante = "B" | "C"
 
@@ -134,29 +139,61 @@ export interface ComprobanteRef {
   cbteNro: number
 }
 
+/**
+ * Lo que ARCA devuelve al consultar un comprobante ya emitido (`FECompConsultar`).
+ * Es la fuente AUTORITATIVA de los importes de una nota de crédito: las filas
+ * legadas no guardan lo autorizado. El SDK descarta `Iva[]`, `CbtesAsoc` y
+ * `CondicionIVAReceptorId`, así que la alícuota se infiere de `impIva`/`impNeto`.
+ */
 export interface ConsultaResult {
+  /** `false` si ARCA no tiene ese comprobante. El resto de los campos queda vacío. */
   existe: boolean
   cae?: string
   caeVencimiento?: string
-  total?: number
+  /** "A" aprobado, "R" rechazado. */
+  resultado?: string
+  /** Fecha del comprobante en formato AAAAMMDD. */
   cbteFch?: string
+  concepto?: number
+  docTipo?: number
+  /** Solo dígitos. */
   docNro?: string
+  impTotal?: number
+  impNeto?: number
+  impIva?: number
+  impTrib?: number
+  impOpEx?: number
+  impTotConc?: number
+  moneda?: string
+  cotizacion?: number
 }
 
-export type MotivoNotaCredito = "error_datos" | "error_importe" | "anulacion_venta" | "devolucion" | "duplicado" | "otro"
+/** Motivo con el que el Admin anula una factura (queda en la nota de crédito). */
+export type MotivoNotaCredito = "error_factura" | "devolucion_total" | "otro"
 
-export interface NotaCreditoInput extends EmitirInput {
-  comprobanteAsociadoId: string
-  motivo: MotivoNotaCredito
-  motivoDetalle?: string
-}
+/**
+ * Desenlace de enviar una nota de crédito a ARCA. `emitirNotaCredito` nunca
+ * lanza: la distinción entre `rechazada` e `incierta` es la que evita emitir una
+ * SEGUNDA nota de crédito al reintentar.
+ *
+ *  - `autorizada`: ARCA devolvió CAE.
+ *  - `rechazada`: ARCA dijo "R"/Errors, o el envío falló ANTES de salir
+ *    (autenticación, armado): ARCA no emitió nada, reintentar es seguro.
+ *  - `incierta`: `createVoucher` lanzó, o respondió sin CAE y sin rechazo: ARCA
+ *    pudo haberla emitido. Nunca se marca como rechazada; se verifica contra ARCA.
+ */
+export type ResultadoNotaCredito =
+  | { kind: "autorizada"; numero: string; cae: string; caeVencimiento: string; raw: unknown }
+  | { kind: "rechazada"; errores: string[]; raw: unknown }
+  | { kind: "incierta"; error: string }
 
 // Interfaces segregadas (ISP): cada capacidad ARCA-only es su propia interfaz,
 // nunca un método opcional en `FacturacionProvider` — evita forzar a
 // tusfacturas-provider.ts a implementar NC/consulta/puntos de venta, que no
 // soporta, y evita el guard-en-cada-call-site de una interfaz "fat" opcional.
 export interface SoportaNotaCredito<C> {
-  emitirNotaCredito(creds: C, input: NotaCreditoInput): Promise<ComprobanteResult>
+  /** Envía el voucher ya armado y numerado (`CbteDesde`/`CbteHasta` explícitos). */
+  emitirNotaCredito(creds: C, voucher: IVoucher): Promise<ResultadoNotaCredito>
 }
 
 export interface SoportaConsulta<C> {

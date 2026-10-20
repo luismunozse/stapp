@@ -13,15 +13,17 @@
 // que mantener una copia local del tipo que derive en silencio.
 import type { INextVoucher } from "@arcasdk/core/lib/domain/types/voucher.types"
 
+import { CBTE_TIPO_FACTURA } from "@/lib/facturacion/cbte-tipo"
 import { ErrorDeNegocioFacturacion } from "@/lib/facturacion/errores"
 import { deriveTipo } from "@/lib/facturacion/derive"
 import type { ArcaCredenciales, DatosFiscales, EmitirInput } from "@/lib/facturacion/types"
 
-/** Códigos de `FEParamGetTiposCbte`. */
-const CBTE_TIPO: Record<"B" | "C", number> = { B: 6, C: 11 }
-
-/** Códigos de `FEParamGetTiposIva`, indexados por la alícuota en porcentaje. */
-const ALICUOTA_ID: Record<number, number> = {
+/**
+ * Códigos de `FEParamGetTiposIva`, indexados por la alícuota en porcentaje.
+ * Se exporta para que la nota de crédito infiera la alícuota de la factura
+ * original con la MISMA tabla con la que se emitió.
+ */
+export const ALICUOTA_ID: Record<number, number> = {
   0: 3,
   10.5: 4,
   21: 5,
@@ -51,8 +53,20 @@ const COND_IVA_RECEPTOR: Record<string, number> = {
   "RESPONSABLE MONOTRIBUTO": 6,
 }
 
-function normalizar(valor: string | undefined): string {
+function normalizar(valor: string | null | undefined): string {
   return (valor ?? "").trim().toUpperCase()
+}
+
+/**
+ * Código de `FEParamGetCondicionIvaReceptor` para el texto que el taller (o la
+ * fila persistida) guarda como condición de IVA del receptor, o `undefined` si
+ * no se reconoce. NO inventa un default: la factura cae a consumidor final
+ * (`?? 5`) porque es el receptor que ARCA acepta sin identificar, pero la nota
+ * de crédito debe copiar la condición del original y por eso necesita saber
+ * cuándo no se pudo determinar.
+ */
+export function condicionIvaReceptorId(condicionIva: string | null | undefined): number | undefined {
+  return COND_IVA_RECEPTOR[normalizar(condicionIva)]
 }
 
 /**
@@ -166,7 +180,7 @@ export function buildVoucher(
   return {
     CantReg: 1,
     PtoVta: creds.puntoVenta,
-    CbteTipo: CBTE_TIPO[tipo],
+    CbteTipo: CBTE_TIPO_FACTURA[tipo],
     Concepto: 1, // Productos
     // Ante un tipo de documento o condición desconocidos se cae a consumidor
     // final, que es el receptor que AFIP acepta sin identificar.
@@ -184,7 +198,7 @@ export function buildVoucher(
     ImpTrib: 0,
     MonId: input.moneda,
     MonCotiz: 1,
-    CondicionIVAReceptorId: COND_IVA_RECEPTOR[normalizar(input.receptor.condicionIva)] ?? 5,
+    CondicionIVAReceptorId: condicionIvaReceptorId(input.receptor.condicionIva) ?? 5,
     ...(iva ? { Iva: iva } : {}),
   }
 }
