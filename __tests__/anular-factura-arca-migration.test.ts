@@ -45,6 +45,31 @@ describe("371: transaction hygiene", () => {
     expect(sql).toMatch(/WHERE cbte_tipo IN \(8, 13\)/)
     expect(sql.indexOf("Abort: falta")).toBeLessThan(sql.indexOf("ALTER TABLE comprobantes_fiscales"))
   })
+
+  it("aborts when another CHECK mentions estado: the estado rebuild would leave it stale", () => {
+    const sql = collapse(migRaw())
+    // multi-column CHECKs that mention estado, except the two this migration owns
+    expect(sql).toContain("conkey IS DISTINCT FROM ARRAY[v_attnum]")
+    expect(sql).toContain("conname NOT IN ('comprobantes_fiscales_nc_check', 'comprobantes_fiscales_anulado_check')")
+    expect(sql).toContain("pg_get_constraintdef(oid) ~ '\\mestado\\M'")
+    expect(sql).toContain("RAISE EXCEPTION 'Abort: otra CHECK de comprobantes_fiscales menciona estado")
+    expect(sql.indexOf("Abort: otra CHECK")).toBeLessThan(sql.indexOf("ALTER TABLE comprobantes_fiscales"))
+  })
+
+  it("documents the runbook to release a stuck pendiente NC, with the ARCA check first", () => {
+    const header = migRaw().slice(0, migRaw().indexOf("SET LOCAL lock_timeout"))
+    expect(header).toContain("RUNBOOK")
+    expect(header).toContain("Mis Comprobantes")
+    expect(header).toMatch(/UPDATE comprobantes_fiscales\n--\s+SET estado = 'rechazado', error_msg = /)
+    expect(header).toMatch(/WHERE id = '<nc id>' AND estado = 'pendiente' AND comprobante_asociado_id IS NOT NULL;/)
+    // the warning must come before the statement
+    expect(header.indexOf("NOT authorized")).toBeLessThan(header.indexOf("SET estado = 'rechazado'"))
+  })
+
+  it("does not claim that bloqueos.ts already repeats the text: PR4/PR5 align it", () => {
+    expect(migRaw()).not.toMatch(/bloqueos\.ts repeats the same text/)
+    expect(migRaw()).toMatch(/PR4\/PR5/)
+  })
 })
 
 describe("371: the columns", () => {
@@ -87,6 +112,8 @@ describe("371: constraints", () => {
     // NC side. A CHECK passes on NULL, so each nullable comparison needs its own IS NOT NULL.
     expect(body).toContain("comprobante_asociado_id IS NOT NULL")
     expect(body).toContain("comprobante_asociado_id <> id")
+    // ARCA numbers per CUIT + PV + type: an NC must carry the issuer CUIT (11 digits, like the 370 column)
+    expect(body).toContain("cuit_emisor IS NOT NULL AND cuit_emisor ~ '^[0-9]{11}$'")
     expect(body).toContain("cbte_tipo IS NOT NULL AND cbte_tipo = CASE tipo WHEN 'B' THEN 8 WHEN 'C' THEN 13 END")
     expect(body).toContain("cbte_nro_solicitado IS NOT NULL AND cbte_nro_solicitado > 0")
     expect(body).toContain("estado <> 'anulado'")
@@ -123,10 +150,24 @@ describe("371: indexes", () => {
     )
   })
 
-  it("one in-flight NC per org, point of sale and type", () => {
+  it("one in-flight NC per issuer CUIT, point of sale and type (ARCA numbers by CUIT, not by org)", () => {
     expect(sql()).toContain(
-      "CREATE UNIQUE INDEX IF NOT EXISTS uq_comprobante_nc_en_vuelo ON comprobantes_fiscales(organization_id, punto_venta, cbte_tipo) " +
+      "CREATE UNIQUE INDEX IF NOT EXISTS uq_comprobante_nc_en_vuelo ON comprobantes_fiscales(cuit_emisor, punto_venta, cbte_tipo) " +
         "WHERE comprobante_asociado_id IS NOT NULL AND estado = 'pendiente';"
+    )
+    expect(sql()).not.toMatch(/uq_comprobante_nc_en_vuelo ON comprobantes_fiscales\(organization_id/)
+  })
+
+  it("one emitted NC per issuer CUIT, point of sale, type and number", () => {
+    expect(sql()).toContain(
+      "CREATE UNIQUE INDEX IF NOT EXISTS uq_comprobante_nc_numero ON comprobantes_fiscales(cuit_emisor, punto_venta, cbte_tipo, numero) " +
+        "WHERE comprobante_asociado_id IS NOT NULL AND estado = 'emitido';"
+    )
+  })
+
+  it("a plain index on comprobante_asociado_id serves the self-FK lookups", () => {
+    expect(sql()).toContain(
+      "CREATE INDEX IF NOT EXISTS idx_comprobantes_asociado ON comprobantes_fiscales(comprobante_asociado_id);"
     )
   })
 })
@@ -189,13 +230,38 @@ describe("371: confirmar_nota_credito_fiscal", () => {
     for (const msg of [
       "Nota de crédito no encontrada",
       "La nota de crédito ya está emitida con otro CAE",
-      "La nota de crédito no está pendiente",
       "La factura asociada no está emitida",
       "La factura asociada no corresponde a la venta o al tipo de la nota de crédito",
       "Faltan el número, el CAE o su vencimiento",
+      "El número de la nota de crédito no coincide con el pedido a ARCA",
     ]) {
       expect(sql(), msg).toContain(`RAISE EXCEPTION '${msg}'`)
     }
+  })
+
+  it("confirms an NC in pendiente OR rechazado: ARCA may have authorized a send we gave up on", () => {
+    const body = sql()
+    // only 'emitido' is special (replay); there is no state check left that refuses a rechazada NC
+    expect(body).toContain("IF v_nc.estado = 'emitido' THEN")
+    expect(body).not.toMatch(/ELSIF v_nc\.estado <> 'pendiente'/)
+    expect(body).not.toContain("La nota de crédito no está pendiente")
+  })
+
+  it("relies on the unique indexes (23505) when a newer active NC exists, instead of re-checking", () => {
+    const body = sql()
+    // the NC is flipped by a plain UPDATE: uq_comprobante_nc_activa / uq_comprobante_nc_numero decide
+    expect(body).not.toMatch(/EXCEPTION\s+WHEN\s+unique_violation/i)
+    expect(body).toMatch(/UPDATE comprobantes_fiscales SET estado = 'emitido', numero = p_numero/)
+  })
+
+  it("checks that the number is PPPP-NNNNNNNN, with the NC's own point of sale and requested number", () => {
+    const body = sql()
+    expect(body).toContain("p_numero ~ '^[0-9]{1,5}-[0-9]{1,8}$'")
+    expect(body).toContain("split_part(p_numero, '-', 1)::INTEGER = v_nc.punto_venta")
+    expect(body).toContain("split_part(p_numero, '-', 2)::INTEGER = v_nc.cbte_nro_solicitado")
+    // the regex guards the casts: it must be evaluated before them (separate statements, not one OR)
+    expect(body.indexOf("p_numero ~ '^[0-9]{1,5}-[0-9]{1,8}$'")).toBeLessThan(body.indexOf("split_part(p_numero"))
+    expect(body.indexOf("split_part(p_numero")).toBeLessThan(body.indexOf("IF v_nc.estado = 'emitido' THEN"))
   })
 
   it("is for service_role only", () => {
@@ -216,12 +282,24 @@ describe("371 rollback", () => {
     expect(sql().startsWith("SET LOCAL lock_timeout = '3s';")).toBe(true)
   })
 
-  it("refuses to run when any NC or annulled factura exists (a fiscal NC cannot be undone)", () => {
+  it("locks the table right after the lock_timeout, so no NC can slip in between the guard and the drops", () => {
+    expect(sql().startsWith("SET LOCAL lock_timeout = '3s'; LOCK TABLE comprobantes_fiscales IN ACCESS EXCLUSIVE MODE;")).toBe(true)
+  })
+
+  it("deletes rechazada NC rows (no fiscal effect) before the guard, then refuses on any live NC or annulled factura", () => {
     const body = sql()
-    expect(body).toContain("comprobante_asociado_id IS NOT NULL")
-    expect(body).toContain("estado = 'anulado'")
+    expect(body).toContain("DELETE FROM comprobantes_fiscales WHERE estado = 'rechazado' AND comprobante_asociado_id IS NOT NULL;")
+    // the guard keeps looking at every NC left (pendiente or emitido) and at annulled facturas
+    expect(body).toContain("WHERE comprobante_asociado_id IS NOT NULL OR estado = 'anulado'")
     expect(body).toContain("RAISE EXCEPTION 'Abort:")
+    expect(body.indexOf("DELETE FROM comprobantes_fiscales")).toBeLessThan(body.indexOf("RAISE EXCEPTION 'Abort:"))
     expect(body.indexOf("RAISE EXCEPTION 'Abort:")).toBeLessThan(body.indexOf("DROP FUNCTION"))
+  })
+
+  it("says what the rollback loses (the rechazada NC attempts) and how to export them", () => {
+    const header = rollbackRaw().slice(0, rollbackRaw().indexOf("SET LOCAL lock_timeout"))
+    expect(header).toMatch(/rechazad/i)
+    expect(header).toContain("SELECT")
   })
 
   it("drops the RPC, restores the 329 trigger body verbatim, the old index and the old CHECK, drops the columns", () => {
@@ -229,7 +307,9 @@ describe("371 rollback", () => {
     expect(body).toContain("DROP FUNCTION IF EXISTS public.confirmar_nota_credito_fiscal(TEXT, TEXT, TEXT, TEXT, TEXT, JSONB);")
     expect(triggerBody(rollbackRaw())).toBe(triggerBody(m329Raw()))
     expect(body).toContain("DROP INDEX IF EXISTS uq_comprobante_nc_en_vuelo;")
+    expect(body).toContain("DROP INDEX IF EXISTS uq_comprobante_nc_numero;")
     expect(body).toContain("DROP INDEX IF EXISTS uq_comprobante_nc_activa;")
+    expect(body).toContain("DROP INDEX IF EXISTS idx_comprobantes_asociado;")
     expect(body).toContain(
       "CREATE UNIQUE INDEX uq_comprobante_venta_activo ON comprobantes_fiscales(venta_id) WHERE estado IN ('pendiente', 'emitido');"
     )
@@ -272,19 +352,43 @@ describe("371 probes", () => {
       "23505 uq_comprobante_venta_activo",
       "23505 uq_comprobante_nc_activa",
       "23505 uq_comprobante_nc_en_vuelo",
+      "23505 uq_comprobante_nc_numero",
       "23514 comprobantes_fiscales_nc_check",
       "23514 comprobantes_fiscales_anulado_check",
       "23514 comprobantes_fiscales_estado_check",
       "P0022 VENTA_NO_ANULABLE",
       "Nota de crédito no encontrada",
       "La nota de crédito ya está emitida con otro CAE",
-      "La nota de crédito no está pendiente",
       "La factura asociada no está emitida",
       "La factura asociada no corresponde a la venta o al tipo de la nota de crédito",
       "Faltan el número, el CAE o su vencimiento",
+      "El número de la nota de crédito no coincide con el pedido a ARCA",
     ]) {
       expect(sql, expected).toContain(expected)
     }
+  })
+
+  it("no longer expects a rechazada NC to be refused: it proves the late confirmation instead", () => {
+    const sql = probesRaw()
+    expect(sql).not.toContain("La nota de crédito no está pendiente")
+    expect(sql).toContain("NC rechazada confirmada tarde")
+    expect(sql).toContain("NC rechazada confirmada tarde mientras hay otra NC activa de la factura")
+  })
+
+  it("seed the awkward rows: a workshop NC linked to another org's factura, a legacy tusfacturas factura, a foreign org", () => {
+    const sql = probesRaw()
+    expect(sql).toMatch(/pg_temp\.nc\('nc-p371-xlink', 'fac-p371-x1'/)
+    expect(sql).toMatch(/p_provider => 'tusfacturas', p_cuit => NULL, p_cbte_tipo => NULL/)
+    expect(sql).toMatch(/p_org => 'org-probe-371-x'/)
+  })
+
+  it("every venta annulment probe also reads ventas.estado afterwards", () => {
+    const sql = probesRaw()
+    expect(sql).toContain("CREATE PROCEDURE pg_temp.probe_anular")
+    expect(sql).toMatch(/'ok \/ ANULADA'/)
+    expect(sql).toMatch(/\/ COMPLETADA'/)
+    // no trigger probe goes through the estado-less helper
+    expect(sql).not.toMatch(/CALL pg_temp\.probe\([^)]*UPDATE ventas/)
   })
 
   it("end with a single result set and a count probe", () => {
