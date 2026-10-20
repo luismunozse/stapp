@@ -14,27 +14,8 @@ import {
 import { mensajeSeguroDeError } from "@/lib/facturacion/errores"
 import { mapVentaToEmitirInput } from "@/lib/facturacion/map-venta"
 import { isMissingColumnError } from "@/lib/db-errors"
-import { SAFE_COLUMNS } from "@/lib/facturacion/comprobante-columns"
+import { SAFE_COLUMNS, columnasFiscales } from "@/lib/facturacion/comprobante-columns"
 import { FILTRO_SIN_NC } from "@/lib/facturacion/cbte-tipo"
-import type { DatosFiscales, EmitirInput } from "@/lib/facturacion/types"
-
-/** Columnas de la foto fiscal (migración comprobantes_fiscales_datos_qr). */
-function columnasFiscales(fiscal: DatosFiscales, detalle: EmitirInput["items"]) {
-  return {
-    fecha_emision: fiscal.fechaEmision,
-    cuit_emisor: fiscal.cuitEmisor,
-    cbte_tipo: fiscal.cbteTipo,
-    concepto: fiscal.concepto,
-    moneda: fiscal.moneda,
-    cotizacion: fiscal.cotizacion,
-    importe_neto: fiscal.importeNeto,
-    importe_iva: fiscal.importeIva,
-    importe_total: fiscal.importeTotal,
-    receptor_doc_tipo_cod: fiscal.receptorDocTipoCod,
-    receptor_doc_nro_cod: fiscal.receptorDocNro,
-    detalle,
-  }
-}
 
 // Código de Postgres para violación de constraint UNIQUE.
 const UNIQUE_VIOLATION = "23505"
