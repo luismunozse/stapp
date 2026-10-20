@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Bell, BellOff, AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
 import { useWebPush } from "@/hooks/use-web-push"
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,12 @@ export function PushSettings() {
   const { supported, permission, subscribed, loading, error, subscribe, unsubscribe } = useWebPush()
   const [testing, setTesting] = useState(false)
 
+  // Toast from the committed `error` state: reading it inside handleToggle
+  // saw the stale value from the render that created the closure.
+  useEffect(() => {
+    if (error) toast.error(error)
+  }, [error])
+
   // Native uses platform OS settings; this card is browser-only.
   if (typeof window !== "undefined" && isNativePlatform()) return null
 
@@ -29,7 +35,6 @@ export function PushSettings() {
     } else {
       const ok = await subscribe()
       if (ok) toast.success("Notificaciones activadas")
-      else if (error) toast.error(error)
     }
   }
 
