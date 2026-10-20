@@ -70,6 +70,23 @@ function mockDb(respuesta: (select: string) => { data: any; error: any; count?: 
   return chains
 }
 
+// Nota de credito electronica (cbte_tipo 8) asociada a FILA, con las columnas de la migracion 371.
+const NC = {
+  ...FILA,
+  id: "nc-1",
+  numero: "0001-00000002",
+  cae: "70417054367999",
+  cbte_tipo: 8,
+  comprobante_asociado_id: "comp-1",
+  cbte_nro_solicitado: 2,
+  motivo: "error_factura",
+  motivo_detalle: null,
+  anulado_at: null,
+}
+
+// Factura anulada: sigue siendo un comprobante emitido con su PDF.
+const ANULADA = { ...FILA, estado: "anulado", anulado_at: "2026-10-20T13:00:00Z" }
+
 const selectDe = (chain: any): string => String(chain.select.mock.calls[0][0])
 
 describe("GET /api/facturacion-electronica/comprobantes", () => {
@@ -171,11 +188,21 @@ describe("GET /api/facturacion-electronica/comprobantes", () => {
     expect(chains[0].range).toHaveBeenCalledWith(0, 0)
   })
 
-  it("SELECT: columnas seguras + foto fiscal + numero_venta, jamas provider_response", async () => {
+  it("SELECT: columnas seguras + foto fiscal + anulacion + numero_venta, jamas provider_response", async () => {
     const chains = mockDb(() => ({ data: [], error: null, count: 0 }))
     await get()
     const sel = selectDe(chains[0])
-    for (const col of ["cae_vencimiento", "cuit_emisor", "importe_total", "detalle", "ventas(numero_venta)"]) {
+    for (const col of [
+      "cae_vencimiento",
+      "cuit_emisor",
+      "importe_total",
+      "detalle",
+      "ventas(numero_venta)",
+      "comprobante_asociado_id",
+      "cbte_nro_solicitado",
+      "motivo_detalle",
+      "anulado_at",
+    ]) {
       expect(sel).toContain(col)
     }
     expect(sel).not.toContain("provider_response")
@@ -201,6 +228,14 @@ describe("GET /api/facturacion-electronica/comprobantes", () => {
       fechaEmision: "2026-10-19",
       createdAt: "2026-10-19T12:00:00Z",
       pdfDisponible: true,
+      cbteTipo: 6,
+      esNotaCredito: false,
+      comprobanteAsociadoId: null,
+      anuladoAt: null,
+      motivo: null,
+      motivoDetalle: null,
+      anulable: true,
+      verificable: false,
     })
     expect(JSON.stringify(body)).not.toContain("provider_response")
     expect(JSON.stringify(body)).not.toContain("secreto")
@@ -226,7 +261,7 @@ describe("GET /api/facturacion-electronica/comprobantes", () => {
     expect(body.items[0].numeroVenta).toBeNull()
   })
 
-  it("42703 en la foto fiscal -> reintenta sin esas columnas, pdfDisponible false", async () => {
+  it("42703 en la foto fiscal -> cae hasta las columnas seguras, pdfDisponible false", async () => {
     const chains = mockDb((select) =>
       select.includes("cuit_emisor")
         ? { data: null, error: { code: "42703", message: 'column "cuit_emisor" does not exist' } }
@@ -238,17 +273,19 @@ describe("GET /api/facturacion-electronica/comprobantes", () => {
     )
     const res = await get()
     expect(res.status).toBe(200)
+    // Los dos primeros escalones nombran la foto fiscal: el tercero es el unico sin ella.
     const sels = chains.map(selectDe)
-    expect(sels).toHaveLength(2)
+    expect(sels).toHaveLength(3)
     expect(sels[0]).toContain("cuit_emisor")
-    expect(sels[1]).not.toContain("cuit_emisor")
-    expect(sels[1]).toContain("ventas(numero_venta)")
-    expect(sels[1]).not.toContain("provider_response")
+    expect(sels[1]).toContain("cuit_emisor")
+    expect(sels[2]).not.toContain("cuit_emisor")
+    expect(sels[2]).toContain("ventas(numero_venta)")
+    expect(sels[2]).not.toContain("provider_response")
     const body = await res.json()
     expect(body.items[0].pdfDisponible).toBe(false)
     expect(body.items[0].fechaEmision).toBeNull()
-    // El reintento conserva los filtros (nunca se pierde el scoping por org).
-    expect(chains[1].eq).toHaveBeenCalledWith("organization_id", "org-1")
+    // Cada reintento conserva los filtros (nunca se pierde el scoping por org).
+    for (const chain of chains) expect(chain.eq).toHaveBeenCalledWith("organization_id", "org-1")
   })
 
   it("otro error de DB -> 500", async () => {
@@ -277,5 +314,224 @@ describe("GET /api/facturacion-electronica/comprobantes", () => {
     const res = await get()
     expect(res.status).toBe(200)
     expect((await res.json()).puedeEmitir).toBe(false)
+  })
+
+  describe("notas de credito y facturas anuladas (migracion 371)", () => {
+    it("estado=anulado es un filtro valido y filtra por esa columna", async () => {
+      const chains = mockDb(() => ({ data: [ANULADA], error: null, count: 1 }))
+      const res = await get("estado=anulado")
+      expect(res.status).toBe(200)
+      expect(chains[0].eq).toHaveBeenCalledWith("estado", "anulado")
+      expect(chains[0].eq).toHaveBeenCalledWith("organization_id", "org-1")
+      expect((await res.json()).items.map((i: any) => i.id)).toEqual(["comp-1"])
+    })
+
+    it("las notas de credito vienen junto a las facturas: ningun filtro las descarta", async () => {
+      const chains = mockDb(() => ({ data: [NC, FILA], error: null, count: 2 }))
+      const body = await (await get()).json()
+      expect(body.items.map((i: any) => i.id)).toEqual(["nc-1", "comp-1"])
+      // Un `.or`/`.neq`/`.not` sobre cbte_tipo sacaria las NC del listado.
+      expect(chains[0].or).not.toHaveBeenCalled()
+      expect(chains[0].neq).not.toHaveBeenCalled()
+      expect(chains[0].not).not.toHaveBeenCalled()
+    })
+
+    it("fila NC B emitida: se reconoce por cbte_tipo, apunta a su factura y lleva el motivo", async () => {
+      mockDb(() => ({ data: [{ ...NC, motivo: "otro", motivo_detalle: "Error de carga" }], error: null, count: 1 }))
+      const body = await (await get()).json()
+      expect(body.items[0]).toEqual({
+        id: "nc-1",
+        ventaId: "venta-1",
+        numeroVenta: 77,
+        tipo: "B",
+        puntoVenta: 1,
+        numero: "0001-00000002",
+        cae: "70417054367999",
+        caeVencimiento: "20261029",
+        estado: "emitido",
+        total: 121,
+        errorMsg: null,
+        pdfUrl: null,
+        fechaEmision: "2026-10-19",
+        createdAt: "2026-10-19T12:00:00Z",
+        pdfDisponible: true,
+        cbteTipo: 8,
+        esNotaCredito: true,
+        comprobanteAsociadoId: "comp-1",
+        anuladoAt: null,
+        motivo: "otro",
+        motivoDetalle: "Error de carga",
+        anulable: false,
+        verificable: false,
+      })
+    })
+
+    it("esNotaCredito sale de cbte_tipo (8/13), no de la columna de asociacion de la 371", async () => {
+      // Sin la 371 el SELECT no trae comprobante_asociado_id: el criterio no puede depender de ella.
+      mockDb(() => ({
+        data: [
+          { ...NC, comprobante_asociado_id: undefined },
+          { ...NC, id: "nc-2", cbte_tipo: 13, comprobante_asociado_id: undefined },
+          { ...FILA, comprobante_asociado_id: "otra" },
+        ],
+        error: null,
+        count: 3,
+      }))
+      const items = (await (await get()).json()).items
+      expect(items.map((i: any) => i.esNotaCredito)).toEqual([true, true, false])
+    })
+
+    it("fila NC C (13) tambien es nota de credito y jamas anulable", async () => {
+      mockDb(() => ({ data: [{ ...NC, tipo: "C", cbte_tipo: 13, importe_iva: 0 }], error: null, count: 1 }))
+      const item = (await (await get()).json()).items[0]
+      expect(item).toMatchObject({ cbteTipo: 13, esNotaCredito: true, anulable: false, pdfDisponible: true })
+    })
+
+    it("NC pendiente con numero pedido: verificable, sin PDF", async () => {
+      mockDb(() => ({
+        data: [{ ...NC, estado: "pendiente", numero: null, cae: null, cae_vencimiento: null }],
+        error: null,
+        count: 1,
+      }))
+      const item = (await (await get()).json()).items[0]
+      expect(item).toMatchObject({ estado: "pendiente", verificable: true, pdfDisponible: false, anulable: false })
+    })
+
+    it.each([
+      ["pendiente sin numero pedido", { estado: "pendiente", cbte_nro_solicitado: null }],
+      ["rechazada", { estado: "rechazado" }],
+      ["emitida", { estado: "emitido" }],
+    ])("NC %s: no verificable", async (_nombre, over) => {
+      mockDb(() => ({ data: [{ ...NC, ...over }], error: null, count: 1 }))
+      expect((await (await get()).json()).items[0].verificable).toBe(false)
+    })
+
+    it("una factura pendiente nunca es verificable (solo las NC)", async () => {
+      mockDb(() => ({ data: [{ ...FILA, estado: "pendiente", cbte_nro_solicitado: 3 }], error: null, count: 1 }))
+      expect((await (await get()).json()).items[0].verificable).toBe(false)
+    })
+
+    it("factura anulada: conserva su PDF, muestra cuando se anulo y ya no es anulable", async () => {
+      mockDb(() => ({ data: [ANULADA], error: null, count: 1 }))
+      const item = (await (await get()).json()).items[0]
+      expect(item).toMatchObject({
+        estado: "anulado",
+        anuladoAt: "2026-10-20T13:00:00Z",
+        pdfDisponible: true,
+        anulable: false,
+        esNotaCredito: false,
+      })
+    })
+
+    it.each([
+      ["emitido", true],
+      ["anulado", true],
+      ["pendiente", false],
+      ["rechazado", false],
+    ])("pdfDisponible con estado %s = %s (foto completa)", async (estado, esperado) => {
+      mockDb(() => ({ data: [{ ...FILA, estado }], error: null, count: 1 }))
+      expect((await (await get()).json()).items[0].pdfDisponible).toBe(esperado)
+    })
+
+    it("factura anulada con foto fiscal incompleta (legacy): sin PDF", async () => {
+      mockDb(() => ({ data: [{ ...ANULADA, cuit_emisor: null }], error: null, count: 1 }))
+      expect((await (await get()).json()).items[0].pdfDisponible).toBe(false)
+    })
+
+    it.each([
+      ["arca emitida", {}, true],
+      ["arca_delegado emitida", { provider: "arca_delegado" }, true],
+      ["tusfacturas", { provider: "tusfacturas" }, false],
+      ["rechazada", { estado: "rechazado" }, false],
+      ["sin CAE", { cae: null }, false],
+    ])("anulable: factura %s -> %s", async (_nombre, over, esperado) => {
+      mockDb(() => ({ data: [{ ...FILA, ...over }], error: null, count: 1 }))
+      expect((await (await get()).json()).items[0].anulable).toBe(esperado)
+    })
+
+    it("sin la 371 (42703 en las columnas de anulacion) cae al escalon de la foto fiscal", async () => {
+      const chains = mockDb((select) =>
+        select.includes("comprobante_asociado_id")
+          ? { data: null, error: { code: "42703", message: 'column "comprobante_asociado_id" does not exist' } }
+          : { data: [FILA], error: null, count: 1 }
+      )
+      const res = await get()
+      expect(res.status).toBe(200)
+      const sels = chains.map(selectDe)
+      expect(sels).toHaveLength(2)
+      expect(sels[1]).toContain("cuit_emisor")
+      expect(sels[1]).toContain("cbte_tipo")
+      for (const col of ["comprobante_asociado_id", "cbte_nro_solicitado", "motivo", "anulado_at"]) {
+        expect(sels[1]).not.toContain(col)
+      }
+      const item = (await res.json()).items[0]
+      // La foto fiscal sigue completa: el PDF y la anulabilidad no se pierden.
+      expect(item).toMatchObject({
+        pdfDisponible: true,
+        cbteTipo: 6,
+        esNotaCredito: false,
+        comprobanteAsociadoId: null,
+        anuladoAt: null,
+        motivo: null,
+        motivoDetalle: null,
+        anulable: true,
+        verificable: false,
+      })
+    })
+
+    it("sin la 371 ni la foto fiscal: tres escalones, y la fila legacy no se puede anular ni verificar", async () => {
+      const chains = mockDb((select) =>
+        select.includes("cuit_emisor") || select.includes("comprobante_asociado_id")
+          ? { data: null, error: { code: "42703", message: "column does not exist" } }
+          : {
+              data: [{ ...FILA, cbte_tipo: undefined, cuit_emisor: undefined, fecha_emision: undefined }],
+              error: null,
+              count: 1,
+            }
+      )
+      const res = await get()
+      expect(res.status).toBe(200)
+      expect(chains.map(selectDe)).toHaveLength(3)
+      const item = (await res.json()).items[0]
+      expect(item).toMatchObject({ cbteTipo: null, esNotaCredito: false, pdfDisponible: false, verificable: false })
+    })
+
+    it("cada escalon conserva organization_id, estado y ventaId", async () => {
+      const chains = mockDb((select) =>
+        select.includes("cuit_emisor")
+          ? { data: null, error: { code: "42703", message: "column does not exist" } }
+          : { data: [], error: null, count: 0 }
+      )
+      await get("estado=emitido&ventaId=venta-9")
+      expect(chains).toHaveLength(3)
+      for (const chain of chains) {
+        expect(chain.eq).toHaveBeenCalledWith("organization_id", "org-1")
+        expect(chain.eq).toHaveBeenCalledWith("estado", "emitido")
+        expect(chain.eq).toHaveBeenCalledWith("venta_id", "venta-9")
+      }
+    })
+
+    it("estado=anulado sin la 371: lista vacia, aunque la base devolviera filas", async () => {
+      // Sin la migracion no puede haber facturas anuladas: un escalon de respaldo
+      // jamas debe inventarlas. La base de este test devuelve una fila a proposito.
+      const chains = mockDb((select) =>
+        select.includes("comprobante_asociado_id")
+          ? { data: null, error: { code: "42703", message: "column does not exist" } }
+          : { data: [FILA], error: null, count: 1 }
+      )
+      const res = await get("estado=anulado")
+      expect(res.status).toBe(200)
+      expect(chains).toHaveLength(1)
+      expect(await res.json()).toMatchObject({ items: [], total: 0, page: 1, totalPages: 0 })
+    })
+
+    it("un error que no es de columna faltante en el segundo escalon -> 500", async () => {
+      mockDb((select) =>
+        select.includes("comprobante_asociado_id")
+          ? { data: null, error: { code: "42703", message: "column does not exist" } }
+          : { data: null, error: { code: "XX000", message: "boom" } }
+      )
+      expect((await get()).status).toBe(500)
+    })
   })
 })
