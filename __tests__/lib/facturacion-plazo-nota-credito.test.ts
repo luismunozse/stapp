@@ -9,6 +9,7 @@ import { describe, it, expect } from "vitest"
 import {
   PLAZO_NOTA_CREDITO_DIAS,
   diasDesdeEmision,
+  diasDesdeFactura,
   excedePlazoNotaCredito,
 } from "@/lib/facturacion/plazo-nota-credito"
 
@@ -68,6 +69,43 @@ describe("diasDesdeEmision", () => {
 
   it("una fecha futura da un número negativo, no un plazo vencido", () => {
     expect(diasDesdeEmision("2026-10-25", HOY)).toBe(-5)
+  })
+})
+
+describe("diasDesdeFactura", () => {
+  it("usa la fecha de emisión de la factura cuando se puede leer", () => {
+    expect(diasDesdeFactura({ fechaEmision: "2026-10-05", createdAt: "2026-01-01T12:00:00Z" }, HOY)).toBe(15)
+    expect(diasDesdeFactura({ fechaEmision: "2026-10-04", createdAt: "2026-10-19T12:00:00Z" }, HOY)).toBe(16)
+  })
+
+  it("en una factura vieja sin fecha usa el día en que se creó", () => {
+    expect(diasDesdeFactura({ fechaEmision: null, createdAt: "2026-10-05T15:00:00Z" }, HOY)).toBe(15)
+    expect(diasDesdeFactura({ fechaEmision: "", createdAt: "2026-10-04T15:00:00Z" }, HOY)).toBe(16)
+  })
+
+  it("la creación se pasa al día de ARGENTINA: a la 01:00 UTC todavía es el día anterior", () => {
+    // 01:00 UTC del 05/10 = 22:00 del 04/10 en Buenos Aires: son 16 días, no 15.
+    expect(diasDesdeFactura({ fechaEmision: null, createdAt: "2026-10-05T01:00:00Z" }, HOY)).toBe(16)
+    // 03:00 UTC del 05/10 = 00:00 del 05/10 en Buenos Aires: 15 días.
+    expect(diasDesdeFactura({ fechaEmision: null, createdAt: "2026-10-05T03:00:00Z" }, HOY)).toBe(15)
+  })
+
+  it("cuenta hasta el 'hoy' que recibe, no hasta el reloj de la máquina", () => {
+    const otroHoy = new Date("2026-11-30T15:00:00Z")
+    expect(diasDesdeFactura({ fechaEmision: "2026-11-15", createdAt: null }, otroHoy)).toBe(15)
+    expect(diasDesdeFactura({ fechaEmision: null, createdAt: "2026-11-14T15:00:00Z" }, otroHoy)).toBe(16)
+  })
+
+  it("también cuando la fecha de emisión no se puede leer", () => {
+    expect(diasDesdeFactura({ fechaEmision: "ayer", createdAt: "2026-10-05T15:00:00Z" }, HOY)).toBe(15)
+  })
+
+  it.each([
+    ["sin ninguna de las dos", { fechaEmision: null, createdAt: null }],
+    ["con una creación ilegible", { fechaEmision: null, createdAt: "no es una fecha" }],
+    ["con una creación vacía", { fechaEmision: undefined, createdAt: "" }],
+  ])("devuelve null %s: no se afirma que venció", (_titulo, factura) => {
+    expect(diasDesdeFactura(factura, HOY)).toBeNull()
   })
 })
 

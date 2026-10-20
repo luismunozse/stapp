@@ -41,6 +41,24 @@ export function diasDesdeEmision(fechaEmision: string | null | undefined, now: D
   return Math.round((hoy - emision) / MS_POR_DIA)
 }
 
+/**
+ * Días desde una factura del listado: su fecha de emisión y, si es una factura
+ * vieja sin ella, el día en que se creó (que es el de su emisión). Ese instante se
+ * pasa al día de Argentina: leído en UTC, una factura hecha a la noche contaría
+ * un día de menos.
+ */
+export function diasDesdeFactura(
+  factura: { fechaEmision?: string | null; createdAt?: string | null },
+  now: Date = new Date()
+): number | null {
+  const porFecha = diasDesdeEmision(factura.fechaEmision, now)
+  if (porFecha !== null) return porFecha
+
+  const creada = factura.createdAt ? new Date(factura.createdAt) : null
+  if (!creada || Number.isNaN(creada.getTime())) return null
+  return diasDesdeEmision(todayInTimeZone(DEFAULT_TIMEZONE, creada), now)
+}
+
 /** `true` a partir del día 16. Sin fecha legible no se afirma que venció. */
 export function excedePlazoNotaCredito(dias: number | null): boolean {
   return dias !== null && dias > PLAZO_NOTA_CREDITO_DIAS
