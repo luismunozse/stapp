@@ -3,30 +3,44 @@
 -- ORDER: redeploy the code from before the annulment PRs first. While the anular / verificar routes
 -- are live, dropping the function and the columns makes them answer 503.
 --
--- IT REFUSES TO RUN once any NC or annulled factura exists. A fiscal NC lives in ARCA and cannot be
--- undone from here, and the old schema cannot even represent it: its estado CHECK has no 'anulado',
--- and its one-active-comprobante-per-venta index would reject the factura + NC pair. A wrong
--- annulment is fixed with a new factura, not with a rollback. To see what is in the way:
+-- IT REFUSES TO RUN once any live NC or annulled factura exists (an NC in pendiente or emitido, a
+-- factura in anulado). A fiscal NC lives in ARCA and cannot be undone from here, and the old schema
+-- cannot even represent it: its estado CHECK has no 'anulado', and its one-active-comprobante-per-venta
+-- index would reject the factura + NC pair. A wrong annulment is fixed with a new factura, not with a
+-- rollback. To see what is in the way:
 --
 --   SELECT id, venta_id, estado, cbte_tipo, numero, comprobante_asociado_id, anulado_at
---   FROM comprobantes_fiscales WHERE comprobante_asociado_id IS NOT NULL OR estado = 'anulado';
+--   FROM comprobantes_fiscales
+--   WHERE (comprobante_asociado_id IS NOT NULL AND estado <> 'rechazado') OR estado = 'anulado';
+--
+-- WHAT IT DELETES: the rechazada NC rows (attempts that ARCA rejected, or that we gave up on). They
+-- have no fiscal effect, but they are the only record of those attempts, and the old schema cannot
+-- hold them. If a send was uncertain, run "Verificar con ARCA" BEFORE rolling back: a rechazada NC
+-- that ARCA did authorize would otherwise be forgotten. Export them first:
+--
+--   SELECT * FROM comprobantes_fiscales
+--   WHERE estado = 'rechazado' AND comprobante_asociado_id IS NOT NULL;
 --
 -- Before any NC or annulment exists nothing is lost: the five columns are empty.
 --
--- LOCKS (held until the transaction ends): ACCESS EXCLUSIVE on comprobantes_fiscales.
--- lock_timeout bounds the wait, not the hold; if it aborts, nothing was applied: re-run it.
+-- LOCKS: ACCESS EXCLUSIVE on comprobantes_fiscales, taken first and held until the transaction ends,
+-- so no NC can be written between the guard and the drops. lock_timeout bounds the wait, not the
+-- hold; if it aborts, nothing was applied: re-run it.
 
 SET LOCAL lock_timeout = '3s';
+LOCK TABLE comprobantes_fiscales IN ACCESS EXCLUSIVE MODE;
 
--- The inner IF keeps this runnable on a database where 371 was only partly applied.
+-- The outer IF keeps this runnable on a database where 371 was only partly applied.
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.columns
              WHERE table_schema = 'public' AND table_name = 'comprobantes_fiscales'
                AND column_name = 'comprobante_asociado_id') THEN
+    DELETE FROM comprobantes_fiscales
+    WHERE estado = 'rechazado' AND comprobante_asociado_id IS NOT NULL;
     IF EXISTS (SELECT 1 FROM comprobantes_fiscales
                WHERE comprobante_asociado_id IS NOT NULL OR estado = 'anulado') THEN
-      RAISE EXCEPTION 'Abort: ya existen notas de credito o facturas anuladas. No se pueden deshacer desde un rollback.';
+      RAISE EXCEPTION 'Abort: ya existen notas de credito pendientes o emitidas, o facturas anuladas. No se pueden deshacer desde un rollback.';
     END IF;
   END IF;
 END $$;
@@ -54,7 +68,9 @@ END;
 $$ LANGUAGE plpgsql;
 
 DROP INDEX IF EXISTS uq_comprobante_nc_en_vuelo;
+DROP INDEX IF EXISTS uq_comprobante_nc_numero;
 DROP INDEX IF EXISTS uq_comprobante_nc_activa;
+DROP INDEX IF EXISTS idx_comprobantes_asociado;
 DROP INDEX IF EXISTS uq_comprobante_venta_activo;
 CREATE UNIQUE INDEX uq_comprobante_venta_activo
   ON comprobantes_fiscales(venta_id) WHERE estado IN ('pendiente', 'emitido');
