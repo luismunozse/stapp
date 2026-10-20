@@ -102,6 +102,53 @@ function fechaDeHoy(now: Date): string {
 }
 
 /**
+ * Alícuotas distintas que declaran las líneas legibles del `detalle` de la
+ * factura. Vacío si no hay detalle usable (sin array, sin líneas con alícuota).
+ */
+function alicuotasDelDetalle(detalle: unknown): number[] {
+  if (!Array.isArray(detalle)) return []
+  const distintas = new Set<number>()
+  for (const cruda of detalle) {
+    if (typeof cruda !== "object" || cruda === null) continue
+    const { alicuotaIva } = cruda as Record<string, unknown>
+    if (esNumero(alicuotaIva)) distintas.add(alicuotaIva)
+  }
+  return [...distintas]
+}
+
+/**
+ * Alícuota de la factura B que se manda en el `Iva[]` de la NC. Con detalle
+ * manda el detalle: una sola alícuota se usa (y debe concordar con el IVA que
+ * ARCA autorizó, a lo sumo un centavo de diferencia); más de una no se anula
+ * automáticamente porque un único `Iva[]` autorizaría un IVA distinto del de la
+ * factura. Sin detalle se infiere de los importes (`inferirAlicuotaIva`).
+ */
+function resolverAlicuota(detalle: unknown, impNeto: number, impIva: number): number {
+  const delDetalle = alicuotasDelDetalle(detalle)
+  if (delDetalle.length === 0) return inferirAlicuotaIva(impNeto, impIva)
+
+  if (delDetalle.length > 1) {
+    throw negocio(
+      "No se puede anular automáticamente una factura con más de una alícuota de IVA. Contactá a soporte. No se emitió la nota de crédito."
+    )
+  }
+
+  const [alicuota] = delDetalle
+  if (!(alicuota in ALICUOTA_ID)) {
+    throw negocio(
+      `La alícuota de IVA de la factura (${alicuota}%) no es una de las que ARCA admite. No se emitió la nota de crédito.`
+    )
+  }
+  const esperado = Math.round((aCentavos(impNeto) * alicuota) / 100)
+  if (Math.abs(esperado - aCentavos(impIva)) > TOLERANCIA_REDONDEO_CENTAVOS) {
+    throw negocio(
+      `El IVA de la factura en ARCA (${impIva} sobre un neto de ${impNeto}) no concuerda con la alícuota de ${alicuota}% de su detalle. No se emitió la nota de crédito.`
+    )
+  }
+  return alicuota
+}
+
+/**
  * Alícuota (en porcentaje) de una factura B a partir de su neto e IVA. La
  * consulta de ARCA descarta el array `Iva`, así que se infiere: la única alícuota
  * conocida cuyo IVA esperado difiere en a lo sumo un centavo del informado. Si
@@ -305,7 +352,7 @@ export function buildNotaCreditoVoucher(
 
   // Factura C no discrimina IVA: ni array `Iva` ni alícuota (ARCA rechaza una C
   // que lo traiga). Factura B: una sola alícuota, la de la factura.
-  const alicuota = original.tipo === "B" ? inferirAlicuotaIva(importes.neto, importes.iva) : 0
+  const alicuota = original.tipo === "B" ? resolverAlicuota(original.detalle, importes.neto, importes.iva) : 0
   const iva =
     original.tipo === "B"
       ? [{ Id: ALICUOTA_ID[alicuota], BaseImp: importes.neto, Importe: importes.iva }]

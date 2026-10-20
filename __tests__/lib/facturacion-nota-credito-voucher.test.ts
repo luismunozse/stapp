@@ -51,6 +51,9 @@ const consultaB: ConsultaResult = {
   cotizacion: 1,
 }
 
+/** Fila legada sin detalle: la alícuota solo se puede inferir de los importes. */
+const facturaBSinDetalle: FacturaOriginal = { ...facturaB, detalle: null }
+
 const facturaC: FacturaOriginal = {
   ...facturaB,
   tipo: "C",
@@ -117,14 +120,14 @@ describe("buildNotaCreditoVoucher — Factura B", () => {
   })
 
   it("10,5%: infiere el Id 4", () => {
-    const { voucher } = buildNotaCreditoVoucher(facturaB, consultaBCon(1000, 105, 1105), opciones)
+    const { voucher } = buildNotaCreditoVoucher(facturaBSinDetalle, consultaBCon(1000, 105, 1105), opciones)
 
     expect(voucher.Iva).toEqual([{ Id: 4, BaseImp: 1000, Importe: 105 }])
     expect(voucher.ImpTotal).toBe(1105)
   })
 
   it("0% (exento): Id 3 con Importe 0, igual que la factura emitida con alícuota 0", () => {
-    const { voucher } = buildNotaCreditoVoucher(facturaB, consultaBCon(500, 0, 500), opciones)
+    const { voucher } = buildNotaCreditoVoucher(facturaBSinDetalle, consultaBCon(500, 0, 500), opciones)
 
     expect(voucher.Iva).toEqual([{ Id: 3, BaseImp: 500, Importe: 0 }])
     expect(voucher.ImpIVA).toBe(0)
@@ -200,7 +203,7 @@ describe("buildNotaCreditoVoucher — alícuota que no se puede inferir", () => 
   })
 
   it("importes tan chicos que varias alícuotas encajan: ambigua, error", () => {
-    const r = mensajeDeError(() => buildNotaCreditoVoucher(facturaB, consultaBCon(0.1, 0.01, 0.11), opciones))
+    const r = mensajeDeError(() => buildNotaCreditoVoucher(facturaBSinDetalle, consultaBCon(0.1, 0.01, 0.11), opciones))
 
     expect(r.esNegocio).toBe(true)
     expect(r.message).toMatch(/alícuota/i)
@@ -544,5 +547,83 @@ describe("buildNotaCreditoVoucher — validación previa del SDK", () => {
     expect(create.mock.calls[0][0]).toMatchObject({ CbteTipo: 8, ImpTotal: 1210, CbteDesde: 1, CbteHasta: 1 })
     expect(r.esNegocio).toBe(true)
     expect(r.message).toContain("validación del SDK")
+  })
+})
+
+describe("buildNotaCreditoVoucher — alícuota según el detalle de la factura", () => {
+  const linea = (alicuotaIva: number, importe = 1000) => ({
+    cantidad: 1,
+    descripcion: "Ítem",
+    importeUnitario: importe,
+    importe,
+    alicuotaIva,
+  })
+
+  it("1000 al 21% + 1000 al 0%: dos alícuotas, no se anula automáticamente (un solo Iva[] de 21% autorizaría otro IVA)", () => {
+    const original: FacturaOriginal = { ...facturaB, detalle: [linea(21), linea(0)] }
+    // Neto 2000, IVA 210: encaja con 10,5% por inferencia, pero la factura tenía dos alícuotas.
+    const r = mensajeDeError(() => buildNotaCreditoVoucher(original, consultaBCon(2000, 210, 2210), opciones))
+
+    expect(r.esNegocio).toBe(true)
+    expect(r.message).toMatch(/más de una alícuota/i)
+  })
+
+  it("dos alícuotas en el detalle son error aunque el IVA total encajara con una sola", () => {
+    const original: FacturaOriginal = { ...facturaB, detalle: [linea(21), linea(10.5)] }
+    const r = mensajeDeError(() => buildNotaCreditoVoucher(original, consultaBCon(2000, 315, 2315), opciones))
+
+    expect(r.esNegocio).toBe(true)
+    expect(r.message).toMatch(/más de una alícuota/i)
+  })
+
+  it("varias líneas con la MISMA alícuota: se usa esa", () => {
+    const original: FacturaOriginal = { ...facturaB, detalle: [linea(21, 400), linea(21, 600)] }
+    const { voucher } = buildNotaCreditoVoucher(original, consultaB, opciones)
+
+    expect(voucher.Iva).toEqual([{ Id: 5, BaseImp: 1000, Importe: 210 }])
+  })
+
+  it("una sola alícuota en el detalle que no concuerda con el IVA de ARCA: error de negocio", () => {
+    // El detalle dice 21% pero ARCA autorizó 10,5% (neto 1000, IVA 105).
+    const r = mensajeDeError(() => buildNotaCreditoVoucher(facturaB, consultaBCon(1000, 105, 1105), opciones))
+
+    expect(r.esNegocio).toBe(true)
+    expect(r.message).toMatch(/alícuota/i)
+  })
+
+  it("una sola alícuota en el detalle: tolera un centavo de redondeo contra ARCA", () => {
+    const { voucher } = buildNotaCreditoVoucher(facturaB, consultaBCon(100, 21.01, 121.01), opciones)
+
+    expect(voucher.Iva).toEqual([{ Id: 5, BaseImp: 100, Importe: 21.01 }])
+  })
+
+  it("una alícuota del detalle que ARCA no conoce (13%): error de negocio", () => {
+    const original: FacturaOriginal = { ...facturaB, detalle: [linea(13)] }
+    const r = mensajeDeError(() => buildNotaCreditoVoucher(original, consultaBCon(1000, 130, 1130), opciones))
+
+    expect(r.esNegocio).toBe(true)
+  })
+
+  it("sin detalle: se infiere si UNA sola alícuota encaja (10,5%)", () => {
+    const original: FacturaOriginal = { ...facturaB, detalle: null }
+    const { voucher } = buildNotaCreditoVoucher(original, consultaBCon(1000, 105, 1105), opciones)
+
+    expect(voucher.Iva).toEqual([{ Id: 4, BaseImp: 1000, Importe: 105 }])
+  })
+
+  it("sin detalle y con dos alícuotas que encajan dentro de la tolerancia: error de negocio", () => {
+    const original: FacturaOriginal = { ...facturaB, detalle: null }
+    const r = mensajeDeError(() => buildNotaCreditoVoucher(original, consultaBCon(0.1, 0.01, 0.11), opciones))
+
+    expect(r.esNegocio).toBe(true)
+    expect(r.message).toMatch(/ambigua/i)
+  })
+
+  it("un detalle ilegible o vacío cuenta como sin detalle (se infiere)", () => {
+    for (const detalle of [[], "basura", [null], [{ cantidad: "x" }]]) {
+      const original: FacturaOriginal = { ...facturaB, detalle }
+      const { voucher } = buildNotaCreditoVoucher(original, consultaBCon(1000, 105, 1105), opciones)
+      expect(voucher.Iva).toEqual([{ Id: 4, BaseImp: 1000, Importe: 105 }])
+    }
   })
 })
