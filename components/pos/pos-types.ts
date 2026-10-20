@@ -43,6 +43,16 @@ export function computeVentaTotals(
   return calcularTotalesVenta(items, global, fiscal, roundCash, factor)
 }
 
+/**
+ * Cobro en efectivo de mostrador: lo que entregó el cliente y el vuelto que se
+ * le devuelve. El checkout lo calcula; la API de ventas no lo conoce, por eso
+ * viaja aparte de la venta (segundo argumento de onComplete).
+ */
+export interface CobroMostrador {
+  montoRecibido: number
+  vuelto: number
+}
+
 export interface PosCliente {
   id: string | null
   nombre: string

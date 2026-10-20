@@ -9,8 +9,6 @@ import {
   ArrowLeft,
   Keyboard,
   Monitor,
-  Check,
-  FileText,
   ShoppingCart,
   Package,
   Printer,
@@ -18,7 +16,6 @@ import {
   Loader2,
   AlertTriangle,
   RotateCcw,
-  Phone,
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -26,7 +23,7 @@ import { PosProductSearch, type PosProductSearchRef, type VentaSucursalInfo } fr
 import { PosCart } from "./pos-cart"
 import { PosCheckoutDialog } from "./pos-checkout-dialog"
 import { PosHeldSales } from "./pos-held-sales"
-import { PosTicketShare } from "./pos-ticket-share"
+import { PosVentaExito } from "./pos-venta-exito"
 import { PosDevolucionSearch, type VentaForDevolucion } from "./pos-devolucion-search"
 import { DevolucionForm } from "@/components/ventas/devolucion-form"
 import { usePosShortcuts } from "./use-pos-shortcuts"
@@ -45,6 +42,7 @@ import type {
   InventarioResult,
   DescuentoConfig,
   FiscalConfig,
+  CobroMostrador,
 } from "./pos-types"
 import { EMPTY_CLIENT, nextLineId, computeVentaTotals, resolveDiasGarantia } from "./pos-types"
 import { Input } from "@/components/ui/input"
@@ -108,6 +106,8 @@ export function PosTerminal() {
   const [heldSales, setHeldSales] = useState<HeldSale[]>([])
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [successData, setSuccessData] = useState<any>(null)
+  // Efectivo recibido + vuelto de la venta del overlay (viene del checkout, no de la API)
+  const [successCobro, setSuccessCobro] = useState<CobroMostrador | null>(null)
   // Item 3: last sale persists after overlay is dismissed so "Reimprimir" stays available
   const [lastSaleData, setLastSaleData] = useState<any>(null)
   const [plantillaCorta, setPlantillaCorta] = useState<string | undefined>(undefined)
@@ -115,9 +115,6 @@ export function PosTerminal() {
   // Item 1: hold-sale note dialog
   const [holdNoteOpen, setHoldNoteOpen] = useState(false)
   const [holdNote, setHoldNote] = useState("")
-
-  // Item 2: manual WhatsApp phone on success overlay
-  const [manualPhone, setManualPhone] = useState("")
 
   // Item 5: scan feedback
   const [scanSuccess, setScanSuccess] = useState<{ nombre: string } | null>(null)
@@ -597,12 +594,12 @@ export function PosTerminal() {
   }, [timezone, printerWidth, formatPrice])
 
   // --- Checkout ---
-  const handleCheckoutComplete = useCallback(async (ventaData: any) => {
+  const handleCheckoutComplete = useCallback(async (ventaData: any, cobro?: CobroMostrador) => {
     setCheckoutOpen(false)
     setSuccessData(ventaData)
+    setSuccessCobro(cobro ?? null)
     // Item 3: persist last sale for reprint after overlay closes
     setLastSaleData(ventaData)
-    setManualPhone("")
     setCartItems([])
     setCliente({ ...EMPTY_CLIENT })
     setShowClienteSearch(false)
@@ -622,6 +619,7 @@ export function PosTerminal() {
 
   const handleSuccessClose = useCallback(() => {
     setSuccessData(null)
+    setSuccessCobro(null)
     setMobileTab("products")
     // Facturación electrónica: limpiar estado de emisión al cerrar el overlay
     setEmitiendoFE(false)
@@ -1134,143 +1132,26 @@ export function PosTerminal() {
 
       {/* ===== Success overlay ===== */}
       {successData && (
-        <div className="fixed inset-0 z-[60] bg-background/95 flex items-center justify-center p-4">
-          <div className="max-w-sm w-full text-center space-y-4">
-            <div className="mx-auto w-16 h-16 rounded-2xl bg-success/10 flex items-center justify-center">
-              <Check className="h-8 w-8 text-success" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-success">Venta registrada</h2>
-              <p className="text-muted-foreground mt-1">
-                Venta #{successData.numeroVenta} — {formatPrice(successData.total)}
-              </p>
-              {successData.clienteNombre && (
-                <p className="text-sm text-muted-foreground">{successData.clienteNombre}</p>
-              )}
-            </div>
-
-            {successData.garantias?.length > 0 && (
-              <p className="text-sm text-success">
-                {successData.garantias.length} certificado(s) de garantía generados
-              </p>
-            )}
-
-            {/* Auto-print indicator */}
-            {printer.connected && (
-              <p className="text-xs text-success">
-                {printing ? "Imprimiendo ticket..." : "Ticket impreso automaticamente"}
-              </p>
-            )}
-
-            <div className="flex flex-col gap-2">
-              {/* Print buttons */}
-              {printer.connected ? (
-                <Button
-                  variant="outline"
-                  className="h-11"
-                  onClick={() => printTicket(successData)}
-                  disabled={printing}
-                >
-                  {printing ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Printer className="mr-2 h-4 w-4" />
-                  )}
-                  {printing ? "Imprimiendo..." : "Reimprimir ticket"}
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  className="h-11"
-                  onClick={() => printTicketHTML(successData)}
-                >
-                  <Printer className="mr-2 h-4 w-4" />
-                  Imprimir ticket
-                </Button>
-              )}
-
-              {/* WhatsApp share as image + download image */}
-              <PosTicketShare ventaData={successData} plantillaCorta={plantillaCorta} countryCode={pais} />
-
-              {/* Facturación electrónica: emitir comprobante para esta venta */}
-              {facturacionDisponible && (
-                <div className="flex flex-col gap-1.5">
-                  <Button
-                    variant="outline"
-                    className="h-11"
-                    onClick={handleEmitirFactura}
-                    disabled={emitiendoFE || !!comprobanteFE}
-                  >
-                    {emitiendoFE ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <FileText className="mr-2 h-4 w-4" />
-                    )}
-                    {emitiendoFE ? "Emitiendo factura..." : "Emitir factura"}
-                  </Button>
-
-                  {comprobanteFE && (
-                    <p className="text-sm text-success">
-                      {comprobanteFE.yaEmitido ? "Ya emitida" : "Factura emitida"}
-                      {": "}
-                      Factura {comprobanteFE.tipo} #{comprobanteFE.numero}
-                      {comprobanteFE.pdf_url && (
-                        <>
-                          {" — "}
-                          <a
-                            href={comprobanteFE.pdf_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline"
-                          >
-                            Ver factura
-                          </a>
-                        </>
-                      )}
-                    </p>
-                  )}
-
-                  {errorFE && (
-                    <p className="text-sm text-destructive">{errorFE}</p>
-                  )}
-                </div>
-              )}
-
-              {/* Item 2: Manual WhatsApp share when no phone on record */}
-              {!successData.clienteTelefono && (
-                <div className="flex gap-2 items-center">
-                  <div className="relative flex-1">
-                    <Phone className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      type="tel"
-                      value={manualPhone}
-                      onChange={(e) => setManualPhone(e.target.value)}
-                      placeholder="Teléfono para WhatsApp"
-                      className="pl-8 h-10 text-sm"
-                    />
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-10 shrink-0 text-green-600 border-green-300 px-3"
-                    disabled={!manualPhone.trim()}
-                    onClick={() => {
-                      if (!manualPhone.trim()) return
-                      const url = buildManualWhatsAppUrl(manualPhone.trim(), successData)
-                      window.open(url, "_blank")
-                    }}
-                  >
-                    <span className="text-xs font-medium">WhatsApp</span>
-                  </Button>
-                </div>
-              )}
-
-              <Button onClick={handleSuccessClose} className="h-12 text-lg font-semibold">
-                Nueva Venta
-              </Button>
-            </div>
-          </div>
-        </div>
+        <PosVentaExito
+          venta={successData}
+          cobro={successCobro}
+          onClose={handleSuccessClose}
+          onPrint={() => {
+            if (printer.connected) void printTicket(successData)
+            else printTicketHTML(successData)
+          }}
+          printer={{ connected: printer.connected, printing }}
+          facturacion={{
+            disponible: facturacionDisponible,
+            emitiendo: emitiendoFE,
+            comprobante: comprobanteFE,
+            error: errorFE,
+            onEmitir: handleEmitirFactura,
+          }}
+          plantillaCorta={plantillaCorta}
+          countryCode={pais}
+          buildManualWhatsAppUrl={buildManualWhatsAppUrl}
+        />
       )}
     </div>
   )
