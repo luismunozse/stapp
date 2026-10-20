@@ -44,22 +44,14 @@ export function tieneFacturaFiscalVigente(venta: any): boolean {
   return comprobantesDe(venta).some((c) => !esNotaCreditoFiscal(c.cbte_tipo) && estaVigente(c))
 }
 
-/** Hay una nota de crédito electrónica emitida o en proceso de emisión. */
-export function tieneNotaCreditoFiscalVigente(venta: any): boolean {
-  return comprobantesDe(venta).some((c) => esNotaCreditoFiscal(c.cbte_tipo) && estaVigente(c))
-}
-
 /**
  * Motivo por el que la venta no se puede editar, o null si se puede. Los
- * textos son los mismos que levanta editar_venta_atomica (P0021).
+ * textos son los mismos que levanta editar_venta_atomica (P0021). Como el
+ * trigger de anulación, la migración 372 cuenta solo FACTURAS: una venta con la
+ * factura anulada y su nota de crédito electrónica se puede editar.
  */
 export function motivoNoEditable(venta: any): string | null {
   if (tieneFacturaFiscalVigente(venta)) return "La venta tiene una factura electrónica emitida."
-  // Hasta la migración 372, editar_venta_atomica cuenta también las notas de
-  // crédito como "factura emitida": una venta con la factura ya anulada seguiría
-  // bloqueada con un texto que no le corresponde. Se dice lo que hay de verdad;
-  // la 372 saca este caso (y su test) cuando el RPC deje de contarlas.
-  if (tieneNotaCreditoFiscalVigente(venta)) return "La venta tiene una nota de crédito electrónica (ARCA)."
   if (lista<{ estado_pago?: string }>(venta?.facturas).some((f) => f.estado_pago !== "ANULADA")) {
     return "La venta tiene un remito generado."
   }
