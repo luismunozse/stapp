@@ -35,6 +35,7 @@ import { useThermalPrinter } from "./use-thermal-printer"
 import { BarcodeScanner } from "@/components/inventario/barcode-scanner"
 import { useCurrency } from "@/contexts/currency-context"
 import { generateTicketCommands } from "@/lib/escpos"
+import { emitirComprobanteArca } from "@/lib/facturacion/emitir-comprobante-client"
 import { fitPrintPageToContent } from "@/lib/print-fit-page"
 import { buildTicketHTML } from "./ticket-html"
 import type {
@@ -634,29 +635,13 @@ export function PosTerminal() {
     if (!successData?.id || emitiendoFE || comprobanteFE) return
     setEmitiendoFE(true)
     setErrorFE(null)
-    try {
-      const res = await fetch("/api/facturacion-electronica/emitir", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ventaId: successData.id }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (res.status === 200) {
-        setComprobanteFE(data.comprobante ?? null)
-      } else if (res.status === 409) {
-        setComprobanteFE(data.comprobante ? { ...data.comprobante, yaEmitido: true } : null)
-      } else if (res.status === 422) {
-        setErrorFE(data.comprobante?.error_msg || data.error || "No se pudo emitir el comprobante")
-      } else if (res.status === 403) {
-        setErrorFE("Facturación electrónica no disponible. Configurá facturación electrónica en Ajustes.")
-      } else {
-        setErrorFE(data.error || "No se pudo emitir el comprobante")
-      }
-    } catch {
-      setErrorFE("Error de conexión al emitir el comprobante")
-    } finally {
-      setEmitiendoFE(false)
+    const resultado = await emitirComprobanteArca(successData.id)
+    if (resultado.kind === "error") {
+      setErrorFE(resultado.message)
+    } else {
+      setComprobanteFE(resultado.comprobante)
     }
+    setEmitiendoFE(false)
   }, [successData, emitiendoFE, comprobanteFE])
 
   // Item 2: build WhatsApp URL for manual phone share
