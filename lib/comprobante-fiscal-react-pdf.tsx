@@ -23,7 +23,7 @@ import {
   type ColumnaTabla,
   type EmisorData,
 } from "./pdf-react-shell"
-import { datosQrDesdeComprobante, urlQrArca, type ComprobanteQrRow } from "./facturacion/arca/qr"
+import { datosQrDesdeComprobante, urlQrArca, pdfFiscalDisponible, type ComprobanteQrRow } from "./facturacion/arca/qr"
 import { lineasComprobante } from "./facturacion/comprobante-lineas"
 
 /** The persisted `comprobantes_fiscales` columns this document reads. */
@@ -175,8 +175,7 @@ export async function generateComprobanteFiscalPDF({
   emisor: EmisorData
 }): Promise<Buffer> {
   const datos = datosQrDesdeComprobante(comprobante)
-  const ivaOk = comprobante.tipo === "C" || (comprobante.importe_iva !== null && comprobante.importe_iva !== undefined)
-  if (!datos || !ivaOk || safe(comprobante.cae_vencimiento) === "") throw new ComprobanteIncompletoError()
+  if (!datos || !pdfFiscalDisponible(comprobante)) throw new ComprobanteIncompletoError()
 
   const [metrics, logo, qrPng] = await Promise.all([
     helveticaMetrics(),
