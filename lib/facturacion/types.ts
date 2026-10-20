@@ -20,13 +20,26 @@ export interface EmitirInput {
     domicilio?: string
   }
   moneda: string
+  /**
+   * Las líneas llegan con el IVA incluido y ya descontadas: suman `total`
+   * (lo que pagó el cliente). `importe` es el total de la línea al centavo;
+   * `importeUnitario` es `importe / cantidad` y puede tener más de 2 decimales.
+   */
   items: Array<{
     cantidad: number
     descripcion: string
     importeUnitario: number
+    /** Total de la línea, IVA incluido. Si falta, se usa importeUnitario x cantidad. */
+    importe?: number
     alicuotaIva: number
   }>
+  /** Total de la venta, el mismo que se cobró. Es el ImpTotal del comprobante. */
   total: number
+  /**
+   * Neto e IVA que la venta guardó (regímenes INCLUIDO y ADITIVO). Solo se
+   * setea cuando suman exactamente `total`; si no, el IVA se despeja del total.
+   */
+  desgloseIva?: { neto: number; iva: number; alicuota: number }
 }
 
 export interface ComprobanteResult {

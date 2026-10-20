@@ -5,6 +5,8 @@ const ENDPOINT = "https://www.tusfacturas.app/app/api/v2/facturacion/nuevo"
 // AFIP IVA scheme codes by rate (confirm against spike output).
 const AFIP_SCHEME: Record<number, string> = { 0: "03", 10.5: "04", 21: "05", 27: "06" }
 
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
+
 function ddmmyyyy(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0")
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`
@@ -23,13 +25,20 @@ export function buildPayload(creds: FacturacionCredenciales, input: EmitirInput,
       rubro: "Servicios", tipo: tipo === "C" ? "FACTURA C" : "FACTURA B", operacion: "V",
       external_reference: input.ventaId, punto_venta: String(creds.puntoVenta),
       fecha: hoy, vencimiento: hoy, moneda: input.moneda, cotizacion: "1",
-      detalle: input.items.map((it) => ({
-        cantidad: String(it.cantidad),
-        afip_scheme: AFIP_SCHEME[it.alicuotaIva] ?? "05",
-        alicuota: String(it.alicuotaIva),
-        importe: (Math.round(it.importeUnitario * it.cantidad * 100) / 100).toFixed(2),
-        producto: { descripcion: it.descripcion, unidad_bulto: "1", precio_unitario_sin_iva: (Math.round(it.importeUnitario * 100) / 100).toFixed(2) },
-      })),
+      detalle: input.items.map((it) => {
+        // Las líneas traen el IVA incluido (suman lo cobrado). Factura B va a
+        // TusFacturas SIN IVA —lo suma el proveedor—; la C no discrimina.
+        const bruto = it.importe ?? it.importeUnitario * it.cantidad
+        const importe = tipo === "B" ? round2(bruto / (1 + it.alicuotaIva / 100)) : round2(it.importeUnitario * it.cantidad)
+        const unitario = tipo === "B" ? round2(importe / (it.cantidad > 0 ? it.cantidad : 1)) : round2(it.importeUnitario)
+        return {
+          cantidad: String(it.cantidad),
+          afip_scheme: AFIP_SCHEME[it.alicuotaIva] ?? "05",
+          alicuota: String(it.alicuotaIva),
+          importe: importe.toFixed(2),
+          producto: { descripcion: it.descripcion, unidad_bulto: "1", precio_unitario_sin_iva: unitario.toFixed(2) },
+        }
+      }),
       leyenda_gral: "",
     },
   }

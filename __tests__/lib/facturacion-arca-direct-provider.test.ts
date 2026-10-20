@@ -177,6 +177,23 @@ describe("arcaDirectProvider.emitir — caminos de error", () => {
     expect(result.errores).toEqual(["lease ocupado"])
     expect(sdk.contextos).toHaveLength(0)
   })
+
+  it("una alícuota no soportada vuelve como rechazo con el motivo y sin llamar a ARCA", async () => {
+    const sdk = fakeSdk()
+    const provider = createArcaDirectProvider({
+      renewTicket: async () => ticket,
+      createArca: sdk.createArca,
+    })
+
+    const result = await provider.emitir(
+      { ...creds, condicionFiscal: "RESPONSABLE_INSCRIPTO" },
+      { ...input, items: [{ cantidad: 1, descripcion: "A", importeUnitario: 1000, importe: 1000, alicuotaIva: 15 }] }
+    )
+
+    expect(result.ok).toBe(false)
+    expect(result.errores).toEqual(["Alícuota de IVA no soportada por ARCA: 15%"])
+    expect(sdk.requests).toHaveLength(0)
+  })
 })
 
 /**

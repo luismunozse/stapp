@@ -66,6 +66,11 @@ export async function POST(request: Request) {
   if (venta.estado !== "COMPLETADA") {
     return NextResponse.json({ error: "Solo se pueden facturar ventas completadas" }, { status: 409 })
   }
+  // ARCA no autoriza un comprobante en $0 (ni negativo): se corta antes de
+  // crear el pendiente para no dejar un rechazado inútil en el historial.
+  if (!(Number(venta.total) > 0)) {
+    return NextResponse.json({ error: "No se puede facturar una venta en $0" }, { status: 422 })
+  }
   const { count: devoluciones, error: devErr } = await supabaseAdmin
     .from("devoluciones_venta")
     .select("id", { count: "exact", head: true })
