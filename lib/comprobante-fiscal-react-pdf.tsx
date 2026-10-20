@@ -1,4 +1,5 @@
-// react-pdf engine for the ARCA fiscal comprobante (Factura B / C).
+// react-pdf engine for the ARCA fiscal comprobante (Factura B / C and the
+// electronic credit note B / C that annuls one).
 //
 // Built ONLY from the persisted comprobante columns plus the organization's
 // fiscal data -- never from the venta, which can be edited after emission.
@@ -8,6 +9,11 @@
 // Footer follows the ARCA spec: QR, "Comprobante Autorizado", CAE N°, CAE
 // expiry date and the Administration's disclaimer. Text only: the ARCA logo
 // image is not shipped.
+//
+// A credit note (cbte_tipo 8 / 13) prints the same layout under the title
+// "NOTA DE CRÉDITO", its own ARCA code, its own CAE and QR, plus the line
+// "Comprobante asociado" naming the invoice it annuls. An annulled invoice
+// prints exactly as before: the document never looks at `estado`.
 import * as React from "react"
 import QRCode from "qrcode"
 import { Document, Page, View, Text, Image, StyleSheet, renderToBuffer } from "@react-pdf/renderer"
@@ -25,6 +31,8 @@ import {
 } from "./pdf-react-shell"
 import { datosQrDesdeComprobante, urlQrArca, pdfFiscalDisponible, type ComprobanteQrRow } from "./facturacion/arca/qr"
 import { lineasComprobante } from "./facturacion/comprobante-lineas"
+import { esNotaCreditoFiscal } from "./facturacion/cbte-tipo"
+import { descripcionAnulacion, type ComprobanteAsociado } from "./facturacion/comprobante-asociado"
 
 /** The persisted `comprobantes_fiscales` columns this document reads. */
 export interface ComprobanteFiscalRow extends ComprobanteQrRow {
@@ -59,6 +67,7 @@ const styles = StyleSheet.create({
     color: MONO.ink,
   },
   nota: { fontSize: TYPE.small, color: MONO.label, marginTop: 4 },
+  asociado: { fontSize: TYPE.body, marginTop: 8 },
   pie: { position: "absolute", bottom: 40, left: 40, right: 40 },
   pieRegla: { borderBottomWidth: 0.5, borderBottomColor: MONO.rule, marginBottom: 8 },
   pieFila: { flexDirection: "row" },
@@ -83,25 +92,42 @@ function fechaDMA(valor: string | null | undefined): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : s
 }
 
+/** "Comprobante asociado: Factura B 0003-00000001 del 15/10/2026" (sin fecha, sin el "del ..."). */
+function lineaComprobanteAsociado(asociado: ComprobanteAsociado): string {
+  const fecha = asociado.fecha ? fechaDMA(asociado.fecha) : ""
+  return `Comprobante asociado: Factura ${asociado.tipo} ${safe(asociado.numero)}${fecha ? ` del ${fecha}` : ""}`
+}
+
 export function ComprobanteFiscalDocument({
   comprobante,
   emisor,
   qrPng,
   logo = null,
   metrics,
+  asociado = null,
 }: {
   comprobante: ComprobanteFiscalRow
   emisor: EmisorData
   qrPng: Buffer
   logo?: PdfLogo | null
   metrics: HelveticaMetrics
+  /** La factura que anula una nota de crédito. Una factura no la usa. */
+  asociado?: ComprobanteAsociado | null
 }) {
   const letra: "B" | "C" = comprobante.tipo === "C" ? "C" : "B"
+  const esNotaCredito = esNotaCreditoFiscal(comprobante.cbte_tipo)
   const fmt = (n: number) => formatCurrencyValue(n, "ARS")
-  const { lineas, ivaContenido, total } = lineasComprobante(comprobante.detalle, letra, {
+  const persistidas = lineasComprobante(comprobante.detalle, letra, {
     importeIva: Number(comprobante.importe_iva ?? 0),
     importeTotal: Number(comprobante.importe_total ?? 0),
   })
+  const { ivaContenido, total } = persistidas
+  // Una nota de crédito sin detalle propio imprime UNA línea por su total, con el
+  // mismo texto con que se armó el voucher enviado a ARCA.
+  const lineas =
+    esNotaCredito && asociado && persistidas.lineas.length === 0
+      ? [{ descripcion: descripcionAnulacion(asociado.tipo, asociado.numero), cantidad: 1, unitario: total, importe: total }]
+      : persistidas.lineas
   const docNro = safe(comprobante.receptor_doc_nro_cod)
   const sinIdentificar = !docNro || /^0+$/.test(docNro)
 
@@ -113,7 +139,7 @@ export function ComprobanteFiscalDocument({
           logo={logo}
           metrics={metrics}
           zonaDerecha="auto"
-          titulo="FACTURA"
+          titulo={esNotaCredito ? "NOTA DE CRÉDITO" : "FACTURA"}
           numero={safe(comprobante.numero)}
           lineasDerecha={[`Fecha de emisión: ${fechaDMA(comprobante.fecha_emision)}`]}
           letterBox={letra}
@@ -127,6 +153,7 @@ export function ComprobanteFiscalDocument({
             espacioInferior={0}
             espacioDerecha={8}
           />
+          {esNotaCredito && asociado ? <Text style={styles.asociado}>{lineaComprobanteAsociado(asociado)}</Text> : null}
         </Cabecera>
 
         <Tabla
@@ -170,12 +197,16 @@ export function ComprobanteFiscalDocument({
 export async function generateComprobanteFiscalPDF({
   comprobante,
   emisor,
+  asociado = null,
 }: {
   comprobante: ComprobanteFiscalRow
   emisor: EmisorData
+  /** Obligatoria para una nota de crédito: sin la factura que anula no se imprime. */
+  asociado?: ComprobanteAsociado | null
 }): Promise<Buffer> {
   const datos = datosQrDesdeComprobante(comprobante)
   if (!datos || !pdfFiscalDisponible(comprobante)) throw new ComprobanteIncompletoError()
+  if (esNotaCreditoFiscal(comprobante.cbte_tipo) && !asociado) throw new ComprobanteIncompletoError()
 
   const [metrics, logo, qrPng] = await Promise.all([
     helveticaMetrics(),
@@ -183,6 +214,13 @@ export async function generateComprobanteFiscalPDF({
     QRCode.toBuffer(urlQrArca(datos), { type: "png", margin: 1, width: 240, errorCorrectionLevel: "M" }),
   ])
   return renderToBuffer(
-    <ComprobanteFiscalDocument comprobante={comprobante} emisor={emisor} qrPng={qrPng} logo={logo} metrics={metrics} />
+    <ComprobanteFiscalDocument
+      comprobante={comprobante}
+      emisor={emisor}
+      qrPng={qrPng}
+      logo={logo}
+      metrics={metrics}
+      asociado={asociado}
+    />
   )
 }
