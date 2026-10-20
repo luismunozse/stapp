@@ -215,8 +215,11 @@ function validarNotaCreditoAntesDeEnviar(voucher: IVoucher): void {
  * Qué pasó con una NC que SÍ salió hacia ARCA y devolvió una respuesta.
  *
  * Solo hay dos certezas: autorizada (A con CAE, vencimiento y el mismo número) y
- * rechazada (R, o errores del pedido). Cualquier otra cosa es `incierta`: ARCA
- * pudo haberla emitido y marcarla rechazada llevaría a emitir una segunda.
+ * rechazada (ARCA devolvió `Resultado` "R", en la cabecera o en el comprobante).
+ * Cualquier otra cosa es `incierta`, incluida una respuesta con `Errors.Err` de
+ * nivel pedido pero sin `Resultado` (códigos internos 500/501/502 "Error
+ * interno"): ARCA pudo haberla emitido igual y marcarla rechazada llevaría a
+ * emitir una segunda. La fila queda pendiente y `verificar` la resuelve.
  */
 function clasificarRespuestaNotaCredito(resultado: any, voucher: IVoucher): ResultadoNotaCredito {
   const response = resultado?.response
@@ -238,10 +241,7 @@ function clasificarRespuestaNotaCredito(resultado: any, voucher: IVoucher): Resu
       }
     }
   } else {
-    const rechazada =
-      detalle?.Resultado === "R" ||
-      response?.FeCabResp?.Resultado === "R" ||
-      (response?.Errors?.Err?.length ?? 0) > 0
+    const rechazada = detalle?.Resultado === "R" || response?.FeCabResp?.Resultado === "R"
 
     if (rechazada) return { kind: "rechazada", errores: extraerErrores(response), raw: response }
   }

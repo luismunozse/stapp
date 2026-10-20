@@ -182,7 +182,8 @@ export type MotivoNotaCredito = "error_factura" | "devolucion_total" | "otro"
  * SEGUNDA nota de crédito al reintentar.
  *
  *  - `autorizada`: ARCA devolvió CAE.
- *  - `rechazada`: ARCA dijo "R"/Errors, o el envío falló ANTES de salir
+ *  - `rechazada`: ARCA devolvió `Resultado` "R" (cabecera o comprobante), o el
+ *    envío falló ANTES de salir (un `Errors` sin `Resultado` es `incierta`)
  *    (autenticación, armado): ARCA no emitió nada, reintentar es seguro.
  *  - `incierta`: `createVoucher` lanzó, o respondió sin CAE y sin rechazo: ARCA
  *    pudo haberla emitido. Nunca se marca como rechazada; se verifica contra ARCA.

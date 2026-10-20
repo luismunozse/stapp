@@ -780,8 +780,11 @@ describe("arcaDirectProvider.emitirNotaCredito — desenlaces del envío", () =>
     })
   })
 
-  it("errores a nivel pedido (Errors.Err, sin detalle): rechazada, ARCA no procesó nada", async () => {
-    const response = { Errors: { Err: [{ Code: 10197, Msg: "Para comprobantes tipo NC se debe informar CbtesAsoc" }] } }
+  it("Resultado R en la cabecera MÁS Errors a nivel pedido: rechazada (rechazo explícito de ARCA)", async () => {
+    const response = {
+      FeCabResp: { Resultado: "R" },
+      Errors: { Err: [{ Code: 10197, Msg: "Para comprobantes tipo NC se debe informar CbtesAsoc" }] },
+    }
     const sdk = fakeSdkNc({ creada: { cae: "", caeFchVto: "", response } })
 
     const res = await proveedorNc(sdk).emitirNotaCredito(creds, voucherNcB)
@@ -791,6 +794,47 @@ describe("arcaDirectProvider.emitirNotaCredito — desenlaces del envío", () =>
       errores: ["10197: Para comprobantes tipo NC se debe informar CbtesAsoc"],
       raw: response,
     })
+  })
+
+  it("Resultado R en el detalle MÁS Errors a nivel pedido: rechazada", async () => {
+    const response = {
+      FeDetResp: { FECAEDetResponse: [{ Resultado: "R" }] },
+      Errors: { Err: [{ Code: 10015, Msg: "Doc invalido" }] },
+    }
+    const sdk = fakeSdkNc({ creada: { cae: "", caeFchVto: "", response } })
+
+    const res = await proveedorNc(sdk).emitirNotaCredito(creds, voucherNcB)
+
+    expect(res.kind).toBe("rechazada")
+    expect(res.kind === "rechazada" && res.errores.join(" ")).toContain("10015")
+  })
+
+  it.each([
+    ["500 (Error interno)", { Code: 500, Msg: "Error interno de aplicacion" }],
+    ["501 (Error interno de base de datos)", { Code: 501, Msg: "Error interno de base de datos" }],
+    ["502 (Error interno)", { Code: 502, Msg: "Error interno" }],
+    ["10197 sin Resultado", { Code: 10197, Msg: "Para comprobantes tipo NC se debe informar CbtesAsoc" }],
+  ])(
+    "Errors a nivel pedido %s SIN Resultado: incierta (ARCA pudo haberla emitido), la fila sigue pendiente",
+    async (_caso, err) => {
+      const response = { Errors: { Err: [err] } }
+      const sdk = fakeSdkNc({ creada: { cae: "", caeFchVto: "", response } })
+
+      const res = await proveedorNc(sdk).emitirNotaCredito(creds, voucherNcB)
+
+      expect(res).toEqual({ kind: "incierta", error: expect.any(String) })
+      expect(spyError).toHaveBeenCalled()
+    }
+  )
+
+  it("Resultado A con CAE: autorizada aunque la respuesta traiga Errors (un Errors suelto no pisa la autorización)", async () => {
+    const creada = respuestaNcAutorizada()
+    creada.response = { ...creada.response, Errors: { Err: [{ Code: 500, Msg: "ruido" }] } } as any
+    const sdk = fakeSdkNc({ creada })
+
+    const res = await proveedorNc(sdk).emitirNotaCredito(creds, voucherNcB)
+
+    expect(res.kind).toBe("autorizada")
   })
 
   it("R solo en el detalle del comprobante (cabecera sin resultado): también es rechazada", async () => {
