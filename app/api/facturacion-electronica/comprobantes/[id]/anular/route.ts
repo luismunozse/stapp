@@ -1,13 +1,21 @@
 import { NextResponse } from "next/server"
 import type { IVoucher } from "@arcasdk/core/lib/domain/types/voucher.types"
 import { requireAdmin } from "@/lib/auth-utils"
-import { createAuditLogger } from "@/lib/audit"
 import { supabaseAdmin } from "@/lib/supabase"
 import { isMissingColumnError } from "@/lib/db-errors"
 import { canEmitirFacturaElectronica } from "@/lib/facturacion/access"
 import { arcaDirectProvider } from "@/lib/facturacion/arca/arca-direct-provider"
 import { cargarCredencialesArca } from "@/lib/facturacion/arca/credenciales-ruta"
 import { buildNotaCreditoVoucher } from "@/lib/facturacion/arca/nota-credito-voucher"
+import {
+  COLUMNAS_NC,
+  FORMA_ID,
+  MSG_NO_DISPONIBLE,
+  MSG_NO_ENCONTRADO,
+  auditarAnulacion,
+  confirmarNotaCredito,
+  leerNotaCredito,
+} from "@/lib/facturacion/arca/nota-credito-ruta"
 import { datosFiscalesDesdeVoucher } from "@/lib/facturacion/arca/voucher"
 import { CBTE_TIPO_FACTURA, esNotaCreditoFiscal } from "@/lib/facturacion/cbte-tipo"
 import {
@@ -40,16 +48,12 @@ import type { ConsultaResult, MotivoNotaCredito, ResultadoNotaCredito } from "@/
  *  - Sin la migración 371 se responde 503: no hay escalón de respaldo.
  */
 
-const FORMA_ID = /^[A-Za-z0-9_-]{1,64}$/
 const UNIQUE_VIOLATION = "23505"
 const MAX_DETALLE = 500
 const MOTIVOS: readonly string[] = ["error_factura", "devolucion_total", "otro"] satisfies readonly MotivoNotaCredito[]
 
 const COLUMNAS_FACTURA = `${SAFE_COLUMNS}, ${SNAPSHOT_COLUMNS}, ${NC_COLUMNS}`
-const COLUMNAS_NC = `${SAFE_COLUMNS}, ${NC_COLUMNS}`
 
-const MSG_NO_DISPONIBLE = "La anulación de facturas todavía no está disponible. Contactá a soporte."
-const MSG_NO_ENCONTRADO = "Comprobante no encontrado"
 const MSG_INCIERTA =
   "No pudimos confirmar si ARCA emitió la nota de crédito. No vuelvas a intentarlo: usá Verificar con ARCA."
 
@@ -377,13 +381,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   if (resultado.kind === "autorizada") {
-    const { error: rpcError } = await supabaseAdmin.rpc("confirmar_nota_credito_fiscal", {
-      p_org_id: org,
-      p_nc_id: nc.id,
-      p_numero: resultado.numero,
-      p_cae: resultado.cae,
-      p_cae_vencimiento: resultado.caeVencimiento,
-      p_provider_response: resultado.raw,
+    const { error: rpcError } = await confirmarNotaCredito(org, nc.id, {
+      numero: resultado.numero,
+      cae: resultado.cae,
+      caeVencimiento: resultado.caeVencimiento,
+      raw: resultado.raw,
     })
     if (rpcError) {
       // ARCA SÍ emitió la NC: la fila pendiente es la única referencia a ese CAE y nunca se borra.
@@ -406,26 +408,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       )
     }
 
-    if (userId) {
-      try {
-        await createAuditLogger(org, userId, request).update(
-          "comprobantes_fiscales",
-          factura.id,
-          { estado: "emitido" },
-          { estado: "anulado", notaCredito: resultado.numero, cae: resultado.cae, motivo: motivo.motivo }
-        )
-      } catch (e) {
-        // La auditoría no bloquea una anulación que ya salió bien.
-        console.error("[facturacion] no se pudo auditar la anulación", e)
-      }
-    }
+    await auditarAnulacion(request, {
+      organizationId: org,
+      userId,
+      facturaId: factura.id,
+      notaCredito: resultado.numero,
+      cae: resultado.cae,
+      motivo: motivo.motivo,
+    })
 
-    const { data: emitida } = await supabaseAdmin
-      .from("comprobantes_fiscales")
-      .select(COLUMNAS_NC)
-      .eq("id", nc.id)
-      .eq("organization_id", org)
-      .single()
+    const { data: emitida } = await leerNotaCredito(nc.id, org)
     return json(
       {
         comprobante: emitida ?? {
