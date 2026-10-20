@@ -148,6 +148,11 @@ export interface ComprobanteRef {
 export interface ConsultaResult {
   /** `false` si ARCA no tiene ese comprobante. El resto de los campos queda vacío. */
   existe: boolean
+  /**
+   * Número del comprobante que ARCA devolvió (`CbteDesde`, solo si coincide con
+   * `CbteHasta`). Permite comprobar que la respuesta es del número que se pidió.
+   */
+  cbteNro?: number
   cae?: string
   caeVencimiento?: string
   /** "A" aprobado, "R" rechazado. */
