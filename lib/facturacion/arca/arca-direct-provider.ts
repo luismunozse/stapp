@@ -20,7 +20,7 @@ import type { ArcaServiceName } from "@arcasdk/core"
 // que mantener una copia local del tipo que derive en silencio.
 import type { INextVoucher } from "@arcasdk/core/lib/domain/types/voucher.types"
 
-import { buildVoucher } from "@/lib/facturacion/arca/voucher"
+import { buildVoucher, datosFiscalesDesdeVoucher } from "@/lib/facturacion/arca/voucher"
 import { toLoginCredentials, wsaaLogin } from "@/lib/facturacion/arca/wsaa-login"
 import {
   renewWsaaTicket,
@@ -28,6 +28,7 @@ import {
   type RenewWsaaTicketOptions,
   type WsaaTicket,
 } from "@/lib/facturacion/arca/wsaa-ticket-store"
+import { mensajeSeguroDeError } from "@/lib/facturacion/errores"
 import { deriveTipo } from "@/lib/facturacion/derive"
 import type {
   ArcaCredenciales,
@@ -197,12 +198,14 @@ export function createArcaDirectProvider(
             cae: resultado.cae,
             caeVencimiento: resultado.caeFchVto,
             raw: resultado.response,
+            // Mismo CUIT que va en `Auth.Cuit`: el representado si hay delegación.
+            fiscal: datosFiscalesDesdeVoucher(voucher, creds.cuitRepresentado ?? creds.cuit),
           }
         }
 
         return { ok: false, tipo, errores: extraerErrores(resultado?.response), raw: resultado?.response ?? null }
       } catch (e: any) {
-        return { ok: false, tipo, errores: [e?.message ?? "Fallo emitiendo contra ARCA"], raw: null }
+        return { ok: false, tipo, errores: [mensajeSeguroDeError(e, "fallo emitiendo contra ARCA")], raw: null }
       }
     },
   }

@@ -13,8 +13,9 @@
 // que mantener una copia local del tipo que derive en silencio.
 import type { INextVoucher } from "@arcasdk/core/lib/domain/types/voucher.types"
 
+import { ErrorDeNegocioFacturacion } from "@/lib/facturacion/errores"
 import { deriveTipo } from "@/lib/facturacion/derive"
-import type { ArcaCredenciales, EmitirInput } from "@/lib/facturacion/types"
+import type { ArcaCredenciales, DatosFiscales, EmitirInput } from "@/lib/facturacion/types"
 
 /** Códigos de `FEParamGetTiposCbte`. */
 const CBTE_TIPO: Record<"B" | "C", number> = { B: 6, C: 11 }
@@ -73,7 +74,7 @@ function round2(n: number): number {
  */
 function alicuotaId(alicuota: number): number {
   const id = ALICUOTA_ID[alicuota]
-  if (id === undefined) throw new Error(`Alícuota de IVA no soportada por ARCA: ${alicuota}%`)
+  if (id === undefined) throw new ErrorDeNegocioFacturacion(`Alícuota de IVA no soportada por ARCA: ${alicuota}%`)
   return id
 }
 
@@ -185,5 +186,27 @@ export function buildVoucher(
     MonCotiz: 1,
     CondicionIVAReceptorId: COND_IVA_RECEPTOR[normalizar(input.receptor.condicionIva)] ?? 5,
     ...(iva ? { Iva: iva } : {}),
+  }
+}
+
+/**
+ * Foto fiscal de lo que se le mandó a ARCA, tomada del voucher ya armado: los
+ * importes son EXACTAMENTE los autorizados (`ImpTotal`, `ImpNeto`, `ImpIVA`),
+ * no un recálculo desde la venta, que puede cambiar después.
+ */
+export function datosFiscalesDesdeVoucher(voucher: INextVoucher, cuitEmisor: string): DatosFiscales {
+  const f = String(voucher.CbteFch)
+  return {
+    fechaEmision: `${f.slice(0, 4)}-${f.slice(4, 6)}-${f.slice(6, 8)}`,
+    cuitEmisor: cuitEmisor.replace(/\D/g, ""),
+    cbteTipo: voucher.CbteTipo,
+    concepto: voucher.Concepto,
+    moneda: voucher.MonId,
+    cotizacion: voucher.MonCotiz,
+    importeNeto: voucher.ImpNeto,
+    importeIva: voucher.ImpIVA,
+    importeTotal: voucher.ImpTotal,
+    receptorDocTipoCod: voucher.DocTipo,
+    receptorDocNro: String(voucher.DocNro),
   }
 }
