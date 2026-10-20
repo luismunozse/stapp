@@ -16,6 +16,12 @@ import {
 } from "@/lib/facturacion/anular-comprobante-client"
 import { CONTACT_EMAIL } from "@/lib/contact"
 
+const SIN_RESPUESTA = {
+        kind: "sinConexion",
+        message:
+          "No pudimos confirmar cómo terminó la anulación. Actualizá la pantalla para ver si quedó anulada; si ves una nota de crédito pendiente, tocá 'Verificar con ARCA'.",
+      }
+
 function respuesta(status: number, body: unknown) {
   return vi.fn().mockResolvedValue({ status, json: async () => body })
 }
@@ -269,10 +275,7 @@ describe("anularComprobanteArca", () => {
         kind: "error",
         message: "Contanos el motivo en el detalle.",
       })
-      expect(await anularComprobanteArca("f1", { motivo: "otro" }, respuesta(404, {}))).toEqual({
-        kind: "error",
-        message: "No se pudo anular la factura",
-      })
+      expect(await anularComprobanteArca("f1", { motivo: "otro" }, respuesta(404, {}))).toEqual(SIN_RESPUESTA)
     })
 
     it("cuerpo no JSON no rompe: se trata como vacio", async () => {
@@ -282,23 +285,50 @@ describe("anularComprobanteArca", () => {
           throw new Error("bad json")
         },
       })
-      expect(await anularComprobanteArca("f1", { motivo: "otro" }, fetchImpl)).toEqual({
-        kind: "error",
-        message: "No se pudo anular la factura",
-      })
+      expect(await anularComprobanteArca("f1", { motivo: "otro" }, fetchImpl)).toEqual(SIN_RESPUESTA)
     })
 
     it("un cuerpo que no es un objeto (null, lista, texto) tampoco se confunde con la falla de red", async () => {
       for (const cuerpo of [null, [], "boom", 7]) {
         const r = await anularComprobanteArca("f1", { motivo: "otro" }, respuesta(500, cuerpo))
-        expect(r).toEqual({ kind: "error", message: "No se pudo anular la factura" })
+        expect(r).toEqual(SIN_RESPUESTA)
       }
     })
 
-    it("un error en blanco cae al texto por defecto", async () => {
-      expect(await anularComprobanteArca("f1", { motivo: "otro" }, respuesta(422, { error: "   " }))).toEqual({
+    it("un error en blanco no es un cuerpo reconocido: sinConexion", async () => {
+      expect(await anularComprobanteArca("f1", { motivo: "otro" }, respuesta(422, { error: "   " }))).toEqual(SIN_RESPUESTA)
+    })
+
+    it("504 con cuerpo HTML (el gateway cortó): sinConexion, nunca un error que invite a reintentar", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue({
+        status: 504,
+        json: async () => {
+          throw new SyntaxError("Unexpected token < in JSON")
+        },
+      })
+      expect(await anularComprobanteArca("f1", { motivo: "otro" }, fetchImpl)).toEqual(SIN_RESPUESTA)
+    })
+
+    it("502 con cuerpo vacío: sinConexion", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue({
+        status: 502,
+        json: async () => {
+          throw new SyntaxError("Unexpected end of JSON input")
+        },
+      })
+      expect(await anularComprobanteArca("f1", { motivo: "otro" }, fetchImpl)).toEqual(SIN_RESPUESTA)
+      expect(await anularComprobanteArca("f1", { motivo: "otro" }, respuesta(502, {}))).toEqual(SIN_RESPUESTA)
+    })
+
+    it("500 con JSON y CAE conserva su tratamiento específico (no se vuelve sinConexion)", async () => {
+      const r = await anularComprobanteArca("f1", { motivo: "otro" }, respuesta(500, { cae: "74123456789099" }))
+      expect(r.kind).toBe("autorizadaSinRegistrar")
+    })
+
+    it("un 5xx con JSON reconocido (error de texto) sigue siendo un error con ese texto", async () => {
+      expect(await anularComprobanteArca("f1", { motivo: "otro" }, respuesta(503, { error: "No disponible" }))).toEqual({
         kind: "error",
-        message: "No se pudo anular la factura",
+        message: "No disponible",
       })
     })
 

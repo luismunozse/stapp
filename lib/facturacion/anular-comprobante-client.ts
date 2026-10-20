@@ -61,7 +61,12 @@ type Cuerpo = Record<string, unknown>
 
 const MSG_INCIERTA =
   "No pudimos confirmar con ARCA si la nota de crédito quedó emitida. Tocá 'Verificar con ARCA' en unos minutos."
-const MSG_ANULAR_POR_DEFECTO = "No se pudo anular la factura"
+/**
+ * Respuesta sin cuerpo reconocible (gateway 502/504 con HTML, cuerpo vacío...): el pedido pudo
+ * haber llegado y la nota salir hacia ARCA. No se invita a reintentar.
+ */
+const MSG_SIN_RESPUESTA =
+  "No pudimos confirmar cómo terminó la anulación. Actualizá la pantalla para ver si quedó anulada; si ves una nota de crédito pendiente, tocá 'Verificar con ARCA'."
 const MSG_SIN_PERMISO = "No tenés permiso para anular facturas electrónicas."
 const MSG_CONFLICTO = "La factura cambió mientras la anulabas. Actualizamos la pantalla con lo que quedó."
 const MSG_RED_ANULAR =
@@ -139,7 +144,10 @@ export async function anularComprobanteArca(
     }
     if (res.status === 409) return { kind: "conflicto", message: error ?? MSG_CONFLICTO }
     if (res.status === 403) return { kind: "error", message: error ?? MSG_SIN_PERMISO }
-    return { kind: "error", message: error ?? MSG_ANULAR_POR_DEFECTO }
+    // Solo un cuerpo con un texto de error reconocible es un "no" del servidor. Cualquier otra
+    // respuesta (HTML de un gateway, vacía, 5xx sin texto) deja el resultado sin saber.
+    if (error) return { kind: "error", message: error }
+    return { kind: "sinConexion", message: MSG_SIN_RESPUESTA }
   } catch {
     // No sabemos si el pedido llego al servidor: no se afirma nada, se manda a mirar.
     return { kind: "sinConexion", message: MSG_RED_ANULAR }
