@@ -15,6 +15,7 @@ import { mensajeSeguroDeError } from "@/lib/facturacion/errores"
 import { mapVentaToEmitirInput } from "@/lib/facturacion/map-venta"
 import { isMissingColumnError } from "@/lib/db-errors"
 import { SAFE_COLUMNS } from "@/lib/facturacion/comprobante-columns"
+import { FILTRO_SIN_NC } from "@/lib/facturacion/cbte-tipo"
 import type { DatosFiscales, EmitirInput } from "@/lib/facturacion/types"
 
 /** Columnas de la foto fiscal (migración comprobantes_fiscales_datos_qr). */
@@ -56,13 +57,30 @@ export async function POST(request: Request) {
   // solo un atajo de UX; la garantía real contra la carrera vive en el
   // índice único parcial de la migración (uq_comprobante_venta_activo),
   // aplicado más abajo en el INSERT.
-  const { data: existing, error: existingErr } = await supabaseAdmin
-    .from("comprobantes_fiscales")
-    .select(SAFE_COLUMNS)
-    .eq("venta_id", ventaId)
-    .eq("organization_id", organizationId!)
-    .eq("estado", "emitido")
-    .maybeSingle()
+  //
+  // Solo cuentan las FACTURAS: anular una deja en la misma venta una nota de
+  // crédito fiscal emitida, que no es "la factura de esta venta". Se pide UNA fila
+  // (la más nueva) y no `maybeSingle` pelado, porque una venta refacturada tiene
+  // varias filas históricas.
+  const buscarEmitida = (soloFacturas: boolean) => {
+    const query = supabaseAdmin
+      .from("comprobantes_fiscales")
+      .select(SAFE_COLUMNS)
+      .eq("venta_id", ventaId)
+      .eq("organization_id", organizationId!)
+      .eq("estado", "emitido")
+    return (soloFacturas ? query.or(FILTRO_SIN_NC) : query)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+  }
+  let { data: existing, error: existingErr } = await buscarEmitida(true)
+  if (existingErr && isMissingColumnError(existingErr)) {
+    // Sin la migración 370 no existe `cbte_tipo`, y sin ella tampoco hay notas de
+    // crédito: el atajo sigue valiendo sin el filtro. Emitir no puede depender de
+    // una columna que llegó después.
+    ;({ data: existing, error: existingErr } = await buscarEmitida(false))
+  }
   if (existingErr) {
     return NextResponse.json({ error: "No se pudo verificar el comprobante" }, { status: 500 })
   }
@@ -186,6 +204,11 @@ export async function POST(request: Request) {
         .eq("venta_id", ventaId)
         .eq("organization_id", organizationId!)
         .in("estado", ["pendiente", "emitido"])
+        // Una NC en vuelo también está "pendiente": la que bloquea la emisión es
+        // la factura, y con las dos filas `maybeSingle` fallaría.
+        .or(FILTRO_SIN_NC)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle()
       if (activeErr) {
         return NextResponse.json({ error: "Comprobante en proceso o ya emitido" }, { status: 409 })
