@@ -24,6 +24,31 @@ interface UseWebPushResult {
   unsubscribe: () => Promise<boolean>
 }
 
+/** Max wait for the service worker to become active before giving up. */
+const SW_READY_TIMEOUT_MS = 10_000
+
+/**
+ * `navigator.serviceWorker.ready` never settles if the SW failed to install,
+ * which would leave the UI spinning forever. Race it against a timeout.
+ */
+function waitForServiceWorker(): Promise<ServiceWorkerRegistration> {
+  let timer: ReturnType<typeof setTimeout>
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new Error(
+            "El servicio de notificaciones no pudo activarse. Recargá la página e intentá de nuevo.",
+          ),
+        ),
+      SW_READY_TIMEOUT_MS,
+    )
+  })
+  return Promise.race([navigator.serviceWorker.ready, timeout]).finally(() =>
+    clearTimeout(timer),
+  )
+}
+
 function isWebPushSupported(): boolean {
   if (typeof window === "undefined") return false
   if (isNativePlatform()) return false // native uses @capacitor/push-notifications instead
@@ -130,7 +155,7 @@ export function useWebPush(): UseWebPushResult {
         return false
       }
 
-      const reg = await navigator.serviceWorker.ready
+      const reg = await waitForServiceWorker()
       let sub = await reg.pushManager.getSubscription()
       if (!sub) {
         sub = await reg.pushManager.subscribe({
@@ -175,7 +200,7 @@ export function useWebPush(): UseWebPushResult {
 
     setLoading(true)
     try {
-      const reg = await navigator.serviceWorker.ready
+      const reg = await waitForServiceWorker()
       const sub = await reg.pushManager.getSubscription()
       if (sub) {
         await fetch("/api/push/web-subscribe", {
