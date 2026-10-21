@@ -1,5 +1,5 @@
 -- ============================================================================
--- 372: push por aviso (outbox sobre user_notifications)
+-- 373: push por aviso (outbox sobre user_notifications)
 -- ============================================================================
 -- QUE: cada fila de user_notifications (el "aviso" de la campanita) tiene que
 -- llegar tambien como push al user_id, sin importar quien la escribio: codigo

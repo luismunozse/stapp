@@ -1,4 +1,4 @@
--- Rollback de avisos_push (migracion 372).
+-- Rollback de avisos_push (migracion 373).
 --
 -- ORDEN: primero quitar el cron /api/cron/avisos-push (vercel.json) y redeployar;
 -- mientras el cron siga vivo, borrar la funcion lo hace fallar cada minuto.

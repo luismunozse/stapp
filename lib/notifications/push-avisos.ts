@@ -7,7 +7,7 @@ import { sendPushToUser, type PushPayload, type SendResult } from "@/lib/push/se
  * Todo aviso de la campanita tiene que llegar también como push, lo haya
  * escrito quien lo haya escrito (código Node o el trigger SQL de stock bajo).
  * El cron /api/cron/avisos-push llama a esta función cada minuto; el RPC
- * claim_avisos_para_push (migración 372) marca y devuelve de forma atómica las
+ * claim_avisos_para_push (migración 373) marca y devuelve de forma atómica las
  * filas pendientes de usuarios con suscripción, así dos corridas nunca
  * duplican un envío.
  */
