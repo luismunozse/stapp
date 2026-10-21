@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 
-import { buildVoucher, datosFiscalesDesdeVoucher } from "@/lib/facturacion/arca/voucher"
+import { ALICUOTA_ID, buildVoucher, condicionIvaReceptorId, datosFiscalesDesdeVoucher } from "@/lib/facturacion/arca/voucher"
 import type { ArcaCredenciales, EmitirInput } from "@/lib/facturacion/types"
 
 const round2 = (n: number) => Math.round(n * 100) / 100
@@ -302,5 +302,45 @@ describe("datosFiscalesDesdeVoucher", () => {
     const voucher = buildVoucher(credsMonotributo, inputConsumidorFinal, { cbteFch: "20260829" })
 
     expect(datosFiscalesDesdeVoucher(voucher, "30-71095505-7").cuitEmisor).toBe("30710955057")
+  })
+})
+
+describe("ALICUOTA_ID", () => {
+  it("expone los Id de FEParamGetTiposIva por alicuota en porcentaje", () => {
+    expect(ALICUOTA_ID).toEqual({ 0: 3, 10.5: 4, 21: 5, 27: 6, 5: 8, 2.5: 9 })
+  })
+})
+
+describe("condicionIvaReceptorId", () => {
+  it("mapea cada condicion conocida a su codigo de FEParamGetCondicionIvaReceptor", () => {
+    expect(condicionIvaReceptorId("CF")).toBe(5)
+    expect(condicionIvaReceptorId("RI")).toBe(1)
+    expect(condicionIvaReceptorId("EXENTO")).toBe(4)
+    expect(condicionIvaReceptorId("MONOTRIBUTO")).toBe(6)
+  })
+
+  it("ignora mayusculas y espacios, igual que el armado de la factura", () => {
+    expect(condicionIvaReceptorId("  consumidor final ")).toBe(5)
+    expect(condicionIvaReceptorId("responsable inscripto")).toBe(1)
+  })
+
+  it("una condicion desconocida o ausente es undefined: quien llama decide, no se inventa un 5", () => {
+    expect(condicionIvaReceptorId("XYZ")).toBeUndefined()
+    expect(condicionIvaReceptorId("")).toBeUndefined()
+    expect(condicionIvaReceptorId(null)).toBeUndefined()
+    expect(condicionIvaReceptorId(undefined)).toBeUndefined()
+  })
+})
+
+describe("buildVoucher — receptor desconocido (comportamiento que no cambia)", () => {
+  it("un tipo de documento o una condicion que no reconoce caen a consumidor final", () => {
+    const voucher = buildVoucher(
+      credsMonotributo,
+      { ...inputConsumidorFinal, receptor: { razonSocial: "X", documentoTipo: "PASAPORTE", documentoNro: "AB123", condicionIva: "???" } },
+      { cbteFch: "20260829" }
+    )
+
+    expect(voucher.DocTipo).toBe(99)
+    expect(voucher.CondicionIVAReceptorId).toBe(5)
   })
 })
