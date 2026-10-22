@@ -236,6 +236,7 @@ describe("GET /api/facturacion-electronica/comprobantes", () => {
       motivoDetalle: null,
       anulable: true,
       verificable: false,
+      notaCreditoEnCursoId: null,
     })
     expect(JSON.stringify(body)).not.toContain("provider_response")
     expect(JSON.stringify(body)).not.toContain("secreto")
@@ -363,6 +364,7 @@ describe("GET /api/facturacion-electronica/comprobantes", () => {
         motivoDetalle: "Error de carga",
         anulable: false,
         verificable: false,
+        notaCreditoEnCursoId: null,
       })
     })
 
@@ -465,7 +467,7 @@ describe("GET /api/facturacion-electronica/comprobantes", () => {
         expect(sels[1]).not.toContain(col)
       }
       const item = (await res.json()).items[0]
-      // La foto fiscal sigue completa: el PDF y la anulabilidad no se pierden.
+      // La foto fiscal sigue completa: el PDF no se pierde.
       expect(item).toMatchObject({
         pdfDisponible: true,
         cbteTipo: 6,
@@ -474,8 +476,10 @@ describe("GET /api/facturacion-electronica/comprobantes", () => {
         anuladoAt: null,
         motivo: null,
         motivoDetalle: null,
-        anulable: true,
+        // Sin la 371 no hay notas de credito que mirar ni ruta que las emita: nunca se ofrece anular.
+        anulable: false,
         verificable: false,
+        notaCreditoEnCursoId: null,
       })
     })
 
@@ -532,6 +536,88 @@ describe("GET /api/facturacion-electronica/comprobantes", () => {
           : { data: null, error: { code: "XX000", message: "boom" } }
       )
       expect((await get()).status).toBe(500)
+    })
+  })
+
+  describe("anulable y nota de credito en curso (consulta de notas por pagina)", () => {
+    const FACTURA_2 = { ...FILA, id: "comp-2", numero: "0001-00000124" }
+    // La consulta de notas es la unica que no embebe la venta.
+    const esConsultaDeNotas = (select: string) => !select.includes("ventas(numero_venta)")
+    const consultasDeNotas = (chains: any[]) => chains.filter((c) => esConsultaDeNotas(selectDe(c)))
+    const NC_EN_CURSO = { id: "nc-9", comprobante_asociado_id: "comp-1", estado: "pendiente" }
+
+    function mockPagina(filas: any[], notas: { data: any; error?: any }) {
+      return mockDb((select) =>
+        esConsultaDeNotas(select)
+          ? { data: notas.data, error: notas.error ?? null }
+          : { data: filas, error: null, count: filas.length }
+      )
+    }
+
+    it("busca las notas de la pagina: misma org, ids de las facturas anulables y estados pendiente/emitido", async () => {
+      const chains = mockPagina([FILA, FACTURA_2, { ...FILA, id: "rech", estado: "rechazado" }], { data: [] })
+      await get()
+      const [consulta] = consultasDeNotas(chains)
+      expect(consulta).toBeDefined()
+      expect(consulta.eq).toHaveBeenCalledWith("organization_id", "org-1")
+      expect(consulta.in).toHaveBeenCalledWith("comprobante_asociado_id", ["comp-1", "comp-2"])
+      expect(consulta.in).toHaveBeenCalledWith("estado", ["pendiente", "emitido"])
+      expect(selectDe(consulta)).toContain("comprobante_asociado_id")
+      expect(selectDe(consulta)).not.toContain("provider_response")
+      expect(selectDe(consulta)).not.toContain("*")
+    })
+
+    it("sin facturas anulables en la pagina no consulta notas", async () => {
+      const chains = mockPagina([{ ...FILA, estado: "rechazado" }, ANULADA, NC], { data: [] })
+      await get()
+      expect(consultasDeNotas(chains)).toHaveLength(0)
+    })
+
+    it("factura sin notas en curso: sigue anulable y sin nota", async () => {
+      mockPagina([FILA], { data: [] })
+      const item = (await (await get()).json()).items[0]
+      expect(item).toMatchObject({ anulable: true, notaCreditoEnCursoId: null })
+    })
+
+    it.each(["pendiente", "emitido"])("factura con una nota %s: ya no es anulable y expone la nota", async (estado) => {
+      mockPagina([FILA, FACTURA_2], { data: [{ ...NC_EN_CURSO, estado }] })
+      const items = (await (await get()).json()).items
+      expect(items[0]).toMatchObject({ id: "comp-1", anulable: false, notaCreditoEnCursoId: "nc-9" })
+      // La otra factura de la pagina no se toca.
+      expect(items[1]).toMatchObject({ id: "comp-2", anulable: true, notaCreditoEnCursoId: null })
+    })
+
+    it("una nota que apunta a otra factura no afecta a esta", async () => {
+      mockPagina([FILA], { data: [{ id: "nc-7", comprobante_asociado_id: "otra" }] })
+      expect((await (await get()).json()).items[0]).toMatchObject({ anulable: true, notaCreditoEnCursoId: null })
+    })
+
+    it("la nota de credito misma no lleva nota en curso", async () => {
+      mockPagina([NC, FILA], { data: [{ id: "nc-1", comprobante_asociado_id: "comp-1" }] })
+      const items = (await (await get()).json()).items
+      expect(items[0]).toMatchObject({ id: "nc-1", notaCreditoEnCursoId: null, anulable: false })
+      expect(items[1]).toMatchObject({ id: "comp-1", notaCreditoEnCursoId: "nc-1", anulable: false })
+    })
+
+    it("si la consulta de notas falla, no se ofrece anular (fail-closed) y el listado sigue", async () => {
+      mockPagina([FILA, FACTURA_2], { data: null, error: { code: "XX000", message: "boom" } })
+      const res = await get()
+      expect(res.status).toBe(200)
+      const items = (await res.json()).items
+      expect(items.map((i: any) => i.anulable)).toEqual([false, false])
+      expect(items.map((i: any) => i.notaCreditoEnCursoId)).toEqual([null, null])
+    })
+
+    it("sin la 371 (escalon sin columnas de anulacion) no hay consulta de notas y nada es anulable", async () => {
+      const chains = mockDb((select) =>
+        select.includes("comprobante_asociado_id")
+          ? { data: null, error: { code: "42703", message: "column does not exist" } }
+          : { data: [FILA], error: null, count: 1 }
+      )
+      const res = await get()
+      expect(res.status).toBe(200)
+      expect(consultasDeNotas(chains)).toHaveLength(0)
+      expect((await res.json()).items[0]).toMatchObject({ anulable: false, notaCreditoEnCursoId: null })
     })
   })
 })

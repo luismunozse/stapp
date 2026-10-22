@@ -41,6 +41,7 @@ function fila(over: Partial<ComprobanteFiscalDTO> = {}): ComprobanteFiscalDTO {
     motivoDetalle: null,
     anulable: false,
     verificable: false,
+    notaCreditoEnCursoId: null,
     ...over,
   }
 }
