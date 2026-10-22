@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
+import { isMissingColumnError } from "@/lib/db-errors"
 import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { rowsToCsv } from "./export-csv"
 import { buildZipStream } from "./zip"
@@ -200,6 +201,20 @@ async function fetchByVentaIds(table: string, ventaIds: string[]): Promise<Row[]
 const COMPROBANTES_COLUMNS =
   "id, venta_id, tipo, punto_venta, numero, cae, cae_vencimiento, estado, pdf_url, receptor_doc_tipo, receptor_doc_nro, receptor_condicion_iva, total, provider, error_msg, created_at, updated_at"
 
+// Facturas anuladas y notas de crédito (migración 371; cbte_tipo, la 370). Sin
+// esas migraciones el SELECT falla con columna inexistente: el respaldo no puede
+// caerse por eso, así que se reintenta con las columnas anteriores.
+const COMPROBANTES_COLUMNS_ANULACION = `${COMPROBANTES_COLUMNS}, cbte_tipo, comprobante_asociado_id, anulado_at, motivo`
+
+async function fetchComprobantes(apply: (q: any) => any): Promise<Row[]> {
+  try {
+    return await fetchAllRows("comprobantes_fiscales", COMPROBANTES_COLUMNS_ANULACION, apply)
+  } catch (e) {
+    if (!isMissingColumnError(e)) throw e
+    return fetchAllRows("comprobantes_fiscales", COMPROBANTES_COLUMNS, apply)
+  }
+}
+
 // Un monto como string con signo ("-50") se prefijaría con `'` en el CSV
 // (anti-fórmulas) y en un respaldo fiscal los negativos son notas de crédito.
 function amountsAsNumbers(rows: Row[], fields: string[]): Row[] {
@@ -242,10 +257,7 @@ export function buildOrganizationExportStream(
     const cc = await fetchAllRows("cuenta_corriente", "*", byOrg)
     zip.addText("cuenta_corriente.csv", rowsToCsv(amountsAsNumbers(cc, ["monto", "saldo_posterior"])))
 
-    const comprobantes = amountsAsNumbers(
-      await fetchAllRows("comprobantes_fiscales", COMPROBANTES_COLUMNS, byOrg),
-      ["total"]
-    )
+    const comprobantes = amountsAsNumbers(await fetchComprobantes(byOrg), ["total"])
     zip.addText("comprobantes_fiscales.csv", rowsToCsv(comprobantes))
 
     const { files, pending } = await collectPdfs(

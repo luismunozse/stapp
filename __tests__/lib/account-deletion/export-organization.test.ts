@@ -232,6 +232,76 @@ describe("buildOrganizationExportStream", () => {
     expect(strFromU8(files["LEEME.txt"])).toMatch(/obligaci[oó]n del taller/i)
   })
 
+  describe("comprobantes_fiscales: columnas de la anulación (migración 371)", () => {
+    const NUEVAS = ["cbte_tipo", "comprobante_asociado_id", "anulado_at", "motivo"]
+
+    it("pide cbte_tipo, comprobante_asociado_id, anulado_at y motivo, y los vuelca al CSV", async () => {
+      const comprobantes = createChainMock(
+        [
+          { id: "c1", numero: "0003-00000001", estado: "anulado", cbte_tipo: 6, comprobante_asociado_id: null, anulado_at: "2026-10-20T13:00:00Z", motivo: null, pdf_url: null, total: 1210 },
+          { id: "n1", numero: "0003-00000002", estado: "emitido", cbte_tipo: 8, comprobante_asociado_id: "c1", anulado_at: null, motivo: "devolucion_total", pdf_url: null, total: 1210 },
+        ],
+        null
+      )
+      mockSupabaseFrom(tables({ comprobantes_fiscales: comprobantes }))
+      const bytes = new Uint8Array(await new Response(buildOrganizationExportStream({ id: "o1", nombre: "T", slug: "t" })).arrayBuffer())
+      const csv = strFromU8(unzipSync(bytes)["comprobantes_fiscales.csv"])
+
+      const select = String(comprobantes.select.mock.calls[0][0])
+      for (const col of NUEVAS) expect(select).toContain(col)
+      expect(select).not.toContain("provider_response")
+      const [cabecera, ...filas] = csv.trim().split(/\r?\n/)
+      for (const col of NUEVAS) expect(cabecera.split(",")).toContain(col)
+      // La nota de credito apunta a su factura y lleva el motivo; la factura, la fecha de anulacion.
+      expect(filas.find((f) => f.startsWith("n1,"))).toContain("c1")
+      expect(filas.find((f) => f.startsWith("n1,"))).toContain("devolucion_total")
+      expect(filas.find((f) => f.startsWith("c1,"))).toContain("2026-10-20T13:00:00Z")
+    })
+
+    it("sin la migración (columna inexistente) reintenta con las columnas anteriores y el respaldo sale igual", async () => {
+      const selects: string[] = []
+      const chain = createChainMock([{ id: "c1", numero: "0001-1", estado: "emitido", pdf_url: null, total: 5 }], null)
+      chain.select = vi.fn((select: string) => {
+        selects.push(select)
+        const falla = NUEVAS.some((c) => select.includes(c))
+        const res = falla
+          ? { data: null, error: { code: "42703", message: 'column "comprobante_asociado_id" does not exist' } }
+          : { data: [{ id: "c1", numero: "0001-1", estado: "emitido", pdf_url: null, total: 5 }], error: null }
+        chain.then = (resolve: any, reject?: any) => Promise.resolve(res).then(resolve, reject)
+        return chain
+      }) as never
+      mockSupabaseFrom(tables({ comprobantes_fiscales: chain }))
+
+      const bytes = new Uint8Array(await new Response(buildOrganizationExportStream({ id: "o1", nombre: "T", slug: "t" })).arrayBuffer())
+      const files = unzipSync(bytes)
+
+      expect(selects).toHaveLength(2)
+      for (const col of NUEVAS) expect(selects[1]).not.toContain(col)
+      expect(selects[1]).not.toContain("provider_response")
+      expect(strFromU8(files["comprobantes_fiscales.csv"])).toContain("0001-1")
+      // Cada intento esta acotado por organizacion (el reintento no pierde el filtro).
+      expect(chain.eq.mock.calls.filter(([col, val]) => col === "organization_id" && val === "o1")).toHaveLength(2)
+    })
+
+    it("un error de la BD que no es de columna faltante sigue tirando y no se reintenta", async () => {
+      // La base responde bien a un segundo pedido: si el export reintentara cualquier
+      // error, terminaria "bien" con datos de un intento que no debio existir.
+      const selects: string[] = []
+      const chain = createChainMock([], null)
+      chain.select = vi.fn((select: string) => {
+        selects.push(select)
+        const res = selects.length === 1 ? { data: null, error: { code: "XX000", message: "down" } } : { data: [], error: null }
+        chain.then = (resolve: any, reject?: any) => Promise.resolve(res).then(resolve, reject)
+        return chain
+      }) as never
+      mockSupabaseFrom(tables({ comprobantes_fiscales: chain }))
+      await expect(
+        new Response(buildOrganizationExportStream({ id: "o1", nombre: "T", slug: "t" })).arrayBuffer()
+      ).rejects.toThrow(/comprobantes_fiscales: down/)
+      expect(selects).toHaveLength(1)
+    })
+  })
+
   it("todas las consultas se acotan por la organización de la sesión", async () => {
     const t = tables()
     mockSupabaseFrom(t)

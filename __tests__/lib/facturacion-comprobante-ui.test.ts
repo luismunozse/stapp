@@ -13,6 +13,9 @@ describe("etiquetaEstadoComprobante", () => {
     expect(etiquetaEstadoComprobante("pendiente")).toBe("En proceso")
     expect(etiquetaEstadoComprobante("rechazado")).toBe("Rechazada")
   })
+  it("una factura anulada por una nota de credito se muestra como Anulada", () => {
+    expect(etiquetaEstadoComprobante("anulado")).toBe("Anulada")
+  })
   it("un estado desconocido se muestra tal cual", () => {
     expect(etiquetaEstadoComprobante("raro")).toBe("raro")
   })
@@ -36,6 +39,16 @@ describe("tituloComprobante", () => {
   })
   it("sin numero (pendiente o rechazado) solo el tipo", () => {
     expect(tituloComprobante("C", null)).toBe("Factura C")
+  })
+  it("una nota de credito electronica se titula 'Nota de crédito B 0003-00000002'", () => {
+    expect(tituloComprobante("B", "0003-00000002", true)).toBe("Nota de crédito B 0003-00000002")
+    expect(tituloComprobante("C", "0003-00000009", true)).toBe("Nota de crédito C 0003-00000009")
+  })
+  it("una nota de credito sin numero (pendiente o rechazada) solo el tipo", () => {
+    expect(tituloComprobante("B", null, true)).toBe("Nota de crédito B")
+  })
+  it("esNotaCredito en false (o ausente) sigue siendo una factura", () => {
+    expect(tituloComprobante("B", "0003-00000001", false)).toBe("Factura B 0003-00000001")
   })
 })
 

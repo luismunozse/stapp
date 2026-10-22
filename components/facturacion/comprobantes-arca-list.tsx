@@ -12,6 +12,7 @@ import {
   etiquetaEstadoComprobante,
   fechaFiscalDMA,
   pdfComprobanteHref,
+  tituloComprobante,
   type ComprobanteFiscalDTO,
   type ListadoComprobantesResponse,
 } from "@/lib/facturacion/comprobante-ui"
@@ -25,11 +26,14 @@ const FILTROS_ESTADO = [
   { value: "emitido", label: "Emitidas" },
   { value: "pendiente", label: "En proceso" },
   { value: "rechazado", label: "Rechazadas" },
+  { value: "anulado", label: "Anuladas" },
 ] as const
 
 function variantEstado(estado: string) {
   if (estado === "emitido") return "successSoft" as const
   if (estado === "rechazado") return "destructiveSoft" as const
+  // Una factura anulada ya no esta vigente pero tampoco fallo: neutra.
+  if (estado === "anulado") return "secondary" as const
   return "warningSoft" as const
 }
 
@@ -126,7 +130,7 @@ export function ComprobantesArcaList() {
               <thead className="bg-background">
                 <tr className="border-b bg-muted/50">
                   <th className="text-left p-3 font-medium hidden md:table-cell">Fecha</th>
-                  <th className="text-left p-3 font-medium">Factura</th>
+                  <th className="text-left p-3 font-medium">Comprobante</th>
                   <th className="text-left p-3 font-medium">Venta</th>
                   <th className="text-right p-3 font-medium">Total</th>
                   <th className="text-center p-3 font-medium">Estado</th>
@@ -177,6 +181,8 @@ function FilaComprobante({
   formatPrice: (n: number | string | null | undefined) => string
   formatDate: (d: Date | string | null | undefined) => string
 }) {
+  // Una factura anulada sigue siendo un comprobante emitido: conserva su PDF.
+  const tienePdf = c.estado === "emitido" || c.estado === "anulado"
   return (
     <tr className="border-b hover:bg-muted/30 transition-colors">
       <td className="p-3 text-muted-foreground hidden md:table-cell">
@@ -188,7 +194,7 @@ function FilaComprobante({
         ) : (
           <div className="text-muted-foreground">Sin número</div>
         )}
-        <div className="text-xs text-muted-foreground">Factura {c.tipo}</div>
+        <div className="text-xs text-muted-foreground">{tituloComprobante(c.tipo, null, c.esNotaCredito)}</div>
         {c.estado === "rechazado" && c.errorMsg && (
           <div className="mt-1 text-xs text-destructive">{c.errorMsg}</div>
         )}
@@ -202,20 +208,22 @@ function FilaComprobante({
           <span className="text-muted-foreground">-</span>
         )}
       </td>
-      <td className="p-3 text-right font-medium">{c.total != null ? formatPrice(c.total) : "-"}</td>
+      <td className="p-3 text-right font-medium">
+        {c.total != null ? `${c.esNotaCredito ? "-" : ""}${formatPrice(c.total)}` : "-"}
+      </td>
       <td className="p-3 text-center">
         <Badge variant={variantEstado(c.estado)}>{etiquetaEstadoComprobante(c.estado)}</Badge>
       </td>
       <td className="p-3 font-mono text-xs hidden lg:table-cell">{c.cae ?? "-"}</td>
       <td className="p-3 text-center">
-        {c.estado === "emitido" && c.pdfDisponible ? (
+        {tienePdf && c.pdfDisponible ? (
           <Button asChild variant="outline" size="sm">
             <a href={pdfComprobanteHref(c.id)} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="mr-1 h-4 w-4" />
               Ver PDF
             </a>
           </Button>
-        ) : c.estado === "emitido" ? (
+        ) : tienePdf ? (
           <span className="text-xs text-muted-foreground">PDF no disponible: datos incompletos</span>
         ) : (
           <span className="text-muted-foreground">-</span>
