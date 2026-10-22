@@ -53,7 +53,7 @@ function montar(venta: unknown, puedeEmitir = true) {
       return {
         status: 200,
         ok: true,
-        json: async () => ({ items: [], total: 0, page: 1, limit: 1, totalPages: 0, puedeEmitir }),
+        json: async () => ({ items: [], total: 0, page: 1, limit: 20, totalPages: 0, puedeEmitir }),
       }
     }
     if (url.startsWith("/api/auth/user-organization")) {
@@ -79,14 +79,14 @@ describe("VentaDetail — factura electrónica", () => {
     montar(ventaResponse())
     await renderDetail()
     expect(await screen.findByRole("button", { name: /Emitir factura electrónica/i })).toBeInTheDocument()
-    expect(mockFetch).toHaveBeenCalledWith("/api/facturacion-electronica/comprobantes?ventaId=v1&limit=1")
+    expect(mockFetch).toHaveBeenCalledWith("/api/facturacion-electronica/comprobantes?ventaId=v1&limit=20")
   })
 
   it("una venta anulada no ofrece emitir", async () => {
     montar(ventaResponse({ estado: "ANULADA" }))
     await renderDetail()
     await waitFor(() =>
-      expect(mockFetch).toHaveBeenCalledWith("/api/facturacion-electronica/comprobantes?ventaId=v1&limit=1")
+      expect(mockFetch).toHaveBeenCalledWith("/api/facturacion-electronica/comprobantes?ventaId=v1&limit=20")
     )
     expect(screen.queryByRole("button", { name: /Emitir factura electrónica/i })).not.toBeInTheDocument()
   })
@@ -101,7 +101,7 @@ describe("VentaDetail — factura electrónica", () => {
     )
     await renderDetail()
     await waitFor(() =>
-      expect(mockFetch).toHaveBeenCalledWith("/api/facturacion-electronica/comprobantes?ventaId=v1&limit=1")
+      expect(mockFetch).toHaveBeenCalledWith("/api/facturacion-electronica/comprobantes?ventaId=v1&limit=20")
     )
     expect(screen.queryByRole("button", { name: /Emitir factura electrónica/i })).not.toBeInTheDocument()
   })
