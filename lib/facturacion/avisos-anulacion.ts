@@ -7,6 +7,9 @@ import type { ResultadoAnulacion, ResultadoVerificacion } from "@/lib/facturacio
  *
  * Client-safe: solo importa tipos.
  */
+/** Se suma al aviso de una anulacion hecha pasados los 15 dias que pide la RG 4540. */
+export const AVISO_FUERA_DE_PLAZO = "Se emitió pasados los 15 días que pide la RG 4540. Consultalo con tu contador."
+
 export type Aviso = { tono: "error" | "warning"; texto: string }
 
 export function avisoDeAnulacion(resultado: ResultadoAnulacion): Aviso | null {

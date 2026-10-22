@@ -3,7 +3,7 @@
  * Listado "Comprobantes ARCA" de /facturacion: filas, filtro por estado (con el
  * valor "todos", nunca vacio), paginacion, estados vacio y de error.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, waitFor, fireEvent, within, act } from "@testing-library/react"
 import React, { type ReactNode } from "react"
 import { ComprobantesArcaList } from "@/components/facturacion/comprobantes-arca-list"
@@ -313,7 +313,11 @@ describe("ComprobantesArcaList", () => {
       const cola = [...listados]
       const colas = { anular: [rutas.anular ?? []].flat(), verificar: [rutas.verificar ?? []].flat() }
       const proxima = (c: Respuesta[]) => (c.length > 1 ? c.shift()! : c[0])
-      const responder = (r: Respuesta) => ({ status: r.status, ok: r.status === 200, json: async () => r.body })
+      const responder = (r: Respuesta) => {
+        // status 0 = se cayo la conexion (el fetch rechaza).
+        if (r.status === 0) throw new TypeError("Failed to fetch")
+        return { status: r.status, ok: r.status === 200, json: async () => r.body }
+      }
       mockFetch.mockImplementation(async (url: string) => {
         if (url.endsWith("/anular")) return responder(proxima(colas.anular))
         if (url.endsWith("/verificar")) return responder(proxima(colas.verificar))
@@ -529,7 +533,7 @@ describe("ComprobantesArcaList", () => {
         await anularConMotivo()
         expect(await avisoQue(MSG_ANULADA)).toHaveTextContent(MSG_ANULADA)
         fireEvent.click(screen.getByRole("button", { name: "Cerrar aviso" }))
-        expect(screen.queryByRole("status")).not.toBeInTheDocument()
+        expect(screen.queryByText(MSG_ANULADA)).not.toBeInTheDocument()
       })
     })
 
@@ -643,6 +647,183 @@ describe("ComprobantesArcaList", () => {
         })
         await waitFor(() => expect(screen.getByRole("button", { name: "Anular factura B 0001-00000009" })).toBeEnabled())
       })
+    })
+
+    describe("despues de un resultado incierto no se vuelve a ofrecer anular (W1)", () => {
+      const sigueAnulable = () => pagina([fila()])
+      const sinBotonAnular = () => expect(screen.queryByRole("button", { name: /Anular factura/ })).not.toBeInTheDocument()
+
+      it.each([
+        ["502 con verificar", { status: 502, body: { error: "x", verificar: true, comprobante: { id: "nc9", estado: "pendiente" } } }],
+        ["500 con CAE (autorizada sin registrar)", { status: 500, body: { error: "rpc", cae: "75000000000001", numero: "0001-00000008" } }],
+        ["se cayo la conexion", { status: 0, body: null }],
+      ])("%s: aunque el listado recargado todavia la muestre anulable, no hay boton y se indica la nota en curso", async (_n, anular) => {
+        montar([sigueAnulable(), sigueAnulable()], { anular })
+        render(<ComprobantesArcaList />)
+        await anularConMotivo()
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+        await waitFor(() => expect(urls().filter((u) => !u.endsWith("/anular"))).toHaveLength(2))
+        sinBotonAnular()
+        expect(await screen.findByText("Nota de crédito en curso")).toBeInTheDocument()
+        expect(screen.getByText(/Verificala con ARCA desde la nota/)).toBeInTheDocument()
+      })
+
+      it("un conflicto (409) no bloquea: la factura puede seguir anulable", async () => {
+        montar([sigueAnulable(), sigueAnulable()], { anular: { status: 409, body: { error: "La factura cambió." } } })
+        render(<ComprobantesArcaList />)
+        await anularConMotivo()
+        await avisoQue("La factura cambió.")
+        expect(await botonAnular()).toBeEnabled()
+      })
+
+      it("se libera cuando el listado ya muestra la nota en curso: si despues la nota desaparece, vuelve a ofrecerse", async () => {
+        montar(
+          [
+            sigueAnulable(),
+            pagina([fila({ anulable: false, notaCreditoEnCursoId: "nc9" }), pendiente({ id: "nc9" })]),
+            sigueAnulable(),
+          ],
+          { anular: { status: 502, body: { error: "x", verificar: true, comprobante: { id: "nc9", estado: "pendiente" } } } }
+        )
+        render(<ComprobantesArcaList />)
+        await anularConMotivo()
+        await screen.findByRole("button", { name: /Verificar con ARCA/ })
+        fireEvent.click(screen.getByRole("option", { name: "Emitidas" }))
+        expect(await botonAnular()).toBeEnabled()
+      })
+
+      it("se libera cuando el listado muestra la factura anulada", async () => {
+        montar([sigueAnulable(), pagina([fila({ estado: "anulado", anulable: false })]), sigueAnulable()], {
+          anular: { status: 500, body: { error: "rpc", cae: "75000000000001", numero: "0001-00000008" } },
+        })
+        render(<ComprobantesArcaList />)
+        await anularConMotivo()
+        await screen.findByText("Anulada")
+        fireEvent.click(screen.getByRole("option", { name: "Emitidas" }))
+        expect(await botonAnular()).toBeEnabled()
+      })
+    })
+
+    describe("la etiqueta 'Nota de crédito en curso' (S4)", () => {
+      it("si la nota esta en la pagina, lleva a su fila", async () => {
+        const original = Element.prototype.scrollIntoView
+        const scroll = vi.fn()
+        Element.prototype.scrollIntoView = scroll as unknown as typeof Element.prototype.scrollIntoView
+        try {
+          responder(pagina([fila({ anulable: false, notaCreditoEnCursoId: "nc1" }), pendiente({ id: "nc1" })]))
+          render(<ComprobantesArcaList />)
+          fireEvent.click(await screen.findByRole("button", { name: "Nota de crédito en curso" }))
+          expect(document.activeElement).toBe(document.getElementById("comprobante-nc1"))
+          expect(scroll).toHaveBeenCalledWith({ block: "nearest" })
+          expect(screen.queryByText(/Verificala con ARCA desde la nota/)).not.toBeInTheDocument()
+        } finally {
+          Element.prototype.scrollIntoView = original
+        }
+      })
+
+      it("si la nota no esta en la pagina, indica donde verificarla", async () => {
+        responder(pagina([fila({ anulable: false, notaCreditoEnCursoId: "nc1" })]))
+        render(<ComprobantesArcaList />)
+        expect(await screen.findByText("Nota de crédito en curso")).toBeInTheDocument()
+        expect(screen.getByText(/Verificala con ARCA desde la nota/)).toBeInTheDocument()
+        expect(screen.queryByRole("button", { name: "Nota de crédito en curso" })).not.toBeInTheDocument()
+      })
+    })
+
+    describe("foco tras el resultado (W2)", () => {
+      let scroll: ReturnType<typeof vi.fn>
+      let original: typeof Element.prototype.scrollIntoView
+      beforeEach(() => {
+        original = Element.prototype.scrollIntoView
+        scroll = vi.fn()
+        Element.prototype.scrollIntoView = scroll as unknown as typeof Element.prototype.scrollIntoView
+      })
+      afterEach(() => {
+        Element.prototype.scrollIntoView = original
+      })
+
+      it("al cerrar el dialogo y recargar, el foco va al aviso y se lo trae a la vista", async () => {
+        montar([pagina([fila()]), pagina([])], { anular: ANULAR_OK })
+        render(<ComprobantesArcaList />)
+        await anularConMotivo()
+        const aviso = await screen.findByTestId("aviso-comprobantes")
+        await waitFor(() => expect(document.activeElement).toBe(aviso))
+        expect(aviso).toHaveTextContent(MSG_ANULADA)
+        expect(scroll).toHaveBeenCalledWith({ block: "nearest" })
+      })
+
+      it("tras verificar tambien", async () => {
+        montar([pagina([pendiente()]), pagina([notaCredito()])], {
+          verificar: { status: 200, body: { resultado: "adoptada", comprobante: { id: "nc1" }, anulado: { id: "c1" } } },
+        })
+        render(<ComprobantesArcaList />)
+        fireEvent.click(await screen.findByRole("button", { name: /Verificar con ARCA/ }))
+        const aviso = await screen.findByTestId("aviso-comprobantes")
+        await waitFor(() => expect(document.activeElement).toBe(aviso))
+      })
+
+      it("si el aviso se cerro mientras se recargaba, el foco va al titulo del listado", async () => {
+        let soltar!: (r: unknown) => void
+        let llamada = 0
+        mockFetch.mockImplementation((url: string) => {
+          if (url.endsWith("/anular")) return Promise.resolve({ status: 200, ok: true, json: async () => ANULAR_OK.body })
+          llamada += 1
+          if (llamada === 1) return Promise.resolve({ status: 200, ok: true, json: async () => pagina([fila()]) })
+          return new Promise((resolve) => {
+            soltar = resolve
+          })
+        })
+        render(<ComprobantesArcaList />)
+        await anularConMotivo()
+        await avisoQue(MSG_ANULADA)
+        fireEvent.click(screen.getByRole("button", { name: "Cerrar aviso" }))
+        await act(async () => {
+          soltar({ status: 200, ok: true, json: async () => pagina([]) })
+        })
+        const titulo = screen.getByRole("heading", { name: "Comprobantes ARCA" })
+        await waitFor(() => expect(document.activeElement).toBe(titulo))
+      })
+    })
+
+    describe("region en vivo del aviso (S6)", () => {
+      it("la region existe desde el principio y solo cambia su texto", async () => {
+        montar([pagina([pendiente()]), pagina([notaCredito()])], {
+          verificar: { status: 200, body: { resultado: "adoptada", comprobante: { id: "nc1" }, anulado: { id: "c1" } } },
+        })
+        render(<ComprobantesArcaList />)
+        await screen.findByRole("button", { name: /Verificar con ARCA/ })
+        const region = screen.getByRole("status")
+        expect(region).toHaveAttribute("aria-live", "polite")
+        expect(region).toBeEmptyDOMElement()
+        fireEvent.click(screen.getByRole("button", { name: /Verificar con ARCA/ }))
+        await waitFor(() => expect(region).toHaveTextContent("ARCA ya tenía la nota de crédito"))
+        expect(screen.getByRole("status")).toBe(region)
+        fireEvent.click(screen.getByRole("button", { name: "Cerrar aviso" }))
+        expect(screen.getByRole("status")).toBe(region)
+        expect(region).toBeEmptyDOMElement()
+      })
+    })
+
+    it("al volver a la ultima pagina que existe las acciones siguen bloqueadas hasta que llega la lista (W3)", async () => {
+      const estados: boolean[] = []
+      let llamada = 0
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith("/anular")) return Promise.resolve({ status: 200, ok: true, json: async () => ANULAR_OK.body })
+        llamada += 1
+        const respuesta = (cuerpo: unknown) => Promise.resolve({ status: 200, ok: true, json: async () => cuerpo })
+        if (llamada === 1) return respuesta(pagina([fila({ id: "a", numero: "0001-00000001" })], { total: 21, totalPages: 2 }))
+        if (llamada === 2) return respuesta(pagina([fila()], { total: 21, page: 2, totalPages: 2 }))
+        if (llamada === 3) return respuesta(pagina([], { total: 20, page: 2, totalPages: 1 }))
+        // Cuarta lectura: el DOM todavia es el de la respuesta vacia. Ahi el boton ya tiene que estar bloqueado.
+        estados.push((screen.getByRole("button", { name: "Anular factura B 0001-00000007", hidden: true }) as HTMLButtonElement).disabled)
+        return respuesta(pagina([fila({ id: "z", numero: "0001-00000003" })], { total: 20, page: 1, totalPages: 1 }))
+      })
+      render(<ComprobantesArcaList />)
+      await screen.findByText("0001-00000001")
+      fireEvent.click(screen.getByRole("button", { name: /Siguiente/i }))
+      await anularConMotivo()
+      expect(await screen.findByText("0001-00000003")).toBeInTheDocument()
+      expect(estados).toEqual([true])
     })
 
     it("si tras recargar la pagina quedo fuera de rango, vuelve a la ultima que existe", async () => {

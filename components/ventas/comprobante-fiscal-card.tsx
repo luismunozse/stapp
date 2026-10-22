@@ -15,7 +15,7 @@ import {
   verificarNotaCreditoArca,
   type ResultadoAnulacion,
 } from "@/lib/facturacion/anular-comprobante-client"
-import { avisoDeAnulacion, avisoDeVerificacion, type Aviso } from "@/lib/facturacion/avisos-anulacion"
+import { AVISO_FUERA_DE_PLAZO, avisoDeAnulacion, avisoDeVerificacion, type Aviso } from "@/lib/facturacion/avisos-anulacion"
 import {
   agruparComprobantesVenta,
   notaCreditoPorVerificar,
@@ -40,8 +40,6 @@ interface ComprobanteFiscalCardProps {
 
 /** Una venta tiene pocas facturas, pero cada anulada suma su nota: alcanza de sobra para ver todo el historial reciente. */
 const COMPROBANTES_POR_VENTA = 20
-
-const AVISO_FUERA_DE_PLAZO = "Se emitió pasados los 15 días que pide la RG 4540. Consultalo con tu contador."
 
 const tituloNotaCredito = (nota: ComprobanteFiscalDTO) =>
   ["Nota de crédito electrónica", nota.tipo, nota.numero].filter(Boolean).join(" ")
