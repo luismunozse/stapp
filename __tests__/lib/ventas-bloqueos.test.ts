@@ -123,7 +123,6 @@ describe("motivoNoAnulable", () => {
 
 describe("motivoNoEditable", () => {
   const MSG_FACTURA = "La venta tiene una factura electrónica emitida."
-  const MSG_NC_ARCA = "La venta tiene una nota de crédito electrónica (ARCA)."
 
   it.each(["emitido", "pendiente"])("una factura %s bloquea (texto de siempre)", (estado) => {
     expect(motivoNoEditable(conComprobantes(factura(estado)))).toBe(MSG_FACTURA)
@@ -139,20 +138,22 @@ describe("motivoNoEditable", () => {
     )
   })
 
-  // Hasta la migracion 372 editar_venta_atomica sigue contando las filas de nota de credito
-  // como "factura emitida": el pre-check lo dice con su nombre real en vez de dejar pasar
-  // un mensaje que no corresponde (D14). La 372 lo saca.
+  // Desde la migracion 372 editar_venta_atomica cuenta solo FACTURAS: una venta con la factura
+  // anulada y su nota de credito electronica se puede editar (el pre-check ya no la bloquea).
   it.each([
     ["emitida", "emitido"],
     ["pendiente", "pendiente"],
-  ])("factura anulada + nota de credito %s: se explica con la nota de credito electronica (D14)", (_n, estadoNc) => {
-    expect(motivoNoEditable(conComprobantes(factura("anulado"), notaCredito(estadoNc)))).toBe(MSG_NC_ARCA)
+  ])("factura anulada + nota de credito %s: no bloquea (la nota de credito no cuenta)", (_n, estadoNc) => {
+    expect(motivoNoEditable(conComprobantes(factura("anulado"), notaCredito(estadoNc)))).toBeNull()
   })
 
-  it("la nota de credito electronica NO se confunde con las notas de credito internas", () => {
-    const interna = motivoNoEditable({ notas_credito: [{ id: "n1", anulada: false }] })
-    expect(interna).toBe("La venta tiene una nota de crédito.")
-    expect(interna).not.toBe(MSG_NC_ARCA)
+  it("una nota de credito sola (cualquier estado, B o C) no bloquea", () => {
+    expect(motivoNoEditable(conComprobantes(notaCredito("emitido", 8)))).toBeNull()
+    expect(motivoNoEditable(conComprobantes(notaCredito("pendiente", 13)))).toBeNull()
+  })
+
+  it("las notas de credito internas siguen bloqueando con su propio texto", () => {
+    expect(motivoNoEditable({ notas_credito: [{ id: "n1", anulada: false }] })).toBe("La venta tiene una nota de crédito.")
   })
 
   it("una nota de credito rechazada (o una factura anulada o rechazada) no bloquea", () => {
@@ -161,10 +162,10 @@ describe("motivoNoEditable", () => {
     expect(motivoNoEditable(conComprobantes(factura("rechazado")))).toBeNull()
   })
 
-  it("una nota de credito emitida va antes que el remito (el RPC mira los comprobantes primero)", () => {
+  it("la nota de credito emitida no tapa un remito: se explica el remito", () => {
     expect(
       motivoNoEditable({ ...conComprobantes(factura("anulado"), notaCredito("emitido")), facturas: [{ id: "r", estado_pago: "PAGADO" }] })
-    ).toBe(MSG_NC_ARCA)
+    ).toBe("La venta tiene un remito generado.")
   })
 
   it("el resto de los bloqueos no cambia", () => {
