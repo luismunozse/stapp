@@ -21,6 +21,7 @@ import { Voucher } from "@arcasdk/core"
 import type { INextVoucher } from "@arcasdk/core/lib/domain/types/voucher.types"
 
 import { ALICUOTA_ID, condicionIvaReceptorId } from "@/lib/facturacion/arca/voucher"
+import { descripcionAnulacion } from "@/lib/facturacion/comprobante-asociado"
 import { CBTE_TIPO_FACTURA, CBTE_TIPO_NOTA_CREDITO } from "@/lib/facturacion/cbte-tipo"
 import { ErrorDeNegocioFacturacion } from "@/lib/facturacion/errores"
 import type { ConsultaResult, EmitirInput, TipoComprobante } from "@/lib/facturacion/types"
@@ -322,7 +323,7 @@ export function detalleNotaCredito(detalleOriginal: unknown, contexto: ContextoD
   return [
     {
       cantidad: 1,
-      descripcion: `Anulación de la factura ${contexto.tipo} ${contexto.numero}`,
+      descripcion: descripcionAnulacion(contexto.tipo, contexto.numero),
       importeUnitario: contexto.impTotal,
       importe: contexto.impTotal,
       alicuotaIva: contexto.alicuota,
