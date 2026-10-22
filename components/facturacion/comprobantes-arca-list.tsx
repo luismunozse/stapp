@@ -1,13 +1,21 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, type Ref } from "react"
 import Link from "next/link"
-import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react"
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, Loader2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { StatusBanner, type BannerTone } from "@/components/ui/status-banner"
+import { AnularFacturaDialog } from "@/components/ventas/anular-factura-dialog"
 import { useCurrency } from "@/contexts/currency-context"
+import {
+  mensajeFacturaAnulada,
+  verificarNotaCreditoArca,
+  type ResultadoAnulacion,
+} from "@/lib/facturacion/anular-comprobante-client"
+import { AVISO_FUERA_DE_PLAZO, avisoDeAnulacion, avisoDeVerificacion } from "@/lib/facturacion/avisos-anulacion"
 import {
   etiquetaEstadoComprobante,
   fechaFiscalDMA,
@@ -29,6 +37,20 @@ const FILTROS_ESTADO = [
   { value: "anulado", label: "Anuladas" },
 ] as const
 
+/** Lo que el listado le cuenta al usuario tras una accion. `venta` solo si la anulacion quedo hecha: ahi se vuelve a facturar. */
+interface AvisoListado {
+  tono: "success" | "warning" | "error"
+  texto: string
+  detalle?: string
+  venta?: { id: string; numero: number | null }
+}
+
+const BANNER: Record<AvisoListado["tono"], { tone: BannerTone; icon: typeof AlertTriangle }> = {
+  success: { tone: "success", icon: CheckCircle2 },
+  warning: { tone: "warning", icon: AlertTriangle },
+  error: { tone: "danger", icon: AlertTriangle },
+}
+
 function variantEstado(estado: string) {
   if (estado === "emitido") return "successSoft" as const
   if (estado === "rechazado") return "destructiveSoft" as const
@@ -43,6 +65,14 @@ function urlListado(page: number, estado: string) {
   return `/api/facturacion-electronica/comprobantes?${params.toString()}`
 }
 
+const idFila = (id: string) => `comprobante-${id}`
+
+/** Anular termino sin saber si ARCA emitio la nota (502 a verificar, 500 con CAE, conexion cortada). */
+const esResultadoIncierto = (r: ResultadoAnulacion) =>
+  r.kind === "incierta" || r.kind === "autorizadaSinRegistrar" || r.kind === "sinConexion"
+
+const ventaDe = (c: ComprobanteFiscalDTO) => (c.ventaId ? { id: c.ventaId, numero: c.numeroVenta } : undefined)
+
 export function ComprobantesArcaList() {
   const { formatPrice, formatDate } = useCurrency()
   const [estado, setEstado] = useState<string>(TODOS)
@@ -50,24 +80,53 @@ export function ComprobantesArcaList() {
   const [datos, setDatos] = useState<ListadoComprobantesResponse | null>(null)
   const [cargando, setCargando] = useState(true)
   const [fallo, setFallo] = useState(false)
+  const [aviso, setAviso] = useState<AvisoListado | null>(null)
+  const [verificandoId, setVerificandoId] = useState<string | null>(null)
+  // Facturas cuyo ultimo intento de anular termino sin saber si ARCA emitio la nota: no se vuelve a ofrecer
+  // anular hasta que el listado muestre la nota en curso o la factura anulada (el servidor tambien lo frena).
+  const [inciertas, setInciertas] = useState<ReadonlySet<string>>(new Set())
+  // Cada cambio de este contador pide mover el foco al resultado (cuando ya cerro el dialogo y la lista se recargo).
+  const [pedidoFoco, setPedidoFoco] = useState(0)
+  const avisoRef = useRef<HTMLDivElement>(null)
+  const tituloRef = useRef<HTMLHeadingElement>(null)
+  // `abierto` va aparte de la factura para que el dialogo conserve su contenido mientras se cierra.
+  const [dialogo, setDialogo] = useState<{ factura: ComprobanteFiscalDTO; abierto: boolean } | null>(null)
   // Una respuesta lenta de un filtro viejo no debe pisar la del filtro actual.
   const pedidoActual = useRef(0)
+  // El estado se actualiza en el render siguiente: el ref frena un segundo click inmediato.
+  const verificandoRef = useRef(false)
 
   const cargar = useCallback(async () => {
     const pedido = ++pedidoActual.current
     setCargando(true)
     setFallo(false)
+    // Si la pagina quedo vacia se pide otra enseguida: no se habilitan las acciones en el medio.
+    let sigueCargando = false
     try {
       const res = await fetch(urlListado(page, estado))
       if (!res.ok) throw new Error(String(res.status))
       const data = (await res.json()) as ListadoComprobantesResponse
       if (pedido !== pedidoActual.current) return
+      // Anular saca filas de un filtro: si la pagina quedo vacia, se vuelve a la ultima que existe.
+      if (page > 1 && data.items.length === 0) {
+        sigueCargando = true
+        setPage(Math.max(1, data.totalPages))
+        return
+      }
       setDatos(data)
+      setInciertas((previas) => {
+        if (previas.size === 0) return previas
+        const quedan = new Set(previas)
+        for (const c of data.items) {
+          if (quedan.has(c.id) && (c.notaCreditoEnCursoId || c.estado === "anulado")) quedan.delete(c.id)
+        }
+        return quedan.size === previas.size ? previas : quedan
+      })
     } catch {
       if (pedido !== pedidoActual.current) return
       setFallo(true)
     } finally {
-      if (pedido === pedidoActual.current) setCargando(false)
+      if (pedido === pedidoActual.current && !sigueCargando) setCargando(false)
     }
   }, [page, estado])
 
@@ -80,8 +139,62 @@ export function ComprobantesArcaList() {
     setPage(1)
   }
 
+  const verificar = async (nota: ComprobanteFiscalDTO) => {
+    if (verificandoRef.current) return
+    verificandoRef.current = true
+    setVerificandoId(nota.id)
+    setAviso(null)
+    try {
+      const resultado = await verificarNotaCreditoArca(nota.id)
+      if (resultado.kind === "ok") setAviso({ tono: "success", texto: resultado.message, venta: ventaDe(nota) })
+      else setAviso(avisoDeVerificacion(resultado))
+      // Pase lo que pase se vuelve a leer: el servidor es la fuente de verdad.
+      await cargar()
+      setPedidoFoco((n) => n + 1)
+    } finally {
+      verificandoRef.current = false
+      setVerificandoId(null)
+    }
+  }
+
+  // El dialogo avisa de todo desenlace que cambia (o pudo cambiar) la factura.
+  const anulacionTerminada = async (factura: ComprobanteFiscalDTO, resultado: ResultadoAnulacion) => {
+    if (esResultadoIncierto(resultado)) setInciertas((previas) => new Set(previas).add(factura.id))
+    if (resultado.kind === "ok") {
+      setAviso({
+        tono: "success",
+        texto: mensajeFacturaAnulada(resultado.comprobante),
+        detalle: resultado.fueraDePlazo ? AVISO_FUERA_DE_PLAZO : undefined,
+        venta: ventaDe(factura),
+      })
+    } else {
+      setAviso(avisoDeAnulacion(resultado))
+    }
+    await cargar()
+    setPedidoFoco((n) => n + 1)
+  }
+
+  // Ya cerrado el dialogo y recargada la lista, el resultado tiene que ser lo primero que se lea y se vea.
+  useEffect(() => {
+    if (pedidoFoco === 0) return
+    const timer = setTimeout(() => {
+      const destino = avisoRef.current?.dataset.vacio === "true" ? tituloRef.current : avisoRef.current
+      destino?.focus({ preventScroll: true })
+      destino?.scrollIntoView?.({ block: "nearest" })
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [pedidoFoco])
+
+  const irANota = (id: string) => {
+    const fila = document.getElementById(idFila(id))
+    fila?.focus({ preventScroll: true })
+    fila?.scrollIntoView?.({ block: "nearest" })
+  }
+
   const items = datos?.items ?? []
   const totalPages = datos?.totalPages ?? 0
+  // Mientras ARCA contesta una verificacion (o se recarga la lista) no se dispara otra accion fiscal.
+  const accionesBloqueadas = verificandoId !== null || cargando
 
   return (
     <div className="space-y-4">
@@ -99,6 +212,11 @@ export function ComprobantesArcaList() {
           </SelectContent>
         </Select>
       </div>
+
+      <h2 ref={tituloRef} tabIndex={-1} className="sr-only">
+        Comprobantes ARCA
+      </h2>
+      <AvisoAccion ref={avisoRef} aviso={aviso} onCerrar={() => setAviso(null)} />
 
       {fallo ? (
         <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm">
@@ -140,7 +258,19 @@ export function ComprobantesArcaList() {
               </thead>
               <tbody>
                 {items.map((c) => (
-                  <FilaComprobante key={c.id} c={c} formatPrice={formatPrice} formatDate={formatDate} />
+                  <FilaComprobante
+                    key={c.id}
+                    c={c}
+                    formatPrice={formatPrice}
+                    formatDate={formatDate}
+                    accionesBloqueadas={accionesBloqueadas}
+                    verificando={verificandoId === c.id}
+                    notaEnPagina={c.notaCreditoEnCursoId ? items.some((n) => n.id === c.notaCreditoEnCursoId) : false}
+                    incierta={inciertas.has(c.id)}
+                    onIrANota={irANota}
+                    onAnular={(factura) => setDialogo({ factura, abierto: true })}
+                    onVerificar={verificar}
+                  />
                 ))}
               </tbody>
             </table>
@@ -168,23 +298,107 @@ export function ComprobantesArcaList() {
           </Button>
         </div>
       )}
+
+      {dialogo && (
+        <AnularFacturaDialog
+          open={dialogo.abierto}
+          onOpenChange={(abierto) => setDialogo((actual) => actual && { ...actual, abierto })}
+          factura={dialogo.factura}
+          onResultado={(resultado) => void anulacionTerminada(dialogo.factura, resultado)}
+        />
+      )}
     </div>
   )
+}
+
+/**
+ * Resultado de la ultima accion fiscal. Queda hasta que se cierra o se hace otra: un toast se iria antes de poder
+ * tocar el link. La region en vivo esta siempre montada y solo cambia su texto, para que los lectores de pantalla
+ * anuncien el cambio; los errores usan role="alert", que se anuncia al aparecer.
+ */
+function AvisoAccion({
+  aviso,
+  onCerrar,
+  ref,
+}: {
+  aviso: AvisoListado | null
+  onCerrar: () => void
+  ref: Ref<HTMLDivElement>
+}) {
+  const banner = aviso && (
+    <StatusBanner tone={BANNER[aviso.tono].tone} icon={BANNER[aviso.tono].icon} className="items-start font-normal">
+      <span className="block">{aviso.texto}</span>
+      {aviso.detalle && <span className="mt-1 block">{aviso.detalle}</span>}
+      {aviso.venta && (
+        <span className="mt-1 block">
+          Para volver a facturarla,{" "}
+          <Link href={`/ventas/${aviso.venta.id}`} className="font-medium underline underline-offset-2">
+            {aviso.venta.numero != null
+              ? `abrí la venta V${String(aviso.venta.numero).padStart(4, "0")}`
+              : "abrí la venta"}
+          </Link>
+          .
+        </span>
+      )}
+    </StatusBanner>
+  )
+  return (
+    <div
+      ref={ref}
+      tabIndex={-1}
+      data-testid="aviso-comprobantes"
+      data-vacio={aviso === null}
+      className={aviso ? "flex items-start gap-2 outline-none" : "outline-none"}
+    >
+      <div role="status" aria-live="polite" className="min-w-0 flex-1 empty:hidden">
+        {aviso && aviso.tono !== "error" ? banner : null}
+      </div>
+      {aviso?.tono === "error" && (
+        <div role="alert" className="min-w-0 flex-1">
+          {banner}
+        </div>
+      )}
+      {aviso && (
+        <Button variant="ghost" size="icon" aria-label="Cerrar aviso" onClick={onCerrar}>
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      )}
+    </div>
+  )
+}
+
+interface FilaComprobanteProps {
+  c: ComprobanteFiscalDTO
+  formatPrice: (n: number | string | null | undefined) => string
+  formatDate: (d: Date | string | null | undefined) => string
+  accionesBloqueadas: boolean
+  verificando: boolean
+  /** La nota de credito en curso de esta factura esta en la misma pagina. */
+  notaEnPagina: boolean
+  /** Se intento anular y no se sabe si ARCA emitio la nota: no se vuelve a ofrecer. */
+  incierta: boolean
+  onIrANota: (id: string) => void
+  onAnular: (factura: ComprobanteFiscalDTO) => void
+  onVerificar: (nota: ComprobanteFiscalDTO) => void
 }
 
 function FilaComprobante({
   c,
   formatPrice,
   formatDate,
-}: {
-  c: ComprobanteFiscalDTO
-  formatPrice: (n: number | string | null | undefined) => string
-  formatDate: (d: Date | string | null | undefined) => string
-}) {
+  accionesBloqueadas,
+  verificando,
+  notaEnPagina,
+  incierta,
+  onIrANota,
+  onAnular,
+  onVerificar,
+}: FilaComprobanteProps) {
   // Una factura anulada sigue siendo un comprobante emitido: conserva su PDF.
   const tienePdf = c.estado === "emitido" || c.estado === "anulado"
+  const nombre = [c.tipo, c.numero].filter(Boolean).join(" ")
   return (
-    <tr className="border-b hover:bg-muted/30 transition-colors">
+    <tr id={idFila(c.id)} tabIndex={-1} className="border-b hover:bg-muted/30 transition-colors outline-none">
       <td className="p-3 text-muted-foreground hidden md:table-cell">
         {c.fechaEmision ? fechaFiscalDMA(c.fechaEmision) : formatDate(c.createdAt)}
       </td>
@@ -197,6 +411,56 @@ function FilaComprobante({
         <div className="text-xs text-muted-foreground">{tituloComprobante(c.tipo, null, c.esNotaCredito)}</div>
         {c.estado === "rechazado" && c.errorMsg && (
           <div className="mt-1 text-xs text-destructive">{c.errorMsg}</div>
+        )}
+        {/* Las acciones viven en la celda principal: Fecha y CAE se esconden en pantallas chicas. */}
+        {c.anulable && !incierta && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2"
+            aria-label={`Anular factura ${nombre}`}
+            disabled={accionesBloqueadas}
+            onClick={() => onAnular(c)}
+          >
+            Anular factura
+          </Button>
+        )}
+        {c.verificable && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2"
+            aria-label={`${verificando ? "Verificando" : "Verificar"} con ARCA la nota de crédito electrónica ${nombre}`}
+            disabled={accionesBloqueadas}
+            onClick={() => onVerificar(c)}
+          >
+            {verificando ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                Verificando...
+              </>
+            ) : (
+              "Verificar con ARCA"
+            )}
+          </Button>
+        )}
+        {!c.esNotaCredito && (c.notaCreditoEnCursoId || incierta) && (
+          <div className="mt-1 text-xs text-warning-700 dark:text-warning-600">
+            {notaEnPagina && c.notaCreditoEnCursoId ? (
+              <button
+                type="button"
+                className="underline underline-offset-2"
+                onClick={() => onIrANota(c.notaCreditoEnCursoId!)}
+              >
+                Nota de crédito en curso
+              </button>
+            ) : (
+              <>
+                <div>Nota de crédito en curso</div>
+                <div>Verificala con ARCA desde la nota.</div>
+              </>
+            )}
+          </div>
         )}
       </td>
       <td className="p-3">

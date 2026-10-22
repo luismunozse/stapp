@@ -29,10 +29,12 @@ export interface ComprobanteFiscalDTO {
   /** Solo en una nota de credito: error_factura | devolucion_total | otro. */
   motivo: string | null
   motivoDetalle: string | null
-  /** La fila misma cumple lo que exige anular; la ficha suma "sin otra nota de credito en curso". */
+  /** Se puede anular desde el listado: la fila lo permite y no hay otra nota de credito pendiente o emitida. */
   anulable: boolean
   /** Nota de credito pendiente con numero pedido: se puede consultar a ARCA. */
   verificable: boolean
+  /** Solo en una factura emitida: la nota de credito pendiente o emitida que ya tiene (no se puede anular de nuevo). */
+  notaCreditoEnCursoId: string | null
 }
 
 export interface ListadoComprobantesResponse {
