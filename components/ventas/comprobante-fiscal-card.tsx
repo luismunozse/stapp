@@ -14,8 +14,8 @@ import {
   mensajeFacturaAnulada,
   verificarNotaCreditoArca,
   type ResultadoAnulacion,
-  type ResultadoVerificacion,
 } from "@/lib/facturacion/anular-comprobante-client"
+import { avisoDeAnulacion, avisoDeVerificacion, type Aviso } from "@/lib/facturacion/avisos-anulacion"
 import {
   agruparComprobantesVenta,
   notaCreditoPorVerificar,
@@ -42,36 +42,6 @@ interface ComprobanteFiscalCardProps {
 const COMPROBANTES_POR_VENTA = 20
 
 const AVISO_FUERA_DE_PLAZO = "Se emitió pasados los 15 días que pide la RG 4540. Consultalo con tu contador."
-
-type Aviso = { tono: "error" | "warning"; texto: string }
-
-/** Lo que la ficha cuenta de una anulación que no salió limpia (la limpia se avisa con un toast). */
-function avisoDeAnulacion(resultado: ResultadoAnulacion): Aviso | null {
-  switch (resultado.kind) {
-    case "ok":
-      return null
-    case "autorizadaSinRegistrar":
-    case "error":
-      return { tono: "error", texto: resultado.message }
-    default:
-      // Envío incierto, otra pantalla ya la tocó o se cortó la conexión: hay que mirar, no es una falla.
-      return { tono: "warning", texto: resultado.message }
-  }
-}
-
-function avisoDeVerificacion(resultado: ResultadoVerificacion): Aviso | null {
-  switch (resultado.kind) {
-    case "ok":
-      return null
-    case "soporte":
-    case "autorizadaSinRegistrar":
-    case "error":
-      return { tono: "error", texto: resultado.message }
-    default:
-      // ARCA no la emitió, hay que esperar un rato o cambió mientras se verificaba.
-      return { tono: "warning", texto: resultado.message }
-  }
-}
 
 const tituloNotaCredito = (nota: ComprobanteFiscalDTO) =>
   ["Nota de crédito electrónica", nota.tipo, nota.numero].filter(Boolean).join(" ")
