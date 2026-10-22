@@ -43,6 +43,7 @@ async function notasEnCursoPorFactura(
   if (!hayColumnas371) return { porFactura, confiable: false }
 
   const ids = filas.filter((r) => esFacturaAnulable(r)).map((r) => r.id as string)
+  const idsSet = new Set(ids)
   if (ids.length === 0) return { porFactura, confiable: true }
 
   const { data, error } = await supabaseAdmin
@@ -57,7 +58,7 @@ async function notasEnCursoPorFactura(
   }
   for (const nota of (data ?? []) as unknown as { id: string; comprobante_asociado_id: string | null }[]) {
     const factura = nota.comprobante_asociado_id
-    if (factura && ids.includes(factura) && !porFactura.has(factura)) porFactura.set(factura, nota.id)
+    if (factura && idsSet.has(factura) && !porFactura.has(factura)) porFactura.set(factura, nota.id)
   }
   return { porFactura, confiable: true }
 }
