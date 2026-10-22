@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { supabaseAdmin } from '@/lib/supabase'
-import { diffObjects, createAuditLogger } from '../audit'
+import { diffObjects, createAuditLogger, generateDescription } from '../audit'
 
 describe('diffObjects', () => {
   it('detecta cambios en valores simples', () => {
@@ -181,5 +181,18 @@ describe('createAuditLogger', () => {
   it('funciona sin request (sin IP ni user-agent)', () => {
     const logger = createAuditLogger('org-1', 'user-1')
     expect(logger).toBeDefined()
+  })
+})
+
+describe('generateDescription de comprobantes fiscales', () => {
+  it('nombra la entidad y muestra la transición de estado de una factura anulada', () => {
+    const descripcion = generateDescription(
+      'UPDATE',
+      'comprobantes_fiscales',
+      'cm0000abcdef',
+      { before: { estado: 'emitido' }, after: { estado: 'anulado' } }
+    )
+
+    expect(descripcion).toBe("Cambió estado de 'emitido' a 'anulado' en comprobante fiscal #abcdef")
   })
 })
