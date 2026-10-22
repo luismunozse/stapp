@@ -29,6 +29,11 @@ import { parsearNumeroComprobante } from "@/lib/facturacion/numero-comprobante"
 import { diasDesdeEmision, excedePlazoNotaCredito } from "@/lib/facturacion/plazo-nota-credito"
 import type { ConsultaResult, MotivoNotaCredito, ResultadoNotaCredito } from "@/lib/facturacion/types"
 
+// Hasta 4 llamadas a ARCA (WSAA, consulta, último autorizado, envío): 60 s en lugar
+// de los 30 generales (también en vercel.json). Un corte tras el envío deja la NC
+// pendiente, que se resuelve con "Verificar con ARCA".
+export const maxDuration = 60
+
 /**
  * Anular una factura ARCA = emitir UNA nota de crédito electrónica (B = 8, C = 13)
  * por el total autorizado, asociada a la factura. La factura pasa a `anulado` en la

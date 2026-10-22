@@ -21,6 +21,10 @@ import { esNotaCreditoFiscal } from "@/lib/facturacion/cbte-tipo"
 import { MENSAJE_ERROR_TECNICO } from "@/lib/facturacion/errores"
 import type { ConsultaResult } from "@/lib/facturacion/types"
 
+// Consulta y último autorizado contra ARCA: 60 s en lugar de los 30 generales
+// (también en vercel.json).
+export const maxDuration = 60
+
 /**
  * "Verificar con ARCA": concilia una nota de crédito que quedó sin resolver con lo
  * que ARCA tiene. `[id]` es el de la NC (no el de la factura).

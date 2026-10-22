@@ -14,6 +14,12 @@
     },
     "app/api/account/export/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/facturacion-electronica/emitir/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/facturacion-electronica/comprobantes/*/*/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [

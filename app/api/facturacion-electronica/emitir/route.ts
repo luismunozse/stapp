@@ -17,6 +17,10 @@ import { isMissingColumnError } from "@/lib/db-errors"
 import { SAFE_COLUMNS, columnasFiscales } from "@/lib/facturacion/comprobante-columns"
 import { FILTRO_SIN_NC } from "@/lib/facturacion/cbte-tipo"
 
+// ARCA puede tardar: si la función se corta después del envío, el comprobante queda
+// "pendiente". 60 s en lugar de los 30 generales (también en vercel.json).
+export const maxDuration = 60
+
 // Código de Postgres para violación de constraint UNIQUE.
 const UNIQUE_VIOLATION = "23505"
 
