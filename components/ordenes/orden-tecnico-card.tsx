@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
 import { Wrench } from "lucide-react"
 import type { User } from "@/types"
 
@@ -11,6 +12,9 @@ interface OrdenTecnicoCardProps {
   updating: boolean
   onAsignarTecnico: (tecnicoId: string | null) => void
   readOnly?: boolean
+  /** A TECNICO may take this unassigned order (opt-in org permission). */
+  puedeTomar?: boolean
+  onTomar?: () => void
 }
 
 export function OrdenTecnicoCard({
@@ -19,6 +23,8 @@ export function OrdenTecnicoCard({
   updating,
   onAsignarTecnico,
   readOnly,
+  puedeTomar,
+  onTomar,
 }: OrdenTecnicoCardProps) {
   const tecnicoAsignado = tecnicos.find(t => t.id === tecnicoId)
 
@@ -30,7 +36,17 @@ export function OrdenTecnicoCard({
           Técnico Asignado
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-3">
+        {puedeTomar && onTomar && (
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Esta orden no tiene técnico asignado.
+            </p>
+            <Button size="sm" onClick={onTomar} disabled={updating}>
+              Tomar orden
+            </Button>
+          </div>
+        )}
         {readOnly ? (
           <p className="text-sm text-foreground">
             {tecnicoAsignado?.nombre || "Sin asignar"}
