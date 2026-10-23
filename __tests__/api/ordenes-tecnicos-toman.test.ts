@@ -129,6 +129,7 @@ describe("GET /api/ordenes/[id] - TECNICO and unassigned orders", () => {
       organization_id: "org-1",
       tecnico_id: null,
       estado: "RECIBIDO",
+      sucursal_id: "suc-A",
       clientes: null,
       users: null,
       recibido: null,
@@ -142,7 +143,20 @@ describe("GET /api/ordenes/[id] - TECNICO and unassigned orders", () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    mockAuthSuccess({ role: "TECNICO", userId: "tec-1" })
+    mockAuthSuccess({ role: "TECNICO", userId: "tec-1", sucursalId: "suc-A" })
+  })
+
+  it("flag on: an unassigned order from ANOTHER sucursal stays 403", async () => {
+    mockSupabaseFrom({
+      organizations: flag(true),
+      ordenes_servicio: createChainMock(orden({ sucursal_id: "suc-B" })),
+      orden_eventos: createChainMock(null),
+    })
+    const { GET } = await import("@/app/api/ordenes/[id]/route")
+
+    const res = await GET(createGetRequest(), ctx())
+
+    expect(res.status).toBe(403)
   })
 
   it("flag off: 403 on an unassigned order", async () => {
