@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados, canViewCotizacionCosts } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados, canViewCotizacionCosts, resolveTecnicosTomanOrdenes } from "@/lib/auth-utils"
+import { ordenSeTomaPorTecnico } from "@/lib/ordenes/tomar"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
@@ -122,12 +123,19 @@ export async function GET(
       )
     }
 
-    // Técnicos solo pueden ver sus órdenes asignadas
+    // Técnicos solo pueden ver sus órdenes asignadas. Excepción opt-in: con
+    // `tecnicos_toman_ordenes` también abren las que no tienen técnico (para
+    // poder tomarlas). Las de OTRO técnico siguen cerradas, con o sin flag.
+    let puedeTomar = false
     if (role === "TECNICO" && orden.tecnico_id !== userId) {
-      return NextResponse.json(
-        { error: "No autorizado" },
-        { status: 403 }
-      )
+      const sinAsignar = !orden.tecnico_id
+      if (!sinAsignar || !(await resolveTecnicosTomanOrdenes(organizationId!))) {
+        return NextResponse.json(
+          { error: "No autorizado" },
+          { status: 403 }
+        )
+      }
+      puedeTomar = ordenSeTomaPorTecnico(orden)
     }
 
     // Último cambio de estado para derivar estadoAnterior (plantillas WhatsApp
@@ -200,6 +208,7 @@ export async function GET(
       organizationZonaHoraria: org?.zona_horaria || null,
       organizationGarantiaDiasDefault: org?.garantia_dias_default ?? null,
       estadoAnterior: ultimoEventoEstado?.estado_anterior ?? null,
+      ...(role === "TECNICO" ? { puedeTomar } : {}),
     }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })

@@ -5,7 +5,9 @@ import {
   hasInventarioAccess,
   resolveVendedoresHabilitados,
   canViewCotizacionCosts,
+  resolveTecnicosTomanOrdenes,
 } from "@/lib/auth-utils"
+import { ordenSeTomaPorTecnico, filtroMiasOSinAsignar } from "@/lib/ordenes/tomar"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumberByType } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
@@ -123,9 +125,21 @@ export async function GET(request: Request) {
       .eq("organization_id", organizationId!)
       .order(sortBy, { ascending: sortOrder })
 
-    // Técnicos solo ven sus órdenes asignadas
+    // Técnicos solo ven sus órdenes asignadas. Con el permiso opt-in
+    // `tecnicos_toman_ordenes` ven además las que no tienen técnico (para poder
+    // tomarlas). Fail-closed: sin flag legible, o con un id que no se puede
+    // meter en el filtro, queda el comportamiento de siempre.
+    let puedeTomarSinAsignar = false
     if (role === "TECNICO") {
-      query = query.eq("tecnico_id", userId!)
+      const filtroMiasOSin = (await resolveTecnicosTomanOrdenes(organizationId!))
+        ? filtroMiasOSinAsignar(userId!)
+        : null
+      if (filtroMiasOSin) {
+        puedeTomarSinAsignar = true
+        query = query.or(filtroMiasOSin)
+      } else {
+        query = query.eq("tecnico_id", userId!)
+      }
     }
 
     // Filtro por sucursal (ADMIN ve según cookie; otros roles su sucursal fija)
@@ -266,7 +280,13 @@ export async function GET(request: Request) {
       includeInventarioCost: hasInventarioAccess(role, vendedoresHabilitados),
       includeCotizacionCost: canViewCotizacionCosts(role),
     }
-    const ordenesFormatted = ordenes?.map((o: any) => formatOrden(o, ordenOptions))
+    const ordenesFormatted = ordenes?.map((o: any) => {
+      const formatted = formatOrden(o, ordenOptions)
+      // Only a TECNICO gets the hint; the server re-checks everything on take.
+      return role === "TECNICO" && formatted
+        ? { ...formatted, puedeTomar: puedeTomarSinAsignar && ordenSeTomaPorTecnico(o) }
+        : formatted
+    })
 
     // Retornar con información de paginación y cache headers
     return NextResponse.json({
