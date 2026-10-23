@@ -62,7 +62,9 @@ keystore.properties
 .cxx/
 
 # Google Services (e.g. APIs or Firebase)
-# google-services.json
+# The repo is public: keep the Firebase config out of it. Builds without it
+# skip the google-services plugin and native push stays off.
+google-services.json
 
 # Freeline
 freeline.py
