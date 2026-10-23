@@ -288,6 +288,27 @@ export async function requireCotizacionCobroAccess() {
   return { ...result, tecnicosCobranCotizaciones }
 }
 
+// Resolves the `tecnicos_toman_ordenes` flag of the org (migration 374). Only
+// needed when the actor is a TECNICO; calling it for other roles is a wasted
+// round-trip because none of them depends on the flag.
+//
+// Fail-closed, like resolveTecnicosOperanPos: if the column does not exist yet
+// or the read fails it returns false and the TECNICO sees and does exactly what
+// he did before. Migrations here are applied BY HAND after the merge, so there
+// is always a window where the deploy is ahead of its column.
+export async function resolveTecnicosTomanOrdenes(organizationId: string): Promise<boolean> {
+  try {
+    const { data } = await supabaseAdmin
+      .from("organizations")
+      .select("tecnicos_toman_ordenes")
+      .eq("id", organizationId)
+      .single()
+    return data?.tecnicos_toman_ordenes === true
+  } catch {
+    return false
+  }
+}
+
 // Regla pura de acceso a los reportes de INGRESOS del taller. ADMIN siempre.
 // VENDEDOR salvo que la organización lo haya apagado.
 //
