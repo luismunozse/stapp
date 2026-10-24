@@ -775,7 +775,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 imei: orden.imei,
                 problemaReportado: orden.problemaReportado,
                 fechaIngreso: fecha,
-                organizationName: undefined,
+                organizationName: (orden as any).organizationName || undefined,
+                logoUrl: (orden as any).organizationLogoUrl ?? null,
               }, etiquetaOpts)
             }}
             title="Imprimir etiqueta para el equipo"
@@ -799,7 +800,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   imei: orden.imei,
                   problemaReportado: orden.problemaReportado,
                   fechaIngreso: fechaRep,
-                  organizationName: undefined,
+                  organizationName: (orden as any).organizationName || undefined,
+                  logoUrl: (orden as any).organizationLogoUrl ?? null,
                   variant: "reparado",
                   fechaReparacion: fechaRep,
                 }, etiquetaOpts)
@@ -1337,6 +1339,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             telefono: orden.telefonoContacto || orden.cliente?.telefono,
             imei: orden.imei,
             problemaReportado: orden.problemaReportado,
+            logoUrl: (orden as any).organizationLogoUrl ?? null,
+            organizationName: (orden as any).organizationName ?? null,
           }}
           onSuccess={() => {
             fetchOrden()

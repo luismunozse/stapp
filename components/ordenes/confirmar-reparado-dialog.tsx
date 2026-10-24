@@ -33,6 +33,9 @@ interface ConfirmarReparadoDialogProps {
     /** IMEI o número de serie. */
     imei?: string | null
     problemaReportado?: string
+    /** Logo del taller para la etiqueta (organizationLogoUrl de la orden). */
+    logoUrl?: string | null
+    organizationName?: string | null
   }
   onSuccess: () => void
 }
@@ -96,6 +99,8 @@ export function ConfirmarReparadoDialog({ open, onOpenChange, orden, onSuccess }
               imei: orden.imei,
               problemaReportado: orden.problemaReportado || "",
               fechaIngreso: fecha,
+              logoUrl: orden.logoUrl,
+              organizationName: orden.organizationName || undefined,
               variant: "reparado",
               fechaReparacion: fecha,
             })

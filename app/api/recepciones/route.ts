@@ -210,10 +210,10 @@ export async function POST(request: Request) {
     // agrupado (ver components/ordenes/recepcion-creada-modal.tsx). Misma
     // consulta que app/api/ordenes/route.ts hace para el alta clasica,
     // recortada a los campos que el comprobante de recepcion realmente
-    // renderiza (sin logo: ese comprobante no lo muestra).
+    // renderiza (el logo va para la etiqueta del equipo).
     const { data: org } = await supabaseAdmin
       .from("organizations")
-      .select("nombre, nombre_mostrar, telefono, direccion, comprobante_terminos")
+      .select("nombre, nombre_mostrar, telefono, direccion, comprobante_terminos, logo_url")
       .eq("id", organizationId!)
       .single()
 
@@ -224,6 +224,7 @@ export async function POST(request: Request) {
         recepcion,
         ordenes,
         organizationName: org?.nombre_mostrar || org?.nombre || null,
+        organizationLogoUrl: org?.logo_url ?? null,
         organizationTelefono: org?.telefono ?? null,
         organizationDireccion: org?.direccion ?? null,
         organizationComprobanteTerminos: org?.comprobante_terminos ?? null,
