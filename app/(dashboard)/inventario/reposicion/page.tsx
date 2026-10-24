@@ -308,24 +308,24 @@ export default function ReposicionPage() {
                               </div>
                             </div>
                             <div className="ml-auto flex items-center gap-2 shrink-0">
-                            <div className="w-20 shrink-0">
-                              <Input
-                                type="number"
-                                min={0}
-                                step={1}
-                                value={qty}
-                                onChange={(e) =>
-                                  setCantidades((p) => ({
-                                    ...p,
-                                    [it.inventarioId]: Math.max(0, parseInt(e.target.value) || 0),
-                                  }))
-                                }
-                                className="h-8 text-center text-sm"
-                              />
-                            </div>
-                            <div className="min-w-24 text-right text-xs shrink-0 whitespace-nowrap">
-                              {formatPrice(qty * it.precioCompra)}
-                            </div>
+                              <div className="w-20 shrink-0">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step={1}
+                                  value={qty}
+                                  onChange={(e) =>
+                                    setCantidades((p) => ({
+                                      ...p,
+                                      [it.inventarioId]: Math.max(0, parseInt(e.target.value) || 0),
+                                    }))
+                                  }
+                                  className="h-8 text-center text-sm"
+                                />
+                              </div>
+                              <div className="min-w-24 text-right text-xs shrink-0 whitespace-nowrap">
+                                {formatPrice(qty * it.precioCompra)}
+                              </div>
                             </div>
                           </div>
                         )
