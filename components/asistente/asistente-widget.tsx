@@ -29,7 +29,7 @@ export function AsistenteWidget({ enabled }: AsistenteWidgetProps) {
   if (!enabled) {
     return (
       <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom,0px)+0.5rem)] right-3 lg:bottom-20 lg:right-6 z-40">
-        {/* Mobile: hugs the corner just above the bottom nav (page gets a spacer in the layout). lg:bottom-20 clears SyncStatusIndicator (lg:bottom-6, z-[55]). */}
+        {/* Mobile: hugs the corner just above the bottom nav. lg:bottom-20 clears SyncStatusIndicator (lg:bottom-6, z-[55]). */}
         {showLockedTip && (
           <div className="absolute bottom-14 right-0 w-64 bg-card border shadow-lg rounded-xl p-3 text-sm">
             <p className="font-medium mb-1">Asistente de STApp</p>
@@ -45,11 +45,11 @@ export function AsistenteWidget({ enabled }: AsistenteWidgetProps) {
           onClick={() => setShowLockedTip((v) => !v)}
           aria-label="Asistente disponible en plan Profesional"
           className={cn(
-            "w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center",
+            "w-11 h-11 lg:w-12 lg:h-12 rounded-full flex items-center justify-center",
             "bg-muted text-muted-foreground border shadow-md hover:bg-muted/80 transition-colors"
           )}
         >
-          <Lock className="w-4 h-4 lg:w-5 lg:h-5" />
+          <Lock className="w-5 h-5" />
         </button>
       </div>
     )
@@ -60,17 +60,17 @@ export function AsistenteWidget({ enabled }: AsistenteWidgetProps) {
       {isOpen && <AsistentePanel onClose={() => setIsOpen(false)} />}
       {!isOpen && (
         <>
-          {/* Mobile: hugs the corner just above the bottom nav (page gets a spacer in the layout). lg:bottom-20 clears SyncStatusIndicator (lg:bottom-6, z-[55]). */}
+          {/* Mobile: hugs the corner just above the bottom nav. lg:bottom-20 clears SyncStatusIndicator (lg:bottom-6, z-[55]). */}
           <button
             onClick={() => setIsOpen(true)}
             aria-label="Abrir asistente de STApp"
             className={cn(
               "fixed bottom-[calc(4rem+env(safe-area-inset-bottom,0px)+0.5rem)] right-3 lg:bottom-20 lg:right-6 z-40",
-              "w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center",
+              "w-11 h-11 lg:w-12 lg:h-12 rounded-full flex items-center justify-center",
               "bg-primary text-primary-foreground shadow-lg hover:opacity-90 transition-opacity"
             )}
           >
-            <Sparkles className="w-4 h-4 lg:w-5 lg:h-5" />
+            <Sparkles className="w-5 h-5" />
           </button>
         </>
       )}
