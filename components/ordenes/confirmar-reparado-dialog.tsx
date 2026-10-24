@@ -35,6 +35,7 @@ interface ConfirmarReparadoDialogProps {
     problemaReportado?: string
     /** Logo del taller para la etiqueta (organizationLogoUrl de la orden). */
     logoUrl?: string | null
+    organizationName?: string | null
   }
   onSuccess: () => void
 }
@@ -99,6 +100,7 @@ export function ConfirmarReparadoDialog({ open, onOpenChange, orden, onSuccess }
               problemaReportado: orden.problemaReportado || "",
               fechaIngreso: fecha,
               logoUrl: orden.logoUrl,
+              organizationName: orden.organizationName || undefined,
               variant: "reparado",
               fechaReparacion: fecha,
             })

@@ -1340,6 +1340,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             imei: orden.imei,
             problemaReportado: orden.problemaReportado,
             logoUrl: (orden as any).organizationLogoUrl ?? null,
+            organizationName: (orden as any).organizationName ?? null,
           }}
           onSuccess={() => {
             fetchOrden()
