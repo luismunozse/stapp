@@ -37,7 +37,7 @@ export function FotosIngreso({
     <div>
       <Label>{label}</Label>
       <div className="mt-2 space-y-3">
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
             ref={fileInputRef}
             type="file"
