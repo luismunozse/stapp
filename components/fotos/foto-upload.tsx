@@ -189,7 +189,7 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
             <Button
               type="button"
               variant="outline"
-              className="flex-1"
+              className="w-full sm:w-auto sm:flex-1"
               onClick={isNativePlatform() ? handleNativeGallery : () => fileInputRef.current?.click()}
             >
               <Upload className="mr-2 h-4 w-4" />
@@ -198,7 +198,7 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
             <Button
               type="button"
               variant="outline"
-              className="flex-1"
+              className="w-full sm:w-auto sm:flex-1"
               onClick={isNativePlatform() ? handleNativeCamera : () => cameraInputRef.current?.click()}
             >
               <Camera className="mr-2 h-4 w-4" />

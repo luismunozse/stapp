@@ -427,7 +427,7 @@ export function FacturacionList() {
                   </div>
 
                   {/* Resumen financiero */}
-                  <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-2 sm:gap-4 p-3 bg-muted rounded-lg">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 p-3 bg-muted rounded-lg">
                     <div className="min-w-0">
                       <div className="text-xs text-muted-foreground">Total</div>
                       <div className="font-bold text-base sm:text-lg break-words">{formatPrice(factura.total)}</div>
