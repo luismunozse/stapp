@@ -117,6 +117,7 @@ export function OrdenesCompraList() {
     {
       key: "numeroOC",
       header: "N° OC",
+      headerClassName: "whitespace-nowrap",
       render: (oc) => <span className="font-mono font-medium">{oc.numeroOC}</span>,
     },
     {
