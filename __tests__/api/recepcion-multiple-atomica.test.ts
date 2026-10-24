@@ -91,6 +91,7 @@ describe("POST /api/recepciones — atomicidad", () => {
           nombre_mostrar: "Taller Central",
           telefono: "1122334455",
           direccion: "Av. Siempre Viva 742",
+          logo_url: "https://cdn.example.com/logo.png",
           comprobante_terminos: "El equipo se entrega contra presentacion de este comprobante.",
         },
         null,
@@ -102,6 +103,7 @@ describe("POST /api/recepciones — atomicidad", () => {
 
     expect(status).toBe(201)
     expect(json.organizationName).toBe("Taller Central")
+    expect(json.organizationLogoUrl).toBe("https://cdn.example.com/logo.png")
     expect(json.organizationTelefono).toBe("1122334455")
     expect(json.organizationDireccion).toBe("Av. Siempre Viva 742")
     expect(json.organizationComprobanteTerminos).toBe(

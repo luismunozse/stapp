@@ -244,6 +244,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
         problemaReportado: orden.problemaReportado,
         fechaIngreso: fecha,
         organizationName: orden.organizationName,
+        logoUrl: orden.organizationLogoUrl,
       })
     } catch (error) {
       console.error("Error imprimiendo la etiqueta:", error)

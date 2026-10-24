@@ -53,6 +53,7 @@ export interface RecepcionCreadaResultado {
     publicToken: string
   }>
   organizationName: string | null
+  organizationLogoUrl?: string | null
   organizationTelefono: string | null
   organizationDireccion: string | null
   organizationComprobanteTerminos: string | null
@@ -140,6 +141,7 @@ export function RecepcionCreadaModal({
           problemaReportado: equipos[i]?.problemaReportado ?? "",
           fechaIngreso: fecha,
           organizationName: resultado.organizationName || undefined,
+          logoUrl: resultado.organizationLogoUrl,
         })
         impresas++
       }

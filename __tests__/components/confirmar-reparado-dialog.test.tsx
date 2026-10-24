@@ -78,7 +78,7 @@ describe("ConfirmarReparadoDialog", () => {
       <ConfirmarReparadoDialog
         open
         onOpenChange={vi.fn()}
-        orden={{ ...baseOrden, costoFinal: 15000, problemaReportado: "No carga", imei: "356938035643809", telefono: "+54 9 351 555-1234" }}
+        orden={{ ...baseOrden, costoFinal: 15000, problemaReportado: "No carga", imei: "356938035643809", telefono: "+54 9 351 555-1234", logoUrl: "https://x.com/logo.png" }}
         onSuccess={vi.fn()}
       />,
     )
@@ -89,6 +89,7 @@ describe("ConfirmarReparadoDialog", () => {
     expect(data.variant).toBe("reparado")
     expect(data.imei).toBe("356938035643809")
     expect(data.telefono).toBe("+54 9 351 555-1234")
+    expect(data.logoUrl).toBe("https://x.com/logo.png")
     expect(data.publicToken).toBeUndefined()
     // La firma nueva ya no recibe baseUrl: sólo (data, opts?).
     expect((printDeviceLabel as any).mock.calls[0]).toHaveLength(1)
