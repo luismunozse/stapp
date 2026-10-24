@@ -1,5 +1,6 @@
 import { printHtmlViaIframe } from "@/lib/print/print-html-iframe"
 import { DEFAULT_LABEL_SIZE, LABEL_SIZES, type LabelSize } from "@/lib/etiqueta-tamano"
+import { imageUrlToBinarizedDataUrl } from "@/lib/escpos-image"
 import { resolveEtiquetaSize } from "./etiqueta-size-org"
 
 export { DEFAULT_LABEL_SIZE, LABEL_SIZES, type LabelSize }
@@ -15,6 +16,14 @@ export interface LabelData {
   problemaReportado: string
   fechaIngreso: string
   organizationName?: string
+  /**
+   * Logo del taller ya resuelto y binarizado (data URL; http(s) tambien vale).
+   * Si es valido reemplaza al nombre del taller. buildLabelHtml es pura: no
+   * descarga ni procesa nada, eso lo hace printDeviceLabel desde `logoUrl`.
+   */
+  logoDataUrl?: string | null
+  /** URL original del logo; printDeviceLabel la binariza a `logoDataUrl` antes de imprimir. */
+  logoUrl?: string | null
   /** "ingreso" (default): intake label with reported problem. "reparado": ready-for-pickup tag. */
   variant?: "ingreso" | "reparado"
   /** Repair completion date shown on the "reparado" variant (falls back to fechaIngreso). */
@@ -90,6 +99,16 @@ function esc(v: string): string {
     .replace(/"/g, "&quot;")
 }
 
+const SAFE_DATA_IMAGE = /^data:image\/(?:png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]+$/i
+const SAFE_HTTP_URL = /^https?:\/\/\S+$/i
+
+/** Solo data URLs de imagen o http(s); cualquier otra cosa se descarta. */
+function safeLogoSrc(v: string | null | undefined): string {
+  const src = v?.trim()
+  if (!src) return ""
+  return SAFE_DATA_IMAGE.test(src) || SAFE_HTTP_URL.test(src) ? esc(src) : ""
+}
+
 function truncate(v: string, max: number): string {
   return v.length > max ? v.substring(0, max) + "..." : v
 }
@@ -103,14 +122,16 @@ export function buildLabelHtml(data: LabelData, size: LabelSize): string {
   const cfg = SIZE_CONFIG[size] ?? SIZE_CONFIG[DEFAULT_LABEL_SIZE]
   const esReparado = data.variant === "reparado"
   const codigo = esc(data.codigoOrden || `#${data.numeroOrden}`)
-  const empresa = data.organizationName ? esc(data.organizationName) : ""
+  const logo = safeLogoSrc(data.logoDataUrl)
+  // El logo reemplaza al nombre del taller; sin logo valido se imprime el nombre.
+  const empresa = !logo && data.organizationName ? esc(data.organizationName) : ""
   const fechaPie = esc(esReparado ? data.fechaReparacion || data.fechaIngreso : data.fechaIngreso)
   const title = `Etiqueta ${esReparado ? "Reparado " : ""}${codigo}`
 
   const body =
     cfg.mode === "roll"
-      ? rollBody({ esReparado, codigo, empresa, fechaPie, data })
-      : dieCutBody({ esReparado, codigo, empresa, fechaPie, data })
+      ? rollBody({ esReparado, codigo, empresa, logo, fechaPie, data })
+      : dieCutBody({ esReparado, codigo, empresa, logo, fechaPie, data })
 
   const styles = cfg.mode === "roll" ? rollStyles(cfg) : dieCutStyles(cfg)
 
@@ -173,6 +194,9 @@ function dieCutStyles(cfg: SizeConfig): string {
   }
   .left { flex: 1; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
   .codigo { font-size: 1.9em; font-weight: bold; letter-spacing: 0.3px; line-height: 1.05; border-bottom: 1px solid #000; padding-bottom: 0.6mm; margin-bottom: 0.6mm; }
+  .head { display: flex; align-items: center; gap: 1.5mm; border-bottom: 1px solid #000; padding-bottom: 0.6mm; margin-bottom: 0.6mm; }
+  .head .codigo { flex: 1; min-width: 0; border: 0; padding: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .logo { display: block; height: 5mm; max-width: 40%; object-fit: contain; flex-shrink: 0; }
   .empresa { font-size: 0.85em; color: #555; margin-bottom: 0.3mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .info { line-height: 1.25; flex: 1; min-height: 0; overflow: hidden; }
   .info .label { color: #666; font-size: 0.85em; }
@@ -189,13 +213,20 @@ function dieCutBody(p: {
   esReparado: boolean
   codigo: string
   empresa: string
+  logo: string
   fechaPie: string
   data: LabelData
 }): string {
   const problema = esc(truncate(p.data.problemaReportado, PROBLEMA_MAX))
+  const header = p.logo
+    ? `<div class="head">
+      <img class="logo" src="${p.logo}" alt="">
+      <div class="codigo">${p.codigo}</div>
+    </div>`
+    : `${p.empresa ? `<div class="empresa">${p.empresa}</div>` : ""}
+    <div class="codigo">${p.codigo}</div>`
   return `  <div class="left">
-    ${p.empresa ? `<div class="empresa">${p.empresa}</div>` : ""}
-    <div class="codigo">${p.codigo}</div>
+    ${header}
     ${p.esReparado ? `<span class="badge">✓ REPARADO</span>` : ""}
     <div class="info">
       ${dataLines(p.data, { cliente: 40, tel: 24, imei: 30 }, "")}
@@ -219,6 +250,7 @@ function rollStyles(cfg: SizeConfig): string {
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .empresa { font-size: 0.85em; color: #555; }
+  .logo { display: block; margin: 0 auto 1mm; max-height: 14mm; max-width: 60%; object-fit: contain; }
   .codigo { font-size: 2em; font-weight: bold; line-height: 1.1; margin: 1mm 0; }
   .badge { display: inline-block; background: #000; color: #fff; font-size: 1.3em; font-weight: bold; padding: 1mm 3mm; margin: 1mm 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .row { text-align: left; margin: 0.4mm 0; word-break: break-word; }
@@ -231,11 +263,13 @@ function rollBody(p: {
   esReparado: boolean
   codigo: string
   empresa: string
+  logo: string
   fechaPie: string
   data: LabelData
 }): string {
   const problema = esc(truncate(p.data.problemaReportado, PROBLEMA_MAX))
-  return `  ${p.empresa ? `<div class="empresa">${p.empresa}</div>` : ""}
+  return `  ${p.logo ? `<img class="logo" src="${p.logo}" alt="">` : ""}
+  ${p.empresa ? `<div class="empresa">${p.empresa}</div>` : ""}
   <div class="codigo">${p.codigo}</div>
   ${p.esReparado ? `<span class="badge">✓ REPARADO</span>` : ""}
   ${dataLines(p.data, { cliente: 32, tel: 24, imei: 30 }, ' class="row"')}
@@ -245,12 +279,35 @@ function rollBody(p: {
   <div class="fecha">${p.fechaPie}</div>`
 }
 
+// Ancho maximo del raster del logo en puntos del cabezal (~203dpi): el logo de
+// una etiqueta die-cut mide ~5mm de alto, el de un rollo va centrado arriba.
+const LOGO_DOTS_DIECUT = 200
+const LOGO_DOTS_ROLL = 320
+
+/**
+ * Binariza el logo (las termicas no imprimen grises). Nunca rompe la
+ * impresion: ante cualquier falla devuelve null y la etiqueta lleva el nombre.
+ */
+async function resolveLogo(data: LabelData, size: LabelSize): Promise<string | null> {
+  if (data.logoDataUrl) return data.logoDataUrl
+  if (!data.logoUrl) return null
+  try {
+    const cfg = SIZE_CONFIG[size] ?? SIZE_CONFIG[DEFAULT_LABEL_SIZE]
+    return await imageUrlToBinarizedDataUrl(data.logoUrl, {
+      maxWidth: cfg.mode === "roll" ? LOGO_DOTS_ROLL : LOGO_DOTS_DIECUT,
+    })
+  } catch {
+    return null
+  }
+}
+
 /**
  * Genera e imprime la etiqueta del equipo por el driver del SO.
  * @param opts.size tamaño/medio; si se omite, usa el de la org (luego localStorage, luego default).
  */
 export async function printDeviceLabel(data: LabelData, opts?: { size?: LabelSize }): Promise<void> {
   const size = opts?.size ?? (await resolveEtiquetaSize())
-  const html = buildLabelHtml(data, size)
+  const logoDataUrl = await resolveLogo(data, size)
+  const html = buildLabelHtml({ ...data, logoDataUrl }, size)
   await printHtmlViaIframe(html)
 }

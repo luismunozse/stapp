@@ -8,12 +8,17 @@ import {
   DEFAULT_LABEL_SIZE,
   type LabelData,
 } from "@/components/ordenes/print-label"
+import { imageUrlToBinarizedDataUrl } from "@/lib/escpos-image"
 import { resolveEtiquetaSize } from "@/components/ordenes/etiqueta-size-org"
 
 // El tamano por defecto sale de la org (red). Aca se aisla: los tests de
 // coordinacion de promesas no deben tocar fetch.
 vi.mock("@/components/ordenes/etiqueta-size-org", () => ({
   resolveEtiquetaSize: vi.fn(() => Promise.resolve("60x40")),
+}))
+
+vi.mock("@/lib/escpos-image", () => ({
+  imageUrlToBinarizedDataUrl: vi.fn(),
 }))
 
 const baseData: LabelData = {
@@ -238,6 +243,76 @@ describe("buildLabelHtml — problema multilínea en die-cut", () => {
   })
 })
 
+describe("buildLabelHtml — logo del taller", () => {
+  const LOGO = "data:image/png;base64,iVBORw0KGgo="
+  const ingreso: LabelData = {
+    ...baseData,
+    variant: "ingreso",
+    organizationName: "Taller Pepe",
+    logoDataUrl: LOGO,
+  }
+
+  it.each(["40x30", "50x30", "50x40", "60x40"] as const)(
+    "%s: el logo reemplaza al nombre y va en el encabezado junto al codigo",
+    (size) => {
+      const html = buildLabelHtml(ingreso, size)
+      expect(html).toContain(`<img class="logo" src="${LOGO}"`)
+      expect(html).not.toContain("Taller Pepe")
+      expect(html).not.toContain('class="empresa"')
+      expect(html).toMatch(/<div class="head">\s*<img class="logo"[^>]*>\s*<div class="codigo">/)
+    },
+  )
+
+  it("die-cut con logo no cambia el line-clamp del problema", () => {
+    expect(buildLabelHtml(ingreso, "50x30")).toContain("-webkit-line-clamp: 3")
+    expect(buildLabelHtml(ingreso, "40x30")).toContain("-webkit-line-clamp: 3")
+    expect(buildLabelHtml(ingreso, "50x40")).toContain("-webkit-line-clamp: 5")
+    expect(buildLabelHtml(ingreso, "60x40")).toContain("-webkit-line-clamp: 5")
+  })
+
+  it.each(["58mm", "80mm"] as const)("%s: logo centrado arriba, antes del codigo", (size) => {
+    const html = buildLabelHtml(ingreso, size)
+    expect(html).toMatch(/<img class="logo" src="data:image\/png[^>]*>\s*<div class="codigo">/)
+    expect(html).toMatch(/\.logo\s*\{[^}]*margin:\s*0 auto/)
+    expect(html).not.toContain("Taller Pepe")
+  })
+
+  it.each(["60x40", "58mm"] as const)("%s: sin logo imprime el nombre como siempre", (size) => {
+    const html = buildLabelHtml({ ...ingreso, logoDataUrl: null }, size)
+    expect(html).toContain('<div class="empresa">Taller Pepe</div>')
+    expect(html).not.toContain("<img")
+  })
+
+  it("acepta una URL https", () => {
+    const url = "https://cdn.example.com/logo.png"
+    expect(buildLabelHtml({ ...ingreso, logoDataUrl: url }, "60x40")).toContain(`src="${url}"`)
+  })
+
+  it.each([
+    "javascript:alert(1)",
+    "data:text/html;base64,PHNjcmlwdD4=",
+    "file:///etc/passwd",
+    '"><script>alert(1)</script>',
+  ])("rechaza un src no seguro (%s) y cae al nombre", (bad) => {
+    const html = buildLabelHtml({ ...ingreso, logoDataUrl: bad }, "60x40")
+    expect(html).not.toContain("<img")
+    expect(html).not.toContain("<script")
+    expect(html).toContain("Taller Pepe")
+  })
+
+  it("escapa comillas en el src", () => {
+    const html = buildLabelHtml({ ...ingreso, logoDataUrl: 'https://x.com/a".png' }, "60x40")
+    expect(html).toContain("&quot;")
+    expect(html).not.toContain('a".png')
+  })
+
+  it("variante reparado tambien lleva el logo", () => {
+    const html = buildLabelHtml({ ...ingreso, variant: "reparado" }, "50x30")
+    expect(html).toContain('<img class="logo"')
+    expect(html).toContain("REPARADO")
+  })
+})
+
 describe("persistencia del tamaño en localStorage", () => {
   beforeEach(() => localStorage.clear())
 
@@ -457,5 +532,42 @@ describe("printDeviceLabel — tamaño", () => {
     await printDeviceLabel(ingresoData, { size: "40x30" })
     expect(printedHtml(fake)).toContain("size: 40mm 30mm")
     expect(resolveEtiquetaSize).not.toHaveBeenCalled()
+  })
+})
+
+describe("printDeviceLabel — logo", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    document.body.innerHTML = ""
+  })
+  const withLogo: LabelData = { ...ingresoData, organizationName: "Taller Pepe", logoUrl: "https://x.com/l.png" }
+  const printed = (fake: ReturnType<typeof installFakeIframe>) =>
+    (fake.doc.write.mock.calls[0]?.[0] ?? "") as string
+
+  it("binariza logoUrl y lo imprime en lugar del nombre", async () => {
+    vi.mocked(imageUrlToBinarizedDataUrl).mockResolvedValueOnce("data:image/png;base64,AAAA")
+    const fake = installFakeIframe({ readyState: "complete", images: [loadedImg()] })
+    await printDeviceLabel(withLogo, { size: "60x40" })
+    expect(imageUrlToBinarizedDataUrl).toHaveBeenCalledWith("https://x.com/l.png", { maxWidth: 200 })
+    expect(printed(fake)).toContain('src="data:image/png;base64,AAAA"')
+    expect(printed(fake)).not.toContain("Taller Pepe")
+  })
+
+  it("rollo usa un raster mas ancho", async () => {
+    vi.mocked(imageUrlToBinarizedDataUrl).mockResolvedValueOnce("data:image/png;base64,AAAA")
+    installFakeIframe({ readyState: "complete", images: [loadedImg()] })
+    await printDeviceLabel(withLogo, { size: "58mm" })
+    expect(imageUrlToBinarizedDataUrl).toHaveBeenLastCalledWith("https://x.com/l.png", { maxWidth: 320 })
+  })
+
+  it.each([
+    ["devuelve null", () => vi.mocked(imageUrlToBinarizedDataUrl).mockResolvedValueOnce(null)],
+    ["rechaza", () => vi.mocked(imageUrlToBinarizedDataUrl).mockRejectedValueOnce(new Error("cors"))],
+  ])("si la binarizacion %s imprime con el nombre", async (_n, arrange) => {
+    arrange()
+    const fake = installFakeIframe({ readyState: "complete", images: [loadedImg()] })
+    await printDeviceLabel(withLogo, { size: "60x40" })
+    expect(printed(fake)).toContain("Taller Pepe")
+    expect(fake.print).toHaveBeenCalledTimes(1)
   })
 })
