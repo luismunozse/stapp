@@ -284,20 +284,43 @@ function rollBody(p: {
 const LOGO_DOTS_DIECUT = 200
 const LOGO_DOTS_ROLL = 320
 
+/** Si el logo no baja en este tiempo, la etiqueta sale con el nombre. */
+export const LOGO_TIMEOUT_MS = 2500
+
+// Logos ya binarizados, por url + ancho: una tanda de etiquetas (recepcion
+// multiple) baja el logo una sola vez. Solo se guardan los aciertos.
+const logoCache = new Map<string, string>()
+
+export function clearLogoCache(): void {
+  logoCache.clear()
+}
+
 /**
- * Binariza el logo (las termicas no imprimen grises). Nunca rompe la
- * impresion: ante cualquier falla devuelve null y la etiqueta lleva el nombre.
+ * Binariza el logo (las termicas no imprimen grises). Nunca rompe ni traba la
+ * impresion: ante cualquier falla o demora devuelve null y la etiqueta lleva el nombre.
  */
 async function resolveLogo(data: LabelData, size: LabelSize): Promise<string | null> {
   if (data.logoDataUrl) return data.logoDataUrl
   if (!data.logoUrl) return null
+  const cfg = SIZE_CONFIG[size] ?? SIZE_CONFIG[DEFAULT_LABEL_SIZE]
+  const maxWidth = cfg.mode === "roll" ? LOGO_DOTS_ROLL : LOGO_DOTS_DIECUT
+  const key = `${maxWidth}|${data.logoUrl}`
+  const cached = logoCache.get(key)
+  if (cached) return cached
+  let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    const cfg = SIZE_CONFIG[size] ?? SIZE_CONFIG[DEFAULT_LABEL_SIZE]
-    return await imageUrlToBinarizedDataUrl(data.logoUrl, {
-      maxWidth: cfg.mode === "roll" ? LOGO_DOTS_ROLL : LOGO_DOTS_DIECUT,
-    })
+    const logo = await Promise.race([
+      imageUrlToBinarizedDataUrl(data.logoUrl, { maxWidth }),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), LOGO_TIMEOUT_MS)
+      }),
+    ])
+    if (logo) logoCache.set(key, logo)
+    return logo
   } catch {
     return null
+  } finally {
+    clearTimeout(timer)
   }
 }
 

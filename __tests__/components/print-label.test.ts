@@ -6,6 +6,8 @@ import {
   readEtiquetaSize,
   saveEtiquetaSize,
   DEFAULT_LABEL_SIZE,
+  LOGO_TIMEOUT_MS,
+  clearLogoCache,
   type LabelData,
 } from "@/components/ordenes/print-label"
 import { imageUrlToBinarizedDataUrl } from "@/lib/escpos-image"
@@ -537,6 +539,8 @@ describe("printDeviceLabel — tamaño", () => {
 
 describe("printDeviceLabel — logo", () => {
   afterEach(() => {
+    vi.useRealTimers()
+    clearLogoCache()
     vi.restoreAllMocks()
     document.body.innerHTML = ""
   })
@@ -569,5 +573,32 @@ describe("printDeviceLabel — logo", () => {
     await printDeviceLabel(withLogo, { size: "60x40" })
     expect(printed(fake)).toContain("Taller Pepe")
     expect(fake.print).toHaveBeenCalledTimes(1)
+  })
+
+  it("si el logo nunca termina de bajar, imprime igual con el nombre", async () => {
+    vi.useFakeTimers()
+    vi.mocked(imageUrlToBinarizedDataUrl).mockReturnValueOnce(new Promise(() => {}))
+    const fake = installFakeIframe({ readyState: "complete", images: [loadedImg()] })
+    const done = printDeviceLabel(withLogo, { size: "60x40" })
+    await vi.advanceTimersByTimeAsync(LOGO_TIMEOUT_MS)
+    await done
+    expect(printed(fake)).toContain("Taller Pepe")
+    expect(fake.print).toHaveBeenCalledTimes(1)
+  })
+
+  it("en una tanda de etiquetas el logo se baja y binariza una sola vez", async () => {
+    vi.mocked(imageUrlToBinarizedDataUrl).mockClear().mockResolvedValue("data:image/png;base64,AAAA")
+    installFakeIframe({ readyState: "complete", images: [loadedImg()] })
+    for (let i = 0; i < 3; i++) await printDeviceLabel(withLogo, { size: "60x40" })
+    expect(imageUrlToBinarizedDataUrl).toHaveBeenCalledTimes(1)
+  })
+
+  it("una falla no queda guardada: la proxima etiqueta reintenta el logo", async () => {
+    vi.mocked(imageUrlToBinarizedDataUrl).mockResolvedValueOnce(null).mockResolvedValueOnce("data:image/png;base64,AAAA")
+    const fake = installFakeIframe({ readyState: "complete", images: [loadedImg()] })
+    await printDeviceLabel(withLogo, { size: "60x40" })
+    await printDeviceLabel(withLogo, { size: "60x40" })
+    const segunda = fake.doc.write.mock.calls[1]?.[0] as string
+    expect(segunda).toContain('src="data:image/png;base64,AAAA"')
   })
 })
