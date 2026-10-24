@@ -147,6 +147,8 @@ export default async function DashboardLayout({
                 No se muestra si ya hay trial banner — ese ya empuja al upgrade. */}
             {!showTrialBanner && !showMaintenanceBanner && <UsageWarningBanner />}
             {children}
+            {/* Mobile-only spacer so the last item scrolls clear of the floating assistant button */}
+            <div aria-hidden className="h-14 lg:hidden" />
           </SidebarMain>
           {/* Modal de cambio de políticas - se muestra una sola vez */}
           {showTrialBanner && (
