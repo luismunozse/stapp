@@ -417,6 +417,28 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     }
   }
 
+  // A TECNICO takes an unassigned order for himself (opt-in org permission).
+  // The server decides; a 409 means somebody else got it first.
+  const handleTomarOrden = async () => {
+    setUpdating(true)
+    try {
+      const res = await fetch(`/api/ordenes/${ordenId}/tomar`, { method: "POST" })
+      if (res.ok) {
+        toast.success("Tomaste la orden")
+      } else {
+        const error = await res.json().catch(() => ({}))
+        await alert({ title: "No se pudo tomar la orden", description: error.error || "Error al tomar la orden", variant: "error" })
+      }
+      // Refresh in both cases: after a 409 the card must show the new technician.
+      fetchOrden()
+    } catch (error) {
+      console.error("Error taking orden:", error)
+      await alert({ title: "Error", description: "Error al tomar la orden", variant: "error" })
+    } finally {
+      setUpdating(false)
+    }
+  }
+
   const handleUpdateField = async (field: string, value: any) => {
     setUpdating(true)
     try {
@@ -890,6 +912,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           updating={updating}
           onAsignarTecnico={handleAsignarTecnico}
           readOnly={userRole === "TECNICO"}
+          puedeTomar={(orden as any).puedeTomar === true && !orden.tecnicoId}
+          onTomar={handleTomarOrden}
         />
         {(orden as any).recibidoPor && (
           <Card>
@@ -1174,6 +1198,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             tecnicos={tecnicos}
             updating={updating}
             onAsignarTecnico={handleAsignarTecnico}
+            puedeTomar={(orden as any).puedeTomar === true && !orden.tecnicoId}
+            onTomar={handleTomarOrden}
           />
           {(orden as any).recibidoPor && (
             <Card>

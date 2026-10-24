@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DatePicker } from "@/components/ui/date-picker"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
-import { OrderStatusBadge } from "@/components/ui/badge"
+import { Badge, OrderStatusBadge } from "@/components/ui/badge"
 import {
   Plus,
   Search,
@@ -120,6 +120,7 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
   const puedeCobrar = usePuedeCobrar()
   const [showForm, setShowForm] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [tomando, setTomando] = useState<string | null>(null)
   const { confirm, showError } = useModal()
 
   // Si llega ?fromTurno=<id>, abrir form de creación con prefill desde turno
@@ -363,6 +364,27 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
     }
   }
 
+  // A TECNICO takes an unassigned order (opt-in org permission). The server
+  // decides; a 409 means somebody else got it first, so refresh either way.
+  const handleTomar = async (e: React.MouseEvent, orden: OrdenServicio) => {
+    e.stopPropagation()
+    setTomando(orden.id)
+    try {
+      const res = await fetch(`/api/ordenes/${orden.id}/tomar`, { method: "POST" })
+      if (res.ok) {
+        toast.success("Tomaste la orden")
+      } else {
+        const error = await res.json().catch(() => ({}))
+        toast.error(error.error || "Error al tomar la orden")
+      }
+      mutate()
+    } catch {
+      toast.error("Error al tomar la orden")
+    } finally {
+      setTomando(null)
+    }
+  }
+
   const handleDelete = async (e: React.MouseEvent, orden: OrdenServicio) => {
     e.stopPropagation()
     const codigoDisplay = orden.codigoOrden || `#${orden.numeroOrden}`
@@ -459,6 +481,20 @@ export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps =
             {orden.codigoOrden || `#${orden.numeroOrden}`}
           </span>
           {orden.esPractica && <PracticaBadge conAviso className="max-w-[220px]" />}
+          {isTecnico && !orden.tecnicoId && (
+            <Badge variant="warningSoft">Sin asignar</Badge>
+          )}
+          {isTecnico && orden.puedeTomar && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs"
+              disabled={tomando === orden.id}
+              onClick={(e) => handleTomar(e, orden)}
+            >
+              Tomar orden
+            </Button>
+          )}
         </div>
       ),
     },

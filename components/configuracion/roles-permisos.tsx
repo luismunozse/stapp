@@ -83,6 +83,13 @@ const PERMISOS: { rol: Rol; campo: string; titulo: string; detalle: string }[] =
       "Puede convertir en venta las cotizaciones aceptadas que él mismo creó, sin depender de un administrador. No alcanza a las cotizaciones de otros técnicos, ni a eliminarlas, revisarlas o convertirlas en orden de servicio.",
   },
   {
+    rol: "TECNICO",
+    campo: "tecnicosTomanOrdenes",
+    titulo: "Tomar órdenes sin asignar",
+    detalle:
+      "Puede ver las órdenes que todavía no tienen técnico y tomarlas para sí mismo, por ejemplo cuando no hay un administrador para asignarlas. Solo puede tomarlas para sí: no puede reasignar órdenes de otros técnicos ni asignar a otra persona. Una vez tomada, la orden es suya y se rige por las reglas habituales.",
+  },
+  {
     rol: "VENDEDOR",
     campo: "vendedoresAdministranInventario",
     titulo: "Administrar el inventario",

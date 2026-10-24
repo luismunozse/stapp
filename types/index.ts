@@ -125,6 +125,8 @@ export interface OrdenServicio {
   codigoOrden?: string
   clienteId: string
   tecnicoId?: string | null
+  /** Server hint for a TECNICO: this unassigned order can be taken by him (opt-in org permission). */
+  puedeTomar?: boolean
   dispositivo: string
   tipoDispositivo: TipoDispositivo
   tipoDispositivoId?: string | null
