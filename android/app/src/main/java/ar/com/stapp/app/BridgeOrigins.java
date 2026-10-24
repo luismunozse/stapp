@@ -32,7 +32,7 @@ final class BridgeOrigins {
             String host = entry.trim();
             if (host.startsWith("*.")) {
                 origins.add("https://" + host);
-            } else if (host.startsWith("http") && host.contains("*.")) {
+            } else if (host.startsWith("https://*.")) {
                 origins.add(host);
             }
         }

@@ -34,7 +34,6 @@ public class BridgeOriginsTest {
             new String[] {"*.stapp.com.ar", "stapp.com.ar", "http://*.example.com"});
         Set<String> expected = new HashSet<>();
         expected.add("https://*.stapp.com.ar");
-        expected.add("http://*.example.com");
         assertEquals(expected, origins);
     }
 
@@ -46,5 +45,21 @@ public class BridgeOriginsTest {
     @Test
     public void emptyArrayYieldsEmptySet() {
         assertTrue(BridgeOrigins.fromAllowNavigation(new String[0]).isEmpty());
+    }
+
+    @Test
+    public void skipsPlainHttpWildcardBecauseOnlyHttpsIsAllowed() {
+        assertTrue(BridgeOrigins.fromAllowNavigation(new String[] {"http://*.example.com"}).isEmpty());
+    }
+
+    @Test
+    public void skipsNullElements() {
+        Set<String> origins = BridgeOrigins.fromAllowNavigation(new String[] {null, "*.stapp.com.ar"});
+        assertEquals(Collections.singleton("https://*.stapp.com.ar"), origins);
+    }
+
+    @Test
+    public void skipsNonWildcardSchemedHost() {
+        assertTrue(BridgeOrigins.fromAllowNavigation(new String[] {"https://stapp.com.ar"}).isEmpty());
     }
 }
