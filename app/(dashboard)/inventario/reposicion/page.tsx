@@ -261,14 +261,14 @@ export default function ReposicionPage() {
                         onClick={(e) => e.stopPropagation()}
                         className="h-4 w-4"
                       />
-                      <Truck className="h-4 w-4 text-muted-foreground" />
+                      <Truck className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <CardTitle className="text-sm font-medium truncate">
                         {g.proveedorNombre || "Sin proveedor asignado"}
                       </CardTitle>
                       {g.leadTimeDias !== null && (
                         <Badge variant="secondary" className="text-[10px]">Lead {g.leadTimeDias}d</Badge>
                       )}
-                      <Badge variant="outline" className="text-[10px]">{g.items.length} items</Badge>
+                      <Badge variant="outline" className="text-[10px] shrink-0 whitespace-nowrap">{g.items.length} items</Badge>
                     </div>
                     <div className="text-sm font-semibold shrink-0">{formatPrice(g.subtotal)}</div>
                   </div>
@@ -280,7 +280,7 @@ export default function ReposicionPage() {
                         const checked = !!seleccion[it.inventarioId]
                         const qty = cantidades[it.inventarioId] ?? 0
                         return (
-                          <div key={it.inventarioId} className="flex items-center gap-2 px-3 py-2">
+                          <div key={it.inventarioId} className="flex flex-wrap sm:flex-nowrap items-center gap-2 px-3 py-2">
                             <input
                               type="checkbox"
                               checked={checked}
@@ -289,7 +289,7 @@ export default function ReposicionPage() {
                               }
                               className="h-4 w-4 shrink-0"
                             />
-                            <div className="flex-1 min-w-0">
+                            <div className="flex-1 min-w-0 basis-[calc(100%-1.5rem)] sm:basis-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-medium truncate">{it.nombre}</span>
                                 {prioridadBadge(it.prioridad)}
@@ -307,6 +307,7 @@ export default function ReposicionPage() {
                                 )}
                               </div>
                             </div>
+                            <div className="ml-auto flex items-center gap-2 shrink-0">
                             <div className="w-20 shrink-0">
                               <Input
                                 type="number"
@@ -322,8 +323,9 @@ export default function ReposicionPage() {
                                 className="h-8 text-center text-sm"
                               />
                             </div>
-                            <div className="w-24 text-right text-xs shrink-0">
+                            <div className="min-w-24 text-right text-xs shrink-0 whitespace-nowrap">
                               {formatPrice(qty * it.precioCompra)}
+                            </div>
                             </div>
                           </div>
                         )
