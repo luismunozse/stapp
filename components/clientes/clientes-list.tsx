@@ -428,7 +428,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       {/* Filter bar */}
       <div className="flex flex-wrap items-end gap-2">
         <Select value={tipoCliente || "TODOS"} onValueChange={(v) => onFilterChange(() => setTipoCliente(v === "TODOS" ? "" : v))}>
-          <SelectTrigger className="w-[150px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
+          <SelectTrigger className="w-[calc(50%-0.25rem)] sm:w-[150px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="TODOS">Todos los tipos</SelectItem>
             <SelectItem value="INDIVIDUAL">Individual</SelectItem>
@@ -437,7 +437,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
         </Select>
 
         <Select value={aceptaWhatsapp || "TODOS"} onValueChange={(v) => onFilterChange(() => setAceptaWhatsapp(v === "TODOS" ? "" : v))}>
-          <SelectTrigger className="w-[170px]"><SelectValue placeholder="WhatsApp" /></SelectTrigger>
+          <SelectTrigger className="w-[calc(50%-0.25rem)] sm:w-[170px]"><SelectValue placeholder="WhatsApp" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="TODOS">WhatsApp: todos</SelectItem>
             <SelectItem value="true">Acepta WhatsApp</SelectItem>
@@ -449,14 +449,14 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           type="date"
           value={fechaDesde}
           onChange={(e) => onFilterChange(() => setFechaDesde(e.target.value))}
-          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+          className="h-9 w-[calc(50%-0.25rem)] sm:w-auto rounded-md border border-input bg-background px-2 text-sm"
           aria-label="Fecha desde"
         />
         <input
           type="date"
           value={fechaHasta}
           onChange={(e) => onFilterChange(() => setFechaHasta(e.target.value))}
-          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+          className="h-9 w-[calc(50%-0.25rem)] sm:w-auto rounded-md border border-input bg-background px-2 text-sm"
           aria-label="Fecha hasta"
         />
 
