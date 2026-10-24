@@ -322,7 +322,7 @@ export function TemplateEditor() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Settings className="h-5 w-5" />
@@ -347,7 +347,7 @@ export function TemplateEditor() {
               onSubmit={handleCreateTemplate}
               className="flex flex-col gap-3 mb-4 p-3 bg-muted rounded-lg"
             >
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <Input
                   placeholder="Nombre del template..."
                   value={newTemplateName}
@@ -356,7 +356,7 @@ export function TemplateEditor() {
                   className="flex-1"
                 />
                 <Select value={newTemplateDeviceType} onValueChange={setNewTemplateDeviceType}>
-                  <SelectTrigger className="w-48">
+                  <SelectTrigger className="w-full sm:w-48">
                     <SelectValue placeholder="Todos los tipos" />
                   </SelectTrigger>
                   <SelectContent>
@@ -402,7 +402,7 @@ export function TemplateEditor() {
                   }
                   size="sm"
                   onClick={() => setSelectedTemplate(template)}
-                  className="flex items-center gap-1"
+                  className="flex h-auto max-w-full flex-wrap items-center justify-start gap-1 whitespace-normal text-left"
                 >
                   {template.nombre}
                   {template.tipoDispositivo && (
@@ -430,7 +430,7 @@ export function TemplateEditor() {
       {selectedTemplate && (
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle>{selectedTemplate.nombre}</CardTitle>
                 <CardDescription>
