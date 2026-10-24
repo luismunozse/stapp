@@ -297,7 +297,7 @@ export default function WebhooksPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3">
-        <div className="flex items-start gap-3">
+        <div className="flex items-start gap-3 sm:items-center">
           <Link href="/configuracion">
             <Button variant="ghost" size="icon" className="shrink-0">
               <ArrowLeft className="h-4 w-4" />

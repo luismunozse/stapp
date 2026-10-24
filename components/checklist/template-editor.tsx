@@ -402,7 +402,7 @@ export function TemplateEditor() {
                   }
                   size="sm"
                   onClick={() => setSelectedTemplate(template)}
-                  className="flex h-auto max-w-full flex-wrap items-center justify-start gap-1 whitespace-normal text-left"
+                  className="flex h-auto min-h-9 py-1.5 max-w-full flex-wrap items-center justify-start gap-1 whitespace-normal text-left"
                 >
                   {template.nombre}
                   {template.tipoDispositivo && (
