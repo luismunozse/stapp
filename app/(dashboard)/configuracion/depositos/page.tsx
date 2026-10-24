@@ -20,6 +20,7 @@ interface Deposito {
   principal: boolean
   activo: boolean
   createdAt: string
+  sucursalNombre?: string | null
 }
 
 export default function DepositosPage() {
@@ -296,6 +297,9 @@ function DepositoList({
       </p>
     )
   }
+  // Hay un principal por sucursal: el nombre solo aporta con más de una.
+  const variasSucursales =
+    new Set(items.map((d) => d.sucursalNombre).filter(Boolean)).size > 1
   return (
     <div className="space-y-2">
       {items.map((d) => (
@@ -306,11 +310,12 @@ function DepositoList({
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <Warehouse className="h-4 w-4 text-muted-foreground shrink-0" />
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="font-medium truncate">{d.nombre}</span>
                 {d.principal && (
                   <Badge variant="outline" className="text-[10px] gap-1 border-amber-500/60 text-amber-600">
                     <Star className="h-2.5 w-2.5" /> Principal
+                    {variasSucursales && d.sucursalNombre ? ` · ${d.sucursalNombre}` : ""}
                   </Badge>
                 )}
                 {d.codigo && (
