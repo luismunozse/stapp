@@ -14,6 +14,9 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // The WebView scales text by the system font size (e.g. 110%), which the web layouts do
+        // not tolerate yet: amounts get truncated and cards overflow. Pin it to 100% until they do.
+        getBridge().getWebView().getSettings().setTextZoom(100);
         injectBridgeOnWildcardOrigins();
     }
 
