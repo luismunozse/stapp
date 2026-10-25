@@ -180,11 +180,13 @@ export default function CajaPage() {
         </div>
       ) : data ? (
         <Tabs defaultValue="resumen">
-          <TabsList>
-            <TabsTrigger value="resumen">Resumen</TabsTrigger>
-            {puedeOperarCaja && <TabsTrigger value="movimientos">Movimientos Manuales</TabsTrigger>}
-            {isAdmin && <TabsTrigger value="historial">Historial de Cierres</TabsTrigger>}
-          </TabsList>
+          <div className="overflow-x-auto">
+            <TabsList className="w-auto min-w-full sm:min-w-0">
+              <TabsTrigger value="resumen">Resumen</TabsTrigger>
+              {puedeOperarCaja && <TabsTrigger value="movimientos">Movimientos Manuales</TabsTrigger>}
+              {isAdmin && <TabsTrigger value="historial">Historial de Cierres</TabsTrigger>}
+            </TabsList>
+          </div>
 
           <TabsContent value="resumen">
             <CajaResumen

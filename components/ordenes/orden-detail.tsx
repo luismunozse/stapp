@@ -927,8 +927,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         )}
       </div>
 
-      {/* Main Content - 2 columns */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      {/* Main Content - 2 columns. grid-cols-1 (minmax(0,1fr)) keeps the scrolling tab bar from widening the page on mobile */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Left Column - Info */}
         <div className="lg:col-span-2 space-y-6">
           {/* Main Info Card */}
