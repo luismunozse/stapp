@@ -386,13 +386,13 @@ export function FacturacionList() {
             return (
               <Card key={factura.id}>
                 <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div>
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                    <div className="min-w-0">
                       <CardTitle className="text-lg flex items-center gap-2">
-                        <FileText className="h-5 w-5" />
+                        <FileText className="h-5 w-5 shrink-0" />
                         Remito {factura.numeroFactura}
                       </CardTitle>
-                      <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
+                      <div className="text-sm text-muted-foreground mt-1 flex flex-wrap items-center gap-2">
                         <Badge variant={factura.origen === "venta" ? "infoSoft" : "outline"}>
                           {factura.origen === "venta" ? "Venta" : "Orden"}
                         </Badge>
@@ -407,7 +407,7 @@ export function FacturacionList() {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
                       <Button
                         variant="outline"
                         size="sm"
@@ -427,20 +427,20 @@ export function FacturacionList() {
                   </div>
 
                   {/* Resumen financiero */}
-                  <div className="grid grid-cols-3 gap-2 sm:gap-4 p-3 bg-muted rounded-lg">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 p-3 bg-muted rounded-lg">
                     <div className="min-w-0">
                       <div className="text-xs text-muted-foreground">Total</div>
-                      <div className="font-bold text-sm sm:text-lg truncate">{formatPrice(factura.total)}</div>
+                      <div className="font-bold text-base sm:text-lg break-words">{formatPrice(factura.total)}</div>
                     </div>
                     <div className="min-w-0">
                       <div className="text-xs text-muted-foreground">Abonado</div>
-                      <div className="font-medium text-sm sm:text-lg text-green-600 truncate">
+                      <div className="font-medium text-base sm:text-lg text-green-600 break-words">
                         {formatPrice(factura.montoAbonado || 0)}
                       </div>
                     </div>
                     <div className="min-w-0">
                       <div className="text-xs text-muted-foreground">Pendiente</div>
-                      <div className="font-medium text-sm sm:text-lg text-red-600 truncate">
+                      <div className="font-medium text-base sm:text-lg text-red-600 break-words">
                         {formatPrice(factura.total - (factura.montoAbonado || 0))}
                       </div>
                     </div>

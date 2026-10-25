@@ -37,7 +37,7 @@ export function FotosIngreso({
     <div>
       <Label>{label}</Label>
       <div className="mt-2 space-y-3">
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -58,7 +58,7 @@ export function FotosIngreso({
             type="button"
             variant="outline"
             onClick={() => fileInputRef.current?.click()}
-            className="flex-1"
+            className="w-full sm:w-auto sm:flex-1"
             disabled={comprimiendo}
           >
             <Upload className="mr-2 h-4 w-4" />
@@ -68,7 +68,7 @@ export function FotosIngreso({
             type="button"
             variant="outline"
             onClick={() => cameraInputRef.current?.click()}
-            className="flex-1"
+            className="w-full sm:w-auto sm:flex-1"
             disabled={comprimiendo}
           >
             <Camera className="mr-2 h-4 w-4" />

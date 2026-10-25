@@ -141,8 +141,8 @@ export function VentasDashboard() {
       {expanded && (
         <>
           {/* Second Row: Top Products + Top Sellers */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Card className="min-w-0">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium">Top 5 Productos</CardTitle>
               </CardHeader>
@@ -172,7 +172,7 @@ export function VentasDashboard() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="min-w-0">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium">Top 5 Vendedores</CardTitle>
               </CardHeader>
