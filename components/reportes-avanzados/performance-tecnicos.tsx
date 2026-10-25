@@ -116,7 +116,7 @@ export function PerformanceTecnicos() {
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 min-[480px]:grid-cols-3 gap-3">
         <StatCard
           title="Total Órdenes"
           value={String(data.totales.totalOrdenes)}
