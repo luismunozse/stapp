@@ -333,9 +333,9 @@ export function ServiciosClient() {
           {visibles.map((servicio) => (
             <div
               key={servicio.id}
-              className="flex items-center justify-between p-3 border rounded-lg"
+              className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 border rounded-lg"
             >
-              <div>
+              <div className="min-w-0">
                 <div className="font-medium flex items-center gap-2 flex-wrap">
                   {servicio.nombre}
                   <span className="text-xs text-muted-foreground">{servicio.codigo}</span>
@@ -360,7 +360,7 @@ export function ServiciosClient() {
                 )}
               </div>
               <div className="flex items-center gap-3">
-                <span className="font-semibold">{formatPrice(servicio.precio)}</span>
+                <span className="font-semibold whitespace-nowrap mr-auto sm:mr-0">{formatPrice(servicio.precio)}</span>
                 <Button
                   variant="ghost"
                   size="icon"
