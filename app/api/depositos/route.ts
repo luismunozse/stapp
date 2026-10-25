@@ -23,6 +23,7 @@ function formatDeposito(row: any) {
     activo: row.activo,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    sucursalNombre: row.sucursales?.nombre ?? null,
   }
 }
 
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
 
     let query = supabaseAdmin
       .from("depositos")
-      .select("*")
+      .select("*, sucursales(nombre)")
       .eq("organization_id", organizationId!)
       .is("deleted_at", null)
       .order("principal", { ascending: false })
