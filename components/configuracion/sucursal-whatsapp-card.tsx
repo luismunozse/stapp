@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, MessageCircle, RefreshCw } from "lucide-react"
+import { Loader2, RefreshCw } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 
 type State = "open" | "connecting" | "close" | "qr" | "unknown"
 
@@ -99,7 +100,7 @@ export function SucursalWhatsAppCard({ sucursalId }: { sucursalId: string }) {
     <div className="rounded-lg border p-3 space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-medium">
-          <MessageCircle className="h-4 w-4 text-green-600" /> WhatsApp de la sucursal
+          <WhatsAppIcon className="text-green-600" /> WhatsApp de la sucursal
         </div>
         <Badge variant={connected ? "default" : "secondary"} className={connected ? "bg-green-600" : ""}>
           {connected ? "Conectado" : state === "connecting" || state === "qr" ? "Conectando…" : "Desconectado"}
@@ -127,7 +128,7 @@ export function SucursalWhatsAppCard({ sucursalId }: { sucursalId: string }) {
           </Button>
         ) : (
           <Button size="sm" onClick={connect} disabled={loading}>
-            {loading && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Conectar WhatsApp
+            {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <WhatsAppIcon className="mr-1" />} Conectar WhatsApp
           </Button>
         )}
       </div>
