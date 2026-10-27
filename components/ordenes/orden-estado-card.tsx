@@ -178,7 +178,7 @@ export function OrdenEstadoCard({
                     type="button"
                     aria-label="Editar fecha prometida"
                     onClick={startEditFecha}
-                    className="text-muted-foreground hover:text-foreground"
+                    className="-m-1.5 rounded p-1.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
