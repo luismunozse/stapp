@@ -305,7 +305,11 @@ describe("cargarOrdenEnAlcance - a database that fails", () => {
   ])("%s is thrown, not answered as 'not found'", async (_nombre, error) => {
     conErrorDeLectura(error)
 
-    await expect(cargarOrdenEnAlcance("o-a-t1", vendedorA, "ver")).rejects.toMatchObject(error)
+    // An Error (so the route's log says what happened, not "[object Object]") that keeps the code.
+    const fallo = await cargarOrdenEnAlcance("o-a-t1", vendedorA, "ver").catch((e) => e)
+
+    expect(fallo).toBeInstanceOf(Error)
+    expect(fallo).toMatchObject(error)
   })
 
   it("'no rows' (PGRST116) is still the one answer a missing id gets, same as an order out of scope", async () => {
