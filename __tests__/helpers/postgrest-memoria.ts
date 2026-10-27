@@ -14,7 +14,8 @@
  * must be filtered by two different aliases, none of them the table's own name). Several filters on one embed
  * (`or(list, { referencedTable })` included) are ONE condition on an embedded row (one row has to satisfy them
  * all), not one "some row matches" each. `maxFilas` (opt-in) is PostgREST's `max-rows`: the rows of the query
- * are cut silently, the rows an embed carries never are. An `or()` list cannot name `embed.column` itself (the logic-tree parser takes plain
+ * are cut silently, and so are the rows of each to-many embed, for each parent (the cap reaches every node of
+ * the read plan). An `or()` list cannot name `embed.column` itself (the logic-tree parser takes plain
  * columns only), and the full-text operator (`fts`, the `search_vector` column) is not supported.
  * Anything else throws instead of silently matching, so a new filter in a route cannot
  * slip through unverified. Like PostgREST, a `.single()` / `.maybeSingle()` over several rows is an
@@ -200,7 +201,7 @@ function existeEnLasFilas(filas: Fila[], columna: string): boolean {
 function embedsDelSelect(
   columnas: string,
   prefijo = "",
-  salida = { todos: new Set<string>(), interiores: new Set<string>(), ambiguas: new Set<string>() },
+  salida = { todos: new Set<string>(), interiores: new Set<string>(), ambiguas: new Set<string>(), tablas: new Set<string>() },
 ) {
   // The embeds of this level: how a filter can name each one is its alias, and the table's own name.
   const nivel: Array<{ alias: string; tabla: string }> = []
@@ -212,6 +213,7 @@ function embedsDelSelect(
     const ruta = prefijo ? `${prefijo}.${alias}` : alias
     nivel.push({ alias, tabla })
     salida.todos.add(ruta)
+    salida.tablas.add(tabla)
     if (pistas.some((p) => p.trim() === "inner")) salida.interiores.add(ruta)
     embedsDelSelect(item.slice(abre + 1, item.lastIndexOf(")")), ruta, salida)
   }
@@ -221,6 +223,26 @@ function embedsDelSelect(
     if (nivel.filter((e) => e.alias === nombre || e.tabla === nombre).length > 1) salida.ambiguas.add(prefijo ? `${prefijo}.${nombre}` : nombre)
   }
   return salida
+}
+
+/**
+ * The tables a select list embeds, at any depth (the part after `alias:`, before any `!hint`). A request fails
+ * when one of them cannot be read, whichever table it was made on.
+ */
+export function tablasEmbebidas(columnas: string): string[] {
+  return [...embedsDelSelect(columnas).tablas]
+}
+
+/** Cuts, inside a copy of a result row, the list the embed `ruta` holds at `maximo` rows (for each parent it hangs from). */
+function acotarEmbebidas(fila: Fila, ruta: string[], maximo: number): void {
+  const [cabeza, ...resto] = ruta
+  const valor = fila?.[cabeza]
+  if (valor === null || valor === undefined) return
+  if (resto.length > 0) {
+    ;(Array.isArray(valor) ? valor : [valor]).forEach((e) => acotarEmbebidas(e, resto, maximo))
+  } else if (Array.isArray(valor)) {
+    fila[cabeza] = valor.slice(0, maximo)
+  }
 }
 
 /** Keeps, inside a copy of a result row, the embedded rows `prueba` accepts (a to-one embed that fails becomes null). */
@@ -266,9 +288,10 @@ function proyectar(fila: Fila, columnas: string): Fila {
 }
 
 /**
- * `maxFilas` is the cap PostgREST puts on the rows of a response (`max-rows`: 1000 on Supabase). It cuts the
- * rows of the query silently, after any range, and never the rows an embed carries (they belong to their
- * parent); `count: "exact"` still counts every row. Without it nothing is capped.
+ * `maxFilas` is the cap PostgREST puts on the rows of a response (`max-rows`: 1000 on Supabase). It applies to
+ * EVERY node of the read plan: it cuts the rows of the query silently, after any range, and the rows of each
+ * to-many embed for each of its parents, after the embed's own filters. `count: "exact"` still counts every row.
+ * Without it nothing is capped.
  */
 export function tablaPostgrest(filas: Fila[], { maxFilas }: { maxFilas?: number } = {}) {
   const consultas: Array<{ columnas: string; or: string[] }> = []
@@ -389,10 +412,13 @@ export function tablaPostgrest(filas: Fila[], { maxFilas }: { maxFilas?: number 
         if (maxFilas !== undefined) rows = rows.slice(0, maxFilas)
         const proyectadas = rows.map((f) => {
           const fila = proyectar(f, columnas)
-          if (porEmbed.size === 0) return fila
-          // The embedded rows are the fixture's own: filter a copy, never the fixture.
+          const acotaEmbebidas = maxFilas !== undefined && embeds.todos.size > 0
+          if (porEmbed.size === 0 && !acotaEmbebidas) return fila
+          // The embedded rows are the fixture's own: filter and cut a copy, never the fixture.
           const copia = JSON.parse(JSON.stringify(fila)) as Fila
           porEmbed.forEach((e) => filtrarEmbebidas(copia, e.ruta, cumpleEmbed(e)))
+          // The cap reaches every node of the read plan: a to-many embed is cut for each parent, after its own filters.
+          if (acotaEmbebidas) embeds.todos.forEach((ruta) => acotarEmbebidas(copia, ruta.split("."), maxFilas!))
           return copia
         })
         return { rows: proyectadas, total }

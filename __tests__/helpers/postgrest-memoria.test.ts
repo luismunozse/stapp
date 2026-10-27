@@ -529,10 +529,48 @@ describe("the rows PostgREST answers at most (max-rows: 1000 on Supabase)", () =
     expect(alFinal.data?.map((p: any) => p.id)).toEqual(["p8", "p9", "p10", "p11"])
   })
 
-  it("embedded rows are NOT capped: they belong to their parent, and only the parents are counted", async () => {
-    const { data } = await tablaPostgrest(MUCHAS, { maxFilas: 2 }).select("id, hijas(id)")
-    expect(data).toHaveLength(2)
+  // PostgREST applies the cap to EVERY node of the read plan: a to-many embed gets a LIMIT per parent.
+  it("the rows of a to-many embed are cut at the cap for each parent", async () => {
+    const { data } = await tablaPostgrest(MUCHAS, { maxFilas: 3 }).select("id, hijas(id)")
+    expect(data).toHaveLength(3)
+    expect(data?.every((p: any) => p.hijas.length === 3)).toBe(true)
+    expect(data?.[0].hijas.map((h: any) => h.id)).toEqual(["h0-0", "h0-1", "h0-2"])
+  })
+
+  it("an embed under the cap comes whole", async () => {
+    const { data } = await tablaPostgrest(MUCHAS, { maxFilas: 5 }).select("id, hijas(id)")
     expect(data?.every((p: any) => p.hijas.length === 5)).toBe(true)
+  })
+
+  it("the cap of an embed comes after its own filters: what a filter keeps is what counts against it", async () => {
+    const filas = [
+      {
+        id: "p1",
+        hijas: [
+          ...Array.from({ length: 6 }, (_, j) => ({ id: `viejas-${j}`, estado: "ENTREGADO" })),
+          ...Array.from({ length: 2 }, (_, j) => ({ id: `abiertas-${j}`, estado: "RECIBIDO" })),
+        ],
+      },
+    ]
+    const sinFiltro = await tablaPostgrest(filas, { maxFilas: 5 }).select("id, hijas(id, estado)")
+    expect(sinFiltro.data?.[0].hijas.map((h: any) => h.id)).toEqual(["viejas-0", "viejas-1", "viejas-2", "viejas-3", "viejas-4"])
+    const filtrada = await tablaPostgrest(filas, { maxFilas: 5 }).select("id, hijas(id, estado)").eq("hijas.estado", "RECIBIDO")
+    expect(filtrada.data?.[0].hijas.map((h: any) => h.id)).toEqual(["abiertas-0", "abiertas-1"])
+  })
+
+  it("every embed of a nested path is cut for each of its parents, and the fixture is never touched", async () => {
+    const filas = [{ id: "c1", ordenes: Array.from({ length: 3 }, (_, i) => ({ id: `o${i}`, items: Array.from({ length: 4 }, (_, j) => ({ id: `i${i}-${j}` })) })) }]
+    const { data } = await tablaPostgrest(filas, { maxFilas: 2 }).select("id, ordenes(id, items(id))")
+    expect(data?.[0].ordenes).toHaveLength(2)
+    expect(data?.[0].ordenes.every((o: any) => o.items.length === 2)).toBe(true)
+    expect(filas[0].ordenes).toHaveLength(3)
+    expect(filas[0].ordenes[0].items).toHaveLength(4)
+  })
+
+  it("a to-one embed is not a list: the cap has nothing to cut", async () => {
+    const filas = [{ id: "t1", orden: { id: "o1", estado: "X" } }]
+    const { data } = await tablaPostgrest(filas, { maxFilas: 1 }).select("id, orden(id, estado)")
+    expect(data?.[0].orden).toEqual({ id: "o1", estado: "X" })
   })
 
   it("the exact count is the real one, not the capped one", async () => {

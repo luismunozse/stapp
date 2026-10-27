@@ -18,7 +18,7 @@
  */
 import { vi } from "vitest"
 import { supabaseAdmin } from "@/lib/supabase"
-import { tablaPostgrest } from "./postgrest-memoria"
+import { tablaPostgrest, tablasEmbebidas } from "./postgrest-memoria"
 
 type Fila = Record<string, any>
 type Filtro = [string, ...unknown[]]
@@ -33,11 +33,11 @@ export interface Escritura {
 }
 
 interface Opciones {
-  /** Makes every read of a table fail with this error (a database that answers, but with an error). */
+  /** Makes every read of a table fail with this error (a database that answers, but with an error), also a read that only EMBEDS the table. */
   errorDeLectura?: Record<string, { code?: string; message: string }>
   /** What an rpc answers with. Defaults to `{ success: true }`. */
   resultadoRpc?: (nombre: string, args: unknown) => unknown
-  /** PostgREST's `max-rows` (1000 on Supabase): a read answers at most this many rows of its table, silently. Unset: no cap. */
+  /** PostgREST's `max-rows` (1000 on Supabase): a read answers at most this many rows, and each to-many embed at most this many per parent, silently. Unset: no cap. */
   maxFilas?: number
 }
 
@@ -163,7 +163,9 @@ export function montarSupabaseEnMemoria(tablas: Record<string, Fila[]>, opciones
     return {
       select: (...args: Parameters<typeof lectura.select>) => {
         lecturas.push(nombre)
-        const error = opciones.errorDeLectura?.[nombre]
+        // A table the select embeds is read by the same request: if it cannot be read, the whole request fails.
+        const tablaQueFalla = [nombre, ...tablasEmbebidas(args[0] ?? "*")].find((t) => opciones.errorDeLectura?.[t])
+        const error = tablaQueFalla ? opciones.errorDeLectura?.[tablaQueFalla] : undefined
         return error ? lecturaConError(error) : lectura.select(...args)
       },
       ...Object.fromEntries(ESCRITURAS.map((operacion) => [operacion, (carga?: unknown) => cadenaDeEscritura(nombre, operacion, carga)])),
