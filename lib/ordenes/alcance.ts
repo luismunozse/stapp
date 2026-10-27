@@ -110,7 +110,9 @@ export async function cargarOrdenEnAlcance(
 
   // "No rows" is an answer about the order. Any other error says nothing about it: it goes to the
   // route's catch (logged, 500) instead of passing for "the order does not exist".
-  if (error && error.code !== SIN_FILAS) throw error
+  if (error && error.code !== SIN_FILAS) {
+    throw Object.assign(new Error(error.message || "order lookup failed"), { code: error.code })
+  }
   if (error || !data) return { error: noEncontrada() }
   const orden = data as unknown as Record<string, any>
 
