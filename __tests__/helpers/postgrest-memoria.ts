@@ -84,12 +84,27 @@ function evaluar(fila: Fila, item: string): boolean {
   return logica[1] === "and" ? hijos.every((h) => evaluar(fila, h)) : hijos.some((h) => evaluar(fila, h))
 }
 
-/** Every column named by the conditions of a logic tree. */
-function columnasDe(lista: string): string[] {
-  return partirNivel(lista).flatMap((item) => {
+/**
+ * Walks a logic tree: every condition names a known column, and an unquoted value holds none of
+ * the characters PostgREST reserves there (a parenthesis ends the value). `in.(..)` is a list and a
+ * double-quoted value may hold anything.
+ */
+function validarLista(lista: string, exigir: (columna: string) => void): void {
+  for (const item of partirNivel(lista)) {
     const logica = item.match(/^(?:and|or)\(([\s\S]*)\)$/)
-    return logica ? columnasDe(logica[1]) : [item.slice(0, item.indexOf("."))]
-  })
+    if (logica) {
+      validarLista(logica[1], exigir)
+      continue
+    }
+    const i1 = item.indexOf(".")
+    const i2 = item.indexOf(".", i1 + 1)
+    exigir(item.slice(0, i1))
+    const op = item.slice(i1 + 1, i2)
+    const valor = item.slice(i2 + 1)
+    if (op !== "in" && !/^".*"$/.test(valor) && /[()]/.test(valor)) {
+      throw new Error(`postgrest-memoria: reserved character in the unquoted value of "${item}"`)
+    }
+  }
 }
 
 /** What `.or(lista)` means: at least one item of the list matches. */
@@ -138,7 +153,7 @@ export function tablaPostgrest(filas: Fila[]) {
         gte: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(f[c], v) >= 0), q),
         lt: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(f[c], v) < 0), q),
         lte: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(f[c], v) <= 0), q),
-        or: (lista: string) => (columnasDe(lista).forEach(exigir), consulta.or.push(lista), predicados.push((f) => cumpleOr(f, lista)), q),
+        or: (lista: string) => (validarLista(lista, exigir), consulta.or.push(lista), predicados.push((f) => cumpleOr(f, lista)), q),
         order: (col: string, o?: { ascending?: boolean }) => (exigir(col), orden.push({ col, asc: o?.ascending !== false }), q),
         range: (desde: number, hasta: number) => ((rango = [desde, hasta]), q),
         limit: (n: number) => ((rango = [0, n - 1]), q),

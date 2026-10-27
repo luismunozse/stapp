@@ -241,19 +241,22 @@ export async function GET(request: Request) {
     }
 
     if (search) {
+      // The term goes into two filter strings (clients here, orders below). It is sanitized once:
+      // a comma or a parenthesis would make the client lookup a syntax error (400) and silently
+      // drop the client-name matches, and in the orders filter it could close the group around the
+      // branch scope and add a clause next to it.
+      const termino = terminoDeBusquedaSeguro(search)
+
       // Primero buscar IDs de clientes que coincidan con la búsqueda
       const { data: clientesMatch } = await supabaseAdmin
         .from("clientes")
         .select("id")
         .eq("organization_id", organizationId!)
-        .or(`nombre.ilike.%${search}%,telefono.ilike.%${search}%`)
+        .or(`nombre.ilike.%${termino}%,telefono.ilike.%${termino}%`)
 
       const clienteIds = clientesMatch?.map(c => c.id) || []
 
       // Construir filtros de búsqueda (sin ::text que no es válido en PostgREST).
-      // The term goes inside an expression combined with the branch filter: if it
-      // could close it, it would add a condition next to that filter.
-      const termino = terminoDeBusquedaSeguro(search)
       const filters = [
         `dispositivo.ilike.%${termino}%`,
         `codigo_orden.ilike.%${termino}%`,

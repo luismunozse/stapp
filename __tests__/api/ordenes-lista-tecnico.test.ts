@@ -248,6 +248,26 @@ describe("GET /api/ordenes - everyone else is unchanged", () => {
     expect((await listar()).ids).toEqual(["de-otro-SJ", "libre-SJ"])
   })
 
+  it.each([
+    ["a comma", "Pérez, Juan"],
+    ["parentheses", "(011) 4444"],
+  ])("a client search with %s still finds the client (the lookup shares the sanitized term)", async (_caso, busqueda) => {
+    mockAuthSuccess({ role: "ADMIN", userId: "adm" })
+    montar({
+      toma: false,
+      clientes: [
+        { id: "cli-1", organization_id: "org-1", nombre: "Pérez, Juan", telefono: "(011) 4444-5555" },
+        { id: "cli-2", organization_id: "org-1", nombre: "Lopez", telefono: "1166" },
+      ],
+      filas: [orden("de-perez", SJ, null, { cliente_id: "cli-1" }), orden("de-lopez", SJ, null, { cliente_id: "cli-2" })],
+    })
+
+    const { status, ids } = await listar(`?search=${encodeURIComponent(busqueda)}`)
+
+    expect(status).toBe(200)
+    expect(ids).toEqual(["de-perez"])
+  })
+
   it("a one-branch org: a technician gets exactly assigned + unassigned, as before (XC-3)", async () => {
     mockAuthSuccess({ role: "TECNICO", userId: "tec-1", sucursalId: SJ })
     montar({

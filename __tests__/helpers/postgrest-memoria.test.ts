@@ -40,6 +40,23 @@ describe("single / maybeSingle", () => {
   })
 })
 
+describe("values inside an or() list", () => {
+  const lista = (valor: string) => () => tablaPostgrest(FILAS).select("id").or(`nombre.ilike.${valor},sucursal_id.eq.s1`)
+
+  it.each([
+    ["a parenthesis", "%(011) 4444%"],
+    ["a closing parenthesis", "%a)%"],
+  ])("an unquoted value with %s is a syntax error, as in PostgREST", (_caso, valor) => {
+    expect(lista(valor)).toThrow(/reserved/)
+  })
+
+  it("a quoted value may hold them, and an in.(..) list is a list", async () => {
+    expect(lista('"%(011) 4444%"')).not.toThrow()
+    const { data } = await tablaPostgrest(FILAS).select("id").or("id.in.(a,c),nombre.ilike.%zz%")
+    expect(data).toEqual([{ id: "a" }, { id: "c" }])
+  })
+})
+
 describe("columns that do not exist in the fixtures", () => {
   const sobreTabla = (fn: (q: any) => unknown) => () => fn(tablaPostgrest(FILAS).select("id"))
 
