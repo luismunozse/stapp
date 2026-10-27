@@ -37,6 +37,7 @@ export async function POST(
       .select("id, rol, activo, porcentaje_comision, costo_hora")
       .eq("id", tecnicoDestinoId)
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (destinoError || !destino) {
