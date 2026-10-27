@@ -1,4 +1,7 @@
+import { supabaseAdmin } from "@/lib/supabase"
 import { SUCURSAL_NINGUNA, assertSucursalEnOrg, sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
+import { soloAtendidasPor, sucursalQueAtiende } from "@/lib/sucursal-ordenes"
+import { ESTADOS_ACTIVOS } from "@/lib/order-states"
 
 /**
  * The branch a technician / seller list is scoped to, or null for every branch.
@@ -43,4 +46,34 @@ export async function sucursalParaListaPersonal(params: {
     )
   }
   return lectura.sucursalId
+}
+
+/**
+ * The branch whose technicians can take EVERY open order of `origenId` that an ADMIN's bulk move
+ * would touch: the picker of the destination. A technician can be assigned only an order handled by
+ * his own branch (BM-5), so the orders to move decide the list, not the origin technician's branch:
+ *  - all of them handled by one branch: that branch;
+ *  - handled by several: nobody (the move is refused unless the destination is an ADMIN);
+ *  - none open: the scope the request already had.
+ * `sucursalDelAlcance` is that scope (the ADMIN's selected branch, or null for all of them), the
+ * same one the bulk move applies.
+ */
+export async function sucursalParaReasignar(params: {
+  organizationId: string
+  origenId: string
+  sucursalDelAlcance: string | null
+}): Promise<string | null> {
+  const { data } = await soloAtendidasPor(
+    supabaseAdmin
+      .from("ordenes_servicio")
+      .select("sucursal_id")
+      .eq("organization_id", params.organizationId)
+      .eq("tecnico_id", params.origenId)
+      .in("estado", ESTADOS_ACTIVOS as unknown as string[]),
+    params.sucursalDelAlcance,
+  )
+  const ramas = new Set((data ?? []).map((o: { sucursal_id: string }) => sucursalQueAtiende(o)).filter(Boolean))
+  if (ramas.size === 0) return params.sucursalDelAlcance
+  if (ramas.size === 1) return [...ramas][0]
+  return SUCURSAL_NINGUNA
 }

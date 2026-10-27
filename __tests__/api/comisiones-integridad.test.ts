@@ -328,9 +328,10 @@ describe("C4 — POST /api/tecnicos/[id]/reasignar — costo_hora_snapshot updat
   it("C4.1 — unpaid orders update includes costo_hora_snapshot from destino técnico", async () => {
     mockAdminAuth()
 
+    // The destination must belong to the branch that handles each order (BM-5).
     const mockOrdenes = [
-      { id: "o1", estado: "EN_REPARACION", comision_pagada: false },
-      { id: "o2", estado: "RECIBIDO", comision_pagada: false },
+      { id: "o1", estado: "EN_REPARACION", comision_pagada: false, sucursal_id: "suc-1", tecnico_id: "tec-origen" },
+      { id: "o2", estado: "RECIBIDO", comision_pagada: false, sucursal_id: "suc-1", tecnico_id: "tec-origen" },
     ]
 
     // Spy on the two update calls to ordenes_servicio:
@@ -356,6 +357,7 @@ describe("C4 — POST /api/tecnicos/[id]/reasignar — costo_hora_snapshot updat
           activo: true,
           porcentaje_comision: 15,
           costo_hora: 750,
+          sucursal_id: "suc-1",
         }) as any
       }
       if (table === "ordenes_servicio") {
@@ -386,8 +388,8 @@ describe("C4 — POST /api/tecnicos/[id]/reasignar — costo_hora_snapshot updat
     mockAdminAuth()
 
     const mockOrdenes = [
-      { id: "o1", estado: "REPARADO", comision_pagada: true },   // paid — skip
-      { id: "o2", estado: "EN_REPARACION", comision_pagada: false }, // unpaid — update
+      { id: "o1", estado: "REPARADO", comision_pagada: true, sucursal_id: "suc-1", tecnico_id: "tec-origen" },   // paid — skip
+      { id: "o2", estado: "EN_REPARACION", comision_pagada: false, sucursal_id: "suc-1", tecnico_id: "tec-origen" }, // unpaid — update
     ]
 
     const inCalls: any[] = []
@@ -414,6 +416,7 @@ describe("C4 — POST /api/tecnicos/[id]/reasignar — costo_hora_snapshot updat
           activo: true,
           porcentaje_comision: 20,
           costo_hora: 900,
+          sucursal_id: "suc-1",
         }) as any
       }
       if (table === "ordenes_servicio") return ordenesChain as any

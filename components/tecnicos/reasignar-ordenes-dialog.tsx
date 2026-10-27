@@ -50,8 +50,10 @@ export function ReasignarOrdenesDialog({
   ordenesActivas,
   onSuccess,
 }: Props) {
+  // The server offers the technicians that can take every open order of this one (BM-5): the branch
+  // that handles those orders, which is not always the technician's own.
   const { data: tecnicos = [], isLoading } = useSWR<TecnicoOpt[]>(
-    open ? "/api/tecnicos" : null,
+    open ? `/api/tecnicos?paraReasignarDe=${encodeURIComponent(tecnicoOrigenId)}` : null,
     fetcher,
     { revalidateOnFocus: false }
   )

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, assertSucursalEnOrg } from "@/lib/sucursal"
-import { sucursalParaListaPersonal } from "@/lib/sucursal-personal"
+import { sucursalParaListaPersonal, sucursalParaReasignar } from "@/lib/sucursal-personal"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import bcrypt from "bcryptjs"
@@ -16,13 +16,25 @@ export async function GET(request: Request) {
     // own scope applies. `?alcance=escritura` is what the order form sends: the branch
     // the order will be created in. See sucursalParaListaPersonal for who may ask for what.
     const { searchParams } = new URL(request.url)
-    const sucursalId = await sucursalParaListaPersonal({
+    let sucursalId = await sucursalParaListaPersonal({
       role,
       userSucursalId: session!.user.sucursalId ?? null,
       organizationId: organizationId!,
       sucursalSolicitada: searchParams.get("sucursalId"),
       alcance: searchParams.get("alcance") === "escritura" ? "escritura" : "lectura",
     })
+
+    // `?paraReasignarDe=<id>` is the destination picker of a bulk move (an ADMIN's): the technicians
+    // that can take every open order of that technician in the scope the move applies, which
+    // may not be the technician's own branch (an order handled by another one).
+    const origenId = searchParams.get("paraReasignarDe")
+    if (role === "ADMIN" && origenId) {
+      sucursalId = await sucursalParaReasignar({
+        organizationId: organizationId!,
+        origenId,
+        sucursalDelAlcance: sucursalId,
+      })
+    }
 
     let query = supabaseAdmin
       .from("users")
