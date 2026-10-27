@@ -7,13 +7,23 @@
  *  - a query that starts `.from("ordenes_servicio")` and is not a write, or one whose use cannot be seen;
  *  - a `.select(..)` whose columns EMBED the table (`ordenes_servicio(..)`, `alias:ordenes_servicio(..)`,
  *    `ordenes_servicio!inner(..)`, `ordenes_servicio!fk(..)`, `ordenes_servicio:fk_column(..)`): the
- *    orders reach the caller through another table.
+ *    orders reach the caller through another table. A `${NAME}` of a template, or a whole argument, that
+ *    names a string constant (of the file, or one another file exports) is written out first, so an embed
+ *    assembled from a constant is seen;
+ *  - the table NAMED as a string value that is handed to a call (`fetchAllRows("ordenes_servicio", ..)`) or
+ *    held in a constant: the query is built somewhere else. An audit entry (`audit.create("ordenes_servicio",
+ *    ..)`) names its entity and reads nothing. A table named by a parameter (`.from(tabla)`) cannot be seen:
+ *    its callers are the ones swept.
  *
  * A read counts as scoped only when a helper is APPLIED TO THAT read, one helper call per read:
  *  (A) a filter builder (`filtroVisibleEnSucursal`, `filtroAtiendeSucursal`, `filtroListaTecnico`), or, for
- *      an embed, a filter on the embed's `sucursal_id` / `tecnico_id`, sits inside the read's own chain;
+ *      an embed, a filter on the embed's `sucursal_id` / `tecnico_id`, sits inside the read's own chain. A
+ *      filter on an embed scopes only when the embed is `!inner` (every embed of its path): without it
+ *      PostgREST filters the embedded rows and keeps every parent row;
  *  (B) the chain is an argument of a wrapper (`soloAtendidasPor`, `soloOriginadasEn`, the door's
- *      `.aplicar` / `.aplicarAEmbed`);
+ *      `.aplicar` / `.aplicarAEmbed`). The door's wrappers narrow a plain embed on purpose (the client
+ *      detail, the technician counts); `soloOriginadasEn(.., "embed.sucursal_id")` is an `.eq` on the embed
+ *      and needs `!inner` like any other filter on it;
  *  (C) the chain is held in a variable that a wrapper (or an embed filter) receives.
  * A call that is only in the same function, that wraps another table's query, or that is already spent
  * on another read, covers nothing. `cargarOrdenEnAlcance` is a loader (it reads at its call site) and
@@ -42,16 +52,31 @@ const ESCRITURAS = ["insert", "update", "upsert", "delete"]
 /** A column of an embed that scopes it by branch or by technician. */
 const COLUMNAS_DE_ALCANCE = ["sucursal_id", "tecnico_id"]
 
+/** One embed of the orders table in a select list. */
+interface EmbedDeOrdenes {
+  /** The alias, or the table's own name: how a filter names it. */
+  nombre: string
+  /** The dotted path of embed names from the queried table (`facturas.ordenes_servicio`). */
+  ruta: string
+  /** Every embed of the path is `!inner`: only then does a filter on it drop the parent rows. */
+  interior: boolean
+}
+
 interface Lectura {
   linea: number
   posicion: number
-  /** Where the read starts: the `.from(..)` call, or the `.select(..)` call of an embed. */
+  /** Where the read starts: the `.from(..)` call, the `.select(..)` call of an embed, or the call (or constant) that names the table as a string. */
   desde: ts.Node
   /** The nearest function (or the file) that holds the read. */
   contenedor: ts.Node
-  /** The names (aliases) under which the table is embedded; empty for a query that starts on the table. */
-  embeds: string[]
+  /** The embeds of the table in the read's select; empty for a query that starts on the table. */
+  embeds: EmbedDeOrdenes[]
+  /** The table is only NAMED as a string value (`fetchAllRows("ordenes_servicio", ..)`, a constant): the query is built elsewhere. */
+  esMencion?: boolean
 }
+
+/** String constants by name: the ones other files export, so that a `${NAME}` in a select can be followed. */
+type Constantes = ReadonlyMap<string, string>
 
 const esFuncion = (n: ts.Node) =>
   ts.isFunctionDeclaration(n) ||
@@ -90,43 +115,158 @@ const nombreDeLlamada = (n: ts.CallExpression): string | null => {
   return ts.isIdentifier(f) ? f.text : ts.isPropertyAccessExpression(f) ? f.name.text : null
 }
 
-/** The source of a `.select(..)` argument; an identifier is followed to the `const` it names in the same file. */
-function textoDelSelect(arg: ts.Node, sf: ts.SourceFile): string {
+/**
+ * `audit.create("ordenes_servicio", id, ..)` / `createAuditLogger(..).update("ordenes_servicio", ..)`: an audit
+ * entry names the entity it is about; it reads no order.
+ */
+function esEntradaDeAuditoria(llamada: ts.CallExpression): boolean {
+  const f = llamada.expression
+  if (!ts.isPropertyAccessExpression(f) || !["create", "update", "delete"].includes(f.name.text)) return false
+  const receptor = desenvolver(f.expression)
+  return (ts.isIdentifier(receptor) && receptor.text === "audit") || (ts.isCallExpression(receptor) && nombreDeLlamada(receptor) === "createAuditLogger")
+}
+
+/** Splits a select list on its top-level commas (not the ones inside parens). */
+function partirNivel(texto: string): string[] {
+  const partes: string[] = []
+  let nivel = 0
+  let actual = ""
+  for (const c of texto) {
+    if (c === "(") nivel++
+    if (c === ")") nivel--
+    if (nivel === 0 && c === ",") {
+      partes.push(actual)
+      actual = ""
+    } else {
+      actual += c
+    }
+  }
+  if (actual.trim() !== "") partes.push(actual)
+  return partes.map((p) => p.trim()).filter((p) => p !== "")
+}
+
+/** The head of an embed that is the orders table: `ordenes_servicio`, `alias:ordenes_servicio`, with `!hint`s or `:column`. */
+const CABEZA_DE_ORDENES = /^(?:(\w+)\s*:\s*)?ordenes_servicio((?:\s*[:!]\s*\w+)*)$/
+
+/**
+ * The embeds of `ordenes_servicio` in a select list, with the dotted path of each and whether every embed of
+ * the path is `!inner`. A path that appears both ways (a select with two shapes) counts as not inner.
+ */
+function embedsDeOrdenes(columnas: string): EmbedDeOrdenes[] {
+  const encontrados: EmbedDeOrdenes[] = []
+  const recorrer = (lista: string, prefijo: string[], interiorHastaAqui: boolean) => {
+    for (const item of partirNivel(lista)) {
+      const abre = item.indexOf("(")
+      if (abre < 0) continue
+      const cabeza = item.slice(0, abre).trim()
+      const nombre = (cabeza.includes(":") ? cabeza.split(":")[0] : cabeza.split("!")[0]).trim()
+      const interior = interiorHastaAqui && /!\s*inner\b/.test(cabeza)
+      const ruta = [...prefijo, nombre]
+      if (CABEZA_DE_ORDENES.test(cabeza)) encontrados.push({ nombre, ruta: ruta.join("."), interior })
+      recorrer(item.slice(abre + 1, item.lastIndexOf(")")), ruta, interior)
+    }
+  }
+  recorrer(columnas.replace(/[`'"]/g, ""), [], true)
+  const porRuta = new Map<string, EmbedDeOrdenes>()
+  for (const e of encontrados) {
+    const previo = porRuta.get(e.ruta)
+    porRuta.set(e.ruta, previo ? { ...previo, interior: previo.interior && e.interior } : e)
+  }
+  return [...porRuta.values()]
+}
+
+/** The string constants of a file (`const NAME = "..."`), by name; `soloExportadas` keeps the ones another file can import. */
+function constantesDeTexto(sf: ts.SourceFile, soloExportadas = false): Map<string, string> {
+  const salida = new Map<string, string>()
+  const visitar = (n: ts.Node) => {
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) {
+      const sentencia = n.parent?.parent
+      const exportada = !!sentencia && ts.isVariableStatement(sentencia) && !!ts.getModifiers(sentencia)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
+      const valor = textoDe(n.initializer)
+      if (valor !== null && (!soloExportadas || exportada)) salida.set(n.name.text, valor)
+    }
+    ts.forEachChild(n, visitar)
+  }
+  visitar(sf)
+  return salida
+}
+
+/** True when a string value names the orders table or embeds it. */
+const nombraOEmbebeOrdenes = (valor: string) => valor.trim() === "ordenes_servicio" || embedsDeOrdenes(valor).length > 0
+
+/** The EXPORTED string constants of a source that name or embed the orders table: what another file may use in a select. */
+function constantesDeOrdenes(src: string, rel = "x.ts"): Map<string, string> {
+  const sf = ts.createSourceFile(rel, src, ts.ScriptTarget.Latest, true, rel.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
+  return new Map([...constantesDeTexto(sf, true)].filter(([, valor]) => nombraOEmbebeOrdenes(valor)))
+}
+
+/**
+ * The text of a `.select(..)` argument with the constants it uses written out: an identifier is followed
+ * to the `const` it names (this file's, or one another file exports) and so is every `${NAME}` of a template;
+ * any other `${..}` is dropped.
+ */
+function textoDelSelect(arg: ts.Node, sf: ts.SourceFile, locales: Map<string, string>, globales: Constantes): string {
+  const valorDe = (nombre: string) => locales.get(nombre) ?? globales.get(nombre)
   const base = desenvolver(arg)
   if (ts.isIdentifier(base)) {
-    let encontrado: string | null = null
-    const buscar = (n: ts.Node) => {
-      if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.name.text === base.text && n.initializer) {
-        encontrado = n.initializer.getText(sf)
-      }
-      if (encontrado === null) ts.forEachChild(n, buscar)
-    }
-    buscar(sf)
-    if (encontrado !== null) return encontrado
+    const valor = valorDe(base.text)
+    if (valor !== undefined) return valor
   }
-  return arg.getText(sf)
+  return arg
+    .getText(sf)
+    .replace(/\$\{\s*([A-Za-z_$][\w$]*)\s*\}/g, (_todo, nombre: string) => valorDe(nombre) ?? "")
+    .replace(/\$\{[^}]*\}/g, "")
 }
 
-/** The names under which a select list embeds `ordenes_servicio` (an alias, or the table's own name). */
-function embedsDeOrdenes(columnas: string): string[] {
-  const nombres: string[] = []
-  const patron = /(?<![\w.])(?:(\w+)\s*:\s*)?ordenes_servicio((?:\s*[:!]\s*\w+)*)\s*\(/g
-  for (const m of columnas.matchAll(patron)) nombres.push(m[1] ?? "ordenes_servicio")
-  return nombres
-}
-
-function analizar(src: string, rel = "x.ts"): { sf: ts.SourceFile; lecturas: Lectura[] } {
+function analizar(src: string, rel = "x.ts", globales: Constantes = new Map()): { sf: ts.SourceFile; lecturas: Lectura[] } {
   const sf = ts.createSourceFile(rel, src, ts.ScriptTarget.Latest, true, rel.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
   const lecturas: Lectura[] = []
+  const locales = constantesDeTexto(sf)
   const contenedorDe = (n: ts.Node) => {
     let contenedor: ts.Node = n.parent
     while (!esFuncion(contenedor) && !ts.isSourceFile(contenedor)) contenedor = contenedor.parent
     return contenedor
   }
-  const registrar = (n: ts.Node, embeds: string[]) =>
-    lecturas.push({ linea: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1, posicion: n.getStart(sf), desde: n, contenedor: contenedorDe(n), embeds })
+  const registrar = (n: ts.Node, embeds: EmbedDeOrdenes[], desde: ts.Node = n, esMencion = false) =>
+    lecturas.push({ linea: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1, posicion: n.getStart(sf), desde, contenedor: contenedorDe(n), embeds, esMencion })
+
+  // The names a select uses: a constant of this file that a select reads is counted through the select.
+  const usadasEnSelect = new Set<string>()
+  const recogerNombres = (n: ts.Node) => {
+    if (ts.isIdentifier(n)) usadasEnSelect.add(n.text)
+    ts.forEachChild(n, recogerNombres)
+  }
+  const buscarSelects = (n: ts.Node) => {
+    if (ts.isCallExpression(n) && nombreDeLlamada(n) === "select" && n.arguments[0]) recogerNombres(n.arguments[0])
+    ts.forEachChild(n, buscarSelects)
+  }
+  buscarSelects(sf)
+
+  /** A string that names the table or embeds it, handed to a call or held in a constant: a read that is built elsewhere. */
+  const mencion = (n: ts.StringLiteral | ts.NoSubstitutionTemplateLiteral | ts.TemplateExpression) => {
+    const texto = ts.isTemplateExpression(n) ? [n.head.text, ...n.templateSpans.map((s) => s.literal.text)].join(" ") : n.text
+    if (!(!ts.isTemplateExpression(n) && texto.trim() === "ordenes_servicio") && embedsDeOrdenes(texto).length === 0) return
+    let nodo: ts.Node = n
+    while (nodo.parent && esTransparente(nodo.parent) && nodo.parent.expression === nodo) nodo = nodo.parent
+    const padre = nodo.parent
+    // A literal inside the first argument of a select is part of that select's read, which counts it.
+    for (let a: ts.Node | undefined = n.parent; a && !esFuncion(a); a = a.parent) {
+      if (ts.isCallExpression(a) && nombreDeLlamada(a) === "select" && a.arguments[0] && n.pos >= a.arguments[0].pos && n.end <= a.arguments[0].end) return
+    }
+    if (padre && ts.isCallExpression(padre) && padre.arguments.some((a) => a === nodo)) {
+      const nombre = nombreDeLlamada(padre)
+      if (nombre === "from" && ts.isPropertyAccessExpression(padre.expression) && padre.arguments[0] === nodo) return // a .from(..) is a read by itself
+      if (nombre !== null && ENVOLTURAS.includes(nombre)) return // the embed a wrapper names (`aplicarAEmbed(q, "ordenes_servicio")`), not a table read
+      if (esEntradaDeAuditoria(padre)) return // an audit entry names its entity, it reads nothing
+      registrar(n, [], padre, true)
+    } else if (padre && ts.isVariableDeclaration(padre) && padre.initializer === nodo) {
+      if (ts.isIdentifier(padre.name) && usadasEnSelect.has(padre.name.text)) return // counted through the select that uses it
+      registrar(n, [], n, true)
+    }
+  }
 
   const visitar = (n: ts.Node) => {
+    if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateExpression(n)) mencion(n)
     if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.arguments[0]) {
       const nombre = n.expression.name.text
       if (nombre === "from" && textoDe(n.arguments[0]) === "ordenes_servicio") {
@@ -135,7 +275,7 @@ function analizar(src: string, rel = "x.ts"): { sf: ts.SourceFile; lecturas: Lec
         if (metodo === null || !ESCRITURAS.includes(metodo)) registrar(n, [])
       }
       if (nombre === "select") {
-        const embeds = embedsDeOrdenes(textoDelSelect(n.arguments[0], sf))
+        const embeds = embedsDeOrdenes(textoDelSelect(n.arguments[0], sf, locales, globales))
         if (embeds.length > 0) registrar(n, embeds)
       }
     }
@@ -162,13 +302,25 @@ function topeDeLaCadena(n: ts.Node): ts.Node {
 
 /**
  * A filter on a column of the embed that scopes it: `.eq("ordenes_servicio.sucursal_id", ..)`, or the same
- * through the table it hangs from (`.eq("facturas.ordenes_servicio.sucursal_id", ..)`).
+ * through the table it hangs from (`.eq("facturas.ordenes_servicio.sucursal_id", ..)`), by the full path of the
+ * embed. Only an `!inner` embed (every embed of its path) counts: without it PostgREST filters the embedded
+ * rows and keeps EVERY parent row, so the read still returns the other branches' parents.
  */
-function esFiltroDeEmbed(llamada: ts.CallExpression, embeds: string[]): boolean {
+function esFiltroDeEmbed(llamada: ts.CallExpression, embeds: EmbedDeOrdenes[]): boolean {
   if (!ts.isPropertyAccessExpression(llamada.expression) || !llamada.arguments[0]) return false
   const columna = textoDe(llamada.arguments[0])
   if (columna === null) return false
-  return embeds.some((e) => COLUMNAS_DE_ALCANCE.some((c) => columna === `${e}.${c}` || columna.endsWith(`.${e}.${c}`)))
+  return embeds.some((e) => e.interior && COLUMNAS_DE_ALCANCE.some((c) => columna === `${e.ruta}.${c}`))
+}
+
+/** `soloOriginadasEn(chain, s, "embed.sucursal_id")` filters like an `.eq` on the embed: it needs the embed to be `!inner` too. */
+function envolturaSobreEmbedPlano(llamada: ts.CallExpression, embeds: EmbedDeOrdenes[]): boolean {
+  if (nombreDeLlamada(llamada) !== "soloOriginadasEn" || embeds.length === 0) return false
+  const columna = llamada.arguments[2] ? textoDe(llamada.arguments[2]) : null
+  if (columna === null || !columna.includes(".")) return false
+  const ruta = columna.split(".").slice(0, -1).join(".")
+  const embed = embeds.find((e) => e.ruta === ruta)
+  return embed !== undefined && !embed.interior
 }
 
 function llamadasDentro(raiz: ts.Node, cuando: (c: ts.CallExpression) => boolean): ts.CallExpression[] {
@@ -209,11 +361,15 @@ function candidatas(lectura: Lectura): ts.CallExpression[] {
   const tope = topeDeLaCadena(lectura.desde)
   const salida: ts.CallExpression[] = []
 
-  // (A) a filter builder, or a filter on the embed's branch / technician column, inside the chain.
+  // (A) a filter builder, or a filter on the embed's branch / technician column, inside the chain. A table that
+  // is only named by a string (`fetchAllRows("ordenes_servicio", .., (q) => ..)`) builds its query in a callback:
+  // a wrapper applied there counts too.
   salida.push(
     ...llamadasDentro(tope, (c) => {
       const nombre = nombreDeLlamada(c)
-      return (nombre !== null && FILTROS.includes(nombre)) || (lectura.embeds.length > 0 && esFiltroDeEmbed(c, lectura.embeds))
+      if (nombre !== null && FILTROS.includes(nombre)) return true
+      if (lectura.esMencion && nombre !== null && ENVOLTURAS.includes(nombre)) return true
+      return lectura.embeds.length > 0 && esFiltroDeEmbed(c, lectura.embeds)
     }),
   )
 
@@ -223,7 +379,7 @@ function candidatas(lectura: Lectura): ts.CallExpression[] {
   const padre = actual.parent
   if (padre && ts.isCallExpression(padre) && padre.arguments[0] === actual) {
     const nombre = nombreDeLlamada(padre)
-    if (nombre !== null && ENVOLTURAS.includes(nombre)) salida.push(padre)
+    if (nombre !== null && ENVOLTURAS.includes(nombre) && !envolturaSobreEmbedPlano(padre, lectura.embeds)) salida.push(padre)
   }
 
   // (C) the chain is held in a variable that a wrapper receives, or whose embed is filtered.
@@ -232,7 +388,9 @@ function candidatas(lectura: Lectura): ts.CallExpression[] {
     salida.push(
       ...llamadasDentro(lectura.contenedor, (c) => {
         const nombre = nombreDeLlamada(c)
-        if (nombre !== null && ENVOLTURAS.includes(nombre) && c.arguments[0]) return raizDeLaCadena(c.arguments[0]) === variable
+        if (nombre !== null && ENVOLTURAS.includes(nombre) && c.arguments[0]) {
+          return raizDeLaCadena(c.arguments[0]) === variable && !envolturaSobreEmbedPlano(c, lectura.embeds)
+        }
         if (lectura.embeds.length > 0 && esFiltroDeEmbed(c, lectura.embeds)) {
           return ts.isPropertyAccessExpression(c.expression) && raizDeLaCadena(c.expression.expression) === variable
         }
@@ -244,8 +402,8 @@ function candidatas(lectura: Lectura): ts.CallExpression[] {
 }
 
 /** The reads of a source file that are not covered by a helper applied to them: the ones that need a listing. */
-function sinAlcance(src: string, rel = "x.ts"): number[] {
-  const { lecturas } = analizar(src, rel)
+function sinAlcance(src: string, rel = "x.ts", globales: Constantes = new Map()): number[] {
+  const { lecturas } = analizar(src, rel, globales)
   const gastadas = new Set<ts.Node>()
   const sueltas: number[] = []
   for (const lectura of lecturas) {
@@ -272,6 +430,16 @@ const EXENTOS: Listado = new Map([
   ["app/(dashboard)/dashboard/page.tsx", { sitios: 1, motivo: `the technician's cards: ${ASIGNADAS}` }],
   ["app/api/cron/engagement/route.ts", { sitios: 2, motivo: CRON }],
   ["app/api/cron/recordatorios/route.ts", { sitios: 1, motivo: CRON }],
+  // The crons that name the table to a generic reader (`fetchAllRows("ordenes_servicio", ..)`, `countRows(..)`).
+  ["app/api/cron/auto-archive-dormant/route.ts", { sitios: 1, motivo: `${CRON} (the last order date of every organization)` }],
+  ["app/api/cron/feature-usage/route.ts", { sitios: 2, motivo: `${CRON} (counts of real orders per organization)` }],
+  ["app/api/cron/lifecycle-emails/route.ts", { sitios: 1, motivo: `${CRON} (order history per organization for win-back and milestone emails)` }],
+  ["app/api/cron/re-engagement/route.ts", { sitios: 1, motivo: `${CRON} (the last order date of every organization)` }],
+  ["app/api/cron/trial-management/route.ts", { sitios: 1, motivo: `${CRON} (whether a trial organization has orders)` }],
+  [
+    "lib/reportes/notas-credito-devengado.ts",
+    { sitios: 1, motivo: "defines the embed `ordenes_servicio(estado)` that the credit-note queries of the reports use: it reads only the order's state, and those queries are scoped by notas_credito.sucursal_id" },
+  ],
   ["app/api/superadmin/email-campaigns/route.ts", { sitios: 2, motivo: SUPERADMIN }],
   ["app/api/superadmin/organizations/[id]/route.ts", { sitios: 1, motivo: SUPERADMIN }],
   ["app/api/superadmin/stats/engagement/route.ts", { sitios: 1, motivo: SUPERADMIN }],
@@ -333,13 +501,13 @@ const PENDIENTE_PR5B: Listado = new Map([
   ["app/api/tecnicos/[id]/insights/route.ts", { sitios: 1, motivo: "technician insights" }],
   ["app/api/tecnicos/[id]/reasignar/route.ts", { sitios: 1, motivo: "bulk reassignment" }],
   ["lib/notas-credito/documento.ts", { sitios: 1, motivo: "the order behind a credit note document" }],
-  ["app/api/reportes/estado-resultados/route.ts", { sitios: 1, motivo: "report" }],
+  ["app/api/reportes/estado-resultados/route.ts", { sitios: 2, motivo: "report (the order read; the credit-note query through the shared embed is scoped by notas_credito.sucursal_id)" }],
   ["app/api/reportes/fallas-comunes/route.ts", { sitios: 1, motivo: "report" }],
   ["app/api/reportes/performance-tecnicos/route.ts", { sitios: 1, motivo: "report" }],
   ["app/api/reportes/rentabilidad-tecnicos/route.ts", { sitios: 1, motivo: "report" }],
   ["app/api/reportes/rentabilidad/route.ts", { sitios: 1, motivo: "report" }],
   ["app/api/reportes/tasa-retorno/route.ts", { sitios: 1, motivo: "report" }],
-  ["app/api/reportes/tendencia-financiera/route.ts", { sitios: 1, motivo: "report" }],
+  ["app/api/reportes/tendencia-financiera/route.ts", { sitios: 2, motivo: "report (the order read; the credit-note query through the shared embed is scoped by notas_credito.sucursal_id)" }],
   ["app/api/reportes/tiempo-reparacion/route.ts", { sitios: 1, motivo: "report" }],
   ["app/api/reportes/top-clientes/route.ts", { sitios: 1, motivo: "report" }],
 ])
@@ -366,7 +534,8 @@ const LISTAS: Array<[string, Listado]> = [
 ]
 
 /** The lines of a source that are reported as loose. */
-const sueltas = (src: string) => sinAlcance(`export async function GET() {\n${src}\n}`).map((l) => l - 1)
+const sueltas = (src: string, constantes: Record<string, string> = {}) =>
+  sinAlcance(`export async function GET() {\n${src}\n}`, "x.ts", new Map(Object.entries(constantes))).map((l) => l - 1)
 
 describe("detector, with planted offenders", () => {
   it("reports a read in a function that calls no helper", () => {
@@ -593,12 +762,161 @@ describe("detector, with planted offenders", () => {
       expect(sueltas(src)).toEqual([2])
     })
   })
+
+  describe("a filter on the embed scopes it only when the embed is !inner (without it every parent row stays)", () => {
+    const tabla = (select: string, resto: string) => `  return supabaseAdmin.from("facturas").select("${select}")${resto}`
+
+    it.each([
+      ["a plain embed filtered by branch", "id, ordenes_servicio(sucursal_id)", `.eq("ordenes_servicio.sucursal_id", s)`],
+      ["a plain embed filtered by technician", "id, ordenes_servicio(tecnico_id)", `.eq("ordenes_servicio.tecnico_id", u)`],
+      ["an aliased plain embed", "id, orden:ordenes_servicio(sucursal_id)", `.eq("orden.sucursal_id", s)`],
+      ["a plain embed behind a foreign-key hint", "id, ordenes_servicio!orden_id_fkey(sucursal_id)", `.eq("ordenes_servicio.sucursal_id", s)`],
+      ["an inner embed under a plain one", "id, facturas(ordenes_servicio!inner(sucursal_id))", `.eq("facturas.ordenes_servicio.sucursal_id", s)`],
+      ["a plain embed under an inner one", "id, facturas!inner(ordenes_servicio(sucursal_id))", `.eq("facturas.ordenes_servicio.sucursal_id", s)`],
+    ])("does not count: %s", (_caso, select, filtro) => {
+      expect(sueltas(tabla(select, filtro))).toEqual([1])
+    })
+
+    it.each([
+      ["an inner embed filtered by branch", "id, ordenes_servicio!inner(sucursal_id)", `.eq("ordenes_servicio.sucursal_id", s)`],
+      ["an inner embed filtered by technician", "id, ordenes_servicio!inner(tecnico_id)", `.eq("ordenes_servicio.tecnico_id", u)`],
+      ["an aliased inner embed", "id, orden:ordenes_servicio!inner(sucursal_id)", `.eq("orden.sucursal_id", s)`],
+      ["an inner embed behind a foreign-key hint", "id, ordenes_servicio!orden_id_fkey!inner(sucursal_id)", `.eq("ordenes_servicio.sucursal_id", s)`],
+      ["inner embeds all the way down", "id, facturas!inner(ordenes_servicio!inner(sucursal_id))", `.eq("facturas.ordenes_servicio.sucursal_id", s)`],
+    ])("counts: %s", (_caso, select, filtro) => {
+      expect(sueltas(tabla(select, filtro))).toEqual([])
+    })
+
+    it("the same rule when the chain is held in a variable and the filter is applied to it", () => {
+      const con = (select: string) => `  let q = supabaseAdmin.from("facturas").select("${select}")\n  if (s) q = q.eq("ordenes_servicio.sucursal_id", s)`
+      expect(sueltas(con("id, ordenes_servicio(sucursal_id)"))).toEqual([1])
+      expect(sueltas(con("id, ordenes_servicio!inner(sucursal_id)"))).toEqual([])
+    })
+
+    it("the drop of !inner from a real-looking invoice read is caught (the sweep used to stay green)", () => {
+      const factura = (select: string) =>
+        `  const q = supabaseAdmin.from("facturas").select(\`*, ${select} (id, numero_orden, sucursal_id, clientes (*)), pagos_parciales (*)\`).eq("id", id)\n  return opts?.sid ? q.eq("ordenes_servicio.sucursal_id", opts.sid) : q`
+      expect(sueltas(factura("ordenes_servicio!inner"))).toEqual([])
+      expect(sueltas(factura("ordenes_servicio"))).toEqual([1])
+    })
+
+    it("a wrapper that names the embed's column needs the embed to be !inner too", () => {
+      const con = (select: string) => `  return soloOriginadasEn(supabaseAdmin.from("facturas").select("${select}"), s, "ordenes_servicio.sucursal_id")`
+      expect(sueltas(con("id, ordenes_servicio!inner(sucursal_id)"))).toEqual([])
+      expect(sueltas(con("id, ordenes_servicio(sucursal_id)"))).toEqual([1])
+    })
+
+    it("a select with two shapes counts as inner only if both are", () => {
+      const con = (a: string, b: string) => `  return supabaseAdmin.from("facturas").select(c ? "id, ${a}(sucursal_id)" : "id, ${b}(sucursal_id)").eq("ordenes_servicio.sucursal_id", s)`
+      expect(sueltas(con("ordenes_servicio!inner", "ordenes_servicio!inner"))).toEqual([])
+      expect(sueltas(con("ordenes_servicio!inner", "ordenes_servicio"))).toEqual([1])
+    })
+
+    it("the door's wrappers stay accepted on a plain embed: they narrow the embedded orders on purpose (the client detail)", () => {
+      expect(sueltas(`  return alcance.aplicarAEmbed(supabaseAdmin.from("clientes").select("id, ordenes_servicio(id)"), "ordenes_servicio")`)).toEqual([])
+      expect(sueltas(`  return supabaseAdmin.from("clientes").select("id, ordenes_servicio(id)").or(filtroVisibleEnSucursal(s), { referencedTable: "ordenes_servicio" })`)).toEqual([])
+    })
+  })
+
+  describe("an embed assembled from a constant of another file", () => {
+    const NC = { NC_ORDEN_ESTADO_EMBED: "ordenes_servicio(estado)" }
+
+    it("is followed through ${} in a template: the notes of credit select the order's state", () => {
+      const src = "  return supabaseAdmin.from(\"notas_credito\").select(`monto, venta_id, orden_id, ${NC_ORDEN_ESTADO_EMBED}`).eq(\"organization_id\", o)"
+      expect(sueltas(src, NC)).toEqual([1])
+    })
+
+    it("a filter on the parent's own branch column does not scope the embedded order, but a wrapper does", () => {
+      const select = "supabaseAdmin.from(\"notas_credito\").select(`monto, ${NC_ORDEN_ESTADO_EMBED}`)"
+      expect(sueltas(`  let q = ${select}\n  if (s) q = q.eq("sucursal_id", s)`, NC)).toEqual([1])
+      expect(sueltas(`  return soloOriginadasEn(${select}, s)`, NC)).toEqual([])
+    })
+
+    it("is followed when the constant is the whole select argument", () => {
+      expect(sueltas(`  return supabaseAdmin.from("notas_credito").select(NC_ORDEN_ESTADO_EMBED)`, NC)).toEqual([1])
+    })
+
+    it("a constant that is not an orders embed is not a read", () => {
+      expect(sueltas("  return supabaseAdmin.from(\"notas_credito\").select(`monto, ${OTRA_COSA}`)", { OTRA_COSA: "clientes(nombre)" })).toEqual([])
+      expect(sueltas("  return supabaseAdmin.from(\"notas_credito\").select(`monto, ${DESCONOCIDA}`)")).toEqual([])
+    })
+
+    it("the definition of such a constant is itself reported (anyone could use it elsewhere)", () => {
+      expect(sinAlcance(`export const NC_ORDEN_ESTADO_EMBED = "ordenes_servicio(estado)"`)).toEqual([1])
+    })
+
+    it("a constant of the same file that a select uses is ONE read, not two", () => {
+      const src = `const COLUMNAS = "id, ordenes_servicio(id)"\nexport async function GET() {\n  return supabaseAdmin.from("clientes").select(COLUMNAS)\n}`
+      expect(sinAlcance(src)).toEqual([3])
+      expect(sinAlcance(`const COLUMNAS = "id, ordenes_servicio(id)"\nexport async function GET() {\n  return soloOriginadasEn(supabaseAdmin.from("clientes").select(COLUMNAS), s)\n}`)).toEqual([])
+    })
+
+    it("only the constants a file EXPORTS are offered to the others (a private constant of the same name is another thing)", () => {
+      expect([...constantesDeOrdenes(`export const A = "ordenes_servicio(estado)"\nconst B = "ordenes_servicio(id)"\nexport const C = "clientes(nombre)"`).keys()]).toEqual(["A"])
+    })
+
+    it("a template literal that holds the embed and is handed to something else is reported", () => {
+      expect(sueltas("  return construir(`id, ordenes_servicio(id)`)")).toEqual([1])
+    })
+  })
+
+  describe("the table named as a string value", () => {
+    it.each([
+      ["a generic row reader", `  return fetchAllRows("ordenes_servicio", "organization_id", (q) => q.gte("fecha_ingreso", desde))`],
+      ["a row counter", `  return countRows("ordenes_servicio", o, undefined, { soloReales: true })`],
+      ["a call that is not a query at all", `  return anything(1, "ordenes_servicio")`],
+      ["a name held in a constant that a query then uses", `  const TABLA = "ordenes_servicio"\n  return supabaseAdmin.from(TABLA).select("id")`],
+      ["the table typed with as const", `  return fetchAllRows("ordenes_servicio" as const, "id", (q) => q)`],
+    ])("reports %s", (_caso, src) => {
+      expect(sueltas(src)).toHaveLength(1)
+    })
+
+    it("a filter builder inside the reader's callback scopes it", () => {
+      expect(sueltas(`  return fetchAllRows("ordenes_servicio", "id", (q) => q.or(filtroAtiendeSucursal(s)))`)).toEqual([])
+    })
+
+    it("a wrapper applied to the reader's query, or around the reader, scopes it", () => {
+      expect(sueltas(`  return fetchAllRows("ordenes_servicio", "id", (q) => soloAtendidasPor(q, s))`)).toEqual([])
+      expect(sueltas(`  return soloAtendidasPor(fetchAllRows("ordenes_servicio", "id", (q) => q), s)`)).toEqual([])
+    })
+
+    it("a wrapper in the callback of ANOTHER table's reader does not scope this one", () => {
+      const src = `  await fetchAllRows("ventas", "id", (q) => soloOriginadasEn(q, s))\n  return fetchAllRows("ordenes_servicio", "id", (q) => q)`
+      expect(sueltas(src)).toEqual([2])
+    })
+
+    it("the table of a .from is still ONE read, however it is written", () => {
+      expect(sueltas(`  return supabaseAdmin.from("ordenes_servicio").select("id")`)).toEqual([1])
+    })
+
+    it("text that only talks about the table is not a read: prose, a property value, a comparison", () => {
+      expect(sueltas(`  const nota = "ordenes_servicio no tiene created_at"`)).toEqual([])
+      expect(sueltas(`  await log({ entidad: "ordenes_servicio" })`)).toEqual([])
+      expect(sueltas(`  return tabla === "ordenes_servicio"`)).toEqual([])
+      expect(sueltas(`  // fetchAllRows("ordenes_servicio", "id", q)\n  return 1`)).toEqual([])
+    })
+
+    it("an audit entry names its entity and reads nothing; the same call on anything else is reported", () => {
+      expect(sueltas(`  await audit.create("ordenes_servicio", id, { a: 1 })`)).toEqual([])
+      expect(sueltas(`  await audit.update("ordenes_servicio", id, antes, despues)`)).toEqual([])
+      expect(sueltas(`  await createAuditLogger(o, u, request).delete("ordenes_servicio", id, orden)`)).toEqual([])
+      expect(sueltas(`  await cache.update("ordenes_servicio", id, antes, despues)`)).toEqual([1])
+      expect(sueltas(`  await audit.leer("ordenes_servicio", id)`)).toEqual([1])
+    })
+
+    it("a table named by a parameter cannot be seen here: its callers are the ones swept", () => {
+      expect(sueltas(`  return supabaseAdmin.from(tabla).select("*")`)).toEqual([])
+    })
+  })
 })
 
 describe("source tree", () => {
-  const archivos = leerFuentes(["app", "lib", "components", "hooks", "contexts"])
-    .filter(({ src }) => src.includes("ordenes_servicio"))
-    .map(({ rel, src }) => ({ rel, src, sueltas: sinAlcance(src, rel), lecturas: analizar(src, rel).lecturas.length }))
+  const fuentes = leerFuentes(["app", "lib", "components", "hooks", "contexts"])
+  // The constants the files export that name or embed the table: a `${NAME}` in a select of another file is followed.
+  const globales: Constantes = new Map(fuentes.filter(({ src }) => src.includes("ordenes_servicio")).flatMap(({ rel, src }) => [...constantesDeOrdenes(src, rel)]))
+  const archivos = fuentes
+    .filter(({ src }) => src.includes("ordenes_servicio") || [...globales.keys()].some((nombre) => src.includes(nombre)))
+    .map(({ rel, src }) => ({ rel, src, sueltas: sinAlcance(src, rel, globales), lecturas: analizar(src, rel, globales).lecturas.length }))
 
   it("scans the real tree (guards against a ghost loop)", () => {
     const rels = new Set(archivos.map((a) => a.rel))
@@ -621,6 +939,18 @@ describe("source tree", () => {
     expect(de("app/api/clientes/[id]/route.ts")).toBeGreaterThan(0)
     expect(de("app/api/tecnicos/route.ts")).toBeGreaterThan(0)
     expect(de("app/api/garantias/route.ts")).toBeGreaterThan(0)
+  })
+
+  it("the embed another file exports is followed, and the tables a cron names to a generic reader are seen", () => {
+    const de = (rel: string) => archivos.find((a) => a.rel === rel)?.lecturas ?? 0
+    expect(globales.get("NC_ORDEN_ESTADO_EMBED")).toBe("ordenes_servicio(estado)")
+    // one read of the orders table in the report and one of the embed through the constant
+    expect(de("app/api/reportes/estado-resultados/route.ts")).toBeGreaterThan(
+      archivos.find((a) => a.rel === "app/api/reportes/estado-resultados/route.ts")!.src.match(/from\("ordenes_servicio"\)/g)!.length,
+    )
+    for (const cron of ["auto-archive-dormant", "feature-usage", "lifecycle-emails", "re-engagement", "trial-management"]) {
+      expect(de(`app/api/cron/${cron}/route.ts`), cron).toBeGreaterThan(0)
+    }
   })
 
   it("every approved helper is exported by the module that defines it", () => {
