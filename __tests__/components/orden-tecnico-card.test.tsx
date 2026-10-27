@@ -31,10 +31,30 @@ const props = (extra: Record<string, unknown> = {}) => ({
 
 describe("OrdenTecnicoCard - assignee from another branch", () => {
   it("read-only: shows the assignee even though they are not in the list", () => {
-    render(<OrdenTecnicoCard {...props({ readOnly: true, tecnicoActual: DE_OTRA_SUCURSAL })} />)
+    render(<OrdenTecnicoCard {...props({ readOnly: true, listaCargada: true, tecnicoActual: DE_OTRA_SUCURSAL })} />)
 
     expect(screen.getByText("Carla · otra sucursal")).toBeInTheDocument()
     expect(screen.queryByText("Sin asignar")).not.toBeInTheDocument()
+  })
+
+  // The mark claims "this person is not in the branch's list": only true once that list has loaded.
+  it.each([
+    ["the list has not loaded (or the viewer never fetches it)", undefined],
+    ["the list is flagged as not loaded", false],
+  ])("read-only: the assignee is shown WITHOUT the mark when %s", (_caso, listaCargada) => {
+    render(<OrdenTecnicoCard {...props({ readOnly: true, listaCargada, tecnicos: [], tecnicoActual: DE_OTRA_SUCURSAL })} />)
+
+    expect(screen.getByText("Carla")).toBeInTheDocument()
+    expect(screen.queryByText(/otra sucursal/)).not.toBeInTheDocument()
+  })
+
+  it("editable: the assignee is offered WITHOUT the mark while the list has not loaded", async () => {
+    render(<OrdenTecnicoCard {...props({ listaCargada: false, tecnicoActual: DE_OTRA_SUCURSAL })} />)
+
+    expect(within(screen.getByRole("combobox")).getByText("Carla")).toBeInTheDocument()
+    abrir(screen.getByRole("combobox"))
+    const opciones = (await screen.findAllByRole("option")).map((o) => o.textContent)
+    expect(opciones).toEqual(["Sin asignar", "Ana", "Beto", "Carla"])
   })
 
   it("read-only: still says Sin asignar when nobody is assigned", () => {
@@ -44,7 +64,7 @@ describe("OrdenTecnicoCard - assignee from another branch", () => {
   })
 
   it("editable: the select shows the assignee and offers them next to the branch's technicians", async () => {
-    render(<OrdenTecnicoCard {...props({ tecnicoActual: DE_OTRA_SUCURSAL })} />)
+    render(<OrdenTecnicoCard {...props({ listaCargada: true, tecnicoActual: DE_OTRA_SUCURSAL })} />)
 
     const selector = screen.getByRole("combobox")
     expect(within(selector).getByText("Carla · otra sucursal")).toBeInTheDocument()
@@ -55,7 +75,7 @@ describe("OrdenTecnicoCard - assignee from another branch", () => {
   })
 
   it("an assignee who IS in the list is not marked", () => {
-    render(<OrdenTecnicoCard {...props({ readOnly: true, tecnicoId: "t-a", tecnicoActual: DE_LA_SUCURSAL[0] })} />)
+    render(<OrdenTecnicoCard {...props({ readOnly: true, listaCargada: true, tecnicoId: "t-a", tecnicoActual: DE_LA_SUCURSAL[0] })} />)
 
     expect(screen.getByText("Ana")).toBeInTheDocument()
     expect(screen.queryByText(/otra sucursal/)).not.toBeInTheDocument()
