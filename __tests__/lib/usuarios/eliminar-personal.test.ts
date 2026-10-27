@@ -4,21 +4,29 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { mockSupabaseFrom, createChainMock } from "../../api/helpers"
 import { eliminarPersonal } from "@/lib/usuarios/eliminar-personal"
 
-function usersWithDelete(error: unknown) {
-  const users = createChainMock(null, null)
-  ;(users as any).then = (resolve: any, reject?: any) =>
-    Promise.resolve({ data: null, error }).then(resolve, reject)
-  return users
-}
-
-function setup(deleteError: unknown, rpcData: string | null = "OK", rpcError: unknown = null) {
-  const users = usersWithDelete(deleteError)
+// users is touched three ways, each awaited on its own: delete() fails with the
+// FK error, select().maybeSingle() reads the email, update() frees it.
+function setup(
+  deleteError: unknown,
+  rpcData: string | null = "OK",
+  rpcError: unknown = null,
+  updateError: unknown = null
+) {
+  const deleteChain = createChainMock(null, deleteError)
+  const readChain = createChainMock(null, null)
+  readChain.maybeSingle = vi.fn().mockResolvedValue({ data: { email: "vendedor@taller.com" }, error: null })
+  const emailUpdate = createChainMock(null, updateError)
+  const users = {
+    delete: vi.fn(() => deleteChain),
+    select: vi.fn(() => readChain),
+    update: vi.fn(() => emailUpdate),
+  }
   const push = createChainMock(null, null)
   const web = createChainMock(null, null)
   const audit = createChainMock(null, null)
   mockSupabaseFrom({ users, push_tokens: push, web_push_subscriptions: web, audit_logs: audit })
   vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: rpcData, error: rpcError } as never)
-  return { users, push, web, audit }
+  return { users, deleteChain, push, web, audit, emailUpdate }
 }
 
 const args = { id: "v1", organizationId: "o1", rol: "VENDEDOR" as const, actorId: "admin1" }
@@ -30,12 +38,12 @@ describe("eliminarPersonal", () => {
   })
 
   it("hard deletes when nothing references the user", async () => {
-    const { users } = setup(null)
+    const { users, deleteChain } = setup(null)
     const r = await eliminarPersonal(args)
     expect(r).toEqual({ ok: true, baja: false })
     expect(users.delete).toHaveBeenCalled()
-    expect(users.eq).toHaveBeenCalledWith("organization_id", "o1")
-    expect(users.eq).toHaveBeenCalledWith("rol", "VENDEDOR")
+    expect(deleteChain.eq).toHaveBeenCalledWith("organization_id", "o1")
+    expect(deleteChain.eq).toHaveBeenCalledWith("rol", "VENDEDOR")
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
@@ -53,7 +61,38 @@ describe("eliminarPersonal", () => {
         action: "DELETE",
         entity: "users",
         entity_id: "v1",
-        changes: { by_admin: true, soft: true },
+        changes: { by_admin: true, soft: true, email_original: "vendedor@taller.com", email_liberado: true },
+      })
+    )
+  })
+
+  it("frees the email on baja and leaves the name alone", async () => {
+    const { users, emailUpdate } = setup({ code: "23503", message: "fk" })
+    await eliminarPersonal(args)
+    expect(users.update).toHaveBeenCalledWith({ email: "baja+v1@baja.stapp.invalid" })
+    expect(emailUpdate.eq).toHaveBeenCalledWith("id", "v1")
+    expect(emailUpdate.eq).toHaveBeenCalledWith("organization_id", "o1")
+    expect(emailUpdate.not).toHaveBeenCalledWith("deleted_at", "is", null)
+  })
+
+  it("does not touch the email on ALREADY_DELETED", async () => {
+    const { users } = setup({ code: "23503" }, "ALREADY_DELETED")
+    await eliminarPersonal(args)
+    expect(users.update).not.toHaveBeenCalled()
+  })
+
+  it("does not touch the email on a hard delete", async () => {
+    const { users } = setup(null)
+    await eliminarPersonal(args)
+    expect(users.update).not.toHaveBeenCalled()
+  })
+
+  it("still reports the baja when freeing the email fails, and the audit says so", async () => {
+    const { audit } = setup({ code: "23503" }, "OK", null, { message: "update down" })
+    expect(await eliminarPersonal(args)).toEqual({ ok: true, baja: true })
+    expect(audit.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changes: { by_admin: true, soft: true, email_original: "vendedor@taller.com", email_liberado: false },
       })
     )
   })

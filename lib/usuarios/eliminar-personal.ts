@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
+import { bajaEmail } from "@/lib/account-deletion/state"
 
 const FK_VIOLATION = "23503"
 
@@ -62,6 +63,32 @@ export async function eliminarPersonal(params: {
     }
   })
 
+  // Free the unique email so the person can be re-hired right away. Best-effort:
+  // the original goes to the audit row; the name stays so history keeps its author.
+  let emailOriginal: string | null = null
+  let emailLiberado = false
+  try {
+    const { data: fila } = await supabaseAdmin
+      .from("users")
+      .select("email")
+      .eq("id", id)
+      .eq("organization_id", organizationId)
+      .maybeSingle()
+    emailOriginal = fila?.email ?? null
+    if (emailOriginal) {
+      const { error: emailError } = await supabaseAdmin
+        .from("users")
+        .update({ email: bajaEmail(id) })
+        .eq("id", id)
+        .eq("organization_id", organizationId)
+        .not("deleted_at", "is", null)
+      if (emailError) console.error("[eliminar-personal] liberar email:", emailError)
+      else emailLiberado = true
+    }
+  } catch (err) {
+    console.error("[eliminar-personal] liberar email:", err)
+  }
+
   try {
     const { error: auditError } = await supabaseAdmin.from("audit_logs").insert({
       organization_id: organizationId,
@@ -69,7 +96,7 @@ export async function eliminarPersonal(params: {
       action: "DELETE",
       entity: "users",
       entity_id: id,
-      changes: { by_admin: true, soft: true },
+      changes: { by_admin: true, soft: true, email_original: emailOriginal, email_liberado: emailLiberado },
     })
     if (auditError) console.error("[eliminar-personal] audit_logs:", auditError)
   } catch (err) {

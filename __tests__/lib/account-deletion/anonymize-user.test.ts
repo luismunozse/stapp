@@ -40,6 +40,15 @@ describe("anonymizeUser", () => {
     expect(users.delete).not.toHaveBeenCalled()
   })
 
+  it("anonimiza igual a un usuario cuyo email ya fue liberado por una baja de admin", async () => {
+    const { users } = setup({ id: "u1", email: "baja+u1@baja.stapp.invalid", organization_id: "o1" })
+    expect(await anonymizeUser("u1")).toEqual({ ok: true, alreadyAnonymized: false })
+    expect(users.update).toHaveBeenCalledWith(expect.objectContaining({
+      email: "deleted+u1@deleted.stapp.invalid",
+      nombre: "Usuario eliminado",
+    }))
+  })
+
   it("borra el avatar de storage (solo el archivo exacto del usuario, no u10.png)", async () => {
     const { remove } = setup({ id: "u1", email: "juan@gmail.com", organization_id: "o1" })
     await anonymizeUser("u1")
