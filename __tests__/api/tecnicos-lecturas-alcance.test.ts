@@ -451,7 +451,7 @@ describe("the open-order counts of the technician screens follow the viewer's sc
 
   // The list of a branch is the list of ITS technicians; the count of each is the orders that scope handles.
   it.each(
-    conNombre([
+    conNombre<[Record<string, number[]>]>([
       [ADMIN_TODAS, { "t-a": [2, 0], "t-b": [0, 2] }],
       [ADMIN_A, { "t-a": [1, 0], "t-a2": [0, 0] }],
       [ADMIN_B, { "t-b": [0, 1], "t-b2": [0, 0] }],
