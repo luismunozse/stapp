@@ -3,6 +3,8 @@ import { NextResponse } from "next/server"
 import { headers } from "next/headers"
 import { validateUserTenant } from "@/lib/tenant"
 import { supabaseAdmin } from "@/lib/supabase"
+import { conSucursalVigente } from "@/lib/sesion-sucursal"
+import { clearSessionCookie } from "@/lib/session-cookie"
 
 export async function getAuthSession() {
   const session = await auth()
@@ -17,6 +19,10 @@ export async function getAuthSession() {
   }
 }
 
+// requireAuth() checks the session against the user's row (see conSucursalVigente)
+// and, for TECNICO/VENDEDOR, returns it with `user.sucursalId` taken from the DB,
+// not from the JWT, which keeps the branch the user had at login for hours after
+// an ADMIN moves them. A stale session is a 401 SESSION_STALE that clears the cookie.
 export async function requireAuth() {
   const { session, organizationId, userId, role } = await getAuthSession()
   if (!session || !organizationId) {
@@ -29,27 +35,91 @@ export async function requireAuth() {
     }
   }
 
-  // Validar contexto de tenant si existe (subdominio)
+  // Validar contexto de tenant si existe (subdominio). The branch lookup is an
+  // independent round-trip, so it runs alongside the tenant check instead of
+  // after it. A tenant 403 wins and discards whatever the lookup answered.
   const headersList = await headers()
   const tenantSlug = headersList.get("x-tenant-slug")
 
-  if (tenantSlug) {
-    const isValidTenant = await validateUserTenant(organizationId, tenantSlug)
-    if (!isValidTenant) {
-      return {
-        error: NextResponse.json(
-          { error: "No tienes acceso a esta organización" },
-          { status: 403 }
-        ),
-        session: null,
-        organizationId: null,
-        userId: null,
-        role: null,
-      }
+  const [isValidTenant, vigente] = await Promise.all([
+    tenantSlug ? validateUserTenant(organizationId, tenantSlug) : true,
+    // Settled, never rejects: a tenant 403 or a throw while this is in flight
+    // must not leave an unhandled rejection behind.
+    conSucursalVigente(session).then(
+      (sesionVigente) => ({ sesionVigente, fallo: false as const }),
+      (err: unknown) => ({ sesionVigente: null, fallo: true as const, err })
+    ),
+  ])
+
+  if (!isValidTenant) {
+    return {
+      error: NextResponse.json(
+        { error: "No tienes acceso a esta organización" },
+        { status: 403 }
+      ),
+      session: null,
+      organizationId: null,
+      userId: null,
+      role: null,
     }
   }
 
-  return { error: null, session, organizationId, userId, role }
+  // Fail-closed on a failed lookup: no 200 on a guessed branch (rationale in
+  // conSucursalVigente).
+  if (vigente.fallo) {
+    console.error("[auth] Could not re-read the user's row:", vigente.err)
+    return {
+      error: NextResponse.json(
+        { error: "No pudimos verificar tu sesión. Intentá de nuevo." },
+        { status: 500 }
+      ),
+      session: null,
+      organizationId: null,
+      userId: null,
+      role: null,
+    }
+  }
+  // The JWT no longer describes the user (row gone or deleted, role or
+  // organization changed in the DB, ADMIN included): 401 SESSION_STALE and clear
+  // the session cookie in the same response. Without that the browser keeps the
+  // stale token and every request repeats this 401; with it the next navigation
+  // carries no token and the middleware sends the user to /login. The error is a
+  // NextResponse, so the cookie rides on it and nothing else has to change.
+  // Never for an impersonation session (same skip as the middleware's
+  // deletedUserResponse): the cookie is the impersonation token, and clearing it
+  // would also drop the superadmin's way back out. Those keep the 401 alone.
+  const sesionVigente = vigente.sesionVigente
+  if (!sesionVigente) {
+    const respuesta = NextResponse.json(
+      { error: "Tu sesión cambió. Volvé a iniciar sesión.", code: "SESSION_STALE" },
+      { status: 401 }
+    )
+    return {
+      error: session.user.isImpersonating ? respuesta : clearSessionCookie(respuesta),
+      session: null,
+      organizationId: null,
+      userId: null,
+      role: null,
+    }
+  }
+
+  return { error: null, session: sesionVigente, organizationId, userId, role }
+}
+
+/**
+ * For server pages/layouts that call `auth()` themselves and need the user's
+ * branch: same fresh value requireAuth() gives the API. Reading
+ * `session.user.sucursalId` from a raw `auth()` returns the stale JWT value
+ * (the session-sucursal-sweep test enforces this).
+ *
+ * Returns null without a session or when the JWT no longer matches the user's
+ * row (gone, deleted, role or organization changed); THROWS when
+ * the lookup fails, so the page errors instead of rendering on a guessed branch.
+ */
+export async function sesionConSucursalVigente() {
+  const session = await auth()
+  if (!session?.user) return null
+  return conSucursalVigente(session)
 }
 
 export async function requireAdmin() {

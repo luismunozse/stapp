@@ -22,6 +22,7 @@ import { verifyGoogleIdToken } from "@/lib/google"
 import { logLoginEvent, logLogoutEvent } from "@/lib/superadmin-audit"
 import { verifyUserTotpCode } from "@/lib/totp"
 import { isUserDeleted, isLoginBlocked } from "@/lib/account-deletion/state"
+import { sessionCookieDomain, sessionCookieName } from "@/lib/session-cookie"
 
 type Rol = "ADMIN" | "TECNICO" | "VENDEDOR"
 
@@ -40,16 +41,11 @@ const THIRTY_DAYS = 30 * 24 * 60 * 60 // 30 días en segundos
 // Tiempo antes de expiración para refrescar automáticamente (6 horas antes)
 const REFRESH_THRESHOLD = 6 * 60 * 60
 
-// Derivar dominio de cookies automáticamente en producción
-// para que la sesión se comparta entre todos los subdominios
-function getCookieDomain(): string | undefined {
-  if (process.env.COOKIE_DOMAIN) return process.env.COOKIE_DOMAIN
-  if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_ROOT_DOMAIN) {
-    return `.${process.env.NEXT_PUBLIC_ROOT_DOMAIN}`
-  }
-  return undefined
-}
-const COOKIE_DOMAIN = getCookieDomain()
+// Dominio de cookies derivado automáticamente en producción para que la sesión
+// se comparta entre todos los subdominios. La regla (y el nombre de la cookie de
+// sesión) viven en lib/session-cookie.ts, compartidas con el middleware y con
+// requireAuth(), que no pueden importar este archivo.
+const COOKIE_DOMAIN = sessionCookieDomain()
 
 // Genera un refresh token único
 function generateRefreshToken(): string {
@@ -630,10 +626,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   // Cookies configuradas para funcionar en todos los subdominios
   cookies: {
     sessionToken: {
-      name:
-        process.env.NODE_ENV === "production"
-          ? "__Secure-next-auth.session-token"
-          : "next-auth.session-token",
+      name: sessionCookieName(),
       options: {
         httpOnly: true,
         sameSite: "lax",
