@@ -357,56 +357,33 @@ export default async function DashboardPage() {
   let avgDiasResolucion: number | null = null
 
   if (isTecnico) {
-    // Lo asignado al técnico, de cualquier sucursal (BM-6): no lleva filtro de sucursal.
     const primerDiaMes = new Date(new Date().setDate(1))
     const hoyIso = new Date().toISOString()
+    // Lo asignado al técnico, de cualquier sucursal (BM-6): no lleva filtro de sucursal. Es la única
+    // lectura de órdenes de este bloque, y está declarada como excepción en ordenes-reads-sweep.
+    const misOrdenes = (columnas: string, opciones?: { count: "exact"; head: true }): any =>
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select(columnas, opciones)
+        .eq("organization_id", organizationId)
+        .eq("tecnico_id", userId)
+    const conteo = { count: "exact", head: true } as const
     const [activas, completadas, recientes, sinDiagnostico, esperandoRepuesto, vencidas, completadasConFecha] = await Promise.all([
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select("id", { count: "exact", head: true })
-        .eq("organization_id", organizationId)
-        .eq("tecnico_id", userId)
-        .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO"]),
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select("id", { count: "exact", head: true })
-        .eq("organization_id", organizationId)
-        .eq("tecnico_id", userId)
+      misOrdenes("id", conteo).in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO"]),
+      misOrdenes("id", conteo)
         .in("estado", ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"])
         .gte("fecha_ingreso", primerDiaMes.toISOString()),
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select(`id, numero_orden, codigo_orden, dispositivo, estado, fecha_ingreso, fecha_prometida, clientes (nombre)`)
-        .eq("organization_id", organizationId)
-        .eq("tecnico_id", userId)
+      misOrdenes(`id, numero_orden, codigo_orden, dispositivo, estado, fecha_ingreso, fecha_prometida, clientes (nombre)`)
         .order("fecha_ingreso", { ascending: false })
         .limit(5),
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select("id", { count: "exact", head: true })
-        .eq("organization_id", organizationId)
-        .eq("tecnico_id", userId)
-        .eq("estado", "RECIBIDO"),
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select("id", { count: "exact", head: true })
-        .eq("organization_id", organizationId)
-        .eq("tecnico_id", userId)
-        .eq("estado", "ESPERANDO_REPUESTO"),
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select(`id, numero_orden, codigo_orden, dispositivo, estado, fecha_prometida, clientes (nombre)`)
-        .eq("organization_id", organizationId)
-        .eq("tecnico_id", userId)
+      misOrdenes("id", conteo).eq("estado", "RECIBIDO"),
+      misOrdenes("id", conteo).eq("estado", "ESPERANDO_REPUESTO"),
+      misOrdenes(`id, numero_orden, codigo_orden, dispositivo, estado, fecha_prometida, clientes (nombre)`)
         .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO"])
         .lt("fecha_prometida", hoyIso)
         .not("fecha_prometida", "is", null)
         .order("fecha_prometida", { ascending: true }),
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select("fecha_ingreso, fecha_completado")
-        .eq("organization_id", organizationId)
-        .eq("tecnico_id", userId)
+      misOrdenes("fecha_ingreso, fecha_completado")
         .in("estado", ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"])
         .not("fecha_completado", "is", null)
         .gte("fecha_ingreso", primerDiaMes.toISOString()),
