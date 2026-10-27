@@ -16,6 +16,7 @@ vi.mock("@/lib/cuenta-corriente-react-pdf", () => ({
   generateReciboCCPDF: vi.fn(async () => Buffer.from("pdf")),
 }))
 
+import { generateResumenCCPDF } from "@/lib/cuenta-corriente-react-pdf"
 import { GET as getCliente } from "@/app/api/clientes/[id]/route"
 import { GET as getCC } from "@/app/api/clientes/[id]/cuenta-corriente/route"
 import { GET as getResumen } from "@/app/api/clientes/[id]/cuenta-corriente/resumen/route"
@@ -96,6 +97,46 @@ describe("customer account statement lines", () => {
     expect(cc.or).toHaveBeenCalledWith(`sucursal_id.eq.${S1},sucursal_id.is.null`)
   })
 
+  it("statement PDF: non-admin gets no running balances, only movements plus the org-wide balance", async () => {
+    vi.mocked(generateResumenCCPDF).mockClear()
+    cc = createChainMock([
+      { tipo: "PAGO", monto: "50", saldo_posterior: "-999", created_at: "2026-01-02T00:00:00Z" },
+    ])
+    mockSupabaseFrom({
+      cuenta_corriente: cc,
+      clientes: createChainMock({ nombre: "Ana", saldo_cuenta: "100" }),
+      organizations: createChainMock({ nombre: "Org", zona_horaria: "UTC" }),
+    })
+    mockAuthSuccess({ role: "VENDEDOR", userId: U1, sucursalId: S1 })
+    await getResumen(createGetRequest("http://localhost/api/x?desde=2026-01-01&hasta=2026-01-31"), params())
+    const arg = vi.mocked(generateResumenCCPDF).mock.calls[0][0]
+    expect(arg.sinSaldosAcumulados).toBe(true)
+    expect(arg.saldoFinal).toBe(100)
+    expect(arg.saldoInicial).toBe(0)
+    expect(arg.movimientos).toHaveLength(1)
+    expect(arg.movimientos[0].saldoPosterior).toBe(0)
+    // No opening-balance lookup either.
+    expect(cc.lt).not.toHaveBeenCalled()
+  })
+
+  it("statement PDF: ADMIN keeps the ledger running balances", async () => {
+    vi.mocked(generateResumenCCPDF).mockClear()
+    cc = createChainMock([
+      { tipo: "PAGO", monto: "50", saldo_posterior: "-999", created_at: "2026-01-02T00:00:00Z" },
+    ])
+    mockSupabaseFrom({
+      cuenta_corriente: cc,
+      clientes: createChainMock({ nombre: "Ana", saldo_cuenta: "100" }),
+      organizations: createChainMock({ nombre: "Org", zona_horaria: "UTC" }),
+    })
+    mockAuthSuccess({ role: "ADMIN" })
+    await getResumen(createGetRequest("http://localhost/api/x?desde=2026-01-01&hasta=2026-01-31"), params())
+    const arg = vi.mocked(generateResumenCCPDF).mock.calls[0][0]
+    expect(arg.sinSaldosAcumulados).toBeFalsy()
+    expect(arg.movimientos[0].saldoPosterior).toBe(-999)
+    expect(arg.saldoFinal).toBe(-999)
+    expect(cc.lt).toHaveBeenCalled()
+  })
   it("statement PDF: ADMIN unscoped", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     await getResumen(createGetRequest("http://localhost/api/x?desde=2026-01-01&hasta=2026-01-31"), params())

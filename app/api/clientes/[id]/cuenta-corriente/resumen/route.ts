@@ -29,9 +29,11 @@ export async function GET(
 
     const { id: clienteId } = await params
 
-    // Non-admins get a statement of the lines stamped with their branch only. The
-    // client's overall balance (saldo_cuenta) is not printed here, and stays
-    // org-wide elsewhere on purpose (design decision).
+    // Non-admins get a statement of the lines stamped with their branch only.
+    // saldo_posterior is the ORG-WIDE running balance, so on a narrowed statement it
+    // would not reconcile with the printed lines: those are printed without running
+    // balances, and the headline is the customer's current org-wide balance
+    // (saldo_cuenta, org-wide on purpose by design).
     const sucursalLineas = await sucursalDeLineasNoAdmin({
       role,
       userSucursalId: session!.user.sucursalId ?? null,
@@ -39,7 +41,7 @@ export async function GET(
 
     const { data: cliente } = await supabaseAdmin
       .from("clientes")
-      .select("nombre, telefono, email, direccion, dni")
+      .select("nombre, telefono, email, direccion, dni, saldo_cuenta")
       .eq("id", clienteId)
       .eq("organization_id", organizationId!)
       .single()
@@ -86,14 +88,14 @@ export async function GET(
 
     // Opening balance = the balance the last movement BEFORE the range left
     // behind. No movement before it means the account starts at zero.
-    let previoQuery = supabaseAdmin
+    const sinSaldosAcumulados = sucursalLineas !== null
+    let previo: { saldo_posterior: string } | null = null
+    if (!sinSaldosAcumulados) {
+      ;({ data: previo } = await supabaseAdmin
       .from("cuenta_corriente")
       .select("saldo_posterior")
       .eq("organization_id", organizationId!)
       .eq("cliente_id", clienteId)
-    previoQuery = aplicarSucursalLineas(previoQuery, sucursalLineas)
-
-    const { data: previo } = await previoQuery
       .lt("created_at", inicioUtc)
       // id breaks created_at ties deterministically: cuids are time-ordered,
       // so the tiebreak agrees with insertion order. Without it two movements
@@ -102,7 +104,8 @@ export async function GET(
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .limit(1)
-      .maybeSingle()
+      .maybeSingle())
+    }
 
     const saldoInicial = previo ? parseFloat(previo.saldo_posterior) : 0
 
@@ -134,7 +137,8 @@ export async function GET(
       fecha: m.created_at,
       tipo: m.tipo,
       monto: parseFloat(m.monto),
-      saldoPosterior: parseFloat(m.saldo_posterior),
+      // Never carried on a branch-scoped statement (org-wide running balance).
+      saldoPosterior: sinSaldosAcumulados ? 0 : parseFloat(m.saldo_posterior),
       metodoPago: m.metodo_pago,
       numeroReferencia: m.numero_referencia,
       referenciaTipo: m.referencia_tipo,
@@ -143,13 +147,18 @@ export async function GET(
     // Closing balance is the last in-range movement's running balance — NOT
     // clientes.saldo_cuenta, which is today's balance and would be wrong for
     // any range that doesn't end today.
-    const saldoFinal = movimientos.length ? movimientos[movimientos.length - 1].saldoPosterior : saldoInicial
+    const saldoFinal = sinSaldosAcumulados
+      ? parseFloat(String(cliente.saldo_cuenta ?? "0"))
+      : movimientos.length
+        ? movimientos[movimientos.length - 1].saldoPosterior
+        : saldoInicial
 
     const pdfBuffer = await generateResumenCCPDF({
       desde,
       hasta,
       saldoInicial,
       saldoFinal,
+      ...(sinSaldosAcumulados ? { sinSaldosAcumulados: true } : {}),
       movimientos,
       cliente: {
         nombre: cliente.nombre,
