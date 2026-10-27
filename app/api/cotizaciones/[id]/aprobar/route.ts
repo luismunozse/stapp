@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { cotizacionEnAlcance, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { aplicarAprobacionCotizacionAOrden } from "@/lib/cotizacion-aprobar-orden"
 // Compartido con la ruta pública de aprobación, que usa el mismo RPC atómico.
@@ -94,7 +95,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     const { id } = await params
@@ -114,6 +115,25 @@ export async function POST(
 
     if (fetchError || !cotizacion) {
       return NextResponse.json({ error: "Cotización no encontrada" }, { status: 404 })
+    }
+
+    // A quote linked to an order of another branch is "not found" for this caller,
+    // before anything is approved. `select("*")` carries no order, so look it up.
+    const alcance = await resolverAlcanceOrdenesDeSesion({
+      role,
+      userId,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    if (alcance.tipo !== "todas" && cotizacion.orden_id) {
+      const { data: ordenVinculada } = await supabaseAdmin
+        .from("ordenes_servicio")
+        .select("sucursal_id, tecnico_id")
+        .eq("id", cotizacion.orden_id)
+        .eq("organization_id", organizationId!)
+        .single()
+      if (!cotizacionEnAlcance(alcance, { orden_id: cotizacion.orden_id, ordenes_servicio: ordenVinculada })) {
+        return NextResponse.json({ error: "Cotización no encontrada" }, { status: 404 })
+      }
     }
 
     // TECNICO ownership check

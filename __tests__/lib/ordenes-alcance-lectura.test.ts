@@ -3,6 +3,7 @@ import {
   resolverAlcanceOrdenes,
   ordenEnAlcance,
   aplicarAlcanceOrdenes,
+  cotizacionEnAlcance,
 } from "@/lib/ordenes/alcance-lectura"
 import { SUCURSAL_NINGUNA } from "@/lib/sucursal"
 
@@ -175,5 +176,28 @@ describe("aplicarAlcanceOrdenes", () => {
     expect(q2.or).toHaveBeenCalledWith(`sucursal_id.eq.${S1},tecnico_id.eq.${U1}`, {
       referencedTable: "ordenes_servicio",
     })
+  })
+})
+
+describe("cotizacionEnAlcance", () => {
+  const vendedor = resolverAlcanceOrdenes({ role: "VENDEDOR", sucursalId: S1, verTodas: false, userId: U1 })
+  const todas = resolverAlcanceOrdenes({ role: "ADMIN", sucursalId: null, verTodas: true, userId: U1 })
+
+  it("a quote without an order is not order data: always in scope", () => {
+    expect(cotizacionEnAlcance(vendedor, { orden_id: null, ordenes_servicio: null })).toBe(true)
+  })
+
+  it("a quote linked to an order follows that order", () => {
+    expect(
+      cotizacionEnAlcance(vendedor, { orden_id: "o1", ordenes_servicio: { sucursal_id: S1, tecnico_id: null } })
+    ).toBe(true)
+    expect(
+      cotizacionEnAlcance(vendedor, { orden_id: "o1", ordenes_servicio: { sucursal_id: S2, tecnico_id: null } })
+    ).toBe(false)
+  })
+
+  it("a linked quote whose order did not load fails closed, except unfiltered", () => {
+    expect(cotizacionEnAlcance(vendedor, { orden_id: "o1", ordenes_servicio: null })).toBe(false)
+    expect(cotizacionEnAlcance(todas, { orden_id: "o1", ordenes_servicio: null })).toBe(true)
   })
 })

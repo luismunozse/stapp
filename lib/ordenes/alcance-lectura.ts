@@ -104,6 +104,21 @@ export function ordenEnAlcance(
   return alcance.tipo === "sucursal_o_asignadas" && orden.tecnico_id === alcance.userId
 }
 
+/**
+ * A quote is visible when the order it is linked to is. `cotizaciones` has no
+ * branch column of its own, so a quote with no order is not order data and
+ * stays visible as before. The caller's select must embed the order with its
+ * `sucursal_id` and `tecnico_id`.
+ */
+export function cotizacionEnAlcance(
+  alcance: AlcanceOrdenes,
+  cotizacion: { orden_id?: string | null; ordenes_servicio?: OrdenAlcanzable | null }
+): boolean {
+  if (alcance.tipo === "todas") return true
+  if (!cotizacion.orden_id) return true
+  return ordenEnAlcance(alcance, cotizacion.ordenes_servicio)
+}
+
 interface QueryFiltrable {
   eq: (columna: string, valor: string) => any
   or: (filtros: string, opciones?: { referencedTable: string }) => any

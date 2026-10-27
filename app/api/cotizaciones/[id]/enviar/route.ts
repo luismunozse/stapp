@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { cotizacionEnAlcance, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
 import { generateCotizacionPDF } from "@/lib/pdf"
 import { buildCotizacionPdfExtras } from "@/lib/cotizacion-pdf"
 import { sendCotizacionEmail } from "@/lib/email"
@@ -14,7 +15,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     const hasCotizaciones = await hasPlanFeature(organizationId!, "cotizaciones_online")
@@ -33,7 +34,7 @@ export async function POST(
       .select(`
         *,
         ordenes_servicio!cotizaciones_orden_id_fkey (
-          id, numero_orden, dispositivo, problema_reportado, organization_id,
+          id, numero_orden, dispositivo, problema_reportado, organization_id, sucursal_id, tecnico_id,
           clientes (*),
           organizations (id, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria)
         ),
@@ -46,7 +47,15 @@ export async function POST(
       .is("deleted_at", null)
       .single()
 
-    if (fetchError || !cotizacion) {
+    // Out of the caller's branch scope = same answer as a missing quote, before
+    // anything is sent or marked.
+    const alcance = await resolverAlcanceOrdenesDeSesion({
+      role,
+      userId,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+
+    if (fetchError || !cotizacion || !cotizacionEnAlcance(alcance, cotizacion)) {
       return NextResponse.json({ error: "Cotización no encontrada" }, { status: 404 })
     }
 
