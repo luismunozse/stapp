@@ -10,24 +10,26 @@ import { aplicarAlcanceOrdenes, type AlcanceOrdenes } from "@/lib/ordenes/alcanc
 export async function consultarDatosDashboard(organizationId: string, alcance: AlcanceOrdenes) {
   // Order-derived queries follow the caller's order read scope. The scope is also
   // part of the cache key of the page's unstable_cache (it is an argument).
-  const ordenesQ = (columnas: string, opciones?: { count: "exact"; head: boolean }) =>
+  // The builders are deliberately loosely typed: a select string held in a variable
+  // cannot be parsed by the typed client, and the call sites cast what they read.
+  const ordenesQ = (columnas: string, opciones?: { count: "exact"; head: boolean }): any =>
     aplicarAlcanceOrdenes(
       supabaseAdmin
         .from("ordenes_servicio")
-        .select(columnas, opciones)
+        .select(columnas as any, opciones)
         .eq("organization_id", organizationId),
       alcance
     )
-  const viaOrden = <Q extends Parameters<typeof aplicarAlcanceOrdenes>[0]>(query: Q): Q =>
+  const viaOrden = (query: any): any =>
     aplicarAlcanceOrdenes(query, alcance, { referencedTable: "ordenes_servicio" })
   // cobros_orden carries no branch of its own: it follows the branch of its order.
-  const cobrosQ = (columnas: string) =>
+  const cobrosQ = (columnas: string): any =>
     alcance.tipo === "todas"
-      ? supabaseAdmin.from("cobros_orden").select(columnas).eq("organization_id", organizationId)
+      ? supabaseAdmin.from("cobros_orden").select(columnas as any).eq("organization_id", organizationId)
       : viaOrden(
           supabaseAdmin
             .from("cobros_orden")
-            .select(`${columnas}, ordenes_servicio!inner(id)`)
+            .select(`${columnas}, ordenes_servicio!inner(id)` as any)
             .eq("organization_id", organizationId)
         )
   const hoy = new Date()

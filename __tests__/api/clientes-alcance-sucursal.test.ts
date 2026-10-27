@@ -23,7 +23,8 @@ import { GET as getRecibo } from "@/app/api/clientes/[id]/cuenta-corriente/[movi
 
 const S1 = "sucursal-1"
 const U1 = "user-1"
-const params = (extra: Record<string, string> = {}) => ({ params: Promise.resolve({ id: "cli-1", ...extra }) })
+const params = () => ({ params: Promise.resolve({ id: "cli-1" }) })
+const paramsMov = () => ({ params: Promise.resolve({ id: "cli-1", movimientoId: "mov-1" }) })
 
 describe("GET /api/clientes/[id] embedded orders", () => {
   let clientes: ReturnType<typeof createChainMock>
@@ -105,7 +106,7 @@ describe("customer account statement lines", () => {
     mockAuthSuccess({ role: "VENDEDOR", userId: U1, sucursalId: S1 })
     cc.single.mockResolvedValueOnce({ data: null, error: { message: "no rows" } })
     const { status, body } = await parseResponse(
-      await getRecibo(createGetRequest(), params({ movimientoId: "mov-1" }))
+      await getRecibo(createGetRequest(), paramsMov())
     )
     expect(cc.eq).toHaveBeenCalledWith("sucursal_id", S1)
     expect(status).toBe(404)
@@ -115,7 +116,7 @@ describe("customer account statement lines", () => {
   it("receipt: ADMIN unscoped", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     cc.single.mockResolvedValueOnce({ data: null, error: { message: "no rows" } })
-    await getRecibo(createGetRequest(), params({ movimientoId: "mov-1" }))
+    await getRecibo(createGetRequest(), paramsMov())
     expect(cc.eq).not.toHaveBeenCalledWith("sucursal_id", expect.anything())
   })
 })
