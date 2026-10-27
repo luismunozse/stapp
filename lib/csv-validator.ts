@@ -1,62 +1,100 @@
 import { z } from 'zod'
 import type { ParsedRow } from './csv-parser'
+import { parseLocalizedNumber } from './number-parse'
+
+// Cells reach the validators as STRINGS (CSV) or native numbers (Excel). Text
+// fields accept both: a numeric Excel cell for telefono/dni/codigo is a valid
+// identifier, not a "format error".
+const toText = (val: unknown): unknown => {
+  if (typeof val === 'number') return Number.isFinite(val) ? String(val) : val
+  if (typeof val === 'string') return val.trim()
+  return val
+}
+
+const optionalText = z.preprocess(toText, z.string().nullish())
+const emailShape = z.string().email()
 
 // Cliente validation schema (matches existing API schema)
 const clienteRowSchema = z.object({
-  nombre: z.string().min(1, 'El nombre es requerido'),
-  telefono: z.string()
-    .min(1, 'El teléfono es requerido')
-    .regex(/^\d{10}$/, 'El teléfono debe tener exactamente 10 dígitos'),
-  email: z.string().email('Email inválido').optional().or(z.literal('')).or(z.null()),
-  direccion: z.string().optional().or(z.null()).or(z.literal('')),
-  dni: z.string().optional().or(z.null()).or(z.literal('')),
+  nombre: z.preprocess(
+    toText,
+    z.string({ required_error: 'El nombre es requerido', invalid_type_error: 'El nombre es requerido' })
+      .min(1, 'El nombre es requerido'),
+  ),
+  telefono: z.preprocess((val, ctx) => {
+    const raw = toText(val)
+    if (raw === null || raw === undefined || raw === '') {
+      ctx.addIssue({ code: 'custom', fatal: true, message: 'El teléfono es requerido' })
+      return z.NEVER
+    }
+    // Spaces, dashes, dots and parentheses are formatting, not content.
+    const digits = typeof raw === 'string' ? raw.replace(/[\s().-]/g, '') : raw
+    if (typeof digits !== 'string' || !/^\d{10}$/.test(digits)) {
+      ctx.addIssue({
+        code: 'custom',
+        fatal: true,
+        message: `El teléfono debe tener exactamente 10 dígitos (recibido: "${String(raw)}")`,
+      })
+      return z.NEVER
+    }
+    return digits
+  }, z.string()),
+  email: z.preprocess(
+    toText,
+    z.string().nullish().refine(
+      (v) => !v || emailShape.safeParse(v).success,
+      (v) => ({ message: `Email inválido: "${v}"` }),
+    ),
+  ),
+  direccion: optionalText,
+  dni: optionalText,
 })
 
-// Inventario validation schema (matches existing API schema)
-// Note: CSV values come as strings, so we need to transform them
-const optionalNonNegNumber = (label: string) =>
-  z.preprocess((val) => {
-    if (val === null || val === undefined || val === '') return undefined
-    if (typeof val === 'number') return val
-    if (typeof val === 'string') {
-      const cleaned = val.replace(/[^\d.,-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')
-      const num = parseFloat(cleaned)
-      if (isNaN(num)) throw new Error(`${label} inválido. Debe ser un número.`)
-      return num
+/**
+ * Number column. `emptyValue` is what a blank cell becomes. Parsing goes through
+ * the shared `parseLocalizedNumber` so "1.500", "1.500,50" and "1,234.56" mean
+ * the same thing here as in "Actualizar precios"; garbage is an explicit error
+ * naming the column and the value, never a silent guess.
+ */
+const numberColumn = (
+  label: string,
+  opts: { integer?: boolean; emptyValue: 0 | undefined; minMessage: string },
+) =>
+  z.preprocess((val, ctx) => {
+    if (val === null || val === undefined || (typeof val === 'string' && val.trim() === '')) {
+      return opts.emptyValue
     }
-    return val
-  }, z.number().min(0, `${label} debe ser mayor o igual a 0`).optional())
+    const num = parseLocalizedNumber(val as string | number)
+    if (num === null || (opts.integer && !Number.isInteger(num))) {
+      ctx.addIssue({
+        code: 'custom',
+        fatal: true,
+        message: opts.integer
+          ? `${label} inválido: "${String(val)}" debe ser un número entero mayor o igual a 0`
+          : `${label} inválido: "${String(val)}" no es un número válido (ejemplos: 1500 o 1.500,50)`,
+      })
+      return z.NEVER
+    }
+    return num
+  }, opts.emptyValue === undefined
+    ? z.number().min(0, opts.minMessage).optional()
+    : z.number().min(0, opts.minMessage))
 
 const inventarioRowSchema = z.object({
-  codigo: z.string().optional().or(z.null()).or(z.literal('')),
-  nombre: z.string().min(1, 'El nombre es requerido'),
-  descripcion: z.string().optional().or(z.null()).or(z.literal('')),
-  categoria: z.string().optional().or(z.null()).or(z.literal('')),
-  tipoDispositivo: z.string().optional().or(z.null()).or(z.literal('')),
-  stock: z.preprocess((val) => {
-    if (val === null || val === undefined || val === '') return 0
-    if (typeof val === 'number') return val
-    if (typeof val === 'string') {
-      const num = parseInt(val.replace(/[^\d-]/g, ''), 10)
-      if (isNaN(num)) throw new Error('Stock inválido. Debe ser un número entero mayor o igual a 0')
-      return num
-    }
-    return val
-  }, z.number().int().min(0, 'El stock debe ser mayor o igual a 0')),
-  precioCompra: optionalNonNegNumber('Precio de compra'),
-  precioVenta: z.preprocess((val) => {
-    if (val === null || val === undefined || (typeof val === 'string' && val.trim() === '')) return 0
-    if (typeof val === 'number') return val
-    if (typeof val === 'string') {
-      const cleaned = val.replace(/[^\d.,-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')
-      const num = parseFloat(cleaned)
-      if (isNaN(num)) throw new Error('Precio de venta inválido. Debe ser un número mayor o igual a 0')
-      return num
-    }
-    return val
-  }, z.number().min(0, 'El precio de venta debe ser mayor o igual a 0')),
-  proveedor: z.string().optional().or(z.null()).or(z.literal('')),
-  marca: z.string().optional().or(z.null()).or(z.literal('')),
+  codigo: optionalText,
+  nombre: z.preprocess(
+    toText,
+    z.string({ required_error: 'El nombre es requerido', invalid_type_error: 'El nombre es requerido' })
+      .min(1, 'El nombre es requerido'),
+  ),
+  descripcion: optionalText,
+  categoria: optionalText,
+  tipoDispositivo: optionalText,
+  stock: numberColumn('Stock', { integer: true, emptyValue: 0, minMessage: 'El stock debe ser mayor o igual a 0' }),
+  precioCompra: numberColumn('Precio de compra', { emptyValue: undefined, minMessage: 'Precio de compra debe ser mayor o igual a 0' }),
+  precioVenta: numberColumn('Precio de venta', { emptyValue: 0, minMessage: 'El precio de venta debe ser mayor o igual a 0' }),
+  proveedor: optionalText,
+  marca: optionalText,
 })
 
 // Tipo dispositivo enum del schema. Importaciones libres usan 'TODOS' por default.
@@ -86,45 +124,51 @@ export function resolveTipoDispositivo(raw: unknown): string {
 export interface ValidationResult {
   valid: boolean
   data?: any
+  /** Full message including the spreadsheet row: "Fila 7: Precio de venta inválido: ...". */
   error?: string
+  /** Same message without the "Fila N:" prefix (for UIs that show the row separately). */
+  message?: string
+  /** Canonical column (e.g. "precioVenta") of the first problem found, when known. */
+  column?: string
   sinPrecio?: boolean
 }
 
-export function validateClienteRow(row: ParsedRow, rowIndex: number): ValidationResult {
+function invalidResult(error: unknown, rowNumber: number): ValidationResult {
+  let message = 'Error de validación'
+  let column: string | undefined
+  if (error instanceof z.ZodError) {
+    const issues = error.errors
+    message = issues.map(i => i.message).join('; ')
+    const first = issues[0]?.path[0]
+    column = typeof first === 'string' ? first : undefined
+  } else if (error instanceof Error) {
+    message = error.message
+  }
+  return { valid: false, error: `Fila ${rowNumber}: ${message}`, message, column }
+}
+
+/**
+ * @param rowIndex 0-based index of the data row (header excluded).
+ * @param rowNumber real spreadsheet line to report; defaults to `rowIndex + 2`
+ *   (header = line 1), which only holds for CSVs without blank lines.
+ */
+export function validateClienteRow(row: ParsedRow, rowIndex: number, rowNumber = rowIndex + 2): ValidationResult {
   try {
     const data = clienteRowSchema.parse(row)
     return { valid: true, data }
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        valid: false,
-        error: `Fila ${rowIndex + 2}: ${error.errors[0].message}`,
-      }
-    }
-    return {
-      valid: false,
-      error: `Fila ${rowIndex + 2}: ${error instanceof Error ? error.message : 'Error de validación'}`,
-    }
+    return invalidResult(error, rowNumber)
   }
 }
 
-export function validateInventarioRow(row: ParsedRow, rowIndex: number): ValidationResult {
+export function validateInventarioRow(row: ParsedRow, rowIndex: number, rowNumber = rowIndex + 2): ValidationResult {
   try {
     const data = inventarioRowSchema.parse(row)
     const sinPrecio = row.precioVenta === null || row.precioVenta === undefined ||
       (typeof row.precioVenta === 'string' && row.precioVenta.trim() === '')
     return { valid: true, data, sinPrecio }
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        valid: false,
-        error: `Fila ${rowIndex + 2}: ${error.errors[0].message}`,
-      }
-    }
-    return {
-      valid: false,
-      error: `Fila ${rowIndex + 2}: ${error instanceof Error ? error.message : 'Error de validación'}`,
-    }
+    return invalidResult(error, rowNumber)
   }
 }
 
