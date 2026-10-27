@@ -127,7 +127,7 @@ function cumple(fila: Fila, nodo: Nodo): boolean {
     return nodo.op === "and" ? nodo.hijos.every((h) => cumple(fila, h)) : nodo.hijos.some((h) => cumple(fila, h))
   }
   const { col, op, valor } = nodo
-  const actual = fila[col]
+  const actual = leer(fila, col)
   switch (op) {
     case "eq":
       return actual !== null && actual !== undefined && String(actual) === valor
@@ -152,6 +152,30 @@ function cumple(fila: Fila, nodo: Nodo): boolean {
   }
 }
 
+/** A column of a fixture row, or `embed.column` for a column of an embedded row (an object under the embed's name). */
+function leer(fila: Fila, columna: string): any {
+  if (!columna.includes(".")) return fila[columna]
+  let actual: any = fila
+  for (const parte of columna.split(".")) {
+    if (actual === null || actual === undefined) return undefined
+    actual = actual[parte]
+  }
+  return actual
+}
+
+/** True when some fixture row has the column, or the embedded row holding `embed.column`. */
+function existeEnLasFilas(filas: Fila[], columna: string): boolean {
+  const partes = columna.split(".")
+  return filas.some((f) => {
+    let actual: any = f
+    for (const parte of partes) {
+      if (actual === null || typeof actual !== "object" || !(parte in actual)) return false
+      actual = actual[parte]
+    }
+    return true
+  })
+}
+
 /** What `.or(lista)` means: at least one item of the list matches. */
 export function cumpleOr(fila: Fila, lista: string): boolean {
   return parsearLista(lista).some((n) => cumple(fila, n))
@@ -169,7 +193,7 @@ function proyectar(fila: Fila, columnas: string): Fila {
   for (const item of partirNivel(columnas)) {
     if (item === "*") Object.assign(salida, fila)
     else if (item.includes("(")) {
-      const nombre = item.split("(")[0].split("!")[0]
+      const nombre = item.split("(")[0].split("!")[0].trim()
       const alias = nombre.includes(":") ? nombre.split(":")[0] : nombre
       if (alias in fila) salida[alias] = fila[alias]
     } else {
@@ -184,7 +208,7 @@ export function tablaPostgrest(filas: Fila[]) {
   const consultas: Array<{ columnas: string; or: string[] }> = []
   const conocidas = new Set(filas.flatMap((f) => Object.keys(f)))
   const exigir = (columna: string) => {
-    if (filas.length > 0 && !conocidas.has(columna)) {
+    if (filas.length > 0 && !existeEnLasFilas(filas, columna)) {
       throw new Error(`postgrest-memoria: column "${columna}" is not in the fixture rows (known: ${[...conocidas].join(", ")})`)
     }
   }
@@ -198,15 +222,22 @@ export function tablaPostgrest(filas: Fila[]) {
       const orden: Array<{ col: string; asc: boolean }> = []
       let rango: [number, number] | null = null
       const q: any = {
-        eq: (c: string, v: unknown) => (exigir(c), predicados.push((f) => f[c] === v), q),
-        neq: (c: string, v: unknown) => (exigir(c), predicados.push((f) => f[c] !== v), q),
-        in: (c: string, vs: unknown[]) => (exigir(c), predicados.push((f) => vs.includes(f[c])), q),
-        is: (c: string, v: unknown) => (exigir(c), predicados.push((f) => (v === null ? f[c] == null : f[c] === v)), q),
-        ilike: (c: string, p: string) => (exigir(c), predicados.push((f) => typeof f[c] === "string" && aRegex(p).test(f[c])), q),
-        gt: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(f[c], v) > 0), q),
-        gte: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(f[c], v) >= 0), q),
-        lt: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(f[c], v) < 0), q),
-        lte: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(f[c], v) <= 0), q),
+        eq: (c: string, v: unknown) => (exigir(c), predicados.push((f) => leer(f, c) === v), q),
+        neq: (c: string, v: unknown) => (exigir(c), predicados.push((f) => leer(f, c) !== v), q),
+        in: (c: string, vs: unknown[]) => (exigir(c), predicados.push((f) => vs.includes(leer(f, c))), q),
+        is: (c: string, v: unknown) => (exigir(c), predicados.push((f) => (v === null ? leer(f, c) == null : leer(f, c) === v)), q),
+        ilike: (c: string, p: string) => (exigir(c), predicados.push((f) => typeof leer(f, c) === "string" && aRegex(p).test(leer(f, c))), q),
+        gt: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(leer(f, c), v) > 0), q),
+        gte: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(leer(f, c), v) >= 0), q),
+        lt: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(leer(f, c), v) < 0), q),
+        lte: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(leer(f, c), v) <= 0), q),
+        // not(column, operator, value): the negation of the condition an or() list would hold.
+        not: (c: string, op: string, v: unknown) => {
+          exigir(c)
+          const condicion: Nodo = { tipo: "condicion", col: c, op, valor: String(v) }
+          predicados.push((f) => !cumple(f, condicion))
+          return q
+        },
         or: (lista: string) => {
           const arbol = parsearLista(lista)
           columnasDeLaLista(arbol).forEach(exigir)

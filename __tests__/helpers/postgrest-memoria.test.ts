@@ -138,3 +138,69 @@ describe("columns that do not exist in the fixtures", () => {
     expect((await tablaPostgrest([]).select("x").eq("lo_que_sea", 1)).data).toEqual([])
   })
 })
+
+describe("a filter on a column of an embedded table (PostgREST: embed!inner + embed.col)", () => {
+  const FACTURAS = [
+    { id: "f1", total: 100, ordenes_servicio: { organization_id: "o1", sucursal_id: "s1" } },
+    { id: "f2", total: 40, ordenes_servicio: { organization_id: "o1", sucursal_id: "s2" } },
+    { id: "f3", total: 7, ordenes_servicio: { organization_id: "o2", sucursal_id: "s1" } },
+  ]
+  const facturas = () => tablaPostgrest(FACTURAS).select("id, total, ordenes_servicio!inner(organization_id, sucursal_id)")
+
+  it("keeps the rows whose embedded row matches, and the embed travels with them", async () => {
+    const { data } = await facturas().eq("ordenes_servicio.sucursal_id", "s1")
+    expect(data).toEqual([
+      { id: "f1", total: 100, ordenes_servicio: { organization_id: "o1", sucursal_id: "s1" } },
+      { id: "f3", total: 7, ordenes_servicio: { organization_id: "o2", sucursal_id: "s1" } },
+    ])
+  })
+
+  it("filters stack, like the dashboard's organization + branch pair", async () => {
+    const { data } = await facturas().eq("ordenes_servicio.organization_id", "o1").eq("ordenes_servicio.sucursal_id", "s2")
+    expect(data?.map((f: any) => f.id)).toEqual(["f2"])
+  })
+
+  it("a row with no embedded row is out, as in an inner join", async () => {
+    const { data } = await tablaPostgrest([...FACTURAS, { id: "f4", total: 1, ordenes_servicio: null }])
+      .select("id, ordenes_servicio!inner(sucursal_id)")
+      .eq("ordenes_servicio.sucursal_id", "s1")
+    expect(data?.map((f: any) => f.id)).toEqual(["f1", "f3"])
+  })
+
+  it("a column the embedded rows do not have is an error, not NULL for every row", () => {
+    expect(() => facturas().eq("ordenes_servicio.no_existe", "s1")).toThrow(/no_existe/)
+  })
+
+  it("an embed the rows do not have is an error too", () => {
+    expect(() => facturas().eq("garantias.sucursal_id", "s1")).toThrow(/garantias/)
+  })
+})
+
+describe("not()", () => {
+  const FILAS_NOT = [
+    { id: "a", tecnico_id: null, estado: "RECIBIDO" },
+    { id: "b", tecnico_id: "t1", estado: "REPARADO" },
+    { id: "c", tecnico_id: "t2", estado: "ENTREGADO" },
+  ]
+
+  it("not is null keeps the rows that have a value", async () => {
+    const { data } = await tablaPostgrest(FILAS_NOT).select("id").not("tecnico_id", "is", null)
+    expect(data).toEqual([{ id: "b" }, { id: "c" }])
+  })
+
+  it("not in (..) drops the listed values", async () => {
+    const { data } = await tablaPostgrest(FILAS_NOT).select("id").not("estado", "in", "(RECIBIDO,REPARADO)")
+    expect(data).toEqual([{ id: "c" }])
+  })
+
+  it("a column that does not exist is an error", () => {
+    expect(() => tablaPostgrest(FILAS_NOT).select("id").not("derivada_a_sucursal_id", "is", null)).toThrow(/derivada_a_sucursal_id/)
+  })
+})
+
+describe("an embed written with a space before its parenthesis", () => {
+  it("is kept under its name (the dashboard writes `clientes (nombre)`)", async () => {
+    const { data } = await tablaPostgrest([{ id: "a", clientes: { nombre: "Ana" } }]).select("id, clientes (nombre)")
+    expect(data).toEqual([{ id: "a", clientes: { nombre: "Ana" } }])
+  })
+})
