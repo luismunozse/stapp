@@ -3,8 +3,9 @@
 import { useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-import { Loader2, Wrench } from "lucide-react"
+import { Wrench } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ClienteDetalleSkeleton } from "./cliente-detalle-skeleton"
 import { ClienteDetalleHeader } from "./cliente-detalle-header"
 import { ClienteForm } from "@/components/clientes/cliente-form"
 import { ClienteWhatsAppDialog } from "@/components/clientes/cliente-whatsapp-dialog"
@@ -22,6 +23,16 @@ import type { Cliente } from "@/types"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
+// Throws with the HTTP status so the detail can tell "not found" from a failed load.
+class HttpError extends Error {
+  constructor(public status: number) { super(`HTTP ${status}`) }
+}
+const clienteFetcher = async (url: string) => {
+  const res = await fetch(url)
+  if (!res.ok) throw new HttpError(res.status)
+  return res.json()
+}
+
 
 interface ClienteDetalleProps {
   clienteId: string
@@ -38,7 +49,11 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
   const [showExpress, setShowExpress] = useState(false)
 
   const { data: cliente, error, isLoading, mutate } = useSWR<Cliente>(
-    `/api/clientes/${clienteId}`, fetcher, { revalidateOnFocus: false }
+    `/api/clientes/${clienteId}`, clienteFetcher, {
+      revalidateOnFocus: false,
+      // A 404 won't fix itself on retry
+      shouldRetryOnError: (e) => !(e instanceof HttpError && e.status === 404),
+    }
   )
   const { data: ccData, mutate: mutateCC } = useSWR(
     `/api/clientes/${clienteId}/cuenta-corriente?limit=50`, fetcher, { revalidateOnFocus: false }
@@ -55,17 +70,24 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
   })
   const organizationName: string = configData?.nombreEmpresa || ""
 
-  if (isLoading) {
+  if (isLoading) return <ClienteDetalleSkeleton />
+
+  const notFound = (error instanceof HttpError && error.status === 404) || (!error && !cliente)
+  if (error && !notFound) {
     return (
       <div className="px-4 py-6 sm:px-6 max-w-5xl mx-auto">
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="text-center py-20 space-y-4">
+          <p className="text-muted-foreground">No se pudo cargar el cliente.</p>
+          <div className="flex justify-center gap-2">
+            <Button onClick={() => mutate()}>Reintentar</Button>
+            <Button asChild variant="outline"><Link href="/clientes">Volver a clientes</Link></Button>
+          </div>
         </div>
       </div>
     )
   }
 
-  if (error || !cliente || (cliente as any).error) {
+  if (notFound || !cliente) {
     return (
       <div className="px-4 py-6 sm:px-6 max-w-5xl mx-auto">
         <div className="text-center py-20 space-y-4">
