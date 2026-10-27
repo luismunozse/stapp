@@ -122,7 +122,7 @@ Seguimiento: {link_seguimiento}
     label: "Recordatorio de retiro",
     category: "ordenes",
     description:
-      "Recordatorio automático para el cliente que todavía no retiró su equipo: se envía una vez por día mientras la orden siga en estado Reparado, pasados los días de recordatorio configurados, hasta que se retira. También está disponible a mano como \"Recordatorio de retiro\" en el botón de WhatsApp de la orden. Si no se personalizó \"Aviso: Reparado / listo para retirar\", este texto se usa también para ese aviso.",
+      "Recordatorio automático para el cliente que todavía no retiró su equipo: se envía una vez por día mientras la orden siga en estado Reparado, pasados los días de recordatorio configurados, hasta que se retire. También está disponible a mano como \"Recordatorio de retiro\" en el botón de WhatsApp de la orden. Si no se personalizó \"Aviso: Reparado / listo para retirar\", este texto se usa también para ese aviso.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
     defaultText: `Hola {cliente}, le recordamos que su {dispositivo} está listo para retirar.
 
