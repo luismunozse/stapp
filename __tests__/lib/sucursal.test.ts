@@ -15,7 +15,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { cookies } from "next/headers"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createChainMock } from "../api/helpers"
 import {
+  assertSucursalEnOrg,
   resolveSucursalLectura,
   resolverDestinoVenta,
   derivarLecturaVenta,
@@ -1044,5 +1046,34 @@ describe("getNombreSucursal", () => {
     const nombre = await getNombreSucursal("org-1", "suc-inexistente")
 
     expect(nombre).toBeNull()
+  })
+})
+
+describe("assertSucursalEnOrg", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  function sucursalesResponde(row: unknown) {
+    const chain = createChainMock(row)
+    vi.mocked(supabaseAdmin.from).mockImplementation(() => chain as any)
+    return chain
+  }
+
+  it("by default scopes to the org and skips soft-deleted branches, but accepts an inactive one (existing callers)", async () => {
+    const chain = sucursalesResponde({ id: "suc-A" })
+
+    expect(await assertSucursalEnOrg("suc-A", "org-1")).toBe(true)
+
+    expect(chain.eq).toHaveBeenCalledWith("organization_id", "org-1")
+    expect(chain.is).toHaveBeenCalledWith("deleted_at", null)
+    expect(chain.eq).not.toHaveBeenCalledWith("activo", true)
+  })
+
+  it("with soloActiva it also requires an active branch, keeping the org scope", async () => {
+    const chain = sucursalesResponde(null)
+
+    expect(await assertSucursalEnOrg("suc-A", "org-1", { soloActiva: true })).toBe(false)
+
+    expect(chain.eq).toHaveBeenCalledWith("activo", true)
+    expect(chain.eq).toHaveBeenCalledWith("organization_id", "org-1")
   })
 })

@@ -78,18 +78,30 @@ export async function getPrincipalId(organizationId: string): Promise<string | n
   return data?.id ?? null
 }
 
-/** Valida que una sucursal pertenezca a la org y esté activa. Previene cross-org. */
+/**
+ * Valida que una sucursal pertenezca a la org y no esté dada de baja. Previene
+ * cross-org.
+ *
+ * Pese a lo que decía el comentario anterior, NO mira `activo`: una sucursal
+ * desactivada sigue pasando. Los callers existentes (alta de técnico/vendedor,
+ * set-activa, API v1) viven con eso, así que el default no cambia. Quien necesite
+ * rechazar una sucursal inactiva —mover un usuario a ella, por ejemplo— pasa
+ * `{ soloActiva: true }`.
+ */
 export async function assertSucursalEnOrg(
   sucursalId: string,
-  organizationId: string
+  organizationId: string,
+  opciones: { soloActiva?: boolean } = {}
 ): Promise<boolean> {
-  const { data } = await supabaseAdmin
+  let query = supabaseAdmin
     .from("sucursales")
     .select("id")
     .eq("id", sucursalId)
     .eq("organization_id", organizationId)
     .is("deleted_at", null)
-    .single()
+  if (opciones.soloActiva) query = query.eq("activo", true)
+
+  const { data } = await query.single()
   return !!data
 }
 
