@@ -3,6 +3,7 @@
  * `recepciones` has no branch column, so the batch is judged by its members.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { cookies } from "next/headers"
 import { mockAuthSuccess, createChainMock, mockSupabaseFrom, createGetRequest, parseResponse } from "./helpers"
 
 vi.mock("@/lib/subscriptions", () => ({
@@ -52,7 +53,10 @@ function montar(ordenes: any[]) {
 }
 
 describe("GET /api/recepciones/[id] branch scope", () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(cookies).mockResolvedValue({ get: vi.fn(() => undefined), set: vi.fn() } as any)
+  })
 
   it("ADMIN sees every member", async () => {
     montar([orden("a", S1), orden("b", S2)])
@@ -62,13 +66,42 @@ describe("GET /api/recepciones/[id] branch scope", () => {
     expect(body.totales.subtotal).toBe(200)
   })
 
-  it("VENDEDOR sees only the members of the current branch, totals included", async () => {
+  it("ADMIN with a branch selected still gets the whole batch and its totals", async () => {
+    vi.mocked(cookies).mockResolvedValue({
+      get: vi.fn((n: string) => (n === "stapp-sucursal-activa" ? { value: S1 } : undefined)),
+      set: vi.fn(),
+    } as any)
+    montar([orden("a", S1), orden("b", S2)])
+    mockAuthSuccess({ role: "ADMIN" })
+    const { body } = await parseResponse(await GET(createGetRequest(), ctx))
+    expect(body.ordenes.map((o: any) => o.id)).toEqual(["a", "b"])
+    expect(body.totales.subtotal).toBe(200)
+    expect(body.montosParciales).toBeFalsy()
+  })
+
+  it("VENDEDOR with every member visible: unchanged, totals included", async () => {
+    montar([orden("a", S1), orden("b", S1)])
+    mockAuthSuccess({ role: "VENDEDOR", userId: U1, sucursalId: S1 })
+    const { status, body } = await parseResponse(await GET(createGetRequest(), ctx))
+    expect(status).toBe(200)
+    expect(body.ordenes.map((o: any) => o.id)).toEqual(["a", "b"])
+    expect(body.totales.subtotal).toBe(200)
+    expect(body.montosParciales).toBeFalsy()
+  })
+
+  it("VENDEDOR with a partial batch: members of the branch only, money fields null", async () => {
     montar([orden("a", S1), orden("b", S2)])
     mockAuthSuccess({ role: "VENDEDOR", userId: U1, sucursalId: S1 })
     const { status, body } = await parseResponse(await GET(createGetRequest(), ctx))
     expect(status).toBe(200)
     expect(body.ordenes.map((o: any) => o.id)).toEqual(["a"])
-    expect(body.totales.subtotal).toBe(100)
+    expect(body.montosParciales).toBe(true)
+    expect(body.totales.subtotal).toBeNull()
+    expect(body.totales.totalLote).toBeNull()
+    expect(body.totales.yaCobrado).toBeNull()
+    expect(body.totales.pendienteCobro).toBeNull()
+    expect(body.recepcion.descuentoTipo).toBeNull()
+    expect(body.recepcion.descuentoValor).toBeNull()
   })
 
   it("TECNICO also sees members assigned to them in another branch", async () => {
@@ -76,6 +109,7 @@ describe("GET /api/recepciones/[id] branch scope", () => {
     mockAuthSuccess({ role: "TECNICO", userId: U1, sucursalId: S1 })
     const { body } = await parseResponse(await GET(createGetRequest(), ctx))
     expect(body.ordenes.map((o: any) => o.id)).toEqual(["a", "b"])
+    expect(body.montosParciales).toBe(true)
   })
 
   it("no member in scope answers like a missing batch", async () => {

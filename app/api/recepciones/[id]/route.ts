@@ -3,7 +3,7 @@ import { z } from "zod"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
-import { ordenEnAlcance, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
+import { ordenEnAlcance, resolverAlcanceOrdenesDeSesion, type AlcanceOrdenes } from "@/lib/ordenes/alcance-lectura"
 import { calcularTotalLote, round2, type DescuentoTipo } from "@/lib/lote-utils"
 import { ESTADOS_ENTREGADOS, esEstadoEntregado, esEstadoExcluidoDeLote, esEstadoFueraDeLosMontos, liquidarEntregadosPrevios } from "@/lib/lote-estados"
 
@@ -44,11 +44,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       )
     }
 
-    const alcance = await resolverAlcanceOrdenesDeSesion({
-      role,
-      userId,
-      userSucursalId: session!.user.sucursalId ?? null,
-    })
+    // A batch is one negotiation and only ADMIN can deliver it, so ADMIN always gets
+    // the whole batch (the branch switcher does not narrow it). Everyone else is
+    // limited to the members in their order read scope.
+    const alcance: AlcanceOrdenes =
+      role === "ADMIN"
+        ? { tipo: "todas" }
+        : await resolverAlcanceOrdenesDeSesion({
+            role,
+            userId,
+            userSucursalId: session!.user.sucursalId ?? null,
+          })
 
     const { data: recepcion, error: recepcionError } = await supabaseAdmin
       .from("recepciones")
@@ -79,12 +85,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     }
 
     // `recepciones` has no branch of its own: the caller sees the members that are
-    // in their order read scope (totals below are computed over those), and a batch
-    // with none of them answers like a missing one.
+    // in their order read scope, and a batch with none of them answers like a
+    // missing one.
     const lista = (ordenes ?? []).filter((o) => ordenEnAlcance(alcance, o))
     if (alcance.tipo !== "todas" && lista.length === 0) {
       return NextResponse.json({ error: "Recepcion no encontrada" }, { status: 404 })
     }
+    // With members hidden, the batch money (subtotal, discount, total, collected)
+    // cannot be computed honestly: the discount applies to the whole negotiated
+    // batch, and summing the visible subset would be wrong. It is withheld instead
+    // of being summed over amounts the caller cannot see.
+    const montosParciales = lista.length < (ordenes ?? []).length
     // Base de las lineas de dinero: los miembros que siguen dentro del lote.
     // Las ENTREGADO normales se quedan (su costo forma parte del total
     // negociado); las entregadas aparte y las cerradas sin entrega salen — se
@@ -113,8 +124,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         codigo: recepcion.codigo,
         clienteId: recepcion.cliente_id,
         clienteNombre: (recepcion as { clientes?: { nombre?: string } }).clientes?.nombre ?? "",
-        descuentoTipo: recepcion.descuento_tipo ?? null,
-        descuentoValor: recepcion.descuento_valor != null ? Number(recepcion.descuento_valor) : null,
+        descuentoTipo: montosParciales ? null : (recepcion.descuento_tipo ?? null),
+        descuentoValor: montosParciales ? null : recepcion.descuento_valor != null ? Number(recepcion.descuento_valor) : null,
         observaciones: recepcion.observaciones ?? null,
         createdAt: recepcion.created_at,
       },
@@ -128,11 +139,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         presupuesto: o.presupuesto != null ? Number(o.presupuesto) : null,
         costoFinal: o.costo_final != null ? Number(o.costo_final) : null,
       })),
+      montosParciales,
       totales: {
-        subtotal,
-        totalLote,
-        yaCobrado,
-        pendienteCobro,
+        subtotal: montosParciales ? null : subtotal,
+        totalLote: montosParciales ? null : totalLote,
+        yaCobrado: montosParciales ? null : yaCobrado,
+        pendienteCobro: montosParciales ? null : pendienteCobro,
         entregadas,
         // Elegibles todavia por entregar (los cerrados sin entrega no cuentan).
         pendientes: lista.filter((o) => !esEstadoExcluidoDeLote(o.estado)).length,
