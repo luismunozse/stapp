@@ -35,14 +35,17 @@ function usuario(id: string, nombre: string, rol: string, sucursal: string | nul
     organization_id: org,
     sucursal_id: sucursal,
     porcentaje_comision: 0,
+    especialidades: [],
+    avatar_url: null,
+    fecha_ingreso_tecnico: null,
     created_at: "2026-01-01",
   }
 }
 
 const SUCURSALES = [
-  { id: "suc-A", nombre: "Cerro", organization_id: "org-1", deleted_at: null },
-  { id: "suc-B", nombre: "San Justo", organization_id: "org-1", deleted_at: null },
-  { id: "suc-OTRA", nombre: "De otra org", organization_id: "org-2", deleted_at: null },
+  { id: "suc-A", nombre: "Cerro", organization_id: "org-1", principal: true, deleted_at: null },
+  { id: "suc-B", nombre: "San Justo", organization_id: "org-1", principal: false, deleted_at: null },
+  { id: "suc-OTRA", nombre: "De otra org", organization_id: "org-2", principal: true, deleted_at: null },
 ]
 
 function usuariosDe(prefijo: string, rol: string) {
