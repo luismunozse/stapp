@@ -15,6 +15,12 @@ interface OrdenTecnicoCardProps {
    * assignee from another branch (legacy) still shows instead of "Sin asignar".
    */
   tecnicoActual?: { id: string; nombre: string } | null
+  /**
+   * True only once `tecnicos` was fetched successfully for the order's branch. The "otra
+   * sucursal" mark says the assignee is not in that list, which is only a fact then: never
+   * while the list is loading, after it failed, or when the viewer never fetches it.
+   */
+  listaCargada?: boolean
   updating: boolean
   onAsignarTecnico: (tecnicoId: string | null) => void
   readOnly?: boolean
@@ -27,6 +33,7 @@ export function OrdenTecnicoCard({
   tecnicoId,
   tecnicos,
   tecnicoActual,
+  listaCargada,
   updating,
   onAsignarTecnico,
   readOnly,
@@ -36,7 +43,8 @@ export function OrdenTecnicoCard({
   const asignadoFueraDeLista = !!tecnicoActual && tecnicoActual.id === tecnicoId && !tecnicos.some(t => t.id === tecnicoId)
   const opciones: Array<{ id: string; nombre: string }> = asignadoFueraDeLista ? [...tecnicos, tecnicoActual] : tecnicos
   // Marked, so that choosing "Sin asignar" or another technician later is not a surprise.
-  const etiqueta = (t: { id: string; nombre: string }) => (asignadoFueraDeLista && t.id === tecnicoId ? `${t.nombre} · otra sucursal` : t.nombre)
+  const etiqueta = (t: { id: string; nombre: string }) =>
+    asignadoFueraDeLista && listaCargada && t.id === tecnicoId ? `${t.nombre} · otra sucursal` : t.nombre
   const tecnicoAsignado = opciones.find(t => t.id === tecnicoId)
 
   return (

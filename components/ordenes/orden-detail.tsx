@@ -269,9 +269,12 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const sucursalAtiendeId = orden?.sucursalAtiendeId
   // The list is filed under the branch it was fetched for: after the order moves to another
   // branch, the previous branch's technicians are never shown, even if the refetch fails.
-  const tecnicos = tecnicosDe && tecnicosDe.para === sucursalAtiendeId ? tecnicosDe.lista : []
+  const listaCargada = !!tecnicosDe && tecnicosDe.para === sucursalAtiendeId
+  const tecnicos = listaCargada ? tecnicosDe.lista : []
   useEffect(() => {
-    if (!sucursalAtiendeId) return
+    // A viewer who cannot assign has no use for the list (and its branch is not the one it would be
+    // computed against): no request, so no failure to report and no mark to compute.
+    if (!sucursalAtiendeId || tecnicoSoloLectura) return
     let vigente = true
     const fallo = () => {
       if (vigente) toast.error("No se pudo cargar la lista de técnicos", { id: "fetch-tecnicos-error" })
@@ -289,7 +292,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     return () => {
       vigente = false
     }
-  }, [sucursalAtiendeId])
+  }, [sucursalAtiendeId, tecnicoSoloLectura])
 
   // Polling: re-fetch the orden every 15 seconds while the tab is visible.
   // Previously used Supabase Realtime with an HS256-minted JWT (PR3), which
@@ -929,6 +932,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           tecnicoId={orden.tecnicoId}
           tecnicos={tecnicos}
           tecnicoActual={orden.tecnico}
+          listaCargada={listaCargada}
           updating={updating}
           onAsignarTecnico={handleAsignarTecnico}
           readOnly={tecnicoSoloLectura}
@@ -1217,6 +1221,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             tecnicoId={orden.tecnicoId}
             tecnicos={tecnicos}
             tecnicoActual={orden.tecnico}
+            listaCargada={listaCargada}
             updating={updating}
             onAsignarTecnico={handleAsignarTecnico}
             readOnly={tecnicoSoloLectura}

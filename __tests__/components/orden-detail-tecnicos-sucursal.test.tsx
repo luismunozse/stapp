@@ -50,9 +50,10 @@ vi.mock("@/components/ordenes/orden-tecnico-card", () => ({
     tecnicos: Array<{ nombre: string }>
     tecnicoActual?: { nombre: string } | null
     readOnly?: boolean
+    listaCargada?: boolean
   }) => (
     <div data-testid="tecnico-card">
-      {`lista:${p.tecnicos.map((t) => t.nombre).join(",")}|actual:${p.tecnicoActual?.nombre ?? "-"}|readOnly:${p.readOnly ? "si" : "no"}`}
+      {`lista:${p.tecnicos.map((t) => t.nombre).join(",")}|actual:${p.tecnicoActual?.nombre ?? "-"}|readOnly:${p.readOnly ? "si" : "no"}|cargada:${p.listaCargada ? "si" : "no"}`}
     </div>
   ),
 }))
@@ -249,11 +250,98 @@ describe("OrdenDetail - technicians of the handling branch", () => {
       montarRed({ ...ORDEN, sucursalAtiendeId: "suc-A", puedeAsignarTecnico })
       render(<OrdenDetail ordenId="ord-1" />)
 
-      await waitFor(async () => expect(await tarjeta()).toHaveTextContent("lista:Ana,Beto"))
+      // A viewer who cannot assign never fetches the list (C6): wait for the order, not for a list.
+      await waitFor(async () =>
+        expect(await tarjeta()).toHaveTextContent(esperado ? "readOnly:si" : "lista:Ana,Beto"),
+      )
       const lecturas = await soloLectura()
       // The mobile and the desktop layouts each render one card: they must agree.
       expect(lecturas.length).toBeGreaterThanOrEqual(2)
       expect(lecturas.every((v) => v === esperado)).toBe(true)
+    })
+  })
+
+  describe("a viewer who cannot assign never fetches the technician list", () => {
+    it.each([
+      ["a TECNICO", "TECNICO", false],
+      ["a TECNICO against a server that does not say", "TECNICO", undefined],
+      ["a VENDEDOR of another branch", "VENDEDOR", false],
+    ])("%s: no request, no toast, the assignee shown from the order without the mark", async (_caso, rol, puedeAsignarTecnico) => {
+      sesion.role = rol
+      // Even if the endpoint would fail, nothing is asked: so nothing can toast.
+      montarRed(
+        { ...ORDEN, sucursalAtiendeId: "suc-A", puedeAsignarTecnico, tecnicoId: "t-x", tecnico: { id: "t-x", nombre: "Dario" } },
+        {},
+        { "suc-A": "500" },
+      )
+      render(<OrdenDetail ordenId="ord-1" />)
+
+      await waitFor(async () => expect(await tarjeta()).toHaveTextContent("actual:Dario"))
+      await act(async () => {})
+      expect(await tarjeta()).toHaveTextContent("lista:|actual:Dario|readOnly:si|cargada:no")
+      expect(pedidosDeTecnicos()).toEqual([])
+      expect(avisos.error).not.toHaveBeenCalled()
+    })
+
+    it("an ADMIN who can assign does fetch it", async () => {
+      montarRed({ ...ORDEN, sucursalAtiendeId: "suc-A", puedeAsignarTecnico: true })
+      render(<OrdenDetail ordenId="ord-1" />)
+
+      await waitFor(async () => expect(await tarjeta()).toHaveTextContent("lista:Ana,Beto"))
+      expect(pedidosDeTecnicos()).toEqual(["/api/tecnicos?sucursalId=suc-A"])
+    })
+  })
+
+  describe("the card is told the list has loaded only once it did", () => {
+    it("no while the answer is on its way, yes once it arrived", async () => {
+      let soltar!: () => void
+      const retenida = new Promise<void>((resolve) => (soltar = resolve))
+      montarRed({ ...ORDEN, sucursalAtiendeId: "suc-A" }, { "/api/tecnicos?sucursalId=suc-A": retenida })
+      render(<OrdenDetail ordenId="ord-1" />)
+
+      await waitFor(() => expect(pedidosDeTecnicos()).toHaveLength(1))
+      expect(await tarjeta()).toHaveTextContent("lista:|")
+      expect(await tarjeta()).toHaveTextContent("cargada:no")
+
+      await act(async () => {
+        soltar()
+        await retenida
+      })
+      await waitFor(async () => expect(await tarjeta()).toHaveTextContent("cargada:si"))
+    })
+
+    it("a loaded EMPTY list counts as loaded", async () => {
+      montarRed({ ...ORDEN, sucursalAtiendeId: "suc-vacia" })
+      render(<OrdenDetail ordenId="ord-1" />)
+
+      await waitFor(async () => expect(await tarjeta()).toHaveTextContent("cargada:si"))
+      expect(await tarjeta()).toHaveTextContent("lista:|")
+    })
+
+    it.each([
+      ["a server error", "500" as const],
+      ["a network failure", "red" as const],
+    ])("never after %s", async (_caso, fallo) => {
+      montarRed({ ...ORDEN, sucursalAtiendeId: "suc-B" }, {}, { "suc-B": fallo })
+      render(<OrdenDetail ordenId="ord-1" />)
+
+      await waitFor(() => expect(avisos.error).toHaveBeenCalledTimes(1))
+      expect(await tarjeta()).toHaveTextContent("cargada:no")
+    })
+
+    it("not for the new branch after a refresh moved the order and its refetch failed", async () => {
+      const orden: Record<string, unknown> = { ...ORDEN, sucursalAtiendeId: "suc-A" }
+      montarRed(orden, {}, { "suc-B": "500" })
+      render(<OrdenDetail ordenId="ord-1" />)
+      await waitFor(async () => expect(await tarjeta()).toHaveTextContent("cargada:si"))
+
+      orden.sucursalAtiendeId = "suc-B"
+      await act(async () => {
+        await sondeo.refrescar!()
+      })
+
+      await waitFor(() => expect(avisos.error).toHaveBeenCalledTimes(1))
+      expect(await tarjeta()).toHaveTextContent("cargada:no")
     })
   })
 
