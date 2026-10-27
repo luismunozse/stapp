@@ -196,9 +196,9 @@ describe("the technicians offered when creating an order are exactly the ones PO
 })
 
 describe("PUT /api/ordenes/[id] - assigning a technician", () => {
-  function montar(opts: { orden?: Record<string, unknown>; role?: string; userId?: string } = {}) {
+  function montar(opts: { orden?: Record<string, unknown>; role?: string; userId?: string; sucursalId?: string | null } = {}) {
     vi.clearAllMocks()
-    mockAuthSuccess({ role: opts.role ?? "VENDEDOR", userId: opts.userId ?? "u-9", sucursalId: "suc-A" })
+    mockAuthSuccess({ role: opts.role ?? "VENDEDOR", userId: opts.userId ?? "u-9", sucursalId: opts.sucursalId === undefined ? "suc-A" : opts.sucursalId })
     const orden = {
       id: "o1",
       numero_orden: 1,
@@ -256,8 +256,10 @@ describe("PUT /api/ordenes/[id] - assigning a technician", () => {
     expect(ordenes.update).toHaveBeenCalledWith(expect.objectContaining({ tecnico_id: tecnicoId }))
   })
 
+  // Only an ADMIN reaches an order of another branch (a VENDEDOR of A gets "not found" for it),
+  // and he belongs to no branch, so the order's branch is the only one there is to compare with.
   it("the branch is the order's, not the editor's: an order handled by B takes B's technicians", async () => {
-    const { ordenes } = montar({ orden: { sucursal_id: "suc-B", tecnico_id: null } })
+    const { ordenes } = montar({ role: "ADMIN", sucursalId: null, orden: { sucursal_id: "suc-B", tecnico_id: null } })
 
     expect((await parseResponse(await put({ tecnicoId: "t-a" }))).status).toBe(400)
     expect(ordenes.update).not.toHaveBeenCalled()

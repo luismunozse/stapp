@@ -148,7 +148,9 @@ describe("GET /api/ordenes/[id] - TECNICO and unassigned orders", () => {
     mockAuthSuccess({ role: "TECNICO", userId: "tec-1", sucursalId: "suc-A" })
   })
 
-  it("flag on: an unassigned order from ANOTHER sucursal stays 403", async () => {
+  // An order of another branch is out of the technician's scope: the same "not found" a missing id
+  // gets (it used to be 403, which told him the order exists). The in-scope refusals below stay 403.
+  it("flag on: an unassigned order from ANOTHER sucursal is not found", async () => {
     mockSupabaseFrom({
       organizations: flag(true),
       ordenes_servicio: createChainMock(orden({ sucursal_id: "suc-B" })),
@@ -156,9 +158,10 @@ describe("GET /api/ordenes/[id] - TECNICO and unassigned orders", () => {
     })
     const { GET } = await import("@/app/api/ordenes/[id]/route")
 
-    const res = await GET(createGetRequest(), ctx())
+    const { status, body } = await parseResponse(await GET(createGetRequest(), ctx()))
 
-    expect(res.status).toBe(403)
+    expect(status).toBe(404)
+    expect(body).toEqual({ error: "Orden no encontrada" })
   })
 
   it("flag off: 403 on an unassigned order", async () => {
@@ -220,12 +223,13 @@ describe("GET /api/ordenes/[id] - TECNICO and unassigned orders", () => {
 describe("PUT /api/ordenes/[id] - the generic guard stays closed", () => {
   it("flag on: a TECNICO still cannot update an unassigned order through PUT", async () => {
     vi.clearAllMocks()
-    mockAuthSuccess({ role: "TECNICO", userId: "tec-1" })
+    mockAuthSuccess({ role: "TECNICO", userId: "tec-1", sucursalId: "suc-A" })
     mockSupabaseFrom({
       organizations: flag(true),
       ordenes_servicio: createChainMock({
         id: "o1",
         organization_id: "org-1",
+        sucursal_id: "suc-A",
         tecnico_id: null,
         estado: "RECIBIDO",
         clientes: null,
