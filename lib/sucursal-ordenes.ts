@@ -168,12 +168,17 @@ export interface PermisosOrden {
  * Who may do what with an order. Pure: the route (`cargarOrdenEnAlcance`) feeds it the order row.
  *
  * Scope (`ver`): an ADMIN, a user of the origin branch, a user of the destination branch while an
- * active derivation sends the order there, and whoever the order is assigned to, whatever their
- * branch (BM-6). Anyone else, including a user with no branch, is out of scope (XC-4).
+ * active derivation sends the order there, and a TECNICO the order is assigned to, whatever his
+ * branch (BM-6). Anyone else, including a user with no branch, is out of scope (XC-4). The
+ * assignment counts only for a TECNICO: changing a technician into a seller does not clear his
+ * assignments, and a seller who still holds one gets his branch's orders and no more.
  *
  * Inside the scope the branch decides the work (`reparar`, `comercial`, `entregar`) and the role
  * narrows the person: a TECNICO opens and edits only his own orders, or opens one he can claim.
- * While an order is not derived, everybody in scope has the branch permissions the routes always
+ * `reparar`, `comercial` and `entregar` are branch-level: they do not narrow a technician to his
+ * own orders, and a route that narrows technicians does it itself (the detail through `leer` and
+ * `editar`, the delivery with its own check). That keeps an org with one branch unchanged (XC-3):
+ * while an order is not derived, everybody in scope has the branch permissions the routes always
  * gave them, so wiring a route to this policy narrows by branch and changes nothing else.
  *
  * Derived (the approved split, OD-3, OD-4): the origin keeps the client-facing side, the
@@ -194,7 +199,7 @@ export function politicaOrden(
 
   const esAdmin = actor.role === "ADMIN"
   const esTecnico = actor.role === "TECNICO"
-  const esAsignado = orden.tecnicoId !== null && orden.tecnicoId === actor.userId
+  const esAsignado = esTecnico && orden.tecnicoId !== null && orden.tecnicoId === actor.userId
   const esOrigen = !esAdmin && sucursal !== null && sucursal === orden.sucursalId
   const esDestino = !esAdmin && sucursal !== null && sucursal === derivada
 
