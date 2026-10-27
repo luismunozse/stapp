@@ -136,6 +136,63 @@ describe("a TECNICO (BM-6, OI-3, XC-4)", () => {
   })
 })
 
+describe("the same scope applied to the orders a row embeds", () => {
+  const embebida = (id: string, sucursal: string, tecnico: string | null) => ({ id, sucursal_id: sucursal, tecnico_id: tecnico })
+  const CLIENTES = [
+    {
+      id: "c1",
+      ordenes_servicio: [embebida("a-libre", A, null), embebida("a-de-ta", A, "t-a"), embebida("b-de-ta", B, "t-a"), embebida("b-libre", B, null)],
+    },
+    { id: "c2", ordenes_servicio: [embebida("b-libre", B, null)] },
+    { id: "c3", ordenes_servicio: [] as ReturnType<typeof embebida>[] },
+  ]
+
+  function montarClientes(toma: boolean) {
+    montarSupabaseEnMemoria({ clientes: CLIENTES, organizations: [{ id: "org-1", tecnicos_toman_ordenes: toma }] })
+  }
+
+  /** Per client, the ids of the embedded orders the scope leaves. `interno` embeds with !inner. */
+  async function embebidas(a: ReturnType<typeof actor>, interno = false, otrosOr: string[] = []) {
+    const alcance = await alcanceLecturaOrdenes(a)
+    const select = `id, ordenes_servicio${interno ? "!inner" : ""}(id, sucursal_id, tecnico_id)`
+    const { data, error } = await alcance.aplicarAEmbed(supabaseAdmin.from("clientes").select(select), "ordenes_servicio", otrosOr)
+    expect(error).toBeNull()
+    return Object.fromEntries((data as any[]).map((c) => [c.id, (c.ordenes_servicio as Array<{ id: string }>).map((o) => o.id).sort()]))
+  }
+
+  beforeEach(() => montarClientes(false))
+
+  it("a branch's staff reads that branch's orders inside every client, and every client stays", async () => {
+    expect(await embebidas(actor("VENDEDOR", "v-a", A))).toEqual({ c1: ["a-de-ta", "a-libre"], c2: [], c3: [] })
+    expect(await embebidas(actor("VENDEDOR", "v-b", B))).toEqual({ c1: ["b-de-ta", "b-libre"], c2: ["b-libre"], c3: [] })
+  })
+
+  it("an ADMIN on Todas reads every embedded order; with a branch selected, that branch's", async () => {
+    expect(await embebidas(actor("ADMIN", "u-admin", null))).toEqual({ c1: ["a-de-ta", "a-libre", "b-de-ta", "b-libre"], c2: ["b-libre"], c3: [] })
+    conCookie(B)
+    expect(await embebidas(actor("ADMIN", "u-admin", null))).toEqual({ c1: ["b-de-ta", "b-libre"], c2: ["b-libre"], c3: [] })
+  })
+
+  it("a technician reads what is assigned to him from any branch (opt-in off), nothing else", async () => {
+    expect(await embebidas(actor("TECNICO", "t-a", A))).toEqual({ c1: ["a-de-ta", "b-de-ta"], c2: [], c3: [] })
+  })
+
+  it("a technician with the opt-in also reads the unassigned orders of his own branch", async () => {
+    montarClientes(true)
+    expect(await embebidas(actor("TECNICO", "t-a", A))).toEqual({ c1: ["a-de-ta", "a-libre", "b-de-ta"], c2: [], c3: [] })
+    expect(await embebidas(actor("TECNICO", "t-a", null))).toEqual({ c1: ["a-de-ta", "b-de-ta"], c2: [], c3: [] })
+  })
+
+  it("with !inner the rows without an order in the scope are out", async () => {
+    expect(await embebidas(actor("VENDEDOR", "v-b", B), true)).toEqual({ c1: ["b-de-ta", "b-libre"], c2: ["b-libre"] })
+    expect(await embebidas(actor("TECNICO", "t-a", A), true)).toEqual({ c1: ["a-de-ta", "b-de-ta"] })
+  })
+
+  it("the caller's own OR list stays inside the scope", async () => {
+    expect(await embebidas(actor("VENDEDOR", "v-a", A), false, ["tecnico_id.is.null,sucursal_id.eq.suc-B"])).toEqual({ c1: ["a-libre"], c2: [], c3: [] })
+  })
+})
+
 describe("other OR lists of the caller are ANDed with the scope in ONE expression", () => {
   it("a branch scope plus a search list", async () => {
     expect(await ids(actor("VENDEDOR", "v-a", A), ["estado.eq.EN_REPARACION,estado.eq.APROBADO"])).toEqual([])

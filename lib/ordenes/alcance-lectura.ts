@@ -27,11 +27,18 @@ export interface AlcanceLectura {
    * expression, so a search can never widen it. Apply it before `.order()` / `.range()`.
    */
   aplicar<Q>(query: Q, otrosOr?: string[]): Q
+  /**
+   * The same scope for the orders a query EMBEDS (`clientes(.., ordenes_servicio(..))`,
+   * `notification_logs(.., ordenes_servicio!inner(..))`): `embed` is the embed's name or alias. With
+   * `embed!inner` the rows without an order in the scope are dropped; without it every row stays and
+   * only its embedded orders are narrowed.
+   */
+  aplicarAEmbed<Q>(query: Q, embed: string, otrosOr?: string[]): Q
 }
 
 interface Filtrable<Q> {
   eq(columna: string, valor: string): Q
-  or(filtro: string): Q
+  or(filtro: string, opciones?: { referencedTable: string }): Q
 }
 
 /**
@@ -52,6 +59,10 @@ export async function alcanceLecturaOrdenes(actor: ActorLectura): Promise<Alcanc
         const base = filtro ? query : (query as unknown as Filtrable<Q>).eq("tecnico_id", actor.userId)
         return unir(base, [filtro ?? "", ...otrosOr])
       },
+      aplicarAEmbed: <Q>(query: Q, embed: string, otrosOr: string[] = []) => {
+        const base = filtro ? query : (query as unknown as Filtrable<Q>).eq(`${embed}.tecnico_id`, actor.userId)
+        return unir(base, [filtro ?? "", ...otrosOr], embed)
+      },
     }
   }
 
@@ -60,11 +71,17 @@ export async function alcanceLecturaOrdenes(actor: ActorLectura): Promise<Alcanc
   return {
     puedeTomarSinAsignar: false,
     aplicar: <Q>(query: Q, otrosOr: string[] = []) => unir(query, [filtro, ...otrosOr]),
+    aplicarAEmbed: <Q>(query: Q, embed: string, otrosOr: string[] = []) => unir(query, [filtro, ...otrosOr], embed),
   }
 }
 
-/** The OR lists as one expression on one `.or()`, or the query as it came when there are none. */
-function unir<Q>(query: Q, listas: string[]): Q {
+/**
+ * The OR lists as one expression on one `.or()` (on the embed's rows when `embed` is given), or the
+ * query as it came when there are none.
+ */
+function unir<Q>(query: Q, listas: string[], embed?: string): Q {
   const unida = combinarOr(...listas)
-  return unida === "" ? query : (query as unknown as Filtrable<Q>).or(unida)
+  if (unida === "") return query
+  const conOr = query as unknown as Filtrable<Q>
+  return embed ? conOr.or(unida, { referencedTable: embed }) : conOr.or(unida)
 }
