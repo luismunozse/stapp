@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin, requireAdminOrSelf } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
+import { eliminarPersonal } from "@/lib/usuarios/eliminar-personal"
 import bcrypt from "bcryptjs"
 
 export async function GET(
@@ -33,6 +34,7 @@ export async function GET(
       .eq("id", id)
       .eq("rol", "TECNICO")
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (dbError || !tecnico) {
@@ -128,6 +130,7 @@ export async function PUT(
       .eq("id", id)
       .eq("rol", "TECNICO")
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (fetchError || !tecnico) {
@@ -198,7 +201,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, userId } = await requireAdmin()
     if (error) return error
 
     const { id } = await params
@@ -216,6 +219,7 @@ export async function DELETE(
       .eq("id", id)
       .eq("rol", "TECNICO")
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (fetchError || !tecnico) {
@@ -233,14 +237,31 @@ export async function DELETE(
       )
     }
 
-    const { error: deleteError } = await supabaseAdmin
-      .from("users")
-      .delete()
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
+    const result = await eliminarPersonal({
+      id,
+      organizationId: organizationId!,
+      rol: "TECNICO",
+      actorId: userId,
+    })
+    if (!result.ok) {
+      if (result.status === 404) {
+        return NextResponse.json({ error: "Técnico no encontrado" }, { status: 404 })
+      }
+      if (result.status === 409) {
+        return NextResponse.json(
+          { error: "No se puede dar de baja al último administrador del taller" },
+          { status: 409 }
+        )
+      }
+      return NextResponse.json({ error: "Error al eliminar técnico" }, { status: 500 })
+    }
 
-    if (deleteError) {
-      throw deleteError
+    if (result.baja) {
+      return NextResponse.json({
+        baja: true,
+        message:
+          "El técnico tenía historial (órdenes, cobros o caja): quedó dado de baja. Ya no puede ingresar y su historial se conserva.",
+      })
     }
 
     return NextResponse.json({ message: "Técnico eliminado correctamente" })
