@@ -57,6 +57,17 @@ describe("resolverAlcanceOrdenes", () => {
     ).toEqual({ tipo: "sucursal", sucursalId: S1 })
   })
 
+  it("accepts cuid ids (the real id format)", () => {
+    expect(
+      resolverAlcanceOrdenes({
+        role: "TECNICO",
+        sucursalId: "cm1abc23d0001xyz",
+        verTodas: false,
+        userId: "cm1user45e0002abc",
+      })
+    ).toEqual({ tipo: "sucursal_o_asignadas", sucursalId: "cm1abc23d0001xyz", userId: "cm1user45e0002abc" })
+  })
+
   it("a malformed branch id fails closed", () => {
     expect(
       resolverAlcanceOrdenes({ role: "VENDEDOR", sucursalId: "a),or(x", verTodas: false, userId: U1 })

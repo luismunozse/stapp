@@ -25,10 +25,12 @@ export interface OrdenAlcanzable {
   tecnico_id?: string | null
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// Ids are cuid TEXT (or UUID): letters, digits, "_" and "-" only. Anything with a
+// comma, dot or parenthesis could break out of a PostgREST filter string.
+const ID_SEGURO_RE = /^[A-Za-z0-9_-]{1,64}$/
 
-function esUuid(valor: unknown): valor is string {
-  return typeof valor === "string" && UUID_RE.test(valor)
+function esIdSeguro(valor: unknown): valor is string {
+  return typeof valor === "string" && ID_SEGURO_RE.test(valor)
 }
 
 export function resolverAlcanceOrdenes(params: {
@@ -45,11 +47,11 @@ export function resolverAlcanceOrdenes(params: {
   // inconsistent input, not a wider scope.
   if (role === "ADMIN" && verTodas) return { tipo: "todas" }
 
-  // The id is spliced into a PostgREST `.or()` string: anything that is not a
-  // UUID fails closed to the sentinel that matches no row.
-  const sucursalId = esUuid(params.sucursalId) ? params.sucursalId : SUCURSAL_NINGUNA
+  // The id is spliced into a PostgREST `.or()` string: anything that is not a safe
+  // id fails closed to the sentinel that matches no row.
+  const sucursalId = esIdSeguro(params.sucursalId) ? params.sucursalId : SUCURSAL_NINGUNA
 
-  if (role === "TECNICO" && esUuid(params.userId)) {
+  if (role === "TECNICO" && esIdSeguro(params.userId)) {
     return { tipo: "sucursal_o_asignadas", sucursalId, userId: params.userId }
   }
   return { tipo: "sucursal", sucursalId }
