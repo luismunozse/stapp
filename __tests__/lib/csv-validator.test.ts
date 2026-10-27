@@ -165,6 +165,25 @@ describe("validateClienteRow — identifiers stay strings", () => {
   })
 })
 
+describe("validator messages have no zod noise", () => {
+  it("reports a missing phone with exactly one message", () => {
+    const result = validateClienteRow({ nombre: "x", telefono: null }, 0)
+    expect(result.message).toBe("El teléfono es requerido")
+  })
+
+  it("reports a wrong phone with exactly one message", () => {
+    const result = validateClienteRow({ nombre: "x", telefono: "12" }, 0)
+    expect(result.message).toBe('El teléfono debe tener exactamente 10 dígitos (recibido: "12")')
+  })
+
+  it("reports each bad number once, without 'Expected number, received object'", () => {
+    const result = validateInventarioRow({ nombre: "a", precioVenta: "abc", stock: "1.5" }, 0)
+    expect(result.message).not.toMatch(/Expected|received/)
+    expect(result.message?.split("; ")).toHaveLength(2)
+    expect(result.column).toBe("stock")
+  })
+})
+
 describe("validateCSVHeaders", () => {
   it("rejects INVENTARIO headers missing precioVenta", () => {
     const result = validateCSVHeaders(["nombre", "stock"], "INVENTARIO")

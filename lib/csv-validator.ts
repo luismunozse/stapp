@@ -24,7 +24,7 @@ const clienteRowSchema = z.object({
   telefono: z.preprocess((val, ctx) => {
     const raw = toText(val)
     if (raw === null || raw === undefined || raw === '') {
-      ctx.addIssue({ code: 'custom', message: 'El teléfono es requerido' })
+      ctx.addIssue({ code: 'custom', fatal: true, message: 'El teléfono es requerido' })
       return z.NEVER
     }
     // Spaces, dashes, dots and parentheses are formatting, not content.
@@ -32,6 +32,7 @@ const clienteRowSchema = z.object({
     if (typeof digits !== 'string' || !/^\d{10}$/.test(digits)) {
       ctx.addIssue({
         code: 'custom',
+        fatal: true,
         message: `El teléfono debe tener exactamente 10 dígitos (recibido: "${String(raw)}")`,
       })
       return z.NEVER
@@ -67,6 +68,7 @@ const numberColumn = (
     if (num === null || (opts.integer && !Number.isInteger(num))) {
       ctx.addIssue({
         code: 'custom',
+        fatal: true,
         message: opts.integer
           ? `${label} inválido: "${String(val)}" debe ser un número entero mayor o igual a 0`
           : `${label} inválido: "${String(val)}" no es un número válido (ejemplos: 1500 o 1.500,50)`,
