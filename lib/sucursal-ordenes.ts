@@ -84,6 +84,17 @@ export function tecnicoAsignable(
 }
 
 /**
+ * The technician a form should show and send, out of the one it holds (from a draft, or from the
+ * appointment the order comes from) and the ones its picker offers. One the picker does not offer
+ * (another branch) would be a blank select that still posts him, so it counts as nobody. With no
+ * list to judge against (not loaded, or failed) the choice is left as it is.
+ */
+export function tecnicoOfrecido(elegidoId: string, ofrecidos: ReadonlyArray<{ id: string }>): string {
+  if (ofrecidos.length === 0) return elegidoId
+  return ofrecidos.some((t) => t.id === elegidoId) ? elegidoId : ""
+}
+
+/**
  * Joins comma-separated OR lists into ONE expression meaning "every list matches
  * at least one of its conditions". Pass the result to a single `.or()`: repeated
  * `.or()` calls would rely on PostgREST ANDing the repeated `or` params (open item 7).
