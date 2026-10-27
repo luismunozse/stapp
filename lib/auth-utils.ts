@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { headers } from "next/headers"
 import { validateUserTenant } from "@/lib/tenant"
 import { supabaseAdmin } from "@/lib/supabase"
+import { conSucursalVigente } from "@/lib/sesion-sucursal"
 
 export async function getAuthSession() {
   const session = await auth()
@@ -17,6 +18,9 @@ export async function getAuthSession() {
   }
 }
 
+// requireAuth() returns the session with `user.sucursalId` taken from the DB
+// for TECNICO/VENDEDOR (see conSucursalVigente), not from the JWT, which keeps
+// the branch the user had at login for hours after an ADMIN moves them.
 export async function requireAuth() {
   const { session, organizationId, userId, role } = await getAuthSession()
   if (!session || !organizationId) {
@@ -49,7 +53,51 @@ export async function requireAuth() {
     }
   }
 
-  return { error: null, session, organizationId, userId, role }
+  // Fail-closed on a failed lookup: no 200 on a guessed branch (rationale in
+  // conSucursalVigente).
+  let sesionVigente: typeof session | null
+  try {
+    sesionVigente = await conSucursalVigente(session)
+  } catch (err) {
+    console.error("[auth] Could not re-read the user's branch:", err)
+    return {
+      error: NextResponse.json(
+        { error: "No pudimos verificar tu sucursal. Intentá de nuevo." },
+        { status: 500 }
+      ),
+      session: null,
+      organizationId: null,
+      userId: null,
+      role: null,
+    }
+  }
+  // The row is gone (deleted account) while the JWT is still alive.
+  if (!sesionVigente) {
+    return {
+      error: NextResponse.json({ error: "No autorizado" }, { status: 401 }),
+      session: null,
+      organizationId: null,
+      userId: null,
+      role: null,
+    }
+  }
+
+  return { error: null, session: sesionVigente, organizationId, userId, role }
+}
+
+/**
+ * For server pages/layouts that call `auth()` themselves and need the user's
+ * branch: same fresh value requireAuth() gives the API. Reading
+ * `session.user.sucursalId` from a raw `auth()` returns the stale JWT value
+ * (the session-sucursal-sweep test enforces this).
+ *
+ * Returns null without a session or when the user's row is gone; THROWS when
+ * the lookup fails, so the page errors instead of rendering on a guessed branch.
+ */
+export async function sesionConSucursalVigente() {
+  const session = await auth()
+  if (!session?.user) return null
+  return conSucursalVigente(session)
 }
 
 export async function requireAdmin() {

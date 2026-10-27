@@ -87,6 +87,16 @@ vi.mock('@/lib/supabase', () => ({
   },
 }))
 
+// requireAuth() re-reads users.sucursal_id for every TECNICO/VENDEDOR request
+// (lib/sesion-sucursal.ts). Without a default, each of the ~120 route suites that
+// run as one of those roles would see an extra from("users") call that eats its
+// mock queue. The default is "the DB agrees with the JWT": the session passes
+// through untouched. __tests__/lib/auth-utils-sucursal.test.ts runs the real thing
+// with vi.unmock, and any test that needs a moved user can too.
+vi.mock('@/lib/sesion-sucursal', () => ({
+  conSucursalVigente: vi.fn(async (session: unknown) => session),
+}))
+
 // Practice-order helpers. Every route that creates a real order calls
 // deletePracticeData, and every money or stock route calls rejectIfPractica.
 // Without these defaults each of those route suites would see an extra rpc() or
