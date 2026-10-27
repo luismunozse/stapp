@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs"
+import { parseLocalizedNumber } from "./number-parse"
 
 export type Cell = string | number | null
 
@@ -59,53 +60,15 @@ export async function getSheetPreviews(base64: string, perSheetLimit = 30): Prom
 }
 
 /**
- * Parse a price-like cell value into a number.
- * Handles: native numbers, "$1.234,56" (es-AR), "1,234.56" (en-US),
- * "1234,56", "1234.56", "$ 1234", with NBSP and stray spaces.
- * Returns null if value is empty or unparseable.
+ * Parse a price-like cell value into a non-negative number rounded to cents.
+ * Delegates to the shared `parseLocalizedNumber` (same rules as the CSV/Excel
+ * import: "1.500" = 1500, "1.500,50" = 1500.5, "1,234.56" = 1234.56, "$ 1234").
+ * Returns null if the value is empty, negative or unparseable.
  */
 export function parsePrice(raw: Cell): number | null {
   if (raw === null || raw === undefined) return null
-  if (typeof raw === "number") {
-    if (!isFinite(raw) || raw < 0) return null
-    return Math.round(raw * 100) / 100
-  }
-  let s = String(raw).trim()
-  if (!s) return null
-  s = s.replace(/[$ \s]/g, "").replace(/[A-Za-z]/g, "")
-  if (!s) return null
-
-  const hasDot = s.includes(".")
-  const hasComma = s.includes(",")
-  let normalized = s
-  if (hasDot && hasComma) {
-    // last seen separator is the decimal one
-    if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
-      normalized = s.replace(/\./g, "").replace(",", ".")
-    } else {
-      normalized = s.replace(/,/g, "")
-    }
-  } else if (hasComma) {
-    // single comma: decimal if followed by 1-2 digits, else thousands
-    const parts = s.split(",")
-    const last = parts[parts.length - 1]
-    if (parts.length === 2 && last.length <= 2) {
-      normalized = s.replace(",", ".")
-    } else {
-      normalized = s.replace(/,/g, "")
-    }
-  } else if (hasDot) {
-    // single dot or multiple dots
-    const parts = s.split(".")
-    const last = parts[parts.length - 1]
-    if (parts.length > 2 || (parts.length === 2 && last.length === 3 && parts[0].length <= 3)) {
-      // looks like thousands (e.g., 1.234 or 1.234.567)
-      normalized = s.replace(/\./g, "")
-    }
-  }
-
-  const n = parseFloat(normalized)
-  if (!isFinite(n) || n < 0) return null
+  const n = parseLocalizedNumber(raw)
+  if (n === null || n < 0) return null
   return Math.round(n * 100) / 100
 }
 
