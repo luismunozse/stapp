@@ -75,13 +75,30 @@ describe("TecnicosList: the delete guard counts every open order of the technici
   })
   afterEach(() => vi.unstubAllGlobals())
 
-  it("a technician with nothing in this scope but work elsewhere (jed-electronics) cannot be deleted from here", async () => {
+  const REFUSO = "No se puede eliminar un técnico con órdenes activas."
+
+  it("a technician with nothing in this scope but work elsewhere (jed-electronics) cannot be deleted from here, and the refusal says why", async () => {
     lista = [tecnico("t-jed", "Jed", { ordenesActivas: 0, ordenesActivasTotal: 7 })]
     montar()
     fireEvent.click(await botonEliminarDe("Jed"))
-    await waitFor(() => expect(advertir).toHaveBeenCalledWith("No se puede eliminar un técnico con órdenes activas"))
+    await waitFor(() =>
+      expect(advertir).toHaveBeenCalledWith(
+        `${REFUSO} Tiene 7 orden(es) activa(s), todas de otras sucursales. Considerá reasignarlas: las de otras sucursales se mueven eligiendo esa sucursal en el selector.`,
+      ),
+    )
     expect(confirmar).not.toHaveBeenCalled()
     expect(pedidos.filter((p) => p.method === "DELETE")).toEqual([])
+  })
+
+  it("work in this scope AND elsewhere: the refusal says how it splits", async () => {
+    lista = [tecnico("t-m", "Mica", { ordenesActivas: 1, ordenesActivasTotal: 3 })]
+    montar()
+    fireEvent.click(await botonEliminarDe("Mica"))
+    await waitFor(() =>
+      expect(advertir).toHaveBeenCalledWith(
+        `${REFUSO} Tiene 3 orden(es) activa(s) (1 de esta sucursal y 2 de otras). Considerá reasignarlas: las de otras sucursales se mueven eligiendo esa sucursal en el selector.`,
+      ),
+    )
   })
 
   it("the card still shows the count of the scope (what a reassignment from here moves)", async () => {
@@ -95,7 +112,7 @@ describe("TecnicosList: the delete guard counts every open order of the technici
     lista = [tecnico("t-a", "Ana", { ordenesActivas: 2, ordenesActivasTotal: 2 })]
     montar()
     fireEvent.click(await botonEliminarDe("Ana"))
-    await waitFor(() => expect(advertir).toHaveBeenCalled())
+    await waitFor(() => expect(advertir).toHaveBeenCalledWith(`${REFUSO} Tiene 2 orden(es) activa(s). Considerá reasignarlas.`))
     expect(confirmar).not.toHaveBeenCalled()
   })
 
@@ -112,7 +129,7 @@ describe("TecnicosList: the delete guard counts every open order of the technici
     lista = [tecnico("t-c", "Carla", { ordenesActivas: 3 })]
     montar()
     fireEvent.click(await botonEliminarDe("Carla"))
-    await waitFor(() => expect(advertir).toHaveBeenCalled())
+    await waitFor(() => expect(advertir).toHaveBeenCalledWith(`${REFUSO} Tiene 3 orden(es) activa(s). Considerá reasignarlas.`))
     expect(confirmar).not.toHaveBeenCalled()
   })
 })

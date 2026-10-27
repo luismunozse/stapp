@@ -39,6 +39,7 @@ import { TecnicoForm } from "./tecnico-form"
 import { useModal } from "@/contexts/modal-context"
 import { useCurrency } from "@/contexts/currency-context"
 import { cn } from "@/lib/utils"
+import { avisoDeOrdenesActivas } from "@/lib/tecnico-ordenes-activas"
 
 interface Tecnico {
   id: string
@@ -189,15 +190,19 @@ export function TecnicosList() {
   }
 
   const handleDelete = async (
-    id: string,
-    ordenesActivas: number,
+    tecnico: Tecnico,
     e: React.MouseEvent
   ) => {
     e.preventDefault()
     e.stopPropagation()
+    const id = tecnico.id
 
-    if (ordenesActivas > 0) {
-      await showWarning("No se puede eliminar un técnico con órdenes activas")
+    // Every open order he holds, in every branch, stops the delete; the card shows only the part in this scope,
+    // so the refusal says where the rest is (a card that counts zero would otherwise refuse without a reason).
+    const totalActivas = tecnico.ordenesActivasTotal ?? tecnico.ordenesActivas
+    if (totalActivas > 0) {
+      const detalle = avisoDeOrdenesActivas(totalActivas, tecnico.ordenesActivas, "Tiene")
+      await showWarning(`No se puede eliminar un técnico con órdenes activas.${detalle ? ` ${detalle}` : ""}`)
       return
     }
 
@@ -507,9 +512,7 @@ export function TecnicosList() {
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 sm:h-8 sm:w-8 text-destructive hover:text-destructive"
-                            onClick={(e) =>
-                              handleDelete(tecnico.id, tecnico.ordenesActivasTotal ?? tecnico.ordenesActivas, e)
-                            }
+                            onClick={(e) => handleDelete(tecnico, e)}
                             disabled={deletingId === tecnico.id}
                           >
                             <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
