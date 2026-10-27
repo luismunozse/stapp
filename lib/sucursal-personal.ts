@@ -1,4 +1,4 @@
-import { assertSucursalEnOrg, sucursalParaLectura } from "@/lib/sucursal"
+import { assertSucursalEnOrg, sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 
 /**
  * The branch a technician / seller list is scoped to, or null for every branch.
@@ -9,12 +9,19 @@ import { assertSucursalEnOrg, sucursalParaLectura } from "@/lib/sucursal"
  * another org, malformed) is ignored, not an error, and the switcher's choice applies.
  * The requested id only ever reaches a query as a bound value, never inside a filter
  * string.
+ *
+ * `alcance: "escritura"` is for the screen that CREATES something these people get
+ * assigned to. With no valid branch requested, an ADMIN is scoped to the branch the
+ * write will land in (`sucursalParaEscritura`: the selected branch, or the principal on
+ * Todas) instead of every branch, so what the screen offers is what the server validates.
+ * Nothing changes for anyone else.
  */
 export async function sucursalParaListaPersonal(params: {
   role: string | null
   userSucursalId: string | null
   organizationId: string
   sucursalSolicitada: string | null
+  alcance?: "lectura" | "escritura"
 }): Promise<string | null> {
   const lectura = await sucursalParaLectura({
     role: params.role,
@@ -23,6 +30,13 @@ export async function sucursalParaListaPersonal(params: {
   const pedida = params.sucursalSolicitada
   if (params.role === "ADMIN" && pedida && (await assertSucursalEnOrg(pedida, params.organizationId))) {
     return pedida
+  }
+  if (params.role === "ADMIN" && params.alcance === "escritura") {
+    return sucursalParaEscritura({
+      role: params.role,
+      organizationId: params.organizationId,
+      userSucursalId: params.userSucursalId,
+    })
   }
   return lectura.sucursalId
 }

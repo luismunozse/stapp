@@ -191,6 +191,66 @@ describe("GET /api/tecnicos?sucursalId= (not ADMIN)", () => {
   })
 })
 
+// What the order form offers when it CREATES an order: the technicians of the branch POST
+// /api/ordenes will validate against (sucursalParaEscritura), not the read scope. On Todas an
+// ADMIN creates in the principal branch, so the list shows the principal's technicians.
+describe("GET /api/tecnicos?alcance=escritura", () => {
+  const url = "http://localhost:3000/api/tecnicos"
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCookie(null)
+    montarDb()
+  })
+
+  const ids = async (query: string) =>
+    (await parseResponse(await GET_TECNICOS(new Request(`${url}${query}`)))).body.map((t: any) => t.id)
+
+  it("an ADMIN on Todas gets the principal branch's technicians, where the plain list gives every branch", async () => {
+    mockAuthSuccess({ role: "ADMIN", userId: "adm" })
+
+    expect(await ids("?alcance=escritura")).toEqual(["t-a1", "t-a2"])
+    expect(await ids("")).toEqual(["t-a1", "t-a2", "t-b1", "t-sin"])
+  })
+
+  it("an ADMIN with a branch selected gets that branch", async () => {
+    mockAuthSuccess({ role: "ADMIN", userId: "adm" })
+    mockCookie("suc-B")
+
+    expect(await ids("?alcance=escritura")).toEqual(["t-b1"])
+  })
+
+  it("an explicit branch wins over both the switcher and the principal", async () => {
+    mockAuthSuccess({ role: "ADMIN", userId: "adm" })
+
+    expect(await ids("?alcance=escritura&sucursalId=suc-B")).toEqual(["t-b1"])
+    mockCookie("suc-A")
+    expect(await ids("?alcance=escritura&sucursalId=suc-B")).toEqual(["t-b1"])
+  })
+
+  it("an explicit branch that is not in the org is ignored: the write scope applies", async () => {
+    mockAuthSuccess({ role: "ADMIN", userId: "adm" })
+
+    expect(await ids("?alcance=escritura&sucursalId=suc-OTRA")).toEqual(["t-a1", "t-a2"])
+  })
+
+  it.each([
+    ["a VENDEDOR of B gets B, not the principal", "VENDEDOR", "suc-B", ["t-b1"]],
+    ["a TECNICO of A gets A", "TECNICO", "suc-A", ["t-a1", "t-a2"]],
+    ["a user with no branch still gets nothing", "VENDEDOR", null, []],
+  ])("%s", async (_caso, role, sucursalId, esperados) => {
+    mockAuthSuccess({ role, userId: "u-9", sucursalId })
+
+    expect(await ids("?alcance=escritura")).toEqual(esperados)
+  })
+
+  it("any other value is the plain read scope", async () => {
+    mockAuthSuccess({ role: "ADMIN", userId: "adm" })
+
+    expect(await ids("?alcance=todas")).toEqual(["t-a1", "t-a2", "t-b1", "t-sin"])
+  })
+})
+
 describe("GET /api/vendedores - still ADMIN only, branch and search compose", () => {
   const url = "http://localhost:3000/api/vendedores"
 

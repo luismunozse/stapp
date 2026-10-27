@@ -13,12 +13,15 @@ export async function GET(request: Request) {
     if (error) return error
 
     // `?sucursalId=` scopes the list to one branch (BM-4); without it the request's
-    // own scope applies. See sucursalParaListaPersonal for who may ask for what.
+    // own scope applies. `?alcance=escritura` is what the order form sends: the branch
+    // the order will be created in. See sucursalParaListaPersonal for who may ask for what.
+    const { searchParams } = new URL(request.url)
     const sucursalId = await sucursalParaListaPersonal({
       role,
       userSucursalId: session!.user.sucursalId ?? null,
       organizationId: organizationId!,
-      sucursalSolicitada: new URL(request.url).searchParams.get("sucursalId"),
+      sucursalSolicitada: searchParams.get("sucursalId"),
+      alcance: searchParams.get("alcance") === "escritura" ? "escritura" : "lectura",
     })
 
     let query = supabaseAdmin
