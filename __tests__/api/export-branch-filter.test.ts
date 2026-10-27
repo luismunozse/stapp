@@ -54,7 +54,8 @@ describe("GET /api/export/ordenes — branch filter", () => {
     const res = await GET(req, ctx)
 
     expect(res.status).toBe(200)
-    expect(ordenesChain.eq).toHaveBeenCalledWith("sucursal_id", "suc-A")
+    // The scope comes from the orders door: one or() with the branch's visibility filter.
+    expect(ordenesChain.or).toHaveBeenCalledWith("sucursal_id.eq.suc-A")
   })
 
   it("verTodas (cookie=todas) → no sucursal_id filter on ordenes", async () => {

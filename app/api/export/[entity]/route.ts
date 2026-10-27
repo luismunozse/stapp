@@ -10,6 +10,7 @@ import { traerTodas } from "@/lib/supabase-paginar"
 import { DEFAULT_TIMEZONE, dayRangeUtc } from "@/lib/timezone"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura, type ResultadoLectura } from "@/lib/sucursal"
+import { alcanceLecturaOrdenes, type ActorLectura } from "@/lib/ordenes/alcance-lectura"
 import {
   arrayToCSV,
   arrayToXLSX,
@@ -133,7 +134,12 @@ async function runExport(entity: string, filters: Record<string, string>) {
     let payload: ExportPayload
     switch (entity as EntityType) {
       case "ordenes":
-        payload = await exportOrdenes(organizationId!, filters, lectura)
+        payload = await exportOrdenes(filters, {
+          organizationId: organizationId!,
+          userId: userId!,
+          role: role!,
+          sucursalId: session!.user.sucursalId ?? null,
+        })
         break
       case "ventas": {
         // Las mismas reglas que el listado de ventas: un TECNICO sin acceso al
@@ -207,9 +213,8 @@ function formatDateFilename(): string {
 }
 
 async function exportOrdenes(
-  organizationId: string,
   filters: Record<string, string>,
-  lectura: ResultadoLectura
+  actor: ActorLectura
 ): Promise<ExportPayload> {
   let query = supabaseAdmin
     .from("ordenes_servicio")
@@ -220,12 +225,12 @@ async function exportOrdenes(
       tecnico:users!tecnico_id(nombre)
     `
     )
-    .eq("organization_id", organizationId)
+    .eq("organization_id", actor.organizationId)
     .order("fecha_ingreso", { ascending: false })
     .limit(10000)
 
-  if (!lectura.verTodas && lectura.sucursalId)
-    query = query.eq("sucursal_id", lectura.sucursalId)
+  // Exactly the rows the orders list shows this user (SC-6): the same door.
+  query = (await alcanceLecturaOrdenes(actor)).aplicar(query)
 
   if (filters.estado) query = query.eq("estado", filters.estado)
   if (filters.desde) query = query.gte("fecha_ingreso", filters.desde)

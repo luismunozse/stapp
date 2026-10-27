@@ -267,7 +267,7 @@ describe("LEAK 3 — GET /api/search — ILIKE fallback branch filter", () => {
     vi.clearAllMocks()
   })
 
-  it("TECNICO 'suc-A' fallback → ordenes query gets .eq('sucursal_id', 'suc-A'), clientes does NOT", async () => {
+  it("TECNICO 'suc-A' fallback → ordenes query is scoped to 'suc-A', clientes does NOT", async () => {
     mockAuthWithSucursal({ role: "TECNICO", sucursalId: "suc-A" })
     mockCookie(null)
 
@@ -285,10 +285,11 @@ describe("LEAK 3 — GET /api/search — ILIKE fallback branch filter", () => {
 
     expect(res.status).toBe(200)
 
-    // ordenes fallback must have sucursal_id filter
-    const ordenesEqCalls = vi.mocked(ordenesChain.eq).mock.calls as any[][]
+    // ordenes fallback must be scoped to the branch: its visibility filter and the search terms in
+    // ONE expression, so the terms cannot widen the branch
+    const ordenesOrCalls = vi.mocked(ordenesChain.or).mock.calls as any[][]
     expect(
-      ordenesEqCalls.find((c) => c[0] === "sucursal_id" && c[1] === "suc-A")
+      ordenesOrCalls.find((c) => String(c[0]).startsWith("and(sucursal_id.eq.suc-A,or(dispositivo.ilike."))
     ).toBeTruthy()
 
     // clientes fallback must NOT have sucursal_id filter (org-wide)

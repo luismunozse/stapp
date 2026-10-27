@@ -21,6 +21,7 @@ import {
   esIdSeguro,
   tecnicoOfrecido,
   soloAtendidasPor,
+  filtroVisibleOAsignada,
   soloOriginadasEn,
   MENSAJE_TECNICO_OTRA_SUCURSAL,
 } from "@/lib/sucursal-ordenes"
@@ -238,6 +239,30 @@ describe("soloAtendidasPor (the dashboard's operational widgets: what a branch w
     const { q, llamadas } = constructorEspia()
     soloAtendidasPor(q, "suc-A,sucursal_id.neq.x")
     expect(llamadas).toEqual([["or", `sucursal_id.eq.${SUCURSAL_NINGUNA}`]])
+  })
+})
+
+describe("filtroVisibleOAsignada (a technician's view of rows that hang from an order)", () => {
+  it("his branch's orders, or the ones assigned to him, as ONE or() list", () => {
+    expect(filtroVisibleOAsignada("tec-1", "suc-A")).toBe("sucursal_id.eq.suc-A,tecnico_id.eq.tec-1")
+    expect(filtroVisibleOAsignada("tec-2", "suc-B")).toBe("sucursal_id.eq.suc-B,tecnico_id.eq.tec-2")
+  })
+
+  it("without a branch (XC-4): only what is assigned to him", () => {
+    expect(filtroVisibleOAsignada("tec-1", null)).toBe("tecnico_id.eq.tec-1")
+  })
+
+  it("a branch id that cannot be spliced fails closed to the sentinel branch, his own orders still there", () => {
+    expect(filtroVisibleOAsignada("tec-1", "suc-A,x")).toBe(`sucursal_id.eq.${SUCURSAL_NINGUNA},tecnico_id.eq.tec-1`)
+  })
+
+  it("a user id that cannot be spliced leaves only the branch, never a broken list", () => {
+    expect(filtroVisibleOAsignada("tec-1,x", "suc-A")).toBe("sucursal_id.eq.suc-A")
+    expect(filtroVisibleOAsignada("tec-1,x", null)).toBe(`sucursal_id.eq.${SUCURSAL_NINGUNA}`)
+  })
+
+  it("never references the derivation column", () => {
+    expect(filtroVisibleOAsignada("tec-1", "suc-A")).not.toContain("derivada_a_sucursal_id")
   })
 })
 

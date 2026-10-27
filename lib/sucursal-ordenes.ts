@@ -58,6 +58,18 @@ export function soloAtendidasPor<Q>(query: Q, sucursalId: string | null): Q {
 }
 
 /**
+ * An `or` list over the columns of an order for a TECNICO who reads rows that hang from orders (the
+ * notification history): the orders his branch may open, or the ones assigned to him from any branch
+ * (BM-6). Without a branch only what is assigned (XC-4); with neither a branch nor a user id that can
+ * be spliced, no order at all.
+ */
+export function filtroVisibleOAsignada(userId: string, sucursalId: string | null): string {
+  const asignada = esIdSeguro(userId) ? `tecnico_id.eq.${userId}` : ""
+  const visible = sucursalId === null && asignada !== "" ? "" : filtroVisibleEnSucursal(sucursalId)
+  return [visible, asignada].filter((parte) => parte !== "").join(",")
+}
+
+/**
  * Narrows a filterable query to what a branch originated: orders by the branch that took them in,
  * sales by the branch that made them. For money (collections, invoices, sales), which stays with the
  * origin however the order is handled. `columna` is the branch column, or its path through an embed
