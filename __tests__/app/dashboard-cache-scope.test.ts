@@ -23,6 +23,7 @@ import { HeroMetric } from "@/components/dashboard/hero-metric"
 import { ActionStrip } from "@/components/dashboard/action-strip"
 import { AlertItem } from "@/components/dashboard/alert-item"
 import { QuickActions } from "@/components/dashboard/quick-actions"
+import { OnboardingPanel } from "@/components/dashboard/onboarding-panel"
 import { OrdenesRecientes, DashboardCharts } from "@/components/dashboard"
 import DashboardPage from "@/app/(dashboard)/dashboard/page"
 import { montarSupabaseEnMemoria } from "../helpers/supabase-memoria"
@@ -231,6 +232,7 @@ function resumen(arbol: ReactElement) {
     ) as Record<string, string>,
     cobrosPendientes: props(QuickActions)[0]?.cobrosPendientesCount as number | undefined,
     alertas: props(AlertItem).map((p) => p.title as string),
+    conPanelDeInicio: props(OnboardingPanel).length > 0,
     texto: texto(arbol),
   }
 }
@@ -514,27 +516,68 @@ describe("an org with one branch sees what it always saw (XC-3)", () => {
 })
 
 describe("widgets that are org-wide for now", () => {
-  // The PR that scopes each of them takes it off its list and moves the expectation into the scoped tables.
+  // The PR that scopes a widget takes its name off its list AND its line off the table below (and puts
+  // the expectation into the scoped tables above). Each name must have a line: a name without one fails.
   const PENDIENTE_PR15 = ["itemsBajoStock"]
   const PENDIENTE_PR18 = ["totalClientes", "clientesMesAnterior"]
 
-  it("lists exactly what is left unscoped", () => {
-    expect([...PENDIENTE_PR15, ...PENDIENTE_PR18]).toEqual(["itemsBajoStock", "totalClientes", "clientesMesAnterior"])
+  // What the widget shows an ADMIN, and the org-wide value it shows in every branch (the world has 3 items
+  // under stock 5, 4 clients, and 2 of them created before this month).
+  const COMO_SE_VE: Record<string, { leer: (v: Vista) => unknown; orgWide: unknown }> = {
+    itemsBajoStock: { leer: (v) => v.acciones.stock, orgWide: "2 items" },
+    totalClientes: { leer: (v) => v.tarjetas["Clientes"], orgWide: { valor: "4", detalle: "Total registrados" } },
+    clientesMesAnterior: { leer: (v) => v.clientesCambio, orgWide: { pct: 100, direction: "up" } },
+  }
+
+  const PENDIENTES = [...PENDIENTE_PR15, ...PENDIENTE_PR18]
+
+  it("every name on the lists says how to see it, and the table has nothing else", () => {
+    expect(PENDIENTES.filter((nombre) => !(nombre in COMO_SE_VE))).toEqual([])
+    expect(Object.keys(COMO_SE_VE).filter((nombre) => !PENDIENTES.includes(nombre))).toEqual([])
   })
 
-  it.each([
-    ["A", VENDEDOR_A],
-    ["B", VENDEDOR_B],
-  ])("the low-stock count (PR15) and the client counts (PR18) are still the org's, for branch %s", async (_caso, espectador) => {
-    const v = resumen(await cargar(espectador))
-    expect(v.alertas).toContain("2 items con stock bajo")
-    expect(v.tarjetas["Clientes"]).toEqual({ valor: "4", detalle: "Total registrados" })
+  it.each(PENDIENTES.flatMap((nombre) => [ADMIN_A, ADMIN_B].map((espectador) => [`${nombre}, ADMIN with ${espectador.cookie}`, nombre, espectador] as const)))(
+    "%s: still the organization's number",
+    async (_caso, nombre, espectador) => {
+      const { leer, orgWide } = COMO_SE_VE[nombre]
+      expect(leer(resumen(await cargar(espectador)))).toEqual(orgWide)
+    },
+  )
+
+  it("and for a seller: the low-stock alert and the client count are the org's", async () => {
+    for (const espectador of [VENDEDOR_A, VENDEDOR_B]) {
+      const v = resumen(await cargar(espectador))
+      expect(v.alertas).toContain("2 items con stock bajo")
+      expect(v.tarjetas["Clientes"]).toEqual({ valor: "4", detalle: "Total registrados" })
+    }
+  })
+})
+
+describe("the 'create your first order' panel is about the organization, not the scope", () => {
+  const ADMIN_EN_SUCURSAL_SIN_ORDENES: Espectador = { ...ADMIN_TODAS, cookie: "suc-C" }
+
+  it("an org with orders: an ADMIN who selects a branch with none is not told to create the first one", async () => {
+    expect(resumen(await cargar(ADMIN_EN_SUCURSAL_SIN_ORDENES)).conPanelDeInicio).toBe(false)
   })
 
-  it("and for an ADMIN: the same numbers, the client change included", async () => {
-    const v = resumen(await cargar(ADMIN_B))
-    expect(v.tarjetas["Clientes"]?.valor).toBe("4")
-    expect(v.clientesCambio).toEqual({ pct: 100, direction: "up" })
-    expect(v.acciones.stock).toBe("2 items")
+  it("an org with orders: no panel on Todas or on a branch that has them", async () => {
+    for (const espectador of [ADMIN_TODAS, ADMIN_A, ADMIN_B]) {
+      expect(resumen(await cargar(espectador)).conPanelDeInicio, espectador.cookie ?? "todas").toBe(false)
+    }
+  })
+
+  it("an org with no orders at all: the ADMIN on Todas gets it, as before", async () => {
+    montarSupabaseEnMemoria({ ...mundo(), ordenes_servicio: [] })
+    expect(resumen(await cargar(ADMIN_TODAS)).conPanelDeInicio).toBe(true)
+  })
+
+  it("a branch selected in an org with no orders waits for Todas: an empty branch says nothing about the org", async () => {
+    montarSupabaseEnMemoria({ ...mundo(), ordenes_servicio: [] })
+    expect(resumen(await cargar(ADMIN_EN_SUCURSAL_SIN_ORDENES)).conPanelDeInicio).toBe(false)
+  })
+
+  it("only an ADMIN is offered it", async () => {
+    montarSupabaseEnMemoria({ ...mundo(), ordenes_servicio: [] })
+    expect(resumen(await cargar(VENDEDOR_A)).conPanelDeInicio).toBe(false)
   })
 })

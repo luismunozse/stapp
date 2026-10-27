@@ -803,8 +803,9 @@ export default async function DashboardPage() {
       {/* Setup checklist (oculto al 100%) — guía nuevos/inactivos a su primera orden */}
       {isAdmin && <SetupChecklist />}
 
-      {/* Onboarding para cuentas nuevas */}
-      {isAdmin && totalOrdenes === 0 && (
+      {/* Onboarding para cuentas nuevas. Habla de la organización: con una sucursal elegida, que
+          esa sucursal no tenga órdenes no es una cuenta nueva, así que solo se ofrece en "Todas". */}
+      {isAdmin && sucursalDelAlcance === null && totalOrdenes === 0 && (
         <OnboardingPanel
           hasConfig={!!orgData?.zona_horaria}
           hasTecnicos={ordenesPorTecnico.length > 0}
