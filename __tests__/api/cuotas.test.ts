@@ -65,7 +65,7 @@ describe("GET /api/ordenes/[id]/cuotas", () => {
 
     const chain = createChainMock(mockCuotas)
     chain.then = (resolve: any) => resolve({ data: mockCuotas, error: null })
-    mockSupabaseFrom({ cuotas_cobro: chain })
+    mockSupabaseFrom({ ordenes_servicio: createChainMock({ id: "o1" }), cuotas_cobro: chain })
 
     const response = await GET(
       createGetRequest("http://localhost:3000/api/ordenes/o1/cuotas"),
@@ -86,7 +86,7 @@ describe("GET /api/ordenes/[id]/cuotas", () => {
 
     const chain = createChainMock([])
     chain.then = (resolve: any) => resolve({ data: [], error: null })
-    mockSupabaseFrom({ cuotas_cobro: chain })
+    mockSupabaseFrom({ ordenes_servicio: createChainMock({ id: "o1" }), cuotas_cobro: chain })
 
     const response = await GET(
       createGetRequest("http://localhost:3000/api/ordenes/o1/cuotas"),

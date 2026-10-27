@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
 import { queueNotification } from "@/lib/notifications/queue"
@@ -36,26 +37,24 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId, userId, role } = autenticado
     if (error) return error
 
     const { id } = await params
-    const practica = await rejectIfPractica(id, organizationId!)
-    if (practica) return practica
     const body = await request.json()
     const data = entregarSchema.parse(body)
 
-    // Obtener orden actual con cliente
-    const { data: orden, error: fetchError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select(`*, clientes(*)`)
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
-      .single()
+    // Obtener orden actual con cliente, dentro del alcance de quien llama
+    const cargada = await cargarOrdenEnAlcance(id, actorDeSesion(autenticado), "entregar", {
+      select: `*, clientes(*)`,
+    })
+    if ("error" in cargada) return cargada.error
+    const { orden } = cargada
 
-    if (fetchError || !orden) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-    }
+    // After the scope check, so a practice order of another branch is "not found" too.
+    const practica = await rejectIfPractica(id, organizationId!)
+    if (practica) return practica
 
     // Técnicos solo pueden entregar sus órdenes asignadas
     if (role === "TECNICO" && orden.tecnico_id !== userId) {

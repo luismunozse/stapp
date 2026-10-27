@@ -40,8 +40,9 @@ describe("GET /api/ordenes/[id]/notas-credito", () => {
   })
 
   it("el técnico no ve las NC de una orden de otro técnico", async () => {
-    mockAuthSuccess({ role: "TECNICO", userId: "tec-1" })
-    setup({ id: "o-1", tecnico_id: "tec-2" })
+    // Same branch: the order is in his scope, and a colleague's is still not his to read.
+    mockAuthSuccess({ role: "TECNICO", userId: "tec-1", sucursalId: "suc-1" })
+    setup({ id: "o-1", sucursal_id: "suc-1", tecnico_id: "tec-2" })
     expect((await get()).status).toBe(404)
     expect(supabaseAdmin.from).not.toHaveBeenCalledWith("v_notas_credito")
   })
@@ -51,8 +52,8 @@ describe("GET /api/ordenes/[id]/notas-credito", () => {
     ["VENDEDOR", "user-1"],
     ["TECNICO", "tec-1"],
   ])("%s que ve la orden recibe sus NC desde la vista", async (role, userId) => {
-    mockAuthSuccess({ role, userId })
-    const chains = setup({ id: "o-1", tecnico_id: "tec-1" })
+    mockAuthSuccess({ role, userId, sucursalId: "suc-1" })
+    const chains = setup({ id: "o-1", sucursal_id: "suc-1", tecnico_id: "tec-1" })
     const res = await parseResponse(await get())
     expect(res.status).toBe(200)
     expect(res.body).toHaveLength(1)

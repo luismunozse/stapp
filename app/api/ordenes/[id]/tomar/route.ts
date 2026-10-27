@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, resolveTecnicosTomanOrdenes } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
-import { sucursalParaLectura } from "@/lib/sucursal"
+import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { ordenSeTomaPorTecnico } from "@/lib/ordenes/tomar"
 
 // POST /api/ordenes/[id]/tomar
@@ -20,7 +20,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, session, organizationId, userId, role } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId, userId, role } = autenticado
     if (error) return error
 
     // ADMIN assigns through PUT /api/ordenes/[id]; nobody else takes orders.
@@ -48,23 +49,16 @@ export async function POST(
 
     const { id } = await params
 
-    const { data: orden } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id, tecnico_id, estado, sucursal_id")
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (!orden) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-    }
-
-    // Same branch scoping as the orders list: a technician does not reach into
-    // another branch's orders.
-    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
-    if (!filtro.verTodas && filtro.sucursalId && (orden as any).sucursal_id !== filtro.sucursalId) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-    }
+    // Same scope as the orders list and the detail: a technician does not reach into
+    // another branch's orders, so one of another branch is "not found" (the same
+    // answer a missing id gets). One assigned to him is in scope, and then already taken.
+    // The flag was read above: pass it on instead of reading it again.
+    const cargada = await cargarOrdenEnAlcance(id, actorDeSesion(autenticado), "ver", {
+      select: "id, tecnico_id, estado, sucursal_id",
+      tomaSinAsignar: true,
+    })
+    if ("error" in cargada) return cargada.error
+    const { orden } = cargada
 
     if (orden.tecnico_id) {
       return NextResponse.json(
