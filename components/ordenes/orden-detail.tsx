@@ -68,6 +68,7 @@ import { OrdenPapelSelect, useOrdenPapel } from "@/components/ordenes/orden-pape
 import { NotificationHistory } from "@/components/ordenes/notification-history"
 import { PracticaOrdenDetail } from "@/components/ordenes/practica-orden-detail"
 import { OrdenEstadoCard } from "@/components/ordenes/orden-estado-card"
+import { dateOnlyToNoonUtcISO, todayInTimeZone } from "@/lib/timezone"
 import { OrdenTecnicoCard } from "@/components/ordenes/orden-tecnico-card"
 import { OrdenCostosCard } from "@/components/ordenes/orden-costos-card"
 import { OrdenComisionCard } from "@/components/ordenes/orden-comision-card"
@@ -174,6 +175,19 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       { problemaReportado: value },
       { problemaReportado: value },
       "Problema reportado actualizado"
+    )
+  }
+
+  const handleSaveFechaPrometida = async (fecha: string | null): Promise<boolean> => {
+    if (!orden) return false
+    const current = orden.fechaPrometida
+      ? todayInTimeZone(timezone, new Date(orden.fechaPrometida))
+      : null
+    if (fecha === current) return true
+    return saveOrdenField(
+      { fechaPrometida: fecha },
+      { fechaPrometida: fecha ? dateOnlyToNoonUtcISO(fecha) : null } as Partial<OrdenServicio>,
+      "Fecha prometida actualizada"
     )
   }
 
@@ -905,6 +919,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           updating={updating}
           onUpdateEstado={handleUpdateEstado}
           esRetiro={isRetiro}
+          onUpdateFechaPrometida={handleSaveFechaPrometida}
         />
         <OrdenTecnicoCard
           tecnicoId={orden.tecnicoId}
@@ -1161,6 +1176,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             fechaCompletado={orden.fechaCompletado}
             updating={updating}
             onUpdateEstado={handleUpdateEstado}
+            esRetiro={isRetiro}
+            onUpdateFechaPrometida={handleSaveFechaPrometida}
           />
 
           {/* Link de Seguimiento */}
