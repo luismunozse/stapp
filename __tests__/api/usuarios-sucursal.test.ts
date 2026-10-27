@@ -59,6 +59,40 @@ const resuelve = (rows: unknown, error: unknown = null) => ({
   then: (res: any, rej?: any) => Promise.resolve({ data: rows, error }).then(res, rej),
 })
 
+const DIA_MS = 86_400_000
+const enElFuturo = () => new Date(Date.now() + DIA_MS).toISOString()
+const enElPasado = () => new Date(Date.now() - DIA_MS).toISOString()
+
+/** A turno of the technician `u-2` in org-1: agendado, tomorrow, in suc-A, unless overridden. */
+const turno = (overrides: Record<string, any> = {}) => ({
+  organization_id: "org-1",
+  tecnico_id: "u-2",
+  sucursal_id: "suc-A",
+  estado: "agendado",
+  inicio: enElFuturo(),
+  ...overrides,
+})
+
+/**
+ * A table that really honours eq / in / gte, so a query that filters wrongly returns the
+ * wrong rows (a chain mock that ignores its filters would give a false green).
+ */
+function tablaEnMemoria(filas: Array<Record<string, any>>) {
+  return {
+    select: () => {
+      const filtros: Array<(f: any) => boolean> = []
+      const q: any = {
+        eq: (c: string, v: unknown) => (filtros.push((f) => f[c] === v), q),
+        in: (c: string, vs: unknown[]) => (filtros.push((f) => vs.includes(f[c])), q),
+        gte: (c: string, v: string) => (filtros.push((f) => f[c] >= v), q),
+        then: (res: any, rej?: any) =>
+          Promise.resolve({ data: filas.filter((f) => filtros.every((p) => p(f))).map((f) => ({ sucursal_id: f.sucursal_id })), error: null }).then(res, rej),
+      }
+      return q
+    },
+  }
+}
+
 /**
  * Wires `supabaseAdmin.from` per table. `destinoValida` is what the branch check
  * (`assertSucursalEnOrg`, a `.single()` on `sucursales`) finds; the same table also
@@ -71,7 +105,7 @@ function mockDb(
     readError?: unknown
     ordenes?: Array<{ sucursal_id: string | null }>
     ordenesError?: unknown
-    turnos?: Array<{ sucursal_id: string | null }>
+    turnos?: Array<Record<string, any>>
     turnosError?: unknown
     caja?: Array<{ id: string; sucursal_id: string }>
     cajaError?: unknown
@@ -86,7 +120,7 @@ function mockDb(
   const updateChain = createChainMock(opts.updateRows ?? [{ id: "u-2" }], opts.updateError ?? null)
   usersChain.update = vi.fn().mockReturnValue(updateChain)
   const ordenesChain = createChainMock(opts.ordenes ?? [], opts.ordenesError ?? null)
-  const turnosChain = createChainMock(opts.turnos ?? [], opts.turnosError ?? null)
+  const turnosTabla: any = opts.turnosError ? createChainMock(null, opts.turnosError) : tablaEnMemoria(opts.turnos ?? [])
   const cajaChain = createChainMock(opts.caja ?? [], opts.cajaError ?? null)
   const sucursalesChain: any = createChainMock(opts.destinoValida === false ? null : { id: "suc-B" })
   sucursalesChain.in = vi
@@ -98,14 +132,14 @@ function mockDb(
     const porTabla: Record<string, unknown> = {
       users: usersChain,
       ordenes_servicio: ordenesChain,
-      turnos: turnosChain,
+      turnos: turnosTabla,
       sesiones_caja: cajaChain,
       sucursales: sucursalesChain,
       audit_logs: auditChain,
     }
     return (porTabla[tabla] ?? createChainMock(null)) as any
   })
-  return { usersChain, updateChain, ordenesChain, turnosChain, cajaChain, sucursalesChain, auditChain }
+  return { usersChain, updateChain, ordenesChain, cajaChain, sucursalesChain, auditChain }
 }
 
 const tablasTocadas = () => vi.mocked(supabaseAdmin.from).mock.calls.map((c) => c[0] as string)
@@ -157,23 +191,42 @@ describe("GET /api/usuarios/[id]/sucursal — what the move would leave behind",
     expect(body.ordenesAbiertas.map((g: any) => g.sucursalNombre)).toEqual(["San Justo", "Tablada"])
   })
 
-  it("reports the appointments still ahead and the open cash session the move would strand", async () => {
-    const { turnosChain, cajaChain } = mockDb({
-      turnos: [{ sucursal_id: "suc-A" }, { sucursal_id: "suc-A" }],
-      caja: [{ id: "ses-1", sucursal_id: "suc-A" }],
+  it("counts the appointments still ahead: en_camino always, agendado/confirmado only if not started", async () => {
+    mockDb({
+      turnos: [
+        // Counted: under way (its start has passed by definition), and two still to come.
+        turno({ estado: "en_camino", inicio: enElPasado() }),
+        turno({ estado: "agendado" }),
+        turno({ estado: "confirmado", sucursal_id: "suc-B" }),
+        // Not counted: never started and already late, finished, cancelled, or someone else's.
+        turno({ estado: "agendado", inicio: enElPasado() }),
+        turno({ estado: "confirmado", inicio: enElPasado() }),
+        turno({ estado: "realizado" }),
+        turno({ estado: "orden_generada" }),
+        turno({ estado: "cancelado" }),
+        turno({ estado: "no_show" }),
+        turno({ tecnico_id: "u-otro" }),
+        turno({ organization_id: "org-ajena" }),
+        turno({ estado: "en_camino", organization_id: "org-ajena" }),
+      ],
     })
 
     const { status, body } = await leer()
 
     expect(status).toBe(200)
-    expect(body.turnosPendientes).toEqual([{ sucursalId: "suc-A", sucursalNombre: "Tablada", cantidad: 2 }])
-    expect(body.totalTurnosPendientes).toBe(2)
+    expect(body.turnosPendientes).toEqual([
+      { sucursalId: "suc-A", sucursalNombre: "Tablada", cantidad: 2 },
+      { sucursalId: "suc-B", sucursalNombre: "San Justo", cantidad: 1 },
+    ])
+    expect(body.totalTurnosPendientes).toBe(3)
+  })
+
+  it("reports the open cash session the move would block", async () => {
+    const { cajaChain } = mockDb({ caja: [{ id: "ses-1", sucursal_id: "suc-A" }] })
+
+    const { body } = await leer()
+
     expect(body.cajaAbierta).toEqual({ sesionId: "ses-1", sucursalId: "suc-A", sucursalNombre: "Tablada" })
-    // Pending = not cancelled/no-show/done, and still in the future; scoped to org + technician.
-    expect(turnosChain.eq).toHaveBeenCalledWith("organization_id", "org-1")
-    expect(turnosChain.eq).toHaveBeenCalledWith("tecnico_id", "u-2")
-    expect(turnosChain.in).toHaveBeenCalledWith("estado", ["agendado", "confirmado", "en_camino"])
-    expect(turnosChain.gte).toHaveBeenCalledWith("inicio", expect.any(String))
     // Only a session the user OPENED and that is still ABIERTA.
     expect(cajaChain.eq).toHaveBeenCalledWith("organization_id", "org-1")
     expect(cajaChain.eq).toHaveBeenCalledWith("usuario_apertura_id", "u-2")
@@ -401,14 +454,31 @@ describe("PUT /api/usuarios/[id]/sucursal — move a user", () => {
     expect(usersChain.update).not.toHaveBeenCalled()
   })
 
-  it("moving to the branch the user is already in is a 400 no-op", async () => {
-    const { usersChain } = mockDb({ target: usuario({ sucursal_id: "suc-B" }) })
+  it("moving to the branch the user is already in is an idempotent 200: no write, no audit, no cash check", async () => {
+    const { usersChain, auditChain, cajaChain } = mockDb({
+      target: usuario({ sucursal_id: "suc-B" }),
+      caja: [{ id: "ses-1", sucursal_id: "suc-B" }],
+    })
 
     const { status, body } = await mover()
 
-    expect(status).toBe(400)
-    expect(body.error).toContain("Juan")
+    expect(status).toBe(200)
+    expect(body).toEqual({ success: true, sucursalId: "suc-B", message: "Juan ya está en San Justo." })
     expect(usersChain.update).not.toHaveBeenCalled()
+    expect(auditChain.insert).not.toHaveBeenCalled()
+    expect(cajaChain.eq).not.toHaveBeenCalled()
+    expect(invalidateRefreshToken).not.toHaveBeenCalled()
+  })
+
+  it("the already-there answer falls back to a neutral name when the names lookup fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    mockDb({ target: usuario({ sucursal_id: "suc-B" }), nombresError: { message: "names down" } })
+
+    const { status, body } = await mover()
+
+    expect(status).toBe(200)
+    expect(body.message).toBe("Juan ya está en esa sucursal.")
+    warn.mockRestore()
   })
 
   it.each([{}, { sucursalId: null }, { sucursalId: "" }, { sucursalId: 7 }])(
@@ -443,8 +513,11 @@ describe("PUT /api/usuarios/[id]/sucursal — move a user", () => {
 })
 
 describe("PUT /api/usuarios/[id]/sucursal — the moved user's following requests", () => {
-  /** A tiny in-memory `users` table: update really changes what the next read returns. */
-  function usersEnMemoria(filas: Array<Record<string, any>>) {
+  /**
+   * A tiny in-memory `users` table: update really changes what the next read returns.
+   * `trasLeer` runs right after a read answered, i.e. between the route's read and its write.
+   */
+  function usersEnMemoria(filas: Array<Record<string, any>>, trasLeer?: () => void) {
     const consulta = (extra: (q: any, filtros: Array<(f: any) => boolean>) => void) => {
       const filtros: Array<(f: any) => boolean> = []
       const q: any = {
@@ -461,7 +534,11 @@ describe("PUT /api/usuarios/[id]/sucursal — the moved user's following request
       select: () =>
         consulta((q, filtros) => {
           // A copy, like a real response: the session cache must not alias the "table".
-          q.maybeSingle = async () => ({ data: coinciden(filtros)[0] ? { ...coinciden(filtros)[0] } : null, error: null })
+          q.maybeSingle = async () => {
+            const leida = coinciden(filtros)[0] ? { ...coinciden(filtros)[0] } : null
+            trasLeer?.()
+            return { data: leida, error: null }
+          }
         }),
       update: (payload: Record<string, unknown>) =>
         consulta((q, filtros) => {
@@ -501,5 +578,42 @@ describe("PUT /api/usuarios/[id]/sucursal — the moved user's following request
     expect(siguiente.error).toBeNull()
     expect(siguiente.session!.user.sucursalId).toBe("suc-B")
     expect(invalidateRefreshToken).not.toHaveBeenCalled()
+  })
+
+  // Another request changes the row after our read and before our write. The real filters of the
+  // conditional UPDATE must then match nothing: 409, the other request's change survives, no audit.
+  it.each([
+    ["moved to another branch", { sucursal_id: "suc-C" }],
+    ["promoted to ADMIN", { rol: "ADMIN" }],
+    ["deleted", { deleted_at: "2026-10-27T00:00:00Z" }],
+  ])("a user %s between the read and the write is a 409 and is not overwritten", async (_que, cambio) => {
+    const filas = [usuario({ id: "u-2", sucursal_id: "suc-A" })]
+    const users = usersEnMemoria(filas, () => Object.assign(filas[0], cambio))
+    const sucursales: any = createChainMock({ id: "suc-B" })
+    sucursales.in = vi.fn().mockReturnValue(resuelve(NOMBRES))
+    const auditChain = createChainMock(null)
+    vi.mocked(supabaseAdmin.from).mockImplementation(((tabla: string) =>
+      ({ users, sucursales, audit_logs: auditChain })[tabla as "users"] ?? createChainMock([])) as any)
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1", userId: "u-admin" })
+
+    const { status, body } = await mover()
+
+    expect(status).toBe(409)
+    expect(body.error).toBe("El usuario cambió mientras tanto. Recargá e intentá de nuevo.")
+    expect(filas[0]).toMatchObject(cambio) // the concurrent change is still there
+    expect(filas[0].sucursal_id).not.toBe("suc-B")
+    expect(auditChain.insert).not.toHaveBeenCalled()
+  })
+
+  it("control: with no concurrent change the same table takes the move", async () => {
+    const filas = [usuario({ id: "u-2", sucursal_id: "suc-A" })]
+    const sucursales: any = createChainMock({ id: "suc-B" })
+    sucursales.in = vi.fn().mockReturnValue(resuelve(NOMBRES))
+    vi.mocked(supabaseAdmin.from).mockImplementation(((tabla: string) =>
+      ({ users: usersEnMemoria(filas), sucursales })[tabla as "users"] ?? createChainMock([])) as any)
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1", userId: "u-admin" })
+
+    expect((await mover()).status).toBe(200)
+    expect(filas[0].sucursal_id).toBe("suc-B")
   })
 })

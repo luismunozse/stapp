@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 import { assertSucursalEnOrg } from "@/lib/sucursal"
 import { ESTADOS_ACTIVOS } from "@/lib/order-states"
+import type { EstadoTurno } from "@/types"
 
 // Always a concrete branch: clearing it would orphan the user (CHECK from
 // migration 241) and an ADMIN is never a valid target anyway.
@@ -13,9 +14,13 @@ const moverSchema = z.object({ sucursalId: z.string().trim().min(1).max(100) })
 // The only roles that belong to a branch; an ADMIN picks one through the cookie.
 const ROLES_CON_SUCURSAL = ["TECNICO", "VENDEDOR"]
 
-// Appointments still to happen: the non-final states of the turnos state machine
+// Appointments still pending are the non-final states of the turnos state machine
 // (app/api/turnos/[id]/route.ts); cancelado, no_show, realizado and orden_generada are done.
-const ESTADOS_TURNO_PENDIENTE = ["agendado", "confirmado", "en_camino"]
+// agendado/confirmado are pending only while their start is still ahead (a late one never
+// happened), but en_camino is under way right now and its start has passed by definition, so
+// it always counts. Hence two queries instead of one `inicio >= now` over all three.
+const ESTADOS_TURNO_POR_VENIR: EstadoTurno[] = ["agendado", "confirmado"]
+const ESTADO_TURNO_EN_CURSO: EstadoTurno = "en_camino"
 
 interface Grupo {
   sucursalId: string | null
@@ -66,10 +71,13 @@ async function nombresDeSucursales(organizationId: string, ids: string[]) {
 }
 
 /**
- * The cash session the user opened and has not closed, if any. A non-admin can
- * only close a session of their own branch (caja/sesiones/[id]/cerrar answers
- * 404 otherwise), and that branch cannot open another while this one is ABIERTA
- * (unique index from migration 252): a move would strand the money.
+ * The cash session the user opened and has not closed, if any. A move is refused
+ * while it exists: afterwards a non-admin could not close their own session
+ * (caja/sesiones/[id]/cerrar answers 404 outside the session's branch), and that
+ * branch cannot open another while this one is ABIERTA (unique index, migration
+ * 252). Other users with cash access in that branch, and any ADMIN, could still
+ * close it, so this is a policy that keeps the cashier's own session closable by
+ * them, not a hard stop on losing money.
  */
 async function cajaAbiertaDe(userId: string, organizationId: string) {
   const { data, error } = await supabaseAdmin
@@ -109,8 +117,10 @@ function agruparPorSucursal(filas: Array<{ sucursal_id: string | null }> | null,
  *   the branch they live in. An order's branch is not necessarily the user's (a
  *   technician working another branch's orders is a real setup), so one count
  *   would hide it.
- * - `turnosPendientes`: upcoming appointments assigned to the user, by branch.
- *   After the move the agenda only lists the new branch, so these drop out of sight.
+ * - `turnosPendientes`: appointments assigned to the user that are under way
+ *   (en_camino) or not started yet (agendado/confirmado with a future start), by
+ *   branch. After the move the agenda only lists the new branch, so these drop out
+ *   of sight.
  * - `cajaAbierta`: the cash session the user has open, if any. PUT refuses to move
  *   a user in that state.
  */
@@ -124,35 +134,36 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     if (cargado.error) return cargado.error
     const { usuario } = cargado
 
-    const [ordenes, turnos, caja] = await Promise.all([
+    const turnosDelTecnico = () =>
+      supabaseAdmin.from("turnos").select("sucursal_id").eq("organization_id", organizationId!).eq("tecnico_id", id)
+
+    const [ordenes, turnosEnCurso, turnosPorVenir, caja] = await Promise.all([
       supabaseAdmin
         .from("ordenes_servicio")
         .select("sucursal_id")
         .eq("organization_id", organizationId!)
         .eq("tecnico_id", id)
         .in("estado", ESTADOS_ACTIVOS as unknown as string[]),
-      supabaseAdmin
-        .from("turnos")
-        .select("sucursal_id")
-        .eq("organization_id", organizationId!)
-        .eq("tecnico_id", id)
-        .in("estado", ESTADOS_TURNO_PENDIENTE)
-        .gte("inicio", new Date().toISOString()),
+      turnosDelTecnico().eq("estado", ESTADO_TURNO_EN_CURSO),
+      turnosDelTecnico().in("estado", ESTADOS_TURNO_POR_VENIR).gte("inicio", new Date().toISOString()),
       cajaAbiertaDe(id, organizationId!),
     ])
     // A failed read is a 500, never an empty list: "no warning" would read as
     // "nothing to lose" and the ADMIN would confirm blind.
     if (ordenes.error) throw ordenes.error
-    if (turnos.error) throw turnos.error
+    if (turnosEnCurso.error) throw turnosEnCurso.error
+    if (turnosPorVenir.error) throw turnosPorVenir.error
+    // The two turno states are disjoint, so concatenating cannot double count.
+    const turnos = [...(turnosEnCurso.data ?? []), ...(turnosPorVenir.data ?? [])]
 
     const ids = new Set<string>()
-    for (const f of [...(ordenes.data ?? []), ...(turnos.data ?? []), ...(caja ? [caja] : [])]) {
+    for (const f of [...(ordenes.data ?? []), ...turnos, ...(caja ? [caja] : [])]) {
       if (f.sucursal_id) ids.add(f.sucursal_id)
     }
     const nombres = await nombresDeSucursales(organizationId!, [...ids])
 
     const ordenesAbiertas = agruparPorSucursal(ordenes.data, nombres)
-    const turnosPendientes = agruparPorSucursal(turnos.data, nombres)
+    const turnosPendientes = agruparPorSucursal(turnos, nombres)
     const suma = (grupos: Grupo[]) => grupos.reduce((acc, g) => acc + g.cantidad, 0)
 
     return NextResponse.json(
@@ -184,6 +195,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
  *    few seconds with no new login.
  *  - No `ordenes_servicio` or `turnos` write: the user keeps their assigned work
  *    wherever it is (BM-3). Moving it is a separate, explicit action.
+ * Moving a user to the branch they are already in is an idempotent 200.
  */
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -199,8 +211,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (cargado.error) return cargado.error
     const { usuario } = cargado
 
+    // Already there: idempotent success (a double click or a retry after a lost
+    // response is not an error). Nothing is written, audited or checked.
     if (usuario.sucursal_id === sucursalId) {
-      return NextResponse.json({ error: `${usuario.nombre} ya está en esa sucursal.` }, { status: 400 })
+      const nombres = await nombresDeSucursales(organizationId!, [sucursalId])
+      return NextResponse.json({
+        success: true,
+        sucursalId,
+        message: `${usuario.nombre} ya está en ${nombres.get(sucursalId) ?? "esa sucursal"}.`,
+      })
     }
 
     // Org-scoped AND active-only: assertSucursalEnOrg alone lets an inactive
@@ -225,6 +244,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     // organization, still a TECNICO/VENDEDOR (not promoted to ADMIN), not deleted,
     // and still in the branch we compared against. If another request changed it
     // in between nothing matches and we answer 409 instead of overwriting.
+    // Known and accepted: the cash session check above and this UPDATE are not one
+    // transaction (a session opened in between slips through), and requireAuth()
+    // caches the user's branch ~5 s (PR1a), so they can still act in the old branch
+    // for a few seconds after the move.
     let actualizar = supabaseAdmin
       .from("users")
       .update({ sucursal_id: sucursalId })
