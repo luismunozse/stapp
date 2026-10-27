@@ -38,6 +38,7 @@ function formatTurno(t: any) {
   return {
     id: t.id,
     organizationId: t.organization_id,
+    sucursalId: t.sucursal_id ?? null,
     clienteId: t.cliente_id,
     clienteSnapshot: t.cliente_snapshot,
     tecnicoId: t.tecnico_id,

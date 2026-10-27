@@ -570,6 +570,8 @@ export interface ClienteSnapshot {
 export interface Turno {
   id: string
   organizationId: string
+  /** The branch the appointment belongs to. */
+  sucursalId?: string | null
   clienteId: string | null
   clienteSnapshot: ClienteSnapshot | null
   tecnicoId: string | null
