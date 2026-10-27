@@ -8,6 +8,7 @@ import {
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { soloOriginadasEn } from "@/lib/sucursal-ordenes"
 
 interface TecnicoRentabilidad {
   tecnicoId: string
@@ -101,9 +102,8 @@ export async function GET(request: Request) {
       .gte("fecha_completado", desde.toISOString())
       .lte("fecha_completado", hasta.toISOString())
 
-    if (!filtro.verTodas && filtro.sucursalId) {
-      ordenesQuery = ordenesQuery.eq("sucursal_id", filtro.sucursalId)
-    }
+    // Revenue and commissions follow the branch that took the order in.
+    ordenesQuery = soloOriginadasEn(ordenesQuery, filtro.verTodas ? null : filtro.sucursalId)
 
     const { data: ordenes, error: dbError } = await ordenesQuery
 

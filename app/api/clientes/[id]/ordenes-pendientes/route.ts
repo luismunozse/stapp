@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { soloOriginadasEn } from "@/lib/sucursal-ordenes"
 import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
 
 // GET - Obtener órdenes con cobro pendiente de un cliente
@@ -21,21 +22,20 @@ export async function GET(
     })
     const sid = filtro.verTodas ? null : filtro.sucursalId
 
-    let query = supabaseAdmin
-      .from("ordenes_servicio")
-      .select(`id, numero_orden, codigo_orden, dispositivo, costo_final, total_cobrado, estado_cobro, descuento_cobro, estado, ${NOTAS_CREDITO_APLICADO_EMBED}`)
-      .eq("organization_id", organizationId!)
-      .eq("cliente_id", clienteId)
-      // The onboarding practice order is never collectable.
-      .eq("es_practica", false)
-      .in("estado_cobro", ["PENDIENTE", "PARCIAL"])
-      .not("costo_final", "is", null)
-      .gt("costo_final", 0)
-      .order("fecha_ingreso", { ascending: false })
-
-    if (sid) query = query.eq("sucursal_id", sid)
-
-    const { data: ordenes, error: dbError } = await query
+    // What is owed stays with the branch that took the order in, whoever handles it.
+    const { data: ordenes, error: dbError } = await soloOriginadasEn(
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select(`id, numero_orden, codigo_orden, dispositivo, costo_final, total_cobrado, estado_cobro, descuento_cobro, estado, ${NOTAS_CREDITO_APLICADO_EMBED}`)
+        .eq("organization_id", organizationId!)
+        .eq("cliente_id", clienteId)
+        // The onboarding practice order is never collectable.
+        .eq("es_practica", false)
+        .in("estado_cobro", ["PENDIENTE", "PARCIAL"])
+        .not("costo_final", "is", null)
+        .gt("costo_final", 0),
+      sid,
+    ).order("fecha_ingreso", { ascending: false })
 
     if (dbError) throw dbError
 

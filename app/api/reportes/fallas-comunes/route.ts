@@ -3,6 +3,7 @@ import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { soloAtendidasPor } from "@/lib/sucursal-ordenes"
 
 export async function GET(request: Request) {
   try {
@@ -31,9 +32,8 @@ export async function GET(request: Request) {
       .eq("organization_id", organizationId!)
       .neq("estado", "CANCELADO")
 
-    if (!filtro.verTodas && filtro.sucursalId) {
-      query = query.eq("sucursal_id", filtro.sucursalId)
-    }
+    // Failures are repair work: they follow the branch that handles the order.
+    query = soloAtendidasPor(query, filtro.verTodas ? null : filtro.sucursalId)
 
     if (tipoDispositivo) {
       query = query.eq("tipo_dispositivo", tipoDispositivo)

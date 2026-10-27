@@ -58,8 +58,8 @@ describe("GET /api/reportes/performance-tecnicos — branch filter", () => {
     const { status, body } = await parseResponse(response)
 
     expect(status).toBe(200)
-    // The eq("sucursal_id", "suc-A") chain method must have been called
-    expect(ordenesChain.eq).toHaveBeenCalledWith("sucursal_id", "suc-A")
+    // Technician work follows the branch that handles the order: one or() with its filter
+    expect(ordenesChain.or).toHaveBeenCalledWith("sucursal_id.eq.suc-A")
   })
 
   it("verTodas cookie → no sucursal_id filter applied", async () => {
@@ -130,7 +130,7 @@ describe("GET /api/reportes/tiempo-reparacion — branch filter", () => {
     const { status } = await parseResponse(response)
 
     expect(status).toBe(200)
-    expect(ordenesChain.eq).toHaveBeenCalledWith("sucursal_id", "suc-A")
+    expect(ordenesChain.or).toHaveBeenCalledWith("sucursal_id.eq.suc-A")
   })
 
   it("verTodas → no sucursal_id filter", async () => {
@@ -190,7 +190,7 @@ describe("GET /api/reportes/fallas-comunes — branch filter", () => {
     const { status } = await parseResponse(response)
 
     expect(status).toBe(200)
-    expect(ordenesChain.eq).toHaveBeenCalledWith("sucursal_id", "suc-A")
+    expect(ordenesChain.or).toHaveBeenCalledWith("sucursal_id.eq.suc-A")
   })
 
   it("verTodas → no sucursal_id filter", async () => {

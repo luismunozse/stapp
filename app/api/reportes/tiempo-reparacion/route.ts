@@ -3,6 +3,7 @@ import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { soloAtendidasPor } from "@/lib/sucursal-ordenes"
 
 export async function GET(request: Request) {
   try {
@@ -45,9 +46,8 @@ export async function GET(request: Request) {
       .gte("fecha_completado", fechaInicio.toISOString())
       .in("estado", ["REPARADO", "ENTREGADO"])
 
-    if (!filtro.verTodas && filtro.sucursalId) {
-      ordenesQuery = ordenesQuery.eq("sucursal_id", filtro.sucursalId)
-    }
+    // Repair time is repair work: it follows the branch that handles the order.
+    ordenesQuery = soloAtendidasPor(ordenesQuery, filtro.verTodas ? null : filtro.sucursalId)
 
     const { data: ordenes } = await ordenesQuery
 

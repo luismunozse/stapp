@@ -3,6 +3,7 @@ import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { soloAtendidasPor } from "@/lib/sucursal-ordenes"
 
 interface TecnicoPerformance {
   tecnicoId: string
@@ -45,9 +46,8 @@ export async function GET() {
       .not("tecnico_id", "is", null)
       .gte("fecha_ingreso", primerDiaMes.toISOString())
 
-    if (!filtro.verTodas && filtro.sucursalId) {
-      ordenesQuery = ordenesQuery.eq("sucursal_id", filtro.sucursalId)
-    }
+    // The work of a technician follows the branch that handles the order.
+    ordenesQuery = soloAtendidasPor(ordenesQuery, filtro.verTodas ? null : filtro.sucursalId)
 
     const { data: ordenes, error: ordenesError } = await ordenesQuery
 

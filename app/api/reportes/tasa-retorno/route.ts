@@ -3,6 +3,7 @@ import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { soloOriginadasEn } from "@/lib/sucursal-ordenes"
 
 export async function GET() {
   try {
@@ -41,9 +42,8 @@ export async function GET() {
       .gte("fecha_ingreso", seisAtras.toISOString())
       .neq("estado", "CANCELADO")
 
-    if (!filtro.verTodas && filtro.sucursalId) {
-      ordenesQuery = ordenesQuery.eq("sucursal_id", filtro.sucursalId)
-    }
+    // A return belongs to the branch that took the order in (the one the customer came back to).
+    ordenesQuery = soloOriginadasEn(ordenesQuery, filtro.verTodas ? null : filtro.sucursalId)
 
     const { data: ordenes } = await ordenesQuery
 
