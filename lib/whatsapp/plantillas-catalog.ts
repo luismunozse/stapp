@@ -122,7 +122,7 @@ Seguimiento: {link_seguimiento}
     label: "Recordatorio de retiro",
     category: "ordenes",
     description:
-      "Recordatorio automático para el cliente que todavía no retiró su equipo: se envía cuando la orden sigue en estado Reparado pasados los días de recordatorio configurados. También está disponible a mano como \"Recordatorio de retiro\" en el botón de WhatsApp de la orden.",
+      "Recordatorio automático para el cliente que todavía no retiró su equipo: se envía una vez por día mientras la orden siga en estado Reparado, pasados los días de recordatorio configurados, hasta que se retira. También está disponible a mano como \"Recordatorio de retiro\" en el botón de WhatsApp de la orden. Si no se personalizó \"Aviso: Reparado / listo para retirar\", este texto se usa también para ese aviso.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
     defaultText: `Hola {cliente}, le recordamos que su {dispositivo} está listo para retirar.
 
@@ -297,7 +297,8 @@ Seguimiento: {link_seguimiento}
     key: "orden_estado_reparado",
     label: "Aviso: Reparado / listo para retirar",
     category: "ordenes",
-    description: "Aviso al cliente cuando la orden entra al estado REPARADO.",
+    description:
+      "Aviso al cliente cuando la orden entra al estado REPARADO. Si este aviso no se personalizó pero sí \"Recordatorio de retiro\", se usa ese texto en su lugar.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
     defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra reparado.
 
@@ -877,7 +878,7 @@ const KEY_RECORDATORIO_RETIRO = "orden_listo_retirar"
  */
 export function estadoOverrideKeys(estado: string): string[] {
   const especifica = `orden_estado_${estado.toLowerCase()}`
-  return estado === "REPARADO"
+  return estado.toUpperCase() === "REPARADO"
     ? [especifica, KEY_RECORDATORIO_RETIRO, KEY_GENERICA_ESTADO]
     : [especifica, KEY_GENERICA_ESTADO]
 }

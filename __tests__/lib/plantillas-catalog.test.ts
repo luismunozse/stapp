@@ -5,6 +5,7 @@ import {
   getPlantilla,
   PLANTILLAS_CATALOG,
   estadoOverrideKeys,
+  estadoDefaultKeys,
 } from "@/lib/whatsapp/plantillas-catalog"
 
 describe("renderTemplate", () => {
@@ -184,7 +185,22 @@ describe("orden_listo_retirar (recordatorio de retiro)", () => {
   })
 })
 
+describe("estadoDefaultKeys", () => {
+  it("REPARADO nunca incluye orden_listo_retirar como default", () => {
+    expect(estadoDefaultKeys("REPARADO")).toEqual(["orden_estado_reparado", "orden_estado_actual"])
+    expect(estadoDefaultKeys("REPARADO")).not.toContain("orden_listo_retirar")
+  })
+})
+
 describe("estadoOverrideKeys", () => {
+  it("compara el estado sin distinguir mayúsculas", () => {
+    expect(estadoOverrideKeys("reparado")).toEqual([
+      "orden_estado_reparado",
+      "orden_listo_retirar",
+      "orden_estado_actual",
+    ])
+  })
+
   it("REPARADO: específica → recordatorio de retiro → genérica", () => {
     expect(estadoOverrideKeys("REPARADO")).toEqual([
       "orden_estado_reparado",
