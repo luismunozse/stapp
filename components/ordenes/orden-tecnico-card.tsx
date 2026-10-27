@@ -8,7 +8,13 @@ import type { User } from "@/types"
 
 interface OrdenTecnicoCardProps {
   tecnicoId: string | null | undefined
+  /** The technicians of the branch that handles the order. */
   tecnicos: User[]
+  /**
+   * Who has the order now. Added to the options when they are not in `tecnicos`, so an
+   * assignee from another branch (legacy) still shows instead of "Sin asignar".
+   */
+  tecnicoActual?: { id: string; nombre: string } | null
   updating: boolean
   onAsignarTecnico: (tecnicoId: string | null) => void
   readOnly?: boolean
@@ -20,13 +26,16 @@ interface OrdenTecnicoCardProps {
 export function OrdenTecnicoCard({
   tecnicoId,
   tecnicos,
+  tecnicoActual,
   updating,
   onAsignarTecnico,
   readOnly,
   puedeTomar,
   onTomar,
 }: OrdenTecnicoCardProps) {
-  const tecnicoAsignado = tecnicos.find(t => t.id === tecnicoId)
+  const asignadoFueraDeLista = !!tecnicoActual && tecnicoActual.id === tecnicoId && !tecnicos.some(t => t.id === tecnicoId)
+  const opciones: Array<{ id: string; nombre: string }> = asignadoFueraDeLista ? [...tecnicos, tecnicoActual] : tecnicos
+  const tecnicoAsignado = opciones.find(t => t.id === tecnicoId)
 
   return (
     <Card>
@@ -62,7 +71,7 @@ export function OrdenTecnicoCard({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">Sin asignar</SelectItem>
-              {tecnicos.map((tecnico) => (
+              {opciones.map((tecnico) => (
                 <SelectItem key={tecnico.id} value={tecnico.id}>
                   {tecnico.nombre}
                 </SelectItem>

@@ -214,6 +214,8 @@ export async function GET(
       organizationMoneda: org?.moneda || null,
       organizationZonaHoraria: org?.zona_horaria || null,
       organizationGarantiaDiasDefault: org?.garantia_dias_default ?? null,
+      // The branch that works the order: the screen lists that branch's technicians.
+      sucursalAtiendeId: sucursalQueAtiende(orden),
       estadoAnterior: ultimoEventoEstado?.estado_anterior ?? null,
       ...(role === "TECNICO" ? { puedeTomar } : {}),
     }, {

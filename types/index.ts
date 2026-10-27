@@ -127,6 +127,8 @@ export interface OrdenServicio {
   tecnicoId?: string | null
   /** Server hint for a TECNICO: this unassigned order can be taken by him (opt-in org permission). */
   puedeTomar?: boolean
+  /** Detail only: the branch that works the order (its technicians are the ones that can be assigned). */
+  sucursalAtiendeId?: string
   dispositivo: string
   tipoDispositivo: TipoDispositivo
   tipoDispositivoId?: string | null
