@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { alcanceLecturaOrdenes } from "@/lib/ordenes/alcance-lectura"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -35,7 +36,17 @@ export async function GET(request: Request) {
       .order("fecha_prometida", { ascending: true })
 
     if (role === "TECNICO") {
+      // His own commitments, whatever branch handles the order (BM-6).
       query = query.eq("tecnico_id", userId!)
+    } else {
+      // The branch's commitments: the switcher's branch or all for an ADMIN, his own for anyone else.
+      const alcance = await alcanceLecturaOrdenes({
+        organizationId: organizationId!,
+        userId: userId!,
+        role: role!,
+        sucursalId: session!.user.sucursalId ?? null,
+      })
+      query = alcance.aplicar(query)
     }
 
     // Filter by date range if provided (for calendar month view)

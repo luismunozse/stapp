@@ -193,5 +193,7 @@ export function montarSupabaseEnMemoria(tablas: Record<string, Fila[]>, opciones
     filas: (nombre: string): Fila[] => (tabla(nombre), filasDe.get(nombre)!),
     /** The SELECT strings the table received, in order. */
     consultas: (nombre: string) => tabla(nombre).consultas.map((c) => c.columnas),
+    /** The `.or()` lists each query of the table received, in order (one inner array per query). */
+    listasOr: (nombre: string) => tabla(nombre).consultas.map((c) => c.or),
   }
 }

@@ -10,6 +10,15 @@ import {
 import { resolveTerminologia } from "@/lib/terminologia"
 import { generateEmailByType } from "./email-templates"
 import { getWhatsAppTemplates, generateWhatsAppUrl } from "./whatsapp-templates"
+import { soloOriginadasEn } from "@/lib/sucursal-ordenes"
+import type { AlcanceLectura } from "@/lib/ordenes/alcance-lectura"
+
+/** Qué parte del historial de la organización puede leer quien lo pide (ver getNotificationHistory). */
+export type AlcanceHistorial =
+  /** Las órdenes que originó una sucursal. */
+  | { tipo: "sucursal"; sucursalId: string }
+  /** Un técnico: las órdenes de su lista (la puerta de lecturas de órdenes, que conoce el permiso de la organización). */
+  | { tipo: "lista"; lectura: AlcanceLectura }
 
 export class NotificationService {
   private organizationId: string
@@ -256,16 +265,21 @@ export class NotificationService {
     }
   }
 
-  // Metodo para obtener historial de notificaciones
-  async getNotificationHistory(ordenId?: string, limit = 50) {
-    let query = supabaseAdmin
-      .from("notification_logs")
-      .select(`
+  // Metodo para obtener historial de notificaciones.
+  //
+  // `alcance` limita el historial de toda la organización a las notificaciones de órdenes de una
+  // sucursal (la de origen: el aviso sale por su canal). Las que no cuelgan de una orden quedan
+  // afuera. Un técnico lee las de las órdenes de su lista (las asignadas a él de cualquier sucursal
+  // y, con el permiso de la organización, las libres de la suya): las mismas que puede abrir una por
+  // una. Sin `alcance` (el ADMIN en "Todas", o el historial de una orden) no se filtra.
+  async getNotificationHistory(ordenId?: string, limit = 50, alcance?: AlcanceHistorial) {
+    const columnas = `
         id, tipo, canal, estado, destinatario, asunto, error_message, created_at,
         estado_entrega, delivered_at, bounced_at, bounce_tipo, proveedor,
-        ordenes_servicio (numero_orden),
-        clientes (nombre)
-      `)
+        clientes (nombre)`
+    let query = supabaseAdmin
+      .from("notification_logs")
+      .select(alcance ? `${columnas}, ordenes_servicio!inner (numero_orden, sucursal_id, tecnico_id)` : `${columnas}, ordenes_servicio (numero_orden)`)
       .eq("organization_id", this.organizationId)
       .order("created_at", { ascending: false })
       .limit(limit)
@@ -274,8 +288,16 @@ export class NotificationService {
       query = query.eq("orden_id", ordenId)
     }
 
+    if (alcance?.tipo === "lista") {
+      query = alcance.lectura.aplicarAEmbed(query, "ordenes_servicio")
+    } else if (alcance) {
+      query = soloOriginadasEn(query, alcance.sucursalId, "ordenes_servicio.sucursal_id")
+    }
+
     const { data } = await query
-    return data || []
+    const filas = (data || []) as any[]
+    // Lo que se devuelve es el número de orden: la sucursal y el técnico eran solo para filtrar.
+    return alcance ? filas.map((f) => ({ ...f, ordenes_servicio: { numero_orden: f.ordenes_servicio?.numero_orden } })) : filas
   }
 }
 

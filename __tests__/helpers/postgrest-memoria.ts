@@ -9,10 +9,10 @@
  * A filter on `embed.column` follows PostgREST: the embedded rows are filtered (a to-one embed that
  * fails comes back null, a to-many array is shortened); with `embed!inner(..)` in the select a parent
  * row left without a matching embedded row is dropped too, without `!inner` every parent is kept; an
- * embed the select does not embed is an error. Several filters on one embed are ONE condition on an
- * embedded row (one row has to satisfy them all), not one "some row matches" each. An `or()` list cannot name an embedded
- * column (the logic-tree parser takes plain columns only), and the `search_vector` full-text
- * operator (`fts`) is not supported either.
+ * embed the select does not embed is an error. Several filters on one embed (`or(list, { referencedTable })`
+ * included) are ONE condition on an embedded row (one row has to satisfy them all), not one "some row
+ * matches" each. An `or()` list cannot name `embed.column` itself (the logic-tree parser takes plain
+ * columns only), and the full-text operator (`fts`, the `search_vector` column) is not supported.
  * Anything else throws instead of silently matching, so a new filter in a route cannot
  * slip through unverified. Like PostgREST, a `.single()` / `.maybeSingle()` over several rows is an
  * error, a logic-tree list is parsed with PostgREST's own rules (an unquoted value runs to the next
@@ -317,11 +317,18 @@ export function tablaPostgrest(filas: Fila[]) {
           const condicion: Nodo = { tipo: "condicion", col, op, valor: String(v) }
           return filtrar(c, (valor) => !cumple({ [col]: valor }, condicion))
         },
-        or: (lista: string) => {
+        // With `referencedTable` the list is about the embedded rows: it is one more condition on the rows of
+        // that embed, ANDed with the other filters on it (see filtrarEmbed).
+        or: (lista: string, opciones?: { referencedTable?: string }) => {
           const arbol = parsearLista(lista)
-          columnasDeLaLista(arbol).forEach(exigir)
+          const embed = opciones?.referencedTable
+          columnasDeLaLista(arbol).forEach((c) => exigir(embed ? `${embed}.${c}` : c))
           consulta.or.push(lista)
-          predicados.push((f) => arbol.some((n) => cumple(f, n)))
+          if (!embed) {
+            predicados.push((f) => arbol.some((n) => cumple(f, n)))
+            return q
+          }
+          filtrarEmbed(embed, (e) => e !== null && typeof e === "object" && arbol.some((n) => cumple(e, n)))
           return q
         },
         order: (col: string, o?: { ascending?: boolean }) => (exigir(col), orden.push({ col, asc: o?.ascending !== false }), q),

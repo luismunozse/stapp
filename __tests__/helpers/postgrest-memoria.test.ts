@@ -342,6 +342,71 @@ describe("a filter on an embedded table WITHOUT !inner (PostgREST filters the em
   })
 })
 
+describe("or() on an embedded table (referencedTable, with embed!inner)", () => {
+  const LOGS = [
+    { id: "n1", ordenes_servicio: { sucursal_id: "s1", tecnico_id: null } },
+    { id: "n2", ordenes_servicio: { sucursal_id: "s2", tecnico_id: "t1" } },
+    { id: "n3", ordenes_servicio: { sucursal_id: "s2", tecnico_id: "t2" } },
+    { id: "n4", ordenes_servicio: null },
+  ]
+  const logs = () => tablaPostgrest(LOGS).select("id, ordenes_servicio!inner(sucursal_id, tecnico_id)")
+
+  it("keeps the rows whose embedded row matches any condition of the list", async () => {
+    const { data } = await logs().or("sucursal_id.eq.s1,tecnico_id.eq.t1", { referencedTable: "ordenes_servicio" })
+    expect(data?.map((l: any) => l.id)).toEqual(["n1", "n2"])
+  })
+
+  it("a row with no embedded row is out, as in an inner join", async () => {
+    const { data } = await logs().or("tecnico_id.is.null,sucursal_id.eq.s2", { referencedTable: "ordenes_servicio" })
+    expect(data?.map((l: any) => l.id)).toEqual(["n1", "n2", "n3"])
+  })
+
+  it("nested groups work on the embedded row too", async () => {
+    const { data } = await logs().or("and(sucursal_id.eq.s2,tecnico_id.eq.t2),tecnico_id.eq.t1", { referencedTable: "ordenes_servicio" })
+    expect(data?.map((l: any) => l.id)).toEqual(["n2", "n3"])
+  })
+
+  it("a column the embedded rows do not have is an error", () => {
+    expect(() => logs().or("derivada_a_sucursal_id.eq.s1", { referencedTable: "ordenes_servicio" })).toThrow(/derivada_a_sucursal_id/)
+  })
+
+  it("it stacks with an or() on the table itself", async () => {
+    const { data } = await logs()
+      .or("sucursal_id.eq.s2", { referencedTable: "ordenes_servicio" })
+      .or("id.eq.n3,id.eq.n1")
+    expect(data?.map((l: any) => l.id)).toEqual(["n3"])
+  })
+
+  it("WITHOUT !inner every parent stays and only the embedded rows are filtered", async () => {
+    const { data } = await tablaPostgrest(LOGS)
+      .select("id, ordenes_servicio(sucursal_id, tecnico_id)")
+      .or("sucursal_id.eq.s1,tecnico_id.eq.t1", { referencedTable: "ordenes_servicio" })
+    expect(data?.map((l: any) => l.id)).toEqual(["n1", "n2", "n3", "n4"])
+    expect(data?.map((l: any) => l.ordenes_servicio?.sucursal_id ?? null)).toEqual(["s1", "s2", null, null])
+  })
+
+  it("an embed the select list does not embed is an error", () => {
+    expect(() => tablaPostgrest(LOGS).select("id").or("sucursal_id.eq.s1", { referencedTable: "ordenes_servicio" })).toThrow(/does not embed/)
+  })
+
+  it("an or() on a to-many embed and a filter on the same embed need ONE embedded row for both", async () => {
+    const clientes = [
+      { id: "c1", ordenes: [{ id: "o1", sucursal_id: "A", tecnico_id: null }, { id: "o2", sucursal_id: "B", tecnico_id: "t-a" }] },
+      { id: "c2", ordenes: [{ id: "o3", sucursal_id: "A", tecnico_id: "t-a" }, { id: "o4", sucursal_id: "A", tecnico_id: null }] },
+    ]
+    const conInner = await tablaPostgrest(clientes)
+      .select("id, ordenes!inner(id, sucursal_id, tecnico_id)")
+      .or("sucursal_id.eq.A", { referencedTable: "ordenes" })
+      .eq("ordenes.tecnico_id", "t-a")
+    expect(conInner.data?.map((c: any) => [c.id, c.ordenes.map((o: any) => o.id)])).toEqual([["c2", ["o3"]]])
+    const sinInner = await tablaPostgrest(clientes)
+      .select("id, ordenes(id, sucursal_id, tecnico_id)")
+      .or("sucursal_id.eq.A", { referencedTable: "ordenes" })
+      .eq("ordenes.tecnico_id", "t-a")
+    expect(sinInner.data?.map((c: any) => [c.id, c.ordenes.map((o: any) => o.id)])).toEqual([["c1", []], ["c2", ["o3"]]])
+  })
+})
+
 describe("not()", () => {
   const FILAS_NOT = [
     { id: "a", tecnico_id: null, estado: "RECIBIDO" },
