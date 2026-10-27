@@ -119,9 +119,10 @@ Seguimiento: {link_seguimiento}
   },
   {
     key: "orden_listo_retirar",
-    label: "Listo para retirar",
+    label: "Recordatorio de retiro",
     category: "ordenes",
-    description: "Se envía cuando el equipo está reparado y listo para entregar.",
+    description:
+      "Recordatorio automático para el cliente que todavía no retiró su equipo: se envía cuando la orden sigue en estado Reparado pasados los días de recordatorio configurados. También está disponible a mano como \"Recordatorio de retiro\" en el botón de WhatsApp de la orden.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
     defaultText: `Hola {cliente}, le recordamos que su {dispositivo} está listo para retirar.
 
@@ -863,6 +864,31 @@ export const CATEGORIES: Record<PlantillaCategory, { label: string; description:
   cobranza: { label: "Cobranza", description: "Pagos, saldos y links de pago" },
   operativo: { label: "Operativo", description: "Repuestos, demoras e información" },
   marketing: { label: "Marketing", description: "Captación, retención y fidelización" },
+}
+
+const KEY_GENERICA_ESTADO = "orden_estado_actual"
+const KEY_RECORDATORIO_RETIRO = "orden_listo_retirar"
+
+/**
+ * Keys de OVERRIDE (texto editado por la org) para el aviso de cambio de estado,
+ * en orden de prioridad. Fuente única para el envío automático y el diálogo manual.
+ * Para REPARADO se intercala `orden_listo_retirar`: muchos talleres editaron esa
+ * plantilla esperando que fuera el aviso de "listo para retirar".
+ */
+export function estadoOverrideKeys(estado: string): string[] {
+  const especifica = `orden_estado_${estado.toLowerCase()}`
+  return estado === "REPARADO"
+    ? [especifica, KEY_RECORDATORIO_RETIRO, KEY_GENERICA_ESTADO]
+    : [especifica, KEY_GENERICA_ESTADO]
+}
+
+/**
+ * Keys de DEFAULT del catálogo para el aviso de cambio de estado. Excluye
+ * `orden_listo_retirar`: su texto por defecto es un recordatorio y nunca debe
+ * pasar por el aviso de reparado.
+ */
+export function estadoDefaultKeys(estado: string): string[] {
+  return estadoOverrideKeys(estado).filter((k) => k !== KEY_RECORDATORIO_RETIRO)
 }
 
 export function getPlantilla(key: string): PlantillaDefinition | undefined {

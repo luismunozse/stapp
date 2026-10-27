@@ -4,6 +4,7 @@ import {
   resolvePlantilla,
   getPlantilla,
   PLANTILLAS_CATALOG,
+  estadoOverrideKeys,
 } from "@/lib/whatsapp/plantillas-catalog"
 
 describe("renderTemplate", () => {
@@ -172,5 +173,27 @@ describe("plantilla de nota de crédito", () => {
     expect(p?.category).toBe("ventas")
     expect(p?.variables.map((v) => v.key)).toEqual(["cliente", "numero_nc", "operacion", "monto", "detalle_importes", "empresa"])
     expect(p?.defaultText).not.toContain("{link_pdf}")
+  })
+})
+
+describe("orden_listo_retirar (recordatorio de retiro)", () => {
+  it("se presenta como recordatorio, no como aviso de reparado", () => {
+    const p = getPlantilla("orden_listo_retirar")!
+    expect(p.label).toBe("Recordatorio de retiro")
+    expect(p.description).not.toMatch(/cuando el equipo est[aá] reparado/i)
+  })
+})
+
+describe("estadoOverrideKeys", () => {
+  it("REPARADO: específica → recordatorio de retiro → genérica", () => {
+    expect(estadoOverrideKeys("REPARADO")).toEqual([
+      "orden_estado_reparado",
+      "orden_listo_retirar",
+      "orden_estado_actual",
+    ])
+  })
+
+  it("otros estados: específica → genérica, sin listo_retirar", () => {
+    expect(estadoOverrideKeys("EN_REPARACION")).toEqual(["orden_estado_en_reparacion", "orden_estado_actual"])
   })
 })

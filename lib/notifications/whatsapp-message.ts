@@ -9,7 +9,7 @@
 
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
 import { formatDateValue } from "@/lib/timezone"
-import { renderTemplate, getPlantilla } from "@/lib/whatsapp/plantillas-catalog"
+import { renderTemplate, getPlantilla, estadoOverrideKeys, estadoDefaultKeys } from "@/lib/whatsapp/plantillas-catalog"
 
 export interface WaMessageContext {
   cliente: { nombre: string }
@@ -136,7 +136,7 @@ function buildVarsForContext(context: any): Record<string, string | number> {
 
 /**
  * Resuelve el texto de una plantilla para un tipo de notificación.
- * Orden de prioridad: override per-estado → override genérico → default catálogo per-estado → default catálogo genérico → null.
+ * Orden de prioridad: override per-estado (REPARADO: → orden_listo_retirar) → override genérico → default catálogo per-estado → default catálogo genérico → null.
  * El catálogo es la única fuente de verdad cuando no hay override de la org.
  */
 export function resolvePlantillaForTipo(
@@ -144,23 +144,25 @@ export function resolvePlantillaForTipo(
   context: any,
   plantillasOverride: Record<string, string> | null | undefined,
 ): string | null {
-  const keys: string[] =
-    tipo === "CAMBIO_ESTADO" && context.orden?.estado
-      ? [`orden_estado_${String(context.orden.estado).toLowerCase()}`, "orden_estado_actual"]
-      : [TIPO_TO_CATALOG_KEY[tipo]].filter(Boolean) as string[]
+  const esCambioEstado = tipo === "CAMBIO_ESTADO" && !!context.orden?.estado
+  const estado = esCambioEstado ? String(context.orden.estado) : ""
+  const overrideKeys: string[] = esCambioEstado
+    ? estadoOverrideKeys(estado)
+    : ([TIPO_TO_CATALOG_KEY[tipo]].filter(Boolean) as string[])
+  const defaultKeys: string[] = esCambioEstado ? estadoDefaultKeys(estado) : overrideKeys
 
-  if (keys.length === 0) return null
+  if (overrideKeys.length === 0) return null
   const vars = buildVarsForContext(context)
 
   // 1) Override de la org (en orden de prioridad de keys)
   if (plantillasOverride) {
-    for (const key of keys) {
+    for (const key of overrideKeys) {
       const tpl = plantillasOverride[key]
       if (tpl && tpl.trim()) return renderTemplate(tpl, vars)
     }
   }
   // 2) Default del catálogo (única fuente de verdad)
-  for (const key of keys) {
+  for (const key of defaultKeys) {
     const def = getPlantilla(key)?.defaultText
     if (def && def.trim()) return renderTemplate(def, vars)
   }
