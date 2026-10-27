@@ -58,13 +58,19 @@ export async function POST(
       tomaSinAsignar: true,
     })
     if ("error" in cargada) return cargada.error
-    const { orden } = cargada
+    const { orden, permisos } = cargada
 
     if (orden.tecnico_id) {
       return NextResponse.json(
         { error: "La orden ya tiene un técnico asignado" },
         { status: 409 }
       )
+    }
+    // Only the branch that handles an order claims it: a technician who can see it for another
+    // reason (he is on the origin side of a derivation) gets the answer he got for any other
+    // branch's order.
+    if (!permisos.tomar) {
+      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
     }
     if (!ordenSeTomaPorTecnico(orden)) {
       return NextResponse.json(
