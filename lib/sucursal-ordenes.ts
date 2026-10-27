@@ -58,6 +58,20 @@ export function soloAtendidasPor<Q>(query: Q, sucursalId: string | null): Q {
   return sucursalId === null ? query : (query as unknown as ConOr<Q>).or(filtroAtiendeSucursal(sucursalId))
 }
 
+type ConOrEnEmbed<Q> = { or(filtro: string, opciones: { referencedTable: string }): Q }
+
+/**
+ * Narrows the orders a query EMBEDS (`ordenes_servicio:ordenes_servicio!tecnico_id (..)`) to the ones a
+ * branch handles; `null` means every branch and returns the query as it came. The embed must not be
+ * `!inner`: every parent row stays and only its embedded orders narrow, so a technician who holds
+ * nothing in that branch is still listed, with a count of zero. For counts of work in progress.
+ */
+export function soloAtendidasPorEnEmbed<Q>(query: Q, sucursalId: string | null, embed: string): Q {
+  return sucursalId === null
+    ? query
+    : (query as unknown as ConOrEnEmbed<Q>).or(filtroAtiendeSucursal(sucursalId), { referencedTable: embed })
+}
+
 /**
  * Narrows a filterable query to what a branch originated: orders by the branch that took them in,
  * sales by the branch that made them. For money (collections, invoices, sales), which stays with the

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { sucursalParaEscritura, assertSucursalEnOrg } from "@/lib/sucursal"
-import { sucursalParaListaPersonal, sucursalParaReasignar } from "@/lib/sucursal-personal"
+import { sucursalParaEscritura, sucursalParaLectura, assertSucursalEnOrg } from "@/lib/sucursal"
+import { sucursalParaListaPersonal, sucursalParaReasignar, type DestinoDeReasignacion } from "@/lib/sucursal-personal"
+import { soloAtendidasPorEnEmbed } from "@/lib/sucursal-ordenes"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import bcrypt from "bcryptjs"
@@ -24,21 +25,31 @@ export async function GET(request: Request) {
       alcance: searchParams.get("alcance") === "escritura" ? "escritura" : "lectura",
     })
 
+    // The open-order counts of each technician are the orders the viewer's scope handles (the branch
+    // the switcher selects, an ADMIN's, or his own): the same ones a bulk move of them touches.
+    const alcance = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
+    const sucursalDelAlcance = alcance.verTodas ? null : alcance.sucursalId
+
     // `?paraReasignarDe=<id>` is the destination picker of a bulk move (an ADMIN's): the technicians
     // that can take every open order of that technician in the scope the move applies, which
-    // may not be the technician's own branch (an order handled by another one).
+    // may not be the technician's own branch (an order handled by another one). It also answers how
+    // many orders the move touches, and whether they span several branches (then nobody is offered
+    // and the screen asks for a branch).
     const origenId = searchParams.get("paraReasignarDe")
+    let reasignacion: DestinoDeReasignacion | null = null
     if (role === "ADMIN" && origenId) {
-      sucursalId = await sucursalParaReasignar({
+      reasignacion = await sucursalParaReasignar({
         organizationId: organizationId!,
         origenId,
-        sucursalDelAlcance: sucursalId,
+        sucursalDelAlcance,
       })
+      sucursalId = reasignacion.sucursalId
     }
 
-    let query = supabaseAdmin
-      .from("users")
-      .select(`
+    let query = soloAtendidasPorEnEmbed(
+      supabaseAdmin
+        .from("users")
+        .select(`
         id,
         nombre,
         email,
@@ -54,8 +65,11 @@ export async function GET(request: Request) {
           estado
         )
       `)
-      .eq("rol", "TECNICO")
-      .eq("organization_id", organizationId!)
+        .eq("rol", "TECNICO")
+        .eq("organization_id", organizationId!),
+      sucursalDelAlcance,
+      "ordenes_servicio",
+    )
       .order("activo", { ascending: false })
       .order("nombre", { ascending: true })
     if (sucursalId) query = query.eq("sucursal_id", sucursalId)
@@ -91,7 +105,10 @@ export async function GET(request: Request) {
       }
     })
 
-    return NextResponse.json(tecnicosConStats, {
+    const cuerpo = reasignacion
+      ? { tecnicos: tecnicosConStats, ordenesAMover: reasignacion.ordenes, variasSucursales: reasignacion.variasSucursales }
+      : tecnicosConStats
+    return NextResponse.json(cuerpo, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })
   } catch (error) {

@@ -39,6 +39,8 @@ function usuario(id: string, nombre: string, rol: string, sucursal: string | nul
     avatar_url: null,
     fecha_ingreso_tecnico: null,
     created_at: "2026-01-01",
+    // What the `ordenes_servicio!tecnico_id` embed of the technicians list holds: one open order in his branch.
+    ordenes_servicio: sucursal ? [{ id: `o-${id}`, estado: "EN_REPARACION", sucursal_id: sucursal }] : [],
   }
 }
 

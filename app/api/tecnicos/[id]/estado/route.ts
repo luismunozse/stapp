@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
+import { soloAtendidasPorEnEmbed } from "@/lib/sucursal-ordenes"
 import { ESTADOS_ACTIVOS } from "@/lib/order-states"
 
 export async function PATCH(
@@ -8,7 +10,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, role, session } = await requireAdmin()
     if (error) return error
 
     const { id } = await params
@@ -22,17 +24,24 @@ export async function PATCH(
       )
     }
 
-    const { data: tecnico, error: fetchError } = await supabaseAdmin
-      .from("users")
-      .select(`
+    // The warning counts the orders of the scope the ADMIN works in (the ones a bulk reassignment moves).
+    const alcance = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
+    const sucursalDelAlcance = alcance.verTodas ? null : alcance.sucursalId
+
+    const { data: tecnico, error: fetchError } = await soloAtendidasPorEnEmbed(
+      supabaseAdmin
+        .from("users")
+        .select(`
         id,
         activo,
         ordenes_servicio:ordenes_servicio!tecnico_id (id, estado)
       `)
-      .eq("id", id)
-      .eq("rol", "TECNICO")
-      .eq("organization_id", organizationId!)
-      .single()
+        .eq("id", id)
+        .eq("rol", "TECNICO")
+        .eq("organization_id", organizationId!),
+      sucursalDelAlcance,
+      "ordenes_servicio",
+    ).single()
 
     if (fetchError || !tecnico) {
       return NextResponse.json({ error: "Técnico no encontrado" }, { status: 404 })

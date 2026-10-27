@@ -21,6 +21,7 @@ import {
   esIdSeguro,
   tecnicoOfrecido,
   soloAtendidasPor,
+  soloAtendidasPorEnEmbed,
   soloOriginadasEn,
   MENSAJE_TECNICO_OTRA_SUCURSAL,
 } from "@/lib/sucursal-ordenes"
@@ -238,6 +239,38 @@ describe("soloAtendidasPor (the dashboard's operational widgets: what a branch w
     const { q, llamadas } = constructorEspia()
     soloAtendidasPor(q, "suc-A,sucursal_id.neq.x")
     expect(llamadas).toEqual([["or", `sucursal_id.eq.${SUCURSAL_NINGUNA}`]])
+  })
+})
+
+describe("soloAtendidasPorEnEmbed (the open-order counts a query embeds: what a branch works on)", () => {
+  it("every branch (null): the query is returned untouched", () => {
+    const { q, llamadas } = constructorEspia()
+    expect(soloAtendidasPorEnEmbed(q, null, "ordenes_servicio")).toBe(q)
+    expect(llamadas).toEqual([])
+  })
+
+  it("a branch: ONE or() on the embed with the handling-branch filter, so the day the filter changes this follows", () => {
+    const { q, llamadas } = constructorEspia()
+    expect(soloAtendidasPorEnEmbed(q, "suc-A", "ordenes_servicio")).toBe(q)
+    expect(llamadas).toEqual([["or", filtroAtiendeSucursal("suc-A"), { referencedTable: "ordenes_servicio" }]])
+  })
+
+  it("the embed named is the embed filtered (an alias)", () => {
+    const { q, llamadas } = constructorEspia()
+    soloAtendidasPorEnEmbed(q, "suc-A", "orden")
+    expect(llamadas).toEqual([["or", filtroAtiendeSucursal("suc-A"), { referencedTable: "orden" }]])
+  })
+
+  it("an id that cannot be spliced fails closed to the sentinel branch", () => {
+    const { q, llamadas } = constructorEspia()
+    soloAtendidasPorEnEmbed(q, "suc-A,sucursal_id.neq.x", "ordenes_servicio")
+    expect(llamadas).toEqual([["or", `sucursal_id.eq.${SUCURSAL_NINGUNA}`, { referencedTable: "ordenes_servicio" }]])
+  })
+
+  it("never references the derivation column", () => {
+    const { q, llamadas } = constructorEspia()
+    soloAtendidasPorEnEmbed(q, "suc-A", "ordenes_servicio")
+    expect(JSON.stringify(llamadas)).not.toContain("derivada_a_sucursal_id")
   })
 })
 

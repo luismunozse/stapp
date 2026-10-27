@@ -23,6 +23,8 @@ import { GET as ordenesDe } from "@/app/api/tecnicos/[id]/ordenes/route"
 import { GET as insightsDe } from "@/app/api/tecnicos/[id]/insights/route"
 import { POST as reasignar } from "@/app/api/tecnicos/[id]/reasignar/route"
 import { GET as listar } from "@/app/api/tecnicos/route"
+import { GET as detalle } from "@/app/api/tecnicos/[id]/route"
+import { PATCH as estado } from "@/app/api/tecnicos/[id]/estado/route"
 
 const A = "suc-A"
 const B = "suc-B"
@@ -67,6 +69,12 @@ const ORDENES = () => {
   ]
 }
 
+/** What the `ordenes_servicio:ordenes_servicio!tecnico_id (..)` embed of a user holds: the orders assigned to him. */
+const ordenesEmbebidas = (id: string) =>
+  ORDENES()
+    .filter((o) => o.tecnico_id === id)
+    .map((o) => ({ id: o.id, estado: o.estado, sucursal_id: o.sucursal_id }))
+
 const usuario = (id: string, rol: string, sucursal: string | null, extra: Record<string, unknown> = {}) => ({
   id,
   organization_id: "org-1",
@@ -81,7 +89,9 @@ const usuario = (id: string, rol: string, sucursal: string | null, extra: Record
   porcentaje_comision: 10,
   costo_hora: 5,
   sucursal_id: sucursal,
-  ordenes_servicio: [],
+  created_at: "2026-01-01T00:00:00Z",
+  horario_laboral: null,
+  ordenes_servicio: ordenesEmbebidas(id),
   ...extra,
 })
 
@@ -322,40 +332,195 @@ describe("POST /api/tecnicos/[id]/reasignar (BM-5 on a bulk move)", () => {
 
 // ---------------------------------------------------------------------------------------------
 describe("GET /api/tecnicos?paraReasignarDe= (the destination picker of a bulk move)", () => {
+  /** The ids on offer, the number of orders the move would touch, and whether they span several branches. */
   async function ofrecidos(e: Espectador, origen: string, ordenes = ORDENES()) {
     entrar(e)
     montarSupabaseEnMemoria({ ordenes_servicio: ordenes, users: USUARIOS, organizations: [{ id: "org-1", vendedores_administran_inventario: false }] })
     const { status, body } = await parseResponse(await listar(new Request(`http://localhost:3000/api/tecnicos?paraReasignarDe=${origen}`)))
     expect(status).toBe(200)
-    return (body as Array<{ id: string }>).map((t) => t.id).sort()
+    return {
+      ids: (body.tecnicos as Array<{ id: string }>).map((t) => t.id).sort(),
+      ordenesAMover: body.ordenesAMover as number,
+      variasSucursales: body.variasSucursales as boolean,
+    }
   }
 
   it("with a branch selected: the technicians of the branch that handles the orders to move", async () => {
-    expect(await ofrecidos(ADMIN_A, "t-a")).toEqual(["t-a", "t-a2", "t-inactivo"])
-    expect(await ofrecidos(ADMIN_B, "t-a")).toEqual(["t-b", "t-b2"])
+    expect((await ofrecidos(ADMIN_A, "t-a")).ids).toEqual(["t-a", "t-a2", "t-inactivo"])
+    expect((await ofrecidos(ADMIN_B, "t-a")).ids).toEqual(["t-b", "t-b2"])
   })
 
   it("on Todas, orders of ONE branch: that branch's technicians (what the route will accept)", async () => {
     const ordenes = ORDENES()
     ordenes.push(orden("a4", A, "t-a2"))
-    expect(await ofrecidos(ADMIN_TODAS, "t-a2", ordenes)).toEqual(["t-a", "t-a2", "t-inactivo"])
+    expect((await ofrecidos(ADMIN_TODAS, "t-a2", ordenes)).ids).toEqual(["t-a", "t-a2", "t-inactivo"])
   })
 
   it("the technician of A who holds an order of B: the picker offers B's technicians, the ones the route accepts", async () => {
     const ordenes = ORDENES().filter((o) => o.id !== "a2") // t-a keeps only b2
-    expect(await ofrecidos(ADMIN_TODAS, "t-a", ordenes)).toEqual(["t-b", "t-b2"])
+    expect((await ofrecidos(ADMIN_TODAS, "t-a", ordenes)).ids).toEqual(["t-b", "t-b2"])
   })
 
-  it("on Todas, orders of SEVERAL branches: nobody can take them all, so nobody is offered", async () => {
-    expect(await ofrecidos(ADMIN_TODAS, "t-a")).toEqual([])
+  it("on Todas, orders of SEVERAL branches: nobody can take them all, so nobody is offered, and the answer says why", async () => {
+    const { ids, variasSucursales } = await ofrecidos(ADMIN_TODAS, "t-a")
+    expect(ids).toEqual([])
+    expect(variasSucursales).toBe(true)
   })
 
   it("a technician with no open orders: the list the request's own scope gives", async () => {
-    expect(await ofrecidos(ADMIN_TODAS, "t-b2")).toEqual(["t-a", "t-a2", "t-b", "t-b2", "t-inactivo"])
-    expect(await ofrecidos(ADMIN_B, "t-b2")).toEqual(["t-b", "t-b2"])
+    expect((await ofrecidos(ADMIN_TODAS, "t-b2")).ids).toEqual(["t-a", "t-a2", "t-b", "t-b2", "t-inactivo"])
+    expect((await ofrecidos(ADMIN_B, "t-b2")).ids).toEqual(["t-b", "t-b2"])
   })
 
   it("only an ADMIN's list changes: anyone else keeps his own branch's list and the parameter does nothing", async () => {
-    expect(await ofrecidos({ ...TECNICO_A, nombre: "t-a" }, "t-b")).toEqual(["t-a", "t-a2", "t-inactivo"])
+    entrar({ ...TECNICO_A, nombre: "t-a" })
+    montarSupabaseEnMemoria({ ordenes_servicio: ORDENES(), users: USUARIOS, organizations: [{ id: "org-1", vendedores_administran_inventario: false }] })
+    const { body } = await parseResponse(await listar(new Request("http://localhost:3000/api/tecnicos?paraReasignarDe=t-b")))
+    expect((body as Array<{ id: string }>).map((t) => t.id).sort()).toEqual(["t-a", "t-a2", "t-inactivo"])
+  })
+
+  describe("it says how many orders the move touches, and that is how many it moves", () => {
+    it.each(
+      conNombre([
+        [ADMIN_TODAS, 2, true],
+        [ADMIN_A, 1, false],
+        [ADMIN_B, 1, false],
+      ]),
+    )("%s: the orders of t-a in that scope, across branches or not", async (_nombre, espectador, cantidad, varias) => {
+      const { ordenesAMover, variasSucursales } = await ofrecidos(espectador, "t-a")
+      expect(ordenesAMover).toBe(cantidad)
+      expect(variasSucursales).toBe(varias)
+    })
+
+    it("nothing to move: zero orders in one branch's worth of nothing", async () => {
+      const { ordenesAMover, variasSucursales } = await ofrecidos(ADMIN_TODAS, "t-b2")
+      expect(ordenesAMover).toBe(0)
+      expect(variasSucursales).toBe(false)
+    })
+
+    it.each(conNombre([[ADMIN_TODAS], [ADMIN_A], [ADMIN_B]]))(
+      "%s: the number on offer is the number the move (to an ADMIN, who can take any) reports",
+      async (_nombre, espectador) => {
+        const { ordenesAMover } = await ofrecidos(espectador, "t-a")
+        entrar(espectador)
+        montar()
+        const res = await reasignar(
+          new Request("http://localhost:3000/api/tecnicos/t-a/reasignar", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tecnicoDestinoId: "admin-1" }),
+          }),
+          ctx("t-a"),
+        )
+        expect((await parseResponse(res)).body.reasignadas).toBe(ordenesAMover)
+      },
+    )
+
+    it("only the open orders count: a finished one does not move", async () => {
+      const ordenes = ORDENES()
+      ordenes.push(orden("a9", A, "t-a", "REPARADO"))
+      expect((await ofrecidos(ADMIN_A, "t-a", ordenes)).ordenesAMover).toBe(1)
+    })
+  })
+
+  describe("when the orders cannot be read", () => {
+    it("the picker fails instead of offering a list that was not judged against the orders", async () => {
+      entrar(ADMIN_A)
+      montarSupabaseEnMemoria(
+        { ordenes_servicio: ORDENES(), users: USUARIOS, organizations: [{ id: "org-1", vendedores_administran_inventario: false }] },
+        { errorDeLectura: { ordenes_servicio: { code: "XX000", message: "connection lost" } } },
+      )
+      const res = await listar(new Request("http://localhost:3000/api/tecnicos?paraReasignarDe=t-a"))
+      expect(res.status).toBe(500)
+      const body = await res.json()
+      expect(body.tecnicos).toBeUndefined()
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------------------------
+describe("the open-order counts of the technician screens follow the viewer's scope (OI-1, SC-3, BM-5)", () => {
+  /** t-a holds a2 (A) and b2 (B), both open; t-b holds a3 (A) and b3 (B), both finished. */
+  async function listaDeCuentas(e: Espectador) {
+    entrar(e)
+    montar()
+    const { status, body } = await parseResponse(await listar(new Request("http://localhost:3000/api/tecnicos")))
+    expect(status).toBe(200)
+    return Object.fromEntries((body as Array<{ id: string; ordenesActivas: number; ordenesCompletadas: number }>).map((t) => [t.id, [t.ordenesActivas, t.ordenesCompletadas]]))
+  }
+
+  // The list of a branch is the list of ITS technicians; the count of each is the orders that scope handles.
+  it.each(
+    conNombre([
+      [ADMIN_TODAS, { "t-a": [2, 0], "t-b": [0, 2] }],
+      [ADMIN_A, { "t-a": [1, 0], "t-a2": [0, 0] }],
+      [ADMIN_B, { "t-b": [0, 1], "t-b2": [0, 0] }],
+    ]),
+  )("the list for %s counts the orders that scope handles", async (_nombre, espectador, esperado) => {
+    expect(await listaDeCuentas(espectador)).toMatchObject(esperado)
+  })
+
+  it("a scope narrows the count of a technician, not who is in the list", async () => {
+    expect(Object.keys(await listaDeCuentas(ADMIN_A)).sort()).toEqual(["t-a", "t-a2", "t-inactivo"])
+    expect(Object.keys(await listaDeCuentas(ADMIN_TODAS)).sort()).toEqual(["t-a", "t-a2", "t-b", "t-b2", "t-inactivo"])
+  })
+
+  async function detalleDe(e: Espectador, id: string) {
+    entrar(e)
+    montar()
+    const { status, body } = await parseResponse(await detalle(get(id), ctx(id)))
+    expect(status).toBe(200)
+    return [body.ordenesActivas, body.ordenesCompletadas]
+  }
+
+  it.each(
+    conNombre([
+      [ADMIN_TODAS, [2, 0]],
+      [ADMIN_A, [1, 0]],
+      [ADMIN_B, [1, 0]],
+    ]),
+  )("the detail of t-a for %s: the number the reassign dialog shows is the one that moves", async (_nombre, espectador, esperado) => {
+    expect(await detalleDe(espectador, "t-a")).toEqual(esperado)
+  })
+
+  it("the technician himself sees all his open orders, whatever the stored choice of a branch (BM-6)", async () => {
+    expect(await detalleDe(TECNICO_A, "t-a")).toEqual([2, 0])
+    expect(await detalleDe({ ...TECNICO_A, cookie: B }, "t-a")).toEqual([2, 0])
+  })
+
+  it("the counts of the branches add up to Todas (SC-4)", async () => {
+    for (const id of ["t-a", "t-b"]) {
+      const [a, b, todas] = [await detalleDe(ADMIN_A, id), await detalleDe(ADMIN_B, id), await detalleDe(ADMIN_TODAS, id)]
+      expect(Number(a[0]) + Number(b[0])).toBe(todas[0])
+      expect(Number(a[1]) + Number(b[1])).toBe(todas[1])
+    }
+  })
+
+  async function cambiarActivo(e: Espectador, id: string, activo: boolean) {
+    entrar(e)
+    montar()
+    const res = await estado(
+      new Request(`http://localhost:3000/api/tecnicos/${id}/estado`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activo }),
+      }),
+      ctx(id),
+    )
+    const { status, body } = await parseResponse(res)
+    expect(status).toBe(200)
+    return body as { ordenesActivas: number; warning: string | null }
+  }
+
+  it.each(
+    conNombre([
+      [ADMIN_TODAS, 2],
+      [ADMIN_A, 1],
+      [ADMIN_B, 1],
+    ]),
+  )("deactivating t-a as %s warns about the orders of that scope", async (_nombre, espectador, cantidad) => {
+    const { ordenesActivas, warning } = await cambiarActivo(espectador, "t-a", false)
+    expect(ordenesActivas).toBe(cantidad)
+    expect(warning).toContain(`${cantidad} orden(es)`)
   })
 })

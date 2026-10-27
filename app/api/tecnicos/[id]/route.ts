@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { requireAdmin, requireAdminOrSelf } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
+import { soloAtendidasPorEnEmbed } from "@/lib/sucursal-ordenes"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import bcrypt from "bcryptjs"
 
@@ -10,12 +12,22 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    const { error, organizationId } = await requireAdminOrSelf(id)
+    const { error, organizationId, role, session } = await requireAdminOrSelf(id)
     if (error) return error
 
-    const { data: tecnico, error: dbError } = await supabaseAdmin
-      .from("users")
-      .select(`
+    // The open-order count is what the viewer's scope handles, which is also what a bulk reassignment
+    // of them moves: an ADMIN reads the branch the switcher selects (every one on Todas). The technician
+    // himself reads everything assigned to him, from any branch (BM-6).
+    let sucursalDelAlcance: string | null = null
+    if (role === "ADMIN") {
+      const alcance = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
+      sucursalDelAlcance = alcance.verTodas ? null : alcance.sucursalId
+    }
+
+    const { data: tecnico, error: dbError } = await soloAtendidasPorEnEmbed(
+      supabaseAdmin
+        .from("users")
+        .select(`
         id,
         nombre,
         email,
@@ -30,10 +42,12 @@ export async function GET(
         horario_laboral,
         ordenes_servicio:ordenes_servicio!tecnico_id ( estado )
       `)
-      .eq("id", id)
-      .eq("rol", "TECNICO")
-      .eq("organization_id", organizationId!)
-      .single()
+        .eq("id", id)
+        .eq("rol", "TECNICO")
+        .eq("organization_id", organizationId!),
+      sucursalDelAlcance,
+      "ordenes_servicio",
+    ).single()
 
     if (dbError || !tecnico) {
       return NextResponse.json({ error: "Técnico no encontrado" }, { status: 404 })

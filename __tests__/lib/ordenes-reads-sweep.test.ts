@@ -42,7 +42,7 @@ import ts from "typescript"
 import { leerFuentes } from "../helpers/fuentes"
 
 /** Calls that take the QUERY and narrow it: a read in their first argument, or held in the variable they receive, is scoped. */
-const ENVOLTURAS = ["soloAtendidasPor", "soloOriginadasEn", "aplicar", "aplicarAEmbed"]
+const ENVOLTURAS = ["soloAtendidasPor", "soloAtendidasPorEnEmbed", "soloOriginadasEn", "aplicar", "aplicarAEmbed"]
 /** Builders of the filter string a read applies inside its own chain (`.or(filtroX(..))`). */
 const FILTROS = ["filtroVisibleEnSucursal", "filtroAtiendeSucursal", "filtroListaTecnico"]
 /** Approved but never applied by being called: the order loader reads at its call site, the door factory hands out the scope. */
@@ -463,6 +463,10 @@ const EXENTOS: Listado = new Map([
     "app/api/ordenes/[id]/cobros/route.ts",
     { sitios: 2, motivo: "helper of POST (the handler loads the order through the loader first) and DELETE (ADMIN only, role first); both pinned in ordenes-subroutes-sweep" },
   ],
+  [
+    "app/api/tecnicos/[id]/route.ts",
+    { sitios: 1, motivo: "DELETE of a technician (ADMIN only): the guard counts EVERY open order he holds, in every branch, on purpose: scoping it would let him be deleted with work still assigned elsewhere" },
+  ],
   ["app/api/recepciones/[id]/route.ts", { sitios: 1, motivo: "PATCH of the reception's discount: counts its delivered orders. ADMIN only, role first (the GET reads through the reception's branch)" }],
   ["app/api/recepciones/[id]/entregar/route.ts", { sitios: 1, motivo: `delivery of a whole reception. ${SOLO_ADMIN}, and the role is checked first` }],
   ["app/api/sucursales/[id]/route.ts", { sitios: 1, motivo: "count of the orders of a branch before it is deleted (ADMIN only)" }],
@@ -492,13 +496,8 @@ const EXENTOS: Listado = new Map([
 ])
 
 // Reads that PR5b was to scope: technician views and counts, invoicing candidates, pending orders of a
-// client, receptions, credit notes, reports. What is left is the open-order counts embedded in the
-// technician screens.
-const PENDIENTE_PR5B: Listado = new Map([
-  ["app/api/tecnicos/route.ts", { sitios: 1, motivo: "open-order counts of the technicians list (an embed of his orders)" }],
-  ["app/api/tecnicos/[id]/route.ts", { sitios: 2, motivo: "open-order counts of a technician (an embed of his orders)" }],
-  ["app/api/tecnicos/[id]/estado/route.ts", { sitios: 1, motivo: "open-order count of a technician (an embed of his orders)" }],
-])
+// client, receptions, credit notes, reports. It is empty: PR5b scoped them all.
+const PENDIENTE_PR5B: Listado = new Map()
 
 // Reads of quotes and warranties (the order a quote is for, the order a warranty covers): scoped by the
 // change that gives quotes and warranties a branch (PR20).
@@ -547,6 +546,11 @@ describe("detector, with planted offenders", () => {
   describe("(B) the chain is the argument of a wrapper", () => {
     it.each(["soloAtendidasPor", "soloOriginadasEn"])("accepts %s(chain, sucursal)", (envoltura) => {
       expect(sueltas(`  return ${envoltura}(supabaseAdmin.from("ordenes_servicio").select("*").eq("organization_id", o), s)`)).toEqual([])
+    })
+
+    it("accepts soloAtendidasPorEnEmbed(chain, sucursal, embed) around a select that embeds the orders, with more calls after it", () => {
+      const src = `  return soloAtendidasPorEnEmbed(supabaseAdmin.from("users").select("id, ordenes_servicio:ordenes_servicio!tecnico_id (id, estado)").eq("rol", "TECNICO"), s, "ordenes_servicio").order("nombre")`
+      expect(sueltas(src)).toEqual([])
     })
 
     it("accepts the door's aplicar and aplicarAEmbed as methods", () => {
@@ -953,6 +957,10 @@ describe("source tree", () => {
     // the door's methods are members of the scope it returns
     const puerta = fuente("lib/ordenes/alcance-lectura.ts")
     for (const metodo of ["aplicar", "aplicarAEmbed"]) expect(puerta, metodo).toMatch(new RegExp(`\\b${metodo}<Q>\\(`))
+  })
+
+  it("PENDIENTE_PR5B is empty: the reads of the technician views and counts, money and reports are all scoped", () => {
+    expect([...PENDIENTE_PR5B.keys()]).toEqual([])
   })
 
   it("a file is in at most one list, and every listed file exists", () => {
