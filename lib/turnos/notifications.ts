@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { sendCustomer } from "@/lib/email/index"
+import { sendCustomer, replyToDelTaller } from "@/lib/email/index"
 import { renderTemplate, getPlantilla } from "@/lib/whatsapp/plantillas-catalog"
 
 const TURNO_TIPO_TO_CATALOG_KEY: Record<string, string> = {
@@ -234,7 +234,7 @@ export async function sendTurnoNotification(
 
   const { data: orgConfig } = await supabaseAdmin
     .from("organizations")
-    .select("notificaciones_email, notificaciones_whatsapp, plantillas_whatsapp")
+    .select("notificaciones_email, notificaciones_whatsapp, plantillas_whatsapp, email")
     .eq("id", ctx.organizationId)
     .single()
 
@@ -248,6 +248,7 @@ export async function sendTurnoNotification(
         subject: tpl.subject,
         html: tpl.html,
         fromName: ctx.organizationName,
+        replyTo: replyToDelTaller(orgConfig?.email),
       })
       result.email = { sent: true }
       await logNotif(ctx.organizationId, ctx.turnoId, tipo, "email", ctx.destinatarioEmail, "ENVIADO", tpl.html)

@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { sendCustomer, proveedorCliente } from "@/lib/email/index"
+import { sendCustomer, proveedorCliente, replyToDelTaller } from "@/lib/email/index"
 import {
   NotificationType,
   NotificationChannel,
@@ -24,7 +24,7 @@ export class NotificationService {
 
     const { data: org } = await supabaseAdmin
       .from("organizations")
-      .select("notificaciones_email, notificaciones_whatsapp, dias_recordatorio, pais")
+      .select("notificaciones_email, notificaciones_whatsapp, dias_recordatorio, pais, email")
       .eq("id", this.organizationId)
       .single()
 
@@ -33,6 +33,7 @@ export class NotificationService {
       whatsappEnabled: org?.notificaciones_whatsapp ?? true,
       diasRecordatorio: org?.dias_recordatorio ?? 3,
       pais: org?.pais ?? null,
+      email: org?.email ?? null,
     }
 
     return this.config
@@ -93,10 +94,15 @@ export class NotificationService {
     }
 
     try {
+      // El cliente final responde al correo del taller, no al remitente
+      // tecnico de avisos.stapp.com.ar, que nadie lee.
+      const config = await this.getConfig()
       const result = await sendCustomer({
         to: context.cliente.email,
         subject: emailContent.subject,
         html: emailContent.html,
+        fromName: context.organizationName,
+        replyTo: replyToDelTaller(config.email),
       })
 
       const messageId = (result as { id?: string } | null)?.id

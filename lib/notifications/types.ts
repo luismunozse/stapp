@@ -142,4 +142,6 @@ export interface NotificationConfig {
   diasRecordatorio: number
   /** País de la organización: decide el código telefónico del link de WhatsApp. */
   pais: string | null
+  /** Email del taller: se usa como reply-to de los correos al cliente final. */
+  email: string | null
 }

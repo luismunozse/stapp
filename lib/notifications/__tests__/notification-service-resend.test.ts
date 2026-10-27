@@ -73,4 +73,57 @@ describe('NotificationService.sendNotification via Resend (kill switch, path de 
     expect(logInsert!.payload.estado).toBe('FALLIDO')
     expect(logInsert!.payload.proveedor).toBe('resend')
   })
+
+  async function enviarYLeerBody(orgRow: Record<string, any>) {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'resend-1' }),
+    }) as any
+    wireSupabase({ organizations: orgRow })
+
+    const { NotificationService } = await import('../index')
+    const service = new NotificationService('org1')
+    await service.sendNotification('CAMBIO_ESTADO', baseContext as any, ['EMAIL'])
+
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+    return JSON.parse(vi.mocked(global.fetch).mock.calls[0][1]!.body as string)
+  }
+
+  it('manda el nombre del taller como remitente y su email como reply_to', async () => {
+    const body = await enviarYLeerBody({
+      notificaciones_email: true,
+      notificaciones_whatsapp: false,
+      dias_recordatorio: 3,
+      pais: 'AR',
+      email: 'taller@example.com',
+    })
+
+    expect(body.from).toBe('Org <avisos@avisos.stapp.com.ar>')
+    expect(body.reply_to).toBe('taller@example.com')
+  })
+
+  it('sin email del taller no manda reply_to pero igual manda el nombre', async () => {
+    const body = await enviarYLeerBody({
+      notificaciones_email: true,
+      notificaciones_whatsapp: false,
+      dias_recordatorio: 3,
+      pais: 'AR',
+      email: null,
+    })
+
+    expect(body.from).toBe('Org <avisos@avisos.stapp.com.ar>')
+    expect(body).not.toHaveProperty('reply_to')
+  })
+
+  it('descarta un email del taller con formato invalido', async () => {
+    const body = await enviarYLeerBody({
+      notificaciones_email: true,
+      notificaciones_whatsapp: false,
+      dias_recordatorio: 3,
+      pais: 'AR',
+      email: 'no es un correo',
+    })
+
+    expect(body).not.toHaveProperty('reply_to')
+  })
 })
