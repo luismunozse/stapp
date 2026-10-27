@@ -3,7 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { NotificationService, type AlcanceHistorial } from "@/lib/notifications"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { alcanceLecturaOrdenes } from "@/lib/ordenes/alcance-lectura"
-import { sucursalParaLectura } from "@/lib/sucursal"
+import { SUCURSAL_NINGUNA, sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET(request: Request) {
   try {
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
       alcance = { tipo: "lista", lectura }
     } else {
       const lectura = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
-      if (!lectura.verTodas) alcance = { tipo: "sucursal", sucursalId: lectura.sucursalId }
+      if (!lectura.verTodas) alcance = { tipo: "sucursal", sucursalId: lectura.sucursalId ?? SUCURSAL_NINGUNA }
     }
 
     return NextResponse.json(await notificationService.getNotificationHistory(undefined, limit, alcance))
