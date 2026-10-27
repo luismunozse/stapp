@@ -6,10 +6,11 @@
  * Honoured: select (column projection, `alias:col`, embeds kept by alias), eq, neq, in, is,
  * ilike, gt/gte/lt/lte, `or(...)` with nested and(...)/or(...) (each `.or()` call ANDs with the
  * others, like repeated `or` params), order, range, limit, single, maybeSingle.
- * A filter on `embed.column` follows PostgREST: with `embed!inner(..)` in the select a parent row
- * without a matching embedded row is dropped; without `!inner` every parent is kept and only the
- * embedded rows are filtered (a to-one embed that fails comes back null, a to-many array is
- * filtered); an embed the select does not embed is an error. An `or()` list cannot name an embedded
+ * A filter on `embed.column` follows PostgREST: the embedded rows are filtered (a to-one embed that
+ * fails comes back null, a to-many array is shortened); with `embed!inner(..)` in the select a parent
+ * row left without a matching embedded row is dropped too, without `!inner` every parent is kept; an
+ * embed the select does not embed is an error. Several filters on one embed are ONE condition on an
+ * embedded row (one row has to satisfy them all), not one "some row matches" each. An `or()` list cannot name an embedded
  * column (the logic-tree parser takes plain columns only), and the `search_vector` full-text
  * operator (`fts`) is not supported either.
  * Anything else throws instead of silently matching, so a new filter in a route cannot
@@ -264,17 +265,29 @@ export function tablaPostgrest(filas: Fila[]) {
       const consulta = { columnas, or: [] as string[] }
       consultas.push(consulta)
       const predicados: Array<(f: Fila) => boolean> = []
-      // Filters on a NON-inner embed: PostgREST filters the embedded rows and keeps every parent row.
-      const sobreEmbebidas: Array<{ ruta: string[]; prueba: (e: Fila) => boolean }> = []
+      // The filters on each embed, by path. They are ONE condition on an embedded row (an AND), not one
+      // "some row matches" per filter: PostgREST needs a single embedded row to satisfy all of them.
+      const porEmbed = new Map<string, { ruta: string[]; interior: boolean; pruebas: Array<(e: Fila) => boolean> }>()
       const embeds = embedsDelSelect(columnas)
       const orden: Array<{ col: string; asc: boolean }> = []
       let rango: [number, number] | null = null
 
+      /** Adds a condition on the rows of the embed `nombre` (a dotted path of embed names). */
+      const filtrarEmbed = (nombre: string, prueba: (e: Fila) => boolean) => {
+        if (!embeds.todos.has(nombre)) {
+          throw new Error(`postgrest-memoria: a filter on the embed "${nombre}", which the select list does not embed (${columnas})`)
+        }
+        const existente = porEmbed.get(nombre)
+        if (existente) existente.pruebas.push(prueba)
+        else porEmbed.set(nombre, { ruta: nombre.split("."), interior: embeds.interiores.has(nombre), pruebas: [prueba] })
+      }
+
       /**
-       * A filter on `column` (`embed.column` for an embedded table). With `embed!inner(..)` in the select
-       * a parent row without a matching embedded row is dropped (an inner join); without `!inner` only the
-       * embedded rows are filtered, as PostgREST does, so a route that forgot `!inner` returns the parents
-       * it should have dropped and its test fails.
+       * A filter on `column` (`embed.column` for an embedded table). The filters of an embed narrow its rows
+       * (a to-one that fails is null, a to-many array is shortened); with `embed!inner(..)` in the select a
+       * parent left without a matching embedded row is dropped too (an inner join), without `!inner` every
+       * parent stays, as PostgREST does, so a route that forgot `!inner` returns the parents it should have
+       * dropped and its test fails.
        */
       const filtrar = (c: string, prueba: (valor: any) => boolean) => {
         exigir(c)
@@ -284,14 +297,7 @@ export function tablaPostgrest(filas: Fila[]) {
         }
         const partes = c.split(".")
         const col = partes[partes.length - 1]
-        const ruta = partes.slice(0, -1)
-        const nombre = ruta.join(".")
-        if (!embeds.todos.has(nombre)) {
-          throw new Error(`postgrest-memoria: "${c}" filters the embed "${nombre}", which the select list does not embed (${columnas})`)
-        }
-        const probar = (e: Fila) => prueba(e?.[col])
-        if (embeds.interiores.has(nombre)) predicados.push((f) => embebidas(f, ruta).some(probar))
-        else sobreEmbebidas.push({ ruta, prueba: probar })
+        filtrarEmbed(partes.slice(0, -1).join("."), (e) => prueba(e?.[col]))
         return q
       }
 
@@ -324,7 +330,11 @@ export function tablaPostgrest(filas: Fila[]) {
         abortSignal: () => q,
       }
       const resolver = () => {
-        let rows = filas.filter((f) => predicados.every((p) => p(f)))
+        const cumpleEmbed = (e: { pruebas: Array<(r: Fila) => boolean> }) => (r: Fila) => e.pruebas.every((p) => p(r))
+        const interiores = [...porEmbed.values()].filter((e) => e.interior)
+        let rows = filas.filter(
+          (f) => predicados.every((p) => p(f)) && interiores.every((e) => embebidas(f, e.ruta).some(cumpleEmbed(e))),
+        )
         for (const { col, asc } of [...orden].reverse()) {
           rows = [...rows].sort((a, b) => {
             const r = comparar(a[col], b[col])
@@ -335,10 +345,10 @@ export function tablaPostgrest(filas: Fila[]) {
         if (rango) rows = rows.slice(rango[0], rango[1] + 1)
         const proyectadas = rows.map((f) => {
           const fila = proyectar(f, columnas)
-          if (sobreEmbebidas.length === 0) return fila
+          if (porEmbed.size === 0) return fila
           // The embedded rows are the fixture's own: filter a copy, never the fixture.
           const copia = JSON.parse(JSON.stringify(fila)) as Fila
-          sobreEmbebidas.forEach(({ ruta, prueba }) => filtrarEmbebidas(copia, ruta, prueba))
+          porEmbed.forEach((e) => filtrarEmbebidas(copia, e.ruta, cumpleEmbed(e)))
           return copia
         })
         return { rows: proyectadas, total }

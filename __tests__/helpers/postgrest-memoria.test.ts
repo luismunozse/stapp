@@ -224,6 +224,92 @@ describe("a filter on an embedded table WITHOUT !inner (PostgREST filters the em
     ]
     const { data } = await tablaPostgrest(clientes).select("id, ordenes!inner(id, sucursal_id)").eq("ordenes.sucursal_id", "s1")
     expect(data?.map((c: any) => c.id)).toEqual(["c1"])
+    // ...and the parent that stays carries only the embedded rows that matched.
+    expect(data?.[0].ordenes).toEqual([{ id: "o1", sucursal_id: "s1" }])
+  })
+
+  describe("several filters on the same embed apply to the SAME embedded row", () => {
+    // c1 holds an order of A without technician and an order of B held by t-a: no order is both "of A" and "t-a's".
+    const CLIENTES = [
+      { id: "c1", ordenes: [{ id: "o1", sucursal_id: "A", tecnico_id: null }, { id: "o2", sucursal_id: "B", tecnico_id: "t-a" }] },
+      { id: "c2", ordenes: [{ id: "o3", sucursal_id: "A", tecnico_id: "t-a" }, { id: "o4", sucursal_id: "A", tecnico_id: null }] },
+      { id: "c3", ordenes: [{ id: "o5", sucursal_id: "B", tecnico_id: null }] },
+    ]
+    const ordenesDe = (data: any[] | null) => Object.fromEntries((data ?? []).map((c) => [c.id, c.ordenes.map((o: any) => o.id)]))
+
+    it("with !inner: a parent is kept only if ONE embedded row satisfies every filter, and keeps only those rows", async () => {
+      const { data } = await tablaPostgrest(CLIENTES)
+        .select("id, ordenes!inner(id, sucursal_id, tecnico_id)")
+        .eq("ordenes.sucursal_id", "A")
+        .eq("ordenes.tecnico_id", "t-a")
+      expect(ordenesDe(data)).toEqual({ c2: ["o3"] })
+    })
+
+    it("without !inner: every parent stays and each embedded array keeps the rows that satisfy BOTH filters", async () => {
+      const { data } = await tablaPostgrest(CLIENTES)
+        .select("id, ordenes(id, sucursal_id, tecnico_id)")
+        .eq("ordenes.sucursal_id", "A")
+        .eq("ordenes.tecnico_id", "t-a")
+      expect(ordenesDe(data)).toEqual({ c1: [], c2: ["o3"], c3: [] })
+    })
+
+    it("the order the filters are chained in does not matter", async () => {
+      const { data } = await tablaPostgrest(CLIENTES)
+        .select("id, ordenes!inner(id, sucursal_id, tecnico_id)")
+        .eq("ordenes.tecnico_id", "t-a")
+        .eq("ordenes.sucursal_id", "A")
+      expect(ordenesDe(data)).toEqual({ c2: ["o3"] })
+    })
+
+    it("a filter of another embed (or of the parent) is not mixed into the row predicate", async () => {
+      const filas = [
+        { id: "p1", tipo: "x", ordenes: [{ id: "o1", sucursal_id: "A" }], pagos: [{ id: "g1", metodo: "EFECTIVO" }] },
+        { id: "p2", tipo: "y", ordenes: [{ id: "o2", sucursal_id: "A" }], pagos: [{ id: "g2", metodo: "TARJETA" }] },
+      ]
+      const { data } = await tablaPostgrest(filas)
+        .select("id, ordenes!inner(id, sucursal_id), pagos!inner(id, metodo)")
+        .eq("ordenes.sucursal_id", "A")
+        .eq("pagos.metodo", "EFECTIVO")
+        .eq("tipo", "x")
+      expect(data?.map((p: any) => p.id)).toEqual(["p1"])
+    })
+
+    it("an or() on the embed and a filter on the same embed also need one row for both", async () => {
+      // or() with referencedTable is PR5's; the plain filters of the same embed already must not split.
+      const { data } = await tablaPostgrest(CLIENTES)
+        .select("id, ordenes!inner(id, sucursal_id, tecnico_id)")
+        .eq("ordenes.sucursal_id", "A")
+        .not("ordenes.tecnico_id", "is", null)
+      expect(ordenesDe(data)).toEqual({ c2: ["o3"] })
+    })
+
+    it("a to-one embed with two filters is judged on its one row (unchanged)", async () => {
+      const filas = [
+        { id: "t1", orden: { sucursal_id: "A", tecnico_id: "t-a" } },
+        { id: "t2", orden: { sucursal_id: "A", tecnico_id: null } },
+        { id: "t3", orden: { sucursal_id: "B", tecnico_id: "t-a" } },
+      ]
+      const conInner = await tablaPostgrest(filas).select("id, orden!inner(sucursal_id, tecnico_id)").eq("orden.sucursal_id", "A").eq("orden.tecnico_id", "t-a")
+      expect(conInner.data?.map((t: any) => t.id)).toEqual(["t1"])
+      const sinInner = await tablaPostgrest(filas).select("id, orden(sucursal_id, tecnico_id)").eq("orden.sucursal_id", "A").eq("orden.tecnico_id", "t-a")
+      expect(sinInner.data?.map((t: any) => t.orden?.tecnico_id ?? null)).toEqual(["t-a", null, null])
+    })
+
+    it("nested embeds: the filters on one nested path judge the same row of it", async () => {
+      const facturas = [
+        { id: "f1", ordenes_servicio: [{ id: "o1", sucursal_id: "A", tecnico_id: null }, { id: "o2", sucursal_id: "B", tecnico_id: "t-a" }] },
+        { id: "f2", ordenes_servicio: [{ id: "o3", sucursal_id: "A", tecnico_id: "t-a" }] },
+      ]
+      const pagos = [
+        { id: "p1", facturas: facturas[0] },
+        { id: "p2", facturas: facturas[1] },
+      ]
+      const { data } = await tablaPostgrest(pagos)
+        .select("id, facturas!inner(id, ordenes_servicio!inner(id, sucursal_id, tecnico_id))")
+        .eq("facturas.ordenes_servicio.sucursal_id", "A")
+        .eq("facturas.ordenes_servicio.tecnico_id", "t-a")
+      expect(data?.map((p: any) => p.id)).toEqual(["p2"])
+    })
   })
 
   it("an alias embed is filtered by its alias, and !inner is found behind a foreign-key hint", async () => {
