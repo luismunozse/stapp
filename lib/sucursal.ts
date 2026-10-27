@@ -79,14 +79,9 @@ export async function getPrincipalId(organizationId: string): Promise<string | n
 }
 
 /**
- * Valida que una sucursal pertenezca a la org y no esté dada de baja. Previene
- * cross-org.
- *
- * Pese a lo que decía el comentario anterior, NO mira `activo`: una sucursal
- * desactivada sigue pasando. Los callers existentes (alta de técnico/vendedor,
- * set-activa, API v1) viven con eso, así que el default no cambia. Quien necesite
- * rechazar una sucursal inactiva —mover un usuario a ella, por ejemplo— pasa
- * `{ soloActiva: true }`.
+ * Validates that a sucursal belongs to the org and is not deleted. Prevents
+ * cross-org access. An inactive sucursal passes unless `{ soloActiva: true }` is
+ * given (e.g. when moving a user into it).
  */
 export async function assertSucursalEnOrg(
   sucursalId: string,

@@ -3,13 +3,18 @@
  * GET / PUT /api/usuarios/[id]/sucursal — "Mover de sucursal" (sucursales-aislamiento,
  * BM-2 / BM-3). An ADMIN moves a TECNICO/VENDEDOR to another active branch of the org.
  *
- *   1. The move governs the user's NEXT request: the route only writes
- *      `users.sucursal_id` (requireAuth re-reads it per request) and must not cut the session.
+ *   1. The move governs the user's following requests without a new login: the route only
+ *      writes `users.sucursal_id` and requireAuth() re-reads it (cached ~5 s per instance),
+ *      so it applies within a few seconds. The route must not cut the session.
  *   2. Orders stay where they are (BM-3): the route never writes `ordenes_servicio`;
- *      GET only reports them so the form can warn first.
- *   3. ADMIN-only, org-scoped, never targets an ADMIN.
+ *      GET only reports them (plus appointments and an open cash session) so the form can
+ *      warn first. An open cash session blocks the move, because the user could not close
+ *      it from the new branch.
+ *   3. ADMIN-only, org-scoped, never targets an ADMIN, and the write is conditional on the
+ *      row still being what was read.
  *
- * `@/lib/sesion-sucursal` is un-mocked so the last test can prove (1) end to end.
+ * `@/lib/sesion-sucursal` is un-mocked so the last test can prove (1) end to end; its cache
+ * outlives a test, hence the clear in `beforeEach`.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { auth, invalidateRefreshToken } from "@/lib/auth"
@@ -19,19 +24,17 @@ import { mockAuthSuccess, createChainMock, parseResponse } from "./helpers"
 
 vi.unmock("@/lib/sesion-sucursal")
 
+import { clearSesionSucursalCache } from "@/lib/sesion-sucursal"
 import { requireAuth } from "@/lib/auth-utils"
 import { GET, PUT } from "@/app/api/usuarios/[id]/sucursal/route"
 
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) })
-const getReq = (id: string) => new Request(`http://localhost/api/usuarios/${id}/sucursal`)
-const putJson = (id: string, body: unknown) =>
-  new Request(`http://localhost/api/usuarios/${id}/sucursal`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  })
+const url = (id: string) => `http://localhost/api/usuarios/${id}/sucursal`
+const getReq = (id: string) => new Request(url(id))
+const putRaw = (id: string, body: string) =>
+  new Request(url(id), { method: "PUT", headers: { "Content-Type": "application/json" }, body })
 const mover = async (id = "u-2", body: unknown = { sucursalId: "suc-B" }) =>
-  parseResponse((await PUT(putJson(id, body), ctx(id))) as Response)
+  parseResponse((await PUT(putRaw(id, JSON.stringify(body)), ctx(id))) as Response)
 const leer = async (id = "u-2") => parseResponse((await GET(getReq(id), ctx(id))) as Response)
 
 function usuario(overrides: Record<string, any> = {}) {
@@ -52,43 +55,57 @@ const NOMBRES = [
 ]
 
 /** An awaitable resolving to `rows` (how a `.in(...)` names query ends). */
-const resuelve = (rows: unknown) => ({
-  then: (res: any, rej?: any) => Promise.resolve({ data: rows, error: null }).then(res, rej),
+const resuelve = (rows: unknown, error: unknown = null) => ({
+  then: (res: any, rej?: any) => Promise.resolve({ data: rows, error }).then(res, rej),
 })
 
 /**
  * Wires `supabaseAdmin.from` per table. `destinoValida` is what the branch check
- * (`assertSucursalEnOrg`, a `.single()` on `sucursales`) finds; the same table
- * also answers the names query that ends in `.in(...)`.
+ * (`assertSucursalEnOrg`, a `.single()` on `sucursales`) finds; the same table also
+ * answers the names query that ends in `.in(...)`. `updateRows` is what the conditional
+ * UPDATE reports as written (`.select("id")`): empty means the guard matched no row.
  */
 function mockDb(
   opts: {
     target?: Record<string, any> | null
+    readError?: unknown
     ordenes?: Array<{ sucursal_id: string | null }>
     ordenesError?: unknown
+    turnos?: Array<{ sucursal_id: string | null }>
+    turnosError?: unknown
+    caja?: Array<{ id: string; sucursal_id: string }>
+    cajaError?: unknown
     destinoValida?: boolean
+    nombresError?: unknown
+    updateRows?: Array<{ id: string }>
     updateError?: unknown
     auditError?: unknown
   } = {},
 ) {
-  const usersChain: any = createChainMock("target" in opts ? opts.target : usuario())
-  const updateChain = createChainMock(null, opts.updateError ?? null)
+  const usersChain: any = createChainMock("target" in opts ? opts.target : usuario(), opts.readError ?? null)
+  const updateChain = createChainMock(opts.updateRows ?? [{ id: "u-2" }], opts.updateError ?? null)
   usersChain.update = vi.fn().mockReturnValue(updateChain)
   const ordenesChain = createChainMock(opts.ordenes ?? [], opts.ordenesError ?? null)
+  const turnosChain = createChainMock(opts.turnos ?? [], opts.turnosError ?? null)
+  const cajaChain = createChainMock(opts.caja ?? [], opts.cajaError ?? null)
   const sucursalesChain: any = createChainMock(opts.destinoValida === false ? null : { id: "suc-B" })
-  sucursalesChain.in = vi.fn().mockReturnValue(resuelve(NOMBRES))
+  sucursalesChain.in = vi
+    .fn()
+    .mockReturnValue(opts.nombresError ? resuelve(null, opts.nombresError) : resuelve(NOMBRES))
   const auditChain = createChainMock(null, opts.auditError ?? null)
 
   vi.mocked(supabaseAdmin.from).mockImplementation((tabla: string) => {
     const porTabla: Record<string, unknown> = {
       users: usersChain,
       ordenes_servicio: ordenesChain,
+      turnos: turnosChain,
+      sesiones_caja: cajaChain,
       sucursales: sucursalesChain,
       audit_logs: auditChain,
     }
     return (porTabla[tabla] ?? createChainMock(null)) as any
   })
-  return { usersChain, updateChain, ordenesChain, sucursalesChain, auditChain }
+  return { usersChain, updateChain, ordenesChain, turnosChain, cajaChain, sucursalesChain, auditChain }
 }
 
 const tablasTocadas = () => vi.mocked(supabaseAdmin.from).mock.calls.map((c) => c[0] as string)
@@ -101,7 +118,9 @@ const OBJETIVOS_INVALIDOS: Array<[string, Record<string, any> | null, number]> =
   ["an ADMIN has no branch to move: 400", usuario({ rol: "ADMIN", sucursal_id: null }), 400],
 ]
 
-describe("GET /api/usuarios/[id]/sucursal — open orders the move would leave behind", () => {
+beforeEach(() => clearSesionSucursalCache())
+
+describe("GET /api/usuarios/[id]/sucursal — what the move would leave behind", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1", userId: "u-admin" })
@@ -129,14 +148,49 @@ describe("GET /api/usuarios/[id]/sucursal — open orders the move would leave b
     expect(ordenesChain.in).toHaveBeenCalledWith("estado", ESTADOS_ACTIVOS)
   })
 
-  it("reports nothing to warn about without open orders, and resolves no branch names", async () => {
-    mockDb({ ordenes: [] })
+  it("breaks a tie on the count by branch name, not by the order rows arrived in", async () => {
+    // suc-A (Tablada) arrives first; alphabetically San Justo (suc-B) goes first.
+    mockDb({ ordenes: [{ sucursal_id: "suc-A" }, { sucursal_id: "suc-B" }] })
+
+    const { body } = await leer()
+
+    expect(body.ordenesAbiertas.map((g: any) => g.sucursalNombre)).toEqual(["San Justo", "Tablada"])
+  })
+
+  it("reports the appointments still ahead and the open cash session the move would strand", async () => {
+    const { turnosChain, cajaChain } = mockDb({
+      turnos: [{ sucursal_id: "suc-A" }, { sucursal_id: "suc-A" }],
+      caja: [{ id: "ses-1", sucursal_id: "suc-A" }],
+    })
+
+    const { status, body } = await leer()
+
+    expect(status).toBe(200)
+    expect(body.turnosPendientes).toEqual([{ sucursalId: "suc-A", sucursalNombre: "Tablada", cantidad: 2 }])
+    expect(body.totalTurnosPendientes).toBe(2)
+    expect(body.cajaAbierta).toEqual({ sesionId: "ses-1", sucursalId: "suc-A", sucursalNombre: "Tablada" })
+    // Pending = not cancelled/no-show/done, and still in the future; scoped to org + technician.
+    expect(turnosChain.eq).toHaveBeenCalledWith("organization_id", "org-1")
+    expect(turnosChain.eq).toHaveBeenCalledWith("tecnico_id", "u-2")
+    expect(turnosChain.in).toHaveBeenCalledWith("estado", ["agendado", "confirmado", "en_camino"])
+    expect(turnosChain.gte).toHaveBeenCalledWith("inicio", expect.any(String))
+    // Only a session the user OPENED and that is still ABIERTA.
+    expect(cajaChain.eq).toHaveBeenCalledWith("organization_id", "org-1")
+    expect(cajaChain.eq).toHaveBeenCalledWith("usuario_apertura_id", "u-2")
+    expect(cajaChain.eq).toHaveBeenCalledWith("estado", "ABIERTA")
+  })
+
+  it("reports nothing to warn about without open work, and resolves no branch names", async () => {
+    mockDb({ ordenes: [], turnos: [], caja: [] })
 
     const { status, body } = await leer()
 
     expect(status).toBe(200)
     expect(body.ordenesAbiertas).toEqual([])
     expect(body.totalOrdenesAbiertas).toBe(0)
+    expect(body.turnosPendientes).toEqual([])
+    expect(body.totalTurnosPendientes).toBe(0)
+    expect(body.cajaAbierta).toBeNull()
     expect(tablasTocadas()).not.toContain("sucursales")
   })
 
@@ -152,9 +206,9 @@ describe("GET /api/usuarios/[id]/sucursal — open orders the move would leave b
     ])
   })
 
-  it.each(["TECNICO", "VENDEDOR"])("%s gets 403 and no order is read", async (role) => {
+  it.each(["TECNICO", "VENDEDOR"])("%s gets 403 and nothing is read", async (role) => {
     mockAuthSuccess({ role, organizationId: "org-1", userId: "u-v", sucursalId: "suc-A" })
-    mockDb()
+    mockDb({ target: usuario({ rol: role }) })
 
     expect((await leer()).status).toBe(403)
     expect(tablasTocadas()).not.toContain("ordenes_servicio")
@@ -164,11 +218,18 @@ describe("GET /api/usuarios/[id]/sucursal — open orders the move would leave b
     mockDb({ target })
 
     expect((await leer()).status).toBe(esperado)
-    expect(tablasTocadas()).not.toContain("ordenes_servicio")
+    expect(tablasTocadas()).not.toEqual(expect.arrayContaining(["ordenes_servicio"]))
+    expect(tablasTocadas()).not.toContain("turnos")
+    expect(tablasTocadas()).not.toContain("sesiones_caja")
   })
 
-  it("answers 500 when the orders query fails (never an empty list that hides the warning)", async () => {
-    mockDb({ ordenesError: { message: "connection reset" } })
+  it.each([
+    ["the user read", { readError: { message: "connection reset" } }],
+    ["the orders query", { ordenesError: { message: "connection reset" } }],
+    ["the appointments query", { turnosError: { message: "connection reset" } }],
+    ["the cash session query", { cajaError: { message: "connection reset" } }],
+  ])("answers 500 when %s fails (never an all-clear that hides the warning)", async (_que, fallo) => {
+    mockDb(fallo)
 
     const { status, body } = await leer()
 
@@ -192,23 +253,80 @@ describe("PUT /api/usuarios/[id]/sucursal — move a user", () => {
 
       expect(status).toBe(200)
       expect(body).toMatchObject({ success: true, sucursalId: "suc-B" })
+      expect(body.message).toContain("San Justo")
       // Exactly one column, scoped to the user and the org.
       expect(usersChain.update).toHaveBeenCalledTimes(1)
       expect(usersChain.update).toHaveBeenCalledWith({ sucursal_id: "suc-B" })
       expect(updateChain.eq).toHaveBeenCalledWith("id", "u-2")
       expect(updateChain.eq).toHaveBeenCalledWith("organization_id", "org-1")
-      // BM-3: no order changes. And NO re-login (the rol route cuts the session; this must not).
+      // BM-3: no order or appointment changes. And NO re-login (the rol route cuts the session).
       expect(tablasTocadas()).not.toContain("ordenes_servicio")
+      expect(tablasTocadas()).not.toContain("turnos")
       expect(invalidateRefreshToken).not.toHaveBeenCalled()
     },
   )
 
-  it("the write also guards the role, so a user promoted to ADMIN in between never gets a branch", async () => {
+  it("promises a few seconds, not an instant effect (the branch lookup is cached)", async () => {
+    mockDb()
+
+    const { body } = await mover()
+
+    expect(body.message).toMatch(/unos segundos/)
+    expect(body.message).not.toMatch(/próxima acción|inmediat/i)
+  })
+
+  it("the write is conditional on the row still being what was read", async () => {
     const { updateChain } = mockDb()
 
     await mover()
 
+    // Not promoted to ADMIN, not deleted, and still in the branch we read.
     expect(updateChain.in).toHaveBeenCalledWith("rol", ["TECNICO", "VENDEDOR"])
+    expect(updateChain.is).toHaveBeenCalledWith("deleted_at", null)
+    expect(updateChain.eq).toHaveBeenCalledWith("sucursal_id", "suc-A")
+    expect(updateChain.select).toHaveBeenCalledWith("id")
+  })
+
+  it("a user with no branch yet is guarded with IS NULL, not with a comparison to null", async () => {
+    const { updateChain } = mockDb({ target: usuario({ sucursal_id: null }) })
+
+    expect((await mover()).status).toBe(200)
+
+    expect(updateChain.is).toHaveBeenCalledWith("sucursal_id", null)
+    expect(updateChain.eq).not.toHaveBeenCalledWith("sucursal_id", expect.anything())
+  })
+
+  it("answers 409 and writes no audit row when the conditional update matched nothing", async () => {
+    // Another request moved, promoted or deleted the user between our read and our write.
+    const { auditChain } = mockDb({ updateRows: [] })
+
+    const { status, body } = await mover()
+
+    expect(status).toBe(409)
+    expect(body.error).toBe("El usuario cambió mientras tanto. Recargá e intentá de nuevo.")
+    expect(auditChain.insert).not.toHaveBeenCalled()
+  })
+
+  it("blocks the move with a 409 while the user has a cash session open, and writes nothing", async () => {
+    // A non-admin cannot close a session outside their own branch, and that branch could not open another.
+    const { usersChain, cajaChain, auditChain } = mockDb({ caja: [{ id: "ses-1", sucursal_id: "suc-A" }] })
+
+    const { status, body } = await mover()
+
+    expect(status).toBe(409)
+    expect(body.error).toBe("Tiene una caja abierta en Tablada. Cerrala antes de moverlo.")
+    expect(body.code).toBe("CAJA_ABIERTA")
+    expect(cajaChain.eq).toHaveBeenCalledWith("usuario_apertura_id", "u-2")
+    expect(cajaChain.eq).toHaveBeenCalledWith("estado", "ABIERTA")
+    expect(usersChain.update).not.toHaveBeenCalled()
+    expect(auditChain.insert).not.toHaveBeenCalled()
+  })
+
+  it("will not move on a guess: a failing cash session lookup is a 500 and nothing is written", async () => {
+    const { usersChain } = mockDb({ cajaError: { message: "connection reset" } })
+
+    expect((await mover()).status).toBe(500)
+    expect(usersChain.update).not.toHaveBeenCalled()
   })
 
   it("records who moved whom, from which branch to which", async () => {
@@ -229,15 +347,32 @@ describe("PUT /api/usuarios/[id]/sucursal — move a user", () => {
     for (const parte of ["Juan", "Tablada", "San Justo"]) expect(fila.changes.action_description).toContain(parte)
   })
 
-  it("a failed audit insert does not fail a move that already happened", async () => {
+  it("a failed audit insert does not fail a move that already happened, but is logged", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
     mockDb({ auditError: { message: "audit down" } })
 
     expect((await mover()).status).toBe(200)
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("audit"), "audit down")
+    warn.mockRestore()
+  })
+
+  it("never shows a raw branch id when the names lookup fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { auditChain } = mockDb({ nombresError: { message: "names down" } })
+
+    const { status, body } = await mover()
+
+    expect(status).toBe(200)
+    expect(body.message).toContain("la nueva sucursal")
+    expect(body.message).not.toContain("suc-B")
+    expect(auditChain.insert.mock.calls[0][0].changes.action_description).not.toContain("suc-")
+    warn.mockRestore()
   })
 
   it.each(["TECNICO", "VENDEDOR"])("%s gets 403 and nothing is written", async (role) => {
     mockAuthSuccess({ role, organizationId: "org-1", userId: "u-v", sucursalId: "suc-A" })
-    const { usersChain } = mockDb()
+    const { usersChain } = mockDb({ target: usuario({ rol: role }) })
 
     expect((await mover()).status).toBe(403)
     expect(usersChain.update).not.toHaveBeenCalled()
@@ -286,22 +421,37 @@ describe("PUT /api/usuarios/[id]/sucursal — move a user", () => {
     },
   )
 
-  it("answers 500 when the update fails, with no audit row for a move that did not happen", async () => {
-    const { auditChain } = mockDb({ updateError: { message: "boom" } })
+  it("a malformed JSON body is a 400 and nothing is read or written", async () => {
+    const { usersChain } = mockDb()
+
+    const res = (await PUT(putRaw("u-2", "{oops"), ctx("u-2"))) as Response
+
+    expect(res.status).toBe(400)
+    expect(usersChain.update).not.toHaveBeenCalled()
+    expect(tablasTocadas()).not.toContain("sucursales")
+  })
+
+  it.each([
+    ["reading the user", { readError: { message: "boom" } }],
+    ["updating the user", { updateError: { message: "boom" } }],
+  ])("answers 500 when %s fails, with no audit row for a move that did not happen", async (_cuando, fallo) => {
+    const { auditChain } = mockDb(fallo)
 
     expect((await mover()).status).toBe(500)
     expect(auditChain.insert).not.toHaveBeenCalled()
   })
 })
 
-describe("PUT /api/usuarios/[id]/sucursal — the moved user's next request", () => {
+describe("PUT /api/usuarios/[id]/sucursal — the moved user's following requests", () => {
   /** A tiny in-memory `users` table: update really changes what the next read returns. */
   function usersEnMemoria(filas: Array<Record<string, any>>) {
     const consulta = (extra: (q: any, filtros: Array<(f: any) => boolean>) => void) => {
       const filtros: Array<(f: any) => boolean> = []
       const q: any = {
         eq: (c: string, v: unknown) => (filtros.push((f) => f[c] === v), q),
+        is: (c: string, v: unknown) => (filtros.push((f) => f[c] === v), q),
         in: (c: string, vs: unknown[]) => (filtros.push((f) => vs.includes(f[c])), q),
+        select: () => q,
       }
       extra(q, filtros)
       return q
@@ -310,13 +460,15 @@ describe("PUT /api/usuarios/[id]/sucursal — the moved user's next request", ()
     return {
       select: () =>
         consulta((q, filtros) => {
-          q.maybeSingle = async () => ({ data: coinciden(filtros)[0] ?? null, error: null })
+          // A copy, like a real response: the session cache must not alias the "table".
+          q.maybeSingle = async () => ({ data: coinciden(filtros)[0] ? { ...coinciden(filtros)[0] } : null, error: null })
         }),
       update: (payload: Record<string, unknown>) =>
         consulta((q, filtros) => {
           q.then = (res: any, rej?: any) => {
-            coinciden(filtros).forEach((f) => Object.assign(f, payload))
-            return Promise.resolve({ data: null, error: null }).then(res, rej)
+            const tocadas = coinciden(filtros)
+            tocadas.forEach((f) => Object.assign(f, payload))
+            return Promise.resolve({ data: tocadas.map((f) => ({ id: f.id })), error: null }).then(res, rej)
           }
         }),
     }
@@ -329,7 +481,7 @@ describe("PUT /api/usuarios/[id]/sucursal — the moved user's next request", ()
     const sucursales: any = createChainMock({ id: "suc-B" })
     sucursales.in = vi.fn().mockReturnValue(resuelve(NOMBRES))
     vi.mocked(supabaseAdmin.from).mockImplementation(((tabla: string) =>
-      tabla === "users" ? users : tabla === "sucursales" ? sucursales : createChainMock(null)) as any)
+      tabla === "users" ? users : tabla === "sucursales" ? sucursales : createChainMock([])) as any)
 
     // The JWT the technician carries was signed while they were still in suc-A.
     const jwtDelTecnico = {
@@ -342,6 +494,8 @@ describe("PUT /api/usuarios/[id]/sucursal — the moved user's next request", ()
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1", userId: "u-admin" })
     expect((await mover()).status).toBe(200)
 
+    // The lookup is cached for a few seconds per instance; clear it to stand for "a few seconds later".
+    clearSesionSucursalCache()
     vi.mocked(auth).mockResolvedValue(jwtDelTecnico) // the same, now stale, token
     const siguiente = await requireAuth()
     expect(siguiente.error).toBeNull()
