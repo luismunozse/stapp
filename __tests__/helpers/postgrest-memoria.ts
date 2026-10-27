@@ -7,7 +7,9 @@
  * gt/gte/lt/lte, `or(...)` with nested and(...)/or(...) (each `.or()` call ANDs with the
  * others, like repeated `or` params), order, range, limit, single, maybeSingle.
  * Anything else throws instead of silently matching, so a new filter in a route cannot
- * slip through unverified.
+ * slip through unverified. Like PostgREST, a `.single()` / `.maybeSingle()` over several rows is an
+ * error, and a filter, order or select on a column that none of the fixture rows has throws
+ * (it would otherwise read as NULL for every row; an empty table cannot be judged).
  */
 type Fila = Record<string, any>
 
@@ -82,6 +84,14 @@ function evaluar(fila: Fila, item: string): boolean {
   return logica[1] === "and" ? hijos.every((h) => evaluar(fila, h)) : hijos.some((h) => evaluar(fila, h))
 }
 
+/** Every column named by the conditions of a logic tree. */
+function columnasDe(lista: string): string[] {
+  return partirNivel(lista).flatMap((item) => {
+    const logica = item.match(/^(?:and|or)\(([\s\S]*)\)$/)
+    return logica ? columnasDe(logica[1]) : [item.slice(0, item.indexOf("."))]
+  })
+}
+
 /** What `.or(lista)` means: at least one item of the list matches. */
 export function cumpleOr(fila: Fila, lista: string): boolean {
   return partirNivel(lista).some((item) => evaluar(fila, item))
@@ -103,26 +113,33 @@ function proyectar(fila: Fila, columnas: string): Fila {
 
 export function tablaPostgrest(filas: Fila[]) {
   const consultas: Array<{ columnas: string; or: string[] }> = []
+  const conocidas = new Set(filas.flatMap((f) => Object.keys(f)))
+  const exigir = (columna: string) => {
+    if (filas.length > 0 && !conocidas.has(columna)) {
+      throw new Error(`postgrest-memoria: column "${columna}" is not in the fixture rows (known: ${[...conocidas].join(", ")})`)
+    }
+  }
   return {
     consultas,
     select: (columnas = "*", opciones?: { count?: string }) => {
+      for (const item of partirNivel(columnas)) if (item !== "*" && !item.includes("(")) exigir(item)
       const consulta = { columnas, or: [] as string[] }
       consultas.push(consulta)
       const predicados: Array<(f: Fila) => boolean> = []
       const orden: Array<{ col: string; asc: boolean }> = []
       let rango: [number, number] | null = null
       const q: any = {
-        eq: (c: string, v: unknown) => (predicados.push((f) => f[c] === v), q),
-        neq: (c: string, v: unknown) => (predicados.push((f) => f[c] !== v), q),
-        in: (c: string, vs: unknown[]) => (predicados.push((f) => vs.includes(f[c])), q),
-        is: (c: string, v: unknown) => (predicados.push((f) => (v === null ? f[c] == null : f[c] === v)), q),
-        ilike: (c: string, p: string) => (predicados.push((f) => typeof f[c] === "string" && aRegex(p).test(f[c])), q),
-        gt: (c: string, v: unknown) => (predicados.push((f) => comparar(f[c], v) > 0), q),
-        gte: (c: string, v: unknown) => (predicados.push((f) => comparar(f[c], v) >= 0), q),
-        lt: (c: string, v: unknown) => (predicados.push((f) => comparar(f[c], v) < 0), q),
-        lte: (c: string, v: unknown) => (predicados.push((f) => comparar(f[c], v) <= 0), q),
-        or: (lista: string) => (consulta.or.push(lista), predicados.push((f) => cumpleOr(f, lista)), q),
-        order: (col: string, o?: { ascending?: boolean }) => (orden.push({ col, asc: o?.ascending !== false }), q),
+        eq: (c: string, v: unknown) => (exigir(c), predicados.push((f) => f[c] === v), q),
+        neq: (c: string, v: unknown) => (exigir(c), predicados.push((f) => f[c] !== v), q),
+        in: (c: string, vs: unknown[]) => (exigir(c), predicados.push((f) => vs.includes(f[c])), q),
+        is: (c: string, v: unknown) => (exigir(c), predicados.push((f) => (v === null ? f[c] == null : f[c] === v)), q),
+        ilike: (c: string, p: string) => (exigir(c), predicados.push((f) => typeof f[c] === "string" && aRegex(p).test(f[c])), q),
+        gt: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(f[c], v) > 0), q),
+        gte: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(f[c], v) >= 0), q),
+        lt: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(f[c], v) < 0), q),
+        lte: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(f[c], v) <= 0), q),
+        or: (lista: string) => (columnasDe(lista).forEach(exigir), consulta.or.push(lista), predicados.push((f) => cumpleOr(f, lista)), q),
+        order: (col: string, o?: { ascending?: boolean }) => (exigir(col), orden.push({ col, asc: o?.ascending !== false }), q),
         range: (desde: number, hasta: number) => ((rango = [desde, hasta]), q),
         limit: (n: number) => ((rango = [0, n - 1]), q),
         abortSignal: () => q,
@@ -139,11 +156,19 @@ export function tablaPostgrest(filas: Fila[]) {
         if (rango) rows = rows.slice(rango[0], rango[1] + 1)
         return { rows: rows.map((f) => proyectar(f, columnas)), total }
       }
+      // PostgREST answers PGRST116 when .single() finds zero or several rows, and when
+      // .maybeSingle() finds several.
       q.single = async () => {
         const { rows } = resolver()
-        return rows[0] ? { data: rows[0], error: null } : { data: null, error: { code: "PGRST116", message: "no rows" } }
+        return rows.length === 1
+          ? { data: rows[0], error: null }
+          : { data: null, error: { code: "PGRST116", message: `${rows.length} rows, expected 1` } }
       }
-      q.maybeSingle = async () => ({ data: resolver().rows[0] ?? null, error: null })
+      q.maybeSingle = async () => {
+        const { rows } = resolver()
+        if (rows.length > 1) return { data: null, error: { code: "PGRST116", message: `${rows.length} rows, expected at most 1` } }
+        return { data: rows[0] ?? null, error: null }
+      }
       q.then = (res: any, rej?: any) => {
         const { rows, total } = resolver()
         return Promise.resolve({ data: rows, error: null, ...(opciones?.count ? { count: total } : {}) }).then(res, rej)
