@@ -81,6 +81,8 @@ describe("GET /api/reportes/performance-tecnicos — branch filter", () => {
     const eqCalls = vi.mocked(ordenesChain.eq).mock.calls
     const sucursalFilter = eqCalls.find((c: any[]) => c[0] === "sucursal_id")
     expect(sucursalFilter).toBeUndefined()
+    // The branch goes in an or(): no or() at all means no scope was applied
+    expect(ordenesChain.or).not.toHaveBeenCalled()
   })
 
   it("no cookie → treated as verTodas (no sucursal_id filter)", async () => {
@@ -102,6 +104,7 @@ describe("GET /api/reportes/performance-tecnicos — branch filter", () => {
     const eqCalls = vi.mocked(ordenesChain.eq).mock.calls
     const sucursalFilter = eqCalls.find((c: any[]) => c[0] === "sucursal_id")
     expect(sucursalFilter).toBeUndefined()
+    expect(ordenesChain.or).not.toHaveBeenCalled()
   })
 })
 
@@ -146,6 +149,7 @@ describe("GET /api/reportes/tiempo-reparacion — branch filter", () => {
 
     const eqCalls = vi.mocked(ordenesChain.eq).mock.calls
     expect(eqCalls.find((c: any[]) => c[0] === "sucursal_id")).toBeUndefined()
+    expect(ordenesChain.or).not.toHaveBeenCalled()
   })
 
   it("no cookie → no sucursal_id filter", async () => {
@@ -162,6 +166,7 @@ describe("GET /api/reportes/tiempo-reparacion — branch filter", () => {
 
     expect(status).toBe(200)
     expect(vi.mocked(ordenesChain.eq).mock.calls.find((c: any[]) => c[0] === "sucursal_id")).toBeUndefined()
+    expect(ordenesChain.or).not.toHaveBeenCalled()
   })
 })
 
@@ -205,6 +210,7 @@ describe("GET /api/reportes/fallas-comunes — branch filter", () => {
     await GET(createGetRequest())
 
     expect(vi.mocked(ordenesChain.eq).mock.calls.find((c: any[]) => c[0] === "sucursal_id")).toBeUndefined()
+    expect(ordenesChain.or).not.toHaveBeenCalled()
   })
 
   it("no cookie → no sucursal_id filter", async () => {
@@ -219,6 +225,7 @@ describe("GET /api/reportes/fallas-comunes — branch filter", () => {
     await GET(createGetRequest())
 
     expect(vi.mocked(ordenesChain.eq).mock.calls.find((c: any[]) => c[0] === "sucursal_id")).toBeUndefined()
+    expect(ordenesChain.or).not.toHaveBeenCalled()
   })
 })
 
