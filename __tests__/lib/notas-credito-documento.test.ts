@@ -261,6 +261,43 @@ describe("cargarDocumentoNC — orden", () => {
     expect(await cargarDocumentoNC("nc-o", tecnico)).not.toBeNull()
   })
 
+  describe("la sucursal de la orden (OI-1, XC-2)", () => {
+    const deSuc1 = { ...orden, sucursal_id: "suc-1" }
+    const vendedorSuc2: LectorNC = { ...vendedor, userSucursalId: "suc-2" }
+
+    it("un vendedor de otra sucursal recibe lo mismo que ante una NC que no existe, sin leer nada más", async () => {
+      setup({ vista: vistaOrden, ordenes_servicio: deSuc1, notas_credito: ncOrden, clientes: { nombre: "Juan" } })
+      expect(await cargarDocumentoNC("nc-o", vendedorSuc2)).toBeNull()
+      expect(supabaseAdmin.from).not.toHaveBeenCalledWith("notas_credito")
+      expect(supabaseAdmin.from).not.toHaveBeenCalledWith("clientes")
+    })
+
+    it("el vendedor de la sucursal de la orden la ve", async () => {
+      setup({ vista: vistaOrden, ordenes_servicio: deSuc1, notas_credito: ncOrden, clientes: { nombre: "Juan" } })
+      expect((await cargarDocumentoNC("nc-o", vendedor))?.origen).toBe("ORDEN")
+    })
+
+    it("un vendedor sin sucursal no ve ninguna", async () => {
+      setup({ vista: vistaOrden, ordenes_servicio: deSuc1, notas_credito: ncOrden, clientes: { nombre: "Juan" } })
+      expect(await cargarDocumentoNC("nc-o", { ...vendedor, userSucursalId: null })).toBeNull()
+    })
+
+    it("el técnico de otra sucursal ve la NC de una orden que tiene asignada (BM-6)", async () => {
+      setup({ vista: vistaOrden, ordenes_servicio: deSuc1, notas_credito: ncOrden, clientes: { nombre: "Juan" } })
+      expect(await cargarDocumentoNC("nc-o", { ...tecnico, userSucursalId: "suc-2" })).not.toBeNull()
+    })
+
+    it("el técnico de la sucursal no ve la de una orden asignada a otro (se mantiene)", async () => {
+      setup({ vista: vistaOrden, ordenes_servicio: { ...deSuc1, tecnico_id: "tec-2" }, notas_credito: ncOrden })
+      expect(await cargarDocumentoNC("nc-o", tecnico)).toBeNull()
+    })
+
+    it("un ADMIN la ve, de cualquier sucursal", async () => {
+      setup({ vista: vistaOrden, ordenes_servicio: { ...deSuc1, sucursal_id: "suc-9" }, notas_credito: ncOrden, clientes: { nombre: "Juan" } })
+      expect(await cargarDocumentoNC("nc-o", admin)).not.toBeNull()
+    })
+  })
+
   it("sin costo final no hay pendiente que mostrar", async () => {
     setup({ vista: vistaOrden, ordenes_servicio: { ...orden, costo_final: null }, notas_credito: ncOrden, clientes: { nombre: "Juan" } })
     expect((await cargarDocumentoNC("nc-o", admin))?.pendienteActual).toBeNull()
