@@ -48,6 +48,8 @@ function orden(id: string, sucursal: string, tecnico: string | null, extra: Reco
     tipo_dispositivo: "CELULAR",
     marca: "Samsung",
     imei: null,
+    diagnostico: null,
+    observaciones: null,
     problema_reportado: "No enciende",
     estado: "EN_REPARACION",
     fecha_prometida: "2026-10-20T12:00:00Z",
@@ -200,12 +202,12 @@ describe("GET /api/ordenes/compromisos", () => {
 describe("GET /api/search", () => {
   const url = (q: string, extra = "") => new Request(`http://localhost:3000/api/search?q=${encodeURIComponent(q)}${extra}`)
 
-  async function ordenesDe(e: Espectador, q: string, extra = "") {
+  async function ordenesDe(e: Espectador, q: string, extra = "", toma = false, filas?: ReturnType<typeof ORDENES>) {
     entrar(e)
-    const memoria = montar()
+    const memoria = montar({ toma, filas })
     const { status, body } = await parseResponse(await buscar(url(q, extra)))
     expect(status).toBe(200)
-    return { ids: (body.ordenes as Array<{ id: string }>).map((o) => o.id).sort(), memoria }
+    return { ids: (body.ordenes as Array<{ id: string }>).map((o) => o.id).sort(), body, memoria }
   }
 
   it.each(
@@ -240,30 +242,92 @@ describe("GET /api/search", () => {
     expect((await ordenesDe(VENDEDOR_B, String(NUM.b1))).ids).toEqual(["b1"])
   })
 
-  describe("a technician finds what is assigned to him in any branch (BM-6)", () => {
-    it("the orders of his branch plus the one he holds in the other", async () => {
-      expect((await ordenesDe(TECNICO_A, "Galaxy")).ids).toEqual(["a1", "a2", "a3", "b2"])
+  describe("a technician searches inside his list scope: what the list shows him (BM-6, OI-3)", () => {
+    it("opt-in off: what is assigned to him, from any branch", async () => {
+      expect((await ordenesDe(TECNICO_A, "Galaxy")).ids).toEqual(["a2", "b2"])
+    })
+
+    it("opt-in on: also the unassigned orders of his own branch", async () => {
+      expect((await ordenesDe(TECNICO_A, "Galaxy", "", true)).ids).toEqual(["a1", "a2", "b2"])
     })
 
     it("searching by the number of the order he holds in the other branch", async () => {
       expect((await ordenesDe(TECNICO_A, String(NUM.b2))).ids).toEqual(["b2"])
     })
 
-    it("but not an unassigned order of the other branch", async () => {
+    it("not an unassigned order of the other branch, with the opt-in on or off", async () => {
       expect((await ordenesDe(TECNICO_A, String(NUM.b1))).ids).toEqual([])
+      expect((await ordenesDe(TECNICO_A, String(NUM.b1), "", true)).ids).toEqual([])
     })
 
-    it("an order that the SQL already returned is not repeated", async () => {
-      const { ids } = await ordenesDe(TECNICO_A, "Galaxy a2")
-      expect(ids).toEqual(["a2"])
+    it("not an order assigned to a colleague of his own branch, by name, number, code or IMEI", async () => {
+      const filas = () => {
+        const f = ORDENES()
+        f[2] = { ...f[2], imei: "356938035643809" }
+        return f
+      }
+      for (const termino of ["Galaxy a3", String(NUM.a3), `CEL-${NUM.a3}`, "356938035643809"]) {
+        for (const toma of [false, true]) {
+          const { ids } = await ordenesDe(TECNICO_A, termino, "", toma, filas())
+          expect(ids, `term ${termino}, opt-in ${toma}`).toEqual([])
+        }
+      }
+      // ...and his colleague does find it
+      expect((await ordenesDe({ ...TECNICO_A, userId: "t-b" }, "356938035643809", "", false, filas())).ids).toEqual(["a3"])
+    })
+
+    it("finds by the code of the order, by what the order says about the device and by its notes", async () => {
+      expect((await ordenesDe(TECNICO_A, `CEL-${NUM.a2}`)).ids).toEqual(["a2"])
+      const filas = ORDENES()
+      filas[1] = { ...filas[1], diagnostico: "Conector de carga flojo", observaciones: "Cliente pasa el viernes" }
+      expect((await ordenesDe(TECNICO_A, "conector de carga", "", false, filas)).ids).toEqual(["a2"])
+      expect((await ordenesDe(TECNICO_A, "pasa el viernes", "", false, filas)).ids).toEqual(["a2"])
+    })
+
+    it.each(
+      conNombre([
+        [TECNICO_A, false],
+        [TECNICO_A, true],
+        [TECNICO_B, false],
+        [TECNICO_B, true],
+        [TECNICO_SIN_SUCURSAL, true],
+      ]),
+    )("%s: everything the search finds is on his list", async (_nombre, espectador, toma) => {
+      const encontradas = (await ordenesDe(espectador, "Galaxy", "", toma)).ids
+      entrar(espectador)
+      montar({ toma })
+      const { body } = await parseResponse(await listar(new Request("http://localhost:3000/api/ordenes?limit=100")))
+      const enLaLista = (body.data as Array<{ id: string }>).map((o) => o.id)
+      expect(encontradas.length).toBeGreaterThan(0)
+      expect(enLaLista).toEqual(expect.arrayContaining(encontradas))
+    })
+
+    it("the scope and the term travel in ONE or() list, so the term cannot widen the scope", async () => {
+      for (const toma of [false, true]) {
+        const { memoria } = await ordenesDe(TECNICO_A, "Galaxy", "", toma)
+        expect(memoria.listasOr("ordenes_servicio")).toHaveLength(1)
+        expect(memoria.listasOr("ordenes_servicio")[0]).toHaveLength(1)
+      }
     })
 
     it("the limit is kept", async () => {
-      expect((await ordenesDe(TECNICO_A, "Galaxy", "&limit=2")).ids).toHaveLength(2)
+      expect((await ordenesDe(TECNICO_A, "Galaxy", "&limit=1", true)).ids).toHaveLength(1)
     })
 
-    it("without a branch: only what is assigned to him", async () => {
+    it("without a branch: only what is assigned to him, even with the opt-in on", async () => {
       expect((await ordenesDe(TECNICO_SIN_SUCURSAL, "Galaxy")).ids).toEqual(["a2", "b2"])
+      expect((await ordenesDe(TECNICO_SIN_SUCURSAL, "Galaxy", "", true)).ids).toEqual(["a2", "b2"])
+    })
+
+    it("the search function is asked for clients only: its orders are the whole branch's, not his list", async () => {
+      const { memoria } = await ordenesDe(TECNICO_A, "Galaxy")
+      expect((memoria.escrituras.find((x) => x.tabla === "search_all")?.carga as any).search_type).toBe("clientes")
+    })
+
+    it("a search for orders only does not call the search function at all", async () => {
+      const { ids, memoria } = await ordenesDe(TECNICO_A, "Galaxy", "&type=ordenes")
+      expect(ids).toEqual(["a2", "b2"])
+      expect(memoria.escrituras.some((x) => x.tabla === "search_all")).toBe(false)
     })
 
     it("a search for clients only does not look at orders", async () => {
@@ -291,7 +355,7 @@ describe("GET /api/search", () => {
         [ADMIN_TODAS, ["a1", "a2", "a3", "b1", "b2", "b3"]],
         [ADMIN_B, ["b1", "b2", "b3"]],
         [VENDEDOR_SIN_SUCURSAL, []],
-        [TECNICO_A, ["a1", "a2", "a3", "b2"]],
+        [TECNICO_A, ["a2", "b2"]],
       ]),
     )("%s finds the expected orders", async (_nombre, espectador, esperado) => {
       expect(await ordenesDeFallback(espectador, "Galaxy")).toEqual(esperado)
@@ -300,6 +364,11 @@ describe("GET /api/search", () => {
     it("finds by the number of the order, like the function does", async () => {
       expect(await ordenesDeFallback(VENDEDOR_B, String(NUM.b3))).toEqual(["b3"])
       expect(await ordenesDeFallback(VENDEDOR_A, String(NUM.b3))).toEqual([])
+    })
+
+    it("finds by the code of the order, inside the scope", async () => {
+      expect(await ordenesDeFallback(VENDEDOR_B, `CEL-${NUM.b3}`)).toEqual(["b3"])
+      expect(await ordenesDeFallback(VENDEDOR_A, `CEL-${NUM.b3}`)).toEqual([])
     })
 
     it("a term built to close the filter cannot widen the scope or break the query", async () => {
@@ -411,6 +480,7 @@ describe("GET /api/notificaciones", () => {
   const LOGS = [
     log("n-a1", "a1", A),
     log("n-a2", "a2", A, "t-a"),
+    log("n-a3", "a3", A, "t-b"), // an order of t-a's own branch, held by a colleague
     log("n-b1", "b1", B),
     log("n-b2", "b2", B, "t-a"),
     log("n-b3", "b3", B, "t-b"),
@@ -458,16 +528,20 @@ describe("GET /api/notificaciones", () => {
   describe("of the whole organization (no order)", () => {
     it.each(
       conNombre([
-        [ADMIN_TODAS, ["n-a1", "n-a2", "n-b1", "n-b2", "n-b3", "n-sin"]],
-        [VENDEDOR_A, ["n-a1", "n-a2"]],
-        [VENDEDOR_B, ["n-b1", "n-b2", "n-b3"]],
-        [ADMIN_B, ["n-b1", "n-b2", "n-b3"]],
-        [VENDEDOR_SIN_SUCURSAL, []],
-        [TECNICO_A, ["n-a1", "n-a2", "n-b2"]],
-        [TECNICO_SIN_SUCURSAL, ["n-a2", "n-b2"]],
+        [ADMIN_TODAS, false, ["n-a1", "n-a2", "n-a3", "n-b1", "n-b2", "n-b3", "n-sin"]],
+        [VENDEDOR_A, false, ["n-a1", "n-a2", "n-a3"]],
+        [VENDEDOR_B, false, ["n-b1", "n-b2", "n-b3"]],
+        [ADMIN_B, false, ["n-b1", "n-b2", "n-b3"]],
+        [VENDEDOR_SIN_SUCURSAL, false, []],
+        [TECNICO_A, false, ["n-a2", "n-b2"]],
+        [TECNICO_A, true, ["n-a1", "n-a2", "n-b2"]],
+        [TECNICO_B, false, ["n-a3", "n-b3"]],
+        [TECNICO_B, true, ["n-a3", "n-b1", "n-b3"]],
+        [TECNICO_SIN_SUCURSAL, false, ["n-a2", "n-b2"]],
+        [TECNICO_SIN_SUCURSAL, true, ["n-a2", "n-b2"]],
       ]),
-    )("%s gets the expected history", async (_nombre, espectador, esperado) => {
-      expect((await historial(espectador)).ids).toEqual(esperado)
+    )("%s gets the expected history", async (_nombre, espectador, toma, esperado) => {
+      expect((await historial(espectador, "", toma)).ids).toEqual(esperado)
     })
 
     it("an ADMIN with a branch selected gets what that branch's seller gets (SC-3)", async () => {
@@ -475,7 +549,24 @@ describe("GET /api/notificaciones", () => {
     })
 
     it("a seller ignores the stored choice of another branch", async () => {
-      expect((await historial({ ...VENDEDOR_A, cookie: B })).ids).toEqual(["n-a1", "n-a2"])
+      expect((await historial({ ...VENDEDOR_A, cookie: B })).ids).toEqual(["n-a1", "n-a2", "n-a3"])
+    })
+
+    it.each(
+      conNombre([
+        [TECNICO_A, false],
+        [TECNICO_A, true],
+        [TECNICO_B, false],
+        [TECNICO_B, true],
+        [TECNICO_SIN_SUCURSAL, true],
+      ]),
+    )("%s: every notice of the whole history is one he can open from its order, and the other way round", async (_nombre, espectador, toma) => {
+      const deLaOrganizacion = (await historial(espectador, "", toma)).ids
+      // The per-order history answers [] for an order the technician may not open.
+      const porOrden = await Promise.all(
+        LOGS.filter((l) => l.orden_id !== null).map(async (l) => ({ id: l.id, abre: (await historial(espectador, `?ordenId=${l.orden_id}`, toma)).ids.includes(l.id) })),
+      )
+      expect(porOrden.filter((x) => x.abre).map((x) => x.id).sort()).toEqual(deLaOrganizacion)
     })
   })
 })

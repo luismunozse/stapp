@@ -136,7 +136,6 @@ const ONBOARDING = "onboarding: counts or seeds the organization's own orders, n
 
 const EXENTOS: Listado = new Map([
   ["app/(dashboard)/dashboard/page.tsx", { sitios: 1, motivo: `the technician's cards: ${ASIGNADAS}` }],
-  ["app/api/search/route.ts", { sitios: 1, motivo: `the technician's own orders next to the function's results: ${ASIGNADAS}` }],
   ["app/api/cron/engagement/route.ts", { sitios: 2, motivo: CRON }],
   ["app/api/cron/recordatorios/route.ts", { sitios: 1, motivo: CRON }],
   ["app/api/superadmin/email-campaigns/route.ts", { sitios: 2, motivo: SUPERADMIN }],

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { NotificationService, type AlcanceHistorial } from "@/lib/notifications"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
+import { alcanceLecturaOrdenes } from "@/lib/ordenes/alcance-lectura"
 import { sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET(request: Request) {
@@ -25,13 +26,20 @@ export async function GET(request: Request) {
     }
 
     // The history of the organization: the whole of it for an ADMIN on Todas, otherwise the part that
-    // hangs from the orders of the viewer's branch (a technician: also the ones assigned to him).
+    // hangs from the orders of the viewer's branch. A technician reads the part that hangs from the
+    // orders on his list (so the same notices he can open one by one).
     let alcance: AlcanceHistorial | undefined
     if (role === "TECNICO") {
-      alcance = { sucursalId: session!.user.sucursalId ?? null, tecnicoId: userId! }
+      const lectura = await alcanceLecturaOrdenes({
+        organizationId: organizationId!,
+        userId: userId!,
+        role,
+        sucursalId: session!.user.sucursalId ?? null,
+      })
+      alcance = { tipo: "lista", lectura }
     } else {
       const lectura = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
-      if (!lectura.verTodas) alcance = { sucursalId: lectura.sucursalId }
+      if (!lectura.verTodas) alcance = { tipo: "sucursal", sucursalId: lectura.sucursalId }
     }
 
     return NextResponse.json(await notificationService.getNotificationHistory(undefined, limit, alcance))

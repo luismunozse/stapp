@@ -10,15 +10,15 @@ import {
 import { resolveTerminologia } from "@/lib/terminologia"
 import { generateEmailByType } from "./email-templates"
 import { getWhatsAppTemplates, generateWhatsAppUrl } from "./whatsapp-templates"
-import { filtroVisibleOAsignada, soloOriginadasEn } from "@/lib/sucursal-ordenes"
+import { soloOriginadasEn } from "@/lib/sucursal-ordenes"
+import type { AlcanceLectura } from "@/lib/ordenes/alcance-lectura"
 
 /** Qué parte del historial de la organización puede leer quien lo pide (ver getNotificationHistory). */
-export interface AlcanceHistorial {
-  /** Sucursal de origen de las órdenes; null = ninguna restricción de sucursal (solo con `tecnicoId`). */
-  sucursalId: string | null
-  /** Un técnico: además de su sucursal, lo asignado a él. */
-  tecnicoId?: string
-}
+export type AlcanceHistorial =
+  /** Las órdenes que originó una sucursal. */
+  | { tipo: "sucursal"; sucursalId: string }
+  /** Un técnico: las órdenes de su lista (la puerta de lecturas de órdenes, que conoce el permiso de la organización). */
+  | { tipo: "lista"; lectura: AlcanceLectura }
 
 export class NotificationService {
   private organizationId: string
@@ -269,8 +269,9 @@ export class NotificationService {
   //
   // `alcance` limita el historial de toda la organización a las notificaciones de órdenes de una
   // sucursal (la de origen: el aviso sale por su canal). Las que no cuelgan de una orden quedan
-  // afuera. Un técnico lee además las de las órdenes que tiene asignadas, de cualquier sucursal.
-  // Sin `alcance` (el ADMIN en "Todas", o el historial de una orden) no se filtra.
+  // afuera. Un técnico lee las de las órdenes de su lista (las asignadas a él de cualquier sucursal
+  // y, con el permiso de la organización, las libres de la suya): las mismas que puede abrir una por
+  // una. Sin `alcance` (el ADMIN en "Todas", o el historial de una orden) no se filtra.
   async getNotificationHistory(ordenId?: string, limit = 50, alcance?: AlcanceHistorial) {
     const columnas = `
         id, tipo, canal, estado, destinatario, asunto, error_message, created_at,
@@ -287,8 +288,8 @@ export class NotificationService {
       query = query.eq("orden_id", ordenId)
     }
 
-    if (alcance?.tecnicoId) {
-      query = query.or(filtroVisibleOAsignada(alcance.tecnicoId, alcance.sucursalId), { referencedTable: "ordenes_servicio" })
+    if (alcance?.tipo === "lista") {
+      query = alcance.lectura.aplicarAEmbed(query, "ordenes_servicio")
     } else if (alcance) {
       query = soloOriginadasEn(query, alcance.sucursalId, "ordenes_servicio.sucursal_id")
     }

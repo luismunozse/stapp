@@ -2,14 +2,18 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { alcanceLecturaOrdenes, type ActorLectura } from "@/lib/ordenes/alcance-lectura"
 import { combinarOr, filtroVisibleEnSucursal, terminoDeBusquedaSeguro } from "@/lib/sucursal-ordenes"
 
 const COLUMNAS_ORDEN = "id, numero_orden, dispositivo, estado, problema_reportado, marca, imei, clientes(nombre)"
 
 /**
- * The conditions that make an order match a term, the way the search function does: its text columns
- * and the exact order number. The term is sanitized (a comma or a parenthesis would close the group
- * around the branch scope and add a clause next to it).
+ * The conditions that make an order match a term: the text columns the `search_all` function looks
+ * at (device, reported problem, IMEI) and the exact order number, plus the brand, the order code and the
+ * diagnosis and notes that feed its `search_vector`. The function matches that vector by stemmed words
+ * (`@@`), which an ILIKE cannot reproduce (and the in-memory table cannot parse an `fts` operator), so a
+ * term matches here as a substring of the same columns. The term is sanitized (a comma or a parenthesis
+ * would close the group around the scope and add a clause next to it).
  */
 function coincidencias(q: string): string {
   const termino = terminoDeBusquedaSeguro(q)
@@ -18,6 +22,9 @@ function coincidencias(q: string): string {
     `problema_reportado.ilike.%${termino}%`,
     `marca.ilike.%${termino}%`,
     `imei.ilike.%${termino}%`,
+    `codigo_orden.ilike.%${termino}%`,
+    `diagnostico.ilike.%${termino}%`,
+    `observaciones.ilike.%${termino}%`,
   ]
   if (/^\d{1,9}$/.test(q)) lista.push(`numero_orden.eq.${q}`)
   return lista.join(",")
@@ -29,22 +36,19 @@ function aResultado(o: Record<string, unknown>): ResultadoOrden {
   return { ...o, id: o.id as string, cliente_nombre: (o.clientes as Record<string, unknown> | null)?.nombre || null }
 }
 
-/** The orders assigned to a technician that match the term, from any branch (BM-6). */
-async function ordenesAsignadas(organizationId: string, tecnicoId: string, q: string, limit: number): Promise<ResultadoOrden[]> {
-  const { data } = await supabaseAdmin
-    .from("ordenes_servicio")
-    .select(COLUMNAS_ORDEN)
-    .eq("organization_id", organizationId)
-    .eq("tecnico_id", tecnicoId)
-    .or(coincidencias(q))
+/**
+ * The orders that match a term inside a technician's list scope (what the list shows him: what is assigned
+ * to him from any branch, BM-6, and with the org opt-in the unassigned ones of his branch, OI-3). The
+ * `search_all` function scopes by branch only, so for a technician its order rows would include the ones
+ * assigned to a colleague of his branch, which he cannot open.
+ */
+async function ordenesDelTecnico(actor: ActorLectura, q: string, limit: number): Promise<ResultadoOrden[]> {
+  const alcance = await alcanceLecturaOrdenes(actor)
+  const { data } = await alcance
+    .aplicar(supabaseAdmin.from("ordenes_servicio").select(COLUMNAS_ORDEN).eq("organization_id", actor.organizationId), [coincidencias(q)])
+    .order("fecha_ingreso", { ascending: false })
     .limit(limit)
   return (data || []).map(aResultado)
-}
-
-/** His own orders first, then what the branch search found, once each, up to the limit. */
-function unirAsignadas(propias: Array<{ id: string }>, asignadas: Array<{ id: string }>, limit: number) {
-  const vistas = new Set(asignadas.map((o) => o.id))
-  return [...asignadas, ...propias.filter((o) => !vistas.has(o.id))].slice(0, limit)
 }
 
 export async function GET(request: Request) {
@@ -68,14 +72,18 @@ export async function GET(request: Request) {
     }
 
     const buscaOrdenes = type === "all" || type === "ordenes"
-    // A technician also finds what is assigned to him in another branch.
-    const asignadas = role === "TECNICO" && buscaOrdenes ? await ordenesAsignadas(organizationId!, userId!, q, limit) : []
+    // A technician's orders come from his list scope, not from the function's branch-wide rows.
+    const deTecnico =
+      role === "TECNICO" && buscaOrdenes
+        ? await ordenesDelTecnico({ organizationId: organizationId!, userId: userId!, role, sucursalId: session!.user.sucursalId ?? null }, q, limit)
+        : null
+    if (deTecnico && type === "ordenes") return NextResponse.json({ clientes: [], ordenes: deTecnico })
 
-    // Usar la función RPC de búsqueda unificada
+    // Usar la función RPC de búsqueda unificada (a technician only asks it for clients)
     const { data, error: dbError } = await supabaseAdmin.rpc("search_all", {
       org_id: organizationId!,
       search_query: q,
-      search_type: type,
+      search_type: deTecnico ? "clientes" : type,
       max_results: limit,
       p_sucursal_id: sid,
     })
@@ -96,7 +104,9 @@ export async function GET(request: Request) {
         results.clientes = clientes || []
       }
 
-      if (buscaOrdenes) {
+      if (deTecnico) {
+        results.ordenes = deTecnico
+      } else if (buscaOrdenes) {
         // The branch and the term are ONE expression, so the term can never widen the branch.
         const { data: ordenes } = await supabaseAdmin
           .from("ordenes_servicio")
@@ -105,18 +115,14 @@ export async function GET(request: Request) {
           .or(combinarOr(sid ? filtroVisibleEnSucursal(sid) : "", coincidencias(q)))
           .limit(limit)
 
-        results.ordenes = unirAsignadas((ordenes || []).map(aResultado), asignadas, limit)
+        results.ordenes = (ordenes || []).map(aResultado)
       }
 
       return NextResponse.json(results)
     }
 
     const encontrado = data || { clientes: [], ordenes: [] }
-    if (!buscaOrdenes) return NextResponse.json(encontrado)
-    return NextResponse.json({
-      ...encontrado,
-      ordenes: unirAsignadas((encontrado.ordenes ?? []) as ResultadoOrden[], asignadas, limit),
-    })
+    return NextResponse.json(deTecnico ? { ...encontrado, ordenes: deTecnico } : encontrado)
   } catch (err) {
     console.error("Error en búsqueda:", err)
     return NextResponse.json(
