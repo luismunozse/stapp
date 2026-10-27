@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatCliente } from "@/lib/db-utils"
+import { alcanceLecturaOrdenes } from "@/lib/ordenes/alcance-lectura"
 import { z } from "zod"
 
 const clienteSchema = z.object({
@@ -23,14 +24,24 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     const { id } = await params
 
-    const { data: cliente, error: dbError } = await supabaseAdmin
-      .from("clientes")
-      .select(`
+    // The client is shared (its own sharing is PR18's to change); the orders it embeds follow the
+    // same scope as the orders list, so the client always comes back and only its orders narrow.
+    const alcance = await alcanceLecturaOrdenes({
+      organizationId: organizationId!,
+      userId: userId!,
+      role: role!,
+      sucursalId: session!.user.sucursalId ?? null,
+    })
+    const { data: cliente, error: dbError } = await alcance
+      .aplicarAEmbed(
+        supabaseAdmin
+          .from("clientes")
+          .select(`
         *,
         ordenes_servicio (
           id,
@@ -48,8 +59,10 @@ export async function GET(
           activo
         )
       `)
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
+          .eq("id", id)
+          .eq("organization_id", organizationId!),
+        "ordenes_servicio",
+      )
       .single()
 
     if (dbError || !cliente) {
