@@ -2,16 +2,29 @@ import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, assertSucursalEnOrg } from "@/lib/sucursal"
+import { sucursalParaListaPersonal } from "@/lib/sucursal-personal"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import bcrypt from "bcryptjs"
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role, session } = await requireAuth()
     if (error) return error
 
-    const { data: tecnicos, error: dbError } = await supabaseAdmin
+    // `?sucursalId=` scopes the list to one branch (BM-4); without it the request's
+    // own scope applies. `?alcance=escritura` is what the order form sends: the branch
+    // the order will be created in. See sucursalParaListaPersonal for who may ask for what.
+    const { searchParams } = new URL(request.url)
+    const sucursalId = await sucursalParaListaPersonal({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+      organizationId: organizationId!,
+      sucursalSolicitada: searchParams.get("sucursalId"),
+      alcance: searchParams.get("alcance") === "escritura" ? "escritura" : "lectura",
+    })
+
+    let query = supabaseAdmin
       .from("users")
       .select(`
         id,
@@ -23,6 +36,7 @@ export async function GET() {
         avatar_url,
         fecha_ingreso_tecnico,
         porcentaje_comision,
+        sucursal_id,
         ordenes_servicio:ordenes_servicio!tecnico_id (
           id,
           estado
@@ -33,6 +47,9 @@ export async function GET() {
       .is("deleted_at", null)
       .order("activo", { ascending: false })
       .order("nombre", { ascending: true })
+    if (sucursalId) query = query.eq("sucursal_id", sucursalId)
+
+    const { data: tecnicos, error: dbError } = await query
 
     if (dbError) {
       throw dbError
@@ -57,6 +74,7 @@ export async function GET() {
         avatarUrl: tecnico.avatar_url ?? null,
         fechaIngresoTecnico: tecnico.fecha_ingreso_tecnico ?? null,
         porcentajeComision: Number(tecnico.porcentaje_comision ?? 0),
+        sucursalId: tecnico.sucursal_id ?? null,
         ordenesActivas,
         ordenesCompletadas,
       }

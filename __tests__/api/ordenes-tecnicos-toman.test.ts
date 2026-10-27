@@ -54,7 +54,7 @@ const flag = (v: boolean | null) =>
 describe("GET /api/ordenes - TECNICO and unassigned orders", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockAuthSuccess({ role: "TECNICO", userId: "tec-1" })
+    mockAuthSuccess({ role: "TECNICO", userId: "tec-1", sucursalId: "suc-A" })
   })
 
   it("flag off: only his own orders (eq tecnico_id), no OR with null", async () => {
@@ -79,14 +79,16 @@ describe("GET /api/ordenes - TECNICO and unassigned orders", () => {
     expect(chain.or).not.toHaveBeenCalled()
   })
 
-  it("flag on: own OR unassigned, and no plain eq on tecnico_id", async () => {
+  // The unassigned half is limited to his own branch (OI-3); the full row-level
+  // behavior is in ordenes-lista-tecnico.test.ts.
+  it("flag on: own OR unassigned in his branch, and no plain eq on tecnico_id", async () => {
     const chain = listChain()
     mockSupabaseFrom({ organizations: flag(true), clientes: createChainMock([]), ordenes_servicio: chain })
     const { GET } = await import("@/app/api/ordenes/route")
 
     await GET(createGetRequest("http://localhost:3000/api/ordenes"))
 
-    expect(chain.or).toHaveBeenCalledWith("tecnico_id.eq.tec-1,tecnico_id.is.null")
+    expect(chain.or).toHaveBeenCalledWith("tecnico_id.eq.tec-1,and(tecnico_id.is.null,sucursal_id.eq.suc-A)")
     expect(chain.eq).not.toHaveBeenCalledWith("tecnico_id", expect.anything())
   })
 

@@ -25,7 +25,7 @@ describe("management lists hide users that were dados de baja", () => {
   })
 
   it("GET /api/tecnicos", async () => {
-    await listTecnicos()
+    await listTecnicos(createGetRequest("http://localhost:3000/api/tecnicos"))
     expect(users.is).toHaveBeenCalledWith("deleted_at", null)
   })
 
