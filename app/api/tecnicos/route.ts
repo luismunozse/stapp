@@ -30,6 +30,7 @@ export async function GET() {
       `)
       .eq("rol", "TECNICO")
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .order("activo", { ascending: false })
       .order("nombre", { ascending: true })
 

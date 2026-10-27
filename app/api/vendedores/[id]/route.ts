@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { eliminarPersonal } from "@/lib/usuarios/eliminar-personal"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
 
@@ -37,6 +38,7 @@ export async function GET(
       .eq("id", id)
       .eq("rol", "VENDEDOR")
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (dbError || !vendedor) {
@@ -125,6 +127,7 @@ export async function PUT(
       .eq("id", id)
       .eq("rol", "VENDEDOR")
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (fetchError || !vendedor) {
@@ -189,7 +192,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, userId } = await requireAdmin()
     if (error) return error
 
     const { id } = await params
@@ -201,37 +204,38 @@ export async function DELETE(
       .eq("id", id)
       .eq("rol", "VENDEDOR")
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (fetchError || !vendedor) {
       return NextResponse.json({ error: "Vendedor no encontrado" }, { status: 404 })
     }
 
-    // Contar ventas asociadas sin traerlas (HEAD + count exact)
-    const { count: ventasCount, error: countError } = await supabaseAdmin
-      .from("ventas")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", organizationId!)
-      .eq("vendedor_id", id)
-
-    if (countError) throw countError
-
-    if ((ventasCount || 0) > 0) {
-      return NextResponse.json(
-        { error: `No se puede eliminar un vendedor con ${ventasCount} venta(s) asociada(s). Reasigne las ventas primero.` },
-        { status: 400 }
-      )
+    const result = await eliminarPersonal({
+      id,
+      organizationId: organizationId!,
+      rol: "VENDEDOR",
+      actorId: userId,
+    })
+    if (!result.ok) {
+      if (result.status === 404) {
+        return NextResponse.json({ error: "Vendedor no encontrado" }, { status: 404 })
+      }
+      if (result.status === 409) {
+        return NextResponse.json(
+          { error: "No se puede dar de baja al último administrador del taller" },
+          { status: 409 }
+        )
+      }
+      return NextResponse.json({ error: "Error al eliminar vendedor" }, { status: 500 })
     }
 
-    const { error: deleteError } = await supabaseAdmin
-      .from("users")
-      .delete()
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
-      .eq("rol", "VENDEDOR")
-
-    if (deleteError) {
-      throw deleteError
+    if (result.baja) {
+      return NextResponse.json({
+        baja: true,
+        message:
+          "El vendedor tenía historial (ventas, órdenes o caja): quedó dado de baja. Ya no puede ingresar y su historial se conserva.",
+      })
     }
 
     return NextResponse.json({ message: "Vendedor eliminado correctamente" })

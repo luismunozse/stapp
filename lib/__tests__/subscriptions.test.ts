@@ -101,14 +101,27 @@ describe('getSubscriptionInfo', () => {
   })
 })
 
+// getUsageInfo also runs two live head counts on users; they resolve to 0 here.
+function mockUsage(usage: any) {
+  vi.mocked(supabaseAdmin.from).mockImplementation(((table: string) => {
+    if (table === 'organization_usage') return mockSupabaseChain(usage) as any
+    const chain: any = {
+      select: vi.fn(() => chain),
+      eq: vi.fn(() => chain),
+      is: vi.fn(() => chain),
+      then: (resolve: any) => Promise.resolve({ count: 0, error: null }).then(resolve),
+    }
+    return chain
+  }) as any)
+}
+
 describe('getUsageInfo', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
   it('retorna ceros cuando no hay datos de uso', async () => {
-    const chain = mockSupabaseChain(null)
-    vi.mocked(supabaseAdmin.from).mockReturnValue(chain as any)
+    mockUsage(null)
 
     const { getUsageInfo } = await import('../subscriptions')
     const result = await getUsageInfo('org-123')
@@ -130,16 +143,16 @@ describe('getUsageInfo', () => {
       clientes_count: 50,
       storage_used_mb: '45.5',
     }
-    const chain = mockSupabaseChain(mockData)
-    vi.mocked(supabaseAdmin.from).mockReturnValue(chain as any)
+    mockUsage(mockData)
 
     const { getUsageInfo } = await import('../subscriptions')
     const result = await getUsageInfo('org-123')
 
     expect(result.ordenesMesActual).toBe(15)
     expect(result.ordenesTotal).toBe(100)
-    expect(result.tecnicos).toBe(3)
-    expect(result.vendedores).toBe(2)
+    // seats come from the live users count (0 here), not the cached counters
+    expect(result.tecnicos).toBe(0)
+    expect(result.vendedores).toBe(0)
     expect(result.clientes).toBe(50)
     expect(result.storageMb).toBe(45.5)
   })
@@ -153,8 +166,7 @@ describe('getUsageInfo', () => {
       clientes_count: null,
       storage_used_mb: null,
     }
-    const chain = mockSupabaseChain(mockData)
-    vi.mocked(supabaseAdmin.from).mockReturnValue(chain as any)
+    mockUsage(mockData)
 
     const { getUsageInfo } = await import('../subscriptions')
     const result = await getUsageInfo('org-123')
@@ -165,6 +177,66 @@ describe('getUsageInfo', () => {
     expect(result.vendedores).toBe(0)
     expect(result.clientes).toBe(0)
     expect(result.storageMb).toBe(0)
+  })
+})
+
+describe('getUsageInfo seat counts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  // organization_usage answers .single(); users answers a head count that is
+  // filtered by rol and deleted_at IS NULL (never by activo).
+  function mockTables(usage: any, counts: { VENDEDOR: number; TECNICO: number }) {
+    const usersCalls: { rol?: string; isArgs: any[][]; eqs: any[][] }[] = []
+    vi.mocked(supabaseAdmin.from).mockImplementation(((table: string) => {
+      if (table === 'organization_usage') return mockSupabaseChain(usage) as any
+      const call: { rol?: string; isArgs: any[][]; eqs: any[][] } = { isArgs: [], eqs: [] }
+      usersCalls.push(call)
+      const chain: any = {
+        select: vi.fn(() => chain),
+        eq: vi.fn((col: string, val: any) => {
+          call.eqs.push([col, val])
+          if (col === 'rol') call.rol = val
+          return chain
+        }),
+        is: vi.fn((...a: any[]) => {
+          call.isArgs.push(a)
+          return chain
+        }),
+        then: (resolve: any) =>
+          Promise.resolve({ count: counts[call.rol as 'VENDEDOR' | 'TECNICO'] ?? 0, error: null }).then(resolve),
+      }
+      return chain
+    }) as any)
+    return usersCalls
+  }
+
+  it('counts vendedores and tecnicos live, ignoring the cached counters', async () => {
+    const calls = mockTables(
+      { tecnicos_count: 5, vendedores_count: 4, ordenes_count: 7 },
+      { VENDEDOR: 1, TECNICO: 2 }
+    )
+    const { getUsageInfo } = await import('../subscriptions')
+    const result = await getUsageInfo('org-123')
+
+    expect(result.vendedores).toBe(1)
+    expect(result.tecnicos).toBe(2)
+    expect(result.ordenesTotal).toBe(7)
+    expect(calls).toHaveLength(2)
+    for (const c of calls) {
+      expect(c.eqs).toContainEqual(['organization_id', 'org-123'])
+      expect(c.isArgs).toContainEqual(['deleted_at', null])
+      expect(c.eqs.some(([col]) => col === 'activo')).toBe(false)
+    }
+  })
+
+  it('still counts live seats when the org has no usage row', async () => {
+    mockTables(null, { VENDEDOR: 1, TECNICO: 0 })
+    const { getUsageInfo } = await import('../subscriptions')
+    const result = await getUsageInfo('org-123')
+    expect(result.vendedores).toBe(1)
+    expect(result.tecnicos).toBe(0)
   })
 })
 
