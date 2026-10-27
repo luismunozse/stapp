@@ -1,4 +1,4 @@
-import { addressOf, type EmailProvider } from "../types"
+import { formatFrom, type EmailProvider } from "../types"
 
 const API_URL = "https://api.resend.com/emails"
 
@@ -9,16 +9,12 @@ const API_URL = "https://api.resend.com/emails"
 export const resendProvider: EmailProvider = {
   nombre: "resend",
 
-  async send({ to, subject, html, fromName, substitutions, attachments }) {
-    // Resend no tiene sustituciones del lado del proveedor, y este canal no
-    // manda adjuntos. Se rompe fuerte en vez de descartarlos en silencio: un
-    // drop mudo convierte un error de ruteo en un correo mutilado que nadie
-    // mira.
+  async send({ to, subject, html, fromName, replyTo, substitutions, attachments }) {
+    // Resend no tiene sustituciones del lado del proveedor. Se rompe fuerte en
+    // vez de descartarlas en silencio: un drop mudo convierte un error de
+    // ruteo en un correo mutilado que nadie mira.
     if (substitutions) {
       throw new Error("resendProvider: substitutions no esta soportado en el canal de cliente")
-    }
-    if (attachments && attachments.length > 0) {
-      throw new Error("resendProvider: attachments no esta soportado en el canal de cliente")
     }
 
     const apiKey = process.env.RESEND_API_KEY
@@ -27,7 +23,24 @@ export const resendProvider: EmailProvider = {
     }
 
     const base = process.env.RESEND_FROM || "avisos@avisos.stapp.com.ar"
-    const from = fromName ? `${fromName} <${addressOf(base)}>` : base
+    const from = formatFrom(fromName, base)
+
+    const payload: Record<string, unknown> = { from, to, subject, html }
+
+    // Las respuestas del cliente van al correo del taller; el from sigue siendo
+    // la direccion verificada de avisos.stapp.com.ar.
+    if (replyTo) {
+      payload.reply_to = replyTo
+    }
+
+    // Resend nombra el MIME `content_type` (no `type`); `content` es base64.
+    if (attachments && attachments.length > 0) {
+      payload.attachments = attachments.map((att) => ({
+        filename: att.filename,
+        content: att.content,
+        content_type: att.type,
+      }))
+    }
 
     const response = await fetch(API_URL, {
       method: "POST",
@@ -35,7 +48,7 @@ export const resendProvider: EmailProvider = {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ from, to, subject, html }),
+      body: JSON.stringify(payload),
     })
 
     if (!response.ok) {

@@ -1,4 +1,4 @@
-import { addressOf, type EmailProvider } from "../types"
+import { formatFrom, type EmailProvider } from "../types"
 
 const API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 
@@ -10,6 +10,9 @@ const API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 export const envialoSimpleProvider: EmailProvider = {
   nombre: "envialosimple",
 
+  // `replyTo` se ignora a proposito: la documentacion oficial de este endpoint
+  // (https://api-transaccional.envialosimple.email/) no lista un campo de
+  // reply-to en el body, y no se adivina un nombre. Hoy nada lo manda por aca.
   async send({ to, subject, html, fromName, substitutions, attachments }) {
     const apiKey = process.env.ENVIALOSIMPLE_API_KEY
     if (!apiKey) {
@@ -17,7 +20,7 @@ export const envialoSimpleProvider: EmailProvider = {
     }
 
     const base = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
-    const from = fromName ? `${fromName} <${addressOf(base)}>` : base
+    const from = formatFrom(fromName, base)
 
     const payload: Record<string, unknown> = { from, to, subject, html }
 

@@ -47,6 +47,20 @@ describe("envialoSimpleProvider", () => {
     expect(body.from).toBe("Taller Pepe <noreply@stapp.com.ar>")
   })
 
+  it("sanea el nombre visible en el from (comillas, comas y CR/LF)", async () => {
+    const { envialoSimpleProvider } = await import("../providers/envialosimple")
+    const base = { to: "cliente@example.com", subject: "Asunto", html: "<p>hola</p>" }
+
+    await envialoSimpleProvider.send({ ...base, fromName: 'Taller "Pepe", S.A.' })
+    await envialoSimpleProvider.send({ ...base, fromName: "Taller\r\nBcc: x@y.com" })
+
+    const calls = vi.mocked(global.fetch).mock.calls
+    expect(JSON.parse(calls[0][1]!.body as string).from).toBe('"Taller Pepe, S.A." <noreply@stapp.com.ar>')
+    const inyectado = JSON.parse(calls[1][1]!.body as string).from
+    expect(inyectado).not.toMatch(/[\r\n]/)
+    expect(inyectado).toBe('"Taller Bcc: x@y.com" <noreply@stapp.com.ar>')
+  })
+
   it("mapea adjuntos con disposition attachment", async () => {
     const { envialoSimpleProvider } = await import("../providers/envialosimple")
 
@@ -61,6 +75,20 @@ describe("envialoSimpleProvider", () => {
     expect(body.attachments).toEqual([
       { filename: "a.pdf", content: "YmFzZTY0", type: "application/pdf", disposition: "attachment" },
     ])
+  })
+
+  it("ignora replyTo: el campo no esta verificado en la API y no se adivina", async () => {
+    const { envialoSimpleProvider } = await import("../providers/envialosimple")
+
+    await envialoSimpleProvider.send({
+      to: "cliente@example.com",
+      subject: "Asunto",
+      html: "<p>hola</p>",
+      replyTo: "taller@example.com",
+    })
+
+    const body = JSON.parse(vi.mocked(global.fetch).mock.calls[0][1]!.body as string)
+    expect(Object.keys(body).sort()).toEqual(["from", "html", "subject", "to"])
   })
 
   it("tira si falta la API key", async () => {
