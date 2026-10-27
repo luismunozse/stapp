@@ -25,6 +25,10 @@
  *      detail, the technician counts); `soloOriginadasEn(.., "embed.sucursal_id")` is an `.eq` on the embed
  *      and needs `!inner` like any other filter on it;
  *  (C) the chain is held in a variable that a wrapper (or an embed filter) receives.
+ * A select that embeds the table more than once is one read PER embed, and a wrapper that names an embed
+ * (`soloAtendidasPorEnEmbed(q, s, "alias")`, `aplicarAEmbed(q, "alias")`) narrows that one: a sibling embed next
+ * to a narrowed one (the technicians' open orders of every branch next to the ones of the viewer's scope) is
+ * a read of its own, and is listed with its reason.
  * A call that is only in the same function, that wraps another table's query, or that is already spent
  * on another read, covers nothing. `cargarOrdenEnAlcance` is a loader (it reads at its call site) and
  * `alcanceLecturaOrdenes` only hands out the scope: neither covers a query by being called.
@@ -275,8 +279,9 @@ function analizar(src: string, rel = "x.ts", globales: Constantes = new Map()): 
         if (metodo === null || !ESCRITURAS.includes(metodo)) registrar(n, [])
       }
       if (nombre === "select") {
-        const embeds = embedsDeOrdenes(textoDelSelect(n.arguments[0], sf, locales, globales))
-        if (embeds.length > 0) registrar(n, embeds)
+        // A select that embeds the orders more than once is one read PER embed: a helper narrows the embed it
+        // names, so a sibling embed next to a narrowed one is a read of its own (it needs its own helper or a listing).
+        for (const embed of embedsDeOrdenes(textoDelSelect(n.arguments[0], sf, locales, globales))) registrar(n, [embed])
       }
     }
     ts.forEachChild(n, visitar)
@@ -321,6 +326,22 @@ function envolturaSobreEmbedPlano(llamada: ts.CallExpression, embeds: EmbedDeOrd
   const ruta = columna.split(".").slice(0, -1).join(".")
   const embed = embeds.find((e) => e.ruta === ruta)
   return embed !== undefined && !embed.interior
+}
+
+/** The position of the argument that names the embed a wrapper narrows, for the wrappers that take one. */
+const ARGUMENTO_DEL_EMBED: Record<string, number> = { soloAtendidasPorEnEmbed: 2, aplicarAEmbed: 1 }
+
+/**
+ * A wrapper that names an embed (as a literal) narrows THAT embed: when the read is one embed of a select and the
+ * wrapper names another (or one the select does not have), it covers nothing. A name that is not a literal is
+ * taken for the embed of the read.
+ */
+function nombraOtroEmbed(llamada: ts.CallExpression, embeds: EmbedDeOrdenes[]): boolean {
+  const nombre = nombreDeLlamada(llamada)
+  const posicion = nombre === null ? undefined : ARGUMENTO_DEL_EMBED[nombre]
+  if (posicion === undefined || embeds.length !== 1 || !llamada.arguments[posicion]) return false
+  const nombrado = textoDe(llamada.arguments[posicion])
+  return nombrado !== null && nombrado !== embeds[0].nombre && nombrado !== embeds[0].ruta
 }
 
 function llamadasDentro(raiz: ts.Node, cuando: (c: ts.CallExpression) => boolean): ts.CallExpression[] {
@@ -379,7 +400,7 @@ function candidatas(lectura: Lectura): ts.CallExpression[] {
   const padre = actual.parent
   if (padre && ts.isCallExpression(padre) && padre.arguments[0] === actual) {
     const nombre = nombreDeLlamada(padre)
-    if (nombre !== null && ENVOLTURAS.includes(nombre) && !envolturaSobreEmbedPlano(padre, lectura.embeds)) salida.push(padre)
+    if (nombre !== null && ENVOLTURAS.includes(nombre) && !envolturaSobreEmbedPlano(padre, lectura.embeds) && !nombraOtroEmbed(padre, lectura.embeds)) salida.push(padre)
   }
 
   // (C) the chain is held in a variable that a wrapper receives, or whose embed is filtered.
@@ -389,7 +410,7 @@ function candidatas(lectura: Lectura): ts.CallExpression[] {
       ...llamadasDentro(lectura.contenedor, (c) => {
         const nombre = nombreDeLlamada(c)
         if (nombre !== null && ENVOLTURAS.includes(nombre) && c.arguments[0]) {
-          return raizDeLaCadena(c.arguments[0]) === variable && !envolturaSobreEmbedPlano(c, lectura.embeds)
+          return raizDeLaCadena(c.arguments[0]) === variable && !envolturaSobreEmbedPlano(c, lectura.embeds) && !nombraOtroEmbed(c, lectura.embeds)
         }
         if (lectura.embeds.length > 0 && esFiltroDeEmbed(c, lectura.embeds)) {
           return ts.isPropertyAccessExpression(c.expression) && raizDeLaCadena(c.expression.expression) === variable
@@ -401,17 +422,24 @@ function candidatas(lectura: Lectura): ts.CallExpression[] {
   return salida
 }
 
-/** The reads of a source file that are not covered by a helper applied to them: the ones that need a listing. */
-function sinAlcance(src: string, rel = "x.ts", globales: Constantes = new Map()): number[] {
+/** The reads of a source file that are not covered by a helper applied to them, as they were read. */
+function lecturasSinAlcance(src: string, rel = "x.ts", globales: Constantes = new Map()): Lectura[] {
   const { lecturas } = analizar(src, rel, globales)
   const gastadas = new Set<ts.Node>()
-  const sueltas: number[] = []
+  const sueltas: Lectura[] = []
   for (const lectura of lecturas) {
     const libre = candidatas(lectura).find((c) => !gastadas.has(c))
     if (libre) gastadas.add(libre)
-    else sueltas.push(lectura.linea)
+    else sueltas.push(lectura)
   }
-  return sueltas.sort((a, b) => a - b)
+  return sueltas
+}
+
+/** The reads of a source file that are not covered by a helper applied to them: the ones that need a listing. */
+function sinAlcance(src: string, rel = "x.ts", globales: Constantes = new Map()): number[] {
+  return lecturasSinAlcance(src, rel, globales)
+    .map((l) => l.linea)
+    .sort((a, b) => a - b)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -425,6 +453,8 @@ const SUPERADMIN = "platform superadmin: organization-wide statistics, not a ten
 const PUBLICO = "reached with the public token of the order or quote; the customer has no branch"
 const SOLO_ADMIN = "ADMIN only: an ADMIN's scope for an order by id is the whole organization, as in the loader"
 const ONBOARDING = "onboarding: counts or seeds the organization's own orders, no branch involved"
+const TOTAL_DE_ACTIVAS =
+  "count only (just the ids of his open orders come out, and they are counted), it gates a global action (deactivating or deleting him), and the total is an ADMIN's: nobody else's answer carries it"
 
 const EXENTOS: Listado = new Map([
   ["app/(dashboard)/dashboard/page.tsx", { sitios: 1, motivo: `the technician's cards: ${ASIGNADAS}` }],
@@ -465,12 +495,17 @@ const EXENTOS: Listado = new Map([
   ],
   [
     "lib/sucursal-personal.ts",
-    { sitios: 1, motivo: "ordenesActivasTotales: the open orders a technician holds in EVERY branch, for the ADMIN screens that warn before a global action (deactivate, delete); only counts per technician come out" },
+    { sitios: 1, motivo: `defines the \`activas_totales\` embed used by the technician selects: ${TOTAL_DE_ACTIVAS}` },
   ],
+  ["app/api/tecnicos/route.ts", { sitios: 1, motivo: `the technicians list: ${TOTAL_DE_ACTIVAS}; it is next to the embed narrowed to the viewer's scope, which has its own wrapper` }],
   [
     "app/api/tecnicos/[id]/route.ts",
-    { sitios: 1, motivo: "DELETE of a technician (ADMIN only): the guard counts EVERY open order he holds, in every branch, on purpose: scoping it would let him be deleted with work still assigned elsewhere" },
+    {
+      sitios: 2,
+      motivo: `the \`activas_totales\` embed of the technician detail (${TOTAL_DE_ACTIVAS}), and the DELETE of a technician (ADMIN only): its guard counts EVERY open order he holds, in every branch, on purpose: scoping it would let him be deleted with work still assigned elsewhere`,
+    },
   ],
+  ["app/api/tecnicos/[id]/estado/route.ts", { sitios: 1, motivo: `deactivating or reactivating a technician: ${TOTAL_DE_ACTIVAS}` }],
   ["app/api/recepciones/[id]/route.ts", { sitios: 1, motivo: "PATCH of the reception's discount: counts its delivered orders. ADMIN only, role first (the GET reads through the reception's branch)" }],
   ["app/api/recepciones/[id]/entregar/route.ts", { sitios: 1, motivo: `delivery of a whole reception. ${SOLO_ADMIN}, and the role is checked first` }],
   ["app/api/sucursales/[id]/route.ts", { sitios: 1, motivo: "count of the orders of a branch before it is deleted (ADMIN only)" }],
@@ -631,6 +666,40 @@ describe("detector, with planted offenders", () => {
     it("a factory arrow is its own function: its helper does not cover the reads outside it", () => {
       const src = `  const a = () => soloAtendidasPor(supabaseAdmin.from("ordenes_servicio").select("id"), s)\n  const b = await supabaseAdmin.from("ordenes_servicio").select("estado")`
       expect(sueltas(src)).toEqual([2])
+    })
+  })
+
+  describe("a select that embeds the orders twice is two reads: a helper narrows the embed it names, not its sibling", () => {
+    // The technicians' count in the scope (`alcance`) next to their open orders of every branch (`activas`).
+    const doble = (envuelto: (consulta: string) => string) =>
+      `  return ${envuelto(`supabaseAdmin.from("users").select("id, alcance:ordenes_servicio!tecnico_id (id, estado), activas:ordenes_servicio!tecnico_id (id)").eq("rol", "TECNICO")`)}`
+    const embedsSueltos = (src: string) => lecturasSinAlcance(`export async function GET() {\n${src}\n}`).flatMap((l) => l.embeds.map((e) => e.nombre))
+
+    it("the wrapper that names one embed covers that one and leaves the other loose", () => {
+      expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(${q}, s, "alcance")`))).toEqual(["activas"])
+      expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(${q}, s, "activas")`))).toEqual(["alcance"])
+      expect(embedsSueltos(doble((q) => `alcance.aplicarAEmbed(${q}, "alcance")`))).toEqual(["activas"])
+    })
+
+    it("a wrapper that names an embed the select does not have covers neither", () => {
+      expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(${q}, s, "ordenes_servicio")`))).toEqual(["alcance", "activas"])
+    })
+
+    it("a wrapper that does not say which embed it narrows (a variable) is taken for the first one", () => {
+      expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(${q}, s, embed)`))).toEqual(["activas"])
+    })
+
+    it("with no wrapper both are loose, and a select with one embed is still one read", () => {
+      expect(embedsSueltos(doble((q) => q))).toEqual(["alcance", "activas"])
+      expect(embedsSueltos(`  return soloAtendidasPorEnEmbed(supabaseAdmin.from("users").select("id, alcance:ordenes_servicio!tecnico_id (id)"), s, "alcance")`)).toEqual([])
+    })
+
+    it("a filter builder in the chain covers one of them", () => {
+      expect(embedsSueltos(doble((q) => `${q}.or(filtroAtiendeSucursal(s), { referencedTable: "alcance" })`))).toEqual(["activas"])
+    })
+
+    it("the file reports the second embed on the line of the select, as one more loose read of it", () => {
+      expect(sueltas(doble((q) => `soloAtendidasPorEnEmbed(${q}, s, "alcance")`))).toEqual([1])
     })
   })
 
