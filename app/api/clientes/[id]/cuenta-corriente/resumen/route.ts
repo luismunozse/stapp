@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateResumenCCPDF } from "@/lib/cuenta-corriente-react-pdf"
 import { isMissingColumnError } from "@/lib/db-errors"
+import { sucursalDeLineasNoAdmin } from "@/lib/ordenes/alcance-lectura"
 import { dayRangeUtc, todayInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 // Same two-tier emisor select as the recibo route: migration 295's fiscal
@@ -23,10 +24,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role, session } = await requireAuth()
     if (error) return error
 
     const { id: clienteId } = await params
+
+    // Non-admins get a statement of the lines stamped with their branch only. The
+    // client's overall balance (saldo_cuenta) is not printed here, and stays
+    // org-wide elsewhere on purpose (design decision).
+    const sucursalLineas = await sucursalDeLineasNoAdmin({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
 
     const { data: cliente } = await supabaseAdmin
       .from("clientes")
@@ -77,11 +86,14 @@ export async function GET(
 
     // Opening balance = the balance the last movement BEFORE the range left
     // behind. No movement before it means the account starts at zero.
-    const { data: previo } = await supabaseAdmin
+    let previoQuery = supabaseAdmin
       .from("cuenta_corriente")
       .select("saldo_posterior")
       .eq("organization_id", organizationId!)
       .eq("cliente_id", clienteId)
+    if (sucursalLineas) previoQuery = previoQuery.eq("sucursal_id", sucursalLineas)
+
+    const { data: previo } = await previoQuery
       .lt("created_at", inicioUtc)
       // id breaks created_at ties deterministically: cuids are time-ordered,
       // so the tiebreak agrees with insertion order. Without it two movements
@@ -94,11 +106,14 @@ export async function GET(
 
     const saldoInicial = previo ? parseFloat(previo.saldo_posterior) : 0
 
-    const { data: rows, error: movError } = await supabaseAdmin
+    let rowsQuery = supabaseAdmin
       .from("cuenta_corriente")
       .select("tipo, monto, saldo_posterior, metodo_pago, numero_referencia, referencia_tipo, created_at")
       .eq("organization_id", organizationId!)
       .eq("cliente_id", clienteId)
+    if (sucursalLineas) rowsQuery = rowsQuery.eq("sucursal_id", sucursalLineas)
+
+    const { data: rows, error: movError } = await rowsQuery
       .gte("created_at", inicioUtc)
       .lte("created_at", finUtc)
       .order("created_at", { ascending: true })

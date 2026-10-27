@@ -75,6 +75,24 @@ export async function resolverAlcanceOrdenesDeSesion(params: {
   })
 }
 
+/**
+ * Branch to filter branch-stamped LINES (e.g. `cuenta_corriente.sucursal_id`)
+ * for a non-ADMIN caller; null for ADMIN, whose view is left as it was. Lines
+ * carry no technician, so the technician exception of orders does not apply.
+ * Fail-closed: a non-admin without a branch gets the sentinel that matches nothing.
+ */
+export async function sucursalDeLineasNoAdmin(params: {
+  role: string | null
+  userSucursalId: string | null | undefined
+}): Promise<string | null> {
+  if (params.role === "ADMIN") return null
+  const filtro = await sucursalParaLectura({
+    role: params.role,
+    userSucursalId: params.userSucursalId ?? null,
+  })
+  return filtro.sucursalId ?? SUCURSAL_NINGUNA
+}
+
 /** Checks a single loaded order row against the scope. */
 export function ordenEnAlcance(
   alcance: AlcanceOrdenes,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura } from "@/lib/sucursal"
+import { sucursalDeLineasNoAdmin } from "@/lib/ordenes/alcance-lectura"
 import { z } from "zod"
 
 // GET - Obtener saldo y movimientos de cuenta corriente del cliente
@@ -10,10 +11,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role, session } = await requireAuth()
     if (error) return error
 
     const { id: clienteId } = await params
+
+    // Non-admins read only the lines stamped with their branch. `saldo` below is
+    // the client's overall balance and stays org-wide on purpose (design decision):
+    // it is a debt of the client to the business, not branch data.
+    const sucursalLineas = await sucursalDeLineasNoAdmin({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
 
     // Obtener saldo actual
     const { data: cliente, error: clienteError } = await supabaseAdmin
@@ -33,11 +42,14 @@ export async function GET(
     const page = parseInt(searchParams.get("page") || "1")
     const offset = (page - 1) * limit
 
-    const { data: movimientos, error: movError, count } = await supabaseAdmin
+    let movimientosQuery = supabaseAdmin
       .from("cuenta_corriente")
       .select("*", { count: "exact" })
       .eq("organization_id", organizationId!)
       .eq("cliente_id", clienteId)
+    if (sucursalLineas) movimientosQuery = movimientosQuery.eq("sucursal_id", sucursalLineas)
+
+    const { data: movimientos, error: movError, count } = await movimientosQuery
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1)
 
