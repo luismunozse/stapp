@@ -463,6 +463,8 @@ const EXENTOS: Listado = new Map([
     "app/api/ordenes/[id]/cobros/route.ts",
     { sitios: 2, motivo: "helper of POST (the handler loads the order through the loader first) and DELETE (ADMIN only, role first); both pinned in ordenes-subroutes-sweep" },
   ],
+  ["app/api/recepciones/[id]/route.ts", { sitios: 1, motivo: "PATCH of the reception's discount: counts its delivered orders. ADMIN only, role first (the GET reads through the reception's branch)" }],
+  ["app/api/recepciones/[id]/entregar/route.ts", { sitios: 1, motivo: `delivery of a whole reception. ${SOLO_ADMIN}, and the role is checked first` }],
   ["app/api/sucursales/[id]/route.ts", { sitios: 1, motivo: "count of the orders of a branch before it is deleted (ADMIN only)" }],
   ["app/api/tipos-dispositivo/[id]/route.ts", { sitios: 1, motivo: "count of the orders of a device type before it is deleted (ADMIN only)" }],
   ["app/api/usuarios/[id]/sucursal/route.ts", { sitios: 1, motivo: "open orders assigned to a user, to warn before moving him (ADMIN only)" }],
@@ -472,6 +474,9 @@ const EXENTOS: Listado = new Map([
   ["app/api/caja/movimientos/metodo-pago/route.ts", { sitios: 2, motivo: "joins the order of a collection or of an invoice payment only for its branch (the origin) that the handler checks; nothing else of the order is read" }],
   ["app/api/facturacion/[id]/route.ts", { sitios: 2, motivo: "invoice by id (void, delete): joins the order for its organization, client and branch (the origin), to re-credit the client account there; no order data is returned" }],
   ["app/api/pagos/route.ts", { sitios: 1, motivo: "payment of an invoice by id: joins the order for its organization, client and branch (the origin); no order data is returned" }],
+  // The credit notes of the two financial reports select the order's state through the shared embed.
+  ["app/api/reportes/estado-resultados/route.ts", { sitios: 1, motivo: "the credit-note query selects only the state of the order (the shared embed `ordenes_servicio(estado)`); it is scoped by notas_credito.sucursal_id, the origin branch" }],
+  ["app/api/reportes/tendencia-financiera/route.ts", { sitios: 1, motivo: "the credit-note query selects only the state of the order (the shared embed `ordenes_servicio(estado)`); it is scoped by notas_credito.sucursal_id, the origin branch" }],
   // Public: reached with the token of the quote.
   ["app/api/public/cotizaciones/[token]/route.ts", { sitios: 1, motivo: `the order linked to a quote, ${PUBLICO}` }],
   ["app/api/public/cotizaciones/[token]/pdf/route.ts", { sitios: 1, motivo: `the order linked to a quote, ${PUBLICO}` }],
@@ -486,30 +491,13 @@ const EXENTOS: Listado = new Map([
   ],
 ])
 
-// Reads that PR5b scopes (technician views and counts, invoicing candidates, pending orders of a client, receptions, reports...).
+// Reads that PR5b was to scope: technician views and counts, invoicing candidates, pending orders of a
+// client, receptions, credit notes, reports. What is left is the open-order counts embedded in the
+// technician screens.
 const PENDIENTE_PR5B: Listado = new Map([
-  ["app/api/caja/route.ts", { sitios: 1, motivo: "orders pending collection on the cash screen: money, follows the origin" }],
-  ["app/api/clientes/[id]/ordenes-pendientes/route.ts", { sitios: 1, motivo: "pending orders of a client: money, follows the origin" }],
-  ["app/api/facturacion/candidatos/route.ts", { sitios: 1, motivo: "orders that can be invoiced: money, follows the origin" }],
-  ["app/api/recepciones/[id]/route.ts", { sitios: 2, motivo: "the orders of a multi-device reception: the reception's branch" }],
-  ["app/api/recepciones/[id]/entregar/route.ts", { sitios: 1, motivo: "the orders of a multi-device reception: the reception's branch" }],
   ["app/api/tecnicos/route.ts", { sitios: 1, motivo: "open-order counts of the technicians list (an embed of his orders)" }],
-  ["app/api/tecnicos/summary/route.ts", { sitios: 1, motivo: "technician summary" }],
   ["app/api/tecnicos/[id]/route.ts", { sitios: 2, motivo: "open-order counts of a technician (an embed of his orders)" }],
   ["app/api/tecnicos/[id]/estado/route.ts", { sitios: 1, motivo: "open-order count of a technician (an embed of his orders)" }],
-  ["app/api/tecnicos/[id]/ordenes/route.ts", { sitios: 1, motivo: "orders of a technician" }],
-  ["app/api/tecnicos/[id]/insights/route.ts", { sitios: 1, motivo: "technician insights" }],
-  ["app/api/tecnicos/[id]/reasignar/route.ts", { sitios: 1, motivo: "bulk reassignment" }],
-  ["lib/notas-credito/documento.ts", { sitios: 1, motivo: "the order behind a credit note document" }],
-  ["app/api/reportes/estado-resultados/route.ts", { sitios: 2, motivo: "report (the order read; the credit-note query through the shared embed is scoped by notas_credito.sucursal_id)" }],
-  ["app/api/reportes/fallas-comunes/route.ts", { sitios: 1, motivo: "report" }],
-  ["app/api/reportes/performance-tecnicos/route.ts", { sitios: 1, motivo: "report" }],
-  ["app/api/reportes/rentabilidad-tecnicos/route.ts", { sitios: 1, motivo: "report" }],
-  ["app/api/reportes/rentabilidad/route.ts", { sitios: 1, motivo: "report" }],
-  ["app/api/reportes/tasa-retorno/route.ts", { sitios: 1, motivo: "report" }],
-  ["app/api/reportes/tendencia-financiera/route.ts", { sitios: 2, motivo: "report (the order read; the credit-note query through the shared embed is scoped by notas_credito.sucursal_id)" }],
-  ["app/api/reportes/tiempo-reparacion/route.ts", { sitios: 1, motivo: "report" }],
-  ["app/api/reportes/top-clientes/route.ts", { sitios: 1, motivo: "report" }],
 ])
 
 // Reads of quotes and warranties (the order a quote is for, the order a warranty covers): scoped by the
