@@ -274,8 +274,8 @@ describe("a filter on an embedded table WITHOUT !inner (PostgREST filters the em
       expect(data?.map((p: any) => p.id)).toEqual(["p1"])
     })
 
-    it("an or() on the embed and a filter on the same embed also need one row for both", async () => {
-      // or() with referencedTable is PR5's; the plain filters of the same embed already must not split.
+    it("an eq() and a not() on the same embed also need one row for both", async () => {
+      // (or() with referencedTable joins the same condition: its own test is in the or() describe, with PR5.)
       const { data } = await tablaPostgrest(CLIENTES)
         .select("id, ordenes!inner(id, sucursal_id, tecnico_id)")
         .eq("ordenes.sucursal_id", "A")
