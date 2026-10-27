@@ -6,7 +6,7 @@
  *  - several branches (an ADMIN on Todas) is explained, not shown as "no technicians";
  *  - a failed request is an error with a retry, not an empty list.
  */
-import React from "react"
+import React, { useEffect } from "react"
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { act, render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { SWRConfig, useSWRConfig } from "swr"
@@ -52,7 +52,9 @@ const falla = (estado = 500) => Promise.resolve({ ok: false, status: estado, jso
 let revalidar: () => Promise<unknown>
 function ExponeRevalidar() {
   const { mutate } = useSWRConfig()
-  revalidar = () => mutate(URL_DESTINOS)
+  useEffect(() => {
+    revalidar = () => mutate(URL_DESTINOS)
+  }, [mutate])
   return null
 }
 
