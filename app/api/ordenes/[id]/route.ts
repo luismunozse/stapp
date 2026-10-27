@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados, canViewCotizacionCosts, resolveTecnicosTomanOrdenes } from "@/lib/auth-utils"
+import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados, canViewCotizacionCosts } from "@/lib/auth-utils"
 import { ordenSeTomaPorTecnico } from "@/lib/ordenes/tomar"
-import { sucursalParaLectura } from "@/lib/sucursal"
+import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { MENSAJE_TECNICO_OTRA_SUCURSAL, sucursalQueAtiende, tecnicoAsignable } from "@/lib/sucursal-ordenes"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
@@ -58,14 +58,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, session, organizationId, userId, role } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, session, organizationId, role } = autenticado
     if (error) return error
 
     const { id } = await params
 
-    const { data: orden, error: dbError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select(`
+    // Within the caller's scope: an order of another branch is "not found", the same answer a
+    // missing id gets, before anything else is read. A TECNICO opens only his own orders, plus
+    // (opt-in `tecnicos_toman_ordenes`) the unassigned ones of his branch so he can take them;
+    // a colleague's order stays 403.
+    const cargada = await cargarOrdenEnAlcance(id, actorDeSesion(autenticado), "leer", {
+      select: `
         *,
         clientes (*),
         users:tecnico_id (
@@ -113,37 +117,11 @@ export async function GET(
         recepciones:recepcion_id (
           codigo
         )
-      `)
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (dbError || !orden) {
-      return NextResponse.json(
-        { error: "Orden no encontrada" },
-        { status: 404 }
-      )
-    }
-
-    // Técnicos solo pueden ver sus órdenes asignadas. Excepción opt-in: con
-    // `tecnicos_toman_ordenes` también abren las que no tienen técnico (para
-    // poder tomarlas). Las de OTRO técnico siguen cerradas, con o sin flag.
-    let puedeTomar = false
-    if (role === "TECNICO" && orden.tecnico_id !== userId) {
-      const sinAsignar = !orden.tecnico_id
-      if (!sinAsignar || !(await resolveTecnicosTomanOrdenes(organizationId!))) {
-        return NextResponse.json(
-          { error: "No autorizado" },
-          { status: 403 }
-        )
-      }
-      // Same branch scoping as the list and the take endpoint.
-      const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
-      if (!filtro.verTodas && filtro.sucursalId && (orden as any).sucursal_id !== filtro.sucursalId) {
-        return NextResponse.json({ error: "No autorizado" }, { status: 403 })
-      }
-      puedeTomar = ordenSeTomaPorTecnico(orden)
-    }
+      `,
+    })
+    if ("error" in cargada) return cargada.error
+    const { orden, permisos } = cargada
+    const puedeTomar = permisos.tomar && ordenSeTomaPorTecnico(orden)
 
     // Último cambio de estado para derivar estadoAnterior (plantillas WhatsApp
     // como "seguimiento_presupuesto_rechazado" lo necesitan).
@@ -241,42 +219,31 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId, userId, role } = autenticado
     if (error) return error
 
     const { id } = await params
-    const practica = await rejectIfPractica(id, organizationId!)
-    if (practica) return practica
     const body = await request.json()
     const data = updateOrdenSchema.parse(body)
 
-    // Obtener orden actual
-    const { data: orden, error: fetchError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select(`
+    // Obtener orden actual, dentro del alcance de quien llama: una orden de otra sucursal es
+    // "no encontrada" (la misma respuesta que un id inexistente), y los técnicos solo
+    // actualizan sus órdenes asignadas (403 si no).
+    const cargada = await cargarOrdenEnAlcance(id, actorDeSesion(autenticado), "editar", {
+      select: `
         *,
         clientes (*),
         ${NOTAS_CREDITO_APLICADO_EMBED},
         organizations (id, nombre, nombre_mostrar, slug, moneda, zona_horaria)
-      `)
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
-      .single()
+      `,
+    })
+    if ("error" in cargada) return cargada.error
+    const { orden } = cargada
 
-    if (fetchError || !orden) {
-      return NextResponse.json(
-        { error: "Orden no encontrada" },
-        { status: 404 }
-      )
-    }
-
-    // Técnicos solo pueden actualizar sus órdenes asignadas
-    if (role === "TECNICO" && orden.tecnico_id !== userId) {
-      return NextResponse.json(
-        { error: "No autorizado" },
-        { status: 403 }
-      )
-    }
+    // After the scope check, so a practice order of another branch is "not found" too.
+    const practica = await rejectIfPractica(id, organizationId!)
+    if (practica) return practica
 
     // Validar transición de estado (state machine)
     if (data.estado && data.estado !== orden.estado) {
@@ -642,31 +609,26 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId, userId, role } = autenticado
     if (error) return error
+
+    const { id } = await params
+
+    // Verificar que la orden existe, pertenece a la organización y está al alcance de quien
+    // llama. Va antes del rol: para quien no es admin, una orden de otra sucursal es "no
+    // encontrada", igual que un id inexistente, y no "solo administradores".
+    const cargada = await cargarOrdenEnAlcance(id, actorDeSesion(autenticado), "ver", {
+      select: "id, numero_orden, estado",
+    })
+    if ("error" in cargada) return cargada.error
+    const { orden } = cargada
 
     // Solo admins pueden eliminar órdenes
     if (role !== "ADMIN") {
       return NextResponse.json(
         { error: "Solo administradores pueden eliminar órdenes" },
         { status: 403 }
-      )
-    }
-
-    const { id } = await params
-
-    // Verificar que la orden existe y pertenece a la organización
-    const { data: orden, error: fetchError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id, numero_orden, estado")
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (fetchError || !orden) {
-      return NextResponse.json(
-        { error: "Orden no encontrada" },
-        { status: 404 }
       )
     }
 
