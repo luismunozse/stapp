@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils"
 import { EmptyState } from "@/components/ui/empty-state"
 import { useCurrency } from "@/contexts/currency-context"
+import { saldoCuentaDisplay } from "@/lib/cliente-deuda-resumen"
 import { todayInTimeZone } from "@/lib/timezone"
 import { useModal } from "@/contexts/modal-context"
 import { RevertirCargoDialog } from "./revertir-cargo-dialog"
@@ -71,6 +72,7 @@ const metodoPagoLabels: Record<string, string> = {
 
 interface CuentaCorrientePanelProps {
   cliente: Cliente
+  // Fired after any mutation that moves the balance (deposit or cargo revert)
   onDeposito?: () => void
 }
 
@@ -102,6 +104,7 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
   )
   const saldo = data?.saldo ?? 0
   const movimientos = data?.movimientos ?? []
+  const saldoView = saldoCuentaDisplay(saldo)
 
   useEffect(() => {
     setShowDeposito(false)
@@ -156,12 +159,14 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
       <Card>
         <CardContent className="pt-6">
           <div className="text-center">
-            <div className="text-sm text-muted-foreground">Saldo disponible</div>
+            <div className="text-sm text-muted-foreground">{saldoView.label}</div>
             <div className={cn(
               "text-2xl font-bold tabular-nums mt-1",
-              saldo > 0 ? "text-info-600" : "text-muted-foreground"
+              saldoView.tone === "destructive" && "text-destructive",
+              saldoView.tone === "info" && "text-info-600",
+              saldoView.tone === "muted" && "text-muted-foreground"
             )}>
-              {formatPrice(saldo)}
+              {formatPrice(saldoView.amount)}
             </div>
           </div>
         </CardContent>
@@ -355,7 +360,7 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
           saldoActual={saldo}
           open={!!revertirTarget}
           onOpenChange={(v) => !v && setRevertirTarget(null)}
-          onDone={() => mutate()}
+          onDone={() => { mutate(); onDeposito?.() }}
         />
       )}
     </div>

@@ -17,11 +17,11 @@ import { ClienteOrdenesHistorial } from "./cliente-ordenes-historial"
 import { ClienteCotizaciones } from "./cliente-cotizaciones"
 import { ClienteSectores } from "./cliente-sectores"
 import { ClienteNotasCreditoLink } from "./cliente-notas-credito-link"
+import { resumenDeudaCliente } from "@/lib/cliente-deuda-resumen"
 import type { Cliente } from "@/types"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
-interface OrdenPendiente { id: string; pendiente: number }
 
 interface ClienteDetalleProps {
   clienteId: string
@@ -43,8 +43,9 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
   const { data: ccData, mutate: mutateCC } = useSWR(
     `/api/clientes/${clienteId}/cuenta-corriente?limit=50`, fetcher, { revalidateOnFocus: false }
   )
-  const { data: pendientes } = useSWR<OrdenPendiente[]>(
-    `/api/clientes/${clienteId}/ordenes-pendientes`, fetcher, { revalidateOnFocus: false }
+  // Fiado + unpaid orders for the active sucursal (same source as the WhatsApp reminder).
+  const { data: deudaData, mutate: mutateDeuda } = useSWR<{ deudaTotal?: number; error?: string }>(
+    `/api/clientes/${clienteId}/deuda-sucursal`, fetcher, { revalidateOnFocus: false }
   )
   const { data: ordenesData } = useSWR(
     `/api/ordenes?clienteId=${clienteId}&limit=1`, fetcher, { revalidateOnFocus: false }
@@ -76,15 +77,18 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
   }
 
   const saldo = ccData?.saldo || 0
-  const deudaPendiente = (pendientes || []).reduce((acc, o) => acc + (o.pendiente || 0), 0)
+  const resumen = resumenDeudaCliente({
+    saldo: ccData?.saldo,
+    deudaTotal: typeof deudaData?.deudaTotal === "number" ? deudaData.deudaTotal : undefined,
+  })
+  const refreshMoney = () => { mutateCC(); mutateDeuda() }
   const totalOrdenes = ordenesData?.total || 0
 
   return (
     <div className="px-4 py-6 sm:px-6 max-w-5xl mx-auto">
       <ClienteDetalleHeader
         cliente={cliente}
-        saldo={saldo}
-        deudaPendiente={deudaPendiente}
+        resumen={resumen}
         totalOrdenes={totalOrdenes}
         onEdit={() => setShowEdit(true)}
         onWhatsApp={() => setShowWhatsApp(true)}
@@ -105,13 +109,13 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
             </div>
           </CardHeader>
           <CardContent>
-            <CuentaCorrientePanel cliente={cliente} onDeposito={() => mutateCC()} />
+            <CuentaCorrientePanel cliente={cliente} onDeposito={refreshMoney} />
           </CardContent>
         </Card>
         <ClienteOrdenesPendientes
           clienteId={clienteId}
           clienteNombre={cliente.nombre}
-          onCobrado={() => mutateCC()}
+          onCobrado={refreshMoney}
         />
         <ClienteOrdenesHistorial clienteId={clienteId} />
         <ClienteCotizaciones clienteId={clienteId} />
@@ -131,7 +135,7 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
         saldoActual={saldo}
         open={showExpress}
         onOpenChange={setShowExpress}
-        onDone={() => { mutate(); mutateCC() }}
+        onDone={() => { mutate(); refreshMoney() }}
       />
       {showWhatsApp && (
         <ClienteWhatsAppDialog

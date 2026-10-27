@@ -11,19 +11,25 @@ import { useCurrency } from "@/contexts/currency-context"
 import { getTaxIdLabel, getPersonalIdLabel } from "@/lib/countries"
 import { useHasFeature } from "@/hooks/use-subscription"
 import { TipoPrecioBadge } from "@/components/clientes/tipo-precio-badge"
+import type { ResumenDeudaCliente } from "@/lib/cliente-deuda-resumen"
 import type { Cliente } from "@/types"
+
+const TONE_CLASS = {
+  destructive: "text-destructive",
+  info: "text-info-600",
+  muted: "text-muted-foreground",
+} as const
 
 interface ClienteDetalleHeaderProps {
   cliente: Cliente
-  saldo: number
-  deudaPendiente: number
+  resumen: ResumenDeudaCliente
   totalOrdenes: number
   onEdit: () => void
   onWhatsApp: () => void
 }
 
 export function ClienteDetalleHeader({
-  cliente, saldo, deudaPendiente, totalOrdenes, onEdit, onWhatsApp,
+  cliente, resumen, totalOrdenes, onEdit, onWhatsApp,
 }: ClienteDetalleHeaderProps) {
   const { formatPrice, pais } = useCurrency()
   const router = useRouter()
@@ -91,13 +97,15 @@ export function ClienteDetalleHeader({
 
       <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-4">
         <Card><CardContent className="p-3 text-center">
-          <div className="text-xs text-muted-foreground">Saldo a favor</div>
-          <div className="text-base sm:text-lg font-bold tabular-nums text-info-600">{formatPrice(saldo)}</div>
+          <div className="text-xs text-muted-foreground">Debe</div>
+          <div className={`text-base sm:text-lg font-bold tabular-nums ${TONE_CLASS[resumen.debeTone]}`}>
+            {resumen.debe === null ? "—" : formatPrice(resumen.debe)}
+          </div>
         </CardContent></Card>
         <Card><CardContent className="p-3 text-center">
-          <div className="text-xs text-muted-foreground">Deuda pendiente</div>
-          <div className={`text-base sm:text-lg font-bold tabular-nums ${deudaPendiente > 0 ? "text-destructive" : "text-muted-foreground"}`}>
-            {formatPrice(deudaPendiente)}
+          <div className="text-xs text-muted-foreground">A favor</div>
+          <div className={`text-base sm:text-lg font-bold tabular-nums ${TONE_CLASS[resumen.aFavorTone]}`}>
+            {formatPrice(resumen.aFavor)}
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-3 text-center">
