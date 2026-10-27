@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react"
 
 const mockRole = vi.hoisted(() => ({ current: "ADMIN" as string }))
 vi.mock("next-auth/react", () => ({
@@ -32,6 +32,11 @@ const info = (over: Record<string, unknown> = {}) => ({
 })
 
 const CAJA_CENTRAL = { sesionId: "ses-1", sucursalId: "suc-a", sucursalNombre: "Casa Central" }
+const grupo = (sucursalId: string | null, sucursalNombre: string | null, cantidad: number) => ({
+  sucursalId,
+  sucursalNombre,
+  cantidad,
+})
 
 /** GET answers `get`, PUT answers `put`; every call is recorded on the returned mock. */
 function mockApi(get: () => Response | Promise<Response>, put?: () => Response | Promise<Response>) {
@@ -42,28 +47,34 @@ function mockApi(get: () => Response | Promise<Response>, put?: () => Response |
   return fetchMock
 }
 
+const botonMover = () => screen.getByRole("button", { name: "Mover de sucursal" })
 const abrir = async () => fireEvent.click(await screen.findByRole("button", { name: "Mover de sucursal" }))
 const elegir = (id: string) => fireEvent.change(screen.getByLabelText("Nueva sucursal"), { target: { value: id } })
 const confirmar = () => screen.getByRole("button", { name: "Confirmar movimiento" })
+/** Lets pending promises and the state updates they trigger settle. */
+const asentar = () => act(async () => { await new Promise((r) => setTimeout(r, 0)) })
 
 describe("lineaOrdenesAbiertas", () => {
+  const COLA = "pero dejará de verl"
   it.each([
-    [4, "Casa Central", "TECNICO", "Tiene 4 órdenes abiertas en Casa Central. Seguirán asignadas a este técnico."],
-    [1, "Cerro", "TECNICO", "Tiene 1 orden abierta en Cerro. Seguirá asignada a este técnico."],
-    [3, "Cerro", "VENDEDOR", "Tiene 3 órdenes abiertas en Cerro. Seguirán asignadas a este vendedor."],
-    [2, null, "TECNICO", "Tiene 2 órdenes abiertas sin sucursal. Seguirán asignadas a este técnico."],
-  ])("%i en %s (%s)", (cantidad, sucursal, rol, esperado) => {
-    expect(lineaOrdenesAbiertas(cantidad, sucursal, rol)).toBe(esperado)
+    [grupo("suc-a", "Casa Central", 4), "TECNICO", `Tiene 4 órdenes abiertas en Casa Central. Seguirán asignadas a este técnico, ${COLA}as hasta que vuelva a esa sucursal.`],
+    [grupo("suc-b", "Cerro", 1), "TECNICO", `Tiene 1 orden abierta en Cerro. Seguirá asignada a este técnico, ${COLA}a hasta que vuelva a esa sucursal.`],
+    [grupo("suc-b", "Cerro", 3), "VENDEDOR", `Tiene 3 órdenes abiertas en Cerro. Seguirán asignadas a este vendedor, ${COLA}as hasta que vuelva a esa sucursal.`],
+    [grupo("suc-x", null, 2), "TECNICO", `Tiene 2 órdenes abiertas en otra sucursal. Seguirán asignadas a este técnico, ${COLA}as hasta que vuelva a esa sucursal.`],
+    [grupo(null, null, 2), "TECNICO", "Tiene 2 órdenes abiertas sin sucursal. Seguirán asignadas a este técnico."],
+  ])("%j (%s)", (g, rol, esperado) => {
+    expect(lineaOrdenesAbiertas(g, rol)).toBe(esperado)
   })
 })
 
 describe("lineaTurnosPendientes / lineaCajaAbierta", () => {
   it.each([
-    [2, "Casa Central", "TECNICO", "Tiene 2 turnos pendientes en Casa Central. Siguen asignados a este técnico, pero dejará de verlos en su agenda."],
-    [1, "Cerro", "TECNICO", "Tiene 1 turno pendiente en Cerro. Sigue asignado a este técnico, pero dejará de verlo en su agenda."],
-    [3, null, "VENDEDOR", "Tiene 3 turnos pendientes sin sucursal. Siguen asignados a este vendedor, pero dejará de verlos en su agenda."],
-  ])("%i en %s (%s)", (cantidad, sucursal, rol, esperado) => {
-    expect(lineaTurnosPendientes(cantidad, sucursal, rol)).toBe(esperado)
+    [grupo("suc-a", "Casa Central", 2), "TECNICO", "Tiene 2 turnos pendientes en Casa Central. Siguen asignados a este técnico, pero dejará de verlos en su agenda."],
+    [grupo("suc-b", "Cerro", 1), "TECNICO", "Tiene 1 turno pendiente en Cerro. Sigue asignado a este técnico, pero dejará de verlo en su agenda."],
+    [grupo("suc-x", null, 3), "VENDEDOR", "Tiene 3 turnos pendientes en otra sucursal. Siguen asignados a este vendedor, pero dejará de verlos en su agenda."],
+    [grupo(null, null, 3), "TECNICO", "Tiene 3 turnos pendientes sin sucursal. Siguen asignados a este técnico, pero dejará de verlos en su agenda."],
+  ])("%j (%s)", (g, rol, esperado) => {
+    expect(lineaTurnosPendientes(g, rol)).toBe(esperado)
   })
 
   it.each([
@@ -81,21 +92,52 @@ describe("MoverSucursal", () => {
   afterEach(() => vi.unstubAllGlobals())
 
   describe("visibilidad", () => {
-    it("ADMIN con más de una sucursal: lee al usuario y muestra su sucursal actual", async () => {
+    it("ADMIN con más de una sucursal: lee al usuario, muestra su sucursal actual y el grupo está rotulado", async () => {
       const fetchMock = mockApi(() => json(info()))
       render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES} />)
 
       expect(await screen.findByText("Casa Central")).toBeInTheDocument()
-      expect(screen.getByRole("button", { name: "Mover de sucursal" })).toBeEnabled()
+      expect(botonMover()).toBeEnabled()
+      expect(screen.getByRole("group", { name: "Sucursal" })).toContainElement(botonMover())
       expect(fetchMock).toHaveBeenCalledWith("/api/usuarios/u1/sucursal", expect.objectContaining({ cache: "no-store" }))
     })
 
-    it("no muestra nada ni consulta si la organización tiene una sola sucursal", () => {
+    it("con una sola sucursal activa y el usuario ya en ella, consulta pero no muestra nada (no hay a dónde moverlo)", async () => {
       const fetchMock = mockApi(() => json(info()))
       const { container } = render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES.slice(0, 1)} />)
 
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+      await asentar()
       expect(container).toBeEmptyDOMElement()
+    })
+
+    it("rescate: con una sola sucursal activa, un usuario varado en una inactiva se puede mover a ella", async () => {
+      mockApi(() => json(info({ usuario: { id: "u1", nombre: "Tomás", rol: "TECNICO", sucursalId: "suc-vieja" } })))
+      render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES.slice(0, 1)} />)
+
+      expect(await screen.findByText("Sucursal inactiva")).toBeInTheDocument()
+      await abrir()
+      expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Elegí una sucursal", "Casa Central"])
+      elegir("suc-a")
+      expect(confirmar()).toBeEnabled()
+    })
+
+    it("con una sola sucursal activa, si la lectura falla no aparece ningún error (nada nuevo para quien no puede mover)", async () => {
+      const fetchMock = mockApi(() => json({ error: "x" }, 500))
+      const { container } = render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES.slice(0, 1)} />)
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+      await asentar()
+      expect(container).toBeEmptyDOMElement()
+    })
+
+    it("sin sucursales activas no consulta ni muestra nada", async () => {
+      const fetchMock = mockApi(() => json(info()))
+      const { container } = render(<MoverSucursal usuarioId="u1" sucursales={[]} />)
+
+      await asentar()
       expect(fetchMock).not.toHaveBeenCalled()
+      expect(container).toBeEmptyDOMElement()
     })
 
     it("no muestra nada ni consulta si quien mira no es ADMIN", () => {
@@ -121,36 +163,36 @@ describe("MoverSucursal", () => {
 
   describe("aviso de órdenes abiertas", () => {
     it("con órdenes abiertas lo muestra al abrir, no antes, y aclara que no se reasignan", async () => {
-      mockApi(() =>
-        json(info({ ordenesAbiertas: [{ sucursalId: "suc-a", sucursalNombre: "Casa Central", cantidad: 4 }], totalOrdenesAbiertas: 4 }))
-      )
+      mockApi(() => json(info({ ordenesAbiertas: [grupo("suc-a", "Casa Central", 4)], totalOrdenesAbiertas: 4 })))
       render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES} />)
 
       await screen.findByRole("button", { name: "Mover de sucursal" })
       expect(screen.queryByText(/Tiene 4/)).not.toBeInTheDocument()
 
       await abrir()
-      expect(screen.getByText("Tiene 4 órdenes abiertas en Casa Central. Seguirán asignadas a este técnico.")).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          "Tiene 4 órdenes abiertas en Casa Central. Seguirán asignadas a este técnico, pero dejará de verlas hasta que vuelva a esa sucursal."
+        )
+      ).toBeInTheDocument()
       expect(screen.getByText(/no reasigna ni cambia de sucursal ninguna orden/i)).toBeInTheDocument()
     })
 
-    it("agrupa por sucursal, una línea por grupo, con etiqueta neutra si falta el nombre", async () => {
+    it("agrupa por sucursal, una línea por grupo, con etiquetas neutras si falta el nombre o la sucursal", async () => {
       mockApi(() =>
         json(
           info({
-            ordenesAbiertas: [
-              { sucursalId: "suc-b", sucursalNombre: "Cerro", cantidad: 3 },
-              { sucursalId: null, sucursalNombre: null, cantidad: 1 },
-            ],
-            totalOrdenesAbiertas: 4,
+            ordenesAbiertas: [grupo("suc-b", "Cerro", 3), grupo("suc-x", null, 2), grupo(null, null, 1)],
+            totalOrdenesAbiertas: 6,
           })
         )
       )
       render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES} />)
       await abrir()
 
-      expect(screen.getAllByRole("listitem")).toHaveLength(2)
-      expect(screen.getByText("Tiene 3 órdenes abiertas en Cerro. Seguirán asignadas a este técnico.")).toBeInTheDocument()
+      expect(screen.getAllByRole("listitem")).toHaveLength(3)
+      expect(screen.getByText(/^Tiene 3 órdenes abiertas en Cerro\. Seguirán asignadas a este técnico, pero dejará de verlas hasta que vuelva a esa sucursal\.$/)).toBeInTheDocument()
+      expect(screen.getByText(/^Tiene 2 órdenes abiertas en otra sucursal\. /)).toBeInTheDocument()
       expect(screen.getByText("Tiene 1 orden abierta sin sucursal. Seguirá asignada a este técnico.")).toBeInTheDocument()
     })
 
@@ -159,7 +201,7 @@ describe("MoverSucursal", () => {
         json(
           info({
             usuario: { id: "u1", nombre: "Vera", rol: "VENDEDOR", sucursalId: "suc-a" },
-            ordenesAbiertas: [{ sucursalId: "suc-a", sucursalNombre: "Casa Central", cantidad: 2 }],
+            ordenesAbiertas: [grupo("suc-a", "Casa Central", 2)],
             totalOrdenesAbiertas: 2,
           })
         )
@@ -167,7 +209,7 @@ describe("MoverSucursal", () => {
       render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES} />)
       await abrir()
 
-      expect(screen.getByText(/Seguirán asignadas a este vendedor/)).toBeInTheDocument()
+      expect(screen.getByText(/Seguirán asignadas a este vendedor, pero dejará de verlas hasta que vuelva a esa sucursal/)).toBeInTheDocument()
       expect(screen.queryByText(/técnico/i)).not.toBeInTheDocument()
     })
 
@@ -186,10 +228,7 @@ describe("MoverSucursal", () => {
       mockApi(() =>
         json(
           info({
-            turnosPendientes: [
-              { sucursalId: "suc-b", sucursalNombre: "Cerro", cantidad: 2 },
-              { sucursalId: "suc-a", sucursalNombre: "Casa Central", cantidad: 1 },
-            ],
+            turnosPendientes: [grupo("suc-b", "Cerro", 2), grupo("suc-a", "Casa Central", 1)],
             totalTurnosPendientes: 3,
           })
         )
@@ -245,14 +284,17 @@ describe("MoverSucursal", () => {
       expect(confirmar()).toBeDisabled()
     })
 
-    it("si no se pueden leer los pendientes muestra el error del servidor, no deja mover a ciegas y Reintentar lo recupera", async () => {
+    it("si no se pueden leer los pendientes muestra el error del servidor (sin doble punto), no deja mover a ciegas y Reintentar lo recupera", async () => {
       let falla = true
       mockApi(() =>
-        falla ? json({ error: "No pudimos leer el trabajo pendiente del usuario" }, 500) : json(info())
+        falla ? json({ error: "No pudimos leer el trabajo pendiente del usuario." }, 500) : json(info())
       )
       render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES} />)
 
-      expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos leer el trabajo pendiente del usuario")
+      const alerta = await screen.findByRole("alert")
+      expect(alerta).toHaveTextContent("No pudimos leer el trabajo pendiente del usuario.")
+      expect(alerta).toHaveTextContent("Por ahora no se puede mover.")
+      expect(alerta.textContent).not.toMatch(/\.\./)
       expect(screen.queryByRole("button", { name: "Mover de sucursal" })).not.toBeInTheDocument()
 
       falla = false
@@ -287,8 +329,16 @@ describe("MoverSucursal", () => {
       expect(confirmar()).toBeEnabled()
     })
 
-    it("confirmar hace PUT con la sucursal elegida, avisa, actualiza la actual y no envía el formulario", async () => {
-      const onMoved = vi.fn()
+    it("al abrir el panel el foco pasa al selector", async () => {
+      mockApi(() => json(info()))
+      render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES} />)
+      expect(await screen.findByRole("button", { name: "Mover de sucursal" })).not.toHaveFocus()
+      await abrir()
+
+      expect(screen.getByLabelText("Nueva sucursal")).toHaveFocus()
+    })
+
+    it("confirmar hace PUT con la sucursal elegida, avisa en la región viva, actualiza la actual, devuelve el foco y no envía el formulario", async () => {
       const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault())
       const fetchMock = mockApi(
         () => json(info()),
@@ -296,14 +346,20 @@ describe("MoverSucursal", () => {
       )
       render(
         <form onSubmit={onSubmit}>
-          <MoverSucursal usuarioId="u1" sucursales={SUCURSALES} onMoved={onMoved} />
+          <MoverSucursal usuarioId="u1" sucursales={SUCURSALES} />
         </form>
       )
       await abrir()
+      // The live region exists before anything happens (a region inserted together with its text is often not announced).
+      const estado = screen.getByRole("status")
+      expect(estado).toHaveAttribute("aria-live", "polite")
+      expect(estado).toBeEmptyDOMElement()
+
       elegir("suc-b")
       fireEvent.click(confirmar())
 
-      expect(await screen.findByRole("status")).toHaveTextContent("Tomás ahora está en Cerro.")
+      await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Tomás ahora está en Cerro."))
+      expect(screen.getByRole("status")).toBe(estado)
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/usuarios/u1/sucursal",
         expect.objectContaining({
@@ -312,9 +368,9 @@ describe("MoverSucursal", () => {
           body: JSON.stringify({ sucursalId: "suc-b" }),
         })
       )
-      expect(onMoved).toHaveBeenCalledWith("suc-b")
       expect(screen.queryByLabelText("Nueva sucursal")).not.toBeInTheDocument()
       expect(screen.getByText("Cerro", { selector: "p" })).toBeInTheDocument()
+      expect(botonMover()).toHaveFocus()
       expect(onSubmit).not.toHaveBeenCalled()
     })
 
@@ -334,35 +390,33 @@ describe("MoverSucursal", () => {
       expect(screen.getByRole("button", { name: "Moviendo..." })).toBeDisabled()
 
       resolver(json({ success: true, message: "Listo." }))
-      await screen.findByRole("status")
+      await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Listo."))
     })
 
-    it("400: muestra el mensaje del servidor, conserva la elección y deja reintentar", async () => {
-      const onMoved = vi.fn()
+    it("400: muestra el mensaje del servidor, conserva la elección, no cambia la sucursal actual y deja reintentar", async () => {
       const fetchMock = mockApi(
         () => json(info()),
         () => json({ error: "La sucursal elegida no existe o está inactiva." }, 400)
       )
-      render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES} onMoved={onMoved} />)
+      render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES} />)
       await abrir()
       elegir("suc-b")
       fireEvent.click(confirmar())
 
       expect(await screen.findByRole("alert")).toHaveTextContent("La sucursal elegida no existe o está inactiva.")
-      expect(onMoved).not.toHaveBeenCalled()
+      expect(screen.getByText("Casa Central", { selector: "p" })).toBeInTheDocument()
       expect(screen.getByLabelText("Nueva sucursal")).toHaveValue("suc-b")
       expect(confirmar()).toBeEnabled()
       expect(fetchMock.mock.calls.filter(([, init]) => init?.method !== "PUT")).toHaveLength(1)
     })
 
-    it("409 CAJA_ABIERTA: muestra el error tal cual, relee al usuario y pasa a bloquear con la caja", async () => {
-      const onMoved = vi.fn()
+    it("409 CAJA_ABIERTA: muestra el error una sola vez, relee al usuario y pasa a bloquear con la caja", async () => {
       let lecturas = 0
       mockApi(
         () => json(++lecturas === 1 ? info() : info({ cajaAbierta: CAJA_CENTRAL })),
         () => json({ error: "Tiene una caja abierta en Casa Central. Cerrala antes de moverlo.", code: "CAJA_ABIERTA" }, 409)
       )
-      render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES} onMoved={onMoved} />)
+      render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES} />)
       await abrir()
       elegir("suc-b")
       fireEvent.click(confirmar())
@@ -371,11 +425,12 @@ describe("MoverSucursal", () => {
       await waitFor(() => expect(lecturas).toBe(2))
       elegir("suc-b")
       expect(confirmar()).toBeDisabled()
-      expect(onMoved).not.toHaveBeenCalled()
+      // The reread also reports the open cash session, but the same sentence must not appear twice.
+      expect(screen.getAllByText(/Tiene una caja abierta en Casa Central/)).toHaveLength(1)
+      expect(screen.getByText("Casa Central", { selector: "p" })).toBeInTheDocument()
     })
 
     it("409 cambió mientras tanto: muestra el error tal cual, relee al usuario y pide elegir de nuevo", async () => {
-      const onMoved = vi.fn()
       let lecturas = 0
       mockApi(
         () =>
@@ -386,7 +441,7 @@ describe("MoverSucursal", () => {
           ),
         () => json({ error: "El usuario cambió mientras tanto. Recargá e intentá de nuevo." }, 409)
       )
-      render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES} onMoved={onMoved} />)
+      render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES} />)
       await abrir()
       elegir("suc-b")
       fireEvent.click(confirmar())
@@ -397,7 +452,6 @@ describe("MoverSucursal", () => {
       expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Elegí una sucursal", "Casa Central", "Cerro"])
       expect(screen.getByLabelText("Nueva sucursal")).toHaveValue("")
       expect(confirmar()).toBeDisabled()
-      expect(onMoved).not.toHaveBeenCalled()
     })
 
     it("un error de red se muestra y no cierra el panel", async () => {
@@ -414,7 +468,7 @@ describe("MoverSucursal", () => {
       await waitFor(() => expect(confirmar()).toBeEnabled())
     })
 
-    it("Cancelar cierra el panel sin mover a nadie", async () => {
+    it("Cancelar cierra el panel sin mover a nadie y devuelve el foco al botón", async () => {
       const fetchMock = mockApi(() => json(info()))
       render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES} />)
       await abrir()
@@ -422,7 +476,7 @@ describe("MoverSucursal", () => {
       fireEvent.click(screen.getByRole("button", { name: "Cancelar" }))
 
       expect(screen.queryByLabelText("Nueva sucursal")).not.toBeInTheDocument()
-      expect(screen.getByRole("button", { name: "Mover de sucursal" })).toBeInTheDocument()
+      expect(botonMover()).toHaveFocus()
       expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false)
     })
   })
