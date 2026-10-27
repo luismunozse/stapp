@@ -73,6 +73,8 @@ describe("GET /api/export/ordenes — branch filter", () => {
     expect(res.status).toBe(200)
     const eqCalls = vi.mocked(ordenesChain.eq).mock.calls
     expect(eqCalls.find((c: any[]) => c[0] === "sucursal_id")).toBeUndefined()
+    // The door puts the branch in an or(): no or() at all means no scope was applied.
+    expect(ordenesChain.or).not.toHaveBeenCalled()
   })
 
   it("no cookie (ADMIN default) → no sucursal_id filter on ordenes", async () => {
@@ -90,6 +92,7 @@ describe("GET /api/export/ordenes — branch filter", () => {
     expect(res.status).toBe(200)
     const eqCalls = vi.mocked(ordenesChain.eq).mock.calls
     expect(eqCalls.find((c: any[]) => c[0] === "sucursal_id")).toBeUndefined()
+    expect(ordenesChain.or).not.toHaveBeenCalled()
   })
 })
 
