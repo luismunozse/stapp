@@ -195,12 +195,16 @@ describe("terminoDeBusquedaSeguro", () => {
 describe("tecnicoOfrecido (a technician that came from a draft or an appointment)", () => {
   const OFRECIDOS = [{ id: "t-a" }, { id: "t-a2" }]
 
+  // `cargada` = the list was fetched successfully (an empty list is a list: nobody is offered).
   it.each([
-    ["is kept when the picker offers it", "t-a2", OFRECIDOS, "t-a2"],
-    ["is dropped when the picker does not offer it", "t-b", OFRECIDOS, ""],
-    ["is kept while there is no list to judge it against", "t-b", [], "t-b"],
-    ["nobody chosen stays nobody", "", OFRECIDOS, ""],
-  ])("a choice that %s", (_caso, elegido, ofrecidos, esperado) => {
-    expect(tecnicoOfrecido(elegido, ofrecidos)).toBe(esperado)
+    ["is kept when the picker offers it", "t-a2", OFRECIDOS, true, "t-a2"],
+    ["is dropped when the loaded picker does not offer it", "t-b", OFRECIDOS, true, ""],
+    ["is dropped when the loaded picker offers NOBODY (an empty list is still a list)", "t-b", [], true, ""],
+    ["is kept while the list has not loaded", "t-b", [], false, "t-b"],
+    ["is kept when the list failed to load (nothing to judge against)", "t-b", [], false, "t-b"],
+    ["nobody chosen stays nobody", "", OFRECIDOS, true, ""],
+    ["nobody chosen stays nobody, loaded and empty", "", [], true, ""],
+  ])("a choice that %s", (_caso, elegido, ofrecidos, cargada, esperado) => {
+    expect(tecnicoOfrecido(elegido, ofrecidos, cargada)).toBe(esperado)
   })
 })

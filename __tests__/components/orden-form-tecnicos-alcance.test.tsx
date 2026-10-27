@@ -5,7 +5,7 @@
  * technicians and the server would reject all but the principal's.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { ModalProvider } from "@/contexts/modal-context"
 
 const sesion = vi.hoisted(() => ({ role: "ADMIN" as string }))
@@ -72,6 +72,8 @@ describe("OrdenForm - technician picker scope", () => {
 describe("OrdenForm - a technician that came from a draft or an appointment", () => {
   const DRAFT_KEY = "draft:v3:orden-form:org-1:user-1:new"
   let posts: Array<Record<string, unknown>>
+  let tecnicosPedidos = 0
+  let respuestaTecnicos: () => Promise<Response>
 
   function borrador(tecnicoId: string) {
     return JSON.stringify({
@@ -111,6 +113,9 @@ describe("OrdenForm - a technician that came from a draft or an appointment", ()
   beforeEach(() => {
     sesion.role = "ADMIN"
     posts = []
+    tecnicosPedidos = 0
+    respuestaTecnicos = () =>
+      Promise.resolve({ ok: true, json: async () => [{ id: "t-a", nombre: "Ana", activo: true }] } as Response)
     window.localStorage.clear()
     vi.stubGlobal(
       "fetch",
@@ -121,7 +126,8 @@ describe("OrdenForm - a technician that came from a draft or an appointment", ()
           return Promise.resolve({ ok: false, status: 500, json: async () => ({ error: "no importa" }) } as Response)
         }
         if (url.startsWith("/api/tecnicos")) {
-          return Promise.resolve({ ok: true, json: async () => [{ id: "t-a", nombre: "Ana", activo: true }] } as Response)
+          tecnicosPedidos++
+          return respuestaTecnicos()
         }
         return Promise.resolve({ ok: true, json: async () => [] } as Response)
       }),
@@ -162,5 +168,45 @@ describe("OrdenForm - a technician that came from a draft or an appointment", ()
 
     expect(textoDelSelector).toBe("Ana")
     expect(orden.tecnicoId).toBe("t-a")
+  })
+
+  /**
+   * The picker is hidden when there is nothing to pick (an empty list) or the list never came.
+   * Wait for the technician request to be answered, check the picker is not there, then create.
+   */
+  async function crearOrdenSinSelector(tecnicoId: string) {
+    window.localStorage.setItem(DRAFT_KEY, borrador(tecnicoId))
+    await montar()
+    await screen.findByText(/se restauró un borrador no guardado/i)
+    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+    await screen.findByText(/Paso 2\/3/)
+    await waitFor(() => expect(tecnicosPedidos).toBe(1))
+    await act(async () => {})
+    expect(document.getElementById("tecnicoId")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }))
+    await screen.findByText(/Paso 3\/3/)
+    fireEvent.click(screen.getByRole("button", { name: "Crear Orden" }))
+    await waitFor(() => expect(posts).toHaveLength(1))
+    return posts[0]
+  }
+
+  it("with a LOADED list that is empty, the picker is hidden and the held technician is not sent: nobody is offered, and there would be no way to clear it", async () => {
+    respuestaTecnicos = () => Promise.resolve({ ok: true, json: async () => [] } as Response)
+
+    const orden = await crearOrdenSinSelector("t-otra-sucursal")
+
+    expect(orden.tecnicoId).toBeUndefined()
+  })
+
+  it.each([
+    ["the server answers an error", () => Promise.resolve({ ok: false, status: 500, json: async () => ({ error: "x" }) } as Response)],
+    ["the request fails on the network", () => Promise.reject(new TypeError("Failed to fetch"))],
+    ["the answer is not a list", () => Promise.resolve({ ok: true, json: async () => ({ error: "no" }) } as Response)],
+  ])("when %s there is nothing to judge against: the held technician is kept and sent", async (_caso, respuesta) => {
+    respuestaTecnicos = respuesta
+
+    const orden = await crearOrdenSinSelector("t-otra-sucursal")
+
+    expect(orden.tecnicoId).toBe("t-otra-sucursal")
   })
 })

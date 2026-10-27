@@ -86,11 +86,17 @@ export function tecnicoAsignable(
 /**
  * The technician a form should show and send, out of the one it holds (from a draft, or from the
  * appointment the order comes from) and the ones its picker offers. One the picker does not offer
- * (another branch) would be a blank select that still posts him, so it counts as nobody. With no
- * list to judge against (not loaded, or failed) the choice is left as it is.
+ * (another branch) would be a blank select that still posts him, so it counts as nobody. A list
+ * that loaded and is EMPTY is still a list (nobody is offered, and the hidden picker leaves no way
+ * to clear a held choice). Only with no list to judge against (`cargada` false: not loaded, or it
+ * failed) is the choice left as it is.
  */
-export function tecnicoOfrecido(elegidoId: string, ofrecidos: ReadonlyArray<{ id: string }>): string {
-  if (ofrecidos.length === 0) return elegidoId
+export function tecnicoOfrecido(
+  elegidoId: string,
+  ofrecidos: ReadonlyArray<{ id: string }>,
+  cargada: boolean,
+): string {
+  if (!cargada) return elegidoId
   return ofrecidos.some((t) => t.id === elegidoId) ? elegidoId : ""
 }
 
