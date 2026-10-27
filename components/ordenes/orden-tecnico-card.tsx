@@ -35,6 +35,8 @@ export function OrdenTecnicoCard({
 }: OrdenTecnicoCardProps) {
   const asignadoFueraDeLista = !!tecnicoActual && tecnicoActual.id === tecnicoId && !tecnicos.some(t => t.id === tecnicoId)
   const opciones: Array<{ id: string; nombre: string }> = asignadoFueraDeLista ? [...tecnicos, tecnicoActual] : tecnicos
+  // Marked, so that choosing "Sin asignar" or another technician later is not a surprise.
+  const etiqueta = (t: { id: string; nombre: string }) => (asignadoFueraDeLista && t.id === tecnicoId ? `${t.nombre} · otra sucursal` : t.nombre)
   const tecnicoAsignado = opciones.find(t => t.id === tecnicoId)
 
   return (
@@ -58,7 +60,7 @@ export function OrdenTecnicoCard({
         )}
         {readOnly ? (
           <p className="text-sm text-foreground">
-            {tecnicoAsignado?.nombre || "Sin asignar"}
+            {tecnicoAsignado ? etiqueta(tecnicoAsignado) : "Sin asignar"}
           </p>
         ) : (
           <Select
@@ -73,7 +75,7 @@ export function OrdenTecnicoCard({
               <SelectItem value="none">Sin asignar</SelectItem>
               {opciones.map((tecnico) => (
                 <SelectItem key={tecnico.id} value={tecnico.id}>
-                  {tecnico.nombre}
+                  {etiqueta(tecnico)}
                 </SelectItem>
               ))}
             </SelectContent>

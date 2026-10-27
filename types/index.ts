@@ -129,6 +129,8 @@ export interface OrdenServicio {
   puedeTomar?: boolean
   /** Detail only: the branch that works the order (its technicians are the ones that can be assigned). */
   sucursalAtiendeId?: string
+  /** Detail only: this user may assign a technician (the server accepts a choice from that branch's list). */
+  puedeAsignarTecnico?: boolean
   dispositivo: string
   tipoDispositivo: TipoDispositivo
   tipoDispositivoId?: string | null

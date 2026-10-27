@@ -55,3 +55,26 @@ describe("GET /api/ordenes/[id] - handling branch", () => {
     expect(body.sucursalAtiendeId).toBe("suc-T")
   })
 })
+
+// The assignee picker is only useful where the server would accept the choice: the technicians it
+// lists are those of the handling branch, so a user of another branch would be offered their own
+// branch's technicians and every choice would be a 400. The server says it, with the branch it just
+// re-read for the user (the JWT value can be hours stale).
+describe("GET /api/ordenes/[id] - puedeAsignarTecnico", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it.each([
+    ["an ADMIN, whatever branch handles the order", "ADMIN", null, "suc-A", true],
+    ["a VENDEDOR of the handling branch", "VENDEDOR", "suc-A", "suc-A", true],
+    ["a VENDEDOR of another branch", "VENDEDOR", "suc-B", "suc-A", false],
+    ["a VENDEDOR with no branch", "VENDEDOR", null, "suc-A", false],
+    ["a TECNICO, even of the handling branch (he does not reassign)", "TECNICO", "suc-A", "suc-A", false],
+  ])("%s", async (_caso, role, sucursalDelUsuario, sucursalDeLaOrden, esperado) => {
+    mockAuthSuccess({ role, userId: "tec-1", sucursalId: sucursalDelUsuario })
+
+    const { status, body } = await detalle(orden({ sucursal_id: sucursalDeLaOrden, tecnico_id: "tec-1" }))
+
+    expect(status).toBe(200)
+    expect(body.puedeAsignarTecnico).toBe(esperado)
+  })
+})
