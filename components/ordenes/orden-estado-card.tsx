@@ -1,9 +1,13 @@
 "use client"
 
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Clock, AlertTriangle, Timer } from "lucide-react"
+import { Clock, AlertTriangle, Timer, Pencil } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { todayInTimeZone } from "@/lib/timezone"
 import { getTransicionesPosibles, ESTADO_LABELS } from "@/lib/orden-state-machine"
 import type { EstadoOrden } from "@/types"
 
@@ -15,6 +19,8 @@ interface OrdenEstadoCardProps {
   updating: boolean
   onUpdateEstado: (estado: EstadoOrden) => void
   esRetiro?: boolean
+  /** Persists the promised date (YYYY-MM-DD, or null to clear). Resolves true on success. */
+  onUpdateFechaPrometida?: (fecha: string | null) => Promise<boolean>
 }
 
 function ElapsedTime({ since }: { since: string | Date }) {
@@ -43,8 +49,12 @@ export function OrdenEstadoCard({
   updating,
   onUpdateEstado,
   esRetiro = false,
+  onUpdateFechaPrometida,
 }: OrdenEstadoCardProps) {
-  const { formatDate } = useCurrency()
+  const { formatDate, timezone } = useCurrency()
+  const [editingFecha, setEditingFecha] = useState(false)
+  const [fechaDraft, setFechaDraft] = useState("")
+  const [savingFecha, setSavingFecha] = useState(false)
 
   const transicionesPosibles = getTransicionesPosibles(estado)
   const esTerminal = transicionesPosibles.length === 0
@@ -52,6 +62,24 @@ export function OrdenEstadoCard({
   const fechaPrometidaVencida = fechaPrometida && new Date(fechaPrometida) < new Date() && estado !== "ENTREGADO" && estado !== "ENTREGADO_SIN_REPARACION" && estado !== "ENTREGADO_SIN_COBRO" && estado !== "CANCELADO" && estado !== "SIN_REPARACION"
 
   const showElapsed = estado !== "ENTREGADO" && estado !== "ENTREGADO_SIN_REPARACION" && estado !== "ENTREGADO_SIN_COBRO" && estado !== "CANCELADO" && estado !== "SIN_REPARACION"
+
+  const puedeEditarFecha = !!onUpdateFechaPrometida && showElapsed
+
+  const startEditFecha = () => {
+    // Same calendar day that formatDate displays for the stored instant.
+    setFechaDraft(fechaPrometida ? todayInTimeZone(timezone, new Date(fechaPrometida)) : "")
+    setEditingFecha(true)
+  }
+
+  const commitFecha = async (value: string | null) => {
+    if (!onUpdateFechaPrometida) return
+    setSavingFecha(true)
+    try {
+      if (await onUpdateFechaPrometida(value)) setEditingFecha(false)
+    } finally {
+      setSavingFecha(false)
+    }
+  }
 
   return (
     <Card>
@@ -112,14 +140,59 @@ export function OrdenEstadoCard({
             <span className="text-muted-foreground">Ingreso</span>
             <span>{formatDate(fechaIngreso)}</span>
           </div>
-          {fechaPrometida && (
-            <div className="flex justify-between">
+          {editingFecha ? (
+            <div className="space-y-2" onKeyDown={(e) => { if (e.key === "Escape") setEditingFecha(false) }}>
+              {/* No fixed id: the card is mounted twice (mobile + desktop). */}
+              <span className="text-muted-foreground">Prometida</span>
+              <Input
+                aria-label="Fecha prometida"
+                type="date"
+                value={fechaDraft}
+                onChange={(e) => setFechaDraft(e.target.value)}
+                disabled={savingFecha}
+                autoFocus
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" disabled={savingFecha} onClick={() => commitFecha(fechaDraft || null)}>
+                  Guardar
+                </Button>
+                <Button size="sm" variant="outline" disabled={savingFecha} onClick={() => setEditingFecha(false)}>
+                  Cancelar
+                </Button>
+                {fechaPrometida && (
+                  <Button size="sm" variant="ghost" disabled={savingFecha} onClick={() => commitFecha(null)}>
+                    Quitar
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : fechaPrometida ? (
+            <div className="flex justify-between items-center">
               <span className={`text-muted-foreground ${fechaPrometidaVencida ? "text-red-600 dark:text-red-400" : ""}`}>Prometida</span>
-              <span className={fechaPrometidaVencida ? "text-red-600 dark:text-red-400 font-medium" : ""}>
-                {formatDate(fechaPrometida)}
+              <span className="flex items-center gap-1.5">
+                <span className={fechaPrometidaVencida ? "text-red-600 dark:text-red-400 font-medium" : ""}>
+                  {formatDate(fechaPrometida)}
+                </span>
+                {puedeEditarFecha && (
+                  <button
+                    type="button"
+                    aria-label="Editar fecha prometida"
+                    onClick={startEditFecha}
+                    className="-m-1.5 rounded p-1.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </span>
             </div>
-          )}
+          ) : puedeEditarFecha ? (
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Prometida</span>
+              <button type="button" onClick={startEditFecha} className="text-xs text-primary hover:underline">
+                Agregar
+              </button>
+            </div>
+          ) : null}
           {fechaCompletado && (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Completado</span>

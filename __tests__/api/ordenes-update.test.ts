@@ -394,6 +394,50 @@ describe("PUT /api/ordenes/[id] - Campos Requeridos", () => {
     expect(status).toBe(200)
   })
 
+  it("guarda fechaPrometida YYYY-MM-DD anclada a mediodía UTC", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrden({ estado: "RECIBIDO" })
+    let callCount = 0
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockImplementation(() => {
+      callCount++
+      return Promise.resolve({ data: mockOrden, error: null })
+    })
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    const response = await PUT(
+      createPutRequest({ fechaPrometida: "2030-03-15" }),
+      createParams("o1")
+    )
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(200)
+    expect(chain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ fecha_prometida: "2030-03-15T12:00:00.000Z" })
+    )
+  })
+
+  it("fechaPrometida null limpia la fecha", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrden({ estado: "RECIBIDO", fecha_prometida: "2030-03-15T12:00:00.000Z" })
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockResolvedValue({ data: mockOrden, error: null })
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    const response = await PUT(
+      createPutRequest({ fechaPrometida: null }),
+      createParams("o1")
+    )
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(200)
+    expect(chain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ fecha_prometida: null })
+    )
+  })
+
   it("rechaza presupuesto negativo", async () => {
     mockAuthSuccess()
 
