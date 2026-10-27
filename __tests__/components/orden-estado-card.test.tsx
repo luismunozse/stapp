@@ -57,6 +57,13 @@ describe("OrdenEstadoCard — fecha prometida editable", () => {
     expect(screen.getByLabelText("Fecha prometida")).toHaveValue("2030-03-15")
   })
 
+  it("precarga el día de la zona del taller aunque difiera del día UTC", () => {
+    // 01:00 UTC del 15 = 22:00 del 14 en Buenos Aires: cortar el ISO daría el 15.
+    renderCard({ fechaPrometida: "2030-03-15T01:00:00.000Z" })
+    fireEvent.click(screen.getByRole("button", { name: "Editar fecha prometida" }))
+    expect(screen.getByLabelText("Fecha prometida")).toHaveValue("2030-03-14")
+  })
+
   it("Guardar llama al handler con YYYY-MM-DD", async () => {
     const onUpdate = vi.fn().mockResolvedValue(true)
     renderCard({ onUpdateFechaPrometida: onUpdate })

@@ -142,9 +142,9 @@ export function OrdenEstadoCard({
           </div>
           {editingFecha ? (
             <div className="space-y-2" onKeyDown={(e) => { if (e.key === "Escape") setEditingFecha(false) }}>
-              <label htmlFor="orden-fecha-prometida" className="text-muted-foreground">Prometida</label>
+              {/* No fixed id: the card is mounted twice (mobile + desktop). */}
+              <span className="text-muted-foreground">Prometida</span>
               <Input
-                id="orden-fecha-prometida"
                 aria-label="Fecha prometida"
                 type="date"
                 value={fechaDraft}

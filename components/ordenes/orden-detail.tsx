@@ -191,6 +191,10 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     )
   }
 
+  // Mirrors the PUT guard: a TECNICO can open an unassigned order (to take it)
+  // but can only update orders assigned to them.
+  const canEditFechaPrometida = userRole !== "TECNICO" || orden?.tecnicoId === session?.user?.id
+
   const handleSaveDiagnostico = async (next: string): Promise<boolean> => {
     const value = next.trim() || null
     if (!orden || (value || "") === (orden.diagnostico || "")) return true
@@ -919,7 +923,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           updating={updating}
           onUpdateEstado={handleUpdateEstado}
           esRetiro={isRetiro}
-          onUpdateFechaPrometida={handleSaveFechaPrometida}
+          onUpdateFechaPrometida={canEditFechaPrometida ? handleSaveFechaPrometida : undefined}
         />
         <OrdenTecnicoCard
           tecnicoId={orden.tecnicoId}
@@ -1177,7 +1181,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             updating={updating}
             onUpdateEstado={handleUpdateEstado}
             esRetiro={isRetiro}
-            onUpdateFechaPrometida={handleSaveFechaPrometida}
+            onUpdateFechaPrometida={canEditFechaPrometida ? handleSaveFechaPrometida : undefined}
           />
 
           {/* Link de Seguimiento */}
