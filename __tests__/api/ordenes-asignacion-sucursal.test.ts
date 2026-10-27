@@ -9,6 +9,7 @@
  * looks up is the one the test defined, with the branch it defined.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { cookies } from "next/headers"
 import { mockAuthSuccess, mockSupabaseFrom, createChainMock, createPostRequest, parseResponse } from "./helpers"
 import { tablaPostgrest } from "../helpers/postgrest-memoria"
 
@@ -32,6 +33,7 @@ vi.mock("@/lib/webhooks/dispatcher", () => ({ emitWebhookEvent: vi.fn().mockReso
 vi.mock("@/lib/tipos-dispositivo-config", () => ({ tipoValidaImei: vi.fn() }))
 
 import { POST } from "@/app/api/ordenes/route"
+import { GET as GET_TECNICOS } from "@/app/api/tecnicos/route"
 import { PUT } from "@/app/api/ordenes/[id]/route"
 import { queueNotification } from "@/lib/notifications/queue"
 import { getNextOrderNumberByType } from "@/lib/counters"
@@ -39,12 +41,12 @@ import { getNextOrderNumberByType } from "@/lib/counters"
 const MENSAJE = "Ese técnico no pertenece a la sucursal de esta orden"
 
 const PERSONAL = [
-  { id: "t-a", nombre: "Ana", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", porcentaje_comision: 10, costo_hora: 100 },
-  { id: "t-a2", nombre: "Beto", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", porcentaje_comision: 10, costo_hora: 100 },
-  { id: "t-b", nombre: "Carla", rol: "TECNICO", sucursal_id: "suc-B", organization_id: "org-1", porcentaje_comision: 20, costo_hora: 200 },
-  { id: "t-b2", nombre: "Dario", rol: "TECNICO", sucursal_id: "suc-B", organization_id: "org-1", porcentaje_comision: 20, costo_hora: 200 },
-  { id: "adm", nombre: "Fede", rol: "ADMIN", sucursal_id: null, organization_id: "org-1", porcentaje_comision: 0, costo_hora: 0 },
-  { id: "t-otra-org", nombre: "Eva", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-2", porcentaje_comision: 0, costo_hora: 0 },
+  { id: "t-a", nombre: "Ana", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 10, costo_hora: 100 },
+  { id: "t-a2", nombre: "Beto", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 10, costo_hora: 100 },
+  { id: "t-b", nombre: "Carla", rol: "TECNICO", sucursal_id: "suc-B", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 20, costo_hora: 200 },
+  { id: "t-b2", nombre: "Dario", rol: "TECNICO", sucursal_id: "suc-B", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 20, costo_hora: 200 },
+  { id: "adm", nombre: "Fede", rol: "ADMIN", sucursal_id: null, organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 0, costo_hora: 0 },
+  { id: "t-otra-org", nombre: "Eva", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-2", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 0, costo_hora: 0 },
 ]
 
 describe("POST /api/ordenes - assigning a technician", () => {
@@ -133,6 +135,63 @@ describe("POST /api/ordenes - assigning a technician", () => {
     expect(body.error).toBe("Técnico inválido")
     expect(insert).not.toHaveBeenCalled()
     expect(getNextOrderNumberByType).not.toHaveBeenCalled()
+  })
+})
+
+// The list the order form offers and the validation of POST must agree BY CONSTRUCTION: both
+// resolve the branch with sucursalParaEscritura. Whoever the form offers is accepted, and whoever
+// it does not offer is rejected for the branch reason.
+describe("the technicians offered when creating an order are exactly the ones POST accepts", () => {
+  const TECNICOS = ["t-a", "t-a2", "t-b", "t-b2"]
+
+  function montar(role: string, sucursalId: string | null, cookie: string | null) {
+    vi.clearAllMocks()
+    mockAuthSuccess({ role, userId: "u-9", sucursalId })
+    vi.mocked(cookies).mockResolvedValue({
+      get: vi.fn((name: string) => (name === "stapp-sucursal-activa" && cookie ? { value: cookie } : undefined)),
+      set: vi.fn(),
+    } as any)
+    const insert = vi.fn().mockReturnValue(createChainMock({ id: "o-new", clientes: { id: "c1" } }))
+    mockSupabaseFrom({
+      users: tablaPostgrest(PERSONAL),
+      ordenes_servicio: { ...createChainMock(null), insert } as any,
+      // The principal branch of the org is suc-A.
+      sucursales: createChainMock({ id: "suc-A" }),
+      organizations: createChainMock({ nombre: "Taller" }),
+      orden_eventos: createChainMock(null),
+    } as any)
+  }
+
+  const ofrecidos = async () =>
+    (await parseResponse(await GET_TECNICOS(new Request("http://localhost:3000/api/tecnicos?alcance=escritura")))).body.map(
+      (t: any) => t.id as string,
+    )
+
+  const crear = async (tecnicoId: string) =>
+    parseResponse(
+      await POST(
+        createPostRequest({ clienteId: "c1", dispositivo: "iPhone", tipoDispositivo: "CELULAR", problemaReportado: "x", tecnicoId }),
+      ),
+    )
+
+  it.each([
+    ["an ADMIN on Todas", "ADMIN", null, null, ["t-a", "t-a2"]],
+    ["an ADMIN with suc-B selected", "ADMIN", null, "suc-B", ["t-b", "t-b2"]],
+    ["a VENDEDOR of suc-A", "VENDEDOR", "suc-A", null, ["t-a", "t-a2"]],
+  ])("%s", async (_caso, role, sucursalId, cookie, esperados) => {
+    montar(role, sucursalId, cookie)
+
+    const lista = await ofrecidos()
+    expect(lista.sort()).toEqual(esperados)
+
+    for (const id of TECNICOS) {
+      const { status, body } = await crear(id)
+      if (lista.includes(id)) expect(status, `${id} is offered`).toBe(201)
+      else {
+        expect(status, `${id} is not offered`).toBe(400)
+        expect(body.error).toBe(MENSAJE)
+      }
+    }
   })
 })
 
