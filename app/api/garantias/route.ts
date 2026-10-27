@@ -5,6 +5,7 @@ import { queueNotification } from "@/lib/notifications/queue"
 import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
+import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
 
 const garantiaSchema = z.object({
   ordenId: z.string().min(1, "Orden requerida"),
@@ -14,12 +15,19 @@ const garantiaSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
     const estado = searchParams.get("estado")
     const porVencer = searchParams.get("porVencer") === "true"
+
+    // A warranty is visible when the order it belongs to is.
+    const alcance = await resolverAlcanceOrdenesDeSesion({
+      role,
+      userId,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
 
     let query = supabaseAdmin
       .from("garantias")
@@ -36,6 +44,7 @@ export async function GET(request: Request) {
       `)
       .eq("ordenes_servicio.organization_id", organizationId!)
       .order("fecha_vencimiento", { ascending: true })
+    query = aplicarAlcanceOrdenes(query, alcance, { referencedTable: "ordenes_servicio" })
 
     if (estado) {
       query = query.eq("estado", estado)

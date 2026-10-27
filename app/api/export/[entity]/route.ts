@@ -10,6 +10,7 @@ import { traerTodas } from "@/lib/supabase-paginar"
 import { DEFAULT_TIMEZONE, dayRangeUtc } from "@/lib/timezone"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura, type ResultadoLectura } from "@/lib/sucursal"
+import { aplicarAlcanceOrdenes, resolverAlcanceOrdenes, type AlcanceOrdenes } from "@/lib/ordenes/alcance-lectura"
 import {
   arrayToCSV,
   arrayToXLSX,
@@ -161,7 +162,16 @@ async function runExport(entity: string, filters: Record<string, string>) {
         break
       }
       case "garantias":
-        payload = await exportGarantias(organizationId!, filters)
+        payload = await exportGarantias(
+          organizationId!,
+          filters,
+          resolverAlcanceOrdenes({
+            role,
+            sucursalId: lectura.sucursalId,
+            verTodas: lectura.verTodas,
+            userId,
+          })
+        )
         break
       default:
         return NextResponse.json(
@@ -376,7 +386,8 @@ async function resolveUmbralStockBajo(organizationId: string): Promise<number> {
 
 async function exportGarantias(
   organizationId: string,
-  filters: Record<string, string>
+  filters: Record<string, string>,
+  alcance: AlcanceOrdenes
 ): Promise<ExportPayload> {
   let query = supabaseAdmin
     .from("garantias")
@@ -393,6 +404,8 @@ async function exportGarantias(
     .eq("ordenes_servicio.organization_id", organizationId)
     .order("fecha_vencimiento", { ascending: true })
     .limit(10000)
+  // Same scope as the warranty list: follows the order the warranty belongs to.
+  query = aplicarAlcanceOrdenes(query, alcance, { referencedTable: "ordenes_servicio" })
 
   if (filters.estado) query = query.eq("estado", filters.estado)
 

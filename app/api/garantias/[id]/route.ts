@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
+import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
 
 const updateGarantiaSchema = z.object({
   estado: z.enum(["ACTIVA", "VENCIDA", "RECLAMADA"]).optional(),
@@ -15,12 +16,19 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     const { id } = await params
 
-    const { data: garantia, error: dbError } = await supabaseAdmin
+    // Out of scope = same 404 as a missing warranty (the inner join drops the row).
+    const alcance = await resolverAlcanceOrdenesDeSesion({
+      role,
+      userId,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+
+    const query = supabaseAdmin
       .from("garantias")
       .select(`
         *,
@@ -35,7 +43,10 @@ export async function GET(
       `)
       .eq("id", id)
       .eq("ordenes_servicio.organization_id", organizationId!)
-      .single()
+
+    const { data: garantia, error: dbError } = await aplicarAlcanceOrdenes(query, alcance, {
+      referencedTable: "ordenes_servicio",
+    }).single()
 
     if (dbError || !garantia) {
       return NextResponse.json(
