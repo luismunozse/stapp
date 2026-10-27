@@ -87,6 +87,7 @@ export function lineaCajaAbierta(sucursal: string | null): string {
 }
 
 const claveDe = ({ sucursalId }: GrupoPendiente) => sucursalId ?? "sin-sucursal"
+const sucursalDe = ({ usuario: { sucursalId } }: InfoUsuario) => sucursalId
 
 /** Warning lines of the panel: open orders (if any), then pending appointments, one per branch group. */
 function avisosDe({ usuario: { rol }, ordenesAbiertas, totalOrdenesAbiertas, turnosPendientes }: InfoUsuario) {
@@ -115,9 +116,10 @@ const SELECT_CLASS =
  * Moving never touches the orders, and the copy says so.
  *
  * One active branch is enough to mount it: a user stranded in an INACTIVE branch
- * can only be rescued by moving them to the single active one. Whether there is
- * anywhere to go is decided once the user is read, and a one-branch org whose user
- * is already in that branch sees nothing at all.
+ * can only be rescued by moving them to the single active one. A one-branch org
+ * whose user is already in that branch sees nothing at all. Once the section has
+ * been shown it stays mounted even when the move (or a concurrent one) leaves
+ * nowhere else to go: it carries the success announcement and the focus.
  *
  * Mounted inside the edit `<form>`, so every button is `type="button"`.
  */
@@ -126,6 +128,7 @@ export function MoverSucursal({ usuarioId, sucursales }: MoverSucursalProps) {
   const visible = session?.user?.role === "ADMIN" && sucursales.length >= 1
   const selectId = useId()
   const tituloId = useId()
+  const grupoRef = useRef<HTMLDivElement>(null)
   const botonRef = useRef<HTMLButtonElement>(null)
   const selectRef = useRef<HTMLSelectElement>(null)
   const devolverFoco = useRef(false)
@@ -137,6 +140,12 @@ export function MoverSucursal({ usuarioId, sucursales }: MoverSucursalProps) {
   const [moviendo, setMoviendo] = useState(false)
   const [errorMover, setErrorMover] = useState<ErrorMover | null>(null)
   const [mensaje, setMensaje] = useState("")
+  const [visto, setVisto] = useState(false)
+
+  const hayDestino = !!info && sucursales.some((s) => s.id !== sucursalDe(info))
+  useEffect(() => {
+    if (hayDestino) setVisto(true)
+  }, [hayDestino])
 
   const cargar = useCallback(async () => {
     setErrorLectura("")
@@ -158,13 +167,14 @@ export function MoverSucursal({ usuarioId, sucursales }: MoverSucursalProps) {
   }, [visible, cargar])
 
   // The trigger unmounts while the panel is open, so focus is handed over by hand:
-  // into the select when it opens, back to the trigger when it closes.
+  // into the select when it opens, back to the trigger when it closes. With nowhere
+  // left to go there is no trigger, and the focus stays on the section itself.
   useEffect(() => {
     if (abierto) {
       selectRef.current?.focus()
     } else if (devolverFoco.current) {
       devolverFoco.current = false
-      botonRef.current?.focus()
+      ;(botonRef.current ?? grupoRef.current)?.focus()
     }
   }, [abierto])
 
@@ -230,9 +240,10 @@ export function MoverSucursal({ usuarioId, sucursales }: MoverSucursalProps) {
   }
   if (!info) return null
 
+  if (!hayDestino && !visto) return null
+
   // The user's branch comes from the API response, never from the session.
   const { sucursalId: actualId } = info.usuario
-  if (!sucursales.some((s) => s.id !== actualId)) return null
 
   const nombreActual = actualId
     ? (sucursales.find((s) => s.id === actualId)?.nombre ?? "Sucursal inactiva")
@@ -242,13 +253,13 @@ export function MoverSucursal({ usuarioId, sucursales }: MoverSucursalProps) {
   const cajaAbierta = info.cajaAbierta ?? null
 
   return (
-    <div role="group" aria-labelledby={tituloId} className="space-y-2">
+    <div ref={grupoRef} role="group" aria-labelledby={tituloId} tabIndex={-1} className="space-y-2 focus:outline-none">
       <span id={tituloId} className="block text-sm font-medium leading-none">
         Sucursal
       </span>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className={cn("min-w-0 text-sm font-medium", TEXTO_LARGO)}>{nombreActual}</p>
-        {!abierto && (
+        {!abierto && hayDestino && (
           <Button
             ref={botonRef}
             type="button"

@@ -111,15 +111,51 @@ describe("MoverSucursal", () => {
       expect(container).toBeEmptyDOMElement()
     })
 
-    it("rescate: con una sola sucursal activa, un usuario varado en una inactiva se puede mover a ella", async () => {
-      mockApi(() => json(info({ usuario: { id: "u1", nombre: "Tomás", rol: "TECNICO", sucursalId: "suc-vieja" } })))
+    it("rescate: con una sola sucursal activa, un usuario varado en una inactiva se puede mover a ella y la sección sigue montada con el aviso", async () => {
+      mockApi(
+        () => json(info({ usuario: { id: "u1", nombre: "Tomás", rol: "TECNICO", sucursalId: "suc-vieja" } })),
+        () => json({ success: true, sucursalId: "suc-a", message: "Tomás ahora está en Casa Central. El cambio se aplica en unos segundos, sin volver a iniciar sesión." })
+      )
       render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES.slice(0, 1)} />)
 
       expect(await screen.findByText("Sucursal inactiva")).toBeInTheDocument()
       await abrir()
       expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Elegí una sucursal", "Casa Central"])
+      const estado = screen.getByRole("status")
       elegir("suc-a")
       expect(confirmar()).toBeEnabled()
+      fireEvent.click(confirmar())
+
+      // Once moved there is nowhere left to go, but the section must not vanish: that would
+      // take the announcement with it and drop the focus to <body>.
+      await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Tomás ahora está en Casa Central."))
+      expect(screen.getByRole("status")).toBe(estado)
+      expect(screen.getByText("Casa Central", { selector: "p" })).toBeInTheDocument()
+      expect(screen.queryByRole("button", { name: "Mover de sucursal" })).not.toBeInTheDocument()
+      expect(document.activeElement).not.toBe(document.body)
+      expect(screen.getByRole("group", { name: "Sucursal" })).toHaveFocus()
+    })
+
+    it("si tras un 409 la relectura deja al usuario sin a dónde ir, la sección no desaparece y Cancelar deja el foco en ella", async () => {
+      let lecturas = 0
+      mockApi(
+        () =>
+          json(
+            info({ usuario: { id: "u1", nombre: "Tomás", rol: "TECNICO", sucursalId: ++lecturas === 1 ? "suc-vieja" : "suc-a" } })
+          ),
+        () => json({ error: "El usuario cambió mientras tanto. Recargá e intentá de nuevo." }, 409)
+      )
+      render(<MoverSucursal usuarioId="u1" sucursales={SUCURSALES.slice(0, 1)} />)
+      await abrir()
+      elegir("suc-a")
+      fireEvent.click(confirmar())
+
+      // Someone already moved the user into the only active branch: nothing to offer, but the error stays on screen.
+      expect(await screen.findByRole("alert")).toHaveTextContent("El usuario cambió mientras tanto.")
+      expect(await screen.findByText("Casa Central", { selector: "p" })).toBeInTheDocument()
+      fireEvent.click(screen.getByRole("button", { name: "Cancelar" }))
+
+      expect(screen.getByRole("group", { name: "Sucursal" })).toHaveFocus()
     })
 
     it("con una sola sucursal activa, si la lectura falla no aparece ningún error (nada nuevo para quien no puede mover)", async () => {
