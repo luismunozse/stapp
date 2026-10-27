@@ -41,12 +41,12 @@ import { getNextOrderNumberByType } from "@/lib/counters"
 const MENSAJE = "Ese técnico no pertenece a la sucursal de esta orden"
 
 const PERSONAL = [
-  { id: "t-a", nombre: "Ana", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 10, costo_hora: 100 },
-  { id: "t-a2", nombre: "Beto", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 10, costo_hora: 100 },
-  { id: "t-b", nombre: "Carla", rol: "TECNICO", sucursal_id: "suc-B", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 20, costo_hora: 200 },
-  { id: "t-b2", nombre: "Dario", rol: "TECNICO", sucursal_id: "suc-B", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 20, costo_hora: 200 },
-  { id: "adm", nombre: "Fede", rol: "ADMIN", sucursal_id: null, organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 0, costo_hora: 0 },
-  { id: "t-otra-org", nombre: "Eva", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-2", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 0, costo_hora: 0 },
+  { id: "t-a", nombre: "Ana", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 10, costo_hora: 100, deleted_at: null },
+  { id: "t-a2", nombre: "Beto", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 10, costo_hora: 100, deleted_at: null },
+  { id: "t-b", nombre: "Carla", rol: "TECNICO", sucursal_id: "suc-B", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 20, costo_hora: 200, deleted_at: null },
+  { id: "t-b2", nombre: "Dario", rol: "TECNICO", sucursal_id: "suc-B", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 20, costo_hora: 200, deleted_at: null },
+  { id: "adm", nombre: "Fede", rol: "ADMIN", sucursal_id: null, organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 0, costo_hora: 0, deleted_at: null },
+  { id: "t-otra-org", nombre: "Eva", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-2", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 0, costo_hora: 0, deleted_at: null },
 ]
 
 describe("POST /api/ordenes - assigning a technician", () => {
@@ -325,6 +325,87 @@ describe("PUT /api/ordenes/[id] - assigning a technician", () => {
 
     expect(status).toBe(400)
     expect(body.error).toBe(MENSAJE)
+    expect(ordenes.update).not.toHaveBeenCalled()
+  })
+})
+
+describe("removed staff stay out of branch-scoped lists and assignment", () => {
+  // A technician of suc-A who was removed (soft delete) must neither be offered nor accepted.
+  const BAJA = { ...PERSONAL[0], id: "t-baja", nombre: "Gus", deleted_at: "2026-10-01T00:00:00Z" }
+  const CON_BAJA = [...PERSONAL, BAJA]
+
+  function montar(role: string, sucursalId: string | null) {
+    vi.clearAllMocks()
+    mockAuthSuccess({ role, userId: "u-9", sucursalId })
+    const insert = vi.fn().mockReturnValue(createChainMock({ id: "o-new", sucursal_id: sucursalId, clientes: { id: "c1" } }))
+    const ordenes = createChainMock(null) as any
+    ordenes.insert = insert
+    ordenes.single = vi.fn().mockResolvedValue({
+      data: {
+        id: "o1",
+        numero_orden: 1,
+        cliente_id: "c1",
+        organization_id: "org-1",
+        sucursal_id: "suc-A",
+        tecnico_id: null,
+        estado: "RECIBIDO",
+        presupuesto: null,
+        costo_final: null,
+        diagnostico: null,
+        clientes: { id: "c1", nombre: "Juan", email: null, telefono: null },
+        organizations: { id: "org-1", nombre: "Taller", moneda: "ARS", zona_horaria: "America/Argentina/Buenos_Aires" },
+      },
+      error: null,
+    })
+    mockSupabaseFrom({
+      users: tablaPostgrest(CON_BAJA),
+      ordenes_servicio: ordenes,
+      sucursales: createChainMock({ id: "suc-A" }),
+      organizations: createChainMock({ nombre: "Taller" }),
+      orden_eventos: createChainMock(null),
+    } as any)
+    return { insert, ordenes }
+  }
+
+  it("the technician list of a branch does not offer a removed technician", async () => {
+    montar("ADMIN", null)
+
+    const { body } = await parseResponse(
+      await GET_TECNICOS(new Request("http://localhost:3000/api/tecnicos?sucursalId=suc-A")),
+    )
+
+    expect(body.map((t: any) => t.id).sort()).toEqual(["t-a", "t-a2"])
+  })
+
+  it("creating an order rejects a removed technician of the branch and writes nothing", async () => {
+    const { insert } = montar("VENDEDOR", "suc-A")
+
+    const { status, body } = await parseResponse(
+      await POST(
+        createPostRequest({ clienteId: "c1", dispositivo: "iPhone", tipoDispositivo: "CELULAR", problemaReportado: "x", tecnicoId: "t-baja" }),
+      ),
+    )
+
+    expect(status).toBe(400)
+    expect(body.error).toBe("Técnico inválido")
+    expect(insert).not.toHaveBeenCalled()
+  })
+
+  it("reassigning an order rejects a removed technician of the handling branch", async () => {
+    const { ordenes } = montar("VENDEDOR", "suc-A")
+
+    const { status } = await parseResponse(
+      await PUT(
+        new Request("http://localhost:3000/api/ordenes/o1", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tecnicoId: "t-baja" }),
+        }),
+        { params: Promise.resolve({ id: "o1" }) },
+      ),
+    )
+
+    expect(status).toBe(400)
     expect(ordenes.update).not.toHaveBeenCalled()
   })
 })

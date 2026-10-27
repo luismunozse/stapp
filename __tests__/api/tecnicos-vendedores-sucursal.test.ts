@@ -39,6 +39,7 @@ function usuario(id: string, nombre: string, rol: string, sucursal: string | nul
     avatar_url: null,
     fecha_ingreso_tecnico: null,
     created_at: "2026-01-01",
+    deleted_at: null,
   }
 }
 
