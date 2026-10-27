@@ -4,6 +4,20 @@ import { validateClienteRow, validateInventarioRow, type ValidationResult } from
 /** How many invalid rows the preview lists. The total is always reported. */
 export const MAX_REPORTED_INVALID_ROWS = 100
 
+const MAX_CELL_CHARS = 200
+
+/**
+ * Copy of a row safe to send back to the browser / store in history: a broken
+ * quote can leave one cell holding the rest of the file.
+ */
+export function compactRow(row: ParsedRow): ParsedRow {
+  const out: ParsedRow = {}
+  for (const [k, v] of Object.entries(row)) {
+    out[k] = typeof v === 'string' && v.length > MAX_CELL_CHARS ? `${v.slice(0, MAX_CELL_CHARS)}…` : v
+  }
+  return out
+}
+
 export type ImportEntity = 'CLIENTES' | 'INVENTARIO'
 
 export interface RowValidation {

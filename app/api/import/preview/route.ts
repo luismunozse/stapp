@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, denyIfNoInventarioAccess } from "@/lib/auth-utils"
 import { parseCSV, parseExcel } from "@/lib/csv-parser"
 import { validateCSVHeaders, normalizeHeaders, normalizeRow } from "@/lib/csv-validator"
-import { validateImportRows, collectInvalidRows } from "@/lib/import-rows"
+import { validateImportRows, collectInvalidRows, compactRow } from "@/lib/import-rows"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { excedeTechoDeImportacion, MAX_IMPORT_FILE_LABEL } from "@/lib/import-limits"
 import { z } from "zod"
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
 
     const validatedPreview = checked.slice(0, 5).map(({ rowNumber, row, validation }) => ({
       row: rowNumber,
-      data: row,
+      data: compactRow(row),
       parsed: validation.valid ? validation.data : undefined,
       valid: validation.valid,
       error: validation.message ?? validation.error,

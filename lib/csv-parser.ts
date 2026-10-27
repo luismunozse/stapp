@@ -29,9 +29,17 @@ export interface ParseResult {
 }
 
 const MSG_TOO_MANY_COLUMNS =
-  'La fila tiene más columnas que el encabezado. Si usás coma como separador decimal, guardá el CSV separado por punto y coma o poné el número entre comillas.'
+  'La fila tiene más columnas que el encabezado. Si usás coma como separador decimal, guardá el CSV separado por punto y coma o poné el número entre comillas. También puede haber datos en una columna sin título.'
 const MSG_BAD_QUOTES =
   'La fila tiene comillas sin cerrar o mal ubicadas. Revisá que cada texto entre comillas esté bien cerrado.'
+
+/** An unclosed quote makes Papa swallow the following lines into this one row. */
+function badQuotesMessage(record: string[]): string {
+  const swallowed = record.reduce((n, c) => n + (String(c ?? '').split('\n').length - 1), 0)
+  return swallowed > 0
+    ? `${MSG_BAD_QUOTES} Las ${swallowed} líneas siguientes quedaron dentro de esta fila y no se leyeron.`
+    : MSG_BAD_QUOTES
+}
 
 function isBlankCell(cell: unknown): boolean {
   return cell === null || cell === undefined || String(cell).trim() === ''
@@ -55,7 +63,11 @@ export async function parseCSV(base64Data: string): Promise<ParseResult> {
   })
 
   try {
-    let csvText = Buffer.from(base64Data, 'base64').toString('utf-8')
+    const bytes = Buffer.from(base64Data, 'base64')
+    let csvText = bytes.toString('utf-8')
+    // Excel in Spanish saves "CSV (delimitado por comas)" as Windows-1252: invalid
+    // UTF-8 turns "Teléfono" into "Tel\uFFFDfono" and the column is never recognised.
+    if (csvText.includes('\uFFFD')) csvText = new TextDecoder('windows-1252').decode(bytes)
     if (csvText.charCodeAt(0) === 0xfeff) csvText = csvText.slice(1)
 
     // Detect the delimiter on a small sample that ignores blank lines: with
@@ -104,7 +116,7 @@ export async function parseCSV(base64Data: string): Promise<ParseResult> {
       data.push(obj)
       rowNumbers.push(i + 1)
       if (extra) rowErrors.push({ index, row: i + 1, message: MSG_TOO_MANY_COLUMNS })
-      else if (quoteErrorRecords.has(i)) rowErrors.push({ index, row: i + 1, message: MSG_BAD_QUOTES })
+      else if (quoteErrorRecords.has(i)) rowErrors.push({ index, row: i + 1, message: badQuotesMessage(record) })
     }
 
     return { data, rowNumbers, rowErrors, errors: [], totalRows: data.length }
@@ -148,6 +160,10 @@ function resolveCellValue(value: ExcelJS.CellValue): string | number | null {
   if (value instanceof Date) return value.toISOString()
   if (typeof value === 'object' && 'result' in value) {
     return resolveCellValue((value as ExcelJS.CellFormulaValue).result as ExcelJS.CellValue)
+  }
+  if (typeof value === 'object' && 'text' in value && !('richText' in value)) {
+    // Hyperlink cell (e.g. an auto-linked email): the visible text is the value.
+    return String((value as ExcelJS.CellHyperlinkValue).text ?? '')
   }
   if (typeof value === 'object' && 'richText' in value) {
     return (value as ExcelJS.CellRichTextValue).richText.map(rt => rt.text).join('')

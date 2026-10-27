@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { depositoPorDefecto, moverStockInicialLote } from "@/lib/depositos"
 import { parseCSV, parseExcel } from "@/lib/csv-parser"
 import { validateCSVHeaders, normalizeHeaders, normalizeRow, resolveTipoDispositivo, generateCodigo } from "@/lib/csv-validator"
-import { validateImportRows } from "@/lib/import-rows"
+import { validateImportRows, compactRow } from "@/lib/import-rows"
 import { uploadImportFile, base64ToBuffer } from "@/lib/storage"
 import { enforcePlanLimit } from "@/lib/plan-limits"
 import { excedeTechoDeImportacion, MAX_IMPORT_FILE_LABEL } from "@/lib/import-limits"
@@ -194,7 +194,7 @@ export async function POST(request: Request) {
           row: rowNumber,
           error: validation.message ?? validation.error!,
           ...(validation.column ? { column: validation.column } : {}),
-          data: row,
+          data: compactRow(row),
         })
         continue
       }

@@ -86,6 +86,23 @@ describe('parseCSV — row numbers match the spreadsheet', () => {
   })
 })
 
+describe('parseCSV — encodings and broken quotes', () => {
+  it('re-decodes a Windows-1252 file (Excel in Spanish) so accented headers survive', async () => {
+    const latin1 = Buffer.from('nombre;teléfono\nJosé;1123456789\n', 'latin1').toString('base64')
+    const r = await parseCSV(latin1)
+    expect(Object.keys(r.data[0])).toEqual(['nombre', 'teléfono'])
+    expect(r.data[0].nombre).toBe('José')
+  })
+
+  it('says how many lines an unclosed quote swallowed', async () => {
+    const r = await parseCSV(b64('nombre,telefono\nA,1112345678\n"B,111\nC,222\nD,333\n'))
+    expect(r.rowErrors).toHaveLength(1)
+    expect(r.rowErrors[0].row).toBe(3)
+    expect(r.rowErrors[0].message).toContain('comillas')
+    expect(r.rowErrors[0].message).toMatch(/\d+ líneas siguientes/)
+  })
+})
+
 describe('parseCSV — truly unreadable files abort', () => {
   it('returns a fatal error when there is no header/data at all', async () => {
     const r = await parseCSV(b64(''))
@@ -129,6 +146,16 @@ describe('parseExcel — row numbers', () => {
     const r = await parseExcel(file)
     expect(r.data.map((d) => d.nombre)).toEqual(['A', 'B'])
     expect(r.rowNumbers).toEqual([2, 4])
+  })
+
+  it('reads the visible text of hyperlink cells (auto-linked emails)', async () => {
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet('Hoja1')
+    ws.getRow(1).values = ['nombre', 'email']
+    ws.getRow(2).values = ['Ana', { text: 'ana@test.com', hyperlink: 'mailto:ana@test.com' }] as ExcelJS.CellValue[]
+    const buf = await wb.xlsx.writeBuffer()
+    const r = await parseExcel(Buffer.from(buf as ArrayBuffer).toString('base64'))
+    expect(r.data[0].email).toBe('ana@test.com')
   })
 
   it('exposes rowErrors as an empty list', async () => {
