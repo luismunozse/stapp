@@ -282,6 +282,21 @@ const getDashboardData = unstable_cache(
   { revalidate: 120, tags: ["dashboard"] }
 )
 
+/**
+ * The part of the PostgREST builder the technician's cards chain, and what awaiting it gives. The real
+ * builder is a deeply nested generic that the compiler gives up on once these chains are composed
+ * (TS2589), so the factory below returns this small structural type instead of `any`.
+ */
+interface ConsultaMisOrdenes extends PromiseLike<{ data: any[] | null; count: number | null; error: unknown }> {
+  in(columna: string, valores: readonly string[]): ConsultaMisOrdenes
+  eq(columna: string, valor: string): ConsultaMisOrdenes
+  gte(columna: string, valor: string): ConsultaMisOrdenes
+  lt(columna: string, valor: string): ConsultaMisOrdenes
+  not(columna: string, operador: string, valor: unknown): ConsultaMisOrdenes
+  order(columna: string, opciones?: { ascending?: boolean }): ConsultaMisOrdenes
+  limit(cantidad: number): ConsultaMisOrdenes
+}
+
 export default async function DashboardPage() {
   // La sucursal sale de la base (la del JWT queda vieja hasta ~18 h después de un traslado).
   const session = await sesionConSucursalVigente()
@@ -361,12 +376,12 @@ export default async function DashboardPage() {
     const hoyIso = new Date().toISOString()
     // Lo asignado al técnico, de cualquier sucursal (BM-6): no lleva filtro de sucursal. Es la única
     // lectura de órdenes de este bloque, y está declarada como excepción en ordenes-reads-sweep.
-    const misOrdenes = (columnas: string, opciones?: { count: "exact"; head: true }): any =>
+    const misOrdenes = (columnas: string, opciones?: { count: "exact"; head: true }) =>
       supabaseAdmin
         .from("ordenes_servicio")
         .select(columnas, opciones)
         .eq("organization_id", organizationId)
-        .eq("tecnico_id", userId)
+        .eq("tecnico_id", userId) as unknown as ConsultaMisOrdenes
     const conteo = { count: "exact", head: true } as const
     const [activas, completadas, recientes, sinDiagnostico, esperandoRepuesto, vencidas, completadasConFecha] = await Promise.all([
       misOrdenes("id", conteo).in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO"]),
