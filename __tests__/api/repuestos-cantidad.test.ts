@@ -79,7 +79,7 @@ describe("PATCH /api/ordenes/[id]/repuestos — editar cantidad", () => {
   it("devuelve 404 si la orden no es de la organización", async () => {
     mockAuthSuccess()
     mockSupabaseFrom({
-      ordenes_servicio: createChainMock(null, { message: "not found" }),
+      ordenes_servicio: createChainMock(null, { code: "PGRST116", message: "not found" }),
     })
     const res = await PATCH(createPatchRequest({ cantidad: 2 }), createParams("o1"))
     expect((await parseResponse(res)).status).toBe(404)

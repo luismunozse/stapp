@@ -66,7 +66,7 @@ describe("POST /api/ordenes/[id]/entregar", () => {
   it("returns 404 when order not found", async () => {
     mockAuthSuccess()
 
-    const chain = createChainMock(null, { message: "not found" })
+    const chain = createChainMock(null, { code: "PGRST116", message: "not found" })
     mockSupabaseFrom({ ordenes_servicio: chain })
 
     const response = await POST(
