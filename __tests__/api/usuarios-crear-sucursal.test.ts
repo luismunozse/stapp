@@ -5,7 +5,11 @@
  * "No principal -> 400" and "insert carries sucursal_id" already live in
  * tecnicos-sucursal-guard / vendedores-sucursal-guard. This file pins the other
  * half: what happens to a branch id sent in the body, and what cannot be smuggled
- * into the inserted row. Both routes already behave this way; no route change.
+ * into the inserted row.
+ *
+ * A branch id the caller names explicitly is a request, not a hint: if it is not
+ * an active branch of the actor's org the answer is 400 and nothing is written.
+ * The principal is the fallback only when the body does not name a branch at all.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { auth } from "@/lib/auth"
@@ -62,35 +66,53 @@ describe.each(CASOS)("$nombre — branch membership on create", ({ post, rol }) 
     } as any)
   })
 
-  it("a branch id that is not the org's cannot rescue an org without a principal: 400 and nothing is written", async () => {
+  it("an explicit branch that is not an active branch of the org is a 400, even though a principal exists to fall back to", async () => {
+    const { existeChain, insertChain } = wireDb({ principal: "suc-principal", bodyBranchExists: null })
+
+    const res = await post(createPostRequest(body({ sucursalId: "suc-inactiva-o-ajena" })))
+
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe("La sucursal elegida no existe o está inactiva.")
+    expect(insertChain.insert).not.toHaveBeenCalled()
+    // The lookup that said "no" is the org-scoped, active-only, not-deleted one.
+    expect(existeChain.eq).toHaveBeenCalledWith("id", "suc-inactiva-o-ajena")
+    expect(existeChain.eq).toHaveBeenCalledWith("organization_id", "org-1")
+    expect(existeChain.eq).toHaveBeenCalledWith("activo", true)
+    expect(existeChain.is).toHaveBeenCalledWith("deleted_at", null)
+  })
+
+  it("the same rejection holds for an org without a principal: nothing is written", async () => {
     const { insertChain } = wireDb({ principal: null, bodyBranchExists: null })
 
     const res = await post(createPostRequest(body({ sucursalId: "suc-ajena" })))
 
     expect(res.status).toBe(400)
-    expect((await res.json()).error).toMatch(/sucursal/i)
+    expect((await res.json()).error).toBe("La sucursal elegida no existe o está inactiva.")
     expect(insertChain.insert).not.toHaveBeenCalled()
   })
 
-  it("ignores a branch id from another org: the existence check is scoped to the actor's org and the principal is used", async () => {
-    const { existeChain, insertChain } = wireDb({ principal: "suc-principal", bodyBranchExists: null })
-
-    const res = await post(createPostRequest(body({ sucursalId: "suc-ajena" })))
-
-    expect(res.status).toBe(201)
-    expect(existeChain.eq).toHaveBeenCalledWith("id", "suc-ajena")
-    expect(existeChain.eq).toHaveBeenCalledWith("organization_id", "org-1")
-    const fila = insertChain.insert.mock.calls[0][0]
-    expect(fila.sucursal_id).toBe("suc-principal")
-  })
-
-  it("stores the branch chosen in the form when it belongs to the org", async () => {
-    const { insertChain } = wireDb({ principal: "suc-principal", bodyBranchExists: "suc-cerro" })
+  it("stores the branch chosen in the form when it is an active branch of the org", async () => {
+    const { existeChain, insertChain } = wireDb({ principal: "suc-principal", bodyBranchExists: "suc-cerro" })
 
     const res = await post(createPostRequest(body({ sucursalId: "suc-cerro" })))
 
     expect(res.status).toBe(201)
+    expect(existeChain.eq).toHaveBeenCalledWith("activo", true)
     expect(insertChain.insert.mock.calls[0][0].sucursal_id).toBe("suc-cerro")
+  })
+
+  it.each([
+    ["omitted", undefined],
+    ["empty", ""],
+    ["null", null],
+  ])("falls back to the principal, without looking the body branch up, when sucursalId is %s", async (_caso, valor) => {
+    const { existeChain, insertChain } = wireDb({ principal: "suc-principal", bodyBranchExists: "no-se-consulta" })
+
+    const res = await post(createPostRequest(body({ sucursalId: valor })))
+
+    expect(res.status).toBe(201)
+    expect(existeChain.eq).not.toHaveBeenCalled()
+    expect(insertChain.insert.mock.calls[0][0].sucursal_id).toBe("suc-principal")
   })
 
   it(`always inserts a ${rol} of the actor's org with a branch, whatever the body claims`, async () => {
