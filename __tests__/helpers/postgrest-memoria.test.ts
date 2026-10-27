@@ -176,6 +176,86 @@ describe("a filter on a column of an embedded table (PostgREST: embed!inner + em
   })
 })
 
+describe("a filter on an embedded table WITHOUT !inner (PostgREST filters the embedded rows, not the parents)", () => {
+  const FACTURAS = [
+    { id: "f1", total: 100, ordenes_servicio: { organization_id: "o1", sucursal_id: "s1" } },
+    { id: "f2", total: 40, ordenes_servicio: { organization_id: "o1", sucursal_id: "s2" } },
+  ]
+  const sinInner = () => tablaPostgrest(FACTURAS).select("id, total, ordenes_servicio(organization_id, sucursal_id)")
+
+  it("keeps every parent row: a route that forgot !inner would return the other branch's rows", async () => {
+    const { data } = await sinInner().eq("ordenes_servicio.sucursal_id", "s1")
+    expect(data?.map((f: any) => f.id)).toEqual(["f1", "f2"])
+  })
+
+  it("a to-one embed that fails the filter comes back null", async () => {
+    const { data } = await sinInner().eq("ordenes_servicio.sucursal_id", "s1")
+    expect(data?.map((f: any) => f.ordenes_servicio?.sucursal_id ?? null)).toEqual(["s1", null])
+  })
+
+  it("never touches the fixture rows it filters a copy of", async () => {
+    await sinInner().eq("ordenes_servicio.sucursal_id", "s1")
+    expect(FACTURAS[1].ordenes_servicio).toEqual({ organization_id: "o1", sucursal_id: "s2" })
+  })
+
+  it("a nested embed path is filtered on the copy, never on the fixture", async () => {
+    const filas = [{ id: "1", cliente: { ordenes: [{ x: 1 }, { x: 2 }] } }]
+    const { data } = await tablaPostgrest(filas).select("id, cliente(ordenes(x))").eq("cliente.ordenes.x", 1)
+    expect(data).toEqual([{ id: "1", cliente: { ordenes: [{ x: 1 }] } }])
+    expect(filas[0].cliente.ordenes).toEqual([{ x: 1 }, { x: 2 }])
+  })
+
+  it("a to-many embed keeps the parents and filters the embedded array", async () => {
+    const clientes = [
+      { id: "c1", ordenes: [{ id: "o1", sucursal_id: "s1" }, { id: "o2", sucursal_id: "s2" }] },
+      { id: "c2", ordenes: [{ id: "o3", sucursal_id: "s2" }] },
+    ]
+    const { data } = await tablaPostgrest(clientes).select("id, ordenes(id, sucursal_id)").eq("ordenes.sucursal_id", "s1")
+    expect(data).toEqual([
+      { id: "c1", ordenes: [{ id: "o1", sucursal_id: "s1" }] },
+      { id: "c2", ordenes: [] },
+    ])
+  })
+
+  it("with !inner on a to-many embed, a parent with no matching embedded row is out", async () => {
+    const clientes = [
+      { id: "c1", ordenes: [{ id: "o1", sucursal_id: "s1" }, { id: "o2", sucursal_id: "s2" }] },
+      { id: "c2", ordenes: [{ id: "o3", sucursal_id: "s2" }] },
+    ]
+    const { data } = await tablaPostgrest(clientes).select("id, ordenes!inner(id, sucursal_id)").eq("ordenes.sucursal_id", "s1")
+    expect(data?.map((c: any) => c.id)).toEqual(["c1"])
+  })
+
+  it("an alias embed is filtered by its alias, and !inner is found behind a foreign-key hint", async () => {
+    const filas = [
+      { id: "t1", ordenes_servicio: { id: "a", sucursal_id: "s1" } },
+      { id: "t2", ordenes_servicio: { id: "b", sucursal_id: "s2" } },
+    ]
+    const conInner = await tablaPostgrest(filas)
+      .select("id, ordenes_servicio:ordenes_servicio!orden_id_fkey!inner(id, sucursal_id)")
+      .eq("ordenes_servicio.sucursal_id", "s1")
+    expect(conInner.data?.map((t: any) => t.id)).toEqual(["t1"])
+    const sinHint = await tablaPostgrest(filas)
+      .select("id, ordenes_servicio:ordenes_servicio!orden_id_fkey(id, sucursal_id)")
+      .eq("ordenes_servicio.sucursal_id", "s1")
+    expect(sinHint.data?.map((t: any) => t.id)).toEqual(["t1", "t2"])
+  })
+
+  it("not() on an embedded column follows the same rule", async () => {
+    const { data } = await sinInner().not("ordenes_servicio.sucursal_id", "is", null)
+    expect(data?.map((f: any) => f.id)).toEqual(["f1", "f2"])
+    const conInner = await tablaPostgrest(FACTURAS)
+      .select("id, ordenes_servicio!inner(sucursal_id)")
+      .not("ordenes_servicio.sucursal_id", "in", "(s1)")
+    expect(conInner.data?.map((f: any) => f.id)).toEqual(["f2"])
+  })
+
+  it("a filter on an embed the select list does not embed is an error, not a silent match", () => {
+    const { select } = tablaPostgrest(FACTURAS)
+    expect(() => select("id, total").eq("ordenes_servicio.sucursal_id", "s1")).toThrow(/does not embed.*ordenes_servicio|ordenes_servicio.*does not embed/)
+  })
+})
+
 describe("not()", () => {
   const FILAS_NOT = [
     { id: "a", tecnico_id: null, estado: "RECIBIDO" },

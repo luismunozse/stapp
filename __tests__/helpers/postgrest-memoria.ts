@@ -6,6 +6,12 @@
  * Honoured: select (column projection, `alias:col`, embeds kept by alias), eq, neq, in, is,
  * ilike, gt/gte/lt/lte, `or(...)` with nested and(...)/or(...) (each `.or()` call ANDs with the
  * others, like repeated `or` params), order, range, limit, single, maybeSingle.
+ * A filter on `embed.column` follows PostgREST: with `embed!inner(..)` in the select a parent row
+ * without a matching embedded row is dropped; without `!inner` every parent is kept and only the
+ * embedded rows are filtered (a to-one embed that fails comes back null, a to-many array is
+ * filtered); an embed the select does not embed is an error. An `or()` list cannot name an embedded
+ * column (the logic-tree parser takes plain columns only), and the `search_vector` full-text
+ * operator (`fts`) is not supported either.
  * Anything else throws instead of silently matching, so a new filter in a route cannot
  * slip through unverified. Like PostgREST, a `.single()` / `.maybeSingle()` over several rows is an
  * error, a logic-tree list is parsed with PostgREST's own rules (an unquoted value runs to the next
@@ -163,17 +169,56 @@ function leer(fila: Fila, columna: string): any {
   return actual
 }
 
-/** True when some fixture row has the column, or the embedded row holding `embed.column`. */
+/** The rows an embed path reaches from a row: an embed is an object (to-one), an array (to-many) or null. */
+function embebidas(fila: Fila, ruta: string[]): Fila[] {
+  let actuales: Fila[] = [fila]
+  for (const parte of ruta) {
+    actuales = actuales.flatMap((a) => {
+      const valor = a?.[parte]
+      return valor === null || valor === undefined ? [] : Array.isArray(valor) ? valor : [valor]
+    })
+  }
+  return actuales
+}
+
+/** True when some fixture row has the column, or an embedded row of `embed.column` that has it. */
 function existeEnLasFilas(filas: Fila[], columna: string): boolean {
   const partes = columna.split(".")
-  return filas.some((f) => {
-    let actual: any = f
-    for (const parte of partes) {
-      if (actual === null || typeof actual !== "object" || !(parte in actual)) return false
-      actual = actual[parte]
-    }
-    return true
-  })
+  const col = partes[partes.length - 1]
+  const ruta = partes.slice(0, -1)
+  return filas.some((f) => embebidas(f, ruta).some((e) => e !== null && typeof e === "object" && col in e))
+}
+
+/**
+ * The embeds of a select list as dotted paths, and which of them carry `!inner`
+ * (`tabla!inner(..)`, `alias:tabla!fk!inner(..)`). A filter on an embed uses the embed's name (its alias).
+ */
+function embedsDelSelect(columnas: string, prefijo = "", salida = { todos: new Set<string>(), interiores: new Set<string>() }) {
+  for (const item of partirNivel(columnas)) {
+    const abre = item.indexOf("(")
+    if (abre < 0) continue
+    const [nombreCompleto, ...pistas] = item.slice(0, abre).trim().split("!")
+    const nombre = (nombreCompleto.includes(":") ? nombreCompleto.split(":")[0] : nombreCompleto).trim()
+    const ruta = prefijo ? `${prefijo}.${nombre}` : nombre
+    salida.todos.add(ruta)
+    if (pistas.some((p) => p.trim() === "inner")) salida.interiores.add(ruta)
+    embedsDelSelect(item.slice(abre + 1, item.lastIndexOf(")")), ruta, salida)
+  }
+  return salida
+}
+
+/** Keeps, inside a copy of a result row, the embedded rows `prueba` accepts (a to-one embed that fails becomes null). */
+function filtrarEmbebidas(fila: Fila, ruta: string[], prueba: (e: Fila) => boolean): void {
+  const [cabeza, ...resto] = ruta
+  const valor = fila?.[cabeza]
+  if (valor === null || valor === undefined) return
+  if (resto.length > 0) {
+    ;(Array.isArray(valor) ? valor : [valor]).forEach((e) => filtrarEmbebidas(e, resto, prueba))
+  } else if (Array.isArray(valor)) {
+    fila[cabeza] = valor.filter(prueba)
+  } else if (!prueba(valor)) {
+    fila[cabeza] = null
+  }
 }
 
 /** What `.or(lista)` means: at least one item of the list matches. */
@@ -219,24 +264,52 @@ export function tablaPostgrest(filas: Fila[]) {
       const consulta = { columnas, or: [] as string[] }
       consultas.push(consulta)
       const predicados: Array<(f: Fila) => boolean> = []
+      // Filters on a NON-inner embed: PostgREST filters the embedded rows and keeps every parent row.
+      const sobreEmbebidas: Array<{ ruta: string[]; prueba: (e: Fila) => boolean }> = []
+      const embeds = embedsDelSelect(columnas)
       const orden: Array<{ col: string; asc: boolean }> = []
       let rango: [number, number] | null = null
+
+      /**
+       * A filter on `column` (`embed.column` for an embedded table). With `embed!inner(..)` in the select
+       * a parent row without a matching embedded row is dropped (an inner join); without `!inner` only the
+       * embedded rows are filtered, as PostgREST does, so a route that forgot `!inner` returns the parents
+       * it should have dropped and its test fails.
+       */
+      const filtrar = (c: string, prueba: (valor: any) => boolean) => {
+        exigir(c)
+        if (!c.includes(".")) {
+          predicados.push((f) => prueba(f[c]))
+          return q
+        }
+        const partes = c.split(".")
+        const col = partes[partes.length - 1]
+        const ruta = partes.slice(0, -1)
+        const nombre = ruta.join(".")
+        if (!embeds.todos.has(nombre)) {
+          throw new Error(`postgrest-memoria: "${c}" filters the embed "${nombre}", which the select list does not embed (${columnas})`)
+        }
+        const probar = (e: Fila) => prueba(e?.[col])
+        if (embeds.interiores.has(nombre)) predicados.push((f) => embebidas(f, ruta).some(probar))
+        else sobreEmbebidas.push({ ruta, prueba: probar })
+        return q
+      }
+
       const q: any = {
-        eq: (c: string, v: unknown) => (exigir(c), predicados.push((f) => leer(f, c) === v), q),
-        neq: (c: string, v: unknown) => (exigir(c), predicados.push((f) => leer(f, c) !== v), q),
-        in: (c: string, vs: unknown[]) => (exigir(c), predicados.push((f) => vs.includes(leer(f, c))), q),
-        is: (c: string, v: unknown) => (exigir(c), predicados.push((f) => (v === null ? leer(f, c) == null : leer(f, c) === v)), q),
-        ilike: (c: string, p: string) => (exigir(c), predicados.push((f) => typeof leer(f, c) === "string" && aRegex(p).test(leer(f, c))), q),
-        gt: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(leer(f, c), v) > 0), q),
-        gte: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(leer(f, c), v) >= 0), q),
-        lt: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(leer(f, c), v) < 0), q),
-        lte: (c: string, v: unknown) => (exigir(c), predicados.push((f) => comparar(leer(f, c), v) <= 0), q),
+        eq: (c: string, v: unknown) => filtrar(c, (valor) => valor === v),
+        neq: (c: string, v: unknown) => filtrar(c, (valor) => valor !== v),
+        in: (c: string, vs: unknown[]) => filtrar(c, (valor) => vs.includes(valor)),
+        is: (c: string, v: unknown) => filtrar(c, (valor) => (v === null ? valor == null : valor === v)),
+        ilike: (c: string, p: string) => filtrar(c, (valor) => typeof valor === "string" && aRegex(p).test(valor)),
+        gt: (c: string, v: unknown) => filtrar(c, (valor) => comparar(valor, v) > 0),
+        gte: (c: string, v: unknown) => filtrar(c, (valor) => comparar(valor, v) >= 0),
+        lt: (c: string, v: unknown) => filtrar(c, (valor) => comparar(valor, v) < 0),
+        lte: (c: string, v: unknown) => filtrar(c, (valor) => comparar(valor, v) <= 0),
         // not(column, operator, value): the negation of the condition an or() list would hold.
         not: (c: string, op: string, v: unknown) => {
-          exigir(c)
-          const condicion: Nodo = { tipo: "condicion", col: c, op, valor: String(v) }
-          predicados.push((f) => !cumple(f, condicion))
-          return q
+          const col = c.split(".").pop()!
+          const condicion: Nodo = { tipo: "condicion", col, op, valor: String(v) }
+          return filtrar(c, (valor) => !cumple({ [col]: valor }, condicion))
         },
         or: (lista: string) => {
           const arbol = parsearLista(lista)
@@ -260,7 +333,15 @@ export function tablaPostgrest(filas: Fila[]) {
         }
         const total = rows.length
         if (rango) rows = rows.slice(rango[0], rango[1] + 1)
-        return { rows: rows.map((f) => proyectar(f, columnas)), total }
+        const proyectadas = rows.map((f) => {
+          const fila = proyectar(f, columnas)
+          if (sobreEmbebidas.length === 0) return fila
+          // The embedded rows are the fixture's own: filter a copy, never the fixture.
+          const copia = JSON.parse(JSON.stringify(fila)) as Fila
+          sobreEmbebidas.forEach(({ ruta, prueba }) => filtrarEmbebidas(copia, ruta, prueba))
+          return copia
+        })
+        return { rows: proyectadas, total }
       }
       // PostgREST answers PGRST116 when .single() finds zero or several rows, and when
       // .maybeSingle() finds several.
