@@ -29,10 +29,17 @@ function mockRpc(data: any) {
   vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data, error: null } as any)
 }
 
+// The technician works an order of his own branch: the route checks the order is within his scope
+// before it calls the RPC.
+function ordenEnAlcance() {
+  return createChainMock({ id: "ord-1", sucursal_id: "suc-1", tecnico_id: "tec-1" })
+}
+
 describe("POST /api/ordenes/[id]/servicios", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockAuthSuccess({ organizationId: "org-1", role: "TECNICO" })
+    mockAuthSuccess({ organizationId: "org-1", role: "TECNICO", userId: "tec-1", sucursalId: "suc-1" })
+    mockSupabaseFrom({ ordenes_servicio: ordenEnAlcance() })
   })
 
   it("agrega una linea ad-hoc y autocompleta costo_final", async () => {
@@ -142,7 +149,7 @@ describe("POST /api/ordenes/[id]/servicios", () => {
     const servicioChain = createChainMock({
       id: "srv-9", nombre: "Cambio de pantalla", precio: 15000,
     })
-    mockSupabaseFrom({ servicios: servicioChain })
+    mockSupabaseFrom({ ordenes_servicio: ordenEnAlcance(), servicios: servicioChain })
     mockRpc({
       success: true, id: "lin-1", servicio_id: "srv-9", nombre: "Cambio de pantalla",
       cantidad: 1, precio_unitario: 15000, costoFinalActualizado: true, sumaServicios: 15000,
@@ -166,7 +173,7 @@ describe("POST /api/ordenes/[id]/servicios", () => {
     const servicioChain = createChainMock({
       id: "srv-9", nombre: "Cambio de pantalla", precio: 15000,
     })
-    mockSupabaseFrom({ servicios: servicioChain })
+    mockSupabaseFrom({ ordenes_servicio: ordenEnAlcance(), servicios: servicioChain })
     mockRpc({
       success: true, id: "lin-1", servicio_id: "srv-9", nombre: "Cambio de pantalla",
       cantidad: 1, precio_unitario: 20000, costoFinalActualizado: true, sumaServicios: 20000,
@@ -188,7 +195,7 @@ describe("POST /api/ordenes/[id]/servicios", () => {
 
   it("tipo catalogo con servicioId de otra organizacion devuelve 404", async () => {
     const servicioChain = createChainMock(null)
-    mockSupabaseFrom({ servicios: servicioChain })
+    mockSupabaseFrom({ ordenes_servicio: ordenEnAlcance(), servicios: servicioChain })
 
     const res = await POST(
       createPostRequest({ tipo: "catalogo", servicioId: "srv-ajeno", cantidad: 1 }),
@@ -205,7 +212,8 @@ describe("POST /api/ordenes/[id]/servicios", () => {
 describe("DELETE /api/ordenes/[id]/servicios", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockAuthSuccess({ organizationId: "org-1", role: "TECNICO" })
+    mockAuthSuccess({ organizationId: "org-1", role: "TECNICO", userId: "tec-1", sucursalId: "suc-1" })
+    mockSupabaseFrom({ ordenes_servicio: ordenEnAlcance() })
   })
 
   it("elimina una linea y actualiza costo_final cuando la orden no tiene cobros", async () => {

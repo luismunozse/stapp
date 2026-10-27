@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
@@ -42,26 +43,23 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId } = autenticado
     if (error) return error
 
     const { id: ordenId } = await params
-    const practica = await rejectIfPractica(ordenId, organizationId!)
-    if (practica) return practica
     const body = await request.json()
     const data = repuestoSchema.parse(body)
 
-    // Verificar que la orden pertenece a la org
-    const { data: orden, error: ordenError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id")
-      .eq("id", ordenId)
-      .eq("organization_id", organizationId!)
-      .single()
+    // The order must belong to the org and be within the caller's scope. The stock
+    // is taken from the branch that works the order, so nothing is added to one that
+    // is out of scope.
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "reparar", { select: "id" })
+    if ("error" in cargada) return cargada.error
 
-    if (ordenError || !orden) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-    }
+    // After the scope check, so a practice order of another branch is "not found" too.
+    const practica = await rejectIfPractica(ordenId, organizationId!)
+    if (practica) return practica
 
     if (data.tipo === "inventario") {
       // Verificar que el item pertenece a la organización
@@ -128,7 +126,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, userId } = autenticado
     if (error) return error
 
     const { id: ordenId } = await params
@@ -142,17 +141,9 @@ export async function PATCH(
     const body = await request.json()
     const data = cantidadPatchSchema.parse(body)
 
-    // Verificar que la orden pertenece a la org
-    const { data: orden, error: ordenError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id")
-      .eq("id", ordenId)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (ordenError || !orden) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-    }
+    // The order must belong to the org and be within the caller's scope
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "reparar", { select: "id" })
+    if ("error" in cargada) return cargada.error
 
     // Verificar que el repuesto es de ESTA orden: sin esto, un repuestoId de
     // otra orden de la misma org pasaría el chequeo anterior.
@@ -204,7 +195,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error } = autenticado
     if (error) return error
 
     const { id: ordenId } = await params
@@ -215,17 +207,9 @@ export async function DELETE(
       return NextResponse.json({ error: "ID de repuesto requerido" }, { status: 400 })
     }
 
-    // Verificar que la orden pertenece a la org
-    const { data: orden, error: ordenError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id")
-      .eq("id", ordenId)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (ordenError || !orden) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-    }
+    // The order must belong to the org and be within the caller's scope
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "reparar", { select: "id" })
+    if ("error" in cargada) return cargada.error
 
     // Obtener el repuesto
     const { data: repuesto, error: repuestoError } = await supabaseAdmin

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
@@ -35,13 +36,22 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId } = autenticado
     if (error) return error
 
     const { id: ordenId } = await params
+    const parsed = lineaSchema.parse(await request.json())
+
+    // The order must belong to the org and be within the caller's scope. The RPC below
+    // only knows the organization, so this is where a service line is kept off an order
+    // of another branch.
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "reparar", { select: "id" })
+    if ("error" in cargada) return cargada.error
+
+    // After the scope check, so a practice order of another branch is "not found" too.
     const practica = await rejectIfPractica(ordenId, organizationId!)
     if (practica) return practica
-    const parsed = lineaSchema.parse(await request.json())
 
     // Snapshot de nombre y precio. Si viene del catálogo, se leen de ahí, pero
     // el precio enviado gana: el catálogo es un default, no una atadura. Esta
@@ -135,7 +145,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId } = autenticado
     if (error) return error
 
     const { id: ordenId } = await params
@@ -144,6 +155,10 @@ export async function DELETE(
     if (!servicioOrdenId) {
       return NextResponse.json({ error: "Falta servicioOrdenId" }, { status: 400 })
     }
+
+    // The order must belong to the org and be within the caller's scope
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "reparar", { select: "id" })
+    if ("error" in cargada) return cargada.error
 
     // Delete + suma + sincronización de costo_final en una única transacción,
     // con SELECT ... FOR UPDATE sobre la orden: ver migration 301.
@@ -192,10 +207,17 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId } = autenticado
     if (error) return error
 
     const { id: ordenId } = await params
+
+    // The order must belong to the org and be within the caller's scope
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "reparar", { select: "id" })
+    if ("error" in cargada) return cargada.error
+
+    // After the scope check, so a practice order of another branch is "not found" too.
     const practica = await rejectIfPractica(ordenId, organizationId!)
     if (practica) return practica
 
