@@ -225,6 +225,8 @@ describe("C3 — POST /api/ordenes — snapshot when tecnicoId is provided", () 
         // Both the tecnico check AND any potential re-fetch return the same mock
         return createChainMock({
           id: "tec-1",
+          rol: "TECNICO",
+          sucursal_id: "suc-1",
           porcentaje_comision: 10,
           costo_hora: 500,
         }) as any
