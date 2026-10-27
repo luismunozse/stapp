@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura } from "@/lib/sucursal"
-import { sucursalDeLineasNoAdmin } from "@/lib/ordenes/alcance-lectura"
+import { aplicarSucursalLineas, sucursalDeLineasNoAdmin } from "@/lib/ordenes/alcance-lectura"
 import { z } from "zod"
 
 // GET - Obtener saldo y movimientos de cuenta corriente del cliente
@@ -47,7 +47,7 @@ export async function GET(
       .select("*", { count: "exact" })
       .eq("organization_id", organizationId!)
       .eq("cliente_id", clienteId)
-    if (sucursalLineas) movimientosQuery = movimientosQuery.eq("sucursal_id", sucursalLineas)
+    movimientosQuery = aplicarSucursalLineas(movimientosQuery, sucursalLineas)
 
     const { data: movimientos, error: movError, count } = await movimientosQuery
       .order("created_at", { ascending: false })

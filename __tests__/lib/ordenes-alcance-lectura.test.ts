@@ -4,6 +4,7 @@ import {
   ordenEnAlcance,
   aplicarAlcanceOrdenes,
   cotizacionEnAlcance,
+  aplicarSucursalLineas,
 } from "@/lib/ordenes/alcance-lectura"
 import { SUCURSAL_NINGUNA } from "@/lib/sucursal"
 
@@ -199,5 +200,31 @@ describe("cotizacionEnAlcance", () => {
   it("a linked quote whose order did not load fails closed, except unfiltered", () => {
     expect(cotizacionEnAlcance(vendedor, { orden_id: "o1", ordenes_servicio: null })).toBe(false)
     expect(cotizacionEnAlcance(todas, { orden_id: "o1", ordenes_servicio: null })).toBe(true)
+  })
+})
+
+describe("aplicarSucursalLineas", () => {
+  it("does nothing for ADMIN (null)", () => {
+    const q = fakeQuery()
+    q.or = vi.fn().mockReturnValue(q)
+    aplicarSucursalLineas(q, null)
+    expect(q.eq).not.toHaveBeenCalled()
+    expect(q.or).not.toHaveBeenCalled()
+  })
+
+  it("matches the branch or unattributed lines", () => {
+    const q = fakeQuery()
+    aplicarSucursalLineas(q, S1)
+    expect(q.or).toHaveBeenCalledWith(`sucursal_id.eq.${S1},sucursal_id.is.null`)
+  })
+
+  it("the no-branch sentinel and unsafe ids match nothing", () => {
+    const q1 = fakeQuery()
+    aplicarSucursalLineas(q1, SUCURSAL_NINGUNA)
+    expect(q1.eq).toHaveBeenCalledWith("sucursal_id", SUCURSAL_NINGUNA)
+    expect(q1.or).not.toHaveBeenCalled()
+    const q2 = fakeQuery()
+    aplicarSucursalLineas(q2, "a),or(x")
+    expect(q2.eq).toHaveBeenCalledWith("sucursal_id", SUCURSAL_NINGUNA)
   })
 })

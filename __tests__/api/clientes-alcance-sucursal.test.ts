@@ -73,33 +73,34 @@ describe("customer account statement lines", () => {
     mockAuthSuccess({ role: "ADMIN" })
     await getCC(createGetRequest(), params())
     expect(cc.eq).not.toHaveBeenCalledWith("sucursal_id", expect.anything())
+    expect(cc.or).not.toHaveBeenCalled()
   })
 
   it("list: non-admin sees only lines of their branch, balance stays org-wide", async () => {
     mockAuthSuccess({ role: "VENDEDOR", userId: U1, sucursalId: S1 })
     const { body } = await parseResponse(await getCC(createGetRequest(), params()))
-    expect(cc.eq).toHaveBeenCalledWith("sucursal_id", S1)
+    expect(cc.or).toHaveBeenCalledWith(`sucursal_id.eq.${S1},sucursal_id.is.null`)
     expect(body.saldo).toBe(100)
   })
 
-  it("list: non-admin without a branch matches nothing", async () => {
+  it("list: non-admin without a branch matches nothing (unattributed lines stay hidden too)", async () => {
     mockAuthSuccess({ role: "TECNICO", userId: U1, sucursalId: null })
     await getCC(createGetRequest(), params())
+    expect(cc.or).not.toHaveBeenCalled()
     expect(cc.eq).toHaveBeenCalledWith("sucursal_id", "00000000-0000-0000-0000-000000000000")
   })
 
   it("statement PDF: non-admin lines are branch-scoped (opening balance query too)", async () => {
     mockAuthSuccess({ role: "VENDEDOR", userId: U1, sucursalId: S1 })
     await getResumen(createGetRequest("http://localhost/api/x?desde=2026-01-01&hasta=2026-01-31"), params())
-    const calls = cc.eq.mock.calls.filter((c) => c[0] === "sucursal_id")
-    expect(calls).toHaveLength(2)
-    expect(calls.every((c) => c[1] === S1)).toBe(true)
+    expect(cc.or).toHaveBeenCalledWith(`sucursal_id.eq.${S1},sucursal_id.is.null`)
   })
 
   it("statement PDF: ADMIN unscoped", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     await getResumen(createGetRequest("http://localhost/api/x?desde=2026-01-01&hasta=2026-01-31"), params())
     expect(cc.eq).not.toHaveBeenCalledWith("sucursal_id", expect.anything())
+    expect(cc.or).not.toHaveBeenCalled()
   })
 
   it("receipt: a line of another branch is indistinguishable from not found", async () => {
@@ -108,7 +109,7 @@ describe("customer account statement lines", () => {
     const { status, body } = await parseResponse(
       await getRecibo(createGetRequest(), paramsMov())
     )
-    expect(cc.eq).toHaveBeenCalledWith("sucursal_id", S1)
+    expect(cc.or).toHaveBeenCalledWith(`sucursal_id.eq.${S1},sucursal_id.is.null`)
     expect(status).toBe(404)
     expect(body.error).toBe("Movimiento no encontrado")
   })
@@ -118,5 +119,6 @@ describe("customer account statement lines", () => {
     cc.single.mockResolvedValueOnce({ data: null, error: { message: "no rows" } })
     await getRecibo(createGetRequest(), paramsMov())
     expect(cc.eq).not.toHaveBeenCalledWith("sucursal_id", expect.anything())
+    expect(cc.or).not.toHaveBeenCalled()
   })
 })

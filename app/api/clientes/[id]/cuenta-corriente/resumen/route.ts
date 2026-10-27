@@ -3,7 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateResumenCCPDF } from "@/lib/cuenta-corriente-react-pdf"
 import { isMissingColumnError } from "@/lib/db-errors"
-import { sucursalDeLineasNoAdmin } from "@/lib/ordenes/alcance-lectura"
+import { aplicarSucursalLineas, sucursalDeLineasNoAdmin } from "@/lib/ordenes/alcance-lectura"
 import { dayRangeUtc, todayInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 // Same two-tier emisor select as the recibo route: migration 295's fiscal
@@ -91,7 +91,7 @@ export async function GET(
       .select("saldo_posterior")
       .eq("organization_id", organizationId!)
       .eq("cliente_id", clienteId)
-    if (sucursalLineas) previoQuery = previoQuery.eq("sucursal_id", sucursalLineas)
+    previoQuery = aplicarSucursalLineas(previoQuery, sucursalLineas)
 
     const { data: previo } = await previoQuery
       .lt("created_at", inicioUtc)
@@ -111,7 +111,7 @@ export async function GET(
       .select("tipo, monto, saldo_posterior, metodo_pago, numero_referencia, referencia_tipo, created_at")
       .eq("organization_id", organizationId!)
       .eq("cliente_id", clienteId)
-    if (sucursalLineas) rowsQuery = rowsQuery.eq("sucursal_id", sucursalLineas)
+    rowsQuery = aplicarSucursalLineas(rowsQuery, sucursalLineas)
 
     const { data: rows, error: movError } = await rowsQuery
       .gte("created_at", inicioUtc)

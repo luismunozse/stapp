@@ -93,6 +93,23 @@ export async function sucursalDeLineasNoAdmin(params: {
   return filtro.sucursalId ?? SUCURSAL_NINGUNA
 }
 
+/**
+ * Narrows branch-stamped lines to `sucursalId` (from `sucursalDeLineasNoAdmin`).
+ * `sucursal_id` is nullable and some historical lines were never attributed to a
+ * branch, so those stay visible alongside the caller's own. The no-branch
+ * sentinel keeps matching nothing at all.
+ */
+export function aplicarSucursalLineas<Q extends { eq: (c: string, v: string) => any; or: (f: string) => any }>(
+  query: Q,
+  sucursalId: string | null
+): Q {
+  if (!sucursalId) return query
+  if (sucursalId === SUCURSAL_NINGUNA || !esIdSeguro(sucursalId)) {
+    return query.eq("sucursal_id", SUCURSAL_NINGUNA)
+  }
+  return query.or(`sucursal_id.eq.${sucursalId},sucursal_id.is.null`)
+}
+
 /** Checks a single loaded order row against the scope. */
 export function ordenEnAlcance(
   alcance: AlcanceOrdenes,

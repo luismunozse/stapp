@@ -3,7 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateReciboCCPDF } from "@/lib/cuenta-corriente-react-pdf"
 import { isMissingColumnError } from "@/lib/db-errors"
-import { sucursalDeLineasNoAdmin } from "@/lib/ordenes/alcance-lectura"
+import { aplicarSucursalLineas, sucursalDeLineasNoAdmin } from "@/lib/ordenes/alcance-lectura"
 
 // Emisor columns in two tiers: migration 295's fiscal identity columns may
 // not be applied yet, and a recibo must still print without them. Same
@@ -51,7 +51,7 @@ export async function GET(
       .eq("id", movimientoId)
       .eq("cliente_id", clienteId)
       .eq("organization_id", organizationId!)
-    if (sucursalLineas) movimientoQuery = movimientoQuery.eq("sucursal_id", sucursalLineas)
+    movimientoQuery = aplicarSucursalLineas(movimientoQuery, sucursalLineas)
 
     const { data: movimiento, error: movError } = await movimientoQuery.single()
 
