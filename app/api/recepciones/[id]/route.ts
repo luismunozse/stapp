@@ -3,6 +3,7 @@ import { z } from "zod"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { ordenEnAlcance, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
 import { calcularTotalLote, round2, type DescuentoTipo } from "@/lib/lote-utils"
 import { ESTADOS_ENTREGADOS, esEstadoEntregado, esEstadoExcluidoDeLote, esEstadoFueraDeLosMontos, liquidarEntregadosPrevios } from "@/lib/lote-estados"
 
@@ -27,7 +28,7 @@ const descuentoSchema = z
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     // Gate de plan. hasPlanFeature aplica los overrides por organizacion.
@@ -42,6 +43,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         { status: 403 },
       )
     }
+
+    const alcance = await resolverAlcanceOrdenesDeSesion({
+      role,
+      userId,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
 
     const { data: recepcion, error: recepcionError } = await supabaseAdmin
       .from("recepciones")
@@ -62,7 +69,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
     const { data: ordenes, error: ordenesError } = await supabaseAdmin
       .from("ordenes_servicio")
-      .select("id, numero_orden, codigo_orden, dispositivo, marca, estado, presupuesto, costo_final, descuento_cobro")
+      .select("id, numero_orden, codigo_orden, dispositivo, marca, estado, presupuesto, costo_final, descuento_cobro, sucursal_id, tecnico_id")
       .eq("recepcion_id", id)
       .eq("organization_id", organizationId!)
       .order("numero_orden", { ascending: true })
@@ -71,7 +78,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       throw ordenesError
     }
 
-    const lista = ordenes ?? []
+    // `recepciones` has no branch of its own: the caller sees the members that are
+    // in their order read scope (totals below are computed over those), and a batch
+    // with none of them answers like a missing one.
+    const lista = (ordenes ?? []).filter((o) => ordenEnAlcance(alcance, o))
+    if (alcance.tipo !== "todas" && lista.length === 0) {
+      return NextResponse.json({ error: "Recepcion no encontrada" }, { status: 404 })
+    }
     // Base de las lineas de dinero: los miembros que siguen dentro del lote.
     // Las ENTREGADO normales se quedan (su costo forma parte del total
     // negociado); las entregadas aparte y las cerradas sin entrega salen — se
