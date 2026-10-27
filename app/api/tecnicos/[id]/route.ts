@@ -1,21 +1,37 @@
 import { NextResponse } from "next/server"
 import { requireAdmin, requireAdminOrSelf } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
+import { EMBED_ORDENES_ACTIVAS_TOTALES, soloActivasEnTodasLasSucursales, totalDeOrdenesActivas } from "@/lib/sucursal-personal"
+import { soloAtendidasPorEnEmbed } from "@/lib/sucursal-ordenes"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import bcrypt from "bcryptjs"
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const { error, organizationId } = await requireAdminOrSelf(id)
-    if (error) return error
+/**
+ * The row of the detail. Typed by hand: the select is one of two strings (the second adds the total), and the
+ * compiler cannot read the columns of a union of them.
+ */
+interface FilaDelDetalle {
+  id: string
+  nombre: string
+  email: string
+  telefono: string | null
+  activo: boolean | null
+  especialidades: string[] | null
+  avatar_url: string | null
+  fecha_ingreso_tecnico: string | null
+  porcentaje_comision: number | null
+  costo_hora: number | null
+  created_at: string
+  horario_laboral: unknown
+  activas_del_alcance?: unknown[] | null
+  completadas_del_alcance?: unknown[] | null
+  activas_totales?: unknown[] | null
+}
 
-    const { data: tecnico, error: dbError } = await supabaseAdmin
-      .from("users")
-      .select(`
+// What the detail of a technician reads of him. The orders are counted through embeds of his own row: the open
+// ones and the finished ones of the viewer's scope (narrowed to it by the route), by state, each under its alias.
+const COLUMNAS_DEL_DETALLE = `
         id,
         nombre,
         email,
@@ -28,24 +44,62 @@ export async function GET(
         costo_hora,
         created_at,
         horario_laboral,
-        ordenes_servicio:ordenes_servicio!tecnico_id ( estado )
-      `)
-      .eq("id", id)
-      .eq("rol", "TECNICO")
-      .eq("organization_id", organizationId!)
-      .single()
+        activas_del_alcance:ordenes_servicio!tecnico_id (id),
+        completadas_del_alcance:ordenes_servicio!tecnico_id (id)`
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const { error, organizationId, role, session } = await requireAdminOrSelf(id)
+    if (error) return error
+
+    // The open-order count is what the viewer's scope handles, which is also what a bulk reassignment
+    // of them moves: an ADMIN reads the branch the switcher selects (every one on Todas). The technician
+    // himself reads everything assigned to him, from any branch (BM-6).
+    let sucursalDelAlcance: string | null = null
+    if (role === "ADMIN") {
+      const alcance = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
+      sucursalDelAlcance = alcance.verTodas ? null : alcance.sucursalId
+    }
+
+    // What gates deactivating or deleting him is global: every open order he holds, in every branch, on Todas as
+    // well. Only an ADMIN's answer carries it, so only an ADMIN's read asks for it; the technician himself gets
+    // the count of what is assigned to him. The scoped count stays for what a reassignment from this screen moves.
+    const conTotal = role === "ADMIN"
+
+    // The counts are embeds of the technician's own orders, filtered by state on their alias: PostgREST cuts every
+    // to-many embed at db-max-rows (1000 on Supabase) for each parent, so an embed of ALL his orders would lose the
+    // open ones that come after the first thousand. The finished count is a figure of the page, not a gate.
+    let consulta = soloAtendidasPorEnEmbed(
+      soloAtendidasPorEnEmbed(
+        supabaseAdmin
+          .from("users")
+          .select(conTotal ? `${COLUMNAS_DEL_DETALLE}, ${EMBED_ORDENES_ACTIVAS_TOTALES}` : COLUMNAS_DEL_DETALLE)
+          .eq("id", id)
+          .eq("rol", "TECNICO")
+          .eq("organization_id", organizationId!)
+          .in("activas_del_alcance.estado", ESTADOS_ACTIVOS as unknown as string[])
+          .in("completadas_del_alcance.estado", ESTADOS_COMPLETADOS as unknown as string[]),
+        sucursalDelAlcance,
+        "activas_del_alcance",
+      ),
+      sucursalDelAlcance,
+      "completadas_del_alcance",
+    )
+    if (conTotal) consulta = soloActivasEnTodasLasSucursales(consulta, organizationId!)
+    const { data, error: dbError } = await consulta.single()
+    const tecnico = data as unknown as FilaDelDetalle | null
 
     if (dbError || !tecnico) {
       return NextResponse.json({ error: "Técnico no encontrado" }, { status: 404 })
     }
 
-    const ordenes = tecnico.ordenes_servicio || []
-    const ordenesActivas = ordenes.filter((o: any) =>
-      ESTADOS_ACTIVOS.includes(o.estado)
-    ).length
-    const ordenesCompletadas = ordenes.filter((o: any) =>
-      ESTADOS_COMPLETADOS.includes(o.estado)
-    ).length
+    const ordenesActivas = (tecnico.activas_del_alcance || []).length
+    const ordenesCompletadas = (tecnico.completadas_del_alcance || []).length
+    const ordenesActivasTotal = conTotal ? totalDeOrdenesActivas(tecnico) : ordenesActivas
 
     return NextResponse.json({
       id: tecnico.id,
@@ -61,6 +115,7 @@ export async function GET(
       createdAt: tecnico.created_at,
       horarioLaboral: tecnico.horario_laboral ?? null,
       ordenesActivas,
+      ordenesActivasTotal,
       ordenesCompletadas,
     })
   } catch (error) {
@@ -203,28 +258,26 @@ export async function DELETE(
 
     const { id } = await params
 
-    // Verificar que el técnico existe y obtener órdenes activas
+    // Verificar que el técnico existe y obtener órdenes activas: every open order he holds, in every branch. The embed
+    // asks for open orders only: PostgREST cuts a to-many embed at db-max-rows (1000 on Supabase) for each parent, and
+    // an embed of ALL his orders would lose the open ones behind a thousand old ones.
     const { data: tecnico, error: fetchError } = await supabaseAdmin
       .from("users")
       .select(`
         id,
-        ordenes_servicio:ordenes_servicio!tecnico_id (
-          id,
-          estado
-        )
+        ordenes_servicio:ordenes_servicio!tecnico_id (id)
       `)
       .eq("id", id)
       .eq("rol", "TECNICO")
       .eq("organization_id", organizationId!)
+      .in("ordenes_servicio.estado", ESTADOS_ACTIVOS as unknown as string[])
       .single()
 
     if (fetchError || !tecnico) {
       return NextResponse.json({ error: "Técnico no encontrado" }, { status: 404 })
     }
 
-    const ordenesActivas = (tecnico.ordenes_servicio || []).filter(
-      (o: any) => ESTADOS_ACTIVOS.includes(o.estado)
-    )
+    const ordenesActivas = tecnico.ordenes_servicio || []
 
     if (ordenesActivas.length > 0) {
       return NextResponse.json(

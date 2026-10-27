@@ -15,6 +15,7 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPosAccess, resolveTecnicosOperanPos, soloVeSusVentas } from "@/lib/auth-utils"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { saldoPendienteVenta } from "@/lib/db-utils"
 import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
 import { isMissingColumnError } from "@/lib/db-errors"
@@ -145,14 +146,18 @@ async function parteDeVenta(fila: FilaVistaNC, lector: LectorNC): Promise<ParteM
 }
 
 async function parteDeOrden(fila: FilaVistaNC, lector: LectorNC): Promise<ParteMotor | null> {
-  const { data: orden, error: ordenError } = await supabaseAdmin
-    .from("ordenes_servicio")
-    .select(`id, tecnico_id, telefono_contacto, costo_final, descuento_cobro, total_cobrado, ${NOTAS_CREDITO_APLICADO_EMBED}`)
-    .eq("id", fila.origen_id)
-    .eq("organization_id", lector.organizationId)
-    .maybeSingle()
-  if (ordenError) throw ordenError
-  if (!orden) return null
+  // La orden se lee dentro del alcance del lector (sucursal, o asignada a él si es técnico): fuera
+  // de él es lo mismo que una orden que no existe (XC-2).
+  const cargada = await cargarOrdenEnAlcance(
+    fila.origen_id,
+    { organizationId: lector.organizationId, userId: lector.userId, role: lector.role ?? "", sucursalId: lector.userSucursalId },
+    "ver",
+    {
+      select: `id, tecnico_id, telefono_contacto, costo_final, descuento_cobro, total_cobrado, ${NOTAS_CREDITO_APLICADO_EMBED}`,
+    },
+  )
+  if ("error" in cargada) return null
+  const orden = cargada.orden
   if (lector.role === "TECNICO" && orden.tecnico_id !== lector.userId) return null
 
   const { data: nc, error: ncError } = await supabaseAdmin

@@ -156,3 +156,41 @@ describe("a read that fails", () => {
     expect(clientes).toEqual({ data: { id: "c-1" }, error: null })
   })
 })
+
+describe("a read that fails because of a table it embeds", () => {
+  it("fails the whole request, as PostgREST does when an embedded table cannot be read", async () => {
+    montarSupabaseEnMemoria(
+      { users: [{ id: "u-1", ordenes: [{ id: "o-1" }] }], ordenes: FILAS() },
+      { errorDeLectura: { ordenes: { code: "57014", message: "canceling statement due to statement timeout" } } },
+    )
+
+    const conEmbed = await db().from("users").select("id, activas:ordenes!tecnico_id (id)").eq("id", "u-1").single()
+    const sinEmbed = await db().from("users").select("id").eq("id", "u-1").single()
+
+    expect(conEmbed).toEqual({ data: null, error: { code: "57014", message: "canceling statement due to statement timeout" } })
+    expect(sinEmbed).toEqual({ data: { id: "u-1" }, error: null })
+  })
+
+  it("also when the embed is nested, and the read is still listed under the table that was queried", async () => {
+    const mem = montarSupabaseEnMemoria(
+      { users: [{ id: "u-1" }], ordenes: FILAS() },
+      { errorDeLectura: { ordenes: { message: "connection lost" } } },
+    )
+
+    const anidado = await db().from("users").select("id, clientes (id, ordenes!inner (id))").single()
+
+    expect(anidado.error).toEqual({ message: "connection lost" })
+    expect(mem.lecturas).toEqual(["users"])
+  })
+})
+
+describe("the most rows a read answers (max-rows)", () => {
+  it("a read of any table is cut at the cap the test asks for, and not at all without one", async () => {
+    montarSupabaseEnMemoria({ ordenes: FILAS(), clientes: [{ id: "c-1" }, { id: "c-2" }, { id: "c-3" }] }, { maxFilas: 2 })
+    expect((await db().from("ordenes").select("id")).data).toHaveLength(2)
+    expect((await db().from("clientes").select("id")).data).toHaveLength(2)
+
+    montarSupabaseEnMemoria({ ordenes: FILAS() })
+    expect((await db().from("ordenes").select("id")).data).toHaveLength(3)
+  })
+})

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { soloOriginadasEn } from "@/lib/sucursal-ordenes"
 import { ESTADOS_ORDEN_NUNCA_DEVENGAN, NC_ORDEN_ESTADO_EMBED, notaCreditoRestaDevengado } from "@/lib/reportes/notas-credito-devengado"
 
 /**
@@ -138,7 +139,8 @@ export async function GET(request: Request) {
       .not("fecha_completado", "is", null)
       .gte("fecha_completado", desdeISO)
       .lte("fecha_completado", hastaISO)
-    if (sid) ordenesQuery = ordenesQuery.eq("sucursal_id", sid)
+    // Revenue follows the branch that took the order in.
+    ordenesQuery = soloOriginadasEn(ordenesQuery, sid)
     const { data: ordenes } = await ordenesQuery
 
     // Cobros previos al inicio del período para órdenes terminales en período

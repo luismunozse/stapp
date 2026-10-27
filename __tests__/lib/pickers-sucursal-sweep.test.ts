@@ -30,15 +30,6 @@ const EXENTOS = new Map<string, Exencion>([
   ["components/comisiones/comisiones-vendedores-view.tsx", { llamadas: 1, razon: "seller list of the commissions screen: no order behind it" }],
   ["components/emails/email-compose.tsx", { llamadas: 2, razon: "recipients picker (technicians and sellers): no order behind it" }],
   ["components/ordenes/ordenes-list.tsx", { llamadas: 1, razon: "technician filter of the orders list: no single order behind it" }],
-  [
-    "components/tecnicos/reasignar-ordenes-dialog.tsx",
-    {
-      llamadas: 1,
-      razon:
-        "moves every open order of one technician, which can span branches; the reasignar route is scoped " +
-        "later and decides the destination rule, so the picker keeps the effective branch until then",
-    },
-  ],
   ["components/tecnicos/tecnicos-list.tsx", { llamadas: 1, razon: "management list of technicians (the Sucursal column is a later PR)" }],
   ["components/tecnicos/tecnicos-ranking.tsx", { llamadas: 1, razon: "ranking of technicians: no order behind it" }],
   ["components/tecnicos/tecnico-form.tsx", { llamadas: 1, razon: "the create/edit form POSTs or PUTs a technician, it does not read the list" }],
@@ -51,9 +42,10 @@ const EXENTOS = new Map<string, Exencion>([
 // `/api/tecnicos/<id>`, `/api/tecnicos/summary`, `/api/tecnicos/[id]` or `/api/tecnicos-x`.
 const LISTA = /\/api\/(?:tecnicos|vendedores)(?![\w-]|\/[\w$[])/g
 
-// A call is scoped when its query names the branch (`sucursalId=`) or says it is for creating
-// something (`alcance=escritura`).
-const ALCANCE_DECLARADO = /^\/?\?(?:[^&]*&)*(?:sucursalId=|alcance=escritura(?:&|$))/
+// A call is scoped when its query names the branch (`sucursalId=`), says it is for creating
+// something (`alcance=escritura`), or is the destination picker of a bulk move
+// (`paraReasignarDe=<technician>`: the server derives the branch from the orders to move).
+const ALCANCE_DECLARADO = /^\/?\?(?:[^&]*&)*(?:sucursalId=|alcance=escritura(?:&|$)|paraReasignarDe=)/
 
 interface Consumo {
   endpoint: string
@@ -83,6 +75,8 @@ describe("detector", () => {
     ["one scoped and one bare call in the same file", `fetch("/api/tecnicos?sucursalId=a")\nfetch("/api/tecnicos")`],
     ["a scope that is not the write one", `fetch("/api/tecnicos?alcance=lectura")`],
     ["a write scope that only starts like it", `fetch("/api/tecnicos?alcance=escrituraX")`],
+    ["a reassignment picker parameter that only starts like it", `fetch("/api/tecnicos?paraReasignarDeX=a")`],
+    ["the reassignment parameter named but empty of the technician", `fetch("/api/tecnicos?paraReasignar=a")`],
     // Blind spots of the first version: the endpoint followed by anything but a quote or a `?`.
     ["a query string spliced in a template", "fetch(`/api/tecnicos${qs}`)"],
     ["a trailing slash", `fetch("/api/tecnicos/")`],
@@ -98,6 +92,8 @@ describe("detector", () => {
     ["the branch after another param", "fetch(`/api/vendedores?limit=100&sucursalId=${id}`)"],
     ["the write scope", "fetch(`/api/tecnicos?alcance=escritura`)"],
     ["the write scope after another param", "fetch(`/api/tecnicos?dias=7&alcance=escritura`)"],
+    ["the picker of a bulk reassignment (the server derives the branch from the orders to move)", "fetch(`/api/tecnicos?paraReasignarDe=${encodeURIComponent(id)}`)"],
+    ["the reassignment picker as a useSWR key", "useSWR(open ? `/api/tecnicos?paraReasignarDe=${id}` : null, fetcher)"],
     ["a scoped call with a trailing slash", "fetch(`/api/tecnicos/?sucursalId=${id}`)"],
     ["a resource, not the list", "fetch(`/api/tecnicos/${id}/ordenes`)"],
     ["a resource by a literal id", `fetch("/api/vendedores/abc123")`],

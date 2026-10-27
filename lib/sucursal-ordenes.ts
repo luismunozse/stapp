@@ -13,6 +13,7 @@ import { SUCURSAL_NINGUNA } from "@/lib/sucursal"
 const ID_SEGURO = /^[A-Za-z0-9_-]+$/
 
 export const MENSAJE_TECNICO_OTRA_SUCURSAL = "Ese técnico no pertenece a la sucursal de esta orden"
+export const MENSAJE_TECNICO_OTRA_SUCURSAL_TURNO = "Ese técnico no pertenece a la sucursal de este turno"
 
 /** True when the id can be spliced into a PostgREST filter string without leaving its syntax. */
 export function esIdSeguro(id: unknown): id is string {
@@ -55,6 +56,20 @@ type ConEq<Q> = { eq(columna: string, valor: string): Q }
  */
 export function soloAtendidasPor<Q>(query: Q, sucursalId: string | null): Q {
   return sucursalId === null ? query : (query as unknown as ConOr<Q>).or(filtroAtiendeSucursal(sucursalId))
+}
+
+type ConOrEnEmbed<Q> = { or(filtro: string, opciones: { referencedTable: string }): Q }
+
+/**
+ * Narrows the orders a query EMBEDS (`ordenes_servicio:ordenes_servicio!tecnico_id (..)`) to the ones a
+ * branch handles; `null` means every branch and returns the query as it came. The embed must not be
+ * `!inner`: every parent row stays and only its embedded orders narrow, so a technician who holds
+ * nothing in that branch is still listed, with a count of zero. For counts of work in progress.
+ */
+export function soloAtendidasPorEnEmbed<Q>(query: Q, sucursalId: string | null, embed: string): Q {
+  return sucursalId === null
+    ? query
+    : (query as unknown as ConOrEnEmbed<Q>).or(filtroAtiendeSucursal(sucursalId), { referencedTable: embed })
 }
 
 /**

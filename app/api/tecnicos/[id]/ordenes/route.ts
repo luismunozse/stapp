@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { requireAdminOrSelf } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
+import { soloAtendidasPor } from "@/lib/sucursal-ordenes"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 
 type EstadoFiltro = "activas" | "completadas" | "todas" | string
@@ -11,8 +13,16 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    const { error, organizationId } = await requireAdminOrSelf(id)
+    const { error, organizationId, role, session } = await requireAdminOrSelf(id)
     if (error) return error
+
+    // The technician himself reads everything assigned to him, from any branch (BM-6). An ADMIN
+    // reads the technician's orders in the scope he is looking at: all, or one branch's work.
+    let sucursalId: string | null = null
+    if (role === "ADMIN") {
+      const lectura = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
+      sucursalId = lectura.verTodas ? null : lectura.sucursalId
+    }
     const { searchParams } = new URL(request.url)
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10))
     const limit = Math.min(
@@ -33,10 +43,11 @@ export async function GET(
       return NextResponse.json({ error: "Técnico no encontrado" }, { status: 404 })
     }
 
-    let query = supabaseAdmin
-      .from("ordenes_servicio")
-      .select(
-        `
+    let query = soloAtendidasPor(
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select(
+          `
         id,
         numero_orden,
         codigo_orden,
@@ -48,10 +59,12 @@ export async function GET(
         costo_final,
         clientes ( nombre )
       `,
-        { count: "exact" }
-      )
-      .eq("organization_id", organizationId!)
-      .eq("tecnico_id", id)
+          { count: "exact" }
+        )
+        .eq("organization_id", organizationId!)
+        .eq("tecnico_id", id),
+      sucursalId,
+    )
 
     if (estado === "activas") {
       query = query.in("estado", ESTADOS_ACTIVOS as unknown as string[])

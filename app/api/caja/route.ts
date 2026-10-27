@@ -3,6 +3,7 @@ import { requireCajaAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchMovimientosDia, computeTotales } from "@/lib/caja-utils"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { soloOriginadasEn } from "@/lib/sucursal-ordenes"
 import { todayInTimeZone, dayRangeUtc, DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 const PAGE = 1000
@@ -35,21 +36,23 @@ async function leerTodo(armar: () => any): Promise<Fila[]> {
 //    app/api/pagos/route.ts), que queda en PENDIENTE.
 // El conteo es exacto sobre lo que queda y se muestran las 10 más nuevas.
 async function cargarSinCobrar(organizationId: string, sucursalId: string | null) {
-  const candidatas = await leerTodo(() => {
-    let q = supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id, numero_orden, costo_final, total_cobrado, descuento_cobro")
-      .eq("organization_id", organizationId)
-      .eq("es_practica", false)
-      .in("estado", ["REPARADO", "ENTREGADO"])
-      .in("estado_cobro", ["PENDIENTE", "PARCIAL"])
-      .not("costo_final", "is", null)
-      .gt("costo_final", 0)
+  // La deuda sigue a la sucursal que recibió la orden, la atienda quien la atienda.
+  const candidatas = await leerTodo(() =>
+    soloOriginadasEn(
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select("id, numero_orden, costo_final, total_cobrado, descuento_cobro")
+        .eq("organization_id", organizationId)
+        .eq("es_practica", false)
+        .in("estado", ["REPARADO", "ENTREGADO"])
+        .in("estado_cobro", ["PENDIENTE", "PARCIAL"])
+        .not("costo_final", "is", null)
+        .gt("costo_final", 0),
+      sucursalId,
+    )
       // ordenes_servicio no tiene created_at: la fecha de alta es fecha_ingreso.
       .order("fecha_ingreso", { ascending: false, nullsFirst: false })
-    if (sucursalId) q = q.eq("sucursal_id", sucursalId)
-    return q
-  })
+  )
 
   // Pendiente real, igual que get_deuda_cliente_sucursal (mig 318) y
   // clientes/[id]/ordenes-pendientes: costo - descuento - cobrado, con piso en 0

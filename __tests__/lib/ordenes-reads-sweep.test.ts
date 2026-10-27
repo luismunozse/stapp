@@ -25,6 +25,11 @@
  *      detail, the technician counts); `soloOriginadasEn(.., "embed.sucursal_id")` is an `.eq` on the embed
  *      and needs `!inner` like any other filter on it;
  *  (C) the chain is held in a variable that a wrapper (or an embed filter) receives.
+ * A select that embeds the table more than once is one read PER embed, and a wrapper that names an embed
+ * (`soloAtendidasPorEnEmbed(q, s, "alias")`, `aplicarAEmbed(q, "alias")`) narrows that one: a sibling embed next
+ * to a narrowed one (the technicians' open orders of every branch next to the ones of the viewer's scope) is
+ * a read of its own, and is listed with its reason. A wrapper around a wrapper is followed (through the calls
+ * chained after each one), and each covers the embed it names.
  * A call that is only in the same function, that wraps another table's query, or that is already spent
  * on another read, covers nothing. `cargarOrdenEnAlcance` is a loader (it reads at its call site) and
  * `alcanceLecturaOrdenes` only hands out the scope: neither covers a query by being called.
@@ -42,7 +47,7 @@ import ts from "typescript"
 import { leerFuentes } from "../helpers/fuentes"
 
 /** Calls that take the QUERY and narrow it: a read in their first argument, or held in the variable they receive, is scoped. */
-const ENVOLTURAS = ["soloAtendidasPor", "soloOriginadasEn", "aplicar", "aplicarAEmbed"]
+const ENVOLTURAS = ["soloAtendidasPor", "soloAtendidasPorEnEmbed", "soloOriginadasEn", "aplicar", "aplicarAEmbed"]
 /** Builders of the filter string a read applies inside its own chain (`.or(filtroX(..))`). */
 const FILTROS = ["filtroVisibleEnSucursal", "filtroAtiendeSucursal", "filtroListaTecnico"]
 /** Approved but never applied by being called: the order loader reads at its call site, the door factory hands out the scope. */
@@ -275,8 +280,9 @@ function analizar(src: string, rel = "x.ts", globales: Constantes = new Map()): 
         if (metodo === null || !ESCRITURAS.includes(metodo)) registrar(n, [])
       }
       if (nombre === "select") {
-        const embeds = embedsDeOrdenes(textoDelSelect(n.arguments[0], sf, locales, globales))
-        if (embeds.length > 0) registrar(n, embeds)
+        // A select that embeds the orders more than once is one read PER embed: a helper narrows the embed it
+        // names, so a sibling embed next to a narrowed one is a read of its own (it needs its own helper or a listing).
+        for (const embed of embedsDeOrdenes(textoDelSelect(n.arguments[0], sf, locales, globales))) registrar(n, [embed])
       }
     }
     ts.forEachChild(n, visitar)
@@ -321,6 +327,22 @@ function envolturaSobreEmbedPlano(llamada: ts.CallExpression, embeds: EmbedDeOrd
   const ruta = columna.split(".").slice(0, -1).join(".")
   const embed = embeds.find((e) => e.ruta === ruta)
   return embed !== undefined && !embed.interior
+}
+
+/** The position of the argument that names the embed a wrapper narrows, for the wrappers that take one. */
+const ARGUMENTO_DEL_EMBED: Record<string, number> = { soloAtendidasPorEnEmbed: 2, aplicarAEmbed: 1 }
+
+/**
+ * A wrapper that names an embed (as a literal) narrows THAT embed: when the read is one embed of a select and the
+ * wrapper names another (or one the select does not have), it covers nothing. A name that is not a literal is
+ * taken for the embed of the read.
+ */
+function nombraOtroEmbed(llamada: ts.CallExpression, embeds: EmbedDeOrdenes[]): boolean {
+  const nombre = nombreDeLlamada(llamada)
+  const posicion = nombre === null ? undefined : ARGUMENTO_DEL_EMBED[nombre]
+  if (posicion === undefined || embeds.length !== 1 || !llamada.arguments[posicion]) return false
+  const nombrado = textoDe(llamada.arguments[posicion])
+  return nombrado !== null && nombrado !== embeds[0].nombre && nombrado !== embeds[0].ruta
 }
 
 function llamadasDentro(raiz: ts.Node, cuando: (c: ts.CallExpression) => boolean): ts.CallExpression[] {
@@ -373,13 +395,18 @@ function candidatas(lectura: Lectura): ts.CallExpression[] {
     }),
   )
 
-  // (B) the chain is the query argument of a wrapper.
-  let actual: ts.Node = tope
-  while (actual.parent && esTransparente(actual.parent) && actual.parent.expression === actual) actual = actual.parent
-  const padre = actual.parent
-  if (padre && ts.isCallExpression(padre) && padre.arguments[0] === actual) {
+  // (B) the chain is the query argument of a wrapper, or of a wrapper that wraps a wrapper (the calls chained after
+  // each one are part of the chain it hands to the next). Each wrapper covers one read: the embed it names.
+  let nodo: ts.Node = tope
+  for (;;) {
+    let actual: ts.Node = nodo
+    while (actual.parent && esTransparente(actual.parent) && actual.parent.expression === actual) actual = actual.parent
+    const padre = actual.parent
+    if (!(padre && ts.isCallExpression(padre) && padre.arguments[0] === actual)) break
     const nombre = nombreDeLlamada(padre)
-    if (nombre !== null && ENVOLTURAS.includes(nombre) && !envolturaSobreEmbedPlano(padre, lectura.embeds)) salida.push(padre)
+    if (nombre === null || !ENVOLTURAS.includes(nombre)) break
+    if (!envolturaSobreEmbedPlano(padre, lectura.embeds) && !nombraOtroEmbed(padre, lectura.embeds)) salida.push(padre)
+    nodo = topeDeLaCadena(padre)
   }
 
   // (C) the chain is held in a variable that a wrapper receives, or whose embed is filtered.
@@ -389,7 +416,7 @@ function candidatas(lectura: Lectura): ts.CallExpression[] {
       ...llamadasDentro(lectura.contenedor, (c) => {
         const nombre = nombreDeLlamada(c)
         if (nombre !== null && ENVOLTURAS.includes(nombre) && c.arguments[0]) {
-          return raizDeLaCadena(c.arguments[0]) === variable && !envolturaSobreEmbedPlano(c, lectura.embeds)
+          return raizDeLaCadena(c.arguments[0]) === variable && !envolturaSobreEmbedPlano(c, lectura.embeds) && !nombraOtroEmbed(c, lectura.embeds)
         }
         if (lectura.embeds.length > 0 && esFiltroDeEmbed(c, lectura.embeds)) {
           return ts.isPropertyAccessExpression(c.expression) && raizDeLaCadena(c.expression.expression) === variable
@@ -401,17 +428,24 @@ function candidatas(lectura: Lectura): ts.CallExpression[] {
   return salida
 }
 
-/** The reads of a source file that are not covered by a helper applied to them: the ones that need a listing. */
-function sinAlcance(src: string, rel = "x.ts", globales: Constantes = new Map()): number[] {
+/** The reads of a source file that are not covered by a helper applied to them, as they were read. */
+function lecturasSinAlcance(src: string, rel = "x.ts", globales: Constantes = new Map()): Lectura[] {
   const { lecturas } = analizar(src, rel, globales)
   const gastadas = new Set<ts.Node>()
-  const sueltas: number[] = []
+  const sueltas: Lectura[] = []
   for (const lectura of lecturas) {
     const libre = candidatas(lectura).find((c) => !gastadas.has(c))
     if (libre) gastadas.add(libre)
-    else sueltas.push(lectura.linea)
+    else sueltas.push(lectura)
   }
-  return sueltas.sort((a, b) => a - b)
+  return sueltas
+}
+
+/** The reads of a source file that are not covered by a helper applied to them: the ones that need a listing. */
+function sinAlcance(src: string, rel = "x.ts", globales: Constantes = new Map()): number[] {
+  return lecturasSinAlcance(src, rel, globales)
+    .map((l) => l.linea)
+    .sort((a, b) => a - b)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -425,6 +459,8 @@ const SUPERADMIN = "platform superadmin: organization-wide statistics, not a ten
 const PUBLICO = "reached with the public token of the order or quote; the customer has no branch"
 const SOLO_ADMIN = "ADMIN only: an ADMIN's scope for an order by id is the whole organization, as in the loader"
 const ONBOARDING = "onboarding: counts or seeds the organization's own orders, no branch involved"
+const TOTAL_DE_ACTIVAS =
+  "count only (just the ids of his open orders come out, and they are counted), it gates a global action (deactivating or deleting him), and the total is an ADMIN's: nobody else's answer carries it"
 
 const EXENTOS: Listado = new Map([
   ["app/(dashboard)/dashboard/page.tsx", { sitios: 1, motivo: `the technician's cards: ${ASIGNADAS}` }],
@@ -463,6 +499,21 @@ const EXENTOS: Listado = new Map([
     "app/api/ordenes/[id]/cobros/route.ts",
     { sitios: 2, motivo: "helper of POST (the handler loads the order through the loader first) and DELETE (ADMIN only, role first); both pinned in ordenes-subroutes-sweep" },
   ],
+  [
+    "lib/sucursal-personal.ts",
+    { sitios: 1, motivo: `defines the \`activas_totales\` embed used by the technician selects: ${TOTAL_DE_ACTIVAS}` },
+  ],
+  ["app/api/tecnicos/route.ts", { sitios: 1, motivo: `the technicians list: ${TOTAL_DE_ACTIVAS}; it is next to the two embeds narrowed to the viewer's scope, which have a wrapper each` }],
+  [
+    "app/api/tecnicos/[id]/route.ts",
+    {
+      sitios: 2,
+      motivo: `the \`activas_totales\` embed of the technician detail (${TOTAL_DE_ACTIVAS}), and the DELETE of a technician (ADMIN only): its guard counts EVERY open order he holds, in every branch, on purpose: scoping it would let him be deleted with work still assigned elsewhere. It asks for open orders only, so the per-parent cap of PostgREST cannot hide them`,
+    },
+  ],
+  ["app/api/tecnicos/[id]/estado/route.ts", { sitios: 1, motivo: `deactivating or reactivating a technician: ${TOTAL_DE_ACTIVAS}` }],
+  ["app/api/recepciones/[id]/route.ts", { sitios: 1, motivo: "PATCH of the reception's discount: counts its delivered orders. ADMIN only, role first (the GET reads through the reception's branch)" }],
+  ["app/api/recepciones/[id]/entregar/route.ts", { sitios: 1, motivo: `delivery of a whole reception. ${SOLO_ADMIN}, and the role is checked first` }],
   ["app/api/sucursales/[id]/route.ts", { sitios: 1, motivo: "count of the orders of a branch before it is deleted (ADMIN only)" }],
   ["app/api/tipos-dispositivo/[id]/route.ts", { sitios: 1, motivo: "count of the orders of a device type before it is deleted (ADMIN only)" }],
   ["app/api/usuarios/[id]/sucursal/route.ts", { sitios: 1, motivo: "open orders assigned to a user, to warn before moving him (ADMIN only)" }],
@@ -472,6 +523,9 @@ const EXENTOS: Listado = new Map([
   ["app/api/caja/movimientos/metodo-pago/route.ts", { sitios: 2, motivo: "joins the order of a collection or of an invoice payment only for its branch (the origin) that the handler checks; nothing else of the order is read" }],
   ["app/api/facturacion/[id]/route.ts", { sitios: 2, motivo: "invoice by id (void, delete): joins the order for its organization, client and branch (the origin), to re-credit the client account there; no order data is returned" }],
   ["app/api/pagos/route.ts", { sitios: 1, motivo: "payment of an invoice by id: joins the order for its organization, client and branch (the origin); no order data is returned" }],
+  // The credit notes of the two financial reports select the order's state through the shared embed.
+  ["app/api/reportes/estado-resultados/route.ts", { sitios: 1, motivo: "the credit-note query selects only the state of the order (the shared embed `ordenes_servicio(estado)`); it is scoped by notas_credito.sucursal_id, the origin branch" }],
+  ["app/api/reportes/tendencia-financiera/route.ts", { sitios: 1, motivo: "the credit-note query selects only the state of the order (the shared embed `ordenes_servicio(estado)`); it is scoped by notas_credito.sucursal_id, the origin branch" }],
   // Public: reached with the token of the quote.
   ["app/api/public/cotizaciones/[token]/route.ts", { sitios: 1, motivo: `the order linked to a quote, ${PUBLICO}` }],
   ["app/api/public/cotizaciones/[token]/pdf/route.ts", { sitios: 1, motivo: `the order linked to a quote, ${PUBLICO}` }],
@@ -486,31 +540,9 @@ const EXENTOS: Listado = new Map([
   ],
 ])
 
-// Reads that PR5b scopes (technician views and counts, invoicing candidates, pending orders of a client, receptions, reports...).
-const PENDIENTE_PR5B: Listado = new Map([
-  ["app/api/caja/route.ts", { sitios: 1, motivo: "orders pending collection on the cash screen: money, follows the origin" }],
-  ["app/api/clientes/[id]/ordenes-pendientes/route.ts", { sitios: 1, motivo: "pending orders of a client: money, follows the origin" }],
-  ["app/api/facturacion/candidatos/route.ts", { sitios: 1, motivo: "orders that can be invoiced: money, follows the origin" }],
-  ["app/api/recepciones/[id]/route.ts", { sitios: 2, motivo: "the orders of a multi-device reception: the reception's branch" }],
-  ["app/api/recepciones/[id]/entregar/route.ts", { sitios: 1, motivo: "the orders of a multi-device reception: the reception's branch" }],
-  ["app/api/tecnicos/route.ts", { sitios: 1, motivo: "open-order counts of the technicians list (an embed of his orders)" }],
-  ["app/api/tecnicos/summary/route.ts", { sitios: 1, motivo: "technician summary" }],
-  ["app/api/tecnicos/[id]/route.ts", { sitios: 2, motivo: "open-order counts of a technician (an embed of his orders)" }],
-  ["app/api/tecnicos/[id]/estado/route.ts", { sitios: 1, motivo: "open-order count of a technician (an embed of his orders)" }],
-  ["app/api/tecnicos/[id]/ordenes/route.ts", { sitios: 1, motivo: "orders of a technician" }],
-  ["app/api/tecnicos/[id]/insights/route.ts", { sitios: 1, motivo: "technician insights" }],
-  ["app/api/tecnicos/[id]/reasignar/route.ts", { sitios: 1, motivo: "bulk reassignment" }],
-  ["lib/notas-credito/documento.ts", { sitios: 1, motivo: "the order behind a credit note document" }],
-  ["app/api/reportes/estado-resultados/route.ts", { sitios: 2, motivo: "report (the order read; the credit-note query through the shared embed is scoped by notas_credito.sucursal_id)" }],
-  ["app/api/reportes/fallas-comunes/route.ts", { sitios: 1, motivo: "report" }],
-  ["app/api/reportes/performance-tecnicos/route.ts", { sitios: 1, motivo: "report" }],
-  ["app/api/reportes/rentabilidad-tecnicos/route.ts", { sitios: 1, motivo: "report" }],
-  ["app/api/reportes/rentabilidad/route.ts", { sitios: 1, motivo: "report" }],
-  ["app/api/reportes/tasa-retorno/route.ts", { sitios: 1, motivo: "report" }],
-  ["app/api/reportes/tendencia-financiera/route.ts", { sitios: 2, motivo: "report (the order read; the credit-note query through the shared embed is scoped by notas_credito.sucursal_id)" }],
-  ["app/api/reportes/tiempo-reparacion/route.ts", { sitios: 1, motivo: "report" }],
-  ["app/api/reportes/top-clientes/route.ts", { sitios: 1, motivo: "report" }],
-])
+// Reads that PR5b was to scope: technician views and counts, invoicing candidates, pending orders of a
+// client, receptions, credit notes, reports. It is empty: PR5b scoped them all.
+const PENDIENTE_PR5B: Listado = new Map()
 
 // Reads of quotes and warranties (the order a quote is for, the order a warranty covers): scoped by the
 // change that gives quotes and warranties a branch (PR20).
@@ -559,6 +591,11 @@ describe("detector, with planted offenders", () => {
   describe("(B) the chain is the argument of a wrapper", () => {
     it.each(["soloAtendidasPor", "soloOriginadasEn"])("accepts %s(chain, sucursal)", (envoltura) => {
       expect(sueltas(`  return ${envoltura}(supabaseAdmin.from("ordenes_servicio").select("*").eq("organization_id", o), s)`)).toEqual([])
+    })
+
+    it("accepts soloAtendidasPorEnEmbed(chain, sucursal, embed) around a select that embeds the orders, with more calls after it", () => {
+      const src = `  return soloAtendidasPorEnEmbed(supabaseAdmin.from("users").select("id, ordenes_servicio:ordenes_servicio!tecnico_id (id, estado)").eq("rol", "TECNICO"), s, "ordenes_servicio").order("nombre")`
+      expect(sueltas(src)).toEqual([])
     })
 
     it("accepts the door's aplicar and aplicarAEmbed as methods", () => {
@@ -635,6 +672,77 @@ describe("detector, with planted offenders", () => {
     it("a factory arrow is its own function: its helper does not cover the reads outside it", () => {
       const src = `  const a = () => soloAtendidasPor(supabaseAdmin.from("ordenes_servicio").select("id"), s)\n  const b = await supabaseAdmin.from("ordenes_servicio").select("estado")`
       expect(sueltas(src)).toEqual([2])
+    })
+  })
+
+  describe("a select that embeds the orders twice is two reads: a helper narrows the embed it names, not its sibling", () => {
+    // The technicians' count in the scope (`alcance`) next to their open orders of every branch (`activas`).
+    const doble = (envuelto: (consulta: string) => string) =>
+      `  return ${envuelto(`supabaseAdmin.from("users").select("id, alcance:ordenes_servicio!tecnico_id (id, estado), activas:ordenes_servicio!tecnico_id (id)").eq("rol", "TECNICO")`)}`
+    const embedsSueltos = (src: string) => lecturasSinAlcance(`export async function GET() {\n${src}\n}`).flatMap((l) => l.embeds.map((e) => e.nombre))
+
+    it("the wrapper that names one embed covers that one and leaves the other loose", () => {
+      expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(${q}, s, "alcance")`))).toEqual(["activas"])
+      expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(${q}, s, "activas")`))).toEqual(["alcance"])
+      expect(embedsSueltos(doble((q) => `alcance.aplicarAEmbed(${q}, "alcance")`))).toEqual(["activas"])
+    })
+
+    it("a wrapper that names an embed the select does not have covers neither", () => {
+      expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(${q}, s, "ordenes_servicio")`))).toEqual(["alcance", "activas"])
+    })
+
+    it("a wrapper that does not say which embed it narrows (a variable) is taken for the first one", () => {
+      expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(${q}, s, embed)`))).toEqual(["activas"])
+    })
+
+    it("with no wrapper both are loose, and a select with one embed is still one read", () => {
+      expect(embedsSueltos(doble((q) => q))).toEqual(["alcance", "activas"])
+      expect(embedsSueltos(`  return soloAtendidasPorEnEmbed(supabaseAdmin.from("users").select("id, alcance:ordenes_servicio!tecnico_id (id)"), s, "alcance")`)).toEqual([])
+    })
+
+    it("a filter builder in the chain covers one of them", () => {
+      expect(embedsSueltos(doble((q) => `${q}.or(filtroAtiendeSucursal(s), { referencedTable: "alcance" })`))).toEqual(["activas"])
+    })
+
+    it("the file reports the second embed on the line of the select, as one more loose read of it", () => {
+      expect(sueltas(doble((q) => `soloAtendidasPorEnEmbed(${q}, s, "alcance")`))).toEqual([1])
+    })
+
+    describe("a wrapper around a wrapper: each covers the embed it names", () => {
+      it("two wrappers, one around the other, cover both embeds", () => {
+        expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(soloAtendidasPorEnEmbed(${q}, s, "alcance"), s, "activas")`))).toEqual([])
+        expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(soloAtendidasPorEnEmbed(${q}, s, "activas"), s, "alcance")`))).toEqual([])
+      })
+
+      it("through the calls chained after the inner one", () => {
+        expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(soloAtendidasPorEnEmbed(${q}, s, "alcance").order("nombre"), s, "activas")`))).toEqual([])
+      })
+
+      it("a wrapper that narrows the whole query next to one that names an embed covers one embed each", () => {
+        expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(soloOriginadasEn(${q}, s), s, "activas")`))).toEqual([])
+      })
+
+      it("the same embed named twice is covered once, and the other stays loose", () => {
+        expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(soloAtendidasPorEnEmbed(${q}, s, "alcance"), s, "alcance")`))).toEqual(["activas"])
+      })
+
+      it("names that match no embed cover nothing, however many wrappers there are", () => {
+        expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(soloAtendidasPorEnEmbed(${q}, s, "uno"), s, "otro")`))).toEqual(["alcance", "activas"])
+      })
+
+      it("a call that is not a wrapper in between breaks the chain: what is outside it covers nothing here", () => {
+        expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(algunaOtraCosa(soloAtendidasPorEnEmbed(${q}, s, "alcance")), s, "activas")`))).toEqual(["activas"])
+      })
+    })
+
+    it("a select written as a conditional of two templates that use constants still shows both embeds", () => {
+      const src =
+        "const COLUMNAS = `id, alcance:ordenes_servicio!tecnico_id (id)`\n" +
+        "export async function GET() {\n" +
+        "  return soloAtendidasPorEnEmbed(supabaseAdmin.from(\"users\").select(c ? `${COLUMNAS}, ${EMBED_TOTAL}` : COLUMNAS), s, \"alcance\")\n" +
+        "}"
+      const globales = new Map([["EMBED_TOTAL", "activas:ordenes_servicio!tecnico_id (id)"]])
+      expect(lecturasSinAlcance(src, "x.ts", globales).flatMap((l) => l.embeds.map((e) => e.nombre))).toEqual(["activas"])
     })
   })
 
@@ -965,6 +1073,10 @@ describe("source tree", () => {
     // the door's methods are members of the scope it returns
     const puerta = fuente("lib/ordenes/alcance-lectura.ts")
     for (const metodo of ["aplicar", "aplicarAEmbed"]) expect(puerta, metodo).toMatch(new RegExp(`\\b${metodo}<Q>\\(`))
+  })
+
+  it("PENDIENTE_PR5B is empty: the reads of the technician views and counts, money and reports are all scoped", () => {
+    expect([...PENDIENTE_PR5B.keys()]).toEqual([])
   })
 
   it("a file is in at most one list, and every listed file exists", () => {

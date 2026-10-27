@@ -31,6 +31,7 @@ import { ReasignarOrdenesDialog } from "@/components/tecnicos/reasignar-ordenes-
 import { HorarioLaboralEditor } from "@/components/tecnicos/horario-laboral-editor"
 import { useModal } from "@/contexts/modal-context"
 import { useCurrency } from "@/contexts/currency-context"
+import { avisoDeOrdenesActivas } from "@/lib/tecnico-ordenes-activas"
 
 interface TecnicoDetalle {
   id: string
@@ -44,7 +45,10 @@ interface TecnicoDetalle {
   porcentajeComision?: number
   costoHora?: number
   createdAt: string
+  /** Open orders handled in the scope the ADMIN works in: what the reassignment dialog moves. */
   ordenesActivas: number
+  /** Every open order he holds, in every branch: what gates deactivating and deleting him. */
+  ordenesActivasTotal?: number
   ordenesCompletadas: number
   horarioLaboral?: Record<string, Array<{ de: string; a: string }>> | null
 }
@@ -100,18 +104,18 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
     }
   }
 
+  // Deactivating or deleting a technician is global: what warns about it is every open order he holds.
+  const totalActivas = tecnico ? tecnico.ordenesActivasTotal ?? tecnico.ordenesActivas : 0
+
   const handleToggleEstado = async () => {
     if (!tecnico) return
     const nuevo = !tecnico.activo
+    const aviso = nuevo ? null : avisoDeOrdenesActivas(totalActivas, tecnico.ordenesActivas, "Aún tiene")
     const confirmed = await confirm({
       title: nuevo ? "Reactivar técnico" : "Desactivar técnico",
       description: nuevo
         ? "El técnico volverá a poder recibir asignaciones."
-        : `El técnico dejará de recibir asignaciones nuevas.${
-            tecnico.ordenesActivas > 0
-              ? ` Aún tiene ${tecnico.ordenesActivas} orden(es) activa(s) — considerá reasignarlas.`
-              : ""
-          }`,
+        : `El técnico dejará de recibir asignaciones nuevas.${aviso ? ` ${aviso}` : ""}`,
       confirmText: nuevo ? "Reactivar" : "Desactivar",
       variant: nuevo ? "info" : "danger",
     })
@@ -209,7 +213,7 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
         </div>
         {isAdmin && (
           <div className="flex flex-wrap gap-2 pl-12 sm:pl-0">
-            {tecnico.ordenesActivas > 0 && (
+            {totalActivas > 0 && (
               <Button
                 variant="outline"
                 size="sm"
@@ -240,8 +244,8 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
               variant="destructive"
               size="sm"
               onClick={handleDelete}
-              disabled={deleting || tecnico.ordenesActivas > 0}
-              title={tecnico.ordenesActivas > 0 ? "No se puede eliminar con órdenes activas" : ""}
+              disabled={deleting || totalActivas > 0}
+              title={totalActivas > 0 ? "No se puede eliminar con órdenes activas" : ""}
             >
               <Trash2 className="mr-1.5 h-4 w-4" />
               <span className="hidden sm:inline">{deleting ? "Eliminando..." : "Eliminar"}</span>
@@ -402,6 +406,7 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
         tecnicoOrigenId={tecnico.id}
         tecnicoOrigenNombre={tecnico.nombre}
         ordenesActivas={tecnico.ordenesActivas}
+        ordenesActivasTotal={totalActivas}
         onSuccess={fetchTecnico}
       />
     </div>

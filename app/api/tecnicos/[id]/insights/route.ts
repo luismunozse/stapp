@@ -5,6 +5,8 @@ import {
   resolveVendedoresHabilitados,
 } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
+import { soloAtendidasPor } from "@/lib/sucursal-ordenes"
 
 interface TopRepuesto {
   nombre: string
@@ -20,8 +22,16 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    const { error, organizationId, role } = await requireAdminOrSelf(id)
+    const { error, organizationId, role, session } = await requireAdminOrSelf(id)
     if (error) return error
+
+    // The technician himself sees the numbers of everything assigned to him, from any branch
+    // (BM-6). An ADMIN sees the work in the scope he is looking at: all, or one branch's.
+    let sucursalId: string | null = null
+    if (role === "ADMIN") {
+      const lectura = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
+      sucursalId = lectura.verTodas ? null : lectura.sucursalId
+    }
     const { searchParams } = new URL(request.url)
     const dias = parseInt(searchParams.get("dias") || "90", 10)
     const desde = new Date()
@@ -39,18 +49,20 @@ export async function GET(
     if (!tec) return NextResponse.json({ error: "Técnico no encontrado" }, { status: 404 })
 
     // Órdenes del técnico (recientes)
-    const { data: ordenes } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select(`
+    const { data: ordenes } = await soloAtendidasPor(
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select(`
         id, numero_orden, codigo_orden, dispositivo, tipo_dispositivo, marca, estado,
         fecha_ingreso, fecha_completado, fecha_prometida,
         costo_final, es_reingreso,
         repuestos_orden (cantidad, precio_unitario, inventario_id, nombre, inventario:inventario_id (id, nombre))
       `)
-      .eq("tecnico_id", id)
-      .eq("organization_id", organizationId!)
-      .gte("fecha_ingreso", desdeISO)
-      .order("fecha_ingreso", { ascending: false })
+        .eq("tecnico_id", id)
+        .eq("organization_id", organizationId!)
+        .gte("fecha_ingreso", desdeISO),
+      sucursalId,
+    ).order("fecha_ingreso", { ascending: false })
 
     const ords = ordenes || []
 

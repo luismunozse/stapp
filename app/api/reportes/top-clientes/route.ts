@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireIngresosAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { soloOriginadasEn } from "@/lib/sucursal-ordenes"
 
 interface ClienteTop {
   clienteId: string
@@ -45,9 +46,8 @@ export async function GET(request: NextRequest) {
       .eq("organization_id", organizationId!)
       .neq("estado", "CANCELADO")
 
-    if (!filtro.verTodas && filtro.sucursalId) {
-      ordenesQuery = ordenesQuery.eq("sucursal_id", filtro.sucursalId)
-    }
+    // A client's spending counts in the branch that took the order in.
+    ordenesQuery = soloOriginadasEn(ordenesQuery, filtro.verTodas ? null : filtro.sucursalId)
 
     const { data: ordenes, error: ordenesError } = await ordenesQuery
 

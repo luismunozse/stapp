@@ -3,6 +3,8 @@ import { z } from "zod"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { sucursalParaLectura } from "@/lib/sucursal"
+import { soloOriginadasEn } from "@/lib/sucursal-ordenes"
 import { calcularTotalLote, round2, type DescuentoTipo } from "@/lib/lote-utils"
 import { ESTADOS_ENTREGADOS, esEstadoEntregado, esEstadoExcluidoDeLote, esEstadoFueraDeLosMontos, liquidarEntregadosPrevios } from "@/lib/lote-estados"
 
@@ -27,7 +29,7 @@ const descuentoSchema = z
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role, session } = await requireAuth()
     if (error) return error
 
     // Gate de plan. hasPlanFeature aplica los overrides por organizacion.
@@ -45,7 +47,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
     const { data: recepcion, error: recepcionError } = await supabaseAdmin
       .from("recepciones")
-      .select("id, numero, codigo, cliente_id, descuento_tipo, descuento_valor, observaciones, created_at, clientes(nombre)")
+      .select("id, sucursal_id, numero, codigo, cliente_id, descuento_tipo, descuento_valor, observaciones, created_at, clientes(nombre)")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .single()
@@ -60,12 +62,22 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Recepcion no encontrada" }, { status: 404 })
     }
 
-    const { data: ordenes, error: ordenesError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id, numero_orden, codigo_orden, dispositivo, marca, estado, presupuesto, costo_final, descuento_cobro")
-      .eq("recepcion_id", id)
-      .eq("organization_id", organizationId!)
-      .order("numero_orden", { ascending: true })
+    // A reception belongs to the branch that took it in, and so do its orders. Staff of another
+    // branch get the same answer as for a reception that does not exist; an ADMIN reads any.
+    const lectura = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
+    const sucursalId = role === "ADMIN" ? null : lectura.sucursalId
+    if (sucursalId !== null && recepcion.sucursal_id !== sucursalId) {
+      return NextResponse.json({ error: "Recepcion no encontrada" }, { status: 404 })
+    }
+
+    const { data: ordenes, error: ordenesError } = await soloOriginadasEn(
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select("id, numero_orden, codigo_orden, dispositivo, marca, estado, presupuesto, costo_final, descuento_cobro")
+        .eq("recepcion_id", id)
+        .eq("organization_id", organizationId!),
+      sucursalId,
+    ).order("numero_orden", { ascending: true })
 
     if (ordenesError) {
       throw ordenesError

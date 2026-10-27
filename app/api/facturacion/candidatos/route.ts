@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { soloOriginadasEn } from "@/lib/sucursal-ordenes"
 
 export async function GET(request: Request) {
   try {
@@ -14,22 +15,24 @@ export async function GET(request: Request) {
     })
     const sid = filtro.verTodas ? null : filtro.sucursalId
 
-    let ordenesQuery = supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id, numero_orden, codigo_orden, dispositivo, clientes (nombre), facturas (id)")
-      .eq("organization_id", organizationId!)
-      .in("estado", ["REPARADO", "ENTREGADO"])
+    // Invoices stay with the branch that took the order in (or made the sale), whoever handles it.
+    const ordenesQuery = soloOriginadasEn(
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select("id, numero_orden, codigo_orden, dispositivo, clientes (nombre), facturas (id)")
+        .eq("organization_id", organizationId!)
+        .in("estado", ["REPARADO", "ENTREGADO"]),
+      sid,
+    )
 
-    let ventasQuery = supabaseAdmin
-      .from("ventas")
-      .select("id, numero_venta, cliente_nombre, total, facturas (id)")
-      .eq("organization_id", organizationId!)
-      .eq("estado", "COMPLETADA")
-
-    if (sid) {
-      ordenesQuery = ordenesQuery.eq("sucursal_id", sid)
-      ventasQuery = ventasQuery.eq("sucursal_id", sid)
-    }
+    const ventasQuery = soloOriginadasEn(
+      supabaseAdmin
+        .from("ventas")
+        .select("id, numero_venta, cliente_nombre, total, facturas (id)")
+        .eq("organization_id", organizationId!)
+        .eq("estado", "COMPLETADA"),
+      sid,
+    )
 
     const { data: ordenes, error: ordenesError } = await ordenesQuery
       .order("fecha_ingreso", { ascending: false })

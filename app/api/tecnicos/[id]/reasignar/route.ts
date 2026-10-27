@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
+import {
+  MENSAJE_TECNICO_OTRA_SUCURSAL,
+  soloAtendidasPor,
+  sucursalQueAtiende,
+  tecnicoAsignable,
+} from "@/lib/sucursal-ordenes"
 import { ESTADOS_ACTIVOS } from "@/lib/order-states"
 
 export async function POST(
@@ -8,8 +15,13 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, role, session } = await requireAdmin()
     if (error) return error
+
+    // Only the orders in the scope the ADMIN is looking at move: all of them on Todas, one branch's
+    // when the switcher selects it.
+    const lectura = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
+    const sucursalId = lectura.verTodas ? null : lectura.sucursalId
 
     const { id: origenId } = await params
     const body = await request.json()
@@ -34,7 +46,7 @@ export async function POST(
 
     const { data: destino, error: destinoError } = await supabaseAdmin
       .from("users")
-      .select("id, rol, activo, porcentaje_comision, costo_hora")
+      .select("id, rol, activo, porcentaje_comision, costo_hora, sucursal_id")
       .eq("id", tecnicoDestinoId)
       .eq("organization_id", organizationId!)
       .single()
@@ -55,12 +67,15 @@ export async function POST(
       )
     }
 
-    let query = supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id, estado, comision_pagada")
-      .eq("organization_id", organizationId!)
-      .eq("tecnico_id", origenId)
-      .in("estado", ESTADOS_ACTIVOS as unknown as string[])
+    let query = soloAtendidasPor(
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select("id, estado, comision_pagada, sucursal_id, tecnico_id")
+        .eq("organization_id", organizationId!)
+        .eq("tecnico_id", origenId)
+        .in("estado", ESTADOS_ACTIVOS as unknown as string[]),
+      sucursalId,
+    )
 
     if (Array.isArray(ordenIds) && ordenIds.length > 0) {
       query = query.in("id", ordenIds)
@@ -68,6 +83,17 @@ export async function POST(
 
     const { data: ordenes, error: ordenesError } = await query
     if (ordenesError) throw ordenesError
+
+    // The same rule as assigning one order (BM-5): the destination must be able to take EACH order
+    // (an ADMIN always can; a technician only from the branch that handles it). If one cannot be
+    // taken nothing moves, instead of a move that stops halfway.
+    const destinatario = { id: destino.id, rol: destino.rol, sucursal_id: (destino.sucursal_id as string | null) ?? null }
+    const hayOrdenAjena = (ordenes || []).some(
+      (o: any) => !tecnicoAsignable(destinatario, sucursalQueAtiende(o), o.tecnico_id ?? null)
+    )
+    if (hayOrdenAjena) {
+      return NextResponse.json({ error: MENSAJE_TECNICO_OTRA_SUCURSAL }, { status: 400 })
+    }
 
     const targetIds = (ordenes || []).map((o: any) => o.id)
     if (targetIds.length === 0) {

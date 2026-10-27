@@ -8,6 +8,7 @@ import {
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { soloOriginadasEn } from "@/lib/sucursal-ordenes"
 
 export async function GET() {
   try {
@@ -48,9 +49,8 @@ export async function GET() {
       .not("costo_final", "is", null)
       .in("estado", ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION"])
 
-    if (!filtro.verTodas && filtro.sucursalId) {
-      ordenesQuery = ordenesQuery.eq("sucursal_id", filtro.sucursalId)
-    }
+    // Profit follows the branch that took the order in.
+    ordenesQuery = soloOriginadasEn(ordenesQuery, filtro.verTodas ? null : filtro.sucursalId)
 
     const { data: ordenes } = await ordenesQuery
 

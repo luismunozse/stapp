@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
+import { soloAtendidasPor } from "@/lib/sucursal-ordenes"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, role, session } = await requireAdmin()
     if (error) return error
+
+    // The orders each technician works on in the scope the ADMIN is looking at: the whole
+    // organization on Todas, one branch's work when the switcher selects it.
+    const lectura = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
+    const sucursalId = lectura.verTodas ? null : lectura.sucursalId
 
     const { searchParams } = new URL(request.url)
     const dias = Math.max(1, Math.min(365, parseInt(searchParams.get("dias") || "30", 10)))
@@ -13,14 +20,17 @@ export async function GET(request: Request) {
     desde.setDate(desde.getDate() - dias)
     const desdeISO = desde.toISOString()
 
-    const { data: ordenes, error: dbError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select(
-        "id, tecnico_id, estado, fecha_ingreso, fecha_completado, fecha_prometida, costo_final, es_reingreso"
-      )
-      .eq("organization_id", organizationId!)
-      .not("tecnico_id", "is", null)
-      .gte("fecha_ingreso", desdeISO)
+    const { data: ordenes, error: dbError } = await soloAtendidasPor(
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select(
+          "id, tecnico_id, estado, fecha_ingreso, fecha_completado, fecha_prometida, costo_final, es_reingreso"
+        )
+        .eq("organization_id", organizationId!)
+        .not("tecnico_id", "is", null)
+        .gte("fecha_ingreso", desdeISO),
+      sucursalId,
+    )
 
     if (dbError) throw dbError
 
