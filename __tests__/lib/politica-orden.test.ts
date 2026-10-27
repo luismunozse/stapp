@@ -109,6 +109,32 @@ const SIN_DERIVAR: Caso[] = [
     TODO_EL_TRABAJO,
   ],
   ["TECNICO with no branch, assigned to him: still his (XC-4)", tecSinSucursal, deA("t-0"), false, "ASIGNADO", TODO_EL_TRABAJO],
+  // Changing a technician into a seller does not clear his assignments. Assigned-to-me is a
+  // technician's scope (BM-6); a seller who still holds one gets his branch's orders and no more.
+  [
+    "VENDEDOR of another branch that still holds an assignment (role changed): out of scope",
+    { userId: "t-sj", role: "VENDEDOR", sucursalId: "suc-SJ" },
+    deA("t-sj"),
+    false,
+    "AJENO",
+    [],
+  ],
+  [
+    "VENDEDOR with no branch that still holds an assignment (role changed): out of scope",
+    { userId: "t-0", role: "VENDEDOR", sucursalId: null },
+    deA("t-0"),
+    false,
+    "AJENO",
+    [],
+  ],
+  [
+    "VENDEDOR of the order's branch that also holds the assignment: a seller of the branch",
+    { userId: "v-a", role: "VENDEDOR", sucursalId: A },
+    deA("v-a"),
+    false,
+    "ORIGEN",
+    [...TODO_EL_TRABAJO, "derivar"],
+  ],
   ["TECNICO with no branch, unassigned order, toma ON: nothing (XC-4)", conToma(tecSinSucursal), deA(), false, "AJENO", []],
 ]
 
