@@ -66,7 +66,9 @@ function montarDb(sucursales = SUCURSALES) {
     ...usuariosDe("v", "VENDEDOR"),
     usuario("adm", "Fede", "ADMIN", null),
   ])
-  mockSupabaseFrom({ users, sucursales: tablaPostgrest(sucursales) } as any)
+  // An ADMIN with a branch selected also reads, apart, the open orders each technician holds in every branch.
+  const ordenes = tablaPostgrest([{ id: "o-1", organization_id: "org-1", tecnico_id: "t-a1", sucursal_id: "suc-A", estado: "EN_REPARACION" }])
+  mockSupabaseFrom({ users, sucursales: tablaPostgrest(sucursales), ordenes_servicio: ordenes } as any)
   vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: [], error: null } as any)
   return users
 }

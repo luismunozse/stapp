@@ -48,7 +48,10 @@ interface Tecnico {
   activo: boolean
   especialidades?: string[]
   porcentajeComision?: number
+  /** Open orders handled in the scope the viewer works in: what the card shows. */
   ordenesActivas: number
+  /** Every open order he holds in every branch (ADMIN only): what stops a delete. */
+  ordenesActivasTotal?: number
   ordenesCompletadas: number
 }
 
@@ -505,7 +508,7 @@ export function TecnicosList() {
                             size="icon"
                             className="h-7 w-7 sm:h-8 sm:w-8 text-destructive hover:text-destructive"
                             onClick={(e) =>
-                              handleDelete(tecnico.id, tecnico.ordenesActivas, e)
+                              handleDelete(tecnico.id, tecnico.ordenesActivasTotal ?? tecnico.ordenesActivas, e)
                             }
                             disabled={deletingId === tecnico.id}
                           >

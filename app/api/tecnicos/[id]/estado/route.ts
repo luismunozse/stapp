@@ -2,7 +2,9 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { ordenesActivasTotales } from "@/lib/sucursal-personal"
 import { soloAtendidasPorEnEmbed } from "@/lib/sucursal-ordenes"
+import { avisoDeOrdenesActivas } from "@/lib/tecnico-ordenes-activas"
 import { ESTADOS_ACTIVOS } from "@/lib/order-states"
 
 export async function PATCH(
@@ -24,7 +26,9 @@ export async function PATCH(
       )
     }
 
-    // The warning counts the orders of the scope the ADMIN works in (the ones a bulk reassignment moves).
+    // Deactivating a technician is a GLOBAL write, so the count that warns about it is every open order he
+    // holds, in every branch. The part in the scope the ADMIN works in (what a reassignment moves) is read
+    // apart, to tell him how many of them belong to other branches.
     const alcance = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
     const sucursalDelAlcance = alcance.verTodas ? null : alcance.sucursalId
 
@@ -47,9 +51,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Técnico no encontrado" }, { status: 404 })
     }
 
-    const ordenesActivas = (tecnico.ordenes_servicio || []).filter(
+    const enAlcance = (tecnico.ordenes_servicio || []).filter(
       (o: any) => ESTADOS_ACTIVOS.includes(o.estado)
     ).length
+    // On Todas the count above already is the total.
+    const ordenesActivas = sucursalDelAlcance === null ? enAlcance : (await ordenesActivasTotales(organizationId!, [id])).get(id) ?? 0
 
     const { error: updateError } = await supabaseAdmin
       .from("users")
@@ -63,10 +69,7 @@ export async function PATCH(
       id,
       activo,
       ordenesActivas,
-      warning:
-        !activo && ordenesActivas > 0
-          ? `El técnico tiene ${ordenesActivas} orden(es) activa(s). Considerá reasignarlas.`
-          : null,
+      warning: activo ? null : avisoDeOrdenesActivas(ordenesActivas, enAlcance, "El técnico tiene"),
     })
   } catch (err) {
     console.error("Error updating tecnico estado:", err)

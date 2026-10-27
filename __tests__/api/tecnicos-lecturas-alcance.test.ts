@@ -23,7 +23,7 @@ import { GET as ordenesDe } from "@/app/api/tecnicos/[id]/ordenes/route"
 import { GET as insightsDe } from "@/app/api/tecnicos/[id]/insights/route"
 import { POST as reasignar } from "@/app/api/tecnicos/[id]/reasignar/route"
 import { GET as listar } from "@/app/api/tecnicos/route"
-import { GET as detalle } from "@/app/api/tecnicos/[id]/route"
+import { GET as detalle, DELETE as eliminar } from "@/app/api/tecnicos/[id]/route"
 import { PATCH as estado } from "@/app/api/tecnicos/[id]/estado/route"
 
 const A = "suc-A"
@@ -432,8 +432,13 @@ describe("GET /api/tecnicos?paraReasignarDe= (the destination picker of a bulk m
       )
       const res = await listar(new Request("http://localhost:3000/api/tecnicos?paraReasignarDe=t-a"))
       expect(res.status).toBe(500)
-      const body = await res.json()
+      const texto = await res.text()
+      const body = JSON.parse(texto)
       expect(body.tecnicos).toBeUndefined()
+      // The answer says what failed in the app's words and never repeats what the database said.
+      expect(body.error).toBe("Error al obtener técnicos")
+      expect(texto).not.toContain("connection lost")
+      expect(texto).not.toContain("XX000")
     })
   })
 })
@@ -512,15 +517,137 @@ describe("the open-order counts of the technician screens follow the viewer's sc
     return body as { ordenesActivas: number; warning: string | null }
   }
 
+  // Deactivating a technician is a GLOBAL write: the warning counts every open order he holds, in every
+  // branch, and says which part belongs to the scope the ADMIN works in (what a reassignment would move).
   it.each(
-    conNombre([
-      [ADMIN_TODAS, 2],
-      [ADMIN_A, 1],
-      [ADMIN_B, 1],
+    conNombre<[string]>([
+      [ADMIN_TODAS, "El técnico tiene 2 orden(es) activa(s). Considerá reasignarlas."],
+      [ADMIN_A, "El técnico tiene 2 orden(es) activa(s) (1 de esta sucursal y 1 de otras). Considerá reasignarlas: las de otras sucursales se mueven eligiendo esa sucursal en el selector."],
+      [ADMIN_B, "El técnico tiene 2 orden(es) activa(s) (1 de esta sucursal y 1 de otras). Considerá reasignarlas: las de otras sucursales se mueven eligiendo esa sucursal en el selector."],
     ]),
-  )("deactivating t-a as %s warns about the orders of that scope", async (_nombre, espectador, cantidad) => {
+  )("deactivating t-a as %s counts all his open orders and says where they are", async (_nombre, espectador, aviso) => {
     const { ordenesActivas, warning } = await cambiarActivo(espectador, "t-a", false)
-    expect(ordenesActivas).toBe(cantidad)
-    expect(warning).toContain(`${cantidad} orden(es)`)
+    expect(ordenesActivas).toBe(2)
+    expect(warning).toBe(aviso)
+  })
+
+  it("reactivating gives no warning, whatever he holds", async () => {
+    expect((await cambiarActivo(ADMIN_B, "t-a", true)).warning).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------------------------
+describe("a technician of one branch who holds the open orders of another (jed-electronics): what gates a global action is global", () => {
+  // t-jed belongs to San Justo (B) and holds SEVEN open orders of Tablada (A).
+  const ordenesJed = () => Array.from({ length: 7 }, (_, i) => orden(`j${i + 1}`, A, "t-jed"))
+
+  function montarJed() {
+    // ...plus an order of ANOTHER organization under the same technician id, and a finished one of his: neither counts.
+    const ajena = { ...orden("x-otra-org", A, "t-jed"), organization_id: "org-2" }
+    const terminada = orden("x-terminada", A, "t-jed", "REPARADO")
+    const ordenes = [...ORDENES(), ...ordenesJed(), ajena, terminada]
+    const embebidas = ordenes.filter((o) => o.tecnico_id === "t-jed" && o.organization_id === "org-1").map((o) => ({ id: o.id, estado: o.estado, sucursal_id: o.sucursal_id }))
+    return montarSupabaseEnMemoria({
+      ordenes_servicio: ordenes,
+      users: [...USUARIOS, usuario("t-jed", "TECNICO", B, { ordenes_servicio: embebidas })],
+      organizations: [{ id: "org-1", vendedores_administran_inventario: false }],
+    })
+  }
+
+  async function desactivar(e: Espectador) {
+    entrar(e)
+    const memoria = montarJed()
+    const res = await estado(
+      new Request("http://localhost:3000/api/tecnicos/t-jed/estado", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activo: false }),
+      }),
+      ctx("t-jed"),
+    )
+    const { status, body } = await parseResponse(res)
+    expect(status).toBe(200)
+    return { ...(body as { ordenesActivas: number; warning: string | null }), memoria }
+  }
+
+  async function detalleJed(e: Espectador) {
+    entrar(e)
+    montarJed()
+    const { status, body } = await parseResponse(await detalle(get("t-jed"), ctx("t-jed")))
+    expect(status).toBe(200)
+    return body as { ordenesActivas: number; ordenesActivasTotal: number }
+  }
+
+  it("an ADMIN on his own branch (San Justo) is warned of the seven orders, which all belong to another branch", async () => {
+    const { ordenesActivas, warning } = await desactivar(ADMIN_B)
+    expect(ordenesActivas).toBe(7)
+    expect(warning).toBe(
+      "El técnico tiene 7 orden(es) activa(s), todas de otras sucursales. Considerá reasignarlas: las de otras sucursales se mueven eligiendo esa sucursal en el selector.",
+    )
+  })
+
+  it("an ADMIN on Tablada, where they are handled, and on Todas get the plain warning", async () => {
+    for (const espectador of [ADMIN_A, ADMIN_TODAS]) {
+      const { ordenesActivas, warning } = await desactivar(espectador)
+      expect(ordenesActivas, espectador.nombre).toBe(7)
+      expect(warning, espectador.nombre).toBe("El técnico tiene 7 orden(es) activa(s). Considerá reasignarlas.")
+    }
+  })
+
+  it("the detail carries what a reassignment moves (this scope) AND the total that gates deactivating and deleting him", async () => {
+    expect(await detalleJed(ADMIN_B)).toMatchObject({ ordenesActivas: 0, ordenesActivasTotal: 7 })
+    expect(await detalleJed(ADMIN_A)).toMatchObject({ ordenesActivas: 7, ordenesActivasTotal: 7 })
+    expect(await detalleJed(ADMIN_TODAS)).toMatchObject({ ordenesActivas: 7, ordenesActivasTotal: 7 })
+  })
+
+  it("the technician himself: his count and the total are the same, everything assigned to him (BM-6)", async () => {
+    expect(await detalleJed({ nombre: "t-jed himself", role: "TECNICO", userId: "t-jed", sucursalId: B })).toMatchObject({ ordenesActivas: 7, ordenesActivasTotal: 7 })
+  })
+
+  it("the list carries the total next to the scoped count, so the delete guard never lets him go with work elsewhere", async () => {
+    entrar(ADMIN_B)
+    montarJed()
+    const { body } = await parseResponse(await listar(new Request("http://localhost:3000/api/tecnicos")))
+    const jed = (body as Array<{ id: string; ordenesActivas: number; ordenesActivasTotal: number }>).find((t) => t.id === "t-jed")
+    expect(jed).toMatchObject({ ordenesActivas: 0, ordenesActivasTotal: 7 })
+  })
+
+  it("only an ADMIN gets the total: anyone else sees the scoped count and nothing about the other branches", async () => {
+    entrar({ nombre: "VENDEDOR of B", role: "VENDEDOR", userId: "v-b", sucursalId: B })
+    montarJed()
+    const { body } = await parseResponse(await listar(new Request("http://localhost:3000/api/tecnicos")))
+    const jed = (body as Array<{ id: string; ordenesActivas: number; ordenesActivasTotal: number }>).find((t) => t.id === "t-jed")
+    expect(jed).toMatchObject({ ordenesActivas: 0, ordenesActivasTotal: 0 })
+  })
+
+  it("an ADMIN on Todas reads the same number twice, with no extra read of the orders", async () => {
+    entrar(ADMIN_TODAS)
+    const memoria = montarJed()
+    await parseResponse(await listar(new Request("http://localhost:3000/api/tecnicos")))
+    expect(memoria.lecturas.filter((t) => t === "ordenes_servicio")).toHaveLength(0)
+  })
+
+  it("deleting him is refused for the ADMIN of any branch while he holds open orders anywhere, and nothing is deleted", async () => {
+    for (const espectador of [ADMIN_B, ADMIN_A, ADMIN_TODAS]) {
+      entrar(espectador)
+      const memoria = montarJed()
+      const res = await eliminar(new Request("http://localhost:3000/api/tecnicos/t-jed", { method: "DELETE" }), ctx("t-jed"))
+      expect(res.status, espectador.nombre).toBe(400)
+      expect(memoria.escrituras.filter((x) => x.tabla === "users"), espectador.nombre).toEqual([])
+    }
+  })
+
+  it("an unreadable total is an error, not zero: the warning is never skipped because a read failed", async () => {
+    entrar(ADMIN_B)
+    const memoria = montarSupabaseEnMemoria(
+      { ordenes_servicio: ORDENES(), users: USUARIOS, organizations: [{ id: "org-1", vendedores_administran_inventario: false }] },
+      { errorDeLectura: { ordenes_servicio: { code: "XX000", message: "connection lost" } } },
+    )
+    const res = await estado(
+      new Request("http://localhost:3000/api/tecnicos/t-a/estado", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activo: false }) }),
+      ctx("t-a"),
+    )
+    expect(res.status).toBe(500)
+    expect(memoria.escrituras.filter((x) => x.tabla === "users")).toEqual([])
   })
 })

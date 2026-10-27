@@ -464,6 +464,10 @@ const EXENTOS: Listado = new Map([
     { sitios: 2, motivo: "helper of POST (the handler loads the order through the loader first) and DELETE (ADMIN only, role first); both pinned in ordenes-subroutes-sweep" },
   ],
   [
+    "lib/sucursal-personal.ts",
+    { sitios: 1, motivo: "ordenesActivasTotales: the open orders a technician holds in EVERY branch, for the ADMIN screens that warn before a global action (deactivate, delete); only counts per technician come out" },
+  ],
+  [
     "app/api/tecnicos/[id]/route.ts",
     { sitios: 1, motivo: "DELETE of a technician (ADMIN only): the guard counts EVERY open order he holds, in every branch, on purpose: scoping it would let him be deleted with work still assigned elsewhere" },
   ],

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, sucursalParaLectura, assertSucursalEnOrg } from "@/lib/sucursal"
-import { sucursalParaListaPersonal, sucursalParaReasignar, type DestinoDeReasignacion } from "@/lib/sucursal-personal"
+import { ordenesActivasTotales, sucursalParaListaPersonal, sucursalParaReasignar, type DestinoDeReasignacion } from "@/lib/sucursal-personal"
 import { soloAtendidasPorEnEmbed } from "@/lib/sucursal-ordenes"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
@@ -80,6 +80,14 @@ export async function GET(request: Request) {
       throw dbError
     }
 
+    // What gates deactivating or deleting a technician (screens of an ADMIN) is global: every open order he
+    // holds, in every branch. On Todas the scoped count already is that; with a branch selected it is read
+    // apart. The picker of a bulk move does not need it, and anyone else only sees his own scope.
+    const totales =
+      role === "ADMIN" && sucursalDelAlcance !== null && !reasignacion
+        ? await ordenesActivasTotales(organizationId!, (tecnicos ?? []).map((t) => t.id))
+        : null
+
     const tecnicosConStats = tecnicos?.map((tecnico) => {
       const ordenes = tecnico.ordenes_servicio || []
       const ordenesActivas = ordenes.filter(
@@ -101,6 +109,7 @@ export async function GET(request: Request) {
         porcentajeComision: Number(tecnico.porcentaje_comision ?? 0),
         sucursalId: tecnico.sucursal_id ?? null,
         ordenesActivas,
+        ordenesActivasTotal: totales ? totales.get(tecnico.id) ?? 0 : ordenesActivas,
         ordenesCompletadas,
       }
     })

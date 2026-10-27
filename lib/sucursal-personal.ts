@@ -48,6 +48,26 @@ export async function sucursalParaListaPersonal(params: {
   return lectura.sucursalId
 }
 
+/**
+ * How many open orders each technician holds in EVERY branch (a map from his id; zero when he holds none).
+ * Deactivating or deleting a technician is a global action, so what warns about it counts everything he
+ * holds, not only the part in the scope the ADMIN is looking at. A read that fails throws: a count that
+ * could not be read is not zero.
+ */
+export async function ordenesActivasTotales(organizationId: string, tecnicoIds: string[]): Promise<Map<string, number>> {
+  const totales = new Map<string, number>()
+  if (tecnicoIds.length === 0) return totales
+  const { data, error } = await supabaseAdmin
+    .from("ordenes_servicio")
+    .select("tecnico_id")
+    .eq("organization_id", organizationId)
+    .in("tecnico_id", tecnicoIds)
+    .in("estado", ESTADOS_ACTIVOS as unknown as string[])
+  if (error) throw error
+  for (const fila of (data ?? []) as Array<{ tecnico_id: string }>) totales.set(fila.tecnico_id, (totales.get(fila.tecnico_id) ?? 0) + 1)
+  return totales
+}
+
 /** What the destination picker of a bulk move needs to know about the orders that would move. */
 export interface DestinoDeReasignacion {
   /** The branch whose technicians can take every one of those orders; null = every branch. */

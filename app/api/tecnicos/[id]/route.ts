@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin, requireAdminOrSelf } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { ordenesActivasTotales } from "@/lib/sucursal-personal"
 import { soloAtendidasPorEnEmbed } from "@/lib/sucursal-ordenes"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import bcrypt from "bcryptjs"
@@ -61,6 +62,12 @@ export async function GET(
       ESTADOS_COMPLETADOS.includes(o.estado)
     ).length
 
+    // What gates deactivating or deleting him is global: every open order he holds, in every branch. On
+    // Todas (and for the technician himself) the count above already is that; with a branch selected it
+    // is read apart. The scoped count stays for what a reassignment from this screen moves.
+    const ordenesActivasTotal =
+      sucursalDelAlcance === null ? ordenesActivas : (await ordenesActivasTotales(organizationId!, [id])).get(id) ?? 0
+
     return NextResponse.json({
       id: tecnico.id,
       nombre: tecnico.nombre,
@@ -75,6 +82,7 @@ export async function GET(
       createdAt: tecnico.created_at,
       horarioLaboral: tecnico.horario_laboral ?? null,
       ordenesActivas,
+      ordenesActivasTotal,
       ordenesCompletadas,
     })
   } catch (error) {
