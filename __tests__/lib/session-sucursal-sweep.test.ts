@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
-import { join, relative, sep } from "node:path"
+import { leerFuentes, sinComentarios } from "../helpers/fuentes"
 
 // requireAuth() hands API routes the user's CURRENT branch, but anything that
 // takes the session straight from auth(), getAuthSession() or useSession() reads
@@ -8,9 +7,7 @@ import { join, relative, sep } from "node:path"
 // the user. Server pages go through sesionConSucursalVigente() and API routes
 // through requireAuth() (or a wrapper); everything else has to be listed here
 // with the reason it can live with the JWT value.
-const ROOT = process.cwd()
-
-// Directories (relative to ROOT) and single files that are scanned.
+// Directories (relative to the repo root) and single files that are scanned.
 const RAICES = ["app", "lib", "components", "hooks", "contexts"]
 const ARCHIVOS_SUELTOS = ["middleware.ts"]
 
@@ -39,25 +36,10 @@ function tomaSesionCruda(src: string): boolean {
   return [...src.matchAll(ALIAS_DE_FUENTE)].some(([, alias]) => new RegExp(`\\b${alias}\\(`).test(src))
 }
 
-/** Code without comments, so prose like "the middleware/auth() accept it" is not a call. */
-function sinComentarios(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1")
-}
-
 /** True when a file takes a raw session and reads the branch from it. */
 function leeSucursalDelJwt(fuente: string): boolean {
   const src = sinComentarios(fuente)
   return tomaSesionCruda(src) && LEE_SUCURSAL.test(src) && !src.includes("sesionConSucursalVigente(")
-}
-
-function recorrer(dir: string, out: string[] = []): string[] {
-  for (const name of readdirSync(dir)) {
-    if (name === "node_modules" || name === "__tests__" || name.startsWith(".")) continue
-    const full = join(dir, name)
-    if (statSync(full).isDirectory()) recorrer(full, out)
-    else if (/\.(ts|tsx)$/.test(name) && !/\.test\.(ts|tsx)$/.test(name)) out.push(full)
-  }
-  return out
 }
 
 describe("detector", () => {
@@ -93,10 +75,7 @@ describe("detector", () => {
 })
 
 describe("source tree", () => {
-  const archivos = [
-    ...RAICES.flatMap((d) => recorrer(join(ROOT, d))),
-    ...ARCHIVOS_SUELTOS.map((f) => join(ROOT, f)).filter((f) => existsSync(f)),
-  ].map((f) => ({ rel: relative(ROOT, f).split(sep).join("/"), src: readFileSync(f, "utf8") }))
+  const archivos = leerFuentes(RAICES, ARCHIVOS_SUELTOS)
 
   it("scans the real tree (guards against a ghost loop)", () => {
     const rels = new Set(archivos.map((a) => a.rel))

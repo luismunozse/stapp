@@ -26,6 +26,10 @@ interface FilaUsuario {
 // the query settles, so a rejection is never remembered either.
 const TTL_MS = 5_000
 export const CACHE_MAX_ENTRIES = 5000
+// A hung query must not hang every request of the user (they all wait on the
+// same single-flight promise): past this it is aborted and the request fails
+// closed with a 500, and the in-flight entry is dropped so the next one retries.
+const LOOKUP_TIMEOUT_MS = 3_000
 const cache = new Map<string, { fila: FilaUsuario; expiresAt: number }>()
 const enVuelo = new Map<string, Promise<FilaUsuario | null>>()
 
@@ -40,6 +44,7 @@ async function consultar(userId: string): Promise<FilaUsuario | null> {
     .from("users")
     .select("rol, sucursal_id, organization_id, deleted_at")
     .eq("id", userId)
+    .abortSignal(AbortSignal.timeout(LOOKUP_TIMEOUT_MS))
     .maybeSingle()
 
   if (error) throw new Error(`Could not read the user's row: ${error.message}`)
@@ -60,7 +65,11 @@ function leerFila(userId: string): Promise<FilaUsuario | null> {
   const pendiente = enVuelo.get(userId)
   if (pendiente) return pendiente
 
-  const consulta = consultar(userId).finally(() => enVuelo.delete(userId))
+  // Only drop our own entry: clearSesionSucursalCache() may have let a newer
+  // flight of this user start while this one was still pending.
+  const consulta: Promise<FilaUsuario | null> = consultar(userId).finally(() => {
+    if (enVuelo.get(userId) === consulta) enVuelo.delete(userId)
+  })
   enVuelo.set(userId, consulta)
   return consulta
 }

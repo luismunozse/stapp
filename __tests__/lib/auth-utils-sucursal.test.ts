@@ -200,6 +200,25 @@ describe("requireAuth — a JWT that no longer matches the user's row is a stale
     expect(r.userId).toBeNull()
   })
 
+  it.each([
+    ["a TECNICO whose role changed", "TECNICO", fila({ rol: "VENDEDOR" })],
+    ["an ADMIN that was deleted", "ADMIN", fila({ rol: "ADMIN", deleted_at: "2026-10-27T12:00:00Z", sucursal_id: null })],
+  ])("an impersonation session (%s) still gets the 401 SESSION_STALE but keeps its cookie", async (_caso, rolJwt, row) => {
+    // Clearing it would drop the impersonation token the superadmin needs to exit
+    // (same skip as middleware.ts deletedUserResponse).
+    const impersonada = sesion(rolJwt, rolJwt === "ADMIN" ? null : "suc-A")
+    impersonada.user.isImpersonating = true
+    vi.mocked(auth).mockResolvedValue(impersonada)
+    usersResponde(row)
+
+    const r = await requireAuth()
+
+    expect(r.error!.status).toBe(401)
+    expect(await r.error!.json()).toEqual({ error: MENSAJE, code: "SESSION_STALE" })
+    expect(r.error!.headers.get("set-cookie")).toBeNull()
+    expect(r.session).toBeNull()
+  })
+
   it("a plain 401 (no session at all) does not touch the cookie", async () => {
     vi.mocked(auth).mockResolvedValue(null as any)
 
@@ -405,6 +424,130 @@ describe("requireAuth — single-flight lookup", () => {
 
     expect(despues.error).toBeNull()
     expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
+  })
+
+  it("two in-flight callers with different JWT roles share ONE query and are judged separately", async () => {
+    const { abrir } = conPuerta(async () => ({ data: fila({ rol: "TECNICO" }), error: null }))
+    const deRol = (role: string) => ({
+      user: { id: "user-1", role, organizationId: "org-1", sucursalId: "suc-A" as string | null },
+    })
+
+    const coincide = conSucursalVigente(deRol("TECNICO"))
+    const cambioDeRol = conSucursalVigente(deRol("VENDEDOR"))
+    await alcanzanElLookup()
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+    abrir()
+    const [a, b] = await Promise.all([coincide, cambioDeRol])
+
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+    expect(a!.user.sucursalId).toBe("suc-B")
+    expect(b).toBeNull()
+  })
+
+  it("a flight that settles late does not remove the entry of a newer flight", async () => {
+    // Two flights of one user only coexist if the cache is cleared in between.
+    const compuertas: Array<(r: { data: unknown; error: unknown }) => void> = []
+    vi.mocked(supabaseAdmin.from).mockImplementation((() => {
+      const chain = createChainMock(null)
+      chain.maybeSingle = vi.fn(() => new Promise((resolver) => compuertas.push(resolver)))
+      return chain
+    }) as any)
+    const sesionDe = () => ({
+      user: { id: "user-1", role: "TECNICO", organizationId: "org-1", sucursalId: null as string | null },
+    })
+
+    const vieja = conSucursalVigente(sesionDe())
+    clearSesionSucursalCache()
+    const nueva = conSucursalVigente(sesionDe())
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
+
+    const viejaFallo = expect(vieja).rejects.toThrow()
+    compuertas[0]({ data: null, error: { message: "boom" } }) // the old flight settles first, failing
+    await viejaFallo
+
+    const otra = conSucursalVigente(sesionDe()) // must join the newer flight, not start a third query
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
+
+    compuertas[1]({ data: fila(), error: null })
+    const [n, o] = await Promise.all([nueva, otra])
+    expect(n!.user.sucursalId).toBe("suc-B")
+    expect(o!.user.sucursalId).toBe("suc-B")
+  })
+})
+
+describe("requireAuth — the lookup is bounded", () => {
+  const T0 = new Date("2026-10-27T12:00:00Z").getTime()
+  const vaciarMicrotareas = async () => {
+    for (let i = 0; i < 30; i++) await Promise.resolve()
+  }
+
+  it("a query that never settles is aborted after 3 s: 500, and the next request issues a new query", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "Date"] })
+    vi.setSystemTime(T0)
+    // AbortSignal.timeout runs on native timers that fake timers do not move, so
+    // it is rebuilt on top of the faked setTimeout.
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation((ms: number) => {
+      const controlador = new AbortController()
+      setTimeout(() => controlador.abort(new DOMException("The operation timed out.", "TimeoutError")), ms)
+      return controlador.signal
+    })
+    try {
+      vi.mocked(auth).mockResolvedValue(sesion("TECNICO", "suc-A"))
+      // Like fetch, the colgada query only ends when the signal it was given aborts.
+      const colgada = createChainMock(null)
+      let senal!: AbortSignal
+      colgada.abortSignal = vi.fn((s: AbortSignal) => {
+        senal = s
+        return colgada
+      })
+      colgada.maybeSingle = vi.fn(
+        () => new Promise((_, rechazar) => senal.addEventListener("abort", () => rechazar(senal.reason)))
+      )
+      vi.mocked(supabaseAdmin.from).mockReturnValueOnce(colgada as any)
+
+      let resuelta = false
+      const pendiente = requireAuth().then((r) => {
+        resuelta = true
+        return r
+      })
+      await vaciarMicrotareas()
+      expect(timeout).toHaveBeenCalledWith(3_000)
+      expect(colgada.abortSignal).toHaveBeenCalledWith(senal)
+
+      await vi.advanceTimersByTimeAsync(2_999)
+      expect(resuelta).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      const r = await pendiente
+
+      expect(r.error!.status).toBe(500)
+      expect(r.session).toBeNull()
+
+      // The aborted flight left nothing behind: the next request queries again.
+      vi.mocked(supabaseAdmin.from).mockReturnValueOnce(createChainMock(fila()) as any)
+      const despues = requireAuth()
+      await vaciarMicrotareas()
+      const ok = await despues
+      expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
+      expect(ok.error).toBeNull()
+      expect(ok.session!.user.sucursalId).toBe("suc-B")
+    } finally {
+      timeout.mockRestore()
+    }
+  })
+
+  it("a lookup that answers in time is untouched by the bound", async () => {
+    vi.mocked(auth).mockResolvedValue(sesion("TECNICO", "suc-A"))
+    const chain = usersResponde(fila())
+    const timeout = vi.spyOn(AbortSignal, "timeout")
+    try {
+      const r = await requireAuth()
+
+      expect(r.error).toBeNull()
+      expect(chain.abortSignal).toHaveBeenCalledTimes(1)
+      expect(timeout).toHaveBeenCalledWith(3_000)
+    } finally {
+      timeout.mockRestore()
+    }
   })
 })
 

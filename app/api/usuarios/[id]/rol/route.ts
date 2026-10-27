@@ -194,19 +194,19 @@ export async function PATCH(
 
     // Guard 5: cortarle la sesion al usuario tocado.
     //
-    // `token.role` se firma en el JWT al iniciar sesion y NO se vuelve a leer:
-    // el refresh de lib/auth.ts solo re-sincroniza nombre y avatar, y cada
-    // refresco extiende `exp` un dia mas. Con la cookie a 30 dias, un usuario
-    // activo puede arrastrar el rol viejo durante semanas.
+    // `token.role` se firma en el JWT al iniciar sesion y esta ruta no puede
+    // cambiarlo. El corte lo hace requireAuth(): relee la fila del usuario (cache
+    // de ~5 s por instancia, lib/sesion-sucursal.ts) y, si el rol de la BD ya no
+    // coincide con el del JWT, responde 401 SESSION_STALE y borra la cookie de
+    // sesion. El cambio de rol aplica entonces en unos segundos, no en horas.
     //
-    // Invalidar el refresh token corta esa cadena: el JWT que ya tiene sigue
-    // siendo valido hasta su `exp` (24 h como mucho) pero no se puede
-    // extender, asi que el usuario vuelve a loguearse y entra con el rol
-    // nuevo. NO es inmediato, y no hay forma de que lo sea sin leer el rol de
-    // la BD en cada request.
+    // Invalidar el refresh token sigue haciendo falta: corta la cadena de
+    // refrescos, asi que el JWT viejo no se puede extender y el usuario vuelve a
+    // loguearse con el rol nuevo. Sin eso, una sesion restaurada desde el refresh
+    // token podria seguir extendiendo un JWT con el rol anterior.
     //
-    // Se invalida SIEMPRE, suba o baje de rol: una promocion que no aplica
-    // hasta mañana es un pedido de soporte igual que una degradacion.
+    // Se invalida SIEMPRE, suba o baje de rol: una promocion que no aplica es un
+    // pedido de soporte igual que una degradacion.
     await invalidateRefreshToken(id)
 
     await supabaseAdmin.from("audit_logs").insert({

@@ -85,15 +85,17 @@ export async function requireAuth() {
   // stale token and every request repeats this 401; with it the next navigation
   // carries no token and the middleware sends the user to /login. The error is a
   // NextResponse, so the cookie rides on it and nothing else has to change.
+  // Never for an impersonation session (same skip as the middleware's
+  // deletedUserResponse): the cookie is the impersonation token, and clearing it
+  // would also drop the superadmin's way back out. Those keep the 401 alone.
   const sesionVigente = vigente.sesionVigente
   if (!sesionVigente) {
+    const respuesta = NextResponse.json(
+      { error: "Tu sesión cambió. Volvé a iniciar sesión.", code: "SESSION_STALE" },
+      { status: 401 }
+    )
     return {
-      error: clearSessionCookie(
-        NextResponse.json(
-          { error: "Tu sesión cambió. Volvé a iniciar sesión.", code: "SESSION_STALE" },
-          { status: 401 }
-        )
-      ),
+      error: session.user.isImpersonating ? respuesta : clearSessionCookie(respuesta),
       session: null,
       organizationId: null,
       userId: null,

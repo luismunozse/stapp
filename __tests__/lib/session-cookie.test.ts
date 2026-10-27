@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { NextResponse } from "next/server"
 import { clearSessionCookie, sessionCookieDomain, sessionCookieName } from "@/lib/session-cookie"
+import { leerFuentes, sinComentarios } from "../helpers/fuentes"
 
 beforeEach(() => {
   delete process.env.COOKIE_DOMAIN
@@ -67,5 +68,38 @@ describe("clearSessionCookie", () => {
     expect(cookie).toMatchObject({ value: "", maxAge: 0, path: "/", httpOnly: true })
     expect(cookie?.secure).toBeFalsy()
     expect(cookie?.domain).toBeUndefined()
+  })
+})
+
+// lib/auth.ts cannot be imported in tests (next-auth does not load here), so the
+// cookie rules are pinned statically: they live in lib/session-cookie.ts and
+// every other place that needs them imports them.
+describe("one source for the cookie rules", () => {
+  const fuentes = leerFuentes(["app", "lib", "components", "hooks", "contexts"], ["middleware.ts"])
+
+  it("scans the real tree (guards against a ghost loop)", () => {
+    expect(fuentes.length).toBeGreaterThan(500)
+    expect(fuentes.some((f) => f.rel === "lib/auth.ts")).toBe(true)
+  })
+
+  it.each([
+    "lib/auth.ts",
+    "lib/impersonation.ts",
+    "middleware.ts",
+    "app/api/superadmin/impersonate/route.ts",
+    "app/api/auth/impersonate/exit/route.ts",
+  ])("%s takes the cookie name and domain from lib/session-cookie.ts", (rel) => {
+    const f = fuentes.find((x) => x.rel === rel)
+    expect(f, rel).toBeDefined()
+    expect(sinComentarios(f!.src)).toMatch(/from "@\/lib\/session-cookie"/)
+  })
+
+  it("nothing else hardcodes the session cookie name or reads process.env.COOKIE_DOMAIN", () => {
+    const duplicados = fuentes
+      .filter((f) => f.rel !== "lib/session-cookie.ts")
+      .filter((f) => /next-auth\.session-token|process\.env\.COOKIE_DOMAIN/.test(sinComentarios(f.src)))
+      .map((f) => f.rel)
+      .sort()
+    expect(duplicados).toEqual([])
   })
 })
