@@ -73,7 +73,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
   const router = useRouter()
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === "ADMIN"
-  const { confirm, showError } = useModal()
+  const { confirm, showError, showSuccess } = useModal()
   const { timezone } = useCurrency()
   const [vendedor, setVendedor] = useState<VendedorDetalle | null>(null)
   const [loading, setLoading] = useState(true)
@@ -103,14 +103,9 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
   }
 
   const handleDelete = async () => {
-    if (vendedor && vendedor.ventasTotal > 0) {
-      await showError(`No se puede eliminar un vendedor con ${vendedor.ventasTotal} venta(s) asociada(s). Reasigne las ventas primero.`)
-      return
-    }
-
     const confirmed = await confirm({
       title: "Eliminar Vendedor",
-      description: "¿Estás seguro de eliminar este vendedor? Esta acción no se puede deshacer.",
+      description: "¿Estás seguro de eliminar este vendedor? Si tiene historial (ventas, órdenes o caja) quedará dado de baja: pierde el acceso y su historial se conserva. Si no tiene historial, se elimina.",
       confirmText: "Eliminar",
       cancelText: "Cancelar",
       variant: "danger",
@@ -122,6 +117,8 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
     try {
       const res = await fetch(`/api/vendedores/${id}`, { method: "DELETE" })
       if (res.ok) {
+        const data = await res.json().catch(() => null)
+        if (data?.baja && data.message) await showSuccess(data.message)
         router.push("/vendedores")
       } else {
         const data = await res.json()
@@ -180,7 +177,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
               variant="destructive"
               size="sm"
               onClick={handleDelete}
-              disabled={deleting || vendedor.ventasTotal > 0}
+              disabled={deleting}
             >
               <Trash2 className="mr-1.5 h-4 w-4" />
               <span className="hidden sm:inline">{deleting ? "Eliminando..." : "Eliminar"}</span>
