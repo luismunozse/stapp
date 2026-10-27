@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
+import { aplicarAlcanceOrdenes, type AlcanceOrdenes } from "@/lib/ordenes/alcance-lectura"
 import { sendCustomer, proveedorCliente } from "@/lib/email/index"
 import {
   NotificationType,
@@ -257,25 +258,43 @@ export class NotificationService {
   }
 
   // Metodo para obtener historial de notificaciones
-  async getNotificationHistory(ordenId?: string, limit = 50) {
-    let query = supabaseAdmin
-      .from("notification_logs")
-      .select(`
+  //
+  // `alcance` (omit for the unfiltered history) narrows the rows to those whose
+  // order is in the caller's read scope. A lookup by `ordenId` is expected to have
+  // been checked against the scope by the caller already.
+  async getNotificationHistory(ordenId?: string, limit = 50, alcance?: AlcanceOrdenes) {
+    const construir = (ordenInner: boolean) =>
+      supabaseAdmin
+        .from("notification_logs")
+        .select(`
         id, tipo, canal, estado, destinatario, asunto, error_message, created_at,
         estado_entrega, delivered_at, bounced_at, bounce_tipo, proveedor,
-        ordenes_servicio (numero_orden),
+        ordenes_servicio${ordenInner ? "!inner" : ""} (numero_orden),
         clientes (nombre)
       `)
-      .eq("organization_id", this.organizationId)
-      .order("created_at", { ascending: false })
-      .limit(limit)
+        .eq("organization_id", this.organizationId)
+        .order("created_at", { ascending: false })
+        .limit(limit)
 
-    if (ordenId) {
-      query = query.eq("orden_id", ordenId)
+    if (ordenId || !alcance || alcance.tipo === "todas") {
+      let query = construir(false)
+      if (ordenId) {
+        query = query.eq("orden_id", ordenId)
+      }
+      const { data } = await query
+      return data || []
     }
 
-    const { data } = await query
-    return data || []
+    // Rows with no order keep their behavior; rows with an order only show when that
+    // order is in scope. PostgREST cannot express "no order OR order in scope" in
+    // one query, so fetch both sides and merge.
+    const [sinOrden, conOrden] = await Promise.all([
+      construir(false).is("orden_id", null),
+      aplicarAlcanceOrdenes(construir(true), alcance, { referencedTable: "ordenes_servicio" }),
+    ])
+    return [...(sinOrden.data || []), ...(conOrden.data || [])]
+      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, limit)
   }
 }
 

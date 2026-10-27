@@ -1,20 +1,44 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { supabaseAdmin } from "@/lib/supabase"
 import { NotificationService } from "@/lib/notifications"
+import { ordenEnAlcance, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
     const ordenId = searchParams.get("ordenId")
     const limit = parseInt(searchParams.get("limit") || "50")
 
+    // The history shows the order number and the customer of each row, so it
+    // follows the caller's order read scope.
+    const alcance = await resolverAlcanceOrdenesDeSesion({
+      role,
+      userId,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+
+    if (ordenId && alcance.tipo !== "todas") {
+      // A missing order and one out of scope answer the same.
+      const { data: orden } = await supabaseAdmin
+        .from("ordenes_servicio")
+        .select("sucursal_id, tecnico_id")
+        .eq("id", ordenId)
+        .eq("organization_id", organizationId!)
+        .single()
+      if (!ordenEnAlcance(alcance, orden)) {
+        return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
+      }
+    }
+
     const notificationService = new NotificationService(organizationId!)
     const history = await notificationService.getNotificationHistory(
       ordenId || undefined,
-      limit
+      limit,
+      alcance
     )
 
     return NextResponse.json(history)
