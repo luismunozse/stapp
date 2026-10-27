@@ -1,5 +1,8 @@
-import { auth } from "@/lib/auth"
+import { sesionConSucursalVigente } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
+import { claveDeAlcance, sucursalDeClave } from "@/lib/dashboard-alcance"
+import { soloAtendidasPor, soloOriginadasEn } from "@/lib/sucursal-ordenes"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ClipboardList, Users, Package, DollarSign, Shield, ShoppingCart, TrendingUp, CheckCircle, AlertTriangle, Clock, Wrench } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
@@ -23,9 +26,59 @@ import { countRealOrders } from "@/lib/onboarding/practica"
 import { HeroMetric } from "@/components/dashboard/hero-metric"
 import { ActionStrip, buildAdminActions } from "@/components/dashboard/action-strip"
 
-// Cachear datos del dashboard por 2 minutos
+// Cachear datos del dashboard por 2 minutos. La sucursal entra por ARGUMENTO (`alcanceKey`: el id
+// de la sucursal o "todas"): unstable_cache indexa por los argumentos, así que dos vistas con
+// distinto alcance nunca comparten una entrada. La función no lee nada más del espectador.
 const getDashboardData = unstable_cache(
-  async (organizationId: string) => {
+  async (organizationId: string, alcanceKey: string) => {
+    const sucursalId = sucursalDeClave(alcanceKey) // null = todas las sucursales
+    const conteo = { count: "exact", head: true } as const
+
+    // Las funciones de abajo arman el select con una variable, y el tipo del resultado se infiere
+    // del texto literal del select: sin literal no hay tipo. Devuelven `any`, como el resto de la página.
+
+    // Órdenes que la sucursal está atendiendo (pendientes, vencidas, gráficos).
+    const ordenesQueAtiende = (columnas: string, opciones?: typeof conteo): any =>
+      soloAtendidasPor(
+        supabaseAdmin.from("ordenes_servicio").select(columnas, opciones).eq("organization_id", organizationId),
+        sucursalId,
+      )
+    // Órdenes que la sucursal recibió: la plata y el conteo del mes siguen al origen.
+    const ordenesDeOrigen = (columnas: string, opciones?: typeof conteo): any =>
+      soloOriginadasEn(
+        supabaseAdmin.from("ordenes_servicio").select(columnas, opciones).eq("organization_id", organizationId),
+        sucursalId,
+      )
+    // Ventas completadas de la sucursal que las hizo.
+    const ventas = (columnas: string): any =>
+      soloOriginadasEn(
+        supabaseAdmin.from("ventas").select(columnas).eq("organization_id", organizationId).eq("estado", "COMPLETADA"),
+        sucursalId,
+      )
+    // Facturas pagadas: pertenecen a la sucursal de origen de la orden que facturan.
+    const facturasPagadas = (columnas: string): any =>
+      soloOriginadasEn(
+        supabaseAdmin
+          .from("facturas")
+          .select(`${columnas}, ordenes_servicio!inner(organization_id, sucursal_id)`)
+          .eq("ordenes_servicio.organization_id", organizationId)
+          .eq("estado_pago", "PAGADO"),
+        sucursalId,
+        "ordenes_servicio.sucursal_id",
+      )
+    // Cobros directos a órdenes, de la sucursal de origen de la orden. El join solo se agrega
+    // cuando hay sucursal, así que la consulta de todas las sucursales queda como estaba.
+    const cobrosDeOrden = (columnas: string): any => {
+      const base = supabaseAdmin.from("cobros_orden")
+      const consulta =
+        sucursalId === null ? base.select(columnas) : base.select(`${columnas}, ordenes_servicio!inner(sucursal_id)`)
+      return soloOriginadasEn(
+        consulta.eq("organization_id", organizationId).neq("anulado", true),
+        sucursalId,
+        "ordenes_servicio.sucursal_id",
+      )
+    }
+
     const hoy = new Date()
     const enSieteDias = new Date()
     enSieteDias.setDate(enSieteDias.getDate() + 7)
@@ -36,6 +89,39 @@ const getDashboardData = unstable_cache(
     const primerDiaMesAnterior = new Date(primerDiaMes)
     primerDiaMesAnterior.setMonth(primerDiaMesAnterior.getMonth() - 1)
     const ultimoDiaMesAnterior = new Date(primerDiaMes.getTime() - 1)
+
+    // Garantías activas que vencen en los próximos 7 días. Las de una orden siguen a la sucursal de
+    // origen de la orden; las de una venta, a la sucursal que la hizo.
+    const garantiasDeOrdenes = () =>
+      soloOriginadasEn(
+        supabaseAdmin
+          .from("garantias")
+          .select(`
+          id, orden_id, fecha_vencimiento,
+          ordenes_servicio!inner (
+            id, numero_orden, organization_id, sucursal_id,
+            clientes (nombre)
+          )
+        `)
+          .eq("ordenes_servicio.organization_id", organizationId)
+          .eq("estado", "ACTIVA")
+          .gte("fecha_vencimiento", hoy.toISOString())
+          .lte("fecha_vencimiento", enSieteDias.toISOString()),
+        sucursalId,
+        "ordenes_servicio.sucursal_id",
+      )
+    const garantiasDeVentas = () =>
+      soloOriginadasEn(
+        supabaseAdmin
+          .from("garantias_venta")
+          .select("id, numero_garantia, fecha_vencimiento, items_venta!inner(descripcion), ventas!inner(numero_venta, cliente_nombre, organization_id, sucursal_id)")
+          .eq("organization_id", organizationId)
+          .eq("estado", "ACTIVA")
+          .gte("fecha_vencimiento", hoy.toISOString())
+          .lte("fecha_vencimiento", enSieteDias.toISOString()),
+        sucursalId,
+        "ventas.sucursal_id",
+      )
 
     const [
       totalOrdenesResult,
@@ -65,193 +151,97 @@ const getDashboardData = unstable_cache(
       cobrosMesAnteriorResult,
       clientesMesAnteriorResult,
     ] = await Promise.all([
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select("id", { count: "exact", head: true })
-        .eq("organization_id", organizationId),
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select("id", { count: "exact", head: true })
-        .eq("organization_id", organizationId)
-        .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO"]),
+      ordenesQueAtiende("id", conteo),
+      ordenesQueAtiende("id", conteo).in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO"]),
+      // Clientes: sin alcance por sucursal hasta que lo traiga su PR (PENDIENTE_PR18)
       supabaseAdmin
         .from("clientes")
         .select("id", { count: "exact", head: true })
         .eq("organization_id", organizationId),
+      // Stock bajo: sin alcance por sucursal hasta que lo traiga su PR (PENDIENTE_PR15)
       supabaseAdmin
         .from("inventario")
         .select("id", { count: "exact", head: true })
         .eq("organization_id", organizationId)
         .lt("stock", 5),
-      supabaseAdmin
-        .from("facturas")
-        .select("total, orden_id, ordenes_servicio!inner(organization_id)")
-        .eq("ordenes_servicio.organization_id", organizationId)
-        .eq("estado_pago", "PAGADO")
-        .gte("fecha", primerDiaMes.toISOString()),
-      supabaseAdmin
-        .from("garantias")
-        .select(`
-          id, orden_id, fecha_vencimiento,
-          ordenes_servicio!inner (
-            id, numero_orden, organization_id,
-            clientes (nombre)
-          )
-        `)
-        .eq("ordenes_servicio.organization_id", organizationId)
-        .eq("estado", "ACTIVA")
-        .gte("fecha_vencimiento", hoy.toISOString())
-        .lte("fecha_vencimiento", enSieteDias.toISOString())
-        .order("fecha_vencimiento", { ascending: true }),
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select("estado")
-        .eq("organization_id", organizationId),
-      supabaseAdmin
-        .from("facturas")
-        .select("total, fecha, orden_id, ordenes_servicio!inner(organization_id)")
-        .eq("ordenes_servicio.organization_id", organizationId)
-        .eq("estado_pago", "PAGADO")
+      facturasPagadas("total, orden_id").gte("fecha", primerDiaMes.toISOString()),
+      // Garantías de órdenes: de la sucursal de origen de la orden
+      garantiasDeOrdenes().order("fecha_vencimiento", { ascending: true }),
+      ordenesQueAtiende("estado"),
+      facturasPagadas("total, fecha, orden_id")
         .gte("fecha", hace7Dias.toISOString())
         .order("fecha", { ascending: true }),
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select(`
+      ordenesQueAtiende(`
           id, numero_orden, codigo_orden, dispositivo, estado, fecha_ingreso,
           clientes (nombre)
         `)
-        .eq("organization_id", organizationId)
         .order("fecha_ingreso", { ascending: false })
         .limit(5),
       // Ventas de hoy
-      supabaseAdmin
-        .from("ventas")
-        .select("id, total")
-        .eq("organization_id", organizationId)
-        .eq("estado", "COMPLETADA")
-        .gte("created_at", new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+      ventas("id, total").gte("created_at", new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
       // Facturas pagadas hoy
-      supabaseAdmin
-        .from("facturas")
-        .select("total, orden_id, ordenes_servicio!inner(organization_id)")
-        .eq("ordenes_servicio.organization_id", organizationId)
-        .eq("estado_pago", "PAGADO")
-        .gte("fecha", new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+      facturasPagadas("total, orden_id").gte("fecha", new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
       // Cobros directos a órdenes de hoy
-      supabaseAdmin
-        .from("cobros_orden")
-        .select("monto, orden_id")
-        .eq("organization_id", organizationId)
-        .neq("anulado", true)
-        .gte("created_at", new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+      cobrosDeOrden("monto, orden_id").gte("created_at", new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
 
       // Ventas del mes
-      supabaseAdmin
-        .from("ventas")
-        .select("id, total")
-        .eq("organization_id", organizationId)
-        .eq("estado", "COMPLETADA")
-        .gte("created_at", primerDiaMes.toISOString()),
+      ventas("id, total").gte("created_at", primerDiaMes.toISOString()),
 
       // Ventas últimos 7 días (para gráfica de ingresos)
-      supabaseAdmin
-        .from("ventas")
-        .select("total, created_at")
-        .eq("organization_id", organizationId)
-        .eq("estado", "COMPLETADA")
+      ventas("total, created_at")
         .gte("created_at", hace7Dias.toISOString())
         .order("created_at", { ascending: true }),
 
-      // Garantías de venta por vencer (próximos 7 días)
-      supabaseAdmin
-        .from("garantias_venta")
-        .select("id, numero_garantia, fecha_vencimiento, items_venta!inner(descripcion), ventas!inner(numero_venta, cliente_nombre, organization_id)")
-        .eq("organization_id", organizationId)
-        .eq("estado", "ACTIVA")
-        .gte("fecha_vencimiento", hoy.toISOString())
-        .lte("fecha_vencimiento", enSieteDias.toISOString())
-        .order("fecha_vencimiento", { ascending: true }),
+      // Garantías de venta por vencer (próximos 7 días): de la sucursal que hizo la venta
+      garantiasDeVentas().order("fecha_vencimiento", { ascending: true }),
 
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select(`
+      ordenesQueAtiende(`
           tecnico_id, estado,
           users!ordenes_servicio_tecnico_id_fkey (nombre)
         `)
-        .eq("organization_id", organizationId)
         .not("tecnico_id", "is", null)
         .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO", "REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"]),
-      // Órdenes con cobro pendiente (para antigüedad de deuda)
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select(`
+      // Órdenes con cobro pendiente (para antigüedad de deuda): la deuda sigue a la sucursal de origen
+      ordenesDeOrigen(`
           id, numero_orden, codigo_orden, costo_final, total_cobrado, descuento_cobro,
           estado_cobro, fecha_ingreso, estado,
           clientes (nombre)
         `)
-        .eq("organization_id", organizationId)
         .in("estado_cobro", ["PENDIENTE", "PARCIAL"])
         .in("estado", ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION"])
         .gt("costo_final", 0),
       // Órdenes con fecha prometida vencida
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select(`
+      ordenesQueAtiende(`
           id, numero_orden, codigo_orden, dispositivo, estado, fecha_prometida,
           clientes (nombre)
         `)
-        .eq("organization_id", organizationId)
         .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO"])
         .lt("fecha_prometida", hoy.toISOString())
         .not("fecha_prometida", "is", null),
       // Cobros directos a órdenes (sin factura) del mes actual
-      supabaseAdmin
-        .from("cobros_orden")
-        .select("monto, orden_id")
-        .eq("organization_id", organizationId)
-        .neq("anulado", true)
-        .gte("created_at", primerDiaMes.toISOString()),
+      cobrosDeOrden("monto, orden_id").gte("created_at", primerDiaMes.toISOString()),
       // Cobros directos a órdenes últimos 7 días (para gráfica)
-      supabaseAdmin
-        .from("cobros_orden")
-        .select("monto, orden_id, created_at")
-        .eq("organization_id", organizationId)
-        .neq("anulado", true)
+      cobrosDeOrden("monto, orden_id, created_at")
         .gte("created_at", hace7Dias.toISOString())
         .order("created_at", { ascending: true }),
       // --- Datos del mes anterior (para comparativa) ---
-      // Órdenes pendientes mes anterior
-      supabaseAdmin
-        .from("ordenes_servicio")
-        .select("id", { count: "exact", head: true })
-        .eq("organization_id", organizationId)
+      // Órdenes recibidas el mes anterior
+      ordenesDeOrigen("id", conteo)
         .gte("fecha_ingreso", primerDiaMesAnterior.toISOString())
         .lte("fecha_ingreso", ultimoDiaMesAnterior.toISOString()),
       // Ingresos facturas mes anterior
-      supabaseAdmin
-        .from("facturas")
-        .select("total, orden_id, ordenes_servicio!inner(organization_id)")
-        .eq("ordenes_servicio.organization_id", organizationId)
-        .eq("estado_pago", "PAGADO")
+      facturasPagadas("total, orden_id")
         .gte("fecha", primerDiaMesAnterior.toISOString())
         .lte("fecha", ultimoDiaMesAnterior.toISOString()),
       // Ventas mes anterior
-      supabaseAdmin
-        .from("ventas")
-        .select("id, total")
-        .eq("organization_id", organizationId)
-        .eq("estado", "COMPLETADA")
+      ventas("id, total")
         .gte("created_at", primerDiaMesAnterior.toISOString())
         .lte("created_at", ultimoDiaMesAnterior.toISOString()),
       // Cobros directos mes anterior
-      supabaseAdmin
-        .from("cobros_orden")
-        .select("monto, orden_id")
-        .eq("organization_id", organizationId)
-        .neq("anulado", true)
+      cobrosDeOrden("monto, orden_id")
         .gte("created_at", primerDiaMesAnterior.toISOString())
         .lte("created_at", ultimoDiaMesAnterior.toISOString()),
-      // Clientes mes anterior
+      // Clientes mes anterior (PENDIENTE_PR18)
       supabaseAdmin
         .from("clientes")
         .select("id", { count: "exact", head: true })
@@ -293,7 +283,8 @@ const getDashboardData = unstable_cache(
 )
 
 export default async function DashboardPage() {
-  const session = await auth()
+  // La sucursal sale de la base (la del JWT queda vieja hasta ~18 h después de un traslado).
+  const session = await sesionConSucursalVigente()
   if (!session || !session.user?.organizationId) {
     redirect("/login")
   }
@@ -304,6 +295,13 @@ export default async function DashboardPage() {
   const isAdmin = userRole === "ADMIN"
   const isVendedor = userRole === "VENDEDOR"
   const isTecnico = userRole === "TECNICO"
+
+  // Alcance de lectura: el ADMIN elige sucursal (o todas) con el selector; el resto ve la suya y
+  // la cookie no cuenta. Sin sucursal, un no-admin no ve nada de ninguna.
+  const alcanceKey = claveDeAlcance(
+    await sucursalParaLectura({ role: userRole, userSucursalId: session.user.sucursalId ?? null }),
+  )
+  const sucursalDelAlcance = sucursalDeClave(alcanceKey)
 
   // Obtener la última versión vista por el usuario (sin caché, es por usuario)
   // También leemos `nombre` directo de la BD en vez de confiar en session.user.name,
@@ -359,6 +357,7 @@ export default async function DashboardPage() {
   let avgDiasResolucion: number | null = null
 
   if (isTecnico) {
+    // Lo asignado al técnico, de cualquier sucursal (BM-6): no lleva filtro de sucursal.
     const primerDiaMes = new Date(new Date().setDate(1))
     const hoyIso = new Date().toISOString()
     const [activas, completadas, recientes, sinDiagnostico, esperandoRepuesto, vencidas, completadasConFecha] = await Promise.all([
@@ -448,21 +447,20 @@ export default async function DashboardPage() {
   if (isVendedor) {
     const primerDiaMes = new Date(new Date().setDate(1))
     const hoyInicio = new Date(new Date().setHours(0, 0, 0, 0))
+    // Sus ventas, de su sucursal, como el listado de ventas: un vendedor trasladado deja atrás las anteriores.
+    const misVentas = () =>
+      soloOriginadasEn(
+        supabaseAdmin
+          .from("ventas")
+          .select("id, total")
+          .eq("organization_id", organizationId)
+          .eq("vendedor_id", userId)
+          .eq("estado", "COMPLETADA"),
+        sucursalDelAlcance,
+      )
     const [ventasHoy, ventasMes] = await Promise.all([
-      supabaseAdmin
-        .from("ventas")
-        .select("id, total")
-        .eq("organization_id", organizationId)
-        .eq("vendedor_id", userId)
-        .eq("estado", "COMPLETADA")
-        .gte("created_at", hoyInicio.toISOString()),
-      supabaseAdmin
-        .from("ventas")
-        .select("id, total")
-        .eq("organization_id", organizationId)
-        .eq("vendedor_id", userId)
-        .eq("estado", "COMPLETADA")
-        .gte("created_at", primerDiaMes.toISOString()),
+      misVentas().gte("created_at", hoyInicio.toISOString()),
+      misVentas().gte("created_at", primerDiaMes.toISOString()),
     ])
     const ventasHoyData = ventasHoy.data as { total: number }[] | null
     misVentasHoyTotal = ventasHoyData?.reduce((sum, v) => sum + (v.total || 0), 0) || 0
@@ -500,7 +498,7 @@ export default async function DashboardPage() {
     cobrosMesAnteriorResult,
     clientesMesAnteriorResult,
     hace7Dias,
-  } = await getDashboardData(organizationId)
+  } = await getDashboardData(organizationId, alcanceKey)
 
   // Procesar datos básicos
   const totalOrdenes = totalOrdenesResult.count || 0
@@ -805,8 +803,9 @@ export default async function DashboardPage() {
       {/* Setup checklist (oculto al 100%) — guía nuevos/inactivos a su primera orden */}
       {isAdmin && <SetupChecklist />}
 
-      {/* Onboarding para cuentas nuevas */}
-      {isAdmin && totalOrdenes === 0 && (
+      {/* Onboarding para cuentas nuevas. Habla de la organización: con una sucursal elegida, que
+          esa sucursal no tenga órdenes no es una cuenta nueva, así que solo se ofrece en "Todas". */}
+      {isAdmin && sucursalDelAlcance === null && totalOrdenes === 0 && (
         <OnboardingPanel
           hasConfig={!!orgData?.zona_horaria}
           hasTecnicos={ordenesPorTecnico.length > 0}

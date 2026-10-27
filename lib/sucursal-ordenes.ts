@@ -42,6 +42,31 @@ export function filtroAtiendeSucursal(sucursalId: string | null | undefined): st
   return `sucursal_id.eq.${sucursalParaFiltro(sucursalId)}`
 }
 
+// The two query helpers below take any PostgREST filter builder and answer the same builder. They do
+// not constrain `Q` to the builder's `or` / `eq`: those are heavily overloaded generics, and checking
+// them against a constraint makes the compiler give up ("type instantiation is excessively deep").
+type ConOr<Q> = { or(filtro: string): Q }
+type ConEq<Q> = { eq(columna: string, valor: string): Q }
+
+/**
+ * Narrows a filterable query on `ordenes_servicio` to the orders a branch handles; `null` means every
+ * branch and returns the query as it came. For widgets about the work in progress (what is pending,
+ * what is late): they follow the branch that works the order. Apply it before `.order()` / `.limit()`.
+ */
+export function soloAtendidasPor<Q>(query: Q, sucursalId: string | null): Q {
+  return sucursalId === null ? query : (query as unknown as ConOr<Q>).or(filtroAtiendeSucursal(sucursalId))
+}
+
+/**
+ * Narrows a filterable query to what a branch originated: orders by the branch that took them in,
+ * sales by the branch that made them. For money (collections, invoices, sales), which stays with the
+ * origin however the order is handled. `columna` is the branch column, or its path through an embed
+ * (`ordenes_servicio.sucursal_id`). `null` means every branch.
+ */
+export function soloOriginadasEn<Q>(query: Q, sucursalId: string | null, columna = "sucursal_id"): Q {
+  return sucursalId === null ? query : (query as unknown as ConEq<Q>).eq(columna, sucursalParaFiltro(sucursalId))
+}
+
 /** A comma-separated OR list as ONE operand of a PostgREST and(...) / or(...). */
 function comoOperando(lista: string): string {
   return lista.includes(",") ? `or(${lista})` : lista

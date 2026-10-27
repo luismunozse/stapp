@@ -20,6 +20,8 @@ import {
   terminoDeBusquedaSeguro,
   esIdSeguro,
   tecnicoOfrecido,
+  soloAtendidasPor,
+  soloOriginadasEn,
   MENSAJE_TECNICO_OTRA_SUCURSAL,
 } from "@/lib/sucursal-ordenes"
 import { SUCURSAL_NINGUNA } from "@/lib/sucursal"
@@ -206,5 +208,61 @@ describe("tecnicoOfrecido (a technician that came from a draft or an appointment
     ["nobody chosen stays nobody, loaded and empty", "", [], true, ""],
   ])("a choice that %s", (_caso, elegido, ofrecidos, cargada, esperado) => {
     expect(tecnicoOfrecido(elegido, ofrecidos, cargada)).toBe(esperado)
+  })
+})
+
+// A query builder that records what is chained onto it; every method answers the builder itself.
+function constructorEspia() {
+  const llamadas: Array<[string, ...unknown[]]> = []
+  const q: any = {
+    or: (...args: unknown[]) => (llamadas.push(["or", ...args]), q),
+    eq: (...args: unknown[]) => (llamadas.push(["eq", ...args]), q),
+  }
+  return { q, llamadas }
+}
+
+describe("soloAtendidasPor (the dashboard's operational widgets: what a branch works on)", () => {
+  it("every branch (null): the query is returned untouched", () => {
+    const { q, llamadas } = constructorEspia()
+    expect(soloAtendidasPor(q, null)).toBe(q)
+    expect(llamadas).toEqual([])
+  })
+
+  it("a branch: ONE or() with the handling-branch filter, so the day the filter changes this follows", () => {
+    const { q, llamadas } = constructorEspia()
+    expect(soloAtendidasPor(q, "suc-A")).toBe(q)
+    expect(llamadas).toEqual([["or", filtroAtiendeSucursal("suc-A")]])
+  })
+
+  it("an id that cannot be spliced fails closed to the sentinel branch", () => {
+    const { q, llamadas } = constructorEspia()
+    soloAtendidasPor(q, "suc-A,sucursal_id.neq.x")
+    expect(llamadas).toEqual([["or", `sucursal_id.eq.${SUCURSAL_NINGUNA}`]])
+  })
+})
+
+describe("soloOriginadasEn (money and sales: the branch where the order or the sale was made)", () => {
+  it("every branch (null): the query is returned untouched", () => {
+    const { q, llamadas } = constructorEspia()
+    expect(soloOriginadasEn(q, null)).toBe(q)
+    expect(llamadas).toEqual([])
+  })
+
+  it("a branch: an eq on the origin column, which a later derivation never changes", () => {
+    const { q, llamadas } = constructorEspia()
+    expect(soloOriginadasEn(q, "suc-B")).toBe(q)
+    expect(llamadas).toEqual([["eq", "sucursal_id", "suc-B"]])
+  })
+
+  it("through an embed: the column of the joined table", () => {
+    const { q, llamadas } = constructorEspia()
+    soloOriginadasEn(q, "suc-B", "ordenes_servicio.sucursal_id")
+    expect(llamadas).toEqual([["eq", "ordenes_servicio.sucursal_id", "suc-B"]])
+  })
+
+  it("an id that cannot be spliced fails closed to the sentinel branch", () => {
+    const { q, llamadas } = constructorEspia()
+    soloOriginadasEn(q, "suc-A)")
+    expect(llamadas).toEqual([["eq", "sucursal_id", SUCURSAL_NINGUNA]])
   })
 })
