@@ -1,4 +1,4 @@
-import { assertSucursalEnOrg, sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
+import { SUCURSAL_NINGUNA, assertSucursalEnOrg, sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 
 /**
  * The branch a technician / seller list is scoped to, or null for every branch.
@@ -32,11 +32,15 @@ export async function sucursalParaListaPersonal(params: {
     return pedida
   }
   if (params.role === "ADMIN" && params.alcance === "escritura") {
-    return sucursalParaEscritura({
-      role: params.role,
-      organizationId: params.organizationId,
-      userSucursalId: params.userSucursalId,
-    })
+    // No write branch (no principal, two principals, a failed lookup): POST rejects everyone, so
+    // the list offers nobody instead of every branch.
+    return (
+      (await sucursalParaEscritura({
+        role: params.role,
+        organizationId: params.organizationId,
+        userSucursalId: params.userSucursalId,
+      })) ?? SUCURSAL_NINGUNA
+    )
   }
   return lectura.sucursalId
 }

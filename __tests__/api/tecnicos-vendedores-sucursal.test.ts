@@ -58,13 +58,13 @@ function usuariosDe(prefijo: string, rol: string) {
   ]
 }
 
-function montarDb() {
+function montarDb(sucursales = SUCURSALES) {
   const users = tablaPostgrest([
     ...usuariosDe("t", "TECNICO"),
     ...usuariosDe("v", "VENDEDOR"),
     usuario("adm", "Fede", "ADMIN", null),
   ])
-  mockSupabaseFrom({ users, sucursales: tablaPostgrest(SUCURSALES) } as any)
+  mockSupabaseFrom({ users, sucursales: tablaPostgrest(sucursales) } as any)
   vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: [], error: null } as any)
   return users
 }
@@ -248,6 +248,34 @@ describe("GET /api/tecnicos?alcance=escritura", () => {
     mockAuthSuccess({ role: "ADMIN", userId: "adm" })
 
     expect(await ids("?alcance=todas")).toEqual(["t-a1", "t-a2", "t-b1", "t-sin"])
+  })
+
+  // POST /api/ordenes cannot resolve a write branch in these states and rejects everyone; the
+  // list must not answer "every branch" (null) where the server accepts nobody. Fail closed.
+  describe("when the write scope cannot be resolved", () => {
+    const SIN_PRINCIPAL = SUCURSALES.map((s) => ({ ...s, principal: false }))
+    const DOS_PRINCIPALES = SUCURSALES.map((s) => (s.organization_id === "org-1" ? { ...s, principal: true } : s))
+
+    it.each([
+      ["the org has no principal branch", SIN_PRINCIPAL],
+      ["two branches are flagged principal (the lookup is a .single())", DOS_PRINCIPALES],
+    ])("%s: an ADMIN on Todas gets nobody, not every branch", async (_caso, sucursales) => {
+      montarDb(sucursales)
+      mockAuthSuccess({ role: "ADMIN", userId: "adm" })
+
+      expect(await ids("?alcance=escritura")).toEqual([])
+      // The plain read scope is not affected: it never needed the principal.
+      expect(await ids("")).toEqual(["t-a1", "t-a2", "t-b1", "t-sin"])
+    })
+
+    it("an explicit valid branch or a selected one still works without a principal", async () => {
+      montarDb(SIN_PRINCIPAL)
+      mockAuthSuccess({ role: "ADMIN", userId: "adm" })
+
+      expect(await ids("?alcance=escritura&sucursalId=suc-B")).toEqual(["t-b1"])
+      mockCookie("suc-A")
+      expect(await ids("?alcance=escritura")).toEqual(["t-a1", "t-a2"])
+    })
   })
 })
 
