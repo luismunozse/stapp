@@ -41,7 +41,8 @@ import { getNextOrderNumberByType } from "@/lib/counters"
 const MENSAJE = "Ese técnico no pertenece a la sucursal de esta orden"
 
 const PERSONAL = [
-  { id: "t-a", nombre: "Ana", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 10, costo_hora: 100 },
+  // `ordenes_servicio` is what the technicians list embeds to count the open orders in the viewer's branch.
+  { id: "t-a", nombre: "Ana", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 10, costo_hora: 100, ordenes_servicio: [{ id: "o-t-a", estado: "EN_REPARACION", sucursal_id: "suc-A" }] },
   { id: "t-a2", nombre: "Beto", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 10, costo_hora: 100 },
   { id: "t-b", nombre: "Carla", rol: "TECNICO", sucursal_id: "suc-B", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 20, costo_hora: 200 },
   { id: "t-b2", nombre: "Dario", rol: "TECNICO", sucursal_id: "suc-B", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 20, costo_hora: 200 },
