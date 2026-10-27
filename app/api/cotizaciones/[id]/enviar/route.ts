@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { generateCotizacionPDF } from "@/lib/pdf"
 import { buildCotizacionPdfExtras } from "@/lib/cotizacion-pdf"
 import { sendCotizacionEmail } from "@/lib/email"
+import { EmailSuprimidoError, replyToDelTaller } from "@/lib/email/index"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { totalPresupuestoDeOrden } from "@/lib/cotizacion-presupuesto"
 import { marcarOriginalReemplazada } from "@/lib/cotizacion-revision"
@@ -35,7 +36,7 @@ export async function POST(
         ordenes_servicio!cotizaciones_orden_id_fkey (
           id, numero_orden, dispositivo, problema_reportado, organization_id,
           clientes (*),
-          organizations (id, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria)
+          organizations (id, nombre_mostrar, email, telefono, direccion, logo_url, moneda, zona_horaria)
         ),
         clientes (*),
         sectores_cliente (id, nombre),
@@ -68,7 +69,7 @@ export async function POST(
     if (!org) {
       const { data: orgData } = await supabaseAdmin
         .from("organizations")
-        .select("id, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria")
+        .select("id, nombre_mostrar, email, telefono, direccion, logo_url, moneda, zona_horaria")
         .eq("id", organizationId!)
         .single()
       org = orgData
@@ -138,18 +139,35 @@ export async function POST(
       zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
     })
 
-    // Enviar email
-    await sendCotizacionEmail({
-      email: cliente.email,
-      nombreCliente: cliente.nombre,
-      numeroCotizacion: cotizacion.numero_cotizacion,
-      numeroOrden: orden?.numero_orden,
-      total: cotizacion.total,
-      fechaVencimiento,
-      pdfBuffer,
-      moneda: org?.moneda || "ARS",
-      zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
-    })
+    // Enviar email. Una direccion suprimida (rebote o queja) es un hecho del
+    // destinatario, no un fallo del servidor: se le explica al taller en vez de
+    // devolver un 500 opaco. La cotizacion NO pasa a ENVIADA si esto falla.
+    try {
+      await sendCotizacionEmail({
+        email: cliente.email,
+        nombreCliente: cliente.nombre,
+        numeroCotizacion: cotizacion.numero_cotizacion,
+        numeroOrden: orden?.numero_orden,
+        total: cotizacion.total,
+        fechaVencimiento,
+        pdfBuffer,
+        moneda: org?.moneda || "ARS",
+        zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
+        fromName: org?.nombre_mostrar || undefined,
+        replyTo: replyToDelTaller(org?.email),
+      })
+    } catch (sendError) {
+      if (sendError instanceof EmailSuprimidoError) {
+        return NextResponse.json(
+          {
+            error:
+              "No se puede enviar a este correo: la dirección rebotó o marcó un envío anterior como no deseado, y está bloqueada para proteger la entrega. Use otra dirección de correo o envíe la cotización por WhatsApp.",
+          },
+          { status: 422 }
+        )
+      }
+      throw sendError
+    }
 
     // Actualizar estado a ENVIADA (y persistir el vencimiento recien asignado,
     // para que la pantalla de seguimiento muestre lo mismo que el PDF enviado).
