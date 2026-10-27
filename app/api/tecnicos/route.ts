@@ -2,16 +2,26 @@ import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, assertSucursalEnOrg } from "@/lib/sucursal"
+import { sucursalParaListaPersonal } from "@/lib/sucursal-personal"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import bcrypt from "bcryptjs"
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role, session } = await requireAuth()
     if (error) return error
 
-    const { data: tecnicos, error: dbError } = await supabaseAdmin
+    // `?sucursalId=` scopes the list to one branch (BM-4); without it the request's
+    // own scope applies. See sucursalParaListaPersonal for who may ask for what.
+    const sucursalId = await sucursalParaListaPersonal({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+      organizationId: organizationId!,
+      sucursalSolicitada: new URL(request.url).searchParams.get("sucursalId"),
+    })
+
+    let query = supabaseAdmin
       .from("users")
       .select(`
         id,
@@ -23,6 +33,7 @@ export async function GET() {
         avatar_url,
         fecha_ingreso_tecnico,
         porcentaje_comision,
+        sucursal_id,
         ordenes_servicio:ordenes_servicio!tecnico_id (
           id,
           estado
@@ -32,6 +43,9 @@ export async function GET() {
       .eq("organization_id", organizationId!)
       .order("activo", { ascending: false })
       .order("nombre", { ascending: true })
+    if (sucursalId) query = query.eq("sucursal_id", sucursalId)
+
+    const { data: tecnicos, error: dbError } = await query
 
     if (dbError) {
       throw dbError
@@ -56,6 +70,7 @@ export async function GET() {
         avatarUrl: tecnico.avatar_url ?? null,
         fechaIngresoTecnico: tecnico.fecha_ingreso_tecnico ?? null,
         porcentajeComision: Number(tecnico.porcentaje_comision ?? 0),
+        sucursalId: tecnico.sucursal_id ?? null,
         ordenesActivas,
         ordenesCompletadas,
       }

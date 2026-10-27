@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, assertSucursalEnOrg } from "@/lib/sucursal"
+import { sucursalParaListaPersonal } from "@/lib/sucursal-personal"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
@@ -25,10 +26,18 @@ export async function GET(request: Request) {
     // El POST de este mismo archivo ya pedia requireAdmin y el GET quedo en
     // requireAuth: cualquier rol listaba los vendedores de la organizacion.
     // El POS no depende de esta ruta, usa /api/operadores?rol=VENDEDOR.
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, role, session } = await requireAdmin()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
+    // `?sucursalId=` scopes the list to one branch (BM-4); without it the switcher's
+    // choice applies, or every branch on "Todas".
+    const sucursalId = await sucursalParaListaPersonal({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+      organizationId: organizationId!,
+      sucursalSolicitada: searchParams.get("sucursalId"),
+    })
     const search = (searchParams.get("search") || "").trim()
     const activoParam = searchParams.get("activo")
     const page = Math.max(parseInt(searchParams.get("page") || "1"), 1)
@@ -38,13 +47,15 @@ export async function GET(request: Request) {
     let query = supabaseAdmin
       .from("users")
       .select(
-        "id, nombre, email, telefono, activo, porcentaje_comision, created_at",
+        "id, nombre, email, telefono, activo, porcentaje_comision, sucursal_id, created_at",
         { count: "exact" }
       )
       .eq("rol", "VENDEDOR")
       .eq("organization_id", organizationId!)
       .order("activo", { ascending: false })
       .order("nombre", { ascending: true })
+
+    if (sucursalId) query = query.eq("sucursal_id", sucursalId)
 
     if (search) {
       const escaped = search.replace(/[%,]/g, "")
@@ -87,6 +98,7 @@ export async function GET(request: Request) {
         telefono: vendedor.telefono ?? null,
         activo: vendedor.activo !== false,
         porcentajeComision: Number(vendedor.porcentaje_comision ?? 0),
+        sucursalId: vendedor.sucursal_id ?? null,
         created_at: vendedor.created_at,
         ventasCompletadas: stats.ventasCompletadas,
         ventasTotal: stats.ventasTotal,
