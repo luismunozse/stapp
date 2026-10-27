@@ -33,7 +33,7 @@ describe("OrdenTecnicoCard - assignee from another branch", () => {
   it("read-only: shows the assignee even though they are not in the list", () => {
     render(<OrdenTecnicoCard {...props({ readOnly: true, tecnicoActual: DE_OTRA_SUCURSAL })} />)
 
-    expect(screen.getByText("Carla")).toBeInTheDocument()
+    expect(screen.getByText("Carla · otra sucursal")).toBeInTheDocument()
     expect(screen.queryByText("Sin asignar")).not.toBeInTheDocument()
   })
 
@@ -47,11 +47,18 @@ describe("OrdenTecnicoCard - assignee from another branch", () => {
     render(<OrdenTecnicoCard {...props({ tecnicoActual: DE_OTRA_SUCURSAL })} />)
 
     const selector = screen.getByRole("combobox")
-    expect(within(selector).getByText("Carla")).toBeInTheDocument()
+    expect(within(selector).getByText("Carla · otra sucursal")).toBeInTheDocument()
 
     abrir(selector)
     const opciones = (await screen.findAllByRole("option")).map((o) => o.textContent)
-    expect(opciones).toEqual(["Sin asignar", "Ana", "Beto", "Carla"])
+    expect(opciones).toEqual(["Sin asignar", "Ana", "Beto", "Carla · otra sucursal"])
+  })
+
+  it("an assignee who IS in the list is not marked", () => {
+    render(<OrdenTecnicoCard {...props({ readOnly: true, tecnicoId: "t-a", tecnicoActual: DE_LA_SUCURSAL[0] })} />)
+
+    expect(screen.getByText("Ana")).toBeInTheDocument()
+    expect(screen.queryByText(/otra sucursal/)).not.toBeInTheDocument()
   })
 
   it("editable: an assignee who is in the list is not offered twice", async () => {

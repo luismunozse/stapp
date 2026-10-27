@@ -113,7 +113,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const term = useTerminologia()
   const { formatPrice, formatDate, currency, timezone, pais } = useCurrency()
   const [orden, setOrden] = useState<OrdenServicio | null>(null)
-  const [tecnicos, setTecnicos] = useState<UserType[]>([])
+  const [tecnicosDe, setTecnicosDe] = useState<{ para: string; lista: UserType[] } | null>(null)
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -135,6 +135,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const isAdmin = session?.user?.role === "ADMIN"
   const puedeCobrar = usePuedeCobrar()
   const userRole = session?.user?.role
+  // A technician does not reassign, and the picker lists the handling branch's technicians: for
+  // anyone else the server says whether a choice would be accepted (puedeAsignarTecnico).
+  const tecnicoSoloLectura = userRole === "TECNICO" || orden?.puedeAsignarTecnico === false
 
   const seguimientoUrl = orden?.publicToken
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/seguimiento/${orden.publicToken}`
@@ -264,15 +267,25 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   // Who can be assigned is decided by the branch that handles the order (BM-4), not
   // by the viewer's, so the list waits for the order and follows its branch.
   const sucursalAtiendeId = orden?.sucursalAtiendeId
+  // The list is filed under the branch it was fetched for: after the order moves to another
+  // branch, the previous branch's technicians are never shown, even if the refetch fails.
+  const tecnicos = tecnicosDe && tecnicosDe.para === sucursalAtiendeId ? tecnicosDe.lista : []
   useEffect(() => {
     if (!sucursalAtiendeId) return
     let vigente = true
+    const fallo = () => {
+      if (vigente) toast.error("No se pudo cargar la lista de técnicos", { id: "fetch-tecnicos-error" })
+    }
     fetch(`/api/tecnicos?sucursalId=${encodeURIComponent(sucursalAtiendeId)}`, { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
-        if (vigente && Array.isArray(data)) setTecnicos(data)
+      .then(async (res) => {
+        const data = res.ok ? await res.json() : null
+        if (!Array.isArray(data)) return fallo()
+        if (vigente) setTecnicosDe({ para: sucursalAtiendeId, lista: data })
       })
-      .catch((error) => console.error("Error fetching tecnicos:", error))
+      .catch((error) => {
+        console.error("Error fetching tecnicos:", error)
+        fallo()
+      })
     return () => {
       vigente = false
     }
@@ -918,7 +931,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           tecnicoActual={orden.tecnico}
           updating={updating}
           onAsignarTecnico={handleAsignarTecnico}
-          readOnly={userRole === "TECNICO"}
+          readOnly={tecnicoSoloLectura}
           puedeTomar={(orden as any).puedeTomar === true && !orden.tecnicoId}
           onTomar={handleTomarOrden}
         />
@@ -1206,6 +1219,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             tecnicoActual={orden.tecnico}
             updating={updating}
             onAsignarTecnico={handleAsignarTecnico}
+            readOnly={tecnicoSoloLectura}
             puedeTomar={(orden as any).puedeTomar === true && !orden.tecnicoId}
             onTomar={handleTomarOrden}
           />

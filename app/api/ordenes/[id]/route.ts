@@ -216,6 +216,12 @@ export async function GET(
       organizationGarantiaDiasDefault: org?.garantia_dias_default ?? null,
       // The branch that works the order: the screen lists that branch's technicians.
       sucursalAtiendeId: sucursalQueAtiende(orden),
+      // The picker lists that branch's technicians, so only an ADMIN or someone of that branch
+      // (as just re-read for this request) can make a choice the server will accept. A
+      // technician does not reassign.
+      puedeAsignarTecnico:
+        role === "ADMIN" ||
+        (role !== "TECNICO" && !!session!.user.sucursalId && session!.user.sucursalId === sucursalQueAtiende(orden)),
       estadoAnterior: ultimoEventoEstado?.estado_anterior ?? null,
       ...(role === "TECNICO" ? { puedeTomar } : {}),
     }, {
