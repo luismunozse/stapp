@@ -33,6 +33,9 @@ export type OrdenCargada = { orden: any; permisos: PermisosOrden } | { error: Ne
 
 const COLUMNAS_DE_ALCANCE = "sucursal_id, tecnico_id"
 
+/** PostgREST's answer to `.single()` when no row matches. */
+const SIN_FILAS = "PGRST116"
+
 /**
  * An order has ever been derived: the audit table that answers it arrives with the derivation.
  * Until then nothing is derived, so nothing has ever been.
@@ -105,6 +108,9 @@ export async function cargarOrdenEnAlcance(
     .eq("organization_id", actor.organizationId)
     .single()
 
+  // "No rows" is an answer about the order. Any other error says nothing about it: it goes to the
+  // route's catch (logged, 500) instead of passing for "the order does not exist".
+  if (error && error.code !== SIN_FILAS) throw error
   if (error || !data) return { error: noEncontrada() }
   const orden = data as unknown as Record<string, any>
 

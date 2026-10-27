@@ -93,9 +93,11 @@ interface Montaje {
   /** The branch an ADMIN has selected in the screen (the cookie). */
   cookie?: string | null
   ordenes?: Array<Record<string, unknown>>
+  /** Makes every read of the orders table fail with this error. */
+  errorDeLectura?: { code?: string; message: string }
 }
 
-function montar({ role, userId = "u-1", sucursalId = null, toma = false, cookie = null, ordenes = ORDENES }: Montaje) {
+function montar({ role, userId = "u-1", sucursalId = null, toma = false, cookie = null, ordenes = ORDENES, errorDeLectura }: Montaje) {
   vi.clearAllMocks()
   mockAuthSuccess({ role, userId, sucursalId })
   vi.mocked(cookies).mockResolvedValue({
@@ -109,13 +111,12 @@ function montar({ role, userId = "u-1", sucursalId = null, toma = false, cookie 
       organizations: [{ id: "org-1", tecnicos_toman_ordenes: toma, vendedores_administran_inventario: false }],
       orden_eventos: [],
     },
-    {
-      // What an update answers: the order with the change applied.
-      resultadoEscritura: ({ tabla, operacion, carga }) =>
-        tabla === "ordenes_servicio" && operacion === "update" ? { ...orden("o-a-libre"), ...(carga as object) } : carga,
-    },
+    errorDeLectura ? { errorDeLectura: { ordenes_servicio: errorDeLectura } } : {},
   )
 }
+
+/** The write must name the order AND the organization, or it reaches rows it was not asked for. */
+const filtrosDeLaOrden = (id: string) => expect.arrayContaining([["eq", "id", id], ["eq", "organization_id", "org-1"]])
 
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) })
 const get = (id: string) => GET(new Request(`http://localhost:3000/api/ordenes/${id}`), ctx(id))
@@ -146,6 +147,12 @@ const FUERA_DE_ALCANCE: Array<[string, Montaje, string]> = [
   ["a TECNICO of A, an unassigned order of B (toma ON)", { role: "TECNICO", userId: "t-1", sucursalId: A, toma: true }, "o-b-libre"],
   ["a TECNICO of A, an order of B assigned to a colleague", { role: "TECNICO", userId: "t-1", sucursalId: A }, "o-b-t2"],
   ["a VENDEDOR with no branch", { role: "VENDEDOR", userId: "v-0", sucursalId: null }, "o-a-libre"],
+  // Changing a technician into a seller does not clear his assignments (t-1 holds o-b-t1).
+  [
+    "a VENDEDOR of A who still holds the assignment of an order of B (role changed)",
+    { role: "VENDEDOR", userId: "t-1", sucursalId: A },
+    "o-b-t1",
+  ],
   ["a TECNICO with no branch, an order he does not have", { role: "TECNICO", userId: "t-1", sucursalId: null, toma: true }, "o-a-libre"],
 ]
 
@@ -321,14 +328,21 @@ describe("PUT /api/ordenes/[id]", () => {
   ] as Array<[string, Montaje, string]>)("%s is updated", async (_quien, montaje, id) => {
     const mem = montar(montaje)
 
-    const { status } = await parseResponse(await put(id, { observaciones: "Llamar al cliente" }))
+    const { status, body } = await parseResponse(await put(id, { observaciones: "Llamar al cliente" }))
 
     expect(status).toBe(200)
-    expect(mem.escrituras).toContainEqual({
-      tabla: "ordenes_servicio",
-      operacion: "update",
-      carga: { observaciones: "Llamar al cliente" },
-    })
+    // The answer is the order that was asked for, not a fixed one.
+    expect(body.id).toBe(id)
+    // One write, aimed at that order of that organization: the other orders keep their data.
+    expect(mem.escrituras).toEqual([
+      {
+        tabla: "ordenes_servicio",
+        operacion: "update",
+        carga: { observaciones: "Llamar al cliente" },
+        filtros: filtrosDeLaOrden(id),
+      },
+    ])
+    expect(mem.filas("ordenes_servicio").filter((o) => o.observaciones === "Llamar al cliente").map((o) => o.id)).toEqual([id])
   })
 
   it("an org with one branch: a VENDEDOR edits any order of it, a TECNICO only his", async () => {
@@ -344,14 +358,17 @@ describe("PUT /api/ordenes/[id]", () => {
 })
 
 describe("DELETE /api/ordenes/[id]", () => {
-  it.each(FUERA_DE_ALCANCE)("%s answers what a nonexistent id answers; nothing is deleted", async (_quien, montaje, id) => {
+  const SOLO_ADMIN = { status: 403, body: { error: "Solo administradores pueden eliminar órdenes" } }
+
+  // The role check comes first, as it always did: anybody who is not an ADMIN gets the same 403 for
+  // any id, with no database read, so the answer says nothing about whether the order exists.
+  it.each(FUERA_DE_ALCANCE)("%s gets the same 403 for a foreign, a missing and an own-branch id, with no read", async (_quien, montaje, id) => {
     const mem = montar(montaje)
 
-    const inexistente = await parseResponse(await borrar("no-existe"))
-    const fuera = await parseResponse(await borrar(id))
-
-    expect(inexistente).toEqual(NO_ENCONTRADA)
-    expect(fuera).toEqual(inexistente)
+    for (const que of [id, "no-existe", "o-a-t1"]) {
+      expect(await parseResponse(await borrar(que)), que).toEqual(SOLO_ADMIN)
+    }
+    expect(mem.lecturas).toEqual([])
     expect(mem.escrituras).toEqual([])
     nadieSeEntero()
   })
@@ -359,24 +376,25 @@ describe("DELETE /api/ordenes/[id]", () => {
   it.each([
     ["a VENDEDOR", { role: "VENDEDOR", userId: "v-a", sucursalId: A }],
     ["a TECNICO", { role: "TECNICO", userId: "t-1", sucursalId: A }],
-  ] as Array<[string, Montaje]>)("%s deleting an order of his branch is still told only administrators can", async (_quien, montaje) => {
+  ] as Array<[string, Montaje]>)("%s deleting an order of his branch is told only administrators can", async (_quien, montaje) => {
     const mem = montar(montaje)
 
-    const { status, body } = await parseResponse(await borrar("o-a-t1"))
-
-    expect(status).toBe(403)
-    expect(body).toEqual({ error: "Solo administradores pueden eliminar órdenes" })
+    expect(await parseResponse(await borrar("o-a-t1"))).toEqual(SOLO_ADMIN)
     expect(mem.escrituras).toEqual([])
+    expect(mem.filas("ordenes_servicio")).toHaveLength(ORDENES.length)
   })
 
-  it("an ADMIN deletes an order of any branch", async () => {
+  it("an ADMIN deletes an order of any branch: that order of that organization, and no other", async () => {
     const mem = montar({ role: "ADMIN", userId: "adm", cookie: A })
 
     const { status, body } = await parseResponse(await borrar("o-b-libre"))
 
     expect(status).toBe(200)
     expect(body.message).toContain("eliminada")
-    expect(mem.escrituras).toContainEqual({ tabla: "ordenes_servicio", operacion: "delete", carga: undefined })
+    expect(mem.escrituras).toEqual([
+      { tabla: "ordenes_servicio", operacion: "delete", carga: undefined, filtros: filtrosDeLaOrden("o-b-libre") },
+    ])
+    expect(mem.filas("ordenes_servicio").map((o) => o.id)).toEqual(ORDENES.map((o) => o.id).filter((id) => id !== "o-b-libre"))
   })
 
   it("an ADMIN deleting a nonexistent id still gets 404", async () => {
@@ -384,5 +402,29 @@ describe("DELETE /api/ordenes/[id]", () => {
 
     expect(await parseResponse(await borrar("no-existe"))).toEqual(NO_ENCONTRADA)
     expect(mem.escrituras).toEqual([])
+  })
+})
+
+// A database that fails says nothing about the order: the route logs it and answers 500, it does not
+// say the order does not exist.
+describe("a database that fails while the order is looked up", () => {
+  const FALLO = { code: "57014", message: "canceling statement due to statement timeout" }
+
+  it.each([
+    ["GET", { role: "VENDEDOR", userId: "v-a", sucursalId: A }, () => get("o-a-libre"), "Error al obtener orden"],
+    ["PUT", { role: "VENDEDOR", userId: "v-a", sucursalId: A }, () => put("o-a-libre", { observaciones: "x" }), "Error al actualizar orden"],
+    ["DELETE (ADMIN)", { role: "ADMIN", userId: "adm" }, () => borrar("o-a-libre"), "Error al eliminar orden"],
+  ] as Array<[string, Montaje, () => Promise<Response>, string]>)("%s answers 500, logs it, and writes nothing", async (_metodo, montaje, llamar, mensaje) => {
+    const mem = montar({ ...montaje, errorDeLectura: FALLO })
+    const registro = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    try {
+      expect(await parseResponse(await llamar())).toEqual({ status: 500, body: { error: mensaje } })
+      expect(registro).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ code: "57014" }))
+      expect(mem.escrituras).toEqual([])
+      nadieSeEntero()
+    } finally {
+      registro.mockRestore()
+    }
   })
 })

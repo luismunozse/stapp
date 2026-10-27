@@ -82,6 +82,7 @@ describe("cargarOrdenEnAlcance - not found is one answer (XC-2)", () => {
     ["a TECNICO of A, another technician's order of B", tecnicoA, "o-b-t2"],
     ["a branchless TECNICO, an unassigned order (toma ON)", tecnicoSinSucursal, "o-a-libre"],
     ["a VENDEDOR with no branch", actor("VENDEDOR", null, "v-0"), "o-a-libre"],
+    ["a VENDEDOR of A that still holds an order of B (his role changed)", actor("VENDEDOR", A, "t-1"), "o-b-t1"],
     ["anyone, an order of another organization", vendedorA, "o-otra-org"],
     ["an ADMIN, an order of another organization", admin, "o-otra-org"],
   ])("%s gets exactly what a nonexistent id gets", async (_quien, quien, id) => {
@@ -283,6 +284,45 @@ describe("cargarOrdenEnAlcance - the technician's narrowing (OI-3, BM-6)", () =>
     expect("error" in (await cargarOrdenEnAlcance("o-b-t1", tecnicoSinSucursal, "editar"))).toBe(false)
     expect(await respuestaDe(await cargarOrdenEnAlcance("o-a-libre", tecnicoSinSucursal, "leer"))).toEqual(NO_ENCONTRADA)
     expect(await respuestaDe(await cargarOrdenEnAlcance("o-a-t2", tecnicoSinSucursal, "leer"))).toEqual(NO_ENCONTRADA)
+  })
+})
+
+// "Not found" is an answer about the order. A database that could not answer says nothing about it,
+// so the caller gets a failure (the route's catch logs it and answers 500), not a 404 that would hide
+// an outage behind "the order does not exist".
+describe("cargarOrdenEnAlcance - a database that fails", () => {
+  const conErrorDeLectura = (error: { code?: string; message: string }) =>
+    montarSupabaseEnMemoria(
+      { ordenes_servicio: ORDENES, organizations: [{ id: "org-1", tecnicos_toman_ordenes: false }] },
+      { errorDeLectura: { ordenes_servicio: error } },
+    )
+
+  it.each([
+    ["a statement timeout", { code: "57014", message: "canceling statement due to statement timeout" }],
+    ["a connection failure", { code: "08006", message: "connection failure" }],
+    ["a network failure, which carries no code", { code: "", message: "TypeError: fetch failed" }],
+    ["an error with no code at all", { message: "boom" }],
+  ])("%s is thrown, not answered as 'not found'", async (_nombre, error) => {
+    conErrorDeLectura(error)
+
+    await expect(cargarOrdenEnAlcance("o-a-t1", vendedorA, "ver")).rejects.toMatchObject(error)
+  })
+
+  it("'no rows' (PGRST116) is still the one answer a missing id gets, same as an order out of scope", async () => {
+    montar({ toma: true })
+    const fuera = await respuestaDe(await cargarOrdenEnAlcance("o-b-libre", vendedorA, "ver"))
+    conErrorDeLectura({ code: "PGRST116", message: "JSON object requested, multiple (or no) rows returned" })
+
+    const sinFilas = await respuestaDe(await cargarOrdenEnAlcance("o-a-t1", vendedorA, "ver"))
+
+    expect(sinFilas).toEqual(NO_ENCONTRADA)
+    expect(sinFilas).toEqual(fuera)
+  })
+
+  it("a missing id still gets 'not found', not a failure", async () => {
+    montar({ toma: true })
+
+    expect(await respuestaDe(await cargarOrdenEnAlcance("no-existe", vendedorA, "ver"))).toEqual(NO_ENCONTRADA)
   })
 })
 

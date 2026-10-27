@@ -615,22 +615,21 @@ export async function DELETE(
 
     const { id } = await params
 
-    // Verificar que la orden existe, pertenece a la organización y está al alcance de quien
-    // llama. Va antes del rol: para quien no es admin, una orden de otra sucursal es "no
-    // encontrada", igual que un id inexistente, y no "solo administradores".
-    const cargada = await cargarOrdenEnAlcance(id, actorDeSesion(autenticado), "ver", {
-      select: "id, numero_orden, estado",
-    })
-    if ("error" in cargada) return cargada.error
-    const { orden } = cargada
-
-    // Solo admins pueden eliminar órdenes
+    // Solo admins pueden eliminar órdenes. Va primero y sin leer nada: quien no es admin
+    // recibe la misma respuesta para cualquier id, así que no dice nada de la orden.
     if (role !== "ADMIN") {
       return NextResponse.json(
         { error: "Solo administradores pueden eliminar órdenes" },
         { status: 403 }
       )
     }
+
+    // Verificar que la orden existe y pertenece a la organización (un admin alcanza toda la org)
+    const cargada = await cargarOrdenEnAlcance(id, actorDeSesion(autenticado), "ver", {
+      select: "id, numero_orden, estado",
+    })
+    if ("error" in cargada) return cargada.error
+    const { orden } = cargada
 
     // Eliminar la orden (las relaciones se eliminan en cascada por la DB)
     const { error: deleteError } = await supabaseAdmin
