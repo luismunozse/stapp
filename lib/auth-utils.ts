@@ -33,33 +33,39 @@ export async function requireAuth() {
     }
   }
 
-  // Validar contexto de tenant si existe (subdominio)
+  // Validar contexto de tenant si existe (subdominio). The branch lookup is an
+  // independent round-trip, so it runs alongside the tenant check instead of
+  // after it. A tenant 403 wins and discards whatever the lookup answered.
   const headersList = await headers()
   const tenantSlug = headersList.get("x-tenant-slug")
 
-  if (tenantSlug) {
-    const isValidTenant = await validateUserTenant(organizationId, tenantSlug)
-    if (!isValidTenant) {
-      return {
-        error: NextResponse.json(
-          { error: "No tienes acceso a esta organización" },
-          { status: 403 }
-        ),
-        session: null,
-        organizationId: null,
-        userId: null,
-        role: null,
-      }
+  const [isValidTenant, vigente] = await Promise.all([
+    tenantSlug ? validateUserTenant(organizationId, tenantSlug) : true,
+    // Settled, never rejects: a tenant 403 or a throw while this is in flight
+    // must not leave an unhandled rejection behind.
+    conSucursalVigente(session).then(
+      (sesionVigente) => ({ sesionVigente, fallo: false as const }),
+      (err: unknown) => ({ sesionVigente: null, fallo: true as const, err })
+    ),
+  ])
+
+  if (!isValidTenant) {
+    return {
+      error: NextResponse.json(
+        { error: "No tienes acceso a esta organización" },
+        { status: 403 }
+      ),
+      session: null,
+      organizationId: null,
+      userId: null,
+      role: null,
     }
   }
 
   // Fail-closed on a failed lookup: no 200 on a guessed branch (rationale in
   // conSucursalVigente).
-  let sesionVigente: typeof session | null
-  try {
-    sesionVigente = await conSucursalVigente(session)
-  } catch (err) {
-    console.error("[auth] Could not re-read the user's branch:", err)
+  if (vigente.fallo) {
+    console.error("[auth] Could not re-read the user's row:", vigente.err)
     return {
       error: NextResponse.json(
         { error: "No pudimos verificar tu sucursal. Intentá de nuevo." },
@@ -71,7 +77,9 @@ export async function requireAuth() {
       role: null,
     }
   }
-  // The row is gone (deleted account) while the JWT is still alive.
+  // The JWT no longer describes the user (row gone or deleted, role or
+  // organization changed in the DB): force a new login.
+  const sesionVigente = vigente.sesionVigente
   if (!sesionVigente) {
     return {
       error: NextResponse.json({ error: "No autorizado" }, { status: 401 }),
@@ -91,7 +99,8 @@ export async function requireAuth() {
  * `session.user.sucursalId` from a raw `auth()` returns the stale JWT value
  * (the session-sucursal-sweep test enforces this).
  *
- * Returns null without a session or when the user's row is gone; THROWS when
+ * Returns null without a session or when the JWT no longer matches the user's
+ * row (gone, deleted, role or organization changed); THROWS when
  * the lookup fails, so the page errors instead of rendering on a guessed branch.
  */
 export async function sesionConSucursalVigente() {

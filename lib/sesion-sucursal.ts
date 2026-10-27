@@ -1,24 +1,75 @@
 import { supabaseAdmin } from "@/lib/supabase"
 
 interface SesionConUsuario {
-  user: { id: string; role?: string | null; sucursalId?: string | null }
+  user: { id: string; role?: string | null; organizationId: string; sucursalId?: string | null }
+}
+
+interface FilaUsuario {
+  rol: string | null
+  sucursal_id: string | null
+  organization_id: string | null
+  deleted_at: string | null
+}
+
+// Per-instance cache of the users row, same idea as lib/user-status-edge.ts
+// (30 s there). The row, not the verdict, is cached: role and org are compared
+// against the CURRENT session on every call.
+//
+// Freshness trade-off: a move, a role change or a deletion takes effect on the
+// affected user's next request after the entry expires, i.e. within ~5 s on every
+// instance (each one holds its own entry, none outlives the TTL). That is the
+// price of not adding a users query to every request of every technician and
+// seller; it is still ~18 h better than waiting for the JWT to be re-signed.
+// Failures and missing rows are never cached.
+const TTL_MS = 5_000
+const MAX_ENTRIES = 5000
+const cache = new Map<string, { fila: FilaUsuario; expiresAt: number }>()
+
+export function clearSesionSucursalCache(): void {
+  cache.clear()
+}
+
+async function leerFila(userId: string): Promise<FilaUsuario | null> {
+  const now = Date.now()
+  const hit = cache.get(userId)
+  if (hit) {
+    if (hit.expiresAt > now) return hit.fila
+    cache.delete(userId)
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .select("rol, sucursal_id, organization_id, deleted_at")
+    .eq("id", userId)
+    .maybeSingle()
+
+  if (error) throw new Error(`Could not read the user's row: ${error.message}`)
+  if (!data) return null
+
+  if (cache.size >= MAX_ENTRIES) cache.clear()
+  cache.set(userId, { fila: data as FilaUsuario, expiresAt: now + TTL_MS })
+  return data as FilaUsuario
 }
 
 /**
  * Returns `session` with `user.sucursalId` replaced by what `users.sucursal_id`
  * holds right now, so an ADMIN moving a technician or seller to another branch
- * governs that user's very next request instead of whenever the JWT is re-signed
- * (up to ~18 h later).
+ * governs that user's next requests instead of whenever the JWT is re-signed
+ * (up to ~18 h later; see the cache note above for the ~5 s of lag that remains).
  *
  * - ADMIN: returned as is, no query. An ADMIN has no branch (CHECK from
  *   migration 241) and picks one through the cookie, so there is nothing to refresh.
- * - Everyone else: one primary-key lookup, never cached. A cache would bring back
- *   the staleness this exists to remove.
+ * - Everyone else: one primary-key lookup (cached ~5 s) that also reads role,
+ *   organization and deletion mark, because the JWT is just as stale for those.
  * - Returns a copy; the object `auth()` produced is never mutated.
- * - Returns null when the user's row no longer exists (deleted account).
+ * - Returns null, which callers turn into a 401 (forcing a new login), when the
+ *   JWT no longer describes the user: the row is gone, `deleted_at` is set, the
+ *   DB role differs from the JWT role, or the DB organization differs from the
+ *   JWT organization. A demoted ADMIN is not caught here (no query for ADMIN).
  *
  * THROWS when the lookup fails, and callers must let that become a 500. This is
- * deliberately fail-closed and never falls back to the JWT value:
+ * deliberately fail-closed and never falls back to the JWT value, nor to an
+ * expired cache entry:
  *   - the JWT branch may be exactly the one an ADMIN just took the user out of,
  *     so trusting it on a failed read would hand back access that was revoked;
  *   - treating the failure as "no branch" would turn into SUCURSAL_NINGUNA and
@@ -29,14 +80,15 @@ interface SesionConUsuario {
 export async function conSucursalVigente<S extends SesionConUsuario>(session: S): Promise<S | null> {
   if (session.user.role === "ADMIN") return session
 
-  const { data, error } = await supabaseAdmin
-    .from("users")
-    .select("sucursal_id")
-    .eq("id", session.user.id)
-    .maybeSingle()
+  const fila = await leerFila(session.user.id)
+  if (
+    !fila ||
+    fila.deleted_at ||
+    fila.rol !== session.user.role ||
+    fila.organization_id !== session.user.organizationId
+  ) {
+    return null
+  }
 
-  if (error) throw new Error(`Could not read users.sucursal_id: ${error.message}`)
-  if (!data) return null
-
-  return { ...session, user: { ...session.user, sucursalId: data.sucursal_id ?? null } }
+  return { ...session, user: { ...session.user, sucursalId: fila.sucursal_id ?? null } }
 }

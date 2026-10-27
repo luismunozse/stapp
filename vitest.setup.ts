@@ -87,12 +87,14 @@ vi.mock('@/lib/supabase', () => ({
   },
 }))
 
-// requireAuth() re-reads users.sucursal_id for every TECNICO/VENDEDOR request
-// (lib/sesion-sucursal.ts). Without a default, each of the ~120 route suites that
-// run as one of those roles would see an extra from("users") call that eats its
-// mock queue. The default is "the DB agrees with the JWT": the session passes
-// through untouched. __tests__/lib/auth-utils-sucursal.test.ts runs the real thing
-// with vi.unmock, and any test that needs a moved user can too.
+// requireAuth() re-reads the user's row (branch, role, org, deletion mark; cached
+// 5 s) for every TECNICO/VENDEDOR request (lib/sesion-sucursal.ts). Without a
+// default, each of the ~120 route suites that run as one of those roles would see
+// an extra from("users") call that eats its mock queue. The default is "the DB
+// agrees with the JWT": the session passes through untouched.
+// __tests__/lib/auth-utils-sucursal.test.ts runs the real thing with vi.unmock,
+// and any test that needs a moved user can too (clearSesionSucursalCache() between
+// cases, the cache outlives a test).
 vi.mock('@/lib/sesion-sucursal', () => ({
   conSucursalVigente: vi.fn(async (session: unknown) => session),
 }))
