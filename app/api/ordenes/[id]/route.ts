@@ -315,6 +315,7 @@ export async function PUT(
         .select("id, rol, porcentaje_comision, costo_hora")
         .eq("id", data.tecnicoId)
         .eq("organization_id", organizationId!)
+        .is("deleted_at", null)
         .single()
 
       if (!tecnico) {

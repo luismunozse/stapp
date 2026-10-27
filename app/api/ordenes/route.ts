@@ -372,6 +372,7 @@ export async function POST(request: Request) {
         .eq("id", data.tecnicoId)
         .eq("organization_id", organizationId!)
         .eq("rol", "TECNICO")
+        .is("deleted_at", null)
         .maybeSingle()
       if (!tecnicoCheck) {
         return NextResponse.json({ error: "Técnico inválido" }, { status: 400 })

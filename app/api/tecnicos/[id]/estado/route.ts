@@ -32,6 +32,7 @@ export async function PATCH(
       .eq("id", id)
       .eq("rol", "TECNICO")
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (fetchError || !tecnico) {
@@ -47,6 +48,7 @@ export async function PATCH(
       .update({ activo })
       .eq("id", id)
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
 
     if (updateError) throw updateError
 

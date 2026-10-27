@@ -177,6 +177,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         .eq("id", data.tecnicoId)
         .eq("organization_id", organizationId!)
         .in("rol", ["TECNICO", "ADMIN"])
+        .is("deleted_at", null)
         .maybeSingle()
       if (!tecnicoCheck) {
         return NextResponse.json({ error: "Técnico inválido" }, { status: 400 })
