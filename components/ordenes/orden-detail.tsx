@@ -259,24 +259,30 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
   useEffect(() => {
     fetchOrden()
-    fetchTecnicos()
   }, [ordenId, fetchOrden])
+
+  // Who can be assigned is decided by the branch that handles the order (BM-4), not
+  // by the viewer's, so the list waits for the order and follows its branch.
+  const sucursalAtiendeId = orden?.sucursalAtiendeId
+  useEffect(() => {
+    if (!sucursalAtiendeId) return
+    let vigente = true
+    fetch(`/api/tecnicos?sucursalId=${encodeURIComponent(sucursalAtiendeId)}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (vigente && Array.isArray(data)) setTecnicos(data)
+      })
+      .catch((error) => console.error("Error fetching tecnicos:", error))
+    return () => {
+      vigente = false
+    }
+  }, [sucursalAtiendeId])
 
   // Polling: re-fetch the orden every 15 seconds while the tab is visible.
   // Previously used Supabase Realtime with an HS256-minted JWT (PR3), which
   // was abandoned because the production Supabase project uses asymmetric JWT
   // signing (ECC P-256) — HS256 tokens are rejected with JwtSignatureError.
   useVisibilityPolling(fetchOrden, 15000, Boolean(ordenId))
-
-  const fetchTecnicos = async () => {
-    try {
-      const res = await fetch("/api/tecnicos", { cache: "no-store" })
-      const data = await res.json()
-      setTecnicos(data)
-    } catch (error) {
-      console.error("Error fetching tecnicos:", error)
-    }
-  }
 
   const handleUpdateEstado = async (nuevoEstado: EstadoOrden) => {
     // ENTREGADO_SIN_REPARACION comparte el flujo de entrega: el backend lo
@@ -909,6 +915,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         <OrdenTecnicoCard
           tecnicoId={orden.tecnicoId}
           tecnicos={tecnicos}
+          tecnicoActual={orden.tecnico}
           updating={updating}
           onAsignarTecnico={handleAsignarTecnico}
           readOnly={userRole === "TECNICO"}
@@ -1196,6 +1203,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           <OrdenTecnicoCard
             tecnicoId={orden.tecnicoId}
             tecnicos={tecnicos}
+            tecnicoActual={orden.tecnico}
             updating={updating}
             onAsignarTecnico={handleAsignarTecnico}
             puedeTomar={(orden as any).puedeTomar === true && !orden.tecnicoId}
