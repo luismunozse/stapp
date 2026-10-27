@@ -7,7 +7,7 @@ import {
   canViewCotizacionCosts,
   resolveTecnicosTomanOrdenes,
 } from "@/lib/auth-utils"
-import { ordenSeTomaPorTecnico, filtroMiasOSinAsignar } from "@/lib/ordenes/tomar"
+import { ordenSeTomaPorTecnico } from "@/lib/ordenes/tomar"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumberByType } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
@@ -16,6 +16,13 @@ import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/li
 import { formatOrden } from "@/lib/db-utils"
 import { queueNotification } from "@/lib/notifications/queue"
 import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
+import {
+  MENSAJE_TECNICO_OTRA_SUCURSAL,
+  combinarOr,
+  filtroListaTecnico,
+  tecnicoAsignable,
+  terminoDeBusquedaSeguro,
+} from "@/lib/sucursal-ordenes"
 import { z } from "zod"
 import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
 import { isValidImei } from "@/lib/imei"
@@ -125,27 +132,36 @@ export async function GET(request: Request) {
       .eq("organization_id", organizationId!)
       .order(sortBy, { ascending: sortOrder })
 
-    // Técnicos solo ven sus órdenes asignadas. Con el permiso opt-in
-    // `tecnicos_toman_ordenes` ven además las que no tienen técnico (para poder
-    // tomarlas). Fail-closed: sin flag legible, o con un id que no se puede
-    // meter en el filtro, queda el comportamiento de siempre.
+    // Every `or` condition of the list goes into ONE combined expression at the end
+    // (combinarOr): repeated `.or()` calls would rely on PostgREST ANDing the repeated
+    // `or` params.
+    const filtrosOr: string[] = []
+
+    // A technician sees the orders assigned to him, from any branch (BM-6). With the
+    // opt-in permission `tecnicos_toman_ordenes` he also sees the unassigned ones that
+    // his branch handles (so he can take them). Fail-closed: an unreadable flag, no
+    // branch, or an id that cannot be spliced into the filter leaves only the orders
+    // assigned to him. The branch filter below does not apply to a technician: that
+    // limit already sits inside his own filter.
     let puedeTomarSinAsignar = false
     if (role === "TECNICO") {
-      const filtroMiasOSin = (await resolveTecnicosTomanOrdenes(organizationId!))
-        ? filtroMiasOSinAsignar(userId!)
-        : null
-      if (filtroMiasOSin) {
+      const filtroTecnico = filtroListaTecnico(
+        userId!,
+        session!.user.sucursalId ?? null,
+        await resolveTecnicosTomanOrdenes(organizationId!),
+      )
+      if (filtroTecnico) {
         puedeTomarSinAsignar = true
-        query = query.or(filtroMiasOSin)
+        filtrosOr.push(filtroTecnico)
       } else {
         query = query.eq("tecnico_id", userId!)
       }
-    }
-
-    // Filtro por sucursal (ADMIN ve según cookie; otros roles su sucursal fija)
-    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
-    if (!filtro.verTodas && filtro.sucursalId) {
-      query = query.eq("sucursal_id", filtro.sucursalId)
+    } else {
+      // Filtro por sucursal (ADMIN ve según cookie; otros roles su sucursal fija)
+      const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
+      if (!filtro.verTodas && filtro.sucursalId) {
+        query = query.eq("sucursal_id", filtro.sucursalId)
+      }
     }
 
     if (estado) {
@@ -199,13 +215,13 @@ export async function GET(request: Request) {
     if (conPresupuesto === "si") {
       query = query.not("presupuesto", "is", null).gt("presupuesto", 0)
     } else if (conPresupuesto === "no") {
-      query = query.or("presupuesto.is.null,presupuesto.eq.0")
+      filtrosOr.push("presupuesto.is.null,presupuesto.eq.0")
     }
 
     if (conSena === "si") {
       query = query.gt("sena", 0)
     } else if (conSena === "no") {
-      query = query.or("sena.is.null,sena.eq.0")
+      filtrosOr.push("sena.is.null,sena.eq.0")
     }
 
     if (sinTecnico === "true") {
@@ -234,12 +250,15 @@ export async function GET(request: Request) {
 
       const clienteIds = clientesMatch?.map(c => c.id) || []
 
-      // Construir filtros de búsqueda (sin ::text que no es válido en PostgREST)
+      // Construir filtros de búsqueda (sin ::text que no es válido en PostgREST).
+      // The term goes inside an expression combined with the branch filter: if it
+      // could close it, it would add a condition next to that filter.
+      const termino = terminoDeBusquedaSeguro(search)
       const filters = [
-        `dispositivo.ilike.%${search}%`,
-        `codigo_orden.ilike.%${search}%`,
-        `marca.ilike.%${search}%`,
-        `imei.ilike.%${search}%`,
+        `dispositivo.ilike.%${termino}%`,
+        `codigo_orden.ilike.%${termino}%`,
+        `marca.ilike.%${termino}%`,
+        `imei.ilike.%${termino}%`,
       ]
 
       // Si el search es numérico y entra en rango INT32, buscar por numero_orden exacto.
@@ -253,7 +272,11 @@ export async function GET(request: Request) {
         filters.push(`cliente_id.in.(${clienteIds.join(",")})`)
       }
 
-      query = query.or(filters.join(","))
+      filtrosOr.push(filters.join(","))
+    }
+
+    if (filtrosOr.length > 0) {
+      query = query.or(combinarOr(...filtrosOr))
     }
 
     // Aplicar paginación
@@ -361,6 +384,14 @@ export async function POST(request: Request) {
     // Generar token público para acceso al PDF
     const publicToken = generatePublicToken()
 
+    // The concrete write branch, from role/cookie/user. It is resolved before the
+    // technician is validated: the branch an order is created in is the one that handles it.
+    const sucursalId = await sucursalParaEscritura({
+      role,
+      organizationId: organizationId!,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+
     // Resolver técnico asignado: TECNICO → siempre él mismo; otros roles → optativo desde el form
     let tecnicoAsignadoId: string | null = role === "TECNICO" ? userId! : null
     let tecnicoPorcentajeComision: number | null = null
@@ -368,13 +399,16 @@ export async function POST(request: Request) {
     if (role !== "TECNICO" && data.tecnicoId) {
       const { data: tecnicoCheck } = await supabaseAdmin
         .from("users")
-        .select("id, porcentaje_comision, costo_hora")
+        .select("id, rol, sucursal_id, porcentaje_comision, costo_hora")
         .eq("id", data.tecnicoId)
         .eq("organization_id", organizationId!)
         .eq("rol", "TECNICO")
         .maybeSingle()
       if (!tecnicoCheck) {
         return NextResponse.json({ error: "Técnico inválido" }, { status: 400 })
+      }
+      if (!tecnicoAsignable(tecnicoCheck, sucursalId, null)) {
+        return NextResponse.json({ error: MENSAJE_TECNICO_OTRA_SUCURSAL }, { status: 400 })
       }
       tecnicoAsignadoId = data.tecnicoId
       tecnicoPorcentajeComision = Number(tecnicoCheck.porcentaje_comision ?? 0)
@@ -399,13 +433,6 @@ export async function POST(request: Request) {
 
     // Resolver quién recibió el equipo (server-authoritative: fallback al usuario de sesión)
     const recibidoPor = await resolveOperador(organizationId!, data.recibidoPorId, userId!)
-
-    // Resolver sucursal concreta de escritura según rol/cookie/usuario
-    const sucursalId = await sucursalParaEscritura({
-      role,
-      organizationId: organizationId!,
-      userSucursalId: session!.user.sucursalId ?? null,
-    })
 
     const { data: orden, error: dbError } = await supabaseAdmin
       .from("ordenes_servicio")

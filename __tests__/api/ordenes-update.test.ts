@@ -287,7 +287,7 @@ describe("PUT /api/ordenes/[id] - Campos Requeridos", () => {
   it("permite EN_REPARACION si técnico y costoFinal se envían en la misma request", async () => {
     mockAuthSuccess()
 
-    const mockOrden = createMockOrden({ estado: "APROBADO", presupuesto: 5000, costo_final: null, tecnico_id: null })
+    const mockOrden = createMockOrden({ estado: "APROBADO", presupuesto: 5000, costo_final: null, tecnico_id: null, sucursal_id: "suc-1" })
     const mockUpdated = { ...mockOrden, estado: "EN_REPARACION", tecnico_id: "t1", costo_final: 5000 }
 
     let callCount = 0
@@ -298,7 +298,7 @@ describe("PUT /api/ordenes/[id] - Campos Requeridos", () => {
       return Promise.resolve({ data: mockUpdated, error: null })
     })
 
-    const usersChain = createChainMock({ id: "t1", rol: "TECNICO" })
+    const usersChain = createChainMock({ id: "t1", rol: "TECNICO", sucursal_id: "suc-1" })
     mockSupabaseFrom({
       ordenes_servicio: chain,
       orden_eventos: createChainMock(null),

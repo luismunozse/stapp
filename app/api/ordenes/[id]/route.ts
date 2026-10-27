@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados, canViewCotizacionCosts, resolveTecnicosTomanOrdenes } from "@/lib/auth-utils"
 import { ordenSeTomaPorTecnico } from "@/lib/ordenes/tomar"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { MENSAJE_TECNICO_OTRA_SUCURSAL, sucursalQueAtiende, tecnicoAsignable } from "@/lib/sucursal-ordenes"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
@@ -312,7 +313,7 @@ export async function PUT(
     if (data.tecnicoId) {
       const { data: tecnico } = await supabaseAdmin
         .from("users")
-        .select("id, rol, porcentaje_comision, costo_hora")
+        .select("id, rol, sucursal_id, porcentaje_comision, costo_hora")
         .eq("id", data.tecnicoId)
         .eq("organization_id", organizationId!)
         .single()
@@ -322,6 +323,12 @@ export async function PUT(
       }
       if (tecnico.rol !== "TECNICO" && tecnico.rol !== "ADMIN") {
         return NextResponse.json({ error: "El usuario seleccionado no tiene rol de técnico" }, { status: 400 })
+      }
+      // Only the branch that handles the order assigns its technicians; the one already
+      // assigned stays valid even if it is from another branch (legacy), so editing any
+      // other field of such an order keeps working.
+      if (!tecnicoAsignable(tecnico, sucursalQueAtiende(orden), orden.tecnico_id ?? null)) {
+        return NextResponse.json({ error: MENSAJE_TECNICO_OTRA_SUCURSAL }, { status: 400 })
       }
       porcentajeComisionFromTecnico = Number(tecnico.porcentaje_comision ?? 0)
       costoHoraFromTecnico = Number(tecnico.costo_hora ?? 0)
