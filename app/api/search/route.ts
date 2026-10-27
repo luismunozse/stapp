@@ -7,13 +7,23 @@ import { combinarOr, filtroVisibleEnSucursal, terminoDeBusquedaSeguro } from "@/
 
 const COLUMNAS_ORDEN = "id, numero_orden, dispositivo, estado, problema_reportado, marca, imei, clientes(nombre)"
 
+/** The most words of a term that count: a long text cannot build an unbounded filter. */
+const MAX_PALABRAS = 6
+
+/** The words of a term, in order, without the blanks, up to MAX_PALABRAS. */
+function palabrasDe(q: string): string[] {
+  return q.split(/\s+/).filter((palabra) => palabra !== "").slice(0, MAX_PALABRAS)
+}
+
 /**
- * The conditions that make an order match a term: the text columns the `search_all` function looks
+ * The conditions that make an order match ONE word: the text columns the `search_all` function looks
  * at (device, reported problem, IMEI) and the exact order number, plus the brand, the order code and the
  * diagnosis and notes that feed its `search_vector`. The function matches that vector by stemmed words
  * (`@@`), which an ILIKE cannot reproduce (and the in-memory table cannot parse an `fts` operator), so a
- * term matches here as a substring of the same columns. The term is sanitized (a comma or a parenthesis
- * would close the group around the scope and add a clause next to it).
+ * word matches here as a substring of the same columns. The function also ANDs the words of a term
+ * (`plainto_tsquery`): a term of several words is one list per word (see ordenesDelTecnico), not one
+ * substring. The word is sanitized (a comma or a parenthesis would close the group around the scope and
+ * add a clause next to it).
  */
 function coincidencias(q: string): string {
   const termino = terminoDeBusquedaSeguro(q)
@@ -40,12 +50,14 @@ function aResultado(o: Record<string, unknown>): ResultadoOrden {
  * The orders that match a term inside a technician's list scope (what the list shows him: what is assigned
  * to him from any branch, BM-6, and with the org opt-in the unassigned ones of his branch, OI-3). The
  * `search_all` function scopes by branch only, so for a technician its order rows would include the ones
- * assigned to a colleague of his branch, which he cannot open.
+ * assigned to a colleague of his branch, which he cannot open. Like the function, every word of the term
+ * has to match (in any column, in any order): one list per word, ANDed with the scope by the door inside
+ * ONE `or()`, so no word can widen the scope.
  */
 async function ordenesDelTecnico(actor: ActorLectura, q: string, limit: number): Promise<ResultadoOrden[]> {
   const alcance = await alcanceLecturaOrdenes(actor)
   const { data } = await alcance
-    .aplicar(supabaseAdmin.from("ordenes_servicio").select(COLUMNAS_ORDEN).eq("organization_id", actor.organizationId), [coincidencias(q)])
+    .aplicar(supabaseAdmin.from("ordenes_servicio").select(COLUMNAS_ORDEN).eq("organization_id", actor.organizationId), palabrasDe(q).map(coincidencias))
     .order("fecha_ingreso", { ascending: false })
     .limit(limit)
   return (data || []).map(aResultado)

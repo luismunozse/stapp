@@ -284,6 +284,81 @@ describe("GET /api/search", () => {
       expect((await ordenesDe(TECNICO_A, "pasa el viernes", "", false, filas)).ids).toEqual(["a2"])
     })
 
+    describe("a term of several words: every word must match, in any of the columns, in any order (as the search function does)", () => {
+      // a2 is t-a's: "Samsung Galaxy A52" with "Pantalla rota"; a3 is a colleague's, with the same device.
+      const filas = () => {
+        const f = ORDENES()
+        f[1] = { ...f[1], dispositivo: "Samsung Galaxy A52", problema_reportado: "Pantalla rota", marca: "Samsung" }
+        f[2] = { ...f[2], dispositivo: "Samsung Galaxy A52", problema_reportado: "Pantalla rota", marca: "Samsung" }
+        return f
+      }
+      const buscar2 = async (termino: string, e: Espectador = TECNICO_A, toma = false) => (await ordenesDe(e, termino, "", toma, filas())).ids
+
+      it.each([
+        ["two words of the device", "samsung a52"],
+        ["one word of the device and one of the problem", "galaxy rota"],
+        ["the same words in the other order", "rota galaxy"],
+        ["extra spaces between the words", "  samsung    a52  "],
+        ["three words from three columns", "samsung a52 pantalla"],
+      ])("finds the order: %s", async (_caso, termino) => {
+        expect(await buscar2(termino)).toEqual(["a2"])
+      })
+
+      it.each([
+        ["a word that matches nothing", "galaxy inexistente"],
+        ["a word that matches nothing among words that do", "samsung a52 pantalla zzzz"],
+      ])("finds nothing: %s", async (_caso, termino) => {
+        expect(await buscar2(termino)).toEqual([])
+      })
+
+      it("a word still matches by substring, as one word did before", async () => {
+        expect(await buscar2("sams pantal")).toEqual(["a2"])
+      })
+
+      it("an order number among the words matches the number exactly", async () => {
+        expect(await buscar2(`samsung ${NUM.a2}`)).toEqual(["a2"])
+        expect(await buscar2(`samsung ${NUM.b1}`)).toEqual([])
+        // with a code that does not contain the number, only the number column can match it
+        const sinCodigo = filas()
+        sinCodigo[1] = { ...sinCodigo[1], codigo_orden: "XYZ-A" }
+        expect((await ordenesDe(TECNICO_A, `samsung ${NUM.a2}`, "", false, sinCodigo)).ids).toEqual(["a2"])
+        expect((await ordenesDe(TECNICO_A, `samsung ${NUM.a2 + 1000}`, "", false, sinCodigo)).ids).toEqual([])
+      })
+
+      it("the words never widen the scope: a colleague's order with the same device is not found, the colleague finds his", async () => {
+        expect(await buscar2("samsung a52")).toEqual(["a2"])
+        expect(await buscar2("samsung a52", { ...TECNICO_A, userId: "t-b" })).toEqual(["a3"])
+        expect(await buscar2("samsung a52", TECNICO_A, true)).toEqual(["a2"])
+      })
+
+      it("the scope and every word travel in ONE or(), one list per word", async () => {
+        const { memoria } = await ordenesDe(TECNICO_A, "samsung a52 pantalla", "", true, filas())
+        const listas = memoria.listasOr("ordenes_servicio")
+        expect(listas).toHaveLength(1)
+        expect(listas[0]).toHaveLength(1)
+        expect(listas[0][0].match(/dispositivo\.ilike\./g)).toHaveLength(3)
+      })
+
+      it("only the first words count: a long text cannot build an unbounded filter", async () => {
+        const { memoria } = await ordenesDe(TECNICO_A, "a b c d e f g h i j k l", "", false, filas())
+        expect(memoria.listasOr("ordenes_servicio")[0][0].match(/dispositivo\.ilike\./g)).toHaveLength(6)
+      })
+
+      it("a word built to close the filter cannot widen the scope or break the query", async () => {
+        const { ids, memoria } = await ordenesDe(TECNICO_A, "samsung x),sucursal_id.neq.zzz,dispositivo.ilike.(Galaxy", "", false, filas())
+        expect(ids).toEqual([])
+        expect(memoria.listasOr("ordenes_servicio")[0][0]).not.toContain(",sucursal_id.neq.zzz")
+      })
+
+      it("the fallback of the search function is the same for a technician", async () => {
+        entrar(TECNICO_A)
+        montar({ filas: filas() })
+        vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: { message: "function search_all does not exist" } } as any)
+        const { body } = await parseResponse(await buscar(url("galaxy rota")))
+        expect((body.ordenes as Array<{ id: string }>).map((o) => o.id)).toEqual(["a2"])
+      })
+    })
+
     it.each(
       conNombre([
         [TECNICO_A, false],
