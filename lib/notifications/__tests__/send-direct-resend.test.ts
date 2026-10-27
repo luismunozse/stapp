@@ -64,6 +64,65 @@ describe('sendNotificationDirect via Resend (kill switch)', () => {
     expect(url).toBe('https://api.resend.com/emails')
   })
 
+  it('manda el email del taller como reply_to y su nombre como remitente', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 're-1' }),
+    }) as any
+    wireSupabase({
+      organizations: {
+        notificaciones_email: true,
+        notificaciones_whatsapp: false,
+        plantillas_whatsapp: null,
+        pais: 'AR',
+        email: 'taller@example.com',
+      },
+      clientes: { acepta_whatsapp: true },
+      users: null,
+    })
+
+    const { sendNotificationDirect } = await import('../send-direct')
+    await sendNotificationDirect({
+      organizationId: 'org1',
+      clienteId: 'c1',
+      tipo: 'CAMBIO_ESTADO',
+      context: baseContext as any,
+    })
+
+    const body = JSON.parse(vi.mocked(global.fetch).mock.calls[0][1]!.body as string)
+    expect(body.from).toBe('Org <avisos@avisos.stapp.com.ar>')
+    expect(body.reply_to).toBe('taller@example.com')
+  })
+
+  it('sin email del taller no manda reply_to', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 're-2' }),
+    }) as any
+    wireSupabase({
+      organizations: {
+        notificaciones_email: true,
+        notificaciones_whatsapp: false,
+        plantillas_whatsapp: null,
+        pais: 'AR',
+        email: null,
+      },
+      clientes: { acepta_whatsapp: true },
+      users: null,
+    })
+
+    const { sendNotificationDirect } = await import('../send-direct')
+    await sendNotificationDirect({
+      organizationId: 'org1',
+      clienteId: 'c1',
+      tipo: 'CAMBIO_ESTADO',
+      context: baseContext as any,
+    })
+
+    const body = JSON.parse(vi.mocked(global.fetch).mock.calls[0][1]!.body as string)
+    expect(body).not.toHaveProperty('reply_to')
+  })
+
   it('con RESEND_API_KEY seteada y Resend respondiendo no-ok, el log FALLIDO atribuye el intento a resend', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,

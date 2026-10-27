@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sendAdminEmail } from "@/lib/email"
+import { EmailSuprimidoError, replyToDelTaller } from "@/lib/email/index"
 
 export async function POST(request: Request) {
   try {
@@ -21,11 +22,12 @@ export async function POST(request: Request) {
     // Obtener nombre de la organización
     const { data: org } = await supabaseAdmin
       .from("organizations")
-      .select("nombre")
+      .select("nombre, nombre_mostrar, email")
       .eq("id", organizationId!)
       .single()
 
-    const nombreOrganizacion = org?.nombre || "Mi Negocio"
+    // Mismo nombre visible que usan cotizaciones y notificaciones.
+    const nombreOrganizacion = org?.nombre_mostrar || org?.nombre || "Mi Negocio"
 
     // Enviar email
     try {
@@ -35,6 +37,7 @@ export async function POST(request: Request) {
         asunto,
         contenido,
         nombreOrganizacion,
+        replyTo: replyToDelTaller(org?.email),
       })
 
       // Registrar en historial
@@ -52,6 +55,10 @@ export async function POST(request: Request) {
 
       return NextResponse.json({ message: "Email enviado correctamente" })
     } catch (sendError: any) {
+      // Destinatario suprimido (rebote o queja): no es una falla del servidor,
+      // se le explica al taller y queda asentado en el historial.
+      const suprimido = sendError instanceof EmailSuprimidoError
+
       // Registrar el error en historial
       await supabaseAdmin.from("admin_emails").insert({
         organization_id: organizationId!,
@@ -63,8 +70,20 @@ export async function POST(request: Request) {
         asunto,
         contenido,
         estado: "ERROR",
-        error_message: sendError.message || "Error desconocido",
+        error_message: suprimido
+          ? "Dirección bloqueada: rebotó o marcó un envío anterior como no deseado"
+          : sendError.message || "Error desconocido",
       })
+
+      if (suprimido) {
+        return NextResponse.json(
+          {
+            error:
+              "No se puede enviar a este correo: la dirección rebotó o marcó un envío anterior como no deseado, y está bloqueada para proteger la entrega. Use otra dirección de correo o contacte al destinatario por WhatsApp.",
+          },
+          { status: 422 }
+        )
+      }
 
       return NextResponse.json(
         { error: "Error al enviar el email. Se registró en el historial." },

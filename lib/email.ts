@@ -142,7 +142,7 @@ const getDivider = () => `
 // ============================================
 // ENVÍO DE EMAIL
 // ============================================
-import { sendPlatform, type EmailMessage } from "@/lib/email/index"
+import { sendPlatform, sendCustomer, canalClienteAceptaReplyTo, type EmailMessage } from "@/lib/email/index"
 
 type SendEmailParams = EmailMessage
 
@@ -516,8 +516,16 @@ interface SendCotizacionEmailParams {
   pdfBuffer: Buffer
   moneda?: string
   zonaHoraria?: string
+  /** Nombre visible del taller como remitente. */
+  fromName?: string
+  /** Email del taller. Sin él, el correo no invita a responder. */
+  replyTo?: string
 }
 
+/**
+ * La cotización va al cliente final del taller: sale por el canal de cliente
+ * (`sendCustomer`), no por el de plataforma. Puede lanzar `EmailSuprimidoError`.
+ */
 export async function sendCotizacionEmail({
   email,
   nombreCliente,
@@ -528,10 +536,20 @@ export async function sendCotizacionEmail({
   pdfBuffer,
   moneda,
   zonaHoraria,
+  fromName,
+  replyTo,
 }: SendCotizacionEmailParams) {
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
   const formatCurrency = (amount: number) =>
     formatCurrencyValue(amount, (moneda as CurrencyCode) || DEFAULT_CURRENCY)
+
+  // "Responda a este correo" solo es cierto si hay reply-to Y el canal lo
+  // entrega: sin él (o con el fallback a EnvialoSimple, que lo descarta), la
+  // respuesta caería en el remitente técnico de la plataforma.
+  const respuestaLlegaAlTaller = Boolean(replyTo) && canalClienteAceptaReplyTo()
+  const invitacionAConsultar = respuestaLlegaAlTaller
+    ? "Si desea aceptar esta cotización o tiene alguna consulta, por favor responda a este correo o contáctenos."
+    : "Si desea aceptar esta cotización o tiene alguna consulta, por favor contáctenos."
 
   const vencimientoText = fechaVencimiento
     ? `📅 Válida hasta el <strong>${formatDateValue(fechaVencimiento, zonaHoraria)}</strong>`
@@ -624,12 +642,14 @@ export async function sendCotizacionEmail({
     </p>
 
     <p class="text-body" style="color: #4b5563; font-size: 15px; text-align: center; margin: 12px 0 0 0;">
-      Si desea aceptar esta cotización o tiene alguna consulta, por favor responda a este correo o contáctenos.
+      ${invitacionAConsultar}
     </p>
   `
 
-  return sendEmail({
+  return sendCustomer({
     to: email,
+    fromName,
+    replyTo,
     subject: `Cotización ${numeroCotizacion} - Orden #${numeroOrden}`,
     attachments: [
       {
@@ -642,7 +662,9 @@ export async function sendCotizacionEmail({
       preheader: `${nombreCliente}, tu cotización ${numeroCotizacion} por ${formatCurrency(total)} está lista`,
       content,
       rootDomain,
-      footerText: "Responde a este correo si deseas confirmar la cotización o tienes consultas.",
+      footerText: respuestaLlegaAlTaller
+        ? "Responde a este correo si deseas confirmar la cotización o tienes consultas."
+        : "Contáctanos si deseas confirmar la cotización o tienes consultas.",
     }),
   })
 }
@@ -659,14 +681,22 @@ interface SendAdminEmailParams {
   asunto: string
   contenido: string
   nombreOrganizacion: string
+  /** Email del taller para que el destinatario le responda directo. */
+  replyTo?: string
 }
 
+/**
+ * Mensaje del taller a un cliente o proveedor: sale por el canal de cliente
+ * (`sendCustomer`) con el nombre del taller como remitente. Puede lanzar
+ * `EmailSuprimidoError`.
+ */
 export async function sendAdminEmail({
   to,
   nombreDestinatario,
   asunto,
   contenido,
   nombreOrganizacion,
+  replyTo,
 }: SendAdminEmailParams) {
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
 
@@ -702,8 +732,10 @@ export async function sendAdminEmail({
     </p>
   `
 
-  return sendEmail({
+  return sendCustomer({
     to,
+    fromName: nombreOrganizacion,
+    replyTo,
     subject: `${asunto} - ${nombreOrganizacion}`,
     html: getBaseTemplate({
       preheader: `${nombreDestinatario}, tienes un mensaje de ${nombreOrganizacion}`,

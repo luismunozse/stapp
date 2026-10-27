@@ -45,6 +45,21 @@ describe("resendProvider", () => {
     expect(body.from).toBe("Taller Pepe <avisos@avisos.stapp.com.ar>")
   })
 
+  it("sanea el nombre del taller en el from (comillas, comas y CR/LF)", async () => {
+    const { resendProvider } = await import("../providers/resend")
+
+    await resendProvider.send({ to: "a@b.com", subject: "s", html: "h", fromName: 'Taller "Pepe", S.A.' })
+    await resendProvider.send({ to: "a@b.com", subject: "s", html: "h", fromName: "Taller\r\nBcc: x@y.com" })
+
+    const calls = vi.mocked(global.fetch).mock.calls
+    expect(JSON.parse(calls[0][1]!.body as string).from).toBe(
+      '"Taller Pepe, S.A." <avisos@avisos.stapp.com.ar>'
+    )
+    const inyectado = JSON.parse(calls[1][1]!.body as string).from
+    expect(inyectado).not.toMatch(/[\r\n]/)
+    expect(inyectado).toBe('"Taller Bcc: x@y.com" <avisos@avisos.stapp.com.ar>')
+  })
+
   it("tira si le pasan substitutions, que Resend no soporta", async () => {
     const { resendProvider } = await import("../providers/resend")
 
@@ -54,18 +69,52 @@ describe("resendProvider", () => {
     expect(global.fetch).not.toHaveBeenCalled()
   })
 
-  it("tira si le pasan attachments, que este canal no manda", async () => {
+  it("manda los attachments con los nombres de campo de Resend", async () => {
     const { resendProvider } = await import("../providers/resend")
 
-    await expect(
-      resendProvider.send({
-        to: "a@b.com",
-        subject: "s",
-        html: "h",
-        attachments: [{ filename: "a.pdf", content: "YmFzZTY0", type: "application/pdf" }],
-      })
-    ).rejects.toThrow("attachments")
-    expect(global.fetch).not.toHaveBeenCalled()
+    await resendProvider.send({
+      to: "a@b.com",
+      subject: "s",
+      html: "h",
+      attachments: [{ filename: "a.pdf", content: "YmFzZTY0", type: "application/pdf" }],
+    })
+
+    const body = JSON.parse(vi.mocked(global.fetch).mock.calls[0][1]!.body as string)
+    expect(body.attachments).toEqual([
+      { filename: "a.pdf", content: "YmFzZTY0", content_type: "application/pdf" },
+    ])
+  })
+
+  it("no manda el campo attachments si no hay adjuntos", async () => {
+    const { resendProvider } = await import("../providers/resend")
+
+    await resendProvider.send({ to: "a@b.com", subject: "s", html: "h", attachments: [] })
+
+    const body = JSON.parse(vi.mocked(global.fetch).mock.calls[0][1]!.body as string)
+    expect(body).not.toHaveProperty("attachments")
+  })
+
+  it("manda reply_to cuando hay replyTo", async () => {
+    const { resendProvider } = await import("../providers/resend")
+
+    await resendProvider.send({
+      to: "a@b.com",
+      subject: "s",
+      html: "h",
+      replyTo: "taller@example.com",
+    })
+
+    const body = JSON.parse(vi.mocked(global.fetch).mock.calls[0][1]!.body as string)
+    expect(body.reply_to).toBe("taller@example.com")
+  })
+
+  it("no manda reply_to cuando no hay replyTo", async () => {
+    const { resendProvider } = await import("../providers/resend")
+
+    await resendProvider.send({ to: "a@b.com", subject: "s", html: "h" })
+
+    const body = JSON.parse(vi.mocked(global.fetch).mock.calls[0][1]!.body as string)
+    expect(body).not.toHaveProperty("reply_to")
   })
 
   it("tira si falta la API key", async () => {

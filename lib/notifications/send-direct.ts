@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { sendCustomer, proveedorCliente } from "@/lib/email/index"
+import { sendCustomer, proveedorCliente, replyToDelTaller } from "@/lib/email/index"
 import { formatDateValue } from "@/lib/timezone"
 import { generateWhatsAppMessage, formatEstado, resolvePlantillaForTipo } from "@/lib/notifications/whatsapp-message"
 import { escapeHtml } from "@/lib/escape-html"
@@ -74,7 +74,7 @@ export async function sendNotificationDirect(params: NotificationParams) {
   // Obtener configuración de la organización
   const { data: orgConfig } = await supabaseAdmin
     .from("organizations")
-    .select("notificaciones_email, notificaciones_whatsapp, plantillas_whatsapp, pais")
+    .select("notificaciones_email, notificaciones_whatsapp, plantillas_whatsapp, pais, email")
     .eq("id", organizationId)
     .single()
 
@@ -93,6 +93,7 @@ export async function sendNotificationDirect(params: NotificationParams) {
         subject,
         html,
         fromName: context.organizationName,
+        replyTo: replyToDelTaller(orgConfig.email),
       })
 
       // Un error silencioso aca no lanza excepcion: el correo ya salio, pero

@@ -5,6 +5,7 @@ import type { EmailMessage, NombreProveedor, SendResult } from "./types"
 
 export type { EmailMessage, EmailAttachment, SendResult, EmailProvider } from "./types"
 export { EmailSuprimidoError } from "./suppression"
+export { replyToDelTaller } from "./reply-to"
 
 /**
  * Proveedor que resuelve hoy para el canal de cliente. Existe para que el
@@ -13,6 +14,15 @@ export { EmailSuprimidoError } from "./suppression"
  */
 export function proveedorCliente(): NombreProveedor {
   return process.env.RESEND_API_KEY ? "resend" : "envialosimple"
+}
+
+/**
+ * Indica si el canal de cliente entregara de verdad el reply-to. Solo Resend lo
+ * cursa; el fallback a EnvialoSimple lo descarta, y ahi prometerle al cliente
+ * "responda a este correo" mandaria su respuesta a la direccion de plataforma.
+ */
+export function canalClienteAceptaReplyTo(): boolean {
+  return proveedorCliente() === "resend"
 }
 
 /**

@@ -74,4 +74,42 @@ describe("sendTurnoNotification usa el canal de cliente", () => {
     const body = JSON.parse(vi.mocked(global.fetch).mock.calls[0][1]!.body as string)
     expect(body.to).toBe("cliente@example.com")
   })
+
+  it("pasa el nombre del taller y su email como replyTo", async () => {
+    wireSupabase({
+      organizations: {
+        notificaciones_email: true,
+        notificaciones_whatsapp: false,
+        plantillas_whatsapp: null,
+        email: "taller@example.com",
+      },
+    })
+    const { sendCustomer } = await import("@/lib/email/index")
+    const { sendTurnoNotification } = await import("../notifications")
+
+    await sendTurnoNotification(baseCtx as any, "confirmacion", ["email"])
+
+    expect(sendCustomer).toHaveBeenCalledWith(
+      expect.objectContaining({ fromName: "Taller Pepe", replyTo: "taller@example.com" }),
+    )
+  })
+
+  it("sin email del taller no pasa replyTo", async () => {
+    wireSupabase({
+      organizations: {
+        notificaciones_email: true,
+        notificaciones_whatsapp: false,
+        plantillas_whatsapp: null,
+        email: null,
+      },
+    })
+    const { sendCustomer } = await import("@/lib/email/index")
+    const { sendTurnoNotification } = await import("../notifications")
+
+    await sendTurnoNotification(baseCtx as any, "confirmacion", ["email"])
+
+    const msg = vi.mocked(sendCustomer).mock.calls[0][0]
+    expect(msg.fromName).toBe("Taller Pepe")
+    expect(msg.replyTo).toBeUndefined()
+  })
 })
