@@ -24,7 +24,14 @@ vi.mock("@/components/ui/select", () => ({
   SelectTrigger: () => null,
   SelectValue: () => null,
   SelectContent: ({ children }: any) => <>{children}</>,
-  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
+  // An <option> holds text only: the item's children (spans) are flattened to it.
+  SelectItem: ({ value, children }: any) => {
+    const texto = (nodo: React.ReactNode): string =>
+      React.Children.toArray(nodo)
+        .map((n) => (typeof n === "string" || typeof n === "number" ? String(n) : React.isValidElement(n) ? texto((n.props as { children?: React.ReactNode }).children) : ""))
+        .join("")
+    return <option value={value}>{texto(children)}</option>
+  },
 }))
 
 import { toast } from "sonner"
@@ -58,9 +65,10 @@ function ExponeRevalidar() {
   return null
 }
 
-function montar(ordenesActivas = 5) {
+/** `total`: every open order he holds, in every branch (the page's number); `swr`: extra global options of the cache. */
+function montar(ordenesActivas = 5, opciones: { total?: number; swr?: Record<string, unknown> } = {}) {
   return render(
-    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, ...opciones.swr }}>
       <ExponeRevalidar />
       <ReasignarOrdenesDialog
         open
@@ -68,6 +76,7 @@ function montar(ordenesActivas = 5) {
         tecnicoOrigenId="t-origen"
         tecnicoOrigenNombre="Lucas"
         ordenesActivas={ordenesActivas}
+        ordenesActivasTotal={opciones.total}
         onSuccess={vi.fn()}
       />
     </SWRConfig>,
@@ -209,6 +218,89 @@ describe("ReasignarOrdenesDialog", () => {
       fireEvent.click(screen.getByRole("button", { name: "Reintentar" }))
       expect(await screen.findByLabelText("destino")).toBeInTheDocument()
       expect(pedidos.filter((p) => p.url === URL_DESTINOS)).toHaveLength(2)
+    })
+
+    it("a failed first load is NOT retried behind the alert (the button is the retry): the alert never flickers into a spinner", async () => {
+      respuestaDestinos = () => falla(500)
+      // The cache is allowed to retry on error, quickly: the dialog must not rely on it.
+      montar(5, { swr: { errorRetryInterval: 10 } })
+      await screen.findByRole("alert")
+      await new Promise((resolver) => setTimeout(resolver, 250))
+      expect(pedidos.filter((p) => p.url === URL_DESTINOS)).toHaveLength(1)
+      expect(screen.getByRole("alert")).toBeInTheDocument()
+      expect(screen.queryByText(/Cargando técnicos/)).not.toBeInTheDocument()
+    })
+
+    it("while the retry of the button is in flight the alert stays (no spinner takes its place)", async () => {
+      respuestaDestinos = () => falla(500)
+      montar()
+      await screen.findByRole("alert")
+      respuestaDestinos = () => new Promise<Response>(() => {})
+      fireEvent.click(screen.getByRole("button", { name: "Reintentar" }))
+      await waitFor(() => expect(pedidos.filter((p) => p.url === URL_DESTINOS)).toHaveLength(2))
+      expect(screen.getByRole("alert")).toBeInTheDocument()
+      expect(screen.queryByText(/Cargando técnicos/)).not.toBeInTheDocument()
+    })
+  })
+
+  describe("nothing to move in this scope", () => {
+    beforeEach(() => {
+      respuestaDestinos = () => ok({ tecnicos: [tecnico("t-1", "Ana")], ordenesAMover: 0, variasSucursales: false })
+    })
+
+    it("his open orders are in other branches (the jed-electronics case): says so, offers nobody and cannot be confirmed", async () => {
+      montar(0, { total: 7 })
+      expect(await screen.findByText(/en otras sucursales/)).toHaveTextContent(
+        "No hay órdenes activas de Lucas en esta sucursal para mover. Tiene 7 en otras sucursales: elegí esa sucursal en el selector.",
+      )
+      expect(screen.queryByLabelText("destino")).not.toBeInTheDocument()
+      expect(screen.getByText(/Mover las órdenes activas de/)).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "Reasignar órdenes" })).toBeDisabled()
+    })
+
+    it("he holds no open order anywhere: says that, plainly", async () => {
+      montar(0, { total: 0 })
+      expect(await screen.findByText("No hay órdenes activas de Lucas para mover.")).toBeInTheDocument()
+      expect(screen.queryByLabelText("destino")).not.toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "Reasignar órdenes" })).toBeDisabled()
+    })
+
+    it("a destination chosen before the answer said there was nothing to move cannot be confirmed", async () => {
+      respuestaDestinos = () => ok({ tecnicos: [tecnico("t-1", "Ana")], ordenesAMover: 2, variasSucursales: false })
+      montar(2, { total: 0 })
+      fireEvent.change(await screen.findByLabelText("destino"), { target: { value: "t-1" } })
+      expect(boton()).toBeEnabled()
+      respuestaDestinos = () => ok({ tecnicos: [tecnico("t-1", "Ana")], ordenesAMover: 0, variasSucursales: false })
+      await act(async () => {
+        await revalidar()
+      })
+      expect(await screen.findByText("No hay órdenes activas de Lucas para mover.")).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "Reasignar órdenes" })).toBeDisabled()
+    })
+
+    it("with orders to move the dialog is the same as ever (the total only matters when there is nothing to move)", async () => {
+      respuestaDestinos = () => ok({ tecnicos: [tecnico("t-1", "Ana")], ordenesAMover: 2, variasSucursales: false })
+      montar(2, { total: 9 })
+      expect(await screen.findByRole("button", { name: "Reasignar 2 orden(es)" })).toBeInTheDocument()
+      expect(screen.getByLabelText("destino")).toBeInTheDocument()
+    })
+  })
+
+  describe("the destination options", () => {
+    it("are plain text options: no element is nested inside an <option> (React warns about it)", async () => {
+      const espia = vi.spyOn(console, "error").mockImplementation(() => {})
+      try {
+        montar()
+        await screen.findByLabelText("destino")
+        const avisos = espia.mock.calls.map((llamada) => String(llamada[0])).filter((m) => /cannot be (a child|a descendant)|validateDOMNesting/i.test(m))
+        expect(avisos).toEqual([])
+        const opciones = Array.from(screen.getByLabelText("destino").querySelectorAll("option"))
+        expect(opciones.every((o) => o.children.length === 0)).toBe(true)
+        expect(opciones[1].textContent).toContain("Ana")
+        expect(opciones[1].textContent).toContain("1 activa(s)")
+      } finally {
+        espia.mockRestore()
+      }
     })
   })
 
