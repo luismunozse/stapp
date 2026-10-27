@@ -375,15 +375,6 @@ export async function POST(request: Request) {
       turnoOrigen = { id: turnoCheck.id, tecnico_id: turnoCheck.tecnico_id }
     }
 
-    // Obtener siguiente número de orden con prefijo por tipo de dispositivo
-    const { codigo: codigoOrden, numero: numeroOrden } = await getNextOrderNumberByType(
-      organizationId!,
-      data.tipoDispositivo
-    )
-
-    // Generar token público para acceso al PDF
-    const publicToken = generatePublicToken()
-
     // The concrete write branch, from role/cookie/user. It is resolved before the
     // technician is validated: the branch an order is created in is the one that handles it.
     const sucursalId = await sucursalParaEscritura({
@@ -427,6 +418,16 @@ export async function POST(request: Request) {
         tecnicoCostoHora = Number(selfTecnico.costo_hora ?? 0)
       }
     }
+
+    // Next order number, with the prefix of the device type. It comes after every validation
+    // that can reject the request: the RPC increments the counter, so a rejection would burn a number.
+    const { codigo: codigoOrden, numero: numeroOrden } = await getNextOrderNumberByType(
+      organizationId!,
+      data.tipoDispositivo
+    )
+
+    // Generar token público para acceso al PDF
+    const publicToken = generatePublicToken()
 
     // Determinar estado inicial y costo final
     const estadoInicial = data.presupuestoAceptado ? "EN_REPARACION" : "RECIBIDO"

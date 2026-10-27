@@ -34,6 +34,7 @@ vi.mock("@/lib/tipos-dispositivo-config", () => ({ tipoValidaImei: vi.fn() }))
 import { POST } from "@/app/api/ordenes/route"
 import { PUT } from "@/app/api/ordenes/[id]/route"
 import { queueNotification } from "@/lib/notifications/queue"
+import { getNextOrderNumberByType } from "@/lib/counters"
 
 const MENSAJE = "Ese técnico no pertenece a la sucursal de esta orden"
 
@@ -80,6 +81,8 @@ describe("POST /api/ordenes - assigning a technician", () => {
     expect(body.error).toBe(MENSAJE)
     expect(insert).not.toHaveBeenCalled()
     expect(queueNotification).not.toHaveBeenCalled()
+    // The number counter is incremented by the RPC: a rejected request must not burn one.
+    expect(getNextOrderNumberByType).not.toHaveBeenCalled()
   })
 
   it("accepts a technician of the branch the order is created in", async () => {
@@ -89,6 +92,7 @@ describe("POST /api/ordenes - assigning a technician", () => {
 
     expect(status).toBe(201)
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ sucursal_id: "suc-A", tecnico_id: "t-a" }))
+    expect(getNextOrderNumberByType).toHaveBeenCalledTimes(1)
   })
 
   it("the branch the order is created in decides: a VENDEDOR of B takes B's technicians, not A's", async () => {
@@ -98,9 +102,12 @@ describe("POST /api/ordenes - assigning a technician", () => {
     expect(rechazado.status).toBe(400)
     expect(rechazado.body.error).toBe(MENSAJE)
     expect(insert).not.toHaveBeenCalled()
+    expect(getNextOrderNumberByType).not.toHaveBeenCalled()
 
     const aceptado = await parseResponse(await POST(cuerpo({ tecnicoId: "t-b" })))
     expect(aceptado.status).toBe(201)
+    // Only the accepted request took a number.
+    expect(getNextOrderNumberByType).toHaveBeenCalledTimes(1)
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ sucursal_id: "suc-B", tecnico_id: "t-b" }))
   })
 
@@ -125,6 +132,7 @@ describe("POST /api/ordenes - assigning a technician", () => {
     expect(status).toBe(400)
     expect(body.error).toBe("Técnico inválido")
     expect(insert).not.toHaveBeenCalled()
+    expect(getNextOrderNumberByType).not.toHaveBeenCalled()
   })
 })
 
