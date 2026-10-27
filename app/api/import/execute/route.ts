@@ -3,7 +3,8 @@ import { requireAuth, denyIfNoInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { depositoPorDefecto, moverStockInicialLote } from "@/lib/depositos"
 import { parseCSV, parseExcel } from "@/lib/csv-parser"
-import { validateClienteRow, validateInventarioRow, validateCSVHeaders, normalizeHeaders, normalizeRow, resolveTipoDispositivo, generateCodigo } from "@/lib/csv-validator"
+import { validateCSVHeaders, normalizeHeaders, normalizeRow, resolveTipoDispositivo, generateCodigo } from "@/lib/csv-validator"
+import { validateImportRows } from "@/lib/import-rows"
 import { uploadImportFile, base64ToBuffer } from "@/lib/storage"
 import { enforcePlanLimit } from "@/lib/plan-limits"
 import { excedeTechoDeImportacion, MAX_IMPORT_FILE_LABEL } from "@/lib/import-limits"
@@ -185,14 +186,16 @@ export async function POST(request: Request) {
     }
     const validRows: Array<{ rowNumber: number; row: any; data: any; sinPrecio?: boolean }> = []
 
-    for (let i = 0; i < parseResult.data.length; i++) {
-      const row = parseResult.data[i]
-      const rowNumber = i + 2
-      const validation = data.entityType === 'CLIENTES'
-        ? validateClienteRow(row, i)
-        : validateInventarioRow(row, i)
+    // Same validation and numbering as /preview: rowNumber is the spreadsheet line.
+    const checked = validateImportRows(parseResult.data, parseResult, data.entityType)
+    for (const { rowNumber, row, validation } of checked) {
       if (!validation.valid) {
-        results.errors.push({ row: rowNumber, error: validation.error!, data: row })
+        results.errors.push({
+          row: rowNumber,
+          error: validation.message ?? validation.error!,
+          ...(validation.column ? { column: validation.column } : {}),
+          data: row,
+        })
         continue
       }
       validRows.push({ rowNumber, row, data: validation.data, sinPrecio: validation.sinPrecio })

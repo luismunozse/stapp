@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import { requireAuth, denyIfNoInventarioAccess } from "@/lib/auth-utils"
 import { parseCSV, parseExcel } from "@/lib/csv-parser"
-import { validateClienteRow, validateInventarioRow, validateCSVHeaders, normalizeHeaders, normalizeRow } from "@/lib/csv-validator"
+import { validateCSVHeaders, normalizeHeaders, normalizeRow } from "@/lib/csv-validator"
+import { validateImportRows, collectInvalidRows } from "@/lib/import-rows"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { excedeTechoDeImportacion, MAX_IMPORT_FILE_LABEL } from "@/lib/import-limits"
 import { z } from "zod"
@@ -78,9 +79,11 @@ export async function POST(request: Request) {
       )
     }
 
+    // Only a file that cannot be read at all aborts. Row-level problems
+    // (parseResult.rowErrors) are reported per row below.
     if (parseResult.errors.length > 0) {
       return NextResponse.json(
-        { error: `Error al parsear archivo: ${parseResult.errors[0]}` },
+        { error: `No se pudo leer el archivo: ${parseResult.errors[0]}` },
         { status: 400 }
       )
     }
@@ -106,34 +109,21 @@ export async function POST(request: Request) {
 
     const normalizedRows = parseResult.data.map(r => normalizeRow(r, mapping))
 
-    // Validate first 5 rows for preview
-    const previewRows = normalizedRows.slice(0, 5)
-    const validatedPreview = previewRows.map((row, index) => {
-      const validation = data.entityType === 'CLIENTES'
-        ? validateClienteRow(row, index)
-        : validateInventarioRow(row, index)
+    // Validate EVERY row once (sync, no I/O). Row numbers are the spreadsheet
+    // lines the user sees (header = 1); structural problems found by the parser
+    // show up here as invalid rows instead of aborting the whole file.
+    const checked = validateImportRows(normalizedRows, parseResult, data.entityType)
 
-      return {
-        row: index + 1,
-        data: row,
-        valid: validation.valid,
-        error: validation.error,
-      }
-    })
+    const validatedPreview = checked.slice(0, 5).map(({ rowNumber, row, validation }) => ({
+      row: rowNumber,
+      data: row,
+      parsed: validation.valid ? validation.data : undefined,
+      valid: validation.valid,
+      error: validation.message ?? validation.error,
+    }))
 
-    // Validar TODAS las filas (sync, sin I/O) para contar errores y filas sin precio.
-    let invalidRows = 0
-    let sinPrecio = 0
-    for (let index = 0; index < normalizedRows.length; index++) {
-      const validation = data.entityType === 'CLIENTES'
-        ? validateClienteRow(normalizedRows[index], index)
-        : validateInventarioRow(normalizedRows[index], index)
-      if (!validation.valid) {
-        invalidRows++
-      } else if (validation.sinPrecio) {
-        sinPrecio++
-      }
-    }
+    const { total: invalidRows, details: invalidDetails } = collectInvalidRows(checked)
+    const sinPrecio = checked.filter(c => c.validation.valid && c.validation.sinPrecio).length
 
     return NextResponse.json({
       totalRows: parseResult.totalRows,
@@ -141,6 +131,7 @@ export async function POST(request: Request) {
       headers: canonicalHeaders,
       unmappedColumns: unmapped,
       invalidRows,
+      invalidDetails,
       sinPrecio,
     })
   } catch (error) {
