@@ -5,9 +5,9 @@ import {
   hasInventarioAccess,
   resolveVendedoresHabilitados,
   canViewCotizacionCosts,
-  resolveTecnicosTomanOrdenes,
 } from "@/lib/auth-utils"
 import { ordenSeTomaPorTecnico } from "@/lib/ordenes/tomar"
+import { alcanceLecturaOrdenes } from "@/lib/ordenes/alcance-lectura"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumberByType } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
@@ -15,14 +15,8 @@ import { uploadOrderPhoto, base64ToBuffer } from "@/lib/storage"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { formatOrden } from "@/lib/db-utils"
 import { queueNotification } from "@/lib/notifications/queue"
-import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
-import {
-  MENSAJE_TECNICO_OTRA_SUCURSAL,
-  combinarOr,
-  filtroListaTecnico,
-  tecnicoAsignable,
-  terminoDeBusquedaSeguro,
-} from "@/lib/sucursal-ordenes"
+import { sucursalParaEscritura } from "@/lib/sucursal"
+import { MENSAJE_TECNICO_OTRA_SUCURSAL, tecnicoAsignable, terminoDeBusquedaSeguro } from "@/lib/sucursal-ordenes"
 import { z } from "zod"
 import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
 import { isValidImei } from "@/lib/imei"
@@ -132,37 +126,19 @@ export async function GET(request: Request) {
       .eq("organization_id", organizationId!)
       .order(sortBy, { ascending: sortOrder })
 
-    // Every `or` condition of the list goes into ONE combined expression at the end
-    // (combinarOr): repeated `.or()` calls would rely on PostgREST ANDing the repeated
-    // `or` params.
+    // Which orders this user reads (a technician: his own, from any branch, plus his branch's
+    // unassigned ones with the org opt-in; an ADMIN: the switcher's branch or all; anyone else: his
+    // branch) is decided by the door, the same one the export uses. It joins the `or` conditions of
+    // the list below into ONE expression (combinarOr): repeated `.or()` calls would rely on
+    // PostgREST ANDing the repeated `or` params.
+    const alcance = await alcanceLecturaOrdenes({
+      organizationId: organizationId!,
+      userId: userId!,
+      role: role!,
+      sucursalId: session!.user.sucursalId ?? null,
+    })
+    const puedeTomarSinAsignar = alcance.puedeTomarSinAsignar
     const filtrosOr: string[] = []
-
-    // A technician sees the orders assigned to him, from any branch (BM-6). With the
-    // opt-in permission `tecnicos_toman_ordenes` he also sees the unassigned ones that
-    // his branch handles (so he can take them). Fail-closed: an unreadable flag, no
-    // branch, or an id that cannot be spliced into the filter leaves only the orders
-    // assigned to him. The branch filter below does not apply to a technician: that
-    // limit already sits inside his own filter.
-    let puedeTomarSinAsignar = false
-    if (role === "TECNICO") {
-      const filtroTecnico = filtroListaTecnico(
-        userId!,
-        session!.user.sucursalId ?? null,
-        await resolveTecnicosTomanOrdenes(organizationId!),
-      )
-      if (filtroTecnico) {
-        puedeTomarSinAsignar = true
-        filtrosOr.push(filtroTecnico)
-      } else {
-        query = query.eq("tecnico_id", userId!)
-      }
-    } else {
-      // Filtro por sucursal (ADMIN ve según cookie; otros roles su sucursal fija)
-      const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
-      if (!filtro.verTodas && filtro.sucursalId) {
-        query = query.eq("sucursal_id", filtro.sucursalId)
-      }
-    }
 
     if (estado) {
       query = query.eq("estado", estado)
@@ -278,9 +254,7 @@ export async function GET(request: Request) {
       filtrosOr.push(filters.join(","))
     }
 
-    if (filtrosOr.length > 0) {
-      query = query.or(combinarOr(...filtrosOr))
-    }
+    query = alcance.aplicar(query, filtrosOr)
 
     // Aplicar paginación
     query = query.range(offset, offset + limit - 1)
