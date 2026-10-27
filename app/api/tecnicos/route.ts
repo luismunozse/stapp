@@ -15,6 +15,42 @@ import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/li
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import bcrypt from "bcryptjs"
 
+/**
+ * A row of the list. Typed by hand: the select is one of two strings (the second adds the total), and the compiler
+ * cannot read the columns of a union of them.
+ */
+interface FilaDeLaLista {
+  id: string
+  nombre: string
+  email: string
+  telefono: string | null
+  activo: boolean | null
+  especialidades: string[] | null
+  avatar_url: string | null
+  fecha_ingreso_tecnico: string | null
+  porcentaje_comision: number | null
+  sucursal_id: string | null
+  activas_del_alcance?: unknown[] | null
+  completadas_del_alcance?: unknown[] | null
+  activas_totales?: unknown[] | null
+}
+
+// What the list of technicians reads of each one. The orders are counted through embeds of his own row: the open
+// ones and the finished ones of the viewer's scope (narrowed to it by the route), by state, each under its alias.
+const COLUMNAS_DE_LA_LISTA = `
+        id,
+        nombre,
+        email,
+        telefono,
+        activo,
+        especialidades,
+        avatar_url,
+        fecha_ingreso_tecnico,
+        porcentaje_comision,
+        sucursal_id,
+        activas_del_alcance:ordenes_servicio!tecnico_id (id),
+        completadas_del_alcance:ordenes_servicio!tecnico_id (id)`
+
 export async function GET(request: Request) {
   try {
     const { error, organizationId, role, session } = await requireAuth()
@@ -53,60 +89,44 @@ export async function GET(request: Request) {
       sucursalId = reasignacion.sucursalId
     }
 
-    // Two embeds of the orders: the ones the viewer's scope handles (`ordenes_del_alcance`, narrowed), and the
-    // open ones of every branch (`activas_totales`, for the total that gates a global action). Every
-    // consumer of the list gets one answer from one read: the total adds no second read to fail or to be cut.
-    let query = soloActivasEnTodasLasSucursales(
+    // What gates deactivating or deleting a technician (screens of an ADMIN) is global: every open order he
+    // holds, in every branch, on Todas as well. It is read only when it is going to be used: the picker of a bulk
+    // move, a seller and a technician carry their own scope's counts and nothing more.
+    const conTotal = role === "ADMIN" && !reasignacion
+
+    // Each count is an embed of the technician's own orders, filtered by state on its alias: PostgREST cuts every
+    // to-many embed at db-max-rows (1000 on Supabase) for each parent, so an embed of ALL the orders a technician
+    // ever held would lose the open ones that come after the first thousand. The open ones, and the finished ones,
+    // are read apart: far below the cap for open orders; the finished count is a figure of the card, not a gate.
+    let query = soloAtendidasPorEnEmbed(
       soloAtendidasPorEnEmbed(
         supabaseAdmin
           .from("users")
-          .select(`
-        id,
-        nombre,
-        email,
-        telefono,
-        activo,
-        especialidades,
-        avatar_url,
-        fecha_ingreso_tecnico,
-        porcentaje_comision,
-        sucursal_id,
-        ordenes_del_alcance:ordenes_servicio!tecnico_id (
-          id,
-          estado
-        ),
-        ${EMBED_ORDENES_ACTIVAS_TOTALES}
-      `)
+          .select(conTotal ? `${COLUMNAS_DE_LA_LISTA}, ${EMBED_ORDENES_ACTIVAS_TOTALES}` : COLUMNAS_DE_LA_LISTA)
           .eq("rol", "TECNICO")
-          .eq("organization_id", organizationId!),
+          .eq("organization_id", organizationId!)
+          .in("activas_del_alcance.estado", ESTADOS_ACTIVOS as unknown as string[])
+          .in("completadas_del_alcance.estado", ESTADOS_COMPLETADOS as unknown as string[]),
         sucursalDelAlcance,
-        "ordenes_del_alcance",
+        "activas_del_alcance",
       ),
-      organizationId!,
+      sucursalDelAlcance,
+      "completadas_del_alcance",
     )
-      .order("activo", { ascending: false })
-      .order("nombre", { ascending: true })
+    if (conTotal) query = soloActivasEnTodasLasSucursales(query, organizationId!)
+    query = query.order("activo", { ascending: false }).order("nombre", { ascending: true })
     if (sucursalId) query = query.eq("sucursal_id", sucursalId)
 
-    const { data: tecnicos, error: dbError } = await query
+    const { data, error: dbError } = await query
 
     if (dbError) {
       throw dbError
     }
-
-    // What gates deactivating or deleting a technician (screens of an ADMIN) is global: every open order he
-    // holds, in every branch. On Todas the scoped count already is that. Anyone else only sees his own scope:
-    // the total is an ADMIN's, and it is not in their answer.
-    const conTotal = role === "ADMIN" && sucursalDelAlcance !== null
+    const tecnicos = data as unknown as FilaDeLaLista[] | null
 
     const tecnicosConStats = tecnicos?.map((tecnico) => {
-      const ordenes = tecnico.ordenes_del_alcance || []
-      const ordenesActivas = ordenes.filter(
-        (o: any) => ESTADOS_ACTIVOS.includes(o.estado)
-      ).length
-      const ordenesCompletadas = ordenes.filter(
-        (o: any) => ESTADOS_COMPLETADOS.includes(o.estado)
-      ).length
+      const ordenesActivas = (tecnico.activas_del_alcance || []).length
+      const ordenesCompletadas = (tecnico.completadas_del_alcance || []).length
 
       return {
         id: tecnico.id,

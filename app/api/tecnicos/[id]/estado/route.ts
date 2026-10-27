@@ -29,7 +29,10 @@ export async function PATCH(
     // Deactivating a technician is a GLOBAL write, so the count that warns about it is every open order he
     // holds, in every branch. The part in the scope the ADMIN works in (what a reassignment moves) comes in
     // the same read, to tell him how many of them belong to other branches. Both are embeds of the technician's
-    // own row: there is no second read, so a reactivation has nothing extra to fail on.
+    // own row, filtered by state on their alias: PostgREST cuts every to-many embed at db-max-rows (1000 on
+    // Supabase) for each parent, and asking for open orders only keeps the count far below the cap. They are
+    // read in the same request as the technician: if the orders cannot be read the request fails (no count is
+    // made up), and that goes for a reactivation as well, which reads them and ignores them.
     const alcance = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
     const sucursalDelAlcance = alcance.verTodas ? null : alcance.sucursalId
 
@@ -40,14 +43,15 @@ export async function PATCH(
           .select(`
         id,
         activo,
-        ordenes_del_alcance:ordenes_servicio!tecnico_id (id, estado),
+        activas_del_alcance:ordenes_servicio!tecnico_id (id),
         ${EMBED_ORDENES_ACTIVAS_TOTALES}
       `)
           .eq("id", id)
           .eq("rol", "TECNICO")
-          .eq("organization_id", organizationId!),
+          .eq("organization_id", organizationId!)
+          .in("activas_del_alcance.estado", ESTADOS_ACTIVOS as unknown as string[]),
         sucursalDelAlcance,
-        "ordenes_del_alcance",
+        "activas_del_alcance",
       ),
       organizationId!,
     ).single()
@@ -56,9 +60,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Técnico no encontrado" }, { status: 404 })
     }
 
-    const enAlcance = (tecnico.ordenes_del_alcance || []).filter(
-      (o: any) => ESTADOS_ACTIVOS.includes(o.estado)
-    ).length
+    const enAlcance = (tecnico.activas_del_alcance || []).length
     const ordenesActivas = totalDeOrdenesActivas(tecnico)
 
     const { error: updateError } = await supabaseAdmin

@@ -25,8 +25,9 @@ function mockCookie(valor: string | null) {
 }
 
 function usuario(id: string, nombre: string, rol: string, sucursal: string | null, org = "org-1") {
-  // What the order embeds of the technicians list hold: one open order in his branch.
+  // What the order embeds of the technicians list hold: one open order and one finished order in his branch.
   const abierta = sucursal ? [{ id: `o-${id}`, estado: "EN_REPARACION", sucursal_id: sucursal, organization_id: org }] : []
+  const terminada = sucursal ? [{ id: `o-${id}-t`, estado: "ENTREGADO", sucursal_id: sucursal, organization_id: org }] : []
   return {
     id,
     nombre,
@@ -41,7 +42,8 @@ function usuario(id: string, nombre: string, rol: string, sucursal: string | nul
     avatar_url: null,
     fecha_ingreso_tecnico: null,
     created_at: "2026-01-01",
-    ordenes_del_alcance: abierta,
+    activas_del_alcance: abierta,
+    completadas_del_alcance: terminada,
     activas_totales: abierta,
   }
 }

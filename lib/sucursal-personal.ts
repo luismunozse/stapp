@@ -51,11 +51,14 @@ export async function sucursalParaListaPersonal(params: {
 /**
  * The open orders a technician holds in EVERY branch, embedded in the select that reads him, to be COUNTED
  * (only their ids come out). Deactivating or deleting a technician is a global action, so what warns about it
- * counts everything he holds, not only the part in the scope the ADMIN is looking at. It is the second embed
- * of the orders next to the one that narrows to the scope (`ordenes_del_alcance`): each is filtered by its own
- * alias, and neither alias is the table's own name, which both embeds would answer to. It is an embed, and not a
- * read with a row per open order, because a read of rows is cut at PostgREST's max-rows (1000) without an error,
- * and a technician whose orders come after the cut would show none; what an embed carries is not cut.
+ * counts everything he holds, not only the part in the scope the ADMIN is looking at. It is one more embed of
+ * the orders next to the ones that narrow to the scope (`activas_del_alcance`, `completadas_del_alcance`): each
+ * is filtered by its own alias, and no alias is the table's own name, which every one of them would answer to.
+ * It is an embed, and not a read with a row per open order, because PostgREST cuts what it answers at
+ * db-max-rows (1000 on Supabase) without an error, and a technician whose orders come after the cut would
+ * show none. That cap reaches every node of the read plan: a to-many embed is cut for each parent too. So every
+ * embed that counts open orders asks for open orders only (a technician does not hold a thousand of them at once),
+ * never for all the orders he ever held, which can pass the cap and hide the open ones behind it.
  * Narrow the query with `soloActivasEnTodasLasSucursales`, and count with `totalDeOrdenesActivas`.
  */
 export const EMBED_ORDENES_ACTIVAS_TOTALES = "activas_totales:ordenes_servicio!tecnico_id (id)"
