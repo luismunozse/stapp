@@ -19,6 +19,7 @@ import {
   combinarOr,
   terminoDeBusquedaSeguro,
   esIdSeguro,
+  tecnicoOfrecido,
   MENSAJE_TECNICO_OTRA_SUCURSAL,
 } from "@/lib/sucursal-ordenes"
 import { SUCURSAL_NINGUNA } from "@/lib/sucursal"
@@ -188,5 +189,18 @@ describe("terminoDeBusquedaSeguro", () => {
     expect(expr.startsWith("and(")).toBe(true)
     expect(expr.endsWith(")")).toBe(true)
     expect(expr).not.toMatch(/\)\s*,\s*sucursal_id\.neq/)
+  })
+})
+
+describe("tecnicoOfrecido (a technician that came from a draft or an appointment)", () => {
+  const OFRECIDOS = [{ id: "t-a" }, { id: "t-a2" }]
+
+  it.each([
+    ["is kept when the picker offers it", "t-a2", OFRECIDOS, "t-a2"],
+    ["is dropped when the picker does not offer it", "t-b", OFRECIDOS, ""],
+    ["is kept while there is no list to judge it against", "t-b", [], "t-b"],
+    ["nobody chosen stays nobody", "", OFRECIDOS, ""],
+  ])("a choice that %s", (_caso, elegido, ofrecidos, esperado) => {
+    expect(tecnicoOfrecido(elegido, ofrecidos)).toBe(esperado)
   })
 })

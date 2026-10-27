@@ -19,19 +19,9 @@ const RAICES = ["app", "components"]
 // can disagree with the httpOnly cookie that actually decides.
 const EXENTOS = new Map<string, string>([
   ["components/agenda/agenda-view.tsx", "filter of the agenda: no order behind it, the ADMIN's selected branch applies"],
-  [
-    "components/agenda/turno-form-dialog.tsx",
-    "appointment form: the client does not know the branch of the appointment, it is created in the " +
-      "request's effective branch, which is also the one the technicians are listed for",
-  ],
   ["components/comisiones/comisiones-view.tsx", "technician filter of the commissions screen: no order behind it, effective branch"],
   ["components/comisiones/comisiones-vendedores-view.tsx", "seller list of the commissions screen: no order behind it, effective branch"],
   ["components/emails/email-compose.tsx", "recipients picker: no order behind it, the effective branch applies"],
-  [
-    "components/ordenes/orden-form.tsx",
-    "creating an order: it is handled by the branch it is created in, the request's effective branch. " +
-      "An ADMIN on Todas creates in the principal branch until the create-on-Todas prompt exists",
-  ],
   ["components/ordenes/ordenes-list.tsx", "technician filter of the orders list: no single order, the effective branch applies"],
   [
     "components/tecnicos/reasignar-ordenes-dialog.tsx",
@@ -59,7 +49,9 @@ function consumos(fuente: string): Consumo[] {
   return [...src.matchAll(LISTA)].map((m) => {
     // The string literal the endpoint sits in runs to its closing quote.
     const literal = src.slice(m.index! + m[0].length).split(/["'`]/, 1)[0]
-    return { endpoint: m[0], conSucursal: /^\?(?:[^&]*&)*sucursalId=/.test(literal) }
+    // Scoped: the query names the branch, or says it is for creating something
+    // (`alcance=escritura`: the branch the write will land in).
+    return { endpoint: m[0], conSucursal: /^\?(?:[^&]*&)*(?:sucursalId=|alcance=escritura(?:&|$))/.test(literal) }
   })
 }
 
@@ -81,6 +73,7 @@ describe("detector", () => {
   it.each([
     ["a scoped template", "fetch(`/api/tecnicos?sucursalId=${encodeURIComponent(id)}`)"],
     ["the branch after another param", "fetch(`/api/vendedores?limit=100&sucursalId=${id}`)"],
+    ["the write scope", "fetch(`/api/tecnicos?alcance=escritura`)"],
     ["a resource, not the list", "fetch(`/api/tecnicos/${id}/ordenes`)"],
     ["the summary endpoint", "fetch(`/api/tecnicos/summary?dias=7`)"],
     ["no call at all", `const x = "/api/operadores?rol=VENDEDOR"`],

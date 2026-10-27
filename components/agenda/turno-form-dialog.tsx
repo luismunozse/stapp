@@ -97,7 +97,9 @@ export function TurnoFormDialog({
   }>(null)
 
   const { data: tecnicosData } = useSWR<TecnicoOpt[] | { tecnicos?: TecnicoOpt[] }>(
-    open ? "/api/tecnicos" : null,
+    // Appointments are created in the branch the write lands in, and their technician is carried into
+    // the order made from them: the same scope the order form uses.
+    open ? "/api/tecnicos?alcance=escritura" : null,
     fetcher,
   )
   const tecnicos: TecnicoOpt[] = Array.isArray(tecnicosData)
