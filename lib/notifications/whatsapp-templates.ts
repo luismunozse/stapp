@@ -2,7 +2,7 @@ import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/
 import { formatDateValue } from "@/lib/timezone"
 import { formatPhoneForCountry } from "@/lib/countries"
 import { EstadoOrden, NotificationContext, MetodoPagoVenta } from "./types"
-import { renderTemplate, getPlantilla } from "@/lib/whatsapp/plantillas-catalog"
+import { renderTemplate, getPlantilla, estadoOverrideKeys, estadoDefaultKeys } from "@/lib/whatsapp/plantillas-catalog"
 import { resolveTerminologia, t } from "@/lib/terminologia"
 
 export interface WhatsAppTemplate {
@@ -138,22 +138,23 @@ function applyOverride(
 ): string {
   const vars = buildVarsFromContext(ctx)
 
-  const keys: string[] = []
-  if (legacyId === "estado_actual" && ctx.orden?.estado) {
-    keys.push(`orden_estado_${ctx.orden.estado.toLowerCase()}`)
-  }
   const catalogKey = LEGACY_ID_TO_CATALOG_KEY[legacyId]
-  if (catalogKey) keys.push(catalogKey)
+  let overrideKeys: string[] = catalogKey ? [catalogKey] : []
+  let defaultKeys = overrideKeys
+  if (legacyId === "estado_actual" && ctx.orden?.estado) {
+    overrideKeys = estadoOverrideKeys(ctx.orden.estado)
+    defaultKeys = estadoDefaultKeys(ctx.orden.estado)
+  }
 
   // 1) Override de la org
   if (plantillasOverride) {
-    for (const key of keys) {
+    for (const key of overrideKeys) {
       const o = plantillasOverride[key]
       if (o && o.trim()) return renderTemplate(o, vars)
     }
   }
   // 2) Default del catálogo (única fuente de verdad)
-  for (const key of keys) {
+  for (const key of defaultKeys) {
     const def = getPlantilla(key)?.defaultText
     if (def && def.trim()) return renderTemplate(def, vars)
   }

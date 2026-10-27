@@ -356,3 +356,53 @@ describe("confirmacion_pago — gating por señal explícita de pago recibido", 
     expect(ids).toContain("confirmacion_pago")
   })
 })
+
+describe("getWhatsAppTemplates REPARADO: orden_listo_retirar como override de respaldo", () => {
+  const msg = (id: string, estado: "REPARADO" | "EN_REPARACION", ov: Record<string, string> | null) =>
+    getWhatsAppTemplates(ctxOrden({ estado }), ov).find((t) => t.id === id)?.mensaje
+
+  it("solo orden_listo_retirar → estado_actual lo usa, con variables renderizadas", () => {
+    expect(msg("estado_actual", "REPARADO", { orden_listo_retirar: "X {cliente}" })).toBe("X Juan")
+  })
+
+  it("orden_estado_reparado gana sobre orden_listo_retirar", () => {
+    expect(
+      msg("estado_actual", "REPARADO", { orden_estado_reparado: "Y {cliente}", orden_listo_retirar: "X {cliente}" }),
+    ).toBe("Y Juan")
+  })
+
+  it("orden_listo_retirar gana sobre el genérico orden_estado_actual", () => {
+    expect(
+      msg("estado_actual", "REPARADO", { orden_estado_actual: "Z {cliente}", orden_listo_retirar: "X {cliente}" }),
+    ).toBe("X Juan")
+  })
+
+  it("sin overrides → default del catálogo de orden_estado_reparado", () => {
+    const m = msg("estado_actual", "REPARADO", null)!
+    expect(m).toMatch(/se encuentra reparado/)
+    expect(m).not.toMatch(/le recordamos/)
+  })
+
+  it("no se filtra a otros estados", () => {
+    const baseline = msg("estado_actual", "EN_REPARACION", null)
+    expect(baseline).toMatch(/Ya estamos reparando su equipo/)
+    expect(msg("estado_actual", "EN_REPARACION", { orden_listo_retirar: "X {cliente}" })).toBe(baseline)
+  })
+
+  it.each(["ENTREGADO_SIN_REPARACION", "SIN_REPARACION"] as const)("%s no usa orden_listo_retirar", (estado) => {
+    const get = (ov: Record<string, string> | null) =>
+      getWhatsAppTemplates(ctxOrden({ estado }), ov).find((t) => t.id === "estado_actual")?.mensaje
+    expect(get({ orden_listo_retirar: "X {cliente}" })).toBe(get(null))
+  })
+
+  it("orden_listo_retirar solo espacios cae al genérico, y sin genérico al default de reparado", () => {
+    expect(msg("estado_actual", "REPARADO", { orden_listo_retirar: "   ", orden_estado_actual: "Z {cliente}" })).toBe("Z Juan")
+    expect(msg("estado_actual", "REPARADO", { orden_listo_retirar: "   " })).toBe(msg("estado_actual", "REPARADO", null))
+  })
+
+  it("la opción listo_retirar (Recordatorio de retiro) sigue usando orden_listo_retirar", () => {
+    expect(msg("listo_retirar", "REPARADO", { orden_listo_retirar: "X {cliente}" })).toBe("X Juan")
+    const t = getWhatsAppTemplates(ctxOrden({ estado: "REPARADO" })).find((x) => x.id === "listo_retirar")
+    expect(t?.nombre).toBe("Recordatorio de retiro")
+  })
+})
