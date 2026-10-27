@@ -7,6 +7,12 @@ import type { Cliente } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
 import { getTaxIdLabel, getPersonalIdLabel } from "@/lib/countries"
 
+// Keep only digits and a leading "+" so spaces/dashes/parentheses don't leak into the tel: URI.
+const telHref = (raw: string) => {
+  const trimmed = raw.trim()
+  return (trimmed.startsWith("+") ? "+" : "") + trimmed.replace(/\D/g, "")
+}
+
 function Row({ icon: Icon, label, value, href, external }: {
   icon: typeof Phone; label: string; value: string; href?: string; external?: boolean
 }) {
@@ -35,7 +41,7 @@ export function ClienteDetalleDatos({ cliente }: { cliente: Cliente }) {
     <Card>
       <CardHeader><CardTitle className="text-base">Datos &amp; contacto</CardTitle></CardHeader>
       <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {cliente.telefono && <Row icon={Phone} label="Teléfono" value={cliente.telefono} href={`tel:${cliente.telefono}`} />}
+        {cliente.telefono && <Row icon={Phone} label="Teléfono" value={cliente.telefono} href={`tel:${telHref(cliente.telefono)}`} />}
         {cliente.email && <Row icon={Mail} label="Email" value={cliente.email} href={`mailto:${cliente.email}`} />}
         {cliente.direccion && <Row
           icon={MapPin}

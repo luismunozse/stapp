@@ -23,13 +23,17 @@ const TONE_CLASS = {
 interface ClienteDetalleHeaderProps {
   cliente: Cliente
   resumen: ResumenDeudaCliente
+  // The debt request failed (not just loading)
+  deudaError?: boolean
+  // Debt is scoped to the active sucursal while the balance below is org-wide
+  porSucursal?: boolean
   totalOrdenes: number
   onEdit: () => void
   onWhatsApp: () => void
 }
 
 export function ClienteDetalleHeader({
-  cliente, resumen, totalOrdenes, onEdit, onWhatsApp,
+  cliente, resumen, deudaError = false, porSucursal = false, totalOrdenes, onEdit, onWhatsApp,
 }: ClienteDetalleHeaderProps) {
   const { formatPrice, pais } = useCurrency()
   const router = useRouter()
@@ -102,9 +106,21 @@ export function ClienteDetalleHeader({
       <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-1 lg:mt-4">
         <Card><CardContent className="p-3 text-center">
           <div className="text-xs text-muted-foreground">Debe</div>
-          <div className={`text-base sm:text-lg font-bold tabular-nums ${TONE_CLASS[resumen.debeTone]}`}>
-            {resumen.debe === null ? "—" : formatPrice(resumen.debe)}
-          </div>
+          {resumen.debe === null && deudaError ? (
+            <div
+              className="text-sm sm:text-base font-medium text-muted-foreground"
+              title="No se pudo cargar la deuda. Recargá la página para reintentar."
+            >
+              No disponible
+            </div>
+          ) : (
+            <div className={`text-base sm:text-lg font-bold tabular-nums ${TONE_CLASS[resumen.debeTone]}`}>
+              {resumen.debe === null ? "—" : formatPrice(resumen.debe)}
+            </div>
+          )}
+          {porSucursal && resumen.debe !== null && (
+            <div className="text-[11px] text-muted-foreground">en esta sucursal</div>
+          )}
         </CardContent></Card>
         <Card><CardContent className="p-3 text-center">
           <div className="text-xs text-muted-foreground">A favor</div>

@@ -74,9 +74,11 @@ interface CuentaCorrientePanelProps {
   cliente: Cliente
   // Fired after any mutation that moves the balance (deposit or cargo revert)
   onDeposito?: () => void
+  // True when the screen shows per-sucursal debt elsewhere: this balance is org-wide
+  saldoGlobal?: boolean
 }
 
-export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePanelProps) {
+export function CuentaCorrientePanel({ cliente, onDeposito, saldoGlobal = false }: CuentaCorrientePanelProps) {
   const { formatPrice, formatDate, timezone } = useCurrency()
   const { showError } = useModal()
   const { data: session } = useSession()
@@ -168,6 +170,9 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
             )}>
               {formatPrice(saldoView.amount)}
             </div>
+            {saldoGlobal && (
+              <div className="text-xs text-muted-foreground mt-1">todas las sucursales</div>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 // Mirrors ClienteDetalle: identity row, 3 stat cards, first section card.
 export function ClienteDetalleSkeleton() {
   return (
-    <div className="px-4 py-6 sm:px-6 max-w-5xl mx-auto" aria-busy="true" aria-label="Cargando cliente">
+    <div className="px-4 py-6 sm:px-6 max-w-5xl mx-auto" role="status" aria-busy="true" aria-label="Cargando cliente">
       <div className="flex items-start gap-3">
         <Skeleton className="h-10 w-10 rounded-lg" />
         <Skeleton className="h-11 w-11 rounded-full" />

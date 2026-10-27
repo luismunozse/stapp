@@ -59,8 +59,8 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
     `/api/clientes/${clienteId}/cuenta-corriente?limit=50`, fetcher, { revalidateOnFocus: false }
   )
   // Fiado + unpaid orders for the active sucursal (same source as the WhatsApp reminder).
-  const { data: deudaData, mutate: mutateDeuda } = useSWR<{ deudaTotal?: number; error?: string }>(
-    `/api/clientes/${clienteId}/deuda-sucursal`, fetcher, { revalidateOnFocus: false }
+  const { data: deudaData, error: deudaError, mutate: mutateDeuda } = useSWR<{ deudaTotal?: number; porSucursal?: boolean }>(
+    `/api/clientes/${clienteId}/deuda-sucursal`, clienteFetcher, { revalidateOnFocus: false }
   )
   const { data: ordenesData } = useSWR(
     `/api/ordenes?clienteId=${clienteId}&limit=1`, fetcher, { revalidateOnFocus: false }
@@ -72,8 +72,9 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
 
   if (isLoading) return <ClienteDetalleSkeleton />
 
-  const notFound = (error instanceof HttpError && error.status === 404) || (!error && !cliente)
-  if (error && !notFound) {
+  // Keep a loaded page on screen when a background refetch fails.
+  const notFound = !cliente && ((error instanceof HttpError && error.status === 404) || !error)
+  if (!cliente && error && !notFound) {
     return (
       <div className="px-4 py-6 sm:px-6 max-w-5xl mx-auto">
         <div className="text-center py-20 space-y-4">
@@ -87,7 +88,7 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
     )
   }
 
-  if (notFound || !cliente) {
+  if (!cliente) {
     return (
       <div className="px-4 py-6 sm:px-6 max-w-5xl mx-auto">
         <div className="text-center py-20 space-y-4">
@@ -111,6 +112,8 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
       <ClienteDetalleHeader
         cliente={cliente}
         resumen={resumen}
+        deudaError={!!deudaError && !deudaData}
+        porSucursal={!!deudaData?.porSucursal}
         totalOrdenes={totalOrdenes}
         onEdit={() => setShowEdit(true)}
         onWhatsApp={() => setShowWhatsApp(true)}
@@ -131,7 +134,7 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
             </div>
           </CardHeader>
           <CardContent>
-            <CuentaCorrientePanel cliente={cliente} onDeposito={refreshMoney} />
+            <CuentaCorrientePanel cliente={cliente} onDeposito={refreshMoney} saldoGlobal={!!deudaData?.porSucursal} />
           </CardContent>
         </Card>
         <ClienteOrdenesPendientes
