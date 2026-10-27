@@ -435,3 +435,108 @@ describe("an embed written with a space before its parenthesis", () => {
     expect(data).toEqual([{ id: "a", clientes: { nombre: "Ana" } }])
   })
 })
+
+describe("two embeds of the same table in one select", () => {
+  // PostgREST finds the embed a filter names by the embed's table name OR its alias, and takes the first
+  // one that answers: a name two embeds answer to would filter whichever it meets first.
+  const TECNICOS = [
+    {
+      id: "t1",
+      en_alcance: [
+        { id: "o1", estado: "EN_REPARACION", sucursal_id: "A" },
+        { id: "o2", estado: "REPARADO", sucursal_id: "A" },
+      ],
+      activas: [
+        { id: "o1", estado: "EN_REPARACION", sucursal_id: "A" },
+        { id: "o3", estado: "EN_REPARACION", sucursal_id: "B" },
+      ],
+    },
+  ]
+  const DOS = "id, en_alcance:ordenes!tecnico_id(id, estado, sucursal_id), activas:ordenes!tecnico_id(id, estado, sucursal_id)"
+
+  it("a filter by an alias narrows that embed and leaves the other as it came", async () => {
+    const { data } = await tablaPostgrest(TECNICOS).select(DOS).eq("en_alcance.sucursal_id", "A").eq("activas.estado", "EN_REPARACION")
+    expect(data?.[0].en_alcance.map((o: any) => o.id)).toEqual(["o1", "o2"])
+    expect(data?.[0].activas.map((o: any) => o.id)).toEqual(["o1", "o3"])
+    const soloUno = await tablaPostgrest(TECNICOS).select(DOS).eq("activas.sucursal_id", "B")
+    expect(soloUno.data?.[0].en_alcance.map((o: any) => o.id)).toEqual(["o1", "o2"])
+    expect(soloUno.data?.[0].activas.map((o: any) => o.id)).toEqual(["o3"])
+  })
+
+  it("an or() with referencedTable follows the same rule", async () => {
+    const { data } = await tablaPostgrest(TECNICOS).select(DOS).or("sucursal_id.eq.A", { referencedTable: "en_alcance" })
+    expect(data?.[0].en_alcance.map((o: any) => o.id)).toEqual(["o1", "o2"])
+    expect(data?.[0].activas.map((o: any) => o.id)).toEqual(["o1", "o3"])
+  })
+
+  it("a filter by the table's name is ambiguous when both embeds are of that table: it is an error", () => {
+    expect(() => tablaPostgrest(TECNICOS).select(DOS).eq("ordenes.estado", "EN_REPARACION")).toThrow(/ambiguous/)
+    expect(() => tablaPostgrest(TECNICOS).select(DOS).or("estado.eq.REPARADO", { referencedTable: "ordenes" })).toThrow(/ambiguous/)
+  })
+
+  it("an alias that is the table's own name is ambiguous next to another embed of that table", () => {
+    const select = "id, ordenes:ordenes!tecnico_id(id, estado), activas:ordenes!tecnico_id(id, estado)"
+    const filas = [{ id: "t1", ordenes: [{ id: "o1", estado: "EN_REPARACION" }], activas: [{ id: "o1", estado: "EN_REPARACION" }] }]
+    expect(() => tablaPostgrest(filas).select(select).eq("ordenes.estado", "EN_REPARACION")).toThrow(/ambiguous/)
+    // ...and the other alias is fine.
+    expect(() => tablaPostgrest(filas).select(select).eq("activas.estado", "EN_REPARACION")).not.toThrow()
+  })
+
+  it("an alias that is the table name of ANOTHER embed is ambiguous too", () => {
+    const filas = [{ id: "p1", a: [{ id: "v1", x: 1 }], ventas: [{ id: "o1", x: 1 }] }]
+    expect(() => tablaPostgrest(filas).select("id, a:ventas(id, x), ventas:ordenes(id, x)").eq("ventas.x", 1)).toThrow(/ambiguous/)
+    expect(() => tablaPostgrest(filas).select("id, a:ventas(id, x), ventas:ordenes(id, x)").eq("a.x", 1)).not.toThrow()
+  })
+
+  it("a lone embed is never ambiguous, whatever its alias", async () => {
+    const filas = [{ id: "t1", ordenes: [{ id: "o1", estado: "EN_REPARACION" }] }]
+    const { data } = await tablaPostgrest(filas).select("id, ordenes:ordenes!tecnico_id(id, estado)").eq("ordenes.estado", "EN_REPARACION")
+    expect(data?.[0].ordenes).toHaveLength(1)
+  })
+
+  it("embeds of different tables never clash", async () => {
+    const filas = [{ id: "t1", ordenes: [{ id: "o1", estado: "X" }], ventas: [{ id: "v1", estado: "X" }] }]
+    const { data } = await tablaPostgrest(filas).select("id, ordenes(id, estado), ventas(id, estado)").eq("ordenes.estado", "Y")
+    expect(data?.[0].ordenes).toEqual([])
+    expect(data?.[0].ventas).toHaveLength(1)
+  })
+})
+
+describe("the rows PostgREST answers at most (max-rows: 1000 on Supabase)", () => {
+  const MUCHAS = Array.from({ length: 12 }, (_, i) => ({
+    id: `p${i}`,
+    hijas: Array.from({ length: 5 }, (_, j) => ({ id: `h${i}-${j}` })),
+  }))
+
+  it("nothing is capped unless the table is given a cap", async () => {
+    const { data } = await tablaPostgrest(MUCHAS).select("id")
+    expect(data).toHaveLength(12)
+  })
+
+  it("the rows of the query are cut at the cap, silently, as PostgREST does", async () => {
+    const { data, error } = await tablaPostgrest(MUCHAS, { maxFilas: 10 }).select("id")
+    expect(error).toBeNull()
+    expect(data).toHaveLength(10)
+  })
+
+  it("a range inside the cap is honoured, and the cap applies to what it asks for", async () => {
+    const dentro = await tablaPostgrest(MUCHAS, { maxFilas: 10 }).select("id").range(0, 4)
+    expect(dentro.data).toHaveLength(5)
+    const fuera = await tablaPostgrest(MUCHAS, { maxFilas: 10 }).select("id").range(0, 11)
+    expect(fuera.data).toHaveLength(10)
+    // The cap limits how many rows come back, not how far in a range may start.
+    const alFinal = await tablaPostgrest(MUCHAS, { maxFilas: 10 }).select("id").range(8, 11)
+    expect(alFinal.data?.map((p: any) => p.id)).toEqual(["p8", "p9", "p10", "p11"])
+  })
+
+  it("embedded rows are NOT capped: they belong to their parent, and only the parents are counted", async () => {
+    const { data } = await tablaPostgrest(MUCHAS, { maxFilas: 2 }).select("id, hijas(id)")
+    expect(data).toHaveLength(2)
+    expect(data?.every((p: any) => p.hijas.length === 5)).toBe(true)
+  })
+
+  it("the exact count is the real one, not the capped one", async () => {
+    const respuesta = await tablaPostgrest(MUCHAS, { maxFilas: 10 }).select("id", { count: "exact" })
+    expect(respuesta.count).toBe(12)
+  })
+})

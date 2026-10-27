@@ -37,6 +37,8 @@ interface Opciones {
   errorDeLectura?: Record<string, { code?: string; message: string }>
   /** What an rpc answers with. Defaults to `{ success: true }`. */
   resultadoRpc?: (nombre: string, args: unknown) => unknown
+  /** PostgREST's `max-rows` (1000 on Supabase): a read answers at most this many rows of its table, silently. Unset: no cap. */
+  maxFilas?: number
 }
 
 const copia = <T>(valor: T): T => JSON.parse(JSON.stringify(valor))
@@ -67,7 +69,7 @@ export function montarSupabaseEnMemoria(tablas: Record<string, Fila[]>, opciones
       const filas = copia(tablas[nombre] ?? [])
       filasDe.set(nombre, filas)
       columnas.set(nombre, new Set(filas.flatMap((f) => Object.keys(f))))
-      memoria.set(nombre, tablaPostgrest(filas))
+      memoria.set(nombre, tablaPostgrest(filas, { maxFilas: opciones.maxFilas }))
     }
     return memoria.get(nombre)!
   }

@@ -156,3 +156,14 @@ describe("a read that fails", () => {
     expect(clientes).toEqual({ data: { id: "c-1" }, error: null })
   })
 })
+
+describe("the most rows a read answers (max-rows)", () => {
+  it("a read of any table is cut at the cap the test asks for, and not at all without one", async () => {
+    montarSupabaseEnMemoria({ ordenes: FILAS(), clientes: [{ id: "c-1" }, { id: "c-2" }, { id: "c-3" }] }, { maxFilas: 2 })
+    expect((await db().from("ordenes").select("id")).data).toHaveLength(2)
+    expect((await db().from("clientes").select("id")).data).toHaveLength(2)
+
+    montarSupabaseEnMemoria({ ordenes: FILAS() })
+    expect((await db().from("ordenes").select("id")).data).toHaveLength(3)
+  })
+})
