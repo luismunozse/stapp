@@ -78,18 +78,25 @@ export async function getPrincipalId(organizationId: string): Promise<string | n
   return data?.id ?? null
 }
 
-/** Valida que una sucursal pertenezca a la org y esté activa. Previene cross-org. */
+/**
+ * Validates that a sucursal belongs to the org and is not deleted. Prevents
+ * cross-org access. An inactive sucursal passes unless `{ soloActiva: true }` is
+ * given (e.g. when moving a user into it).
+ */
 export async function assertSucursalEnOrg(
   sucursalId: string,
-  organizationId: string
+  organizationId: string,
+  opciones: { soloActiva?: boolean } = {}
 ): Promise<boolean> {
-  const { data } = await supabaseAdmin
+  let query = supabaseAdmin
     .from("sucursales")
     .select("id")
     .eq("id", sucursalId)
     .eq("organization_id", organizationId)
     .is("deleted_at", null)
-    .single()
+  if (opciones.soloActiva) query = query.eq("activo", true)
+
+  const { data } = await query.single()
   return !!data
 }
 
