@@ -168,6 +168,22 @@ describe("cargarOrdenEnAlcance - scope", () => {
     expect(mem.consultas("ordenes_servicio")).toEqual([`${select}, sucursal_id, tecnico_id`])
   })
 
+  it.each([
+    ["the branch", "id, sucursal_id, clientes(*)", "id, sucursal_id, clientes(*), tecnico_id"],
+    ["the technician", "id, tecnico_id", "id, tecnico_id, sucursal_id"],
+    ["both", "tecnico_id, sucursal_id, estado", "tecnico_id, sucursal_id, estado"],
+  ])("a select that already has %s does not repeat it", async (_nombre, select, esperado) => {
+    await cargarOrdenEnAlcance("o-a-t1", tecnicoA, "ver", { select })
+
+    expect(mem.consultas("ordenes_servicio")).toEqual([esperado])
+  })
+
+  it("a column that is only inside an embed is not the order's: it is added", async () => {
+    await cargarOrdenEnAlcance("o-a-t1", tecnicoA, "ver", { select: "id, clientes(sucursal_id, tecnico_id)" })
+
+    expect(mem.consultas("ordenes_servicio")).toEqual(["id, clientes(sucursal_id, tecnico_id), sucursal_id, tecnico_id"])
+  })
+
   it("never selects or filters on the derivation column (it does not exist until the migration)", async () => {
     await cargarOrdenEnAlcance("o-a-t1", tecnicoA, "ver")
     await cargarOrdenEnAlcance("o-a-t1", tecnicoA, "ver", { select: "id" })
