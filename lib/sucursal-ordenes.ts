@@ -13,6 +13,7 @@ import { SUCURSAL_NINGUNA } from "@/lib/sucursal"
 const ID_SEGURO = /^[A-Za-z0-9_-]+$/
 
 export const MENSAJE_TECNICO_OTRA_SUCURSAL = "Ese técnico no pertenece a la sucursal de esta orden"
+export const MENSAJE_TECNICO_OTRA_SUCURSAL_TURNO = "Ese técnico no pertenece a la sucursal de este turno"
 
 /** True when the id can be spliced into a PostgREST filter string without leaving its syntax. */
 export function esIdSeguro(id: unknown): id is string {

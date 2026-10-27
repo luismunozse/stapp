@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { notifyTurno } from "@/lib/turnos/notifications"
+import { MENSAJE_TECNICO_OTRA_SUCURSAL_TURNO, tecnicoAsignable } from "@/lib/sucursal-ordenes"
 
 const turnoPatchSchema = z.object({
   clienteId: z.string().min(1).nullable().optional(),
@@ -174,13 +175,18 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     if (data.tecnicoId !== undefined && data.tecnicoId !== null) {
       const { data: tecnicoCheck } = await supabaseAdmin
         .from("users")
-        .select("id")
+        .select("id, rol, sucursal_id")
         .eq("id", data.tecnicoId)
         .eq("organization_id", organizationId!)
         .in("rol", ["TECNICO", "ADMIN"])
         .maybeSingle()
       if (!tecnicoCheck) {
         return NextResponse.json({ error: "Técnico inválido" }, { status: 400 })
+      }
+      // BM-5: a technician of another branch cannot be assigned, but the one already assigned stays
+      // (a legacy cross-branch assignment survives an edit of another field).
+      if (!tecnicoAsignable(tecnicoCheck, actual.sucursal_id ?? null, actual.tecnico_id ?? null)) {
+        return NextResponse.json({ error: MENSAJE_TECNICO_OTRA_SUCURSAL_TURNO }, { status: 400 })
       }
     }
 
