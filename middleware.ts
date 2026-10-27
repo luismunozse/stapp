@@ -12,6 +12,7 @@ import { getTenantStatusBySlug } from "@/lib/tenant-status-edge"
 import { getUserDeletedStatus } from "@/lib/user-status-edge"
 import { isImpersonationWriteBlocked } from "@/lib/impersonation"
 import { isPublicPath } from "@/lib/public-paths"
+import { clearSessionCookie, sessionCookieName } from "@/lib/session-cookie"
 
 // Hashea un string con SHA-256 usando Web Crypto (compatible con Edge Runtime,
 // donde `node:crypto` no está disponible). Devuelve los primeros 16 hex chars,
@@ -68,22 +69,6 @@ const RESERVED_SUBDOMAINS = new Set([
   "signin",
 ])
 
-// Cookie de sesión de NextAuth (mismo nombre/dominio que lib/auth.ts; el
-// middleware no puede importar auth.ts por Edge).
-function sessionCookieName(): string {
-  return process.env.NODE_ENV === "production"
-    ? "__Secure-next-auth.session-token"
-    : "next-auth.session-token"
-}
-
-function sessionCookieDomain(): string | undefined {
-  if (process.env.COOKIE_DOMAIN) return process.env.COOKIE_DOMAIN
-  if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_ROOT_DOMAIN) {
-    return `.${process.env.NEXT_PUBLIC_ROOT_DOMAIN}`
-  }
-  return undefined
-}
-
 // Usuario dado de baja (eliminación de cuenta): su JWT sigue siendo válido
 // hasta ~18 h porque solo se revalida en las últimas 6 h de su día de vida.
 // Devuelve la respuesta que corta la sesión (401 en /api, redirect a /login en
@@ -102,15 +87,7 @@ async function deletedUserResponse(
   const res = pathname.startsWith("/api/")
     ? NextResponse.json({ error: "Cuenta eliminada" }, { status: 401 })
     : NextResponse.redirect(new URL("/login", request.url))
-  res.cookies.set(sessionCookieName(), "", {
-    maxAge: 0,
-    path: "/",
-    domain: sessionCookieDomain(),
-    secure: process.env.NODE_ENV === "production",
-    httpOnly: true,
-    sameSite: "lax",
-  })
-  return res
+  return clearSessionCookie(res)
 }
 
 // Rutas de landing page (solo para dominio principal)

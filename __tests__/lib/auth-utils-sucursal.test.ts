@@ -6,8 +6,10 @@
  * in the last hours of the token's life, so a user moved to another branch kept
  * the old one for up to ~18 h. About 60 API files read that field and every one
  * of them gets it from requireAuth(), which makes it the single place to fix:
- * for a non-ADMIN it re-reads the user's row (branch, role, org, deletion mark)
- * with a 5 s per-instance cache.
+ * it re-reads the user's row (branch, role, org, deletion mark) with a 5 s
+ * per-instance cache and single-flight. A non-ADMIN gets the DB branch; every
+ * role, ADMIN included, gets a 401 SESSION_STALE (and a cleared session cookie)
+ * when the JWT no longer matches the row.
  *
  * vitest.setup.ts replaces `@/lib/sesion-sucursal` with an identity ("the DB
  * agrees with the JWT") so the ~120 route suites that run as TECNICO/VENDEDOR
@@ -27,7 +29,7 @@ vi.mock("@/lib/tenant", async (importOriginal) => ({
 }))
 
 import { requireAuth, requireAdmin, requireAdminOrVendedor, requirePosAccess, sesionConSucursalVigente } from "@/lib/auth-utils"
-import { clearSesionSucursalCache } from "@/lib/sesion-sucursal"
+import { CACHE_MAX_ENTRIES, clearSesionSucursalCache, conSucursalVigente } from "@/lib/sesion-sucursal"
 import { GET as getOperadores } from "@/app/api/operadores/route"
 import { POST as postTurno } from "@/app/api/turnos/route"
 
@@ -112,15 +114,18 @@ describe("requireAuth — fresh branch for non-admins", () => {
     expect(r.session!.user.sucursalId).toBeNull()
   })
 
-  it("ADMIN does no extra query and keeps the session untouched", async () => {
+  it("ADMIN is verified too, but its session is returned untouched (no branch, 'Todas' keeps working)", async () => {
     const admin = sesion("ADMIN", null)
     vi.mocked(auth).mockResolvedValue(admin)
+    const chain = usersResponde(fila({ rol: "ADMIN", sucursal_id: "suc-X" }))
 
     const r = await requireAuth()
 
-    expect(supabaseAdmin.from).not.toHaveBeenCalled()
-    expect(r.session).toBe(admin)
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+    expect(chain.eq).toHaveBeenCalledWith("id", "user-1")
     expect(r.error).toBeNull()
+    expect(r.session).toBe(admin)
+    expect(r.session!.user.sucursalId).toBeNull()
   })
 
   it("an unauthenticated request is a 401 and never reaches the lookup", async () => {
@@ -139,8 +144,19 @@ describe("requireAuth — fresh branch for non-admins", () => {
     const r = await requireAuth()
 
     expect(r.error!.status).toBe(500)
+    expect(await r.error!.json()).toEqual({ error: "No pudimos verificar tu sesión. Intentá de nuevo." })
     expect(r.session).toBeNull()
     expect(r.organizationId).toBeNull()
+  })
+
+  it("fails closed for an ADMIN too when the lookup fails", async () => {
+    vi.mocked(auth).mockResolvedValue(sesion("ADMIN", null))
+    usersResponde(null, { message: "connection reset" })
+
+    const r = await requireAuth()
+
+    expect(r.error!.status).toBe(500)
+    expect(r.session).toBeNull()
   })
 
   it("fails closed with a 500 when the lookup throws", async () => {
@@ -154,33 +170,54 @@ describe("requireAuth — fresh branch for non-admins", () => {
     expect(r.session).toBeNull()
   })
 
-  it("a user whose row does not exist is a 401", async () => {
-    vi.mocked(auth).mockResolvedValue(sesion("TECNICO", "suc-A"))
-    usersResponde(null)
-
-    const r = await requireAuth()
-
-    expect(r.error!.status).toBe(401)
-    expect(r.session).toBeNull()
-  })
 })
 
-describe("requireAuth — a JWT that no longer matches the user's row is a 401", () => {
+describe("requireAuth — a JWT that no longer matches the user's row is a stale session", () => {
+  const MENSAJE = "Tu sesión cambió. Volvé a iniciar sesión."
+
   it.each([
+    ["the row does not exist", "TECNICO", null],
     ["the DB role changed (VENDEDOR in the JWT, TECNICO in the DB)", "VENDEDOR", fila({ rol: "TECNICO" })],
     ["the DB role was promoted to ADMIN", "TECNICO", fila({ rol: "ADMIN" })],
     ["the DB organization is another one", "TECNICO", fila({ organization_id: "org-2" })],
     ["the DB row has a null organization", "TECNICO", fila({ organization_id: null })],
     ["the user was deleted", "TECNICO", fila({ deleted_at: "2026-10-27T12:00:00Z" })],
-  ])("%s", async (_caso, rolJwt, row) => {
-    vi.mocked(auth).mockResolvedValue(sesion(rolJwt, "suc-A"))
+    ["an ADMIN was demoted in the DB", "ADMIN", fila({ rol: "TECNICO", sucursal_id: "suc-A" })],
+    ["an ADMIN's organization is another one", "ADMIN", fila({ rol: "ADMIN", organization_id: "org-2", sucursal_id: null })],
+    ["an ADMIN was deleted", "ADMIN", fila({ rol: "ADMIN", deleted_at: "2026-10-27T12:00:00Z", sucursal_id: null })],
+  ])("%s: 401 SESSION_STALE and the session cookie is cleared", async (_caso, rolJwt, row) => {
+    vi.mocked(auth).mockResolvedValue(sesion(rolJwt, rolJwt === "ADMIN" ? null : "suc-A"))
     usersResponde(row)
 
     const r = await requireAuth()
 
     expect(r.error!.status).toBe(401)
+    expect(await r.error!.json()).toEqual({ error: MENSAJE, code: "SESSION_STALE" })
+    const setCookie = r.error!.headers.get("set-cookie") ?? ""
+    expect(setCookie).toContain("next-auth.session-token=;")
+    expect(setCookie).toContain("Max-Age=0")
     expect(r.session).toBeNull()
     expect(r.userId).toBeNull()
+  })
+
+  it("a plain 401 (no session at all) does not touch the cookie", async () => {
+    vi.mocked(auth).mockResolvedValue(null as any)
+
+    const r = await requireAuth()
+
+    expect(r.error!.status).toBe(401)
+    expect(r.error!.headers.get("set-cookie")).toBeNull()
+  })
+
+  it("an unchanged ADMIN passes", async () => {
+    const admin = sesion("ADMIN", null)
+    vi.mocked(auth).mockResolvedValue(admin)
+    usersResponde(fila({ rol: "ADMIN", sucursal_id: null }))
+
+    const r = await requireAuth()
+
+    expect(r.error).toBeNull()
+    expect(r.session).toBe(admin)
   })
 
   it("a deleted user is also null for server pages", async () => {
@@ -272,6 +309,141 @@ describe("requireAuth — 5 s per-instance cache of the users row", () => {
     expect(ok.error).toBeNull()
     expect(ok.session!.user.sucursalId).toBe("suc-B")
   })
+
+  it("an unchanged ADMIN costs at most one lookup per TTL", async () => {
+    vi.mocked(auth).mockResolvedValue(sesion("ADMIN", null))
+    usersResponde(fila({ rol: "ADMIN", sucursal_id: null }))
+
+    await requireAuth()
+    vi.setSystemTime(T0 + 4_000)
+    await requireAuth()
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+
+    vi.setSystemTime(T0 + 5_001)
+    await requireAuth()
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
+  })
+
+  it("a demoted ADMIN is caught on a cache hit too (the comparison uses the current JWT)", async () => {
+    usersResponde(fila({ rol: "TECNICO", sucursal_id: "suc-A" }))
+    vi.mocked(auth).mockResolvedValue(sesion("TECNICO"))
+    expect((await requireAuth()).error).toBeNull()
+
+    vi.mocked(auth).mockResolvedValue(sesion("ADMIN", null))
+    const r = await requireAuth()
+
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+    expect(r.error!.status).toBe(401)
+  })
+})
+
+describe("requireAuth — single-flight lookup", () => {
+  /** Every lookup waits at a gate; `abrir()` lets all of them through. */
+  function conPuerta(resultado: () => Promise<{ data: unknown; error: unknown }>) {
+    let abrir!: () => void
+    const puerta = new Promise<void>((r) => (abrir = r))
+    const chain = createChainMock(null)
+    chain.maybeSingle = vi.fn(async () => {
+      await puerta
+      return resultado()
+    })
+    vi.mocked(supabaseAdmin.from).mockImplementation(() => chain as any)
+    return { abrir }
+  }
+  // One macrotask: every pending requireAuth() has reached the lookup by then.
+  const alcanzanElLookup = () => new Promise((r) => setTimeout(r, 0))
+
+  it("N parallel requests of one user on a miss share ONE query", async () => {
+    vi.mocked(auth).mockResolvedValue(sesion("TECNICO", "suc-A"))
+    const { abrir } = conPuerta(async () => ({ data: fila(), error: null }))
+
+    const llamadas = Array.from({ length: 5 }, () => requireAuth())
+    await alcanzanElLookup()
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+    abrir()
+    const rs = await Promise.all(llamadas)
+
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+    expect(rs).toHaveLength(5)
+    for (const r of rs) {
+      expect(r.error).toBeNull()
+      expect(r.session!.user.sucursalId).toBe("suc-B")
+    }
+  })
+
+  it("parallel requests of different users do not share a query", async () => {
+    const { abrir } = conPuerta(async () => ({ data: fila(), error: null }))
+    const otro = { ...sesion("TECNICO"), user: { ...sesion("TECNICO").user, id: "user-2" } }
+
+    vi.mocked(auth).mockResolvedValue(sesion("TECNICO"))
+    const a = requireAuth()
+    vi.mocked(auth).mockResolvedValue(otro)
+    const b = requireAuth()
+    await alcanzanElLookup()
+    abrir()
+    await Promise.all([a, b])
+
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
+  })
+
+  it("a failing in-flight lookup fails every waiter and is not cached", async () => {
+    vi.mocked(auth).mockResolvedValue(sesion("TECNICO", "suc-A"))
+    const { abrir } = conPuerta(async () => {
+      throw new Error("down")
+    })
+
+    const llamadas = Array.from({ length: 3 }, () => requireAuth())
+    await alcanzanElLookup()
+    abrir()
+    const rs = await Promise.all(llamadas)
+
+    expect(rs.map((r) => r.error!.status)).toEqual([500, 500, 500])
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
+
+    usersResponde(fila())
+    const despues = await requireAuth()
+
+    expect(despues.error).toBeNull()
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe("cache bound", () => {
+  const T0 = new Date("2026-10-27T12:00:00Z").getTime()
+  const usuario = (i: number) => ({
+    user: { id: `u${i}`, role: "TECNICO", organizationId: "org-1", sucursalId: null as string | null },
+  })
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(T0)
+    usersResponde(fila())
+  })
+
+  it("a full cache is cleared when a NEW user arrives", async () => {
+    for (let i = 0; i < CACHE_MAX_ENTRIES; i++) await conSucursalVigente(usuario(i))
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(CACHE_MAX_ENTRIES)
+
+    await conSucursalVigente(usuario(CACHE_MAX_ENTRIES)) // new key on a full cache
+    await conSucursalVigente(usuario(CACHE_MAX_ENTRIES)) // cached again
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(CACHE_MAX_ENTRIES + 1)
+
+    await conSucursalVigente(usuario(0)) // evicted by the clear
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(CACHE_MAX_ENTRIES + 2)
+  })
+
+  it("refreshing a user that is already in a full cache clears nobody else", async () => {
+    await conSucursalVigente(usuario(0))
+    vi.setSystemTime(T0 + 3_000)
+    for (let i = 1; i < CACHE_MAX_ENTRIES; i++) await conSucursalVigente(usuario(i)) // exactly full now
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(CACHE_MAX_ENTRIES)
+
+    vi.setSystemTime(T0 + 5_500) // u0 has expired, everyone else is valid until T0 + 8_000
+    await conSucursalVigente(usuario(0))
+    await conSucursalVigente(usuario(1))
+
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(CACHE_MAX_ENTRIES + 1) // only u0 was re-read
+  })
 })
 
 describe("requireAuth — tenant check and branch lookup", () => {
@@ -312,6 +484,7 @@ describe("requireAuth — tenant check and branch lookup", () => {
 describe("wrappers around requireAuth", () => {
   it.each([
     ["requireAdmin", requireAdmin, "TECNICO"],
+    ["requireAdmin (ADMIN)", requireAdmin, "ADMIN"],
     ["requireAdminOrVendedor", requireAdminOrVendedor, "VENDEDOR"],
     ["requirePosAccess", requirePosAccess, "VENDEDOR"],
   ])("%s propagates the 500 when the lookup fails", async (_nombre, guard, role) => {
@@ -420,12 +593,15 @@ describe("sesionConSucursalVigente — server pages that call auth() directly", 
     expect(await sesionConSucursalVigente()).toBeNull()
   })
 
-  it("ADMIN passes through with no query", async () => {
+  it("ADMIN is verified and returned untouched; a demoted ADMIN is null", async () => {
     const admin = sesion("ADMIN", null)
     vi.mocked(auth).mockResolvedValue(admin)
-
+    usersResponde(fila({ rol: "ADMIN", sucursal_id: null }))
     expect(await sesionConSucursalVigente()).toBe(admin)
-    expect(supabaseAdmin.from).not.toHaveBeenCalled()
+
+    clearSesionSucursalCache()
+    usersResponde(fila({ rol: "TECNICO" }))
+    expect(await sesionConSucursalVigente()).toBeNull()
   })
 
   it("throws when the lookup fails: a page must not render on a guessed branch", async () => {

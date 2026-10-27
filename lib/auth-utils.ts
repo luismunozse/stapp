@@ -4,6 +4,7 @@ import { headers } from "next/headers"
 import { validateUserTenant } from "@/lib/tenant"
 import { supabaseAdmin } from "@/lib/supabase"
 import { conSucursalVigente } from "@/lib/sesion-sucursal"
+import { clearSessionCookie } from "@/lib/session-cookie"
 
 export async function getAuthSession() {
   const session = await auth()
@@ -18,9 +19,10 @@ export async function getAuthSession() {
   }
 }
 
-// requireAuth() returns the session with `user.sucursalId` taken from the DB
-// for TECNICO/VENDEDOR (see conSucursalVigente), not from the JWT, which keeps
-// the branch the user had at login for hours after an ADMIN moves them.
+// requireAuth() checks the session against the user's row (see conSucursalVigente)
+// and, for TECNICO/VENDEDOR, returns it with `user.sucursalId` taken from the DB,
+// not from the JWT, which keeps the branch the user had at login for hours after
+// an ADMIN moves them. A stale session is a 401 SESSION_STALE that clears the cookie.
 export async function requireAuth() {
   const { session, organizationId, userId, role } = await getAuthSession()
   if (!session || !organizationId) {
@@ -68,7 +70,7 @@ export async function requireAuth() {
     console.error("[auth] Could not re-read the user's row:", vigente.err)
     return {
       error: NextResponse.json(
-        { error: "No pudimos verificar tu sucursal. Intentá de nuevo." },
+        { error: "No pudimos verificar tu sesión. Intentá de nuevo." },
         { status: 500 }
       ),
       session: null,
@@ -78,11 +80,20 @@ export async function requireAuth() {
     }
   }
   // The JWT no longer describes the user (row gone or deleted, role or
-  // organization changed in the DB): force a new login.
+  // organization changed in the DB, ADMIN included): 401 SESSION_STALE and clear
+  // the session cookie in the same response. Without that the browser keeps the
+  // stale token and every request repeats this 401; with it the next navigation
+  // carries no token and the middleware sends the user to /login. The error is a
+  // NextResponse, so the cookie rides on it and nothing else has to change.
   const sesionVigente = vigente.sesionVigente
   if (!sesionVigente) {
     return {
-      error: NextResponse.json({ error: "No autorizado" }, { status: 401 }),
+      error: clearSessionCookie(
+        NextResponse.json(
+          { error: "Tu sesión cambió. Volvé a iniciar sesión.", code: "SESSION_STALE" },
+          { status: 401 }
+        )
+      ),
       session: null,
       organizationId: null,
       userId: null,

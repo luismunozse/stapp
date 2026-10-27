@@ -26,14 +26,28 @@ const EXENTOS = new Map<string, string>([
   ],
 ])
 
-// Where a session comes from without going through the DB refresh.
-const FUENTE_CRUDA = /\bawait\s+auth\(\s*\)|\bgetAuthSession\(|\buseSession\(/
+// Where a session comes from without going through the DB refresh: auth() (with
+// or without await, also as `mod.auth()`), getAuthSession() and useSession().
+const FUENTE_CRUDA = /\bauth\(\s*\)|\bgetAuthSession\(|\buseSession\(/
+// `import { auth as obtenerSesion }`: the alias is a raw source too once it is called.
+const ALIAS_DE_FUENTE = /\b(?:auth|getAuthSession|useSession)\s+as\s+([A-Za-z_$][\w$]*)/g
 // `.sucursalId` property reads, and `const { sucursalId } = session.user` style destructuring.
 const LEE_SUCURSAL = /\.sucursalId\b|\{[^{}]*\bsucursalId\b[^{}]*\}\s*=\s*[\w$!?.]*\buser\b/
 
+function tomaSesionCruda(src: string): boolean {
+  if (FUENTE_CRUDA.test(src)) return true
+  return [...src.matchAll(ALIAS_DE_FUENTE)].some(([, alias]) => new RegExp(`\\b${alias}\\(`).test(src))
+}
+
+/** Code without comments, so prose like "the middleware/auth() accept it" is not a call. */
+function sinComentarios(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1")
+}
+
 /** True when a file takes a raw session and reads the branch from it. */
-function leeSucursalDelJwt(src: string): boolean {
-  return FUENTE_CRUDA.test(src) && LEE_SUCURSAL.test(src) && !src.includes("sesionConSucursalVigente(")
+function leeSucursalDelJwt(fuente: string): boolean {
+  const src = sinComentarios(fuente)
+  return tomaSesionCruda(src) && LEE_SUCURSAL.test(src) && !src.includes("sesionConSucursalVigente(")
 }
 
 function recorrer(dir: string, out: string[] = []): string[] {
@@ -54,6 +68,12 @@ describe("detector", () => {
     ["destructuring from session.user", `const session = await auth()\nconst { role, sucursalId } = session.user`],
     ["destructuring from session!.user", `const { session } = await getAuthSession()\nconst { sucursalId } = session!.user`],
     ["destructuring from a user variable", `const { data } = useSession()\nconst user = data?.user\nconst { sucursalId } = user`],
+    ["auth() without await", `const pendiente = auth()\npendiente.then((s) => s?.user.sucursalId)`],
+    ["auth().then(...) chained", `auth().then((s) => use(s?.user.sucursalId))`],
+    ["an aliased import of auth", `import { auth as obtenerSesion } from "@/lib/auth"\nconst s = await obtenerSesion()\nuse(s?.user.sucursalId)`],
+    ["an aliased import of getAuthSession", `import { getAuthSession as leer } from "@/lib/auth-utils"\nconst { session } = await leer()\nuse(session!.user.sucursalId)`],
+    ["an aliased import of useSession", `import { useSession as usarSesion } from "next-auth/react"\nconst { data } = usarSesion()\nuse(data?.user?.sucursalId)`],
+    ["a namespace import of the auth module", `import * as authMod from "@/lib/auth"\nconst s = await authMod.auth()\nuse(s?.user.sucursalId)`],
   ])("flags %s", (_caso, src) => {
     expect(leeSucursalDelJwt(src)).toBe(true)
   })
@@ -64,6 +84,9 @@ describe("detector", () => {
     ["a raw session that never reads the branch", `const session = await auth()\nconst o = session.user.organizationId`],
     ["a branch read with no session source", `const d = resolver()\nreturn d.sucursalId`],
     ["a destructuring of something that is not a user", `const session = await auth()\nconst { sucursalId } = lectura`],
+    ["an aliased import that is never called", `import { auth as obtenerSesion } from "@/lib/auth"\nconst d = resolver()\nreturn d.sucursalId`],
+    ["the NextAuth(...) setup", `export const { auth } = NextAuth(config)\nconst d = resolver()\nreturn d.sucursalId`],
+    ["auth() mentioned only in comments", `// the middleware/auth() accept it\n/* uses useSession() */\nconst d = resolver()\nreturn d.sucursalId`],
   ])("ignores %s", (_caso, src) => {
     expect(leeSucursalDelJwt(src)).toBe(false)
   })
