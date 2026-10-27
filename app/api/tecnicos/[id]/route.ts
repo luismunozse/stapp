@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin, requireAdminOrSelf } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
-import { ordenesActivasTotales } from "@/lib/sucursal-personal"
+import { EMBED_ORDENES_ACTIVAS_TOTALES, soloActivasEnTodasLasSucursales, totalDeOrdenesActivas } from "@/lib/sucursal-personal"
 import { soloAtendidasPorEnEmbed } from "@/lib/sucursal-ordenes"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import bcrypt from "bcryptjs"
@@ -25,10 +25,11 @@ export async function GET(
       sucursalDelAlcance = alcance.verTodas ? null : alcance.sucursalId
     }
 
-    const { data: tecnico, error: dbError } = await soloAtendidasPorEnEmbed(
-      supabaseAdmin
-        .from("users")
-        .select(`
+    const { data: tecnico, error: dbError } = await soloActivasEnTodasLasSucursales(
+      soloAtendidasPorEnEmbed(
+        supabaseAdmin
+          .from("users")
+          .select(`
         id,
         nombre,
         email,
@@ -41,20 +42,23 @@ export async function GET(
         costo_hora,
         created_at,
         horario_laboral,
-        ordenes_servicio:ordenes_servicio!tecnico_id ( estado )
+        ordenes_del_alcance:ordenes_servicio!tecnico_id ( estado ),
+        ${EMBED_ORDENES_ACTIVAS_TOTALES}
       `)
-        .eq("id", id)
-        .eq("rol", "TECNICO")
-        .eq("organization_id", organizationId!),
-      sucursalDelAlcance,
-      "ordenes_servicio",
+          .eq("id", id)
+          .eq("rol", "TECNICO")
+          .eq("organization_id", organizationId!),
+        sucursalDelAlcance,
+        "ordenes_del_alcance",
+      ),
+      organizationId!,
     ).single()
 
     if (dbError || !tecnico) {
       return NextResponse.json({ error: "Técnico no encontrado" }, { status: 404 })
     }
 
-    const ordenes = tecnico.ordenes_servicio || []
+    const ordenes = tecnico.ordenes_del_alcance || []
     const ordenesActivas = ordenes.filter((o: any) =>
       ESTADOS_ACTIVOS.includes(o.estado)
     ).length
@@ -64,9 +68,8 @@ export async function GET(
 
     // What gates deactivating or deleting him is global: every open order he holds, in every branch. On
     // Todas (and for the technician himself) the count above already is that; with a branch selected it
-    // is read apart. The scoped count stays for what a reassignment from this screen moves.
-    const ordenesActivasTotal =
-      sucursalDelAlcance === null ? ordenesActivas : (await ordenesActivasTotales(organizationId!, [id])).get(id) ?? 0
+    // comes in the same read. The scoped count stays for what a reassignment from this screen moves.
+    const ordenesActivasTotal = sucursalDelAlcance === null ? ordenesActivas : totalDeOrdenesActivas(tecnico)
 
     return NextResponse.json({
       id: tecnico.id,

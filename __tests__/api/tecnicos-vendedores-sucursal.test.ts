@@ -25,6 +25,8 @@ function mockCookie(valor: string | null) {
 }
 
 function usuario(id: string, nombre: string, rol: string, sucursal: string | null, org = "org-1") {
+  // What the order embeds of the technicians list hold: one open order in his branch.
+  const abierta = sucursal ? [{ id: `o-${id}`, estado: "EN_REPARACION", sucursal_id: sucursal, organization_id: org }] : []
   return {
     id,
     nombre,
@@ -39,8 +41,8 @@ function usuario(id: string, nombre: string, rol: string, sucursal: string | nul
     avatar_url: null,
     fecha_ingreso_tecnico: null,
     created_at: "2026-01-01",
-    // What the `ordenes_servicio!tecnico_id` embed of the technicians list holds: one open order in his branch.
-    ordenes_servicio: sucursal ? [{ id: `o-${id}`, estado: "EN_REPARACION", sucursal_id: sucursal }] : [],
+    ordenes_del_alcance: abierta,
+    activas_totales: abierta,
   }
 }
 
@@ -66,9 +68,8 @@ function montarDb(sucursales = SUCURSALES) {
     ...usuariosDe("v", "VENDEDOR"),
     usuario("adm", "Fede", "ADMIN", null),
   ])
-  // An ADMIN with a branch selected also reads, apart, the open orders each technician holds in every branch.
-  const ordenes = tablaPostgrest([{ id: "o-1", organization_id: "org-1", tecnico_id: "t-a1", sucursal_id: "suc-A", estado: "EN_REPARACION" }])
-  mockSupabaseFrom({ users, sucursales: tablaPostgrest(sucursales), ordenes_servicio: ordenes } as any)
+  // No `ordenes_servicio` table: the lists read the orders only through the technicians' own embeds.
+  mockSupabaseFrom({ users, sucursales: tablaPostgrest(sucursales) } as any)
   vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: [], error: null } as any)
   return users
 }

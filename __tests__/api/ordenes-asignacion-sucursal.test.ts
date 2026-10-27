@@ -40,15 +40,18 @@ import { getNextOrderNumberByType } from "@/lib/counters"
 
 const MENSAJE = "Ese técnico no pertenece a la sucursal de esta orden"
 
+// A technician who holds no order still carries the embeds (an empty array, as PostgREST answers a to-many embed).
+const SIN_ORDENES = { ordenes_del_alcance: [], activas_totales: [] }
+
 const PERSONAL = [
-  // `ordenes_servicio` is what the technicians list embeds to count the open orders in the viewer's branch.
-  { id: "t-a", nombre: "Ana", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 10, costo_hora: 100, ordenes_servicio: [{ id: "o-t-a", estado: "EN_REPARACION", sucursal_id: "suc-A" }] },
+  // `ordenes_del_alcance` and `activas_totales` are what the technicians list embeds to count the open orders.
+  { id: "t-a", nombre: "Ana", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 10, costo_hora: 100, ordenes_del_alcance: [{ id: "o-t-a", estado: "EN_REPARACION", sucursal_id: "suc-A", organization_id: "org-1" }], activas_totales: [{ id: "o-t-a", estado: "EN_REPARACION", sucursal_id: "suc-A", organization_id: "org-1" }] },
   { id: "t-a2", nombre: "Beto", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 10, costo_hora: 100 },
   { id: "t-b", nombre: "Carla", rol: "TECNICO", sucursal_id: "suc-B", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 20, costo_hora: 200 },
   { id: "t-b2", nombre: "Dario", rol: "TECNICO", sucursal_id: "suc-B", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 20, costo_hora: 200 },
   { id: "adm", nombre: "Fede", rol: "ADMIN", sucursal_id: null, organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 0, costo_hora: 0 },
   { id: "t-otra-org", nombre: "Eva", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-2", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 0, costo_hora: 0 },
-]
+].map((p) => ({ ...SIN_ORDENES, ...p }))
 
 describe("POST /api/ordenes - assigning a technician", () => {
   const cuerpo = (extra: Record<string, unknown> = {}) =>

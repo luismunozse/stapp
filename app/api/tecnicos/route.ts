@@ -2,7 +2,14 @@ import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, sucursalParaLectura, assertSucursalEnOrg } from "@/lib/sucursal"
-import { ordenesActivasTotales, sucursalParaListaPersonal, sucursalParaReasignar, type DestinoDeReasignacion } from "@/lib/sucursal-personal"
+import {
+  EMBED_ORDENES_ACTIVAS_TOTALES,
+  soloActivasEnTodasLasSucursales,
+  sucursalParaListaPersonal,
+  sucursalParaReasignar,
+  totalDeOrdenesActivas,
+  type DestinoDeReasignacion,
+} from "@/lib/sucursal-personal"
 import { soloAtendidasPorEnEmbed } from "@/lib/sucursal-ordenes"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
@@ -46,10 +53,14 @@ export async function GET(request: Request) {
       sucursalId = reasignacion.sucursalId
     }
 
-    let query = soloAtendidasPorEnEmbed(
-      supabaseAdmin
-        .from("users")
-        .select(`
+    // Two embeds of the orders: the ones the viewer's scope handles (`ordenes_del_alcance`, narrowed), and the
+    // open ones of every branch (`activas_totales`, for the total that gates a global action). Every
+    // consumer of the list gets one answer from one read: the total adds no second read to fail or to be cut.
+    let query = soloActivasEnTodasLasSucursales(
+      soloAtendidasPorEnEmbed(
+        supabaseAdmin
+          .from("users")
+          .select(`
         id,
         nombre,
         email,
@@ -60,15 +71,18 @@ export async function GET(request: Request) {
         fecha_ingreso_tecnico,
         porcentaje_comision,
         sucursal_id,
-        ordenes_servicio:ordenes_servicio!tecnico_id (
+        ordenes_del_alcance:ordenes_servicio!tecnico_id (
           id,
           estado
-        )
+        ),
+        ${EMBED_ORDENES_ACTIVAS_TOTALES}
       `)
-        .eq("rol", "TECNICO")
-        .eq("organization_id", organizationId!),
-      sucursalDelAlcance,
-      "ordenes_servicio",
+          .eq("rol", "TECNICO")
+          .eq("organization_id", organizationId!),
+        sucursalDelAlcance,
+        "ordenes_del_alcance",
+      ),
+      organizationId!,
     )
       .order("activo", { ascending: false })
       .order("nombre", { ascending: true })
@@ -81,15 +95,12 @@ export async function GET(request: Request) {
     }
 
     // What gates deactivating or deleting a technician (screens of an ADMIN) is global: every open order he
-    // holds, in every branch. On Todas the scoped count already is that; with a branch selected it is read
-    // apart. The picker of a bulk move does not need it, and anyone else only sees his own scope.
-    const totales =
-      role === "ADMIN" && sucursalDelAlcance !== null && !reasignacion
-        ? await ordenesActivasTotales(organizationId!, (tecnicos ?? []).map((t) => t.id))
-        : null
+    // holds, in every branch. On Todas the scoped count already is that. Anyone else only sees his own scope:
+    // the total is an ADMIN's, and it is not in their answer.
+    const conTotal = role === "ADMIN" && sucursalDelAlcance !== null
 
     const tecnicosConStats = tecnicos?.map((tecnico) => {
-      const ordenes = tecnico.ordenes_servicio || []
+      const ordenes = tecnico.ordenes_del_alcance || []
       const ordenesActivas = ordenes.filter(
         (o: any) => ESTADOS_ACTIVOS.includes(o.estado)
       ).length
@@ -109,7 +120,7 @@ export async function GET(request: Request) {
         porcentajeComision: Number(tecnico.porcentaje_comision ?? 0),
         sucursalId: tecnico.sucursal_id ?? null,
         ordenesActivas,
-        ordenesActivasTotal: totales ? totales.get(tecnico.id) ?? 0 : ordenesActivas,
+        ordenesActivasTotal: conTotal ? totalDeOrdenesActivas(tecnico) : ordenesActivas,
         ordenesCompletadas,
       }
     })

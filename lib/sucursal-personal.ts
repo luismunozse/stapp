@@ -49,23 +49,41 @@ export async function sucursalParaListaPersonal(params: {
 }
 
 /**
- * How many open orders each technician holds in EVERY branch (a map from his id; zero when he holds none).
- * Deactivating or deleting a technician is a global action, so what warns about it counts everything he
- * holds, not only the part in the scope the ADMIN is looking at. A read that fails throws: a count that
- * could not be read is not zero.
+ * The open orders a technician holds in EVERY branch, embedded in the select that reads him, to be COUNTED
+ * (only their ids come out). Deactivating or deleting a technician is a global action, so what warns about it
+ * counts everything he holds, not only the part in the scope the ADMIN is looking at. It is the second embed
+ * of the orders next to the one that narrows to the scope (`ordenes_del_alcance`): each is filtered by its own
+ * alias, and neither alias is the table's own name, which both embeds would answer to. It is an embed, and not a
+ * read with a row per open order, because a read of rows is cut at PostgREST's max-rows (1000) without an error,
+ * and a technician whose orders come after the cut would show none; what an embed carries is not cut.
+ * Narrow the query with `soloActivasEnTodasLasSucursales`, and count with `totalDeOrdenesActivas`.
  */
-export async function ordenesActivasTotales(organizationId: string, tecnicoIds: string[]): Promise<Map<string, number>> {
-  const totales = new Map<string, number>()
-  if (tecnicoIds.length === 0) return totales
-  const { data, error } = await supabaseAdmin
-    .from("ordenes_servicio")
-    .select("tecnico_id")
-    .eq("organization_id", organizationId)
-    .in("tecnico_id", tecnicoIds)
-    .in("estado", ESTADOS_ACTIVOS as unknown as string[])
-  if (error) throw error
-  for (const fila of (data ?? []) as Array<{ tecnico_id: string }>) totales.set(fila.tecnico_id, (totales.get(fila.tecnico_id) ?? 0) + 1)
-  return totales
+export const EMBED_ORDENES_ACTIVAS_TOTALES = "activas_totales:ordenes_servicio!tecnico_id (id)"
+
+/** The alias of `EMBED_ORDENES_ACTIVAS_TOTALES`: how a filter names it. */
+export const ALIAS_ACTIVAS_TOTALES = "activas_totales"
+
+type ConEq<Q> = { eq(columna: string, valor: string): Q }
+type ConIn<Q> = { in(columna: string, valores: string[]): Q }
+
+/**
+ * Narrows the embed `EMBED_ORDENES_ACTIVAS_TOTALES` of a query to the open orders of the organization, of any
+ * branch. It takes any PostgREST filter builder and answers the same builder (see `soloAtendidasPor`).
+ */
+export function soloActivasEnTodasLasSucursales<Q>(query: Q, organizationId: string): Q {
+  const deLaOrganizacion = (query as unknown as ConEq<Q>).eq(`${ALIAS_ACTIVAS_TOTALES}.organization_id`, organizationId)
+  return (deLaOrganizacion as unknown as ConIn<Q>).in(`${ALIAS_ACTIVAS_TOTALES}.estado`, ESTADOS_ACTIVOS as unknown as string[])
+}
+
+/**
+ * How many open orders, in every branch, a technician row that embedded `EMBED_ORDENES_ACTIVAS_TOTALES` holds.
+ * A row that does not carry the embed throws: a total that was never read is not zero, and a screen would
+ * offer to delete a technician who holds work.
+ */
+export function totalDeOrdenesActivas(tecnico: { activas_totales?: unknown }): number {
+  const ordenes = tecnico.activas_totales
+  if (!Array.isArray(ordenes)) throw new Error(`the row does not carry the embed ${ALIAS_ACTIVAS_TOTALES}: its total was not read`)
+  return ordenes.length
 }
 
 /** What the destination picker of a bulk move needs to know about the orders that would move. */

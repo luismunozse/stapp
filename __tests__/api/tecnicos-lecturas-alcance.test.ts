@@ -69,11 +69,24 @@ const ORDENES = () => {
   ]
 }
 
-/** What the `ordenes_servicio:ordenes_servicio!tecnico_id (..)` embed of a user holds: the orders assigned to him. */
-const ordenesEmbebidas = (id: string) =>
-  ORDENES()
-    .filter((o) => o.tecnico_id === id)
-    .map((o) => ({ id: o.id, estado: o.estado, sucursal_id: o.sucursal_id }))
+type OrdenFila = ReturnType<typeof orden>
+
+/**
+ * What the order embeds of a technician hold, the orders assigned to him: `ordenes_del_alcance` (the ones
+ * the viewer's branch handles, narrowed by the route) and `activas_totales` (the open ones of every branch).
+ * An order of ANOTHER organization under his id is no row of the first and is a row of the second, which only
+ * the route's own filter by organization keeps out.
+ */
+const embeber = (ordenes: OrdenFila[], id: string) => {
+  const fila = (o: OrdenFila) => ({ id: o.id, estado: o.estado, sucursal_id: o.sucursal_id, organization_id: o.organization_id })
+  const suyas = ordenes.filter((o) => o.tecnico_id === id)
+  return {
+    ordenes_del_alcance: suyas.filter((o) => o.organization_id === "org-1").map(fila),
+    activas_totales: suyas.map(fila),
+    // The embed of the delete guard: every order of his, unscoped and unfiltered.
+    ordenes_servicio: suyas.map(fila),
+  }
+}
 
 const usuario = (id: string, rol: string, sucursal: string | null, extra: Record<string, unknown> = {}) => ({
   id,
@@ -91,7 +104,7 @@ const usuario = (id: string, rol: string, sucursal: string | null, extra: Record
   sucursal_id: sucursal,
   created_at: "2026-01-01T00:00:00Z",
   horario_laboral: null,
-  ordenes_servicio: ordenesEmbebidas(id),
+  ...embeber(ORDENES(), id),
   ...extra,
 })
 
@@ -133,6 +146,15 @@ function montar() {
     users: USUARIOS,
     organizations: [{ id: "org-1", vendedores_administran_inventario: false }],
   })
+}
+
+/** The tables of a world with these orders (and these extra technicians): every user's embeds hold what the orders say. */
+function mundo(ordenes: OrdenFila[], tecnicos: Array<{ id: string; sucursal: string }> = [], opciones: Parameters<typeof montarSupabaseEnMemoria>[1] = {}) {
+  const usuarios = [...USUARIOS, ...tecnicos.map((t) => usuario(t.id, "TECNICO", t.sucursal))].map((u) => ({ ...u, ...embeber(ordenes, u.id) }))
+  return montarSupabaseEnMemoria(
+    { ordenes_servicio: ordenes, users: usuarios, organizations: [{ id: "org-1", vendedores_administran_inventario: false }] },
+    opciones,
+  )
 }
 
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) })
@@ -545,13 +567,7 @@ describe("a technician of one branch who holds the open orders of another (jed-e
     // ...plus an order of ANOTHER organization under the same technician id, and a finished one of his: neither counts.
     const ajena = { ...orden("x-otra-org", A, "t-jed"), organization_id: "org-2" }
     const terminada = orden("x-terminada", A, "t-jed", "REPARADO")
-    const ordenes = [...ORDENES(), ...ordenesJed(), ajena, terminada]
-    const embebidas = ordenes.filter((o) => o.tecnico_id === "t-jed" && o.organization_id === "org-1").map((o) => ({ id: o.id, estado: o.estado, sucursal_id: o.sucursal_id }))
-    return montarSupabaseEnMemoria({
-      ordenes_servicio: ordenes,
-      users: [...USUARIOS, usuario("t-jed", "TECNICO", B, { ordenes_servicio: embebidas })],
-      organizations: [{ id: "org-1", vendedores_administran_inventario: false }],
-    })
+    return mundo([...ORDENES(), ...ordenesJed(), ajena, terminada], [{ id: "t-jed", sucursal: B }])
   }
 
   async function desactivar(e: Espectador) {
@@ -637,17 +653,107 @@ describe("a technician of one branch who holds the open orders of another (jed-e
     }
   })
 
-  it("an unreadable total is an error, not zero: the warning is never skipped because a read failed", async () => {
+  it("a technician that cannot be read is not deactivated: the warning is never skipped because a read failed", async () => {
+    entrar(ADMIN_B)
+    const memoria = montarSupabaseEnMemoria(
+      { ordenes_servicio: ORDENES(), users: USUARIOS, organizations: [{ id: "org-1", vendedores_administran_inventario: false }] },
+      { errorDeLectura: { users: { code: "XX000", message: "connection lost" } } },
+    )
+    const res = await estado(
+      new Request("http://localhost:3000/api/tecnicos/t-a/estado", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activo: false }) }),
+      ctx("t-a"),
+    )
+    expect(res.status).not.toBe(200)
+    expect(memoria.escrituras.filter((x) => x.tabla === "users")).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------------------------
+describe("the total that gates a global action comes WITH the technician, not from a read of one row per open order", () => {
+  // A read of rows is cut at PostgREST's max-rows (1000) without an error, and a technician whose orders come
+  // after the cut would show zero (and the list would offer to delete him). What an embed carries is never cut.
+  const MAX_FILAS = 1000
+  const abiertas = (cuantas: number, sucursal: string, tecnico: string, prefijo: string) =>
+    Array.from({ length: cuantas }, (_, i) => orden(`${prefijo}${i + 1}`, sucursal, tecnico))
+
+  /** 1000 open orders of t-b2 come first in the table, then the ones of t-jed (San Justo, holding orders of Tablada). */
+  function mundoGrande(deJed: number) {
+    const ordenes = [...ORDENES(), ...abiertas(MAX_FILAS, B, "t-b2", "m"), ...abiertas(deJed, A, "t-jed", "j")]
+    return mundo(ordenes, [{ id: "t-jed", sucursal: B }], { maxFilas: MAX_FILAS })
+  }
+
+  const totales = async (e: Espectador) => {
+    entrar(e)
+    mundoGrande(3)
+    const { status, body } = await parseResponse(await listar(new Request("http://localhost:3000/api/tecnicos")))
+    expect(status).toBe(200)
+    return Object.fromEntries((body as Array<{ id: string; ordenesActivasTotal: number }>).map((t) => [t.id, t.ordenesActivasTotal]))
+  }
+
+  it("the list shows the real total of every technician, whatever comes after the first thousand open orders", async () => {
+    expect(await totales(ADMIN_B)).toMatchObject({ "t-b2": MAX_FILAS, "t-jed": 3, "t-b": 0 })
+    expect(await totales(ADMIN_A)).toMatchObject({ "t-a": 2, "t-a2": 0 })
+  })
+
+  it("the detail, the deactivation and the warning of a technician who holds more than a thousand open orders", async () => {
+    entrar(ADMIN_B)
+    mundoGrande(MAX_FILAS + 200)
+    const det = await parseResponse(await detalle(get("t-jed"), ctx("t-jed")))
+    expect(det.body).toMatchObject({ ordenesActivas: 0, ordenesActivasTotal: MAX_FILAS + 200 })
+
+    mundoGrande(MAX_FILAS + 200)
+    const res = await estado(
+      new Request("http://localhost:3000/api/tecnicos/t-jed/estado", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activo: false }) }),
+      ctx("t-jed"),
+    )
+    const { body } = await parseResponse(res)
+    expect(body).toMatchObject({ ordenesActivas: MAX_FILAS + 200 })
+    expect((body as { warning: string }).warning).toContain(`${MAX_FILAS + 200} orden(es) activa(s)`)
+  })
+
+  it.each([
+    ["the list", async () => listar(new Request("http://localhost:3000/api/tecnicos"))],
+    ["the list for the order form (?alcance=escritura)", async () => listar(new Request("http://localhost:3000/api/tecnicos?alcance=escritura"))],
+    ["the detail", async () => detalle(get("t-jed"), ctx("t-jed"))],
+    [
+      "deactivating",
+      async () =>
+        estado(
+          new Request("http://localhost:3000/api/tecnicos/t-jed/estado", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activo: false }) }),
+          ctx("t-jed"),
+        ),
+    ],
+  ])("%s reads no row of the orders table: the counts come with the technician", async (_que, pedir) => {
+    entrar(ADMIN_B)
+    const memoria = mundoGrande(7)
+    expect((await pedir()).status).toBe(200)
+    expect(memoria.lecturas).toContain("users")
+    expect(memoria.lecturas).not.toContain("ordenes_servicio")
+  })
+
+  it("the technician pickers (the order form, the appointment form, the ranking) do not fail with the orders table: they never read it", async () => {
+    for (const ruta of ["", "?alcance=escritura", "?sucursalId=suc-B"]) {
+      entrar(ADMIN_B)
+      montarSupabaseEnMemoria(
+        { ordenes_servicio: ORDENES(), users: USUARIOS, organizations: [{ id: "org-1", vendedores_administran_inventario: false }] },
+        { errorDeLectura: { ordenes_servicio: { code: "XX000", message: "connection lost" } } },
+      )
+      const res = await listar(new Request(`http://localhost:3000/api/tecnicos${ruta}`))
+      expect(res.status, ruta).toBe(200)
+    }
+  })
+
+  it("reactivating a technician does not depend on the orders: it is written even if they cannot be read", async () => {
     entrar(ADMIN_B)
     const memoria = montarSupabaseEnMemoria(
       { ordenes_servicio: ORDENES(), users: USUARIOS, organizations: [{ id: "org-1", vendedores_administran_inventario: false }] },
       { errorDeLectura: { ordenes_servicio: { code: "XX000", message: "connection lost" } } },
     )
     const res = await estado(
-      new Request("http://localhost:3000/api/tecnicos/t-a/estado", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activo: false }) }),
-      ctx("t-a"),
+      new Request("http://localhost:3000/api/tecnicos/t-inactivo/estado", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activo: true }) }),
+      ctx("t-inactivo"),
     )
-    expect(res.status).toBe(500)
-    expect(memoria.escrituras.filter((x) => x.tabla === "users")).toEqual([])
+    expect(res.status).toBe(200)
+    expect(memoria.escrituras.filter((x) => x.tabla === "users").map((x) => x.carga)).toEqual([{ activo: true }])
   })
 })
