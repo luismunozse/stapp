@@ -28,7 +28,8 @@
  * A select that embeds the table more than once is one read PER embed, and a wrapper that names an embed
  * (`soloAtendidasPorEnEmbed(q, s, "alias")`, `aplicarAEmbed(q, "alias")`) narrows that one: a sibling embed next
  * to a narrowed one (the technicians' open orders of every branch next to the ones of the viewer's scope) is
- * a read of its own, and is listed with its reason.
+ * a read of its own, and is listed with its reason. A wrapper around a wrapper is followed (through the calls
+ * chained after each one), and each covers the embed it names.
  * A call that is only in the same function, that wraps another table's query, or that is already spent
  * on another read, covers nothing. `cargarOrdenEnAlcance` is a loader (it reads at its call site) and
  * `alcanceLecturaOrdenes` only hands out the scope: neither covers a query by being called.
@@ -394,13 +395,18 @@ function candidatas(lectura: Lectura): ts.CallExpression[] {
     }),
   )
 
-  // (B) the chain is the query argument of a wrapper.
-  let actual: ts.Node = tope
-  while (actual.parent && esTransparente(actual.parent) && actual.parent.expression === actual) actual = actual.parent
-  const padre = actual.parent
-  if (padre && ts.isCallExpression(padre) && padre.arguments[0] === actual) {
+  // (B) the chain is the query argument of a wrapper, or of a wrapper that wraps a wrapper (the calls chained after
+  // each one are part of the chain it hands to the next). Each wrapper covers one read: the embed it names.
+  let nodo: ts.Node = tope
+  for (;;) {
+    let actual: ts.Node = nodo
+    while (actual.parent && esTransparente(actual.parent) && actual.parent.expression === actual) actual = actual.parent
+    const padre = actual.parent
+    if (!(padre && ts.isCallExpression(padre) && padre.arguments[0] === actual)) break
     const nombre = nombreDeLlamada(padre)
-    if (nombre !== null && ENVOLTURAS.includes(nombre) && !envolturaSobreEmbedPlano(padre, lectura.embeds) && !nombraOtroEmbed(padre, lectura.embeds)) salida.push(padre)
+    if (nombre === null || !ENVOLTURAS.includes(nombre)) break
+    if (!envolturaSobreEmbedPlano(padre, lectura.embeds) && !nombraOtroEmbed(padre, lectura.embeds)) salida.push(padre)
+    nodo = topeDeLaCadena(padre)
   }
 
   // (C) the chain is held in a variable that a wrapper receives, or whose embed is filtered.
@@ -497,12 +503,12 @@ const EXENTOS: Listado = new Map([
     "lib/sucursal-personal.ts",
     { sitios: 1, motivo: `defines the \`activas_totales\` embed used by the technician selects: ${TOTAL_DE_ACTIVAS}` },
   ],
-  ["app/api/tecnicos/route.ts", { sitios: 1, motivo: `the technicians list: ${TOTAL_DE_ACTIVAS}; it is next to the embed narrowed to the viewer's scope, which has its own wrapper` }],
+  ["app/api/tecnicos/route.ts", { sitios: 1, motivo: `the technicians list: ${TOTAL_DE_ACTIVAS}; it is next to the two embeds narrowed to the viewer's scope, which have a wrapper each` }],
   [
     "app/api/tecnicos/[id]/route.ts",
     {
       sitios: 2,
-      motivo: `the \`activas_totales\` embed of the technician detail (${TOTAL_DE_ACTIVAS}), and the DELETE of a technician (ADMIN only): its guard counts EVERY open order he holds, in every branch, on purpose: scoping it would let him be deleted with work still assigned elsewhere`,
+      motivo: `the \`activas_totales\` embed of the technician detail (${TOTAL_DE_ACTIVAS}), and the DELETE of a technician (ADMIN only): its guard counts EVERY open order he holds, in every branch, on purpose: scoping it would let him be deleted with work still assigned elsewhere. It asks for open orders only, so the per-parent cap of PostgREST cannot hide them`,
     },
   ],
   ["app/api/tecnicos/[id]/estado/route.ts", { sitios: 1, motivo: `deactivating or reactivating a technician: ${TOTAL_DE_ACTIVAS}` }],
@@ -700,6 +706,43 @@ describe("detector, with planted offenders", () => {
 
     it("the file reports the second embed on the line of the select, as one more loose read of it", () => {
       expect(sueltas(doble((q) => `soloAtendidasPorEnEmbed(${q}, s, "alcance")`))).toEqual([1])
+    })
+
+    describe("a wrapper around a wrapper: each covers the embed it names", () => {
+      it("two wrappers, one around the other, cover both embeds", () => {
+        expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(soloAtendidasPorEnEmbed(${q}, s, "alcance"), s, "activas")`))).toEqual([])
+        expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(soloAtendidasPorEnEmbed(${q}, s, "activas"), s, "alcance")`))).toEqual([])
+      })
+
+      it("through the calls chained after the inner one", () => {
+        expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(soloAtendidasPorEnEmbed(${q}, s, "alcance").order("nombre"), s, "activas")`))).toEqual([])
+      })
+
+      it("a wrapper that narrows the whole query next to one that names an embed covers one embed each", () => {
+        expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(soloOriginadasEn(${q}, s), s, "activas")`))).toEqual([])
+      })
+
+      it("the same embed named twice is covered once, and the other stays loose", () => {
+        expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(soloAtendidasPorEnEmbed(${q}, s, "alcance"), s, "alcance")`))).toEqual(["activas"])
+      })
+
+      it("names that match no embed cover nothing, however many wrappers there are", () => {
+        expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(soloAtendidasPorEnEmbed(${q}, s, "uno"), s, "otro")`))).toEqual(["alcance", "activas"])
+      })
+
+      it("a call that is not a wrapper in between breaks the chain: what is outside it covers nothing here", () => {
+        expect(embedsSueltos(doble((q) => `soloAtendidasPorEnEmbed(algunaOtraCosa(soloAtendidasPorEnEmbed(${q}, s, "alcance")), s, "activas")`))).toEqual(["activas"])
+      })
+    })
+
+    it("a select written as a conditional of two templates that use constants still shows both embeds", () => {
+      const src =
+        "const COLUMNAS = `id, alcance:ordenes_servicio!tecnico_id (id)`\n" +
+        "export async function GET() {\n" +
+        "  return soloAtendidasPorEnEmbed(supabaseAdmin.from(\"users\").select(c ? `${COLUMNAS}, ${EMBED_TOTAL}` : COLUMNAS), s, \"alcance\")\n" +
+        "}"
+      const globales = new Map([["EMBED_TOTAL", "activas:ordenes_servicio!tecnico_id (id)"]])
+      expect(lecturasSinAlcance(src, "x.ts", globales).flatMap((l) => l.embeds.map((e) => e.nombre))).toEqual(["activas"])
     })
   })
 
