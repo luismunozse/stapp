@@ -10,12 +10,14 @@ function setup(
   deleteError: unknown,
   rpcData: string | null = "OK",
   rpcError: unknown = null,
-  updateError: unknown = null
+  updateError: unknown = null,
+  opts: { email?: string; updateRows?: unknown[] } = {}
 ) {
+  const email = opts.email ?? "vendedor@taller.com"
   const deleteChain = createChainMock(null, deleteError)
   const readChain = createChainMock(null, null)
-  readChain.maybeSingle = vi.fn().mockResolvedValue({ data: { email: "vendedor@taller.com" }, error: null })
-  const emailUpdate = createChainMock(null, updateError)
+  readChain.maybeSingle = vi.fn().mockResolvedValue({ data: { email }, error: null })
+  const emailUpdate = createChainMock(updateError ? null : (opts.updateRows ?? [{ id: "v1" }]), updateError)
   const users = {
     delete: vi.fn(() => deleteChain),
     select: vi.fn(() => readChain),
@@ -75,10 +77,43 @@ describe("eliminarPersonal", () => {
     expect(emailUpdate.not).toHaveBeenCalledWith("deleted_at", "is", null)
   })
 
-  it("does not touch the email on ALREADY_DELETED", async () => {
-    const { users } = setup({ code: "23503" }, "ALREADY_DELETED")
+  it("retries freeing the email on ALREADY_DELETED and audits it", async () => {
+    const { users, emailUpdate, audit, push } = setup({ code: "23503" }, "ALREADY_DELETED")
+    expect(await eliminarPersonal(args)).toEqual({ ok: true, baja: true })
+    expect(users.update).toHaveBeenCalledWith({ email: "baja+v1@baja.stapp.invalid" })
+    expect(emailUpdate.not).toHaveBeenCalledWith("deleted_at", "is", null)
+    expect(push.delete).not.toHaveBeenCalled()
+    expect(audit.insert).toHaveBeenCalledTimes(1)
+    expect(audit.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changes: { by_admin: true, soft: true, email_original: "vendedor@taller.com", email_liberado: true },
+      })
+    )
+  })
+
+  it("ALREADY_DELETED with the email already freed does nothing and writes no audit", async () => {
+    const { users, audit } = setup({ code: "23503" }, "ALREADY_DELETED", null, null, {
+      email: "baja+v1@baja.stapp.invalid",
+    })
     await eliminarPersonal(args)
     expect(users.update).not.toHaveBeenCalled()
+    expect(audit.insert).not.toHaveBeenCalled()
+  })
+
+  it("ALREADY_DELETED writes no audit when the email still could not be freed", async () => {
+    const { audit } = setup({ code: "23503" }, "ALREADY_DELETED", null, { message: "down" })
+    expect(await eliminarPersonal(args)).toEqual({ ok: true, baja: true })
+    expect(audit.insert).not.toHaveBeenCalled()
+  })
+
+  it("records email_liberado false when the update matched no row", async () => {
+    const { audit } = setup({ code: "23503" }, "OK", null, null, { updateRows: [] })
+    expect(await eliminarPersonal(args)).toEqual({ ok: true, baja: true })
+    expect(audit.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changes: { by_admin: true, soft: true, email_original: "vendedor@taller.com", email_liberado: false },
+      })
+    )
   })
 
   it("does not touch the email on a hard delete", async () => {
