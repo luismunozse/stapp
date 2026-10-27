@@ -42,6 +42,7 @@ export async function GET(request: Request) {
         { count: "exact" }
       )
       .eq("rol", "VENDEDOR")
+      .is("deleted_at", null)
       .eq("organization_id", organizationId!)
       .order("activo", { ascending: false })
       .order("nombre", { ascending: true })
