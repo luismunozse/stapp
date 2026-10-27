@@ -102,9 +102,17 @@ export async function POST(request: Request) {
       fechaIngresoTecnico,
     } = body
 
-    // Si el form mandó una sucursal explícita y es válida para la org, usarla.
+    // An explicit branch is a request, not a hint: if it is not an active branch of
+    // the org it is rejected instead of silently falling back to the principal. The
+    // principal stays the fallback only when the body names no branch at all.
     const bodySucursalId = (body?.sucursalId ?? null) as string | null
-    if (bodySucursalId && (await assertSucursalEnOrg(bodySucursalId, organizationId!))) {
+    if (bodySucursalId) {
+      if (!(await assertSucursalEnOrg(bodySucursalId, organizationId!, { soloActiva: true }))) {
+        return NextResponse.json(
+          { error: "La sucursal elegida no existe o está inactiva." },
+          { status: 400 }
+        )
+      }
       sucursalId = bodySucursalId
     }
 

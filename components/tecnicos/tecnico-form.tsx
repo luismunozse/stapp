@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { FormActionBar } from "@/components/ui/form-action-bar"
+import { MoverSucursal } from "@/components/usuarios/mover-sucursal"
 import { Eye, EyeOff, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -315,6 +316,8 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
               </p>
             </div>
           )}
+
+          {isEditing && <MoverSucursal usuarioId={tecnico.id} sucursales={sucursales} />}
 
           <div className="space-y-2">
             <Label htmlFor="costoHora">Costo por hora</Label>

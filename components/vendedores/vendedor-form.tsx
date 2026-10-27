@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { FormActionBar } from "@/components/ui/form-action-bar"
+import { MoverSucursal } from "@/components/usuarios/mover-sucursal"
 import { Eye, EyeOff } from "lucide-react"
 
 interface VendedorFormProps {
@@ -261,6 +262,7 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
               </p>
             </div>
           )}
+          {isEditing && <MoverSucursal usuarioId={vendedor.id} sucursales={sucursales} />}
           {isEditing && (
             <div className="flex items-center gap-2 pt-2">
               <input
