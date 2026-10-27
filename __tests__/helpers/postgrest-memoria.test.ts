@@ -43,17 +43,54 @@ describe("single / maybeSingle", () => {
 describe("values inside an or() list", () => {
   const lista = (valor: string) => () => tablaPostgrest(FILAS).select("id").or(`nombre.ilike.${valor},sucursal_id.eq.s1`)
 
+  // PostgREST reads an unquoted value up to the next `,` or `)`: a `)` inside it ends the value and
+  // breaks the list, a lone `(` is just a character.
   it.each([
-    ["a parenthesis", "%(011) 4444%"],
+    ["a balanced pair", "%(011) 4444%"],
     ["a closing parenthesis", "%a)%"],
   ])("an unquoted value with %s is a syntax error, as in PostgREST", (_caso, valor) => {
-    expect(lista(valor)).toThrow(/reserved/)
+    expect(lista(valor)).toThrow(/syntax/)
   })
 
-  it("a quoted value may hold them, and an in.(..) list is a list", async () => {
+  it("a lone opening parenthesis is just a character, and the row is found", async () => {
+    const tabla = tablaPostgrest([{ id: "a", nombre: "x(y", sucursal_id: "s9" }, { id: "b", nombre: "otro", sucursal_id: "s9" }])
+    const { data } = await tabla.select("id").or("nombre.ilike.%x(y%,id.eq.zz")
+    expect(data).toEqual([{ id: "a" }])
+  })
+
+  it("a quoted value may hold any of them, and an in.(..) list is a list", async () => {
     expect(lista('"%(011) 4444%"')).not.toThrow()
+    expect(lista('"say \\"hi\\", (ok)"')).not.toThrow()
     const { data } = await tablaPostgrest(FILAS).select("id").or("id.in.(a,c),nombre.ilike.%zz%")
     expect(data).toEqual([{ id: "a" }, { id: "c" }])
+  })
+
+  it("a list that does not close, or has stray text after a group, is a syntax error", () => {
+    const sobre = (l: string) => () => tablaPostgrest(FILAS).select("id").or(l)
+    expect(sobre("and(id.eq.a,nombre.eq.b")).toThrow(/syntax/)
+    expect(sobre("and(id.eq.a) y,id.eq.b")).toThrow(/syntax/)
+    expect(sobre("id.eq.a)")).toThrow(/syntax/)
+  })
+
+  it("evaluates nested groups with quoted and in values", async () => {
+    const tabla = tablaPostgrest([
+      { id: "a", nombre: "Ana, la", sucursal_id: "s1", tecnico_id: null },
+      { id: "b", nombre: "Beto", sucursal_id: "s1", tecnico_id: "t1" },
+      { id: "c", nombre: "Carla", sucursal_id: "s2", tecnico_id: null },
+    ])
+    const { data } = await tabla.select("id").or('and(tecnico_id.is.null,or(sucursal_id.eq.s1,sucursal_id.in.(s3,s4))),nombre.eq."Carla"')
+    expect(data).toEqual([{ id: "a" }, { id: "c" }])
+  })
+})
+
+describe("aliased plain selects", () => {
+  it("alias:col reads the column and names the key after the alias", async () => {
+    const { data } = await tablaPostgrest(FILAS).select("id, quien:nombre").eq("id", "a")
+    expect(data).toEqual([{ id: "a", quien: "Ana" }])
+  })
+
+  it("an alias over a column that does not exist is still an unknown column", () => {
+    expect(() => tablaPostgrest(FILAS).select("id, quien:no_existe")).toThrow(/no_existe/)
   })
 })
 
