@@ -5,15 +5,14 @@ import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { estadoConfig } from "./estado-config"
 import {
   FileText,
   Plus,
   Send,
   Edit,
   Trash2,
-  CheckCircle,
   XCircle,
-  Clock,
   Mail,
   PenTool,
   Download,
@@ -89,13 +88,6 @@ interface CotizacionListProps {
    *  el estado de la orden vinculada (compartir, enviar, aprobar, rechazar
    *  o eliminar una cotización), para que refresque su propio `orden`. */
   onOrdenChanged?: () => void
-}
-
-const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: string }> = {
-  BORRADOR: { label: "Borrador", icon: Edit, color: "bg-muted text-muted-foreground" },
-  ENVIADA: { label: "Enviada", icon: Mail, color: "bg-info-50 text-info-700 dark:bg-info/15 dark:text-info-500" },
-  ACEPTADA: { label: "Aceptada", icon: CheckCircle, color: "bg-success-50 text-success-700 dark:bg-success/15 dark:text-success-500" },
-  RECHAZADA: { label: "Rechazada", icon: XCircle, color: "bg-destructive/10 text-destructive" },
 }
 
 export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repuestos = [], mostrarCostos, onOrdenChanged }: CotizacionListProps) {

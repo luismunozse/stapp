@@ -253,6 +253,20 @@ describe("politicaOrden", () => {
     expect(politicaOrden(admin, sinOrigen, false).ver).toBe(true)
   })
 
+  it("an unknown or missing role is granted nothing, even in the order's branch (fail-closed)", () => {
+    for (const role of ["CLIENTE", "", null]) {
+      const actor = { userId: "x-a", role, sucursalId: A }
+      for (const [orden, everDerived] of [
+        [deA(), false],
+        [deA("x-a"), false],
+        [deA(null, B), true],
+        [{ sucursalId: B, tecnicoId: null, derivadaA: A }, true],
+      ] as const) {
+        expect(politicaOrden(actor as any, orden, everDerived), String(role)).toEqual(NADA)
+      }
+    }
+  })
+
   it("the toma flag is read only for a TECNICO and defaults to off", () => {
     const libre = deA()
 

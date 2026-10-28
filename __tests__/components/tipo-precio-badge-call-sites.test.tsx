@@ -71,8 +71,7 @@ describe("ClienteDetalleHeader — badge de tier", () => {
     render(
       <ClienteDetalleHeader
         cliente={makeCliente({ tipoPrecio: "MAYORISTA" })}
-        saldo={0}
-        deudaPendiente={0}
+        resumen={{ debe: 0, aFavor: 0, debeTone: "muted", aFavorTone: "muted" }}
         totalOrdenes={0}
         onEdit={vi.fn()}
         onWhatsApp={vi.fn()}
@@ -85,8 +84,7 @@ describe("ClienteDetalleHeader — badge de tier", () => {
     render(
       <ClienteDetalleHeader
         cliente={makeCliente()}
-        saldo={0}
-        deudaPendiente={0}
+        resumen={{ debe: 0, aFavor: 0, debeTone: "muted", aFavorTone: "muted" }}
         totalOrdenes={0}
         onEdit={vi.fn()}
         onWhatsApp={vi.fn()}
