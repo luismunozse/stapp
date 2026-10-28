@@ -199,9 +199,12 @@ export function politicaOrden(
 
   const esAdmin = actor.role === "ADMIN"
   const esTecnico = actor.role === "TECNICO"
+  // Branch membership grants access only to the known branch roles: an unknown or
+  // missing role gets nothing (fail-closed).
+  const esDeSucursal = esTecnico || actor.role === "VENDEDOR"
   const esAsignado = esTecnico && orden.tecnicoId !== null && orden.tecnicoId === actor.userId
-  const esOrigen = !esAdmin && sucursal !== null && sucursal === orden.sucursalId
-  const esDestino = !esAdmin && sucursal !== null && sucursal === derivada
+  const esOrigen = esDeSucursal && sucursal !== null && sucursal === orden.sucursalId
+  const esDestino = esDeSucursal && sucursal !== null && sucursal === derivada
 
   const rol: RolEnOrden = esAdmin
     ? "ADMIN"
