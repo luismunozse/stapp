@@ -36,6 +36,7 @@ import { useModal } from "@/contexts/modal-context"
 import { STORES } from "@/lib/offline/constants"
 import type { Cliente, CampoExtra } from "@/types"
 import { isValidImei, sanitizeImei } from "@/lib/imei"
+import { tecnicoOfrecido } from "@/lib/sucursal-ordenes"
 import { parseMoneyInput } from "@/lib/parse-money"
 import { FotosIngreso, type FotoPreview } from "./fotos-ingreso"
 import { AccesoriosPicker } from "./accesorios-picker"
@@ -232,7 +233,13 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   const [selectedSectorId, setSelectedSectorId] = useState<string>("")
   const [sectoresCliente, setSectoresCliente] = useState<Array<{ id: string; nombre: string }>>([])
   const [tecnicosDisponibles, setTecnicosDisponibles] = useState<Array<{ id: string; nombre: string; activo: boolean }>>([])
+  // True only once the list was fetched successfully (an empty list counts): until then, or after a
+  // failure, a technician held from a draft or an appointment is not judged against it.
+  const [tecnicosCargados, setTecnicosCargados] = useState(false)
   const [selectedTecnicoId, setSelectedTecnicoId] = useState<string>("")
+  // What the picker shows and the order carries: a technician restored from a draft or taken from
+  // the appointment, whom the picker does not offer, is nobody.
+  const tecnicoElegido = tecnicoOfrecido(selectedTecnicoId, tecnicosDisponibles, tecnicosCargados)
   const [operadoresDisponibles, setOperadoresDisponibles] = useState<Array<{ id: string; nombre: string }>>([])
   const [selectedRecibidoPorId, setSelectedRecibidoPorId] = useState<string>("")
   const [nuevoSectorNombre, setNuevoSectorNombre] = useState("")
@@ -892,7 +899,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     if (isTecnicoRole) return
     const fetchTecnicos = async () => {
       try {
-        const res = await fetch("/api/tecnicos", { cache: "no-store" })
+        // The branch this order will be created in: what the server validates the assignment against.
+        const res = await fetch("/api/tecnicos?alcance=escritura", { cache: "no-store" })
         if (!res.ok) return
         const data = await res.json()
         setTecnicosDisponibles(
@@ -900,6 +908,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             .filter((t: any) => t.activo !== false)
             .map((t: any) => ({ id: t.id, nombre: t.nombre, activo: t.activo !== false }))
         )
+        setTecnicosCargados(true)
       } catch (error) {
         console.error("Error fetching tecnicos:", error)
       }
@@ -1121,7 +1130,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         telefonoContacto: data.telefonoContacto || undefined,
         metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
         sectorId: selectedSectorId || undefined,
-        tecnicoId: !isTecnicoRole && selectedTecnicoId ? selectedTecnicoId : undefined,
+        tecnicoId: !isTecnicoRole && tecnicoElegido ? tecnicoElegido : undefined,
         recibidoPorId: selectedRecibidoPorId || undefined,
         fromTurnoId: fromTurnoId || undefined,
       }
@@ -1637,7 +1646,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             <div>
               <Label htmlFor="tecnicoId">{term("tecnico")} asignado (Opcional)</Label>
               <Select
-                value={selectedTecnicoId || "NONE"}
+                value={tecnicoElegido || "NONE"}
                 onValueChange={(v) => setSelectedTecnicoId(v === "NONE" ? "" : v)}
               >
                 <SelectTrigger id="tecnicoId">

@@ -8,7 +8,7 @@
 // column, so the handling branch is the origin `sucursal_id` and NO filter here may
 // mention the new column (an unknown column is a 42703 on the hot list query).
 
-import { SUCURSAL_NINGUNA } from "@/lib/sucursal"
+import { SUCURSAL_NINGUNA } from "@/lib/sucursal-constantes"
 
 const ID_SEGURO = /^[A-Za-z0-9_-]+$/
 
@@ -81,6 +81,23 @@ export function tecnicoAsignable(
   if (tecnicoPrevioId !== null && tecnico.id === tecnicoPrevioId) return true
   if (tecnico.rol === "ADMIN") return true
   return !!atiende && tecnico.sucursal_id === atiende
+}
+
+/**
+ * The technician a form should show and send, out of the one it holds (from a draft, or from the
+ * appointment the order comes from) and the ones its picker offers. One the picker does not offer
+ * (another branch) would be a blank select that still posts him, so it counts as nobody. A list
+ * that loaded and is EMPTY is still a list (nobody is offered, and the hidden picker leaves no way
+ * to clear a held choice). Only with no list to judge against (`cargada` false: not loaded, or it
+ * failed) is the choice left as it is.
+ */
+export function tecnicoOfrecido(
+  elegidoId: string,
+  ofrecidos: ReadonlyArray<{ id: string }>,
+  cargada: boolean,
+): string {
+  if (!cargada) return elegidoId
+  return ofrecidos.some((t) => t.id === elegidoId) ? elegidoId : ""
 }
 
 /**

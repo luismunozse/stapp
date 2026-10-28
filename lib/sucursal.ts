@@ -1,15 +1,11 @@
 import { cookies } from "next/headers"
 import { supabaseAdmin } from "@/lib/supabase"
+import { SUCURSAL_NINGUNA } from "@/lib/sucursal-constantes"
+
+export { SUCURSAL_NINGUNA }
 
 export const SUCURSAL_COOKIE = "stapp-sucursal-activa"
 const TODAS = "todas"
-
-/**
- * Sentinel UUID used when a non-admin user has no assigned branch.
- * Applying .eq("sucursal_id", SUCURSAL_NINGUNA) matches zero real rows,
- * so the query returns empty rather than leaking all branches (fail-closed).
- */
-export const SUCURSAL_NINGUNA = "00000000-0000-0000-0000-000000000000"
 
 export interface ResultadoLectura {
   sucursalId: string | null // null => sin filtro de sucursal (ver todas)
