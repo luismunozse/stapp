@@ -5,7 +5,7 @@ import { SUCURSAL_NINGUNA, sucursalParaLectura } from "@/lib/sucursal"
  * from them (number, code, device, status, amounts, customer of that order,
  * photos, PDFs).
  *
- *  - ADMIN: every branch, narrowed by the branch switcher when one is selected.
+ *  - ADMIN: every branch. In LISTS the branch switcher narrows it; for a record\n *    opened BY ID the switcher is ignored (see `resolverAlcanceOrdenesPorId`).
  *  - VENDEDOR: only orders of their CURRENT branch. No exception for orders they
  *    received or created before being moved.
  *  - TECNICO: orders of their CURRENT branch plus orders assigned to them in any
@@ -73,6 +73,21 @@ export async function resolverAlcanceOrdenesDeSesion(params: {
     verTodas: filtro.verTodas,
     userId: params.userId,
   })
+}
+
+/**
+ * Scope for BY-ID lookups (a record opened from a link). The branch switcher is a
+ * filter for LISTS only: an ADMIN reaches a record of any branch whatever branch the
+ * screen has selected, exactly like `ordenes/[id]`, so a link never breaks for them.
+ * VENDEDOR and TECNICO get the same scope as in lists.
+ */
+export async function resolverAlcanceOrdenesPorId(params: {
+  role: string | null
+  userId: string | null | undefined
+  userSucursalId: string | null | undefined
+}): Promise<AlcanceOrdenes> {
+  if (params.role === "ADMIN") return { tipo: "todas" }
+  return resolverAlcanceOrdenesDeSesion(params)
 }
 
 /**

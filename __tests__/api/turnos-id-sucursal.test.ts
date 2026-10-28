@@ -73,11 +73,11 @@ describe("GET /api/turnos/[id] branch scope", () => {
     expect(status).toBe(200)
   })
 
-  it("ADMIN with a branch selected only reads that branch", async () => {
+  it("ADMIN with a branch selected still reads a turno of another branch by id", async () => {
     mockCookie(S1)
     mockSupabaseFrom({ turnos: createChainMock(turno({ sucursal_id: S2 })) })
     mockAuthSuccess({ role: "ADMIN" })
     const { status } = await parseResponse(await GET(createGetRequest(), ctx))
-    expect(status).toBe(404)
+    expect(status).toBe(200)
   })
 })

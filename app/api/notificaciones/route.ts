@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { NotificationService } from "@/lib/notifications"
-import { ordenEnAlcance, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
+import { ordenEnAlcance, resolverAlcanceOrdenesDeSesion, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 
 export async function GET(request: Request) {
   try {
@@ -15,7 +15,10 @@ export async function GET(request: Request) {
 
     // The history shows the order number and the customer of each row, so it
     // follows the caller's order read scope.
-    const alcance = await resolverAlcanceOrdenesDeSesion({
+    // A lookup by ?ordenId= is a by-id access (the switcher is ignored for ADMIN);
+    // the history list without it is a list (the switcher narrows ADMIN).
+    const resolver = ordenId ? resolverAlcanceOrdenesPorId : resolverAlcanceOrdenesDeSesion
+    const alcance = await resolver({
       role,
       userId,
       userSucursalId: session!.user.sucursalId ?? null,

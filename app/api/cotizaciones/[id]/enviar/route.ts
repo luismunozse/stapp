@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { cotizacionEnAlcance, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
+import { cotizacionEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 import { generateCotizacionPDF } from "@/lib/pdf"
 import { buildCotizacionPdfExtras } from "@/lib/cotizacion-pdf"
 import { sendCotizacionEmail } from "@/lib/email"
@@ -49,7 +49,7 @@ export async function POST(
 
     // Out of the caller's branch scope = same answer as a missing quote, before
     // anything is sent or marked.
-    const alcance = await resolverAlcanceOrdenesDeSesion({
+    const alcance = await resolverAlcanceOrdenesPorId({
       role,
       userId,
       userSucursalId: session!.user.sucursalId ?? null,

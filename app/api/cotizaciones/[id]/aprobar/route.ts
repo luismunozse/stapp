@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { cotizacionEnAlcance, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
+import { cotizacionEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { aplicarAprobacionCotizacionAOrden } from "@/lib/cotizacion-aprobar-orden"
 // Compartido con la ruta pública de aprobación, que usa el mismo RPC atómico.
@@ -119,7 +119,7 @@ export async function POST(
 
     // A quote linked to an order of another branch is "not found" for this caller,
     // before anything is approved. `select("*")` carries no order, so look it up.
-    const alcance = await resolverAlcanceOrdenesDeSesion({
+    const alcance = await resolverAlcanceOrdenesPorId({
       role,
       userId,
       userSucursalId: session!.user.sucursalId ?? null,

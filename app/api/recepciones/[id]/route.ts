@@ -3,7 +3,7 @@ import { z } from "zod"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
-import { ordenEnAlcance, resolverAlcanceOrdenesDeSesion, type AlcanceOrdenes } from "@/lib/ordenes/alcance-lectura"
+import { ordenEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 import { calcularTotalLote, round2, type DescuentoTipo } from "@/lib/lote-utils"
 import { ESTADOS_ENTREGADOS, esEstadoEntregado, esEstadoExcluidoDeLote, esEstadoFueraDeLosMontos, liquidarEntregadosPrevios } from "@/lib/lote-estados"
 
@@ -47,14 +47,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     // A batch is one negotiation and only ADMIN can deliver it, so ADMIN always gets
     // the whole batch (the branch switcher does not narrow it). Everyone else is
     // limited to the members in their order read scope.
-    const alcance: AlcanceOrdenes =
-      role === "ADMIN"
-        ? { tipo: "todas" }
-        : await resolverAlcanceOrdenesDeSesion({
-            role,
-            userId,
-            userSucursalId: session!.user.sucursalId ?? null,
-          })
+    const alcance = await resolverAlcanceOrdenesPorId({
+      role,
+      userId,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
 
     const { data: recepcion, error: recepcionError } = await supabaseAdmin
       .from("recepciones")

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatCliente } from "@/lib/db-utils"
-import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
+import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 import { z } from "zod"
 
 const clienteSchema = z.object({
@@ -30,7 +30,7 @@ export async function GET(
     const { id } = await params
 
     // Clients are org-wide; the orders embedded in the record are not.
-    const alcance = await resolverAlcanceOrdenesDeSesion({
+    const alcance = await resolverAlcanceOrdenesPorId({
       role,
       userId,
       userSucursalId: session!.user.sucursalId ?? null,

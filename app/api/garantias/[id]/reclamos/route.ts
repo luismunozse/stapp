@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumber } from "@/lib/counters"
 import { deletePracticeData } from "@/lib/onboarding/practica"
 import { z } from "zod"
-import { ordenEnAlcance, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
+import { ordenEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 
 const reclamoSchema = z.object({
   descripcion: z.string().min(1, "Descripción requerida"),
@@ -47,7 +47,7 @@ export async function POST(
 
     // A warranty whose order is out of the caller's branch scope answers like a
     // missing one, before anything is written.
-    const alcance = await resolverAlcanceOrdenesDeSesion({
+    const alcance = await resolverAlcanceOrdenesPorId({
       role,
       userId,
       userSucursalId: session!.user.sucursalId ?? null,

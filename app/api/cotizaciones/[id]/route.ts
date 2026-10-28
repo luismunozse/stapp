@@ -10,7 +10,7 @@ import { marcarOriginalReemplazada, restaurarOriginalDeRevision } from "@/lib/co
 import { validarInforme, esInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizacion-informe"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { z } from "zod"
-import { cotizacionEnAlcance, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
+import { cotizacionEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 
 // Detecta el error de "la función no existe todavía", que acá significa
 // "la migración 315 no se corrió a mano aún". Mismo helper que las rutas de
@@ -283,7 +283,7 @@ export async function GET(
       .single()
 
     // A quote linked to an order of another branch is "not found" for this caller.
-    const alcance = await resolverAlcanceOrdenesDeSesion({
+    const alcance = await resolverAlcanceOrdenesPorId({
       role,
       userId,
       userSucursalId: session!.user.sucursalId ?? null,

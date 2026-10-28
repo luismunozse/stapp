@@ -96,13 +96,16 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     const { data, error: dbError } = await fetchTurno(id, organizationId!)
     if (dbError) throw dbError
 
-    // Same branch scope as GET /api/turnos: a turno of another branch answers
-    // like a missing one.
+    // Same branch scope as GET /api/turnos for non-admins: a turno of another
+    // branch answers like a missing one. An ADMIN reaches any turno by id, whatever
+    // the branch switcher has selected (it only narrows lists).
     const lectura = await sucursalParaLectura({
       role,
       userSucursalId: session!.user.sucursalId ?? null,
     })
-    if (!data || (!lectura.verTodas && lectura.sucursalId && data.sucursal_id !== lectura.sucursalId)) {
+    const fueraDeSucursal =
+      role !== "ADMIN" && !lectura.verTodas && !!lectura.sucursalId && data?.sucursal_id !== lectura.sucursalId
+    if (!data || fueraDeSucursal) {
       return NextResponse.json({ error: "No encontrado" }, { status: 404 })
     }
 
