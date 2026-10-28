@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireAdmin, requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { PLANTILLAS_CATALOG } from "@/lib/whatsapp/plantillas-catalog"
 import { z } from "zod"
@@ -22,9 +22,14 @@ const configSchema = z.object({
   plantillasWhatsapp: plantillasSchema,
 })
 
+// GET lo puede leer cualquier miembro de la org: devuelve las plantillas de
+// WhatsApp del taller, que leen las pantallas donde el técnico y el vendedor
+// arman mensajes (órdenes, POS, clientes, notas de crédito, carritos). Con
+// requireAdmin respondían 403 y caían al texto de fábrica. Ningún campo es un
+// secreto (preferencias y texto de mensajes). PUT sigue siendo solo ADMIN.
 export async function GET() {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId } = await requireAuth()
     if (error) return error
 
     const { data: org } = await supabaseAdmin
