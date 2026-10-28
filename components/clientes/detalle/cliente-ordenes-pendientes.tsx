@@ -4,7 +4,7 @@ import { useState } from "react"
 import useSWR from "swr"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { PaymentStatusBadge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { DollarSign, CheckCircle2 } from "lucide-react"
 import { CobrarMultipleDialog } from "@/components/ordenes/cobrar-multiple-dialog"
@@ -58,7 +58,7 @@ export function ClienteOrdenesPendientes({ clienteId, clienteNombre, onCobrado }
               <div key={o.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                 <div className="min-w-0">
                   <div className="font-medium text-sm">#{o.numeroOrden} · {o.dispositivo}</div>
-                  <Badge variant="outline" className="text-[10px] mt-0.5">{o.estadoCobro}</Badge>
+                  <PaymentStatusBadge status={o.estadoCobro} showIcon={false} className="text-[10px] mt-0.5" />
                 </div>
                 <div className="font-semibold tabular-nums text-destructive">{formatPrice(o.pendiente)}</div>
               </div>

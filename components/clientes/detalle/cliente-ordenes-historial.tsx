@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { OrderStatusBadge } from "@/components/ui/badge"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { useCurrency } from "@/contexts/currency-context"
 
@@ -52,7 +52,7 @@ export function ClienteOrdenesHistorial({ clienteId }: Props) {
     {
       key: "estado",
       header: "Estado",
-      render: (o) => <Badge variant="outline">{o.estado}</Badge>,
+      render: (o) => <OrderStatusBadge status={o.estado} showIcon />,
     },
     {
       key: "fechaIngreso",
@@ -81,6 +81,18 @@ export function ClienteOrdenesHistorial({ clienteId }: Props) {
           loading={isLoading}
           emptyMessage="Sin órdenes registradas"
           onRowClick={(o) => router.push(`/ordenes/${o.id}`)}
+          renderMobileCard={(o) => (
+            <div className="space-y-1.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 break-words font-medium text-sm">#{o.numeroOrden} · {o.dispositivo}</div>
+                <OrderStatusBadge status={o.estado} showIcon className="shrink-0" />
+              </div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{formatDate(o.fechaIngreso)}</span>
+                <span className="tabular-nums font-medium text-foreground">{formatPrice(o.costoFinal)}</span>
+              </div>
+            </div>
+          )}
           pagination={{
             page,
             pageSize,

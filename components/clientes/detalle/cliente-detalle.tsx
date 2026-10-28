@@ -3,8 +3,9 @@
 import { useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-import { Loader2, Wrench } from "lucide-react"
+import { Wrench } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ClienteDetalleSkeleton } from "./cliente-detalle-skeleton"
 import { ClienteDetalleHeader } from "./cliente-detalle-header"
 import { ClienteForm } from "@/components/clientes/cliente-form"
 import { ClienteWhatsAppDialog } from "@/components/clientes/cliente-whatsapp-dialog"
@@ -17,11 +18,21 @@ import { ClienteOrdenesHistorial } from "./cliente-ordenes-historial"
 import { ClienteCotizaciones } from "./cliente-cotizaciones"
 import { ClienteSectores } from "./cliente-sectores"
 import { ClienteNotasCreditoLink } from "./cliente-notas-credito-link"
+import { resumenDeudaCliente } from "@/lib/cliente-deuda-resumen"
 import type { Cliente } from "@/types"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
-interface OrdenPendiente { id: string; pendiente: number }
+// Throws with the HTTP status so the detail can tell "not found" from a failed load.
+class HttpError extends Error {
+  constructor(public status: number) { super(`HTTP ${status}`) }
+}
+const clienteFetcher = async (url: string) => {
+  const res = await fetch(url)
+  if (!res.ok) throw new HttpError(res.status)
+  return res.json()
+}
+
 
 interface ClienteDetalleProps {
   clienteId: string
@@ -38,13 +49,18 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
   const [showExpress, setShowExpress] = useState(false)
 
   const { data: cliente, error, isLoading, mutate } = useSWR<Cliente>(
-    `/api/clientes/${clienteId}`, fetcher, { revalidateOnFocus: false }
+    `/api/clientes/${clienteId}`, clienteFetcher, {
+      revalidateOnFocus: false,
+      // A 404 won't fix itself on retry
+      shouldRetryOnError: (e) => !(e instanceof HttpError && e.status === 404),
+    }
   )
   const { data: ccData, mutate: mutateCC } = useSWR(
     `/api/clientes/${clienteId}/cuenta-corriente?limit=50`, fetcher, { revalidateOnFocus: false }
   )
-  const { data: pendientes } = useSWR<OrdenPendiente[]>(
-    `/api/clientes/${clienteId}/ordenes-pendientes`, fetcher, { revalidateOnFocus: false }
+  // Fiado + unpaid orders for the active sucursal (same source as the WhatsApp reminder).
+  const { data: deudaData, error: deudaError, mutate: mutateDeuda } = useSWR<{ deudaTotal?: number; porSucursal?: boolean }>(
+    `/api/clientes/${clienteId}/deuda-sucursal`, clienteFetcher, { revalidateOnFocus: false }
   )
   const { data: ordenesData } = useSWR(
     `/api/ordenes?clienteId=${clienteId}&limit=1`, fetcher, { revalidateOnFocus: false }
@@ -54,17 +70,25 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
   })
   const organizationName: string = configData?.nombreEmpresa || ""
 
-  if (isLoading) {
+  if (isLoading) return <ClienteDetalleSkeleton />
+
+  // Keep a loaded page on screen when a background refetch fails.
+  const notFound = !cliente && ((error instanceof HttpError && error.status === 404) || !error)
+  if (!cliente && error && !notFound) {
     return (
       <div className="px-4 py-6 sm:px-6 max-w-5xl mx-auto">
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="text-center py-20 space-y-4">
+          <p className="text-muted-foreground">No se pudo cargar el cliente.</p>
+          <div className="flex justify-center gap-2">
+            <Button onClick={() => mutate()}>Reintentar</Button>
+            <Button asChild variant="outline"><Link href="/clientes">Volver a clientes</Link></Button>
+          </div>
         </div>
       </div>
     )
   }
 
-  if (error || !cliente || (cliente as any).error) {
+  if (!cliente) {
     return (
       <div className="px-4 py-6 sm:px-6 max-w-5xl mx-auto">
         <div className="text-center py-20 space-y-4">
@@ -76,15 +100,20 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
   }
 
   const saldo = ccData?.saldo || 0
-  const deudaPendiente = (pendientes || []).reduce((acc, o) => acc + (o.pendiente || 0), 0)
+  const resumen = resumenDeudaCliente({
+    saldo: ccData?.saldo,
+    deudaTotal: typeof deudaData?.deudaTotal === "number" ? deudaData.deudaTotal : undefined,
+  })
+  const refreshMoney = () => { mutateCC(); mutateDeuda() }
   const totalOrdenes = ordenesData?.total || 0
 
   return (
     <div className="px-4 py-6 sm:px-6 max-w-5xl mx-auto">
       <ClienteDetalleHeader
         cliente={cliente}
-        saldo={saldo}
-        deudaPendiente={deudaPendiente}
+        resumen={resumen}
+        deudaError={!!deudaError && !deudaData}
+        porSucursal={!!deudaData?.porSucursal}
         totalOrdenes={totalOrdenes}
         onEdit={() => setShowEdit(true)}
         onWhatsApp={() => setShowWhatsApp(true)}
@@ -105,13 +134,13 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
             </div>
           </CardHeader>
           <CardContent>
-            <CuentaCorrientePanel cliente={cliente} onDeposito={() => mutateCC()} />
+            <CuentaCorrientePanel cliente={cliente} onDeposito={refreshMoney} saldoGlobal={!!deudaData?.porSucursal} />
           </CardContent>
         </Card>
         <ClienteOrdenesPendientes
           clienteId={clienteId}
           clienteNombre={cliente.nombre}
-          onCobrado={() => mutateCC()}
+          onCobrado={refreshMoney}
         />
         <ClienteOrdenesHistorial clienteId={clienteId} />
         <ClienteCotizaciones clienteId={clienteId} />
@@ -131,7 +160,7 @@ export function ClienteDetalle({ clienteId, canReparacionesExpress = false }: Cl
         saldoActual={saldo}
         open={showExpress}
         onOpenChange={setShowExpress}
-        onDone={() => { mutate(); mutateCC() }}
+        onDone={() => { mutate(); refreshMoney() }}
       />
       {showWhatsApp && (
         <ClienteWhatsAppDialog
