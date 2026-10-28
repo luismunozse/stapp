@@ -5,7 +5,8 @@ import { SUCURSAL_NINGUNA, sucursalParaLectura } from "@/lib/sucursal"
  * from them (number, code, device, status, amounts, customer of that order,
  * photos, PDFs).
  *
- *  - ADMIN: every branch. In LISTS the branch switcher narrows it; for a record\n *    opened BY ID the switcher is ignored (see `resolverAlcanceOrdenesPorId`).
+ *  - ADMIN: every branch. In LISTS the branch switcher narrows it; for a record
+ *    opened BY ID the switcher is ignored (see `resolverAlcanceOrdenesPorId`).
  *  - VENDEDOR: only orders of their CURRENT branch. No exception for orders they
  *    received or created before being moved.
  *  - TECNICO: orders of their CURRENT branch plus orders assigned to them in any
