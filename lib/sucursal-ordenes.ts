@@ -8,7 +8,7 @@
 // column, so the handling branch is the origin `sucursal_id` and NO filter here may
 // mention the new column (an unknown column is a 42703 on the hot list query).
 
-import { SUCURSAL_NINGUNA } from "@/lib/sucursal"
+import { SUCURSAL_NINGUNA } from "@/lib/sucursal-constantes"
 
 const ID_SEGURO = /^[A-Za-z0-9_-]+$/
 
