@@ -290,3 +290,61 @@ describe("POST /api/cotizaciones/[id]/convertir-venta", () => {
     expect(status).toBe(400)
   })
 })
+
+describe("the select the scope check depends on", () => {
+  // The mock returns the embedded order whatever the select asked for, so the select itself is pinned
+  // here: without `orden_id` or the embed (with both columns) the check would see no order and widen.
+  const EMBED = /ordenes_servicio!cotizaciones_orden_id_fkey\s*\([^)]*\bsucursal_id\b[^)]*\btecnico_id\b/
+  const ADMIN_OK = { role: "ADMIN", userId: U1, sucursalId: S1 }
+
+  const casos: Array<[string, () => Promise<Response>]> = [
+    ["PUT [id]", () => putCotizacion(putRequest({ notas: "x" }), ctx)],
+    ["duplicar", () => duplicarCotizacion(createPostRequest({}), ctx)],
+    ["historial", () => historialCotizacion(createGetRequest(), ctx)],
+    ["convertir-venta", () => convertirVenta(createPostRequest(ventaBody), ctx)],
+  ]
+
+  it.each(casos)("%s selects orden_id and the order with sucursal_id and tecnico_id", async (_n, llamar) => {
+    const cotizaciones = createChainMock(cot())
+    mockSupabaseFrom({ cotizaciones, organizations: createChainMock({ cotizacion_validez_dias: 30 }) })
+    mockAuthSuccess(ADMIN_OK)
+    await llamar()
+    const seleccion = String(cotizaciones.select.mock.calls[0][0])
+    expect(seleccion).toMatch(EMBED)
+    // `*` carries orden_id; otherwise it must be listed (not counting the fkey name in the embed).
+    const sinEmbed = seleccion.replace("cotizaciones_orden_id_fkey", "")
+    expect(sinEmbed.includes("*") || /\borden_id\b/.test(sinEmbed)).toBe(true)
+  })
+
+  it.each(casos)("%s: a linked quote whose order embed is null is a 404 for VENDEDOR and TECNICO", async (_n, llamar) => {
+    // convertir-venta is closed to VENDEDOR by its own role guard (403), so only TECNICO reaches the scope check.
+    for (const role of _n === "convertir-venta" ? ["TECNICO"] : ["VENDEDOR", "TECNICO"]) {
+      vi.clearAllMocks()
+      vi.mocked(getAuditLogs).mockResolvedValue([] as any)
+      mockSupabaseFrom({
+        cotizaciones: createChainMock(cot({ ordenes_servicio: null })),
+        organizations: createChainMock({ cotizacion_validez_dias: 30, tecnicos_cobran_cotizaciones: true }),
+      })
+      mockAuthSuccess({ role, userId: U1, sucursalId: S1 })
+      expect((await llamar()).status, `${role}`).toBe(404)
+    }
+  })
+
+  it.each(casos)("%s: a linked quote whose order embed is null is allowed for ADMIN", async (_n, llamar) => {
+    mockSupabaseFrom({
+      cotizaciones: createChainMock(cot({ ordenes_servicio: null })),
+      organizations: createChainMock({ cotizacion_validez_dias: 30 }),
+    })
+    mockAuthSuccess(ADMIN_OK)
+    expect((await llamar()).status).not.toBe(404)
+  })
+
+  it("historial for a quote that does not exist answers 404", async () => {
+    mockSupabaseFrom({ cotizaciones: createChainMock(null, { message: "not found" }) })
+    mockAuthSuccess(ADMIN_OK)
+    const { status, body } = await parseResponse(await historialCotizacion(createGetRequest(), ctx))
+    expect(status).toBe(404)
+    expect(body.error).toMatch(NO_ENCONTRADA)
+    expect(getAuditLogs).not.toHaveBeenCalled()
+  })
+})
