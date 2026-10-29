@@ -32,6 +32,21 @@ export function sucursalQueAtiende(orden: {
   return orden.sucursal_id
 }
 
+/**
+ * Who may choose the technician of an order: an ADMIN, or someone of the branch that works the
+ * order who is not a technician (a technician takes orders, he does not hand them out). The
+ * order screen reads it from GET and the PUT enforces it, so both answer the same question.
+ */
+export function puedeAsignarTecnicoOrden(
+  role: string | null | undefined,
+  sucursalIdSesion: string | null | undefined,
+  orden: { sucursal_id: string; derivada_a_sucursal_id?: string | null },
+): boolean {
+  if (role === "ADMIN") return true
+  if (role === "TECNICO") return false
+  return !!sucursalIdSesion && sucursalIdSesion === sucursalQueAtiende(orden)
+}
+
 /** Orders a branch may open. Same as `filtroAtiendeSucursal` until derivations exist. */
 export function filtroVisibleEnSucursal(sucursalId: string | null | undefined): string {
   return `sucursal_id.eq.${sucursalParaFiltro(sucursalId)}`

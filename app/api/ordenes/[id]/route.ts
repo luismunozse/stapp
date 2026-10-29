@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados, canViewCotizacionCosts } from "@/lib/auth-utils"
 import { ordenSeTomaPorTecnico } from "@/lib/ordenes/tomar"
 import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
-import { MENSAJE_TECNICO_OTRA_SUCURSAL, sucursalQueAtiende, tecnicoAsignable } from "@/lib/sucursal-ordenes"
+import { MENSAJE_TECNICO_OTRA_SUCURSAL, puedeAsignarTecnicoOrden, sucursalQueAtiende, tecnicoAsignable } from "@/lib/sucursal-ordenes"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
@@ -197,9 +197,7 @@ export async function GET(
       // The picker lists that branch's technicians, so only an ADMIN or someone of that branch
       // (as just re-read for this request) can make a choice the server will accept. A
       // technician does not reassign.
-      puedeAsignarTecnico:
-        role === "ADMIN" ||
-        (role !== "TECNICO" && !!session!.user.sucursalId && session!.user.sucursalId === sucursalQueAtiende(orden)),
+      puedeAsignarTecnico: puedeAsignarTecnicoOrden(role, session!.user.sucursalId, orden),
       estadoAnterior: ultimoEventoEstado?.estado_anterior ?? null,
       ...(role === "TECNICO" ? { puedeTomar } : {}),
     }, {
@@ -220,7 +218,7 @@ export async function PUT(
 ) {
   try {
     const autenticado = await requireAuth()
-    const { error, organizationId, userId, role } = autenticado
+    const { error, session, organizationId, userId, role } = autenticado
     if (error) return error
 
     const { id } = await params
@@ -244,6 +242,23 @@ export async function PUT(
     // After the scope check, so a practice order of another branch is "not found" too.
     const practica = await rejectIfPractica(id, organizationId!)
     if (practica) return practica
+
+    // The commission rate and the worked hours are managed from the ADMIN card of the order
+    // screen; assigning the technician follows the rule GET reports as `puedeAsignarTecnico`.
+    // Sending the technician the order already has is not an assignment.
+    if (role !== "ADMIN" && (data.porcentajeComision !== undefined || data.horasTrabajadas !== undefined)) {
+      return NextResponse.json(
+        { error: "Solo un administrador puede modificar el porcentaje de comisión y las horas trabajadas" },
+        { status: 403 }
+      )
+    }
+    const cambiaTecnico = data.tecnicoId !== undefined && (data.tecnicoId ?? null) !== (orden.tecnico_id ?? null)
+    if (cambiaTecnico && !puedeAsignarTecnicoOrden(role, session?.user.sucursalId, orden)) {
+      return NextResponse.json(
+        { error: "No tenés permiso para asignar el técnico de esta orden" },
+        { status: 403 }
+      )
+    }
 
     // Validar transición de estado (state machine)
     if (data.estado && data.estado !== orden.estado) {
@@ -316,19 +331,23 @@ export async function PUT(
     if (data.estado !== undefined) updateData.estado = data.estado
     if (data.tecnicoId !== undefined) {
       updateData.tecnico_id = data.tecnicoId
-      // Al (re)asignar técnico, copiar su % por defecto si no vino explícito
-      if (data.tecnicoId && data.porcentajeComision === undefined) {
-        updateData.porcentaje_comision = porcentajeComisionFromTecnico
-      }
-      // Al desasignar, limpiar snapshot
-      if (!data.tecnicoId && data.porcentajeComision === undefined) {
-        updateData.porcentaje_comision = null
-      }
-      // Snapshot labor rate on assign; clear on de-assign
-      if (data.tecnicoId) {
-        updateData.costo_hora_snapshot = costoHoraFromTecnico
-      } else {
-        updateData.costo_hora_snapshot = null
+      // Snapshots only when the technician actually changes: re-sending the current one must
+      // not overwrite a rate that was already settled (or paid) with the user's current one.
+      if (cambiaTecnico) {
+        // Al (re)asignar técnico, copiar su % por defecto si no vino explícito
+        if (data.tecnicoId && data.porcentajeComision === undefined) {
+          updateData.porcentaje_comision = porcentajeComisionFromTecnico
+        }
+        // Al desasignar, limpiar snapshot
+        if (!data.tecnicoId && data.porcentajeComision === undefined) {
+          updateData.porcentaje_comision = null
+        }
+        // Snapshot labor rate on assign; clear on de-assign
+        if (data.tecnicoId) {
+          updateData.costo_hora_snapshot = costoHoraFromTecnico
+        } else {
+          updateData.costo_hora_snapshot = null
+        }
       }
     }
     if (data.porcentajeComision !== undefined) updateData.porcentaje_comision = data.porcentajeComision
