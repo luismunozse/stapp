@@ -90,6 +90,23 @@ export async function GET(request: Request) {
       console.error("Error calculando totalDeuda:", e)
     }
 
+    // Org-wide debt summary for the list's stat strip. Deliberately ignores the
+    // list filters so the number does not move while the user searches.
+    let resumenDeuda = { total: 0, clientes: 0 }
+    try {
+      const { data: debtors } = await supabaseAdmin
+        .from("v_clientes_resumen")
+        .select("deuda_pendiente")
+        .eq("organization_id", organizationId!)
+        .gt("deuda_pendiente", 0)
+      resumenDeuda = {
+        total: (debtors || []).reduce((acc: number, r: any) => acc + parseFloat(r.deuda_pendiente || "0"), 0),
+        clientes: (debtors || []).length,
+      }
+    } catch (e) {
+      console.error("Error calculando resumenDeuda:", e)
+    }
+
     return NextResponse.json({
       data: (clientes || []).map((c: any) => ({
         ...formatCliente(c),
@@ -102,6 +119,7 @@ export async function GET(request: Request) {
       limit,
       totalPages: Math.ceil((count || 0) / limit),
       totalDeuda,
+      resumenDeuda,
     }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })
