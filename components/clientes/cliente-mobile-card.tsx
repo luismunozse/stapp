@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,6 +10,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import type { Cliente } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
 import { getPersonalIdLabel } from "@/lib/countries"
+import { telHref } from "@/lib/tel-href"
+import { clienteBalanceChip } from "@/lib/clientes-list-state"
 import { useHasFeature } from "@/hooks/use-subscription"
 import { TipoPrecioBadge } from "./tipo-precio-badge"
 import { PracticaBadge } from "@/components/onboarding/practica-badge"
@@ -23,18 +26,27 @@ interface ClienteMobileCardProps {
   deleting: boolean
 }
 
+const MENU_ITEM = "flex items-center gap-2 w-full px-3 py-2.5 text-sm rounded-md hover:bg-accent transition-colors"
+
 export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCuentaCorriente, onCobrar, deleting }: ClienteMobileCardProps) {
   const router = useRouter()
   const { formatDate, formatPrice, pais } = useCurrency()
   const { hasFeature: hasCotizaciones, loading: cotizacionesLoading } = useHasFeature("cotizaciones_online")
   const puedeCotizar = cotizacionesLoading || hasCotizaciones
 
+  const chip = clienteBalanceChip(cliente)
+  const tel = cliente.telefono ? telHref(cliente.telefono) : ""
+  // Same gating as the menu item: handler only exists when the user can collect.
+  const showCobrar = !!onCobrar && !cliente.esPractica && chip?.kind === "debe"
+  const showActions = !!tel || !!onWhatsApp || showCobrar
+
+  // The name is a stretched link (its ::after covers the card) so the whole card
+  // navigates with real link semantics; interactive children sit above it at z-10.
   return (
-    <Card>
+    <Card className="relative active:bg-muted/50 transition-colors">
       <CardContent className="p-4">
-        {/* Header: Avatar + Nombre + Actions */}
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-3 min-w-0">
             <div className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 ${
               cliente.tipoCliente === "EMPRESA" ? "bg-warning/10" : "bg-primary/10"
             }`}>
@@ -44,9 +56,25 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                 <User className="h-4 w-4 text-primary" />
               )}
             </div>
-            <div>
-              <div className="font-medium text-sm">{cliente.nombre}</div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <Link
+                  href={`/clientes/${cliente.id}`}
+                  className="font-medium text-sm after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring"
+                >
+                  {cliente.nombre}
+                </Link>
+                {chip && (
+                  <span
+                    className={`text-xs font-medium tabular-nums px-1.5 py-0.5 rounded ${
+                      chip.kind === "debe" ? "bg-destructive/10 text-destructive" : "bg-info-50 text-info-700"
+                    }`}
+                  >
+                    {chip.label} {formatPrice(chip.amount)}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 {cliente.tipoCliente === "EMPRESA" && (
                   <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-warning/10 text-warning-700">
                     Empresa
@@ -63,32 +91,33 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
               )}
             </div>
           </div>
-          <div role="group" className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <div role="group" className="relative z-10 flex items-center shrink-0 -mr-2 -mt-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
               onClick={(e) => onEdit(e, cliente)}
               title="Editar"
+              aria-label="Editar"
             >
-              <Edit className="h-3.5 w-3.5" />
+              <Edit className="h-4 w-4" />
             </Button>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-muted-foreground"
+                  className="text-muted-foreground"
                   onClick={(e) => e.stopPropagation()}
                   title="Más acciones"
+                  aria-label="Más acciones"
                 >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
+                  <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-48 p-1">
                 <button
                   type="button"
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                  className={MENU_ITEM}
                   onClick={(e) => { e.stopPropagation(); router.push(`/ordenes?clienteId=${cliente.id}`) }}
                 >
                   <Wrench className="h-4 w-4" />
@@ -97,40 +126,21 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                 {puedeCotizar && (
                   <button
                     type="button"
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                    className={MENU_ITEM}
                     onClick={(e) => { e.stopPropagation(); router.push(`/cotizaciones?clienteId=${cliente.id}`) }}
                   >
                     <Receipt className="h-4 w-4" />
                     Nueva cotización
                   </button>
                 )}
-                <div className="h-px bg-border my-1" />
-                {onWhatsApp && (
-                  <button
-                    type="button"
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
-                    onClick={(e) => onWhatsApp(e, cliente)}
-                  >
-                    <WhatsAppIcon className="h-4 w-4 text-success-600" />
-                    Enviar WhatsApp
-                  </button>
-                )}
                 {onCobrar && !cliente.esPractica && (
-                  <button
-                    type="button"
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
-                    onClick={(e) => onCobrar(e, cliente)}
-                  >
+                  <button type="button" className={MENU_ITEM} onClick={(e) => onCobrar(e, cliente)}>
                     <DollarSign className="h-4 w-4 text-success-600" />
                     Cobrar órdenes
                   </button>
                 )}
                 {onCuentaCorriente && !cliente.esPractica && (
-                  <button
-                    type="button"
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
-                    onClick={(e) => onCuentaCorriente(e, cliente)}
-                  >
+                  <button type="button" className={MENU_ITEM} onClick={(e) => onCuentaCorriente(e, cliente)}>
                     <PiggyBank className="h-4 w-4 text-info-600" />
                     Cuenta corriente
                   </button>
@@ -140,7 +150,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                     <div className="h-px bg-border my-1" />
                     <button
                       type="button"
-                      className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-destructive/10 text-destructive transition-colors"
+                      className="flex items-center gap-2 w-full px-3 py-2.5 text-sm rounded-md hover:bg-destructive/10 text-destructive transition-colors"
                       onClick={(e) => onDelete(e, cliente)}
                       disabled={deleting}
                     >
@@ -154,45 +164,68 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
           </div>
         </div>
 
-        {/* Info */}
-        <div
-          className="space-y-1.5 text-sm cursor-pointer"
-          onClick={() => router.push(`/clientes/${cliente.id}`)}
-        >
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Phone className="h-3.5 w-3.5 shrink-0" />
-            <span>{cliente.telefono}</span>
-          </div>
-
+        {/* Phone is the primary datum; email and address are de-emphasized */}
+        <div className="mt-2 space-y-1 pl-12">
+          {cliente.telefono && <div className="text-sm font-medium tabular-nums">{cliente.telefono}</div>}
           {cliente.email && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Mail className="h-3.5 w-3.5 shrink-0" />
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Mail className="h-3 w-3 shrink-0" />
               <span className="truncate">{cliente.email}</span>
             </div>
           )}
-
           {cliente.direccion && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <MapPin className="h-3.5 w-3.5 shrink-0" />
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <MapPin className="h-3 w-3 shrink-0" />
               <span className="truncate">{cliente.direccion}</span>
             </div>
           )}
-
-          <div className="text-xs text-muted-foreground pt-1">
-            Registrado: {formatDate(cliente.createdAt)}
-          </div>
-
-          {(cliente.deudaPendiente ?? 0) > 0 && (
-            <div className="flex items-center gap-2 text-destructive font-medium">
-              <PiggyBank className="h-3.5 w-3.5 shrink-0" />
-              <span>Debe: {formatPrice(cliente.deudaPendiente || 0)}</span>
-            </div>
-          )}
-          <div className="flex items-center gap-3 text-xs text-muted-foreground pt-0.5">
-            <span>{cliente.ordenesCount ?? 0} órdenes</span>
-            {cliente.ultimaVisita && <span>· Última: {formatDate(cliente.ultimaVisita)}</span>}
+          <div className="text-xs text-muted-foreground pt-0.5">
+            {cliente.ordenesCount ?? 0} órdenes
+            {cliente.ultimaVisita && <> · Última: {formatDate(cliente.ultimaVisita)}</>}
           </div>
         </div>
+
+        {showActions && (
+          <div
+            role="group"
+            aria-label={`Acciones rápidas de ${cliente.nombre}`}
+            className="relative z-10 mt-3 pt-3 border-t flex items-center gap-2"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            {tel && (
+              <Button asChild variant="outline" size="sm" className="h-10 flex-1 gap-1.5">
+                <a href={`tel:${tel}`} aria-label={`Llamar a ${cliente.nombre}`}>
+                  <Phone className="h-4 w-4" />
+                  Llamar
+                </a>
+              </Button>
+            )}
+            {onWhatsApp && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 flex-1 gap-1.5"
+                onClick={(e) => onWhatsApp(e, cliente)}
+                aria-label={`Enviar WhatsApp a ${cliente.nombre}`}
+              >
+                <WhatsAppIcon className="h-4 w-4 text-success-600" />
+                WhatsApp
+              </Button>
+            )}
+            {showCobrar && (
+              <Button
+                size="sm"
+                className="h-10 flex-1 gap-1.5"
+                onClick={(e) => onCobrar!(e, cliente)}
+                aria-label={`Cobrar a ${cliente.nombre}`}
+              >
+                <DollarSign className="h-4 w-4" />
+                Cobrar
+              </Button>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   )
