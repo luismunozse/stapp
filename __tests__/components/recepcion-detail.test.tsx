@@ -464,3 +464,25 @@ describe("RecepcionDetail", () => {
     expect(screen.getByText(/115/)).toBeInTheDocument()
   })
 })
+
+describe("RecepcionDetail — lote parcial (montos no disponibles)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    sessionMock.role = "VENDEDOR"
+  })
+
+  it("no imprime importes del lote y avisa que no estan disponibles", async () => {
+    const body = buildResponse({
+      montosParciales: true,
+      recepcion: { ...buildResponse().recepcion, descuentoTipo: null, descuentoValor: null },
+      totales: { subtotal: null, totalLote: null, yaCobrado: null, pendienteCobro: null, entregadas: 0, pendientes: 2 },
+    })
+    vi.stubGlobal("fetch", mockFetchOnce(body))
+    render(<RecepcionDetail recepcionId="rec-1" />)
+
+    await screen.findByText("Equipos del lote")
+    expect(screen.getByText(/montos del lote no est.n disponibles/i)).toBeTruthy()
+    expect(screen.queryByText("Total del lote")).toBeNull()
+    expect(screen.queryByText("Subtotal")).toBeNull()
+  })
+})

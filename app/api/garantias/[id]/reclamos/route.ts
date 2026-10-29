@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumber } from "@/lib/counters"
 import { deletePracticeData } from "@/lib/onboarding/practica"
 import { z } from "zod"
+import { ordenEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 
 const reclamoSchema = z.object({
   descripcion: z.string().min(1, "Descripción requerida"),
@@ -21,7 +22,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     const { id: garantiaId } = await params
@@ -31,7 +32,7 @@ export async function POST(
     // Verificar que la garantía existe
     const { data: garantia, error: garantiaError } = await supabaseAdmin
       .from("garantias")
-      .select(`*, ordenes_servicio!inner(organization_id)`)
+      .select(`*, ordenes_servicio!inner(organization_id, sucursal_id, tecnico_id)`)
       .eq("id", garantiaId)
       .single()
 
@@ -42,6 +43,17 @@ export async function POST(
     const ordenOrgId = (garantia.ordenes_servicio as any)?.organization_id
     if (ordenOrgId !== organizationId) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 })
+    }
+
+    // A warranty whose order is out of the caller's branch scope answers like a
+    // missing one, before anything is written.
+    const alcance = await resolverAlcanceOrdenesPorId({
+      role,
+      userId,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    if (!ordenEnAlcance(alcance, garantia.ordenes_servicio as any) && alcance.tipo !== "todas") {
+      return NextResponse.json({ error: "Garantía no encontrada" }, { status: 404 })
     }
 
     // Verificar si la garantía está vencida

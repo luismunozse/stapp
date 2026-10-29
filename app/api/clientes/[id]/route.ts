@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatCliente } from "@/lib/db-utils"
+import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 import { z } from "zod"
 
 const clienteSchema = z.object({
@@ -23,12 +24,19 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     const { id } = await params
 
-    const { data: cliente, error: dbError } = await supabaseAdmin
+    // Clients are org-wide; the orders embedded in the record are not.
+    const alcance = await resolverAlcanceOrdenesPorId({
+      role,
+      userId,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+
+    const query = supabaseAdmin
       .from("clientes")
       .select(`
         *,
@@ -50,7 +58,10 @@ export async function GET(
       `)
       .eq("id", id)
       .eq("organization_id", organizationId!)
-      .single()
+
+    const { data: cliente, error: dbError } = await aplicarAlcanceOrdenes(query, alcance, {
+      referencedTable: "ordenes_servicio",
+    }).single()
 
     if (dbError || !cliente) {
       return NextResponse.json(

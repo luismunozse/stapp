@@ -42,13 +42,17 @@ export interface RecepcionDetalleResponse {
     createdAt: string
   }
   ordenes: RecepcionOrden[]
+  /** True cuando el usuario no ve todos los equipos del lote: los importes vienen
+   *  en null porque no se pueden calcular sin los equipos de otras sucursales. */
+  montosParciales?: boolean
   totales: {
-    subtotal: number
-    totalLote: number
+    /** Los cuatro importes son null cuando `montosParciales`. */
+    subtotal: number | null
+    totalLote: number | null
     /** Neto ya facturado en los equipos que ya salieron del taller. */
-    yaCobrado: number
+    yaCobrado: number | null
     /** Lo que falta para llegar al total del lote (nunca negativo). */
-    pendienteCobro: number
+    pendienteCobro: number | null
     entregadas: number
     pendientes: number
   }
@@ -148,7 +152,11 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
       ? "No quedan equipos pendientes de entrega en este lote."
       : "Todos los equipos pendientes deben estar en estado Reparado para poder entregar el lote."
 
-  const descuentoAplicado = recepcion.descuentoTipo && recepcion.descuentoValor ? totales.subtotal - totales.totalLote : 0
+  const montosParciales = data.montosParciales === true || totales.subtotal === null || totales.totalLote === null
+  const descuentoAplicado =
+    recepcion.descuentoTipo && recepcion.descuentoValor && totales.subtotal !== null && totales.totalLote !== null
+      ? totales.subtotal - totales.totalLote
+      : 0
 
   // Base que el servidor usa para el total del lote: los costos ya
   // persistidos de los equipos que se retiraron individualmente. El diálogo
@@ -221,9 +229,15 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
           <CardTitle className="text-base">Totales</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {montosParciales ? (
+            <p className="text-sm text-muted-foreground">
+              Los montos del lote no están disponibles: incluye equipos de otras sucursales.
+            </p>
+          ) : (
+            <>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Subtotal</span>
-            <span>{formatPrice(totales.subtotal)}</span>
+            <span>{formatPrice(totales.subtotal ?? 0)}</span>
           </div>
 
           {recepcion.descuentoTipo && recepcion.descuentoValor ? (
@@ -276,7 +290,7 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
 
           <div className="flex justify-between items-center pt-3 border-t">
             <span className="font-semibold">Total del lote</span>
-            <span className="text-xl font-bold">{formatPrice(totales.totalLote)}</span>
+            <span className="text-xl font-bold">{formatPrice(totales.totalLote ?? 0)}</span>
           </div>
 
           {/* Con equipos ya retirados individualmente, el total del lote no es
@@ -286,12 +300,14 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
             <>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Ya cobrado</span>
-                <span>{formatPrice(totales.yaCobrado)}</span>
+                <span>{formatPrice(totales.yaCobrado ?? 0)}</span>
               </div>
               <div className="flex justify-between text-sm font-medium">
                 <span>Pendiente de cobro</span>
-                <span>{formatPrice(totales.pendienteCobro)}</span>
+                <span>{formatPrice(totales.pendienteCobro ?? 0)}</span>
               </div>
+            </>
+          )}
             </>
           )}
         </CardContent>
@@ -323,7 +339,7 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
         descuentoTipo={recepcion.descuentoTipo}
         descuentoValor={recepcion.descuentoValor}
         subtotalEntregados={subtotalEntregados}
-        yaCobrado={totales.yaCobrado}
+        yaCobrado={totales.yaCobrado ?? 0}
       />
     </div>
   )

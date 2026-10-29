@@ -10,6 +10,7 @@ import { marcarOriginalReemplazada, restaurarOriginalDeRevision } from "@/lib/co
 import { validarInforme, esInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizacion-informe"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { z } from "zod"
+import { cotizacionEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 
 // Detecta el error de "la función no existe todavía", que acá significa
 // "la migración 315 no se corrió a mano aún". Mismo helper que las rutas de
@@ -258,7 +259,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, role } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     const { id } = await params
@@ -269,7 +270,7 @@ export async function GET(
       .select(`
         *,
         ordenes_servicio!cotizaciones_orden_id_fkey (
-          id, numero_orden, dispositivo, organization_id,
+          id, numero_orden, dispositivo, organization_id, sucursal_id, tecnico_id,
           clientes (*)
         ),
         clientes (*),
@@ -281,7 +282,14 @@ export async function GET(
       .is("deleted_at", null)
       .single()
 
-    if (dbError || !cotizacion) {
+    // A quote linked to an order of another branch is "not found" for this caller.
+    const alcance = await resolverAlcanceOrdenesPorId({
+      role,
+      userId,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+
+    if (dbError || !cotizacion || !cotizacionEnAlcance(alcance, cotizacion)) {
       return NextResponse.json(
         { error: "Cotización no encontrada" },
         { status: 404 }

@@ -11,6 +11,7 @@ import { validarInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizaci
 import { randomBytes } from "crypto"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
+import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
 
 const itemSchema = z.object({
   descripcion: z.string().min(1, "Descripción requerida"),
@@ -178,8 +179,16 @@ function formatCotizacion(c: any, includeCosts: boolean) {
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
+
+    // Quotes linked to an order follow that order's branch scope. cotizaciones
+    // has no sucursal_id of its own, so quotes without an order stay as they were.
+    const alcance = await resolverAlcanceOrdenesDeSesion({
+      role,
+      userId,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
 
     const { searchParams } = new URL(request.url)
     const ordenId = searchParams.get("ordenId")
@@ -207,6 +216,7 @@ export async function GET(request: Request) {
 
       if (estado) query = query.eq("estado", estado)
       if (role === "TECNICO") query = query.eq("created_by", userId!)
+      query = aplicarAlcanceOrdenes(query, alcance, { referencedTable: "ordenes_servicio" })
 
       const { data: cotizaciones, error: dbError } = await query
       if (dbError) throw dbError
@@ -218,28 +228,12 @@ export async function GET(request: Request) {
     // Modo standalone: filtrar por organization_id con LEFT join + paginacion
     const { page, limit, offset } = parsePagination(searchParams)
 
-    let query = supabaseAdmin
-      .from("cotizaciones")
-      .select(`
-        *,
-        ordenes_servicio!cotizaciones_orden_id_fkey (
-          id, numero_orden, dispositivo, organization_id,
-          clientes (*)
-        ),
-        clientes (*),
-        sectores_cliente (id, nombre),
-        items_cotizacion (*)
-      `, { count: "exact" })
-      .eq("organization_id", organizationId!)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-
-    if (estado && estado !== "TODOS") query = query.eq("estado", estado)
-    if (clienteId) query = query.eq("cliente_id", clienteId)
+    // Buscar por número de cotización o nombre de cliente.
+    // Supabase no soporta OR cross-table en un select, así que resolvemos
+    // los cliente_ids que matchean y armamos un or() con in-list.
+    let filtroBusqueda: string | null = null
+    let busquedaSoloNumero: string | null = null
     if (search) {
-      // Buscar por número de cotización o nombre de cliente.
-      // Supabase no soporta OR cross-table en un select, así que resolvemos
-      // los cliente_ids que matchean y armamos un or() con in-list.
       const escaped = search.replace(/[%_]/g, "\\$&") // escape wildcards
       const { data: clientesMatch } = await supabaseAdmin
         .from("clientes")
@@ -249,21 +243,64 @@ export async function GET(request: Request) {
 
       const clienteIds = (clientesMatch || []).map((c) => c.id)
       if (clienteIds.length > 0) {
-        query = query.or(
-          `numero_cotizacion.ilike.%${escaped}%,cliente_id.in.(${clienteIds.join(",")})`
-        )
+        filtroBusqueda = `numero_cotizacion.ilike.%${escaped}%,cliente_id.in.(${clienteIds.join(",")})`
       } else {
-        query = query.ilike("numero_cotizacion", `%${escaped}%`)
+        busquedaSoloNumero = `%${escaped}%`
       }
     }
-    if (role === "TECNICO") query = query.eq("created_by", userId!)
 
-    query = query.range(offset, offset + limit - 1)
+    // `ordenInner` makes the join to the order mandatory (quotes without an
+    // order drop out), which is what lets the branch scope filter on it.
+    const construir = (ordenInner: boolean) => {
+      let q = supabaseAdmin
+        .from("cotizaciones")
+        .select(`
+        *,
+        ordenes_servicio!cotizaciones_orden_id_fkey${ordenInner ? "!inner" : ""} (
+          id, numero_orden, dispositivo, organization_id,
+          clientes (*)
+        ),
+        clientes (*),
+        sectores_cliente (id, nombre),
+        items_cotizacion (*)
+      `, { count: "exact" })
+        .eq("organization_id", organizationId!)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
 
-    const { data: cotizaciones, error: dbError, count } = await query
-    if (dbError) throw dbError
+      if (estado && estado !== "TODOS") q = q.eq("estado", estado)
+      if (clienteId) q = q.eq("cliente_id", clienteId)
+      if (filtroBusqueda) q = q.or(filtroBusqueda)
+      if (busquedaSoloNumero) q = q.ilike("numero_cotizacion", busquedaSoloNumero)
+      if (role === "TECNICO") q = q.eq("created_by", userId!)
+      return q
+    }
 
-    const total = count || 0
+    let cotizaciones: any[] | null
+    let total: number
+    if (alcance.tipo === "todas") {
+      const { data, error: dbError, count } = await construir(false).range(offset, offset + limit - 1)
+      if (dbError) throw dbError
+      cotizaciones = data
+      total = count || 0
+    } else {
+      // Two disjoint sets, merged: quotes without an order (visible as before) and
+      // quotes whose order is in scope. PostgREST cannot express "no order OR order
+      // in scope" in one query, so each side fetches its first offset+limit rows,
+      // which is enough to build the requested page of the merged, ordered list.
+      const tope = offset + limit - 1
+      const [sinOrden, conOrden] = await Promise.all([
+        construir(false).is("orden_id", null).range(0, tope),
+        aplicarAlcanceOrdenes(construir(true), alcance, { referencedTable: "ordenes_servicio" }).range(0, tope),
+      ])
+      if (sinOrden.error) throw sinOrden.error
+      if (conOrden.error) throw conOrden.error
+      cotizaciones = [...(sinOrden.data || []), ...(conOrden.data || [])]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(offset, offset + limit)
+      total = (sinOrden.count || 0) + (conOrden.count || 0)
+    }
+
     const includeCosts = canViewCotizacionCosts(role)
     const result = cotizaciones?.map((c) => formatCotizacion(c, includeCosts)) || []
 

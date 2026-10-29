@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -34,9 +35,18 @@ export async function GET(request: Request) {
       .not("estado", "in", `(${estadosFinales.join(",")})`)
       .order("fecha_prometida", { ascending: true })
 
+    // A technician sees only what is assigned to them (any branch); the branch
+    // scope below is a superset of that for them, and the only limit for the rest.
     if (role === "TECNICO") {
       query = query.eq("tecnico_id", userId!)
     }
+
+    const alcance = await resolverAlcanceOrdenesDeSesion({
+      role: role ?? null,
+      userId,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    query = aplicarAlcanceOrdenes(query, alcance)
 
     // Filter by date range if provided (for calendar month view)
     if (desde) {
