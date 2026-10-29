@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 
 // GET - Obtener una foto específica con su URL
@@ -8,22 +9,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string; fotoId: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error } = autenticado
     if (error) return error
 
     const { id: ordenId, fotoId } = await params
 
-    // Verificar que la orden pertenece a la org
-    const { data: orden, error: ordenError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id")
-      .eq("id", ordenId)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (ordenError || !orden) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-    }
+    // The order must belong to the organization and be within the caller's scope
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "ver", { select: "id" })
+    if ("error" in cargada) return cargada.error
 
     const { data: foto, error: dbError } = await supabaseAdmin
       .from("fotos_orden")

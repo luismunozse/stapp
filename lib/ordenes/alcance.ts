@@ -31,7 +31,7 @@ export interface OpcionesCarga {
 
 export type OrdenCargada = { orden: any; permisos: PermisosOrden } | { error: NextResponse }
 
-const COLUMNAS_DE_ALCANCE = "sucursal_id, tecnico_id"
+const COLUMNAS_DE_ALCANCE = ["sucursal_id", "tecnico_id"]
 
 /** PostgREST's answer to `.single()` when no row matches. */
 const SIN_FILAS = "PGRST116"
@@ -42,8 +42,8 @@ const SIN_FILAS = "PGRST116"
  */
 const HA_SIDO_DERIVADA = false
 
-/** True when a PostgREST select list has a top-level `*` (an embed's `(*)` does not count). */
-function pideTodasLasColumnas(select: string): boolean {
+/** The items of a PostgREST select list at its top level (what is inside an embed's parens is not one). */
+function itemsDeNivelSuperior(select: string): string[] {
   let nivel = 0
   let item = ""
   const items: string[] = []
@@ -51,19 +51,23 @@ function pideTodasLasColumnas(select: string): boolean {
     if (c === "(") nivel++
     if (c === ")") nivel--
     if (c === "," && nivel === 0) {
-      items.push(item)
+      items.push(item.trim())
       item = ""
     } else {
       item += c
     }
   }
-  items.push(item)
-  return items.some((i) => i.trim() === "*")
+  items.push(item.trim())
+  return items
 }
 
+/** The route's select plus the columns the policy reads, unless it asks for every column or has them. */
 function selectConColumnasDeAlcance(select: string | undefined): string {
   if (!select || select.trim() === "") return "*"
-  return pideTodasLasColumnas(select) ? select : `${select}, ${COLUMNAS_DE_ALCANCE}`
+  const items = itemsDeNivelSuperior(select)
+  if (items.includes("*")) return select
+  const faltan = COLUMNAS_DE_ALCANCE.filter((columna) => !items.includes(columna))
+  return faltan.length === 0 ? select : `${select}, ${faltan.join(", ")}`
 }
 
 /** The order row as the policy reads it. */
