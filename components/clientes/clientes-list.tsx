@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MoreHorizontal, Users, Wrench, Receipt } from "lucide-react"
+import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MoreHorizontal, Users, Wrench, Receipt, X, ChevronRight } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ClienteForm } from "./cliente-form"
 import { CuentaCorrienteDialog } from "@/components/clientes/cuenta-corriente-dialog"
@@ -29,6 +29,8 @@ import { useModal } from "@/contexts/modal-context"
 import { useCurrency } from "@/contexts/currency-context"
 import { getPersonalIdLabel } from "@/lib/countries"
 import { useHasFeature } from "@/hooks/use-subscription"
+import { telHref } from "@/lib/tel-href"
+import { hasActiveFilters } from "@/lib/clientes-list-state"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -116,6 +118,21 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
   const clientes: Cliente[] = data?.data || (Array.isArray(data) ? data : [])
   const total = data?.total || (Array.isArray(data) ? data.length : 0)
   const totalDeuda: number = data?.totalDeuda || 0
+  // Org-wide debt summary (ignores list filters); undefined until the first response.
+  const resumenDeuda: { total: number; clientes: number } | undefined = data?.resumenDeuda
+  const filtrosActivos = hasActiveFilters({ search, tipoCliente, conDeuda, aceptaWhatsapp, fechaDesde, fechaHasta })
+
+  const clearAllFilters = () => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    setSearch("")
+    setDebouncedSearch("")
+    setTipoCliente("")
+    setConDeuda(false)
+    setAceptaWhatsapp("")
+    setFechaDesde("")
+    setFechaHasta("")
+    setPage(1)
+  }
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -205,7 +222,17 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       render: (cliente) => (
         <div className="flex items-center gap-2">
           <Phone className="h-4 w-4 text-muted-foreground" />
-          <span>{cliente.telefono}</span>
+          {telHref(cliente.telefono || "") ? (
+            <a
+              href={`tel:${telHref(cliente.telefono)}`}
+              className="hover:text-primary hover:underline underline-offset-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {cliente.telefono}
+            </a>
+          ) : (
+            <span>{cliente.telefono}</span>
+          )}
         </div>
       ),
     },
@@ -391,19 +418,61 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
     <PullToRefresh onRefresh={() => mutate()}>
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center justify-between">
         <div className="flex-1 w-full sm:w-auto">
-          <div className="relative">
+          <div className="relative sm:max-w-sm">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder={`Buscar por nombre, teléfono, ${getPersonalIdLabel(pais)} o sector...`}
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
-              className="pl-10 w-full sm:max-w-sm"
+              className="pl-10 pr-10 w-full"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => handleSearchChange("")}
+                aria-label="Limpiar búsqueda"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
-        <div className="grid grid-cols-3 sm:flex sm:items-center gap-2 w-full sm:w-auto">
+
+        {/* Mobile: Nuevo is the primary action; Exportar / Importar live in an overflow menu */}
+        <div className="flex items-center gap-2 sm:hidden">
+          <Button onClick={() => setShowForm(true)} className="h-10 flex-1 gap-1.5">
+            <Plus className="h-4 w-4" />
+            Nuevo cliente
+          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="icon" aria-label="Más opciones" title="Más opciones">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-48 p-1 space-y-1">
+              <ExportButton
+                entity="clientes"
+                filters={{ ...(search && { search }) }}
+                variant="ghost"
+                label="Exportar"
+                className="w-full justify-start"
+              />
+              {allowImport && (
+                <Button onClick={() => setShowImport(true)} variant="ghost" className="w-full justify-start">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Importar CSV
+                </Button>
+              )}
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        {/* Desktop */}
+        <div className="hidden sm:flex sm:items-center gap-2">
           <ExportButton
             entity="clientes"
             filters={{ ...(search && { search }) }}
@@ -414,8 +483,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           {allowImport && (
             <Button onClick={() => setShowImport(true)} variant="outline" size="sm" className="gap-1.5">
               <Upload className="h-4 w-4" />
-              <span className="hidden sm:inline">Importar CSV</span>
-              <span className="sm:hidden">Importar</span>
+              Importar CSV
             </Button>
           )}
           <Button onClick={() => setShowForm(true)} size="sm" className="gap-1.5">
@@ -423,6 +491,31 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
             Nuevo
           </Button>
         </div>
+      </div>
+
+      {/* Debt summary: always visible; the placeholder reserves its height while loading */}
+      <div className="h-11">
+        {!resumenDeuda ? (
+          <div className="h-11 rounded-lg bg-muted animate-pulse" aria-hidden="true" />
+        ) : resumenDeuda.clientes === 0 ? (
+          <div className="flex h-11 items-center rounded-lg border px-4 text-sm text-muted-foreground">
+            Sin deuda pendiente
+          </div>
+        ) : (
+          <button
+            type="button"
+            aria-pressed={conDeuda}
+            onClick={() => { if (!conDeuda) onFilterChange(() => setConDeuda(true)) }}
+            className="flex h-11 w-full items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 text-left text-sm transition-colors hover:bg-destructive/10 active:bg-destructive/10 aria-pressed:border-destructive/60"
+          >
+            <span className="text-muted-foreground">Total adeudado</span>
+            <span className="font-semibold text-destructive tabular-nums">{formatPrice(resumenDeuda.total)}</span>
+            <span className="text-muted-foreground truncate">
+              · {resumenDeuda.clientes} {resumenDeuda.clientes === 1 ? "cliente" : "clientes"}
+            </span>
+            {!conDeuda && <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+          </button>
+        )}
       </div>
 
       {/* Filter bar */}
@@ -465,18 +558,8 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           Solo con deuda
         </label>
 
-        {(tipoCliente || conDeuda || aceptaWhatsapp || fechaDesde || fechaHasta) && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onFilterChange(() => {
-              setTipoCliente("")
-              setConDeuda(false)
-              setAceptaWhatsapp("")
-              setFechaDesde("")
-              setFechaHasta("")
-            })}
-          >
+        {filtrosActivos && (
+          <Button variant="ghost" size="sm" onClick={clearAllFilters}>
             Limpiar
           </Button>
         )}
@@ -542,10 +625,10 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
         />
       )}
 
-      {/* Total adeudado bar */}
-      {conDeuda && (
+      {/* Filtered total: only informative when other filters narrow the debtors */}
+      {conDeuda && resumenDeuda && Math.round(totalDeuda) !== Math.round(resumenDeuda.total) && (
         <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm">
-          <span className="text-muted-foreground">Total adeudado:</span>
+          <span className="text-muted-foreground">Total adeudado (filtrado):</span>
           <span className="font-semibold text-destructive tabular-nums">{formatPrice(totalDeuda)}</span>
         </div>
       )}
@@ -557,7 +640,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           columns={columns}
           keyExtractor={(cliente) => cliente.id}
           loading={isLoading}
-          emptyMessage="No hay clientes registrados"
+          emptyMessage={filtrosActivos ? "Sin resultados" : "No hay clientes registrados"}
           sortKey={sortKey}
           sortDirection={sortDirection}
           onSort={handleSort}
@@ -590,12 +673,22 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
             ))}
           </div>
         ) : clientes.length === 0 ? (
-          <EmptyState
-            icon={Users}
-            title="No hay clientes registrados"
-            variant="search"
-            action={{ label: "Nuevo cliente", onClick: () => setShowForm(true) }}
-          />
+          filtrosActivos ? (
+            <EmptyState
+              icon={Search}
+              title="Sin resultados"
+              description="Ningún cliente coincide con la búsqueda o los filtros."
+              variant="search"
+              action={{ label: "Limpiar filtros", onClick: clearAllFilters }}
+            />
+          ) : (
+            <EmptyState
+              icon={Users}
+              title="No hay clientes registrados"
+              variant="search"
+              action={{ label: "Nuevo cliente", onClick: () => setShowForm(true) }}
+            />
+          )
         ) : (
           <>
             <div className="space-y-3">
