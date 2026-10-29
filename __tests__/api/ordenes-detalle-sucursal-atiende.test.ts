@@ -66,15 +66,28 @@ describe("GET /api/ordenes/[id] - puedeAsignarTecnico", () => {
   it.each([
     ["an ADMIN, whatever branch handles the order", "ADMIN", null, "suc-A", true],
     ["a VENDEDOR of the handling branch", "VENDEDOR", "suc-A", "suc-A", true],
-    ["a VENDEDOR of another branch", "VENDEDOR", "suc-B", "suc-A", false],
-    ["a VENDEDOR with no branch", "VENDEDOR", null, "suc-A", false],
     ["a TECNICO, even of the handling branch (he does not reassign)", "TECNICO", "suc-A", "suc-A", false],
   ])("%s", async (_caso, role, sucursalDelUsuario, sucursalDeLaOrden, esperado) => {
-    mockAuthSuccess({ role, userId: "tec-1", sucursalId: sucursalDelUsuario })
+    // The order is assigned to tec-1: the user is that technician only when the role says so.
+    mockAuthSuccess({ role, userId: role === "TECNICO" ? "tec-1" : "u-9", sucursalId: sucursalDelUsuario })
 
     const { status, body } = await detalle(orden({ sucursal_id: sucursalDeLaOrden, tecnico_id: "tec-1" }))
 
     expect(status).toBe(200)
     expect(body.puedeAsignarTecnico).toBe(esperado)
+  })
+
+  // A seller of another branch (or with none) does not reach the order at all, so there is no
+  // picker to decide on: the detail is "not found".
+  it.each([
+    ["a VENDEDOR of another branch", "suc-B"],
+    ["a VENDEDOR with no branch", null],
+  ])("%s does not get the order", async (_caso, sucursalDelUsuario) => {
+    mockAuthSuccess({ role: "VENDEDOR", userId: "u-9", sucursalId: sucursalDelUsuario })
+
+    const { status, body } = await detalle(orden({ sucursal_id: "suc-A", tecnico_id: "tec-1" }))
+
+    expect(status).toBe(404)
+    expect(body).toEqual({ error: "Orden no encontrada" })
   })
 })

@@ -120,3 +120,119 @@ export function combinarOr(...listas: string[]): string {
 export function terminoDeBusquedaSeguro(termino: string): string {
   return termino.replace(/[,()"\\]/g, "_")
 }
+
+/** How the actor relates to an order. */
+export type RolEnOrden = "ADMIN" | "ORIGEN" | "DESTINO" | "ASIGNADO" | "AJENO"
+
+/** Who is asking. `sucursalId` is the FRESH branch that `requireAuth()` returns, never the JWT copy. */
+export interface ActorOrden {
+  userId: string
+  role: string
+  sucursalId: string | null
+  /** The org opt-in `tecnicos_toman_ordenes`. Only read for a TECNICO; missing means off. */
+  tomaSinAsignar?: boolean
+}
+
+/** The facts about an order that the policy needs. */
+export interface OrdenParaPolitica {
+  /** Where the order was created (the origin). null = unknown: only an ADMIN or the assignee reaches it. */
+  sucursalId: string | null
+  tecnicoId: string | null
+  /** The branch an active derivation sends it to; null or missing when there is none. */
+  derivadaA?: string | null
+}
+
+export interface PermisosOrden {
+  /** The order is in the actor's scope. false means the caller answers "not found" (XC-2). */
+  ver: boolean
+  rol: RolEnOrden
+  /** May open the order. A TECNICO opens only his own, or an unassigned one he can claim. */
+  leer: boolean
+  /** May change the order (PUT). A TECNICO changes only his own. */
+  editar: boolean
+  /** Repair work (repair statuses, repuestos, services, checklist, photos): the branch that works the order. */
+  reparar: boolean
+  /** Client-facing side (client-facing statuses, payments, invoices, messages): the origin. */
+  comercial: boolean
+  /** ENTREGADO*: the origin, and never while an active derivation exists (OD-7). */
+  entregar: boolean
+  /** Send the order to another branch: ADMIN or origin staff who may edit it, once at a time (OD-1, OD-8). */
+  derivar: boolean
+  /** Take it back: ADMIN or destination staff who may edit it (OD-6). */
+  devolver: boolean
+  /** Claim an unassigned order handled by his branch (OI-3). */
+  tomar: boolean
+}
+
+/**
+ * Who may do what with an order. Pure: the route (`cargarOrdenEnAlcance`) feeds it the order row.
+ *
+ * Scope (`ver`): an ADMIN, a user of the origin branch, a user of the destination branch while an
+ * active derivation sends the order there, and a TECNICO the order is assigned to, whatever his
+ * branch (BM-6). Anyone else, including a user with no branch, is out of scope (XC-4). The
+ * assignment counts only for a TECNICO: changing a technician into a seller does not clear his
+ * assignments, and a seller who still holds one gets his branch's orders and no more.
+ *
+ * Inside the scope the branch decides the work (`reparar`, `comercial`, `entregar`) and the role
+ * narrows the person: a TECNICO opens and edits only his own orders, or opens one he can claim.
+ * `reparar`, `comercial` and `entregar` are branch-level: they do not narrow a technician to his
+ * own orders, and a route that narrows technicians does it itself (the detail through `leer` and
+ * `editar`, the delivery with its own check). That keeps an org with one branch unchanged (XC-3):
+ * while an order is not derived, everybody in scope has the branch permissions the routes always
+ * gave them, so wiring a route to this policy narrows by branch and changes nothing else.
+ *
+ * Derived (the approved split, OD-3, OD-4): the origin keeps the client-facing side, the
+ * destination does the repair work, and nobody delivers (OD-7) or derives it again (OD-8). An
+ * ADMIN is unrestricted except for those two. Once an order has ever been derived, only the origin
+ * or an ADMIN delivers it (a destination technician who kept the assignment after the return does
+ * not). A derived order always has `everDerived` true.
+ */
+export function politicaOrden(
+  actor: ActorOrden,
+  orden: OrdenParaPolitica,
+  everDerived: boolean,
+): PermisosOrden {
+  const derivada = orden.derivadaA ?? null
+  const estaDerivada = derivada !== null
+  const handling = derivada ?? orden.sucursalId
+  const sucursal = actor.sucursalId
+
+  const esAdmin = actor.role === "ADMIN"
+  const esTecnico = actor.role === "TECNICO"
+  // Branch membership grants access only to the known branch roles: an unknown or
+  // missing role gets nothing (fail-closed).
+  const esDeSucursal = esTecnico || actor.role === "VENDEDOR"
+  const esAsignado = esTecnico && orden.tecnicoId !== null && orden.tecnicoId === actor.userId
+  const esOrigen = esDeSucursal && sucursal !== null && sucursal === orden.sucursalId
+  const esDestino = esDeSucursal && sucursal !== null && sucursal === derivada
+
+  const rol: RolEnOrden = esAdmin
+    ? "ADMIN"
+    : esDestino
+      ? "DESTINO"
+      : esOrigen
+        ? "ORIGEN"
+        : esAsignado
+          ? "ASIGNADO"
+          : "AJENO"
+
+  const ver = esAdmin || esOrigen || esDestino || esAsignado
+  const tomar =
+    esTecnico &&
+    ver &&
+    orden.tecnicoId === null &&
+    actor.tomaSinAsignar === true &&
+    sucursal !== null &&
+    sucursal === handling
+
+  const leer = esTecnico ? esAsignado || tomar : ver
+  const editar = esTecnico ? esAsignado : ver
+
+  const reparar = estaDerivada ? esAdmin || esDestino || (esAsignado && !esOrigen) : ver
+  const comercial = estaDerivada ? esAdmin || esOrigen : ver
+  const entregar = !estaDerivada && ver && (!everDerived || esAdmin || esOrigen)
+  const derivar = editar && !estaDerivada && (esAdmin || esOrigen)
+  const devolver = editar && estaDerivada && (esAdmin || esDestino)
+
+  return { ver, rol, leer, editar, reparar, comercial, entregar, derivar, devolver, tomar }
+}
