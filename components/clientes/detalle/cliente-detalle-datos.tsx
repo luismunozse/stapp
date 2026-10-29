@@ -6,12 +6,7 @@ import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import type { Cliente } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
 import { getTaxIdLabel, getPersonalIdLabel } from "@/lib/countries"
-
-// Keep only digits and a leading "+" so spaces/dashes/parentheses don't leak into the tel: URI.
-const telHref = (raw: string) => {
-  const trimmed = raw.trim()
-  return (trimmed.startsWith("+") ? "+" : "") + trimmed.replace(/\D/g, "")
-}
+import { telHref } from "@/lib/tel-href"
 
 function Row({ icon: Icon, label, value, href, external }: {
   icon: typeof Phone; label: string; value: string; href?: string; external?: boolean
