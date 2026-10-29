@@ -12,6 +12,9 @@ import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { z } from "zod"
 import { cotizacionEnAlcance, ordenEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 
+// The typed client infers an embedded to-one relation as an array; the row carries one order.
+type ConAlcance = Parameters<typeof cotizacionEnAlcance>[1]
+
 // Detecta el error de "la función no existe todavía", que acá significa
 // "la migración 315 no se corrió a mano aún". Mismo helper que las rutas de
 // aprobar y convertir-venta; se repite en vez de compartirse para no tocar esos
@@ -342,7 +345,7 @@ export async function PUT(
       userSucursalId: session!.user.sucursalId ?? null,
     })
 
-    if (fetchError || !existing || !cotizacionEnAlcance(alcance, existing)) {
+    if (fetchError || !existing || !cotizacionEnAlcance(alcance, existing as ConAlcance)) {
       return NextResponse.json(
         { error: "Cotización no encontrada" },
         { status: 404 }

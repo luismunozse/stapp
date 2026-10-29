@@ -4,6 +4,9 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getAuditLogs } from "@/lib/audit"
 import { cotizacionEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 
+// The typed client infers an embedded to-one relation as an array; the row carries one order.
+type ConAlcance = Parameters<typeof cotizacionEnAlcance>[1]
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -29,7 +32,7 @@ export async function GET(
       userSucursalId: session!.user.sucursalId ?? null,
     })
 
-    if (fetchError || !cotizacion || !cotizacionEnAlcance(alcance, cotizacion)) {
+    if (fetchError || !cotizacion || !cotizacionEnAlcance(alcance, cotizacion as ConAlcance)) {
       return NextResponse.json(
         { error: "Cotización no encontrada" },
         { status: 404 }
