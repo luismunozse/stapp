@@ -96,13 +96,25 @@ export function TurnoFormDialog({
     conflictos: Array<{ id: string; inicio: string; clienteNombre: string | null }>
   }>(null)
 
-  const { data: tecnicosData } = useSWR<TecnicoOpt[] | { tecnicos?: TecnicoOpt[] }>(
-    open ? "/api/tecnicos" : null,
-    fetcher,
-  )
-  const tecnicos: TecnicoOpt[] = Array.isArray(tecnicosData)
+  // CREATING: the appointment lands in the branch the write resolves to, and its technician is carried
+  // into the order made from it: the same scope the order form uses. EDITING: it already belongs to a
+  // branch, so that branch's technicians are the ones that make sense.
+  const urlTecnicos = turno?.sucursalId
+    ? `/api/tecnicos?sucursalId=${encodeURIComponent(turno.sucursalId)}`
+    : "/api/tecnicos?alcance=escritura"
+  const { data: tecnicosData } = useSWR<TecnicoOpt[] | { tecnicos?: TecnicoOpt[] }>(open ? urlTecnicos : null, fetcher)
+  const tecnicosCargados = Array.isArray(tecnicosData) || Array.isArray(tecnicosData?.tecnicos)
+  const tecnicosDeLaLista: TecnicoOpt[] = Array.isArray(tecnicosData)
     ? tecnicosData
     : (tecnicosData?.tecnicos || [])
+  // The technician the appointment has now is always an option, even from another branch or before the
+  // list arrives, so the select shows him and a save of another field cannot lose him. The mark only
+  // appears once the list has loaded: before that it would claim something nobody checked.
+  const actual = turno?.tecnico && turno.tecnico.id === turno.tecnicoId ? turno.tecnico : null
+  const actualFueraDeLista = !!actual && !tecnicosDeLaLista.some((t) => t.id === actual.id)
+  const tecnicos: TecnicoOpt[] = actualFueraDeLista ? [...tecnicosDeLaLista, actual] : tecnicosDeLaLista
+  const etiquetaTecnico = (t: TecnicoOpt) =>
+    actualFueraDeLista && tecnicosCargados && t.id === actual!.id ? `${t.nombre} · otra sucursal` : t.nombre
 
   useEffect(() => {
     if (!open) return
@@ -333,7 +345,7 @@ export function TurnoFormDialog({
                 <SelectContent>
                   <SelectItem value="_none_">Sin asignar</SelectItem>
                   {tecnicos.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.nombre}</SelectItem>
+                    <SelectItem key={t.id} value={t.id}>{etiquetaTecnico(t)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

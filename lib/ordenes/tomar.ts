@@ -24,13 +24,3 @@ export function ordenSeTomaPorTecnico(orden: {
   if (orden.tecnico_id) return false
   return !ESTADOS_ORDEN_CERRADA.includes(orden.estado ?? "")
 }
-
-/**
- * Builds the PostgREST `or` filter "mine or unassigned" for the orders list.
- * Returns null when the user id has characters that would break out of the
- * filter syntax (the caller must then fall back to "mine only": fail-closed).
- */
-export function filtroMiasOSinAsignar(userId: string): string | null {
-  if (!/^[A-Za-z0-9_-]+$/.test(userId)) return null
-  return `tecnico_id.eq.${userId},tecnico_id.is.null`
-}

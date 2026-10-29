@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { uploadOrderPhoto, deleteFile, base64ToBuffer } from "@/lib/storage"
 import { formatFoto } from "@/lib/db-utils"
@@ -20,22 +21,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error } = autenticado
     if (error) return error
 
     const { id: ordenId } = await params
 
-    // Verificar que la orden pertenece a la organización
-    const { data: ordenCheck } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id")
-      .eq("id", ordenId)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (!ordenCheck) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-    }
+    // The order must belong to the organization and be within the caller's scope
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "ver", { select: "id" })
+    if ("error" in cargada) return cargada.error
 
     const { searchParams } = new URL(request.url)
     const tipo = searchParams.get("tipo")
@@ -72,25 +66,15 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId } = autenticado
     if (error) return error
 
     const { id: ordenId } = await params
 
-    // Verificar que la orden existe y pertenece a la organización
-    const { data: orden, error: ordenError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id, organization_id")
-      .eq("id", ordenId)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (ordenError || !orden) {
-      return NextResponse.json(
-        { error: "Orden no encontrada" },
-        { status: 404 }
-      )
-    }
+    // The order must exist, belong to the organization and be within the caller's scope
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "reparar", { select: "id" })
+    if ("error" in cargada) return cargada.error
 
     // Verificar límite de storage antes de subir
     const storageLimitError = await enforcePlanLimit(organizationId!, "storage")
@@ -174,7 +158,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error } = autenticado
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -190,7 +175,7 @@ export async function DELETE(
     // Obtener la foto para verificar y obtener el path
     const { data: foto, error: fetchError } = await supabaseAdmin
       .from("fotos_orden")
-      .select("id, storage_path, ordenes_servicio!inner(organization_id)")
+      .select("id, orden_id, storage_path")
       .eq("id", fotoId)
       .single()
 
@@ -201,14 +186,13 @@ export async function DELETE(
       )
     }
 
-    // Verificar que pertenece a la organización
-    const ordenOrgId = (foto.ordenes_servicio as any)?.organization_id
-    if (ordenOrgId !== organizationId) {
-      return NextResponse.json(
-        { error: "No autorizado" },
-        { status: 403 }
-      )
-    }
+    // A photo is worked through its order: one whose order belongs to another
+    // organization or is outside the caller's scope is a photo that is not there.
+    const cargada = await cargarOrdenEnAlcance(foto.orden_id, actorDeSesion(autenticado), "reparar", {
+      select: "id",
+      noEncontrada: "Foto no encontrada",
+    })
+    if ("error" in cargada) return cargada.error
 
     // Eliminar de Storage
     if (foto.storage_path) {

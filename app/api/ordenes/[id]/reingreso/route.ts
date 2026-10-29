@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { randomBytes } from "crypto"
 import { requireAuth, requireAdminOrVendedor } from "@/lib/auth-utils"
+import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumberByType } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
@@ -23,29 +24,29 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId } = await requireAdminOrVendedor()
+    const autenticado = await requireAdminOrVendedor()
+    const { error, organizationId, userId } = autenticado
     if (error) return error
 
     const { id: ordenOrigenId } = await params
-    const practica = await rejectIfPractica(ordenOrigenId, organizationId!)
-    if (practica) return practica
     const body = await request.json()
     const data = reingresoSchema.parse(body)
 
-    // Obtener orden original
-    const { data: ordenOrigen, error: fetchError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select(`
+    // Obtener orden original, dentro del alcance de quien llama. The re-entry is created for
+    // the origin order's client, so it takes the client-facing side ("comercial").
+    const cargada = await cargarOrdenEnAlcance(ordenOrigenId, actorDeSesion(autenticado), "comercial", {
+      select: `
         *,
         clientes (*)
-      `)
-      .eq("id", ordenOrigenId)
-      .eq("organization_id", organizationId!)
-      .single()
+      `,
+      noEncontrada: "Orden original no encontrada",
+    })
+    if ("error" in cargada) return cargada.error
+    const { orden: ordenOrigen } = cargada
 
-    if (fetchError || !ordenOrigen) {
-      return NextResponse.json({ error: "Orden original no encontrada" }, { status: 404 })
-    }
+    // After the scope check, so a practice order of another branch is "not found" too.
+    const practica = await rejectIfPractica(ordenOrigenId, organizationId!)
+    if (practica) return practica
 
     // Solo se puede re-ingresar desde ENTREGADO o REPARADO
     if (!["ENTREGADO", "REPARADO"].includes(ordenOrigen.estado)) {

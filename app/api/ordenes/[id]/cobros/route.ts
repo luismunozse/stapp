@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
 import { requireAuth, requireCajaAccess } from "@/lib/auth-utils"
-import { sucursalParaLectura } from "@/lib/sucursal"
+import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { todayInTimeZone, addMonthsToDateOnly, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
@@ -73,10 +73,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId } = autenticado
     if (error) return error
 
     const { id: ordenId } = await params
+
+    // The payments of an order are read through the order: one outside the caller's scope is "not found"
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "ver", { select: "id" })
+    if ("error" in cargada) return cargada.error
 
     const { data: cobros, error: dbError } = await supabaseAdmin
       .from("cobros_orden")
@@ -120,7 +125,8 @@ export async function POST(
     // ADMIN siempre; VENDEDOR solo si la org prendió `vendedores_manejan_caja`
     // (fail-closed si el flag no se puede leer). Cobrar mueve plata de caja, y
     // es el mismo permiso que ya gobierna la operativa de caja.
-    const { error, organizationId, userId, role, session } = await requireCajaAccess()
+    const caja = await requireCajaAccess()
+    const { error, organizationId, userId, role } = caja
     if (error) return error
 
     const { id: ordenId } = await params
@@ -134,33 +140,16 @@ export async function POST(
       return NextResponse.json({ error: "Solo administradores pueden aplicar descuentos" }, { status: 403 })
     }
 
-    // Obtener orden
-    const { data: orden, error: ordenError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select(`id, costo_final, total_cobrado, estado_cobro, descuento_cobro, cliente_id, organization_id, estado, sucursal_id, ${NOTAS_CREDITO_APLICADO_EMBED}`)
-      .eq("id", ordenId)
-      .eq("organization_id", organizationId!)
-      .single()
+    // Obtener orden, dentro del alcance de quien llama. El id de la orden viaja en
+    // la URL: una orden de otra sucursal es "no encontrada" (404, igual que un id
+    // inexistente, para no confirmar que existe). El ADMIN alcanza toda la org.
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(caja), "comercial", {
+      select: `id, costo_final, total_cobrado, estado_cobro, descuento_cobro, cliente_id, organization_id, estado, sucursal_id, ${NOTAS_CREDITO_APLICADO_EMBED}`,
+    })
+    if ("error" in cargada) return cargada.error
+    const { orden } = cargada
 
-    if (ordenError || !orden) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-    }
-
-    // Alcance por sucursal para los roles atados a una. El id de la orden viaja
-    // en la URL: sin esto, un VENDEDOR cobra en una orden de otra sucursal
-    // escribiendo otro id. 404 y no 403, para no confirmar que existe.
-    // El ADMIN queda fuera del guard: su alcance no cambia con este permiso.
-    if (role !== "ADMIN") {
-      const filtro = await sucursalParaLectura({
-        role,
-        userSucursalId: session!.user.sucursalId ?? null,
-      })
-      if (!orden.sucursal_id || orden.sucursal_id !== filtro.sucursalId) {
-        return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-      }
-    }
-
-    // DESPUÉS del guard de sucursal: si va antes, un VENDEDOR distingue una
+    // DESPUÉS del alcance: si va antes, un VENDEDOR distingue una
     // orden de práctica ajena (409) de una inexistente (404) cambiando el id.
     const practica = await rejectIfPractica(ordenId, organizationId!)
     if (practica) return practica

@@ -74,7 +74,7 @@ describe("GET /api/ordenes/[id]/cobros", () => {
 
     const chain = createChainMock(mockCobros)
     chain.then = (resolve: any) => resolve({ data: mockCobros, error: null })
-    mockSupabaseFrom({ cobros_orden: chain })
+    mockSupabaseFrom({ ordenes_servicio: createChainMock({ id: "o1" }), cobros_orden: chain })
 
     const response = await GET(createGetRequest("http://localhost:3000/api/ordenes/o1/cobros"), createParams("o1"))
     const { status, body } = await parseResponse(response)

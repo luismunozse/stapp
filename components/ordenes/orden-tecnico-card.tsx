@@ -8,7 +8,19 @@ import type { User } from "@/types"
 
 interface OrdenTecnicoCardProps {
   tecnicoId: string | null | undefined
+  /** The technicians of the branch that handles the order. */
   tecnicos: User[]
+  /**
+   * Who has the order now. Added to the options when they are not in `tecnicos`, so an
+   * assignee from another branch (legacy) still shows instead of "Sin asignar".
+   */
+  tecnicoActual?: { id: string; nombre: string } | null
+  /**
+   * True only once `tecnicos` was fetched successfully for the order's branch. The "otra
+   * sucursal" mark says the assignee is not in that list, which is only a fact then: never
+   * while the list is loading, after it failed, or when the viewer never fetches it.
+   */
+  listaCargada?: boolean
   updating: boolean
   onAsignarTecnico: (tecnicoId: string | null) => void
   readOnly?: boolean
@@ -20,13 +32,20 @@ interface OrdenTecnicoCardProps {
 export function OrdenTecnicoCard({
   tecnicoId,
   tecnicos,
+  tecnicoActual,
+  listaCargada,
   updating,
   onAsignarTecnico,
   readOnly,
   puedeTomar,
   onTomar,
 }: OrdenTecnicoCardProps) {
-  const tecnicoAsignado = tecnicos.find(t => t.id === tecnicoId)
+  const asignadoFueraDeLista = !!tecnicoActual && tecnicoActual.id === tecnicoId && !tecnicos.some(t => t.id === tecnicoId)
+  const opciones: Array<{ id: string; nombre: string }> = asignadoFueraDeLista ? [...tecnicos, tecnicoActual] : tecnicos
+  // Marked, so that choosing "Sin asignar" or another technician later is not a surprise.
+  const etiqueta = (t: { id: string; nombre: string }) =>
+    asignadoFueraDeLista && listaCargada && t.id === tecnicoId ? `${t.nombre} · otra sucursal` : t.nombre
+  const tecnicoAsignado = opciones.find(t => t.id === tecnicoId)
 
   return (
     <Card>
@@ -49,7 +68,7 @@ export function OrdenTecnicoCard({
         )}
         {readOnly ? (
           <p className="text-sm text-foreground">
-            {tecnicoAsignado?.nombre || "Sin asignar"}
+            {tecnicoAsignado ? etiqueta(tecnicoAsignado) : "Sin asignar"}
           </p>
         ) : (
           <Select
@@ -62,9 +81,9 @@ export function OrdenTecnicoCard({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">Sin asignar</SelectItem>
-              {tecnicos.map((tecnico) => (
+              {opciones.map((tecnico) => (
                 <SelectItem key={tecnico.id} value={tecnico.id}>
-                  {tecnico.nombre}
+                  {etiqueta(tecnico)}
                 </SelectItem>
               ))}
             </SelectContent>

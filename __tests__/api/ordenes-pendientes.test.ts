@@ -97,6 +97,19 @@ describe("GET /api/clientes/[id]/ordenes-pendientes", () => {
     expect(ordenes.eq).toHaveBeenCalledWith("es_practica", false)
   })
 
+  it("solo pide órdenes REPARADO/ENTREGADO (mig 273): canceladas y en progreso no se cobran", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    const ordenes = createChainMock([ordenRow()])
+    mockSupabaseFrom({
+      ordenes_servicio: ordenes,
+      cuenta_corriente: createChainMock([]),
+    })
+
+    await GET(createGetRequest(url), ctx)
+
+    expect(ordenes.in).toHaveBeenCalledWith("estado", ["REPARADO", "ENTREGADO"])
+  })
+
   it("fija el pendiente de hoy: costo - descuento - cobrado", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     mockSupabaseFrom({

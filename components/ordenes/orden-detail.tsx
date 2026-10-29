@@ -114,7 +114,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const term = useTerminologia()
   const { formatPrice, formatDate, currency, timezone, pais } = useCurrency()
   const [orden, setOrden] = useState<OrdenServicio | null>(null)
-  const [tecnicos, setTecnicos] = useState<UserType[]>([])
+  const [tecnicosDe, setTecnicosDe] = useState<{ para: string; lista: UserType[] } | null>(null)
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -136,6 +136,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const isAdmin = session?.user?.role === "ADMIN"
   const puedeCobrar = usePuedeCobrar()
   const userRole = session?.user?.role
+  // A technician does not reassign, and the picker lists the handling branch's technicians: for
+  // anyone else the server says whether a choice would be accepted (puedeAsignarTecnico).
+  const tecnicoSoloLectura = userRole === "TECNICO" || orden?.puedeAsignarTecnico === false
 
   const seguimientoUrl = orden?.publicToken
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/seguimiento/${orden.publicToken}`
@@ -277,24 +280,43 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
   useEffect(() => {
     fetchOrden()
-    fetchTecnicos()
   }, [ordenId, fetchOrden])
+
+  // Who can be assigned is decided by the branch that handles the order (BM-4), not
+  // by the viewer's, so the list waits for the order and follows its branch.
+  const sucursalAtiendeId = orden?.sucursalAtiendeId
+  // The list is filed under the branch it was fetched for: after the order moves to another
+  // branch, the previous branch's technicians are never shown, even if the refetch fails.
+  const listaCargada = !!tecnicosDe && tecnicosDe.para === sucursalAtiendeId
+  const tecnicos = listaCargada ? tecnicosDe.lista : []
+  useEffect(() => {
+    // A viewer who cannot assign has no use for the list (and its branch is not the one it would be
+    // computed against): no request, so no failure to report and no mark to compute.
+    if (!sucursalAtiendeId || tecnicoSoloLectura) return
+    let vigente = true
+    const fallo = () => {
+      if (vigente) toast.error("No se pudo cargar la lista de técnicos", { id: "fetch-tecnicos-error" })
+    }
+    fetch(`/api/tecnicos?sucursalId=${encodeURIComponent(sucursalAtiendeId)}`, { cache: "no-store" })
+      .then(async (res) => {
+        const data = res.ok ? await res.json() : null
+        if (!Array.isArray(data)) return fallo()
+        if (vigente) setTecnicosDe({ para: sucursalAtiendeId, lista: data })
+      })
+      .catch((error) => {
+        console.error("Error fetching tecnicos:", error)
+        fallo()
+      })
+    return () => {
+      vigente = false
+    }
+  }, [sucursalAtiendeId, tecnicoSoloLectura])
 
   // Polling: re-fetch the orden every 15 seconds while the tab is visible.
   // Previously used Supabase Realtime with an HS256-minted JWT (PR3), which
   // was abandoned because the production Supabase project uses asymmetric JWT
   // signing (ECC P-256) — HS256 tokens are rejected with JwtSignatureError.
   useVisibilityPolling(fetchOrden, 15000, Boolean(ordenId))
-
-  const fetchTecnicos = async () => {
-    try {
-      const res = await fetch("/api/tecnicos", { cache: "no-store" })
-      const data = await res.json()
-      setTecnicos(data)
-    } catch (error) {
-      console.error("Error fetching tecnicos:", error)
-    }
-  }
 
   const handleUpdateEstado = async (nuevoEstado: EstadoOrden) => {
     // ENTREGADO_SIN_REPARACION comparte el flujo de entrega: el backend lo
@@ -928,9 +950,11 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         <OrdenTecnicoCard
           tecnicoId={orden.tecnicoId}
           tecnicos={tecnicos}
+          tecnicoActual={orden.tecnico}
+          listaCargada={listaCargada}
           updating={updating}
           onAsignarTecnico={handleAsignarTecnico}
-          readOnly={userRole === "TECNICO"}
+          readOnly={tecnicoSoloLectura}
           puedeTomar={(orden as any).puedeTomar === true && !orden.tecnicoId}
           onTomar={handleTomarOrden}
         />
@@ -1217,8 +1241,11 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           <OrdenTecnicoCard
             tecnicoId={orden.tecnicoId}
             tecnicos={tecnicos}
+            tecnicoActual={orden.tecnico}
+            listaCargada={listaCargada}
             updating={updating}
             onAsignarTecnico={handleAsignarTecnico}
+            readOnly={tecnicoSoloLectura}
             puedeTomar={(orden as any).puedeTomar === true && !orden.tecnicoId}
             onTomar={handleTomarOrden}
           />
