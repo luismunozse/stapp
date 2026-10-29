@@ -81,8 +81,7 @@ describe("GET /api/clientes — filtros y resumen", () => {
     const eqCalls = chain.eq.mock.calls.map((c: any) => c[0])
     expect(eqCalls).not.toContain("tipo_cliente")
     expect(eqCalls).not.toContain("acepta_whatsapp")
-    // The only gt() is the org-wide debt summary query, never the list filter.
-    expect(chain.gt.mock.calls).toEqual([["deuda_pendiente", 0]])
+    expect(chain.gt).not.toHaveBeenCalled()
   })
 
   it("devuelve totalDeuda y los campos de resumen mapeados", async () => {
@@ -98,21 +97,5 @@ describe("GET /api/clientes — filtros y resumen", () => {
     expect(body.data[0].deudaPendiente).toBe(150.5)
     expect(body.data[0].ordenesCount).toBe(3)
     expect(body.data[0].ultimaVisita).toBe("2026-05-01")
-  })
-
-  it("devuelve resumenDeuda del org completo, sin los filtros del listado", async () => {
-    mockAuthSuccess()
-    const chain = createChainMock(mockRows(), null, 1)
-    mockSupabaseFrom({ v_clientes_resumen: chain })
-
-    const res = await GET(createGetRequest("http://localhost:3000/api/clientes?tipoCliente=INDIVIDUAL&search=zzz"))
-    const { body } = await parseResponse(res)
-
-    expect(body.resumenDeuda).toEqual({ total: 150.5, clientes: 1 })
-    // Scoped to the org, and the summary query must not inherit the list filters:
-    // tipo_cliente is applied once (list) + once (totalDeuda), not on the summary.
-    expect(chain.eq).toHaveBeenCalledWith("organization_id", "org-1")
-    expect(chain.eq.mock.calls.filter((c: any) => c[0] === "tipo_cliente")).toHaveLength(2)
-    expect(chain.gt).toHaveBeenCalledWith("deuda_pendiente", 0)
   })
 })

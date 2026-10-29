@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MoreHorizontal, Users, Wrench, Receipt, X, ChevronRight } from "lucide-react"
+import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MoreHorizontal, Users, Wrench, Receipt, X } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ClienteForm } from "./cliente-form"
 import { CuentaCorrienteDialog } from "@/components/clientes/cuenta-corriente-dialog"
@@ -118,8 +118,6 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
   const clientes: Cliente[] = data?.data || (Array.isArray(data) ? data : [])
   const total = data?.total || (Array.isArray(data) ? data.length : 0)
   const totalDeuda: number = data?.totalDeuda || 0
-  // Org-wide debt summary (ignores list filters); undefined until the first response.
-  const resumenDeuda: { total: number; clientes: number } | undefined = data?.resumenDeuda
   const filtrosActivos = hasActiveFilters({ search, tipoCliente, conDeuda, aceptaWhatsapp, fechaDesde, fechaHasta })
 
   const clearAllFilters = () => {
@@ -493,31 +491,6 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
         </div>
       </div>
 
-      {/* Debt summary: always visible; the placeholder reserves its height while loading */}
-      <div className="h-11">
-        {!resumenDeuda ? (
-          <div className="h-11 rounded-lg bg-muted animate-pulse" aria-hidden="true" />
-        ) : resumenDeuda.clientes === 0 ? (
-          <div className="flex h-11 items-center rounded-lg border px-4 text-sm text-muted-foreground">
-            Sin deuda pendiente
-          </div>
-        ) : (
-          <button
-            type="button"
-            aria-pressed={conDeuda}
-            onClick={() => { if (!conDeuda) onFilterChange(() => setConDeuda(true)) }}
-            className="flex h-11 w-full items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 text-left text-sm transition-colors hover:bg-destructive/10 active:bg-destructive/10 aria-pressed:border-destructive/60"
-          >
-            <span className="text-muted-foreground">Total adeudado</span>
-            <span className="font-semibold text-destructive tabular-nums">{formatPrice(resumenDeuda.total)}</span>
-            <span className="text-muted-foreground truncate">
-              · {resumenDeuda.clientes} {resumenDeuda.clientes === 1 ? "cliente" : "clientes"}
-            </span>
-            {!conDeuda && <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
-          </button>
-        )}
-      </div>
-
       {/* Filter bar */}
       <div className="flex flex-wrap items-end gap-2">
         <Select value={tipoCliente || "TODOS"} onValueChange={(v) => onFilterChange(() => setTipoCliente(v === "TODOS" ? "" : v))}>
@@ -625,10 +598,10 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
         />
       )}
 
-      {/* Filtered total: only informative when other filters narrow the debtors */}
-      {conDeuda && resumenDeuda && Math.round(totalDeuda) !== Math.round(resumenDeuda.total) && (
+      {/* Total adeudado bar */}
+      {conDeuda && (
         <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm">
-          <span className="text-muted-foreground">Total adeudado (filtrado):</span>
+          <span className="text-muted-foreground">Total adeudado:</span>
           <span className="font-semibold text-destructive tabular-nums">{formatPrice(totalDeuda)}</span>
         </div>
       )}

@@ -108,7 +108,6 @@ describe("ClientesList — empty state with filters", () => {
               data: empty ? [] : [BASE],
               total: empty ? 0 : 1,
               totalDeuda: 0,
-              resumenDeuda: { total: 1500, clientes: 3 },
             }),
           }
         }
@@ -120,16 +119,6 @@ describe("ClientesList — empty state with filters", () => {
   const wrap = (ui: React.ReactNode) => (
     <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>{ui}</SWRConfig>
   )
-
-  it("shows the always-visible debt strip and turns on the debt filter on tap", async () => {
-    render(wrap(<ClientesList />))
-    const strip = await screen.findByRole("button", { name: /Total adeudado/ })
-    expect(strip).toHaveTextContent("$1500")
-    expect(strip).toHaveTextContent("3 clientes")
-    fireEvent.click(strip)
-    expect(await screen.findByRole("button", { name: /Total adeudado/ })).toHaveAttribute("aria-pressed", "true")
-    expect(vi.mocked(fetch).mock.calls.some((c) => String(c[0]).includes("conDeuda=true"))).toBe(true)
-  })
 
   it("offers Limpiar filtros when a search returns nothing, and resets the search", async () => {
     render(wrap(<ClientesList />))
