@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireCotizacionCobroAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura } from "@/lib/sucursal"
+import { cotizacionEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 import { z } from "zod"
 
 const convertSchema = z.object({
@@ -169,14 +170,22 @@ export async function POST(
       .select(`
         *,
         clientes (*),
-        ordenes_servicio!cotizaciones_orden_id_fkey (sucursal_id, clientes (*)),
+        ordenes_servicio!cotizaciones_orden_id_fkey (sucursal_id, tecnico_id, clientes (*)),
         items_cotizacion (*)
       `)
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .single()
 
-    if (fetchError || !cotizacion) {
+    // Out of the caller's branch scope = same answer as a missing quote, before
+    // anything is checked, converted or written.
+    const alcance = await resolverAlcanceOrdenesPorId({
+      role,
+      userId,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+
+    if (fetchError || !cotizacion || !cotizacionEnAlcance(alcance, cotizacion)) {
       return NextResponse.json(
         { error: "Cotizacion no encontrada" },
         { status: 404 }

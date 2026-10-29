@@ -27,7 +27,8 @@ import { supabaseAdmin } from "@/lib/supabase"
 // La resolución de sucursal corre ANTES de leer la cotización y depende de
 // cookies y de la tabla `sucursales`. Sin mockearla devuelve null y el handler
 // contesta 500 antes de llegar a los guards que este archivo ejercita.
-vi.mock("@/lib/sucursal", () => ({
+vi.mock("@/lib/sucursal", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/sucursal")>()),
   sucursalParaEscritura: vi.fn().mockResolvedValue("suc-1"),
 }))
 
