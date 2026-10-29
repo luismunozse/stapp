@@ -166,15 +166,15 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
 
         {/* Phone is the primary datum; email and address are de-emphasized */}
         <div className="mt-2 space-y-1 pl-12">
-          <div className="text-sm font-medium tabular-nums">{cliente.telefono}</div>
+          {cliente.telefono && <div className="text-sm font-medium tabular-nums">{cliente.telefono}</div>}
           {cliente.email && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground/80">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Mail className="h-3 w-3 shrink-0" />
               <span className="truncate">{cliente.email}</span>
             </div>
           )}
           {cliente.direccion && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground/80">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <MapPin className="h-3 w-3 shrink-0" />
               <span className="truncate">{cliente.direccion}</span>
             </div>

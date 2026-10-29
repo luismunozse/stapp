@@ -17,5 +17,15 @@ describe("telHref", () => {
   it("returns an empty string when there are no digits", () => {
     expect(telHref("sin teléfono")).toBe("")
     expect(telHref("")).toBe("")
+    expect(telHref("abc")).toBe("")
+  })
+
+  it("returns an empty string for a lone plus", () => {
+    expect(telHref("+")).toBe("")
+    expect(telHref(" + ")).toBe("")
+  })
+
+  it("keeps a full international number", () => {
+    expect(telHref("+54 9 11 1234-5678")).toBe("+5491112345678")
   })
 })
