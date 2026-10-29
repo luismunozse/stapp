@@ -16,6 +16,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { NextRequest } from "next/server"
 import { mockAuthSuccess, mockSupabaseFrom, createChainMock } from "./helpers"
 import { cookies } from "next/headers"
+import { SUCURSAL_NINGUNA } from "@/lib/sucursal-constantes"
 
 vi.mock("@/lib/subscriptions", () => ({
   hasPlanFeature: vi.fn().mockResolvedValue(true),
@@ -154,5 +155,48 @@ describe("GET /api/export/garantias — scope through the embedded order", () =>
     const { chain } = await exportar()
     expect(chain.eq).not.toHaveBeenCalledWith("ordenes_servicio.sucursal_id", expect.anything())
     expect(chain.or).not.toHaveBeenCalled()
+  })
+})
+
+describe("exports for a non-admin session without a branch — fail closed", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  async function exportar(entity: "ordenes" | "garantias") {
+    const chain = cadena()
+    mockSupabaseFrom({ ordenes_servicio: chain, garantias: chain })
+    const { req, ctx } = exportRequest(entity)
+    const res = await GET(req, ctx)
+    expect(res.status).toBe(200)
+    return { chain }
+  }
+
+  it("ordenes, VENDEDOR: filters by the no-branch sentinel", async () => {
+    mockAuthSuccess({ role: "VENDEDOR", userId: "user-v", sucursalId: null })
+    mockCookie(null)
+    const { chain } = await exportar("ordenes")
+    expect(chain.eq).toHaveBeenCalledWith("sucursal_id", SUCURSAL_NINGUNA)
+  })
+
+  it("ordenes, TECNICO: the branch side of the filter is the sentinel", async () => {
+    mockAuthSuccess({ role: "TECNICO", userId: USER, sucursalId: null })
+    mockCookie(null)
+    const { chain } = await exportar("ordenes")
+    expect(chain.or).toHaveBeenCalledWith(`sucursal_id.eq.${SUCURSAL_NINGUNA},tecnico_id.eq.${USER}`, undefined)
+  })
+
+  it("garantias, VENDEDOR: filters the embedded order by the sentinel", async () => {
+    mockAuthSuccess({ role: "VENDEDOR", userId: "user-v", sucursalId: null })
+    mockCookie(null)
+    const { chain } = await exportar("garantias")
+    expect(chain.eq).toHaveBeenCalledWith("ordenes_servicio.sucursal_id", SUCURSAL_NINGUNA)
+  })
+
+  it("garantias, TECNICO: the branch side of the embedded filter is the sentinel", async () => {
+    mockAuthSuccess({ role: "TECNICO", userId: USER, sucursalId: null })
+    mockCookie(null)
+    const { chain } = await exportar("garantias")
+    expect(chain.or).toHaveBeenCalledWith(`sucursal_id.eq.${SUCURSAL_NINGUNA},tecnico_id.eq.${USER}`, {
+      referencedTable: "ordenes_servicio",
+    })
   })
 })
