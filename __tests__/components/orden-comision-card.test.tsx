@@ -1,6 +1,6 @@
 // __tests__/components/orden-comision-card.test.tsx
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, fireEvent } from "@testing-library/react"
 
 const swr = vi.hoisted(() => ({ data: undefined as any, error: undefined as any, isLoading: false, keys: [] as Array<string | null> }))
 
@@ -162,5 +162,45 @@ describe("OrdenComisionCard", () => {
     expect(swr.keys[0]!.startsWith(orderCommissionKeyPrefix("o"))).toBe(true)
     expect(commissionCardVersion({ descuentoCobro: 0 })).not.toBe(commissionCardVersion({ descuentoCobro: 100 }))
     expect(commissionCardVersion({ fechaEntrega: null })).not.toBe(commissionCardVersion({ fechaEntrega: "2026-10-01" }))
+  })
+  it("never shows a discount line for float noise or a negative difference", () => {
+    swr.data = { filas: [row({ documentoTotal: 1000.1, documentoMonto: 1000.1 + 1e-12, baseTipo: "MONTO_ORDEN" })] }
+    const { unmount } = render(<OrdenComisionCard {...props} />)
+    expect(screen.queryByText("Descuentos y notas de crédito")).not.toBeInTheDocument()
+    unmount()
+    swr.data = { filas: [row({ documentoTotal: 1000, documentoMonto: 1200, baseTipo: "MONTO_ORDEN" })] }
+    render(<OrdenComisionCard {...props} />)
+    expect(screen.queryByText("Descuentos y notas de crédito")).not.toBeInTheDocument()
+  })
+
+  it("shows no discount line when the final cost is unknown", () => {
+    swr.data = { filas: [row({ documentoTotal: null, documentoMonto: 500 })] }
+    render(<OrdenComisionCard {...props} />)
+    expect(screen.queryByText("Descuentos y notas de crédito")).not.toBeInTheDocument()
+  })
+
+  it("a row without rol never renders 'undefined' in its heading", () => {
+    swr.data = { filas: [row({ rol: undefined })] }
+    const { container } = render(<OrdenComisionCard {...props} />)
+    expect(container.textContent).not.toMatch(/undefined/)
+  })
+
+  it("a blank rate is not saved: the field reverts and an error shows", () => {
+    const onUpdateField = vi.fn()
+    render(<OrdenComisionCard {...props} onUpdateField={onUpdateField} />)
+    const input = screen.getByRole("spinbutton", { name: "% Comisión" })
+    fireEvent.change(input, { target: { value: "" } })
+    fireEvent.blur(input)
+    expect(onUpdateField).not.toHaveBeenCalled()
+    expect(screen.getByText("Ingrese un porcentaje entre 0 y 100.")).toBeInTheDocument()
+  })
+
+  it("a valid rate is still saved and clamped", () => {
+    const onUpdateField = vi.fn()
+    render(<OrdenComisionCard {...props} onUpdateField={onUpdateField} />)
+    const input = screen.getByRole("spinbutton", { name: "% Comisión" })
+    fireEvent.change(input, { target: { value: "150" } })
+    fireEvent.blur(input)
+    expect(onUpdateField).toHaveBeenCalledWith("porcentajeComision", 100)
   })
 })

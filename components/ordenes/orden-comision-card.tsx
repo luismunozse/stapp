@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import useSWR from "swr"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -9,6 +10,7 @@ import { Percent } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { COMMISSION_ROLE_LABEL, ORDER_ACCRUAL_HINT, commissionKindLabel, type CommissionRow } from "@/lib/commissions/types"
 import { orderCommissionKeyPrefix } from "@/lib/commissions/card-version"
+import { orderBaseBreakdown } from "@/lib/commissions/breakdown"
 
 type CommissionCardRow = CommissionRow & { beneficiarioNombre: string }
 
@@ -54,6 +56,7 @@ export function OrdenComisionCard({
   readOnly,
 }: OrdenComisionCardProps) {
   const { formatPrice, formatDate } = useCurrency()
+  const [pctInvalido, setPctInvalido] = useState(false)
   const { data, error, isLoading } = useSWR<{ filas: CommissionCardRow[] }>(
     tecnicoId || recibidoPorId ? `${orderCommissionKeyPrefix(ordenId)}v=${encodeURIComponent(version)}` : null,
     fetcher,
@@ -85,11 +88,11 @@ export function OrdenComisionCard({
             const etiqueta = commissionKindLabel(fila.tipo, fila.documentoTipo)
             const personaActual = esTecnico ? tecnicoId : recibidoPorId
             const hint = fila.devengada ? null : accrualHint(fila.motivoSinDevengo)
-            const descuentos = (fila.documentoTotal ?? 0) - (fila.documentoMonto ?? fila.documentoTotal ?? 0)
+            const desglose = orderBaseBreakdown(fila)
             return (
               <div key={fila.clave} className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">{`${COMMISSION_ROLE_LABEL[fila.rol]} · ${fila.beneficiarioNombre}`}</span>
+                  <span className="text-sm font-medium">{`${COMMISSION_ROLE_LABEL[fila.rol] ?? ""} · ${fila.beneficiarioNombre}`}</span>
                   {etiqueta && <span className="text-xs text-muted-foreground">{etiqueta}</span>}
                   {fila.pagado ? (
                     <Badge variant="success" showIcon className="gap-1 ml-auto">
@@ -101,26 +104,12 @@ export function OrdenComisionCard({
                     </Badge>
                   ) : null}
                 </div>
-                {original && !fila.pagado && (
-                  <>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Costo final</span>
-                      <span>{formatPrice(fila.documentoTotal ?? 0)}</span>
-                    </div>
-                    {descuentos !== 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Descuentos y notas de crédito</span>
-                        <span>- {formatPrice(descuentos)}</span>
-                      </div>
-                    )}
-                    {fila.baseTipo === "MANO_DE_OBRA" && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Repuestos</span>
-                        <span>- {formatPrice(fila.documentoCostoRepuestos ?? 0)}</span>
-                      </div>
-                    )}
-                  </>
-                )}
+                {desglose.map((linea) => (
+                  <div key={linea.key} className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{linea.label}</span>
+                    <span>{linea.subtracts ? "- " : ""}{formatPrice(linea.amount)}</span>
+                  </div>
+                ))}
                 {original && (
                   <div className="flex justify-between text-sm font-medium pt-2 border-t">
                     <span>{baseLabel(fila)}</span>
@@ -144,12 +133,26 @@ export function OrdenComisionCard({
                         min="0"
                         max="100"
                         defaultValue={pct}
+                        aria-invalid={pctInvalido || undefined}
+                        onChange={() => setPctInvalido(false)}
                         onBlur={(e) => {
                           const v = parseFloat(e.target.value)
-                          const nuevo = Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0
+                          // A blank or invalid value never saves: it would silently become 0.
+                          if (!Number.isFinite(v)) {
+                            e.target.value = String(pct)
+                            setPctInvalido(true)
+                            return
+                          }
+                          setPctInvalido(false)
+                          const nuevo = Math.max(0, Math.min(100, v))
                           if (nuevo !== pct) onUpdateField("porcentajeComision", nuevo)
                         }}
                       />
+                    )}
+                    {pctInvalido && !readOnly && !fila.pagado && esTecnico && (
+                      <p role="alert" className="mt-1 text-xs text-destructive">
+                        Ingrese un porcentaje entre 0 y 100.
+                      </p>
                     )}
                   </div>
                 )}
