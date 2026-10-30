@@ -131,10 +131,18 @@ async function runExport(entity: string, filters: Record<string, string>) {
       userSucursalId: session!.user.sucursalId ?? null,
     })
 
+    // Order-derived exports share the order list scope (single source of truth).
+    const alcanceOrdenes = resolverAlcanceOrdenes({
+      role,
+      sucursalId: lectura.sucursalId,
+      verTodas: lectura.verTodas,
+      userId,
+    })
+
     let payload: ExportPayload
     switch (entity as EntityType) {
       case "ordenes":
-        payload = await exportOrdenes(organizationId!, filters, lectura)
+        payload = await exportOrdenes(organizationId!, filters, alcanceOrdenes)
         break
       case "ventas": {
         // Las mismas reglas que el listado de ventas: un TECNICO sin acceso al
@@ -162,16 +170,7 @@ async function runExport(entity: string, filters: Record<string, string>) {
         break
       }
       case "garantias":
-        payload = await exportGarantias(
-          organizationId!,
-          filters,
-          resolverAlcanceOrdenes({
-            role,
-            sucursalId: lectura.sucursalId,
-            verTodas: lectura.verTodas,
-            userId,
-          })
-        )
+        payload = await exportGarantias(organizationId!, filters, alcanceOrdenes)
         break
       default:
         return NextResponse.json(
@@ -219,7 +218,7 @@ function formatDateFilename(): string {
 async function exportOrdenes(
   organizationId: string,
   filters: Record<string, string>,
-  lectura: ResultadoLectura
+  alcance: AlcanceOrdenes
 ): Promise<ExportPayload> {
   let query = supabaseAdmin
     .from("ordenes_servicio")
@@ -234,8 +233,8 @@ async function exportOrdenes(
     .order("fecha_ingreso", { ascending: false })
     .limit(10000)
 
-  if (!lectura.verTodas && lectura.sucursalId)
-    query = query.eq("sucursal_id", lectura.sucursalId)
+  // Same scope as the order list (technicians also get orders assigned to them).
+  query = aplicarAlcanceOrdenes(query, alcance)
 
   if (filters.estado) query = query.eq("estado", filters.estado)
   if (filters.desde) query = query.gte("fecha_ingreso", filters.desde)
@@ -394,7 +393,7 @@ async function exportGarantias(
     .select(
       `
       *,
-      orden:ordenes_servicio!inner(
+      ordenes_servicio!inner(
         numero_orden,
         dispositivo,
         cliente:clientes(nombre, telefono)
@@ -405,12 +404,13 @@ async function exportGarantias(
     .order("fecha_vencimiento", { ascending: true })
     .limit(10000)
   // Same scope as the warranty list: follows the order the warranty belongs to.
+  // The embed is not aliased: the filters address it by its table name.
   query = aplicarAlcanceOrdenes(query, alcance, { referencedTable: "ordenes_servicio" })
 
   if (filters.estado) query = query.eq("estado", filters.estado)
 
   const { data, error } = await query
   if (error) throw error
-  const filteredData = (data || []).filter((g: any) => g.orden !== null)
+  const filteredData = (data || []).filter((g: any) => g.ordenes_servicio !== null)
   return { data: filteredData, columns: GARANTIAS_COLUMNS }
 }
