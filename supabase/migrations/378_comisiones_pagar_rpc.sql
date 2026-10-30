@@ -15,7 +15,8 @@
 -- in the org -> non-empty array with distinct keys -> per-org advisory lock ->
 -- the source documents of the rows (ventas, ordenes_servicio) locked FOR UPDATE in id order,
 -- payment time = clock_timestamp() taken after those locks -> one read of the definition, rows
--- checked in request order (missing, already paid, other beneficiary, different amount) ->
+-- checked in request order (missing, already paid, an ORIGINAL row of a legacy-paid document with
+-- no payout item yet = FILA_NO_DISPONIBLE, other beneficiary, different amount) ->
 -- payout + items -> legacy flag sync for the documents of this payout.
 --
 -- Errors are raised as 'COMISION_ERROR:<CODE>[:<detail>]'. A concurrent duplicate that slips
@@ -206,6 +207,22 @@ BEGIN
     END IF;
     IF v_fila.pagado THEN
       RAISE EXCEPTION 'COMISION_ERROR:FILA_YA_PAGADA:%', v_fila.clave;
+    END IF;
+    -- A legacy-paid document (flag set by an old route, no payout item yet: not backfilled) must not
+    -- be paid again. After slice 1 the RPCs re-derive the flag from the items, so this is consistent.
+    IF v_fila.tipo = 'ORIGINAL' AND (
+         (v_fila.documento_tipo = 'VENTA' AND v_fila.rol = 'VENDEDOR'
+          AND EXISTS (SELECT 1 FROM ventas v WHERE v.id = v_fila.documento_id AND v.organization_id = p_organization_id AND v.comision_pagada)
+          AND NOT EXISTS (SELECT 1 FROM comisiones_pagos_items i
+                           WHERE i.organization_id = p_organization_id AND i.documento_tipo = 'VENTA'
+                             AND i.documento_id = v_fila.documento_id AND i.rol = 'VENDEDOR' AND NOT i.anulado))
+      OR (v_fila.documento_tipo = 'ORDEN' AND v_fila.rol = 'TECNICO'
+          AND EXISTS (SELECT 1 FROM ordenes_servicio o WHERE o.id = v_fila.documento_id AND o.organization_id = p_organization_id AND o.comision_pagada)
+          AND NOT EXISTS (SELECT 1 FROM comisiones_pagos_items i
+                           WHERE i.organization_id = p_organization_id AND i.documento_tipo = 'ORDEN'
+                             AND i.documento_id = v_fila.documento_id AND i.rol = 'TECNICO' AND NOT i.anulado))
+    ) THEN
+      RAISE EXCEPTION 'COMISION_ERROR:FILA_NO_DISPONIBLE:%', v_fila.clave;
     END IF;
     IF v_fila.d_beneficiario IS DISTINCT FROM p_beneficiario_id THEN
       RAISE EXCEPTION 'COMISION_ERROR:OTRO_BENEFICIARIO:%', v_fila.clave;

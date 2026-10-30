@@ -21,6 +21,9 @@
 --   * after the payment, a reassignment of tecnico_id keeps the row with the old beneficiary and
 --     amount (no row for the new one), and a costo_final change leaves the paid amount unchanged.
 --
+--   * a legacy-paid document that has no payout item (flag set by an old route, direct UPDATE here)
+--     is refused with FILA_NO_DISPONIBLE; with the flag back at false the same row is paid normally.
+--
 -- Every pagar_comisiones call runs as service_role (SET LOCAL ROLE ... RESET ROLE), as the app
 -- calls it, so the privilege path (invoker views, INSERT payouts, UPDATE ventas / ordenes_servicio,
 -- FOR UPDATE on the source documents) is proven. Fixture setup and assertions stay as postgres.
@@ -85,6 +88,20 @@ UPDATE _ctx c SET
                    WHERE f.organization_id = c.org AND f.documento_tipo = 'ORDEN' AND f.rol = 'TECNICO'
                      AND NOT f.devengada AND NOT f.pagado ORDER BY f.clave LIMIT 1),
   pagos_antes = (SELECT COUNT(*) FROM comisiones_pagos p WHERE p.organization_id = c.org);
+
+-- Legacy-flag fixture (probes 16-17): an accrued unpaid ORDEN row that no earlier probe pays or edits.
+CREATE TEMP TABLE _cg (org TEXT, clave TEXT, doc_id TEXT, benef TEXT, monto NUMERIC, admin TEXT);
+INSERT INTO _cg (org, clave, doc_id, benef, monto, admin)
+SELECT f.organization_id, f.clave, f.documento_id, f.beneficiario_id, f.monto,
+       (SELECT u.id FROM users u WHERE u.organization_id = f.organization_id AND u.rol = 'ADMIN' AND u.deleted_at IS NULL ORDER BY u.id LIMIT 1)
+  FROM v_comisiones_devengadas f
+  JOIN ordenes_servicio o ON o.id = f.documento_id AND o.organization_id = f.organization_id
+ WHERE f.documento_tipo = 'ORDEN' AND f.rol = 'TECNICO' AND f.tipo = 'ORIGINAL'
+   AND NOT f.pagado AND f.monto > 0 AND NOT COALESCE(o.comision_pagada, false)
+   AND f.documento_id NOT IN (SELECT doc_id FROM _ctx WHERE doc_id IS NOT NULL)
+   AND f.documento_id NOT IN (SELECT doc_id FROM _cv)
+   AND EXISTS (SELECT 1 FROM users u WHERE u.organization_id = f.organization_id AND u.rol = 'ADMIN' AND u.deleted_at IS NULL)
+ ORDER BY f.clave LIMIT 1;
 
 -- A sale commission: accrued, unpaid, amount > 0, in any org with an active admin.
 INSERT INTO _cv (org, clave, doc_id, benef, monto, admin)
@@ -234,9 +251,55 @@ BEGIN
   INSERT INTO _r VALUES (15, 'pago de una venta: item = fila, pagado, flag, fecha', 'item=1 / pagado=true / flag=true / fecha=true', v_got);
 END $$;
 
--- 16. No probe lost its row or inserted two.
-INSERT INTO _r SELECT 16, 'filas de los probes 1 a 15: total / distintas', '15 / 15',
-  COUNT(*)::TEXT || ' / ' || COUNT(DISTINCT orden)::TEXT FROM _r WHERE orden BETWEEN 1 AND 15;
+-- ── 16-17. Legacy-paid document without payout item ────────────────────────
+-- 16: flag set directly (as an old route would): the ORIGINAL row is FILA_NO_DISPONIBLE.
+-- 17: flag back at false: the same row is paid normally.
+DO $$
+DECLARE c RECORD; v_res JSONB; v_got TEXT; v_msg TEXT; v_stage INT := 16; v_rows JSONB := '[]'::jsonb;
+BEGIN
+  SELECT * INTO c FROM _cg;
+  IF NOT FOUND THEN
+    INSERT INTO _r VALUES (16, 'FILA_NO_DISPONIBLE: documento pagado por el flag legacy sin item', 'OK', 'SALTEADO: la base no tiene otra orden devengada sin pagar con admin');
+    INSERT INTO _r VALUES (17, 'con el flag en false la misma fila se paga', 'OK', 'SALTEADO: sin orden que sirva');
+    RETURN;
+  END IF;
+
+  UPDATE ordenes_servicio SET comision_pagada = true WHERE id = c.doc_id AND organization_id = c.org;
+  BEGIN
+    SET LOCAL ROLE service_role;
+    PERFORM pagar_comisiones(c.org, c.admin, c.benef, jsonb_build_array(jsonb_build_object('clave', c.clave, 'monto', c.monto)));
+    RESET ROLE;
+    v_got := 'FALLO: no levanto excepcion';
+  EXCEPTION WHEN OTHERS THEN
+    RESET ROLE;
+    GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
+    v_got := CASE WHEN v_msg LIKE '%COMISION_ERROR:FILA_NO_DISPONIBLE:' || c.clave THEN 'OK: ' || v_msg ELSE 'FALLO: ' || SQLSTATE || ' ' || v_msg END;
+  END;
+  v_rows := v_rows || jsonb_build_array(jsonb_build_array(16, 'FILA_NO_DISPONIBLE: documento pagado por el flag legacy sin item',
+    'COMISION_ERROR:FILA_NO_DISPONIBLE:' || c.clave, v_got));
+
+  v_stage := 17;
+  UPDATE ordenes_servicio SET comision_pagada = false WHERE id = c.doc_id AND organization_id = c.org;
+  SET LOCAL ROLE service_role;
+  v_res := pagar_comisiones(c.org, c.admin, c.benef, jsonb_build_array(jsonb_build_object('clave', c.clave, 'monto', c.monto)));
+  RESET ROLE;
+  v_rows := v_rows || jsonb_build_array(jsonb_build_array(17, 'con el flag en false la misma fila se paga', 'total=true / item=1 / flag=true',
+    format('total=%s / item=%s / flag=%s', ((v_res->>'total')::numeric = c.monto)::text,
+      (SELECT COUNT(*) FROM comisiones_pagos_items i WHERE i.pago_id = v_res->>'pagoId' AND i.documento_id = c.doc_id AND i.tipo = 'ORIGINAL' AND NOT i.anulado),
+      (SELECT o.comision_pagada FROM ordenes_servicio o WHERE o.id = c.doc_id AND o.organization_id = c.org)::text)));
+
+  INSERT INTO _r SELECT (r->>0)::int, r->>1, r->>2, r->>3 FROM jsonb_array_elements(v_rows) AS t(r);
+EXCEPTION WHEN OTHERS THEN
+  RESET ROLE;
+  GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
+  INSERT INTO _r SELECT (r->>0)::int, r->>1, r->>2, r->>3 FROM jsonb_array_elements(v_rows) AS t(r);
+  INSERT INTO _r VALUES (v_stage, 'flag legacy: paso ' || v_stage, 'OK', 'FALLO: ' || SQLSTATE || ' ' || v_msg);
+  INSERT INTO _r SELECT g, 'flag legacy: paso ' || g, 'OK', 'SALTEADO: se interrumpio en el paso ' || v_stage FROM generate_series(v_stage + 1, 17) AS g;
+END $$;
+
+-- 18. No probe lost its row or inserted two.
+INSERT INTO _r SELECT 18, 'filas de los probes 1 a 17: total / distintas', '17 / 17',
+  COUNT(*)::TEXT || ' / ' || COUNT(DISTINCT orden)::TEXT FROM _r WHERE orden BETWEEN 1 AND 17;
 
 SELECT orden, probe, esperado, obtenido,
        CASE WHEN esperado = obtenido OR obtenido LIKE 'OK:%' THEN 'OK'

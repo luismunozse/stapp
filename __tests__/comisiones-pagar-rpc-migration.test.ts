@@ -30,6 +30,18 @@ describe("378: pagar_comisiones", () => {
       expect(at).toBeGreaterThan(adv); expect(at).toBeLessThan(def)
     }
   })
+  it("refuses an ORIGINAL row of a legacy-paid document without payout items, after the source locks", () => {
+    const c = cuerpo()
+    const at = c.indexOf("comision_pagada")
+    expect(at).toBeGreaterThan(c.lastIndexOf("FOR UPDATE;"))
+    expect(at).toBeLessThan(c.indexOf("INSERT INTO comisiones_pagos"))
+    const tramo = c.slice(c.lastIndexOf("IF v_fila.tipo = 'ORIGINAL'"), c.indexOf("COMISION_ERROR:OTRO_BENEFICIARIO"))
+    expect(tramo).toContain("v.comision_pagada")
+    expect(tramo).toContain("o.comision_pagada")
+    expect(tramo).toContain("RAISE EXCEPTION 'COMISION_ERROR:FILA_NO_DISPONIBLE:%'")
+    expect(tramo).toContain("i.rol = 'VENDEDOR'"); expect(tramo).toContain("i.rol = 'TECNICO'")
+    expect(tramo).toContain("NOT i.anulado")
+  })
   it("stamps the real payment time (clock_timestamp, after the locks) as fecha_pago", () => {
     const c = cuerpo()
     expect(c).toContain("clock_timestamp()")
@@ -56,8 +68,9 @@ describe("378: probes", () => {
     expect(probes()).toContain("has_function_privilege")
     // the app calls the RPCs as service_role: every call is wrapped, and restored in the exception path too
     expect(probes()).toContain("SET LOCAL ROLE service_role")
-    expect((probes().match(/SET LOCAL ROLE service_role;/g) ?? []).length).toBe(3)
-    expect((probes().match(/RESET ROLE;/g) ?? []).length).toBe(4)
+    expect((probes().match(/SET LOCAL ROLE service_role;/g) ?? []).length).toBe(5)
+    expect((probes().match(/RESET ROLE;/g) ?? []).length).toBe(8)
+    expect(probes()).toContain("COMISION_ERROR:FILA_NO_DISPONIBLE:' || c.clave")
     expect(s).toMatch(/COUNT\(DISTINCT orden\)/)
   })
 })
