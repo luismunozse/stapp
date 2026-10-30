@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS comisiones_pagos (
   origen            TEXT NOT NULL DEFAULT 'APP' CHECK (origen IN ('APP', 'BACKFILL')),
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT comisiones_pagos_anulacion_completa CHECK (
-    NOT anulado OR (anulado_at IS NOT NULL AND anulado_por IS NOT NULL AND length(btrim(motivo_anulacion)) > 0)
+    NOT anulado OR (anulado_at IS NOT NULL AND anulado_por IS NOT NULL AND COALESCE(length(btrim(motivo_anulacion)), 0) > 0)
   )
 );
 

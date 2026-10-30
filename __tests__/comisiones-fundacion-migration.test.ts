@@ -34,6 +34,9 @@ describe("376: tables", () => {
   it("a row can carry only one non-annulled payout item", () => {
     expect(collapse(mig())).toContain("CREATE UNIQUE INDEX IF NOT EXISTS comisiones_pagos_items_fila_vigente_uq ON comisiones_pagos_items (organization_id, COALESCE(documento_tipo, '-'), COALESCE(documento_id, '-'), rol, tipo, COALESCE(ajuste_ref, '-')) WHERE NOT anulado")
   })
+  it("an annulled payout must carry a non-blank reason (NULL-safe CHECK)", () => {
+    expect(collapse(mig())).toContain("COALESCE(length(btrim(motivo_anulacion)), 0) > 0")
+  })
   it("pins the role, kind and origin vocabularies", () => {
     const s = collapse(mig())
     expect(s).toContain("CHECK (rol IN ('VENDEDOR', 'TECNICO', 'RECEPCION'))")
