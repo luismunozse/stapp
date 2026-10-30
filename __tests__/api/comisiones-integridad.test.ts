@@ -238,7 +238,7 @@ describe("C7 — pay/annul handlers answer 500 on an unexpected throw", () => {
   beforeEach(() => vi.clearAllMocks())
 
   const MSG = { error: "No se pudo procesar la operación." }
-  const romper = (users: unknown[] = []) => {
+  const romper = (users: Array<Record<string, unknown>> = []) => {
     montarSupabaseEnMemoria({ users })
     vi.mocked(supabaseAdmin.rpc).mockImplementation((() => {
       throw new Error("network down")
