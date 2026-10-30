@@ -54,6 +54,10 @@ describe("378: probes", () => {
     for (const c of ["NO_AUTORIZADO", "MONTO_DISTINTO", "OTRO_BENEFICIARIO", "FILA_YA_PAGADA", "FILA_NO_DISPONIBLE"]) expect(probes()).toContain(c)
     expect(probes()).toMatch(/reasign/i); expect(probes()).toMatch(/costo_final/)
     expect(probes()).toContain("has_function_privilege")
+    // the app calls the RPCs as service_role: every call is wrapped, and restored in the exception path too
+    expect(probes()).toContain("SET LOCAL ROLE service_role")
+    expect((probes().match(/SET LOCAL ROLE service_role;/g) ?? []).length).toBe(3)
+    expect((probes().match(/RESET ROLE;/g) ?? []).length).toBe(4)
     expect(s).toMatch(/COUNT\(DISTINCT orden\)/)
   })
 })

@@ -21,6 +21,10 @@
 --   * after the payment, a reassignment of tecnico_id keeps the row with the old beneficiary and
 --     amount (no row for the new one), and a costo_final change leaves the paid amount unchanged.
 --
+-- Every pagar_comisiones call runs as service_role (SET LOCAL ROLE ... RESET ROLE), as the app
+-- calls it, so the privilege path (invoker views, INSERT payouts, UPDATE ventas / ordenes_servicio,
+-- FOR UPDATE on the source documents) is proven. Fixture setup and assertions stay as postgres.
+--
 -- Results accumulate in _r and come out in ONE select. Green = esperado equals obtenido, or
 -- obtenido starts with 'OK:'.
 
@@ -48,9 +52,12 @@ BEGIN
     RETURN;
   END IF;
   BEGIN
+    SET LOCAL ROLE service_role;
     PERFORM pagar_comisiones(p_org, p_usr, p_benef, p_filas);
+    RESET ROLE;
     INSERT INTO _r VALUES (p_orden, p_probe, 'COMISION_ERROR:' || p_code, 'FALLO: no levanto excepcion');
   EXCEPTION WHEN OTHERS THEN
+    RESET ROLE;
     GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
     INSERT INTO _r VALUES (p_orden, p_probe, 'COMISION_ERROR:' || p_code,
       CASE WHEN v_msg LIKE '%COMISION_ERROR:' || p_code || '%' THEN 'OK: ' || v_msg ELSE 'FALLO: ' || SQLSTATE || ' ' || v_msg END);
@@ -145,7 +152,9 @@ BEGIN
     INSERT INTO _r VALUES (11, 'pago de una orden: item = fila, pagado, flag, fecha', 'OK', 'SALTEADO: sin fila que sirva');
     RETURN;
   END IF;
+  SET LOCAL ROLE service_role;
   v_res := pagar_comisiones(c.org, c.admin, c.benef, jsonb_build_array(jsonb_build_object('clave', c.clave, 'monto', c.monto)), '  probe 378  ');
+  RESET ROLE;
   UPDATE _ctx SET pago_id = v_res->>'pagoId';
   UPDATE _ctx SET fecha_pago = (SELECT p.fecha_pago FROM comisiones_pagos p WHERE p.id = pago_id);
   SELECT format('total=%s / filas=%s / item=%s / pagado=%s / flag=%s / fecha=%s / notas=%s',
@@ -212,7 +221,9 @@ BEGIN
     INSERT INTO _r VALUES (15, 'pago de una venta: item = fila, pagado, flag, fecha', 'OK', 'SALTEADO: la base no tiene una venta devengada sin pagar con admin');
     RETURN;
   END IF;
+  SET LOCAL ROLE service_role;
   v_res := pagar_comisiones(c.org, c.admin, c.benef, jsonb_build_array(jsonb_build_object('clave', c.clave, 'monto', c.monto)));
+  RESET ROLE;
   SELECT format('item=%s / pagado=%s / flag=%s / fecha=%s',
       (SELECT COUNT(*) FROM comisiones_pagos_items i WHERE i.pago_id = v_res->>'pagoId' AND i.documento_id = c.doc_id
           AND i.rol = 'VENDEDOR' AND i.tipo = 'ORIGINAL' AND i.monto = c.monto),
