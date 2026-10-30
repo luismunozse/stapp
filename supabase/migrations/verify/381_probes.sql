@@ -206,7 +206,7 @@ $$;
 -- Both ORIGINAL rows as clave|monto|beneficiario|pagado.
 CREATE FUNCTION pg_temp.snap(p_id TEXT) RETURNS TEXT
 LANGUAGE sql AS $$
-  SELECT COALESCE(string_agg(format('%s|%s|%s|%s', f.clave, f.monto, f.beneficiario_id, f.pagado), ' ; ' ORDER BY f.clave), 'sin filas')
+  SELECT COALESCE(string_agg(format('%s|%s|%s|%s', f.clave, f.monto, f.beneficiario_id, f.pagado::TEXT), ' ; ' ORDER BY f.clave), 'sin filas')
     FROM v_comisiones_filas f
    WHERE f.documento_tipo = 'ORDEN' AND f.documento_id = p_id AND f.tipo = 'ORIGINAL' AND f.rol IN ('TECNICO', 'RECEPCION')
 $$;
@@ -516,7 +516,7 @@ BEGIN
     v_stage := 13;
     PERFORM pg_temp.anular(v_pr->>'pagoId', 'probe 381 R13');
     v_rows := v_rows || pg_temp.rr(13, 'R13: fila RECEPCION tras anular su pago: pagado / monto actual (1350 - 200 = 1150, 10%) / comision_pagada', 'pagado=false / monto=115.00 / flag=true',
-      (SELECT format('pagado=%s / monto=%s / flag=%s', f.pagado, f.monto, COALESCE(o.comision_pagada, false))
+      (SELECT format('pagado=%s / monto=%s / flag=%s', f.pagado::TEXT, f.monto, COALESCE(o.comision_pagada, false)::TEXT)
          FROM v_comisiones_filas f JOIN ordenes_servicio o ON o.id = f.documento_id
         WHERE f.documento_id = v_id AND f.rol = 'RECEPCION' AND f.tipo = 'ORIGINAL'));
     v_rows := v_rows || pg_temp.rr(13, 'R13: la fila TECNICO sigue pagada con su monto', 'true|65.00',
