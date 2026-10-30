@@ -12,6 +12,7 @@ vi.mock("swr", () => ({
 }))
 
 import { OrdenComisionCard } from "@/components/ordenes/orden-comision-card"
+import { commissionCardVersion } from "@/lib/commissions/card-version"
 
 const row = (o: Record<string, unknown> = {}) => ({
   clave: "ORDEN:o:TECNICO:ORIGINAL:-",
@@ -87,5 +88,12 @@ describe("OrdenComisionCard", () => {
     swr.error = new Error("x")
     render(<OrdenComisionCard {...props} />)
     expect(screen.getByText("No se pudo cargar la comisión.")).toBeInTheDocument()
+  })
+
+  it("version changes when only the quote parts cost changes", () => {
+    const base = { costoFinal: 1000, tecnicoId: "t1" }
+    expect(commissionCardVersion({ ...base, costoRepuestosCotizaciones: 0 })).not.toBe(
+      commissionCardVersion({ ...base, costoRepuestosCotizaciones: 150 }),
+    )
   })
 })
