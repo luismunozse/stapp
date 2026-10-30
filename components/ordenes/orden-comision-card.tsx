@@ -1,60 +1,51 @@
 "use client"
 
-import { useState } from "react"
+import useSWR from "swr"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Percent, CheckCircle2 } from "lucide-react"
+import { Percent } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { COMMISSION_KIND_LABEL, type CommissionRow } from "@/lib/commissions/types"
 
-interface Repuesto {
-  cantidad: number
-  precioUnitario: number | string
-}
+type CommissionCardRow = CommissionRow & { beneficiarioNombre: string }
 
 interface OrdenComisionCardProps {
   ordenId: string
   tecnicoId: string | null | undefined
-  costoFinal: number | null | undefined
-  repuestos: Repuesto[]
-  // Costo extra (cotizaciones aceptadas linkeadas a inventario).
-  // Server lo precalcula con precio_compra; se suma al costo de repuestos_orden.
-  costoRepuestosExtra?: number
   porcentajeComision: number | null | undefined
-  comisionPagada?: boolean
-  fechaPagoComision?: string | null
   horasTrabajadas?: number
+  // Cache key only: changes whenever an input of the commission changes, so SWR refetches.
+  version: string
   onUpdateField: (field: string, value: any) => void
   readOnly?: boolean
+}
+
+const fetcher = async (url: string) => {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error("No se pudo cargar la comisión.")
+  return res.json()
 }
 
 export function OrdenComisionCard({
   ordenId,
   tecnicoId,
-  costoFinal,
-  repuestos,
-  costoRepuestosExtra,
   porcentajeComision,
-  comisionPagada,
-  fechaPagoComision,
   horasTrabajadas,
+  version,
   onUpdateField,
   readOnly,
 }: OrdenComisionCardProps) {
   const { formatPrice, formatDate } = useCurrency()
-  const [editingPct, setEditingPct] = useState(false)
+  const { data, error, isLoading } = useSWR<{ filas: CommissionCardRow[] }>(
+    tecnicoId ? `/api/comisiones/orden/${ordenId}?v=${encodeURIComponent(version)}` : null,
+    fetcher,
+  )
 
   if (!tecnicoId) return null
 
-  const costoRepuestosBase = (repuestos || []).reduce(
-    (acc, r) => acc + (Number(r.cantidad) || 0) * (Number(r.precioUnitario) || 0),
-    0
-  )
-  const costoRepuestos = costoRepuestosBase + (Number(costoRepuestosExtra) || 0)
-  const ganancia = Math.max(0, (costoFinal || 0) - costoRepuestos)
-  const pct = Number(porcentajeComision ?? 0)
-  const comision = Math.round(ganancia * pct) / 100
+  const filas = data?.filas ?? []
 
   return (
     <Card>
@@ -62,54 +53,99 @@ export function OrdenComisionCard({
         <CardTitle className="text-base flex items-center gap-2">
           <Percent className="h-4 w-4" />
           Comisión Técnico
-          {comisionPagada && (
-            <Badge variant="success" showIcon className="gap-1 ml-auto">
-              Pagada
-            </Badge>
-          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Costo final</span>
-          <span>{formatPrice(costoFinal || 0)}</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Repuestos</span>
-          <span>- {formatPrice(costoRepuestos)}</span>
-        </div>
-        <div className="flex justify-between text-sm font-medium pt-2 border-t">
-          <span>Ganancia</span>
-          <span>{formatPrice(ganancia)}</span>
-        </div>
+        {error ? (
+          <p className="text-sm text-destructive">No se pudo cargar la comisión.</p>
+        ) : !data && isLoading ? (
+          <p className="text-sm text-muted-foreground">Cargando…</p>
+        ) : (
+          filas.map((fila) => {
+            const pct = Number(fila.porcentaje ?? porcentajeComision ?? 0)
+            const original = fila.tipo === "ORIGINAL"
+            const etiqueta = COMMISSION_KIND_LABEL[fila.tipo]
+            return (
+              <div key={fila.clave} className="space-y-3">
+                {(fila.pagado || !fila.devengada || etiqueta) && (
+                  <div className="flex items-center gap-2">
+                    {etiqueta && <span className="text-xs text-muted-foreground">{etiqueta}</span>}
+                    {fila.pagado ? (
+                      <Badge variant="success" showIcon className="gap-1 ml-auto">
+                        Pagada
+                      </Badge>
+                    ) : !fila.devengada ? (
+                      <Badge variant="secondary" className="ml-auto">
+                        Proyectada
+                      </Badge>
+                    ) : null}
+                  </div>
+                )}
+                {original && !fila.pagado && (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Costo final</span>
+                      <span>{formatPrice(fila.documentoTotal ?? 0)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Repuestos</span>
+                      <span>- {formatPrice(fila.documentoCostoRepuestos ?? 0)}</span>
+                    </div>
+                  </>
+                )}
+                {original && (
+                  <div className="flex justify-between text-sm font-medium pt-2 border-t">
+                    <span>Ganancia</span>
+                    <span>{formatPrice(fila.base ?? 0)}</span>
+                  </div>
+                )}
 
-        <div>
-          <Label className="text-xs text-muted-foreground">% Comisión</Label>
-          {readOnly || comisionPagada ? (
-            <div className="h-9 px-3 flex items-center rounded-md border bg-muted/50 text-sm">
-              {pct.toFixed(2)}%
-            </div>
-          ) : (
-            <Input
-              key={`pct-${ordenId}-${pct}`}
-              type="number"
-              step="0.01"
-              min="0"
-              max="100"
-              defaultValue={pct}
-              onBlur={(e) => {
-                const v = parseFloat(e.target.value)
-                const nuevo = Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0
-                if (nuevo !== pct) onUpdateField("porcentajeComision", nuevo)
-              }}
-            />
-          )}
-        </div>
+                {original && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">% Comisión</Label>
+                    {readOnly || fila.pagado ? (
+                      <div className="h-9 px-3 flex items-center rounded-md border bg-muted/50 text-sm">
+                        {pct.toFixed(2)}%
+                      </div>
+                    ) : (
+                      <Input
+                        key={`pct-${ordenId}-${pct}`}
+                        aria-label="% Comisión"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        defaultValue={pct}
+                        onBlur={(e) => {
+                          const v = parseFloat(e.target.value)
+                          const nuevo = Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0
+                          if (nuevo !== pct) onUpdateField("porcentajeComision", nuevo)
+                        }}
+                      />
+                    )}
+                  </div>
+                )}
 
-        <div className="flex justify-between items-center pt-2 border-t">
-          <span className="font-semibold">Comisión</span>
-          <span className="text-lg font-semibold text-primary">{formatPrice(comision)}</span>
-        </div>
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <span className="font-semibold">Comisión</span>
+                  <span className="text-lg font-semibold text-primary">{formatPrice(fila.monto)}</span>
+                </div>
+
+                {!fila.devengada && (
+                  <p className="text-xs text-muted-foreground">
+                    Se devenga cuando la orden está cobrada y además reparada o entregada.
+                  </p>
+                )}
+                {fila.pagado && fila.fechaPago && (
+                  <p className="text-xs text-muted-foreground">Pagada el {formatDate(fila.fechaPago)}</p>
+                )}
+                {fila.pagado && fila.beneficiarioId !== tecnicoId && (
+                  <p className="text-xs text-muted-foreground">Pagada a {fila.beneficiarioNombre}</p>
+                )}
+              </div>
+            )
+          })
+        )}
 
         <div className="pt-2 border-t">
           <Label className="text-xs text-muted-foreground mb-1 block">Horas trabajadas</Label>
@@ -132,12 +168,6 @@ export function OrdenComisionCard({
             />
           )}
         </div>
-
-        {comisionPagada && fechaPagoComision && (
-          <p className="text-xs text-muted-foreground">
-            Pagada el {formatDate(fechaPagoComision)}
-          </p>
-        )}
       </CardContent>
     </Card>
   )

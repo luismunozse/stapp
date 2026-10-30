@@ -48,6 +48,22 @@ describe('endpoints de vendedores', () => {
   })
 })
 
+describe('endpoints de comisiones', () => {
+  const handlers = handlersDe(join(API, 'comisiones'))
+
+  it('existen endpoints que auditar', () => {
+    expect(handlers.length).toBeGreaterThanOrEqual(6)
+  })
+
+  it('todos piden requireAdmin salvo GET /api/comisiones (cada técnico ve las suyas)', () => {
+    const ofensores = handlers
+      .filter((h) => !(h.id === 'route.ts' && h.metodo === 'GET'))
+      .filter((h) => !/\brequireAdmin\b/.test(h.body))
+      .map((h) => `${h.id} :: ${h.metodo}`)
+    expect(ofensores).toEqual([])
+  })
+})
+
 describe('endpoints de suscripción', () => {
   const handlers = [
     ...handlersDe(join(API, 'subscriptions')).map((h) => ({ ...h, id: `subscriptions/${h.id}` })),

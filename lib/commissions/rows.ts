@@ -59,7 +59,6 @@ export async function readCommissionRows(q: CommissionRowsQuery): Promise<Commis
       .select("*")
       .eq("organization_id", q.organizationId)
       .in("rol", q.roles)
-      .or("monto.neq.0,pagado.eq.true")
     if (q.beneficiarioId) query = query.eq("beneficiario_id", q.beneficiarioId)
     if (q.desde) query = query.gte("fecha_devengo", q.desde)
     if (q.hasta) query = query.lte("fecha_devengo", q.hasta)

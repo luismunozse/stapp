@@ -232,6 +232,37 @@ describe("C5 — POST /api/vendedores/[id]/comisiones/liquidar", () => {
   })
 })
 
+// ─── C7: an unexpected throw is a logged 500, never an unhandled rejection ─────
+
+describe("C7 — pay/annul handlers answer 500 on an unexpected throw", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const MSG = { error: "No se pudo procesar la operación." }
+  const romper = (users: Array<Record<string, unknown>> = []) => {
+    montarSupabaseEnMemoria({ users })
+    vi.mocked(supabaseAdmin.rpc).mockImplementation((() => {
+      throw new Error("network down")
+    }) as any)
+    vi.spyOn(console, "error").mockImplementation(() => {})
+  }
+  const ctx = { params: Promise.resolve({ id: "v1" }) }
+
+  it.each([
+    ["tecnico POST", () => pagarTecnicoPost(createPostRequest({ beneficiarioId: "t1", filas: FILAS }))],
+    ["tecnico DELETE", () => pagarTecnicoDelete(createDeleteRequest({ pagoId: "p1", motivo: "x" }))],
+    ["vendedor POST", () => pagarVendedorPost(createPostRequest({ beneficiarioId: "v1", filas: FILAS }))],
+    ["vendedor DELETE", () => pagarVendedorDelete(createDeleteRequest({ pagoId: "p1", motivo: "x" }))],
+    ["liquidar POST", () => liquidarPost(createPostRequest({ filas: FILAS }), ctx)],
+  ])("%s", async (_nombre, llamar) => {
+    mockAdminAuth()
+    romper([{ id: "v1", rol: "VENDEDOR", organization_id: "org-1" }])
+    const { status, body } = await parseResponse(await llamar())
+    expect(status).toBe(500)
+    expect(body).toEqual(MSG)
+    expect(console.error).toHaveBeenCalled()
+  })
+})
+
 // ─── C6: non-admins ───────────────────────────────────────────────────────────
 
 describe("C6 — non-admins cannot pay nor unpay", () => {

@@ -116,6 +116,23 @@ describe("seller commission reads use the single definition", () => {
     expect(Math.round((body.comisionDevengada - body.comisionPagada) * 100) / 100).toBe(body.comisionPendiente)
   })
 
+  it("vendedor detail: counts the payable pending rows even when they net to zero, ignoring zero-amount rows", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    montarSupabaseEnMemoria({
+      users: [vendedorFicha],
+      ventas: [],
+      v_comisiones_devengadas: [
+        fila({ clave: "a", monto: 50, pendiente: 50 }),
+        fila({ clave: "b", tipo: "AJUSTE_DEVOLUCION", monto: -50, pendiente: -50 }),
+        fila({ clave: "z", monto: 0, pendiente: 0 }),
+        fila({ clave: "p", pagado: true, pago_id: "p1", pendiente: 0, monto: 70 }),
+      ],
+    }, { resultadoRpc: () => [] })
+    const { body } = await parseResponse(await pedirFicha("s1"))
+    expect(body.comisionPendiente).toBe(0)
+    expect(body.filasPendientes).toBe(2)
+  })
+
   it("liquidation list: estado=pendiente returns only unpaid rows of that seller in that org", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     montarSupabaseEnMemoria({
