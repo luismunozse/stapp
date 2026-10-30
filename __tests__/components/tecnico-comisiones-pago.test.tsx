@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 
-const { data, mutate, confirm, swrError } = vi.hoisted(() => ({
+const { data, mutate, confirm, swrError, swrKeys } = vi.hoisted(() => ({
+  swrKeys: [] as string[],
   data: { value: null as any },
   mutate: vi.fn(),
   confirm: vi.fn(),
@@ -10,12 +11,15 @@ const { data, mutate, confirm, swrError } = vi.hoisted(() => ({
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock("swr", () => ({
-  default: (key: string | null) => ({
+  default: (key: string | null) => {
+    if (key) swrKeys.push(key)
+    return {
     data: key?.startsWith("/api/comisiones?") ? data.value : undefined,
     error: key?.startsWith("/api/comisiones?") ? swrError.value : undefined,
     isLoading: false,
     mutate,
-  }),
+    }
+  },
 }))
 vi.mock("@/contexts/modal-context", () => ({ useModal: () => ({ confirm }) }))
 vi.mock("@/contexts/currency-context", () => ({
@@ -153,5 +157,78 @@ describe("TecnicoComisiones paying and annulling", () => {
     expect(screen.getByText("No se pudieron cargar las comisiones.")).toBeInTheDocument()
     expect(screen.queryByText("Sin órdenes")).not.toBeInTheDocument()
     expect(screen.queryByText("Comisión pendiente")).not.toBeInTheDocument()
+  })
+})
+
+describe("TecnicoComisiones order roles", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    confirm.mockResolvedValue(true)
+    swrError.value = undefined
+    swrKeys.length = 0
+  })
+
+  const pair = () => [
+    item({ clave: "ORDEN:o1:TECNICO:ORIGINAL:-", codigoOrden: "OR-1", montoComision: 65, ganancia: 650 }),
+    item({ clave: "ORDEN:o1:RECEPCION:ORIGINAL:-", rol: "RECEPCION", codigoOrden: "OR-1", montoComision: 42.5, ganancia: 650 }),
+  ]
+
+  it("asks both order roles and badges the reception rows", () => {
+    data.value = { items: pair(), resumen: [] }
+    renderScreen()
+    expect(swrKeys.some((k) => k.includes("rol=todos"))).toBe(true)
+    expect(screen.getAllByText("Recepción")).toHaveLength(1)
+  })
+
+  it("pays technician and reception rows of the same order in one payout", async () => {
+    data.value = { items: pair(), resumen: [] }
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ pagoId: "p1" }) }) as any
+    renderScreen()
+    const selectAll = screen.getAllByRole("checkbox").find((c) => !c.getAttribute("aria-label"))!
+    fireEvent.click(selectAll)
+    fireEvent.click(screen.getByRole("button", { name: /Liquidar seleccionadas/ }))
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    expect(JSON.parse((global.fetch as any).mock.calls[0][1].body)).toEqual({
+      beneficiarioId: "tec-9",
+      filas: [
+        { clave: "ORDEN:o1:TECNICO:ORIGINAL:-", monto: 65 },
+        { clave: "ORDEN:o1:RECEPCION:ORIGINAL:-", monto: 42.5 },
+      ],
+    })
+  })
+
+  it("averages only technician original rows, totals cover every row", () => {
+    data.value = { items: pair(), resumen: [] }
+    renderScreen()
+    // total pending = 107.5; promedio = 65 over one technician row
+    expect(screen.getByText("$107.5")).toBeInTheDocument()
+    expect(screen.getByText("Ticket prom. $650")).toBeInTheDocument()
+  })
+
+  it("does not divide by zero when there are only reception rows", () => {
+    data.value = { items: [pair()[1]], resumen: [] }
+    renderScreen()
+    expect(screen.getByText("Ticket prom. $0")).toBeInTheDocument()
+  })
+
+  it("the CSV has a Rol column", async () => {
+    data.value = { items: pair(), resumen: [] }
+    let blob: Blob | null = null
+    URL.createObjectURL = vi.fn((b: Blob) => { blob = b; return "blob:x" }) as any
+    URL.revokeObjectURL = vi.fn()
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {})
+    renderScreen()
+    fireEvent.click(screen.getByRole("button", { name: /CSV/ }))
+    const text = await new Promise<string>((res) => {
+      const fr = new FileReader()
+      fr.onload = () => res(String(fr.result))
+      fr.readAsText(blob!)
+    })
+    const [head, ...rows] = text.split(/\r?\n/)
+    expect(head).toBe(
+      '"Orden","Rol","Dispositivo","Fecha completado","Costo final","Repuestos","Base","% Comisión","Comisión","Estado pago","Fecha pago"'
+    )
+    expect(rows[0]).toContain('"Técnico"')
+    expect(rows[1]).toContain('"Recepción"')
   })
 })

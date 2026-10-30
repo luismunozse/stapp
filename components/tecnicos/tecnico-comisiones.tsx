@@ -29,13 +29,18 @@ import { cn } from "@/lib/utils"
 import { EmptyState } from "@/components/ui/empty-state"
 import { FieldSectionLabel } from "@/components/ui/field-section-label"
 import { AnularPagoDialog } from "@/components/comisiones/anular-pago-dialog"
-import { COMMISSION_KIND_LABEL, type CommissionKind } from "@/lib/commissions/types"
+import {
+  COMMISSION_ROLE_LABEL,
+  commissionKindLabel,
+  type CommissionKind,
+  type CommissionRole,
+} from "@/lib/commissions/types"
 import { round2 } from "@/lib/precios"
 
 interface Item {
   clave: string
   ordenId: string | null
-  rol: string
+  rol: CommissionRole
   tipo: CommissionKind
   pagoId: string | null
   tecnicoId: string
@@ -126,7 +131,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
   const [paying, setPaying] = useState(false)
   const [anular, setAnular] = useState<{ pagoId: string | null; fecha: string | null } | null>(null)
 
-  const qs = new URLSearchParams({ tecnicoId })
+  const qs = new URLSearchParams({ tecnicoId, rol: "todos" })
   if (desde) qs.set("desde", desde)
   if (hasta) qs.set("hasta", hasta + "T23:59:59")
 
@@ -148,8 +153,15 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
   const totalPendiente = pendientes.reduce((acc, i) => acc + i.montoComision, 0)
   const totalPagado = pagadas.reduce((acc, i) => acc + i.montoComision, 0)
   const totalGanancia = items.reduce((acc, i) => acc + i.ganancia, 0)
-  const ticketPromedio = items.length ? totalGanancia / items.length : 0
-  const comisionPromedio = items.length ? totalComision / items.length : 0
+  // Averages describe repaired orders: only technician originals count, so
+  // reception rows and adjustments do not dilute them.
+  const tecnicoOriginales = items.filter((i) => i.rol === "TECNICO" && i.tipo === "ORIGINAL")
+  const ticketPromedio = tecnicoOriginales.length
+    ? tecnicoOriginales.reduce((acc, i) => acc + i.ganancia, 0) / tecnicoOriginales.length
+    : 0
+  const comisionPromedio = tecnicoOriginales.length
+    ? tecnicoOriginales.reduce((acc, i) => acc + i.montoComision, 0) / tecnicoOriginales.length
+    : 0
 
   // A zero-amount row can be listed but never paid.
   const pagable = (i: Item) => !i.comisionPagada && i.montoComision !== 0
@@ -171,7 +183,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
   const selectedItems = items.filter((i) => selected.has(i.clave) && pagable(i))
 
   const selectLabel = (i: Item) => {
-    const kind = COMMISSION_KIND_LABEL[i.tipo]
+    const kind = commissionKindLabel(i.tipo, "ORDEN")
     const doc = i.codigoOrden || (i.numeroOrden != null ? `#${i.numeroOrden}` : "")
     return `Seleccionar comisión ${doc}${kind ? (doc ? ` (${kind})` : kind) : ""}`.trim()
   }
@@ -232,12 +244,13 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
 
   const exportCSV = () => {
     const headers = [
-      "Orden", "Dispositivo", "Fecha completado",
-      "Costo final", "Repuestos", "Ganancia",
+      "Orden", "Rol", "Dispositivo", "Fecha completado",
+      "Costo final", "Repuestos", "Base",
       "% Comisión", "Comisión", "Estado pago", "Fecha pago",
     ]
     const rows = items.map((i) => [
       i.codigoOrden || `#${i.numeroOrden}`,
+      COMMISSION_ROLE_LABEL[i.rol] ?? i.rol,
       i.dispositivo,
       i.fechaCompletado || "",
       i.costoFinal, i.costoRepuestos, i.ganancia,
@@ -454,9 +467,14 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                           ) : (
                             <span className="text-sm text-muted-foreground">—</span>
                           )}
-                          {COMMISSION_KIND_LABEL[i.tipo] && (
+                          {i.rol === "RECEPCION" && (
+                            <Badge variant="outline" className="text-[10px] shrink-0">
+                              {COMMISSION_ROLE_LABEL.RECEPCION}
+                            </Badge>
+                          )}
+                          {commissionKindLabel(i.tipo, "ORDEN") && (
                             <Badge variant="secondary" className="text-[10px] shrink-0">
-                              {COMMISSION_KIND_LABEL[i.tipo]}
+                              {commissionKindLabel(i.tipo, "ORDEN")}
                             </Badge>
                           )}
                         </div>
