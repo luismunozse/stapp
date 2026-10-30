@@ -17,30 +17,43 @@ async function readJson(request: Request): Promise<unknown | undefined> {
 
 const INVALID_JSON = () => NextResponse.json({ error: "El cuerpo del pedido no es válido" }, { status: 400 })
 
+const UNEXPECTED = () =>
+  NextResponse.json({ error: "No se pudo procesar la operación." }, { status: 500 })
+
 export async function POST(request: Request) {
-  const { error, organizationId, userId } = await requireAdmin()
-  if (error) return error
+  try {
+    const { error, organizationId, userId } = await requireAdmin()
+    if (error) return error
 
-  const json = await readJson(request)
-  if (json === undefined) return INVALID_JSON()
-  const parsed = payBodySchema.safeParse(json)
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+    const json = await readJson(request)
+    if (json === undefined) return INVALID_JSON()
+    const parsed = payBodySchema.safeParse(json)
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+    }
+
+    return await payCommissions({ organizationId: organizationId!, userId: userId!, ...parsed.data })
+  } catch (err) {
+    console.error("[comisiones] pagar POST failed", err)
+    return UNEXPECTED()
   }
-
-  return payCommissions({ organizationId: organizationId!, userId: userId!, ...parsed.data })
 }
 
 export async function DELETE(request: Request) {
-  const { error, organizationId, userId } = await requireAdmin()
-  if (error) return error
+  try {
+    const { error, organizationId, userId } = await requireAdmin()
+    if (error) return error
 
-  const json = await readJson(request)
-  if (json === undefined) return INVALID_JSON()
-  const parsed = annulBodySchema.safeParse(json)
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+    const json = await readJson(request)
+    if (json === undefined) return INVALID_JSON()
+    const parsed = annulBodySchema.safeParse(json)
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+    }
+
+    return await annulCommissionPayout({ organizationId: organizationId!, userId: userId!, ...parsed.data })
+  } catch (err) {
+    console.error("[comisiones] pagar DELETE failed", err)
+    return UNEXPECTED()
   }
-
-  return annulCommissionPayout({ organizationId: organizationId!, userId: userId!, ...parsed.data })
 }

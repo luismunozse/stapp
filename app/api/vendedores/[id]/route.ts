@@ -69,6 +69,8 @@ export async function GET(
     const comisionDevengada = round2(comisiones.reduce((sum, c) => sum + c.monto, 0))
     const comisionPagada = round2(comisiones.filter((c) => c.pagado).reduce((sum, c) => sum + c.monto, 0))
     const comisionPendiente = round2(comisiones.reduce((sum, c) => sum + c.pendiente, 0))
+    // Unpaid rows that can actually be paid (a zero-amount row never can); the net total can be 0 with rows left.
+    const filasPendientes = comisiones.filter((c) => !c.pagado && c.monto !== 0).length
 
     return NextResponse.json({
       id: vendedor.id,
@@ -87,6 +89,7 @@ export async function GET(
       comisionDevengada,
       comisionPagada,
       comisionPendiente,
+      filasPendientes,
       ventas: ventasRecientes.map((v: any) => ({
         id: v.id,
         total: v.total,

@@ -133,7 +133,7 @@ export function OrdenComisionCard({
 
                 {!fila.devengada && (
                   <p className="text-xs text-muted-foreground">
-                    Se devenga cuando la orden queda reparada o entregada y cobrada.
+                    Se devenga cuando la orden está cobrada y además reparada o entregada.
                   </p>
                 )}
                 {fila.pagado && fila.fechaPago && (

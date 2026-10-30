@@ -46,6 +46,7 @@ interface VendedorDetalle {
   comisionDevengada: number
   comisionPagada: number
   comisionPendiente: number
+  filasPendientes: number
   ventas: Venta[]
 }
 
@@ -313,7 +314,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
             <div className={`text-lg sm:text-2xl font-bold ${vendedor.comisionPendiente > 0 ? "text-amber-600" : "text-muted-foreground"}`}>
               {formatCurrency(vendedor.comisionPendiente)}
             </div>
-            {isAdmin && vendedor.comisionPendiente > 0 && (
+            {isAdmin && vendedor.filasPendientes > 0 && (
               <Button
                 size="sm"
                 variant="outline"

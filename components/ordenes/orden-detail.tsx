@@ -1284,7 +1284,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               ordenId={orden.id}
               tecnicoId={orden.tecnicoId}
               porcentajeComision={(orden as any).porcentajeComision}
-              version={commissionCardVersion({ ...orden, repuestos: (orden as any).repuestos, costoRepuestosCotizaciones: (orden as any).costoRepuestosCotizaciones })}
+              version={commissionCardVersion({ ...orden, repuestos: (orden as any).repuestos })}
               horasTrabajadas={(orden as any).horasTrabajadas || 0}
               onUpdateField={handleUpdateField}
             />
@@ -1336,7 +1336,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             ordenId={orden.id}
             tecnicoId={orden.tecnicoId}
             porcentajeComision={(orden as any).porcentajeComision}
-            version={commissionCardVersion({ ...orden, repuestos: (orden as any).repuestos, costoRepuestosCotizaciones: (orden as any).costoRepuestosCotizaciones })}
+            version={commissionCardVersion({ ...orden, repuestos: (orden as any).repuestos })}
             horasTrabajadas={(orden as any).horasTrabajadas || 0}
             onUpdateField={handleUpdateField}
           />

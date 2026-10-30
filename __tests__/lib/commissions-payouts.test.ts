@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { supabaseAdmin } from "@/lib/supabase"
 import { parseResponse } from "../api/helpers"
+import { montarSupabaseEnMemoria } from "../helpers/supabase-memoria"
 import {
   annulBodySchema,
   annulCommissionPayout,
@@ -48,6 +49,8 @@ describe("commission payouts", () => {
   it("unknown errors are not mapped", () =>
     expect(commissionRpcError({ code: "XX000", message: "boom" })).toBeNull())
   it("null error is null", () => expect(commissionRpcError(null)).toBeNull())
+  it("AJUSTES_PAGADOS keeps the id of the blocking payout", () =>
+    expect(commissionRpcError({ code: "P0001", message: "COMISION_ERROR:AJUSTES_PAGADOS:p2" })).toMatchObject({ status: 409, pagoBloqueanteId: "p2" }))
 
   it("payCommissions sends the rows and amounts as given and returns the payout", async () => {
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { pagoId: "p1", total: 70, filas: 2 }, error: null } as any)
@@ -67,5 +70,37 @@ describe("commission payouts", () => {
     const parsed = await parseResponse(res)
     expect(parsed.status).toBe(500)
     expect(parsed.body).toEqual({ error: "Error al anular el pago" })
+  })
+
+  describe("AJUSTES_PAGADOS names the blocking payout", () => {
+    const bloqueado = { code: "P0001", message: "COMISION_ERROR:AJUSTES_PAGADOS:p2" }
+    const anular = () => annulCommissionPayout({ organizationId: "org-1", userId: "a1", pagoId: "p1", motivo: "error" })
+
+    it("says the date of that payout (looked up in the same org)", async () => {
+      montarSupabaseEnMemoria(
+        { comisiones_pagos: [{ id: "p2", organization_id: "org-1", fecha_pago: "2026-10-20T15:00:00Z" }, { id: "p2", organization_id: "org-2", fecha_pago: "2026-01-01T15:00:00Z" }] },
+        { errorRpc: () => bloqueado },
+      )
+      const parsed = await parseResponse(await anular())
+      expect(parsed.status).toBe(409)
+      expect(parsed.body).toEqual({ error: "Primero anulá el pago del 20/10/2026, que tiene ajustes de este." })
+    })
+
+    it("falls back to the generic text when the payout cannot be found", async () => {
+      montarSupabaseEnMemoria({ comisiones_pagos: [] }, { errorRpc: () => bloqueado })
+      const parsed = await parseResponse(await anular())
+      expect(parsed.status).toBe(409)
+      expect(parsed.body.error).toMatch(/^Un pago posterior ya liquidó ajustes/)
+    })
+
+    it("falls back to the generic text when the lookup fails", async () => {
+      montarSupabaseEnMemoria({ comisiones_pagos: [{ id: "p2", organization_id: "org-1", fecha_pago: "2026-10-20T15:00:00Z" }] }, {
+        errorRpc: () => bloqueado,
+        errorDeLectura: { comisiones_pagos: { message: "boom" } },
+      })
+      const parsed = await parseResponse(await anular())
+      expect(parsed.status).toBe(409)
+      expect(parsed.body.error).toMatch(/^Un pago posterior ya liquidó ajustes/)
+    })
   })
 })

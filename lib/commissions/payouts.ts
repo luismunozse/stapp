@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { supabaseAdmin } from "@/lib/supabase"
+import { formatDateValue } from "@/lib/timezone"
 import type { PayRowInput } from "./types"
 
 const filaSchema = z.object({
@@ -51,9 +52,16 @@ const CODE_MAP: Record<string, { status: number; error: string }> = {
 
 const MARKER = "COMISION_ERROR:"
 
+export interface CommissionRpcError {
+  status: number
+  error: string
+  /** AJUSTES_PAGADOS only: the payout that holds the adjustments and has to be annulled first. */
+  pagoBloqueanteId?: string
+}
+
 export function commissionRpcError(
   error: { code?: string; message?: string } | null,
-): { status: number; error: string } | null {
+): CommissionRpcError | null {
   if (!error) return null
   // A concurrent duplicate hits the partial unique index.
   if (error.code === "23505") return { status: 409, error: CHANGED }
@@ -62,8 +70,31 @@ export function commissionRpcError(
   if (at === -1) return null
   const rest = message.slice(at + MARKER.length)
   const end = rest.indexOf(":")
-  const code = end === -1 ? rest : rest.slice(0, end)
-  return CODE_MAP[code.trim()] ?? null
+  const code = (end === -1 ? rest : rest.slice(0, end)).trim()
+  const mapped = CODE_MAP[code]
+  if (!mapped) return null
+  if (code === "AJUSTES_PAGADOS" && end !== -1) {
+    const pagoBloqueanteId = rest.slice(end + 1).trim()
+    if (pagoBloqueanteId) return { ...mapped, pagoBloqueanteId }
+  }
+  return mapped
+}
+
+// Names the blocking payout by its day; any failure keeps the generic text.
+async function blockingPayoutMessage(organizationId: string, pagoId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("comisiones_pagos")
+      .select("fecha_pago")
+      .eq("id", pagoId)
+      .eq("organization_id", organizationId)
+      .maybeSingle()
+    if (error || !data?.fecha_pago) return null
+    const fecha = formatDateValue(data.fecha_pago)
+    return fecha ? `Primero anulá el pago del ${fecha}, que tiene ajustes de este.` : null
+  } catch {
+    return null
+  }
 }
 
 export async function payCommissions(a: {
@@ -109,7 +140,12 @@ export async function annulCommissionPayout(a: {
   })
   if (error) {
     const mapped = commissionRpcError(error)
-    if (mapped) return NextResponse.json({ error: mapped.error }, { status: mapped.status })
+    if (mapped) {
+      const named = mapped.pagoBloqueanteId
+        ? await blockingPayoutMessage(a.organizationId, mapped.pagoBloqueanteId)
+        : null
+      return NextResponse.json({ error: named ?? mapped.error }, { status: mapped.status })
+    }
     console.error("[comisiones] anular_pago_comisiones failed", {
       organizationId: a.organizationId,
       pagoId: a.pagoId,
