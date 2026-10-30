@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { eliminarPersonal } from "@/lib/usuarios/eliminar-personal"
+import { readCommissionRows } from "@/lib/commissions/rows"
+import { round2 } from "@/lib/precios"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
 
@@ -56,24 +58,17 @@ export async function GET(
         .eq("vendedor_id", id)
         .order("created_at", { ascending: false })
         .limit(HISTORIAL_LIMIT),
-      supabaseAdmin
-        .from("v_comisiones_ventas")
-        .select("monto_comision, comision_pagada")
-        .eq("organization_id", organizationId!)
-        .eq("vendedor_id", id),
+      // Every row of this seller (incl. post-payment adjustments) from the single definition.
+      readCommissionRows({ organizationId: organizationId!, roles: ["VENDEDOR"], beneficiarioId: id }),
     ])
 
     const statsRow = (statsRes.data || []).find((r: any) => r.vendedor_id === id)
     const ventasRecientes = ventasRes.data || []
-    const comisiones = comisionesRes.data || []
+    const comisiones = comisionesRes
 
-    const comisionDevengada = comisiones.reduce(
-      (sum: number, c: any) => sum + parseFloat(c.monto_comision || "0"),
-      0
-    )
-    const comisionPagada = comisiones
-      .filter((c: any) => c.comision_pagada)
-      .reduce((sum: number, c: any) => sum + parseFloat(c.monto_comision || "0"), 0)
+    const comisionDevengada = round2(comisiones.reduce((sum, c) => sum + c.monto, 0))
+    const comisionPagada = round2(comisiones.filter((c) => c.pagado).reduce((sum, c) => sum + c.monto, 0))
+    const comisionPendiente = round2(comisiones.reduce((sum, c) => sum + c.pendiente, 0))
 
     return NextResponse.json({
       id: vendedor.id,
@@ -91,7 +86,7 @@ export async function GET(
         : null,
       comisionDevengada,
       comisionPagada,
-      comisionPendiente: comisionDevengada - comisionPagada,
+      comisionPendiente,
       ventas: ventasRecientes.map((v: any) => ({
         id: v.id,
         total: v.total,
