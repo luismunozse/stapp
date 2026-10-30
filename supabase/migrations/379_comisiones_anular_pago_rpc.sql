@@ -83,7 +83,8 @@ BEGIN
     RAISE EXCEPTION 'COMISION_ERROR:PAGO_YA_ANULADO';
   END IF;
 
-  -- 5. No live adjustment in another payout may point at an ORIGINAL row of this one.
+  -- 5. No live adjustment in another payout may depend on a row of this one: any adjustment on
+  --    this payout's ORIGINAL rows, and an AJUSTE_ANULACION on its AJUSTE_DEVOLUCION rows.
   SELECT a.pago_id INTO v_bloqueo
     FROM comisiones_pagos_items a
    WHERE a.organization_id = p_organization_id
