@@ -18,6 +18,14 @@ import type { CommissionBaseKind } from "@/lib/commissions/types"
 
 const CONFIG_URL = "/api/comisiones/config"
 const SAVE_ERROR = "No se pudieron guardar las reglas"
+const RATE_ERROR = "Ingrese un porcentaje entre 0 y 100."
+
+// The raw text of a number input is "" when the browser rejects what was typed (a comma, letters).
+function parseRate(text: string): number | null {
+  if (text.trim() === "") return null
+  const value = Number(text)
+  return Number.isFinite(value) && value >= 0 && value <= 100 ? value : null
+}
 
 const OPTION_CLASS =
   "flex items-start gap-3 p-3 rounded-lg border transition-colors duration-150 ease-out has-[:checked]:border-primary has-[:checked]:bg-accent/40 has-[:disabled]:opacity-60"
@@ -128,6 +136,7 @@ export function ComisionesConfig({ allowEdit }: { allowEdit: boolean }) {
   }
 
   const disabled = !allowEdit || saving
+  const rateInvalid = parseRate(rateText) === null
   const patch = (changes: Partial<CommissionConfig>) => setDraft({ ...draft, ...changes })
 
   const handleSave = async () => {
@@ -149,12 +158,14 @@ export function ComisionesConfig({ allowEdit }: { allowEdit: boolean }) {
         setRateText(String(saved.data.recepcionPorcentajeDefault))
       }
       toast.success("Reglas de comisiones guardadas")
-      await mutate()
     } catch {
       toast.error(SAVE_ERROR)
+      return
     } finally {
       setSaving(false)
     }
+    // The rules are already saved: a failed revalidation must not look like a failed save.
+    await mutate().catch(() => undefined)
   }
 
   return (
@@ -221,14 +232,22 @@ export function ComisionesConfig({ allowEdit }: { allowEdit: boolean }) {
               value={rateText}
               onChange={(e) => {
                 setRateText(e.target.value)
-                patch({ recepcionPorcentajeDefault: e.target.value === "" ? 0 : Number(e.target.value) })
+                const rate = parseRate(e.target.value)
+                if (rate !== null) patch({ recepcionPorcentajeDefault: rate })
               }}
+              aria-invalid={rateInvalid}
+              aria-describedby={rateInvalid ? "comision-recepcion-ayuda comision-recepcion-error" : "comision-recepcion-ayuda"}
               disabled={disabled}
               className="w-24"
             />
             <span className="text-sm text-muted-foreground">%</span>
           </div>
-          <p className="text-xs text-muted-foreground">
+          {rateInvalid && (
+            <p id="comision-recepcion-error" className="text-xs text-destructive" role="alert">
+              {RATE_ERROR}
+            </p>
+          )}
+          <p id="comision-recepcion-ayuda" className="text-xs text-muted-foreground">
             Se aplica a quien recibe un equipo y no tiene un porcentaje de recepción propio. Con 0, la recepción no
             genera comisión. Cada orden guarda el porcentaje vigente al recibirla: un cambio no modifica órdenes ya
             recibidas.
@@ -254,7 +273,7 @@ export function ComisionesConfig({ allowEdit }: { allowEdit: boolean }) {
 
         <Button
           onClick={handleSave}
-          disabled={disabled}
+          disabled={disabled || rateInvalid}
           className="w-full sm:w-auto transition-transform duration-150 ease-out active:scale-[0.97]"
         >
           <Save className="mr-2 h-4 w-4" />

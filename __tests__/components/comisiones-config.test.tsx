@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { SWRConfig } from "swr"
-import { COMMISSION_CONFIG_DEFAULTS } from "@/lib/commissions/config"
+import { BASE_OPTIONS, COMMISSION_CONFIG_DEFAULTS, ORDER_ACCRUAL_OPTIONS } from "@/lib/commissions/config"
 
 const { toastSuccess, toastError } = vi.hoisted(() => ({ toastSuccess: vi.fn(), toastError: vi.fn() }))
 vi.mock("sonner", () => ({ toast: { success: toastSuccess, error: toastError } }))
@@ -82,14 +82,14 @@ describe("ComisionesConfig", () => {
     mockFetch.mockResolvedValueOnce(
       respond({ error: "El porcentaje de recepción debe estar entre 0 y 100" }, false, 400),
     )
-    fireEvent.change(screen.getByLabelText("Porcentaje de recepción por defecto"), { target: { value: "150" } })
+    fireEvent.change(screen.getByLabelText("Porcentaje de recepción por defecto"), { target: { value: "7" } })
     fireEvent.click(screen.getByRole("button", { name: "Guardar reglas" }))
 
     await waitFor(() =>
       expect(toastError).toHaveBeenCalledWith("El porcentaje de recepción debe estar entre 0 y 100"),
     )
     expect(toastSuccess).not.toHaveBeenCalled()
-    expect(screen.getByLabelText("Porcentaje de recepción por defecto")).toHaveValue(150)
+    expect(screen.getByLabelText("Porcentaje de recepción por defecto")).toHaveValue(7)
   })
 
   it("falls back to a generic message when the server sends no error text", async () => {
@@ -110,12 +110,61 @@ describe("ComisionesConfig", () => {
     expect(screen.queryByRole("button", { name: "Guardar reglas" })).not.toBeInTheDocument()
   })
 
+  it("blocks saving an empty or out-of-range rate and never coerces it to 0", async () => {
+    await renderScreen()
+    await screen.findByText("Comisiones de reparaciones")
+    const input = screen.getByLabelText("Porcentaje de recepción por defecto")
+    const save = screen.getByRole("button", { name: "Guardar reglas" })
+    const callsBefore = mockFetch.mock.calls.length
+
+    fireEvent.change(input, { target: { value: "" } })
+    expect(screen.getByText("Ingrese un porcentaje entre 0 y 100.")).toBeInTheDocument()
+    expect(input).toHaveAttribute("aria-invalid", "true")
+    expect(input.getAttribute("aria-describedby")).toContain("comision-recepcion-error")
+    expect(save).toBeDisabled()
+    fireEvent.click(save)
+
+    fireEvent.change(input, { target: { value: "150" } })
+    expect(save).toBeDisabled()
+    expect(mockFetch.mock.calls.length).toBe(callsBefore)
+
+    mockFetch.mockResolvedValueOnce(respond({ ...SERVER_CONFIG, recepcionPorcentajeDefault: 5 }))
+    fireEvent.change(input, { target: { value: "5" } })
+    expect(screen.queryByText("Ingrese un porcentaje entre 0 y 100.")).not.toBeInTheDocument()
+    expect(save).toBeEnabled()
+    fireEvent.click(save)
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalled())
+    const put = mockFetch.mock.calls.find(([, init]) => init?.method === "PUT")
+    expect(JSON.parse(put![1].body).recepcionPorcentajeDefault).toBe(5)
+  })
+
+  it("does not report an error when the save worked but the refresh failed", async () => {
+    await renderScreen()
+    await screen.findByText("Comisiones de reparaciones")
+
+    mockFetch.mockResolvedValueOnce(respond(SERVER_CONFIG))
+    mockFetch.mockRejectedValueOnce(new Error("network"))
+    fireEvent.click(screen.getByRole("button", { name: "Guardar reglas" }))
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("Reglas de comisiones guardadas"))
+    await waitFor(() => expect(mockFetch.mock.calls.length).toBeGreaterThanOrEqual(3))
+    expect(toastError).not.toHaveBeenCalled()
+  })
+
+  it("offers no Save button while loading", async () => {
+    mockFetch.mockReturnValue(new Promise(() => {}))
+    await renderScreen()
+
+    expect(await screen.findByText("Cargando...")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Guardar reglas" })).not.toBeInTheDocument()
+  })
+
   it("allowEdit=false disables every control", async () => {
     await renderScreen(false)
     await screen.findByText("Comisiones de reparaciones")
 
     const radios = screen.getAllByRole("radio")
-    expect(radios).toHaveLength(7)
+    expect(radios).toHaveLength(ORDER_ACCRUAL_OPTIONS.length + 2 * BASE_OPTIONS.length)
     for (const radio of radios) expect(radio).toBeDisabled()
     expect(screen.getByLabelText("Porcentaje de recepción por defecto")).toBeDisabled()
     for (const box of screen.getAllByRole("checkbox")) expect(box).toBeDisabled()
