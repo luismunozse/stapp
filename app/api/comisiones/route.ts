@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { readCommissionRows, summarizeByBeneficiary } from "@/lib/commissions/rows"
 
 export async function GET(request: Request) {
   try {
@@ -21,109 +22,62 @@ export async function GET(request: Request) {
       tecnicoId = userId
     }
 
-    // Fetch org flag before building the query
-    const { data: orgData } = await supabaseAdmin
-      .from("organizations")
-      .select("comision_aplica_sin_reparacion")
-      .eq("id", organizationId!)
-      .single()
-    const comisionAplicaSinReparacion = orgData?.comision_aplica_sin_reparacion ?? false
-
-    const estadosComision = comisionAplicaSinReparacion
-      ? ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION"]
-      : ["REPARADO", "ENTREGADO"]
-
-    let query = supabaseAdmin
-      .from("v_comisiones_ordenes")
-      .select(`
-        orden_id,
-        tecnico_id,
-        codigo_orden,
-        numero_orden,
-        dispositivo,
-        estado,
-        estado_cobro,
-        fecha_completado,
-        costo_final,
-        costo_repuestos,
-        ganancia,
-        porcentaje_comision,
-        monto_comision,
-        comision_pagada,
-        fecha_pago_comision
-      `)
-      .eq("organization_id", organizationId!)
-      .in("estado", estadosComision)
-      .eq("estado_cobro", "COBRADO")
-      .order("fecha_completado", { ascending: false })
-
-    if (tecnicoId) query = query.eq("tecnico_id", tecnicoId)
-    if (desde) query = query.gte("fecha_completado", desde)
-    if (hasta) query = query.lte("fecha_completado", hasta)
-    if (soloPendientes) query = query.eq("comision_pagada", false)
-
-    const { data: ordenes, error: qErr } = await query
-    if (qErr) throw qErr
+    // The definition (DB views) owns which orders accrue, incl. the org flag.
+    const rows = await readCommissionRows({
+      organizationId: organizationId!,
+      roles: ["TECNICO"],
+      beneficiarioId: tecnicoId,
+      desde,
+      hasta,
+      estado: soloPendientes ? "pendiente" : "all",
+    })
 
     // Obtener nombres de técnicos
-    const tecnicoIds = Array.from(new Set((ordenes || []).map((o) => o.tecnico_id).filter(Boolean)))
+    const tecnicoIds = Array.from(new Set(rows.map((r) => r.beneficiarioId).filter(Boolean)))
     const tecnicosMap = new Map<string, string>()
     if (tecnicoIds.length > 0) {
       const { data: tecs } = await supabaseAdmin
         .from("users")
         .select("id, nombre")
         .in("id", tecnicoIds)
+        .eq("organization_id", organizationId!)
       ;(tecs || []).forEach((t) => tecnicosMap.set(t.id, t.nombre))
     }
+    const nombreDe = (id: string) => tecnicosMap.get(id) || "Sin nombre"
 
-    const items = (ordenes || []).map((o) => ({
-      ordenId: o.orden_id,
-      tecnicoId: o.tecnico_id,
-      tecnicoNombre: tecnicosMap.get(o.tecnico_id) || "Sin nombre",
-      codigoOrden: o.codigo_orden,
-      numeroOrden: o.numero_orden,
-      dispositivo: o.dispositivo,
-      estado: o.estado,
-      fechaCompletado: o.fecha_completado,
-      costoFinal: Number(o.costo_final || 0),
-      costoRepuestos: Number(o.costo_repuestos || 0),
-      ganancia: Number(o.ganancia || 0),
-      porcentajeComision: Number(o.porcentaje_comision || 0),
-      montoComision: Number(o.monto_comision || 0),
-      comisionPagada: !!o.comision_pagada,
-      fechaPagoComision: o.fecha_pago_comision,
+    const items = rows.map((r) => ({
+      clave: r.clave,
+      ordenId: r.documentoId,
+      tecnicoId: r.beneficiarioId,
+      tecnicoNombre: nombreDe(r.beneficiarioId),
+      rol: r.rol,
+      tipo: r.tipo,
+      pagoId: r.pagoId,
+      pendiente: r.pendiente,
+      codigoOrden: r.documentoCodigo,
+      numeroOrden: r.documentoNumero,
+      dispositivo: r.documentoDetalle,
+      estado: r.documentoEstado,
+      fechaCompletado: r.fechaDevengo,
+      costoFinal: r.documentoTotal ?? 0,
+      costoRepuestos: r.documentoCostoRepuestos ?? 0,
+      ganancia: r.base ?? 0,
+      porcentajeComision: r.porcentaje ?? 0,
+      montoComision: r.monto,
+      comisionPagada: r.pagado,
+      fechaPagoComision: r.fechaPago,
     }))
 
-    // Totales por técnico
-    const resumenMap = new Map<string, {
-      tecnicoId: string
-      tecnicoNombre: string
-      totalOrdenes: number
-      totalGanancia: number
-      totalComision: number
-      totalPendiente: number
-    }>()
-    for (const it of items) {
-      const k = it.tecnicoId
-      const cur = resumenMap.get(k) || {
-        tecnicoId: k,
-        tecnicoNombre: it.tecnicoNombre,
-        totalOrdenes: 0,
-        totalGanancia: 0,
-        totalComision: 0,
-        totalPendiente: 0,
-      }
-      cur.totalOrdenes += 1
-      cur.totalGanancia += it.ganancia
-      cur.totalComision += it.montoComision
-      if (!it.comisionPagada) cur.totalPendiente += it.montoComision
-      resumenMap.set(k, cur)
-    }
+    const resumen = summarizeByBeneficiary(rows).map((s) => ({
+      tecnicoId: s.beneficiarioId,
+      tecnicoNombre: nombreDe(s.beneficiarioId),
+      totalOrdenes: s.originales,
+      totalGanancia: s.base,
+      totalComision: s.monto,
+      totalPendiente: s.pendiente,
+    }))
 
-    return NextResponse.json({
-      items,
-      resumen: Array.from(resumenMap.values()),
-    }, { headers: { "Cache-Control": "no-store" } })
+    return NextResponse.json({ items, resumen }, { headers: { "Cache-Control": "no-store" } })
   } catch (err) {
     console.error("Error fetching comisiones:", err)
     return NextResponse.json({ error: "Error al obtener comisiones" }, { status: 500 })
