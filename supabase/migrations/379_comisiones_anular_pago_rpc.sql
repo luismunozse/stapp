@@ -11,9 +11,13 @@
 -- (another org's payout is PAGO_NO_ENCONTRADO) -> already annulled? -> adjustment guard ->
 -- soft annulment of payout and items -> legacy flag sync -> audit row -> result.
 --
--- Adjustment guard: annulling a payout whose ORIGINAL rows were later corrected by an
--- AJUSTE_DEVOLUCION / AJUSTE_ANULACION that sits in ANOTHER live payout would leave that
--- adjustment paid against a row that is pending again. It is refused with
+-- Adjustment guard: two dependencies are protected. (1) Annulling a payout whose ORIGINAL
+-- rows were later corrected by an AJUSTE_DEVOLUCION / AJUSTE_ANULACION that sits in ANOTHER
+-- live payout would leave that adjustment paid against a row that is pending again.
+-- (2) A paid AJUSTE_ANULACION is -(ORIGINAL + paid AJUSTE_DEVOLUCION) (377), and the live
+-- AJUSTE_DEVOLUCION row vanishes once the sale is ANULADA, so annulling the payout of a paid
+-- AJUSTE_DEVOLUCION while a live AJUSTE_ANULACION of the same document and role exists would
+-- leave that return paid with nothing pending. Both are refused with
 -- AJUSTES_PAGADOS:<that pago_id>; annul the adjustment payout first.
 --
 -- The flag sync is not optional: the legacy backfill reads comision_pagada, so a stale true
@@ -89,7 +93,8 @@ BEGIN
      AND EXISTS (
        SELECT 1 FROM comisiones_pagos_items o
         WHERE o.pago_id = p_pago_id AND o.organization_id = p_organization_id
-          AND o.tipo = 'ORIGINAL' AND NOT o.anulado
+          AND NOT o.anulado
+          AND (o.tipo = 'ORIGINAL' OR (o.tipo = 'AJUSTE_DEVOLUCION' AND a.tipo = 'AJUSTE_ANULACION'))
           AND o.documento_tipo = a.documento_tipo
           AND o.documento_id = a.documento_id
           AND o.rol = a.rol)

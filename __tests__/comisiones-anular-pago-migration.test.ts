@@ -14,6 +14,10 @@ describe("379: anular_pago_comisiones", () => {
     expect(mig()).toMatch(/tipo IN \('AJUSTE_DEVOLUCION', 'AJUSTE_ANULACION'\).*COMISION_ERROR:AJUSTES_PAGADOS/)
     expect(mig().indexOf("AJUSTES_PAGADOS")).toBeLessThan(mig().indexOf("SET anulado = true"))
   })
+  it("also guards a paid AJUSTE_DEVOLUCION that a later paid AJUSTE_ANULACION nets", () => {
+    expect(mig()).toContain("AND NOT o.anulado AND (o.tipo = 'ORIGINAL' OR (o.tipo = 'AJUSTE_DEVOLUCION' AND a.tipo = 'AJUSTE_ANULACION'))")
+    expect(mig()).not.toContain("AND o.tipo = 'ORIGINAL' AND NOT o.anulado")
+  })
   it("soft-annuls payout and items, resyncs flags, audits in the same transaction", () => {
     const s = mig()
     expect(s).toMatch(/UPDATE comisiones_pagos SET anulado = true, anulado_por = p_usuario_id, anulado_at = now\(\), motivo_anulacion = btrim\(p_motivo\)/)
@@ -24,6 +28,12 @@ describe("379: anular_pago_comisiones", () => {
   })
 })
 describe("379: probes", () => {
+  it("run every RPC call as service_role and cover the return-adjustment chain", () => {
+    expect(probes()).toContain("SET LOCAL ROLE service_role"); expect(probes()).toContain("RESET ROLE")
+    expect(probes()).toContain("AJUSTE_DEVOLUCION"); expect(probes()).toContain("devoluciones_venta")
+    expect(probes()).toContain("c.dev_at - interval '1 day'")
+    expect(probes()).toMatch(/COUNT\(DISTINCT orden\)/)
+  })
   it("cover annul, re-annul, reason, the adjustment guard via a sale annulled after payment", () => {
     for (const c of ["MOTIVO_REQUERIDO", "PAGO_YA_ANULADO", "AJUSTES_PAGADOS", "AJUSTE_ANULACION", "fecha_anulacion", "audit_logs"]) expect(probes()).toContain(c)
     expect(stripComments(probes()).trimEnd().endsWith("ROLLBACK;")).toBe(true)

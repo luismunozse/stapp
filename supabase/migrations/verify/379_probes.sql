@@ -20,7 +20,14 @@
 --   * annulling the same payout again is PAGO_YA_ANULADO;
 --   * a sale annulled after its commission was paid gets fecha_anulacion from the trigger and an
 --     AJUSTE_ANULACION row of -P1.monto; once that row is paid (P2), annulling P1 is AJUSTES_PAGADOS
---     and annulling P2 and then P1 both succeed.
+--     and annulling P2 and then P1 both succeed;
+--   * the second dependency (probes 12-16): ORIGINAL paid (P1, inserted directly and backdated so a
+--     later return lands after it), the return's AJUSTE_DEVOLUCION paid (P2), the sale annulled and
+--     its AJUSTE_ANULACION (-(P1 + P2)) paid (P3). Annulling P2 is then AJUSTES_PAGADOS:<P3>;
+--     annulling P3, P2 and P1 in that order all succeed.
+--   * every RPC call runs as service_role (SET LOCAL ROLE ... RESET ROLE), as the app calls them,
+--     so the privilege path (invoker views, INSERT audit_logs, UPDATE ventas) is proven. Fixture
+--     setup stays as postgres.
 --
 -- Results accumulate in _r and come out in ONE select. Green = esperado equals obtenido, or
 -- obtenido starts with 'OK:'.
@@ -38,6 +45,13 @@ CREATE TEMP TABLE _ctx (
 -- Sale fixture, independent of the order fixture (any org with an active admin).
 CREATE TEMP TABLE _cv (org TEXT, clave TEXT, doc_id TEXT, benef TEXT, monto NUMERIC, admin TEXT);
 
+-- Return fixture: COMPLETADA sale with exactly one effective return, a seller, an accrued unpaid
+-- commission whose return adjustment is non-zero, no live invoice / remito, no payout items.
+CREATE TEMP TABLE _cw (
+  org TEXT, clave TEXT, doc_id TEXT, benef TEXT, monto NUMERIC, base NUMERIC, pct NUMERIC, devengo TIMESTAMPTZ,
+  admin TEXT, dev_id TEXT, dev_at TIMESTAMPTZ, aj_esperado NUMERIC
+);
+
 -- Expects anular_pago_comisiones to fail with COMISION_ERROR:<code>; records OK: <message> when it does.
 CREATE FUNCTION pg_temp.probe_err(p_orden INT, p_probe TEXT, p_code TEXT, p_org TEXT, p_usr TEXT, p_pago TEXT, p_motivo TEXT) RETURNS void
 LANGUAGE plpgsql AS $$
@@ -48,9 +62,12 @@ BEGIN
     RETURN;
   END IF;
   BEGIN
+    SET LOCAL ROLE service_role;
     PERFORM anular_pago_comisiones(p_org, p_usr, p_pago, p_motivo);
+    RESET ROLE;
     INSERT INTO _r VALUES (p_orden, p_probe, 'COMISION_ERROR:' || p_code, 'FALLO: no levanto excepcion');
   EXCEPTION WHEN OTHERS THEN
+    RESET ROLE;
     GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
     INSERT INTO _r VALUES (p_orden, p_probe, 'COMISION_ERROR:' || p_code,
       CASE WHEN v_msg LIKE '%COMISION_ERROR:' || p_code || '%' THEN 'OK: ' || v_msg ELSE 'FALLO: ' || SQLSTATE || ' ' || v_msg END);
@@ -81,9 +98,12 @@ DECLARE c RECORD; v_res JSONB;
 BEGIN
   SELECT * INTO c FROM _ctx;
   IF NOT FOUND THEN RETURN; END IF;
+  SET LOCAL ROLE service_role;
   v_res := pagar_comisiones(c.org, c.admin, c.benef, jsonb_build_array(jsonb_build_object('clave', c.clave, 'monto', c.monto)), 'probe 379');
+  RESET ROLE;
   UPDATE _ctx SET pago_id = v_res->>'pagoId';
 EXCEPTION WHEN OTHERS THEN
+  RESET ROLE;
   UPDATE _ctx SET setup_err = SQLSTATE || ' ' || SQLERRM;
 END $$;
 
@@ -100,6 +120,27 @@ SELECT f.organization_id, f.clave, f.documento_id, f.beneficiario_id, f.monto,
    AND NOT EXISTS (SELECT 1 FROM comprobantes_fiscales cf WHERE cf.venta_id = v.id AND cf.estado IN ('pendiente', 'emitido'))
    AND NOT EXISTS (SELECT 1 FROM facturas fa WHERE fa.venta_id = v.id AND fa.estado_pago::text <> 'ANULADA')
    AND NOT EXISTS (SELECT 1 FROM devoluciones_venta d WHERE d.venta_id = v.id)
+   AND NOT EXISTS (SELECT 1 FROM comisiones_pagos_items i WHERE i.organization_id = v.organization_id AND i.documento_tipo = 'VENTA' AND i.documento_id = v.id)
+   AND EXISTS (SELECT 1 FROM users u WHERE u.organization_id = f.organization_id AND u.rol = 'ADMIN' AND u.deleted_at IS NULL)
+ ORDER BY EXISTS (SELECT 1 FROM items_venta iv WHERE iv.venta_id = v.id AND iv.inventario_id IS NOT NULL), f.clave
+ LIMIT 1;
+
+INSERT INTO _cw (org, clave, doc_id, benef, monto, base, pct, devengo, admin, dev_id, dev_at, aj_esperado)
+SELECT f.organization_id, f.clave, f.documento_id, f.beneficiario_id, f.monto, f.base, f.porcentaje, f.fecha_devengo,
+       (SELECT u.id FROM users u WHERE u.organization_id = f.organization_id AND u.rol = 'ADMIN' AND u.deleted_at IS NULL ORDER BY u.id LIMIT 1),
+       d.id, d.created_at,
+       -ROUND(COALESCE(v.iva_neto, v.total) * d.monto_devolucion / v.total * f.porcentaje / 100, 2)
+  FROM v_comisiones_devengadas f
+  JOIN ventas v ON v.id = f.documento_id AND v.organization_id = f.organization_id
+  JOIN devoluciones_venta d ON d.venta_id = v.id
+ WHERE f.documento_tipo = 'VENTA' AND f.rol = 'VENDEDOR' AND f.tipo = 'ORIGINAL'
+   AND NOT f.pagado AND f.monto > 0 AND NOT COALESCE(v.comision_pagada, false)
+   AND v.estado = 'COMPLETADA' AND v.vendedor_id IS NOT NULL AND v.total > 0
+   AND d.estado = 'COMPLETADA' AND NOT d.anulada
+   AND (SELECT COUNT(*) FROM devoluciones_venta d2 WHERE d2.venta_id = v.id) = 1
+   AND ROUND(COALESCE(v.iva_neto, v.total) * d.monto_devolucion / v.total * f.porcentaje / 100, 2) > 0
+   AND NOT EXISTS (SELECT 1 FROM comprobantes_fiscales cf WHERE cf.venta_id = v.id AND cf.estado IN ('pendiente', 'emitido'))
+   AND NOT EXISTS (SELECT 1 FROM facturas fa WHERE fa.venta_id = v.id AND fa.estado_pago::text <> 'ANULADA')
    AND NOT EXISTS (SELECT 1 FROM comisiones_pagos_items i WHERE i.organization_id = v.organization_id AND i.documento_tipo = 'VENTA' AND i.documento_id = v.id)
    AND EXISTS (SELECT 1 FROM users u WHERE u.organization_id = f.organization_id AND u.rol = 'ADMIN' AND u.deleted_at IS NULL)
  ORDER BY EXISTS (SELECT 1 FROM items_venta iv WHERE iv.venta_id = v.id AND iv.inventario_id IS NOT NULL), f.clave
@@ -139,7 +180,9 @@ BEGIN
     INSERT INTO _r VALUES (6, 'anular el pago de una orden: anulado, fila pendiente, flag, audit_logs', 'OK', 'SALTEADO: no hubo pago');
     RETURN;
   END IF;
+  SET LOCAL ROLE service_role;
   v_res := anular_pago_comisiones(c.org, c.admin, c.pago_id, '  probe 379  ');
+  RESET ROLE;
   SELECT format('filas=%s / pago=%s / items=%s / pagado=%s / flag=%s / audit=%s',
       v_res->>'filas',
       (SELECT (p.anulado AND p.anulado_por = c.admin AND p.anulado_at IS NOT NULL AND p.motivo_anulacion = 'probe 379') FROM comisiones_pagos p WHERE p.id = c.pago_id)::text,
@@ -179,7 +222,9 @@ BEGIN
     RETURN;
   END IF;
 
+  SET LOCAL ROLE service_role;
   v_res := pagar_comisiones(c.org, c.admin, c.benef, jsonb_build_array(jsonb_build_object('clave', c.clave, 'monto', c.monto)), 'probe 379 P1');
+  RESET ROLE;
   v_p1 := v_res->>'pagoId';
   UPDATE ventas SET estado = 'ANULADA' WHERE id = c.doc_id AND organization_id = c.org;
 
@@ -194,12 +239,17 @@ BEGIN
     'fecha_anulacion=true / ajuste=true / monto=true', v_got));
 
   v_stage := 9;
+  SET LOCAL ROLE service_role;
   v_res := pagar_comisiones(c.org, c.admin, c.benef, jsonb_build_array(jsonb_build_object('clave', v_clave_aj, 'monto', v_monto_aj)), 'probe 379 P2');
+  RESET ROLE;
   v_p2 := v_res->>'pagoId';
   BEGIN
+    SET LOCAL ROLE service_role;
     PERFORM anular_pago_comisiones(c.org, c.admin, v_p1, 'probe 379 P1');
+    RESET ROLE;
     v_got := 'FALLO: no levanto excepcion';
   EXCEPTION WHEN OTHERS THEN
+    RESET ROLE;
     GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
     v_got := CASE WHEN v_msg LIKE '%COMISION_ERROR:AJUSTES_PAGADOS:' || v_p2 THEN 'OK: ' || v_msg ELSE 'FALLO: ' || SQLSTATE || ' ' || v_msg END;
   END;
@@ -207,12 +257,16 @@ BEGIN
     'COMISION_ERROR:AJUSTES_PAGADOS:' || v_p2, v_got));
 
   v_stage := 10;
+  SET LOCAL ROLE service_role;
   v_res := anular_pago_comisiones(c.org, c.admin, v_p2, 'probe 379 P2');
+  RESET ROLE;
   v_rows := v_rows || jsonb_build_array(jsonb_build_array(10, 'anular P2 (el ajuste) primero: OK', 'filas=1 / anulado=true',
     format('filas=%s / anulado=%s', v_res->>'filas', (SELECT p.anulado FROM comisiones_pagos p WHERE p.id = v_p2)::text)));
 
   v_stage := 11;
+  SET LOCAL ROLE service_role;
   v_res := anular_pago_comisiones(c.org, c.admin, v_p1, 'probe 379 P1');
+  RESET ROLE;
   v_rows := v_rows || jsonb_build_array(jsonb_build_array(11, 'anular P1 despues: OK y flag de la venta en false', 'filas=1 / anulado=true / flag=false',
     format('filas=%s / anulado=%s / flag=%s', v_res->>'filas',
       (SELECT p.anulado FROM comisiones_pagos p WHERE p.id = v_p1)::text,
@@ -220,6 +274,7 @@ BEGIN
 
   INSERT INTO _r SELECT (r->>0)::int, r->>1, r->>2, r->>3 FROM jsonb_array_elements(v_rows) AS t(r);
 EXCEPTION WHEN OTHERS THEN
+  RESET ROLE;
   GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
   INSERT INTO _r SELECT (r->>0)::int, r->>1, r->>2, r->>3 FROM jsonb_array_elements(v_rows) AS t(r);
   INSERT INTO _r VALUES (v_stage, 'cadena de la venta anulada: paso ' || v_stage, 'OK', 'FALLO: ' || SQLSTATE || ' ' || v_msg);
@@ -227,9 +282,114 @@ EXCEPTION WHEN OTHERS THEN
     FROM generate_series(v_stage + 1, 11) AS g;
 END $$;
 
--- 12. No probe lost its row or inserted two.
-INSERT INTO _r SELECT 12, 'filas de los probes 1 a 11: total / distintas', '11 / 11',
-  COUNT(*)::TEXT || ' / ' || COUNT(DISTINCT orden)::TEXT FROM _r WHERE orden BETWEEN 1 AND 11;
+-- ── 12-16. A paid AJUSTE_DEVOLUCION that a paid AJUSTE_ANULACION nets ─────
+-- 12: P1 = ORIGINAL paid directly, backdated before the return; the return yields a live AJUSTE_DEVOLUCION.
+-- 13: pay it (P2); the live twin disappears.
+-- 14: annul the sale; the AJUSTE_ANULACION is -(P1 + P2); pay it (P3).
+-- 15: annulling P2 is AJUSTES_PAGADOS:<P3>.
+-- 16: annul P3, then P2, then P1: all succeed.
+DO $$
+DECLARE
+  c RECORD; v_stage INT := 12; v_p1 TEXT; v_p2 TEXT; v_p3 TEXT; v_res JSONB; v_got TEXT; v_msg TEXT;
+  v_clave_dev TEXT; v_monto_dev NUMERIC; v_clave_an TEXT; v_monto_an NUMERIC;
+  v_f3 TEXT; v_f2 TEXT; v_f1 TEXT;
+  -- Buffered like the block above: the handler rolls this block back, and the lines of the steps
+  -- that did run must survive it.
+  v_rows JSONB := '[]'::jsonb;
+BEGIN
+  SELECT * INTO c FROM _cw;
+  IF NOT FOUND THEN
+    INSERT INTO _r VALUES (12, 'devolucion tras el pago: AJUSTE_DEVOLUCION vivo', 'OK', 'SALTEADO: la base no tiene una venta con una sola devolucion, sin comprobantes ni pagos y con comision devengada');
+    INSERT INTO _r VALUES (13, 'pagar el AJUSTE_DEVOLUCION (P2): su gemelo vivo desaparece', 'OK', 'SALTEADO: sin venta que sirva');
+    INSERT INTO _r VALUES (14, 'venta anulada: AJUSTE_ANULACION de -(P1+P2), pagado (P3)', 'OK', 'SALTEADO: sin venta que sirva');
+    INSERT INTO _r VALUES (15, 'AJUSTES_PAGADOS: anular P2 con el AJUSTE_ANULACION pagado en P3', 'OK', 'SALTEADO: sin venta que sirva');
+    INSERT INTO _r VALUES (16, 'anular P3, P2 y P1 en ese orden: OK', 'OK', 'SALTEADO: sin venta que sirva');
+    RETURN;
+  END IF;
+
+  -- P1 directly (not through the RPC): backdated one day before the return, the only way to make
+  -- the return land after the payment.
+  INSERT INTO comisiones_pagos (organization_id, beneficiario_id, fecha_pago, pagado_por, total, origen)
+  VALUES (c.org, c.benef, c.dev_at - interval '1 day', c.admin, c.monto, 'APP')
+  RETURNING id INTO v_p1;
+  INSERT INTO comisiones_pagos_items (pago_id, organization_id, documento_tipo, documento_id, rol, tipo, base, porcentaje, monto, fecha_devengo)
+  VALUES (v_p1, c.org, 'VENTA', c.doc_id, 'VENDEDOR', 'ORIGINAL', c.base, c.pct, c.monto, c.devengo);
+  PERFORM comisiones_sincronizar_flags(c.org, 'VENTA', ARRAY[c.doc_id]);
+
+  SELECT d.clave, d.monto INTO v_clave_dev, v_monto_dev
+    FROM v_comisiones_devengadas d
+   WHERE d.organization_id = c.org AND d.documento_id = c.doc_id AND d.tipo = 'AJUSTE_DEVOLUCION' AND NOT d.pagado;
+  v_rows := v_rows || jsonb_build_array(jsonb_build_array(12, 'devolucion tras el pago: AJUSTE_DEVOLUCION vivo',
+    'ajuste=true / monto=true / ref=true',
+    format('ajuste=%s / monto=%s / ref=%s', (v_clave_dev IS NOT NULL)::text, (v_monto_dev = c.aj_esperado)::text,
+      (v_clave_dev = 'VENTA:' || c.doc_id || ':VENDEDOR:AJUSTE_DEVOLUCION:' || c.dev_id)::text)));
+
+  v_stage := 13;
+  SET LOCAL ROLE service_role;
+  v_res := pagar_comisiones(c.org, c.admin, c.benef, jsonb_build_array(jsonb_build_object('clave', v_clave_dev, 'monto', v_monto_dev)), 'probe 379 P2');
+  RESET ROLE;
+  v_p2 := v_res->>'pagoId';
+  v_rows := v_rows || jsonb_build_array(jsonb_build_array(13, 'pagar el AJUSTE_DEVOLUCION (P2): su gemelo vivo desaparece',
+    'pagado=true / vivos=0',
+    format('pagado=%s / vivos=%s',
+      (SELECT f.pagado FROM v_comisiones_filas f WHERE f.organization_id = c.org AND f.clave = v_clave_dev)::text,
+      (SELECT COUNT(*) FROM v_comisiones_filas f WHERE f.organization_id = c.org AND f.documento_id = c.doc_id
+          AND f.tipo = 'AJUSTE_DEVOLUCION' AND NOT f.pagado))));
+
+  v_stage := 14;
+  UPDATE ventas SET estado = 'ANULADA' WHERE id = c.doc_id AND organization_id = c.org;
+  v_clave_an := 'VENTA:' || c.doc_id || ':VENDEDOR:AJUSTE_ANULACION:-';
+  SELECT d.monto INTO v_monto_an FROM v_comisiones_devengadas d WHERE d.organization_id = c.org AND d.clave = v_clave_an AND NOT d.pagado;
+  SET LOCAL ROLE service_role;
+  v_res := pagar_comisiones(c.org, c.admin, c.benef, jsonb_build_array(jsonb_build_object('clave', v_clave_an, 'monto', v_monto_an)), 'probe 379 P3');
+  RESET ROLE;
+  v_p3 := v_res->>'pagoId';
+  v_rows := v_rows || jsonb_build_array(jsonb_build_array(14, 'venta anulada: AJUSTE_ANULACION de -(P1+P2), pagado (P3)',
+    'ajuste=true / monto=true / pagado=true',
+    format('ajuste=%s / monto=%s / pagado=%s', (v_monto_an IS NOT NULL)::text,
+      (v_monto_an = -(c.monto + v_monto_dev))::text,
+      (SELECT f.pagado FROM v_comisiones_filas f WHERE f.organization_id = c.org AND f.clave = v_clave_an)::text)));
+
+  v_stage := 15;
+  BEGIN
+    SET LOCAL ROLE service_role;
+    PERFORM anular_pago_comisiones(c.org, c.admin, v_p2, 'probe 379 P2');
+    RESET ROLE;
+    v_got := 'FALLO: no levanto excepcion';
+  EXCEPTION WHEN OTHERS THEN
+    RESET ROLE;
+    GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
+    v_got := CASE WHEN v_msg LIKE '%COMISION_ERROR:AJUSTES_PAGADOS:' || v_p3 THEN 'OK: ' || v_msg ELSE 'FALLO: ' || SQLSTATE || ' ' || v_msg END;
+  END;
+  v_rows := v_rows || jsonb_build_array(jsonb_build_array(15, 'AJUSTES_PAGADOS: anular P2 con el AJUSTE_ANULACION pagado en P3',
+    'COMISION_ERROR:AJUSTES_PAGADOS:' || v_p3, v_got));
+
+  v_stage := 16;
+  SET LOCAL ROLE service_role;
+  v_res := anular_pago_comisiones(c.org, c.admin, v_p3, 'probe 379 P3');
+  v_f3 := v_res->>'filas';
+  v_res := anular_pago_comisiones(c.org, c.admin, v_p2, 'probe 379 P2');
+  v_f2 := v_res->>'filas';
+  v_res := anular_pago_comisiones(c.org, c.admin, v_p1, 'probe 379 P1');
+  v_f1 := v_res->>'filas';
+  RESET ROLE;
+  v_rows := v_rows || jsonb_build_array(jsonb_build_array(16, 'anular P3, P2 y P1 en ese orden: OK', 'filas=1/1/1 / anulados=3',
+    format('filas=%s/%s/%s / anulados=%s', v_f3, v_f2, v_f1,
+      (SELECT COUNT(*) FROM comisiones_pagos p WHERE p.id IN (v_p1, v_p2, v_p3) AND p.anulado))));
+
+  INSERT INTO _r SELECT (r->>0)::int, r->>1, r->>2, r->>3 FROM jsonb_array_elements(v_rows) AS t(r);
+EXCEPTION WHEN OTHERS THEN
+  RESET ROLE;
+  GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
+  INSERT INTO _r SELECT (r->>0)::int, r->>1, r->>2, r->>3 FROM jsonb_array_elements(v_rows) AS t(r);
+  INSERT INTO _r VALUES (v_stage, 'cadena de la devolucion y la anulacion: paso ' || v_stage, 'OK', 'FALLO: ' || SQLSTATE || ' ' || v_msg);
+  INSERT INTO _r SELECT g, 'cadena de la devolucion y la anulacion: paso ' || g, 'OK', 'SALTEADO: la cadena se interrumpio en el paso ' || v_stage
+    FROM generate_series(v_stage + 1, 16) AS g;
+END $$;
+
+-- 17. No probe lost its row or inserted two.
+INSERT INTO _r SELECT 17, 'filas de los probes 1 a 16: total / distintas', '16 / 16',
+  COUNT(*)::TEXT || ' / ' || COUNT(DISTINCT orden)::TEXT FROM _r WHERE orden BETWEEN 1 AND 16;
 
 SELECT orden, probe, esperado, obtenido,
        CASE WHEN esperado = obtenido OR obtenido LIKE 'OK:%' THEN 'OK'
