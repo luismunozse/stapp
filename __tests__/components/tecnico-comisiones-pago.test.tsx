@@ -152,5 +152,6 @@ describe("TecnicoComisiones paying and annulling", () => {
     renderScreen()
     expect(screen.getByText("No se pudieron cargar las comisiones.")).toBeInTheDocument()
     expect(screen.queryByText("Sin órdenes")).not.toBeInTheDocument()
+    expect(screen.queryByText("Comisión pendiente")).not.toBeInTheDocument()
   })
 })

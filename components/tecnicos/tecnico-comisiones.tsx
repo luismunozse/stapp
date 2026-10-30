@@ -331,6 +331,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
       </div>
 
       {/* KPIs */}
+      {!error && (
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={Wallet}
@@ -361,6 +362,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
           tone="default"
         />
       </div>
+      )}
 
       {/* Barra de acción para selección */}
       {!readOnly && selectedItems.length > 0 && (

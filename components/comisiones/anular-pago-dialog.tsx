@@ -24,6 +24,16 @@ interface AnularPagoDialogProps {
   onAnulado: () => void
 }
 
+interface PagoDetalle {
+  pagoId: string
+  fechaPago: string
+  origen: string
+  total: number
+  anulado: boolean
+  filas: number
+  beneficiarioNombre: string
+}
+
 const FALLBACK_ERROR = "No se pudo anular el pago"
 
 export function AnularPagoDialog({
@@ -34,13 +44,39 @@ export function AnularPagoDialog({
   endpoint,
   onAnulado,
 }: AnularPagoDialogProps) {
-  const { formatDate } = useCurrency()
+  const { formatDate, formatPrice } = useCurrency()
   const [motivo, setMotivo] = useState("")
   const [sending, setSending] = useState(false)
+  const [detalle, setDetalle] = useState<PagoDetalle | null>(null)
+  const [detalleEstado, setDetalleEstado] = useState<"loading" | "ok" | "error">("loading")
 
   useEffect(() => {
     if (!open) setMotivo("")
   }, [open])
+
+  // What annulling would un-pay. Read fresh on every open (a cached count could be stale); a
+  // failed read never blocks the annul, the RPC validates the payout on its own.
+  useEffect(() => {
+    if (!open || !pagoId) return
+    let cancelled = false
+    setDetalle(null)
+    setDetalleEstado("loading")
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/comisiones/pagos/${encodeURIComponent(pagoId)}`)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const d = (await res.json()) as PagoDetalle
+        if (cancelled) return
+        setDetalle(d)
+        setDetalleEstado("ok")
+      } catch {
+        if (!cancelled) setDetalleEstado("error")
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [open, pagoId])
 
   const trimmed = motivo.trim()
   const disabled = !pagoId || trimmed === "" || sending
@@ -59,7 +95,11 @@ export function AnularPagoDialog({
         toast.error(body?.error ?? FALLBACK_ERROR)
         return
       }
-      toast.success("Pago anulado")
+      toast.success(
+        typeof body?.filas === "number"
+          ? `Pago anulado: ${body.filas} comisión(es) vuelven a pendientes.`
+          : "Pago anulado"
+      )
       onAnulado()
       onOpenChange(false)
     } catch {
@@ -80,6 +120,27 @@ export function AnularPagoDialog({
             anuló y por qué.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Fixed-height slot so the dialog does not jump when the summary arrives */}
+        <div className="min-h-5 text-sm" aria-live="polite">
+          {detalleEstado === "loading" && (
+            <span className="text-muted-foreground">Cargando el pago…</span>
+          )}
+          {detalleEstado === "error" && (
+            <span className="text-destructive">No se pudo cargar el pago.</span>
+          )}
+          {detalleEstado === "ok" && detalle && (
+            <span className="font-medium">
+              {detalle.filas} comisión(es) · total {formatPrice(detalle.total)} · pagado el{" "}
+              {formatDate(detalle.fechaPago)}
+            </span>
+          )}
+        </div>
+        {detalleEstado === "ok" && detalle && detalle.filas > 1 && (
+          <p className="text-sm text-muted-foreground">
+            Anular este pago deja pendientes las {detalle.filas} comisiones. Las de órdenes vuelven con el monto actual, no con el pagado.
+          </p>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="anular-pago-motivo">Motivo</Label>
