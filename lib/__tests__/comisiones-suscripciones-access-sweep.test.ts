@@ -52,7 +52,7 @@ describe('endpoints de comisiones', () => {
   const handlers = handlersDe(join(API, 'comisiones'))
 
   it('existen endpoints que auditar', () => {
-    expect(handlers.length).toBeGreaterThanOrEqual(6)
+    expect(handlers.length).toBeGreaterThanOrEqual(10)
   })
 
   it('todos piden requireAdmin salvo GET /api/comisiones (cada técnico ve las suyas)', () => {

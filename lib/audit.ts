@@ -23,6 +23,7 @@ export type AuditEntity =
   | "cuenta_corriente"
   | "movimientos_caja"
   | "comprobantes_fiscales"
+  | "comisiones_config"
 
 interface AuditLogParams {
   organizationId: string
