@@ -98,7 +98,8 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
       setPorcentajeRecepcion(
         tecnico.porcentajeComisionRecepcion != null ? String(tecnico.porcentajeComisionRecepcion) : ""
       )
-      setCostoHora(tecnico.costoHora != null ? String(tecnico.costoHora) : "0")
+      // Not loaded stays blank, so saving never overwrites the stored hourly cost with 0.
+      setCostoHora(tecnico.costoHora != null ? String(tecnico.costoHora) : "")
       setEspecialidades(tecnico.especialidades ?? [])
       setFechaIngreso(tecnico.fechaIngresoTecnico ?? "")
     } else {
@@ -136,9 +137,10 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
       const url = isEditing ? `/api/tecnicos/${tecnico.id}` : "/api/tecnicos"
       const method = isEditing ? "PUT" : "POST"
 
-      const porcNum = parseFloat(porcentajeComision) || 0
-      if (porcNum < 0 || porcNum > 100) {
-        throw new Error("El porcentaje de comisión debe estar entre 0 y 100")
+      // A blank technician rate is invalid: only the reception rate treats blank as "shop default".
+      const porcNum = porcentajeComision.trim() === "" ? NaN : Number(porcentajeComision)
+      if (!Number.isFinite(porcNum) || porcNum < 0 || porcNum > 100) {
+        throw new Error("Ingrese un porcentaje entre 0 y 100.")
       }
 
       const recepcionNum = porcentajeRecepcion.trim() === "" ? null : Number(porcentajeRecepcion)
@@ -146,8 +148,9 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
         throw new Error("El porcentaje de recepción debe estar entre 0 y 100")
       }
 
-      const costoHoraNum = parseFloat(costoHora) || 0
-      if (costoHoraNum < 0) {
+      // Blank on edit means "leave it as stored": the field is omitted from the body.
+      const costoHoraNum = costoHora.trim() === "" ? (isEditing ? undefined : 0) : parseFloat(costoHora) || 0
+      if (costoHoraNum !== undefined && costoHoraNum < 0) {
         throw new Error("El costo por hora no puede ser negativo")
       }
 
@@ -157,7 +160,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
         telefono: telefono.trim() || null,
         porcentajeComision: porcNum,
         porcentajeComisionRecepcion: recepcionNum,
-        costoHora: costoHoraNum,
+        ...(costoHoraNum !== undefined ? { costoHora: costoHoraNum } : {}),
         especialidades,
         fechaIngresoTecnico: fechaIngreso || null,
       }

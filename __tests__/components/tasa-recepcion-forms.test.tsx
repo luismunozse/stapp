@@ -120,3 +120,43 @@ describe("reception rate in the person forms", () => {
     ).toBeInTheDocument()
   })
 })
+
+describe("technician form never zeroes a rate or an hourly cost by accident", () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  const rate = () => screen.getByLabelText("% Comisión sobre ganancia") as HTMLInputElement
+  const puts = (fetchMock: ReturnType<typeof stubApi>) =>
+    fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")
+
+  it("a blank commission rate blocks the submit with an inline message", async () => {
+    const fetchMock = stubApi()
+    renderTecnico({ ...TECNICO, porcentajeComision: 10 })
+    fireEvent.change(rate(), { target: { value: "" } })
+    fireEvent.click(screen.getByRole("button", { name: "Guardar Cambios" }))
+    expect(await screen.findByText("Ingrese un porcentaje entre 0 y 100.")).toBeInTheDocument()
+    expect(puts(fetchMock)).toHaveLength(0)
+  })
+
+  it("a typed 0 commission rate is still valid", async () => {
+    const fetchMock = stubApi()
+    renderTecnico({ ...TECNICO, porcentajeComision: 10 })
+    fireEvent.change(rate(), { target: { value: "0" } })
+    fireEvent.click(screen.getByRole("button", { name: "Guardar Cambios" }))
+    expect((await bodyOfPut(fetchMock, "/api/tecnicos/tec-1")).porcentajeComision).toBe(0)
+  })
+
+  it("editing a technician whose hourly cost was not loaded omits costoHora", async () => {
+    const fetchMock = stubApi()
+    renderTecnico({ ...TECNICO, porcentajeComision: 10 })
+    fireEvent.click(screen.getByRole("button", { name: "Guardar Cambios" }))
+    const body = await bodyOfPut(fetchMock, "/api/tecnicos/tec-1")
+    expect(body).not.toHaveProperty("costoHora")
+  })
+
+  it("a loaded hourly cost is sent back as is", async () => {
+    const fetchMock = stubApi()
+    renderTecnico({ ...TECNICO, porcentajeComision: 10, costoHora: 12.5 })
+    fireEvent.click(screen.getByRole("button", { name: "Guardar Cambios" }))
+    expect((await bodyOfPut(fetchMock, "/api/tecnicos/tec-1")).costoHora).toBe(12.5)
+  })
+})

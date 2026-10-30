@@ -194,6 +194,23 @@ describe("reception rate per person", () => {
     expect(tecnico.body[0]).not.toHaveProperty("porcentajeComisionRecepcion")
   })
 
+  it("GET /api/tecnicos returns the hourly cost to ADMIN only, so editing cannot zero it", async () => {
+    const row = {
+      id: "t1", nombre: "T", email: "t@t.com", telefono: null, activo: true,
+      especialidades: [], porcentaje_comision: 10, porcentaje_comision_recepcion: null,
+      costo_hora: 12.5, sucursal_id: "suc-A", ordenes_servicio: [],
+    }
+    mockSupabaseFrom({ users: createChainMock([row]) })
+
+    mockAuthSuccess({ role: "ADMIN" })
+    const admin = await parseResponse(await getTecnicos(createGetRequest()))
+    expect(admin.body[0].costoHora).toBe(12.5)
+
+    mockAuthSuccess({ role: "TECNICO" })
+    const tecnico = await parseResponse(await getTecnicos(createGetRequest()))
+    expect(tecnico.body[0]).not.toHaveProperty("costoHora")
+  })
+
   it("a converted quote records who converted it as the receiver", async () => {
     let inserted: any = null
     const cotizacion = {

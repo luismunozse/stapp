@@ -37,6 +37,7 @@ export async function GET(request: Request) {
         fecha_ingreso_tecnico,
         porcentaje_comision,
         porcentaje_comision_recepcion,
+        costo_hora,
         sucursal_id,
         ordenes_servicio:ordenes_servicio!tecnico_id (
           id,
@@ -75,9 +76,10 @@ export async function GET(request: Request) {
         avatarUrl: tecnico.avatar_url ?? null,
         fechaIngresoTecnico: tecnico.fecha_ingreso_tecnico ?? null,
         porcentajeComision: Number(tecnico.porcentaje_comision ?? 0),
-        // The reception rate is admin-only: for other roles the property is absent.
+        // The reception rate and the hourly cost are admin-only: for other roles the properties are absent.
         ...(role === "ADMIN"
           ? {
+              costoHora: Number(tecnico.costo_hora ?? 0),
               porcentajeComisionRecepcion:
                 tecnico.porcentaje_comision_recepcion == null ? null : Number(tecnico.porcentaje_comision_recepcion),
             }
