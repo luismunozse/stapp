@@ -10,6 +10,10 @@
 -- adjustment chain. Everything it writes (payouts, items, the sale annulment) is rolled back. A
 -- probe that finds no fitting row skips itself and says so in `obtenido` (SALTEADO: ...).
 --
+-- After 381 is applied: probe 2 (order parity against the legacy v_comisiones_ordenes) reports
+-- differences BY DESIGN, because 381 changes the order base (discount, credit notes) and the
+-- accrual rule. A re-run then is not a regression; verify/381_probes.sql covers the new definition.
+--
 -- What it proves, against the real schema:
 --   * both views are security_invoker and only service_role can read them;
 --   * unpaid parity: for unpaid documents the definition reproduces today's screens, ORDEN
