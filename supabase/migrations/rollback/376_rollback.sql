@@ -11,6 +11,9 @@
 -- Legacy paid flags stay correct because the RPCs keep them in sync with the payouts.
 -- ventas.fecha_anulacion has no other reader, so it is safe to remove.
 
+-- DROP COLUMN on ventas takes ACCESS EXCLUSIVE: do not queue behind a long transaction.
+SET LOCAL lock_timeout = '3s';
+
 DROP TABLE IF EXISTS comisiones_pagos_items;
 DROP TABLE IF EXISTS comisiones_pagos;
 DROP TABLE IF EXISTS comisiones_ajustes;

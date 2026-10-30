@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Comisiones, slice 1 (fundacion): payout tables + sale annulment date. Additive, re-runnable.
 -- ============================================================================
--- Spec: docs/superpowers/specs (one commission calculation with frozen payouts).
+-- Spec: docs/superpowers/specs/2026-10-29-comisiones-unificadas-design.md (one commission calculation with frozen payouts).
 --
 -- What this adds
 --   * ventas.fecha_anulacion: the moment a sale became ANULADA (set by trigger, backfilled

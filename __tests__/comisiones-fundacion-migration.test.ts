@@ -53,4 +53,10 @@ describe("376: rollback", () => {
     expect(s.indexOf("DROP TABLE IF EXISTS comisiones_pagos_items")).toBeLessThan(s.indexOf("DROP TABLE IF EXISTS comisiones_pagos;"))
     expect(s).toContain("DROP COLUMN IF EXISTS fecha_anulacion")
   })
+  it("takes its lock timeout first (DROP COLUMN on ventas needs ACCESS EXCLUSIVE)", () => {
+    expect(collapse(rb()).startsWith("SET LOCAL lock_timeout = '3s';")).toBe(true)
+  })
+  it("the migration header names the spec file", () => {
+    expect(readBySuffix("_comisiones_fundacion.sql")).toContain("docs/superpowers/specs/2026-10-29-comisiones-unificadas-design.md")
+  })
 })
