@@ -299,7 +299,8 @@ SELECT '[3] TECNICO sin pagar: empieza a devengar' AS seccion,
 -- [4] accrued in both, but dated differently
 SELECT '[4] TECNICO sin pagar: cambia la fecha de devengo' AS seccion,
        COUNT(*) AS filas, COUNT(DISTINCT a.organization_id) AS talleres,
-       COUNT(*) FILTER (WHERE date_trunc('month', a.fecha_devengo) IS DISTINCT FROM date_trunc('month', d.fecha_devengo)) AS cambian_de_mes
+       COUNT(*) FILTER (WHERE date_trunc('month', a.fecha_devengo) IS DISTINCT FROM date_trunc('month', d.fecha_devengo)) AS cambian_de_mes,
+       COALESCE(SUM(d.monto) FILTER (WHERE date_trunc('month', a.fecha_devengo) IS DISTINCT FROM date_trunc('month', d.fecha_devengo)), 0) AS monto_cambia_de_mes
   FROM _antes_381 a JOIN _despues_381 d USING (clave)
  WHERE a.rol = 'TECNICO' AND a.tipo = 'ORIGINAL' AND NOT a.pagado AND a.devengada AND d.devengada
    AND a.fecha_devengo IS DISTINCT FROM d.fecha_devengo;

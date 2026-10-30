@@ -66,7 +66,7 @@ describe("381: order credit notes after payment", () => {
   })
   it("the closed-row anti-join is still by key, never by beneficiary", () => {
     const anti = mig().slice(mig().indexOf("WHERE NOT EXISTS ( SELECT 1 FROM pagadas x"))
-    const cuerpo = anti.slice(0, anti.indexOf(")"))
+    const cuerpo = anti.slice(0, anti.indexOf("UNION ALL"))
     expect(cuerpo).not.toContain("beneficiario_id")
   })
 })
@@ -79,6 +79,11 @@ describe("381: views, security, impact report", () => {
       expect(s).toContain(`GRANT SELECT ON public.${v} TO service_role`)
     }
     expect(s).toMatch(/rep\.costo::numeric\(12,2\) AS documento_costo_repuestos, f\.base_tipo, f\.documento_monto::numeric\(12,2\) AS documento_monto, f\.motivo_sin_devengo FROM filas f/)
+  })
+  it("section [4] carries the money of the rows whose accrual month changes", () => {
+    const s = mig()
+    const sec = s.slice(s.indexOf("[4] TECNICO sin pagar"), s.indexOf("[5] filas pagadas"))
+    expect(sec).toContain("AS monto_cambia_de_mes")
   })
   it("snapshots before replacing and prints every section the PR must state", () => {
     const s = mig()
