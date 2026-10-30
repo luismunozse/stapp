@@ -37,6 +37,8 @@ interface Opciones {
   errorDeLectura?: Record<string, { code?: string; message: string }>
   /** What an rpc answers with. Defaults to `{ success: true }`. */
   resultadoRpc?: (nombre: string, args: unknown) => unknown
+  /** Makes an rpc fail: when it returns an error the rpc answers `{ data: null, error }` (the call is recorded either way). */
+  errorRpc?: (nombre: string, args: unknown) => { code?: string; message: string } | null
 }
 
 const copia = <T>(valor: T): T => JSON.parse(JSON.stringify(valor))
@@ -170,6 +172,8 @@ export function montarSupabaseEnMemoria(tablas: Record<string, Fila[]>, opciones
 
   vi.mocked(supabaseAdmin.rpc).mockImplementation((async (nombre: string, args?: unknown) => {
     escrituras.push({ tabla: nombre, operacion: "rpc", carga: args, filtros: [] })
+    const error = opciones.errorRpc?.(nombre, args) ?? null
+    if (error) return { data: null, error }
     return { data: opciones.resultadoRpc ? opciones.resultadoRpc(nombre, args) : { success: true }, error: null }
   }) as any)
 

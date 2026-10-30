@@ -16,10 +16,7 @@ export const payBodySchema = z.object({
   notas: notasSchema,
 })
 
-export const liquidarBodySchema = z.object({
-  filas: z.array(filaSchema).min(1),
-  notas: notasSchema,
-})
+export const liquidarBodySchema = payBodySchema.omit({ beneficiarioId: true })
 
 export const annulBodySchema = z.object({
   pagoId: z.string().min(1),
