@@ -18,12 +18,16 @@
 -- What it proves:
 --   R0  every live payout item has a row in the view with the same clave, monto, pagado = true
 --       and the payout's beneficiary (expected 0 mismatches), before any fixture is written;
+--   R0b no clave repeats inside one organization in the whole view (expected 0 duplicates),
+--       before any fixture is written;
 --   R1  ENTREGADO + COBRADO: TECNICO base 650 / 65.00 / MANO_DE_OBRA / documento_monto 850,
 --       RECEPCION base 850 / 42.50, both devengada;
 --   R2  tecnico_base MONTO_ORDEN and recepcion_base MANO_DE_OBRA: 85.00 and 32.50;
 --   R3  a second credit note of 2000: documento_monto 0, TECNICO row at 0, no RECEPCION row;
 --   R4  a NULL (legacy) or 0 reception rate: no RECEPCION row, TECNICO row present;
 --   R5  REPARADO + COBRADO for each orden_devengo rule, then ENTREGADO + PARCIAL;
+--   R5b an order with a NULL estado + COBRADO never accrues (NO_COMISIONA), under the COBRO rule
+--       too (estado is nullable; a NULL predicate must not read as "condition met");
 --   R6  fecha_devengo per rule (clock_timestamp offsets), annulled cobros ignored, and an
 --       order collected only through pagos_parciales dated by its last invoice payment;
 --   R7  ENTREGADO_SIN_REPARACION with flag 257 off (SIN_REPARACION) and on (devengada);
@@ -35,6 +39,9 @@
 --   R11 after both payouts, credit notes of 600 and then 100 (created_at = clock_timestamp())
 --       give AJUSTE_DEVOLUCION rows -60.00 / -5.00 (TECNICO, capped at labour 650) and
 --       -30.00 / -5.00 (RECEPCION); annulling the 100 note removes its rows;
+--   R11b a paid AJUSTE_DEVOLUCION blocks annulling the payout of the ORIGINAL row of the same
+--       order and role: 379 refuses with COMISION_ERROR:AJUSTES_PAGADOS:<adjustment payout> and
+--       both payouts stay live;
 --   R12 after the payouts, changing costo_final, descuento_cobro, both rates, tecnico_id and
 --       every config rule leaves both paid rows with the same monto, beneficiary and pagado;
 --   R13 annulling the RECEPCION payout makes the row live again at the current amount and leaves
@@ -70,6 +77,13 @@ SELECT 0, 'R0: item de pago vigente sin fila igual en la vista (clave, monto, pa
    AND f.clave = COALESCE(i.documento_tipo, '-') || ':' || COALESCE(i.documento_id, '-') || ':' || i.rol || ':' || i.tipo || ':' || COALESCE(i.ajuste_ref, '-')
    AND f.monto = i.monto AND f.pagado AND f.beneficiario_id = p.beneficiario_id
  WHERE NOT i.anulado AND NOT p.anulado AND f.clave IS NULL;
+
+-- ── R0b. Whole view: a clave never repeats inside an organization ──
+INSERT INTO _r381
+SELECT 0, 'R0b: claves repetidas dentro de una organizacion en v_comisiones_filas', '0',
+       COUNT(*)::TEXT
+  FROM (SELECT organization_id, clave FROM v_comisiones_filas
+         GROUP BY organization_id, clave HAVING COUNT(*) > 1) d;
 
 -- ── Fixture context: one real org with two users, an admin, a sucursal, a cliente and a part ──
 INSERT INTO _ctx381 (org, t, r, admin, sucursal, cliente, inv)
@@ -211,14 +225,14 @@ LANGUAGE sql AS $$
    WHERE f.documento_tipo = 'ORDEN' AND f.documento_id = p_id AND f.tipo = 'ORIGINAL' AND f.rol IN ('TECNICO', 'RECEPCION')
 $$;
 
--- Pays the accrued, unpaid ORIGINAL row of one role through the real RPC, as the admin, as service_role.
-CREATE FUNCTION pg_temp.pagar(p_id TEXT, p_rol TEXT, p_benef TEXT) RETURNS JSONB
+-- Pays the accrued, unpaid row (ORIGINAL unless p_tipo says otherwise) of one role through the real RPC, as the admin, as service_role.
+CREATE FUNCTION pg_temp.pagar(p_id TEXT, p_rol TEXT, p_benef TEXT, p_tipo TEXT DEFAULT 'ORIGINAL') RETURNS JSONB
 LANGUAGE plpgsql AS $$
 DECLARE c RECORD; f RECORD; v_res JSONB;
 BEGIN
   SELECT * INTO c FROM _ctx381;
   SELECT x.clave, x.monto INTO f FROM v_comisiones_filas x
-   WHERE x.documento_tipo = 'ORDEN' AND x.documento_id = p_id AND x.rol = p_rol AND x.tipo = 'ORIGINAL'
+   WHERE x.documento_tipo = 'ORDEN' AND x.documento_id = p_id AND x.rol = p_rol AND x.tipo = p_tipo
      AND x.devengada AND NOT x.pagado;
   BEGIN
     SET LOCAL ROLE service_role;
@@ -315,6 +329,18 @@ BEGIN
     v_rows := v_rows || pg_temp.rr(5, 'R5: ENTREGADO + PARCIAL, ENTREGA_Y_COBRO', 'ESPERA_ENTREGA_Y_COBRO / ESPERA_ENTREGA_Y_COBRO', pg_temp.est2(v_id));
     PERFORM pg_temp.cfg('COBRO');
     v_rows := v_rows || pg_temp.rr(5, 'R5: ENTREGADO + PARCIAL, COBRO', 'ESPERA_COBRO / ESPERA_COBRO', pg_temp.est2(v_id));
+
+    -- R5b: estado is nullable; NULL means "not met", never "accrued" (even under the COBRO rule)
+    PERFORM pg_temp.cfg('COBRO');
+    v_id := pg_temp.mk('ENTREGADO');
+    BEGIN
+      UPDATE ordenes_servicio SET estado = NULL WHERE id = v_id;
+      v_rows := v_rows || pg_temp.rr(5, 'R5b: estado NULL + COBRADO, COBRO (TECNICO / RECEPCION) no devenga', 'NO_COMISIONA / NO_COMISIONA', pg_temp.est2(v_id));
+      v_rows := v_rows || pg_temp.rr(5, 'R5b: estado NULL + COBRADO: filas devengadas en la vista', '0',
+        (SELECT COUNT(*)::TEXT FROM v_comisiones_devengadas f WHERE f.documento_id = v_id));
+    EXCEPTION WHEN not_null_violation THEN
+      v_rows := v_rows || pg_temp.rr(5, 'R5b: estado NULL + COBRADO no devenga', 'OK', 'OK: estado es NOT NULL, el caso NULL no existe');
+    END;
 
     RAISE EXCEPTION 'rollback del escenario R5' USING ERRCODE = 'P0381';
   EXCEPTION
@@ -528,6 +554,45 @@ BEGIN
     WHEN OTHERS THEN
       GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
       PERFORM pg_temp.flush_fail(v_rows, v_stage, 13, SQLSTATE, v_msg);
+  END;
+END $$;
+
+-- ── R11b. A paid credit-note adjustment blocks annulling the payout of its ORIGINAL row ──
+DO $$
+DECLARE
+  c RECORD; v_id TEXT; v_rows JSONB := '[]'::jsonb; v_stage INT := 11; v_msg TEXT;
+  v_p1 JSONB; v_p2 JSONB; v_got TEXT;
+BEGIN
+  SELECT * INTO c FROM _ctx381;
+  IF NOT FOUND THEN PERFORM pg_temp.skip(11, 11, 'la base no tiene una org con dos usuarios, admin, sucursal, cliente e inventario'); RETURN; END IF;
+  BEGIN
+    PERFORM pg_temp.cfg();
+    v_id := pg_temp.mk('ENTREGADO');
+    v_p1 := pg_temp.pagar(v_id, 'RECEPCION', c.r);
+    INSERT INTO notas_credito (organization_id, numero, orden_id, motivo, monto, monto_aplicado_deuda, created_at)
+    VALUES (c.org, 'NC-P381-' || substr(md5(random()::text), 1, 10), v_id, 'AJUSTE_PRECIO', 600, 0, clock_timestamp());
+    v_rows := v_rows || pg_temp.rr(11, 'R11b: precondicion, ajuste AJUSTE_DEVOLUCION RECEPCION de 600', '-30.00', pg_temp.aj(v_id, 'RECEPCION'));
+    v_p2 := pg_temp.pagar(v_id, 'RECEPCION', c.r, 'AJUSTE_DEVOLUCION');
+
+    BEGIN
+      PERFORM pg_temp.anular(v_p1->>'pagoId', 'probe 381 R11b');
+      v_got := 'FALLO: anular el pago del ORIGINAL no fue rechazado';
+    EXCEPTION WHEN OTHERS THEN
+      GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
+      v_got := CASE WHEN v_msg = 'COMISION_ERROR:AJUSTES_PAGADOS:' || (v_p2->>'pagoId') THEN 'OK: ' || v_msg ELSE 'FALLO: ' || SQLSTATE || ' ' || v_msg END;
+    END;
+    v_rows := v_rows || pg_temp.rr(11, 'R11b: anular el pago del ORIGINAL con el ajuste pagado en otro pago', 'COMISION_ERROR:AJUSTES_PAGADOS:' || (v_p2->>'pagoId'), v_got);
+    v_rows := v_rows || pg_temp.rr(11, 'R11b: tras el rechazo, los dos pagos siguen vivos', '2',
+      (SELECT COUNT(*)::TEXT FROM comisiones_pagos WHERE id IN (v_p1->>'pagoId', v_p2->>'pagoId') AND NOT anulado));
+    v_rows := v_rows || pg_temp.rr(11, 'R11b: tras el rechazo, los items de los dos pagos siguen vivos', '2',
+      (SELECT COUNT(*)::TEXT FROM comisiones_pagos_items WHERE pago_id IN (v_p1->>'pagoId', v_p2->>'pagoId') AND NOT anulado));
+
+    RAISE EXCEPTION 'rollback del escenario R11b' USING ERRCODE = 'P0381';
+  EXCEPTION
+    WHEN SQLSTATE 'P0381' THEN PERFORM pg_temp.flush(v_rows);
+    WHEN OTHERS THEN
+      GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
+      PERFORM pg_temp.flush_fail(v_rows, v_stage, 11, SQLSTATE, v_msg);
   END;
 END $$;
 

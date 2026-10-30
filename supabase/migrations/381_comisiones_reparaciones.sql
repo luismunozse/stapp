@@ -17,6 +17,13 @@
 --     role's ORIGINAL row was paid, capped at the paid base (running sum per paid row).
 --   * Three columns are appended at the end: base_tipo, documento_monto, motivo_sin_devengo.
 --
+-- Credit-note cap rule: the running cap of the order AJUSTE_DEVOLUCION rows assumes credit notes
+-- are not annulled after their adjustment is paid. If a paid adjustment's credit note is annulled
+-- anyway, reverse it by annulling that adjustment's payout; the live rows then recompute correctly.
+--
+-- estado is nullable on ordenes_servicio, so every predicate built from it is NULL-safe (COALESCE)
+-- and an order with no estado is NO_COMISIONA: it never accrues, as in 377.
+--
 -- Closed rows keep working by key (377): RECEPCION rows and the new adjustments inherit it.
 --
 -- Requires 380 (comisiones_config, ordenes_servicio.porcentaje_comision_recepcion, the index on
@@ -96,15 +103,15 @@ vivas AS (
     ) uc
     CROSS JOIN LATERAL (
       SELECT COALESCE(cfg.orden_devengo, 'ENTREGA_Y_COBRO') AS regla,
-             o.estado IN ('ENTREGADO', 'ENTREGADO_SIN_REPARACION') AS entregada,
+             COALESCE(o.estado IN ('ENTREGADO', 'ENTREGADO_SIN_REPARACION'), false) AS entregada,
              o.estado_cobro IS NOT DISTINCT FROM 'COBRADO' AS cobrada,
              (o.es_reingreso OR EXISTS (SELECT 1 FROM reclamos_garantia rg WHERE rg.orden_reparacion_id = o.id)) AS reingreso
     ) e
     CROSS JOIN LATERAL (
       SELECT CASE
-        WHEN o.es_practica OR o.estado IN ('CANCELADO', 'ENTREGADO_SIN_COBRO')
+        WHEN o.estado IS NULL OR o.es_practica OR COALESCE(o.estado IN ('CANCELADO', 'ENTREGADO_SIN_COBRO'), false)
           OR (e.reingreso AND NOT COALESCE(cfg.reingreso_comisiona, false)) THEN 'NO_COMISIONA'
-        WHEN o.estado = 'ENTREGADO_SIN_REPARACION' AND NOT org.comision_aplica_sin_reparacion THEN 'SIN_REPARACION'
+        WHEN COALESCE(o.estado = 'ENTREGADO_SIN_REPARACION', false) AND NOT org.comision_aplica_sin_reparacion THEN 'SIN_REPARACION'
         WHEN e.regla = 'ENTREGA_Y_COBRO' AND NOT (e.entregada AND e.cobrada) THEN 'ESPERA_ENTREGA_Y_COBRO'
         WHEN e.regla = 'ENTREGA' AND NOT e.entregada THEN 'ESPERA_ENTREGA'
         WHEN e.regla = 'COBRO' AND NOT e.cobrada THEN 'ESPERA_COBRO'

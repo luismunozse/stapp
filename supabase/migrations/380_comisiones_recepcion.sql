@@ -17,6 +17,9 @@
 --
 -- Nothing reads these objects until 381: applying this file changes no number on any screen.
 --
+-- Lock order: the ALTER on users (ACCESS EXCLUSIVE until COMMIT, and every auth request reads
+-- users) is the last statement, so its lock is held for the shortest time.
+--
 -- Access: comisiones_config is service_role only (376 shape). The trigger function is
 -- SECURITY DEFINER with a pinned search_path so an order insert never fails because the
 -- writer's role cannot read comisiones_config; nobody can call it directly.
@@ -49,14 +52,14 @@ CREATE POLICY comisiones_config_all_service ON comisiones_config
 REVOKE ALL ON public.comisiones_config FROM PUBLIC, anon, authenticated;
 
 -- ----------------------------------------------------------------------------
--- 2. Reception rates: per person (nullable) and frozen per order (nullable = legacy)
+-- 2. Reception rate frozen per order (nullable = legacy). The per-person rate is section 5.
 -- ----------------------------------------------------------------------------
-ALTER TABLE users ADD COLUMN IF NOT EXISTS porcentaje_comision_recepcion NUMERIC(5,2)
-  CHECK (porcentaje_comision_recepcion BETWEEN 0 AND 100);
-
 ALTER TABLE ordenes_servicio ADD COLUMN IF NOT EXISTS porcentaje_comision_recepcion NUMERIC(5,2);
 
--- NOT VALID then VALIDATE: the check does not scan under the ACCESS EXCLUSIVE lock.
+-- NOT VALID: new writes are enforced and the existing rows are not scanned here. The column
+-- was just added, so every existing row is NULL and passes anyway. The file runs in one
+-- transaction (scripts/db-run.mjs), so validating here would scan the whole table under the
+-- lock for nothing. VALIDATE CONSTRAINT can be run separately later, outside a transaction.
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ordenes_servicio_porcentaje_recepcion_check') THEN
@@ -64,7 +67,6 @@ BEGIN
       CHECK (porcentaje_comision_recepcion BETWEEN 0 AND 100) NOT VALID;
   END IF;
 END $$;
-ALTER TABLE ordenes_servicio VALIDATE CONSTRAINT ordenes_servicio_porcentaje_recepcion_check;
 
 -- ----------------------------------------------------------------------------
 -- 3. Snapshot trigger
@@ -96,3 +98,9 @@ CREATE TRIGGER trigger_ordenes_porcentaje_recepcion
 -- ----------------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS reclamos_garantia_orden_reparacion_idx
   ON reclamos_garantia (orden_reparacion_id) WHERE orden_reparacion_id IS NOT NULL;
+
+-- ----------------------------------------------------------------------------
+-- 5. Per-person reception rate. Last on purpose: ACCESS EXCLUSIVE on users is held until COMMIT.
+-- ----------------------------------------------------------------------------
+ALTER TABLE users ADD COLUMN IF NOT EXISTS porcentaje_comision_recepcion NUMERIC(5,2)
+  CHECK (porcentaje_comision_recepcion BETWEEN 0 AND 100);

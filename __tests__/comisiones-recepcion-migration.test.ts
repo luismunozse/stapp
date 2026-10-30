@@ -39,7 +39,17 @@ describe("380: rates", () => {
     expect(s).toContain("ALTER TABLE users ADD COLUMN IF NOT EXISTS porcentaje_comision_recepcion NUMERIC(5,2)")
     expect(s).toContain("ALTER TABLE ordenes_servicio ADD COLUMN IF NOT EXISTS porcentaje_comision_recepcion NUMERIC(5,2)")
     expect(s).toContain("CHECK (porcentaje_comision_recepcion BETWEEN 0 AND 100) NOT VALID")
-    expect(s).toContain("VALIDATE CONSTRAINT ordenes_servicio_porcentaje_recepcion_check")
+  })
+  it("the NOT VALID check is not validated in-file: one transaction would scan under the lock for nothing", () => {
+    expect(stripComments(mig())).not.toMatch(/VALIDATE CONSTRAINT/)
+    expect(mig()).toMatch(/VALIDATE.*(separately|later)/i)
+  })
+  it("the users ALTER (ACCESS EXCLUSIVE until COMMIT) is the last statement of the file", () => {
+    const s = collapse(stripComments(mig()))
+    const u = s.indexOf("ALTER TABLE users ADD COLUMN IF NOT EXISTS porcentaje_comision_recepcion")
+    expect(u).toBeGreaterThan(s.indexOf("CREATE INDEX IF NOT EXISTS reclamos_garantia_orden_reparacion_idx"))
+    expect(u).toBeGreaterThan(s.indexOf("CREATE TRIGGER trigger_ordenes_porcentaje_recepcion"))
+    expect(s.slice(u + 5)).not.toMatch(/\b(ALTER|CREATE|DROP|SELECT|INSERT)\b/)
   })
 })
 describe("380: snapshot trigger", () => {

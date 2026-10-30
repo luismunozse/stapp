@@ -43,11 +43,20 @@ describe("381: rules", () => {
   })
   it("never-commission cases, flag 257 for both roles, then the accrual rule", () => {
     const s = mig()
-    expect(s).toContain("WHEN o.es_practica OR o.estado IN ('CANCELADO', 'ENTREGADO_SIN_COBRO') OR (e.reingreso AND NOT COALESCE(cfg.reingreso_comisiona, false)) THEN 'NO_COMISIONA'")
-    expect(s).toContain("WHEN o.estado = 'ENTREGADO_SIN_REPARACION' AND NOT org.comision_aplica_sin_reparacion THEN 'SIN_REPARACION'")
+    expect(s).toContain("WHEN o.estado IS NULL OR o.es_practica OR COALESCE(o.estado IN ('CANCELADO', 'ENTREGADO_SIN_COBRO'), false) OR (e.reingreso AND NOT COALESCE(cfg.reingreso_comisiona, false)) THEN 'NO_COMISIONA'")
+    expect(s).toContain("WHEN COALESCE(o.estado = 'ENTREGADO_SIN_REPARACION', false) AND NOT org.comision_aplica_sin_reparacion THEN 'SIN_REPARACION'")
     expect(s).toContain("o.estado_cobro IS NOT DISTINCT FROM 'COBRADO' AS cobrada")
     expect(s).toContain("(o.es_reingreso OR EXISTS (SELECT 1 FROM reclamos_garantia rg WHERE rg.orden_reparacion_id = o.id)) AS reingreso")
     expect(s).toContain("(mo.motivo IS NULL) AS devengada")
+  })
+  it("estado is nullable: every predicate built from it is NULL-safe, and a NULL estado never accrues", () => {
+    const s = mig()
+    expect(s).toContain("COALESCE(o.estado IN ('ENTREGADO', 'ENTREGADO_SIN_REPARACION'), false) AS entregada")
+    expect(s).not.toMatch(/[^(]o\.estado IN \('ENTREGADO'/)
+    expect(s).toMatch(/WHEN o\.estado IS NULL OR /)
+  })
+  it("documents the credit-note cap rule for annulled credit notes", () => {
+    expect(readBySuffix("_comisiones_reparaciones.sql")).toMatch(/annul[a-z]* that adjustment's payout/i)
   })
   it("fecha_devengo follows the rule; cobros and invoice payments ignore annulled ones", () => {
     const s = mig()
@@ -109,5 +118,14 @@ describe("381: probes", () => {
   it("covers every row of the probe table", () => {
     for (let i = 0; i <= 14; i++) expect(probes()).toContain(`R${i}`)
     for (const k of ["clock_timestamp()", "comision_pagada", "reclamos_garantia", "pagos_parciales", "AJUSTE_DEVOLUCION"]) expect(probes()).toContain(k)
+  })
+  it("covers a NULL estado, the paid-adjustment annul guard and the whole-view key invariant", () => {
+    const p = probes()
+    expect(p).toContain("R5b")
+    expect(p).toContain("R11b")
+    expect(p).toContain("COMISION_ERROR:AJUSTES_PAGADOS:")
+    const r0b = p.indexOf("'R0b:")
+    expect(r0b).toBeGreaterThan(p.indexOf("'R0:")); expect(r0b).toBeLessThan(p.indexOf("INSERT INTO ordenes_servicio"))
+    expect(collapse(p)).toContain("GROUP BY organization_id, clave HAVING COUNT(*) > 1")
   })
 })
