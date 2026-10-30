@@ -79,6 +79,7 @@ describe("377: security and hygiene", () => {
     expect(rb.indexOf("DROP VIEW IF EXISTS v_comisiones_filas")).toBeGreaterThan(rb.indexOf("DROP VIEW IF EXISTS v_comisiones_devengadas"))
   })
 })
+const probes = () => readByMarker("verify", "Verification of comisiones_definicion")
 const audit = () => readByMarker("backfill", "Audit of comisiones_definicion")
 describe("377 audit", () => {
   it("is read-only", () => {
@@ -93,5 +94,19 @@ describe("377 audit", () => {
   })
   it("lists flag/item drift in both directions", () => {
     expect(audit()).toMatch(/\[3\]/); expect(collapse(audit())).toMatch(/comision_pagada AND NOT EXISTS/); expect(collapse(audit())).toMatch(/NOT \w+\.comision_pagada AND EXISTS/)
+  })
+})
+describe("377 probes", () => {
+  it("is named in the migration header, rolls back, and never commits", () => {
+    expect(readBySuffix("_comisiones_definicion.sql")).toContain("verify/377_probes.sql")
+    const s = stripComments(probes())
+    expect(s).toMatch(/^\s*BEGIN\s*;/m); expect(s.trimEnd().endsWith("ROLLBACK;")).toBe(true); expect(s).not.toMatch(/\bCOMMIT\b/i)
+  })
+  it("covers unpaid parity both ways and the adjustment branches", () => {
+    const s = collapse(probes())
+    expect(s.match(/FULL JOIN/g)).toHaveLength(2)
+    expect(s).toContain("FROM v_comisiones_ordenes c"); expect(s).toContain("FROM v_comisiones_ventas c")
+    for (const c of ["AJUSTE_DEVOLUCION", "AJUSTE_ANULACION", "SALTEADO", "security_invoker"]) expect(probes()).toContain(c)
+    expect(probes()).toMatch(/COUNT\(DISTINCT orden\)/)
   })
 })

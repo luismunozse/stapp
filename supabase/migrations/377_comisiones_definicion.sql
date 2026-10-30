@@ -19,7 +19,7 @@
 -- Access: security_invoker, service_role only (as in 347).
 --
 -- No BEGIN/COMMIT: scripts/db-run.mjs wraps the file (dry-run by default).
--- Rollback: rollback/377_rollback.sql.
+-- Rollback: rollback/377_rollback.sql. Verify: verify/377_probes.sql (unpaid parity + adjustment branches).
 -- ============================================================================
 
 SET LOCAL lock_timeout = '3s';
