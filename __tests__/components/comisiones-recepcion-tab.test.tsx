@@ -23,6 +23,17 @@ vi.mock("swr", () => ({
     }
   },
 }))
+vi.mock("@/components/ui/select", () => ({
+  Select: ({ value, onValueChange, children }: any) => (
+    <select aria-label="persona-filter" value={value} onChange={(e) => onValueChange(e.target.value)}>
+      {children}
+    </select>
+  ),
+  SelectTrigger: () => null,
+  SelectValue: () => null,
+  SelectContent: ({ children }: any) => <>{children}</>,
+  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
+}))
 vi.mock("@/contexts/modal-context", () => ({ useModal: () => ({ confirm }) }))
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({ formatPrice: (n: number) => `$${n}`, formatDate: (d: string) => `fmt(${d})` }),
@@ -86,6 +97,24 @@ describe("ComisionesView reception tab", () => {
       beneficiarioId: "v1",
       filas: [{ clave: "a", monto: 10 }, { clave: "b", monto: 20 }],
     })
+  })
+
+  it("keeps removed receivers in the person filter and filters by them", () => {
+    data.value = {
+      items: [item({ clave: "a" }), item({ clave: "b", tecnicoId: "v9", tecnicoNombre: "Vito" })],
+      resumen: [],
+    }
+    render(<ComisionesView rol="RECEPCION" />)
+    const options = screen.getAllByRole("option").map((o) => o.textContent)
+    expect(options).toEqual(["Todos", "Vera", "Vito"])
+
+    fireEvent.change(screen.getByLabelText("persona-filter"), { target: { value: "v9" } })
+    expect(swrKeys.some((k) => k?.startsWith("/api/comisiones?") && k.includes("tecnicoId=v9"))).toBe(true)
+
+    // The data narrows to the selection (even to nothing): the person stays listed.
+    data.value = { items: [], resumen: [] }
+    fireEvent.change(screen.getByLabelText("persona-filter"), { target: { value: "v9" } })
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toContain("Vito")
   })
 
   it("shows where to set the rate when there is nothing to list", () => {

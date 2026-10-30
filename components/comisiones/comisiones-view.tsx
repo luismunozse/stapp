@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,7 +21,7 @@ import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { EmptyState } from "@/components/ui/empty-state"
 import { AnularPagoDialog } from "@/components/comisiones/anular-pago-dialog"
-import { commissionKindLabel, type CommissionKind } from "@/lib/commissions/types"
+import { commissionKindLabel, type CommissionKind, type CommissionRole } from "@/lib/commissions/types"
 import { round2 } from "@/lib/precios"
 
 interface Item {
@@ -91,7 +91,7 @@ const fetcher = async (url: string) => {
 
 interface ComisionesViewProps {
   tecnicoIdFijo?: string
-  rol?: "TECNICO" | "RECEPCION"
+  rol?: Extract<CommissionRole, "TECNICO" | "RECEPCION">
 }
 
 export function ComisionesView({ tecnicoIdFijo, rol = "TECNICO" }: ComisionesViewProps = {}) {
@@ -109,7 +109,7 @@ export function ComisionesView({ tecnicoIdFijo, rol = "TECNICO" }: ComisionesVie
   const [anular, setAnular] = useState<{ pagoId: string | null; fecha: string | null } | null>(null)
 
   // Reception can be earned by any staff role, so its people come from all operators.
-  const { data: tecnicos = [] } = useSWR<Tecnico[]>(
+  const { data: operadores = [] } = useSWR<Tecnico[]>(
     tecnicoIdFijo ? null : esRecepcion ? "/api/operadores" : "/api/tecnicos",
     fetcher
   )
@@ -135,6 +135,24 @@ export function ComisionesView({ tecnicoIdFijo, rol = "TECNICO" }: ComisionesVie
 
   const items = data?.items || []
   const resumen = data?.resumen || []
+
+  // /api/operadores only lists active people of the current sucursal, but a removed
+  // receiver can still hold pending rows. Remember everyone seen in the data so they
+  // stay selectable, including after the filter narrows the data to them.
+  const seenPeople = useRef(new Map<string, string>())
+  if (esRecepcion) {
+    for (const i of items) seenPeople.current.set(i.tecnicoId, i.tecnicoNombre)
+    for (const r of resumen) seenPeople.current.set(r.tecnicoId, r.tecnicoNombre)
+  }
+  const tecnicos = useMemo(() => {
+    if (!esRecepcion) return operadores
+    const byId = new Map<string, Tecnico>()
+    for (const o of operadores) byId.set(o.id, o)
+    for (const [id, nombre] of seenPeople.current) if (!byId.has(id)) byId.set(id, { id, nombre })
+    return Array.from(byId.values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
+    // seenPeople is a ref: it is refreshed on every render that brings new data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [esRecepcion, operadores, data])
 
   // A zero-amount row can be listed but never paid.
   const pagable = (i: Item) => !i.comisionPagada && i.montoComision !== 0
