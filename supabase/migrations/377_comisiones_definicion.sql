@@ -4,7 +4,9 @@
 -- Adds two views that every screen, total and payment will read:
 --   * v_comisiones_filas: one row per (document, role, kind, adjustment ref). Live rows come
 --     from today's formulas; a row that a non-annulled payout item closes is replaced by the
---     frozen item (matched by key, never by beneficiary).
+--     frozen item (matched by organization + the key expressions of the unique index
+--     comisiones_pagos_items_fila_vigente_uq in 376, never by beneficiary). Every join from a
+--     payout item to its document also carries organization_id (same result, defence in depth).
 --   * v_comisiones_devengadas: the rows filas marks as accrued (what is owed).
 --
 -- ORIGINAL rows reproduce v_comisiones_ordenes (119) plus the filters of
@@ -87,8 +89,8 @@ vivas AS (
          -ROUND(COALESCE(v.iva_neto, v.total) * d.monto_devolucion / v.total * po.porcentaje / 100, 2),
          d.created_at, true
     FROM pagadas po
-    JOIN ventas v ON v.id = po.documento_id AND v.estado = 'COMPLETADA' AND v.total > 0
-    JOIN devoluciones_venta d ON d.venta_id = v.id
+    JOIN ventas v ON v.id = po.documento_id AND v.organization_id = po.organization_id AND v.estado = 'COMPLETADA' AND v.total > 0
+    JOIN devoluciones_venta d ON d.venta_id = v.id AND d.organization_id = v.organization_id
      AND d.estado = 'COMPLETADA' AND NOT d.anulada AND d.created_at > po.fecha_pago
    WHERE po.documento_tipo = 'VENTA' AND po.rol = 'VENDEDOR' AND po.tipo = 'ORIGINAL'
   UNION ALL
@@ -98,10 +100,10 @@ vivas AS (
          -(po.monto + COALESCE(dp.monto, 0)),
          COALESCE(v.fecha_anulacion, v.updated_at), true
     FROM pagadas po
-    JOIN ventas v ON v.id = po.documento_id AND v.estado = 'ANULADA'
+    JOIN ventas v ON v.id = po.documento_id AND v.organization_id = po.organization_id AND v.estado = 'ANULADA'
     LEFT JOIN LATERAL (
       SELECT SUM(x.monto) AS monto FROM pagadas x
-       WHERE x.documento_tipo = 'VENTA' AND x.documento_id = v.id
+       WHERE x.organization_id = po.organization_id AND x.documento_tipo = 'VENTA' AND x.documento_id = v.id
          AND x.rol = 'VENDEDOR' AND x.tipo = 'AJUSTE_DEVOLUCION'
     ) dp ON true
    WHERE po.documento_tipo = 'VENTA' AND po.rol = 'VENDEDOR' AND po.tipo = 'ORIGINAL'
@@ -116,10 +118,11 @@ filas AS (
     FROM vivas l
    WHERE NOT EXISTS (
      SELECT 1 FROM pagadas x
-      WHERE x.documento_tipo IS NOT DISTINCT FROM l.documento_tipo
-        AND x.documento_id IS NOT DISTINCT FROM l.documento_id
+      WHERE x.organization_id = l.organization_id
+        AND COALESCE(x.documento_tipo, '-') = COALESCE(l.documento_tipo, '-')
+        AND COALESCE(x.documento_id, '-')   = COALESCE(l.documento_id, '-')
         AND x.rol = l.rol AND x.tipo = l.tipo
-        AND x.ajuste_ref IS NOT DISTINCT FROM l.ajuste_ref)
+        AND COALESCE(x.ajuste_ref, '-')     = COALESCE(l.ajuste_ref, '-'))
   UNION ALL
   SELECT x.organization_id, x.documento_tipo, x.documento_id, x.beneficiario_id, x.rol, x.tipo,
          x.ajuste_ref, x.base, x.porcentaje, x.monto, x.fecha_devengo, true,
@@ -144,8 +147,8 @@ SELECT
   COALESCE(o.costo_final, v.total) AS documento_total,
   rep.costo::numeric(12,2) AS documento_costo_repuestos
 FROM filas f
-LEFT JOIN ordenes_servicio o ON f.documento_tipo = 'ORDEN' AND o.id = f.documento_id
-LEFT JOIN ventas v ON f.documento_tipo = 'VENTA' AND v.id = f.documento_id
+LEFT JOIN ordenes_servicio o ON f.documento_tipo = 'ORDEN' AND o.id = f.documento_id AND o.organization_id = f.organization_id
+LEFT JOIN ventas v ON f.documento_tipo = 'VENTA' AND v.id = f.documento_id AND v.organization_id = f.organization_id
 LEFT JOIN LATERAL (
   SELECT COALESCE(SUM(r.cantidad * r.precio_unitario), 0) AS costo
     FROM repuestos_orden r WHERE r.orden_id = o.id

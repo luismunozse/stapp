@@ -35,12 +35,27 @@ describe("377: adjustments and the closed-row rule", () => {
     expect(mig()).toContain("-(po.monto + COALESCE(dp.monto, 0))")
     expect(mig()).toContain("COALESCE(v.fecha_anulacion, v.updated_at)")
   })
-  it("a paid row suppresses its live twin by key, never by beneficiary", () => {
+  it("a paid row suppresses its live twin by key and org, never by beneficiary", () => {
     const anti = mig().slice(mig().indexOf("WHERE NOT EXISTS ( SELECT 1 FROM pagadas x"))
-    const cuerpo = anti.slice(0, anti.indexOf(")"))
-    expect(cuerpo).toContain("x.documento_id IS NOT DISTINCT FROM l.documento_id")
-    expect(cuerpo).toContain("x.ajuste_ref IS NOT DISTINCT FROM l.ajuste_ref")
+    const cuerpo = anti.slice(0, anti.indexOf("UNION ALL"))
+    // same COALESCE sentinel as comisiones_pagos_items_fila_vigente_uq (376), so the unique index serves the probe
+    expect(cuerpo).toContain("x.organization_id = l.organization_id")
+    expect(cuerpo).toContain("COALESCE(x.documento_tipo, '-') = COALESCE(l.documento_tipo, '-')")
+    expect(cuerpo).toContain("COALESCE(x.documento_id, '-') = COALESCE(l.documento_id, '-')")
+    expect(cuerpo).toContain("x.rol = l.rol AND x.tipo = l.tipo")
+    expect(cuerpo).toContain("COALESCE(x.ajuste_ref, '-') = COALESCE(l.ajuste_ref, '-')")
+    expect(cuerpo).not.toContain("IS NOT DISTINCT FROM")
     expect(cuerpo).not.toContain("beneficiario_id")
+    expect(collapse(readBySuffix("_comisiones_fundacion.sql"))).toContain("COALESCE(documento_tipo, '-'), COALESCE(documento_id, '-'), rol, tipo, COALESCE(ajuste_ref, '-')) WHERE NOT anulado")
+  })
+  it("every id join between documents carries the organization (defence in depth)", () => {
+    const s = mig()
+    expect(s).toContain("JOIN ventas v ON v.id = po.documento_id AND v.organization_id = po.organization_id AND v.estado = 'COMPLETADA' AND v.total > 0")
+    expect(s).toContain("JOIN devoluciones_venta d ON d.venta_id = v.id AND d.organization_id = v.organization_id")
+    expect(s).toContain("JOIN ventas v ON v.id = po.documento_id AND v.organization_id = po.organization_id AND v.estado = 'ANULADA'")
+    expect(s).toContain("WHERE x.organization_id = po.organization_id AND x.documento_tipo = 'VENTA' AND x.documento_id = v.id")
+    expect(s).toContain("LEFT JOIN ordenes_servicio o ON f.documento_tipo = 'ORDEN' AND o.id = f.documento_id AND o.organization_id = f.organization_id")
+    expect(s).toContain("LEFT JOIN ventas v ON f.documento_tipo = 'VENTA' AND v.id = f.documento_id AND v.organization_id = f.organization_id")
   })
   it("items of annulled payouts never close a row", () => {
     expect(mig()).toContain("FROM comisiones_pagos_items i JOIN comisiones_pagos p ON p.id = i.pago_id WHERE NOT i.anulado")
