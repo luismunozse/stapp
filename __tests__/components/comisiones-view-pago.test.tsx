@@ -58,7 +58,7 @@ describe("ComisionesView paying and annulling payouts", () => {
   })
 
   it("blocks paying a selection that spans two technicians", async () => {
-    data.value = { items: [item({ clave: "a", tecnicoId: "t1" }), item({ clave: "b", ordenId: "o2", tecnicoId: "t2" })], resumen: [] }
+    data.value = { items: [item({ clave: "a", codigoOrden: "a", tecnicoId: "t1" }), item({ clave: "b", codigoOrden: "b", ordenId: "o2", tecnicoId: "t2" })], resumen: [] }
     render(<ComisionesView />)
     selectRow("a")
     selectRow("b")
@@ -67,7 +67,7 @@ describe("ComisionesView paying and annulling payouts", () => {
   })
 
   it("pays one technician's rows with their displayed amounts", async () => {
-    data.value = { items: [item({ clave: "a", tecnicoId: "t1", montoComision: 100 }), item({ clave: "b", ordenId: "o2", tecnicoId: "t1", montoComision: 50 })], resumen: [] }
+    data.value = { items: [item({ clave: "a", codigoOrden: "a", tecnicoId: "t1", montoComision: 100 }), item({ clave: "b", codigoOrden: "b", ordenId: "o2", tecnicoId: "t1", montoComision: 50 })], resumen: [] }
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ pagoId: "p1", total: 150, filas: 2 }) }) as any
     render(<ComisionesView />)
     selectRow("a")
@@ -87,7 +87,7 @@ describe("ComisionesView paying and annulling payouts", () => {
 
   it("on 409 shows the server message and reloads", async () => {
     const msg = "Las comisiones cambiaron desde que las viste. Actualizá y probá de nuevo."
-    data.value = { items: [item({ clave: "a", tecnicoId: "t1", montoComision: 100 })], resumen: [] }
+    data.value = { items: [item({ clave: "a", codigoOrden: "a", tecnicoId: "t1", montoComision: 100 })], resumen: [] }
     global.fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: msg }) }) as any
     render(<ComisionesView />)
     selectRow("a")
@@ -97,15 +97,37 @@ describe("ComisionesView paying and annulling payouts", () => {
   })
 
   it("clicking a paid row opens the annul dialog for its payout", async () => {
-    data.value = { items: [item({ clave: "a", comisionPagada: true, pagoId: "p9", fechaPagoComision: "2026-10-20T12:00:00Z" })], resumen: [] }
+    data.value = { items: [item({ clave: "a", codigoOrden: "a", comisionPagada: true, pagoId: "p9", fechaPagoComision: "2026-10-20T12:00:00Z" })], resumen: [] }
     render(<ComisionesView />)
     expect(screen.queryByText("Anular pago")).not.toBeInTheDocument()
     fireEvent.click(screen.getAllByRole("button", { name: /Pagada/ })[0])
     expect(await screen.findByText("Anular pago", { selector: "h2" })).toBeInTheDocument()
   })
 
+  it("drops rows that became paid meanwhile from the selection, count and body", async () => {
+    data.value = { items: [item({ clave: "a", codigoOrden: "a", montoComision: 100 }), item({ clave: "b", codigoOrden: "b", ordenId: "o2", montoComision: 50 })], resumen: [] }
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ pagoId: "p1", total: 50, filas: 1 }) }) as any
+    const { rerender } = render(<ComisionesView />)
+    selectRow("a")
+    selectRow("b")
+    expect(screen.getByText("2")).toBeInTheDocument()
+    data.value = { items: [item({ clave: "a", codigoOrden: "a", montoComision: 100, comisionPagada: true, pagoId: "p0", fechaPagoComision: "2026-10-20T12:00:00Z" }), item({ clave: "b", codigoOrden: "b", ordenId: "o2", montoComision: 50 })], resumen: [] }
+    rerender(<ComisionesView />)
+    expect(screen.getByText("1")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: /Marcar como pagadas/ }))
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    expect(JSON.parse((global.fetch as any).mock.calls[0][1].body)).toEqual({ beneficiarioId: "t1", filas: [{ clave: "b", monto: 50 }] })
+  })
+
+  it("labels adjustment checkboxes with the kind so they differ from the original", async () => {
+    data.value = { items: [item({ clave: "a", codigoOrden: "OR-7" }), item({ clave: "b", codigoOrden: "OR-7", tipo: "AJUSTE_DEVOLUCION", montoComision: -5 })], resumen: [] }
+    render(<ComisionesView />)
+    expect(screen.getAllByLabelText("Seleccionar comisión OR-7")).toHaveLength(2)
+    expect(screen.getAllByLabelText("Seleccionar comisión OR-7 (Devolución)")).toHaveLength(2)
+  })
+
   it("renders a dash instead of the order link when the row has no order, and badges adjustments", async () => {
-    data.value = { items: [item({ clave: "a", ordenId: null, tipo: "AJUSTE_DEVOLUCION", montoComision: -20 })], resumen: [] }
+    data.value = { items: [item({ clave: "a", codigoOrden: "a", ordenId: null, tipo: "AJUSTE_DEVOLUCION", montoComision: -20 })], resumen: [] }
     render(<ComisionesView />)
     expect(screen.queryByRole("link")).not.toBeInTheDocument()
     expect(screen.getAllByText("—").length).toBeGreaterThan(0)

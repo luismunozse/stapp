@@ -162,7 +162,14 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
     setSelected(next)
   }
 
-  const selectedItems = items.filter((i) => selected.has(i.clave))
+  const selectedItems = items.filter((i) => selected.has(i.clave) && !i.comisionPagada)
+
+  const selectLabel = (i: Item) => {
+    const kind = COMMISSION_KIND_LABEL[i.tipo]
+    const doc = i.codigoOrden || (i.numeroOrden != null ? `#${i.numeroOrden}` : "")
+    return `Seleccionar comisión ${doc}${kind ? (doc ? ` (${kind})` : kind) : ""}`.trim()
+  }
+
   const totalSeleccionado = round2(selectedItems.reduce((acc, i) => acc + i.montoComision, 0))
 
   const applyPreset = (p: Preset) => {
@@ -409,7 +416,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-primary"
-                          aria-label={`Seleccionar comisión ${i.clave}`}
+                          aria-label={selectLabel(i)}
                           checked={selected.has(i.clave)}
                           onChange={() => toggleOne(i.clave)}
                         />
