@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { readBySuffix, readByMarker, collapse } from "./helpers/sql-text"
+import { readBySuffix, readByMarker, collapse, stripComments } from "./helpers/sql-text"
 
 const mig = () => collapse(readBySuffix("_comisiones_definicion.sql"))
 const m119 = () => collapse(readBySuffix("_comisiones_tecnicos.sql"))
@@ -62,5 +62,21 @@ describe("377: security and hygiene", () => {
     const rb = collapse(readByMarker("rollback", "Rollback of comisiones_definicion"))
     expect(rb.indexOf("DROP VIEW IF EXISTS v_comisiones_devengadas")).toBeGreaterThan(-1)
     expect(rb.indexOf("DROP VIEW IF EXISTS v_comisiones_filas")).toBeGreaterThan(rb.indexOf("DROP VIEW IF EXISTS v_comisiones_devengadas"))
+  })
+})
+const audit = () => readByMarker("backfill", "Audit of comisiones_definicion")
+describe("377 audit", () => {
+  it("is read-only", () => {
+    expect(stripComments(audit())).not.toMatch(/\b(INSERT|UPDATE|DELETE|ALTER|CREATE|DROP)\b/i)
+  })
+  it("compares unpaid documents with today's screen filters, both directions", () => {
+    const s = collapse(audit())
+    expect(s).toContain("FROM v_comisiones_ordenes c JOIN organizations org ON org.id = c.organization_id WHERE NOT c.comision_pagada AND c.estado_cobro = 'COBRADO'")
+    expect(s).toContain("FROM v_comisiones_ventas c WHERE NOT c.comision_pagada")
+    expect(s.match(/FULL JOIN/g)).toHaveLength(2)
+    expect(s).toContain("WHERE COALESCE(h.monto, 0) <> COALESCE(n.monto, 0)")
+  })
+  it("lists flag/item drift in both directions", () => {
+    expect(audit()).toMatch(/\[3\]/); expect(collapse(audit())).toMatch(/comision_pagada AND NOT EXISTS/); expect(collapse(audit())).toMatch(/NOT \w+\.comision_pagada AND EXISTS/)
   })
 })
