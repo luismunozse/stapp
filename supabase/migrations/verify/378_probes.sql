@@ -32,9 +32,11 @@ CREATE TEMP TABLE _ctx (
   org TEXT, benef TEXT, clave TEXT, doc_id TEXT, monto NUMERIC,
   admin TEXT, otro TEXT, no_admin TEXT, admin_ajeno TEXT,
   clave_no_dev TEXT,
-  pagos_antes INT, pago_id TEXT, fecha_pago TIMESTAMPTZ,
-  v_clave TEXT, v_doc TEXT, v_benef TEXT, v_monto NUMERIC, v_admin TEXT
+  pagos_antes INT, pago_id TEXT, fecha_pago TIMESTAMPTZ
 );
+
+-- Sale fixture, independent of the order fixture (any org with an active admin).
+CREATE TEMP TABLE _cv (org TEXT, clave TEXT, doc_id TEXT, benef TEXT, monto NUMERIC, admin TEXT);
 
 -- Expects pagar_comisiones to fail with COMISION_ERROR:<code>; records OK: <message> when it does.
 CREATE FUNCTION pg_temp.probe_err(p_orden INT, p_probe TEXT, p_code TEXT, p_org TEXT, p_usr TEXT, p_benef TEXT, p_filas JSONB) RETURNS void
@@ -77,15 +79,16 @@ UPDATE _ctx c SET
                      AND NOT f.devengada AND NOT f.pagado ORDER BY f.clave LIMIT 1),
   pagos_antes = (SELECT COUNT(*) FROM comisiones_pagos p WHERE p.organization_id = c.org);
 
--- A sale commission of the same org: accrued, unpaid, amount > 0.
-UPDATE _ctx c SET (v_clave, v_doc, v_benef, v_monto, v_admin) = (
-  SELECT f.clave, f.documento_id, f.beneficiario_id, f.monto,
-         (SELECT u.id FROM users u WHERE u.organization_id = f.organization_id AND u.rol = 'ADMIN' AND u.deleted_at IS NULL ORDER BY u.id LIMIT 1)
-    FROM v_comisiones_devengadas f
-    JOIN ventas v ON v.id = f.documento_id AND v.organization_id = f.organization_id
-   WHERE f.organization_id = c.org AND f.documento_tipo = 'VENTA' AND f.rol = 'VENDEDOR' AND f.tipo = 'ORIGINAL'
-     AND NOT f.pagado AND f.monto > 0 AND NOT COALESCE(v.comision_pagada, false)
-   ORDER BY f.clave LIMIT 1);
+-- A sale commission: accrued, unpaid, amount > 0, in any org with an active admin.
+INSERT INTO _cv (org, clave, doc_id, benef, monto, admin)
+SELECT f.organization_id, f.clave, f.documento_id, f.beneficiario_id, f.monto,
+       (SELECT u.id FROM users u WHERE u.organization_id = f.organization_id AND u.rol = 'ADMIN' AND u.deleted_at IS NULL ORDER BY u.id LIMIT 1)
+  FROM v_comisiones_devengadas f
+  JOIN ventas v ON v.id = f.documento_id AND v.organization_id = f.organization_id
+ WHERE f.documento_tipo = 'VENTA' AND f.rol = 'VENDEDOR' AND f.tipo = 'ORIGINAL'
+   AND NOT f.pagado AND f.monto > 0 AND NOT COALESCE(v.comision_pagada, false)
+   AND EXISTS (SELECT 1 FROM users u WHERE u.organization_id = f.organization_id AND u.rol = 'ADMIN' AND u.deleted_at IS NULL)
+ ORDER BY f.clave LIMIT 1;
 
 -- ── 1. Shape and privileges (always runs) ──────────────────────────────────
 INSERT INTO _r SELECT 1, 'pagar_comisiones y comisiones_sincronizar_flags: prosecdef / anon / authenticated / service_role',
@@ -146,13 +149,13 @@ BEGIN
   UPDATE _ctx SET pago_id = v_res->>'pagoId';
   UPDATE _ctx SET fecha_pago = (SELECT p.fecha_pago FROM comisiones_pagos p WHERE p.id = pago_id);
   SELECT format('total=%s / filas=%s / item=%s / pagado=%s / flag=%s / fecha=%s / notas=%s',
-      (v_res->>'total')::numeric = c.monto,
+      ((v_res->>'total')::numeric = c.monto)::text,
       v_res->>'filas',
       (SELECT COUNT(*) FROM comisiones_pagos_items i WHERE i.pago_id = v_res->>'pagoId' AND i.organization_id = c.org
           AND i.documento_id = c.doc_id AND i.rol = 'TECNICO' AND i.tipo = 'ORIGINAL' AND i.monto = c.monto AND NOT i.anulado),
-      (SELECT f.pagado AND f.pago_id = v_res->>'pagoId' FROM v_comisiones_filas f WHERE f.clave = c.clave AND f.organization_id = c.org),
-      (SELECT o.comision_pagada FROM ordenes_servicio o WHERE o.id = c.doc_id AND o.organization_id = c.org),
-      (SELECT o.fecha_pago_comision = p.fecha_pago FROM ordenes_servicio o, comisiones_pagos p WHERE o.id = c.doc_id AND o.organization_id = c.org AND p.id = v_res->>'pagoId'),
+      (SELECT f.pagado AND f.pago_id = v_res->>'pagoId' FROM v_comisiones_filas f WHERE f.clave = c.clave AND f.organization_id = c.org)::text,
+      (SELECT o.comision_pagada FROM ordenes_servicio o WHERE o.id = c.doc_id AND o.organization_id = c.org)::text,
+      (SELECT o.fecha_pago_comision = p.fecha_pago FROM ordenes_servicio o, comisiones_pagos p WHERE o.id = c.doc_id AND o.organization_id = c.org AND p.id = v_res->>'pagoId')::text,
       (SELECT p.notas FROM comisiones_pagos p WHERE p.id = v_res->>'pagoId'))
     INTO v_ok;
   INSERT INTO _r VALUES (11, 'pago de una orden: item = fila, pagado, flag, fecha', 'total=true / filas=1 / item=1 / pagado=true / flag=true / fecha=true / notas=probe 378', v_ok);
@@ -173,9 +176,9 @@ BEGIN
   END IF;
   UPDATE ordenes_servicio SET tecnico_id = c.otro WHERE id = c.doc_id AND organization_id = c.org;
   SELECT format('beneficiario=%s / monto=%s / pagado=%s / filas del nuevo=%s',
-      (SELECT f.beneficiario_id = c.benef FROM v_comisiones_filas f WHERE f.clave = c.clave AND f.organization_id = c.org),
-      (SELECT f.monto = c.monto FROM v_comisiones_filas f WHERE f.clave = c.clave AND f.organization_id = c.org),
-      (SELECT f.pagado FROM v_comisiones_filas f WHERE f.clave = c.clave AND f.organization_id = c.org),
+      (SELECT f.beneficiario_id = c.benef FROM v_comisiones_filas f WHERE f.clave = c.clave AND f.organization_id = c.org)::text,
+      (SELECT f.monto = c.monto FROM v_comisiones_filas f WHERE f.clave = c.clave AND f.organization_id = c.org)::text,
+      (SELECT f.pagado FROM v_comisiones_filas f WHERE f.clave = c.clave AND f.organization_id = c.org)::text,
       (SELECT COUNT(*) FROM v_comisiones_filas f WHERE f.organization_id = c.org AND f.documento_id = c.doc_id
           AND f.rol = 'TECNICO' AND f.tipo = 'ORIGINAL' AND f.beneficiario_id = c.otro))
     INTO v_got;
@@ -194,7 +197,7 @@ BEGIN
   END IF;
   UPDATE ordenes_servicio SET costo_final = COALESCE(costo_final, 0) + 100000 WHERE id = c.doc_id AND organization_id = c.org;
   SELECT format('monto=%s / pendiente=%s',
-      (SELECT f.monto = c.monto FROM v_comisiones_filas f WHERE f.clave = c.clave AND f.organization_id = c.org),
+      (SELECT f.monto = c.monto FROM v_comisiones_filas f WHERE f.clave = c.clave AND f.organization_id = c.org)::text,
       (SELECT f.pendiente FROM v_comisiones_filas f WHERE f.clave = c.clave AND f.organization_id = c.org))
     INTO v_got;
   INSERT INTO _r VALUES (14, 'cambiar costo_final de la orden pagada: el monto pagado no cambia', 'monto=true / pendiente=0.00', v_got);
@@ -204,18 +207,18 @@ END $$;
 DO $$
 DECLARE c RECORD; v_res JSONB; v_got TEXT;
 BEGIN
-  SELECT * INTO c FROM _ctx WHERE v_clave IS NOT NULL AND v_admin IS NOT NULL;
+  SELECT * INTO c FROM _cv;
   IF NOT FOUND THEN
-    INSERT INTO _r VALUES (15, 'pago de una venta: item = fila, pagado, flag, fecha', 'OK', 'SALTEADO: la base no tiene una venta devengada sin pagar en esa org');
+    INSERT INTO _r VALUES (15, 'pago de una venta: item = fila, pagado, flag, fecha', 'OK', 'SALTEADO: la base no tiene una venta devengada sin pagar con admin');
     RETURN;
   END IF;
-  v_res := pagar_comisiones(c.org, c.v_admin, c.v_benef, jsonb_build_array(jsonb_build_object('clave', c.v_clave, 'monto', c.v_monto)));
+  v_res := pagar_comisiones(c.org, c.admin, c.benef, jsonb_build_array(jsonb_build_object('clave', c.clave, 'monto', c.monto)));
   SELECT format('item=%s / pagado=%s / flag=%s / fecha=%s',
-      (SELECT COUNT(*) FROM comisiones_pagos_items i WHERE i.pago_id = v_res->>'pagoId' AND i.documento_id = c.v_doc
-          AND i.rol = 'VENDEDOR' AND i.tipo = 'ORIGINAL' AND i.monto = c.v_monto),
-      (SELECT f.pagado FROM v_comisiones_filas f WHERE f.clave = c.v_clave AND f.organization_id = c.org),
-      (SELECT v.comision_pagada FROM ventas v WHERE v.id = c.v_doc AND v.organization_id = c.org),
-      (SELECT v.fecha_pago_comision = p.fecha_pago FROM ventas v, comisiones_pagos p WHERE v.id = c.v_doc AND v.organization_id = c.org AND p.id = v_res->>'pagoId'))
+      (SELECT COUNT(*) FROM comisiones_pagos_items i WHERE i.pago_id = v_res->>'pagoId' AND i.documento_id = c.doc_id
+          AND i.rol = 'VENDEDOR' AND i.tipo = 'ORIGINAL' AND i.monto = c.monto),
+      (SELECT f.pagado FROM v_comisiones_filas f WHERE f.clave = c.clave AND f.organization_id = c.org)::text,
+      (SELECT v.comision_pagada FROM ventas v WHERE v.id = c.doc_id AND v.organization_id = c.org)::text,
+      (SELECT v.fecha_pago_comision = p.fecha_pago FROM ventas v, comisiones_pagos p WHERE v.id = c.doc_id AND v.organization_id = c.org AND p.id = v_res->>'pagoId')::text)
     INTO v_got;
   INSERT INTO _r VALUES (15, 'pago de una venta: item = fila, pagado, flag, fecha', 'item=1 / pagado=true / flag=true / fecha=true', v_got);
 END $$;
