@@ -14,6 +14,7 @@ import {
   createPostRequest,
   parseResponse,
 } from "./helpers"
+import { montarSupabaseEnMemoria } from "../helpers/supabase-memoria"
 import { auth } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 
@@ -63,7 +64,8 @@ vi.mock("@/lib/orden-state-machine", () => ({
 // ─── Route imports (after mocks) ─────────────────────────────────────────────
 
 import { POST as pagarTecnicoPost, DELETE as pagarTecnicoDelete } from "@/app/api/comisiones/pagar/route"
-import { DELETE as pagarVendedorDelete } from "@/app/api/comisiones/vendedores/pagar/route"
+import { POST as pagarVendedorPost, DELETE as pagarVendedorDelete } from "@/app/api/comisiones/vendedores/pagar/route"
+import { POST as liquidarPost } from "@/app/api/vendedores/[id]/comisiones/liquidar/route"
 import { POST as ordenesPost } from "@/app/api/ordenes/route"
 import { POST as reasignarPost } from "@/app/api/tecnicos/[id]/reasignar/route"
 
@@ -90,90 +92,158 @@ function createDeleteRequest(body: any, url = "http://localhost:3000/api/test"):
   })
 }
 
-// ─── C1: técnico double-pay idempotency ──────────────────────────────────────
+// ─── C1: pay goes through the RPC ─────────────────────────────────────────────
 
-describe("C1 — POST /api/comisiones/pagar — idempotency guard", () => {
+const PAGO_OK = () => ({ pagoId: "p1", total: 10, filas: 1 })
+const FILAS = [{ clave: "k", monto: 10 }]
+
+describe("C1 — POST /api/comisiones/pagar — pays through the RPC", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("C1.1 — UPDATE chain includes .eq('comision_pagada', false) to prevent double-pay", async () => {
+  it("C1.1 — pay goes through pagar_comisiones and never updates a table", async () => {
     mockAdminAuth()
-
-    const ordenesChain = createChainMock([{ id: "o1" }])
-    mockSupabaseFrom({ ordenes_servicio: ordenesChain })
-
-    const res = await pagarTecnicoPost(
-      createPostRequest({ ordenIds: ["o1", "o2"] })
-    )
-
+    const mem = montarSupabaseEnMemoria({}, { resultadoRpc: PAGO_OK })
+    const res = await pagarTecnicoPost(createPostRequest({ beneficiarioId: "t1", filas: FILAS }))
     expect(res.status).toBe(200)
-
-    // The UPDATE must have been called with comision_pagada: true
-    expect(ordenesChain.update).toHaveBeenCalledWith(
-      expect.objectContaining({ comision_pagada: true })
-    )
-
-    // AND the chain must include eq("comision_pagada", false) to guard against double-pay
-    const eqCalls = ordenesChain.eq.mock.calls as [string, any][]
-    const idempotencyGuard = eqCalls.find(([col, val]) => col === "comision_pagada" && val === false)
-    expect(idempotencyGuard).toBeDefined()
+    expect(mem.escrituras.map((e) => [e.tabla, e.operacion])).toEqual([["pagar_comisiones", "rpc"]])
+    expect(mem.escrituras[0].carga).toMatchObject({ p_organization_id: "org-1", p_usuario_id: "admin-1", p_beneficiario_id: "t1" })
   })
 
-  it("C1.2 — returns 400 when ordenIds is empty", async () => {
+  it("C1.2 — the legacy body { ordenIds } is a 400 and calls nothing", async () => {
     mockAdminAuth()
-    const res = await pagarTecnicoPost(createPostRequest({ ordenIds: [] }))
+    const mem = montarSupabaseEnMemoria({})
+    const res = await pagarTecnicoPost(createPostRequest({ ordenIds: ["o1"] }))
     expect(res.status).toBe(400)
+    expect(mem.escrituras).toEqual([])
+  })
+
+  it("C1.3 — a stale amount is a 409 with the reload message", async () => {
+    mockAdminAuth()
+    const mem = montarSupabaseEnMemoria(
+      {},
+      { errorRpc: () => ({ message: "COMISION_ERROR:MONTO_DISTINTO:k" }) },
+    )
+    const res = await pagarTecnicoPost(createPostRequest({ beneficiarioId: "t1", filas: FILAS }))
+    const { status, body } = await parseResponse(res)
+    expect(status).toBe(409)
+    expect(body.error).toMatch(/Actualizá/)
+    expect(mem.escrituras).toHaveLength(1)
+  })
+
+  it("C1.4 — a body that is not valid JSON is a 400", async () => {
+    mockAdminAuth()
+    const mem = montarSupabaseEnMemoria({})
+    const res = await pagarTecnicoPost(
+      new Request("http://localhost:3000/api/test", { method: "POST", body: "{nope" }),
+    )
+    expect(res.status).toBe(400)
+    expect(mem.escrituras).toEqual([])
   })
 })
 
-// ─── C2: revert state guard ───────────────────────────────────────────────────
+// ─── C2: unpay annuls the payout ──────────────────────────────────────────────
 
-describe("C2a — DELETE /api/comisiones/pagar — revert only paid rows", () => {
+describe("C2a — DELETE /api/comisiones/pagar — annuls the payout", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("C2a.1 — UPDATE chain includes .eq('comision_pagada', true) on revert", async () => {
+  it("C2a.1 — unpay annuls the payout with its reason", async () => {
     mockAdminAuth()
-
-    const ordenesChain = createChainMock([{ id: "o1" }])
-    mockSupabaseFrom({ ordenes_servicio: ordenesChain })
-
-    const res = await pagarTecnicoDelete(
-      createDeleteRequest({ ordenIds: ["o1"] })
-    )
-
+    const mem = montarSupabaseEnMemoria({}, { resultadoRpc: () => ({ pagoId: "p1", filas: 1 }) })
+    const res = await pagarTecnicoDelete(createDeleteRequest({ pagoId: "p1", motivo: "error de carga" }))
     expect(res.status).toBe(200)
+    expect(mem.escrituras.map((e) => [e.tabla, e.operacion])).toEqual([["anular_pago_comisiones", "rpc"]])
+    expect(mem.escrituras[0].carga).toMatchObject({ p_pago_id: "p1", p_motivo: "error de carga" })
+  })
 
-    expect(ordenesChain.update).toHaveBeenCalledWith(
-      expect.objectContaining({ comision_pagada: false })
-    )
-
-    const eqCalls = ordenesChain.eq.mock.calls as [string, any][]
-    const revertGuard = eqCalls.find(([col, val]) => col === "comision_pagada" && val === true)
-    expect(revertGuard).toBeDefined()
+  it("C2a.2 — unpay without a reason is a 400", async () => {
+    mockAdminAuth()
+    const mem = montarSupabaseEnMemoria({})
+    const res = await pagarTecnicoDelete(createDeleteRequest({ pagoId: "p1" }))
+    expect(res.status).toBe(400)
+    expect(mem.escrituras).toEqual([])
   })
 })
 
-describe("C2b — DELETE /api/comisiones/vendedores/pagar — revert only paid rows", () => {
+describe("C2b — vendedores/pagar — same wrappers", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("C2b.1 — UPDATE chain includes .eq('comision_pagada', true) on revert", async () => {
+  it("C2b.1 — the seller unpay route is the same wrapper", async () => {
     mockAdminAuth()
-
-    const ventasChain = createChainMock([{ id: "v1" }])
-    mockSupabaseFrom({ ventas: ventasChain })
-
-    const res = await pagarVendedorDelete(
-      createDeleteRequest({ ventaIds: ["v1"] })
-    )
-
+    const mem = montarSupabaseEnMemoria({}, { resultadoRpc: () => ({ pagoId: "p1", filas: 1 }) })
+    const res = await pagarVendedorDelete(createDeleteRequest({ pagoId: "p1", motivo: "error de carga" }))
     expect(res.status).toBe(200)
+    expect(mem.escrituras.map((e) => [e.tabla, e.operacion])).toEqual([["anular_pago_comisiones", "rpc"]])
+    expect(mem.escrituras[0].carga).toMatchObject({ p_pago_id: "p1", p_motivo: "error de carga" })
+  })
 
-    expect(ventasChain.update).toHaveBeenCalledWith(
-      expect.objectContaining({ comision_pagada: false })
+  it("C2b.2 — the seller pay route goes through pagar_comisiones", async () => {
+    mockAdminAuth()
+    const mem = montarSupabaseEnMemoria({}, { resultadoRpc: PAGO_OK })
+    const res = await pagarVendedorPost(createPostRequest({ beneficiarioId: "v1", filas: FILAS }))
+    expect(res.status).toBe(200)
+    expect(mem.escrituras.map((e) => [e.tabla, e.operacion])).toEqual([["pagar_comisiones", "rpc"]])
+  })
+})
+
+// ─── C5: liquidar pays the URL's seller ───────────────────────────────────────
+
+describe("C5 — POST /api/vendedores/[id]/comisiones/liquidar", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const ctx = { params: Promise.resolve({ id: "v1" }) }
+
+  it("C5 — liquidar pays the URL's seller, 404 when the id is not a VENDEDOR", async () => {
+    mockAdminAuth()
+    const sinVendedor = montarSupabaseEnMemoria({ users: [] })
+    const res404 = await liquidarPost(createPostRequest({ filas: FILAS }), ctx)
+    expect(res404.status).toBe(404)
+    expect(sinVendedor.escrituras).toEqual([])
+
+    const mem = montarSupabaseEnMemoria(
+      { users: [{ id: "v1", rol: "VENDEDOR", organization_id: "org-1" }] },
+      { resultadoRpc: PAGO_OK },
     )
+    const res = await liquidarPost(createPostRequest({ filas: FILAS }), ctx)
+    const { status, body } = await parseResponse(res)
+    expect(status).toBe(200)
+    expect(body).toEqual({ pagoId: "p1", total: 10, liquidadas: 1, solicitadas: 1 })
+    expect(mem.escrituras.map((e) => [e.tabla, e.operacion])).toEqual([["pagar_comisiones", "rpc"]])
+    expect((mem.escrituras[0].carga as any).p_beneficiario_id).toBe("v1")
+  })
 
-    const eqCalls = ventasChain.eq.mock.calls as [string, any][]
-    const revertGuard = eqCalls.find(([col, val]) => col === "comision_pagada" && val === true)
-    expect(revertGuard).toBeDefined()
+  it("C5.2 — a vendedor of another org is a 404", async () => {
+    mockAdminAuth()
+    const mem = montarSupabaseEnMemoria({ users: [{ id: "v1", rol: "VENDEDOR", organization_id: "org-2" }] })
+    const res = await liquidarPost(createPostRequest({ filas: FILAS }), ctx)
+    expect(res.status).toBe(404)
+    expect(mem.escrituras).toEqual([])
+  })
+
+  it("C5.3 — a handler error is returned unchanged", async () => {
+    mockAdminAuth()
+    montarSupabaseEnMemoria(
+      { users: [{ id: "v1", rol: "VENDEDOR", organization_id: "org-1" }] },
+      { errorRpc: () => ({ message: "COMISION_ERROR:MONTO_DISTINTO:k" }) },
+    )
+    const res = await liquidarPost(createPostRequest({ filas: FILAS }), ctx)
+    expect(res.status).toBe(409)
+  })
+})
+
+// ─── C6: non-admins ───────────────────────────────────────────────────────────
+
+describe("C6 — non-admins cannot pay nor unpay", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("C6 — non-admins cannot pay nor unpay", async () => {
+    mockAuthSuccess({ role: "TECNICO" })
+    const mem = montarSupabaseEnMemoria({})
+    const post = await pagarTecnicoPost(createPostRequest({ beneficiarioId: "t1", filas: FILAS }))
+    const del = await pagarTecnicoDelete(createDeleteRequest({ pagoId: "p1", motivo: "x" }))
+    const postV = await pagarVendedorPost(createPostRequest({ beneficiarioId: "v1", filas: FILAS }))
+    const delV = await pagarVendedorDelete(createDeleteRequest({ pagoId: "p1", motivo: "x" }))
+    expect([post.status, del.status, postV.status, delV.status]).toEqual([403, 403, 403, 403])
+    expect(mem.escrituras).toEqual([])
   })
 })
 

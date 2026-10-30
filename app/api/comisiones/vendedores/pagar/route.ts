@@ -1,79 +1,46 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
-import { supabaseAdmin } from "@/lib/supabase"
+import {
+  annulBodySchema,
+  annulCommissionPayout,
+  payBodySchema,
+  payCommissions,
+} from "@/lib/commissions/payouts"
 
-export async function POST(request: Request) {
+async function readJson(request: Request): Promise<unknown | undefined> {
   try {
-    const { error, organizationId } = await requireAdmin()
-    if (error) return error
-
-    const body = await request.json()
-    const { ventaIds, notas } = body as { ventaIds: string[]; notas?: string }
-
-    if (!Array.isArray(ventaIds) || ventaIds.length === 0) {
-      return NextResponse.json(
-        { error: "Debe indicar al menos una venta" },
-        { status: 400 }
-      )
-    }
-
-    const { data, error: updErr } = await supabaseAdmin
-      .from("ventas")
-      .update({
-        comision_pagada: true,
-        fecha_pago_comision: new Date().toISOString(),
-        comision_pago_notas: notas?.trim() || null,
-      })
-      .in("id", ventaIds)
-      .eq("organization_id", organizationId!)
-      .eq("estado", "COMPLETADA")
-      .eq("comision_pagada", false)
-      .select("id")
-
-    if (updErr) throw updErr
-
-    return NextResponse.json({ updated: data?.length || 0 })
-  } catch (err) {
-    console.error("Error pagando comisiones vendedores:", err)
-    return NextResponse.json(
-      { error: "Error al marcar comisiones como pagadas" },
-      { status: 500 }
-    )
+    return await request.json()
+  } catch {
+    return undefined
   }
 }
 
-export async function DELETE(request: Request) {
-  try {
-    const { error, organizationId } = await requireAdmin()
-    if (error) return error
+const INVALID_JSON = () => NextResponse.json({ error: "El cuerpo del pedido no es válido" }, { status: 400 })
 
-    const body = await request.json()
-    const { ventaIds } = body as { ventaIds: string[] }
+export async function POST(request: Request) {
+  const { error, organizationId, userId } = await requireAdmin()
+  if (error) return error
 
-    if (!Array.isArray(ventaIds) || ventaIds.length === 0) {
-      return NextResponse.json(
-        { error: "Debe indicar al menos una venta" },
-        { status: 400 }
-      )
-    }
-
-    const { data, error: updErr } = await supabaseAdmin
-      .from("ventas")
-      .update({
-        comision_pagada: false,
-        fecha_pago_comision: null,
-        comision_pago_notas: null,
-      })
-      .in("id", ventaIds)
-      .eq("organization_id", organizationId!)
-      .eq("comision_pagada", true)
-      .select("id")
-
-    if (updErr) throw updErr
-
-    return NextResponse.json({ updated: data?.length || 0 })
-  } catch (err) {
-    console.error("Error revirtiendo comisiones vendedores:", err)
-    return NextResponse.json({ error: "Error al revertir" }, { status: 500 })
+  const json = await readJson(request)
+  if (json === undefined) return INVALID_JSON()
+  const parsed = payBodySchema.safeParse(json)
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
   }
+
+  return payCommissions({ organizationId: organizationId!, userId: userId!, ...parsed.data })
+}
+
+export async function DELETE(request: Request) {
+  const { error, organizationId, userId } = await requireAdmin()
+  if (error) return error
+
+  const json = await readJson(request)
+  if (json === undefined) return INVALID_JSON()
+  const parsed = annulBodySchema.safeParse(json)
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+  }
+
+  return annulCommissionPayout({ organizationId: organizationId!, userId: userId!, ...parsed.data })
 }
