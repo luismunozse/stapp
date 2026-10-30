@@ -17,12 +17,16 @@ import {
 import { Wallet } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
+import { COMMISSION_KIND_LABEL, type CommissionKind } from "@/lib/commissions/types"
+import { round2 } from "@/lib/precios"
 
 interface ComisionPendiente {
-  ventaId: string
-  numeroVenta: number
-  clienteNombre: string
-  fecha: string
+  clave: string
+  ventaId: string | null
+  tipo: CommissionKind
+  numeroVenta: number | null
+  clienteNombre: string | null
+  fecha: string | null
   total: number
   porcentajeComision: number
   montoComision: number
@@ -75,47 +79,46 @@ export function LiquidarComisionesDialog({
   // Al llegar data nueva, preseleccionamos todas
   useEffect(() => {
     if (data?.comisiones) {
-      setSelectedIds(new Set(data.comisiones.map((c) => c.ventaId)))
+      setSelectedIds(new Set(data.comisiones.map((c) => c.clave)))
     }
   }, [data])
 
-  const toggleOne = (ventaId: string) => {
+  const toggleOne = (clave: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev)
-      if (next.has(ventaId)) next.delete(ventaId)
-      else next.add(ventaId)
+      if (next.has(clave)) next.delete(clave)
+      else next.add(clave)
       return next
     })
   }
 
   const toggleAll = () => {
     if (selectedIds.size === pendientes.length) setSelectedIds(new Set())
-    else setSelectedIds(new Set(pendientes.map((c) => c.ventaId)))
+    else setSelectedIds(new Set(pendientes.map((c) => c.clave)))
   }
 
-  const totalSeleccionado = useMemo(
-    () =>
-      pendientes
-        .filter((c) => selectedIds.has(c.ventaId))
-        .reduce((sum, c) => sum + c.montoComision, 0),
+  const seleccionadas = useMemo(
+    () => pendientes.filter((c) => selectedIds.has(c.clave)),
     [pendientes, selectedIds]
   )
+  const totalSeleccionado = round2(seleccionadas.reduce((sum, c) => sum + c.montoComision, 0))
 
   const handleSubmit = async () => {
-    if (selectedIds.size === 0) return
+    if (seleccionadas.length === 0) return
     setSubmitting(true)
     try {
       const res = await fetch(`/api/vendedores/${vendedorId}/comisiones/liquidar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ventaIds: Array.from(selectedIds),
+          filas: seleccionadas.map((c) => ({ clave: c.clave, monto: c.montoComision })),
           notas: notas.trim() || undefined,
         }),
       })
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || "Error al liquidar")
+        const err = await res.json().catch(() => ({}))
+        await mutate()
+        throw new Error(err?.error || "Error al liquidar")
       }
       await mutate()
       onLiquidated()
@@ -162,15 +165,16 @@ export function LiquidarComisionesDialog({
                     : "Seleccionar todas"}
                 </button>
                 <span>
-                  {pendientes.length} venta{pendientes.length !== 1 ? "s" : ""}
+                  {pendientes.length} comisión{pendientes.length !== 1 ? "es" : ""}
                 </span>
               </div>
               <div className="space-y-1">
                 {pendientes.map((c) => {
-                  const checked = selectedIds.has(c.ventaId)
+                  const checked = selectedIds.has(c.clave)
+                  const kind = COMMISSION_KIND_LABEL[c.tipo]
                   return (
                     <label
-                      key={c.ventaId}
+                      key={c.clave}
                       className={`flex items-center gap-3 p-2 rounded border cursor-pointer transition-colors ${
                         checked ? "bg-primary/5 border-primary/30" : "hover:bg-muted/40"
                       }`}
@@ -178,19 +182,28 @@ export function LiquidarComisionesDialog({
                       <input
                         type="checkbox"
                         checked={checked}
-                        onChange={() => toggleOne(c.ventaId)}
+                        onChange={() => toggleOne(c.clave)}
                         className="h-4 w-4 rounded border-input"
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 text-sm">
-                          <span className="font-medium">#{c.numeroVenta}</span>
-                          <span className="text-muted-foreground truncate">
-                            {c.clienteNombre}
+                          <span className="font-medium">
+                            {c.numeroVenta != null ? `#${c.numeroVenta}` : "—"}
                           </span>
+                          {kind && (
+                            <Badge variant="secondary" className="text-[10px] shrink-0">
+                              {kind}
+                            </Badge>
+                          )}
+                          {c.clienteNombre && (
+                            <span className="text-muted-foreground truncate">
+                              {c.clienteNombre}
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {formatDate(c.fecha)} · {formatPrice(c.total)} ·{" "}
-                          {c.porcentajeComision}%
+                          {c.fecha ? `${formatDate(c.fecha)} · ` : ""}
+                          {formatPrice(c.total)} · {c.porcentajeComision}%
                         </div>
                       </div>
                       <Badge variant="secondary" className="shrink-0">
