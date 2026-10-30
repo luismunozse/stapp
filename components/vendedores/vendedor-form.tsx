@@ -72,6 +72,22 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
       .catch(() => {})
   }, [open])
 
+  // The parent mounts this form permanently and flips `open` with a new `vendedor`, so
+  // Radix never calls handleOpenChange(true): prefill here whenever the dialog opens.
+  useEffect(() => {
+    if (!open || !vendedor) return
+    setNombre(vendedor.nombre)
+    setEmail(vendedor.email)
+    setTelefono(vendedor.telefono || "")
+    setActivo(vendedor.activo !== false)
+    setPorcentajeComision(vendedor.porcentajeComision?.toString() || "0")
+    setPorcentajeRecepcion(
+      vendedor.porcentajeComisionRecepcion != null ? String(vendedor.porcentajeComisionRecepcion) : ""
+    )
+    setPassword("")
+    setError("")
+  }, [open, vendedor])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
@@ -149,15 +165,6 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
       resetForm()
-    } else if (vendedor) {
-      setNombre(vendedor.nombre)
-      setEmail(vendedor.email)
-      setTelefono(vendedor.telefono || "")
-      setActivo(vendedor.activo !== false)
-      setPorcentajeComision(vendedor.porcentajeComision?.toString() || "0")
-      setPorcentajeRecepcion(
-        vendedor.porcentajeComisionRecepcion != null ? String(vendedor.porcentajeComisionRecepcion) : ""
-      )
     }
     onOpenChange(newOpen)
   }

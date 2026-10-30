@@ -91,6 +91,27 @@ describe("reception rate in the person forms", () => {
     expect(field().value).toBe("6")
   })
 
+  it("VendedorForm opened later by the parent (open flips, vendedor arrives) prefills every field", async () => {
+    const fetchMock = stubApi()
+    const { rerender } = render(
+      <VendedorForm open={false} onOpenChange={() => {}} vendedor={null} onSuccess={() => {}} />
+    )
+    rerender(
+      <VendedorForm
+        open
+        onOpenChange={() => {}}
+        vendedor={{ ...VENDEDOR, nombre: "Ana", porcentajeComision: 5, porcentajeComisionRecepcion: 3.5 }}
+        onSuccess={() => {}}
+      />
+    )
+    expect(field().value).toBe("3.5")
+    expect((screen.getByLabelText("Porcentaje de comisión (%)") as HTMLInputElement).value).toBe("5")
+    expect((screen.getByLabelText("Nombre") as HTMLInputElement).value).toBe("Ana")
+
+    fireEvent.click(screen.getByRole("button", { name: "Guardar Cambios" }))
+    expect((await bodyOfPut(fetchMock, "/api/vendedores/ven-1")).porcentajeComisionRecepcion).toBe(3.5)
+  })
+
   it("explains the default and the snapshot", () => {
     stubApi()
     renderVendedor(VENDEDOR)
