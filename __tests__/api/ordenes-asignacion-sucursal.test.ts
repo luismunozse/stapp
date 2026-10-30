@@ -323,10 +323,10 @@ describe("PUT /api/ordenes/[id] - assigning a technician", () => {
   it("a TECNICO reassigning his own order to a cross-branch colleague is rejected too", async () => {
     const { ordenes } = montar({ role: "TECNICO", userId: "t-a" })
 
-    const { status, body } = await parseResponse(await put({ tecnicoId: "t-b" }))
+    const { status } = await parseResponse(await put({ tecnicoId: "t-b" }))
 
-    expect(status).toBe(400)
-    expect(body.error).toBe(MENSAJE)
+    // A technician does not assign at all (403 before the branch is looked at).
+    expect(status).toBe(403)
     expect(ordenes.update).not.toHaveBeenCalled()
   })
 })
