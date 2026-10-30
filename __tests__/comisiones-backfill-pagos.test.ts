@@ -24,6 +24,14 @@ describe("payout backfill", () => {
     expect(s).toContain("MAX(b.pagado_at) AS fecha_pago")
     expect(s).toContain("p.notas IS NOT DISTINCT FROM b.notas")
   })
+  it("locks the payout items against the pay/annul RPCs before it builds _bf", () => {
+    const s = collapse(bf())
+    expect(s).toContain("SET LOCAL lock_timeout = '3s'; LOCK TABLE comisiones_pagos_items IN EXCLUSIVE MODE;")
+    expect(s.indexOf("LOCK TABLE comisiones_pagos_items IN EXCLUSIVE MODE")).toBeLessThan(s.indexOf("CREATE TEMP TABLE _bf"))
+  })
+  it("documents that check [2] only means something before the first APP payout", () => {
+    expect(bf()).toMatch(/\[2\] is meaningful only before any APP payout/)
+  })
   it("ends with the checks the spec asks for", () => {
     for (const s of ["[2] por beneficiario", "[3] filas post-pago", "[4] pagadas fuera de los filtros de hoy", "[5] pagadas sin beneficiario"]) expect(bf()).toContain(s)
   })

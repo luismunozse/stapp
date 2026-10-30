@@ -33,12 +33,18 @@
 --   [1]  payouts and items inserted by this run.
 --   [2]  per (org, beneficiary, role): sum of the frozen ORIGINAL items vs today's paid
 --        screen total. Every non-zero difference must be explained by a row in [4].
+--        Check [2] is meaningful only before any APP payout exists: afterwards a sale paid
+--        through the RPC is frozen net of returns, which the legacy 333 paid branch does not show.
 --   [3]  post-payment return / annulment rows of paid documents, for a human to read.
 --   [4]  paid documents outside today's route filters (they explain [2]).
 --   [5]  paid documents with no beneficiary (not migrated).
 -- ============================================================================
 
 SET LOCAL lock_timeout = '3s';
+
+-- Blocks pagar_comisiones / anular_pago_comisiones for the run, so an annulment cannot commit
+-- between building _bf and the skip check below. Readers are not blocked.
+LOCK TABLE comisiones_pagos_items IN EXCLUSIVE MODE;
 
 DO $$
 BEGIN
