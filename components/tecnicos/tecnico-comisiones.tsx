@@ -152,12 +152,12 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
   const totalComision = items.reduce((acc, i) => acc + i.montoComision, 0)
   const totalPendiente = pendientes.reduce((acc, i) => acc + i.montoComision, 0)
   const totalPagado = pagadas.reduce((acc, i) => acc + i.montoComision, 0)
-  const totalGanancia = items.reduce((acc, i) => acc + i.ganancia, 0)
-  // Averages describe repaired orders: only technician originals count, so
-  // reception rows and adjustments do not dilute them.
+  // Profit and averages describe repaired orders: only technician originals
+  // count, so reception rows (their own base) and adjustments do not mix in.
   const tecnicoOriginales = items.filter((i) => i.rol === "TECNICO" && i.tipo === "ORIGINAL")
+  const totalGanancia = tecnicoOriginales.reduce((acc, i) => acc + i.ganancia, 0)
   const ticketPromedio = tecnicoOriginales.length
-    ? tecnicoOriginales.reduce((acc, i) => acc + i.ganancia, 0) / tecnicoOriginales.length
+    ? totalGanancia / tecnicoOriginales.length
     : 0
   const comisionPromedio = tecnicoOriginales.length
     ? tecnicoOriginales.reduce((acc, i) => acc + i.montoComision, 0) / tecnicoOriginales.length
@@ -362,14 +362,14 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
         />
         <StatCard
           icon={TrendingUp}
-          title="Ganancia generada"
+          title="Ganancia generada (como técnico)"
           value={formatPrice(totalGanancia)}
-          description={`Ticket prom. ${formatPrice(ticketPromedio)}`}
+          description={`Ticket prom. (como técnico) ${formatPrice(ticketPromedio)}`}
           tone="default"
         />
         <StatCard
           icon={Percent}
-          title="Comisión promedio"
+          title="Comisión promedio (como técnico)"
           value={formatPrice(comisionPromedio)}
           description={`% base: ${Number(porcentajeDefault ?? 0).toFixed(2)}%`}
           tone="default"
@@ -496,7 +496,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                           <div className="text-muted-foreground">-{formatPrice(i.costoRepuestos)}</div>
                         </div>
                         <div>
-                          <div className="text-muted-foreground">Ganancia</div>
+                          <div className="text-muted-foreground">{i.rol === "RECEPCION" ? "Base" : "Ganancia"}</div>
                           <div className="font-medium">{formatPrice(i.ganancia)}</div>
                         </div>
                       </div>

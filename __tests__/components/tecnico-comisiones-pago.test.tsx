@@ -197,18 +197,27 @@ describe("TecnicoComisiones order roles", () => {
     })
   })
 
-  it("averages only technician original rows, totals cover every row", () => {
-    data.value = { items: pair(), resumen: [] }
+  it("averages and ganancia count technician original rows only, totals cover every row", () => {
+    const rows = pair()
+    rows[1] = { ...rows[1], ganancia: 850, montoComision: 42.5 }
+    data.value = { items: rows, resumen: [] }
     renderScreen()
-    // total pending = 107.5; promedio = 65 over one technician row
+    // total pending covers both rows: 65 + 42.5
     expect(screen.getByText("$107.5")).toBeInTheDocument()
-    expect(screen.getByText("Ticket prom. $650")).toBeInTheDocument()
+    const card = (title: string) => screen.getByText(title).parentElement!.parentElement!
+    expect(card("Ganancia generada (como técnico)")).toHaveTextContent("$650")
+    expect(card("Ganancia generada (como técnico)")).not.toHaveTextContent("$1500")
+    expect(screen.getByText("Ticket prom. (como técnico) $650")).toBeInTheDocument()
+    expect(card("Comisión promedio (como técnico)")).toHaveTextContent("$65")
+    expect(card("Comisión promedio (como técnico)")).not.toHaveTextContent("$53.75")
+    // the reception row labels its figure as a base, not as a profit
+    expect(screen.getByText("Base")).toBeInTheDocument()
   })
 
   it("does not divide by zero when there are only reception rows", () => {
     data.value = { items: [pair()[1]], resumen: [] }
     renderScreen()
-    expect(screen.getByText("Ticket prom. $0")).toBeInTheDocument()
+    expect(screen.getByText("Ticket prom. (como técnico) $0")).toBeInTheDocument()
   })
 
   it("the CSV has a Rol column", async () => {
