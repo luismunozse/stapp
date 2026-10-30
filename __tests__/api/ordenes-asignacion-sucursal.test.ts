@@ -41,12 +41,12 @@ import { getNextOrderNumberByType } from "@/lib/counters"
 const MENSAJE = "Ese técnico no pertenece a la sucursal de esta orden"
 
 const PERSONAL = [
-  { id: "t-a", nombre: "Ana", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 10, costo_hora: 100, deleted_at: null },
-  { id: "t-a2", nombre: "Beto", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 10, costo_hora: 100, deleted_at: null },
-  { id: "t-b", nombre: "Carla", rol: "TECNICO", sucursal_id: "suc-B", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 20, costo_hora: 200, deleted_at: null },
-  { id: "t-b2", nombre: "Dario", rol: "TECNICO", sucursal_id: "suc-B", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 20, costo_hora: 200, deleted_at: null },
-  { id: "adm", nombre: "Fede", rol: "ADMIN", sucursal_id: null, organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 0, costo_hora: 0, deleted_at: null },
-  { id: "t-otra-org", nombre: "Eva", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-2", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 0, costo_hora: 0, deleted_at: null },
+  { id: "t-a", nombre: "Ana", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 10, porcentaje_comision_recepcion: null, costo_hora: 100, deleted_at: null },
+  { id: "t-a2", nombre: "Beto", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 10, porcentaje_comision_recepcion: null, costo_hora: 100, deleted_at: null },
+  { id: "t-b", nombre: "Carla", rol: "TECNICO", sucursal_id: "suc-B", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 20, porcentaje_comision_recepcion: null, costo_hora: 200, deleted_at: null },
+  { id: "t-b2", nombre: "Dario", rol: "TECNICO", sucursal_id: "suc-B", organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 20, porcentaje_comision_recepcion: null, costo_hora: 200, deleted_at: null },
+  { id: "adm", nombre: "Fede", rol: "ADMIN", sucursal_id: null, organization_id: "org-1", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 0, porcentaje_comision_recepcion: null, costo_hora: 0, deleted_at: null },
+  { id: "t-otra-org", nombre: "Eva", rol: "TECNICO", sucursal_id: "suc-A", organization_id: "org-2", email: null, telefono: null, activo: true, especialidades: [], avatar_url: null, fecha_ingreso_tecnico: null, porcentaje_comision: 0, porcentaje_comision_recepcion: null, costo_hora: 0, deleted_at: null },
 ]
 
 describe("POST /api/ordenes - assigning a technician", () => {
