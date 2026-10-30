@@ -96,3 +96,18 @@ describe("381: views, security, impact report", () => {
     expect(rb()).not.toContain("Rollback of comisiones_definicion")
   })
 })
+
+const probes = () => readByMarker("verify", "Verification of comisiones_reparaciones")
+describe("381: probes", () => {
+  it("roll back, own result table, service_role around every RPC, real-data invariant first", () => {
+    const s = stripComments(probes())
+    expect(s).toMatch(/^\s*BEGIN\s*;/m); expect(s.trimEnd().endsWith("ROLLBACK;")).toBe(true)
+    expect(s).toContain("CREATE TEMP TABLE _r381")
+    expect(s.match(/SET LOCAL ROLE service_role/g)!.length).toBe(s.match(/RESET ROLE/g)!.length / 2)
+    expect(probes().indexOf("R0")).toBeLessThan(probes().indexOf("INSERT INTO ordenes_servicio"))
+  })
+  it("covers every row of the probe table", () => {
+    for (let i = 0; i <= 14; i++) expect(probes()).toContain(`R${i}`)
+    for (const k of ["clock_timestamp()", "comision_pagada", "reclamos_garantia", "pagos_parciales", "AJUSTE_DEVOLUCION"]) expect(probes()).toContain(k)
+  })
+})
