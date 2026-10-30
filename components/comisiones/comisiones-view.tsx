@@ -21,7 +21,7 @@ import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { EmptyState } from "@/components/ui/empty-state"
 import { AnularPagoDialog } from "@/components/comisiones/anular-pago-dialog"
-import { COMMISSION_KIND_LABEL, type CommissionKind } from "@/lib/commissions/types"
+import { commissionKindLabel, type CommissionKind } from "@/lib/commissions/types"
 import { round2 } from "@/lib/precios"
 
 interface Item {
@@ -91,9 +91,11 @@ const fetcher = async (url: string) => {
 
 interface ComisionesViewProps {
   tecnicoIdFijo?: string
+  rol?: "TECNICO" | "RECEPCION"
 }
 
-export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
+export function ComisionesView({ tecnicoIdFijo, rol = "TECNICO" }: ComisionesViewProps = {}) {
+  const esRecepcion = rol === "RECEPCION"
   const { formatPrice, formatDate } = useCurrency()
   const { confirm } = useModal()
 
@@ -106,14 +108,16 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
   const [paying, setPaying] = useState(false)
   const [anular, setAnular] = useState<{ pagoId: string | null; fecha: string | null } | null>(null)
 
+  // Reception can be earned by any staff role, so its people come from all operators.
   const { data: tecnicos = [] } = useSWR<Tecnico[]>(
-    tecnicoIdFijo ? null : "/api/tecnicos",
+    tecnicoIdFijo ? null : esRecepcion ? "/api/operadores" : "/api/tecnicos",
     fetcher
   )
 
   const effectiveTecnicoId = tecnicoIdFijo || tecnicoId
 
   const qs = new URLSearchParams()
+  qs.set("rol", rol)
   if (effectiveTecnicoId && effectiveTecnicoId !== "all") qs.set("tecnicoId", effectiveTecnicoId)
   if (desde) qs.set("desde", desde)
   if (hasta) qs.set("hasta", hasta + "T23:59:59")
@@ -156,7 +160,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
   const selectedItems = items.filter((i) => selected.has(i.clave) && pagable(i))
 
   const selectLabel = (i: Item) => {
-    const kind = COMMISSION_KIND_LABEL[i.tipo]
+    const kind = commissionKindLabel(i.tipo, "ORDEN")
     const doc = i.codigoOrden || (i.numeroOrden != null ? `#${i.numeroOrden}` : "")
     return `Seleccionar comisión ${doc}${kind ? (doc ? ` (${kind})` : kind) : ""}`.trim()
   }
@@ -218,7 +222,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
     )
 
   const kindBadge = (i: Item) => {
-    const label = COMMISSION_KIND_LABEL[i.tipo]
+    const label = commissionKindLabel(i.tipo, "ORDEN")
     return label ? (
       <Badge variant="secondary" className="text-[10px] shrink-0">
         {label}
@@ -240,7 +244,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
           <div className={`grid gap-3 sm:grid-cols-2 ${tecnicoIdFijo ? "lg:grid-cols-4" : "lg:grid-cols-5"}`}>
             {!tecnicoIdFijo && (
               <div className="space-y-1">
-                <Label className="text-xs">Técnico</Label>
+                <Label className="text-xs">{esRecepcion ? "Persona" : "Técnico"}</Label>
                 <Select value={tecnicoId} onValueChange={setTecnicoId}>
                   <SelectTrigger>
                     <SelectValue />
@@ -302,7 +306,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                   <span>{r.totalOrdenes}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Ganancia</span>
+                  <span className="text-muted-foreground">Base</span>
                   <span>{formatPrice(r.totalGanancia)}</span>
                 </div>
                 <div className="flex justify-between font-medium">
@@ -356,8 +360,12 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
           ) : items.length === 0 ? (
             <EmptyState
               icon={Percent}
-              title="Sin comisiones"
-              description="Ajustá el período o los filtros."
+              title={esRecepcion ? "Sin comisiones de recepción" : "Sin comisiones"}
+              description={
+                esRecepcion
+                  ? "Aparecen cuando una orden recibida con porcentaje de recepción cumple la regla del taller. El porcentaje se configura en Configuración › Comisiones."
+                  : "Ajustá el período o los filtros."
+              }
               variant="search"
             />
           ) : (
@@ -378,11 +386,11 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                     />
                   </th>
                   <th className="p-2 text-left">Orden</th>
-                  <th className="p-2 text-left">Técnico</th>
+                  <th className="p-2 text-left">{esRecepcion ? "Persona" : "Técnico"}</th>
                   <th className="p-2 text-left">Dispositivo</th>
                   <th className="p-2 text-right">Costo final</th>
                   <th className="p-2 text-right">Repuestos</th>
-                  <th className="p-2 text-right">Ganancia</th>
+                  <th className="p-2 text-right">Base</th>
                   <th className="p-2 text-right">%</th>
                   <th className="p-2 text-right">Comisión</th>
                   <th className="p-2 text-left">Completado</th>
@@ -483,7 +491,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                   <div className="flex items-end justify-between gap-2">
                     <div className="text-xs text-muted-foreground space-y-0.5">
                       <div>Costo {formatPrice(i.costoFinal)} · Rep. {formatPrice(i.costoRepuestos)}</div>
-                      <div>Ganancia {formatPrice(i.ganancia)}{i.fechaCompletado ? ` · ${formatDate(i.fechaCompletado)}` : ""}</div>
+                      <div>Base {formatPrice(i.ganancia)}{i.fechaCompletado ? ` · ${formatDate(i.fechaCompletado)}` : ""}</div>
                     </div>
                     <div className="text-right shrink-0">
                       <Badge variant="outline" className="text-[10px] mb-1">

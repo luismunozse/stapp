@@ -101,6 +101,56 @@ describe("GET /api/comisiones reads the single commission definition", () => {
     expect(body.resumen[0].tecnicoNombre).toBe("Sin nombre")
   })
 
+  it.each([
+    ["", ["TECNICO"]],
+    ["?rol=RECEPCION", ["RECEPCION"]],
+    ["?rol=todos", ["TECNICO", "RECEPCION"]],
+  ])("rol%s reads %j", async (q, roles) => {
+    mockAuthSuccess({ role: "ADMIN" })
+    montarSupabaseEnMemoria({
+      v_comisiones_devengadas: [fila({}), fila({ clave: "r", rol: "RECEPCION", beneficiario_id: "t2" })],
+      users: usuarios,
+    })
+    const { status, body } = await parseResponse(await pedir(q))
+    expect(status).toBe(200)
+    expect(new Set(body.items.map((i: any) => i.rol))).toEqual(new Set(roles))
+  })
+
+  it("an unknown rol is a 400", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    montarSupabaseEnMemoria({ v_comisiones_devengadas: [fila({})], users: usuarios })
+    const { status, body } = await parseResponse(await pedir("?rol=VENDEDOR"))
+    expect(status).toBe(400)
+    expect(body).toEqual({ error: "Rol inválido" })
+  })
+
+  it("a non-admin with rol=todos gets only own rows of both roles", async () => {
+    mockAuthSuccess({ role: "TECNICO", userId: "t1" })
+    montarSupabaseEnMemoria({
+      v_comisiones_devengadas: [
+        fila({}),
+        fila({ clave: "r1", rol: "RECEPCION", beneficiario_id: "t1" }),
+        fila({ clave: "r2", rol: "RECEPCION", beneficiario_id: "t2" }),
+      ],
+      users: usuarios,
+    })
+    const { status, body } = await parseResponse(await pedir("?rol=todos"))
+    expect(status).toBe(200)
+    expect(body.items).toHaveLength(2)
+    expect(body.items.every((i: any) => i.tecnicoId === "t1")).toBe(true)
+  })
+
+  it("a removed receiver keeps their name and pending rows", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    montarSupabaseEnMemoria({
+      v_comisiones_devengadas: [fila({ clave: "r9", rol: "RECEPCION", beneficiario_id: "v9", monto: 42.5, pendiente: 42.5 })],
+      users: [{ id: "v9", nombre: "Vera", organization_id: "org-1", activo: false, deleted_at: "2026-10-01" }],
+    })
+    const { body } = await parseResponse(await pedir("?rol=RECEPCION"))
+    expect(body.items[0]).toMatchObject({ tecnicoNombre: "Vera" })
+    expect(body.resumen[0]).toMatchObject({ tecnicoNombre: "Vera", totalPendiente: 42.5 })
+  })
+
   it("500 when the definition read fails", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     montarSupabaseEnMemoria({ v_comisiones_devengadas: [fila({})], users: usuarios }, { errorDeLectura: { v_comisiones_devengadas: { message: "boom" } } })

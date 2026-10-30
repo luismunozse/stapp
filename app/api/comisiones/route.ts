@@ -2,6 +2,13 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { readCommissionRows, summarizeByBeneficiary } from "@/lib/commissions/rows"
+import type { CommissionRole } from "@/lib/commissions/types"
+
+const ROLES_BY_PARAM: Record<string, CommissionRole[]> = {
+  TECNICO: ["TECNICO"],
+  RECEPCION: ["RECEPCION"],
+  todos: ["TECNICO", "RECEPCION"],
+}
 
 export async function GET(request: Request) {
   try {
@@ -13,6 +20,11 @@ export async function GET(request: Request) {
     const desde = searchParams.get("desde")
     const hasta = searchParams.get("hasta")
     const soloPendientes = searchParams.get("soloPendientes") === "true"
+    const rolParam = searchParams.get("rol") ?? "TECNICO"
+    if (!Object.hasOwn(ROLES_BY_PARAM, rolParam)) {
+      return NextResponse.json({ error: "Rol inválido" }, { status: 400 })
+    }
+    const roles = ROLES_BY_PARAM[rolParam]
 
     // Un TECNICO solo puede ver sus propias comisiones
     if (role !== "ADMIN") {
@@ -25,7 +37,7 @@ export async function GET(request: Request) {
     // The definition (DB views) owns which orders accrue, incl. the org flag.
     const rows = await readCommissionRows({
       organizationId: organizationId!,
-      roles: ["TECNICO"],
+      roles,
       beneficiarioId: tecnicoId,
       desde,
       hasta,

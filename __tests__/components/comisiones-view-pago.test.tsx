@@ -126,7 +126,7 @@ describe("ComisionesView paying and annulling payouts", () => {
     data.value = { items: [item({ clave: "a", codigoOrden: "OR-7" }), item({ clave: "b", codigoOrden: "OR-7", tipo: "AJUSTE_DEVOLUCION", montoComision: -5 })], resumen: [] }
     render(<ComisionesView />)
     expect(screen.getAllByLabelText("Seleccionar comisión OR-7")).toHaveLength(2)
-    expect(screen.getAllByLabelText("Seleccionar comisión OR-7 (Devolución)")).toHaveLength(2)
+    expect(screen.getAllByLabelText("Seleccionar comisión OR-7 (Nota de crédito)")).toHaveLength(2)
   })
 
   it("renders a dash instead of the order link when the row has no order, and badges adjustments", async () => {
@@ -134,7 +134,7 @@ describe("ComisionesView paying and annulling payouts", () => {
     render(<ComisionesView />)
     expect(screen.queryByRole("link")).not.toBeInTheDocument()
     expect(screen.getAllByText("—").length).toBeGreaterThan(0)
-    expect(screen.getAllByText("Devolución").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("Nota de crédito").length).toBeGreaterThan(0)
   })
 
   it("lists a zero-amount row but cannot select it, and never posts it", async () => {
