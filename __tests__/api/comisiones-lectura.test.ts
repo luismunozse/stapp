@@ -71,6 +71,23 @@ describe("GET /api/comisiones reads the single commission definition", () => {
     expect(body.resumen[0]).toMatchObject({ tecnicoId: "t1", tecnicoNombre: "Ana", totalOrdenes: 2, totalGanancia: 1500, totalComision: 150, totalPendiente: 100 })
   })
 
+  it("exposes the order amount and the base kind behind each base", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    montarSupabaseEnMemoria({
+      v_comisiones_devengadas: [
+        fila({ base: 650, documento_total: 1000, documento_costo_repuestos: 200, documento_monto: 850, base_tipo: "MANO_DE_OBRA" }),
+        fila({ clave: "k2", rol: "RECEPCION", base: 850, documento_total: 1000, documento_monto: 850, base_tipo: "MONTO_ORDEN" }),
+        fila({ clave: "k3", documento_monto: null, base_tipo: null }),
+      ],
+      users: usuarios,
+    })
+    const { body } = await parseResponse(await pedir("?rol=todos"))
+    const por = (k: string) => body.items.find((i: any) => i.clave === k)
+    expect(por("ORDEN:o1:TECNICO:ORIGINAL:-")).toMatchObject({ montoOrden: 850, baseTipo: "MANO_DE_OBRA", ganancia: 650 })
+    expect(por("k2")).toMatchObject({ montoOrden: 850, baseTipo: "MONTO_ORDEN" })
+    expect(por("k3")).toMatchObject({ montoOrden: null, baseTipo: null })
+  })
+
   it("forwards period and soloPendientes to the definition", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     montarSupabaseEnMemoria({
@@ -99,6 +116,56 @@ describe("GET /api/comisiones reads the single commission definition", () => {
     expect(mem.lecturas).toContain("users")
     expect(body.items[0].tecnicoNombre).toBe("Sin nombre")
     expect(body.resumen[0].tecnicoNombre).toBe("Sin nombre")
+  })
+
+  it.each([
+    ["", ["TECNICO"]],
+    ["?rol=RECEPCION", ["RECEPCION"]],
+    ["?rol=todos", ["TECNICO", "RECEPCION"]],
+  ])("rol%s reads %j", async (q, roles) => {
+    mockAuthSuccess({ role: "ADMIN" })
+    montarSupabaseEnMemoria({
+      v_comisiones_devengadas: [fila({}), fila({ clave: "r", rol: "RECEPCION", beneficiario_id: "t2" })],
+      users: usuarios,
+    })
+    const { status, body } = await parseResponse(await pedir(q))
+    expect(status).toBe(200)
+    expect(new Set(body.items.map((i: any) => i.rol))).toEqual(new Set(roles))
+  })
+
+  it("an unknown rol is a 400", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    montarSupabaseEnMemoria({ v_comisiones_devengadas: [fila({})], users: usuarios })
+    const { status, body } = await parseResponse(await pedir("?rol=VENDEDOR"))
+    expect(status).toBe(400)
+    expect(body).toEqual({ error: "Rol inválido" })
+  })
+
+  it("a non-admin with rol=todos gets only own rows of both roles", async () => {
+    mockAuthSuccess({ role: "TECNICO", userId: "t1" })
+    montarSupabaseEnMemoria({
+      v_comisiones_devengadas: [
+        fila({}),
+        fila({ clave: "r1", rol: "RECEPCION", beneficiario_id: "t1" }),
+        fila({ clave: "r2", rol: "RECEPCION", beneficiario_id: "t2" }),
+      ],
+      users: usuarios,
+    })
+    const { status, body } = await parseResponse(await pedir("?rol=todos"))
+    expect(status).toBe(200)
+    expect(body.items).toHaveLength(2)
+    expect(body.items.every((i: any) => i.tecnicoId === "t1")).toBe(true)
+  })
+
+  it("a removed receiver keeps their name and pending rows", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    montarSupabaseEnMemoria({
+      v_comisiones_devengadas: [fila({ clave: "r9", rol: "RECEPCION", beneficiario_id: "v9", monto: 42.5, pendiente: 42.5 })],
+      users: [{ id: "v9", nombre: "Vera", organization_id: "org-1", activo: false, deleted_at: "2026-10-01" }],
+    })
+    const { body } = await parseResponse(await pedir("?rol=RECEPCION"))
+    expect(body.items[0]).toMatchObject({ tecnicoNombre: "Vera" })
+    expect(body.resumen[0]).toMatchObject({ tecnicoNombre: "Vera", totalPendiente: 42.5 })
   })
 
   it("500 when the definition read fails", async () => {

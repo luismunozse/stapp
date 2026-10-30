@@ -49,6 +49,9 @@ export function toCommissionRow(raw: Record<string, any>): CommissionRow {
     documentoEstado: raw.documento_estado ?? null,
     documentoTotal: num(raw.documento_total),
     documentoCostoRepuestos: num(raw.documento_costo_repuestos),
+    baseTipo: raw.base_tipo ?? null,
+    documentoMonto: num(raw.documento_monto),
+    motivoSinDevengo: raw.motivo_sin_devengo ?? null,
   }
 }
 

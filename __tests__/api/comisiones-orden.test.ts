@@ -43,4 +43,20 @@ describe("GET /api/comisiones/orden/[id]", () => {
     const { body } = await parseResponse(await pedir("o1"))
     expect(body.filas[0].beneficiarioNombre).toBe("—")
   })
+  it("returns the reception row with its beneficiary name", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    montarSupabaseEnMemoria({
+      v_comisiones_filas: [
+        fila({ clave: "a" }),
+        fila({ clave: "r", rol: "RECEPCION", beneficiario_id: "r1", base: 850, porcentaje: 5, monto: 42.5, base_tipo: "MONTO_ORDEN", documento_monto: 850 }),
+      ],
+      users: [
+        { id: "t1", nombre: "Ana", organization_id: "org-1" },
+        { id: "r1", nombre: "Rita", organization_id: "org-1" },
+      ],
+    })
+    const { body } = await parseResponse(await pedir("o1"))
+    expect(body.filas).toHaveLength(2)
+    expect(body.filas.find((f: any) => f.rol === "RECEPCION")).toMatchObject({ clave: "r", beneficiarioId: "r1", beneficiarioNombre: "Rita", baseTipo: "MONTO_ORDEN", documentoMonto: 850 })
+  })
 })

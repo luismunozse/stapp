@@ -36,6 +36,8 @@ export async function GET(request: Request) {
         avatar_url,
         fecha_ingreso_tecnico,
         porcentaje_comision,
+        porcentaje_comision_recepcion,
+        costo_hora,
         sucursal_id,
         ordenes_servicio:ordenes_servicio!tecnico_id (
           id,
@@ -74,6 +76,14 @@ export async function GET(request: Request) {
         avatarUrl: tecnico.avatar_url ?? null,
         fechaIngresoTecnico: tecnico.fecha_ingreso_tecnico ?? null,
         porcentajeComision: Number(tecnico.porcentaje_comision ?? 0),
+        // The reception rate and the hourly cost are admin-only: for other roles the properties are absent.
+        ...(role === "ADMIN"
+          ? {
+              costoHora: Number(tecnico.costo_hora ?? 0),
+              porcentajeComisionRecepcion:
+                tecnico.porcentaje_comision_recepcion == null ? null : Number(tecnico.porcentaje_comision_recepcion),
+            }
+          : {}),
         sucursalId: tecnico.sucursal_id ?? null,
         ordenesActivas,
         ordenesCompletadas,
@@ -114,6 +124,7 @@ export async function POST(request: Request) {
       email,
       password,
       porcentajeComision,
+      porcentajeComisionRecepcion,
       costoHora,
       telefono,
       especialidades,
@@ -152,6 +163,20 @@ export async function POST(request: Request) {
     if (!Number.isFinite(porcentajeNum) || porcentajeNum < 0 || porcentajeNum > 100) {
       return NextResponse.json(
         { error: "El porcentaje de comisión debe estar entre 0 y 100" },
+        { status: 400 }
+      )
+    }
+
+    // null/absent: the shop default applies. A blank is never coerced to 0.
+    if (
+      porcentajeComisionRecepcion != null &&
+      (typeof porcentajeComisionRecepcion !== "number" ||
+        !Number.isFinite(porcentajeComisionRecepcion) ||
+        porcentajeComisionRecepcion < 0 ||
+        porcentajeComisionRecepcion > 100)
+    ) {
+      return NextResponse.json(
+        { error: "El porcentaje de recepción debe estar entre 0 y 100" },
         { status: 400 }
       )
     }
@@ -195,13 +220,14 @@ export async function POST(request: Request) {
         sucursal_id: sucursalId,
         email_verified: true,
         porcentaje_comision: porcentajeNum,
+        porcentaje_comision_recepcion: porcentajeComisionRecepcion ?? null,
         costo_hora: costoHoraNum,
         telefono: telefono || null,
         especialidades: especialidadesArr,
         fecha_ingreso_tecnico: fechaIngresoTecnico || null,
         activo: true,
       })
-      .select("id, nombre, email, porcentaje_comision, costo_hora, telefono, especialidades, fecha_ingreso_tecnico, activo")
+      .select("id, nombre, email, porcentaje_comision, porcentaje_comision_recepcion, costo_hora, telefono, especialidades, fecha_ingreso_tecnico, activo")
       .single()
 
     if (dbError) {

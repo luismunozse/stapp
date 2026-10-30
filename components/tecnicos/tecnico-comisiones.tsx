@@ -29,13 +29,20 @@ import { cn } from "@/lib/utils"
 import { EmptyState } from "@/components/ui/empty-state"
 import { FieldSectionLabel } from "@/components/ui/field-section-label"
 import { AnularPagoDialog } from "@/components/comisiones/anular-pago-dialog"
-import { COMMISSION_KIND_LABEL, type CommissionKind } from "@/lib/commissions/types"
+import {
+  COMMISSION_ROLE_LABEL,
+  commissionKindLabel,
+  type CommissionBaseKind,
+  type CommissionKind,
+  type CommissionRole,
+} from "@/lib/commissions/types"
 import { round2 } from "@/lib/precios"
+import { orderBaseBreakdown } from "@/lib/commissions/breakdown"
 
 interface Item {
   clave: string
   ordenId: string | null
-  rol: string
+  rol: CommissionRole
   tipo: CommissionKind
   pagoId: string | null
   tecnicoId: string
@@ -48,6 +55,9 @@ interface Item {
   costoFinal: number
   costoRepuestos: number
   ganancia: number
+  // What the base was taken from (optional: older payloads omit them).
+  montoOrden?: number | null
+  baseTipo?: CommissionBaseKind | null
   porcentajeComision: number
   montoComision: number
   comisionPagada: boolean
@@ -65,6 +75,20 @@ interface ApiResp {
     totalPendiente: number
   }>
 }
+
+function breakdownOf(i: Item) {
+  return orderBaseBreakdown({
+    tipo: i.tipo,
+    pagado: i.comisionPagada,
+    baseTipo: i.baseTipo,
+    documentoTotal: i.costoFinal,
+    documentoMonto: i.montoOrden,
+    documentoCostoRepuestos: i.costoRepuestos,
+  })
+}
+
+// A payout or a list counts orders, not rows: the technician and reception rows of one order are one order.
+const countOrders = (rows: Item[]) => new Set(rows.map((i) => i.ordenId ?? i.clave)).size
 
 const fetcher = async (url: string) => {
   const r = await fetch(url)
@@ -126,7 +150,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
   const [paying, setPaying] = useState(false)
   const [anular, setAnular] = useState<{ pagoId: string | null; fecha: string | null } | null>(null)
 
-  const qs = new URLSearchParams({ tecnicoId })
+  const qs = new URLSearchParams({ tecnicoId, rol: "todos" })
   if (desde) qs.set("desde", desde)
   if (hasta) qs.set("hasta", hasta + "T23:59:59")
 
@@ -147,9 +171,16 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
   const totalComision = items.reduce((acc, i) => acc + i.montoComision, 0)
   const totalPendiente = pendientes.reduce((acc, i) => acc + i.montoComision, 0)
   const totalPagado = pagadas.reduce((acc, i) => acc + i.montoComision, 0)
-  const totalGanancia = items.reduce((acc, i) => acc + i.ganancia, 0)
-  const ticketPromedio = items.length ? totalGanancia / items.length : 0
-  const comisionPromedio = items.length ? totalComision / items.length : 0
+  // Base and averages describe repaired orders: only technician originals
+  // count, so reception rows (their own base) and adjustments do not mix in.
+  const tecnicoOriginales = items.filter((i) => i.rol === "TECNICO" && i.tipo === "ORIGINAL")
+  const totalBase = tecnicoOriginales.reduce((acc, i) => acc + i.ganancia, 0)
+  const ticketPromedio = tecnicoOriginales.length
+    ? totalBase / tecnicoOriginales.length
+    : 0
+  const comisionPromedio = tecnicoOriginales.length
+    ? tecnicoOriginales.reduce((acc, i) => acc + i.montoComision, 0) / tecnicoOriginales.length
+    : 0
 
   // A zero-amount row can be listed but never paid.
   const pagable = (i: Item) => !i.comisionPagada && i.montoComision !== 0
@@ -171,7 +202,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
   const selectedItems = items.filter((i) => selected.has(i.clave) && pagable(i))
 
   const selectLabel = (i: Item) => {
-    const kind = COMMISSION_KIND_LABEL[i.tipo]
+    const kind = commissionKindLabel(i.tipo, "ORDEN")
     const doc = i.codigoOrden || (i.numeroOrden != null ? `#${i.numeroOrden}` : "")
     return `Seleccionar comisión ${doc}${kind ? (doc ? ` (${kind})` : kind) : ""}`.trim()
   }
@@ -232,19 +263,25 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
 
   const exportCSV = () => {
     const headers = [
-      "Orden", "Dispositivo", "Fecha completado",
-      "Costo final", "Repuestos", "Ganancia",
+      "Orden", "Rol", "Dispositivo", "Fecha completado",
+      "Costo final", "Desc./NC", "Repuestos", "Base",
       "% Comisión", "Comisión", "Estado pago", "Fecha pago",
     ]
-    const rows = items.map((i) => [
+    const rows = items.map((i) => {
+      // Only unpaid rows with a known base kind have a breakdown: the rest keep the frozen base alone.
+      const lines = breakdownOf(i)
+      const amountOf = (key: string) => lines.find((l) => l.key === key)?.amount ?? ""
+      return [
       i.codigoOrden || `#${i.numeroOrden}`,
+      COMMISSION_ROLE_LABEL[i.rol] ?? i.rol,
       i.dispositivo,
       i.fechaCompletado || "",
-      i.costoFinal, i.costoRepuestos, i.ganancia,
+      amountOf("costoFinal"), amountOf("descuentos"), amountOf("repuestos"), i.ganancia,
       i.porcentajeComision, i.montoComision,
       i.comisionPagada ? "Pagada" : "Pendiente",
       i.fechaPagoComision || "",
-    ])
+      ]
+    })
     const csv = [headers, ...rows]
       .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
       .join("\n")
@@ -337,26 +374,26 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
           icon={Wallet}
           title="Comisión pendiente"
           value={formatPrice(totalPendiente)}
-          description={`${pendientes.length} orden(es)`}
+          description={`${countOrders(pendientes)} orden(es)`}
           tone="default"
         />
         <StatCard
           icon={CheckCircle2}
           title="Comisión pagada"
           value={formatPrice(totalPagado)}
-          description={`${pagadas.length} orden(es)`}
+          description={`${countOrders(pagadas)} orden(es)`}
           tone="success"
         />
         <StatCard
           icon={TrendingUp}
-          title="Ganancia generada"
-          value={formatPrice(totalGanancia)}
-          description={`Ticket prom. ${formatPrice(ticketPromedio)}`}
+          title="Base total (como técnico)"
+          value={formatPrice(totalBase)}
+          description={`Ticket prom. (como técnico) ${formatPrice(ticketPromedio)}`}
           tone="default"
         />
         <StatCard
           icon={Percent}
-          title="Comisión promedio"
+          title="Comisión promedio (como técnico)"
           value={formatPrice(comisionPromedio)}
           description={`% base: ${Number(porcentajeDefault ?? 0).toFixed(2)}%`}
           tone="default"
@@ -454,9 +491,14 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                           ) : (
                             <span className="text-sm text-muted-foreground">—</span>
                           )}
-                          {COMMISSION_KIND_LABEL[i.tipo] && (
+                          {i.rol === "RECEPCION" && (
+                            <Badge variant="outline" className="text-[10px] shrink-0">
+                              {COMMISSION_ROLE_LABEL.RECEPCION}
+                            </Badge>
+                          )}
+                          {commissionKindLabel(i.tipo, "ORDEN") && (
                             <Badge variant="secondary" className="text-[10px] shrink-0">
-                              {COMMISSION_KIND_LABEL[i.tipo]}
+                              {commissionKindLabel(i.tipo, "ORDEN")}
                             </Badge>
                           )}
                         </div>
@@ -468,17 +510,18 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                       </div>
 
                       {/* Números */}
-                      <div className="col-span-8 sm:col-span-5 grid grid-cols-3 gap-2 text-xs">
+                      <div className="col-span-8 sm:col-span-5 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                        {breakdownOf(i).map((linea) => (
+                          <div key={linea.key}>
+                            <div className="text-muted-foreground">{linea.shortLabel}</div>
+                            <div className={linea.subtracts ? "text-muted-foreground" : "font-medium"}>
+                              {linea.subtracts ? "-" : ""}
+                              {formatPrice(linea.amount)}
+                            </div>
+                          </div>
+                        ))}
                         <div>
-                          <div className="text-muted-foreground">Cobrado</div>
-                          <div className="font-medium">{formatPrice(i.costoFinal)}</div>
-                        </div>
-                        <div>
-                          <div className="text-muted-foreground">Repuestos</div>
-                          <div className="text-muted-foreground">-{formatPrice(i.costoRepuestos)}</div>
-                        </div>
-                        <div>
-                          <div className="text-muted-foreground">Ganancia</div>
+                          <div className="text-muted-foreground">Base</div>
                           <div className="font-medium">{formatPrice(i.ganancia)}</div>
                         </div>
                       </div>
@@ -547,7 +590,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                       <div className="font-semibold text-lg">{formatPrice(p.total)}</div>
                     </div>
                     <Badge variant="outline" className="text-[10px]">
-                      {p.ordenes.length} orden(es)
+                      {countOrders(p.ordenes)} orden(es)
                     </Badge>
                   </div>
                 </CardContent>

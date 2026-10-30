@@ -126,7 +126,7 @@ describe("ComisionesView paying and annulling payouts", () => {
     data.value = { items: [item({ clave: "a", codigoOrden: "OR-7" }), item({ clave: "b", codigoOrden: "OR-7", tipo: "AJUSTE_DEVOLUCION", montoComision: -5 })], resumen: [] }
     render(<ComisionesView />)
     expect(screen.getAllByLabelText("Seleccionar comisión OR-7")).toHaveLength(2)
-    expect(screen.getAllByLabelText("Seleccionar comisión OR-7 (Devolución)")).toHaveLength(2)
+    expect(screen.getAllByLabelText("Seleccionar comisión OR-7 (Nota de crédito)")).toHaveLength(2)
   })
 
   it("renders a dash instead of the order link when the row has no order, and badges adjustments", async () => {
@@ -134,7 +134,7 @@ describe("ComisionesView paying and annulling payouts", () => {
     render(<ComisionesView />)
     expect(screen.queryByRole("link")).not.toBeInTheDocument()
     expect(screen.getAllByText("—").length).toBeGreaterThan(0)
-    expect(screen.getAllByText("Devolución").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("Nota de crédito").length).toBeGreaterThan(0)
   })
 
   it("lists a zero-amount row but cannot select it, and never posts it", async () => {
@@ -166,5 +166,47 @@ describe("ComisionesView paying and annulling payouts", () => {
     render(<ComisionesView />)
     expect(screen.getByText("No se pudieron cargar las comisiones.")).toBeInTheDocument()
     expect(screen.queryByText("Sin comisiones")).not.toBeInTheDocument()
+  })
+  describe("what the base was taken from", () => {
+    const tecnico = () => item({ clave: "t", codigoOrden: "OR-1", costoFinal: 1000, costoRepuestos: 200, montoOrden: 850, baseTipo: "MANO_DE_OBRA", ganancia: 650 })
+    const recepcion = () => item({ clave: "r", rol: "RECEPCION", codigoOrden: "OR-2", ordenId: "o2", costoFinal: 1000, costoRepuestos: 200, montoOrden: 850, baseTipo: "MONTO_ORDEN", ganancia: 850 })
+
+    it("desktop: shows Desc./NC and Repuestos for a labour base, a dash for parts on an order-amount base", () => {
+      data.value = { items: [tecnico(), recepcion()], resumen: [] }
+      render(<ComisionesView />)
+      const [, tec, rec] = screen.getAllByRole("row")
+      expect(tec).toHaveTextContent("$1000")
+      expect(tec).toHaveTextContent("$150")
+      expect(tec).toHaveTextContent("$200")
+      expect(tec).toHaveTextContent("$650")
+      expect(rec).toHaveTextContent("$150")
+      expect(rec).not.toHaveTextContent("$200")
+      expect(rec).toHaveTextContent("$850")
+      expect(screen.getByRole("columnheader", { name: "Desc./NC" })).toBeInTheDocument()
+    })
+
+    it("mobile: lists Desc./NC and lists Repuestos only for the labour base", () => {
+      data.value = { items: [tecnico(), recepcion()], resumen: [] }
+      const { container } = render(<ComisionesView />)
+      const cards = container.querySelectorAll(".sm\\:hidden .p-3")
+      expect(cards[0]).toHaveTextContent("Desc./NC $150")
+      expect(cards[0]).toHaveTextContent("Repuestos $200")
+      expect(cards[0]).toHaveTextContent("Base $650")
+      expect(cards[1]).toHaveTextContent("Desc./NC $150")
+      expect(cards[1]).not.toHaveTextContent("Repuestos")
+      expect(cards[1]).toHaveTextContent("Base $850")
+    })
+
+    it("a paid row shows only its frozen base, with dashes for the costs", () => {
+      data.value = { items: [{ ...tecnico(), comisionPagada: true, pagoId: "p9", fechaPagoComision: "2026-10-20T12:00:00Z" }], resumen: [] }
+      const { container } = render(<ComisionesView />)
+      const [, row] = screen.getAllByRole("row")
+      expect(row).not.toHaveTextContent("$1000")
+      expect(row).not.toHaveTextContent("$200")
+      expect(row).toHaveTextContent("$650")
+      const card = container.querySelector(".sm\\:hidden .p-3")!
+      expect(card).not.toHaveTextContent("Desc./NC")
+      expect(card).toHaveTextContent("Base $650")
+    })
   })
 })

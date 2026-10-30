@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,7 +21,8 @@ import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { EmptyState } from "@/components/ui/empty-state"
 import { AnularPagoDialog } from "@/components/comisiones/anular-pago-dialog"
-import { COMMISSION_KIND_LABEL, type CommissionKind } from "@/lib/commissions/types"
+import { commissionKindLabel, type CommissionBaseKind, type CommissionKind, type CommissionRole } from "@/lib/commissions/types"
+import { orderBaseBreakdown, type BreakdownLine } from "@/lib/commissions/breakdown"
 import { round2 } from "@/lib/precios"
 
 interface Item {
@@ -40,10 +41,24 @@ interface Item {
   costoFinal: number
   costoRepuestos: number
   ganancia: number
+  // What the base was taken from (optional: older payloads omit them).
+  montoOrden?: number | null
+  baseTipo?: CommissionBaseKind | null
   porcentajeComision: number
   montoComision: number
   comisionPagada: boolean
   fechaPagoComision: string | null
+}
+
+function breakdownOf(i: Item): BreakdownLine[] {
+  return orderBaseBreakdown({
+    tipo: i.tipo,
+    pagado: i.comisionPagada,
+    baseTipo: i.baseTipo,
+    documentoTotal: i.costoFinal,
+    documentoMonto: i.montoOrden,
+    documentoCostoRepuestos: i.costoRepuestos,
+  })
 }
 
 interface Resumen {
@@ -91,9 +106,11 @@ const fetcher = async (url: string) => {
 
 interface ComisionesViewProps {
   tecnicoIdFijo?: string
+  rol?: Extract<CommissionRole, "TECNICO" | "RECEPCION">
 }
 
-export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
+export function ComisionesView({ tecnicoIdFijo, rol = "TECNICO" }: ComisionesViewProps = {}) {
+  const esRecepcion = rol === "RECEPCION"
   const { formatPrice, formatDate } = useCurrency()
   const { confirm } = useModal()
 
@@ -106,14 +123,16 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
   const [paying, setPaying] = useState(false)
   const [anular, setAnular] = useState<{ pagoId: string | null; fecha: string | null } | null>(null)
 
-  const { data: tecnicos = [] } = useSWR<Tecnico[]>(
-    tecnicoIdFijo ? null : "/api/tecnicos",
+  // Reception can be earned by any staff role, so its people come from all operators.
+  const { data: operadores = [] } = useSWR<Tecnico[]>(
+    tecnicoIdFijo ? null : esRecepcion ? "/api/operadores" : "/api/tecnicos",
     fetcher
   )
 
   const effectiveTecnicoId = tecnicoIdFijo || tecnicoId
 
   const qs = new URLSearchParams()
+  qs.set("rol", rol)
   if (effectiveTecnicoId && effectiveTecnicoId !== "all") qs.set("tecnicoId", effectiveTecnicoId)
   if (desde) qs.set("desde", desde)
   if (hasta) qs.set("hasta", hasta + "T23:59:59")
@@ -131,6 +150,24 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
 
   const items = data?.items || []
   const resumen = data?.resumen || []
+
+  // /api/operadores only lists active people of the current sucursal, but a removed
+  // receiver can still hold pending rows. Remember everyone seen in the data so they
+  // stay selectable, including after the filter narrows the data to them.
+  const seenPeople = useRef(new Map<string, string>())
+  if (esRecepcion) {
+    for (const i of items) seenPeople.current.set(i.tecnicoId, i.tecnicoNombre)
+    for (const r of resumen) seenPeople.current.set(r.tecnicoId, r.tecnicoNombre)
+  }
+  const tecnicos = useMemo(() => {
+    if (!esRecepcion) return operadores
+    const byId = new Map<string, Tecnico>()
+    for (const o of operadores) byId.set(o.id, o)
+    for (const [id, nombre] of seenPeople.current) if (!byId.has(id)) byId.set(id, { id, nombre })
+    return Array.from(byId.values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
+    // seenPeople is a ref: it is refreshed on every render that brings new data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [esRecepcion, operadores, data])
 
   // A zero-amount row can be listed but never paid.
   const pagable = (i: Item) => !i.comisionPagada && i.montoComision !== 0
@@ -156,7 +193,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
   const selectedItems = items.filter((i) => selected.has(i.clave) && pagable(i))
 
   const selectLabel = (i: Item) => {
-    const kind = COMMISSION_KIND_LABEL[i.tipo]
+    const kind = commissionKindLabel(i.tipo, "ORDEN")
     const doc = i.codigoOrden || (i.numeroOrden != null ? `#${i.numeroOrden}` : "")
     return `Seleccionar comisión ${doc}${kind ? (doc ? ` (${kind})` : kind) : ""}`.trim()
   }
@@ -218,7 +255,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
     )
 
   const kindBadge = (i: Item) => {
-    const label = COMMISSION_KIND_LABEL[i.tipo]
+    const label = commissionKindLabel(i.tipo, "ORDEN")
     return label ? (
       <Badge variant="secondary" className="text-[10px] shrink-0">
         {label}
@@ -240,7 +277,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
           <div className={`grid gap-3 sm:grid-cols-2 ${tecnicoIdFijo ? "lg:grid-cols-4" : "lg:grid-cols-5"}`}>
             {!tecnicoIdFijo && (
               <div className="space-y-1">
-                <Label className="text-xs">Técnico</Label>
+                <Label className="text-xs">{esRecepcion ? "Persona" : "Técnico"}</Label>
                 <Select value={tecnicoId} onValueChange={setTecnicoId}>
                   <SelectTrigger>
                     <SelectValue />
@@ -302,7 +339,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                   <span>{r.totalOrdenes}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Ganancia</span>
+                  <span className="text-muted-foreground">Base</span>
                   <span>{formatPrice(r.totalGanancia)}</span>
                 </div>
                 <div className="flex justify-between font-medium">
@@ -356,8 +393,12 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
           ) : items.length === 0 ? (
             <EmptyState
               icon={Percent}
-              title="Sin comisiones"
-              description="Ajustá el período o los filtros."
+              title={esRecepcion ? "Sin comisiones de recepción" : "Sin comisiones"}
+              description={
+                esRecepcion
+                  ? "Aparecen cuando una orden recibida con porcentaje de recepción cumple la regla del taller. El porcentaje se configura en Configuración › Comisiones."
+                  : "Ajustá el período o los filtros."
+              }
               variant="search"
             />
           ) : (
@@ -378,11 +419,12 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                     />
                   </th>
                   <th className="p-2 text-left">Orden</th>
-                  <th className="p-2 text-left">Técnico</th>
+                  <th className="p-2 text-left">{esRecepcion ? "Persona" : "Técnico"}</th>
                   <th className="p-2 text-left">Dispositivo</th>
                   <th className="p-2 text-right">Costo final</th>
+                  <th className="p-2 text-right">Desc./NC</th>
                   <th className="p-2 text-right">Repuestos</th>
-                  <th className="p-2 text-right">Ganancia</th>
+                  <th className="p-2 text-right">Base</th>
                   <th className="p-2 text-right">%</th>
                   <th className="p-2 text-right">Comisión</th>
                   <th className="p-2 text-left">Completado</th>
@@ -390,7 +432,13 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                 </tr>
               </thead>
               <tbody>
-                {items.map((i) => (
+                {items.map((i) => {
+                  const lines = breakdownOf(i)
+                  const cell = (key: BreakdownLine["key"]) => {
+                    const line = lines.find((l) => l.key === key)
+                    return line ? formatPrice(line.amount) : "—"
+                  }
+                  return (
                   <tr key={i.clave} className="border-t hover:bg-muted/30">
                     <td className="p-2">
                       {!i.comisionPagada && (
@@ -412,10 +460,9 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                     </td>
                     <td className="p-2">{i.tecnicoNombre}</td>
                     <td className="p-2">{i.dispositivo}</td>
-                    <td className="p-2 text-right">{formatPrice(i.costoFinal)}</td>
-                    <td className="p-2 text-right text-muted-foreground">
-                      {formatPrice(i.costoRepuestos)}
-                    </td>
+                    <td className="p-2 text-right">{cell("costoFinal")}</td>
+                    <td className="p-2 text-right text-muted-foreground">{cell("descuentos")}</td>
+                    <td className="p-2 text-right text-muted-foreground">{cell("repuestos")}</td>
                     <td className="p-2 text-right">{formatPrice(i.ganancia)}</td>
                     <td className="p-2 text-right">
                       <Badge variant="outline" className="text-xs">
@@ -441,7 +488,8 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                       )}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
             </div>
@@ -482,8 +530,12 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                   </div>
                   <div className="flex items-end justify-between gap-2">
                     <div className="text-xs text-muted-foreground space-y-0.5">
-                      <div>Costo {formatPrice(i.costoFinal)} · Rep. {formatPrice(i.costoRepuestos)}</div>
-                      <div>Ganancia {formatPrice(i.ganancia)}{i.fechaCompletado ? ` · ${formatDate(i.fechaCompletado)}` : ""}</div>
+                      {breakdownOf(i).length > 0 && (
+                        <div>
+                          {breakdownOf(i).map((l) => `${l.shortLabel} ${formatPrice(l.amount)}`).join(" · ")}
+                        </div>
+                      )}
+                      <div>Base {formatPrice(i.ganancia)}{i.fechaCompletado ? ` · ${formatDate(i.fechaCompletado)}` : ""}</div>
                     </div>
                     <div className="text-right shrink-0">
                       <Badge variant="outline" className="text-[10px] mb-1">

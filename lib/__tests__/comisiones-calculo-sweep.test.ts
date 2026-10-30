@@ -99,3 +99,108 @@ describe('commission calculation sweep', () => {
     expect([...ALLOWED].filter((p) => !calc.has(p))).toEqual([])
   })
 })
+
+/**
+ * Reception attribution: the trigger snapshots the receiver's rate from `recibido_por`.
+ * Checked here: (1) the per-person rate has exactly four writers; (2) exactly three files write
+ * `recibido_por`; (3) every file that creates an order is either one of those writers, or listed
+ * in NO_RECEIVER_BY_DESIGN / RECEIVER_VIA_RPC with its reason, so a new creation path cannot
+ * skip the receiver unnoticed. Whether a listed path should set a receiver is a product call.
+ */
+const RATE_WRITERS = [
+  'app/api/vendedores/route.ts',
+  'app/api/vendedores/[id]/route.ts',
+  'app/api/tecnicos/route.ts',
+  'app/api/tecnicos/[id]/route.ts',
+]
+const RECEIVER_WRITERS = [
+  'app/api/ordenes/route.ts',
+  'app/api/onboarding/practica/route.ts',
+  'app/api/cotizaciones/[id]/convertir-orden/route.ts',
+]
+
+// Order-creation sites that deliberately set no receiver (the trigger then snapshots no rate).
+const NO_RECEIVER_BY_DESIGN: Record<string, string> = {
+  'lib/onboarding/sample-data.ts': 'demo/sample orders for onboarding, not real receptions',
+  'app/api/onboarding/seed-demo-data/route.ts': 'demo orders seeded for onboarding, not real receptions',
+  'app/api/ordenes/[id]/reingreso/route.ts': 're-entry of an existing order; warranty re-entries have no reception commission',
+  'app/api/garantias/[id]/reclamos/route.ts': 'repair order opened from a warranty claim; warranty re-entries have no reception commission',
+}
+// Order creation through an RPC that takes the receiver as a parameter (`p_recibido_por`).
+const RECEIVER_VIA_RPC = ['app/api/recepciones/route.ts']
+
+/** Files that create an order: an insert straight after `.from("ordenes_servicio")`, or the multi-reception RPC. */
+export function filesCreatingOrders(files: Array<{ path: string; source: string }>): string[] {
+  const direct = /from\(\s*["']ordenes_servicio["']\s*\)\s*\.(?:insert|upsert)\(/
+  const rpc = /rpc\(\s*["']crear_recepcion_multiple["']/
+  return files
+    .filter((f) => {
+      const code = stripComments(f.source)
+      return direct.test(code) || rpc.test(code)
+    })
+    .map((f) => f.path)
+    .sort()
+}
+
+/** Files whose code (comments stripped) writes `key` as an object key or a property assignment, not as a suffix of another name. */
+export function filesWithObjectKey(files: Array<{ path: string; source: string }>, key: string): string[] {
+  const pattern = new RegExp(`(?<![A-Za-z0-9_])${key}\\s*(?::|=(?!=))`)
+  return files.filter((f) => pattern.test(stripComments(f.source))).map((f) => f.path).sort()
+}
+
+describe('reception attribution', () => {
+  it('the key detector ignores comments and longer names', () => {
+    expect(
+      filesWithObjectKey(
+        [
+          { path: 'a.ts', source: 'insert({ recibido_por: userId })' },
+          { path: 'b.ts', source: '// recibido_por: in a comment' },
+          { path: 'c.ts', source: 'rpc("f", { p_recibido_por: id })' },
+          { path: 'd.ts', source: 'update.recibido_por = userId' },
+          { path: 'e.ts', source: 'if (row.recibido_por === userId) {}' },
+        ],
+        'recibido_por',
+      ),
+    ).toEqual(['a.ts', 'd.ts'])
+  })
+
+  it('only the four rate-writer routes write porcentaje_comision_recepcion', () => {
+    expect(filesWithObjectKey(sources(), 'porcentaje_comision_recepcion')).toEqual([...RATE_WRITERS].sort())
+  })
+
+  it('only the three order-creation paths write recibido_por', () => {
+    expect(filesWithObjectKey(sources(), 'recibido_por')).toEqual([...RECEIVER_WRITERS].sort())
+  })
+
+  it('the order-creation detector sees direct inserts and the RPC, not updates or comments', () => {
+    expect(
+      filesCreatingOrders([
+        { path: 'a.ts', source: 'await supabaseAdmin' + String.fromCharCode(10) + '  .from("ordenes_servicio")' + String.fromCharCode(10) + '  .insert({ x: 1 })' },
+        { path: 'b.ts', source: 'supabaseAdmin.from("ordenes_servicio").update({ x: 1 })' },
+        { path: 'c.ts', source: '// .from("ordenes_servicio").insert({})' },
+        { path: 'd.ts', source: 'await supabaseAdmin.rpc("crear_recepcion_multiple", {})' },
+      ]),
+    ).toEqual(['a.ts', 'd.ts'])
+  })
+
+  it('every order-creation path sets a receiver or is listed with a reason', () => {
+    const known = new Set([...RECEIVER_WRITERS, ...RECEIVER_VIA_RPC, ...Object.keys(NO_RECEIVER_BY_DESIGN)])
+    expect(filesCreatingOrders(sources()).filter((p) => !known.has(p))).toEqual([])
+  })
+
+  it('the order-creation lists still match (no dead or duplicated entry)', () => {
+    const creators = new Set(filesCreatingOrders(sources()))
+    const exemptions = [...RECEIVER_VIA_RPC, ...Object.keys(NO_RECEIVER_BY_DESIGN)]
+    expect(exemptions.filter((p) => !creators.has(p))).toEqual([])
+    expect(exemptions.filter((p) => RECEIVER_WRITERS.includes(p))).toEqual([])
+    expect(RECEIVER_WRITERS.filter((p) => !creators.has(p))).toEqual([])
+  })
+
+  it('the listed files still match (a renamed route cannot leave a dead entry)', () => {
+    const all = sources()
+    const rate = new Set(filesWithObjectKey(all, 'porcentaje_comision_recepcion'))
+    const receiver = new Set(filesWithObjectKey(all, 'recibido_por'))
+    expect(RATE_WRITERS.filter((p) => !rate.has(p))).toEqual([])
+    expect(RECEIVER_WRITERS.filter((p) => !receiver.has(p))).toEqual([])
+  })
+})

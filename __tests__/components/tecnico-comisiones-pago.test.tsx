@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 
-const { data, mutate, confirm, swrError } = vi.hoisted(() => ({
+const { data, mutate, confirm, swrError, swrKeys } = vi.hoisted(() => ({
+  swrKeys: [] as string[],
   data: { value: null as any },
   mutate: vi.fn(),
   confirm: vi.fn(),
@@ -10,12 +11,15 @@ const { data, mutate, confirm, swrError } = vi.hoisted(() => ({
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock("swr", () => ({
-  default: (key: string | null) => ({
+  default: (key: string | null) => {
+    if (key) swrKeys.push(key)
+    return {
     data: key?.startsWith("/api/comisiones?") ? data.value : undefined,
     error: key?.startsWith("/api/comisiones?") ? swrError.value : undefined,
     isLoading: false,
     mutate,
-  }),
+    }
+  },
 }))
 vi.mock("@/contexts/modal-context", () => ({ useModal: () => ({ confirm }) }))
 vi.mock("@/contexts/currency-context", () => ({
@@ -153,5 +157,153 @@ describe("TecnicoComisiones paying and annulling", () => {
     expect(screen.getByText("No se pudieron cargar las comisiones.")).toBeInTheDocument()
     expect(screen.queryByText("Sin órdenes")).not.toBeInTheDocument()
     expect(screen.queryByText("Comisión pendiente")).not.toBeInTheDocument()
+  })
+})
+
+describe("TecnicoComisiones order roles", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    confirm.mockResolvedValue(true)
+    swrError.value = undefined
+    swrKeys.length = 0
+  })
+
+  const pair = () => [
+    item({ clave: "ORDEN:o1:TECNICO:ORIGINAL:-", codigoOrden: "OR-1", montoComision: 65, ganancia: 650 }),
+    item({ clave: "ORDEN:o1:RECEPCION:ORIGINAL:-", rol: "RECEPCION", codigoOrden: "OR-1", montoComision: 42.5, ganancia: 650 }),
+  ]
+
+  it("asks both order roles and badges the reception rows", () => {
+    data.value = { items: pair(), resumen: [] }
+    renderScreen()
+    expect(swrKeys.some((k) => k.includes("rol=todos"))).toBe(true)
+    expect(screen.getAllByText("Recepción")).toHaveLength(1)
+  })
+
+  it("pays technician and reception rows of the same order in one payout", async () => {
+    data.value = { items: pair(), resumen: [] }
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ pagoId: "p1" }) }) as any
+    renderScreen()
+    const selectAll = screen.getAllByRole("checkbox").find((c) => !c.getAttribute("aria-label"))!
+    fireEvent.click(selectAll)
+    fireEvent.click(screen.getByRole("button", { name: /Liquidar seleccionadas/ }))
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    expect(JSON.parse((global.fetch as any).mock.calls[0][1].body)).toEqual({
+      beneficiarioId: "tec-9",
+      filas: [
+        { clave: "ORDEN:o1:TECNICO:ORIGINAL:-", monto: 65 },
+        { clave: "ORDEN:o1:RECEPCION:ORIGINAL:-", monto: 42.5 },
+      ],
+    })
+  })
+
+  it("averages and ganancia count technician original rows only, totals cover every row", () => {
+    const rows = pair()
+    rows[1] = { ...rows[1], ganancia: 850, montoComision: 42.5 }
+    data.value = { items: rows, resumen: [] }
+    renderScreen()
+    // total pending covers both rows: 65 + 42.5
+    expect(screen.getByText("$107.5")).toBeInTheDocument()
+    const card = (title: string) => screen.getByText(title).parentElement!.parentElement!
+    expect(card("Base total (como técnico)")).toHaveTextContent("$650")
+    expect(card("Base total (como técnico)")).not.toHaveTextContent("$1500")
+    expect(screen.getByText("Ticket prom. (como técnico) $650")).toBeInTheDocument()
+    expect(card("Comisión promedio (como técnico)")).toHaveTextContent("$65")
+    expect(card("Comisión promedio (como técnico)")).not.toHaveTextContent("$53.75")
+    // no row labels its figure as a profit any more: it is always the base
+    expect(screen.getAllByText("Base")).toHaveLength(2)
+    expect(screen.queryByText("Ganancia")).not.toBeInTheDocument()
+  })
+
+  it("does not divide by zero when there are only reception rows", () => {
+    data.value = { items: [pair()[1]], resumen: [] }
+    renderScreen()
+    expect(screen.getByText("Ticket prom. (como técnico) $0")).toBeInTheDocument()
+  })
+
+  it("the CSV has a Rol column", async () => {
+    data.value = { items: pair(), resumen: [] }
+    let blob: Blob | null = null
+    URL.createObjectURL = vi.fn((b: Blob) => { blob = b; return "blob:x" }) as any
+    URL.revokeObjectURL = vi.fn()
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {})
+    renderScreen()
+    fireEvent.click(screen.getByRole("button", { name: /CSV/ }))
+    const text = await new Promise<string>((res) => {
+      const fr = new FileReader()
+      fr.onload = () => res(String(fr.result))
+      fr.readAsText(blob!)
+    })
+    const [head, ...rows] = text.split(/\r?\n/)
+    expect(head).toBe(
+      '"Orden","Rol","Dispositivo","Fecha completado","Costo final","Desc./NC","Repuestos","Base","% Comisión","Comisión","Estado pago","Fecha pago"'
+    )
+    expect(rows[0]).toContain('"Técnico"')
+    expect(rows[1]).toContain('"Recepción"')
+  })
+  // Final cost 1000, parts 200, discount 100, credit note 50: technician base 650, reception base 850.
+  const discounted = () => [
+    item({ clave: "ORDEN:o1:TECNICO:ORIGINAL:-", codigoOrden: "OR-1", costoFinal: 1000, costoRepuestos: 200, montoOrden: 850, baseTipo: "MANO_DE_OBRA", ganancia: 650, montoComision: 65 }),
+    item({ clave: "ORDEN:o1:RECEPCION:ORIGINAL:-", rol: "RECEPCION", codigoOrden: "OR-1", costoFinal: 1000, costoRepuestos: 200, montoOrden: 850, baseTipo: "MONTO_ORDEN", ganancia: 850, montoComision: 42.5 }),
+  ]
+  const rowAt = (n: number) => screen.getAllByLabelText("Seleccionar comisión OR-1")[n].closest(".divide-y > div") as HTMLElement
+
+  it("explains a discounted order: Desc./NC on both rows, Repuestos only on the labour base", () => {
+    data.value = { items: discounted(), resumen: [] }
+    renderScreen()
+    const tec = rowAt(0)
+    const rec = rowAt(1)
+    expect(tec).toHaveTextContent("Costo final")
+    expect(tec).toHaveTextContent("Desc./NC")
+    expect(tec).toHaveTextContent("$150")
+    expect(tec).toHaveTextContent("Repuestos")
+    expect(tec).toHaveTextContent("$650")
+    expect(rec).toHaveTextContent("Desc./NC")
+    expect(rec).not.toHaveTextContent("Repuestos")
+    expect(rec).toHaveTextContent("$850")
+    expect(screen.queryByText("Cobrado")).not.toBeInTheDocument()
+  })
+
+  it("a paid row shows only its frozen base", () => {
+    data.value = { items: [item({ clave: "p", codigoOrden: "p", costoFinal: 1000, costoRepuestos: 200, montoOrden: 850, baseTipo: "MANO_DE_OBRA", ganancia: 650, comisionPagada: true, pagoId: "p9", fechaPagoComision: "2026-10-20T12:00:00Z" })], resumen: [] }
+    renderScreen()
+    expect(screen.queryByText("Desc./NC")).not.toBeInTheDocument()
+    expect(screen.queryByText("Repuestos")).not.toBeInTheDocument()
+    expect(screen.getByText("Base")).toBeInTheDocument()
+    expect(screen.getAllByText("$650").length).toBeGreaterThan(0)
+  })
+
+  it("the CSV carries Desc./NC after Costo final and leaves Repuestos empty for an order-amount base", async () => {
+    data.value = { items: discounted(), resumen: [] }
+    let blob: Blob | null = null
+    URL.createObjectURL = vi.fn((b: Blob) => { blob = b; return "blob:x" }) as any
+    URL.revokeObjectURL = vi.fn()
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {})
+    renderScreen()
+    fireEvent.click(screen.getByRole("button", { name: /CSV/ }))
+    const text = await new Promise<string>((res) => {
+      const fr = new FileReader()
+      fr.onload = () => res(String(fr.result))
+      fr.readAsText(blob!)
+    })
+    const [head, tec, rec] = text.split(/\r?\n/)
+    expect(head).toBe(
+      '"Orden","Rol","Dispositivo","Fecha completado","Costo final","Desc./NC","Repuestos","Base","% Comisión","Comisión","Estado pago","Fecha pago"'
+    )
+    expect(tec).toContain('"1000","150","200","650"')
+    expect(rec).toContain('"1000","150","","850"')
+  })
+
+  it("counts an order once even when the technician and reception rows both appear", () => {
+    data.value = { items: discounted(), resumen: [] }
+    renderScreen()
+    expect(screen.getByText("1 orden(es)")).toBeInTheDocument()
+  })
+
+  it("counts paid orders and payout orders by distinct order", () => {
+    const paid = (clave: string, rol: string) => item({ clave, rol, codigoOrden: "OR-1", comisionPagada: true, pagoId: "p9", fechaPagoComision: "2026-10-20T12:00:00Z", montoComision: 10 })
+    data.value = { items: [paid("a", "TECNICO"), paid("b", "RECEPCION")], resumen: [] }
+    renderScreen()
+    expect(screen.getAllByText("1 orden(es)")).toHaveLength(2)
   })
 })

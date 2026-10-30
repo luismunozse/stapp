@@ -72,7 +72,7 @@ import { dateOnlyToNoonUtcISO, todayInTimeZone } from "@/lib/timezone"
 import { OrdenTecnicoCard } from "@/components/ordenes/orden-tecnico-card"
 import { OrdenCostosCard } from "@/components/ordenes/orden-costos-card"
 import { OrdenComisionCard } from "@/components/ordenes/orden-comision-card"
-import { commissionCardVersion } from "@/lib/commissions/card-version"
+import { commissionCardVersion, orderCommissionKeyPrefix } from "@/lib/commissions/card-version"
 import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
 import { OrdenServiciosTab } from "@/components/ordenes/orden-servicios-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
@@ -1283,6 +1283,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             <OrdenComisionCard
               ordenId={orden.id}
               tecnicoId={orden.tecnicoId}
+              recibidoPorId={(orden as any).recibidoPor?.id}
               porcentajeComision={(orden as any).porcentajeComision}
               version={commissionCardVersion({ ...orden, repuestos: (orden as any).repuestos })}
               horasTrabajadas={(orden as any).horasTrabajadas || 0}
@@ -1335,6 +1336,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           <OrdenComisionCard
             ordenId={orden.id}
             tecnicoId={orden.tecnicoId}
+            recibidoPorId={(orden as any).recibidoPor?.id}
             porcentajeComision={(orden as any).porcentajeComision}
             version={commissionCardVersion({ ...orden, repuestos: (orden as any).repuestos })}
             horasTrabajadas={(orden as any).horasTrabajadas || 0}
@@ -1399,6 +1401,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           onSuccess={() => {
             fetchOrden()
             void mutate(`/api/ordenes/${orden.id}/notas-credito`)
+            void mutate((k) => typeof k === "string" && k.startsWith(orderCommissionKeyPrefix(orden.id)))
           }}
         />
       )}

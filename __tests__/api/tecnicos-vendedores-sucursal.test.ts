@@ -35,6 +35,8 @@ function usuario(id: string, nombre: string, rol: string, sucursal: string | nul
     organization_id: org,
     sucursal_id: sucursal,
     porcentaje_comision: 0,
+    porcentaje_comision_recepcion: null,
+    costo_hora: 0,
     especialidades: [],
     avatar_url: null,
     fecha_ingreso_tecnico: null,

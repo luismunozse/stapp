@@ -52,7 +52,7 @@ describe('endpoints de comisiones', () => {
   const handlers = handlersDe(join(API, 'comisiones'))
 
   it('existen endpoints que auditar', () => {
-    expect(handlers.length).toBeGreaterThanOrEqual(6)
+    expect(handlers.length).toBeGreaterThanOrEqual(10)
   })
 
   it('todos piden requireAdmin salvo GET /api/comisiones (cada técnico ve las suyas)', () => {
@@ -111,5 +111,19 @@ describe('endpoints de suscripción', () => {
     const ids = new Set(handlers.map((h) => h.id))
     const fantasmas = [...ABIERTAS_A_TODO_ROL].filter((id) => !ids.has(id))
     expect(fantasmas).toEqual([])
+  })
+})
+
+describe('endpoints de técnicos que escriben la comisión', () => {
+  // POST y PUT escriben porcentaje_comision y porcentaje_comision_recepcion: solo el ADMIN.
+  const handlers = handlersDe(join(API, 'tecnicos'))
+
+  it.each([
+    ['route.ts', 'POST'],
+    ['[id]/route.ts', 'PUT'],
+  ])('%s %s pide requireAdmin', (id, metodo) => {
+    const handler = handlers.find((h) => h.id === id && h.metodo === metodo)
+    expect(handler, `${metodo} ${id}`).toBeDefined()
+    expect(handler!.body).toMatch(/\brequireAdmin\b/)
   })
 })

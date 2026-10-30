@@ -40,4 +40,8 @@ describe("commission rows reader", () => {
     montarSupabaseEnMemoria({ v_comisiones_filas: [fila({ monto: 0, pendiente: 0, devengada: false }), fila({ clave: "o2", documento_id: "o2" })] })
     expect(await readDocumentCommissionRows("org-1", "ORDEN", "o1")).toHaveLength(1)
   })
+  it("maps the order-only columns and keeps NULL as null", () => {
+    expect(toRow(fila({ base_tipo: "MANO_DE_OBRA", documento_monto: "850.00", motivo_sin_devengo: "SIN_REPARACION" }))).toMatchObject({ baseTipo: "MANO_DE_OBRA", documentoMonto: 850, motivoSinDevengo: "SIN_REPARACION" })
+    expect(toRow(fila({}))).toMatchObject({ baseTipo: null, documentoMonto: null, motivoSinDevengo: null })
+  })
 })

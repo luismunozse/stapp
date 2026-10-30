@@ -18,7 +18,7 @@ const pedirLiquidacion = (id: string, query = "") =>
   liquidacion(new Request(`http://localhost:3000/api/vendedores/${id}/comisiones${query}`), { params: Promise.resolve({ id }) })
 const pedirFicha = (id: string) => ficha(new Request(`http://localhost:3000/api/vendedores/${id}`), { params: Promise.resolve({ id }) })
 
-const vendedorFicha = { id: "s1", nombre: "Ana", email: "a@a.com", telefono: null, activo: true, porcentaje_comision: 10, created_at: "2026-01-01T00:00:00Z", rol: "VENDEDOR", organization_id: "org-1", deleted_at: null }
+const vendedorFicha = { id: "s1", nombre: "Ana", email: "a@a.com", telefono: null, activo: true, porcentaje_comision: 10, porcentaje_comision_recepcion: null, created_at: "2026-01-01T00:00:00Z", rol: "VENDEDOR", organization_id: "org-1", deleted_at: null }
 
 describe("seller commission reads use the single definition", () => {
   beforeEach(() => vi.clearAllMocks())

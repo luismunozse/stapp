@@ -43,6 +43,6 @@ export interface TecnicoInput {
   nombre: string
   email: string
   password: string
-  /** "% Comisión sobre ganancia" (0-100). */
+  /** "% Comisión como técnico" (0-100). */
   comision: string
 }

@@ -25,6 +25,7 @@ interface TecnicoFormProps {
     nombre: string
     email: string
     porcentajeComision?: number
+    porcentajeComisionRecepcion?: number | null
     costoHora?: number
     telefono?: string | null
     especialidades?: string[]
@@ -52,6 +53,8 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
   const [telefono, setTelefono] = useState("")
   const [password, setPassword] = useState("")
   const [porcentajeComision, setPorcentajeComision] = useState<string>("0")
+  // Blank means "use the shop default" and is sent as null, never as 0.
+  const [porcentajeRecepcion, setPorcentajeRecepcion] = useState<string>("")
   const [costoHora, setCostoHora] = useState<string>("0")
   const [especialidades, setEspecialidades] = useState<string[]>([])
   const [fechaIngreso, setFechaIngreso] = useState<string>("")
@@ -92,7 +95,11 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
       setPorcentajeComision(
         tecnico.porcentajeComision != null ? String(tecnico.porcentajeComision) : "0"
       )
-      setCostoHora(tecnico.costoHora != null ? String(tecnico.costoHora) : "0")
+      setPorcentajeRecepcion(
+        tecnico.porcentajeComisionRecepcion != null ? String(tecnico.porcentajeComisionRecepcion) : ""
+      )
+      // Not loaded stays blank, so saving never overwrites the stored hourly cost with 0.
+      setCostoHora(tecnico.costoHora != null ? String(tecnico.costoHora) : "")
       setEspecialidades(tecnico.especialidades ?? [])
       setFechaIngreso(tecnico.fechaIngresoTecnico ?? "")
     } else {
@@ -108,6 +115,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
     setTelefono("")
     setPassword("")
     setPorcentajeComision("0")
+    setPorcentajeRecepcion("")
     setCostoHora("0")
     setEspecialidades([])
     setFechaIngreso("")
@@ -129,13 +137,20 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
       const url = isEditing ? `/api/tecnicos/${tecnico.id}` : "/api/tecnicos"
       const method = isEditing ? "PUT" : "POST"
 
-      const porcNum = parseFloat(porcentajeComision) || 0
-      if (porcNum < 0 || porcNum > 100) {
-        throw new Error("El porcentaje de comisión debe estar entre 0 y 100")
+      // A blank technician rate is invalid: only the reception rate treats blank as "shop default".
+      const porcNum = porcentajeComision.trim() === "" ? NaN : Number(porcentajeComision)
+      if (!Number.isFinite(porcNum) || porcNum < 0 || porcNum > 100) {
+        throw new Error("Ingrese un porcentaje entre 0 y 100.")
       }
 
-      const costoHoraNum = parseFloat(costoHora) || 0
-      if (costoHoraNum < 0) {
+      const recepcionNum = porcentajeRecepcion.trim() === "" ? null : Number(porcentajeRecepcion)
+      if (recepcionNum !== null && (!Number.isFinite(recepcionNum) || recepcionNum < 0 || recepcionNum > 100)) {
+        throw new Error("El porcentaje de recepción debe estar entre 0 y 100")
+      }
+
+      // Blank on edit means "leave it as stored": the field is omitted from the body.
+      const costoHoraNum = costoHora.trim() === "" ? (isEditing ? undefined : 0) : parseFloat(costoHora) || 0
+      if (costoHoraNum !== undefined && costoHoraNum < 0) {
         throw new Error("El costo por hora no puede ser negativo")
       }
 
@@ -144,7 +159,8 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
         email,
         telefono: telefono.trim() || null,
         porcentajeComision: porcNum,
-        costoHora: costoHoraNum,
+        porcentajeComisionRecepcion: recepcionNum,
+        ...(costoHoraNum !== undefined ? { costoHora: costoHoraNum } : {}),
         especialidades,
         fechaIngresoTecnico: fechaIngreso || null,
       }
@@ -267,7 +283,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="porcentajeComision">% Comisión sobre ganancia</Label>
+              <Label htmlFor="porcentajeComision">% Comisión como técnico</Label>
               <Input
                 id="porcentajeComision"
                 type="number"
@@ -279,7 +295,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
                 placeholder="0"
               />
               <p className="text-[11px] text-muted-foreground">
-                Sobre (costo final − repuestos) de cada orden.
+                Sobre la base que elige el taller en Configuración › Comisiones (por defecto, la mano de obra: monto de la orden menos repuestos).
               </p>
             </div>
             <div className="space-y-2">
@@ -294,6 +310,23 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
                 Fecha de alta laboral (opcional).
               </p>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="porcentajeComisionRecepcion">Comisión por recepción (%)</Label>
+            <Input
+              id="porcentajeComisionRecepcion"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={porcentajeRecepcion}
+              onChange={(e) => setPorcentajeRecepcion(e.target.value)}
+              placeholder="Por defecto del taller"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Vacío: se usa el porcentaje por defecto del taller. Cada orden guarda el porcentaje vigente al recibir el equipo.
+            </p>
           </div>
 
           {!isEditing && sucursales.length > 1 && (

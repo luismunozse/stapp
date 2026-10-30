@@ -31,6 +31,7 @@ interface Vendedor {
   telefono: string | null
   activo: boolean
   porcentajeComision: number
+  porcentajeComisionRecepcion?: number | null
   created_at: string
   ventasCompletadas: number
   ventasTotal: number

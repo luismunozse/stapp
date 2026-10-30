@@ -18,6 +18,13 @@ const vendedorCreateSchema = z.object({
     .max(100, "La comisión no puede superar 100")
     .optional()
     .default(0),
+  // null (or absent) leaves the shop default in force; never coerced, so null is not 0.
+  porcentajeComisionRecepcion: z
+    .number({ invalid_type_error: "El porcentaje de recepción debe estar entre 0 y 100" })
+    .min(0, "El porcentaje de recepción debe estar entre 0 y 100")
+    .max(100, "El porcentaje de recepción debe estar entre 0 y 100")
+    .nullable()
+    .optional(),
   sucursalId: z.string().optional().nullable(),
 })
 
@@ -47,7 +54,7 @@ export async function GET(request: Request) {
     let query = supabaseAdmin
       .from("users")
       .select(
-        "id, nombre, email, telefono, activo, porcentaje_comision, sucursal_id, created_at",
+        "id, nombre, email, telefono, activo, porcentaje_comision, porcentaje_comision_recepcion, sucursal_id, created_at",
         { count: "exact" }
       )
       .eq("rol", "VENDEDOR")
@@ -99,6 +106,8 @@ export async function GET(request: Request) {
         telefono: vendedor.telefono ?? null,
         activo: vendedor.activo !== false,
         porcentajeComision: Number(vendedor.porcentaje_comision ?? 0),
+        porcentajeComisionRecepcion:
+          vendedor.porcentaje_comision_recepcion == null ? null : Number(vendedor.porcentaje_comision_recepcion),
         sucursalId: vendedor.sucursal_id ?? null,
         created_at: vendedor.created_at,
         ventasCompletadas: stats.ventasCompletadas,
@@ -192,9 +201,10 @@ export async function POST(request: Request) {
         email_verified: true,
         telefono: data.telefono?.trim() || null,
         porcentaje_comision: data.porcentajeComision,
+        porcentaje_comision_recepcion: data.porcentajeComisionRecepcion ?? null,
         activo: true,
       })
-      .select("id, nombre, email, telefono, activo, porcentaje_comision")
+      .select("id, nombre, email, telefono, activo, porcentaje_comision, porcentaje_comision_recepcion")
       .single()
 
     if (dbError) {

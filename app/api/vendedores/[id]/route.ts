@@ -18,6 +18,13 @@ const vendedorUpdateSchema = z.object({
     .min(0, "La comisión debe ser mayor o igual a 0")
     .max(100, "La comisión no puede superar 100")
     .optional(),
+  // null clears the rate (the shop default applies); absent leaves it unchanged.
+  porcentajeComisionRecepcion: z
+    .number({ invalid_type_error: "El porcentaje de recepción debe estar entre 0 y 100" })
+    .min(0, "El porcentaje de recepción debe estar entre 0 y 100")
+    .max(100, "El porcentaje de recepción debe estar entre 0 y 100")
+    .nullable()
+    .optional(),
 })
 
 export async function GET(
@@ -35,7 +42,7 @@ export async function GET(
     const { data: vendedor, error: dbError } = await supabaseAdmin
       .from("users")
       .select(
-        "id, nombre, email, telefono, activo, porcentaje_comision, created_at"
+        "id, nombre, email, telefono, activo, porcentaje_comision, porcentaje_comision_recepcion, created_at"
       )
       .eq("id", id)
       .eq("rol", "VENDEDOR")
@@ -79,6 +86,8 @@ export async function GET(
       telefono: vendedor.telefono ?? null,
       activo: vendedor.activo !== false,
       porcentajeComision: Number(vendedor.porcentaje_comision ?? 0),
+      porcentajeComisionRecepcion:
+        vendedor.porcentaje_comision_recepcion == null ? null : Number(vendedor.porcentaje_comision_recepcion),
       createdAt: vendedor.created_at,
       ventasCompletadas: Number(statsRow?.ventas_completadas ?? 0),
       ventasTotal: Number(statsRow?.ventas_total ?? 0),
@@ -155,6 +164,9 @@ export async function PUT(
     if (data.telefono !== undefined) updateData.telefono = data.telefono?.trim() || null
     if (data.activo !== undefined) updateData.activo = data.activo
     if (data.porcentajeComision !== undefined) updateData.porcentaje_comision = data.porcentajeComision
+    if (data.porcentajeComisionRecepcion !== undefined) {
+      updateData.porcentaje_comision_recepcion = data.porcentajeComisionRecepcion
+    }
 
     const { data: updatedVendedor, error: updateError } = await supabaseAdmin
       .from("users")
@@ -162,7 +174,7 @@ export async function PUT(
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .eq("rol", "VENDEDOR")
-      .select("id, nombre, email, telefono, activo, porcentaje_comision")
+      .select("id, nombre, email, telefono, activo, porcentaje_comision, porcentaje_comision_recepcion")
       .single()
 
     if (updateError) {
