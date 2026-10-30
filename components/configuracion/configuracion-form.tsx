@@ -14,6 +14,7 @@ import { Upload, Trash2, Save, ImageIcon } from "lucide-react"
 import { compressImageToDataUrl } from "@/lib/images/compress-image"
 import { toast } from "sonner"
 import { useModal } from "@/contexts/modal-context"
+import { ComisionesConfig } from "@/components/configuracion/comisiones-config"
 import { NotificationSettings } from "@/components/configuracion/notification-settings"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CONFIG_TABS, FORM_TABS, parseConfigTab, type ConfigTab } from "@/components/configuracion/config-tabs"
@@ -97,7 +98,6 @@ export function ConfiguracionForm({
   const [moduloAgenda, setModuloAgenda] = useState(false)
   // Arranca en true: el POS agrupa las variantes salvo que el taller pida la lista plana.
   const [posAgrupaVariantes, setPosAgrupaVariantes] = useState(true)
-  const [comisionAplicaSinReparacion, setComisionAplicaSinReparacion] = useState(false)
   const [ivaRegimen, setIvaRegimen] = useState<"EXENTO" | "INCLUIDO" | "ADITIVO">("EXENTO")
   const [ivaTasa, setIvaTasa] = useState("")
   const [redondeoEfectivo, setRedondeoEfectivo] = useState("0")
@@ -201,7 +201,6 @@ export function ConfiguracionForm({
         setAnticipoPorcentajeDefault(String(data.anticipoPorcentajeDefault ?? 50))
         setModuloAgenda(!!data.moduloAgenda)
         setPosAgrupaVariantes(data.posAgrupaVariantes !== false)
-        setComisionAplicaSinReparacion(!!data.comisionAplicaSinReparacion)
         setIvaRegimen(data.ivaRegimen ?? "EXENTO")
         setIvaTasa(String(data.ivaTasa ?? getIvaGeneral(data.pais)))
         setRedondeoEfectivo(String(data.redondeoEfectivo ?? 0))
@@ -373,7 +372,7 @@ export function ConfiguracionForm({
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, posAgrupaVariantes, ordenFormatoPapel, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, posAgrupaVariantes, ordenFormatoPapel, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, ingresosBrutos, inicioActividades, cbuAlias, mediosPagoTexto, plazoPagoDias }),
       })
 
       if (res.ok) {
@@ -708,21 +707,9 @@ export function ConfiguracionForm({
                   </div>
                 </div>
               </label>
-              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
-                <input
-                  type="checkbox"
-                  checked={comisionAplicaSinReparacion}
-                  onChange={(e) => setComisionAplicaSinReparacion(e.target.checked)}
-                  disabled={!allowEdit}
-                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">Pagar comisión en órdenes sin reparación</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Si está activo, las órdenes ENTREGADO_SIN_REPARACION generan comisión para el técnico y se deducen en el P&L.
-                  </div>
-                </div>
-              </label>
+              <p className="text-xs text-muted-foreground mt-3">
+                Las reglas de comisiones, incluido el pago en órdenes entregadas sin reparar, se configuran en la pestaña Comisiones.
+              </p>
               <p className="text-xs text-muted-foreground mt-3">
                 Los permisos de técnicos y vendedores se configuran en{" "}
                 <Link href="/configuracion/roles" className="underline underline-offset-2 hover:text-foreground">
@@ -1274,6 +1261,11 @@ export function ConfiguracionForm({
           </Card>
           </>
         )}
+      </TabsContent>
+
+      <TabsContent value="comisiones" forceMount className={PANEL_CLASS}>
+        {/* Se guarda por separado (botón propio), por eso esta pestaña no tiene la barra de guardado */}
+        <ComisionesConfig allowEdit={allowEdit} />
       </TabsContent>
 
       <TabsContent value="avisos" forceMount className={PANEL_CLASS}>
