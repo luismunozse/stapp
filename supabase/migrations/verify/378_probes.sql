@@ -37,7 +37,7 @@ CREATE TEMP TABLE _ctx (
 );
 
 -- Expects pagar_comisiones to fail with COMISION_ERROR:<code>; records OK: <message> when it does.
-CREATE PROCEDURE pg_temp.probe_err(p_orden INT, p_probe TEXT, p_code TEXT, p_org TEXT, p_usr TEXT, p_benef TEXT, p_filas JSONB)
+CREATE FUNCTION pg_temp.probe_err(p_orden INT, p_probe TEXT, p_code TEXT, p_org TEXT, p_usr TEXT, p_benef TEXT, p_filas JSONB) RETURNS void
 LANGUAGE plpgsql AS $$
 DECLARE v_msg TEXT;
 BEGIN
@@ -101,22 +101,22 @@ INSERT INTO _r SELECT 2, 'fixture: fila ORDEN devengada y sin pagar encontrada',
   CASE WHEN EXISTS (SELECT 1 FROM _ctx) THEN 'true' ELSE 'SALTEADO: la base no tiene una orden devengada sin pagar con admin' END;
 
 -- ── 3-8. Refusals ──────────────────────────────────────────────────────────
-CALL pg_temp.probe_err(3, 'NO_AUTORIZADO: usuario no admin de la org', 'NO_AUTORIZADO',
+SELECT pg_temp.probe_err(3, 'NO_AUTORIZADO: usuario no admin de la org', 'NO_AUTORIZADO',
   (SELECT org FROM _ctx), (SELECT no_admin FROM _ctx), (SELECT benef FROM _ctx),
   (SELECT jsonb_build_array(jsonb_build_object('clave', clave, 'monto', monto)) FROM _ctx));
 
-CALL pg_temp.probe_err(4, 'NO_AUTORIZADO: admin de otra organizacion', 'NO_AUTORIZADO',
+SELECT pg_temp.probe_err(4, 'NO_AUTORIZADO: admin de otra organizacion', 'NO_AUTORIZADO',
   (SELECT org FROM _ctx), (SELECT admin_ajeno FROM _ctx), (SELECT benef FROM _ctx),
   (SELECT jsonb_build_array(jsonb_build_object('clave', clave, 'monto', monto)) FROM _ctx));
 
-CALL pg_temp.probe_err(5, 'SIN_FILAS: arreglo vacio', 'SIN_FILAS',
+SELECT pg_temp.probe_err(5, 'SIN_FILAS: arreglo vacio', 'SIN_FILAS',
   (SELECT org FROM _ctx), (SELECT admin FROM _ctx), (SELECT benef FROM _ctx), '[]'::jsonb);
 
-CALL pg_temp.probe_err(6, 'FILA_DUPLICADA: la misma clave dos veces', 'FILA_DUPLICADA',
+SELECT pg_temp.probe_err(6, 'FILA_DUPLICADA: la misma clave dos veces', 'FILA_DUPLICADA',
   (SELECT org FROM _ctx), (SELECT admin FROM _ctx), (SELECT benef FROM _ctx),
   (SELECT jsonb_build_array(jsonb_build_object('clave', clave, 'monto', monto), jsonb_build_object('clave', clave, 'monto', monto)) FROM _ctx));
 
-CALL pg_temp.probe_err(7, 'MONTO_DISTINTO: monto pedido distinto al de la definicion', 'MONTO_DISTINTO',
+SELECT pg_temp.probe_err(7, 'MONTO_DISTINTO: monto pedido distinto al de la definicion', 'MONTO_DISTINTO',
   (SELECT org FROM _ctx), (SELECT admin FROM _ctx), (SELECT benef FROM _ctx),
   (SELECT jsonb_build_array(jsonb_build_object('clave', clave, 'monto', monto + 0.01)) FROM _ctx));
 
@@ -125,11 +125,11 @@ INSERT INTO _r SELECT 8, 'MONTO_DISTINTO no escribio ningun pago', '0',
        THEN (SELECT (COUNT(*) - (SELECT pagos_antes FROM _ctx))::TEXT FROM comisiones_pagos WHERE organization_id = (SELECT org FROM _ctx))
        ELSE 'SALTEADO: sin fila que sirva' END;
 
-CALL pg_temp.probe_err(9, 'OTRO_BENEFICIARIO: la fila es de otro usuario', 'OTRO_BENEFICIARIO',
+SELECT pg_temp.probe_err(9, 'OTRO_BENEFICIARIO: la fila es de otro usuario', 'OTRO_BENEFICIARIO',
   (SELECT org FROM _ctx), (SELECT admin FROM _ctx), (SELECT otro FROM _ctx),
   (SELECT jsonb_build_array(jsonb_build_object('clave', clave, 'monto', monto)) FROM _ctx));
 
-CALL pg_temp.probe_err(10, 'FILA_NO_DISPONIBLE: orden que no esta devengada', 'FILA_NO_DISPONIBLE',
+SELECT pg_temp.probe_err(10, 'FILA_NO_DISPONIBLE: orden que no esta devengada', 'FILA_NO_DISPONIBLE',
   (SELECT org FROM _ctx), (SELECT admin FROM _ctx), (SELECT benef FROM _ctx),
   (SELECT jsonb_build_array(jsonb_build_object('clave', clave_no_dev, 'monto', 1)) FROM _ctx WHERE clave_no_dev IS NOT NULL));
 
@@ -158,7 +158,7 @@ BEGIN
   INSERT INTO _r VALUES (11, 'pago de una orden: item = fila, pagado, flag, fecha', 'total=true / filas=1 / item=1 / pagado=true / flag=true / fecha=true / notas=probe 378', v_ok);
 END $$;
 
-CALL pg_temp.probe_err(12, 'FILA_YA_PAGADA: la misma fila otra vez', 'FILA_YA_PAGADA',
+SELECT pg_temp.probe_err(12, 'FILA_YA_PAGADA: la misma fila otra vez', 'FILA_YA_PAGADA',
   (SELECT org FROM _ctx WHERE pago_id IS NOT NULL), (SELECT admin FROM _ctx), (SELECT benef FROM _ctx),
   (SELECT jsonb_build_array(jsonb_build_object('clave', clave, 'monto', monto)) FROM _ctx));
 
