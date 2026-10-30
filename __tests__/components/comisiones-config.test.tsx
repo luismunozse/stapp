@@ -43,6 +43,7 @@ describe("ComisionesConfig", () => {
     ).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: /Al entregar la orden y tenerla cobrada por completo/ })).toBeChecked()
     expect(screen.getByText(/un cambio no modifica órdenes ya recibidas/)).toBeInTheDocument()
+    expect(screen.getByText(/También se aplica a los administradores que reciben equipos\./)).toBeInTheDocument()
     expect(screen.getByLabelText("Porcentaje de recepción por defecto")).toHaveValue(0)
     expect(screen.getByRole("checkbox", { name: /Los reingresos por garantía generan comisión/ })).not.toBeChecked()
     expect(

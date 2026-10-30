@@ -250,7 +250,7 @@ export function ComisionesConfig({ allowEdit }: { allowEdit: boolean }) {
           <p id="comision-recepcion-ayuda" className="text-xs text-muted-foreground">
             Se aplica a quien recibe un equipo y no tiene un porcentaje de recepción propio. Con 0, la recepción no
             genera comisión. Cada orden guarda el porcentaje vigente al recibirla: un cambio no modifica órdenes ya
-            recibidas.
+            recibidas. También se aplica a los administradores que reciben equipos.
           </p>
         </div>
 
