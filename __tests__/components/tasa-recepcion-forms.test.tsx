@@ -124,7 +124,7 @@ describe("reception rate in the person forms", () => {
 describe("technician form never zeroes a rate or an hourly cost by accident", () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  const rate = () => screen.getByLabelText("% Comisión sobre ganancia") as HTMLInputElement
+  const rate = () => screen.getByLabelText("% Comisión como técnico") as HTMLInputElement
   const puts = (fetchMock: ReturnType<typeof stubApi>) =>
     fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")
 

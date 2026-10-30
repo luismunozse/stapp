@@ -283,7 +283,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="porcentajeComision">% Comisión sobre ganancia</Label>
+              <Label htmlFor="porcentajeComision">% Comisión como técnico</Label>
               <Input
                 id="porcentajeComision"
                 type="number"
@@ -295,7 +295,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
                 placeholder="0"
               />
               <p className="text-[11px] text-muted-foreground">
-                Sobre (costo final − repuestos) de cada orden.
+                Sobre la base que elige el taller en Configuración › Comisiones (por defecto, la mano de obra: monto de la orden menos repuestos).
               </p>
             </div>
             <div className="space-y-2">
