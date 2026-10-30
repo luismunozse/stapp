@@ -45,10 +45,12 @@ CREATE TEMP TABLE _ctx (
 -- Sale fixture, independent of the order fixture (any org with an active admin).
 CREATE TEMP TABLE _cv (org TEXT, clave TEXT, doc_id TEXT, benef TEXT, monto NUMERIC, admin TEXT);
 
--- Return fixture: COMPLETADA sale with exactly one effective return, a seller, an accrued unpaid
--- commission whose return adjustment is non-zero, no live invoice / remito, no payout items.
+-- Return fixture, independent of the seller's real rate and of the live commission row (as in
+-- verify/377_probes.sql): COMPLETADA sale with a seller (a non-deleted user of the org) and an org
+-- with a non-deleted ADMIN, total > 0, exactly one effective return whose 5% adjustment is non-zero,
+-- no live invoice / remito, no payout items. P1 is inserted by hand at a fixed 5%.
 CREATE TEMP TABLE _cw (
-  org TEXT, clave TEXT, doc_id TEXT, benef TEXT, monto NUMERIC, base NUMERIC, pct NUMERIC, devengo TIMESTAMPTZ,
+  org TEXT, doc_id TEXT, benef TEXT, base NUMERIC, pct NUMERIC, monto NUMERIC,
   admin TEXT, dev_id TEXT, dev_at TIMESTAMPTZ, aj_esperado NUMERIC
 );
 
@@ -125,25 +127,26 @@ SELECT f.organization_id, f.clave, f.documento_id, f.beneficiario_id, f.monto,
  ORDER BY EXISTS (SELECT 1 FROM items_venta iv WHERE iv.venta_id = v.id AND iv.inventario_id IS NOT NULL), f.clave
  LIMIT 1;
 
-INSERT INTO _cw (org, clave, doc_id, benef, monto, base, pct, devengo, admin, dev_id, dev_at, aj_esperado)
-SELECT f.organization_id, f.clave, f.documento_id, f.beneficiario_id, f.monto, f.base, f.porcentaje, f.fecha_devengo,
-       (SELECT u.id FROM users u WHERE u.organization_id = f.organization_id AND u.rol = 'ADMIN' AND u.deleted_at IS NULL ORDER BY u.id LIMIT 1),
+INSERT INTO _cw (org, doc_id, benef, base, pct, monto, admin, dev_id, dev_at, aj_esperado)
+SELECT v.organization_id, v.id, v.vendedor_id, COALESCE(v.iva_neto, v.total), 5,
+       ROUND(COALESCE(v.iva_neto, v.total) * 5 / 100, 2),
+       (SELECT u.id FROM users u WHERE u.organization_id = v.organization_id AND u.rol = 'ADMIN' AND u.deleted_at IS NULL ORDER BY u.id LIMIT 1),
        d.id, d.created_at,
-       -ROUND(COALESCE(v.iva_neto, v.total) * d.monto_devolucion / v.total * f.porcentaje / 100, 2)
-  FROM v_comisiones_devengadas f
-  JOIN ventas v ON v.id = f.documento_id AND v.organization_id = f.organization_id
+       -ROUND(COALESCE(v.iva_neto, v.total) * d.monto_devolucion / v.total * 5 / 100, 2)
+  FROM ventas v
   JOIN devoluciones_venta d ON d.venta_id = v.id
- WHERE f.documento_tipo = 'VENTA' AND f.rol = 'VENDEDOR' AND f.tipo = 'ORIGINAL'
-   AND NOT f.pagado AND f.monto > 0 AND NOT COALESCE(v.comision_pagada, false)
-   AND v.estado = 'COMPLETADA' AND v.vendedor_id IS NOT NULL AND v.total > 0
+ WHERE v.estado = 'COMPLETADA' AND v.vendedor_id IS NOT NULL AND v.total > 0
    AND d.estado = 'COMPLETADA' AND NOT d.anulada
    AND (SELECT COUNT(*) FROM devoluciones_venta d2 WHERE d2.venta_id = v.id) = 1
-   AND ROUND(COALESCE(v.iva_neto, v.total) * d.monto_devolucion / v.total * f.porcentaje / 100, 2) > 0
+   AND ROUND(COALESCE(v.iva_neto, v.total) * d.monto_devolucion / v.total * 5 / 100, 2) > 0
+   AND ROUND(COALESCE(v.iva_neto, v.total) * 5 / 100, 2) > 0
+   AND EXISTS (SELECT 1 FROM users u WHERE u.id = v.vendedor_id AND u.organization_id = v.organization_id AND u.deleted_at IS NULL)
+   AND EXISTS (SELECT 1 FROM users u WHERE u.organization_id = v.organization_id AND u.rol = 'ADMIN' AND u.deleted_at IS NULL)
+   AND v.id NOT IN (SELECT doc_id FROM _cv)
    AND NOT EXISTS (SELECT 1 FROM comprobantes_fiscales cf WHERE cf.venta_id = v.id AND cf.estado IN ('pendiente', 'emitido'))
    AND NOT EXISTS (SELECT 1 FROM facturas fa WHERE fa.venta_id = v.id AND fa.estado_pago::text <> 'ANULADA')
    AND NOT EXISTS (SELECT 1 FROM comisiones_pagos_items i WHERE i.organization_id = v.organization_id AND i.documento_tipo = 'VENTA' AND i.documento_id = v.id)
-   AND EXISTS (SELECT 1 FROM users u WHERE u.organization_id = f.organization_id AND u.rol = 'ADMIN' AND u.deleted_at IS NULL)
- ORDER BY EXISTS (SELECT 1 FROM items_venta iv WHERE iv.venta_id = v.id AND iv.inventario_id IS NOT NULL), f.clave
+ ORDER BY EXISTS (SELECT 1 FROM items_venta iv WHERE iv.venta_id = v.id AND iv.inventario_id IS NOT NULL), d.created_at DESC
  LIMIT 1;
 
 -- ── 1. Shape and privileges (always runs) ──────────────────────────────────
@@ -313,7 +316,7 @@ BEGIN
   VALUES (c.org, c.benef, c.dev_at - interval '1 day', c.admin, c.monto, 'APP')
   RETURNING id INTO v_p1;
   INSERT INTO comisiones_pagos_items (pago_id, organization_id, documento_tipo, documento_id, rol, tipo, base, porcentaje, monto, fecha_devengo)
-  VALUES (v_p1, c.org, 'VENTA', c.doc_id, 'VENDEDOR', 'ORIGINAL', c.base, c.pct, c.monto, c.devengo);
+  VALUES (v_p1, c.org, 'VENTA', c.doc_id, 'VENDEDOR', 'ORIGINAL', c.base, c.pct, c.monto, c.dev_at - interval '1 day');
   PERFORM comisiones_sincronizar_flags(c.org, 'VENTA', ARRAY[c.doc_id]);
 
   SELECT d.clave, d.monto INTO v_clave_dev, v_monto_dev

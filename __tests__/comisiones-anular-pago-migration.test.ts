@@ -32,6 +32,10 @@ describe("379: probes", () => {
     expect(probes()).toContain("SET LOCAL ROLE service_role"); expect(probes()).toContain("RESET ROLE")
     expect(probes()).toContain("AJUSTE_DEVOLUCION"); expect(probes()).toContain("devoluciones_venta")
     expect(probes()).toContain("c.dev_at - interval '1 day'")
+    // the chain fixture does not depend on the seller's real rate: fixed 5%, and never the sale of probes 7-11
+    expect(probes()).toContain("* 5 / 100")
+    expect(probes()).toContain("v.id NOT IN (SELECT doc_id FROM _cv)")
+    expect(probes()).not.toContain("f.porcentaje")
     expect(probes()).toMatch(/COUNT\(DISTINCT orden\)/)
   })
   it("cover annul, re-annul, reason, the adjustment guard via a sale annulled after payment", () => {
