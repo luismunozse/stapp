@@ -1331,7 +1331,9 @@ git commit -m "test(comisiones): sweep that only the definition computes commiss
 4. Dry-run `backfill/377_backfill_comisiones_pagos.sql`; the user reads `[2]`–`[5]`; then `--apply`. Re-run the audit: `[3]` empty.
 5. Apply 378 and 379; run both probe files.
 6. Merge the app tracker (PRs 6–12) to main. Old routes kept flipping flags until this deploy.
-7. Immediately re-run the backfill (`--apply`; idempotent: picks up documents paid by the old routes in the window) and the audit; a `[3]` row of the "item without flag" kind is an unpay done by an old route in the window: annul that payout from the new UI.
+7. Immediately re-run the backfill (`--apply`; idempotent: picks up documents paid by the old routes in the window) and the audit; a `[3]` row of the "item without flag" kind is an unpay done by an old route in the window. Do NOT annul a BACKFILL payout to fix it: a BACKFILL payout groups several documents (beneficiary + org-timezone day + notes), so annulling it un-pays documents that were legitimately paid. Remediate by case:
+   - No APP payout and no annulment exists yet (nothing was paid or annulled through the new RPCs): `DELETE FROM comisiones_pagos WHERE origen = 'BACKFILL'` (its items go with it: `comisiones_pagos_items.pago_id` is `ON DELETE CASCADE` in 376), re-run the backfill, re-run the audit.
+   - Otherwise: annul only a payout with a single item. For a multi-item payout, annul it and re-pay its other rows from the new UI; they come back at live amounts, not the frozen ones.
 8. Legacy views `v_comisiones_ordenes`/`v_comisiones_ventas` stay (no app reader; the sweep forbids new ones) until the later cleanup.
 
 ## Self-review notes
