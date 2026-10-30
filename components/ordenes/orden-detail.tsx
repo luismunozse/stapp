@@ -72,6 +72,7 @@ import { dateOnlyToNoonUtcISO, todayInTimeZone } from "@/lib/timezone"
 import { OrdenTecnicoCard } from "@/components/ordenes/orden-tecnico-card"
 import { OrdenCostosCard } from "@/components/ordenes/orden-costos-card"
 import { OrdenComisionCard } from "@/components/ordenes/orden-comision-card"
+import { commissionCardVersion } from "@/lib/commissions/card-version"
 import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
 import { OrdenServiciosTab } from "@/components/ordenes/orden-servicios-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
@@ -1282,12 +1283,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             <OrdenComisionCard
               ordenId={orden.id}
               tecnicoId={orden.tecnicoId}
-              costoFinal={orden.costoFinal}
-              repuestos={(orden as any).repuestos || []}
-              costoRepuestosExtra={(orden as any).costoRepuestosCotizaciones || 0}
               porcentajeComision={(orden as any).porcentajeComision}
-              comisionPagada={(orden as any).comisionPagada}
-              fechaPagoComision={(orden as any).fechaPagoComision}
+              version={commissionCardVersion({ ...orden, repuestos: (orden as any).repuestos })}
               horasTrabajadas={(orden as any).horasTrabajadas || 0}
               onUpdateField={handleUpdateField}
             />
@@ -1338,12 +1335,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           <OrdenComisionCard
             ordenId={orden.id}
             tecnicoId={orden.tecnicoId}
-            costoFinal={orden.costoFinal}
-            repuestos={(orden as any).repuestos || []}
-            costoRepuestosExtra={(orden as any).costoRepuestosCotizaciones || 0}
             porcentajeComision={(orden as any).porcentajeComision}
-            comisionPagada={(orden as any).comisionPagada}
-            fechaPagoComision={(orden as any).fechaPagoComision}
+            version={commissionCardVersion({ ...orden, repuestos: (orden as any).repuestos })}
             horasTrabajadas={(orden as any).horasTrabajadas || 0}
             onUpdateField={handleUpdateField}
           />

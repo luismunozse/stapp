@@ -28,9 +28,16 @@ import { useModal } from "@/contexts/modal-context"
 import { cn } from "@/lib/utils"
 import { EmptyState } from "@/components/ui/empty-state"
 import { FieldSectionLabel } from "@/components/ui/field-section-label"
+import { AnularPagoDialog } from "@/components/comisiones/anular-pago-dialog"
+import { COMMISSION_KIND_LABEL, type CommissionKind } from "@/lib/commissions/types"
+import { round2 } from "@/lib/precios"
 
 interface Item {
-  ordenId: string
+  clave: string
+  ordenId: string | null
+  rol: string
+  tipo: CommissionKind
+  pagoId: string | null
   tecnicoId: string
   tecnicoNombre: string
   codigoOrden: string | null
@@ -59,7 +66,11 @@ interface ApiResp {
   }>
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
+const fetcher = async (url: string) => {
+  const r = await fetch(url)
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json()
+}
 
 function toISODate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
@@ -113,12 +124,13 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
   const [hasta, setHasta] = useState(initial.hasta)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [paying, setPaying] = useState(false)
+  const [anular, setAnular] = useState<{ pagoId: string | null; fecha: string | null } | null>(null)
 
   const qs = new URLSearchParams({ tecnicoId })
   if (desde) qs.set("desde", desde)
   if (hasta) qs.set("hasta", hasta + "T23:59:59")
 
-  const { data, isLoading, mutate } = useSWR<ApiResp>(
+  const { data, isLoading, error, mutate } = useSWR<ApiResp>(
     `/api/comisiones?${qs.toString()}`,
     fetcher,
     { revalidateOnFocus: false }
@@ -139,7 +151,9 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
   const ticketPromedio = items.length ? totalGanancia / items.length : 0
   const comisionPromedio = items.length ? totalComision / items.length : 0
 
-  const pendientesIds = pendientes.map((i) => i.ordenId)
+  // A zero-amount row can be listed but never paid.
+  const pagable = (i: Item) => !i.comisionPagada && i.montoComision !== 0
+  const pendientesIds = pendientes.filter(pagable).map((i) => i.clave)
   const allSelected =
     pendientesIds.length > 0 && pendientesIds.every((id) => selected.has(id))
 
@@ -154,9 +168,15 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
     setSelected(next)
   }
 
-  const totalSeleccionado = items
-    .filter((i) => selected.has(i.ordenId))
-    .reduce((acc, i) => acc + i.montoComision, 0)
+  const selectedItems = items.filter((i) => selected.has(i.clave) && pagable(i))
+
+  const selectLabel = (i: Item) => {
+    const kind = COMMISSION_KIND_LABEL[i.tipo]
+    const doc = i.codigoOrden || (i.numeroOrden != null ? `#${i.numeroOrden}` : "")
+    return `Seleccionar comisión ${doc}${kind ? (doc ? ` (${kind})` : kind) : ""}`.trim()
+  }
+
+  const totalSeleccionado = round2(selectedItems.reduce((acc, i) => acc + i.montoComision, 0))
 
   const applyPreset = (p: Preset) => {
     setPreset(p)
@@ -168,10 +188,13 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
   }
 
   const handlePagar = async () => {
-    if (selected.size === 0) return
+    if (selectedItems.length === 0) return
     const ok = await confirm({
       title: "Liquidar comisiones",
-      description: `¿Marcar ${selected.size} orden(es) como comisión pagada a ${tecnicoNombre}? Total: ${formatPrice(totalSeleccionado)}`,
+      description:
+        totalSeleccionado < 0
+          ? `El total es negativo (${formatPrice(totalSeleccionado)}): se registra como descuento a favor del taller. ¿Confirmás?`
+          : `¿Marcar ${selectedItems.length} comisión(es) como pagadas a ${tecnicoNombre}? Total: ${formatPrice(totalSeleccionado)}`,
       confirmText: "Confirmar pago",
       variant: "info",
     })
@@ -181,9 +204,17 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
       const res = await fetch("/api/comisiones/pagar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ordenIds: Array.from(selected) }),
+        body: JSON.stringify({
+          beneficiarioId: tecnicoId,
+          filas: selectedItems.map((r) => ({ clave: r.clave, monto: r.montoComision })),
+        }),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        toast.error(body?.error ?? "No se pudo liquidar")
+        mutate()
+        return
+      }
       toast.success("Comisiones liquidadas")
       setSelected(new Set())
       mutate()
@@ -194,26 +225,9 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
     }
   }
 
-  const handleRevertir = async (ordenId: string) => {
-    const ok = await confirm({
-      title: "Revertir pago",
-      description: "¿Marcar esta comisión como pendiente nuevamente?",
-      confirmText: "Revertir",
-      variant: "danger",
-    })
-    if (!ok) return
-    try {
-      const res = await fetch("/api/comisiones/pagar", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ordenIds: [ordenId] }),
-      })
-      if (!res.ok) throw new Error()
-      toast.success("Revertido")
-      mutate()
-    } catch {
-      toast.error("No se pudo revertir")
-    }
+  const handleAnulado = () => {
+    setSelected(new Set())
+    mutate()
   }
 
   const exportCSV = () => {
@@ -243,18 +257,24 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
     URL.revokeObjectURL(url)
   }
 
-  // Historial de pagos: agrupar pagadas por fecha_pago_comision (día)
+  // Payment history: paid rows grouped by payout, labelled with the payout day
   const pagosAgrupados = useMemo(() => {
-    const map = new Map<string, { fecha: string; total: number; ordenes: Item[] }>()
+    const map = new Map<string, { pagoId: string; fecha: string; total: number; ordenes: Item[] }>()
     for (const i of pagadas) {
-      if (!i.fechaPagoComision) continue
-      const k = i.fechaPagoComision.slice(0, 10)
-      const cur = map.get(k) || { fecha: k, total: 0, ordenes: [] }
+      if (!i.pagoId || !i.fechaPagoComision) continue
+      const cur = map.get(i.pagoId) || {
+        pagoId: i.pagoId,
+        fecha: i.fechaPagoComision.slice(0, 10),
+        total: 0,
+        ordenes: [],
+      }
       cur.total += i.montoComision
       cur.ordenes.push(i)
-      map.set(k, cur)
+      map.set(i.pagoId, cur)
     }
-    return Array.from(map.values()).sort((a, b) => (a.fecha < b.fecha ? 1 : -1))
+    return Array.from(map.values())
+      .map((p) => ({ ...p, total: round2(p.total) }))
+      .sort((a, b) => (a.fecha < b.fecha ? 1 : -1))
   }, [pagadas])
 
   const presetBtn = (p: Preset, label: string) => (
@@ -311,6 +331,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
       </div>
 
       {/* KPIs */}
+      {!error && (
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={Wallet}
@@ -341,12 +362,13 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
           tone="default"
         />
       </div>
+      )}
 
       {/* Barra de acción para selección */}
-      {!readOnly && selected.size > 0 && (
+      {!readOnly && selectedItems.length > 0 && (
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 p-3 rounded-md bg-info-50 border border-info/30">
           <div className="text-sm text-info-700">
-            <strong>{selected.size}</strong> seleccionada(s) · Total a pagar:{" "}
+            <strong>{selectedItems.length}</strong> seleccionada(s) · Total a pagar:{" "}
             <strong>{formatPrice(totalSeleccionado)}</strong>
           </div>
           <div className="flex gap-2">
@@ -372,12 +394,16 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
             <div className="py-12 text-center text-muted-foreground flex items-center justify-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" /> Cargando comisiones…
             </div>
+          ) : error ? (
+            <div role="alert" className="py-12 text-center text-sm text-destructive">
+              No se pudieron cargar las comisiones.
+            </div>
           ) : items.length === 0 ? (
             <EmptyState icon={Hash} title="Sin órdenes" variant="search" />
           ) : (
             <>
               {/* Barra de selección todas pendientes */}
-              {!readOnly && pendientes.length > 0 && (
+              {!readOnly && pendientesIds.length > 0 && (
                 <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted/30">
                   <input
                     type="checkbox"
@@ -386,7 +412,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                     onChange={toggleAll}
                   />
                   <span className="text-xs text-muted-foreground">
-                    Seleccionar {pendientes.length} pendiente(s) ({formatPrice(totalPendiente)})
+                    Seleccionar {pendientesIds.length} pendiente(s) ({formatPrice(totalPendiente)})
                   </span>
                 </div>
               )}
@@ -394,7 +420,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
               <div className="divide-y">
                 {items.map((i) => (
                   <div
-                    key={i.ordenId}
+                    key={i.clave}
                     className={cn(
                       "flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors",
                       i.comisionPagada && "opacity-70"
@@ -405,8 +431,10 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-primary"
-                          checked={selected.has(i.ordenId)}
-                          onChange={() => toggleOne(i.ordenId)}
+                          aria-label={selectLabel(i)}
+                          checked={selected.has(i.clave)}
+                          onChange={() => toggleOne(i.clave)}
+                          disabled={!pagable(i)}
                         />
                       )}
                     </div>
@@ -414,13 +442,24 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                     <div className="flex-1 min-w-0 grid grid-cols-12 gap-2 items-center">
                       {/* Orden + dispositivo */}
                       <div className="col-span-12 sm:col-span-4 min-w-0">
-                        <Link
-                          href={`/ordenes/${i.ordenId}`}
-                          className="inline-flex items-center gap-1 font-medium text-sm text-primary hover:underline"
-                        >
-                          {i.codigoOrden || `#${i.numeroOrden}`}
-                          <ExternalLink className="h-3 w-3" />
-                        </Link>
+                        <div className="flex items-center gap-1.5">
+                          {i.ordenId ? (
+                            <Link
+                              href={`/ordenes/${i.ordenId}`}
+                              className="inline-flex items-center gap-1 font-medium text-sm text-primary hover:underline"
+                            >
+                              {i.codigoOrden || `#${i.numeroOrden}`}
+                              <ExternalLink className="h-3 w-3" />
+                            </Link>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                          {COMMISSION_KIND_LABEL[i.tipo] && (
+                            <Badge variant="secondary" className="text-[10px] shrink-0">
+                              {COMMISSION_KIND_LABEL[i.tipo]}
+                            </Badge>
+                          )}
+                        </div>
                         <div className="text-sm truncate">{i.dispositivo}</div>
                         <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
                           <CalIcon className="h-3 w-3" />
@@ -468,7 +507,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                             </span>
                           ) : (
                             <button
-                              onClick={() => handleRevertir(i.ordenId)}
+                              onClick={() => setAnular({ pagoId: i.pagoId, fecha: i.fechaPagoComision })}
                               className="inline-flex items-center gap-1 text-[10px] text-success-700 dark:text-success-500 hover:underline"
                               title={i.fechaPagoComision ? `Pagada ${formatDate(i.fechaPagoComision)}` : ""}
                             >
@@ -500,7 +539,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
           </FieldSectionLabel>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {pagosAgrupados.map((p) => (
-              <Card key={p.fecha}>
+              <Card key={p.pagoId}>
                 <CardContent className="p-3">
                   <div className="flex justify-between items-start">
                     <div>
@@ -517,6 +556,17 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
           </div>
         </div>
       )}
+
+      <AnularPagoDialog
+        open={anular !== null}
+        onOpenChange={(o) => {
+          if (!o) setAnular(null)
+        }}
+        pagoId={anular?.pagoId ?? null}
+        fechaPago={anular?.fecha ?? null}
+        endpoint="/api/comisiones/pagar"
+        onAnulado={handleAnulado}
+      />
     </div>
   )
 }
