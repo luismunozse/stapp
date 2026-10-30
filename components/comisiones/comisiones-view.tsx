@@ -20,9 +20,16 @@ import { toast } from "sonner"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { EmptyState } from "@/components/ui/empty-state"
+import { AnularPagoDialog } from "@/components/comisiones/anular-pago-dialog"
+import { COMMISSION_KIND_LABEL, type CommissionKind } from "@/lib/commissions/types"
+import { round2 } from "@/lib/precios"
 
 interface Item {
-  ordenId: string
+  clave: string
+  ordenId: string | null
+  rol: string
+  tipo: CommissionKind
+  pagoId: string | null
   tecnicoId: string
   tecnicoNombre: string
   codigoOrden: string | null
@@ -93,6 +100,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
   const [hasta, setHasta] = useState(semana.hasta)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [paying, setPaying] = useState(false)
+  const [anular, setAnular] = useState<{ pagoId: string | null; fecha: string | null } | null>(null)
 
   const { data: tecnicos = [] } = useSWR<Tecnico[]>(
     tecnicoIdFijo ? null : "/api/tecnicos",
@@ -120,7 +128,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
   const items = data?.items || []
   const resumen = data?.resumen || []
 
-  const pendientesIds = items.filter((i) => !i.comisionPagada).map((i) => i.ordenId)
+  const pendientesIds = items.filter((i) => !i.comisionPagada).map((i) => i.clave)
   const allSelected =
     pendientesIds.length > 0 && pendientesIds.every((id) => selected.has(id))
 
@@ -132,22 +140,22 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
     }
   }
 
-  const toggleOne = (id: string) => {
+  const toggleOne = (clave: string) => {
     const next = new Set(selected)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
+    if (next.has(clave)) next.delete(clave)
+    else next.add(clave)
     setSelected(next)
   }
 
-  const totalSeleccionado = items
-    .filter((i) => selected.has(i.ordenId))
-    .reduce((acc, i) => acc + i.montoComision, 0)
+  const selectedItems = items.filter((i) => selected.has(i.clave))
+  const totalSeleccionado = round2(selectedItems.reduce((acc, i) => acc + i.montoComision, 0))
+  const mixedPeople = new Set(selectedItems.map((i) => i.tecnicoId)).size > 1
 
   const handlePagar = async () => {
-    if (selected.size === 0) return
+    if (selectedItems.length === 0 || mixedPeople) return
     const ok = await confirm({
       title: "Pagar comisiones",
-      description: `¿Marcar ${selected.size} órden(es) como comisión pagada? Total: ${formatPrice(totalSeleccionado)}`,
+      description: `¿Marcar ${selectedItems.length} comisión(es) como pagadas? Total: ${formatPrice(totalSeleccionado)}`,
       confirmText: "Confirmar pago",
       variant: "info",
     })
@@ -158,39 +166,48 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
       const res = await fetch("/api/comisiones/pagar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ordenIds: Array.from(selected) }),
+        body: JSON.stringify({
+          beneficiarioId: selectedItems[0].tecnicoId,
+          filas: selectedItems.map((r) => ({ clave: r.clave, monto: r.montoComision })),
+        }),
       })
-      if (!res.ok) throw new Error("Error al pagar")
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        toast.error(body?.error ?? "No se pudo marcar como pagadas")
+        mutate()
+        return
+      }
       toast.success("Comisiones marcadas como pagadas")
       setSelected(new Set())
       mutate()
-    } catch (err) {
+    } catch {
       toast.error("No se pudo marcar como pagadas")
     } finally {
       setPaying(false)
     }
   }
 
-  const handleRevertir = async (ordenId: string) => {
-    const ok = await confirm({
-      title: "Revertir pago",
-      description: "¿Marcar esta comisión como pendiente nuevamente?",
-      confirmText: "Revertir",
-      variant: "danger",
-    })
-    if (!ok) return
-    try {
-      const res = await fetch("/api/comisiones/pagar", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ordenIds: [ordenId] }),
-      })
-      if (!res.ok) throw new Error()
-      toast.success("Revertido")
-      mutate()
-    } catch {
-      toast.error("No se pudo revertir")
-    }
+  const handleAnulado = () => {
+    setSelected(new Set())
+    mutate()
+  }
+
+  const orderLink = (i: Item, className: string) =>
+    i.ordenId ? (
+      <Link href={`/ordenes/${i.ordenId}`} className={className}>
+        {i.codigoOrden || `#${i.numeroOrden}`}
+      </Link>
+    ) : (
+      <span className="text-muted-foreground">—</span>
+    )
+
+  const kindBadge = (i: Item) => {
+    const label = COMMISSION_KIND_LABEL[i.tipo]
+    return label ? (
+      <Badge variant="secondary" className="text-[10px] shrink-0">
+        {label}
+      </Badge>
+    ) : null
   }
 
   const setSemanaActual = () => {
@@ -289,13 +306,18 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
       )}
 
       {/* Acciones bulk */}
-      {selected.size > 0 && (
+      {selectedItems.length > 0 && (
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 p-3 rounded-md bg-info-50 border border-info/30">
           <div className="text-sm text-info-700">
-            <strong>{selected.size}</strong> seleccionada(s) ·{" "}
+            <strong>{selectedItems.length}</strong> seleccionada(s) ·{" "}
             Total: <strong>{formatPrice(totalSeleccionado)}</strong>
+            {mixedPeople && (
+              <div className="text-xs mt-0.5">
+                Elegí comisiones de una sola persona para pagarlas juntas.
+              </div>
+            )}
           </div>
-          <Button onClick={handlePagar} disabled={paying}>
+          <Button onClick={handlePagar} disabled={paying || mixedPeople}>
             {paying ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
@@ -329,6 +351,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                     <input
                       type="checkbox"
                       className="h-4 w-4 accent-primary"
+                      aria-label="Seleccionar todas las pendientes"
                       checked={allSelected}
                       onChange={toggleAll}
                       disabled={pendientesIds.length === 0}
@@ -348,21 +371,23 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
               </thead>
               <tbody>
                 {items.map((i) => (
-                  <tr key={i.ordenId} className="border-t hover:bg-muted/30">
+                  <tr key={i.clave} className="border-t hover:bg-muted/30">
                     <td className="p-2">
                       {!i.comisionPagada && (
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-primary"
-                          checked={selected.has(i.ordenId)}
-                          onChange={() => toggleOne(i.ordenId)}
+                          aria-label={`Seleccionar comisión ${i.clave}`}
+                          checked={selected.has(i.clave)}
+                          onChange={() => toggleOne(i.clave)}
                         />
                       )}
                     </td>
                     <td className="p-2">
-                      <Link href={`/ordenes/${i.ordenId}`} className="text-primary hover:underline">
-                        {i.codigoOrden || `#${i.numeroOrden}`}
-                      </Link>
+                      <div className="flex items-center gap-1.5">
+                        {orderLink(i, "text-primary hover:underline")}
+                        {kindBadge(i)}
+                      </div>
                     </td>
                     <td className="p-2">{i.tecnicoNombre}</td>
                     <td className="p-2">{i.dispositivo}</td>
@@ -384,7 +409,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                     <td className="p-2">
                       {i.comisionPagada ? (
                         <button
-                          onClick={() => handleRevertir(i.ordenId)}
+                          onClick={() => setAnular({ pagoId: i.pagoId, fecha: i.fechaPagoComision })}
                           className="inline-flex items-center gap-1 text-xs text-success-700 dark:text-success-500 hover:underline"
                         >
                           <CheckCircle2 className="h-3 w-3" />
@@ -403,24 +428,24 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
             {/* Mobile: cards */}
             <div className="sm:hidden divide-y">
               {items.map((i) => (
-                <div key={i.ordenId} className="p-3 space-y-2">
+                <div key={i.clave} className="p-3 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                       {!i.comisionPagada && (
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-primary shrink-0"
-                          checked={selected.has(i.ordenId)}
-                          onChange={() => toggleOne(i.ordenId)}
+                          aria-label={`Seleccionar comisión ${i.clave}`}
+                          checked={selected.has(i.clave)}
+                          onChange={() => toggleOne(i.clave)}
                         />
                       )}
-                      <Link href={`/ordenes/${i.ordenId}`} className="text-primary hover:underline font-medium truncate">
-                        {i.codigoOrden || `#${i.numeroOrden}`}
-                      </Link>
+                      {orderLink(i, "text-primary hover:underline font-medium truncate")}
+                      {kindBadge(i)}
                     </div>
                     {i.comisionPagada ? (
                       <button
-                        onClick={() => handleRevertir(i.ordenId)}
+                        onClick={() => setAnular({ pagoId: i.pagoId, fecha: i.fechaPagoComision })}
                         className="inline-flex items-center gap-1 text-xs text-success-700 dark:text-success-500 hover:underline shrink-0"
                       >
                         <CheckCircle2 className="h-3 w-3" />
@@ -453,6 +478,17 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
           )}
         </CardContent>
       </Card>
+
+      <AnularPagoDialog
+        open={anular !== null}
+        onOpenChange={(o) => {
+          if (!o) setAnular(null)
+        }}
+        pagoId={anular?.pagoId ?? null}
+        fechaPago={anular?.fecha ?? null}
+        endpoint="/api/comisiones/pagar"
+        onAnulado={handleAnulado}
+      />
     </div>
   )
 }

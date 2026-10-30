@@ -1,0 +1,114 @@
+import { describe, it, expect, vi, beforeEach } from "vitest"
+import { render, screen, waitFor, fireEvent } from "@testing-library/react"
+
+const { data, mutate } = vi.hoisted(() => ({ data: { value: null as any }, mutate: vi.fn() }))
+
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock("swr", () => ({
+  default: (key: string | null) => ({
+    data: key?.startsWith("/api/comisiones?") ? data.value : [],
+    isLoading: false,
+    mutate,
+  }),
+}))
+vi.mock("@/contexts/modal-context", () => ({ useModal: () => ({ confirm: vi.fn().mockResolvedValue(true) }) }))
+vi.mock("@/contexts/currency-context", () => ({
+  useCurrency: () => ({
+    formatPrice: (n: number) => `$${n}`,
+    formatDate: (d: string) => `fmt(${d})`,
+  }),
+}))
+
+import { toast } from "sonner"
+import { ComisionesView } from "@/components/comisiones/comisiones-view"
+
+function item(over: Record<string, unknown> = {}) {
+  return {
+    clave: "k",
+    ordenId: "o1",
+    tecnicoId: "t1",
+    tecnicoNombre: "Ana",
+    rol: "TECNICO",
+    tipo: "ORIGINAL",
+    pagoId: null,
+    pendiente: 0,
+    codigoOrden: "OR-1",
+    numeroOrden: 1,
+    dispositivo: "Equipo",
+    estado: "ENTREGADO",
+    fechaCompletado: null,
+    costoFinal: 0,
+    costoRepuestos: 0,
+    ganancia: 0,
+    porcentajeComision: 10,
+    montoComision: 0,
+    comisionPagada: false,
+    fechaPagoComision: null,
+    ...over,
+  }
+}
+
+// Desktop table and mobile cards both render in jsdom; the first match is the table one.
+const selectRow = (clave: string) =>
+  fireEvent.click(screen.getAllByLabelText(`Seleccionar comisión ${clave}`)[0])
+
+describe("ComisionesView paying and annulling payouts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("blocks paying a selection that spans two technicians", async () => {
+    data.value = { items: [item({ clave: "a", tecnicoId: "t1" }), item({ clave: "b", ordenId: "o2", tecnicoId: "t2" })], resumen: [] }
+    render(<ComisionesView />)
+    selectRow("a")
+    selectRow("b")
+    expect(screen.getByText("Elegí comisiones de una sola persona para pagarlas juntas.")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Marcar como pagadas/ })).toBeDisabled()
+  })
+
+  it("pays one technician's rows with their displayed amounts", async () => {
+    data.value = { items: [item({ clave: "a", tecnicoId: "t1", montoComision: 100 }), item({ clave: "b", ordenId: "o2", tecnicoId: "t1", montoComision: 50 })], resumen: [] }
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ pagoId: "p1", total: 150, filas: 2 }) }) as any
+    render(<ComisionesView />)
+    selectRow("a")
+    selectRow("b")
+    fireEvent.click(screen.getByRole("button", { name: /Marcar como pagadas/ }))
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    const [url, init] = (global.fetch as any).mock.calls[0]
+    expect(url).toBe("/api/comisiones/pagar")
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({
+      beneficiarioId: "t1",
+      filas: [{ clave: "a", monto: 100 }, { clave: "b", monto: 50 }],
+    })
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Comisiones marcadas como pagadas"))
+    expect(mutate).toHaveBeenCalled()
+  })
+
+  it("on 409 shows the server message and reloads", async () => {
+    const msg = "Las comisiones cambiaron desde que las viste. Actualizá y probá de nuevo."
+    data.value = { items: [item({ clave: "a", tecnicoId: "t1", montoComision: 100 })], resumen: [] }
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: msg }) }) as any
+    render(<ComisionesView />)
+    selectRow("a")
+    fireEvent.click(screen.getByRole("button", { name: /Marcar como pagadas/ }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(msg))
+    expect(mutate).toHaveBeenCalled()
+  })
+
+  it("clicking a paid row opens the annul dialog for its payout", async () => {
+    data.value = { items: [item({ clave: "a", comisionPagada: true, pagoId: "p9", fechaPagoComision: "2026-10-20T12:00:00Z" })], resumen: [] }
+    render(<ComisionesView />)
+    expect(screen.queryByText("Anular pago")).not.toBeInTheDocument()
+    fireEvent.click(screen.getAllByRole("button", { name: /Pagada/ })[0])
+    expect(await screen.findByText("Anular pago", { selector: "h2" })).toBeInTheDocument()
+  })
+
+  it("renders a dash instead of the order link when the row has no order, and badges adjustments", async () => {
+    data.value = { items: [item({ clave: "a", ordenId: null, tipo: "AJUSTE_DEVOLUCION", montoComision: -20 })], resumen: [] }
+    render(<ComisionesView />)
+    expect(screen.queryByRole("link")).not.toBeInTheDocument()
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("Devolución").length).toBeGreaterThan(0)
+  })
+})
