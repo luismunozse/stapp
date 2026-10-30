@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 
-const { data, liquidarData, mutate, showError } = vi.hoisted(() => ({
+const { data, liquidarData, mutate, showError, confirm } = vi.hoisted(() => ({
+  confirm: vi.fn(),
   data: { value: null as any },
   liquidarData: { value: null as any },
   mutate: vi.fn(),
@@ -17,7 +18,7 @@ vi.mock("swr", () => ({
   },
 }))
 vi.mock("@/contexts/modal-context", () => ({
-  useModal: () => ({ confirm: vi.fn().mockResolvedValue(true), showError }),
+  useModal: () => ({ confirm, showError }),
 }))
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({
@@ -57,6 +58,7 @@ const selectRow = (label: string) => fireEvent.click(screen.getAllByLabelText(la
 describe("ComisionesVendedoresView paying and annulling payouts", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    confirm.mockResolvedValue(true)
   })
 
   it("an adjustment row shows 'Devolución' and a negative amount, and nets the selected total", async () => {
@@ -172,6 +174,37 @@ describe("ComisionesVendedoresView paying and annulling payouts", () => {
   })
 })
 
+describe("ComisionesVendedoresView zero amounts and negative totals", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    confirm.mockResolvedValue(true)
+  })
+
+  it("lists a zero-amount row but cannot select it, and never posts it", async () => {
+    data.value = {
+      items: [item({ clave: "a", numeroVenta: 1, montoComision: 100 }), item({ clave: "z", numeroVenta: 9, ventaId: "v9", montoComision: 0 })],
+      resumen: [],
+    }
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ pagoId: "p1" }) }) as any
+    render(<ComisionesVendedoresView />)
+    expect(screen.getAllByLabelText("Seleccionar comisión #9")[0]).toBeDisabled()
+    fireEvent.click(screen.getByLabelText("Seleccionar todas las pendientes"))
+    fireEvent.click(screen.getByRole("button", { name: /Marcar como pagadas/ }))
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    expect(JSON.parse((global.fetch as any).mock.calls[0][1].body)).toEqual({ beneficiarioId: "s1", filas: [{ clave: "a", monto: 100 }] })
+  })
+
+  it("says plainly when the selected total is negative", async () => {
+    data.value = { items: [item({ clave: "n", numeroVenta: 3, tipo: "AJUSTE_DEVOLUCION", montoComision: -30 })], resumen: [] }
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ pagoId: "p1" }) }) as any
+    render(<ComisionesVendedoresView />)
+    selectRow("Seleccionar comisión #3 (Devolución)")
+    fireEvent.click(screen.getByRole("button", { name: /Marcar como pagadas/ }))
+    await waitFor(() => expect(confirm).toHaveBeenCalled())
+    expect(confirm.mock.calls[0][0].description).toBe("El total es negativo ($-30): se registra como descuento a favor del taller. ¿Confirmás?")
+  })
+})
+
 describe("LiquidarComisionesDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -213,5 +246,64 @@ describe("LiquidarComisionesDialog", () => {
     await waitFor(() => expect(showError).toHaveBeenCalledWith("cambiaron"))
     expect(mutate).toHaveBeenCalled()
     expect(onLiquidated).not.toHaveBeenCalled()
+  })
+
+  it("keeps an unticked row unticked after a 409 reloads the same rows", async () => {
+    mutate.mockImplementation(async () => {
+      liquidarData.value = structuredClone(liquidarData.value)
+    })
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: "cambiaron" }) }) as any
+    renderDialog()
+    const [rowA] = screen.getAllByRole("checkbox")
+    fireEvent.click(rowA)
+    expect(rowA).not.toBeChecked()
+    fireEvent.click(screen.getByRole("button", { name: /^Liquidar/ }))
+    await waitFor(() => expect(showError).toHaveBeenCalledWith("cambiaron"))
+    await waitFor(() => expect(mutate).toHaveBeenCalled())
+    expect(screen.getAllByRole("checkbox")[0]).not.toBeChecked()
+    expect(screen.getAllByRole("checkbox")[1]).toBeChecked()
+    mutate.mockReset()
+  })
+
+  it("preselects at most 500 rows (oldest first) and says so", async () => {
+    liquidarData.value = {
+      comisiones: Array.from({ length: 501 }, (_, i) => ({
+        clave: `r${i}`, ventaId: `v${i}`, tipo: "ORIGINAL", numeroVenta: i, clienteNombre: null,
+        // r0 is the newest, r500 the oldest
+        fecha: new Date(Date.UTC(2026, 0, 1) + (500 - i) * 86400000).toISOString(),
+        total: 100, porcentajeComision: 10, montoComision: 10, pagada: false,
+      })),
+      totales: { devengada: 5010, pagada: 0, pendiente: 5010 },
+    }
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ pagoId: "p1" }) }) as any
+    renderDialog()
+    expect(screen.getByText("500 de 501 seleccionada(s)")).toBeInTheDocument()
+    expect(screen.getByText("Se preseleccionaron solo las 500 comisiones más antiguas.")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: /^Liquidar/ }))
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    const claves = JSON.parse((global.fetch as any).mock.calls[0][1].body).filas.map((f: any) => f.clave)
+    expect(claves).toHaveLength(500)
+    expect(claves).not.toContain("r0")
+  })
+
+  it("lists a zero-amount row but cannot select it, and never posts it", async () => {
+    liquidarData.value = {
+      comisiones: [
+        { clave: "a", ventaId: "va", tipo: "ORIGINAL", numeroVenta: 1, clienteNombre: "C1", fecha: "2026-10-01", total: 1000, porcentajeComision: 10, montoComision: 100, pagada: false },
+        { clave: "z", ventaId: "vz", tipo: "ORIGINAL", numeroVenta: 9, clienteNombre: "C9", fecha: "2026-10-02", total: 0, porcentajeComision: 10, montoComision: 0, pagada: false },
+      ],
+      totales: { devengada: 100, pagada: 0, pendiente: 100 },
+    }
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ pagoId: "p1" }) }) as any
+    renderDialog()
+    expect(screen.getByText("#9")).toBeInTheDocument()
+    expect(screen.getAllByRole("checkbox")[1]).toBeDisabled()
+    expect(screen.getAllByRole("checkbox")[1]).not.toBeChecked()
+    fireEvent.click(screen.getByText("Deseleccionar todas"))
+    fireEvent.click(screen.getByText("Seleccionar todas"))
+    expect(screen.getAllByRole("checkbox")[1]).not.toBeChecked()
+    fireEvent.click(screen.getByRole("button", { name: /^Liquidar/ }))
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    expect(JSON.parse((global.fetch as any).mock.calls[0][1].body)).toEqual({ filas: [{ clave: "a", monto: 100 }] })
   })
 })

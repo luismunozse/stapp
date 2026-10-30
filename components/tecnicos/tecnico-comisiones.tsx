@@ -66,7 +66,11 @@ interface ApiResp {
   }>
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
+const fetcher = async (url: string) => {
+  const r = await fetch(url)
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json()
+}
 
 function toISODate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
@@ -126,7 +130,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
   if (desde) qs.set("desde", desde)
   if (hasta) qs.set("hasta", hasta + "T23:59:59")
 
-  const { data, isLoading, mutate } = useSWR<ApiResp>(
+  const { data, isLoading, error, mutate } = useSWR<ApiResp>(
     `/api/comisiones?${qs.toString()}`,
     fetcher,
     { revalidateOnFocus: false }
@@ -147,7 +151,9 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
   const ticketPromedio = items.length ? totalGanancia / items.length : 0
   const comisionPromedio = items.length ? totalComision / items.length : 0
 
-  const pendientesIds = pendientes.map((i) => i.clave)
+  // A zero-amount row can be listed but never paid.
+  const pagable = (i: Item) => !i.comisionPagada && i.montoComision !== 0
+  const pendientesIds = pendientes.filter(pagable).map((i) => i.clave)
   const allSelected =
     pendientesIds.length > 0 && pendientesIds.every((id) => selected.has(id))
 
@@ -162,7 +168,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
     setSelected(next)
   }
 
-  const selectedItems = items.filter((i) => selected.has(i.clave) && !i.comisionPagada)
+  const selectedItems = items.filter((i) => selected.has(i.clave) && pagable(i))
 
   const selectLabel = (i: Item) => {
     const kind = COMMISSION_KIND_LABEL[i.tipo]
@@ -185,7 +191,10 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
     if (selectedItems.length === 0) return
     const ok = await confirm({
       title: "Liquidar comisiones",
-      description: `¿Marcar ${selectedItems.length} comisión(es) como pagadas a ${tecnicoNombre}? Total: ${formatPrice(totalSeleccionado)}`,
+      description:
+        totalSeleccionado < 0
+          ? `El total es negativo (${formatPrice(totalSeleccionado)}): se registra como descuento a favor del taller. ¿Confirmás?`
+          : `¿Marcar ${selectedItems.length} comisión(es) como pagadas a ${tecnicoNombre}? Total: ${formatPrice(totalSeleccionado)}`,
       confirmText: "Confirmar pago",
       variant: "info",
     })
@@ -383,12 +392,16 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
             <div className="py-12 text-center text-muted-foreground flex items-center justify-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" /> Cargando comisiones…
             </div>
+          ) : error ? (
+            <div role="alert" className="py-12 text-center text-sm text-destructive">
+              No se pudieron cargar las comisiones.
+            </div>
           ) : items.length === 0 ? (
             <EmptyState icon={Hash} title="Sin órdenes" variant="search" />
           ) : (
             <>
               {/* Barra de selección todas pendientes */}
-              {!readOnly && pendientes.length > 0 && (
+              {!readOnly && pendientesIds.length > 0 && (
                 <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted/30">
                   <input
                     type="checkbox"
@@ -397,7 +410,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                     onChange={toggleAll}
                   />
                   <span className="text-xs text-muted-foreground">
-                    Seleccionar {pendientes.length} pendiente(s) ({formatPrice(totalPendiente)})
+                    Seleccionar {pendientesIds.length} pendiente(s) ({formatPrice(totalPendiente)})
                   </span>
                 </div>
               )}
@@ -419,6 +432,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                           aria-label={selectLabel(i)}
                           checked={selected.has(i.clave)}
                           onChange={() => toggleOne(i.clave)}
+                          disabled={!pagable(i)}
                         />
                       )}
                     </div>

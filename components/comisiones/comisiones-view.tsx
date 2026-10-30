@@ -83,7 +83,11 @@ function rangoSemanaActual() {
   return { desde: toISODate(lunes), hasta: toISODate(domingo) }
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
+const fetcher = async (url: string) => {
+  const r = await fetch(url)
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json()
+}
 
 interface ComisionesViewProps {
   tecnicoIdFijo?: string
@@ -115,7 +119,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
   if (hasta) qs.set("hasta", hasta + "T23:59:59")
   if (soloPendientes) qs.set("soloPendientes", "true")
 
-  const { data, isLoading, mutate } = useSWR<ApiResp>(
+  const { data, isLoading, error, mutate } = useSWR<ApiResp>(
     `/api/comisiones?${qs.toString()}`,
     fetcher,
     { revalidateOnFocus: false }
@@ -128,7 +132,9 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
   const items = data?.items || []
   const resumen = data?.resumen || []
 
-  const pendientesIds = items.filter((i) => !i.comisionPagada).map((i) => i.clave)
+  // A zero-amount row can be listed but never paid.
+  const pagable = (i: Item) => !i.comisionPagada && i.montoComision !== 0
+  const pendientesIds = items.filter(pagable).map((i) => i.clave)
   const allSelected =
     pendientesIds.length > 0 && pendientesIds.every((id) => selected.has(id))
 
@@ -147,7 +153,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
     setSelected(next)
   }
 
-  const selectedItems = items.filter((i) => selected.has(i.clave) && !i.comisionPagada)
+  const selectedItems = items.filter((i) => selected.has(i.clave) && pagable(i))
 
   const selectLabel = (i: Item) => {
     const kind = COMMISSION_KIND_LABEL[i.tipo]
@@ -162,7 +168,10 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
     if (selectedItems.length === 0 || mixedPeople) return
     const ok = await confirm({
       title: "Pagar comisiones",
-      description: `¿Marcar ${selectedItems.length} comisión(es) como pagadas? Total: ${formatPrice(totalSeleccionado)}`,
+      description:
+        totalSeleccionado < 0
+          ? `El total es negativo (${formatPrice(totalSeleccionado)}): se registra como descuento a favor del taller. ¿Confirmás?`
+          : `¿Marcar ${selectedItems.length} comisión(es) como pagadas? Total: ${formatPrice(totalSeleccionado)}`,
       confirmText: "Confirmar pago",
       variant: "info",
     })
@@ -340,6 +349,10 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="py-10 text-center text-muted-foreground">Cargando…</div>
+          ) : error ? (
+            <div role="alert" className="py-10 text-center text-sm text-destructive">
+              No se pudieron cargar las comisiones.
+            </div>
           ) : items.length === 0 ? (
             <EmptyState
               icon={Percent}
@@ -387,6 +400,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                           aria-label={selectLabel(i)}
                           checked={selected.has(i.clave)}
                           onChange={() => toggleOne(i.clave)}
+                          disabled={!pagable(i)}
                         />
                       )}
                     </td>
@@ -445,6 +459,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                           aria-label={selectLabel(i)}
                           checked={selected.has(i.clave)}
                           onChange={() => toggleOne(i.clave)}
+                          disabled={!pagable(i)}
                         />
                       )}
                       {orderLink(i, "text-primary hover:underline font-medium truncate")}

@@ -1,17 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 
-const { data, mutate } = vi.hoisted(() => ({ data: { value: null as any }, mutate: vi.fn() }))
+const { data, mutate, confirm, swrError } = vi.hoisted(() => ({ data: { value: null as any }, mutate: vi.fn(), confirm: vi.fn(), swrError: { value: undefined as any } }))
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock("swr", () => ({
   default: (key: string | null) => ({
     data: key?.startsWith("/api/comisiones?") ? data.value : [],
     isLoading: false,
+    error: key?.startsWith("/api/comisiones?") ? swrError.value : undefined,
     mutate,
   }),
 }))
-vi.mock("@/contexts/modal-context", () => ({ useModal: () => ({ confirm: vi.fn().mockResolvedValue(true) }) }))
+vi.mock("@/contexts/modal-context", () => ({ useModal: () => ({ confirm }) }))
 vi.mock("@/contexts/currency-context", () => ({
   useCurrency: () => ({
     formatPrice: (n: number) => `$${n}`,
@@ -55,10 +56,12 @@ const selectRow = (clave: string) =>
 describe("ComisionesView paying and annulling payouts", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    confirm.mockResolvedValue(true)
+    swrError.value = undefined
   })
 
   it("blocks paying a selection that spans two technicians", async () => {
-    data.value = { items: [item({ clave: "a", codigoOrden: "a", tecnicoId: "t1" }), item({ clave: "b", codigoOrden: "b", ordenId: "o2", tecnicoId: "t2" })], resumen: [] }
+    data.value = { items: [item({ clave: "a", codigoOrden: "a", tecnicoId: "t1", montoComision: 10 }), item({ clave: "b", codigoOrden: "b", ordenId: "o2", tecnicoId: "t2", montoComision: 10 })], resumen: [] }
     render(<ComisionesView />)
     selectRow("a")
     selectRow("b")
@@ -132,5 +135,36 @@ describe("ComisionesView paying and annulling payouts", () => {
     expect(screen.queryByRole("link")).not.toBeInTheDocument()
     expect(screen.getAllByText("—").length).toBeGreaterThan(0)
     expect(screen.getAllByText("Devolución").length).toBeGreaterThan(0)
+  })
+
+  it("lists a zero-amount row but cannot select it, and never posts it", async () => {
+    data.value = { items: [item({ clave: "a", codigoOrden: "a", montoComision: 100 }), item({ clave: "z", codigoOrden: "z", ordenId: "o3", montoComision: 0 })], resumen: [] }
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ pagoId: "p1", total: 100, filas: 1 }) }) as any
+    render(<ComisionesView />)
+    expect(screen.getAllByText("z").length).toBeGreaterThan(0)
+    expect(screen.getAllByLabelText("Seleccionar comisión z")[0]).toBeDisabled()
+    fireEvent.click(screen.getAllByLabelText("Seleccionar todas las pendientes")[0])
+    expect(screen.getByText("1")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: /Marcar como pagadas/ }))
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    expect(JSON.parse((global.fetch as any).mock.calls[0][1].body)).toEqual({ beneficiarioId: "t1", filas: [{ clave: "a", monto: 100 }] })
+  })
+
+  it("says plainly when the selected total is negative", async () => {
+    data.value = { items: [item({ clave: "n", codigoOrden: "n", tipo: "AJUSTE_DEVOLUCION", montoComision: -30 })], resumen: [] }
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ pagoId: "p1", total: -30, filas: 1 }) }) as any
+    render(<ComisionesView />)
+    fireEvent.click(screen.getAllByLabelText(/Seleccionar comisión n/)[0])
+    fireEvent.click(screen.getByRole("button", { name: /Marcar como pagadas/ }))
+    await waitFor(() => expect(confirm).toHaveBeenCalled())
+    expect(confirm.mock.calls[0][0].description).toBe("El total es negativo ($-30): se registra como descuento a favor del taller. ¿Confirmás?")
+  })
+
+  it("shows an error line, not an empty state, when the read fails", async () => {
+    data.value = undefined
+    swrError.value = new Error("boom")
+    render(<ComisionesView />)
+    expect(screen.getByText("No se pudieron cargar las comisiones.")).toBeInTheDocument()
+    expect(screen.queryByText("Sin comisiones")).not.toBeInTheDocument()
   })
 })

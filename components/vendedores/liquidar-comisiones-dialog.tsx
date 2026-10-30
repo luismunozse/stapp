@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -46,7 +46,30 @@ interface Props {
   onLiquidated: () => void
 }
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json())
+// Server cap per payout (`.max(500, ...)` in lib/commissions/payouts.ts).
+const MAX_FILAS = 500
+
+const fetcher = async (url: string) => {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+// Zero-amount rows are listed but can never be paid.
+const pagable = (c: ComisionPendiente) => !c.pagada && c.montoComision !== 0
+
+// Oldest first (rows without a date last), capped at what one payout accepts.
+function primerasPagables(rows: ComisionPendiente[]): ComisionPendiente[] {
+  return rows
+    .filter(pagable)
+    .sort((a, b) => {
+      if (a.fecha === b.fecha) return a.clave < b.clave ? -1 : 1
+      if (!a.fecha) return 1
+      if (!b.fecha) return -1
+      return a.fecha < b.fecha ? -1 : 1
+    })
+    .slice(0, MAX_FILAS)
+}
 
 export function LiquidarComisionesDialog({
   open,
@@ -58,7 +81,7 @@ export function LiquidarComisionesDialog({
   const { formatPrice, formatDate } = useCurrency()
   const { showError } = useModal()
 
-  const { data, isLoading, mutate } = useSWR<ComisionesResponse>(
+  const { data, isLoading, error, mutate } = useSWR<ComisionesResponse>(
     open ? `/api/vendedores/${vendedorId}/comisiones?estado=pendiente` : null,
     fetcher,
     { revalidateOnFocus: false }
@@ -69,19 +92,33 @@ export function LiquidarComisionesDialog({
   const [notas, setNotas] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
+  const preseleccionado = useRef(false)
+  const [preseleccionRecortada, setPreseleccionRecortada] = useState(false)
+
   useEffect(() => {
     if (!open) {
+      preseleccionado.current = false
+      setPreseleccionRecortada(false)
       setSelectedIds(new Set())
       setNotas("")
     }
   }, [open])
 
-  // Al llegar data nueva, preseleccionamos todas
+  // First load after opening: preselect the oldest payable rows (up to the server cap).
+  // Later reloads keep the previous selection and never auto-select new rows, so an
+  // admin who unticked a disputed row does not get it back after a failed attempt.
   useEffect(() => {
-    if (data?.comisiones) {
-      setSelectedIds(new Set(data.comisiones.map((c) => c.clave)))
+    if (!open || !data?.comisiones) return
+    const rows = data.comisiones
+    if (!preseleccionado.current) {
+      preseleccionado.current = true
+      setSelectedIds(new Set(primerasPagables(rows).map((c) => c.clave)))
+      setPreseleccionRecortada(rows.filter(pagable).length > MAX_FILAS)
+      return
     }
-  }, [data])
+    const vigentes = new Set(rows.filter(pagable).map((c) => c.clave))
+    setSelectedIds((prev) => new Set([...prev].filter((clave) => vigentes.has(clave))))
+  }, [data, open])
 
   const toggleOne = (clave: string) => {
     setSelectedIds((prev) => {
@@ -92,13 +129,17 @@ export function LiquidarComisionesDialog({
     })
   }
 
+  const seleccionables = useMemo(() => primerasPagables(pendientes), [pendientes])
+  const todasSeleccionadas =
+    seleccionables.length > 0 && seleccionables.every((c) => selectedIds.has(c.clave))
+
   const toggleAll = () => {
-    if (selectedIds.size === pendientes.length) setSelectedIds(new Set())
-    else setSelectedIds(new Set(pendientes.map((c) => c.clave)))
+    if (todasSeleccionadas) setSelectedIds(new Set())
+    else setSelectedIds(new Set(seleccionables.map((c) => c.clave)))
   }
 
   const seleccionadas = useMemo(
-    () => pendientes.filter((c) => selectedIds.has(c.clave)),
+    () => pendientes.filter((c) => selectedIds.has(c.clave) && pagable(c)),
     [pendientes, selectedIds]
   )
   const totalSeleccionado = round2(seleccionadas.reduce((sum, c) => sum + c.montoComision, 0))
@@ -148,6 +189,10 @@ export function LiquidarComisionesDialog({
             <div className="py-8 text-center text-sm text-muted-foreground">
               Cargando…
             </div>
+          ) : error ? (
+            <div role="alert" className="py-8 text-center text-sm text-destructive">
+              No se pudieron cargar las comisiones.
+            </div>
           ) : pendientes.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
               No hay comisiones pendientes
@@ -160,28 +205,37 @@ export function LiquidarComisionesDialog({
                   onClick={toggleAll}
                   className="text-primary hover:underline"
                 >
-                  {selectedIds.size === pendientes.length
-                    ? "Deseleccionar todas"
-                    : "Seleccionar todas"}
+                  {todasSeleccionadas ? "Deseleccionar todas" : "Seleccionar todas"}
                 </button>
                 <span>
                   {pendientes.length} comisión{pendientes.length !== 1 ? "es" : ""}
                 </span>
               </div>
+              {preseleccionRecortada && (
+                <p className="text-xs text-muted-foreground mb-2">
+                  Se preseleccionaron solo las {MAX_FILAS} comisiones más antiguas.
+                </p>
+              )}
               <div className="space-y-1">
                 {pendientes.map((c) => {
                   const checked = selectedIds.has(c.clave)
                   const kind = COMMISSION_KIND_LABEL[c.tipo]
+                  const bloqueada = !pagable(c)
                   return (
                     <label
                       key={c.clave}
-                      className={`flex items-center gap-3 p-2 rounded border cursor-pointer transition-colors ${
-                        checked ? "bg-primary/5 border-primary/30" : "hover:bg-muted/40"
+                      className={`flex items-center gap-3 p-2 rounded border transition-colors ${
+                        bloqueada
+                          ? "cursor-not-allowed opacity-60"
+                          : checked
+                            ? "cursor-pointer bg-primary/5 border-primary/30"
+                            : "cursor-pointer hover:bg-muted/40"
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={checked}
+                        disabled={bloqueada}
                         onChange={() => toggleOne(c.clave)}
                         className="h-4 w-4 rounded border-input"
                       />
@@ -233,7 +287,7 @@ export function LiquidarComisionesDialog({
 
             <div className="flex items-center justify-between text-sm pt-2">
               <span className="text-muted-foreground">
-                {selectedIds.size} de {pendientes.length} seleccionada(s)
+                {seleccionadas.length} de {pendientes.length} seleccionada(s)
               </span>
               <span className="font-semibold">
                 Total: {formatPrice(totalSeleccionado)}
@@ -254,11 +308,11 @@ export function LiquidarComisionesDialog({
           <Button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting || selectedIds.size === 0}
+            disabled={submitting || seleccionadas.length === 0}
           >
             {submitting
               ? "Liquidando…"
-              : `Liquidar ${selectedIds.size > 0 ? formatPrice(totalSeleccionado) : ""}`}
+              : `Liquidar ${seleccionadas.length > 0 ? formatPrice(totalSeleccionado) : ""}`}
           </Button>
         </DialogFooter>
       </DialogContent>
