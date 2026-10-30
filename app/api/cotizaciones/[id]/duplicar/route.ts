@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { cotizacionEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 import { getNextQuoteNumber } from "@/lib/counters"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { randomBytes } from "crypto"
@@ -10,7 +11,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     const hasCotizaciones = await hasPlanFeature(organizationId!, "cotizaciones_online")
@@ -28,13 +29,22 @@ export async function POST(
       .from("cotizaciones")
       .select(`
         *,
+        ordenes_servicio!cotizaciones_orden_id_fkey (id, sucursal_id, tecnico_id),
         items_cotizacion (*)
       `)
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .single()
 
-    if (fetchError || !source) {
+    // Out of the caller's branch scope = same answer as a missing quote, before a
+    // number is taken or anything is copied.
+    const alcance = await resolverAlcanceOrdenesPorId({
+      role,
+      userId,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+
+    if (fetchError || !source || !cotizacionEnAlcance(alcance, source)) {
       return NextResponse.json(
         { error: "Cotizacion no encontrada" },
         { status: 404 }

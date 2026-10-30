@@ -10,7 +10,10 @@ import { marcarOriginalReemplazada, restaurarOriginalDeRevision } from "@/lib/co
 import { validarInforme, esInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizacion-informe"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { z } from "zod"
-import { cotizacionEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
+import { cotizacionEnAlcance, ordenEnAlcance, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
+
+// The typed client infers an embedded to-one relation as an array; the row carries one order.
+type ConAlcance = Parameters<typeof cotizacionEnAlcance>[1]
 
 // Detecta el error de "la función no existe todavía", que acá significa
 // "la migración 315 no se corrió a mano aún". Mismo helper que las rutas de
@@ -311,7 +314,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     const hasCotizaciones = await hasPlanFeature(organizationId!, "cotizaciones_online")
@@ -329,12 +332,20 @@ export async function PUT(
     // Verify cotizacion exists and belongs to org
     const { data: existing, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, tipo, origen, organization_id, created_by, iva_porcentaje, descuento_global_tipo, descuento_global_valor, orden_id, revision_de, veredicto, diagnostico_tecnico, causa_dano, presentado_ante, items_cotizacion(id)")
+      .select("id, estado, tipo, origen, organization_id, created_by, iva_porcentaje, descuento_global_tipo, descuento_global_valor, orden_id, revision_de, veredicto, diagnostico_tecnico, causa_dano, presentado_ante, items_cotizacion(id), ordenes_servicio!cotizaciones_orden_id_fkey(id, sucursal_id, tecnico_id)")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .single()
 
-    if (fetchError || !existing) {
+    // A quote linked to an order outside the caller's branch scope answers like a
+    // missing one, before anything is validated or written.
+    const alcance = await resolverAlcanceOrdenesPorId({
+      role,
+      userId,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+
+    if (fetchError || !existing || !cotizacionEnAlcance(alcance, existing as ConAlcance)) {
       return NextResponse.json(
         { error: "Cotización no encontrada" },
         { status: 404 }
@@ -466,11 +477,12 @@ export async function PUT(
       if (newOrdenId) {
         const { data: ordenTarget, error: ordenErr } = await supabaseAdmin
           .from("ordenes_servicio")
-          .select("id, organization_id")
+          .select("id, organization_id, sucursal_id, tecnico_id")
           .eq("id", newOrdenId)
           .eq("organization_id", organizationId!)
           .single()
-        if (ordenErr || !ordenTarget) {
+        // The target order must be inside the caller's scope too.
+        if (ordenErr || !ordenTarget || !ordenEnAlcance(alcance, ordenTarget)) {
           return NextResponse.json(
             { error: "Orden destino no encontrada" },
             { status: 404 }
