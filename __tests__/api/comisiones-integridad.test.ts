@@ -1,10 +1,12 @@
 /**
- * Tests: Commission integrity guards — C1, C2, C3, C4
+ * Tests: Commission integrity guards — C1, C2, C3, C4, C5, C6
  *
- * C1: POST /api/comisiones/pagar — técnico double-pay idempotency guard
- * C2: DELETE /api/comisiones/pagar AND DELETE /api/comisiones/vendedores/pagar — blind revert guard
+ * C1: POST /api/comisiones/pagar — pays only through the pagar_comisiones RPC; bad bodies are 400
+ * C2: DELETE /api/comisiones/pagar AND /api/comisiones/vendedores/pagar — annul through anular_pago_comisiones
  * C3: POST /api/ordenes with tecnicoId — commission snapshot included in insert
  * C4: POST /api/tecnicos/[id]/reasignar — costo_hora_snapshot updated alongside porcentaje_comision
+ * C5: POST /api/vendedores/[id]/comisiones/liquidar — pays the URL's seller, 404 for a non-VENDEDOR
+ * C6: non-admins get 403 on every pay, unpay and liquidar route, and nothing is written
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
@@ -242,7 +244,8 @@ describe("C6 — non-admins cannot pay nor unpay", () => {
     const del = await pagarTecnicoDelete(createDeleteRequest({ pagoId: "p1", motivo: "x" }))
     const postV = await pagarVendedorPost(createPostRequest({ beneficiarioId: "v1", filas: FILAS }))
     const delV = await pagarVendedorDelete(createDeleteRequest({ pagoId: "p1", motivo: "x" }))
-    expect([post.status, del.status, postV.status, delV.status]).toEqual([403, 403, 403, 403])
+    const liq = await liquidarPost(createPostRequest({ filas: FILAS }), { params: Promise.resolve({ id: "v1" }) })
+    expect([post.status, del.status, postV.status, delV.status, liq.status]).toEqual([403, 403, 403, 403, 403])
     expect(mem.escrituras).toEqual([])
   })
 })

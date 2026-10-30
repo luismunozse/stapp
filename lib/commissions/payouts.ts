@@ -12,7 +12,7 @@ const notasSchema = z.string().trim().max(500).optional()
 
 export const payBodySchema = z.object({
   beneficiarioId: z.string().min(1),
-  filas: z.array(filaSchema).min(1),
+  filas: z.array(filaSchema).min(1).max(500, "Elegí hasta 500 comisiones por pago."),
   notas: notasSchema,
 })
 

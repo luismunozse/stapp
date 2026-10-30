@@ -5,8 +5,27 @@ import {
   annulBodySchema,
   annulCommissionPayout,
   commissionRpcError,
+  liquidarBodySchema,
+  payBodySchema,
   payCommissions,
 } from "@/lib/commissions/payouts"
+
+describe("payout body row cap", () => {
+  const filas = (n: number) => Array.from({ length: n }, (_, i) => ({ clave: "k" + i, monto: 1 }))
+  const MSG = "Elegí hasta 500 comisiones por pago."
+
+  it("500 rows pass, 501 fail with the cap message", () => {
+    expect(payBodySchema.safeParse({ beneficiarioId: "t1", filas: filas(500) }).success).toBe(true)
+    const r = payBodySchema.safeParse({ beneficiarioId: "t1", filas: filas(501) })
+    expect(r.success).toBe(false)
+    if (!r.success) expect(r.error.issues[0].message).toBe(MSG)
+  })
+
+  it("liquidar inherits the cap", () => {
+    expect(liquidarBodySchema.safeParse({ filas: filas(500) }).success).toBe(true)
+    expect(liquidarBodySchema.safeParse({ filas: filas(501) }).success).toBe(false)
+  })
+})
 
 describe("commission payouts", () => {
   beforeEach(() => {
