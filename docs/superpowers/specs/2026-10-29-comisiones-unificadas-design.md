@@ -217,6 +217,11 @@ Definitions behind the rules:
 | Margin base | off · price − `costo_unitario_snapshot` | off |
 | When a sale commissions | at sale · as it is paid (fiado) | at sale |
 
+Other behaviours of the sales slice:
+
+- Deleting a sale that has non-annulled payout items is refused, so its `AJUSTE_ANULACION` row cannot disappear.
+- Sales with no seller produce no commission row. Today they show up as "Sin nombre" with nobody to pay; slice 1 already drops them.
+
 Fixes in that slice:
 
 - Returns count only rows with `estado = 'COMPLETADA' AND NOT anulada`.
@@ -250,7 +255,7 @@ Each slice must update every consumer it touches, with a test.
 2. **Repairs: reception plus technician on the real order amount** (the customer's request).
    - `comisiones_config`, reception rate and snapshot trigger, the new order rules, the order card with both roles, the screen showing reception rows.
    - Changes technician numbers on orders with discounts or credit notes. That is intended, and the PR lists how many orders change in production.
-3. **Rate changes "from date X"** with preview and audit, for all roles.
+3. **Rate changes "from date X"** with preview and audit, for all roles. The same slice delivers the admin screen for manual adjustments (`comisiones_ajustes`, `origen = MANUAL`): signed amount, mandatory reason, audited.
 4. **Reports read the single definition.**
    - Until this lands, the reports keep their own formulas: today's divergence plus reception rows missing from them.
 5. **Sales rules:** the table above.
