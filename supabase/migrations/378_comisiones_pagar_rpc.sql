@@ -12,9 +12,11 @@
 --     row passes.
 --
 -- Order inside pagar_comisiones: ADMIN of the org (users.deleted_at IS NULL) -> beneficiary
--- in the org -> non-empty array with distinct keys -> per-org advisory lock -> one read of
--- the definition, rows checked in request order (missing, already paid, other beneficiary,
--- different amount) -> payout + items -> legacy flag sync for the documents of this payout.
+-- in the org -> non-empty array with distinct keys -> per-org advisory lock ->
+-- the source documents of the rows (ventas, ordenes_servicio) locked FOR UPDATE in id order,
+-- payment time = clock_timestamp() taken after those locks -> one read of the definition, rows
+-- checked in request order (missing, already paid, other beneficiary, different amount) ->
+-- payout + items -> legacy flag sync for the documents of this payout.
 --
 -- Errors are raised as 'COMISION_ERROR:<CODE>[:<detail>]'. A concurrent duplicate that slips
 -- past the lock surfaces as SQLSTATE 23505 from comisiones_pagos_items_fila_vigente_uq.
@@ -132,6 +134,9 @@ DECLARE
   v_pago_id   TEXT;
   v_ventas    TEXT[];
   v_ordenes   TEXT[];
+  v_lock_ventas   TEXT[];
+  v_lock_ordenes  TEXT[];
+  v_pagado_at TIMESTAMPTZ;
 BEGIN
   -- 1. The caller is an active ADMIN of this organization.
   IF NOT EXISTS (
@@ -160,6 +165,20 @@ BEGIN
 
   -- 4. One payer at a time per organization.
   PERFORM pg_advisory_xact_lock(hashtext('comisiones:' || p_organization_id));
+
+  -- 4b. Lock the source documents of the requested rows (ids taken from the keys, in id order),
+  -- so a return or an edit cannot commit between the check below and the insert. Then stamp the
+  -- payment time once, after the locks: it is the real payment time, which the
+  -- AJUSTE_DEVOLUCION branch of the definition (377) compares against a return's created_at.
+  SELECT array_agg(DISTINCT split_part(f->>'clave', ':', 2))
+           FILTER (WHERE split_part(f->>'clave', ':', 1) = 'VENTA' AND split_part(f->>'clave', ':', 2) NOT IN ('', '-')),
+         array_agg(DISTINCT split_part(f->>'clave', ':', 2))
+           FILTER (WHERE split_part(f->>'clave', ':', 1) = 'ORDEN' AND split_part(f->>'clave', ':', 2) NOT IN ('', '-'))
+    INTO v_lock_ventas, v_lock_ordenes
+    FROM jsonb_array_elements(p_filas) AS t(f);
+  PERFORM 1 FROM ventas WHERE organization_id = p_organization_id AND id = ANY(v_lock_ventas) ORDER BY id FOR UPDATE;
+  PERFORM 1 FROM ordenes_servicio WHERE organization_id = p_organization_id AND id = ANY(v_lock_ordenes) ORDER BY id FOR UPDATE;
+  v_pagado_at := clock_timestamp();
 
   -- 5. Check every row against the definition, in request order. Nothing is written yet.
   SELECT array_agg(split_part(f->>'clave', ':', 2)), array_agg(split_part(f->>'clave', ':', 5))
@@ -206,7 +225,7 @@ BEGIN
 
   -- 6. Payout + one frozen item per row, copied from the definition.
   INSERT INTO comisiones_pagos (organization_id, beneficiario_id, fecha_pago, pagado_por, notas, total)
-  VALUES (p_organization_id, p_beneficiario_id, now(), p_usuario_id, NULLIF(btrim(p_notas), ''), v_total)
+  VALUES (p_organization_id, p_beneficiario_id, v_pagado_at, p_usuario_id, NULLIF(btrim(p_notas), ''), v_total)
   RETURNING id INTO v_pago_id;
 
   INSERT INTO comisiones_pagos_items (pago_id, organization_id, documento_tipo, documento_id, rol, tipo,

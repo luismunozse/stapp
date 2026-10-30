@@ -17,6 +17,26 @@ describe("378: pagar_comisiones", () => {
     for (const c of ["FILA_NO_DISPONIBLE", "FILA_YA_PAGADA", "OTRO_BENEFICIARIO", "MONTO_DISTINTO"]) expect(cuerpo()).toContain(`COMISION_ERROR:${c}`)
     expect(cuerpo().indexOf("MONTO_DISTINTO")).toBeLessThan(cuerpo().indexOf("INSERT INTO comisiones_pagos"))
   })
+  it("takes the advisory lock before reading the definition", () => {
+    expect(cuerpo().indexOf("pg_advisory_xact_lock")).toBeLessThan(cuerpo().indexOf("FROM v_comisiones_devengadas"))
+  })
+  it("locks the source documents after the advisory lock and before the definition is read", () => {
+    const c = cuerpo()
+    const adv = c.indexOf("pg_advisory_xact_lock"), def = c.indexOf("FROM v_comisiones_devengadas")
+    for (const t of ["ventas", "ordenes_servicio"]) {
+      const m = c.match(new RegExp("FROM " + t + " WHERE organization_id = p_organization_id AND id = ANY\\([^)]*\\) ORDER BY id FOR UPDATE"))
+      expect(m, t).not.toBeNull()
+      const at = c.indexOf(m![0])
+      expect(at).toBeGreaterThan(adv); expect(at).toBeLessThan(def)
+    }
+  })
+  it("stamps the real payment time (clock_timestamp, after the locks) as fecha_pago", () => {
+    const c = cuerpo()
+    expect(c).toContain("clock_timestamp()")
+    expect(c.indexOf("clock_timestamp()")).toBeGreaterThan(c.indexOf("FOR UPDATE"))
+    expect(c).toMatch(/VALUES \(p_organization_id, p_beneficiario_id, v_pagado_at, /)
+    expect(c).not.toMatch(/VALUES \([^)]*\bnow\(\)/)
+  })
   it("syncs both legacy flags after inserting the items", () => {
     expect(cuerpo()).toContain("comisiones_sincronizar_flags(p_organization_id, 'VENTA'")
     expect(cuerpo()).toContain("comisiones_sincronizar_flags(p_organization_id, 'ORDEN'")
