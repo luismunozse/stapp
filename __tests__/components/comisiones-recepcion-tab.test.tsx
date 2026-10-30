@@ -144,4 +144,16 @@ describe("ComisionesView reception tab", () => {
     expect(screen.queryByText("Ganancia")).not.toBeInTheDocument()
     expect(screen.getAllByText("Nota de crédito").length).toBeGreaterThan(0)
   })
+  it("a reception row explains its order-amount base: discounts shown, no parts", () => {
+    data.value = {
+      items: [item({ costoFinal: 1000, costoRepuestos: 200, montoOrden: 850, baseTipo: "MONTO_ORDEN", ganancia: 850 })],
+      resumen: [],
+    }
+    render(<ComisionesView />)
+    const [, row] = screen.getAllByRole("row")
+    expect(row).toHaveTextContent("$1000")
+    expect(row).toHaveTextContent("$150")
+    expect(row).toHaveTextContent("$850")
+    expect(row).not.toHaveTextContent("$200")
+  })
 })

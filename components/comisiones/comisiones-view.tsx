@@ -21,7 +21,8 @@ import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { EmptyState } from "@/components/ui/empty-state"
 import { AnularPagoDialog } from "@/components/comisiones/anular-pago-dialog"
-import { commissionKindLabel, type CommissionKind, type CommissionRole } from "@/lib/commissions/types"
+import { commissionKindLabel, type CommissionBaseKind, type CommissionKind, type CommissionRole } from "@/lib/commissions/types"
+import { orderBaseBreakdown, type BreakdownLine } from "@/lib/commissions/breakdown"
 import { round2 } from "@/lib/precios"
 
 interface Item {
@@ -40,10 +41,24 @@ interface Item {
   costoFinal: number
   costoRepuestos: number
   ganancia: number
+  // What the base was taken from (optional: older payloads omit them).
+  montoOrden?: number | null
+  baseTipo?: CommissionBaseKind | null
   porcentajeComision: number
   montoComision: number
   comisionPagada: boolean
   fechaPagoComision: string | null
+}
+
+function breakdownOf(i: Item): BreakdownLine[] {
+  return orderBaseBreakdown({
+    tipo: i.tipo,
+    pagado: i.comisionPagada,
+    baseTipo: i.baseTipo,
+    documentoTotal: i.costoFinal,
+    documentoMonto: i.montoOrden,
+    documentoCostoRepuestos: i.costoRepuestos,
+  })
 }
 
 interface Resumen {
@@ -407,6 +422,7 @@ export function ComisionesView({ tecnicoIdFijo, rol = "TECNICO" }: ComisionesVie
                   <th className="p-2 text-left">{esRecepcion ? "Persona" : "Técnico"}</th>
                   <th className="p-2 text-left">Dispositivo</th>
                   <th className="p-2 text-right">Costo final</th>
+                  <th className="p-2 text-right">Desc./NC</th>
                   <th className="p-2 text-right">Repuestos</th>
                   <th className="p-2 text-right">Base</th>
                   <th className="p-2 text-right">%</th>
@@ -416,7 +432,13 @@ export function ComisionesView({ tecnicoIdFijo, rol = "TECNICO" }: ComisionesVie
                 </tr>
               </thead>
               <tbody>
-                {items.map((i) => (
+                {items.map((i) => {
+                  const lines = breakdownOf(i)
+                  const cell = (key: BreakdownLine["key"]) => {
+                    const line = lines.find((l) => l.key === key)
+                    return line ? formatPrice(line.amount) : "—"
+                  }
+                  return (
                   <tr key={i.clave} className="border-t hover:bg-muted/30">
                     <td className="p-2">
                       {!i.comisionPagada && (
@@ -438,10 +460,9 @@ export function ComisionesView({ tecnicoIdFijo, rol = "TECNICO" }: ComisionesVie
                     </td>
                     <td className="p-2">{i.tecnicoNombre}</td>
                     <td className="p-2">{i.dispositivo}</td>
-                    <td className="p-2 text-right">{formatPrice(i.costoFinal)}</td>
-                    <td className="p-2 text-right text-muted-foreground">
-                      {formatPrice(i.costoRepuestos)}
-                    </td>
+                    <td className="p-2 text-right">{cell("costoFinal")}</td>
+                    <td className="p-2 text-right text-muted-foreground">{cell("descuentos")}</td>
+                    <td className="p-2 text-right text-muted-foreground">{cell("repuestos")}</td>
                     <td className="p-2 text-right">{formatPrice(i.ganancia)}</td>
                     <td className="p-2 text-right">
                       <Badge variant="outline" className="text-xs">
@@ -467,7 +488,8 @@ export function ComisionesView({ tecnicoIdFijo, rol = "TECNICO" }: ComisionesVie
                       )}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
             </div>
@@ -508,7 +530,11 @@ export function ComisionesView({ tecnicoIdFijo, rol = "TECNICO" }: ComisionesVie
                   </div>
                   <div className="flex items-end justify-between gap-2">
                     <div className="text-xs text-muted-foreground space-y-0.5">
-                      <div>Costo {formatPrice(i.costoFinal)} · Rep. {formatPrice(i.costoRepuestos)}</div>
+                      {breakdownOf(i).length > 0 && (
+                        <div>
+                          {breakdownOf(i).map((l) => `${l.shortLabel} ${formatPrice(l.amount)}`).join(" · ")}
+                        </div>
+                      )}
                       <div>Base {formatPrice(i.ganancia)}{i.fechaCompletado ? ` · ${formatDate(i.fechaCompletado)}` : ""}</div>
                     </div>
                     <div className="text-right shrink-0">

@@ -74,6 +74,9 @@ export async function GET(request: Request) {
       costoFinal: r.documentoTotal ?? 0,
       costoRepuestos: r.documentoCostoRepuestos ?? 0,
       ganancia: r.base ?? 0,
+      // Optional, backward compatible: what the base was taken from.
+      montoOrden: r.documentoMonto,
+      baseTipo: r.baseTipo,
       porcentajeComision: r.porcentaje ?? 0,
       montoComision: r.monto,
       comisionPagada: r.pagado,
