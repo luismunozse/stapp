@@ -26,6 +26,7 @@ export async function GET(
         avatar_url,
         fecha_ingreso_tecnico,
         porcentaje_comision,
+        porcentaje_comision_recepcion,
         costo_hora,
         created_at,
         horario_laboral,
@@ -59,6 +60,8 @@ export async function GET(
       avatarUrl: tecnico.avatar_url ?? null,
       fechaIngresoTecnico: tecnico.fecha_ingreso_tecnico ?? null,
       porcentajeComision: Number(tecnico.porcentaje_comision ?? 0),
+      porcentajeComisionRecepcion:
+        tecnico.porcentaje_comision_recepcion == null ? null : Number(tecnico.porcentaje_comision_recepcion),
       costoHora: Number(tecnico.costo_hora ?? 0),
       createdAt: tecnico.created_at,
       horarioLaboral: tecnico.horario_laboral ?? null,
@@ -89,6 +92,7 @@ export async function PUT(
       email,
       password,
       porcentajeComision,
+      porcentajeComisionRecepcion,
       costoHora,
       telefono,
       especialidades,
@@ -104,6 +108,21 @@ export async function PUT(
           { status: 400 }
         )
       }
+    }
+
+    // null clears the rate (the shop default applies); absent leaves it unchanged.
+    if (
+      porcentajeComisionRecepcion !== undefined &&
+      porcentajeComisionRecepcion !== null &&
+      (typeof porcentajeComisionRecepcion !== "number" ||
+        !Number.isFinite(porcentajeComisionRecepcion) ||
+        porcentajeComisionRecepcion < 0 ||
+        porcentajeComisionRecepcion > 100)
+    ) {
+      return NextResponse.json(
+        { error: "El porcentaje de recepción debe estar entre 0 y 100" },
+        { status: 400 }
+      )
     }
 
     if (costoHora !== undefined) {
@@ -158,6 +177,9 @@ export async function PUT(
     if (email) updateData.email = email
     if (password) updateData.password = await bcrypt.hash(password, 10)
     if (porcentajeComision !== undefined) updateData.porcentaje_comision = Number(porcentajeComision)
+    if (porcentajeComisionRecepcion !== undefined) {
+      updateData.porcentaje_comision_recepcion = porcentajeComisionRecepcion
+    }
     if (costoHora !== undefined) updateData.costo_hora = Number(costoHora)
     if (telefono !== undefined) updateData.telefono = telefono || null
     if (especialidades !== undefined) {
@@ -179,7 +201,7 @@ export async function PUT(
       .update(updateData)
       .eq("id", id)
       .eq("organization_id", organizationId!)
-      .select("id, nombre, email, porcentaje_comision, costo_hora, telefono, especialidades, fecha_ingreso_tecnico, activo, horario_laboral")
+      .select("id, nombre, email, porcentaje_comision, porcentaje_comision_recepcion, costo_hora, telefono, especialidades, fecha_ingreso_tecnico, activo, horario_laboral")
       .single()
 
     if (updateError) {

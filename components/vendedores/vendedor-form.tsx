@@ -25,6 +25,7 @@ interface VendedorFormProps {
     telefono?: string | null
     activo?: boolean
     porcentajeComision?: number
+    porcentajeComisionRecepcion?: number | null
   } | null
   onSuccess: () => void
 }
@@ -43,6 +44,10 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
   const [activo, setActivo] = useState(vendedor?.activo !== false)
   const [porcentajeComision, setPorcentajeComision] = useState(
     vendedor?.porcentajeComision?.toString() || "0"
+  )
+  // Blank means "use the shop default" and is sent as null, never as 0.
+  const [porcentajeRecepcion, setPorcentajeRecepcion] = useState(
+    vendedor?.porcentajeComisionRecepcion != null ? String(vendedor.porcentajeComisionRecepcion) : ""
   )
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -77,6 +82,12 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
       return
     }
 
+    const recepcionNum = porcentajeRecepcion.trim() === "" ? null : Number(porcentajeRecepcion)
+    if (recepcionNum !== null && (!Number.isFinite(recepcionNum) || recepcionNum < 0 || recepcionNum > 100)) {
+      setError("El porcentaje de recepción debe estar entre 0 y 100")
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -89,6 +100,7 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
         password?: string
         telefono: string | null
         porcentajeComision: number
+        porcentajeComisionRecepcion: number | null
         activo?: boolean
         sucursalId?: string
       } = {
@@ -96,6 +108,7 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
         email,
         telefono: telefono.trim() || null,
         porcentajeComision: porcentajeNum,
+        porcentajeComisionRecepcion: recepcionNum,
       }
       if (password) body.password = password
       if (isEditing) body.activo = activo
@@ -129,6 +142,7 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
     setTelefono("")
     setActivo(true)
     setPorcentajeComision("0")
+    setPorcentajeRecepcion("")
     setError("")
   }
 
@@ -141,6 +155,9 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
       setTelefono(vendedor.telefono || "")
       setActivo(vendedor.activo !== false)
       setPorcentajeComision(vendedor.porcentajeComision?.toString() || "0")
+      setPorcentajeRecepcion(
+        vendedor.porcentajeComisionRecepcion != null ? String(vendedor.porcentajeComisionRecepcion) : ""
+      )
     }
     onOpenChange(newOpen)
   }
@@ -240,6 +257,22 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
             />
             <p className="text-xs text-muted-foreground">
               Comisión por defecto aplicada sobre cada venta.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="porcentajeComisionRecepcion">Comisión por recepción (%)</Label>
+            <Input
+              id="porcentajeComisionRecepcion"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={porcentajeRecepcion}
+              onChange={(e) => setPorcentajeRecepcion(e.target.value)}
+              placeholder="Por defecto del taller"
+            />
+            <p className="text-xs text-muted-foreground">
+              Vacío: se usa el porcentaje por defecto del taller. Cada orden guarda el porcentaje vigente al recibir el equipo.
             </p>
           </div>
           {!isEditing && sucursales.length > 1 && (

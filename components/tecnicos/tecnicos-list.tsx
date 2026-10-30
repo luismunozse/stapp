@@ -48,6 +48,7 @@ interface Tecnico {
   activo: boolean
   especialidades?: string[]
   porcentajeComision?: number
+  porcentajeComisionRecepcion?: number | null
   ordenesActivas: number
   ordenesCompletadas: number
 }

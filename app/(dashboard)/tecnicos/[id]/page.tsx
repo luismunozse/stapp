@@ -42,6 +42,7 @@ interface TecnicoDetalle {
   fechaIngresoTecnico?: string | null
   avatarUrl?: string | null
   porcentajeComision?: number
+  porcentajeComisionRecepcion?: number | null
   costoHora?: number
   createdAt: string
   ordenesActivas: number

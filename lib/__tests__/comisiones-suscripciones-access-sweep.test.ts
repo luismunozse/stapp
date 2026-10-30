@@ -113,3 +113,17 @@ describe('endpoints de suscripción', () => {
     expect(fantasmas).toEqual([])
   })
 })
+
+describe('endpoints de técnicos que escriben la comisión', () => {
+  // POST y PUT escriben porcentaje_comision y porcentaje_comision_recepcion: solo el ADMIN.
+  const handlers = handlersDe(join(API, 'tecnicos'))
+
+  it.each([
+    ['route.ts', 'POST'],
+    ['[id]/route.ts', 'PUT'],
+  ])('%s %s pide requireAdmin', (id, metodo) => {
+    const handler = handlers.find((h) => h.id === id && h.metodo === metodo)
+    expect(handler, `${metodo} ${id}`).toBeDefined()
+    expect(handler!.body).toMatch(/\brequireAdmin\b/)
+  })
+})

@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumberByType } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
 import { sucursalParaEscritura } from "@/lib/sucursal"
+import { resolveOperador } from "@/lib/operadores"
 import { deletePracticeData } from "@/lib/onboarding/practica"
 import { randomBytes } from "crypto"
 
@@ -151,6 +152,10 @@ export async function POST(
       obsLines.push(`Plazo de retiro: ${politicaAbandonoDias} días tras aviso de listo.`)
     }
 
+    // Whoever converts the quote is the receiver, same default as POST /api/ordenes: the
+    // reception commission trigger snapshots the rate from recibido_por.
+    const recibidoPor = await resolveOperador(organizationId!, null, userId!)
+
     // Crear la orden con los datos del snapshot
     const { data: orden, error: ordenError } = await supabaseAdmin
       .from("ordenes_servicio")
@@ -173,6 +178,7 @@ export async function POST(
         public_token: publicToken,
         estado: "RECIBIDO",
         sucursal_id: sucursalId,
+        recibido_por: recibidoPor,
         sector_id: cotizacion.sector_id || null,
         metadata: equipo.modelo || equipo.numeroSerie
           ? { modelo: equipo.modelo, numeroSerie: equipo.numeroSerie }

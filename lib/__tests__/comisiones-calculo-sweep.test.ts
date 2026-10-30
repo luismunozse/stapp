@@ -99,3 +99,58 @@ describe('commission calculation sweep', () => {
     expect([...ALLOWED].filter((p) => !calc.has(p))).toEqual([])
   })
 })
+
+/**
+ * Reception attribution: the trigger snapshots the receiver's rate from `recibido_por`,
+ * so every order-creation path must set it, and the per-person rate has four writers.
+ */
+const RATE_WRITERS = [
+  'app/api/vendedores/route.ts',
+  'app/api/vendedores/[id]/route.ts',
+  'app/api/tecnicos/route.ts',
+  'app/api/tecnicos/[id]/route.ts',
+]
+const RECEIVER_WRITERS = [
+  'app/api/ordenes/route.ts',
+  'app/api/onboarding/practica/route.ts',
+  'app/api/cotizaciones/[id]/convertir-orden/route.ts',
+]
+
+/** Files whose code (comments stripped) writes `key` as an object key or a property assignment, not as a suffix of another name. */
+export function filesWithObjectKey(files: Array<{ path: string; source: string }>, key: string): string[] {
+  const pattern = new RegExp(`(?<![A-Za-z0-9_])${key}\\s*(?::|=(?!=))`)
+  return files.filter((f) => pattern.test(stripComments(f.source))).map((f) => f.path).sort()
+}
+
+describe('reception attribution', () => {
+  it('the key detector ignores comments and longer names', () => {
+    expect(
+      filesWithObjectKey(
+        [
+          { path: 'a.ts', source: 'insert({ recibido_por: userId })' },
+          { path: 'b.ts', source: '// recibido_por: in a comment' },
+          { path: 'c.ts', source: 'rpc("f", { p_recibido_por: id })' },
+          { path: 'd.ts', source: 'update.recibido_por = userId' },
+          { path: 'e.ts', source: 'if (row.recibido_por === userId) {}' },
+        ],
+        'recibido_por',
+      ),
+    ).toEqual(['a.ts', 'd.ts'])
+  })
+
+  it('only the four rate-writer routes write porcentaje_comision_recepcion', () => {
+    expect(filesWithObjectKey(sources(), 'porcentaje_comision_recepcion')).toEqual([...RATE_WRITERS].sort())
+  })
+
+  it('only the three order-creation paths write recibido_por', () => {
+    expect(filesWithObjectKey(sources(), 'recibido_por')).toEqual([...RECEIVER_WRITERS].sort())
+  })
+
+  it('the listed files still match (a renamed route cannot leave a dead entry)', () => {
+    const all = sources()
+    const rate = new Set(filesWithObjectKey(all, 'porcentaje_comision_recepcion'))
+    const receiver = new Set(filesWithObjectKey(all, 'recibido_por'))
+    expect(RATE_WRITERS.filter((p) => !rate.has(p))).toEqual([])
+    expect(RECEIVER_WRITERS.filter((p) => !receiver.has(p))).toEqual([])
+  })
+})
