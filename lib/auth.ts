@@ -125,6 +125,25 @@ export async function invalidateRefreshToken(userId: string): Promise<void> {
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  // Auth.js loguea cada CredentialsSignin (password incorrecta, REQUIRES_2FA,
+  // EMAIL_NOT_VERIFIED, GOOGLE_NO_ACCOUNT...) como `[auth][error]` con stack
+  // completo apuntando a authorize(). Son resultados esperados del login, no
+  // fallas: los bajamos a una línea de warn con el código y dejamos el log de
+  // error para lo que realmente rompe (CallbackRouteError, config, etc.).
+  logger: {
+    error(error) {
+      const e = error as Error & { type?: string; code?: string; cause?: unknown }
+      if (e instanceof CredentialsSignin || e.type === "CredentialsSignin") {
+        // REQUIRES_2FA:<userId> → no loguear el userId
+        const code = (e.code || "credentials").split(":")[0]
+        console.warn(`[auth][signin-rejected] ${code}`)
+        return
+      }
+      console.error(`[auth][error] ${e.name}: ${e.message}`)
+      const cause = (e.cause as { err?: unknown } | undefined)?.err ?? e.cause
+      console.error(cause instanceof Error ? cause : e)
+    },
+  },
   providers: [
     Credentials({
       credentials: {
@@ -238,8 +257,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
           // Verificar que la organización esté activa
           const gOrg = gUser.organizations as { id: string; activo: boolean; deleted_at?: string | null } | null
+          // Google ya probó la identidad, así que podemos decir el motivo real
+          // en vez de devolver null (que el cliente muestra como error genérico).
           if (isLoginBlocked(gUser, gOrg, { isSuper: isGoogleSuper })) {
-            return null
+            throw new AuthSigninError("ORG_INACTIVE")
           }
 
           // Verificar 2FA. La validación es server-side: si el usuario tiene

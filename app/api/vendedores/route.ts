@@ -9,7 +9,8 @@ import { z } from "zod"
 
 const vendedorCreateSchema = z.object({
   nombre: z.string().trim().min(1, "El nombre es requerido"),
-  email: z.string().email("Email inválido"),
+  // Normalizado: los logins buscan el email en minúsculas.
+  email: z.string().trim().toLowerCase().email("Email inválido"),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
   telefono: z.string().trim().optional().nullable(),
   porcentajeComision: z.coerce

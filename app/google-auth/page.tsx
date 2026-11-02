@@ -10,6 +10,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Loader2 } from "lucide-react"
 import { BusinessLogo } from "@/components/shared/business-logo"
 import { extractAuthCode, parseRequires2FA } from "@/lib/auth-client"
+import { TwoFactorVerify } from "@/components/auth/two-factor-verify"
 
 /**
  * Página de autenticación con Google en el dominio raíz.
@@ -45,6 +46,12 @@ function GoogleAuthContent() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  // Login con Google + 2FA: guardamos el ID token de Google (vale ~1 h) para
+  // reenviarlo junto con el código TOTP. Antes se redirigía a
+  // /login?needs2fa=true, que nadie leía: el usuario quedaba en el login del
+  // tenant sin forma de completar el segundo factor.
+  const [pendingGoogleToken, setPendingGoogleToken] = useState<string | null>(null)
+  const [twoFAError, setTwoFAError] = useState("")
 
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
@@ -60,6 +67,73 @@ function GoogleAuthContent() {
         </Card>
       </div>
     )
+  }
+
+  // Login: autenticar con el ID token de Google via NextAuth. Si la cuenta
+  // tiene 2FA, el primer intento devuelve REQUIRES_2FA y se reintenta con el
+  // mismo token + el código TOTP.
+  const loginWithGoogle = async (googleIdToken: string, totpCode?: string) => {
+    const result = await signIn("credentials", {
+      googleIdToken,
+      rememberMe: "true",
+      ...(totpCode ? { totpCode } : {}),
+      redirect: false,
+    })
+
+    if (result?.error) {
+      const code = extractAuthCode(result)
+      if (totpCode && code.includes("INVALID_2FA_CODE")) {
+        setTwoFAError("Código inválido. Verificá e intentá de nuevo.")
+        setLoading(false)
+        return
+      }
+      setPendingGoogleToken(null)
+      if (code.includes("GOOGLE_NO_ACCOUNT")) {
+        setError("No existe una cuenta con este email de Google. Registrate primero.")
+      } else if (code.includes("SUPERADMIN_REQUIRES_2FA_SETUP")) {
+        setError("Tu cuenta requiere tener 2FA configurado. Contactá al administrador del sistema.")
+      } else if (code.includes("ORG_INACTIVE")) {
+        setError("La cuenta de tu negocio está inactiva. Contactá a soporte.")
+      } else if (parseRequires2FA(code)) {
+        setTwoFAError("")
+        setPendingGoogleToken(googleIdToken)
+      } else {
+        setError("Error al iniciar sesión con Google")
+      }
+      setLoading(false)
+      return
+    }
+
+    setPendingGoogleToken(null)
+
+    // Login exitoso - redirigir al tenant
+    if (tenant) {
+      window.location.href = `https://${tenant}.${rootDomain}/dashboard`
+    } else {
+      // Sin tenant específico, obtener la org del usuario
+      const orgRes = await fetch("/api/auth/user-organization", {
+        credentials: "include",
+      })
+      if (orgRes.ok) {
+        const { organization } = await orgRes.json()
+        window.location.href = `https://${organization.slug}.${rootDomain}/dashboard`
+      } else {
+        setError("No se pudo obtener la organización")
+        setLoading(false)
+      }
+    }
+  }
+
+  const handleGoogle2FA = async (totpCode: string) => {
+    if (!pendingGoogleToken) return
+    setLoading(true)
+    setTwoFAError("")
+    try {
+      await loginWithGoogle(pendingGoogleToken, totpCode)
+    } catch {
+      setTwoFAError("Error de conexión. Intentá de nuevo.")
+      setLoading(false)
+    }
   }
 
   const handleGoogleSuccess = async (credentialResponse: { credential?: string }) => {
@@ -105,49 +179,7 @@ function GoogleAuthContent() {
         // Redirigir al login del subdominio
         window.location.href = `https://${orgSlug}.${rootDomain}/login?registered=true`
       } else {
-        // Login: autenticar con Google token via NextAuth
-        const result = await signIn("credentials", {
-          googleIdToken: credentialResponse.credential,
-          rememberMe: "true",
-          redirect: false,
-        })
-
-        if (result?.error) {
-          const code = extractAuthCode(result)
-          if (code.includes("GOOGLE_NO_ACCOUNT")) {
-            setError("No existe una cuenta con este email de Google. Registrate primero.")
-          } else if (code.includes("SUPERADMIN_REQUIRES_2FA_SETUP")) {
-            setError("Tu cuenta requiere tener 2FA configurado. Contactá al administrador del sistema.")
-          } else if (parseRequires2FA(code)) {
-            // 2FA requerido - redirigir al login del tenant con indicación
-            const targetUrl = tenant
-              ? `https://${tenant}.${rootDomain}/login?needs2fa=true`
-              : `/login?needs2fa=true`
-            window.location.href = targetUrl
-            return
-          } else {
-            setError("Error al iniciar sesión con Google")
-          }
-          setLoading(false)
-          return
-        }
-
-        // Login exitoso - redirigir al tenant
-        if (tenant) {
-          window.location.href = `https://${tenant}.${rootDomain}/dashboard`
-        } else {
-          // Sin tenant específico, obtener la org del usuario
-          const orgRes = await fetch("/api/auth/user-organization", {
-            credentials: "include",
-          })
-          if (orgRes.ok) {
-            const { organization } = await orgRes.json()
-            window.location.href = `https://${organization.slug}.${rootDomain}/dashboard`
-          } else {
-            setError("No se pudo obtener la organización")
-            setLoading(false)
-          }
-        }
+        await loginWithGoogle(credentialResponse.credential)
       }
     } catch {
       setError("Error de conexión. Intentá de nuevo.")
@@ -224,6 +256,17 @@ function GoogleAuthContent() {
           </div>
         </CardContent>
       </Card>
+
+      {pendingGoogleToken && (
+        <TwoFactorVerify
+          onVerified={handleGoogle2FA}
+          externalError={twoFAError}
+          onCancel={() => {
+            setPendingGoogleToken(null)
+            setTwoFAError("")
+          }}
+        />
+      )}
     </div>
   )
 }

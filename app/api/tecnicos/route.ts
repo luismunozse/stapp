@@ -121,7 +121,7 @@ export async function POST(request: Request) {
     const body = await request.json()
     const {
       nombre,
-      email,
+      email: rawEmail,
       password,
       porcentajeComision,
       porcentajeComisionRecepcion,
@@ -130,6 +130,10 @@ export async function POST(request: Request) {
       especialidades,
       fechaIngresoTecnico,
     } = body
+    // Los logins buscan el email en minúsculas (PostgREST `.eq` es
+    // case-sensitive). Guardarlo tal cual lo tipeó el admin dejaba al técnico
+    // sin poder entrar con Google ni con password si usaba mayúsculas.
+    const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : rawEmail
 
     // An explicit branch is a request, not a hint: if it is not an active branch of
     // the org it is rejected instead of silently falling back to the principal. The
