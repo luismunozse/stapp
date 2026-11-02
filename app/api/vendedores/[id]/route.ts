@@ -9,7 +9,7 @@ import { z } from "zod"
 
 const vendedorUpdateSchema = z.object({
   nombre: z.string().trim().min(1).optional(),
-  email: z.string().email("Email inválido").optional(),
+  email: z.string().trim().toLowerCase().email("Email inválido").optional(),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres").optional(),
   telefono: z.string().trim().optional().nullable(),
   activo: z.boolean().optional(),

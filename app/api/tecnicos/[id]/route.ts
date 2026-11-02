@@ -89,7 +89,7 @@ export async function PUT(
     const body = await request.json()
     const {
       nombre,
-      email,
+      email: rawEmail,
       password,
       porcentajeComision,
       porcentajeComisionRecepcion,
@@ -99,6 +99,8 @@ export async function PUT(
       fechaIngresoTecnico,
       horarioLaboral,
     } = body
+    // Normalizado: los logins buscan el email en minúsculas.
+    const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : rawEmail
 
     if (porcentajeComision !== undefined) {
       const p = Number(porcentajeComision)
