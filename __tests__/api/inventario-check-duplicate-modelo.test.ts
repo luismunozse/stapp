@@ -85,6 +85,26 @@ describe("GET /api/inventario/check-duplicate: model codes", () => {
     expect(matches[0].score).toBe(0.57)
   })
 
+  it("does not glue a lone letter onto a size token (USB-C 2m still matches USB 2m)", async () => {
+    expect(nombres(await consultar("Cable USB-C 2m", ["Cable USB 2m"]))).toEqual(["Cable USB 2m"])
+  })
+
+  it("does not glue a lone letter onto a wattage token (Tipo C 20W still matches 20W)", async () => {
+    expect(nombres(await consultar("Cargador Tipo C 20W", ["Cargador 20W"]))).toEqual(["Cargador 20W"])
+  })
+
+  it("treats a single digit as a model code (iPhone 7 vs iPhone 8)", async () => {
+    expect(await consultar("Funda iPhone 7", ["Funda iPhone 8"])).toEqual([])
+  })
+
+  it("flags a single-digit model with extra words (iPhone 7 vs iPhone 7 Plus)", async () => {
+    expect(nombres(await consultar("Funda iPhone 7", ["Funda iPhone 7 Plus"]))).toEqual(["Funda iPhone 7 Plus"])
+  })
+
+  it("does not flag Redmi 9 vs Redmi 10", async () => {
+    expect(await consultar("Redmi 9", ["Redmi 10"])).toEqual([])
+  })
+
   it("returns only the same-model items from a mixed list", async () => {
     const matches = await consultar("Funda A13", ["Funda A12", "Funda A13", "Funda A32", "Funda A13 transparente"])
     expect(nombres(matches)).toEqual(["Funda A13", "Funda A13 transparente"])

@@ -22,9 +22,9 @@ function tokenize(s: string): string[] {
   // "a 13" -> "a13": a lone letter before a number is part of the model code, and the length
   // filter below would otherwise drop it.
   return normalize(s)
-    .replace(/(^| )([a-z]) (\d)/g, "$1$2$3")
+    .replace(/(^| )([a-z]) (\d+)(?= |$)/g, "$1$2$3")
     .split(" ")
-    .filter((t) => t.length >= 2)
+    .filter((t) => t.length >= 2 || /^\d+$/.test(t))
 }
 
 // A model token carries a digit (a13, 13, 20w, 3000mah). Names whose model tokens are all
