@@ -19,9 +19,23 @@ function normalize(s: string): string {
 }
 
 function tokenize(s: string): string[] {
+  // "a 13" -> "a13": a lone letter before a number is part of the model code, and the length
+  // filter below would otherwise drop it.
   return normalize(s)
+    .replace(/(^| )([a-z]) (\d)/g, "$1$2$3")
     .split(" ")
     .filter((t) => t.length >= 2)
+}
+
+// A model token carries a digit (a13, 13, 20w, 3000mah). Names whose model tokens are all
+// different are different products, whatever generic words they share.
+const esModelo = (t: string) => /\d/.test(t)
+
+function modelosDistintos(queryTokens: string[], candTokens: string[]): boolean {
+  const q = queryTokens.filter(esModelo)
+  const c = candTokens.filter(esModelo)
+  if (q.length === 0 || c.length === 0) return false
+  return !q.some((t) => c.includes(t))
 }
 
 // Score entre 0 y 1. Combina Jaccard (simetría) y containment (cuánto del
@@ -139,7 +153,7 @@ export async function GET(request: Request) {
       candidatas
         .map((row) => {
           const cTokens = tokenize(row.nombre)
-          const score = similarity(queryTokens, cTokens)
+          const score = modelosDistintos(queryTokens, cTokens) ? 0 : similarity(queryTokens, cTokens)
           // Boost si además coincide la categoría (si se pasó)
           const boosted = categoria && row.categoria === categoria ? score + 0.05 : score
           return { row, score: boosted }
