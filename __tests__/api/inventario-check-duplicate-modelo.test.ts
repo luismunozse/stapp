@@ -105,6 +105,10 @@ describe("GET /api/inventario/check-duplicate: model codes", () => {
     expect(await consultar("Redmi 9", ["Redmi 10"])).toEqual([])
   })
 
+  it("matches a wattage split from its unit (20 W vs 20W)", async () => {
+    expect(nombres(await consultar("Cargador 20 W", ["Cargador 20W"]))).toEqual(["Cargador 20W"])
+  })
+
   it("returns only the same-model items from a mixed list", async () => {
     const matches = await consultar("Funda A13", ["Funda A12", "Funda A13", "Funda A32", "Funda A13 transparente"])
     expect(nombres(matches)).toEqual(["Funda A13", "Funda A13 transparente"])
