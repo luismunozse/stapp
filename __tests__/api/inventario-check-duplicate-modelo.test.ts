@@ -105,6 +105,10 @@ describe("GET /api/inventario/check-duplicate: model codes", () => {
     expect(await consultar("Redmi 9", ["Redmi 10"])).toEqual([])
   })
 
+  it("matches a number split from its unit (8 GB vs 8GB)", async () => {
+    expect(nombres(await consultar("Memoria 8 GB", ["Memoria 8GB"]))).toEqual(["Memoria 8GB"])
+  })
+
   it("matches a wattage split from its unit (20 W vs 20W)", async () => {
     expect(nombres(await consultar("Cargador 20 W", ["Cargador 20W"]))).toEqual(["Cargador 20W"])
   })

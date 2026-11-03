@@ -18,13 +18,17 @@ function normalize(s: string): string {
     .trim()
 }
 
-function tokenize(s: string): string[] {
-  // "a 13" -> "a13": a lone letter before a number is part of the model code, and the length
-  // filter below would otherwise drop it.
+// "a 13" -> "a13": a lone letter before a bare number is part of the model code, and the
+// length filter in tokenize would otherwise drop it.
+function normalizeConModelo(s: string): string[] {
   return normalize(s)
     .replace(/(^| )([a-z]) (\d+)(?= |$)/g, "$1$2$3")
     .split(" ")
-    .filter((t) => t.length >= 2 || /^\d+$/.test(t))
+}
+
+// Tokens used for scoring.
+function tokenize(s: string): string[] {
+  return normalizeConModelo(s).filter((t) => t.length >= 2)
 }
 
 // A model token carries a digit (a13, 13, 20w, 3000mah). Names whose model tokens are all
@@ -40,9 +44,12 @@ function mismoModelo(a: string, b: string): boolean {
   return unidad(a, b) || unidad(b, a)
 }
 
-function modelosDistintos(queryTokens: string[], candTokens: string[]): boolean {
-  const q = queryTokens.filter(esModelo)
-  const c = candTokens.filter(esModelo)
+// Model tokens of a name. No length filter: a single digit ("iPhone 7") is a model.
+function modelos(s: string): string[] {
+  return normalizeConModelo(s).filter(esModelo)
+}
+
+function modelosDistintos(q: string[], c: string[]): boolean {
   if (q.length === 0 || c.length === 0) return false
   return !q.some((t) => c.some((u) => mismoModelo(t, u)))
 }
@@ -119,6 +126,7 @@ export async function GET(request: Request) {
     const excludeGrupoId = ID_SEGURO.test(rawExcludeGrupoId) ? rawExcludeGrupoId : ""
 
     const queryTokens = tokenize(nombre)
+    const queryModelos = modelos(nombre)
     if (queryTokens.length === 0) {
       return NextResponse.json({ matches: [] })
     }
@@ -162,7 +170,7 @@ export async function GET(request: Request) {
       candidatas
         .map((row) => {
           const cTokens = tokenize(row.nombre)
-          const score = modelosDistintos(queryTokens, cTokens) ? 0 : similarity(queryTokens, cTokens)
+          const score = modelosDistintos(queryModelos, modelos(row.nombre)) ? 0 : similarity(queryTokens, cTokens)
           // Boost si además coincide la categoría (si se pasó)
           const boosted = categoria && row.categoria === categoria ? score + 0.05 : score
           return { row, score: boosted }
