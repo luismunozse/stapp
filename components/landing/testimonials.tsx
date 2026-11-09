@@ -41,7 +41,7 @@ export function Testimonials() {
 
   return (
     <LazyMotion features={domAnimation}>
-      <section className="py-16 sm:py-20" aria-labelledby="testimonios-heading">
+      <section className="py-10 sm:py-12" aria-labelledby="testimonios-heading">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <m.div
             className="text-center max-w-2xl mx-auto mb-10 sm:mb-12"

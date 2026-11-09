@@ -98,7 +98,7 @@ export function Hero({ prices }: { prices: PlanPrices }) {
 
   return (
     <LazyMotion features={domAnimation}>
-      <section className="relative overflow-hidden pt-24 pb-14 sm:pt-28 lg:pt-32 lg:pb-20">
+      <section className="relative overflow-hidden pt-24 pb-8 sm:pt-28 lg:pt-32 lg:pb-12">
         {/* Fondo: gradiente suave de marca, estilo tech limpio */}
         <div
           aria-hidden="true"

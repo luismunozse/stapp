@@ -13,7 +13,7 @@ const WHATSAPP_DEMO_URL =
 // de transformación (no una lista de features).
 export function CtaBand() {
   return (
-    <section className="py-16 sm:py-20">
+    <section className="py-10 sm:py-12">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="relative overflow-hidden rounded-2xl bg-primary px-6 py-14 text-center sm:px-12 sm:py-16">
           <h2 className="text-3xl font-bold tracking-tight text-balance text-primary-foreground sm:text-4xl">
