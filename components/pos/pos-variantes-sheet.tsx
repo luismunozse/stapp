@@ -98,7 +98,7 @@ export function PosVariantesSheet({ grupo, onClose, onAdd, devolverFoco }: Props
           e.preventDefault()
           devolverFoco?.()
         }}
-        className="data-[state=open]:duration-200 data-[state=closed]:duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none motion-reduce:animate-none"
+        className="data-[state=open]:duration-200 data-[state=closed]:duration-200 ease-[transition-timing-function:cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none motion-reduce:animate-none"
       >
         <SheetHeader>
           <SheetTitle>{mostrado?.nombre ?? "Variantes"}</SheetTitle>

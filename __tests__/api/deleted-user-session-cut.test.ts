@@ -28,7 +28,7 @@ vi.mock("@/lib/impersonation", () => ({
 }))
 
 import { getTenantStatusBySlug } from "@/lib/tenant-status-edge"
-import { middleware } from "@/middleware"
+import { proxy as middleware } from "@/proxy"
 
 const apex = (path: string) =>
   new NextRequest(`https://stapp.com.ar${path}`, { headers: { host: "stapp.com.ar" } })

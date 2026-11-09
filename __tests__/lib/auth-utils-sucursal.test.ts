@@ -205,7 +205,7 @@ describe("requireAuth — a JWT that no longer matches the user's row is a stale
     ["an ADMIN that was deleted", "ADMIN", fila({ rol: "ADMIN", deleted_at: "2026-10-27T12:00:00Z", sucursal_id: null })],
   ])("an impersonation session (%s) still gets the 401 SESSION_STALE but keeps its cookie", async (_caso, rolJwt, row) => {
     // Clearing it would drop the impersonation token the superadmin needs to exit
-    // (same skip as middleware.ts deletedUserResponse).
+    // (same skip as proxy.ts deletedUserResponse).
     const impersonada = sesion(rolJwt, rolJwt === "ADMIN" ? null : "suc-A")
     impersonada.user.isImpersonating = true
     vi.mocked(auth).mockResolvedValue(impersonada)
