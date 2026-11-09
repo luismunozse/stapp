@@ -21,7 +21,7 @@ vi.mock("@/lib/impersonation", () => ({
   isImpersonationWriteBlocked: vi.fn().mockReturnValue(false),
 }))
 
-import { middleware } from "@/middleware"
+import { proxy as middleware } from "@/proxy"
 
 function mainDomainRequestWithForgedHeaders() {
   return new NextRequest("https://stapp.com.ar/", {
