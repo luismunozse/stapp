@@ -75,7 +75,7 @@ describe("clearSessionCookie", () => {
 // cookie rules are pinned statically: they live in lib/session-cookie.ts and
 // every other place that needs them imports them.
 describe("one source for the cookie rules", () => {
-  const fuentes = leerFuentes(["app", "lib", "components", "hooks", "contexts"], ["middleware.ts"])
+  const fuentes = leerFuentes(["app", "lib", "components", "hooks", "contexts"], ["proxy.ts"])
 
   it("scans the real tree (guards against a ghost loop)", () => {
     expect(fuentes.length).toBeGreaterThan(500)
@@ -85,7 +85,7 @@ describe("one source for the cookie rules", () => {
   it.each([
     "lib/auth.ts",
     "lib/impersonation.ts",
-    "middleware.ts",
+    "proxy.ts",
     "app/api/superadmin/impersonate/route.ts",
     "app/api/auth/impersonate/exit/route.ts",
   ])("%s takes the cookie name and domain from lib/session-cookie.ts", (rel) => {

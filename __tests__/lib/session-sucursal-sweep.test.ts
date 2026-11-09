@@ -9,7 +9,7 @@ import { leerFuentes, sinComentarios } from "../helpers/fuentes"
 // with the reason it can live with the JWT value.
 // Directories (relative to the repo root) and single files that are scanned.
 const RAICES = ["app", "lib", "components", "hooks", "contexts"]
-const ARCHIVOS_SUELTOS = ["middleware.ts"]
+const ARCHIVOS_SUELTOS = ["proxy.ts"]
 
 // Files that may read the JWT branch.
 const EXENTOS = new Map<string, string>([
@@ -85,7 +85,7 @@ describe("source tree", () => {
       "app/api/operadores/route.ts",
       "lib/auth-utils.ts",
       "components/pwa/api-cache-session-guard.tsx",
-      "middleware.ts",
+      "proxy.ts",
     ]) {
       expect(rels.has(esperado), esperado).toBe(true)
     }
