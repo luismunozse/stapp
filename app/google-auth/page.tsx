@@ -1,14 +1,14 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useCallback, useState, useSyncExternalStore, Suspense } from "react"
 import { signIn } from "next-auth/react"
 import { useSearchParams } from "next/navigation"
 import { GoogleLogin, GoogleOAuthProvider } from "@react-oauth/google"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ThemeToggle } from "@/components/ui/theme-toggle"
-import { Loader2 } from "lucide-react"
+import { ArrowLeft, Loader2, Store } from "lucide-react"
 import { BusinessLogo } from "@/components/shared/business-logo"
+import { AuthSplitLayout } from "@/components/auth/auth-split-layout"
 import { extractAuthCode, parseRequires2FA } from "@/lib/auth-client"
 import { TwoFactorVerify } from "@/components/auth/two-factor-verify"
 
@@ -22,6 +22,43 @@ import { TwoFactorVerify } from "@/components/auth/two-factor-verify"
  * - orgNombre, orgSlug: datos de org (solo para registro)
  * - userName: nombre del usuario (solo para registro)
  */
+
+// El tema lo maneja ThemeToggle poniendo/quitando la clase `dark` en <html>
+// (no hay contexto compartido), así que se observa esa clase directamente.
+function subscribeDarkClass(onChange: () => void) {
+  const observer = new MutationObserver(onChange)
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] })
+  return () => observer.disconnect()
+}
+
+function useIsDark() {
+  return useSyncExternalStore(
+    subscribeDarkClass,
+    () => document.documentElement.classList.contains("dark"),
+    () => false,
+  )
+}
+
+/**
+ * El botón de Google es un iframe de ancho fijo (entre 200 y 400 px): no se
+ * adapta solo. Se mide el contenedor y se le pasa ese ancho; si no, en móvil
+ * desborda la página a lo ancho.
+ */
+function useGoogleButtonWidth() {
+  const [width, setWidth] = useState(0)
+  const ref = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return
+    const measure = () => {
+      const w = Math.round(Math.min(400, Math.max(200, el.clientWidth)))
+      setWidth((prev) => (prev === w ? prev : w))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  return { ref, width }
+}
 
 function GoogleAuthContent() {
   const searchParams = useSearchParams()
@@ -45,7 +82,13 @@ function GoogleAuthContent() {
   const utm = hasUtm ? utmFromParams : null
 
   const [loading, setLoading] = useState(false)
+  // Qué se está haciendo mientras `loading`: se muestra bajo el spinner
+  const [loadingMsg, setLoadingMsg] = useState("")
   const [error, setError] = useState("")
+  // El email de Google no tiene cuenta: se ofrece ir a registrarse
+  const [noAccount, setNoAccount] = useState(false)
+  const isDark = useIsDark()
+  const { ref: googleButtonRef, width: googleButtonWidth } = useGoogleButtonWidth()
   // Login con Google + 2FA: guardamos el ID token de Google (vale ~1 h) para
   // reenviarlo junto con el código TOTP. Antes se redirigía a
   // /login?needs2fa=true, que nadie leía: el usuario quedaba en el login del
@@ -59,13 +102,9 @@ function GoogleAuthContent() {
   // Si no hay client ID, mostrar error
   if (!clientId) {
     return (
-      <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background px-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6">
-            <p className="text-center text-destructive">Google Login no está configurado.</p>
-          </CardContent>
-        </Card>
-      </div>
+      <AuthSplitLayout>
+        <p className="text-center text-destructive">Google Login no está configurado.</p>
+      </AuthSplitLayout>
     )
   }
 
@@ -90,6 +129,7 @@ function GoogleAuthContent() {
       setPendingGoogleToken(null)
       if (code.includes("GOOGLE_NO_ACCOUNT")) {
         setError("No existe una cuenta con este email de Google. Registrate primero.")
+        setNoAccount(true)
       } else if (code.includes("SUPERADMIN_REQUIRES_2FA_SETUP")) {
         setError("Tu cuenta requiere tener 2FA configurado. Contactá al administrador del sistema.")
       } else if (code.includes("ORG_INACTIVE")) {
@@ -105,6 +145,7 @@ function GoogleAuthContent() {
     }
 
     setPendingGoogleToken(null)
+    setLoadingMsg("Entrando a tu negocio…")
 
     // Login exitoso - redirigir al tenant
     if (tenant) {
@@ -128,6 +169,7 @@ function GoogleAuthContent() {
     if (!pendingGoogleToken) return
     setLoading(true)
     setTwoFAError("")
+    setLoadingMsg("Verificando el código…")
     try {
       await loginWithGoogle(pendingGoogleToken, totpCode)
     } catch {
@@ -144,6 +186,8 @@ function GoogleAuthContent() {
 
     setLoading(true)
     setError("")
+    setNoAccount(false)
+    setLoadingMsg(action === "register" ? "Creando tu cuenta…" : "Verificando tu cuenta…")
 
     try {
       if (action === "register") {
@@ -187,77 +231,14 @@ function GoogleAuthContent() {
     }
   }
 
-  return (
-    <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background px-4">
-      <div className="absolute top-4 right-4">
-        <ThemeToggle variant="icon" />
-      </div>
+  const isRegister = action === "register"
+  const backPath = isRegister ? "registro" : "login"
+  const backHref = tenant ? `https://${tenant}.${rootDomain}/${backPath}` : `/${backPath}`
 
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 pb-4">
-          <div className="flex justify-center py-4">
-            <BusinessLogo size="xl" showText={false} />
-          </div>
-          <CardTitle className="text-xl text-center">
-            {action === "register" ? "Registrarse con Google" : "Iniciar sesión con Google"}
-          </CardTitle>
-          <CardDescription className="text-center">
-            {action === "register"
-              ? `Registrando negocio: ${orgNombre}`
-              : "Seleccioná tu cuenta de Google para continuar"}
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent className="space-y-4">
-          {error && (
-            <div className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded text-sm">
-              {error}
-            </div>
-          )}
-
-          {loading ? (
-            <div className="flex flex-col items-center gap-3 py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="text-sm text-muted-foreground">
-                {action === "register" ? "Creando tu cuenta..." : "Iniciando sesión..."}
-              </p>
-            </div>
-          ) : (
-            <GoogleOAuthProvider clientId={clientId}>
-              <div className="flex justify-center">
-                <div className="w-full [&>div]:!w-full [&_iframe]:!w-full">
-                  <GoogleLogin
-                    onSuccess={handleGoogleSuccess}
-                    onError={() => setError("Error al conectar con Google. Intentá de nuevo.")}
-                    size="large"
-                    width="400"
-                    text={action === "register" ? "signup_with" : "continue_with"}
-                    shape="rectangular"
-                  />
-                </div>
-              </div>
-            </GoogleOAuthProvider>
-          )}
-
-          <div className="text-center pt-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                if (tenant) {
-                  window.location.href = `https://${tenant}.${rootDomain}/${action === "register" ? "registro" : "login"}`
-                } else {
-                  window.location.href = action === "register" ? "/registro" : "/login"
-                }
-              }}
-            >
-              Volver
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {pendingGoogleToken && (
+  // Con 2FA pendiente se muestra solo el paso del código, como en /login
+  if (pendingGoogleToken) {
+    return (
+      <AuthSplitLayout>
         <TwoFactorVerify
           onVerified={handleGoogle2FA}
           externalError={twoFAError}
@@ -266,8 +247,88 @@ function GoogleAuthContent() {
             setTwoFAError("")
           }}
         />
-      )}
-    </div>
+      </AuthSplitLayout>
+    )
+  }
+
+  return (
+    <AuthSplitLayout>
+      <div className="space-y-8">
+        <a
+          href={backHref}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          {isRegister ? "Volver al registro" : "Volver al login"}
+        </a>
+
+        <div className="space-y-6">
+          <div className="flex justify-center lg:justify-start">
+            <BusinessLogo size="xl" showText={false} />
+          </div>
+          <div className="space-y-1.5 text-center lg:text-left">
+            <h1 className="text-2xl font-bold tracking-tight">
+              {isRegister ? "Crear tu cuenta con Google" : "Continuar con Google"}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {isRegister
+                ? "Elegí la cuenta de Google con la que vas a administrar tu negocio"
+                : "Elegí la cuenta de Google con la que te registraste"}
+            </p>
+          </div>
+        </div>
+
+        {isRegister && orgNombre && (
+          <div className="flex items-center gap-3 rounded-xl border bg-muted/40 px-4 py-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Store className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate font-medium">{orgNombre}</p>
+              {orgSlug && (
+                <p className="truncate text-sm text-muted-foreground">
+                  {orgSlug}.{rootDomain}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div role="alert" className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded-lg text-sm space-y-3">
+            <p>{error}</p>
+            {noAccount && (
+              <Button asChild size="sm" variant="outline" className="border-destructive/30 bg-background">
+                <Link href="/registro">Registrar mi negocio</Link>
+              </Button>
+            )}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed py-8" aria-live="polite">
+            <Loader2 className="h-7 w-7 animate-spin text-primary" aria-hidden="true" />
+            <p className="text-sm text-muted-foreground">{loadingMsg}</p>
+          </div>
+        ) : (
+          <GoogleOAuthProvider clientId={clientId}>
+            <div ref={googleButtonRef} className="w-full min-h-10 flex justify-center">
+              {/* key: la librería no redibuja el iframe al cambiar tema o ancho; se remonta */}
+              {googleButtonWidth > 0 && <GoogleLogin
+                key={`${isDark ? "dark" : "light"}-${googleButtonWidth}`}
+                onSuccess={handleGoogleSuccess}
+                onError={() => setError("Error al conectar con Google. Intentá de nuevo.")}
+                size="large"
+                width={googleButtonWidth}
+                theme={isDark ? "filled_black" : "outline"}
+                text={isRegister ? "signup_with" : "continue_with"}
+                shape="rectangular"
+              />}
+            </div>
+          </GoogleOAuthProvider>
+        )}
+      </div>
+    </AuthSplitLayout>
   )
 }
 
@@ -275,7 +336,7 @@ export default function GoogleAuthPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background">
+        <div className="min-h-dvh flex items-center justify-center bg-background">
           <div className="animate-pulse text-muted-foreground">Cargando...</div>
         </div>
       }
