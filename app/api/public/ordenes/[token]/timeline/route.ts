@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getOrderByPublicToken } from "@/lib/public-token"
+import { firmarCampo } from "@/lib/storage-privado"
 
 export async function GET(
   request: Request,
@@ -23,11 +24,14 @@ export async function GET(
       .order("created_at", { ascending: true })
 
     // Obtener fotos para enriquecer el timeline
-    const { data: fotos } = await supabaseAdmin
+    const { data: fotosDb } = await supabaseAdmin
       .from("fotos_orden")
-      .select("id, url, tipo, descripcion, created_at")
+      .select("id, url, storage_path, tipo, descripcion, created_at")
       .eq("orden_id", orden.id)
       .order("created_at", { ascending: true })
+
+    // El bucket es privado: cada foto sale con una URL firmada que vence.
+    const fotos = await firmarCampo("FOTOS_ORDENES", fotosDb ?? [], "url", { campoPath: "storage_path" })
 
     // Combinar eventos y fotos en un timeline unificado
     const timeline = [

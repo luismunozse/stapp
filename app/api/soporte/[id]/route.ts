@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { firmarReferencias } from "@/lib/storage-privado"
 
 export async function GET(
   request: Request,
@@ -21,7 +22,7 @@ export async function GET(
           id, autor_tipo, autor_id, autor_nombre, contenido, created_at, leido_at
         ),
         support_ticket_attachments (
-          id, message_id, url, nombre_archivo, mime, created_at
+          id, message_id, url, storage_path, nombre_archivo, mime, created_at
         )
       `)
       .eq("id", id)
@@ -36,10 +37,16 @@ export async function GET(
     }
 
     // Mapear adjuntos por message_id
-    const allAttachments = (ticket.support_ticket_attachments || []).map((a: Record<string, unknown>) => ({
+    // El bucket es privado: cada adjunto sale con una URL firmada que vence.
+    const adjuntosDb: Record<string, unknown>[] = ticket.support_ticket_attachments || []
+    const urlsFirmadas = await firmarReferencias(
+      "SOPORTE_ATTACHMENTS",
+      adjuntosDb.map((a) => ((a.storage_path as string | null) || (a.url as string | null)))
+    )
+    const allAttachments = adjuntosDb.map((a, i) => ({
       id: a.id as string,
       messageId: a.message_id as string | null,
-      url: a.url as string,
+      url: urlsFirmadas[i],
       nombreArchivo: a.nombre_archivo as string | null,
       createdAt: a.created_at as string,
     }))

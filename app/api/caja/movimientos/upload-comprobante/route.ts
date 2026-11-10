@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server"
 import { requireCajaAccess } from "@/lib/auth-utils"
-import { supabaseAdmin, STORAGE_BUCKETS, getPublicUrl } from "@/lib/supabase"
+import { supabaseAdmin, STORAGE_BUCKETS } from "@/lib/supabase"
+import { firmarReferencia } from "@/lib/storage-privado"
 
 /**
- * Sube un archivo (imagen o PDF) al bucket comprobantes-gastos
- * y devuelve la URL pública.
+ * Sube un archivo (imagen o PDF) al bucket privado comprobantes-gastos
+ * y devuelve una URL firmada para previsualizarlo.
  *
- * El frontend después usa esa URL al crear/actualizar el movimiento.
+ * El frontend después manda esa URL al crear el movimiento; el servidor la
+ * valida contra la organización y guarda la referencia al archivo.
  */
 export async function POST(request: Request) {
   try {
@@ -53,7 +55,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Error al subir comprobante" }, { status: 500 })
     }
 
-    const url = getPublicUrl(STORAGE_BUCKETS.COMPROBANTES_GASTOS, path)
+    const url = await firmarReferencia("COMPROBANTES_GASTOS", path, { prefijo: organizationId! })
+    if (!url) {
+      return NextResponse.json({ error: "Error al subir comprobante" }, { status: 500 })
+    }
 
     return NextResponse.json({ url, path })
   } catch (err) {

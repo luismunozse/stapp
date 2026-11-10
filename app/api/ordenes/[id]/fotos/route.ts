@@ -4,6 +4,7 @@ import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { uploadOrderPhoto, deleteFile, base64ToBuffer } from "@/lib/storage"
 import { formatFoto } from "@/lib/db-utils"
+import { firmarCampo } from "@/lib/storage-privado"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { updateStorageUsage } from "@/lib/subscriptions"
 import { z } from "zod"
@@ -22,7 +23,7 @@ export async function GET(
 ) {
   try {
     const autenticado = await requireAuth()
-    const { error } = autenticado
+    const { error, organizationId } = autenticado
     if (error) return error
 
     const { id: ordenId } = await params
@@ -50,7 +51,13 @@ export async function GET(
       throw dbError
     }
 
-    return NextResponse.json(fotos?.map(formatFoto))
+    // El bucket es privado: cada foto sale con una URL firmada que vence.
+    const firmadas = await firmarCampo("FOTOS_ORDENES", fotos ?? [], "url", {
+      campoPath: "storage_path",
+      prefijo: organizationId!,
+    })
+
+    return NextResponse.json(firmadas.map(formatFoto))
   } catch (error) {
     console.error("Error fetching fotos:", error)
     return NextResponse.json(
@@ -136,7 +143,12 @@ export async function POST(
       console.error("Error updating storage usage:", storageRpcError)
     }
 
-    return NextResponse.json(formatFoto(foto), { status: 201 })
+    const [fotoFirmada] = await firmarCampo("FOTOS_ORDENES", [foto], "url", {
+      campoPath: "storage_path",
+      prefijo: organizationId!,
+    })
+
+    return NextResponse.json(formatFoto(fotoFirmada), { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
