@@ -4,9 +4,8 @@ import { useState, Suspense } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ThemeToggle } from "@/components/ui/theme-toggle"
-import { BusinessLogo } from "@/components/shared/business-logo"
+import { AuthSplitLayout } from "@/components/auth/auth-split-layout"
+import { AuthHeader } from "@/components/auth/auth-header"
 import { Mail, Loader2, CheckCircle2, AlertCircle, ArrowRight } from "lucide-react"
 
 function VerificarContent() {
@@ -58,92 +57,83 @@ function VerificarContent() {
     }
   }
 
+  const emailDestacado = email ? (
+    <span className="font-medium text-foreground">{email}</span>
+  ) : (
+    "tu correo"
+  )
+
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background px-4 py-8">
-      <div className="absolute top-4 right-4">
-        <ThemeToggle variant="icon" />
-      </div>
-
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 pb-4">
-          <div className="flex justify-center py-4">
-            <BusinessLogo size="xl" showText={false} />
-          </div>
-          <div className="flex justify-center mb-2">
-            <div className="bg-primary/10 rounded-full p-3">
-              <Mail className="h-8 w-8 text-primary" />
-            </div>
-          </div>
-          <CardTitle className="text-2xl text-center">
-            {emailFailed ? "Tu cuenta se creó, pero…" : "¡Casi listo! Revisá tu email"}
-          </CardTitle>
-          <CardDescription className="text-center">
-            {emailFailed ? (
-              <>
-                No pudimos enviar el email de verificación a{" "}
-                {email ? (
-                  <span className="font-medium text-foreground">{email}</span>
-                ) : (
-                  "tu correo"
-                )}
-                . Reenvialo desde acá.
-              </>
+    <AuthSplitLayout>
+      <div className="space-y-6">
+        <AuthHeader
+          icon={emailFailed ? <AlertCircle /> : <Mail />}
+          tone={emailFailed ? "error" : "info"}
+          title={emailFailed ? "Tu cuenta se creó, pero…" : "¡Casi listo! Revisá tu email"}
+          description={
+            emailFailed ? (
+              <>No pudimos enviar el email de verificación a {emailDestacado}. Reenvialo desde acá.</>
             ) : (
-              <>
-                Te enviamos un enlace de verificación a{" "}
-                {email ? (
-                  <span className="font-medium text-foreground">{email}</span>
-                ) : (
-                  "tu correo"
-                )}
-              </>
-            )}
-          </CardDescription>
-        </CardHeader>
+              <>Te enviamos un enlace de verificación a {emailDestacado}.</>
+            )
+          }
+        />
 
-        <CardContent className="space-y-4">
-          {emailFailed ? (
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-3 rounded text-sm flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-              <span>
-                Hubo un problema al enviar el email de verificación. Tu cuenta ya existe:
-                tocá <strong>"Reenviar email de verificación"</strong> para recibir el enlace.
-              </span>
-            </div>
-          ) : (
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 px-4 py-3 rounded text-sm">
-              <p className="font-medium mb-1">Próximos pasos:</p>
-              <ol className="list-decimal list-inside space-y-1 text-xs">
-                <li>Abrí el email que te enviamos.</li>
-                <li>Hacé clic en el botón <strong>"Verificar mi email"</strong>.</li>
-                <li>Iniciá sesión en tu cuenta.</li>
-              </ol>
-            </div>
-          )}
+        {emailFailed ? (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-3 rounded-lg text-sm flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <span>
+              Hubo un problema al enviar el email de verificación. Tu cuenta ya existe:
+              tocá <strong>&quot;Reenviar email de verificación&quot;</strong> para recibir el enlace.
+            </span>
+          </div>
+        ) : (
+          <ol className="space-y-3">
+            {[
+              "Abrí el email que te enviamos.",
+              <>Hacé clic en <strong className="text-foreground">&quot;Verificar mi email&quot;</strong>.</>,
+              "Iniciá sesión en tu cuenta.",
+            ].map((paso, i) => (
+              <li key={i} className="flex items-start gap-3 text-sm text-muted-foreground">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                  {i + 1}
+                </span>
+                <span className="pt-0.5">{paso}</span>
+              </li>
+            ))}
+          </ol>
+        )}
 
-          <p className="text-xs text-muted-foreground text-center">
-            ¿No lo encontrás? Revisá la carpeta de <strong>spam</strong> o correo no deseado.
-            El email puede tardar hasta 2 minutos en llegar.
-          </p>
+        <p className="text-xs text-muted-foreground">
+          ¿No lo encontrás? Revisá la carpeta de <strong>spam</strong> o correo no deseado.
+          El email puede tardar hasta 2 minutos en llegar.
+        </p>
 
-          {resendStatus === "success" && (
-            <div className="bg-success-50 dark:bg-success-100 border border-success/30 text-success-700 dark:text-success-600 px-3 py-2 rounded text-xs flex items-start gap-2">
-              <CheckCircle2 className="h-4 w-4 flex-shrink-0 mt-0.5" />
-              <span>{resendMessage}</span>
-            </div>
-          )}
+        {resendStatus === "success" && (
+          <div role="status" className="bg-success-50 dark:bg-success-100 border border-success/30 text-success-700 dark:text-success-600 px-3 py-2 rounded-lg text-xs flex items-start gap-2">
+            <CheckCircle2 className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <span>{resendMessage}</span>
+          </div>
+        )}
 
-          {resendStatus === "error" && (
-            <div className="bg-destructive/10 border border-destructive/30 text-destructive px-3 py-2 rounded text-xs flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-              <span>{resendMessage}</span>
-            </div>
-          )}
+        {resendStatus === "error" && (
+          <div role="alert" className="bg-destructive/10 border border-destructive/30 text-destructive px-3 py-2 rounded-lg text-xs flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <span>{resendMessage}</span>
+          </div>
+        )}
 
+        <div className="space-y-3">
+          <Button asChild className="w-full h-11">
+            <a href={loginUrl}>
+              Ir al login
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </a>
+          </Button>
           <Button
             type="button"
             variant="outline"
-            className="w-full"
+            className="w-full h-11"
             onClick={handleResend}
             disabled={resendLoading || !email}
           >
@@ -159,22 +149,15 @@ function VerificarContent() {
               </>
             )}
           </Button>
+        </div>
 
-          <Button asChild className="w-full">
-            <a href={loginUrl}>
-              Ir al login
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </a>
-          </Button>
-
-          <div className="text-center text-sm text-muted-foreground pt-2 border-t">
-            <Link href="/" className="hover:text-primary hover:underline">
-              Volver al inicio
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+        <p className="text-center text-sm text-muted-foreground">
+          <Link href="/" className="hover:text-primary hover:underline">
+            Volver al inicio
+          </Link>
+        </p>
+      </div>
+    </AuthSplitLayout>
   )
 }
 
