@@ -23,6 +23,22 @@ export class CredencialesIncompletasError extends Error {
   }
 }
 
+/**
+ * La delegación existe del lado de ARCA para el CUIT de la plataforma, no para
+ * una org: cualquier org podría declarar el CUIT de otra. Hasta que la
+ * plataforma verifica que el CUIT pertenece a la org (estado 'conectado'), no
+ * se arma ninguna credencial delegada. Extiende CredencialesIncompletasError
+ * para que las rutas existentes lo traduzcan a un 400 con este mensaje.
+ */
+export class DelegacionNoVerificadaError extends CredencialesIncompletasError {
+  constructor() {
+    super("ARCA delegado", ["verificación"])
+    this.name = "DelegacionNoVerificadaError"
+    this.message =
+      "La delegación de ARCA está pendiente de verificación por STApp. Te avisamos cuando quede habilitada."
+  }
+}
+
 export type CredencialesResueltas =
   | { provider: "arca"; creds: ArcaCredenciales }
   | { provider: "arca_delegado"; creds: ArcaCredenciales }
@@ -30,6 +46,7 @@ export type CredencialesResueltas =
 
 interface CredencialesRow {
   provider?: string | null
+  estado?: string | null
   cuit?: string | null
   cert_pem_enc?: string | null
   key_pem_enc?: string | null
@@ -64,6 +81,7 @@ export function resolverCredenciales(params: ResolverCredencialesParams): Creden
   // AFIP deriva la del WSAA del subject del certificado, no del Auth.Cuit.
   if (row.provider === "arca_delegado") {
     exigir(row, ["cuit"], "ARCA delegado")
+    if (row.estado !== "conectado") throw new DelegacionNoVerificadaError()
     const plataforma = getCertificadoStapp()
 
     return {

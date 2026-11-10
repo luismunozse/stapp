@@ -97,6 +97,7 @@ const CREDENCIALES_ARCA = {
 const CREDENCIALES_DELEGADO = {
   organization_id: "org-1",
   provider: "arca_delegado",
+  estado: "conectado",
   cuit: "30710955057",
   cert_pem_enc: null,
   key_pem_enc: null,
