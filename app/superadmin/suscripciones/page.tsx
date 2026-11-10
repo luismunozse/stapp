@@ -585,7 +585,10 @@ export default function SuscripcionesPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Cancelar suscripción</DialogTitle>
-            <DialogDescription>Cancelar la suscripción de {cancelModal.orgName}</DialogDescription>
+            <DialogDescription>
+              Cancelar la suscripción de {cancelModal.orgName}. También se cancela el débito
+              automático en MercadoPago (u otro proveedor), si tiene uno.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="flex items-center gap-3 p-3 rounded-lg bg-muted">

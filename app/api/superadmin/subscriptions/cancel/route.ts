@@ -4,6 +4,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { cancelOrganizationSubscriptions } from "@/lib/account-deletion/cancel-subscriptions"
 
 const cancelSchema = z.object({
   organizationId: z.string().min(1, "ID de organización requerido"),
@@ -34,6 +35,24 @@ export async function POST(request: Request) {
     if (sub.status === "CANCELED") {
       return NextResponse.json({ error: "La suscripción ya está cancelada" }, { status: 400 })
     }
+
+    // Primero el cobro automático en el proveedor (MercadoPago/Rebill/Creem).
+    // Si solo se marcaba la fila, el proveedor seguía cobrando y el webhook del
+    // cobro siguiente volvía a poner la suscripción en ACTIVE. Se hace igual al
+    // cancelar "al final del período": el acceso sigue hasta current_period_end
+    // pero no hay más débitos. Si el proveedor falla no se toca la fila, para
+    // que el reintento vuelva a pasar por acá (es idempotente).
+    const providerCancel = await cancelOrganizationSubscriptions(organizationId)
+    if (!providerCancel.ok) {
+      return NextResponse.json(
+        {
+          error: `No se pudo cancelar el cobro automático en ${providerCancel.failed.join(", ")}. La suscripción no se modificó; reintentá.`,
+          providers: providerCancel.failed,
+        },
+        { status: 502 }
+      )
+    }
+    const providersCanceled = providerCancel.canceled
 
     const now = new Date().toISOString()
 
@@ -70,7 +89,12 @@ export async function POST(request: Request) {
       action: "CANCELED",
       previous_status: sub.status,
       new_status: immediate ? "CANCELED" : sub.status,
-      details: { immediate, cancel_at_period_end: !immediate, current_period_end: sub.current_period_end },
+      details: {
+        immediate,
+        cancel_at_period_end: !immediate,
+        current_period_end: sub.current_period_end,
+        providers_canceled: providersCanceled,
+      },
       performed_by: email,
     })
 
@@ -85,7 +109,7 @@ export async function POST(request: Request) {
         description: immediate
           ? "Suscripción cancelada inmediatamente"
           : "Suscripción marcada para cancelar al final del período",
-        metadata: { immediate },
+        metadata: { immediate, providersCanceled },
       })
       .catch(() => {})
 
