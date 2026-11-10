@@ -15,12 +15,22 @@ const BENEFICIOS = [
  * desde `lg`) y el contenido a la derecha. En móvil queda solo el contenido:
  * la foto no aporta en la PWA/app nativa y le resta espacio al formulario.
  *
- * Las fotos se alternan con un fundido (ver AuthPhotoRotator).
+ * Las fotos se alternan con un fundido (ver AuthPhotoRotator). El panel queda
+ * fijo (`sticky`) para que no se vaya con el scroll en formularios largos.
+ *
+ * `width`: ancho máximo del contenido. "md" para formularios con grillas
+ * (registro); "sm" para el resto.
  */
-export function AuthSplitLayout({ children }: { children: ReactNode }) {
+export function AuthSplitLayout({
+  children,
+  width = "sm",
+}: {
+  children: ReactNode
+  width?: "sm" | "md"
+}) {
   return (
     <div className="min-h-dvh grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] bg-background">
-      <aside className="relative hidden lg:block overflow-hidden bg-slate-950">
+      <aside className="relative hidden lg:block lg:sticky lg:top-0 lg:h-dvh overflow-hidden bg-slate-950">
         <AuthPhotoRotator />
         {/* Degradado para que el texto se lea sobre cualquiera de las fotos */}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/40 to-transparent" />
@@ -55,7 +65,7 @@ export function AuthSplitLayout({ children }: { children: ReactNode }) {
         <div className="absolute top-4 right-4">
           <ThemeToggle variant="icon" />
         </div>
-        <div className="w-full max-w-sm">{children}</div>
+        <div className={width === "md" ? "w-full max-w-md" : "w-full max-w-sm"}>{children}</div>
       </main>
     </div>
   )
