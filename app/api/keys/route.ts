@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ...data, key: raw }, { status: 201 })
   } catch (e) {
     if (e instanceof z.ZodError) {
-      return NextResponse.json({ error: e.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: e.issues[0].message }, { status: 400 })
     }
     console.error("Error creating api key:", e)
     return NextResponse.json({ error: "Error al crear API key" }, { status: 500 })

@@ -19,7 +19,7 @@ import {
   type ContextoEventos,
 } from "@/lib/inventario-eventos"
 import { imagenRespaldoDe } from "@/lib/variantes"
-import { argumentosGuardarGrupo, compartidosDeFila, guardarGrupoSchema } from "@/lib/variantes-schema"
+import { argumentosGuardarGrupo, compartidosDeFila, validarGuardarGrupo } from "@/lib/variantes-schema"
 import { conReintento, migracionPendiente, respuestaDeError, respuestaDeValidacion } from "@/lib/variantes-api"
 
 type Contexto = { params: Promise<{ id: string }> }
@@ -223,7 +223,7 @@ export async function PUT(request: Request, { params }: Contexto) {
     } catch {
       return NextResponse.json({ error: "El pedido no es un JSON válido", code: "PAYLOAD_INVALIDO" }, { status: 400 })
     }
-    const validado = guardarGrupoSchema.safeParse(cuerpo)
+    const validado = validarGuardarGrupo(cuerpo)
     if (!validado.success) return respuestaDeValidacion(validado.error)
     let datos = validado.data
 

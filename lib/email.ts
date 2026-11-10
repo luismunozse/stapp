@@ -142,7 +142,7 @@ const getDivider = () => `
 // ============================================
 // ENVÍO DE EMAIL
 // ============================================
-import { sendPlatform, type EmailMessage } from "@/lib/email/index"
+import { sendPlatform, sendCustomer, type EmailMessage } from "@/lib/email/index"
 
 type SendEmailParams = EmailMessage
 
@@ -170,6 +170,7 @@ export async function sendVerificationEmail({
 }: SendVerificationEmailParams) {
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
   const verifyUrl = `https://${slug}.${rootDomain}/verificar-email?token=${token}`
+  const nombreSeguro = escapeHtml(nombre)
 
   const content = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -188,7 +189,7 @@ export async function sendVerificationEmail({
     </table>
 
     <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 16px 0 0 0;">
-      Hola <strong>${nombre}</strong>, gracias por registrarte.
+      Hola <strong>${nombreSeguro}</strong>, gracias por registrarte.
     </p>
 
     <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 8px 0 0 0;">
@@ -229,7 +230,7 @@ export async function sendVerificationEmail({
     to: email,
     subject: "Verifica tu cuenta - STApp",
     html: getBaseTemplate({
-      preheader: `${nombre}, verifica tu email para activar tu cuenta de STApp`,
+      preheader: `${nombreSeguro}, verifica tu email para activar tu cuenta de STApp`,
       content,
       rootDomain,
       footerText: "Este correo fue enviado porque alguien se registró con esta dirección de email.",
@@ -670,25 +671,26 @@ export async function sendAdminEmail({
 }: SendAdminEmailParams) {
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
 
-  const escapedContent = contenido
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\n/g, "<br>")
+  // Todo lo que llega acá lo escribió el usuario del taller: se escapa antes de
+  // tocar el HTML. El asunto del correo es texto plano y va sin escapar.
+  const escapedContent = escapeHtml(contenido).replace(/\n/g, "<br>")
+  const asuntoHtml = escapeHtml(asunto)
+  const destinatarioHtml = escapeHtml(nombreDestinatario)
+  const organizacionHtml = escapeHtml(nombreOrganizacion)
 
   const content = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
       <tr>
         <td align="center">
           <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; margin: 0 0 8px 0;">
-            ${asunto}
+            ${asuntoHtml}
           </h1>
         </td>
       </tr>
     </table>
 
     <p class="text-body" style="color: #4b5563; font-size: 16px; margin: 24px 0 0 0;">
-      Hola <strong>${nombreDestinatario}</strong>,
+      Hola <strong>${destinatarioHtml}</strong>,
     </p>
 
     <div class="text-body" style="color: #4b5563; font-size: 15px; line-height: 1.7; margin: 16px 0 0 0;">
@@ -698,18 +700,19 @@ export async function sendAdminEmail({
     ${getDivider()}
 
     <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 0;">
-      Este mensaje fue enviado por <strong>${nombreOrganizacion}</strong> a través de STApp.
+      Este mensaje fue enviado por <strong>${organizacionHtml}</strong> a través de STApp.
     </p>
   `
 
-  return sendEmail({
+  // Canal de CLIENTE: es correo del taller a su cliente, no de la plataforma.
+  return sendCustomer({
     to,
     subject: `${asunto} - ${nombreOrganizacion}`,
     html: getBaseTemplate({
-      preheader: `${nombreDestinatario}, tienes un mensaje de ${nombreOrganizacion}`,
+      preheader: `${destinatarioHtml}, tienes un mensaje de ${organizacionHtml}`,
       content,
       rootDomain,
-      footerText: `Este correo fue enviado por ${nombreOrganizacion} a través de STApp.`,
+      footerText: `Este correo fue enviado por ${organizacionHtml} a través de STApp.`,
     }),
   })
 }
@@ -894,6 +897,11 @@ export async function sendDelegacionArcaPendienteNotification({
     </p>
     <ol style="margin: 0; padding-left: 20px;">
       ${paso(
+        "Verificá que el CUIT " +
+          escapeHtml(cuit) +
+          " sea de este taller (razón social en ARCA vs. la organización). Si no lo es, no sigas: rechazalo en el panel."
+      )}
+      ${paso(
         "Entrá a ARCA con la Clave Fiscal de STApp, abrí la app <strong>Aceptación de Designación</strong> y aceptá la autorización del CUIT " +
           escapeHtml(cuit) +
           "."
@@ -903,12 +911,15 @@ export async function sendDelegacionArcaPendienteNotification({
           escapeHtml(cuit) +
           " → Buscar → ARCA &gt; WebServices &gt; Facturación Electrónica → segundo Buscar → elegí el computador fiscal <strong>stapp-prod</strong> → Confirmar → Confirmar."
       )}
+      ${paso(
+        "En el panel de superadmin, abrí la organización y tocá <strong>Aprobar CUIT</strong> en Facturación delegada. Hasta entonces el taller no puede facturar."
+      )}
     </ol>
 
     ${getDivider()}
 
     <p class="text-muted" style="color: #9ca3af; font-size: 13px; margin: 0;">
-      Mientras no lo hagas, al taller le va a seguir fallando la prueba de conexión.
+      Mientras no lo apruebes, el taller no puede probar la conexión ni facturar.
     </p>
   `
 

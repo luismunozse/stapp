@@ -296,6 +296,7 @@ export function EmailCompose() {
           <Input
             id="asunto"
             placeholder="Asunto del email"
+            maxLength={150}
             value={asunto}
             onChange={(e) => setAsunto(e.target.value)}
           />
@@ -307,6 +308,7 @@ export function EmailCompose() {
           <Textarea
             id="contenido"
             placeholder="Escribe tu mensaje aquí..."
+            maxLength={10000}
             value={contenido}
             onChange={(e) => setContenido(e.target.value)}
             className="min-h-[200px]"

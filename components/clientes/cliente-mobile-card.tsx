@@ -19,7 +19,8 @@ import { PracticaBadge } from "@/components/onboarding/practica-badge"
 interface ClienteMobileCardProps {
   cliente: Cliente
   onEdit: (e: React.MouseEvent, cliente: Cliente) => void
-  onDelete: (e: React.MouseEvent, cliente: Cliente) => void
+  /** Sin onDelete no se muestra la opción Eliminar (solo ADMIN puede borrar). */
+  onDelete?: (e: React.MouseEvent, cliente: Cliente) => void
   onWhatsApp?: (e: React.MouseEvent, cliente: Cliente) => void
   onCuentaCorriente?: (e: React.MouseEvent, cliente: Cliente) => void
   onCobrar?: (e: React.MouseEvent, cliente: Cliente) => void
@@ -145,7 +146,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                     Cuenta corriente
                   </button>
                 )}
-                {!cliente.esPractica && (
+                {onDelete && !cliente.esPractica && (
                   <>
                     <div className="h-px bg-border my-1" />
                     <button

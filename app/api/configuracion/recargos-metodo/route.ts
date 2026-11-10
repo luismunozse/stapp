@@ -60,7 +60,7 @@ export async function PUT(request: Request) {
     data = putSchema.parse(await request.json())
   } catch (e) {
     if (e instanceof z.ZodError) {
-      return NextResponse.json({ error: e.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: e.issues[0].message }, { status: 400 })
     }
     return NextResponse.json({ error: "Body inválido" }, { status: 400 })
   }

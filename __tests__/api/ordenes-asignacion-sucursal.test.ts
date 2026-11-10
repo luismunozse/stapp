@@ -9,6 +9,9 @@
  * looks up is the one the test defined, with the branch it defined.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
+
+// La pertenencia de cliente/sector se prueba en ordenes-referencias-org.test.ts.
+vi.mock("@/lib/referencias-cliente", () => ({ validarClienteYSector: vi.fn().mockResolvedValue(null) }))
 import { cookies } from "next/headers"
 import { mockAuthSuccess, mockSupabaseFrom, createChainMock, createPostRequest, parseResponse } from "./helpers"
 import { tablaPostgrest } from "../helpers/postgrest-memoria"

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation"
+import { serializeJsonLd } from "@/lib/seo/serialize-json-ld"
 import { unstable_cache } from "next/cache"
 import { CatalogoView } from "@/components/catalogo-public/catalogo-view"
 import { fetchCatalogoBaseData } from "@/lib/catalogo/fetch-data"
@@ -117,7 +118,7 @@ export default async function CatalogoPublicPage({ params }: PageProps) {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(itemListLd) }}
       />
       <CatalogoView data={data} />
     </>

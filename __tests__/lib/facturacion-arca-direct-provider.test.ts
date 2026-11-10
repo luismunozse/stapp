@@ -1045,3 +1045,102 @@ describe("arcaDirectProvider — mismo ticket y contexto para consultar, último
     expect(sdk.contextos[0].credentials.credentials).toEqual({ token: "TOK", sign: "SIG" })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Facturas con número explícito (migración 389)
+// ---------------------------------------------------------------------------
+
+/** Factura B (6) número 5 del punto de venta 3: lo que la ruta le entrega a `emitirFacturaNumerada`. */
+const voucherFacturaB: IVoucher = {
+  ...voucherNcB,
+  CbteTipo: 6,
+  CbtesAsoc: undefined,
+}
+
+describe("arcaDirectProvider.emitirFacturaNumerada", () => {
+  const spyError = vi.spyOn(console, "error").mockImplementation(() => {})
+  afterEach(() => spyError.mockClear())
+
+  it("A con CAE: autorizada, con el número enviado, y NUNCA usa createNextVoucher", async () => {
+    const creada = respuestaNcAutorizada()
+    const sdk = fakeSdkNc({ creada })
+
+    const res = await proveedorNc(sdk).emitirFacturaNumerada(creds, voucherFacturaB)
+
+    expect(res).toEqual({
+      kind: "autorizada",
+      numero: "0003-00000005",
+      cae: "70000000000042",
+      caeVencimiento: "20261030",
+      raw: creada.response,
+    })
+    expect(sdk.enviados).toEqual([voucherFacturaB])
+    expect(sdk.siguientes).toHaveLength(0)
+  })
+
+  it("createVoucher lanza (timeout después de enviar): incierta, nunca rechazada", async () => {
+    const sdk = fakeSdkNc({ creada: new Error("ETIMEDOUT") })
+
+    const res = await proveedorNc(sdk).emitirFacturaNumerada(creds, voucherFacturaB)
+
+    expect(res.kind).toBe("incierta")
+  })
+
+  it("R de ARCA: rechazada con los motivos", async () => {
+    const sdk = fakeSdkNc({
+      creada: {
+        response: {
+          FeCabResp: { Resultado: "R" },
+          FeDetResp: { FECAEDetResponse: [{ Resultado: "R", Observaciones: { Obs: [{ Code: 10016, Msg: "no correlativo" }] } }] },
+        },
+      },
+    })
+
+    const res = await proveedorNc(sdk).emitirFacturaNumerada(creds, voucherFacturaB)
+
+    expect(res).toMatchObject({ kind: "rechazada", errores: ["10016: no correlativo"] })
+  })
+
+  it("respuesta sin Resultado (error interno de ARCA): incierta", async () => {
+    const sdk = fakeSdkNc({ creada: { response: { Errors: { Err: [{ Code: 501, Msg: "Error interno" }] } } } })
+
+    const res = await proveedorNc(sdk).emitirFacturaNumerada(creds, voucherFacturaB)
+
+    expect(res.kind).toBe("incierta")
+  })
+
+  it("una NC o un voucher sin número explícito se rechazan ANTES de enviar", async () => {
+    const sdk = fakeSdkNc({ creada: respuestaNcAutorizada() })
+
+    const nc = await proveedorNc(sdk).emitirFacturaNumerada(creds, voucherNcB)
+    const sinNumero = await proveedorNc(sdk).emitirFacturaNumerada(creds, { ...voucherFacturaB, CbteHasta: 6 })
+
+    expect(nc.kind).toBe("rechazada")
+    expect(sinNumero.kind).toBe("rechazada")
+    expect(sdk.enviados).toHaveLength(0)
+  })
+
+  it("si falla la autenticación no salió nada: rechazada", async () => {
+    const sdk = fakeSdkNc({ creada: respuestaNcAutorizada() })
+
+    const res = await proveedorNc(sdk, async () => {
+      throw new Error("WSAA caído")
+    }).emitirFacturaNumerada(creds, voucherFacturaB)
+
+    expect(res.kind).toBe("rechazada")
+    expect(sdk.enviados).toHaveLength(0)
+  })
+})
+
+describe("arcaDirectProvider.armarFactura", () => {
+  it("arma la factura sin número, con la fecha del día en hora argentina", () => {
+    const proveedor = createArcaDirectProvider({ now: () => new Date("2026-11-11T02:30:00Z") })
+
+    const voucher = proveedor.armarFactura(creds, input)
+
+    // 02:30 UTC del 11 es 23:30 del 10 en Argentina.
+    expect(voucher.CbteFch).toBe("20261110")
+    expect(voucher).not.toHaveProperty("CbteDesde")
+    expect(voucher.PtoVta).toBe(creds.puntoVenta)
+  })
+})

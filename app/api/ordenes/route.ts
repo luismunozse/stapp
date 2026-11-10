@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { validarClienteYSector } from "@/lib/referencias-cliente"
 import { randomBytes } from "crypto"
 import {
   requireAuth,
@@ -60,7 +61,7 @@ const ordenSchema = z.object({
   presupuestoAceptado: z.boolean().optional(),
   sena: z.number().optional(),
   metodoPagoSena: z.string().optional(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
   sectorId: z.string().optional(),
   telefonoContacto: z.string().optional(),
   tecnicoId: z.string().optional(),
@@ -354,6 +355,13 @@ export async function POST(request: Request) {
           { status: 400 }
         )
       }
+    }
+
+    // Cliente y sector tienen que ser de esta organización: el INSERT corre con
+    // service_role y la FK sola no lo impide.
+    const errorReferencia = await validarClienteYSector(organizationId!, data.clienteId, data.sectorId)
+    if (errorReferencia) {
+      return NextResponse.json({ error: errorReferencia }, { status: 400 })
     }
 
     // Si la orden se origina en un turno: validar que pertenece a la org y que
@@ -664,7 +672,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0].message },
         { status: 400 }
       )
     }

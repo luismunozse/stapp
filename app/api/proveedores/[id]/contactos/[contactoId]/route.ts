@@ -67,7 +67,7 @@ export async function PUT(
     return NextResponse.json(formatProveedorContacto(updated))
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error updating contacto:", err)
     return NextResponse.json({ error: "Error al actualizar contacto" }, { status: 500 })

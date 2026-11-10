@@ -249,7 +249,7 @@ export async function POST(
 
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error creating cobro:", err)
     return NextResponse.json({ error: "Error al registrar cobro" }, { status: 500 })

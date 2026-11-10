@@ -5,6 +5,7 @@ import { ClientesList } from "@/components/clientes/clientes-list"
 import { ClienteMobileCard } from "@/components/clientes/cliente-mobile-card"
 
 const puedeCobrarMock = vi.fn(() => true)
+vi.mock("next-auth/react", () => ({ useSession: () => ({ data: { user: { role: "ADMIN" } } }) }))
 vi.mock("@/hooks/use-puede-cobrar", () => ({ usePuedeCobrar: () => puedeCobrarMock() }))
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }) }))
 vi.mock("@/contexts/currency-context", () => ({

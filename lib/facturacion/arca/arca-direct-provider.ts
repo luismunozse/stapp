@@ -28,7 +28,7 @@ import {
   type RenewWsaaTicketOptions,
   type WsaaTicket,
 } from "@/lib/facturacion/arca/wsaa-ticket-store"
-import { esNotaCreditoFiscal } from "@/lib/facturacion/cbte-tipo"
+import { CBTE_TIPO_FACTURA, esNotaCreditoFiscal } from "@/lib/facturacion/cbte-tipo"
 import { ErrorDeNegocioFacturacion, mensajeSeguroDeError } from "@/lib/facturacion/errores"
 import { deriveTipo } from "@/lib/facturacion/derive"
 import { formatearNumeroComprobante } from "@/lib/facturacion/numero-comprobante"
@@ -41,8 +41,10 @@ import type {
   EmitirInput,
   FacturacionProvider,
   PuntoVenta,
+  ResultadoFactura,
   ResultadoNotaCredito,
   SoportaConsulta,
+  SoportaFacturaNumerada,
   SoportaDiagnostico,
   SoportaNotaCredito,
   SoportaUltimoNumero,
@@ -66,7 +68,8 @@ export type ArcaDirectProvider = FacturacionProvider<ArcaCredenciales> &
   SoportaDiagnostico<ArcaCredenciales> &
   SoportaConsulta<ArcaCredenciales> &
   SoportaUltimoNumero<ArcaCredenciales> &
-  SoportaNotaCredito<ArcaCredenciales>
+  SoportaNotaCredito<ArcaCredenciales> &
+  SoportaFacturaNumerada<ArcaCredenciales>
 
 /**
  * `FEParamGetPtosVenta` devuelve este código cuando el CUIT no tiene puntos de
@@ -211,6 +214,22 @@ function validarNotaCreditoAntesDeEnviar(voucher: IVoucher): void {
   Voucher.create(voucher)
 }
 
+const MENSAJE_FACTURA_SIN_CONFIRMAR =
+  "ARCA respondió sin confirmar la factura. Verificala con ARCA antes de volver a intentar."
+
+const CODIGOS_FACTURA: readonly number[] = Object.values(CBTE_TIPO_FACTURA)
+
+/** Igual que `validarNotaCreditoAntesDeEnviar`, para una factura B o C numerada. */
+function validarFacturaAntesDeEnviar(voucher: IVoucher): void {
+  if (!CODIGOS_FACTURA.includes(voucher.CbteTipo)) {
+    throw new ErrorDeNegocioFacturacion("El comprobante a enviar no es una factura electrónica (tipo 6 u 11).")
+  }
+  if (!Number.isInteger(voucher.CbteDesde) || voucher.CbteDesde < 1 || voucher.CbteDesde !== voucher.CbteHasta) {
+    throw new ErrorDeNegocioFacturacion("La factura se envía con un único número explícito (CbteDesde y CbteHasta iguales).")
+  }
+  Voucher.create(voucher)
+}
+
 /**
  * Qué pasó con una NC que SÍ salió hacia ARCA y devolvió una respuesta.
  *
@@ -222,6 +241,19 @@ function validarNotaCreditoAntesDeEnviar(voucher: IVoucher): void {
  * emitir una segunda. La fila queda pendiente y `verificar` la resuelve.
  */
 function clasificarRespuestaNotaCredito(resultado: any, voucher: IVoucher): ResultadoNotaCredito {
+  return clasificarRespuestaNumerada(resultado, voucher, MENSAJE_NC_SIN_CONFIRMAR, "la nota de crédito")
+}
+
+/**
+ * Clasificación común a todo comprobante enviado con número explícito (NC y
+ * factura). Ver `clasificarRespuestaNotaCredito` para las reglas.
+ */
+function clasificarRespuestaNumerada(
+  resultado: any,
+  voucher: IVoucher,
+  mensajeIncierta: string,
+  que: string
+): ResultadoNotaCredito {
   const response = resultado?.response
   const detalle = response?.FeDetResp?.FECAEDetResponse?.[0]
 
@@ -246,8 +278,8 @@ function clasificarRespuestaNotaCredito(resultado: any, voucher: IVoucher): Resu
     if (rechazada) return { kind: "rechazada", errores: extraerErrores(response), raw: response }
   }
 
-  console.error("[facturacion] respuesta de ARCA sin resultado concluyente para la nota de crédito", resultado)
-  return { kind: "incierta", error: MENSAJE_NC_SIN_CONFIRMAR }
+  console.error(`[facturacion] respuesta de ARCA sin resultado concluyente para ${que}`, resultado)
+  return { kind: "incierta", error: mensajeIncierta }
 }
 
 export function createArcaDirectProvider(deps: ArcaDirectProviderDeps = {}): ArcaDirectProvider {
@@ -436,6 +468,39 @@ export function createArcaDirectProvider(deps: ArcaDirectProviderDeps = {}): Arc
       }
 
       return clasificarRespuestaNotaCredito(resultado, voucher)
+    },
+
+    /**
+     * Envía una FACTURA ya armada y numerada. Nunca lanza. Misma frontera que
+     * `emitirNotaCredito`: lo que falla antes de `createVoucher` no salió
+     * (`rechazada`); una excepción de `createVoucher` pudo haber llegado
+     * (`incierta`) y NUNCA se marca rechazada: reintentar emitiría otra factura.
+     */
+    armarFactura(creds: ArcaCredenciales, input: EmitirInput): INextVoucher {
+      return buildVoucher(creds, input, { cbteFch: fechaComprobante(now()) })
+    },
+
+    async emitirFacturaNumerada(creds: ArcaCredenciales, voucher: IVoucher): Promise<ResultadoFactura> {
+      let arca: ArcaLike
+      try {
+        validarFacturaAntesDeEnviar(voucher)
+        arca = await clienteAutenticado(creds)
+      } catch (e: unknown) {
+        return {
+          kind: "rechazada",
+          errores: [mensajeSeguroDeError(e, "fallo preparando el envío de la factura a ARCA")],
+          raw: null,
+        }
+      }
+
+      let resultado: any
+      try {
+        resultado = await arca.electronicBillingService.createVoucher(voucher)
+      } catch (e: unknown) {
+        return { kind: "incierta", error: mensajeSeguroDeError(e, "fallo enviando la factura a ARCA") }
+      }
+
+      return clasificarRespuestaNumerada(resultado, voucher, MENSAJE_FACTURA_SIN_CONFIRMAR, "la factura")
     },
   }
 }

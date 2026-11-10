@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     // Validar datos
     const validationResult = registerSchema.safeParse(body)
     if (!validationResult.success) {
-      const errors = validationResult.error.errors.map((e) => e.message)
+      const errors = validationResult.error.issues.map((e) => e.message)
       return NextResponse.json(
         { error: errors.join(", ") },
         { status: 400 }
