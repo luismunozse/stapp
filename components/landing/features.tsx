@@ -40,7 +40,7 @@ const BLOQUES = [
 export function Features() {
   return (
     <LazyMotion features={domAnimation}>
-      <section id="features" className="scroll-mt-24 bg-muted/40 py-20 sm:py-24">
+      <section id="features" className="scroll-mt-24 bg-muted/40 py-10 sm:py-12">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <m.div
             className="mx-auto max-w-2xl text-center"
