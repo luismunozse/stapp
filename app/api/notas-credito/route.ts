@@ -35,7 +35,15 @@ const notaCreditoSchema = z.object({
   metodoDevolucion: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "MERCADOPAGO", "CUENTA_CORRIENTE", "NOTA_CREDITO_INTERNA", "OTRO"]).optional().nullable(),
   notas: z.string().optional().nullable(),
   items: z.array(itemSchema).optional(),
+  /** Clave estable por intento: un reintento devuelve la NC ya creada (mig 387). */
+  idempotencyKey: z.string().max(100).optional().nullable(),
 })
+
+/**
+ * Errores de dominio de crear_nota_credito (mig 387). P0040: las NC activas de
+ * la orden mas esta superan lo cobrado. P0041: la clave ya se uso en otra orden.
+ */
+const ERRORES_RPC_409 = new Set(["P0040", "P0041"])
 
 /** Mensaje unico: un sondeo no distingue "de otra org" de "inexistente". */
 const ITEMS_INVALIDOS = "Algún producto de la nota de crédito no es válido"
@@ -199,10 +207,24 @@ export async function POST(request: Request) {
             restock: i.restock,
           }))
         : null,
+      p_idempotency_key: data.idempotencyKey || null,
     })
 
-    if (rpcError) throw rpcError
+    if (rpcError) {
+      const code = (rpcError as { code?: string }).code
+      if (code && ERRORES_RPC_409.has(code)) {
+        return NextResponse.json({ error: rpcError.message }, { status: 409 })
+      }
+      if (code === "P0002") return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
+      throw rpcError
+    }
     if (result?.error) return NextResponse.json({ error: result.error }, { status: 400 })
+
+    // Reintento del mismo pedido: la NC ya existe y su egreso de caja se
+    // registro la primera vez.
+    if (result?.replayed) {
+      return NextResponse.json({ success: true, id: result.id, numero: result.numero }, { status: 200 })
+    }
 
     // Nota de crédito reembolsada en efectivo → egreso de caja (arqueo).
     await registrarEgresoCajaEfectivo({
