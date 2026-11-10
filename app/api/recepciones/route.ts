@@ -88,6 +88,19 @@ export async function POST(request: Request) {
       }
     }
 
+    // El cliente tiene que ser de esta organización: la RPC inserta con
+    // service_role y no lo comprueba.
+    const { data: cliente, error: clienteError } = await supabaseAdmin
+      .from("clientes")
+      .select("id")
+      .eq("id", data.clienteId)
+      .eq("organization_id", organizationId!)
+      .maybeSingle()
+    if (clienteError) throw clienteError
+    if (!cliente) {
+      return NextResponse.json({ error: "Cliente no encontrado" }, { status: 400 })
+    }
+
     const sucursalId = await sucursalParaEscritura({
       role,
       organizationId: organizationId!,
