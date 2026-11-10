@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAdmin, requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatCliente } from "@/lib/db-utils"
 import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesPorId } from "@/lib/ordenes/alcance-lectura"
 import { z } from "zod"
+
+/** Tablas cuyo registro con este cliente_id cuenta como historial e impide borrarlo. */
+const TABLAS_HISTORIAL_CLIENTE = [
+  "ordenes_servicio",
+  "recepciones",
+  "cuenta_corriente",
+  "ventas",
+  "cotizaciones",
+] as const
 
 const clienteSchema = z.object({
   nombre: z.string().min(1).optional(),
@@ -203,7 +212,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    // Borrar un cliente es una operación de administración: solo ADMIN.
+    const { error, organizationId } = await requireAdmin()
     if (error) return error
 
     const { id } = await params
@@ -220,6 +230,31 @@ export async function DELETE(
       return NextResponse.json(
         { error: "Cliente no encontrado" },
         { status: 404 }
+      )
+    }
+
+    // Varias tablas referencian al cliente con ON DELETE CASCADE (órdenes y,
+    // a través de ellas, cobros/garantías/facturas; cuenta corriente;
+    // recepciones). Borrar un cliente con historial borraría ese historial,
+    // así que solo se permite borrar clientes sin movimientos.
+    const historial = await Promise.all(
+      TABLAS_HISTORIAL_CLIENTE.map((tabla) =>
+        supabaseAdmin
+          .from(tabla)
+          .select("id", { count: "exact", head: true })
+          .eq("cliente_id", id)
+          .eq("organization_id", organizationId!)
+      )
+    )
+    const fallo = historial.find((r) => r.error)
+    if (fallo) throw fallo.error
+    if (historial.some((r) => (r.count ?? 0) > 0)) {
+      return NextResponse.json(
+        {
+          error:
+            "No se puede eliminar un cliente con historial (órdenes, ventas, cotizaciones o cuenta corriente).",
+        },
+        { status: 409 }
       )
     }
 

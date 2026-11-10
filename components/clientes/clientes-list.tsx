@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
+import { useSession } from "next-auth/react"
 import { PullToRefresh } from "@/components/ui/pull-to-refresh"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -39,6 +40,9 @@ interface ClientesListProps {
 }
 
 export function ClientesList({ allowImport = true }: ClientesListProps) {
+  const { data: session } = useSession()
+  // Borrar clientes es solo de ADMIN (el servidor lo exige igual).
+  const esAdmin = session?.user?.role === "ADMIN"
   const puedeCobrar = usePuedeCobrar()
   const router = useRouter()
   const { confirm, showError } = useModal()
@@ -391,7 +395,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                   </button>
                 </>
               )}
-              {!cliente.esPractica && (
+              {esAdmin && !cliente.esPractica && (
                 <>
                   <div className="h-px bg-border my-1" />
                   <button
@@ -670,7 +674,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                   key={cliente.id}
                   cliente={cliente}
                   onEdit={handleEdit}
-                  onDelete={handleDelete}
+                  onDelete={esAdmin ? handleDelete : undefined}
                   onWhatsApp={(e, c) => { e.stopPropagation(); setWhatsappCliente(c) }}
                   onCuentaCorriente={(e, c) => { e.stopPropagation(); setCuentaCorrienteCliente(c) }}
                   onCobrar={puedeCobrar ? (e, c) => { e.stopPropagation(); setCobrarCliente(c) } : undefined}
