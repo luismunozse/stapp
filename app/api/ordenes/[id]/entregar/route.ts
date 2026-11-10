@@ -47,7 +47,8 @@ export async function POST(
 
     // Obtener orden actual con cliente, dentro del alcance de quien llama
     const cargada = await cargarOrdenEnAlcance(id, actorDeSesion(autenticado), "entregar", {
-      select: `*, clientes(*)`,
+      // El embed de NC alimenta el guard del total confirmado (no bajar de lo cobrado).
+      select: `*, clientes(*), ${NOTAS_CREDITO_APLICADO_EMBED}`,
     })
     if ("error" in cargada) return cargada.error
     const { orden } = cargada
@@ -127,6 +128,26 @@ export async function POST(
         costoFinalConfirmado = data.totalACobrar + totalRepuestos
       }
       costoFinalConfirmado = Math.round(costoFinalConfirmado * 100) / 100
+
+      // Mismo guard que el PUT de la orden: el total confirmado no puede quedar
+      // por debajo de lo que ya se cobró (ni de lo que bajaron las notas de
+      // crédito activas). Quedaría un pendiente negativo que nadie registra;
+      // para devolver dinero está el flujo de devolución.
+      const pendienteConfirmado = pendienteOrden({
+        costoFinal: costoFinalConfirmado,
+        descuentoCobro: parseFloat(orden.descuento_cobro || "0"),
+        totalCobrado: parseFloat(orden.total_cobrado || "0"),
+        aplicadoNotasCredito: aplicadoNotasCreditoDeOrden(orden),
+      })
+      if (pendienteConfirmado < 0) {
+        const cobrado = parseFloat(orden.total_cobrado || "0")
+        return NextResponse.json(
+          {
+            error: `El total a cobrar no puede ser menor a lo ya cobrado ($${cobrado.toLocaleString()}). Para devolver dinero al cliente hay que registrar una devolución.`,
+          },
+          { status: 400 }
+        )
+      }
     }
 
     const { data: updatedOrden, error: updateError } = await supabaseAdmin
@@ -153,10 +174,24 @@ export async function POST(
       })
       .eq("id", id)
       .eq("organization_id", organizationId!)
+      // Condicionado al estado que se leyó arriba: dos entregas simultáneas
+      // (doble tap, dos operadores) leen las dos el mismo estado, pero solo una
+      // encuentra la fila todavía así. La otra afecta 0 filas y se corta ACÁ,
+      // antes de cargar deuda, crear garantía o consumir stock.
+      .eq("estado", orden.estado)
       .select(`*, clientes(*), users:entregado_por_user_id(id, nombre, email), ${NOTAS_CREDITO_APLICADO_EMBED}`)
       .single()
 
-    if (updateError) throw updateError
+    if (updateError) {
+      // PGRST116: .single() sin filas, el estado cambió entre la lectura y el UPDATE.
+      if ((updateError as { code?: string }).code === "PGRST116") {
+        return NextResponse.json(
+          { error: "La orden ya fue entregada o cambió de estado mientras se registraba la entrega. Recargá para ver su estado actual." },
+          { status: 409 }
+        )
+      }
+      throw updateError
+    }
 
     // Registrar evento en orden_eventos para timeline público (fire-and-forget;
     // un fallo acá no debe abortar la entrega, mismo criterio que el PUT genérico
@@ -211,7 +246,11 @@ export async function POST(
           // current operator's active cookie.
           p_sucursal_id: (orden as any).sucursal_id ?? null,
         })
-        if (fiadoError) {
+        if (fiadoError && (fiadoError as { code?: string }).code === "23505") {
+          // El índice único de la migración 388 no admite dos cargos vivos de la
+          // misma orden: la deuda ya estaba cargada, no se duplica.
+          console.warn(`[entregar] la orden ${id} ya tenía su cargo en cuenta corriente; no se duplica`)
+        } else if (fiadoError) {
           // No abortar la entrega por un error de CC; registrar y seguir
           // (mismo criterio que consumir_reservas más abajo).
           console.error("Error cargando fiado a cuenta corriente:", fiadoError)
@@ -285,7 +324,8 @@ export async function POST(
     // El embed de NC solo sirve para calcular el pendiente: no es parte de la
     // orden y no se lee en `orden`, así que no cuenta como cambio.
     const { notas_credito: _notasCredito, ...updatedOrdenParaAuditoria } = updatedOrden
-    const changes = diffObjects(orden, updatedOrdenParaAuditoria)
+    const { notas_credito: _notasCreditoAntes, ...ordenParaAuditoria } = orden
+    const changes = diffObjects(ordenParaAuditoria, updatedOrdenParaAuditoria)
     await audit.update("ordenes_servicio", id, changes.before, changes.after)
 
     // Encolar notificación de entrega
