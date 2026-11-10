@@ -35,8 +35,8 @@ export function NotaCreditoAcciones({ id, compacto = false, anulada = false }: N
       const [docRes, configRes, pdf] = await Promise.all([
         fetch(`/api/notas-credito/${encodeURIComponent(id)}`),
         // La plantilla del taller es opcional: sin ella va la de STApp. Esta
-        // ruta es requireAdmin, así que para el vendedor y el técnico responde
-        // 403 y sale la de STApp (igual que el link de seguimiento de la orden).
+        // lectura la puede hacer cualquier miembro de la org; si falla, sale la
+        // de STApp.
         fetch("/api/notificaciones/config").catch(() => null),
         descargarPdfNotaCredito(id),
       ])
