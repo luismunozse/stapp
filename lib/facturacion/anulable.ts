@@ -9,7 +9,7 @@
  *
  * Client-safe: solo importa módulos sin dependencias de servidor.
  */
-import { esNotaCreditoFiscal } from "./cbte-tipo"
+import { CBTE_TIPO_FACTURA, esNotaCreditoFiscal } from "./cbte-tipo"
 import { parsearNumeroComprobante } from "./numero-comprobante"
 
 export interface FilaAnulable {
@@ -43,6 +43,21 @@ export interface FilaVerificable {
 export function esNotaCreditoVerificable(fila: FilaVerificable): boolean {
   return (
     esNotaCreditoFiscal(fila.cbte_tipo) &&
+    fila.estado === "pendiente" &&
+    typeof fila.cbte_nro_solicitado === "number" &&
+    Number.isInteger(fila.cbte_nro_solicitado) &&
+    fila.cbte_nro_solicitado >= 1
+  )
+}
+
+/**
+ * Lo que la ruta `verificar` puede consultar a ARCA: una nota de crédito pendiente con
+ * número pedido, o una FACTURA (6/11) pendiente con número pedido (migración 389).
+ */
+export function esComprobanteVerificable(fila: FilaVerificable): boolean {
+  if (esNotaCreditoVerificable(fila)) return true
+  return (
+    (fila.cbte_tipo === CBTE_TIPO_FACTURA.B || fila.cbte_tipo === CBTE_TIPO_FACTURA.C) &&
     fila.estado === "pendiente" &&
     typeof fila.cbte_nro_solicitado === "number" &&
     Number.isInteger(fila.cbte_nro_solicitado) &&

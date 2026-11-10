@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { isMissingColumnError } from "@/lib/db-errors"
 import { canEmitirFacturaElectronica } from "@/lib/facturacion/access"
 import { NC_COLUMNS, SAFE_COLUMNS, SNAPSHOT_COLUMNS } from "@/lib/facturacion/comprobante-columns"
-import { esFacturaAnulable, esNotaCreditoVerificable } from "@/lib/facturacion/anulable"
+import { esComprobanteVerificable, esFacturaAnulable } from "@/lib/facturacion/anulable"
 import { esNotaCreditoFiscal } from "@/lib/facturacion/cbte-tipo"
 import { pdfFiscalDisponible } from "@/lib/facturacion/arca/qr"
 
@@ -127,7 +127,7 @@ export async function GET(request: Request) {
     motivo: r.motivo ?? null,
     motivoDetalle: r.motivo_detalle ?? null,
     anulable: esFacturaAnulable(r),
-    verificable: esNotaCreditoVerificable(r),
+    verificable: esComprobanteVerificable(r),
   }))
 
   return NextResponse.json({
