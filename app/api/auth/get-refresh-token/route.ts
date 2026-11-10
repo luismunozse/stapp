@@ -15,6 +15,16 @@ export async function GET() {
       )
     }
 
+    // Durante una impersonación la sesión es del usuario impersonado: su
+    // refresh token permitiría abrir una sesión propia, completa y sin la
+    // marca de impersonación. Nunca se entrega.
+    if (session.user.isImpersonating) {
+      return NextResponse.json(
+        { error: "No disponible durante una impersonación" },
+        { status: 403 }
+      )
+    }
+
     // Obtener el refresh token del usuario
     const { data: user, error } = await supabaseAdmin
       .from("users")
