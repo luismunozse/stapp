@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireCajaAccess } from "@/lib/auth-utils"
-import { supabaseAdmin } from "@/lib/supabase"
+import { supabaseAdmin, STORAGE_BUCKETS } from "@/lib/supabase"
+import { firmarReferencias, pathDesdeReferencia } from "@/lib/storage-privado"
 import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 import {
   esErrorColumnaOrigen,
@@ -56,11 +57,18 @@ export async function GET(request: Request) {
 
     const { data: movimientos } = await movimientosQuery
 
+    // El egreso automático de COGS es contable, no un movimiento de caja real.
+    const visibles = (movimientos || []).filter((m) => !esMovimientoCogsAutomatico(m))
+
+    // El bucket de comprobantes es privado: se entregan URLs firmadas que vencen.
+    const comprobantesFirmados = await firmarReferencias(
+      "COMPROBANTES_GASTOS",
+      visibles.map((m) => m.comprobante_url as string | null),
+      { prefijo: organizationId! }
+    )
+
     return NextResponse.json({
-      movimientos: (movimientos || [])
-        // El egreso automático de COGS es contable, no un movimiento de caja real.
-        .filter((m) => !esMovimientoCogsAutomatico(m))
-        .map((m) => ({
+      movimientos: visibles.map((m, i) => ({
         id: m.id,
         tipo: m.tipo,
         monto: parseFloat(m.monto),
@@ -80,7 +88,7 @@ export async function GET(request: Request) {
             }
           : null,
         afectaRentabilidad: m.afecta_rentabilidad,
-        comprobanteUrl: m.comprobante_url,
+        comprobanteUrl: comprobantesFirmados[i],
         esRecurrente: m.es_recurrente,
         origen: resolverOrigen(m),
       })),
@@ -99,6 +107,19 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const parsed = movimientoSchema.parse(body)
+
+    // El comprobante tiene que ser un archivo del bucket subido por esta
+    // organización. Se guarda en formato canónico, sin el token de la URL firmada.
+    let comprobanteUrl: string | null = null
+    if (parsed.comprobanteUrl) {
+      const path = pathDesdeReferencia("COMPROBANTES_GASTOS", parsed.comprobanteUrl)
+      if (!path || !path.startsWith(`${organizationId}/`)) {
+        return NextResponse.json({ error: "Comprobante inválido" }, { status: 400 })
+      }
+      comprobanteUrl = supabaseAdmin.storage
+        .from(STORAGE_BUCKETS.COMPROBANTES_GASTOS)
+        .getPublicUrl(path).data.publicUrl
+    }
 
     const sucursalId = await sucursalParaEscritura({
       role,
@@ -140,7 +161,7 @@ export async function POST(request: Request) {
       usuario_id: userId!,
       categoria_gasto_id: parsed.categoriaGastoId || null,
       afecta_rentabilidad: afectaRentabilidad ?? true,
-      comprobante_url: parsed.comprobanteUrl || null,
+      comprobante_url: comprobanteUrl,
       origen: "MANUAL",
     }
     let { data: movimiento, error: insertError } = await supabaseAdmin

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getOrderByPublicToken } from "@/lib/public-token"
+import { firmarCampo } from "@/lib/storage-privado"
 
 export async function GET(
   request: Request,
@@ -11,11 +12,16 @@ export async function GET(
     const { orden, error } = await getOrderByPublicToken(token)
     if (error) return error
 
-    const { data: fotos } = await supabaseAdmin
+    const { data: fotosDb } = await supabaseAdmin
       .from("fotos_orden")
-      .select("id, url, tipo, descripcion, created_at")
+      .select("id, url, storage_path, tipo, descripcion, created_at")
       .eq("orden_id", orden.id)
       .order("created_at", { ascending: true })
+
+    // El bucket es privado: se firman las URLs y no se expone storage_path.
+    const fotos = (
+      await firmarCampo("FOTOS_ORDENES", fotosDb ?? [], "url", { campoPath: "storage_path" })
+    ).map(({ storage_path: _storagePath, ...resto }) => resto)
 
     // Agrupar por tipo
     const grouped = {

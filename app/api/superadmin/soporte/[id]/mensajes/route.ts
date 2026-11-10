@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { firmarReferencia } from "@/lib/storage-privado"
 import { sendSupportReplyEmail } from "@/lib/email"
 import { uploadSupportMessageAttachment, dataUrlToBuffer } from "@/lib/storage"
 import { z } from "zod"
@@ -92,7 +93,7 @@ export async function POST(
           if (attachment) {
             adjuntos.push({
               id: attachment.id,
-              url: attachment.url,
+              url: (await firmarReferencia("SOPORTE_ATTACHMENTS", result.path)) ?? "",
               nombreArchivo: attachment.nombre_archivo,
             })
           }

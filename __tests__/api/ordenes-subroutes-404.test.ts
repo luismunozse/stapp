@@ -37,6 +37,13 @@ vi.mock("@/lib/storage", () => ({
   deleteFile: vi.fn().mockResolvedValue(undefined),
   base64ToBuffer: vi.fn(() => Buffer.from("img")),
 }))
+// The photo bucket is private: the route returns a signed URL built from storage_path.
+vi.mock("@/lib/storage-privado", () => ({
+  firmarCampo: vi.fn(async (_bucket: string, filas: Record<string, unknown>[], campo: string) =>
+    filas.map((f) => ({ ...f, [campo]: `firmada:${f.storage_path}` }))
+  ),
+  firmarReferencia: vi.fn(async (_bucket: string, ref: string) => `firmada:${ref}`),
+}))
 vi.mock("@/lib/plan-limits", () => ({
   enforcePlanLimit: vi.fn().mockResolvedValue(null),
   isPlanLimitError: vi.fn(() => false),
@@ -318,7 +325,7 @@ const CASOS: Caso[] = [
     nombre: "fotos POST",
     llamar: (id) => fotos.POST(con("POST", id, { data: "aGVsbG8=", mime: "image/png" }, "/fotos"), ctx(id)),
     noEncontrada: ORDEN_NO_ENCONTRADA,
-    control: { status: 201, body: expect.objectContaining({ url: "https://x/y.png" }) },
+    control: { status: 201, body: expect.objectContaining({ url: "firmada:org-1/y.png" }) },
   },
   {
     // The order in the path is the caller's own; the photo is the one of the order he asks about.
@@ -523,7 +530,7 @@ describe("a TECNICO on the sub-routes", () => {
 
   it.each([
     ["repuestos POST", "o-b-t1", 201, { success: true }],
-    ["fotos POST", "o-b-t1", 201, expect.objectContaining({ url: "https://x/y.png" })],
+    ["fotos POST", "o-b-t1", 201, expect.objectContaining({ url: "firmada:org-1/y.png" })],
     ["checklist GET", "o-b-t1", 200, { checklist: null, template: { id: "tpl-1", nombre: "Basica", items: [] } }],
     ["entregar POST", "o-b-reparada-t1", 200, expect.objectContaining({ id: "o-b-reparada-t1", estado: "ENTREGADO" })],
   ])("%s on an order of ANOTHER branch assigned to him works (BM-6): %s", async (nombre, id, status, body) => {
