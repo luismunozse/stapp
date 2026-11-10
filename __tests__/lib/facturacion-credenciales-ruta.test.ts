@@ -30,6 +30,7 @@ const FILA_ARCA = {
 const FILA_DELEGADA = {
   organization_id: "org-1",
   provider: "arca_delegado",
+  estado: "conectado",
   cuit: "30711111113",
   cert_pem_enc: null,
   key_pem_enc: null,

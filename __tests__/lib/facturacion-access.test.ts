@@ -127,7 +127,7 @@ describe("canEmitirFacturaElectronica", () => {
     ;(getCertificadoStapp as any).mockReturnValue({ notAfter: "2099-01-01T00:00:00Z" })
     ;(supabaseAdmin.from as any)
       .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
-      .mockReturnValueOnce(credRow({ organization_id: "o1", provider: "arca_delegado", cert_not_after: null }))
+      .mockReturnValueOnce(credRow({ organization_id: "o1", provider: "arca_delegado", estado: "conectado", cert_not_after: null }))
     expect(await canEmitirFacturaElectronica("o1")).toBe(true)
   })
 
@@ -136,7 +136,7 @@ describe("canEmitirFacturaElectronica", () => {
     ;(getCertificadoStapp as any).mockReturnValue({ notAfter: "2020-01-01T00:00:00Z" })
     ;(supabaseAdmin.from as any)
       .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
-      .mockReturnValueOnce(credRow({ organization_id: "o1", provider: "arca_delegado" }))
+      .mockReturnValueOnce(credRow({ organization_id: "o1", provider: "arca_delegado", estado: "conectado" }))
     expect(await canEmitirFacturaElectronica("o1")).toBe(false)
   })
 
@@ -147,7 +147,18 @@ describe("canEmitirFacturaElectronica", () => {
     })
     ;(supabaseAdmin.from as any)
       .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
-      .mockReturnValueOnce(credRow({ organization_id: "o1", provider: "arca_delegado" }))
+      .mockReturnValueOnce(credRow({ organization_id: "o1", provider: "arca_delegado", estado: "conectado" }))
+    expect(await canEmitirFacturaElectronica("o1")).toBe(false)
+  })
+
+  it("false when provider='arca_delegado' and the delegation is pending verification", async () => {
+    ;(hasPlanFeature as any).mockResolvedValue(true)
+    ;(getCertificadoStapp as any).mockReturnValue({ notAfter: "2099-01-01T00:00:00Z" })
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
+      .mockReturnValueOnce(
+        credRow({ organization_id: "o1", provider: "arca_delegado", estado: "pendiente_verificacion" })
+      )
     expect(await canEmitirFacturaElectronica("o1")).toBe(false)
   })
 })

@@ -15,7 +15,7 @@ export async function canEmitirFacturaElectronica(organizationId: string): Promi
 
     let result = await supabaseAdmin
       .from("facturacion_credenciales")
-      .select("organization_id, provider, cert_not_after")
+      .select("organization_id, provider, cert_not_after, estado")
       .eq("organization_id", organizationId)
       .maybeSingle()
 
@@ -36,6 +36,7 @@ export async function canEmitirFacturaElectronica(organizationId: string): Promi
       organization_id: string
       provider?: string | null
       cert_not_after?: string | null
+      estado?: string | null
     } | null
     if (!cred) return false
 
@@ -48,6 +49,9 @@ export async function canEmitirFacturaElectronica(organizationId: string): Promi
     // vence (o falta) es el de la PLATAFORMA. Mirar `cert_not_after` de la
     // fila, siempre NULL acá, dejaría a toda org delegada sin facturar.
     if (cred.provider === "arca_delegado") {
+      // Hasta que la plataforma verifica que el CUIT es de esta org, no se
+      // factura en su nombre (ver DelegacionNoVerificadaError).
+      if (cred.estado !== "conectado") return false
       const plataforma = getCertificadoStapp()
       return new Date(plataforma.notAfter).getTime() > Date.now()
     }

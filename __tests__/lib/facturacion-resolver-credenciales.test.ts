@@ -14,6 +14,7 @@ import { encryptSecret } from "@/lib/facturacion/crypto"
 import {
   resolverCredenciales,
   CredencialesIncompletasError,
+  DelegacionNoVerificadaError,
 } from "@/lib/facturacion/resolver-credenciales"
 
 beforeAll(() => {
@@ -146,6 +147,7 @@ describe("resolverCredenciales", () => {
       production: true,
       row: {
         provider: "arca_delegado",
+        estado: "conectado",
         cuit: "30710955057",
         cert_pem_enc: null,
         key_pem_enc: null,
@@ -174,8 +176,31 @@ describe("resolverCredenciales", () => {
       resolverCredenciales({
         organizationId: "org-1",
         production: true,
-        row: { provider: "arca_delegado", cuit: null, punto_venta: 1, condicion_fiscal: "MONOTRIBUTO" },
+        row: { provider: "arca_delegado", estado: "conectado", cuit: null, punto_venta: 1, condicion_fiscal: "MONOTRIBUTO" },
       })
     ).toThrow(CredencialesIncompletasError)
+  })
+
+  /**
+   * Cualquier org puede declarar cualquier CUIT en modo delegado: hasta que la
+   * plataforma verifica que el CUIT es de esa org, no se firma nada en su nombre.
+   */
+  it.each(["pendiente_verificacion", "error", null, undefined])(
+    "no arma credenciales delegadas si la delegación no está verificada (estado %s)",
+    (estado) => {
+      expect(() =>
+        resolverCredenciales({
+          organizationId: "org-1",
+          production: true,
+          row: { provider: "arca_delegado", estado, cuit: "30710955057", punto_venta: 1, condicion_fiscal: "MONOTRIBUTO" },
+        })
+      ).toThrow(DelegacionNoVerificadaError)
+    }
+  )
+
+  it("el error de delegación no verificada es un CredencialesIncompletasError con mensaje propio", () => {
+    const e = new DelegacionNoVerificadaError()
+    expect(e).toBeInstanceOf(CredencialesIncompletasError)
+    expect(e.message).toMatch(/verific/i)
   })
 })

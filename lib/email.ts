@@ -894,6 +894,11 @@ export async function sendDelegacionArcaPendienteNotification({
     </p>
     <ol style="margin: 0; padding-left: 20px;">
       ${paso(
+        "Verificá que el CUIT " +
+          escapeHtml(cuit) +
+          " sea de este taller (razón social en ARCA vs. la organización). Si no lo es, no sigas: rechazalo en el panel."
+      )}
+      ${paso(
         "Entrá a ARCA con la Clave Fiscal de STApp, abrí la app <strong>Aceptación de Designación</strong> y aceptá la autorización del CUIT " +
           escapeHtml(cuit) +
           "."
@@ -903,12 +908,15 @@ export async function sendDelegacionArcaPendienteNotification({
           escapeHtml(cuit) +
           " → Buscar → ARCA &gt; WebServices &gt; Facturación Electrónica → segundo Buscar → elegí el computador fiscal <strong>stapp-prod</strong> → Confirmar → Confirmar."
       )}
+      ${paso(
+        "En el panel de superadmin, abrí la organización y tocá <strong>Aprobar CUIT</strong> en Facturación delegada. Hasta entonces el taller no puede facturar."
+      )}
     </ol>
 
     ${getDivider()}
 
     <p class="text-muted" style="color: #9ca3af; font-size: 13px; margin: 0;">
-      Mientras no lo hagas, al taller le va a seguir fallando la prueba de conexión.
+      Mientras no lo apruebes, el taller no puede probar la conexión ni facturar.
     </p>
   `
 

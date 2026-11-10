@@ -496,6 +496,74 @@ describe("facturacion-electronica/credenciales", () => {
       expect(body.cuit).toBe("30710955057")
     })
 
+    /**
+     * Cualquier org puede declarar cualquier CUIT: la fila nace pendiente y solo
+     * la plataforma (superadmin) la pasa a 'conectado' tras verificar el CUIT.
+     */
+    describe("verificación del CUIT", () => {
+      beforeEach(() => {
+        mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+        vi.mocked(sendDelegacionArcaPendienteNotification).mockResolvedValue(undefined as any)
+      })
+
+      it("una delegación nueva queda pendiente_verificacion", async () => {
+        const upsertSpy = mockTablas(null)
+
+        const { status, body } = await parseResponse(await PUT(putDelegado()))
+
+        expect(status).toBe(200)
+        expect(upsertSpy).toHaveBeenCalledWith(expect.objectContaining({ estado: "pendiente_verificacion" }))
+        expect(body.estado).toBe("pendiente_verificacion")
+      })
+
+      it("cambiar el CUIT de una delegación verificada la vuelve a dejar pendiente", async () => {
+        const upsertSpy = mockTablas({ provider: "arca_delegado", cuit: "20111111112", estado: "conectado" })
+
+        await PUT(putDelegado())
+
+        expect(upsertSpy).toHaveBeenCalledWith(expect.objectContaining({ estado: "pendiente_verificacion" }))
+      })
+
+      it("venir de otro proveedor deja la delegación pendiente aunque fuera el mismo CUIT", async () => {
+        const upsertSpy = mockTablas({ provider: "arca", cuit: "30710955057", estado: "conectado" })
+
+        await PUT(putDelegado())
+
+        expect(upsertSpy).toHaveBeenCalledWith(expect.objectContaining({ estado: "pendiente_verificacion" }))
+      })
+
+      it("guardar el mismo CUIT ya verificado conserva 'conectado'", async () => {
+        const upsertSpy = mockTablas({ provider: "arca_delegado", cuit: "30710955057", estado: "conectado" })
+
+        const { body } = await parseResponse(await PUT(putDelegado({ puntoVenta: 5 })))
+
+        expect(upsertSpy).toHaveBeenCalledWith(expect.objectContaining({ estado: "conectado", punto_venta: 5 }))
+        expect(body.estado).toBe("conectado")
+      })
+
+      it("guardar el mismo CUIT todavía pendiente no lo verifica", async () => {
+        const upsertSpy = mockTablas({
+          provider: "arca_delegado",
+          cuit: "30710955057",
+          estado: "pendiente_verificacion",
+        })
+
+        await PUT(putDelegado({ puntoVenta: 5 }))
+
+        expect(upsertSpy).toHaveBeenCalledWith(expect.objectContaining({ estado: "pendiente_verificacion" }))
+      })
+
+      it("409 si el CUIT ya está vinculado a otra organización (índice único)", async () => {
+        mockTablas(null, vi.fn().mockResolvedValue({ data: null, error: { code: "23505", message: "duplicate" } }))
+
+        const { status, body } = await parseResponse(await PUT(putDelegado()))
+
+        expect(status).toBe(409)
+        expect(body.error).toMatch(/otra cuenta/i)
+        expect(sendDelegacionArcaPendienteNotification).not.toHaveBeenCalled()
+      })
+    })
+
     describe("aviso a la plataforma", () => {
       const PREVIA_IGUAL = { provider: "arca_delegado", cuit: "30710955057" }
 
