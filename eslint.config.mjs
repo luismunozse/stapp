@@ -29,6 +29,12 @@ const eslintConfig = [
       "react-hooks/purity": "warn",
       "react-hooks/preserve-manual-memoization": "warn",
       "react-hooks/immutability": "warn",
+      // Reglas que eslint-plugin-react-hooks 7.1 (via eslint-config-next 16.4)
+      // promovio a error. Quedan en warn como el resto del React Compiler
+      // hasta corregir los casos existentes (comisiones-view, use-form-draft,
+      // use-optimistic-mutation, webhook-events-card, devolucion-form).
+      "react-hooks/refs": "warn",
+      "react-hooks/use-memo": "warn",
       "react/no-unescaped-entities": "warn",
       "import/no-anonymous-default-export": "warn",
     },

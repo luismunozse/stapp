@@ -124,7 +124,7 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
 
   return (
     <LazyMotion features={domAnimation}>
-      <section id="pricing" className="py-12 sm:py-16 overflow-hidden">
+      <section id="pricing" className="py-10 sm:py-12 overflow-hidden">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           {/* Header */}
           <m.div
