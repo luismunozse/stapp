@@ -6,6 +6,9 @@ import { resolveTerminologia } from "@/lib/terminologia"
 import { HORA_RECORDATORIOS_LOCAL } from "@/lib/cron-config"
 import { DEFAULT_TIMEZONE, dayRangeUtc, getZonedParts, todayInTimeZone } from "@/lib/timezone"
 
+// El glob general de vercel.json (app/api/**) deja 30 s; los cron van a 60 s.
+export const maxDuration = 60
+
 // Este endpoint puede ser llamado por:
 // 1. Vercel Cron Jobs
 // 2. Un servicio externo (cron-job.org, etc.)
