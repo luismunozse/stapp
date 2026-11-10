@@ -1397,7 +1397,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           open={showNCDialog}
           onOpenChange={setShowNCDialog}
           ordenId={orden.id}
-          montoMaximo={orden.totalCobrado || 0}
+          totalCobrado={orden.totalCobrado || 0}
           onSuccess={() => {
             fetchOrden()
             void mutate(`/api/ordenes/${orden.id}/notas-credito`)

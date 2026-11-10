@@ -149,6 +149,17 @@ export const ESTADOS_COSTO_FINAL_BLOQUEADO: EstadoOrden[] = ["REPARADO", ...ESTA
 export const ESTADOS_PRESUPUESTO_BLOQUEADO: EstadoOrden[] = ["PRESUPUESTADO"]
 
 /**
+ * Estados cerrados en los que el monto de la orden ya no se puede cambiar: las
+ * entregas (el saldo ya se cargó a cuenta corriente y la comisión se devengó
+ * sobre ese costo_final) y la cancelación. Editar costo_final ahí desalinea la
+ * cuenta corriente y las comisiones sin dejar asiento.
+ *
+ * Mismo criterio que aplicar_monto_servicios_orden (migración 304), que no
+ * escribe el monto fuera de los estados que lo sincronizan.
+ */
+export const ESTADOS_MONTO_CERRADO: EstadoOrden[] = [...ESTADOS_ENTREGA, "CANCELADO"]
+
+/**
  * Deriva el estado de entrega a partir del estado actual y si la entrega es sin
  * cobro. Es la única fuente que traduce (estado, sinCobro) -> estado de entrega:
  * - sin cobro -> ENTREGADO_SIN_COBRO (tiene prioridad sobre el retiro)

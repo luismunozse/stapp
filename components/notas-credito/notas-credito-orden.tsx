@@ -18,14 +18,22 @@ const fetcher = async (url: string): Promise<NotaCreditoFila[]> => {
 }
 
 /**
+ * Las NC de una orden (incluidas las anuladas). Misma clave SWR que el bloque y
+ * que el `mutate` del detalle tras emitir una NC.
+ */
+export function useNotasCreditoOrden(ordenId: string) {
+  return useSWR<NotaCreditoFila[]>(`/api/ordenes/${ordenId}/notas-credito`, fetcher, {
+    revalidateOnFocus: false,
+  })
+}
+
+/**
  * Las notas de crédito de una orden, para quien ve la orden. Solo lectura e
  * impresión: emitir desde acá es del PR5 y anular, del PR6.
  */
 export function NotasCreditoOrden({ ordenId }: { ordenId: string }) {
   const { formatPrice, formatDate } = useCurrency()
-  const { data } = useSWR<NotaCreditoFila[]>(`/api/ordenes/${ordenId}/notas-credito`, fetcher, {
-    revalidateOnFocus: false,
-  })
+  const { data } = useNotasCreditoOrden(ordenId)
   const notas = data ?? []
   if (notas.length === 0) return null
 

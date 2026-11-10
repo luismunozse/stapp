@@ -18,7 +18,7 @@ const emailShape = z.string().email()
 const clienteRowSchema = z.object({
   nombre: z.preprocess(
     toText,
-    z.string({ required_error: 'El nombre es requerido', invalid_type_error: 'El nombre es requerido' })
+    z.string({ error: 'El nombre es requerido' })
       .min(1, 'El nombre es requerido'),
   ),
   telefono: z.preprocess((val, ctx) => {
@@ -43,7 +43,7 @@ const clienteRowSchema = z.object({
     toText,
     z.string().nullish().refine(
       (v) => !v || emailShape.safeParse(v).success,
-      (v) => ({ message: `Email inválido: "${v}"` }),
+      { error: (iss) => `Email inválido: "${String(iss.input)}"` },
     ),
   ),
   direccion: optionalText,
@@ -84,7 +84,7 @@ const inventarioRowSchema = z.object({
   codigo: optionalText,
   nombre: z.preprocess(
     toText,
-    z.string({ required_error: 'El nombre es requerido', invalid_type_error: 'El nombre es requerido' })
+    z.string({ error: 'El nombre es requerido' })
       .min(1, 'El nombre es requerido'),
   ),
   descripcion: optionalText,
@@ -137,7 +137,7 @@ function invalidResult(error: unknown, rowNumber: number): ValidationResult {
   let message = 'Error de validación'
   let column: string | undefined
   if (error instanceof z.ZodError) {
-    const issues = error.errors
+    const issues = error.issues
     message = issues.map(i => i.message).join('; ')
     const first = issues[0]?.path[0]
     column = typeof first === 'string' ? first : undefined

@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, sucursalId })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error set sucursal activa:", err)
     return NextResponse.json({ error: "Error al cambiar de sucursal" }, { status: 500 })

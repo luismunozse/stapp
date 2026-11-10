@@ -1,7 +1,7 @@
 // `IVoucher` no se re-exporta limpio desde la raíz del paquete; se importa por
 // ruta interna como `INextVoucher` (ver arca/voucher.ts). Solo tipos: se borra al
 // compilar, así que este módulo sigue siendo importable desde el cliente.
-import type { IVoucher } from "@arcasdk/core/lib/domain/types/voucher.types"
+import type { INextVoucher, IVoucher } from "@arcasdk/core/lib/domain/types/voucher.types"
 
 export type CondicionFiscalEmisor = "MONOTRIBUTO" | "RESPONSABLE_INSCRIPTO"
 export type TipoComprobante = "B" | "C"
@@ -200,6 +200,20 @@ export type ResultadoNotaCredito =
 export interface SoportaNotaCredito<C> {
   /** Envía el voucher ya armado y numerado (`CbteDesde`/`CbteHasta` explícitos). */
   emitirNotaCredito(creds: C, voucher: IVoucher): Promise<ResultadoNotaCredito>
+}
+
+/**
+ * Mismo desenlace para una FACTURA enviada con número explícito: un corte después
+ * del envío es `incierta` y la fila queda pendiente hasta verificarla contra ARCA,
+ * en vez de marcarse rechazada y permitir una segunda factura.
+ */
+export type ResultadoFactura = ResultadoNotaCredito
+
+export interface SoportaFacturaNumerada<C> {
+  /** Arma la factura (sin número) con la fecha del día en hora argentina. No llama a ARCA. */
+  armarFactura(creds: C, input: EmitirInput): INextVoucher
+  /** Envía la factura ya armada y numerada (`CbteDesde`/`CbteHasta` explícitos). */
+  emitirFacturaNumerada(creds: C, voucher: IVoucher): Promise<ResultadoFactura>
 }
 
 export interface SoportaConsulta<C> {

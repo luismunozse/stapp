@@ -31,7 +31,7 @@ export interface ComprobanteFiscalDTO {
   motivoDetalle: string | null
   /** La fila misma cumple lo que exige anular; la ficha suma "sin otra nota de credito en curso". */
   anulable: boolean
-  /** Nota de credito pendiente con numero pedido: se puede consultar a ARCA. */
+  /** Nota de credito o factura ARCA pendiente con numero pedido: se puede consultar a ARCA. */
   verificable: boolean
 }
 

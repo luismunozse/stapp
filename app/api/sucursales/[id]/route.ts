@@ -107,7 +107,7 @@ export async function PUT(
     return NextResponse.json(formatSucursal(row))
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error updating sucursal:", err)
     return NextResponse.json({ error: "Error al actualizar sucursal" }, { status: 500 })

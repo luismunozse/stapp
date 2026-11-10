@@ -247,6 +247,7 @@ export function ConfiguracionForm({
           cuit: data.cuit ?? null,
           puntoVenta: data.puntoVenta ?? null,
           condicionFiscal: data.condicionFiscal ?? null,
+          pendienteVerificacion: data.estado === "pendiente_verificacion",
         })
         setFeEstadoArca({
           conectado: !!data.conectado,

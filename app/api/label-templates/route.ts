@@ -94,7 +94,7 @@ export async function POST(request: Request) {
     return NextResponse.json(created, { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("[label-templates] POST error:", err)
     return NextResponse.json(

@@ -84,6 +84,43 @@ describe("CredencialesArcaDelegado", () => {
     })
   })
 
+  it("al guardar una delegación que queda pendiente avisa que STApp tiene que verificarla y no deja probar", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        conectado: true,
+        provider: "arca_delegado",
+        estado: "pendiente_verificacion",
+        cuit: "30710955057",
+        puntoVenta: 3,
+        condicionFiscal: "MONOTRIBUTO",
+      }),
+    })
+    render(
+      <CredencialesArcaDelegado allowEdit cuitPlataforma="23944498389" estadoInicial={SIN_CONFIGURAR} />
+    )
+
+    fireEvent.change(screen.getByLabelText(/CUIT del taller/i), { target: { value: "30-71095505-7" } })
+    await waitFor(() => expect(screen.getByRole("button", { name: /guardar/i })).toBeEnabled())
+    fireEvent.click(screen.getByRole("button", { name: /guardar/i }))
+
+    expect(await screen.findByText(/verifica que el CUIT sea de tu negocio/i)).toBeInTheDocument()
+    expect(screen.getByText(/Pendiente de verificación/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /probar conexión/i })).toBeDisabled()
+  })
+
+  it("una delegación ya pendiente no deja probar la conexión", () => {
+    render(
+      <CredencialesArcaDelegado
+        allowEdit
+        cuitPlataforma="23944498389"
+        estadoInicial={{ ...CONFIGURADO, pendienteVerificacion: true }}
+      />
+    )
+
+    expect(screen.getByRole("button", { name: /probar conexión/i })).toBeDisabled()
+  })
+
   it("no deja probar la conexión antes de guardar", () => {
     render(
       <CredencialesArcaDelegado allowEdit cuitPlataforma="23944498389" estadoInicial={SIN_CONFIGURAR} />

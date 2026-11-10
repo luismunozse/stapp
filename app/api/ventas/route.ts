@@ -541,10 +541,10 @@ export async function POST(request: Request) {
     return NextResponse.json(response, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const firstError = error.errors[0]
+      const firstError = error.issues[0]
       const field = firstError.path.join(".")
       const message = field ? `${field}: ${firstError.message}` : firstError.message
-      console.error("Zod validation errors:", JSON.stringify(error.errors, null, 2))
+      console.error("Zod validation errors:", JSON.stringify(error.issues, null, 2))
       return NextResponse.json(
         { error: message },
         { status: 400 }

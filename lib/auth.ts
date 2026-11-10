@@ -19,6 +19,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import bcrypt from "bcryptjs"
 import { randomBytes } from "crypto"
 import { verifyGoogleIdToken } from "@/lib/google"
+import { cambiosAlVerificarConGoogle } from "@/lib/google-account"
 import { logLoginEvent, logLogoutEvent } from "@/lib/superadmin-audit"
 import { verifyUserTotpCode } from "@/lib/totp"
 import { isUserDeleted, isLoginBlocked } from "@/lib/account-deletion/state"
@@ -244,12 +245,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             throw new AuthSigninError("GOOGLE_NO_ACCOUNT")
           }
 
-          // Google ya verificó el email, marcar como verificado si no lo está
-          if (!gUser.email_verified) {
-            await supabaseAdmin
+          // Google verificó el email (verifyGoogleIdToken lo exige). Si la cuenta
+          // no lo estaba, se marca verificada y se descartan la contraseña y las
+          // sesiones que pudo dejar quien la registró (ver lib/google-account).
+          const cambiosGoogle = cambiosAlVerificarConGoogle(gUser)
+          if (cambiosGoogle) {
+            const { error: verifError } = await supabaseAdmin
               .from("users")
-              .update({ email_verified: true, email_verification_token: null, email_verification_expires: null })
+              .update(cambiosGoogle)
               .eq("id", gUser.id)
+            if (verifError) throw verifError
+          }
+
+          // Mismo bloqueo por intentos fallidos que el login con contraseña:
+          // sin esto el código 2FA se podía probar sin límite por esta vía.
+          if (gUser.locked_until && new Date(gUser.locked_until) > new Date()) {
+            throw new AuthSigninError("ACCOUNT_LOCKED")
           }
 
           // Verificar si es superadmin
@@ -277,6 +288,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             }
             const totpResult = await verifyUserTotpCode(gUser.id, providedCode)
             if (!totpResult.valid) {
+              Promise.resolve(supabaseAdmin.rpc("handle_failed_login", { p_email: gUser.email })).catch(() => {})
               throw new AuthSigninError("INVALID_2FA_CODE")
             }
           }
@@ -285,6 +297,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (isGoogleSuper && !gUser.totp_enabled) {
             throw new AuthSigninError("SUPERADMIN_REQUIRES_2FA_SETUP")
           }
+
+          Promise.resolve(supabaseAdmin.rpc("reset_failed_login", { p_email: gUser.email })).catch(() => {})
 
           const rememberMe = credentials.rememberMe === "true"
           const refreshToken = await saveRefreshToken(gUser.id, rememberMe)

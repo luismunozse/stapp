@@ -105,7 +105,7 @@ const opcionSchema = z
       .min(1, "Cada opción necesita al menos un valor")
       .max(LIMITES.valoresPorOpcion, "Una opción puede tener hasta 100 valores"),
   })
-  .strict(SIN_CAMPOS_EXTRA)
+  .strict()
 
 const grupoSchema = z
   .object({
@@ -116,7 +116,7 @@ const grupoSchema = z
       .max(LIMITES.opciones, "Un producto puede tener hasta 3 opciones"),
     renombrar: z.boolean().optional(),
   })
-  .strict(SIN_CAMPOS_EXTRA)
+  .strict()
 
 const compartidosSchema = z
   .object({
@@ -131,9 +131,9 @@ const compartidosSchema = z
     trackeaSeries: z.boolean().optional(),
     diasAlertaVencimiento: entero.nullable().optional(),
   })
-  .strict(SIN_CAMPOS_EXTRA)
+  .strict()
 
-const atributoSchema = z.object({ opcion: nombreOpcion, valor }).strict(SIN_CAMPOS_EXTRA)
+const atributoSchema = z.object({ opcion: nombreOpcion, valor }).strict()
 
 const varianteSchema = z
   .object({
@@ -152,7 +152,7 @@ const varianteSchema = z
     puntoReorden: entero.nullable().optional(),
     ubicacion: textoLibre(LIMITES.ubicacion, "La ubicación puede tener hasta 100 caracteres").nullable().optional(),
   })
-  .strict(SIN_CAMPOS_EXTRA)
+  .strict()
   .superRefine((v, ctx) => {
     if (v.stockMinimo != null && v.stockMaximo != null && v.stockMinimo > v.stockMaximo) {
       ctx.addIssue({ code: "custom", path: ["stockMinimo"], message: "El stock mínimo no puede superar al máximo" })
@@ -170,7 +170,7 @@ export const guardarGrupoSchema = z
     // and builds the compartidos itself, so a client never sends both.
     fuenteCompartidosId: idTexto.optional(),
   })
-  .strict(SIN_CAMPOS_EXTRA)
+  .strict()
   .superRefine((datos, ctx) => {
     const problema = (path: (string | number)[], message: string) => ctx.addIssue({ code: "custom", path, message })
     const { opciones } = datos.grupo
@@ -338,22 +338,24 @@ export function argumentosGuardarGrupo(ctx: ContextoGuardarGrupo): ArgsGuardarGr
 }
 
 /**
- * Spanish copy for one issue of the schema. The messages the schema sets itself are already
- * Spanish and name the rule, so they pass through; zod's own English defaults ("Expected
- * object, received null") are replaced by neutral copy chosen by the issue code.
+ * Spanish copy for zod's own defaults, as a zod 4 error map. Pass it to the parse
+ * (`guardarGrupoSchema.safeParse(cuerpo, { error: mensajeDefectoVariantes })`): the messages
+ * the schema sets itself take precedence over a parse-level map, so they pass through, and
+ * only zod's English defaults ("Invalid input: expected object") are replaced by neutral copy
+ * chosen by the issue code. The map sees the raw issue, so `input` tells a missing key apart.
  */
-export function mensajeDeIssue(issue: z.ZodIssue): string {
-  if (issue.code === "custom") return issue.message
-  const porDefecto = z.defaultErrorMap(issue, { defaultError: "", data: undefined }).message
-  if (issue.message !== porDefecto) return issue.message
-
+export function mensajeDefectoVariantes(issue: {
+  code?: string
+  expected?: string
+  origin?: string
+  input?: unknown
+}): string {
   switch (issue.code) {
     case "invalid_type":
-      if (issue.received === "undefined") return "Falta un dato requerido"
+      if (issue.input === undefined) return "Falta un dato requerido"
       switch (issue.expected) {
         case "number":
-        case "integer":
-        case "float":
+        case "int":
         case "bigint":
           return "Tiene que ser un número"
         case "string":
@@ -368,14 +370,24 @@ export function mensajeDeIssue(issue: z.ZodIssue): string {
           return "Hay un dato con un formato que no corresponde"
       }
     case "too_big":
-      if (issue.type === "array" || issue.type === "set") return "Hay demasiados elementos en la lista"
-      return issue.type === "string" ? "Hay un texto demasiado largo" : "Hay un número demasiado grande"
+      if (issue.origin === "array" || issue.origin === "set") return "Hay demasiados elementos en la lista"
+      return issue.origin === "string" ? "Hay un texto demasiado largo" : "Hay un número demasiado grande"
     case "too_small":
-      if (issue.type === "array" || issue.type === "set") return "Faltan elementos en la lista"
-      return issue.type === "string" ? "Hay un texto demasiado corto" : "Hay un número demasiado chico"
+      if (issue.origin === "array" || issue.origin === "set") return "Faltan elementos en la lista"
+      return issue.origin === "string" ? "Hay un texto demasiado corto" : "Hay un número demasiado chico"
     case "unrecognized_keys":
       return SIN_CAMPOS_EXTRA
     default:
       return "Los datos de las variantes no son válidos"
   }
+}
+
+/** The message of one issue from a parse that used `mensajeDefectoVariantes`. */
+export function mensajeDeIssue(issue: z.core.$ZodIssue): string {
+  return issue.message || "Los datos de las variantes no son válidos"
+}
+
+/** Parses a save body with the Spanish defaults: the one entry point for the route. */
+export function validarGuardarGrupo(cuerpo: unknown) {
+  return guardarGrupoSchema.safeParse(cuerpo, { error: mensajeDefectoVariantes })
 }

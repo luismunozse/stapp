@@ -109,7 +109,7 @@ export async function POST(request: Request) {
     return NextResponse.json(formatSucursal(row), { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error creating sucursal:", err)
     return NextResponse.json({ error: "Error al crear sucursal" }, { status: 500 })

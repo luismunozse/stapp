@@ -40,6 +40,7 @@ vi.mock("@/lib/facturacion/arca/arca-direct-provider", () => ({
     consultar: vi.fn(),
     ultimoAutorizado: vi.fn(),
     emitirNotaCredito: vi.fn(),
+    emitirFacturaNumerada: vi.fn(),
   },
 }))
 
@@ -410,7 +411,6 @@ describe("POST /api/facturacion-electronica/comprobantes/[id]/verificar", () => 
     })
 
     it.each([
-      ["una factura (sin comprobante asociado)", { ...NC_PENDIENTE, comprobante_asociado_id: null, cbte_tipo: 6 }],
       ["una fila con asociado pero con tipo de factura", { ...NC_PENDIENTE, cbte_tipo: 6 }],
       ["una fila con asociado pero sin tipo", { ...NC_PENDIENTE, cbte_tipo: null }],
       ["una fila de tipo NC sin comprobante asociado", { ...NC_PENDIENTE, comprobante_asociado_id: null }],
@@ -1098,6 +1098,118 @@ describe("POST /api/facturacion-electronica/comprobantes/[id]/verificar", () => 
       for (const cadena of entregadas) {
         expect(cadena.eq).not.toHaveBeenCalledWith("organization_id", "org-ajena")
       }
+    })
+  })
+  describe("facturas ARCA con envío incierto (migración 389)", () => {
+    const FAC_ID = "fac-9"
+    /** Factura B por 1210 enviada como número 5 y sin confirmar hace 10 minutos. */
+    const FACTURA_PENDIENTE = {
+      ...NC_PENDIENTE,
+      id: FAC_ID,
+      cbte_tipo: 6,
+      comprobante_asociado_id: null,
+      motivo: null,
+      error_msg: "No pudimos confirmar si ARCA emitió la factura.",
+    }
+    const FACTURA_EMITIDA = { ...NC_EMITIDA, id: FAC_ID, comprobante_asociado_id: null, motivo: null }
+
+    afterEach(() => {
+      expect(arcaDirectProvider.emitirFacturaNumerada).not.toHaveBeenCalled()
+      expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
+    })
+
+    it("ARCA la tiene y coincide: la adopta con su CAE (solo si sigue pendiente o rechazada)", async () => {
+      const { despues } = arcaTieneLaNc(FACTURA_PENDIENTE)
+      despues[0] = createChainMock(FACTURA_EMITIDA)
+      montarTablas([createChainMock(FACTURA_PENDIENTE), despues[0]])
+
+      const { status, body } = await verificar(FAC_ID)
+
+      expect(status).toBe(200)
+      expect(body.resultado).toBe("adoptada")
+      expect(arcaDirectProvider.consultar).toHaveBeenCalledWith(CREDS, { puntoVenta: 3, cbteTipoAfip: 6, cbteNro: 5 })
+      const [payload] = payloads(despues[0], "update")
+      expect(payload).toMatchObject({ estado: "emitido", cae: CAE_NC, cae_vencimiento: "20261030" })
+      expect(despues[0].in).toHaveBeenCalledWith("estado", ["pendiente", "rechazado"])
+      expect(despues[0].eq).toHaveBeenCalledWith("organization_id", ORG)
+    })
+
+    it("ARCA no la emitió y pasó la gracia: queda rechazada (reintentar es seguro)", async () => {
+      const rechazo = createChainMock({ ...FACTURA_PENDIENTE, estado: "rechazado" })
+      arcaNoLaTiene(FACTURA_PENDIENTE, 4, [rechazo])
+
+      const { status, body } = await verificar(FAC_ID)
+
+      expect(status).toBe(200)
+      expect(body.resultado).toBe("rechazada")
+      expect(payloads(rechazo, "update")[0]).toMatchObject({ estado: "rechazado" })
+      expect(rechazo.eq).toHaveBeenCalledWith("estado", "pendiente")
+    })
+
+    it("dentro de la gracia no afirma nada: 409 esperar y no escribe", async () => {
+      arcaNoLaTiene({ ...FACTURA_PENDIENTE, updated_at: hace(1 * MINUTO) }, 4, [])
+
+      const { status, body } = await verificar(FAC_ID)
+
+      expect(status).toBe(409)
+      expect(body.resultado).toBe("esperar")
+      sinEscrituras()
+    })
+
+    it("ARCA tiene ese número con otros datos: soporte, sin escribir", async () => {
+      arcaTieneLaNc(FACTURA_PENDIENTE, { ...CONSULTA_NC, impTotal: 999 })
+
+      const { status, body } = await verificar(FAC_ID)
+
+      expect(status).toBe(409)
+      expect(body.resultado).toBe("soporte")
+      expect(body.razon).toBe("datos_distintos")
+      sinEscrituras()
+    })
+
+    it("el número ya está registrado en otra factura (23505 al adoptar): soporte", async () => {
+      montarTablas([
+        createChainMock(FACTURA_PENDIENTE),
+        createChainMock(null, { code: "23505", message: "uq_comprobante_factura_numero" }),
+      ])
+      vi.mocked(arcaDirectProvider.consultar).mockResolvedValue(CONSULTA_NC as never)
+
+      const { status, body } = await verificar(FAC_ID)
+
+      expect(status).toBe(409)
+      expect(body.razon).toBe("no_registrable")
+    })
+
+    it("una factura legada sin número pedido no se consulta: soporte", async () => {
+      montar({ nc: { ...FACTURA_PENDIENTE, cbte_nro_solicitado: null }, despues: [] })
+
+      const { status, body } = await verificar(FAC_ID)
+
+      expect(status).toBe(409)
+      expect(body.razon).toBe("sin_numero")
+      sinLlamadasAArca()
+      sinEscrituras()
+    })
+
+    it("con las credenciales de otro CUIT no se consulta: soporte", async () => {
+      montar({ nc: { ...FACTURA_PENDIENTE, cuit_emisor: "20999999990" }, despues: [] })
+
+      const { status, body } = await verificar(FAC_ID)
+
+      expect(status).toBe(409)
+      expect(body.razon).toBe("otro_emisor")
+      sinLlamadasAArca()
+    })
+
+    it("una factura de TusFacturas no se verifica: 422 sin llamar a ARCA", async () => {
+      montar({ nc: { ...FACTURA_PENDIENTE, provider: "tusfacturas" }, despues: [] })
+
+      const { status } = await verificar(FAC_ID)
+
+      expect(status).toBe(422)
+      expect(cargarCredencialesArca).not.toHaveBeenCalled()
+      sinLlamadasAArca()
+      sinEscrituras()
     })
   })
 })

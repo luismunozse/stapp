@@ -131,7 +131,7 @@ export async function POST(
     return NextResponse.json(result)
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: error.issues[0].message }, { status: 400 })
     }
     console.error("Error receiving OC:", error)
     return NextResponse.json({ error: "Error al recibir orden de compra" }, { status: 500 })
