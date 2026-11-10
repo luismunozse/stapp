@@ -53,7 +53,7 @@ const equipoSchema = z.object({
 const checklistSchema = z.object({
   templateId: z.string(),
   tipoDispositivoId: z.string().optional().nullable(),
-  valores: z.record(z.union([z.boolean(), z.string(), z.null()])),
+  valores: z.record(z.string(), z.union([z.boolean(), z.string(), z.null()])),
   notas: z.string().optional().nullable(),
 })
 
@@ -594,7 +594,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0].message },
         { status: 400 }
       )
     }

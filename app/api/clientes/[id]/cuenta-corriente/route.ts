@@ -142,7 +142,7 @@ export async function POST(
     return NextResponse.json(result, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: error.issues[0].message }, { status: 400 })
     }
     console.error("Error creating deposito:", error)
     return NextResponse.json({ error: "Error al registrar depósito" }, { status: 500 })

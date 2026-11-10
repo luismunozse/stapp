@@ -258,7 +258,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     return NextResponse.json(formatTurno(turno))
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error updating turno:", err)
     return NextResponse.json({ error: "Error al actualizar turno" }, { status: 500 })

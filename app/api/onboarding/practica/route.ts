@@ -28,16 +28,16 @@ import {
 // deliberately does not reuse PUT /api/ordenes/[id] or POST .../entregar: called
 // with sinCobro false, entregar charges cuenta corriente (entregar/route.ts:192-211).
 
-// required_error too: a missing field reports "Required" otherwise, not the min(1) text.
+// A type-level error too: a missing field reports "Required" otherwise, not the min(1) text.
 const crearSchema = z.object({
-  tipoDispositivo: z.string({ required_error: "Elegí el tipo de equipo" }).trim().min(1, "Elegí el tipo de equipo"),
+  tipoDispositivo: z.string({ error: "Elegí el tipo de equipo" }).trim().min(1, "Elegí el tipo de equipo"),
   dispositivo: z
-    .string({ required_error: "Contanos qué equipo es" })
+    .string({ error: "Contanos qué equipo es" })
     .trim()
     .min(1, "Contanos qué equipo es")
     .max(120, "El nombre del equipo es muy largo"),
   problemaReportado: z
-    .string({ required_error: "Contanos qué le pasa" })
+    .string({ error: "Contanos qué le pasa" })
     .trim()
     .min(1, "Contanos qué le pasa")
     .max(500, "La descripción es muy larga"),
@@ -47,7 +47,7 @@ const avanceSchema = z.discriminatedUnion("accion", [
   z.object({
     accion: z.literal("reparar"),
     costoFinal: z
-      .number({ required_error: "Ingresá el precio", invalid_type_error: "El precio tiene que ser un número" })
+      .number({ error: (iss) => (iss.input === undefined ? "Ingresá el precio" : "El precio tiene que ser un número") })
       .positive("El precio tiene que ser mayor a cero")
       .max(99_999_999.99, "El precio es demasiado alto"),
   }),
@@ -161,7 +161,7 @@ async function leerJson(request: Request): Promise<unknown> {
 function primerError(error: z.ZodError, fallback: string): string {
   // Field messages are ours (Spanish). A missing body has no path, and an unknown
   // discriminator carries zod's English text: both get the fallback.
-  return error.errors.find((e) => e.path.length > 0 && e.code !== "invalid_union_discriminator")?.message ?? fallback
+  return error.issues.find((e) => e.path.length > 0 && e.code !== "invalid_union")?.message ?? fallback
 }
 
 async function registrarEvento(
