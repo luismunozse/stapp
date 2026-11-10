@@ -40,6 +40,8 @@ declare module "next-auth/jwt" {
     refreshToken?: string
     avatar?: string | null
     error?: string
+    // Próxima revalidación contra la base (epoch en segundos, lib/auth-tokens.ts).
+    revalidarEn?: number
     // Impersonation claims (minted in lib/impersonation.ts, never on real login).
     isImpersonating?: boolean
     impersonatorEmail?: string | null

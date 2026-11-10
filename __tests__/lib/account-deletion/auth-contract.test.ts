@@ -7,7 +7,10 @@ import { join } from "path"
 // lib/auth.ts no se puede importar en vitest (next-auth no carga y está mockeado
 // globalmente), así que acá solo se fija por texto que cada puerta de entrada
 // llama al predicado. Si alguien agrega un cuarto modo de login, este test es el recordatorio.
-const src = readFileSync(join(process.cwd(), "lib/auth.ts"), "utf8")
+// La validación del refresh token vive en lib/auth-tokens.ts (testeable); se lee junto con lib/auth.ts.
+const src = ["lib/auth.ts", "lib/auth-tokens.ts"]
+  .map((f) => readFileSync(join(process.cwd(), f), "utf8"))
+  .join("\n")
 const count = (re: RegExp) => (src.match(re) ?? []).length
 
 describe("lib/auth.ts rechaza cuentas dadas de baja", () => {

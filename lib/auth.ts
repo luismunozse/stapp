@@ -17,29 +17,26 @@ class AuthSigninError extends CredentialsSignin {
 }
 import { supabaseAdmin } from "@/lib/supabase"
 import bcrypt from "bcryptjs"
-import { randomBytes } from "crypto"
 import { verifyGoogleIdToken } from "@/lib/google"
 import { logLoginEvent, logLogoutEvent } from "@/lib/superadmin-audit"
 import { verifyUserTotpCode } from "@/lib/totp"
 import { isUserDeleted, isLoginBlocked } from "@/lib/account-deletion/state"
 import { sessionCookieDomain, sessionCookieName } from "@/lib/session-cookie"
+import {
+  isSuperadminEmail,
+  saveRefreshToken,
+  validateRefreshToken,
+  invalidateRefreshToken,
+  revocarRefreshToken,
+  rotarRefreshToken,
+  revalidarTokenSesion,
+  REVALIDAR_CADA_SEG,
+} from "@/lib/auth-tokens"
 
 type Rol = "ADMIN" | "TECNICO" | "VENDEDOR"
 
-// Verificar si un email es superadmin (desde env)
-function isSuperadminEmail(email: string): boolean {
-  const superadminEmails =
-    process.env.SUPERADMIN_EMAILS?.split(",").map((e) => e.trim().toLowerCase()) || []
-  return superadminEmails.includes(email.toLowerCase())
-}
-
 // Duraciones de sesión
-const ONE_DAY = 24 * 60 * 60 // 1 día en segundos
-const SEVEN_DAYS = 7 * 24 * 60 * 60 // 7 días en segundos
 const THIRTY_DAYS = 30 * 24 * 60 * 60 // 30 días en segundos
-
-// Tiempo antes de expiración para refrescar automáticamente (6 horas antes)
-const REFRESH_THRESHOLD = 6 * 60 * 60
 
 // Dominio de cookies derivado automáticamente en producción para que la sesión
 // se comparta entre todos los subdominios. La regla (y el nombre de la cookie de
@@ -47,82 +44,8 @@ const REFRESH_THRESHOLD = 6 * 60 * 60
 // requireAuth(), que no pueden importar este archivo.
 const COOKIE_DOMAIN = sessionCookieDomain()
 
-// Genera un refresh token único
-function generateRefreshToken(): string {
-  return randomBytes(64).toString("hex")
-}
-
-// Guarda el refresh token en la base de datos
-async function saveRefreshToken(userId: string, rememberMe: boolean): Promise<string> {
-  const refreshToken = generateRefreshToken()
-  const expiresAt = new Date()
-  expiresAt.setSeconds(expiresAt.getSeconds() + (rememberMe ? THIRTY_DAYS : SEVEN_DAYS))
-
-  await supabaseAdmin
-    .from("users")
-    .update({
-      refresh_token: refreshToken,
-      refresh_token_expires: expiresAt.toISOString(),
-    })
-    .eq("id", userId)
-
-  return refreshToken
-}
-
-// Valida y obtiene usuario por refresh token
-export async function validateRefreshToken(refreshToken: string) {
-  const { data: user, error } = await supabaseAdmin
-    .from("users")
-    .select(`
-      id,
-      email,
-      nombre,
-      rol,
-      organization_id,
-      sucursal_id,
-      refresh_token_expires,
-      deleted_at,
-      organizations (id, activo, deleted_at)
-    `)
-    .eq("refresh_token", refreshToken)
-    .single()
-
-  if (error || !user) return null
-
-  // Usuario dado de baja: no renueva sesión ni entra por el refresh token de la PWA.
-  if (isUserDeleted(user)) return null
-
-  // Verificar que no haya expirado
-  const expires = new Date(user.refresh_token_expires)
-  if (expires < new Date()) {
-    // Limpiar refresh token expirado
-    await supabaseAdmin
-      .from("users")
-      .update({ refresh_token: null, refresh_token_expires: null })
-      .eq("id", user.id)
-    return null
-  }
-
-  // Verificar organización activa (no requerido para superadmin)
-  const orgs = user.organizations as unknown
-  const org = Array.isArray(orgs) ? orgs[0] : orgs
-  if (isLoginBlocked(user, org as { activo: boolean; deleted_at?: string | null } | null, { isSuper: isSuperadminEmail(user.email) })) return null
-
-  return user
-}
-
-// Rota el refresh token (genera uno nuevo)
-export async function rotateRefreshToken(userId: string, rememberMe: boolean): Promise<string> {
-  return saveRefreshToken(userId, rememberMe)
-}
-
-// Invalida el refresh token (logout)
-export async function invalidateRefreshToken(userId: string): Promise<void> {
-  await supabaseAdmin
-    .from("users")
-    .update({ refresh_token: null, refresh_token_expires: null })
-    .eq("id", userId)
-}
+// Refresh tokens: una fila por sesión en `refresh_tokens` (lib/auth-tokens.ts).
+export { validateRefreshToken, invalidateRefreshToken, revocarRefreshToken } from "@/lib/auth-tokens"
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   // Auth.js loguea cada CredentialsSignin (password incorrecta, REQUIRES_2FA,
@@ -197,8 +120,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             return null
           }
 
-          // Rotar el refresh token
-          const newRefreshToken = await saveRefreshToken(fullUser.id, true)
+          // Rotar: el token usado deja de servir y la sesión sigue con uno nuevo.
+          const newRefreshToken = await rotarRefreshToken(credentials.pwaRefreshToken as string, fullUser.id)
 
           return {
             id: fullUser.id,
@@ -487,9 +410,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.rememberMe = user.rememberMe
         token.refreshToken = user.refreshToken
         token.avatar = user.avatar
-        // JWT expira en 1 día, pero se refresca automáticamente
-        token.exp = Math.floor(Date.now() / 1000) + ONE_DAY
-        token.iat = Math.floor(Date.now() / 1000)
+        // Próxima revalidación contra la base (ver revalidarTokenSesion).
+        token.revalidarEn = Math.floor(Date.now() / 1000) + REVALIDAR_CADA_SEG
         return token
       }
 
@@ -527,70 +449,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             }
           }
         }
-        return token
+        // El cliente llama update() cada pocos minutos: la revalidación
+        // periódica tiene que correr también por este camino.
+        return revalidarTokenSesion(token)
       }
 
-      // Verificar si necesita refresh (6 horas antes de expirar)
-      const now = Math.floor(Date.now() / 1000)
-      const exp = token.exp as number
-      const timeUntilExpiry = exp - now
-
-      if (timeUntilExpiry < REFRESH_THRESHOLD && token.refreshToken) {
-        // Validar que el refresh token siga vigente (sin rotarlo).
-        // No rotamos acá porque la PWA guarda el token en localStorage
-        // y no puede sincronizar un token nuevo. Solo se rota en login/restore.
-        const validUser = await validateRefreshToken(token.refreshToken as string)
-
-        if (validUser) {
-          // Extender el JWT sin rotar el refresh token
-          token.exp = Math.floor(Date.now() / 1000) + ONE_DAY
-          token.iat = Math.floor(Date.now() / 1000)
-
-          // Aprovechar el refresh para sincronizar nombre y avatar desde la BD.
-          // Esto cubre el caso en que el usuario actualizó su perfil pero el
-          // trigger "update" de useSession() no llegó a re-firmar el cookie:
-          // el JWT termina sincronizándose solo dentro de las próximas 6 horas
-          // sin requerir re-login.
-          token.name = (validUser as { nombre?: string }).nombre || token.name
-
-          // El rol y la sucursal también, y por un motivo más serio que el
-          // nombre: `token.role` se firma UNA vez, al iniciar sesión, y este
-          // refresh extiende `exp` un día más cada vez que corre. Con la
-          // cookie a 30 días, un usuario activo arrastraba el rol que tenía al
-          // loguearse durante semanas — y el rol es lo que leen requireAdmin()
-          // y todos los guards de la API.
-          //
-          // Mientras el rol solo se fijaba al crear el usuario esto no se
-          // notaba. Dejó de ser así: /api/usuarios/[id]/rol lo cambia desde el
-          // panel del taller, y /api/superadmin/users/[userId]/change-role ya
-          // lo hacía desde antes. `validateRefreshToken` ya traía `rol` en su
-          // SELECT sin usarlo, así que esto no agrega una consulta.
-          //
-          // Van los dos juntos a propósito: un rol nuevo con la sucursal vieja
-          // deja al usuario fuera del invariante que protege el CHECK de la
-          // 241 (`rol = 'ADMIN' OR sucursal_id IS NOT NULL`) — por ejemplo un
-          // ex-ADMIN que ya es TECNICO en la BD pero sigue con sucursalId null
-          // en su token, y por lo tanto sin alcance de sucursal.
-          // Se comparan los tres valores en vez de castear: un rol que no sea
-          // uno de ellos deja el token como estaba en lugar de firmar
-          // cualquier cosa. No deberia pasar —`user_role` es un enum de la
-          // BD— pero esto termina dentro de un JWT que los guards leen como
-          // verdad, y ahi conviene no confiar.
-          const fresco = validUser as { rol?: string; sucursal_id?: string | null }
-          if (fresco.rol === "ADMIN" || fresco.rol === "TECNICO" || fresco.rol === "VENDEDOR") {
-            token.role = fresco.rol
-          }
-          token.sucursalId = fresco.sucursal_id ?? null
-
-          console.log(`[Auth] JWT extended for user ${validUser.id}`)
-        } else {
-          // Refresh token inválido o expirado, forzar re-login
-          console.log(`[Auth] Refresh token invalid, session expired`)
-          token.error = "RefreshTokenExpired"
-        }
-      }
-
-      return token
+      // Revalidación periódica: refresh token vigente, rol y sucursal al día.
+      return revalidarTokenSesion(token)
     },
     session: async ({ session, token }) => {
       if (session.user) {
@@ -625,9 +490,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if ("token" in message && (message.token as { isImpersonating?: boolean })?.isImpersonating) {
         return
       }
-      // Invalidar refresh token al hacer logout
+      // Logout: se revoca solo la sesión de este dispositivo.
       if ("token" in message && message.token?.id) {
-        await invalidateRefreshToken(message.token.id as string)
+        if (typeof message.token.refreshToken === "string") {
+          await revocarRefreshToken(message.token.refreshToken)
+        }
         // Log logout event
         logLogoutEvent({
           userId: message.token.id as string,

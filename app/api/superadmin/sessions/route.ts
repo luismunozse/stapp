@@ -12,17 +12,26 @@ export async function POST(request: Request) {
     const { error, email, userId } = await requireSuperadmin()
     if (error) return error
 
-    // Invalidar todos los refresh tokens excepto el del superadmin actual
-    const { data, error: dbError } = await supabaseAdmin
+    // Invalidar todas las sesiones excepto las del superadmin actual: las de la
+    // tabla refresh_tokens y los tokens previos a ella que quedan en users.
+    const { data: sesiones, error: dbError } = await supabaseAdmin
+      .from("refresh_tokens")
+      .delete()
+      .neq("user_id", userId)
+      .select("id")
+
+    if (dbError) throw dbError
+
+    const { data: legados, error: legadoError } = await supabaseAdmin
       .from("users")
       .update({ refresh_token: null, refresh_token_expires: null })
       .not("id", "eq", userId)
       .not("refresh_token", "is", null)
       .select("id")
 
-    if (dbError) throw dbError
+    if (legadoError) throw legadoError
 
-    const revokedCount = data?.length ?? 0
+    const revokedCount = (sesiones?.length ?? 0) + (legados?.length ?? 0)
 
     // Audit log
     const auditLogger = createSuperadminAuditLogger(email, request)
