@@ -9,6 +9,9 @@
  * C6: non-admins get 403 on every pay, unpay and liquidar route, and nothing is written
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
+
+// La pertenencia de cliente/sector se prueba en ordenes-referencias-org.test.ts.
+vi.mock("@/lib/referencias-cliente", () => ({ validarClienteYSector: vi.fn().mockResolvedValue(null) }))
 import {
   mockAuthSuccess,
   mockSupabaseFrom,

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { validarClienteYSector } from "@/lib/referencias-cliente"
 import { requireAuth, canViewCotizacionCosts } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextQuoteNumber } from "@/lib/counters"
@@ -405,6 +406,16 @@ export async function POST(request: Request) {
         )
       }
       clienteIdForInsert = data.clienteId
+    }
+
+    // El sector tiene que ser de ese cliente (y por lo tanto de la organización).
+    if (data.sectorId) {
+      const errorRef = clienteIdForInsert
+        ? await validarClienteYSector(organizationId!, clienteIdForInsert, data.sectorId)
+        : "Sector no válido para este cliente"
+      if (errorRef) {
+        return NextResponse.json({ error: errorRef }, { status: 400 })
+      }
     }
 
     // Validate fecha_vencimiento is not in the past — comparado por DÍA calendario

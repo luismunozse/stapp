@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { validarClienteYSector } from "@/lib/referencias-cliente"
 import { randomBytes } from "crypto"
 import {
   requireAuth,
@@ -354,6 +355,13 @@ export async function POST(request: Request) {
           { status: 400 }
         )
       }
+    }
+
+    // Cliente y sector tienen que ser de esta organización: el INSERT corre con
+    // service_role y la FK sola no lo impide.
+    const errorReferencia = await validarClienteYSector(organizationId!, data.clienteId, data.sectorId)
+    if (errorReferencia) {
+      return NextResponse.json({ error: errorReferencia }, { status: 400 })
     }
 
     // Si la orden se origina en un turno: validar que pertenece a la org y que
