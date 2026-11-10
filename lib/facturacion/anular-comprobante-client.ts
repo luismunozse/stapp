@@ -195,3 +195,25 @@ export async function verificarNotaCreditoArca(
     return { kind: "error", message: MSG_RED_VERIFICAR }
   }
 }
+
+const MSG_FACTURA_ADOPTADA = "ARCA ya tenía la factura: quedó registrada con su CAE."
+
+/**
+ * "Verificar con ARCA" para una FACTURA cuyo envío quedó incierto. Misma ruta y mismas
+ * respuestas que la de la nota de crédito; solo cambian los textos fijos (los del servidor
+ * ya hablan de la factura).
+ */
+export async function verificarFacturaArca(
+  facturaId: string,
+  fetchImpl: FetchLike = fetch
+): Promise<ResultadoVerificacion> {
+  const resultado = await verificarNotaCreditoArca(facturaId, fetchImpl)
+  if (resultado.kind === "ok") return { ...resultado, message: MSG_FACTURA_ADOPTADA }
+  if (resultado.kind === "autorizadaSinRegistrar") {
+    return {
+      ...resultado,
+      message: `ARCA autorizó la factura (CAE ${resultado.cae}), pero no pudimos registrarla en STApp. No la emitas de nuevo: escribinos a ${CONTACT_EMAIL} con ese CAE.`,
+    }
+  }
+  return resultado
+}
