@@ -33,6 +33,8 @@ async function hashTokenForKey(token: string): Promise<string> {
 
 // Subdominio especial para el panel de superadmin
 const SUPERADMIN_SUBDOMAIN = "admin"
+// Alias que la gente tipea para el panel; redirige al subdominio canónico.
+const SUPERADMIN_ALIAS_SUBDOMAIN = "superadmin"
 
 // Verificar si un email es superadmin (desde env)
 function isSuperadminEmail(email: string | null | undefined): boolean {
@@ -274,6 +276,21 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({
       request: { headers: requestHeaders },
     })
+  }
+
+  // ==========================================
+  // CASO 1b: Alias superadmin.* → admin.*
+  // ==========================================
+  // Sin esto, "superadmin" caía en CASO 4 como slug de tenant inexistente y
+  // terminaba en /tenant-not-found.
+  if (subdomain.toLowerCase() === SUPERADMIN_ALIAS_SUBDOMAIN) {
+    const target = request.nextUrl.clone()
+    target.host = hostname.replace(/^[^.]+/, SUPERADMIN_SUBDOMAIN)
+    if (pathname === "/tenant-not-found") {
+      target.pathname = "/"
+      target.search = ""
+    }
+    return NextResponse.redirect(target, 308)
   }
 
   // ==========================================
