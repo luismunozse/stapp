@@ -2,6 +2,9 @@ import { NextResponse } from "next/server"
 import { requireCronAuth } from "@/lib/cron-auth"
 import { runWhatsAppHealthCheck } from "@/lib/whatsapp/health"
 
+// El glob general de vercel.json (app/api/**) deja 30 s; los cron van a 60 s.
+export const maxDuration = 60
+
 // Cron horario: refresca el estado real de las instancias de WhatsApp y alerta.
 //
 // Auth: Bearer ${CRON_SECRET}

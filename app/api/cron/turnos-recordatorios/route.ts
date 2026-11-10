@@ -3,6 +3,9 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { notifyTurno } from "@/lib/turnos/notifications"
 import { requireCronAuth } from "@/lib/cron-auth"
 
+// El glob general de vercel.json (app/api/**) deja 30 s; los cron van a 60 s.
+export const maxDuration = 60
+
 // Cron: recorre turnos con inicio en las próximas ~24h que aún no
 // recibieron recordatorio_24h, y dispara la notificación.
 // Llamar 1 vez por hora (o cada 30min).
