@@ -481,29 +481,39 @@ describe("requireAuth — the lookup is bounded", () => {
     for (let i = 0; i < 30; i++) await Promise.resolve()
   }
 
-  it("a query that never settles is aborted after 3 s: 500, and the next request issues a new query", async () => {
+  /** A users query that, like fetch, only ends when the signal it was given aborts. */
+  function consultaColgada() {
+    const colgada = createChainMock(null)
+    let senal!: AbortSignal
+    colgada.abortSignal = vi.fn((s: AbortSignal) => {
+      senal = s
+      return colgada
+    })
+    colgada.maybeSingle = vi.fn(
+      () => new Promise((_, rechazar) => senal.addEventListener("abort", () => rechazar(senal.reason)))
+    )
+    return colgada
+  }
+
+  function timeoutsFalsos() {
     vi.useFakeTimers({ toFake: ["setTimeout", "Date"] })
     vi.setSystemTime(T0)
     // AbortSignal.timeout runs on native timers that fake timers do not move, so
     // it is rebuilt on top of the faked setTimeout.
-    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation((ms: number) => {
+    return vi.spyOn(AbortSignal, "timeout").mockImplementation((ms: number) => {
       const controlador = new AbortController()
       setTimeout(() => controlador.abort(new DOMException("The operation timed out.", "TimeoutError")), ms)
       return controlador.signal
     })
+  }
+
+  it("a query that never settles is aborted after 3 s, retried once, then 500; the next request queries again", async () => {
+    const timeout = timeoutsFalsos()
     try {
       vi.mocked(auth).mockResolvedValue(sesion("TECNICO", "suc-A"))
-      // Like fetch, the colgada query only ends when the signal it was given aborts.
-      const colgada = createChainMock(null)
-      let senal!: AbortSignal
-      colgada.abortSignal = vi.fn((s: AbortSignal) => {
-        senal = s
-        return colgada
-      })
-      colgada.maybeSingle = vi.fn(
-        () => new Promise((_, rechazar) => senal.addEventListener("abort", () => rechazar(senal.reason)))
-      )
-      vi.mocked(supabaseAdmin.from).mockReturnValueOnce(colgada as any)
+      vi.mocked(supabaseAdmin.from)
+        .mockReturnValueOnce(consultaColgada() as any)
+        .mockReturnValueOnce(consultaColgada() as any)
 
       let resuelta = false
       const pendiente = requireAuth().then((r) => {
@@ -512,8 +522,10 @@ describe("requireAuth — the lookup is bounded", () => {
       })
       await vaciarMicrotareas()
       expect(timeout).toHaveBeenCalledWith(3_000)
-      expect(colgada.abortSignal).toHaveBeenCalledWith(senal)
 
+      await vi.advanceTimersByTimeAsync(3_000)
+      expect(resuelta).toBe(false)
+      expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
       await vi.advanceTimersByTimeAsync(2_999)
       expect(resuelta).toBe(false)
       await vi.advanceTimersByTimeAsync(1)
@@ -527,12 +539,58 @@ describe("requireAuth — the lookup is bounded", () => {
       const despues = requireAuth()
       await vaciarMicrotareas()
       const ok = await despues
-      expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
+      expect(supabaseAdmin.from).toHaveBeenCalledTimes(3)
       expect(ok.error).toBeNull()
       expect(ok.session!.user.sucursalId).toBe("suc-B")
     } finally {
       timeout.mockRestore()
     }
+  })
+
+  it("a timeout followed by a good answer on the retry lets the request through", async () => {
+    const timeout = timeoutsFalsos()
+    try {
+      vi.mocked(auth).mockResolvedValue(sesion("TECNICO", "suc-A"))
+      vi.mocked(supabaseAdmin.from)
+        .mockReturnValueOnce(consultaColgada() as any)
+        .mockReturnValueOnce(createChainMock(fila()) as any)
+
+      const pendiente = requireAuth()
+      await vaciarMicrotareas()
+      await vi.advanceTimersByTimeAsync(3_000)
+      const r = await pendiente
+
+      expect(r.error).toBeNull()
+      expect(r.session!.user.sucursalId).toBe("suc-B")
+      expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
+    } finally {
+      timeout.mockRestore()
+    }
+  })
+
+  it.each([
+    ["a dropped connection", "TypeError: fetch failed"],
+    ["a timeout reported as an error", "TimeoutError: The operation was aborted due to timeout"],
+  ])("%s gets one retry", async (_caso, mensaje) => {
+    vi.mocked(auth).mockResolvedValue(sesion("TECNICO", "suc-A"))
+    vi.mocked(supabaseAdmin.from)
+      .mockReturnValueOnce(createChainMock(null, { message: mensaje }) as any)
+      .mockReturnValueOnce(createChainMock(fila()) as any)
+
+    const r = await requireAuth()
+
+    expect(r.error).toBeNull()
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(2)
+  })
+
+  it("any other error is not retried: one query, 500", async () => {
+    vi.mocked(auth).mockResolvedValue(sesion("TECNICO", "suc-A"))
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce(createChainMock(null, { message: "permission denied" }) as any)
+
+    const r = await requireAuth()
+
+    expect(r.error!.status).toBe(500)
+    expect(supabaseAdmin.from).toHaveBeenCalledTimes(1)
   })
 
   it("a lookup that answers in time is untouched by the bound", async () => {
