@@ -5,6 +5,8 @@ import { ClientesList } from "@/components/clientes/clientes-list"
 import { ClienteMobileCard } from "@/components/clientes/cliente-mobile-card"
 import type { Cliente } from "@/types"
 
+let rolSesion = "ADMIN"
+vi.mock("next-auth/react", () => ({ useSession: () => ({ data: { user: { role: rolSesion } } }) }))
 vi.mock("@/hooks/use-puede-cobrar", () => ({ usePuedeCobrar: () => true }))
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }) }))
 vi.mock("@/contexts/currency-context", () => ({
@@ -106,6 +108,22 @@ describe("ClientesList — practice client", () => {
     openAllMenus()
 
     for (const label of BLOCKED) expect(screen.getAllByText(label).length).toBeGreaterThan(0)
+  })
+
+  it("hides delete for a non-admin user (only ADMIN can delete clients)", async () => {
+    rolSesion = "VENDEDOR"
+    try {
+      stubFetch([REAL])
+      renderList()
+
+      await screen.findAllByText("Juan Gómez")
+      openAllMenus()
+
+      expect(screen.queryByText("Eliminar")).not.toBeInTheDocument()
+      expect(screen.getAllByText("Cuenta corriente").length).toBeGreaterThan(0)
+    } finally {
+      rolSesion = "ADMIN"
+    }
   })
 })
 
