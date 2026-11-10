@@ -132,8 +132,9 @@ describe("MoverSucursal", () => {
       expect(screen.getByRole("status")).toBe(estado)
       expect(screen.getByText("Casa Central", { selector: "p" })).toBeInTheDocument()
       expect(screen.queryByRole("button", { name: "Mover de sucursal" })).not.toBeInTheDocument()
+      // The focus moves in a passive effect, which may run after the commit waitFor saw.
+      await waitFor(() => expect(screen.getByRole("group", { name: "Sucursal" })).toHaveFocus())
       expect(document.activeElement).not.toBe(document.body)
-      expect(screen.getByRole("group", { name: "Sucursal" })).toHaveFocus()
     })
 
     it("si tras un 409 la relectura deja al usuario sin a dónde ir, la sección no desaparece y Cancelar deja el foco en ella", async () => {
@@ -406,7 +407,8 @@ describe("MoverSucursal", () => {
       )
       expect(screen.queryByLabelText("Nueva sucursal")).not.toBeInTheDocument()
       expect(screen.getByText("Cerro", { selector: "p" })).toBeInTheDocument()
-      expect(botonMover()).toHaveFocus()
+      // The focus moves in a passive effect, which may run after the commit waitFor saw.
+      await waitFor(() => expect(botonMover()).toHaveFocus())
       expect(onSubmit).not.toHaveBeenCalled()
     })
 
