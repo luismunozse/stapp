@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useSession } from "next-auth/react"
-import { useForm } from "react-hook-form"
+import { useForm, type FieldErrors } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Button } from "@/components/ui/button"
@@ -54,7 +54,9 @@ const ordenSchema = z.object({
   accesorios: z.string().optional(),
   codigoAccesoDispositivo: z.string().optional(),
   telefonoContacto: z.string().optional(),
-  presupuesto: z.union([z.number().positive(), z.nan(), z.undefined()]).optional(),
+  // 0 se acepta (el submit lo manda como "sin presupuesto"); rechazarlo
+  // trababa el alta sin ningun aviso, porque el campo esta en el paso 2.
+  presupuesto: z.union([z.number().min(0, "El presupuesto no puede ser negativo"), z.nan(), z.undefined()]).optional(),
   fechaPrometida: z.string().optional(),
   observaciones: z.string().optional(),
   notasInternas: z.string().optional(),
@@ -1270,7 +1272,24 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       const result = await trigger(["clienteId", "dispositivo", "tipoDispositivo", "problemaReportado"])
       return result
     }
+    if (step === 2) return trigger(["presupuesto"])
     return true
+  }
+
+  /** Campos que viven en el paso 2; el resto del schema esta en el paso 1. */
+  const CAMPOS_PASO_2: ReadonlyArray<keyof OrdenFormData> = [
+    "presupuesto", "fechaPrometida", "observaciones", "notasInternas",
+  ]
+
+  /** Sin esto, un error de validacion en un campo que no esta en pantalla
+   *  dejaba el boton "Crear Orden" sin ninguna reaccion. */
+  const onInvalid = async (formErrors: FieldErrors<OrdenFormData>) => {
+    const campos = Object.keys(formErrors) as Array<keyof OrdenFormData>
+    if (campos.length === 0) return
+    const primero = campos[0]
+    setCurrentStep(CAMPOS_PASO_2.includes(primero) ? 2 : 1)
+    const mensaje = formErrors[primero]?.message
+    await showError(typeof mensaje === "string" && mensaje ? mensaje : "Revisá los datos de la orden")
   }
 
   const handleNextStep = async () => {
@@ -1632,6 +1651,11 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                 })}
                 placeholder="0.00"
               />
+              {errors.presupuesto && (
+                <p className="text-sm text-destructive mt-1">
+                  {errors.presupuesto.message}
+                </p>
+              )}
             </div>
             <DatePicker
               id="fechaPrometida"
@@ -2043,7 +2067,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                   Siguiente
                 </Button>
               ) : (
-                <Button type="button" disabled={loading} onClick={handleSubmit(onSubmit)}>
+                <Button type="button" disabled={loading} onClick={handleSubmit(onSubmit, onInvalid)}>
                   {loading ? "Creando..." : "Crear Orden"}
                 </Button>
               )}
