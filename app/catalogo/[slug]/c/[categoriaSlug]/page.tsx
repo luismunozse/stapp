@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation"
+import { serializeJsonLd } from "@/lib/seo/serialize-json-ld"
 import Image from "next/image"
 import Link from "next/link"
 import { unstable_cache } from "next/cache"
@@ -151,11 +152,11 @@ export default async function CatalogoCategoriaPage({ params }: PageProps) {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbLd) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(itemListLd) }}
       />
       <CatalogoBreadcrumb
         items={[
