@@ -96,7 +96,7 @@ export async function PUT(
     return NextResponse.json({ message: "Cuota marcada como pagada" })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error marking cuota:", err)
     return NextResponse.json({ error: "Error al marcar cuota" }, { status: 500 })

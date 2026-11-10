@@ -25,10 +25,7 @@ const itemSchema = z.object({
 
 const notaCreditoSchema = z.object({
   ordenId: z
-    .string({
-      required_error: "La nota de crédito tiene que ser de una orden",
-      invalid_type_error: "La nota de crédito tiene que ser de una orden",
-    })
+    .string({ error: "La nota de crédito tiene que ser de una orden" })
     .min(1, "La nota de crédito tiene que ser de una orden"),
   motivo: z.enum(["DEVOLUCION", "AJUSTE_PRECIO", "GARANTIA", "ERROR_FACTURACION", "DESCUENTO_RETRO", "OTRO"]),
   monto: z.number().positive(),
@@ -219,7 +216,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, id: result.id, numero: result.numero }, { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error creando nota credito:", err)
     return NextResponse.json({ error: "Error al crear nota de crédito" }, { status: 500 })

@@ -12,6 +12,7 @@ import {
   argumentosGuardarGrupo,
   redondearPrecio,
   mensajeDeIssue,
+  mensajeDefectoVariantes,
   LIMITES,
 } from "@/lib/variantes-schema"
 
@@ -608,40 +609,39 @@ describe("guardarGrupoSchema: text and id guards", () => {
   })
 })
 
-describe("mensajeDeIssue: Spanish copy for zod's own English messages", () => {
-  const ENGLISH = /Expected|Required|received|Invalid|must |Unrecognized|Number |String |Array |finite/i
-  const defecto = (issue: Record<string, unknown>) =>
-    ({ ...issue, message: z.defaultErrorMap(issue as never, { defaultError: "", data: undefined }).message }) as z.ZodIssue
+describe("mensajeDefectoVariantes: Spanish copy for zod's own English messages", () => {
+  const ENGLISH = /Expected|Required|received|Invalid|must |Unrecognized|Number |String |Array |finite|Too (big|small)/i
 
   it.each([
-    ["a missing key", { code: "invalid_type", expected: "object", received: "undefined", path: [] }, "Falta un dato requerido"],
-    ["a null where an object goes", { code: "invalid_type", expected: "object", received: "null", path: [] }, "Los datos no tienen el formato esperado"],
-    ["a text where a number goes", { code: "invalid_type", expected: "number", received: "string", path: [] }, "Tiene que ser un número"],
-    ["an integer expected", { code: "invalid_type", expected: "integer", received: "string", path: [] }, "Tiene que ser un número"],
-    ["a number where a text goes", { code: "invalid_type", expected: "string", received: "number", path: [] }, "Tiene que ser un texto"],
-    ["a text where a boolean goes", { code: "invalid_type", expected: "boolean", received: "string", path: [] }, "Tiene que ser sí o no"],
-    ["a text where a list goes", { code: "invalid_type", expected: "array", received: "string", path: [] }, "Tiene que ser una lista"],
-    ["any other type", { code: "invalid_type", expected: "date", received: "string", path: [] }, "Hay un dato con un formato que no corresponde"],
-    ["a list too long", { code: "too_big", maximum: 3, type: "array", inclusive: true, exact: false, path: [] }, "Hay demasiados elementos en la lista"],
-    ["a text too long", { code: "too_big", maximum: 3, type: "string", inclusive: true, exact: false, path: [] }, "Hay un texto demasiado largo"],
-    ["a number too big", { code: "too_big", maximum: 3, type: "number", inclusive: true, exact: false, path: [] }, "Hay un número demasiado grande"],
-    ["a set too big", { code: "too_big", maximum: 3, type: "set", inclusive: true, exact: false, path: [] }, "Hay demasiados elementos en la lista"],
-    ["a set too small", { code: "too_small", minimum: 1, type: "set", inclusive: true, exact: false, path: [] }, "Faltan elementos en la lista"],
-    ["a list too short", { code: "too_small", minimum: 1, type: "array", inclusive: true, exact: false, path: [] }, "Faltan elementos en la lista"],
-    ["a text too short", { code: "too_small", minimum: 1, type: "string", inclusive: true, exact: false, path: [] }, "Hay un texto demasiado corto"],
-    ["a number too small", { code: "too_small", minimum: 1, type: "number", inclusive: true, exact: false, path: [] }, "Hay un número demasiado chico"],
-    ["unknown keys", { code: "unrecognized_keys", keys: ["x"], path: [] }, "Hay datos que no se pueden guardar con las variantes"],
-    ["a number that is not finite", { code: "not_finite", path: [] }, "Los datos de las variantes no son válidos"],
+    ["a missing key", { code: "invalid_type", expected: "object", input: undefined }, "Falta un dato requerido"],
+    ["a null where an object goes", { code: "invalid_type", expected: "object", input: null }, "Los datos no tienen el formato esperado"],
+    ["a text where a number goes", { code: "invalid_type", expected: "number", input: "x" }, "Tiene que ser un número"],
+    ["an integer expected", { code: "invalid_type", expected: "int", input: 1.5 }, "Tiene que ser un número"],
+    ["a number where a text goes", { code: "invalid_type", expected: "string", input: 5 }, "Tiene que ser un texto"],
+    ["a text where a boolean goes", { code: "invalid_type", expected: "boolean", input: "x" }, "Tiene que ser sí o no"],
+    ["a text where a list goes", { code: "invalid_type", expected: "array", input: "x" }, "Tiene que ser una lista"],
+    ["any other type", { code: "invalid_type", expected: "date", input: "x" }, "Hay un dato con un formato que no corresponde"],
+    ["a list too long", { code: "too_big", origin: "array" }, "Hay demasiados elementos en la lista"],
+    ["a text too long", { code: "too_big", origin: "string" }, "Hay un texto demasiado largo"],
+    ["a number too big", { code: "too_big", origin: "number" }, "Hay un número demasiado grande"],
+    ["a set too big", { code: "too_big", origin: "set" }, "Hay demasiados elementos en la lista"],
+    ["a set too small", { code: "too_small", origin: "set" }, "Faltan elementos en la lista"],
+    ["a list too short", { code: "too_small", origin: "array" }, "Faltan elementos en la lista"],
+    ["a text too short", { code: "too_small", origin: "string" }, "Hay un texto demasiado corto"],
+    ["a number too small", { code: "too_small", origin: "number" }, "Hay un número demasiado chico"],
+    ["unknown keys", { code: "unrecognized_keys" }, "Hay datos que no se pueden guardar con las variantes"],
+    ["anything else", { code: "invalid_format" }, "Los datos de las variantes no son válidos"],
   ])("%s", (_t, issue, esperado) => {
-    const texto = mensajeDeIssue(defecto(issue))
+    const texto = mensajeDefectoVariantes(issue)
     expect(texto).toBe(esperado)
     expect(texto).not.toMatch(ENGLISH)
   })
 
   it("keeps the message the schema itself sets (already Spanish and more specific)", () => {
-    const propio = { code: "too_big", maximum: 3, type: "array", inclusive: true, exact: false, path: [], message: "Un producto puede tener hasta 3 opciones" }
-    expect(mensajeDeIssue(propio as z.ZodIssue)).toBe("Un producto puede tener hasta 3 opciones")
-    expect(mensajeDeIssue({ code: "custom", path: [], message: "Cualquier cosa" })).toBe("Cualquier cosa")
+    const r = guardarGrupoSchema.safeParse(conGrupo({ opciones: [] }), { error: mensajeDefectoVariantes })
+    expect(r.success).toBe(false)
+    if (r.success) return
+    expect(r.error.issues.map(mensajeDeIssue)).toContain("Elegí al menos una opción")
   })
 
   it("no real parse of a wrong-typed body leaves an English message", () => {
@@ -652,6 +652,7 @@ describe("mensajeDeIssue: Spanish copy for zod's own English messages", () => {
       { ...base(), archivar: "x" },
       { ...base(), compartidos: 5 },
       { ...base(), depositoId: 5 },
+      { ...base(), extra: 1 },
       conGrupo({ renombrar: "si" }),
       conGrupo({ nombre: 5 }),
       conFila(0, { precioVenta: "10" }),
@@ -664,7 +665,7 @@ describe("mensajeDeIssue: Spanish copy for zod's own English messages", () => {
       { ...base(), compartidos: { diasGarantiaDefault: "7" } },
     ]
     for (const cuerpo of cuerpos) {
-      const r = guardarGrupoSchema.safeParse(cuerpo)
+      const r = guardarGrupoSchema.safeParse(cuerpo, { error: mensajeDefectoVariantes })
       expect(r.success).toBe(false)
       if (r.success) continue
       for (const issue of r.error.issues) expect(mensajeDeIssue(issue)).not.toMatch(ENGLISH)

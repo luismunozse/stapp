@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ sheets })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error parsing price list:", err)
     return NextResponse.json(

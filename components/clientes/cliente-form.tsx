@@ -64,7 +64,7 @@ type ClienteFormData = z.infer<typeof clienteSchema>
  *
  *  Volver a escribirlos es una molestia acotada; que el proximo operador los lea
  *  en el navegador, no. */
-type ClienteDraftValue = WithoutSensitiveClienteFields<ClienteFormData>
+type ClienteDraftValue = WithoutSensitiveClienteFields<z.input<typeof clienteSchema>>
 
 /** Valores base para el form: prefill de edicion o blanco para alta. Vive
  *  afuera del componente (sin dependencias de hooks) para poder reusarla en
@@ -123,7 +123,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
     watch,
     getValues,
     setValue,
-  } = useForm<ClienteFormData>({
+  } = useForm<z.input<typeof clienteSchema>, unknown, ClienteFormData>({
     resolver: zodResolver(clienteSchema),
     defaultValues: clienteFormDefaults(cliente),
   })

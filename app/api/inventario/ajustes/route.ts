@@ -135,7 +135,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, id: result.id, nuevoStock: result.nuevoStock }, { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error creando ajuste:", err)
     return NextResponse.json({ error: "Error al crear ajuste" }, { status: 500 })

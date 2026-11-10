@@ -30,7 +30,7 @@ const equipoSchema = z.object({
   problemaReportado: z.string().min(1, "El problema es requerido"),
   accesorios: z.string().optional(),
   codigoAccesoDispositivo: z.string().optional(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
   fotos: z.array(fotoSchema).optional(),
 })
 
@@ -233,7 +233,7 @@ export async function POST(request: Request) {
     )
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: error.issues[0].message }, { status: 400 })
     }
     console.error("Error creating recepcion:", error)
     return NextResponse.json({ error: "Error al crear la recepcion" }, { status: 500 })

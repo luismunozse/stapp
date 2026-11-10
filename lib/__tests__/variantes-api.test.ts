@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from "vitest"
 import { z } from "zod"
 import { type Payload, ID, base, conFila } from "@/__tests__/helpers/variantes-payload"
-import { guardarGrupoSchema } from "@/lib/variantes-schema"
+import { validarGuardarGrupo } from "@/lib/variantes-schema"
 import {
   mapearErrorRpc,
   esReintentable,
@@ -266,7 +266,7 @@ describe("migracionPendiente and respuestaDeError", () => {
 describe("respuestaDeValidacion", () => {
   const INGLES = /Expected|Required|received|Invalid|must |Unrecognized|Number |String |Array |finite|zod/i
   const issuesDe = (p: Payload) => {
-    const r = guardarGrupoSchema.safeParse(p)
+    const r = validarGuardarGrupo(p)
     if (r.success) throw new Error("expected a rejection")
     return r.error
   }
