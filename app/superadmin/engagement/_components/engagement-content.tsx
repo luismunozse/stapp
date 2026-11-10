@@ -374,7 +374,8 @@ export function EngagementContent() {
       body: {
         organizationId: showTrialExt.id,
         dias: diasNum,
-        motivo: trialForm.motivo || null,
+        // El schema es z.string().optional(): null da 400, undefined omite el campo.
+        motivo: trialForm.motivo.trim() || undefined,
       },
       successMessage: `Trial extendido ${diasNum} días para ${showTrialExt.nombre}`,
       onSuccess: () => {
