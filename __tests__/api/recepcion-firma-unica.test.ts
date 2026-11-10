@@ -46,6 +46,7 @@ describe("POST /api/recepciones — firma unica", () => {
     vi.clearAllMocks()
     mockAuthSuccess()
     mockSupabaseFrom({
+      clientes: createChainMock({ id: "c1" }),
       orden_eventos: createChainMock(null, null),
       fotos_orden: createChainMock(null, null),
     })
