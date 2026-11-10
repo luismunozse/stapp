@@ -10,7 +10,11 @@ import {
 } from "@/lib/rate-limit"
 import { getTenantStatusBySlug } from "@/lib/tenant-status-edge"
 import { getUserDeletedStatus } from "@/lib/user-status-edge"
-import { isImpersonationWriteBlocked } from "@/lib/impersonation"
+import {
+  isImpersonationWriteBlocked,
+  isImpersonationExpired,
+  IMPERSONATION_EXIT_PATH,
+} from "@/lib/impersonation"
 import { isPublicPath } from "@/lib/public-paths"
 import { clearSessionCookie, sessionCookieName } from "@/lib/session-cookie"
 
@@ -90,6 +94,43 @@ async function deletedUserResponse(
     ? NextResponse.json({ error: "Cuenta eliminada" }, { status: 401 })
     : NextResponse.redirect(new URL("/login", request.url))
   return clearSessionCookie(res)
+}
+
+// Corte de una sesión de impersonación: vencida (más de 30 min) o intentando
+// escribir. El vencimiento se mira acá además del callback `jwt` de auth.ts
+// porque getToken() no corre callbacks, y el `exp` del JWT no sirve: Auth.js lo
+// reescribe a 30 días cada vez que se lee /api/auth/session. El endpoint de
+// salida queda siempre habilitado para poder terminarla.
+function impersonationResponse(
+  request: NextRequest,
+  token: { isImpersonating?: unknown; impersonationExpiresAt?: unknown } | null,
+  pathname: string,
+): NextResponse | null {
+  if (!token?.isImpersonating || pathname === IMPERSONATION_EXIT_PATH) return null
+  if (isImpersonationExpired(token)) {
+    // En rutas públicas (/login, /api/auth/*) se deja pasar: el token vencido
+    // ya no autentica nada (el callback `jwt` lo anula en auth()) y cortar acá
+    // haría un loop de redirect a /login o impediría volver a loguearse.
+    if (isPublicPath(pathname)) return null
+    const res = pathname.startsWith("/api/")
+      ? NextResponse.json({ error: "La sesión de impersonación venció" }, { status: 401 })
+      : NextResponse.redirect(new URL("/login", request.url))
+    return clearSessionCookie(res)
+  }
+  if (
+    isImpersonationWriteBlocked({
+      isImpersonating: true,
+      method: request.method,
+      pathname,
+      isServerAction: request.headers.has("next-action"),
+    })
+  ) {
+    return NextResponse.json(
+      { error: "Sesión de impersonación en solo-lectura: acción no permitida" },
+      { status: 403 }
+    )
+  }
+  return null
 }
 
 // Rutas de landing page (solo para dominio principal)
@@ -262,14 +303,28 @@ export async function proxy(request: NextRequest) {
   if (!subdomain) {
     // Las APIs autentican por la cookie de sesión (scopeada al dominio raíz),
     // así que también acá hay que cortar la sesión de un usuario dado de baja.
-    if (pathname.startsWith("/api/") && !isPublicPath(pathname)) {
+    //
+    // La cookie de impersonación también viaja al dominio raíz: sin subdominio
+    // no hay x-tenant-slug y requireAuth() acepta la sesión, así que el
+    // solo-lectura y el vencimiento se aplican también acá. Por eso el token se
+    // lee además en cualquier escritura o server action, no solo en /api.
+    const isApiCall = pathname.startsWith("/api/") && !isPublicPath(pathname)
+    const method = request.method.toUpperCase()
+    const isWrite =
+      !(method === "GET" || method === "HEAD" || method === "OPTIONS") ||
+      request.headers.has("next-action")
+    if (isApiCall || isWrite) {
       const apexToken = await getToken({
         req: request,
         secret: process.env.NEXTAUTH_SECRET,
         cookieName: sessionCookieName(),
       })
-      const apexDeleted = await deletedUserResponse(request, apexToken, pathname)
-      if (apexDeleted) return apexDeleted
+      const apexImpersonation = impersonationResponse(request, apexToken, pathname)
+      if (apexImpersonation) return apexImpersonation
+      if (isApiCall) {
+        const apexDeleted = await deletedUserResponse(request, apexToken, pathname)
+        if (apexDeleted) return apexDeleted
+      }
     }
 
     // Landing page y rutas públicas permitidas
@@ -327,8 +382,11 @@ export async function proxy(request: NextRequest) {
     const adminDeleted = await deletedUserResponse(request, token, pathname)
     if (adminDeleted) return adminDeleted
 
-    // Verificar que el email está en SUPERADMIN_EMAILS
-    if (!isSuperadminEmail(token.email as string)) {
+    // Verificar que el email está en SUPERADMIN_EMAILS. Una sesión de
+    // impersonación nunca entra al panel, aunque el usuario impersonado tenga
+    // un email de la lista: el token lleva el email del objetivo y acá no se
+    // aplica el solo-lectura.
+    if (token.isImpersonating || !isSuperadminEmail(token.email as string)) {
       // No es superadmin, redirigir al dominio principal
       const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
       const protocol = process.env.NODE_ENV === "production" ? "https" : "http"
@@ -473,19 +531,8 @@ export async function proxy(request: NextRequest) {
   // the cross-tenant check above). The decision (block state-changing requests,
   // allow only the exit endpoint) lives in `isImpersonationWriteBlocked` so it
   // can be unit-tested in isolation.
-  if (
-    isImpersonationWriteBlocked({
-      isImpersonating: token?.isImpersonating as boolean | undefined,
-      method: request.method,
-      pathname,
-      isServerAction: request.headers.has("next-action"),
-    })
-  ) {
-    return NextResponse.json(
-      { error: "Sesión de impersonación en solo-lectura: acción no permitida" },
-      { status: 403 }
-    )
-  }
+  const impersonationRes = impersonationResponse(request, token, pathname)
+  if (impersonationRes) return impersonationRes
 
   // Si es ruta pública, permitir pero pasar contexto
   if (isPublicPath(pathname)) {

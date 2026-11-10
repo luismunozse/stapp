@@ -15,6 +15,16 @@ export async function GET() {
       )
     }
 
+    // Durante una impersonación el usuario de la sesión es el del tenant: su
+    // refresh token real abriría una sesión completa (lectura/escritura, sin
+    // el límite de 30 min y sin rastro de impersonación) a nombre suyo.
+    if (session.user.isImpersonating) {
+      return NextResponse.json(
+        { error: "No disponible durante una impersonación" },
+        { status: 403 }
+      )
+    }
+
     // Obtener el refresh token del usuario
     const { data: user, error } = await supabaseAdmin
       .from("users")
