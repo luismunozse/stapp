@@ -34,7 +34,7 @@ import { parseMoneyInput } from "@/lib/parse-money"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { MultiPagoInput, createPagoLine, type PagoLineItem } from "@/components/pagos/multi-pago-input"
-import type { PosCartItem, PosCliente, DescuentoConfig, FiscalConfig } from "./pos-types"
+import type { PosCartItem, PosCliente, DescuentoConfig, FiscalConfig, CobroMostrador } from "./pos-types"
 import { computeVentaTotals } from "./pos-types"
 import {
   condicionDeCobro,
@@ -51,7 +51,8 @@ interface PosCheckoutDialogProps {
   onClose: () => void
   items: PosCartItem[]
   cliente: PosCliente
-  onComplete: (ventaData: any) => void
+  /** `cobro` solo viene en efectivo puro con monto recibido que cubre el total. */
+  onComplete: (ventaData: any, cobro?: CobroMostrador) => void
   descuentoGlobal?: DescuentoConfig | null
   descuentoMotivo?: string
   fiscal?: FiscalConfig | null
@@ -348,7 +349,17 @@ export function PosCheckoutDialog({
       }
 
       const ventaData = await res.json()
-      onComplete(ventaData)
+      const cobro: CobroMostrador | undefined =
+        // Solo si la venta quedó cobrada entera en efectivo: con pago parcial
+        // (fiado) el vuelto se calcula contra el total y no es el real.
+        !pagoParcial &&
+        isCashOnly &&
+        pagosLines[0].monto === totalEfectivo &&
+        montoRecibido !== "" &&
+        montoRecibido >= totalEfectivo
+          ? { montoRecibido, vuelto }
+          : undefined
+      onComplete(ventaData, cobro)
     } catch (error) {
       console.error("Error creating venta:", error)
       await showError("Error al crear la venta")

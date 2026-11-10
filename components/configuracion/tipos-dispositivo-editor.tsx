@@ -212,7 +212,7 @@ export function TiposDispositivoEditor() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Smartphone className="h-5 w-5" />
@@ -327,8 +327,8 @@ export function TiposDispositivoEditor() {
                         <ChevronDown className="h-4 w-4" />
                       </Button>
                     </div>
-                    <div className="flex-1">
-                      <div className="font-medium flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium flex flex-wrap items-center gap-x-2 gap-y-1">
                         {tipo.nombre}
                         {tipo.esBase && (
                           <Badge variant="secondary" className="text-xs">
@@ -341,13 +341,13 @@ export function TiposDispositivoEditor() {
                           </Badge>
                         )}
                       </div>
-                      <div className="text-xs text-muted-foreground flex gap-2 mt-1">
+                      <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2 mt-1">
                         <span>Codigo: {tipo.codigo}</span>
                         <span>|</span>
                         <span>Prefijo: {tipo.prefijoOrden}</span>
                       </div>
                     </div>
-                    <div className="flex gap-1">
+                    <div className="flex shrink-0 gap-1">
                       <Button
                         variant="ghost"
                         size="icon"

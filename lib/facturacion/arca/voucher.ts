@@ -13,14 +13,17 @@
 // que mantener una copia local del tipo que derive en silencio.
 import type { INextVoucher } from "@arcasdk/core/lib/domain/types/voucher.types"
 
+import { CBTE_TIPO_FACTURA } from "@/lib/facturacion/cbte-tipo"
+import { ErrorDeNegocioFacturacion } from "@/lib/facturacion/errores"
 import { deriveTipo } from "@/lib/facturacion/derive"
-import type { ArcaCredenciales, EmitirInput } from "@/lib/facturacion/types"
+import type { ArcaCredenciales, DatosFiscales, EmitirInput } from "@/lib/facturacion/types"
 
-/** Códigos de `FEParamGetTiposCbte`. */
-const CBTE_TIPO: Record<"B" | "C", number> = { B: 6, C: 11 }
-
-/** Códigos de `FEParamGetTiposIva`, indexados por la alícuota en porcentaje. */
-const ALICUOTA_ID: Record<number, number> = {
+/**
+ * Códigos de `FEParamGetTiposIva`, indexados por la alícuota en porcentaje.
+ * Se exporta para que la nota de crédito infiera la alícuota de la factura
+ * original con la MISMA tabla con la que se emitió.
+ */
+export const ALICUOTA_ID: Record<number, number> = {
   0: 3,
   10.5: 4,
   21: 5,
@@ -50,8 +53,20 @@ const COND_IVA_RECEPTOR: Record<string, number> = {
   "RESPONSABLE MONOTRIBUTO": 6,
 }
 
-function normalizar(valor: string | undefined): string {
+function normalizar(valor: string | null | undefined): string {
   return (valor ?? "").trim().toUpperCase()
+}
+
+/**
+ * Código de `FEParamGetCondicionIvaReceptor` para el texto que el taller (o la
+ * fila persistida) guarda como condición de IVA del receptor, o `undefined` si
+ * no se reconoce. NO inventa un default: la factura cae a consumidor final
+ * (`?? 5`) porque es el receptor que ARCA acepta sin identificar, pero la nota
+ * de crédito debe copiar la condición del original y por eso necesita saber
+ * cuándo no se pudo determinar.
+ */
+export function condicionIvaReceptorId(condicionIva: string | null | undefined): number | undefined {
+  return COND_IVA_RECEPTOR[normalizar(condicionIva)]
 }
 
 /**
@@ -64,7 +79,21 @@ function soloDigitos(valor: string | undefined): number {
 }
 
 function round2(n: number): number {
-  return Math.round(n * 100) / 100
+  return Math.round((n + Number.EPSILON) * 100) / 100
+}
+
+/**
+ * Id de `FEParamGetTiposIva` para una alícuota. Una desconocida NO cae en 21%:
+ * mandar el Id equivocado autorizaría un IVA distinto del cobrado.
+ */
+function alicuotaId(alicuota: number): number {
+  const id = ALICUOTA_ID[alicuota]
+  if (id === undefined) throw new ErrorDeNegocioFacturacion(`Alícuota de IVA no soportada por ARCA: ${alicuota}%`)
+  return id
+}
+
+function aCentavos(n: number): number {
+  return Math.round(n * 100)
 }
 
 interface DesgloseIva {
@@ -74,23 +103,53 @@ interface DesgloseIva {
 }
 
 /**
- * Agrupa las líneas POR ALICUOTA, no por ítem: `FECAESolicitar` espera un
- * array de `AlicIva` con una entrada por alícuota distinta, y AFIP rechaza
- * el comprobante si la misma se repite.
+ * Factura B: las líneas ya traen el IVA adentro y suman `input.total` (lo que
+ * pagó el cliente), así que el IVA se DESPEJA del total en vez de sumarse
+ * encima. Antes se trataban como netas y la factura salía un 21% por encima de
+ * lo cobrado, sin descuentos ni redondeo.
+ *
+ * Agrupa POR ALICUOTA, no por ítem: `FECAESolicitar` espera un array de
+ * `AlicIva` con una entrada por alícuota distinta, y AFIP rechaza el
+ * comprobante si la misma se repite. Si las líneas no cierran con el total, la
+ * diferencia se absorbe en el grupo más grande: el total manda.
  */
 function desglosarIva(input: EmitirInput): DesgloseIva {
-  const basePorAlicuota = new Map<number, number>()
+  const totalCentavos = aCentavos(input.total)
+  const { desgloseIva } = input
 
-  for (const item of input.items) {
-    const base = item.importeUnitario * item.cantidad
-    basePorAlicuota.set(item.alicuotaIva, (basePorAlicuota.get(item.alicuotaIva) ?? 0) + base)
+  // Neto e IVA que la venta ya guardó: se respetan si cierran al centavo.
+  if (desgloseIva && aCentavos(desgloseIva.neto + desgloseIva.iva) === totalCentavos) {
+    const neto = round2(desgloseIva.neto)
+    const impuesto = round2(desgloseIva.iva)
+    return {
+      iva: [{ Id: alicuotaId(desgloseIva.alicuota), BaseImp: neto, Importe: impuesto }],
+      neto,
+      impuestoIva: impuesto,
+    }
   }
 
-  const iva = [...basePorAlicuota].map(([alicuota, base]) => ({
-    Id: ALICUOTA_ID[alicuota] ?? ALICUOTA_ID[21],
-    BaseImp: round2(base),
-    Importe: round2((base * alicuota) / 100),
-  }))
+  const brutoPorAlicuota = new Map<number, number>()
+  for (const item of input.items) {
+    const bruto = aCentavos(item.importe ?? item.importeUnitario * item.cantidad)
+    brutoPorAlicuota.set(item.alicuotaIva, (brutoPorAlicuota.get(item.alicuotaIva) ?? 0) + bruto)
+  }
+  if (brutoPorAlicuota.size === 0) brutoPorAlicuota.set(21, 0)
+
+  const diferencia = totalCentavos - [...brutoPorAlicuota.values()].reduce((a, b) => a + b, 0)
+  if (diferencia !== 0) {
+    const [mayor] = [...brutoPorAlicuota].sort((x, y) => y[1] - x[1])[0]
+    brutoPorAlicuota.set(mayor, (brutoPorAlicuota.get(mayor) ?? 0) + diferencia)
+  }
+
+  const iva = [...brutoPorAlicuota].map(([alicuota, centavos]) => {
+    const bruto = centavos / 100
+    const neto = round2(bruto / (1 + alicuota / 100))
+    return {
+      Id: alicuotaId(alicuota),
+      BaseImp: neto,
+      Importe: round2(bruto - neto),
+    }
+  })
 
   return {
     iva,
@@ -115,23 +174,23 @@ export function buildVoucher(
   // el array `Iva` NO se manda (AFIP rechaza una C que lo traiga).
   const { iva, neto, impuestoIva } =
     tipo === "C"
-      ? { iva: undefined, neto: input.total, impuestoIva: 0 }
+      ? { iva: undefined, neto: round2(input.total), impuestoIva: 0 }
       : desglosarIva(input)
 
   return {
     CantReg: 1,
     PtoVta: creds.puntoVenta,
-    CbteTipo: CBTE_TIPO[tipo],
+    CbteTipo: CBTE_TIPO_FACTURA[tipo],
     Concepto: 1, // Productos
     // Ante un tipo de documento o condición desconocidos se cae a consumidor
     // final, que es el receptor que AFIP acepta sin identificar.
     DocTipo: DOC_TIPO[normalizar(input.receptor.documentoTipo)] ?? 99,
     DocNro: soloDigitos(input.receptor.documentoNro),
     CbteFch: options.cbteFch,
-    // AFIP valida ImpTotal = ImpNeto + ImpIVA + ImpTrib + ImpOpEx + ImpTotConc
-    // y rechaza el comprobante si no cierra, así que el total se recalcula
-    // desde las partes en vez de copiar `input.total`.
-    ImpTotal: round2(neto + impuestoIva),
+    // AFIP valida ImpTotal = ImpNeto + ImpIVA + ImpTrib + ImpOpEx + ImpTotConc.
+    // El desglose se arma para cerrar exacto con `input.total` (lo cobrado), que
+    // es el que se informa: nunca se recalcula por encima.
+    ImpTotal: round2(input.total),
     ImpTotConc: 0,
     ImpNeto: neto,
     ImpOpEx: 0,
@@ -139,7 +198,29 @@ export function buildVoucher(
     ImpTrib: 0,
     MonId: input.moneda,
     MonCotiz: 1,
-    CondicionIVAReceptorId: COND_IVA_RECEPTOR[normalizar(input.receptor.condicionIva)] ?? 5,
+    CondicionIVAReceptorId: condicionIvaReceptorId(input.receptor.condicionIva) ?? 5,
     ...(iva ? { Iva: iva } : {}),
+  }
+}
+
+/**
+ * Foto fiscal de lo que se le mandó a ARCA, tomada del voucher ya armado: los
+ * importes son EXACTAMENTE los autorizados (`ImpTotal`, `ImpNeto`, `ImpIVA`),
+ * no un recálculo desde la venta, que puede cambiar después.
+ */
+export function datosFiscalesDesdeVoucher(voucher: INextVoucher, cuitEmisor: string): DatosFiscales {
+  const f = String(voucher.CbteFch)
+  return {
+    fechaEmision: `${f.slice(0, 4)}-${f.slice(4, 6)}-${f.slice(6, 8)}`,
+    cuitEmisor: cuitEmisor.replace(/\D/g, ""),
+    cbteTipo: voucher.CbteTipo,
+    concepto: voucher.Concepto,
+    moneda: voucher.MonId,
+    cotizacion: voucher.MonCotiz,
+    importeNeto: voucher.ImpNeto,
+    importeIva: voucher.ImpIVA,
+    importeTotal: voucher.ImpTotal,
+    receptorDocTipoCod: voucher.DocTipo,
+    receptorDocNro: String(voucher.DocNro),
   }
 }

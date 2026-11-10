@@ -7,9 +7,7 @@ import type { PlanWithUsage } from "@/types/superadmin"
 // Schema de validación para crear plan
 const createPlanSchema = z.object({
   nombre: z.string().min(2, "Nombre debe tener al menos 2 caracteres").max(50),
-  tipo: z.enum(["FREE", "PREMIUM"], {
-    errorMap: () => ({ message: "Tipo debe ser FREE o PREMIUM" }),
-  }),
+  tipo: z.enum(["FREE", "PREMIUM"], { error: "Tipo debe ser FREE o PREMIUM" }),
   slug: z
     .string()
     .min(2, "Slug debe tener al menos 2 caracteres")
@@ -26,7 +24,7 @@ const createPlanSchema = z.object({
   limite_vendedores: z.number().positive("Límite debe ser positivo").nullable(),
   limite_storage_mb: z.number().positive("Límite debe ser positivo").nullable(),
   features: z.array(z.string()).default([]),
-  feature_flags: z.record(z.boolean()).default({}),
+  feature_flags: z.record(z.string(), z.boolean()).default({}),
 }).refine(
   (data) => {
     // Si es FREE, precios deben ser 0

@@ -17,7 +17,7 @@ La diferencia principal con el doc de Oracle: el HTTPS lo pone **Caddy**, dentro
 
 | Servicio | Imagen | Puertos |
 |---|---|---|
-| `evolution-api` | `atendai/evolution-api:v2.1.1` | `127.0.0.1:8080`, solo local |
+| `evolution-api` | `evoapicloud/evolution-api:v2.3.7` | `127.0.0.1:8080`, solo local |
 | `caddy` | `caddy:2-alpine` | `80` y `443`, públicos |
 | `postgres` | `postgres:16-alpine` | interno |
 | `redis` | `redis:7-alpine` | interno |
@@ -78,6 +78,7 @@ docker compose logs --tail 50 evolution-api
 - **Cambiar el `Caddyfile`**: editalo y corré `docker compose restart caddy`. El `up -d` no alcanza, porque el compose no cambió.
 - **`DATABASE_SAVE_DATA_NEW_MESSAGE=true` es obligatoria**: con `false`, los reintentos de WhatsApp le llegan vacíos al cliente (ver el troubleshooting de `whatsapp-evolution-oracle-deploy.md`). Se corrigió el 2026-09-28.
 - **Firewall**: si activás el de Hetzner, abrí TCP **22** (SSH), **80** y **443** (Caddy). Con solo el 22, `evo.stapp.com.ar` deja de responder y se cortan todos los WhatsApp automáticos.
+- **"Esperando el mensaje. Esto puede tardar un tiempo" en los WhatsApp automáticos**: el teléfono del cliente no puede descifrar el mensaje. Con Evolution ≤ v2.2 pasa porque su Baileys (6.x) no soporta los identificadores LID que WhatsApp usa desde 2025. Se corrige actualizando a v2.3.x (Baileys 7), ver *Actualizar a v2.3.7* abajo.
 - **Actualizar Evolution**: cambiá el tag de la imagen (siempre fijo, nunca `latest`), corré `docker compose pull && docker compose up -d` y verificá que la sesión sobreviva.
 - **Backups**: Hetzner Backups o snapshots manuales. La sesión de WhatsApp vive en los volúmenes `postgres_data` y `evolution_instances`, y los certificados HTTPS en `caddy_data` (en `docker volume ls` aparecen con el prefijo `evolution_`). Si el server muere sin backup, hay que reescanear el QR.
 - **Costo**: fijo mientras el server exista; apagarlo no ahorra. El precio vigente está en la consola de Hetzner.
@@ -85,16 +86,45 @@ docker compose logs --tail 50 evolution-api
 
 ---
 
+## Actualizar a v2.3.7 (desde v2.1.1)
+
+La imagen cambió de nombre a partir de v2.2: `atendai/` → `evoapicloud/`.
+
+```bash
+cd /root/evolution
+# 1. Backup: snapshot en Hetzner o dump de la base + copia del compose
+docker compose exec -T postgres pg_dump -U evo evolution > /root/evolution-backup-$(date +%F).sql
+cp docker-compose.yml docker-compose.yml.v2.1.1.bak
+
+# 2. Editar docker-compose.yml:
+#    image: evoapicloud/evolution-api:v2.3.7
+#    quitar CONFIG_SESSION_PHONE_VERSION
+#    agregar DATABASE_CONNECTION_CLIENT_NAME=evolution_exchange
+
+# 3. Aplicar (corre las migraciones de Prisma al arrancar)
+docker compose pull evolution-api && docker compose up -d evolution-api
+docker compose logs -f --tail 100 evolution-api   # esperar "HTTP - ON: 8080"
+
+# 4. Verificar
+curl -s https://evo.stapp.com.ar/ | grep -o '"version":"[^"]*"'   # 2.3.7
+```
+
+Después, en STApp (Configuración → WhatsApp y por sucursal) confirmá que cada instancia siga `open` y mandá un envío de prueba a un número que antes mostraba "Esperando el mensaje". Si alguna instancia quedó `close`, reescaneá el QR.
+
+**Rollback**: `cp docker-compose.yml.v2.1.1.bak docker-compose.yml && docker compose up -d evolution-api`. Si las migraciones ya corrieron y v2.1.1 no arranca, restaurá el dump (`psql -U evo evolution < backup.sql` sobre una base vacía).
+
+---
+
 ## Configuración del server
 
-Copia de `/root/evolution/` al 2026-09-28, con los secretos reemplazados por marcadores. Si cambiás algo en el server, actualizá también esta copia.
+Copia de `/root/evolution/` al 2026-11-10 (actualización a v2.3.7), con los secretos reemplazados por marcadores. Si cambiás algo en el server, actualizá también esta copia.
 
 `docker-compose.yml`:
 
 ```yaml
 services:
   evolution-api:
-    image: atendai/evolution-api:v2.1.1
+    image: evoapicloud/evolution-api:v2.3.7
     restart: always
     depends_on:
       - postgres
@@ -102,9 +132,9 @@ services:
     environment:
       - SERVER_URL=https://evo.stapp.com.ar
       - AUTHENTICATION_API_KEY=TU_API_KEY_SECRETA
-      - CONFIG_SESSION_PHONE_VERSION=2.3000.1043857760
       - DATABASE_ENABLED=true
       - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_CLIENT_NAME=evolution_exchange
       - DATABASE_CONNECTION_URI=postgresql://evo:TU_PASSWORD_POSTGRES@postgres:5432/evolution?schema=public
       - DATABASE_SAVE_DATA_INSTANCE=true
       - DATABASE_SAVE_DATA_NEW_MESSAGE=true
@@ -164,7 +194,8 @@ evo.stapp.com.ar {
 
 - `TU_API_KEY_SECRETA`: la misma que `EVOLUTION_API_KEY` en Vercel. Para generar una nueva: `openssl rand -hex 32`.
 - `TU_PASSWORD_POSTGRES`: va en dos lugares, `DATABASE_CONNECTION_URI` y `POSTGRES_PASSWORD`, y tiene que ser la misma en los dos.
-- `CONFIG_SESSION_PHONE_VERSION`: la versión de WhatsApp Web que presenta Baileys. Si el QR deja de aparecer, está vieja: actualizala como explica el doc de Oracle (comentario del compose y troubleshooting).
+- `CONFIG_SESSION_PHONE_VERSION`: desde v2.3 ya no se fija; Evolution toma sola la versión vigente de WhatsApp Web. Dejarla fija con un valor viejo hace que WhatsApp rechace la conexión. Solo agregala si el QR deja de aparecer (ver troubleshooting del doc de Oracle).
+- `DATABASE_CONNECTION_CLIENT_NAME=evolution_exchange`: tiene que coincidir con el `clientName` que ya usaba la base, si no Evolution no encuentra las instancias existentes.
 - Caddy saca y renueva solo el certificado HTTPS de `evo.stapp.com.ar`, y lo guarda en `caddy_data`.
 
 ---

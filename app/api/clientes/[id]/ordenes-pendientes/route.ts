@@ -28,6 +28,9 @@ export async function GET(
       .eq("cliente_id", clienteId)
       // The onboarding practice order is never collectable.
       .eq("es_practica", false)
+      // Only REPARADO/ENTREGADO orders are collectable (mig 273); same rule as
+      // get_deuda_cliente_sucursal and caja "sin cobrar".
+      .in("estado", ["REPARADO", "ENTREGADO"])
       .in("estado_cobro", ["PENDIENTE", "PARCIAL"])
       .not("costo_final", "is", null)
       .gt("costo_final", 0)

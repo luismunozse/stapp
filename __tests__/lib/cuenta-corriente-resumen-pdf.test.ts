@@ -135,3 +135,32 @@ describe("generateResumenCCPDF", () => {
     }
   })
 })
+
+describe("generateResumenCCPDF without running balances (branch-scoped statement)", () => {
+  const scoped: ResumenCCPDFData = {
+    ...baseData,
+    sinSaldosAcumulados: true,
+    // Org-wide current balance, deliberately different from every row balance.
+    saldoFinal: 777,
+    // Values that must never be printed in this mode.
+    saldoInicial: 123456,
+    movimientos: movimientos.map((m) => ({ ...m, saldoPosterior: 424242 })),
+  }
+
+  it("prints the movements and the current balance, but no running balances", async () => {
+    const text = normalize(await extractReactPdfText(await generateResumenCCPDF(scoped)))
+    expect(text).toContain("DEBE")
+    expect(text).toContain(fmt(8000))
+    expect(text).toContain(fmt(777))
+    expect(text).not.toContain("SALDO\n")
+    expect(text).not.toContain("Saldo inicial")
+    expect(text).not.toContain(fmt(123456))
+    expect(text).not.toContain(fmt(424242))
+  })
+
+  it("keeps the default statement printing the running balance column", async () => {
+    const text = normalize(await extractReactPdfText(await generateResumenCCPDF(baseData)))
+    expect(text).toContain("Saldo inicial")
+    expect(text).toContain(fmt(-3000))
+  })
+})

@@ -5,6 +5,7 @@ export const CONFIG_TABS = [
   { value: "empresa", label: "Empresa" },
   { value: "facturacion", label: "Facturación" },
   { value: "comprobantes", label: "Comprobantes" },
+  { value: "comisiones", label: "Comisiones" },
   { value: "avisos", label: "Avisos" },
   { value: "seguridad", label: "Seguridad" },
 ] as const
@@ -13,8 +14,8 @@ export type ConfigTab = (typeof CONFIG_TABS)[number]["value"]
 
 export const DEFAULT_CONFIG_TAB: ConfigTab = "secciones"
 
-// Solo estas pestañas guardan el formulario con la barra inferior. Avisos se
-// guarda por separado (NotificationSettings) y Secciones/Seguridad no guardan.
+// Solo estas pestañas guardan el formulario con la barra inferior. Avisos y Comisiones se
+// guardan por separado (NotificationSettings, ComisionesConfig) y Secciones/Seguridad no guardan.
 export const FORM_TABS: readonly ConfigTab[] = ["empresa", "facturacion", "comprobantes"]
 
 export function parseConfigTab(value: string | string[] | undefined | null): ConfigTab {

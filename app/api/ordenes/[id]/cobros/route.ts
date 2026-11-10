@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAuth, requireCajaAccess } from "@/lib/auth-utils"
+import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { todayInTimeZone, addMonthsToDateOnly, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
@@ -72,10 +73,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId } = autenticado
     if (error) return error
 
     const { id: ordenId } = await params
+
+    // The payments of an order are read through the order: one outside the caller's scope is "not found"
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "ver", { select: "id" })
+    if ("error" in cargada) return cargada.error
 
     const { data: cobros, error: dbError } = await supabaseAdmin
       .from("cobros_orden")
@@ -116,30 +122,37 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    // ADMIN siempre; VENDEDOR solo si la org prendió `vendedores_manejan_caja`
+    // (fail-closed si el flag no se puede leer). Cobrar mueve plata de caja, y
+    // es el mismo permiso que ya gobierna la operativa de caja.
+    const caja = await requireCajaAccess()
+    const { error, organizationId, userId, role } = caja
     if (error) return error
 
-    if (role !== "ADMIN") {
-      return NextResponse.json({ error: "Solo administradores pueden registrar cobros" }, { status: 403 })
-    }
-
     const { id: ordenId } = await params
-    const practica = await rejectIfPractica(ordenId, organizationId!)
-    if (practica) return practica
     const body = await request.json()
     const data = cobrosSchema.parse(body)
 
-    // Obtener orden
-    const { data: orden, error: ordenError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select(`id, costo_final, total_cobrado, estado_cobro, descuento_cobro, cliente_id, organization_id, estado, sucursal_id, ${NOTAS_CREDITO_APLICADO_EMBED}`)
-      .eq("id", ordenId)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (ordenError || !orden) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
+    // El descuento baja lo que debe la orden (el RPC lo suma a descuento_cobro) y
+    // no tiene tope: con descuento 999.99 + un pago de 0.01 un VENDEDOR saldaría
+    // una orden de 1000. Es decisión del dueño, igual que anular cobros.
+    if (role !== "ADMIN" && (data.descuento ?? 0) > 0) {
+      return NextResponse.json({ error: "Solo administradores pueden aplicar descuentos" }, { status: 403 })
     }
+
+    // Obtener orden, dentro del alcance de quien llama. El id de la orden viaja en
+    // la URL: una orden de otra sucursal es "no encontrada" (404, igual que un id
+    // inexistente, para no confirmar que existe). El ADMIN alcanza toda la org.
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(caja), "comercial", {
+      select: `id, costo_final, total_cobrado, estado_cobro, descuento_cobro, cliente_id, organization_id, estado, sucursal_id, ${NOTAS_CREDITO_APLICADO_EMBED}`,
+    })
+    if ("error" in cargada) return cargada.error
+    const { orden } = cargada
+
+    // DESPUÉS del alcance: si va antes, un VENDEDOR distingue una
+    // orden de práctica ajena (409) de una inexistente (404) cambiando el id.
+    const practica = await rejectIfPractica(ordenId, organizationId!)
+    if (practica) return practica
 
     // --- Atomic RPC path (migration 242) ---
     const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc(
@@ -236,7 +249,7 @@ export async function POST(
 
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error creating cobro:", err)
     return NextResponse.json({ error: "Error al registrar cobro" }, { status: 500 })

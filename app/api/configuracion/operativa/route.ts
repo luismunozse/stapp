@@ -3,7 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getIvaGeneral } from "@/lib/countries"
 import { resolveTerminologia } from "@/lib/terminologia"
-import { hasPlanFeature } from "@/lib/subscriptions"
+import { canEmitirFacturaElectronica } from "@/lib/facturacion/access"
 import { normalizeOrdenPapel } from "@/lib/orden-papel"
 
 /**
@@ -35,12 +35,20 @@ export async function GET() {
       return NextResponse.json({ error: "Organización no encontrada" }, { status: 404 })
     }
 
-    // La emisión de factura electrónica es solo ADMIN (requireAdmin en
-    // /api/facturacion-electronica/emitir): al resto no se le ofrece.
-    const facturacionElectronicaDisponible =
-      role === "ADMIN" &&
-      org.pais === "AR" &&
-      (await hasPlanFeature(organizationId!, "facturacion_electronica"))
+    // Solo se ofrece emitir cuando se PUEDE: ADMIN (requireAdmin en
+    // /api/facturacion-electronica/emitir) y canEmitirFacturaElectronica
+    // (plan + AR + toggle + credenciales, fail closed). Un fallo del chequeo
+    // devuelve false: no tira abajo el resto de la configuración operativa.
+    // /api/configuracion NO usa este gate a propósito: su formulario usa el
+    // flag para mostrar el propio toggle.
+    let facturacionElectronicaDisponible = false
+    if (role === "ADMIN") {
+      try {
+        facturacionElectronicaDisponible = await canEmitirFacturaElectronica(organizationId!)
+      } catch {
+        facturacionElectronicaDisponible = false
+      }
+    }
 
     return NextResponse.json({
       nombreEmpresa: org.nombre_mostrar || org.nombre || "",

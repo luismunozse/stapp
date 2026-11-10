@@ -1,4 +1,5 @@
 import { encode, decode } from "next-auth/jwt"
+import { sessionCookieName } from "@/lib/session-cookie"
 
 type Rol = "ADMIN" | "TECNICO" | "VENDEDOR"
 
@@ -75,11 +76,7 @@ export interface ImpersonationClaims {
  * from the session cookie MUST be encoded with `salt = sessionCookieName`,
  * otherwise the middleware can't decrypt it.
  */
-export function getSessionCookieName(): string {
-  return process.env.NODE_ENV === "production"
-    ? "__Secure-next-auth.session-token"
-    : "next-auth.session-token"
-}
+export const getSessionCookieName: () => string = sessionCookieName
 
 type MintInput = Omit<ImpersonationClaims, "isSuperadmin" | "isImpersonating">
 

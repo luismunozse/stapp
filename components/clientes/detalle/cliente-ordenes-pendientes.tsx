@@ -4,11 +4,12 @@ import { useState } from "react"
 import useSWR from "swr"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { PaymentStatusBadge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { DollarSign, CheckCircle2 } from "lucide-react"
 import { CobrarMultipleDialog } from "@/components/ordenes/cobrar-multiple-dialog"
 import { useCurrency } from "@/contexts/currency-context"
+import { usePuedeCobrar } from "@/hooks/use-puede-cobrar"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -29,6 +30,7 @@ interface Props {
 
 export function ClienteOrdenesPendientes({ clienteId, clienteNombre, onCobrado }: Props) {
   const { formatPrice } = useCurrency()
+  const puedeCobrar = usePuedeCobrar()
   const [showCobrar, setShowCobrar] = useState(false)
   const { data, mutate } = useSWR<OrdenPendiente[]>(
     `/api/clientes/${clienteId}/ordenes-pendientes`, fetcher, { revalidateOnFocus: false }
@@ -41,7 +43,7 @@ export function ClienteOrdenesPendientes({ clienteId, clienteNombre, onCobrado }
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base">Órdenes pendientes de cobro</CardTitle>
-        {ordenes.length > 0 && (
+        {ordenes.length > 0 && puedeCobrar && (
           <Button size="sm" onClick={() => setShowCobrar(true)} className="gap-1.5">
             <DollarSign className="h-4 w-4" /> Cobrar todo ({formatPrice(totalPendiente)})
           </Button>
@@ -56,7 +58,7 @@ export function ClienteOrdenesPendientes({ clienteId, clienteNombre, onCobrado }
               <div key={o.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                 <div className="min-w-0">
                   <div className="font-medium text-sm">#{o.numeroOrden} · {o.dispositivo}</div>
-                  <Badge variant="outline" className="text-[10px] mt-0.5">{o.estadoCobro}</Badge>
+                  <PaymentStatusBadge status={o.estadoCobro} showIcon={false} className="text-[10px] mt-0.5" />
                 </div>
                 <div className="font-semibold tabular-nums text-destructive">{formatPrice(o.pendiente)}</div>
               </div>

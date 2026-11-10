@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useSession } from "next-auth/react"
-import { useForm } from "react-hook-form"
+import { useForm, type FieldErrors } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Button } from "@/components/ui/button"
@@ -36,6 +36,7 @@ import { useModal } from "@/contexts/modal-context"
 import { STORES } from "@/lib/offline/constants"
 import type { Cliente, CampoExtra } from "@/types"
 import { isValidImei, sanitizeImei } from "@/lib/imei"
+import { tecnicoOfrecido } from "@/lib/sucursal-ordenes"
 import { parseMoneyInput } from "@/lib/parse-money"
 import { FotosIngreso, type FotoPreview } from "./fotos-ingreso"
 import { AccesoriosPicker } from "./accesorios-picker"
@@ -53,7 +54,9 @@ const ordenSchema = z.object({
   accesorios: z.string().optional(),
   codigoAccesoDispositivo: z.string().optional(),
   telefonoContacto: z.string().optional(),
-  presupuesto: z.union([z.number().positive(), z.nan(), z.undefined()]).optional(),
+  // 0 se acepta (el submit lo manda como "sin presupuesto"); rechazarlo
+  // trababa el alta sin ningun aviso, porque el campo esta en el paso 2.
+  presupuesto: z.union([z.number().min(0, "El presupuesto no puede ser negativo"), z.nan(), z.undefined()]).optional(),
   fechaPrometida: z.string().optional(),
   observaciones: z.string().optional(),
   notasInternas: z.string().optional(),
@@ -232,7 +235,13 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   const [selectedSectorId, setSelectedSectorId] = useState<string>("")
   const [sectoresCliente, setSectoresCliente] = useState<Array<{ id: string; nombre: string }>>([])
   const [tecnicosDisponibles, setTecnicosDisponibles] = useState<Array<{ id: string; nombre: string; activo: boolean }>>([])
+  // True only once the list was fetched successfully (an empty list counts): until then, or after a
+  // failure, a technician held from a draft or an appointment is not judged against it.
+  const [tecnicosCargados, setTecnicosCargados] = useState(false)
   const [selectedTecnicoId, setSelectedTecnicoId] = useState<string>("")
+  // What the picker shows and the order carries: a technician restored from a draft or taken from
+  // the appointment, whom the picker does not offer, is nobody.
+  const tecnicoElegido = tecnicoOfrecido(selectedTecnicoId, tecnicosDisponibles, tecnicosCargados)
   const [operadoresDisponibles, setOperadoresDisponibles] = useState<Array<{ id: string; nombre: string }>>([])
   const [selectedRecibidoPorId, setSelectedRecibidoPorId] = useState<string>("")
   const [nuevoSectorNombre, setNuevoSectorNombre] = useState("")
@@ -892,7 +901,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     if (isTecnicoRole) return
     const fetchTecnicos = async () => {
       try {
-        const res = await fetch("/api/tecnicos", { cache: "no-store" })
+        // The branch this order will be created in: what the server validates the assignment against.
+        const res = await fetch("/api/tecnicos?alcance=escritura", { cache: "no-store" })
         if (!res.ok) return
         const data = await res.json()
         setTecnicosDisponibles(
@@ -900,6 +910,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             .filter((t: any) => t.activo !== false)
             .map((t: any) => ({ id: t.id, nombre: t.nombre, activo: t.activo !== false }))
         )
+        setTecnicosCargados(true)
       } catch (error) {
         console.error("Error fetching tecnicos:", error)
       }
@@ -1121,7 +1132,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         telefonoContacto: data.telefonoContacto || undefined,
         metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
         sectorId: selectedSectorId || undefined,
-        tecnicoId: !isTecnicoRole && selectedTecnicoId ? selectedTecnicoId : undefined,
+        tecnicoId: !isTecnicoRole && tecnicoElegido ? tecnicoElegido : undefined,
         recibidoPorId: selectedRecibidoPorId || undefined,
         fromTurnoId: fromTurnoId || undefined,
       }
@@ -1180,7 +1191,12 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       // latch siga puesto no hay contra que validarlas, asi que no se mandan:
       // guardarlas mal es peor que no guardarlas, pero las dos son una perdida
       // y el operador tiene que enterarse (el aviso, despues del POST).
-      if (!checklistDelBorrador && checklistTemplate && Object.keys(checklistValores).length > 0) {
+      // La firma de recepcion y las observaciones viven en esta misma seccion:
+      // sin items marcados igual hay que guardarlas, o el PDF de la orden sale
+      // con la linea de firma en blanco.
+      const hayChecklistQueGuardar =
+        Object.keys(checklistValores).length > 0 || !!checklistFirma || !!checklistNotas.trim()
+      if (!checklistDelBorrador && checklistTemplate && hayChecklistQueGuardar) {
         try {
           const checklistBody = {
             templateId: checklistTemplate.id,
@@ -1261,7 +1277,24 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       const result = await trigger(["clienteId", "dispositivo", "tipoDispositivo", "problemaReportado"])
       return result
     }
+    if (step === 2) return trigger(["presupuesto"])
     return true
+  }
+
+  /** Campos que viven en el paso 2; el resto del schema esta en el paso 1. */
+  const CAMPOS_PASO_2: ReadonlyArray<keyof OrdenFormData> = [
+    "presupuesto", "fechaPrometida", "observaciones", "notasInternas",
+  ]
+
+  /** Sin esto, un error de validacion en un campo que no esta en pantalla
+   *  dejaba el boton "Crear Orden" sin ninguna reaccion. */
+  const onInvalid = async (formErrors: FieldErrors<OrdenFormData>) => {
+    const campos = Object.keys(formErrors) as Array<keyof OrdenFormData>
+    if (campos.length === 0) return
+    const primero = campos[0]
+    setCurrentStep(CAMPOS_PASO_2.includes(primero) ? 2 : 1)
+    const mensaje = formErrors[primero]?.message
+    await showError(typeof mensaje === "string" && mensaje ? mensaje : "Revisá los datos de la orden")
   }
 
   const handleNextStep = async () => {
@@ -1623,6 +1656,11 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                 })}
                 placeholder="0.00"
               />
+              {errors.presupuesto && (
+                <p className="text-sm text-destructive mt-1">
+                  {errors.presupuesto.message}
+                </p>
+              )}
             </div>
             <DatePicker
               id="fechaPrometida"
@@ -1637,7 +1675,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             <div>
               <Label htmlFor="tecnicoId">{term("tecnico")} asignado (Opcional)</Label>
               <Select
-                value={selectedTecnicoId || "NONE"}
+                value={tecnicoElegido || "NONE"}
                 onValueChange={(v) => setSelectedTecnicoId(v === "NONE" ? "" : v)}
               >
                 <SelectTrigger id="tecnicoId">
@@ -2034,7 +2072,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                   Siguiente
                 </Button>
               ) : (
-                <Button type="button" disabled={loading} onClick={handleSubmit(onSubmit)}>
+                <Button type="button" disabled={loading} onClick={handleSubmit(onSubmit, onInvalid)}>
                   {loading ? "Creando..." : "Crear Orden"}
                 </Button>
               )}

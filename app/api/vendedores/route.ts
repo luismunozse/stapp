@@ -2,13 +2,15 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, assertSucursalEnOrg } from "@/lib/sucursal"
+import { sucursalParaListaPersonal } from "@/lib/sucursal-personal"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
 
 const vendedorCreateSchema = z.object({
   nombre: z.string().trim().min(1, "El nombre es requerido"),
-  email: z.string().email("Email inválido"),
+  // Normalizado: los logins buscan el email en minúsculas.
+  email: z.string().trim().toLowerCase().email("Email inválido"),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
   telefono: z.string().trim().optional().nullable(),
   porcentajeComision: z.coerce
@@ -17,6 +19,13 @@ const vendedorCreateSchema = z.object({
     .max(100, "La comisión no puede superar 100")
     .optional()
     .default(0),
+  // null (or absent) leaves the shop default in force; never coerced, so null is not 0.
+  porcentajeComisionRecepcion: z
+    .number({ error: "El porcentaje de recepción debe estar entre 0 y 100" })
+    .min(0, "El porcentaje de recepción debe estar entre 0 y 100")
+    .max(100, "El porcentaje de recepción debe estar entre 0 y 100")
+    .nullable()
+    .optional(),
   sucursalId: z.string().optional().nullable(),
 })
 
@@ -25,10 +34,18 @@ export async function GET(request: Request) {
     // El POST de este mismo archivo ya pedia requireAdmin y el GET quedo en
     // requireAuth: cualquier rol listaba los vendedores de la organizacion.
     // El POS no depende de esta ruta, usa /api/operadores?rol=VENDEDOR.
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, role, session } = await requireAdmin()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
+    // `?sucursalId=` scopes the list to one branch (BM-4); without it the switcher's
+    // choice applies, or every branch on "Todas".
+    const sucursalId = await sucursalParaListaPersonal({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+      organizationId: organizationId!,
+      sucursalSolicitada: searchParams.get("sucursalId"),
+    })
     const search = (searchParams.get("search") || "").trim()
     const activoParam = searchParams.get("activo")
     const page = Math.max(parseInt(searchParams.get("page") || "1"), 1)
@@ -38,13 +55,16 @@ export async function GET(request: Request) {
     let query = supabaseAdmin
       .from("users")
       .select(
-        "id, nombre, email, telefono, activo, porcentaje_comision, created_at",
+        "id, nombre, email, telefono, activo, porcentaje_comision, porcentaje_comision_recepcion, sucursal_id, created_at",
         { count: "exact" }
       )
       .eq("rol", "VENDEDOR")
+      .is("deleted_at", null)
       .eq("organization_id", organizationId!)
       .order("activo", { ascending: false })
       .order("nombre", { ascending: true })
+
+    if (sucursalId) query = query.eq("sucursal_id", sucursalId)
 
     if (search) {
       const escaped = search.replace(/[%,]/g, "")
@@ -87,6 +107,9 @@ export async function GET(request: Request) {
         telefono: vendedor.telefono ?? null,
         activo: vendedor.activo !== false,
         porcentajeComision: Number(vendedor.porcentaje_comision ?? 0),
+        porcentajeComisionRecepcion:
+          vendedor.porcentaje_comision_recepcion == null ? null : Number(vendedor.porcentaje_comision_recepcion),
+        sucursalId: vendedor.sucursal_id ?? null,
         created_at: vendedor.created_at,
         ventasCompletadas: stats.ventasCompletadas,
         ventasTotal: stats.ventasTotal,
@@ -131,8 +154,16 @@ export async function POST(request: Request) {
       userSucursalId: session!.user.sucursalId ?? null,
     })
 
-    // Si el form mandó una sucursal explícita y es válida para la org, usarla.
-    if (data.sucursalId && (await assertSucursalEnOrg(data.sucursalId, organizationId!))) {
+    // An explicit branch is a request, not a hint: if it is not an active branch of
+    // the org it is rejected instead of silently falling back to the principal. The
+    // principal stays the fallback only when the body names no branch at all.
+    if (data.sucursalId) {
+      if (!(await assertSucursalEnOrg(data.sucursalId, organizationId!, { soloActiva: true }))) {
+        return NextResponse.json(
+          { error: "La sucursal elegida no existe o está inactiva." },
+          { status: 400 }
+        )
+      }
       sucursalId = data.sucursalId
     }
 
@@ -171,9 +202,10 @@ export async function POST(request: Request) {
         email_verified: true,
         telefono: data.telefono?.trim() || null,
         porcentaje_comision: data.porcentajeComision,
+        porcentaje_comision_recepcion: data.porcentajeComisionRecepcion ?? null,
         activo: true,
       })
-      .select("id, nombre, email, telefono, activo, porcentaje_comision")
+      .select("id, nombre, email, telefono, activo, porcentaje_comision, porcentaje_comision_recepcion")
       .single()
 
     if (dbError) {
@@ -188,7 +220,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0].message },
         { status: 400 }
       )
     }

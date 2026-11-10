@@ -18,8 +18,16 @@ interface ImportModalProps {
 interface PreviewRow {
   row: number
   data: any
+  /** Values as they will be imported (numbers normalized). Only for valid rows. */
+  parsed?: any
   valid: boolean
   error?: string
+}
+
+interface InvalidRowDetail {
+  row: number
+  error: string
+  column?: string
 }
 
 interface ImportResults {
@@ -28,7 +36,7 @@ interface ImportResults {
   skipped: number
   errors: number
   sinPrecio?: number
-  errorDetails: Array<{ row: number; error: string; data: any }>
+  errorDetails: Array<{ row: number; error: string; column?: string; data: any }>
   skippedDetails: Array<{ row: number; reason: string; data: any }>
 }
 
@@ -46,6 +54,7 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
   const [error, setError] = useState<string>("")
   const [unmappedColumns, setUnmappedColumns] = useState<string[]>([])
   const [invalidRows, setInvalidRows] = useState(0)
+  const [invalidDetails, setInvalidDetails] = useState<InvalidRowDetail[]>([])
   const [sinPrecio, setSinPrecio] = useState(0)
 
   const entityLabel = entityType === 'CLIENTES' ? 'Clientes' : 'Inventario'
@@ -132,6 +141,7 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
       setTotalRows(data.totalRows)
       setUnmappedColumns(data.unmappedColumns ?? [])
       setInvalidRows(data.invalidRows ?? 0)
+      setInvalidDetails(data.invalidDetails ?? [])
       setSinPrecio(data.sinPrecio ?? 0)
       setStep('preview')
     } catch (error) {
@@ -303,6 +313,7 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
                     setError("")
                     setUnmappedColumns([])
                     setInvalidRows(0)
+                    setInvalidDetails([])
                     setSinPrecio(0)
                   }}
                 >
@@ -318,9 +329,33 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
               )}
 
               {invalidRows > 0 && (
-                <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-400 px-4 py-3 rounded-lg flex items-start gap-2 text-sm">
-                  <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-                  <p>{invalidRows} de {totalRows} fila{totalRows !== 1 ? 's' : ''} tienen errores y no se importarán</p>
+                <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-400 px-4 py-3 rounded-lg text-sm space-y-3">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                    <p>
+                      {invalidRows} de {totalRows} fila{totalRows !== 1 ? 's' : ''} {invalidRows !== 1 ? 'tienen' : 'tiene'} errores y no se importarán.
+                      El número de fila es el que ves en Excel o Google Sheets.
+                    </p>
+                  </div>
+                  {invalidDetails.length > 0 && (
+                    <>
+                      <ul
+                        className="max-h-56 overflow-y-auto rounded-md bg-white/60 dark:bg-black/20 border border-red-200 dark:border-red-800 divide-y divide-red-100 dark:divide-red-900"
+                        aria-label="Filas con errores"
+                      >
+                        {invalidDetails.map((d) => (
+                          <li key={d.row} className="px-3 py-2 text-xs">
+                            <span className="font-semibold">Fila {d.row}:</span> {d.error}
+                          </li>
+                        ))}
+                      </ul>
+                      {invalidRows > invalidDetails.length && (
+                        <p className="text-xs">
+                          Mostrando las primeras {invalidDetails.length} de {invalidRows} filas con error. Corregí estas y volvé a subir el archivo para ver el resto.
+                        </p>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
 
@@ -362,7 +397,7 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
                             <td className="px-4 py-2">
                               {row.valid ? (
                                 <span className="text-muted-foreground">
-                                  {JSON.stringify(row.data).slice(0, 100)}...
+                                  {JSON.stringify(row.parsed ?? row.data).slice(0, 100)}...
                                 </span>
                               ) : (
                                 <span className="text-red-600 text-xs">

@@ -9,18 +9,9 @@ import {
   IMPERSONATION_BACKUP_COOKIE,
   IMPERSONATION_MAX_AGE,
 } from "@/lib/impersonation"
+import { sessionCookieDomain } from "@/lib/session-cookie"
 
 type Rol = "ADMIN" | "TECNICO" | "VENDEDOR"
-
-// Same derivation as lib/auth.ts so impersonation cookies share the session
-// cookie's scope (all subdomains in production).
-function getCookieDomain(): string | undefined {
-  if (process.env.COOKIE_DOMAIN) return process.env.COOKIE_DOMAIN
-  if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_ROOT_DOMAIN) {
-    return `.${process.env.NEXT_PUBLIC_ROOT_DOMAIN}`
-  }
-  return undefined
-}
 
 /**
  * Starts a READ-ONLY impersonation session for a superadmin.
@@ -129,7 +120,7 @@ export async function POST(request: Request) {
     })
 
     const sessionCookieName = getSessionCookieName()
-    const cookieDomain = getCookieDomain()
+    const cookieDomain = sessionCookieDomain()
     const secure = process.env.NODE_ENV === "production"
     const cookieStore = await cookies()
 

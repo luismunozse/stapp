@@ -1,3 +1,8 @@
+// `IVoucher` no se re-exporta limpio desde la raíz del paquete; se importa por
+// ruta interna como `INextVoucher` (ver arca/voucher.ts). Solo tipos: se borra al
+// compilar, así que este módulo sigue siendo importable desde el cliente.
+import type { INextVoucher, IVoucher } from "@arcasdk/core/lib/domain/types/voucher.types"
+
 export type CondicionFiscalEmisor = "MONOTRIBUTO" | "RESPONSABLE_INSCRIPTO"
 export type TipoComprobante = "B" | "C"
 
@@ -20,13 +25,51 @@ export interface EmitirInput {
     domicilio?: string
   }
   moneda: string
+  /**
+   * Las líneas llegan con el IVA incluido y ya descontadas: suman `total`
+   * (lo que pagó el cliente). `importe` es el total de la línea al centavo;
+   * `importeUnitario` es `importe / cantidad` y puede tener más de 2 decimales.
+   */
   items: Array<{
     cantidad: number
     descripcion: string
     importeUnitario: number
+    /** Total de la línea, IVA incluido. Si falta, se usa importeUnitario x cantidad. */
+    importe?: number
     alicuotaIva: number
   }>
+  /** Total de la venta, el mismo que se cobró. Es el ImpTotal del comprobante. */
   total: number
+  /**
+   * Neto e IVA que la venta guardó (regímenes INCLUIDO y ADITIVO). Solo se
+   * setea cuando suman exactamente `total`; si no, el IVA se despeja del total.
+   */
+  desgloseIva?: { neto: number; iva: number; alicuota: number }
+}
+
+/**
+ * Foto fiscal del comprobante: lo que ARCA efectivamente autorizó. Se persiste
+ * al emitir y es la única fuente del PDF y del QR (la venta puede editarse
+ * después, el comprobante no).
+ */
+export interface DatosFiscales {
+  /** YYYY-MM-DD, la fecha del comprobante (CbteFch). */
+  fechaEmision: string
+  /** CUIT del emisor, solo dígitos: el representado si la org delegó. */
+  cuitEmisor: string
+  /** Código ARCA del tipo de comprobante (B = 6, C = 11). */
+  cbteTipo: number
+  concepto: number
+  /** Código de moneda ARCA ("PES"). */
+  moneda: string
+  cotizacion: number
+  importeNeto: number
+  importeIva: number
+  importeTotal: number
+  /** Código ARCA del tipo de documento del receptor (99 = consumidor final). */
+  receptorDocTipoCod: number
+  /** Número de documento del receptor, solo dígitos ("0" para consumidor final). */
+  receptorDocNro: string
 }
 
 export interface ComprobanteResult {
@@ -37,6 +80,8 @@ export interface ComprobanteResult {
   caeVencimiento?: string
   pdfUrl?: string
   afipQr?: string
+  /** Solo lo llena el proveedor ARCA directo. */
+  fiscal?: DatosFiscales
   errores?: string[]
   raw: unknown
 }
@@ -94,29 +139,81 @@ export interface ComprobanteRef {
   cbteNro: number
 }
 
+/**
+ * Lo que ARCA devuelve al consultar un comprobante ya emitido (`FECompConsultar`).
+ * Es la fuente AUTORITATIVA de los importes de una nota de crédito: las filas
+ * legadas no guardan lo autorizado. El SDK descarta `Iva[]`, `CbtesAsoc` y
+ * `CondicionIVAReceptorId`, así que la alícuota se infiere de `impIva`/`impNeto`.
+ */
 export interface ConsultaResult {
+  /** `false` si ARCA no tiene ese comprobante. El resto de los campos queda vacío. */
   existe: boolean
+  /**
+   * Número del comprobante que ARCA devolvió (`CbteDesde`, solo si coincide con
+   * `CbteHasta`). Permite comprobar que la respuesta es del número que se pidió.
+   */
+  cbteNro?: number
   cae?: string
   caeVencimiento?: string
-  total?: number
+  /** "A" aprobado, "R" rechazado. */
+  resultado?: string
+  /** Fecha del comprobante en formato AAAAMMDD. */
   cbteFch?: string
+  concepto?: number
+  docTipo?: number
+  /** Solo dígitos. */
   docNro?: string
+  impTotal?: number
+  impNeto?: number
+  impIva?: number
+  impTrib?: number
+  impOpEx?: number
+  impTotConc?: number
+  moneda?: string
+  cotizacion?: number
 }
 
-export type MotivoNotaCredito = "error_datos" | "error_importe" | "anulacion_venta" | "devolucion" | "duplicado" | "otro"
+/** Motivo con el que el Admin anula una factura (queda en la nota de crédito). */
+export type MotivoNotaCredito = "error_factura" | "devolucion_total" | "otro"
 
-export interface NotaCreditoInput extends EmitirInput {
-  comprobanteAsociadoId: string
-  motivo: MotivoNotaCredito
-  motivoDetalle?: string
-}
+/**
+ * Desenlace de enviar una nota de crédito a ARCA. `emitirNotaCredito` nunca
+ * lanza: la distinción entre `rechazada` e `incierta` es la que evita emitir una
+ * SEGUNDA nota de crédito al reintentar.
+ *
+ *  - `autorizada`: ARCA devolvió CAE.
+ *  - `rechazada`: ARCA devolvió `Resultado` "R" (cabecera o comprobante), o el
+ *    envío falló ANTES de salir (un `Errors` sin `Resultado` es `incierta`)
+ *    (autenticación, armado): ARCA no emitió nada, reintentar es seguro.
+ *  - `incierta`: `createVoucher` lanzó, o respondió sin CAE y sin rechazo: ARCA
+ *    pudo haberla emitido. Nunca se marca como rechazada; se verifica contra ARCA.
+ */
+export type ResultadoNotaCredito =
+  | { kind: "autorizada"; numero: string; cae: string; caeVencimiento: string; raw: unknown }
+  | { kind: "rechazada"; errores: string[]; raw: unknown }
+  | { kind: "incierta"; error: string }
 
 // Interfaces segregadas (ISP): cada capacidad ARCA-only es su propia interfaz,
 // nunca un método opcional en `FacturacionProvider` — evita forzar a
 // tusfacturas-provider.ts a implementar NC/consulta/puntos de venta, que no
 // soporta, y evita el guard-en-cada-call-site de una interfaz "fat" opcional.
 export interface SoportaNotaCredito<C> {
-  emitirNotaCredito(creds: C, input: NotaCreditoInput): Promise<ComprobanteResult>
+  /** Envía el voucher ya armado y numerado (`CbteDesde`/`CbteHasta` explícitos). */
+  emitirNotaCredito(creds: C, voucher: IVoucher): Promise<ResultadoNotaCredito>
+}
+
+/**
+ * Mismo desenlace para una FACTURA enviada con número explícito: un corte después
+ * del envío es `incierta` y la fila queda pendiente hasta verificarla contra ARCA,
+ * en vez de marcarse rechazada y permitir una segunda factura.
+ */
+export type ResultadoFactura = ResultadoNotaCredito
+
+export interface SoportaFacturaNumerada<C> {
+  /** Arma la factura (sin número) con la fecha del día en hora argentina. No llama a ARCA. */
+  armarFactura(creds: C, input: EmitirInput): INextVoucher
+  /** Envía la factura ya armada y numerada (`CbteDesde`/`CbteHasta` explícitos). */
+  emitirFacturaNumerada(creds: C, voucher: IVoucher): Promise<ResultadoFactura>
 }
 
 export interface SoportaConsulta<C> {

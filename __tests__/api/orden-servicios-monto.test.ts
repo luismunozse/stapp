@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { supabaseAdmin } from "@/lib/supabase"
-import { mockAuthSuccess, createPostRequest, parseResponse } from "./helpers"
+import { mockAuthSuccess, mockSupabaseFrom, createChainMock, createPostRequest, parseResponse } from "./helpers"
 
 import { POST, PATCH } from "@/app/api/ordenes/[id]/servicios/route"
 
@@ -12,6 +12,12 @@ function mockRpc(data: any) {
   vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data, error: null } as any)
 }
 
+// The technician works an order of his own branch: the route checks the order is within his scope
+// before it calls the RPC.
+function ordenEnAlcance() {
+  return createChainMock({ id: "ord-1", sucursal_id: "suc-1", tecnico_id: "tec-1" })
+}
+
 /**
  * La decisión de qué monto mover vive en el RPC (es donde está el lock). La
  * ruta solo relaya el veredicto: estos tests fijan ese contrato.
@@ -19,7 +25,8 @@ function mockRpc(data: any) {
 describe("POST /api/ordenes/[id]/servicios — monto sincronizado", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockAuthSuccess({ organizationId: "org-1", role: "TECNICO" })
+    mockAuthSuccess({ organizationId: "org-1", role: "TECNICO", userId: "tec-1", sucursalId: "suc-1" })
+    mockSupabaseFrom({ ordenes_servicio: ordenEnAlcance() })
   })
 
   it("relaya que el RPC movió el presupuesto", async () => {
@@ -76,7 +83,8 @@ describe("POST /api/ordenes/[id]/servicios — monto sincronizado", () => {
 describe("PATCH /api/ordenes/[id]/servicios — aplicar el total", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockAuthSuccess({ organizationId: "org-1", role: "TECNICO" })
+    mockAuthSuccess({ organizationId: "org-1", role: "TECNICO", userId: "tec-1", sucursalId: "suc-1" })
+    mockSupabaseFrom({ ordenes_servicio: ordenEnAlcance() })
   })
 
   it("aplica la suma al monto vivo y dice cuál movió", async () => {

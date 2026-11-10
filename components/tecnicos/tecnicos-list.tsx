@@ -48,6 +48,9 @@ interface Tecnico {
   activo: boolean
   especialidades?: string[]
   porcentajeComision?: number
+  porcentajeComisionRecepcion?: number | null
+  // Admin-only; absent for other roles.
+  costoHora?: number
   ordenesActivas: number
   ordenesCompletadas: number
 }

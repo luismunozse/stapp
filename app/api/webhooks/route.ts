@@ -9,7 +9,7 @@ const createSchema = z.object({
   // Solo HTTPS. http en producción expone el HMAC al MITM (firma viaja en header).
   url: z.string().url().refine((u) => u.startsWith("https://"), "URL debe ser HTTPS"),
   events: z.array(z.enum(EVENT_TYPES as unknown as [string, ...string[]])).min(1, "Al menos un evento"),
-  headers: z.record(z.string()).nullable().optional(),
+  headers: z.record(z.string(), z.string()).nullable().optional(),
   activo: z.boolean().optional(),
 })
 
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     return NextResponse.json(formatWebhook(row, { includeSecret: true }), { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error creating webhook:", err)
     return NextResponse.json({ error: "Error al crear webhook" }, { status: 500 })

@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server"
+import { MAX_CLIENTES_EN_BUSQUEDA } from "@/lib/busqueda-clientes"
+import { validarClienteYSector } from "@/lib/referencias-cliente"
 import { randomBytes } from "crypto"
 import {
   requireAuth,
   hasInventarioAccess,
   resolveVendedoresHabilitados,
   canViewCotizacionCosts,
+  resolveTecnicosTomanOrdenes,
 } from "@/lib/auth-utils"
+import { ordenSeTomaPorTecnico } from "@/lib/ordenes/tomar"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumberByType } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
@@ -14,6 +18,13 @@ import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/li
 import { formatOrden } from "@/lib/db-utils"
 import { queueNotification } from "@/lib/notifications/queue"
 import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
+import {
+  MENSAJE_TECNICO_OTRA_SUCURSAL,
+  combinarOr,
+  filtroListaTecnico,
+  tecnicoAsignable,
+  terminoDeBusquedaSeguro,
+} from "@/lib/sucursal-ordenes"
 import { z } from "zod"
 import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
 import { isValidImei } from "@/lib/imei"
@@ -51,7 +62,7 @@ const ordenSchema = z.object({
   presupuestoAceptado: z.boolean().optional(),
   sena: z.number().optional(),
   metodoPagoSena: z.string().optional(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
   sectorId: z.string().optional(),
   telefonoContacto: z.string().optional(),
   tecnicoId: z.string().optional(),
@@ -123,15 +134,36 @@ export async function GET(request: Request) {
       .eq("organization_id", organizationId!)
       .order(sortBy, { ascending: sortOrder })
 
-    // Técnicos solo ven sus órdenes asignadas
-    if (role === "TECNICO") {
-      query = query.eq("tecnico_id", userId!)
-    }
+    // Every `or` condition of the list goes into ONE combined expression at the end
+    // (combinarOr): repeated `.or()` calls would rely on PostgREST ANDing the repeated
+    // `or` params.
+    const filtrosOr: string[] = []
 
-    // Filtro por sucursal (ADMIN ve según cookie; otros roles su sucursal fija)
-    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
-    if (!filtro.verTodas && filtro.sucursalId) {
-      query = query.eq("sucursal_id", filtro.sucursalId)
+    // A technician sees the orders assigned to him, from any branch (BM-6). With the
+    // opt-in permission `tecnicos_toman_ordenes` he also sees the unassigned ones that
+    // his branch handles (so he can take them). Fail-closed: an unreadable flag, no
+    // branch, or an id that cannot be spliced into the filter leaves only the orders
+    // assigned to him. The branch filter below does not apply to a technician: that
+    // limit already sits inside his own filter.
+    let puedeTomarSinAsignar = false
+    if (role === "TECNICO") {
+      const filtroTecnico = filtroListaTecnico(
+        userId!,
+        session!.user.sucursalId ?? null,
+        await resolveTecnicosTomanOrdenes(organizationId!),
+      )
+      if (filtroTecnico) {
+        puedeTomarSinAsignar = true
+        filtrosOr.push(filtroTecnico)
+      } else {
+        query = query.eq("tecnico_id", userId!)
+      }
+    } else {
+      // Filtro por sucursal (ADMIN ve según cookie; otros roles su sucursal fija)
+      const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
+      if (!filtro.verTodas && filtro.sucursalId) {
+        query = query.eq("sucursal_id", filtro.sucursalId)
+      }
     }
 
     if (estado) {
@@ -185,13 +217,13 @@ export async function GET(request: Request) {
     if (conPresupuesto === "si") {
       query = query.not("presupuesto", "is", null).gt("presupuesto", 0)
     } else if (conPresupuesto === "no") {
-      query = query.or("presupuesto.is.null,presupuesto.eq.0")
+      filtrosOr.push("presupuesto.is.null,presupuesto.eq.0")
     }
 
     if (conSena === "si") {
       query = query.gt("sena", 0)
     } else if (conSena === "no") {
-      query = query.or("sena.is.null,sena.eq.0")
+      filtrosOr.push("sena.is.null,sena.eq.0")
     }
 
     if (sinTecnico === "true") {
@@ -211,21 +243,29 @@ export async function GET(request: Request) {
     }
 
     if (search) {
+      // The term goes into two filter strings (clients here, orders below). It is sanitized once:
+      // a comma or a parenthesis would make the client lookup a syntax error (400) and silently
+      // drop the client-name matches, and in the orders filter it could close the group around the
+      // branch scope and add a clause next to it.
+      const termino = terminoDeBusquedaSeguro(search)
+
       // Primero buscar IDs de clientes que coincidan con la búsqueda
       const { data: clientesMatch } = await supabaseAdmin
         .from("clientes")
         .select("id")
         .eq("organization_id", organizationId!)
-        .or(`nombre.ilike.%${search}%,telefono.ilike.%${search}%`)
+        .or(`nombre.ilike.%${termino}%,telefono.ilike.%${termino}%`)
+        .order("id", { ascending: false })
+        .limit(MAX_CLIENTES_EN_BUSQUEDA)
 
       const clienteIds = clientesMatch?.map(c => c.id) || []
 
-      // Construir filtros de búsqueda (sin ::text que no es válido en PostgREST)
+      // Construir filtros de búsqueda (sin ::text que no es válido en PostgREST).
       const filters = [
-        `dispositivo.ilike.%${search}%`,
-        `codigo_orden.ilike.%${search}%`,
-        `marca.ilike.%${search}%`,
-        `imei.ilike.%${search}%`,
+        `dispositivo.ilike.%${termino}%`,
+        `codigo_orden.ilike.%${termino}%`,
+        `marca.ilike.%${termino}%`,
+        `imei.ilike.%${termino}%`,
       ]
 
       // Si el search es numérico y entra en rango INT32, buscar por numero_orden exacto.
@@ -239,7 +279,11 @@ export async function GET(request: Request) {
         filters.push(`cliente_id.in.(${clienteIds.join(",")})`)
       }
 
-      query = query.or(filters.join(","))
+      filtrosOr.push(filters.join(","))
+    }
+
+    if (filtrosOr.length > 0) {
+      query = query.or(combinarOr(...filtrosOr))
     }
 
     // Aplicar paginación
@@ -266,7 +310,13 @@ export async function GET(request: Request) {
       includeInventarioCost: hasInventarioAccess(role, vendedoresHabilitados),
       includeCotizacionCost: canViewCotizacionCosts(role),
     }
-    const ordenesFormatted = ordenes?.map((o: any) => formatOrden(o, ordenOptions))
+    const ordenesFormatted = ordenes?.map((o: any) => {
+      const formatted = formatOrden(o, ordenOptions)
+      // Only a TECNICO gets the hint; the server re-checks everything on take.
+      return role === "TECNICO" && formatted
+        ? { ...formatted, puedeTomar: puedeTomarSinAsignar && ordenSeTomaPorTecnico(o) }
+        : formatted
+    })
 
     // Retornar con información de paginación y cache headers
     return NextResponse.json({
@@ -310,6 +360,13 @@ export async function POST(request: Request) {
       }
     }
 
+    // Cliente y sector tienen que ser de esta organización: el INSERT corre con
+    // service_role y la FK sola no lo impide.
+    const errorReferencia = await validarClienteYSector(organizationId!, data.clienteId, data.sectorId)
+    if (errorReferencia) {
+      return NextResponse.json({ error: errorReferencia }, { status: 400 })
+    }
+
     // Si la orden se origina en un turno: validar que pertenece a la org y que
     // todavía no fue vinculado a otra orden.
     let turnoOrigen: { id: string; tecnico_id: string | null } | null = null
@@ -332,14 +389,13 @@ export async function POST(request: Request) {
       turnoOrigen = { id: turnoCheck.id, tecnico_id: turnoCheck.tecnico_id }
     }
 
-    // Obtener siguiente número de orden con prefijo por tipo de dispositivo
-    const { codigo: codigoOrden, numero: numeroOrden } = await getNextOrderNumberByType(
-      organizationId!,
-      data.tipoDispositivo
-    )
-
-    // Generar token público para acceso al PDF
-    const publicToken = generatePublicToken()
+    // The concrete write branch, from role/cookie/user. It is resolved before the
+    // technician is validated: the branch an order is created in is the one that handles it.
+    const sucursalId = await sucursalParaEscritura({
+      role,
+      organizationId: organizationId!,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
 
     // Resolver técnico asignado: TECNICO → siempre él mismo; otros roles → optativo desde el form
     let tecnicoAsignadoId: string | null = role === "TECNICO" ? userId! : null
@@ -348,13 +404,17 @@ export async function POST(request: Request) {
     if (role !== "TECNICO" && data.tecnicoId) {
       const { data: tecnicoCheck } = await supabaseAdmin
         .from("users")
-        .select("id, porcentaje_comision, costo_hora")
+        .select("id, rol, sucursal_id, porcentaje_comision, costo_hora")
         .eq("id", data.tecnicoId)
         .eq("organization_id", organizationId!)
         .eq("rol", "TECNICO")
+        .is("deleted_at", null)
         .maybeSingle()
       if (!tecnicoCheck) {
         return NextResponse.json({ error: "Técnico inválido" }, { status: 400 })
+      }
+      if (!tecnicoAsignable(tecnicoCheck, sucursalId, null)) {
+        return NextResponse.json({ error: MENSAJE_TECNICO_OTRA_SUCURSAL }, { status: 400 })
       }
       tecnicoAsignadoId = data.tecnicoId
       tecnicoPorcentajeComision = Number(tecnicoCheck.porcentaje_comision ?? 0)
@@ -373,19 +433,22 @@ export async function POST(request: Request) {
       }
     }
 
+    // Next order number, with the prefix of the device type. It comes after every validation
+    // that can reject the request: the RPC increments the counter, so a rejection would burn a number.
+    const { codigo: codigoOrden, numero: numeroOrden } = await getNextOrderNumberByType(
+      organizationId!,
+      data.tipoDispositivo
+    )
+
+    // Generar token público para acceso al PDF
+    const publicToken = generatePublicToken()
+
     // Determinar estado inicial y costo final
     const estadoInicial = data.presupuestoAceptado ? "EN_REPARACION" : "RECIBIDO"
     const costoFinal = data.presupuestoAceptado && data.presupuesto ? data.presupuesto : null
 
     // Resolver quién recibió el equipo (server-authoritative: fallback al usuario de sesión)
     const recibidoPor = await resolveOperador(organizationId!, data.recibidoPorId, userId!)
-
-    // Resolver sucursal concreta de escritura según rol/cookie/usuario
-    const sucursalId = await sucursalParaEscritura({
-      role,
-      organizationId: organizationId!,
-      userSucursalId: session!.user.sucursalId ?? null,
-    })
 
     const { data: orden, error: dbError } = await supabaseAdmin
       .from("ordenes_servicio")
@@ -612,7 +675,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0].message },
         { status: 400 }
       )
     }

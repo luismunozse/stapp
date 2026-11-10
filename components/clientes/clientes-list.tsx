@@ -3,13 +3,14 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
+import { useSession } from "next-auth/react"
 import { PullToRefresh } from "@/components/ui/pull-to-refresh"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MoreHorizontal, Users, Wrench, Receipt } from "lucide-react"
+import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MoreHorizontal, Users, Wrench, Receipt, X } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ClienteForm } from "./cliente-form"
 import { CuentaCorrienteDialog } from "@/components/clientes/cuenta-corriente-dialog"
@@ -17,6 +18,7 @@ import { CobrarMultipleDialog } from "@/components/ordenes/cobrar-multiple-dialo
 import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
 import { ClienteMobileCard } from "./cliente-mobile-card"
+import { usePuedeCobrar } from "@/hooks/use-puede-cobrar"
 import { TipoPrecioBadge } from "./tipo-precio-badge"
 import { PracticaBadge } from "@/components/onboarding/practica-badge"
 import { ClienteWhatsAppDialog } from "./cliente-whatsapp-dialog"
@@ -28,6 +30,8 @@ import { useModal } from "@/contexts/modal-context"
 import { useCurrency } from "@/contexts/currency-context"
 import { getPersonalIdLabel } from "@/lib/countries"
 import { useHasFeature } from "@/hooks/use-subscription"
+import { telHref } from "@/lib/tel-href"
+import { hasActiveFilters } from "@/lib/clientes-list-state"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -36,6 +40,10 @@ interface ClientesListProps {
 }
 
 export function ClientesList({ allowImport = true }: ClientesListProps) {
+  const { data: session } = useSession()
+  // Borrar clientes es solo de ADMIN (el servidor lo exige igual).
+  const esAdmin = session?.user?.role === "ADMIN"
+  const puedeCobrar = usePuedeCobrar()
   const router = useRouter()
   const { confirm, showError } = useModal()
   const { formatDate, formatPrice, pais } = useCurrency()
@@ -114,6 +122,19 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
   const clientes: Cliente[] = data?.data || (Array.isArray(data) ? data : [])
   const total = data?.total || (Array.isArray(data) ? data.length : 0)
   const totalDeuda: number = data?.totalDeuda || 0
+  const filtrosActivos = hasActiveFilters({ search, tipoCliente, conDeuda, aceptaWhatsapp, fechaDesde, fechaHasta })
+
+  const clearAllFilters = () => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    setSearch("")
+    setDebouncedSearch("")
+    setTipoCliente("")
+    setConDeuda(false)
+    setAceptaWhatsapp("")
+    setFechaDesde("")
+    setFechaHasta("")
+    setPage(1)
+  }
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -203,7 +224,17 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       render: (cliente) => (
         <div className="flex items-center gap-2">
           <Phone className="h-4 w-4 text-muted-foreground" />
-          <span>{cliente.telefono}</span>
+          {telHref(cliente.telefono || "") ? (
+            <a
+              href={`tel:${telHref(cliente.telefono)}`}
+              className="hover:text-primary hover:underline underline-offset-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {cliente.telefono}
+            </a>
+          ) : (
+            <span>{cliente.telefono}</span>
+          )}
         </div>
       ),
     },
@@ -344,14 +375,16 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
               </button>
               {!cliente.esPractica && (
                 <>
-                  <button
-                    type="button"
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
-                    onClick={(e) => { e.stopPropagation(); setCobrarCliente(cliente) }}
-                  >
-                    <DollarSign className="h-4 w-4 text-success-600" />
-                    Cobrar órdenes
-                  </button>
+                  {puedeCobrar && (
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                      onClick={(e) => { e.stopPropagation(); setCobrarCliente(cliente) }}
+                    >
+                      <DollarSign className="h-4 w-4 text-success-600" />
+                      Cobrar órdenes
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
@@ -362,7 +395,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                   </button>
                 </>
               )}
-              {!cliente.esPractica && (
+              {esAdmin && !cliente.esPractica && (
                 <>
                   <div className="h-px bg-border my-1" />
                   <button
@@ -387,19 +420,61 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
     <PullToRefresh onRefresh={() => mutate()}>
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center justify-between">
         <div className="flex-1 w-full sm:w-auto">
-          <div className="relative">
+          <div className="relative sm:max-w-sm">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder={`Buscar por nombre, teléfono, ${getPersonalIdLabel(pais)} o sector...`}
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
-              className="pl-10 w-full sm:max-w-sm"
+              className="pl-10 pr-10 w-full"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => handleSearchChange("")}
+                aria-label="Limpiar búsqueda"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
-        <div className="grid grid-cols-3 sm:flex sm:items-center gap-2 w-full sm:w-auto">
+
+        {/* Mobile: Nuevo is the primary action; Exportar / Importar live in an overflow menu */}
+        <div className="flex items-center gap-2 sm:hidden">
+          <Button onClick={() => setShowForm(true)} className="h-10 flex-1 gap-1.5">
+            <Plus className="h-4 w-4" />
+            Nuevo cliente
+          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="icon" aria-label="Más opciones" title="Más opciones">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-48 p-1 space-y-1">
+              <ExportButton
+                entity="clientes"
+                filters={{ ...(search && { search }) }}
+                variant="ghost"
+                label="Exportar"
+                className="w-full justify-start"
+              />
+              {allowImport && (
+                <Button onClick={() => setShowImport(true)} variant="ghost" className="w-full justify-start">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Importar CSV
+                </Button>
+              )}
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        {/* Desktop */}
+        <div className="hidden sm:flex sm:items-center gap-2">
           <ExportButton
             entity="clientes"
             filters={{ ...(search && { search }) }}
@@ -410,8 +485,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           {allowImport && (
             <Button onClick={() => setShowImport(true)} variant="outline" size="sm" className="gap-1.5">
               <Upload className="h-4 w-4" />
-              <span className="hidden sm:inline">Importar CSV</span>
-              <span className="sm:hidden">Importar</span>
+              Importar CSV
             </Button>
           )}
           <Button onClick={() => setShowForm(true)} size="sm" className="gap-1.5">
@@ -424,7 +498,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       {/* Filter bar */}
       <div className="flex flex-wrap items-end gap-2">
         <Select value={tipoCliente || "TODOS"} onValueChange={(v) => onFilterChange(() => setTipoCliente(v === "TODOS" ? "" : v))}>
-          <SelectTrigger className="w-[150px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
+          <SelectTrigger className="w-[calc(50%-0.25rem)] sm:w-[150px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="TODOS">Todos los tipos</SelectItem>
             <SelectItem value="INDIVIDUAL">Individual</SelectItem>
@@ -433,7 +507,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
         </Select>
 
         <Select value={aceptaWhatsapp || "TODOS"} onValueChange={(v) => onFilterChange(() => setAceptaWhatsapp(v === "TODOS" ? "" : v))}>
-          <SelectTrigger className="w-[170px]"><SelectValue placeholder="WhatsApp" /></SelectTrigger>
+          <SelectTrigger className="w-[calc(50%-0.25rem)] sm:w-[170px]"><SelectValue placeholder="WhatsApp" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="TODOS">WhatsApp: todos</SelectItem>
             <SelectItem value="true">Acepta WhatsApp</SelectItem>
@@ -445,14 +519,14 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           type="date"
           value={fechaDesde}
           onChange={(e) => onFilterChange(() => setFechaDesde(e.target.value))}
-          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+          className="h-9 w-[calc(50%-0.25rem)] sm:w-auto rounded-md border border-input bg-background px-2 text-sm"
           aria-label="Fecha desde"
         />
         <input
           type="date"
           value={fechaHasta}
           onChange={(e) => onFilterChange(() => setFechaHasta(e.target.value))}
-          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+          className="h-9 w-[calc(50%-0.25rem)] sm:w-auto rounded-md border border-input bg-background px-2 text-sm"
           aria-label="Fecha hasta"
         />
 
@@ -461,18 +535,8 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           Solo con deuda
         </label>
 
-        {(tipoCliente || conDeuda || aceptaWhatsapp || fechaDesde || fechaHasta) && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onFilterChange(() => {
-              setTipoCliente("")
-              setConDeuda(false)
-              setAceptaWhatsapp("")
-              setFechaDesde("")
-              setFechaHasta("")
-            })}
-          >
+        {filtrosActivos && (
+          <Button variant="ghost" size="sm" onClick={clearAllFilters}>
             Limpiar
           </Button>
         )}
@@ -553,7 +617,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           columns={columns}
           keyExtractor={(cliente) => cliente.id}
           loading={isLoading}
-          emptyMessage="No hay clientes registrados"
+          emptyMessage={filtrosActivos ? "Sin resultados" : "No hay clientes registrados"}
           sortKey={sortKey}
           sortDirection={sortDirection}
           onSort={handleSort}
@@ -586,12 +650,22 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
             ))}
           </div>
         ) : clientes.length === 0 ? (
-          <EmptyState
-            icon={Users}
-            title="No hay clientes registrados"
-            variant="search"
-            action={{ label: "Nuevo cliente", onClick: () => setShowForm(true) }}
-          />
+          filtrosActivos ? (
+            <EmptyState
+              icon={Search}
+              title="Sin resultados"
+              description="Ningún cliente coincide con la búsqueda o los filtros."
+              variant="search"
+              action={{ label: "Limpiar filtros", onClick: clearAllFilters }}
+            />
+          ) : (
+            <EmptyState
+              icon={Users}
+              title="No hay clientes registrados"
+              variant="search"
+              action={{ label: "Nuevo cliente", onClick: () => setShowForm(true) }}
+            />
+          )
         ) : (
           <>
             <div className="space-y-3">
@@ -600,10 +674,10 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                   key={cliente.id}
                   cliente={cliente}
                   onEdit={handleEdit}
-                  onDelete={handleDelete}
+                  onDelete={esAdmin ? handleDelete : undefined}
                   onWhatsApp={(e, c) => { e.stopPropagation(); setWhatsappCliente(c) }}
                   onCuentaCorriente={(e, c) => { e.stopPropagation(); setCuentaCorrienteCliente(c) }}
-                  onCobrar={(e, c) => { e.stopPropagation(); setCobrarCliente(c) }}
+                  onCobrar={puedeCobrar ? (e, c) => { e.stopPropagation(); setCobrarCliente(c) } : undefined}
                   deleting={deleting === cliente.id}
                 />
               ))}

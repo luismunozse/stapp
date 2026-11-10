@@ -82,6 +82,7 @@ function formatTurno(t: any) {
   return {
     id: t.id,
     organizationId: t.organization_id,
+    sucursalId: t.sucursal_id ?? null,
     clienteId: t.cliente_id,
     clienteSnapshot: t.cliente_snapshot,
     tecnicoId: t.tecnico_id,
@@ -237,6 +238,7 @@ export async function POST(request: Request) {
         .eq("id", data.tecnicoId)
         .eq("organization_id", organizationId!)
         .in("rol", ["TECNICO", "ADMIN"])
+        .is("deleted_at", null)
         .maybeSingle()
       if (!tecnicoCheck) {
         return NextResponse.json({ error: "Técnico inválido" }, { status: 400 })
@@ -372,7 +374,7 @@ export async function POST(request: Request) {
     )
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error creating turno:", err)
     return NextResponse.json({ error: "Error al crear turno" }, { status: 500 })

@@ -66,7 +66,7 @@ describe("POST /api/ordenes/[id]/entregar", () => {
   it("returns 404 when order not found", async () => {
     mockAuthSuccess()
 
-    const chain = createChainMock(null, { message: "not found" })
+    const chain = createChainMock(null, { code: "PGRST116", message: "not found" })
     mockSupabaseFrom({ ordenes_servicio: chain })
 
     const response = await POST(
@@ -85,11 +85,14 @@ describe("POST /api/ordenes/[id]/entregar", () => {
   })
 
   it("returns 403 when TECNICO tries to deliver another's order", async () => {
-    mockAuthSuccess({ role: "TECNICO", userId: "tecnico-1" })
+    // Same branch: it is the technician's own colleague's order, which stays 403 (an order of
+    // another branch would be "not found").
+    mockAuthSuccess({ role: "TECNICO", userId: "tecnico-1", sucursalId: "suc-1" })
 
     const mockOrden = {
       id: "o1",
       estado: "REPARADO",
+      sucursal_id: "suc-1",
       tecnico_id: "tecnico-2",
       clientes: { id: "c1", nombre: "Test" },
     }

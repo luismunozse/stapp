@@ -64,6 +64,19 @@ export const manualSections: ManualSection[] = [
         tip: "Solo los administradores pueden agregar o modificar usuarios y cambiar la configuración del sistema.",
       },
       {
+        subtitle: "Técnicos que toman órdenes sin asignar",
+        body: "Por defecto solo el administrador asigna órdenes a los técnicos. Si el taller lo habilita en Configuración > Roles y permisos (\"Tomar órdenes sin asignar\"), los técnicos también ven las órdenes que todavía no tienen técnico y pueden tomarlas para sí mismos, por ejemplo cuando no hay un administrador presente.",
+        steps: [
+          "El técnico ve las órdenes sin asignar en el listado, marcadas como \"Sin asignar\"",
+          "Al abrirlas o desde el listado, usa el botón \"Tomar orden\" para quedar asignado",
+          "Solo puede tomarlas para sí mismo: no puede reasignar órdenes de otros técnicos ni asignar a otra persona",
+          "Si dos técnicos intentan tomar la misma orden, se la queda el primero y el segundo recibe un aviso",
+          "Una vez tomada, la orden es del técnico y rigen las reglas habituales",
+        ],
+        tip: "Las órdenes ya cerradas (entregadas o canceladas) no se pueden tomar.",
+        roles: ["ADMIN", "TECNICO"],
+      },
+      {
         subtitle: "Navegación general",
         body: "STApp tiene una barra lateral (sidebar) en escritorio y un menú inferior en dispositivos móviles. La barra lateral se puede colapsar para ganar espacio. En móvil, los 4 accesos principales están en la barra inferior y el resto en el menú \"Más\".",
       },

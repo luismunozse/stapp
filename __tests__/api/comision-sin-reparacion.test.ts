@@ -1,7 +1,7 @@
 /**
  * Tests: comision_aplica_sin_reparacion flag
  *
- * Suite 1 — /api/comisiones: estado filter controlled by flag
+ * Suite 1 — /api/comisiones: the definition owns the flag (no estado filter in the route)
  * Suite 2 — /api/reportes/estado-resultados: commission deduction guarded by flag
  * Suite 3 — /api/configuracion PUT: accepts comisionAplicaSinReparacion field
  */
@@ -13,6 +13,7 @@ import {
 } from "./helpers"
 import { auth } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { montarSupabaseEnMemoria } from "../helpers/supabase-memoria"
 
 // ─── Module mocks (must be hoisted before route imports) ─────────────────────
 
@@ -83,77 +84,21 @@ function createPutRequest(body: any, url = "http://localhost:3000/api/configurac
   })
 }
 
-// ─── Suite 1: /api/comisiones estado filter ───────────────────────────────────
+// ─── Suite 1: /api/comisiones reads the definition ───────────────────────────
 
-describe("Flag comision_aplica_sin_reparacion — /api/comisiones estado filter", () => {
+describe("Flag comision_aplica_sin_reparacion — /api/comisiones", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("flag=false → estado filter is ['REPARADO','ENTREGADO'] only", async () => {
+  it("/api/comisiones applies no estado filter of its own: the definition owns flag 257", async () => {
     mockAdminAuth()
-
-    const inCalls: Array<[string, any[]]> = []
-    const vComisionesChain = createChainMock([])
-    const originalIn = vComisionesChain.in as ReturnType<typeof vi.fn>
-    originalIn.mockImplementation((col: string, vals: any[]) => {
-      inCalls.push([col, vals])
-      return vComisionesChain
-    })
-
-    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
-      if (table === "organizations") {
-        return createChainMock({ comision_aplica_sin_reparacion: false }) as any
-      }
-      if (table === "v_comisiones_ordenes") {
-        return vComisionesChain as any
-      }
-      if (table === "users") {
-        return createChainMock([]) as any
-      }
-      return createChainMock(null, { message: `No mock for table: ${table}` }) as any
-    })
+    const mem = montarSupabaseEnMemoria({ v_comisiones_devengadas: [], users: [] })
 
     const res = await comisionesGet(createGetRequest("http://localhost:3000/api/comisiones"))
     expect(res.status).toBe(200)
 
-    const estadoCall = inCalls.find(([col]) => col === "estado")
-    expect(estadoCall).toBeDefined()
-    expect(estadoCall![1]).not.toContain("ENTREGADO_SIN_REPARACION")
-    expect(estadoCall![1]).toContain("REPARADO")
-    expect(estadoCall![1]).toContain("ENTREGADO")
-  })
-
-  it("flag=true → estado filter includes 'ENTREGADO_SIN_REPARACION'", async () => {
-    mockAdminAuth()
-
-    const inCalls: Array<[string, any[]]> = []
-    const vComisionesChain = createChainMock([])
-    const originalIn = vComisionesChain.in as ReturnType<typeof vi.fn>
-    originalIn.mockImplementation((col: string, vals: any[]) => {
-      inCalls.push([col, vals])
-      return vComisionesChain
-    })
-
-    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
-      if (table === "organizations") {
-        return createChainMock({ comision_aplica_sin_reparacion: true }) as any
-      }
-      if (table === "v_comisiones_ordenes") {
-        return vComisionesChain as any
-      }
-      if (table === "users") {
-        return createChainMock([]) as any
-      }
-      return createChainMock(null, { message: `No mock for table: ${table}` }) as any
-    })
-
-    const res = await comisionesGet(createGetRequest("http://localhost:3000/api/comisiones"))
-    expect(res.status).toBe(200)
-
-    const estadoCall = inCalls.find(([col]) => col === "estado")
-    expect(estadoCall).toBeDefined()
-    expect(estadoCall![1]).toContain("ENTREGADO_SIN_REPARACION")
-    expect(estadoCall![1]).toContain("REPARADO")
-    expect(estadoCall![1]).toContain("ENTREGADO")
+    expect(mem.lecturas).toContain("v_comisiones_devengadas")
+    expect(mem.lecturas).not.toContain("organizations")
+    expect(mem.lecturas).not.toContain("v_comisiones_ordenes")
   })
 })
 

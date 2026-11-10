@@ -26,7 +26,7 @@ const PARES = [
 export function Transformation() {
   return (
     <LazyMotion features={domAnimation}>
-      <section className="py-20 sm:py-24">
+      <section className="py-10 sm:py-12">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <m.div
             className="mx-auto max-w-2xl text-center"

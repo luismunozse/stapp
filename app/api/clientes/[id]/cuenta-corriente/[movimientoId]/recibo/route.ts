@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateReciboCCPDF } from "@/lib/cuenta-corriente-react-pdf"
 import { isMissingColumnError } from "@/lib/db-errors"
+import { aplicarSucursalLineas, sucursalDeLineasNoAdmin } from "@/lib/ordenes/alcance-lectura"
 
 // Emisor columns in two tiers: migration 295's fiscal identity columns may
 // not be applied yet, and a recibo must still print without them. Same
@@ -30,20 +31,29 @@ export async function GET(
   { params }: { params: Promise<{ id: string; movimientoId: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role, session } = await requireAuth()
     if (error) return error
 
     const { id: clienteId, movimientoId } = await params
 
+    // A non-admin only reaches lines of their own branch; anything else answers
+    // exactly like a missing movement.
+    const sucursalLineas = await sucursalDeLineasNoAdmin({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+
     // select("*") on purpose: numero_recibo only exists after migration 306,
     // and the RPC below is what reads it anyway.
-    const { data: movimiento, error: movError } = await supabaseAdmin
+    let movimientoQuery = supabaseAdmin
       .from("cuenta_corriente")
       .select("*")
       .eq("id", movimientoId)
       .eq("cliente_id", clienteId)
       .eq("organization_id", organizationId!)
-      .single()
+    movimientoQuery = aplicarSucursalLineas(movimientoQuery, sucursalLineas)
+
+    const { data: movimiento, error: movError } = await movimientoQuery.single()
 
     if (movError || !movimiento) {
       return NextResponse.json({ error: "Movimiento no encontrado" }, { status: 404 })

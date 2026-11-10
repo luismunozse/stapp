@@ -68,12 +68,15 @@ import { OrdenPapelSelect, useOrdenPapel } from "@/components/ordenes/orden-pape
 import { NotificationHistory } from "@/components/ordenes/notification-history"
 import { PracticaOrdenDetail } from "@/components/ordenes/practica-orden-detail"
 import { OrdenEstadoCard } from "@/components/ordenes/orden-estado-card"
+import { dateOnlyToNoonUtcISO, todayInTimeZone } from "@/lib/timezone"
 import { OrdenTecnicoCard } from "@/components/ordenes/orden-tecnico-card"
 import { OrdenCostosCard } from "@/components/ordenes/orden-costos-card"
 import { OrdenComisionCard } from "@/components/ordenes/orden-comision-card"
+import { commissionCardVersion, orderCommissionKeyPrefix } from "@/lib/commissions/card-version"
 import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
 import { OrdenServiciosTab } from "@/components/ordenes/orden-servicios-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
+import { usePuedeCobrar } from "@/hooks/use-puede-cobrar"
 import { ConfirmarReparadoDialog } from "@/components/ordenes/confirmar-reparado-dialog"
 import { NotaCreditoDialog } from "@/components/notas-credito/nota-credito-dialog"
 import { NotasCreditoOrden } from "@/components/notas-credito/notas-credito-orden"
@@ -112,7 +115,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const term = useTerminologia()
   const { formatPrice, formatDate, currency, timezone, pais } = useCurrency()
   const [orden, setOrden] = useState<OrdenServicio | null>(null)
-  const [tecnicos, setTecnicos] = useState<UserType[]>([])
+  const [tecnicosDe, setTecnicosDe] = useState<{ para: string; lista: UserType[] } | null>(null)
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -132,7 +135,11 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const etiquetaOpts = etiquetaSizeReady ? { size: etiquetaSize } : undefined
 
   const isAdmin = session?.user?.role === "ADMIN"
+  const puedeCobrar = usePuedeCobrar()
   const userRole = session?.user?.role
+  // A technician does not reassign, and the picker lists the handling branch's technicians: for
+  // anyone else the server says whether a choice would be accepted (puedeAsignarTecnico).
+  const tecnicoSoloLectura = userRole === "TECNICO" || orden?.puedeAsignarTecnico === false
 
   const seguimientoUrl = orden?.publicToken
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/seguimiento/${orden.publicToken}`
@@ -174,6 +181,23 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       "Problema reportado actualizado"
     )
   }
+
+  const handleSaveFechaPrometida = async (fecha: string | null): Promise<boolean> => {
+    if (!orden) return false
+    const current = orden.fechaPrometida
+      ? todayInTimeZone(timezone, new Date(orden.fechaPrometida))
+      : null
+    if (fecha === current) return true
+    return saveOrdenField(
+      { fechaPrometida: fecha },
+      { fechaPrometida: fecha ? dateOnlyToNoonUtcISO(fecha) : null } as Partial<OrdenServicio>,
+      "Fecha prometida actualizada"
+    )
+  }
+
+  // Mirrors the PUT guard: a TECNICO can open an unassigned order (to take it)
+  // but can only update orders assigned to them.
+  const canEditFechaPrometida = userRole !== "TECNICO" || orden?.tecnicoId === session?.user?.id
 
   const handleSaveDiagnostico = async (next: string): Promise<boolean> => {
     const value = next.trim() || null
@@ -257,24 +281,43 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
   useEffect(() => {
     fetchOrden()
-    fetchTecnicos()
   }, [ordenId, fetchOrden])
+
+  // Who can be assigned is decided by the branch that handles the order (BM-4), not
+  // by the viewer's, so the list waits for the order and follows its branch.
+  const sucursalAtiendeId = orden?.sucursalAtiendeId
+  // The list is filed under the branch it was fetched for: after the order moves to another
+  // branch, the previous branch's technicians are never shown, even if the refetch fails.
+  const listaCargada = !!tecnicosDe && tecnicosDe.para === sucursalAtiendeId
+  const tecnicos = listaCargada ? tecnicosDe.lista : []
+  useEffect(() => {
+    // A viewer who cannot assign has no use for the list (and its branch is not the one it would be
+    // computed against): no request, so no failure to report and no mark to compute.
+    if (!sucursalAtiendeId || tecnicoSoloLectura) return
+    let vigente = true
+    const fallo = () => {
+      if (vigente) toast.error("No se pudo cargar la lista de técnicos", { id: "fetch-tecnicos-error" })
+    }
+    fetch(`/api/tecnicos?sucursalId=${encodeURIComponent(sucursalAtiendeId)}`, { cache: "no-store" })
+      .then(async (res) => {
+        const data = res.ok ? await res.json() : null
+        if (!Array.isArray(data)) return fallo()
+        if (vigente) setTecnicosDe({ para: sucursalAtiendeId, lista: data })
+      })
+      .catch((error) => {
+        console.error("Error fetching tecnicos:", error)
+        fallo()
+      })
+    return () => {
+      vigente = false
+    }
+  }, [sucursalAtiendeId, tecnicoSoloLectura])
 
   // Polling: re-fetch the orden every 15 seconds while the tab is visible.
   // Previously used Supabase Realtime with an HS256-minted JWT (PR3), which
   // was abandoned because the production Supabase project uses asymmetric JWT
   // signing (ECC P-256) — HS256 tokens are rejected with JwtSignatureError.
   useVisibilityPolling(fetchOrden, 15000, Boolean(ordenId))
-
-  const fetchTecnicos = async () => {
-    try {
-      const res = await fetch("/api/tecnicos", { cache: "no-store" })
-      const data = await res.json()
-      setTecnicos(data)
-    } catch (error) {
-      console.error("Error fetching tecnicos:", error)
-    }
-  }
 
   const handleUpdateEstado = async (nuevoEstado: EstadoOrden) => {
     // ENTREGADO_SIN_REPARACION comparte el flujo de entrega: el backend lo
@@ -349,7 +392,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     // El cobro es parte del flujo de entrega, no un trámite aparte: si quedó
     // saldo, se abre solo. Sigue siendo opcional — cerrarlo deja el saldo en
     // la cuenta corriente del cliente, igual que antes.
-    if (!sinCobroEntrega && (pendienteCobro ?? 0) > 0) {
+    if (puedeCobrar && !sinCobroEntrega && (pendienteCobro ?? 0) > 0) {
       setShowCobrarDialog(true)
     }
     setSinCobroEntrega(false)
@@ -410,6 +453,28 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     } catch (error) {
       console.error("Error assigning tecnico:", error)
       await alert({ title: "Error", description: "Error al asignar técnico", variant: "error" })
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  // A TECNICO takes an unassigned order for himself (opt-in org permission).
+  // The server decides; a 409 means somebody else got it first.
+  const handleTomarOrden = async () => {
+    setUpdating(true)
+    try {
+      const res = await fetch(`/api/ordenes/${ordenId}/tomar`, { method: "POST" })
+      if (res.ok) {
+        toast.success("Tomaste la orden")
+      } else {
+        const error = await res.json().catch(() => ({}))
+        await alert({ title: "No se pudo tomar la orden", description: error.error || "Error al tomar la orden", variant: "error" })
+      }
+      // Refresh in both cases: after a 409 the card must show the new technician.
+      fetchOrden()
+    } catch (error) {
+      console.error("Error taking orden:", error)
+      await alert({ title: "Error", description: "Error al tomar la orden", variant: "error" })
     } finally {
       setUpdating(false)
     }
@@ -740,7 +805,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             variant="outline"
             size="sm"
             onClick={() => {
-              const baseUrl = window.location.origin
               const fecha = orden.fechaIngreso
                 ? new Date(orden.fechaIngreso).toLocaleDateString("es-AR", { timeZone: timezone })
                 : new Date().toLocaleDateString("es-AR", { timeZone: timezone })
@@ -748,12 +812,13 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
                 numeroOrden: orden.numeroOrden,
                 clienteNombre: orden.cliente?.nombre || "",
-                dispositivo: orden.dispositivo,
+                telefono: orden.telefonoContacto || orden.cliente?.telefono,
+                imei: orden.imei,
                 problemaReportado: orden.problemaReportado,
                 fechaIngreso: fecha,
-                publicToken: orden.publicToken,
-                organizationName: undefined,
-              }, baseUrl, etiquetaOpts)
+                organizationName: (orden as any).organizationName || undefined,
+                logoUrl: (orden as any).organizationLogoUrl ?? null,
+              }, etiquetaOpts)
             }}
             title="Imprimir etiqueta para el equipo"
           >
@@ -765,7 +830,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               variant="outline"
               size="sm"
               onClick={() => {
-                const baseUrl = window.location.origin
                 const fechaRep = orden.fechaCompletado
                   ? new Date(orden.fechaCompletado).toLocaleDateString("es-AR", { timeZone: timezone })
                   : new Date().toLocaleDateString("es-AR", { timeZone: timezone })
@@ -773,14 +837,15 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
                   numeroOrden: orden.numeroOrden,
                   clienteNombre: orden.cliente?.nombre || "",
-                  dispositivo: orden.dispositivo,
+                  telefono: orden.telefonoContacto || orden.cliente?.telefono,
+                  imei: orden.imei,
                   problemaReportado: orden.problemaReportado,
                   fechaIngreso: fechaRep,
-                  publicToken: orden.publicToken,
-                  organizationName: undefined,
+                  organizationName: (orden as any).organizationName || undefined,
+                  logoUrl: (orden as any).organizationLogoUrl ?? null,
                   variant: "reparado",
                   fechaReparacion: fechaRep,
-                }, baseUrl, etiquetaOpts)
+                }, etiquetaOpts)
               }}
               title="Imprimir etiqueta de reparado para pegar en el equipo"
             >
@@ -881,13 +946,18 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           updating={updating}
           onUpdateEstado={handleUpdateEstado}
           esRetiro={isRetiro}
+          onUpdateFechaPrometida={canEditFechaPrometida ? handleSaveFechaPrometida : undefined}
         />
         <OrdenTecnicoCard
           tecnicoId={orden.tecnicoId}
           tecnicos={tecnicos}
+          tecnicoActual={orden.tecnico}
+          listaCargada={listaCargada}
           updating={updating}
           onAsignarTecnico={handleAsignarTecnico}
-          readOnly={userRole === "TECNICO"}
+          readOnly={tecnicoSoloLectura}
+          puedeTomar={(orden as any).puedeTomar === true && !orden.tecnicoId}
+          onTomar={handleTomarOrden}
         />
         {(orden as any).recibidoPor && (
           <Card>
@@ -901,8 +971,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         )}
       </div>
 
-      {/* Main Content - 2 columns */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      {/* Main Content - 2 columns. grid-cols-1 (minmax(0,1fr)) keeps the scrolling tab bar from widening the page on mobile */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Left Column - Info */}
         <div className="lg:col-span-2 space-y-6">
           {/* Main Info Card */}
@@ -1135,6 +1205,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             fechaCompletado={orden.fechaCompletado}
             updating={updating}
             onUpdateEstado={handleUpdateEstado}
+            esRetiro={isRetiro}
+            onUpdateFechaPrometida={canEditFechaPrometida ? handleSaveFechaPrometida : undefined}
           />
 
           {/* Link de Seguimiento */}
@@ -1170,8 +1242,13 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           <OrdenTecnicoCard
             tecnicoId={orden.tecnicoId}
             tecnicos={tecnicos}
+            tecnicoActual={orden.tecnico}
+            listaCargada={listaCargada}
             updating={updating}
             onAsignarTecnico={handleAsignarTecnico}
+            readOnly={tecnicoSoloLectura}
+            puedeTomar={(orden as any).puedeTomar === true && !orden.tecnicoId}
+            onTomar={handleTomarOrden}
           />
           {(orden as any).recibidoPor && (
             <Card>
@@ -1196,7 +1273,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             estado={orden.estado}
             origenPresupuesto={(orden as any).origenPresupuesto || null}
             onUpdateField={handleUpdateField}
-            onCobrar={() => setShowCobrarDialog(true)}
+            onCobrar={puedeCobrar ? () => setShowCobrarDialog(true) : undefined}
             readOnly={userRole === "TECNICO"}
           />
 
@@ -1206,12 +1283,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             <OrdenComisionCard
               ordenId={orden.id}
               tecnicoId={orden.tecnicoId}
-              costoFinal={orden.costoFinal}
-              repuestos={(orden as any).repuestos || []}
-              costoRepuestosExtra={(orden as any).costoRepuestosCotizaciones || 0}
+              recibidoPorId={(orden as any).recibidoPor?.id}
               porcentajeComision={(orden as any).porcentajeComision}
-              comisionPagada={(orden as any).comisionPagada}
-              fechaPagoComision={(orden as any).fechaPagoComision}
+              version={commissionCardVersion({ ...orden, repuestos: (orden as any).repuestos })}
               horasTrabajadas={(orden as any).horasTrabajadas || 0}
               onUpdateField={handleUpdateField}
             />
@@ -1255,19 +1329,16 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           estado={orden.estado}
           origenPresupuesto={(orden as any).origenPresupuesto || null}
           onUpdateField={handleUpdateField}
-          onCobrar={() => setShowCobrarDialog(true)}
+          onCobrar={puedeCobrar ? () => setShowCobrarDialog(true) : undefined}
           readOnly={userRole === "TECNICO"}
         />
         {isAdmin && (
           <OrdenComisionCard
             ordenId={orden.id}
             tecnicoId={orden.tecnicoId}
-            costoFinal={orden.costoFinal}
-            repuestos={(orden as any).repuestos || []}
-            costoRepuestosExtra={(orden as any).costoRepuestosCotizaciones || 0}
+            recibidoPorId={(orden as any).recibidoPor?.id}
             porcentajeComision={(orden as any).porcentajeComision}
-            comisionPagada={(orden as any).comisionPagada}
-            fechaPagoComision={(orden as any).fechaPagoComision}
+            version={commissionCardVersion({ ...orden, repuestos: (orden as any).repuestos })}
             horasTrabajadas={(orden as any).horasTrabajadas || 0}
             onUpdateField={handleUpdateField}
           />
@@ -1308,9 +1379,11 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             totalCobrado: orden.totalCobrado || 0,
             descuentoCobro: orden.descuentoCobro || 0,
             clienteNombre: orden.cliente?.nombre,
-            dispositivo: orden.dispositivo,
+            telefono: orden.telefonoContacto || orden.cliente?.telefono,
+            imei: orden.imei,
             problemaReportado: orden.problemaReportado,
-            publicToken: orden.publicToken,
+            logoUrl: (orden as any).organizationLogoUrl ?? null,
+            organizationName: (orden as any).organizationName ?? null,
           }}
           onSuccess={() => {
             fetchOrden()
@@ -1324,10 +1397,11 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           open={showNCDialog}
           onOpenChange={setShowNCDialog}
           ordenId={orden.id}
-          montoMaximo={orden.totalCobrado || 0}
+          totalCobrado={orden.totalCobrado || 0}
           onSuccess={() => {
             fetchOrden()
             void mutate(`/api/ordenes/${orden.id}/notas-credito`)
+            void mutate((k) => typeof k === "string" && k.startsWith(orderCommissionKeyPrefix(orden.id)))
           }}
         />
       )}

@@ -7,7 +7,7 @@ import { settle } from "./helpers/utils"
  * MÓDULO 3 — Técnicos y asignación.
  *
  * Assumes the persisted session is an ADMIN (only ADMIN can reach /tecnicos —
- * middleware.ts adminOnlyRoutes). Assignment is exercised from the orden detail
+ * proxy.ts adminOnlyRoutes). Assignment is exercised from the orden detail
  * "Técnico Asignado" card.
  */
 

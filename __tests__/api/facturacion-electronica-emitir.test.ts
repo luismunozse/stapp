@@ -7,6 +7,8 @@
  * comprobante already exists for the venta.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { MENSAJE_ERROR_TECNICO } from "@/lib/facturacion/errores"
+import { FILTRO_SIN_NC } from "@/lib/facturacion/cbte-tipo"
 import {
   mockAuthSuccess,
   mockAuthError,
@@ -33,8 +35,10 @@ vi.mock("@/lib/facturacion/arca/stapp-cert", () => ({
   ArcaStappCertError: class ArcaStappCertError extends Error {},
 }))
 
+// Los casos ARCA (número explícito, resultado incierto) viven en
+// facturacion-electronica-emitir-arca-numerada.test.ts.
 vi.mock("@/lib/facturacion/arca/arca-direct-provider", () => ({
-  arcaDirectProvider: { emitir: vi.fn() },
+  arcaDirectProvider: { emitir: vi.fn(), armarFactura: vi.fn(), ultimoAutorizado: vi.fn(), emitirFacturaNumerada: vi.fn() },
 }))
 
 vi.mock("@/lib/facturacion/map-venta", () => ({
@@ -95,6 +99,7 @@ const CREDENCIALES_ARCA = {
 const CREDENCIALES_DELEGADO = {
   organization_id: "org-1",
   provider: "arca_delegado",
+  estado: "conectado",
   cuit: "30710955057",
   cert_pem_enc: null,
   key_pem_enc: null,
@@ -198,6 +203,27 @@ describe("POST /api/facturacion-electronica/emitir", () => {
     expect(status).toBe(409)
     expect(body.error).toMatch(/devoluciones/)
     expect(tusFacturasProvider.emitir).not.toHaveBeenCalled()
+  })
+
+  it.each([0, -50, null])("422 sin crear comprobante cuando la venta es de cero o menos (total %s)", async (total) => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [createChainMock(null)],
+      ventas: [createChainMock({ ...VENTA, total })],
+      items_venta: [createChainMock(ITEMS)],
+      facturacion_credenciales: [createChainMock(CREDENCIALES)],
+    })
+
+    const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+    expect(status).toBe(422)
+    expect(body.error).toBe("No se puede facturar una venta en $0")
+    // Solo la consulta de idempotencia: nunca se llegó al INSERT del pendiente.
+    const tablas = vi.mocked(supabaseAdmin.from).mock.calls.map((c) => c[0])
+    expect(tablas.filter((t) => t === "comprobantes_fiscales")).toHaveLength(1)
+    expect(tusFacturasProvider.emitir).not.toHaveBeenCalled()
+    expect(arcaDirectProvider.emitir).not.toHaveBeenCalled()
   })
 
   it("409 when insert hits a unique violation (23505) — in-flight/duplicate, does not call the provider", async () => {
@@ -341,7 +367,7 @@ describe("POST /api/facturacion-electronica/emitir", () => {
     expect(status).toBe(422)
     expect(body.error).toBeDefined()
     expect(updateChain.update).toHaveBeenCalledWith(
-      expect.objectContaining({ estado: "rechazado", error_msg: "boom" })
+      expect.objectContaining({ estado: "rechazado", error_msg: MENSAJE_ERROR_TECNICO })
     )
     expect(updateChain.delete).not.toHaveBeenCalled()
   })
@@ -444,103 +470,6 @@ describe("POST /api/facturacion-electronica/emitir", () => {
    * tokens legacy en NULL, así que si el despacho se equivocara la ruta
    * moriría en `decryptSecret(null)` en vez de emitir.
    */
-  it("despacha al proveedor ARCA cuando la fila de credenciales es provider='arca'", async () => {
-    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
-    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
-    vi.mocked(arcaDirectProvider.emitir).mockResolvedValue({
-      ok: true,
-      cae: "75123456789012",
-      caeVencimiento: "20260908",
-      numero: "0003-00000007",
-      tipo: "C",
-      raw: {},
-    } as any)
-    const insertChain = createChainMock({ id: "cmp-1" })
-    mockSupabaseSequenced({
-      comprobantes_fiscales: [
-        createChainMock(null),
-        insertChain,
-        createChainMock({ id: "cmp-1", estado: "emitido", cae: "75123456789012" }),
-      ],
-      ventas: [createChainMock(VENTA)],
-      items_venta: [createChainMock(ITEMS)],
-      facturacion_credenciales: [createChainMock(CREDENCIALES_ARCA)],
-    })
-
-    const { status } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
-
-    expect(status).toBe(200)
-    expect(arcaDirectProvider.emitir).toHaveBeenCalledTimes(1)
-    expect(tusFacturasProvider.emitir).not.toHaveBeenCalled()
-    expect(insertChain.insert).toHaveBeenCalledWith(expect.objectContaining({ provider: "arca" }))
-  })
-
-  it("le pasa al proveedor ARCA el CUIT y los PEM descifrados de la fila", async () => {
-    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
-    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
-    vi.mocked(arcaDirectProvider.emitir).mockResolvedValue({ ok: true, cae: "1", numero: "0003-00000001", tipo: "C", raw: {} } as any)
-    mockSupabaseSequenced({
-      comprobantes_fiscales: [
-        createChainMock(null),
-        createChainMock({ id: "cmp-1" }),
-        createChainMock({ id: "cmp-1", estado: "emitido" }),
-      ],
-      ventas: [createChainMock(VENTA)],
-      items_venta: [createChainMock(ITEMS)],
-      facturacion_credenciales: [createChainMock(CREDENCIALES_ARCA)],
-    })
-
-    await POST(createPostRequest({ ventaId: "venta-1" }))
-
-    expect(arcaDirectProvider.emitir).toHaveBeenCalledWith(
-      expect.objectContaining({
-        organizationId: "org-1",
-        cuit: "23944498389",
-        certPem: "cert-enc",
-        keyPem: "key-enc",
-        puntoVenta: 3,
-        condicionFiscal: "MONOTRIBUTO",
-        production: false,
-      }),
-      expect.anything()
-    )
-  })
-
-  /**
-   * Una fila delegada no tiene tokens legacy. Si el despacho la mandara al
-   * proveedor equivocado, la ruta moriria descifrando un NULL.
-   */
-  it("despacha al proveedor ARCA cuando la fila es provider='arca_delegado'", async () => {
-    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
-    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
-    vi.mocked(getCertificadoStapp).mockReturnValue({
-      cuit: "23944498389",
-      certPem: "CERT-PLATAFORMA",
-      keyPem: "KEY-PLATAFORMA",
-      notAfter: "2028-09-12T22:16:31.000Z",
-      subject: "CN=stapp-prod",
-    } as any)
-    vi.mocked(arcaDirectProvider.emitir).mockResolvedValue({
-      ok: true, cae: "1", numero: "0002-00000001", tipo: "B", raw: {},
-    } as any)
-    const insertChain = createChainMock({ id: "cmp-1" })
-    mockSupabaseSequenced({
-      comprobantes_fiscales: [createChainMock(null), insertChain, createChainMock({ id: "cmp-1", estado: "emitido" })],
-      ventas: [createChainMock(VENTA)],
-      items_venta: [createChainMock(ITEMS)],
-      facturacion_credenciales: [createChainMock(CREDENCIALES_DELEGADO)],
-    })
-
-    const { status } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
-
-    expect(status).toBe(200)
-    expect(arcaDirectProvider.emitir).toHaveBeenCalledTimes(1)
-    expect(tusFacturasProvider.emitir).not.toHaveBeenCalled()
-    expect(insertChain.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ provider: "arca_delegado", punto_venta: 2 })
-    )
-  })
-
   /**
    * Si faltan las env vars del certificado de plataforma, TODAS las orgs
    * delegadas dejan de facturar a la vez. Un 500 generico manda a leer logs;
@@ -563,5 +492,146 @@ describe("POST /api/facturacion-electronica/emitir", () => {
 
     expect(status).toBe(500)
     expect(body.error).toMatch(/certificado de plataforma/i)
+  })
+
+  const SNAPSHOT_KEYS = [
+    "fecha_emision", "cuit_emisor", "cbte_tipo", "concepto", "moneda", "cotizacion",
+    "importe_neto", "importe_iva", "importe_total", "receptor_doc_tipo_cod", "receptor_doc_nro_cod", "detalle",
+  ]
+  const updatePayloads = (chain: ReturnType<typeof createChainMock>) =>
+    vi.mocked(chain.update).mock.calls.map((c) => c[0] as Record<string, unknown>)
+
+  it("un proveedor sin foto fiscal (TusFacturas) escribe la UPDATE de siempre, sin columnas nuevas", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    vi.mocked(tusFacturasProvider.emitir).mockResolvedValue({
+      ok: true, cae: "1", numero: "0003-1", tipo: "C", pdfUrl: "http://p", raw: {},
+    } as any)
+    const update = createChainMock({ id: "cmp-1", estado: "emitido" })
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [createChainMock(null), createChainMock({ id: "cmp-1" }), update],
+      ventas: [createChainMock(VENTA)],
+      items_venta: [createChainMock(ITEMS)],
+      facturacion_credenciales: [createChainMock(CREDENCIALES)],
+    })
+
+    const { status } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+    expect(status).toBe(200)
+    const payloads = updatePayloads(update)
+    expect(payloads).toHaveLength(1)
+    for (const key of SNAPSHOT_KEYS) expect(Object.keys(payloads[0])).not.toContain(key)
+  })
+
+  /**
+   * Anular una factura deja en la MISMA venta una nota de crédito fiscal
+   * (cbte_tipo 8/13) además de la factura. Emitir decide "¿ya está emitida?"
+   * mirando comprobantes de la venta: si cuenta la NC, una venta con factura
+   * anulada + NC emitida respondería "ya emitida" con la NC y no se podría
+   * refacturar; y con varias filas históricas un `maybeSingle` pelado falla.
+   */
+  describe("ignora las notas de crédito fiscales", () => {
+    const FACTURA_VIGENTE = { id: "cmp-2", venta_id: "venta-1", estado: "emitido", cae: "222" }
+
+    it("el atajo 'ya emitida' mira solo facturas de ESTA venta y organización", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+      vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+      const existente = createChainMock(FACTURA_VIGENTE)
+      mockSupabaseSequenced({ comprobantes_fiscales: [existente] })
+
+      const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+      expect(status).toBe(409)
+      expect(body.yaEmitido).toBe(true)
+      expect(body.comprobante).toEqual(FACTURA_VIGENTE)
+      expect(existente.or).toHaveBeenCalledWith(FILTRO_SIN_NC)
+      expect(existente.eq).toHaveBeenCalledWith("estado", "emitido")
+      expect(existente.eq).toHaveBeenCalledWith("venta_id", "venta-1")
+      expect(existente.eq).toHaveBeenCalledWith("organization_id", "org-1")
+      expect(existente.select).toHaveBeenCalledWith(SAFE_COLUMNS)
+    })
+
+    it("con varias filas históricas pide UNA (la más nueva) en vez de reventar en maybeSingle", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+      vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+      const existente = createChainMock(FACTURA_VIGENTE)
+      mockSupabaseSequenced({ comprobantes_fiscales: [existente] })
+
+      await POST(createPostRequest({ ventaId: "venta-1" }))
+
+      expect(existente.order).toHaveBeenCalledWith("created_at", { ascending: false })
+      expect(existente.limit).toHaveBeenCalledWith(1)
+    })
+
+    it("el atajo se omite SOLO si falta cbte_tipo (migración 370 sin aplicar): reintenta sin el filtro y sigue emitiendo", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+      vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+      const conFiltro = createChainMock(null, { code: "42703", message: "column comprobantes_fiscales.cbte_tipo does not exist" })
+      const sinFiltro = createChainMock(FACTURA_VIGENTE)
+      mockSupabaseSequenced({ comprobantes_fiscales: [conFiltro, sinFiltro] })
+
+      const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+      expect(status).toBe(409)
+      expect(body.comprobante).toEqual(FACTURA_VIGENTE)
+      expect(sinFiltro.or).not.toHaveBeenCalled()
+      expect(sinFiltro.eq).toHaveBeenCalledWith("estado", "emitido")
+      expect(sinFiltro.eq).toHaveBeenCalledWith("organization_id", "org-1")
+    })
+
+    it("otro error de base de datos en el atajo no se reintenta: 500", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+      vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+      const consulta = createChainMock(null, { code: "57014", message: "statement timeout" })
+      const reintento = createChainMock(FACTURA_VIGENTE)
+      mockSupabaseSequenced({ comprobantes_fiscales: [consulta, reintento] })
+
+      const { status } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+      expect(status).toBe(500)
+      expect(reintento.eq).not.toHaveBeenCalled()
+    })
+
+    it("al perder la carrera (23505) devuelve la factura activa, nunca una NC en vuelo", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+      vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+      const activa = createChainMock({ id: "cmp-2", venta_id: "venta-1", estado: "pendiente", cae: null })
+      mockSupabaseSequenced({
+        comprobantes_fiscales: [
+          createChainMock(null),
+          createChainMock(null, { code: "23505", message: 'duplicate key value violates unique constraint "uq_comprobante_venta_activo"' }),
+          activa,
+        ],
+        ventas: [createChainMock(VENTA)],
+        items_venta: [createChainMock(ITEMS)],
+        facturacion_credenciales: [createChainMock(CREDENCIALES)],
+      })
+
+      const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+      expect(status).toBe(409)
+      expect(body.comprobante.id).toBe("cmp-2")
+      expect(activa.or).toHaveBeenCalledWith(FILTRO_SIN_NC)
+      expect(activa.in).toHaveBeenCalledWith("estado", ["pendiente", "emitido"])
+      expect(activa.eq).toHaveBeenCalledWith("organization_id", "org-1")
+      expect(activa.order).toHaveBeenCalledWith("created_at", { ascending: false })
+      expect(activa.limit).toHaveBeenCalledWith(1)
+    })
+
+    it("la consulta de devoluciones NO se toca: sigue siendo solo por venta, sin filtro de NC", async () => {
+      mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+      vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+      const devoluciones = createChainMock(null, null, 1)
+      mockSupabaseSequenced({
+        comprobantes_fiscales: [createChainMock(null)],
+        ventas: [createChainMock(VENTA)],
+        devoluciones_venta: [devoluciones],
+      })
+
+      await POST(createPostRequest({ ventaId: "venta-1" }))
+
+      expect(devoluciones.eq).toHaveBeenCalledWith("venta_id", "venta-1")
+      expect(devoluciones.or).not.toHaveBeenCalled()
+    })
   })
 })

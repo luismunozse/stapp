@@ -352,9 +352,9 @@ export const DEVOLUCIONES_COLUMNS: CSVColumn<any>[] = [
 ]
 
 export const GARANTIAS_COLUMNS: CSVColumn<any>[] = [
-  { key: "orden.numero_orden", header: "Número Orden" },
-  { key: "orden.cliente.nombre", header: "Cliente" },
-  { key: "orden.dispositivo", header: "Dispositivo" },
+  { key: "ordenes_servicio.numero_orden", header: "Número Orden" },
+  { key: "ordenes_servicio.cliente.nombre", header: "Cliente" },
+  { key: "ordenes_servicio.dispositivo", header: "Dispositivo" },
   { key: "dias_validez", header: "Días Validez" },
   {
     key: "fecha_inicio",

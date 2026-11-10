@@ -53,9 +53,22 @@ describe("POST /api/recepciones — atomicidad", () => {
     vi.mocked(isPlanLimitError).mockReturnValue(false)
     mockAuthSuccess()
     mockSupabaseFrom({
+      clientes: createChainMock({ id: "c1" }),
       orden_eventos: createChainMock(null, null),
       fotos_orden: createChainMock(null, null),
     })
+  })
+
+  it("400 y no llama a la RPC si el cliente es de otra organizacion", async () => {
+    const clientes = createChainMock(null, null)
+    mockSupabaseFrom({ clientes })
+
+    const res = await POST(createPostRequest(body))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(400)
+    expect(clientes.eq).toHaveBeenCalledWith("organization_id", "org-1")
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled()
   })
 
   it("crea todo por la RPC y no inserta ordenes por separado", async () => {
@@ -63,6 +76,7 @@ describe("POST /api/recepciones — atomicidad", () => {
     const ordenesChain = createChainMock(null, null)
     mockSupabaseFrom({
       ordenes_servicio: ordenesChain,
+      clientes: createChainMock({ id: "c1" }),
       orden_eventos: createChainMock(null, null),
       fotos_orden: createChainMock(null, null),
     })
@@ -83,6 +97,7 @@ describe("POST /api/recepciones — atomicidad", () => {
     // un segundo fetch a /api/configuracion (que ademas es ADMIN-only).
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: rpcOk, error: null } as any)
     mockSupabaseFrom({
+      clientes: createChainMock({ id: "c1" }),
       orden_eventos: createChainMock(null, null),
       fotos_orden: createChainMock(null, null),
       organizations: createChainMock(
@@ -91,6 +106,7 @@ describe("POST /api/recepciones — atomicidad", () => {
           nombre_mostrar: "Taller Central",
           telefono: "1122334455",
           direccion: "Av. Siempre Viva 742",
+          logo_url: "https://cdn.example.com/logo.png",
           comprobante_terminos: "El equipo se entrega contra presentacion de este comprobante.",
         },
         null,
@@ -102,6 +118,7 @@ describe("POST /api/recepciones — atomicidad", () => {
 
     expect(status).toBe(201)
     expect(json.organizationName).toBe("Taller Central")
+    expect(json.organizationLogoUrl).toBe("https://cdn.example.com/logo.png")
     expect(json.organizationTelefono).toBe("1122334455")
     expect(json.organizationDireccion).toBe("Av. Siempre Viva 742")
     expect(json.organizationComprobanteTerminos).toBe(
@@ -117,6 +134,7 @@ describe("POST /api/recepciones — atomicidad", () => {
     const ordenesChain = createChainMock(null, null)
     mockSupabaseFrom({
       ordenes_servicio: ordenesChain,
+      clientes: createChainMock({ id: "c1" }),
       orden_eventos: createChainMock(null, null),
       fotos_orden: createChainMock(null, null),
     })
@@ -146,6 +164,7 @@ describe("POST /api/recepciones — atomicidad", () => {
     const ordenesChain = createChainMock(null, null)
     mockSupabaseFrom({
       ordenes_servicio: ordenesChain,
+      clientes: createChainMock({ id: "c1" }),
       orden_eventos: createChainMock(null, null),
       fotos_orden: createChainMock(null, null),
     })

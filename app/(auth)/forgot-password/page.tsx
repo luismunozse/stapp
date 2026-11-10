@@ -5,10 +5,9 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ThemeToggle } from "@/components/ui/theme-toggle"
+import { AuthSplitLayout } from "@/components/auth/auth-split-layout"
+import { AuthHeader } from "@/components/auth/auth-header"
 import { ArrowLeft, CheckCircle } from "lucide-react"
-import { BusinessLogo } from "@/components/shared/business-logo"
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("")
@@ -45,91 +44,68 @@ export default function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background px-4">
-        <div className="absolute top-4 right-4">
-          <ThemeToggle variant="icon" />
-        </div>
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <div className="mx-auto w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
-              <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
-            </div>
-            <CardTitle className="text-2xl font-bold">
-              Revisa tu correo
-            </CardTitle>
-            <CardDescription>
-              Si existe una cuenta con el email <strong>{email}</strong>,
-              recibirás un enlace para restablecer tu contraseña.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground text-center">
-              El enlace expirará en 1 hora.
-            </p>
+      <AuthSplitLayout>
+        <div className="space-y-8">
+          <AuthHeader
+            icon={<CheckCircle />}
+            tone="success"
+            title="Revisá tu correo"
+            description={
+              <>
+                Si existe una cuenta con el email <strong className="text-foreground">{email}</strong>,
+                vas a recibir un enlace para restablecer tu contraseña. El enlace vence en 1 hora.
+              </>
+            }
+          />
+          <Button asChild variant="outline" className="w-full h-11">
             <Link href="/login">
-              <Button variant="outline" className="w-full">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Volver al login
-              </Button>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Volver al login
             </Link>
-          </CardContent>
-        </Card>
-      </div>
+          </Button>
+        </div>
+      </AuthSplitLayout>
     )
   }
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background px-4">
-      <div className="absolute top-4 right-4">
-        <ThemeToggle variant="icon" />
-      </div>
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <div className="flex justify-center py-4">
-            <BusinessLogo size="xl" showText={false} />
-          </div>
-          <CardTitle className="text-2xl font-bold text-center">
-            ¿Olvidaste tu contraseña?
-          </CardTitle>
-          <CardDescription className="text-center">
-            Ingresa tu email y te enviaremos un enlace para restablecerla
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded">
-                {error}
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="tu@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                autoFocus
-              />
+    <AuthSplitLayout>
+      <div className="space-y-8">
+        <Link
+          href="/login"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          Volver al login
+        </Link>
+        <AuthHeader
+          title="¿Olvidaste tu contraseña?"
+          description="Ingresá tu email y te enviamos un enlace para restablecerla"
+        />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div role="alert" className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded-lg text-sm">
+              {error}
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Enviando..." : "Enviar enlace"}
-            </Button>
-          </form>
-          <div className="mt-4 text-center">
-            <Link
-              href="/login"
-              className="text-sm text-muted-foreground hover:text-primary"
-            >
-              <ArrowLeft className="inline-block mr-1 h-4 w-4" />
-              Volver al login
-            </Link>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="tu@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              autoFocus
+            />
           </div>
-        </CardContent>
-      </Card>
-    </div>
+          <Button type="submit" className="w-full h-11" disabled={loading}>
+            {loading ? "Enviando..." : "Enviar enlace"}
+          </Button>
+        </form>
+      </div>
+    </AuthSplitLayout>
   )
 }

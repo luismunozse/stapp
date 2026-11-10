@@ -5,8 +5,9 @@ import { derivarDesdeDetalle } from "./detalle"
  * Valida la elección de rubro del registro.
  *
  * Pura y client-safe: la usa el formulario. El backend igual es permisivo (un
- * rubro ausente cae al genérico) porque hay otras vías de alta — app-entry y
- * el flujo de Google — que no muestran el selector.
+ * rubro ausente cae al genérico): es la red de seguridad si algún cliente no lo
+ * manda. Hoy todas las altas pasan por /registro (la app nativa también, desde
+ * /app-entry), y el flujo de Google recibe el rubro desde ese formulario.
  *
  * Devuelve el mensaje de error, o null si está bien.
  */

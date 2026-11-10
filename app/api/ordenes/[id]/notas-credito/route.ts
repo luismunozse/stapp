@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { COLUMNAS_VISTA_NC, leerFilasNC, type FilaVistaNC } from "@/lib/notas-credito/listado"
 
@@ -14,19 +15,20 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId, userId, role } = autenticado
     if (error) return error
 
     const { id } = await params
 
-    const { data: orden, error: ordenError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id, tecnico_id")
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
-      .maybeSingle()
-    if (ordenError) throw ordenError
-    if (!orden || (role === "TECNICO" && orden.tecnico_id !== userId)) {
+    // Within the caller's scope: an order of another branch is "not found". A TECNICO then
+    // gets only his own orders, as ever.
+    const cargada = await cargarOrdenEnAlcance(id, actorDeSesion(autenticado), "ver", {
+      select: "id, tecnico_id",
+    })
+    if ("error" in cargada) return cargada.error
+    const { orden } = cargada
+    if (role === "TECNICO" && orden.tecnico_id !== userId) {
       return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
     }
 

@@ -3,7 +3,9 @@
 import { useState, useRef, useCallback } from "react"
 import html2canvas from "html2canvas"
 import { Button } from "@/components/ui/button"
-import { Loader2, Share2, Download, ImageIcon } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Loader2, Share2, Download, Phone } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import {
   buildVentaContext,
@@ -12,17 +14,8 @@ import {
 } from "@/lib/whatsapp/plantillas-venta"
 import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
-
-const METODO_LABELS: Record<string, string> = {
-  EFECTIVO: "Efectivo",
-  TRANSFERENCIA: "Transferencia",
-  TARJETA: "Tarjeta",
-  TARJETA_DEBITO: "T. Débito",
-  TARJETA_CREDITO: "T. Crédito",
-  MERCADOPAGO: "MercadoPago",
-  CUENTA_CORRIENTE: "Cta. Cte.",
-  OTRO: "Otro",
-}
+import { cn } from "@/lib/utils"
+import { METODO_LABELS } from "./metodo-pago-labels"
 
 interface TicketShareProps {
   ventaData: {
@@ -50,12 +43,25 @@ interface TicketShareProps {
   }
   plantillaCorta?: string | null
   countryCode?: string | null
+  /**
+   * URL de WhatsApp para un teléfono tipeado a mano (venta sin teléfono de
+   * cliente). Si no viene, el campo de teléfono no se ofrece.
+   */
+  buildManualWhatsAppUrl?: (phone: string) => string
+  className?: string
 }
 
-export function PosTicketShare({ ventaData, plantillaCorta, countryCode }: TicketShareProps) {
+export function PosTicketShare({
+  ventaData,
+  plantillaCorta,
+  countryCode,
+  buildManualWhatsAppUrl,
+  className,
+}: TicketShareProps) {
   const { formatPrice, timezone } = useCurrency()
   const ticketRef = useRef<HTMLDivElement>(null)
   const [generating, setGenerating] = useState(false)
+  const [manualPhone, setManualPhone] = useState("")
 
   const subtotal = ventaData.subtotal ?? ventaData.items.reduce((s, i) => s + i.cantidad * i.precioUnitario, 0)
   const descuento = ventaData.descuento ?? 0
@@ -280,7 +286,9 @@ export function PosTicketShare({ ventaData, plantillaCorta, countryCode }: Ticke
             <>
               <div style={{ borderTop: "1px dashed #999", margin: "8px 0" }} />
               <div style={{ fontSize: "10px", color: "#666", textAlign: "center" }}>
-                {ventaData.garantias.length} certificado(s) de garantía
+                {ventaData.garantias.length === 1
+                  ? "1 certificado de garantía"
+                  : `${ventaData.garantias.length} certificados de garantía`}
               </div>
             </>
           )}
@@ -295,37 +303,70 @@ export function PosTicketShare({ ventaData, plantillaCorta, countryCode }: Ticke
         </div>
       </div>
 
-      {/* Action buttons */}
-      <div className="flex gap-2">
-        {ventaData.clienteTelefono && (
-          <Button
-            variant="outline"
-            className="flex-1 h-11 text-green-600 border-green-300"
-            onClick={handleShareWhatsApp}
-            disabled={generating}
-          >
+      {/* Enviar: WhatsApp (imagen del ticket) + descarga, agrupados en un menú */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className={cn("h-11", className)} disabled={generating}>
             {generating ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
-              <WhatsAppIcon className="mr-2 h-4 w-4" />
+              <Share2 className="mr-2 h-4 w-4" />
             )}
-            WhatsApp
+            Enviar
           </Button>
-        )}
-        <Button
-          variant="outline"
-          className="h-11"
-          onClick={handleDownloadImage}
-          disabled={generating}
-          title="Descargar ticket como imagen"
-        >
-          {generating ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-[min(20rem,calc(100vw-2rem))] space-y-2 p-2">
+          {ventaData.clienteTelefono ? (
+            <Button
+              variant="ghost"
+              className="h-11 w-full justify-start px-3 text-success"
+              onClick={handleShareWhatsApp}
+              disabled={generating}
+            >
+              <WhatsAppIcon className="mr-2 h-4 w-4" />
+              WhatsApp al cliente
+            </Button>
           ) : (
-            <ImageIcon className="h-4 w-4" />
+            buildManualWhatsAppUrl && (
+              <div className="space-y-2 px-1 pt-1">
+                <div className="relative">
+                  <Phone className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type="tel"
+                    value={manualPhone}
+                    onChange={(e) => setManualPhone(e.target.value)}
+                    placeholder="Teléfono para WhatsApp"
+                    aria-label="Teléfono para WhatsApp"
+                    className="h-11 pl-8 text-sm"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  className="h-11 w-full text-success"
+                  disabled={!manualPhone.trim()}
+                  onClick={() => {
+                    const phone = manualPhone.trim()
+                    if (!phone) return
+                    window.open(buildManualWhatsAppUrl(phone), "_blank")
+                  }}
+                >
+                  <WhatsAppIcon className="mr-2 h-4 w-4" />
+                  Enviar por WhatsApp
+                </Button>
+              </div>
+            )
           )}
-        </Button>
-      </div>
+          <Button
+            variant="ghost"
+            className="h-11 w-full justify-start px-3"
+            onClick={handleDownloadImage}
+            disabled={generating}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Descargar imagen
+          </Button>
+        </PopoverContent>
+      </Popover>
     </>
   )
 }

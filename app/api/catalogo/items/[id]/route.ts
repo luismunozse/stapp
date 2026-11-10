@@ -42,6 +42,28 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   if (!existing) return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
 
+  // Mismas validaciones de pertenencia que el alta: el UPDATE corre con
+  // service_role y la FK sola aceptaría ids de otra organización.
+  if (parsed.data.categoria_id) {
+    const { data: cat } = await supabaseAdmin
+      .from("catalogo_categorias")
+      .select("id")
+      .eq("id", parsed.data.categoria_id)
+      .eq("organization_id", auth.organizationId!)
+      .maybeSingle()
+    if (!cat) return NextResponse.json({ error: "Categoría no encontrada" }, { status: 400 })
+  }
+
+  if (parsed.data.inventario_id) {
+    const { data: inv } = await supabaseAdmin
+      .from("inventario")
+      .select("id")
+      .eq("id", parsed.data.inventario_id)
+      .eq("organization_id", auth.organizationId!)
+      .maybeSingle()
+    if (!inv) return NextResponse.json({ error: "Item de inventario no encontrado" }, { status: 400 })
+  }
+
   const tipoFinal = parsed.data.tipo ?? existing.tipo
   if (tipoFinal === "SERVICIO" && parsed.data.stock != null) {
     return NextResponse.json({ error: "Servicios no tienen stock" }, { status: 400 })

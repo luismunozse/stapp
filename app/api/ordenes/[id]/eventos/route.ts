@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 
 export async function GET(
@@ -7,10 +8,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId } = autenticado
     if (error) return error
 
     const { id } = await params
+
+    // The timeline is read through the order: one outside the caller's scope is "not found"
+    const cargada = await cargarOrdenEnAlcance(id, actorDeSesion(autenticado), "ver", { select: "id" })
+    if ("error" in cargada) return cargada.error
 
     const { data: eventos, error: dbError } = await supabaseAdmin
       .from("orden_eventos")

@@ -21,6 +21,8 @@ export interface EstadoDelegacion {
   cuit: string | null
   puntoVenta: number | null
   condicionFiscal: CondicionFiscal | null
+  /** La plataforma todavía no verificó que el CUIT es del taller: no se puede facturar ni probar. */
+  pendienteVerificacion?: boolean
 }
 
 interface Props {
@@ -92,7 +94,8 @@ export function CredencialesArcaDelegado({
 
   const puedeGuardar = plataformaLista && datosValidos && allowEdit && !guardando
   // Probar consulta la fila guardada: antes de guardar no hay nada que probar.
-  const puedeProbar = plataformaLista && estado.conectado && !probando
+  // Pendiente de verificación: la ruta de probar responde que no está habilitada.
+  const puedeProbar = plataformaLista && estado.conectado && !estado.pendienteVerificacion && !probando
 
   async function handleGuardar() {
     setGuardando(true)
@@ -113,15 +116,24 @@ export function CredencialesArcaDelegado({
         setMensaje({ tone: "error", text: data?.error || "No se pudo guardar" })
         return
       }
+      const pendienteVerificacion = data.estado === "pendiente_verificacion"
       const nuevo: EstadoDelegacion = {
         conectado: true,
         cuit: data.cuit ?? cuitDigitos,
         puntoVenta: data.puntoVenta ?? puntoVentaNumero,
         condicionFiscal: data.condicionFiscal ?? condicionFiscal,
+        pendienteVerificacion,
       }
       setEstado(nuevo)
       onGuardado?.(nuevo)
-      setMensaje({ tone: "ok", text: "Datos guardados. Probá la conexión para confirmar la delegación." })
+      setMensaje(
+        pendienteVerificacion
+          ? {
+              tone: "warn",
+              text: "Datos guardados. Antes de facturar, STApp verifica que el CUIT sea de tu negocio; cuando quede verificado vas a poder probar la conexión.",
+            }
+          : { tone: "ok", text: "Datos guardados. Probá la conexión para confirmar la delegación." }
+      )
     } catch {
       setMensaje({ tone: "error", text: "Error al guardar" })
     } finally {
@@ -305,6 +317,7 @@ export function CredencialesArcaDelegado({
           <span className="text-sm text-muted-foreground">
             CUIT {estado.cuit}
             {estado.puntoVenta ? ` · Punto de venta ${estado.puntoVenta}` : ""}
+            {estado.pendienteVerificacion ? " · Pendiente de verificación" : ""}
           </span>
         )}
       </div>

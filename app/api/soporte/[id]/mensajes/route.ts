@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { firmarReferencia } from "@/lib/storage-privado"
 import { uploadSupportMessageAttachment } from "@/lib/storage"
 import { dataUrlToBuffer } from "@/lib/storage"
 import { z } from "zod"
@@ -97,7 +98,7 @@ export async function POST(
           if (attachment) {
             adjuntos.push({
               id: attachment.id,
-              url: attachment.url,
+              url: (await firmarReferencia("SOPORTE_ATTACHMENTS", result.path)) ?? "",
               nombreArchivo: attachment.nombre_archivo,
             })
           }
@@ -126,7 +127,7 @@ export async function POST(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0].message },
         { status: 400 }
       )
     }

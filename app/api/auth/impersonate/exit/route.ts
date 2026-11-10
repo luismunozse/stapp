@@ -6,14 +6,7 @@ import {
   getSessionCookieName,
   IMPERSONATION_BACKUP_COOKIE,
 } from "@/lib/impersonation"
-
-function getCookieDomain(): string | undefined {
-  if (process.env.COOKIE_DOMAIN) return process.env.COOKIE_DOMAIN
-  if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_ROOT_DOMAIN) {
-    return `.${process.env.NEXT_PUBLIC_ROOT_DOMAIN}`
-  }
-  return undefined
-}
+import { sessionCookieDomain } from "@/lib/session-cookie"
 
 /**
  * Ends an impersonation session. Restores the superadmin's original session
@@ -27,7 +20,7 @@ export async function POST() {
   try {
     const secret = process.env.NEXTAUTH_SECRET
     const sessionCookieName = getSessionCookieName()
-    const cookieDomain = getCookieDomain()
+    const cookieDomain = sessionCookieDomain()
     const secure = process.env.NODE_ENV === "production"
     const cookieStore = await cookies()
 

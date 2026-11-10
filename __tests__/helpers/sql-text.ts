@@ -22,7 +22,7 @@ function read(dir: string, pick: (name: string, text: () => string) => boolean, 
 export const readBySuffix = (suffix: string) =>
   read("", (name) => name.endsWith(suffix), `suffix "${suffix}"`)
 
-export const readByMarker = (dir: "rollback" | "verify", marker: string) =>
+export const readByMarker = (dir: "rollback" | "verify" | "backfill", marker: string) =>
   read(dir, (_n, text) => text().includes(marker), `marker "${marker}"`)
 
 /** Drops `--` and block comments so headers cannot satisfy or trip a regex. */

@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canEmitirFacturaElectronica } from "@/lib/facturacion/access"
 import { tusFacturasProvider } from "@/lib/facturacion/tusfacturas-provider"
-import { arcaDirectProvider } from "@/lib/facturacion/arca/arca-direct-provider"
+import { emitirFacturaArca } from "@/lib/facturacion/arca/factura-ruta"
 import { isArcaProduction } from "@/lib/facturacion/arca/env"
 import { ArcaStappCertError } from "@/lib/facturacion/arca/stapp-cert"
 import {
@@ -11,13 +11,15 @@ import {
   CredencialesIncompletasError,
   type CredencialesResueltas,
 } from "@/lib/facturacion/resolver-credenciales"
+import { mensajeSeguroDeError } from "@/lib/facturacion/errores"
 import { mapVentaToEmitirInput } from "@/lib/facturacion/map-venta"
+import { isMissingColumnError } from "@/lib/db-errors"
+import { SAFE_COLUMNS, columnasFiscales } from "@/lib/facturacion/comprobante-columns"
+import { FILTRO_SIN_NC } from "@/lib/facturacion/cbte-tipo"
 
-// Columnas seguras para devolver un comprobante al cliente. NUNCA incluir
-// provider_response acá: es la respuesta cruda del proveedor y puede traer
-// datos internos que no corresponde exponer.
-const SAFE_COLUMNS =
-  "id, venta_id, tipo, punto_venta, numero, cae, cae_vencimiento, estado, pdf_url, receptor_doc_tipo, receptor_doc_nro, receptor_condicion_iva, total, provider, error_msg, created_at, updated_at"
+// ARCA puede tardar: si la función se corta después del envío, el comprobante queda
+// "pendiente". 60 s en lugar de los 30 generales (también en vercel.json).
+export const maxDuration = 60
 
 // Código de Postgres para violación de constraint UNIQUE.
 const UNIQUE_VIOLATION = "23505"
@@ -40,13 +42,30 @@ export async function POST(request: Request) {
   // solo un atajo de UX; la garantía real contra la carrera vive en el
   // índice único parcial de la migración (uq_comprobante_venta_activo),
   // aplicado más abajo en el INSERT.
-  const { data: existing, error: existingErr } = await supabaseAdmin
-    .from("comprobantes_fiscales")
-    .select(SAFE_COLUMNS)
-    .eq("venta_id", ventaId)
-    .eq("organization_id", organizationId!)
-    .eq("estado", "emitido")
-    .maybeSingle()
+  //
+  // Solo cuentan las FACTURAS: anular una deja en la misma venta una nota de
+  // crédito fiscal emitida, que no es "la factura de esta venta". Se pide UNA fila
+  // (la más nueva) y no `maybeSingle` pelado, porque una venta refacturada tiene
+  // varias filas históricas.
+  const buscarEmitida = (soloFacturas: boolean) => {
+    const query = supabaseAdmin
+      .from("comprobantes_fiscales")
+      .select(SAFE_COLUMNS)
+      .eq("venta_id", ventaId)
+      .eq("organization_id", organizationId!)
+      .eq("estado", "emitido")
+    return (soloFacturas ? query.or(FILTRO_SIN_NC) : query)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+  }
+  let { data: existing, error: existingErr } = await buscarEmitida(true)
+  if (existingErr && isMissingColumnError(existingErr)) {
+    // Sin la migración 370 no existe `cbte_tipo`, y sin ella tampoco hay notas de
+    // crédito: el atajo sigue valiendo sin el filtro. Emitir no puede depender de
+    // una columna que llegó después.
+    ;({ data: existing, error: existingErr } = await buscarEmitida(false))
+  }
   if (existingErr) {
     return NextResponse.json({ error: "No se pudo verificar el comprobante" }, { status: 500 })
   }
@@ -65,6 +84,11 @@ export async function POST(request: Request) {
   // (y una venta anulada no se factura).
   if (venta.estado !== "COMPLETADA") {
     return NextResponse.json({ error: "Solo se pueden facturar ventas completadas" }, { status: 409 })
+  }
+  // ARCA no autoriza un comprobante en $0 (ni negativo): se corta antes de
+  // crear el pendiente para no dejar un rechazado inútil en el historial.
+  if (!(Number(venta.total) > 0)) {
+    return NextResponse.json({ error: "No se puede facturar una venta en $0" }, { status: 422 })
   }
   const { count: devoluciones, error: devErr } = await supabaseAdmin
     .from("devoluciones_venta")
@@ -130,8 +154,21 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error: "No se pudieron leer las credenciales" }, { status: 500 })
   }
-  const creds = resuelto.creds
   const input = mapVentaToEmitirInput(venta, items || [])
+
+  // ARCA (directa y delegada): número explícito y resultado incierto, para que un
+  // corte después del envío nunca termine en una segunda factura (ver factura-ruta.ts).
+  if (resuelto.provider !== "tusfacturas") {
+    return emitirFacturaArca({
+      organizationId: organizationId!,
+      ventaId,
+      total: venta.total,
+      creds: resuelto.creds,
+      provider: resuelto.provider,
+      input,
+    })
+  }
+  const creds = resuelto.creds
 
   // El INSERT es el gate real contra la carrera: el índice único parcial
   // uq_comprobante_venta_activo (estado IN ('pendiente','emitido')) rechaza
@@ -165,6 +202,11 @@ export async function POST(request: Request) {
         .eq("venta_id", ventaId)
         .eq("organization_id", organizationId!)
         .in("estado", ["pendiente", "emitido"])
+        // Una NC en vuelo también está "pendiente": la que bloquea la emisión es
+        // la factura, y con las dos filas `maybeSingle` fallaría.
+        .or(FILTRO_SIN_NC)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle()
       if (activeErr) {
         return NextResponse.json({ error: "Comprobante en proceso o ya emitido" }, { status: 409 })
@@ -179,14 +221,7 @@ export async function POST(request: Request) {
 
   let result
   try {
-    // La condición se escribe por TusFacturas y no por ARCA a propósito: así
-    // TypeScript estrecha la rama `else` a las DOS variantes ARCA (directa y
-    // delegada) y agregar una tercera no puede caer en silencio del lado
-    // equivocado.
-    result =
-      resuelto.provider === "tusfacturas"
-        ? await tusFacturasProvider.emitir(resuelto.creds, input)
-        : await arcaDirectProvider.emitir(resuelto.creds, input)
+    result = await tusFacturasProvider.emitir(creds, input)
   } catch (err) {
     // No dejamos un comprobante "pendiente" colgado: si el proveedor tira
     // una excepción (timeout, red, etc.), lo marcamos rechazado para que se
@@ -195,7 +230,7 @@ export async function POST(request: Request) {
       .from("comprobantes_fiscales")
       .update({
         estado: "rechazado",
-        error_msg: err instanceof Error ? err.message : "Error desconocido al emitir",
+        error_msg: mensajeSeguroDeError(err, "el proveedor lanzo una excepcion al emitir"),
         updated_at: new Date().toISOString(),
       })
       .eq("id", pend.id)
@@ -211,21 +246,34 @@ export async function POST(request: Request) {
   }
 
   if (result.ok) {
-    const { data: updated, error: updErr } = await supabaseAdmin
-      .from("comprobantes_fiscales")
-      .update({
-        estado: "emitido",
-        tipo: result.tipo,
-        numero: result.numero,
-        cae: result.cae,
-        cae_vencimiento: result.caeVencimiento,
-        pdf_url: result.pdfUrl,
-        provider_response: result.raw as any,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", pend.id)
-      .select(SAFE_COLUMNS)
-      .single()
+    const basePayload = {
+      estado: "emitido",
+      tipo: result.tipo,
+      numero: result.numero,
+      cae: result.cae,
+      cae_vencimiento: result.caeVencimiento,
+      pdf_url: result.pdfUrl,
+      provider_response: result.raw as any,
+      updated_at: new Date().toISOString(),
+    }
+    const escribirEmitido = (payload: Record<string, unknown>) =>
+      supabaseAdmin
+        .from("comprobantes_fiscales")
+        .update(payload)
+        .eq("id", pend.id)
+        .select(SAFE_COLUMNS)
+        .single()
+
+    // Foto fiscal (lo que ARCA autorizó) junto al CAE. Antes de aplicar la
+    // migración esas columnas no existen: PostgREST rechaza el payload entero
+    // con PGRST204 y, como el CAE ya es real, se reintenta con el payload de
+    // siempre en vez de dejar la fila pendiente para siempre.
+    let { data: updated, error: updErr } = await escribirEmitido(
+      result.fiscal ? { ...basePayload, ...columnasFiscales(result.fiscal, input.items) } : basePayload
+    )
+    if (updErr && result.fiscal && isMissingColumnError(updErr)) {
+      ;({ data: updated, error: updErr } = await escribirEmitido(basePayload))
+    }
     if (updErr) {
       // El proveedor SÍ emitió un CAE real acá: nunca se borra el pendiente
       // (perderíamos la única referencia a esa emisión). Se loguea todo lo

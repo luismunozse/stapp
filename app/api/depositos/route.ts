@@ -23,6 +23,7 @@ function formatDeposito(row: any) {
     activo: row.activo,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    sucursalNombre: row.sucursales?.nombre ?? null,
   }
 }
 
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
 
     let query = supabaseAdmin
       .from("depositos")
-      .select("*")
+      .select("*, sucursales(nombre)")
       .eq("organization_id", organizationId!)
       .is("deleted_at", null)
       .order("principal", { ascending: false })
@@ -134,7 +135,7 @@ export async function POST(request: Request) {
     return NextResponse.json(formatDeposito(row), { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error creating deposito:", err)
     return NextResponse.json({ error: "Error al crear depósito" }, { status: 500 })

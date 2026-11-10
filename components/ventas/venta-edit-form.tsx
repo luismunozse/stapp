@@ -29,8 +29,8 @@ const itemSchema = z.object({
   id: z.string().optional(), // Para items existentes
   inventarioId: z.string().nullable().optional(),
   descripcion: z.string().trim().min(1, "Descripción requerida"),
-  cantidad: z.number({ invalid_type_error: "Cantidad requerida" }).int("Sin decimales").min(1, "Mínimo 1"),
-  precioUnitario: z.number({ invalid_type_error: "Precio requerido" }).positive("Precio inválido"),
+  cantidad: z.number({ error: "Cantidad requerida" }).int("Sin decimales").min(1, "Mínimo 1"),
+  precioUnitario: z.number({ error: "Precio requerido" }).positive("Precio inválido"),
   diasGarantia: z.number().int().min(0).default(0),
   // Descuento por línea: se conserva tal como se vendió
   descuento: z.number().min(0).default(0),
@@ -44,7 +44,7 @@ const ventaEditSchema = z.object({
   clienteTelefono: z.string().optional(),
   items: z.array(itemSchema).min(1, "Agrega al menos un producto"),
   tipoDescuentoGlobal: z.enum(["MONTO", "PORCENTAJE"]),
-  descuentoGlobal: z.number({ invalid_type_error: "Descuento inválido" }).min(0),
+  descuentoGlobal: z.number({ error: "Descuento inválido" }).min(0),
   observaciones: z.string().optional(),
 })
 
@@ -146,7 +146,7 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
     setValue,
     reset,
     formState: { errors },
-  } = useForm<VentaEditFormData>({
+  } = useForm<z.input<typeof ventaEditSchema>, unknown, VentaEditFormData>({
     resolver: zodResolver(ventaEditSchema),
     defaultValues: valoresIniciales(venta),
   })

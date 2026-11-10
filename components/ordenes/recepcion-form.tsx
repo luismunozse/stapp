@@ -206,6 +206,7 @@ interface RecepcionCreadaResultado {
     publicToken: string
   }>
   organizationName: string | null
+  organizationLogoUrl?: string | null
   organizationTelefono: string | null
   organizationDireccion: string | null
   organizationComprobanteTerminos: string | null

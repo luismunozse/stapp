@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server"
 import { requireAuth, hasInventarioAccess, resolveVendedoresHabilitados, canViewCotizacionCosts } from "@/lib/auth-utils"
+import { ordenSeTomaPorTecnico } from "@/lib/ordenes/tomar"
+import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
+import { MENSAJE_TECNICO_OTRA_SUCURSAL, puedeAsignarTecnicoOrden, sucursalQueAtiende, tecnicoAsignable } from "@/lib/sucursal-ordenes"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { queueNotification } from "@/lib/notifications/queue"
 import { formatOrden } from "@/lib/db-utils"
-import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos, ESTADO_LABELS, ESTADOS_COSTO_FINAL_BLOQUEADO } from "@/lib/orden-state-machine"
+import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos, ESTADO_LABELS, ESTADOS_COSTO_FINAL_BLOQUEADO, ESTADOS_MONTO_CERRADO } from "@/lib/orden-state-machine"
+import type { EstadoOrden } from "@/types"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
 import { pendienteOrden, aplicadoNotasCreditoDeOrden, NOTAS_CREDITO_APLICADO_EMBED } from "@/lib/ordenes/pendiente"
@@ -55,14 +59,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, session, organizationId, role } = autenticado
     if (error) return error
 
     const { id } = await params
 
-    const { data: orden, error: dbError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select(`
+    // Within the caller's scope: an order of another branch is "not found", the same answer a
+    // missing id gets, before anything else is read. A TECNICO opens only his own orders, plus
+    // (opt-in `tecnicos_toman_ordenes`) the unassigned ones of his branch so he can take them;
+    // a colleague's order stays 403.
+    const cargada = await cargarOrdenEnAlcance(id, actorDeSesion(autenticado), "leer", {
+      select: `
         *,
         clientes (*),
         users:tecnico_id (
@@ -110,25 +118,11 @@ export async function GET(
         recepciones:recepcion_id (
           codigo
         )
-      `)
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (dbError || !orden) {
-      return NextResponse.json(
-        { error: "Orden no encontrada" },
-        { status: 404 }
-      )
-    }
-
-    // Técnicos solo pueden ver sus órdenes asignadas
-    if (role === "TECNICO" && orden.tecnico_id !== userId) {
-      return NextResponse.json(
-        { error: "No autorizado" },
-        { status: 403 }
-      )
-    }
+      `,
+    })
+    if ("error" in cargada) return cargada.error
+    const { orden, permisos } = cargada
+    const puedeTomar = permisos.tomar && ordenSeTomaPorTecnico(orden)
 
     // Último cambio de estado para derivar estadoAnterior (plantillas WhatsApp
     // como "seguimiento_presupuesto_rechazado" lo necesitan).
@@ -199,7 +193,14 @@ export async function GET(
       organizationMoneda: org?.moneda || null,
       organizationZonaHoraria: org?.zona_horaria || null,
       organizationGarantiaDiasDefault: org?.garantia_dias_default ?? null,
+      // The branch that works the order: the screen lists that branch's technicians.
+      sucursalAtiendeId: sucursalQueAtiende(orden),
+      // The picker lists that branch's technicians, so only an ADMIN or someone of that branch
+      // (as just re-read for this request) can make a choice the server will accept. A
+      // technician does not reassign.
+      puedeAsignarTecnico: puedeAsignarTecnicoOrden(role, session!.user.sucursalId, orden),
       estadoAnterior: ultimoEventoEstado?.estado_anterior ?? null,
+      ...(role === "TECNICO" ? { puedeTomar } : {}),
     }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })
@@ -217,39 +218,45 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, session, organizationId, userId, role } = autenticado
     if (error) return error
 
     const { id } = await params
-    const practica = await rejectIfPractica(id, organizationId!)
-    if (practica) return practica
     const body = await request.json()
     const data = updateOrdenSchema.parse(body)
 
-    // Obtener orden actual
-    const { data: orden, error: fetchError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select(`
+    // Obtener orden actual, dentro del alcance de quien llama: una orden de otra sucursal es
+    // "no encontrada" (la misma respuesta que un id inexistente), y los técnicos solo
+    // actualizan sus órdenes asignadas (403 si no).
+    const cargada = await cargarOrdenEnAlcance(id, actorDeSesion(autenticado), "editar", {
+      select: `
         *,
         clientes (*),
         ${NOTAS_CREDITO_APLICADO_EMBED},
         organizations (id, nombre, nombre_mostrar, slug, moneda, zona_horaria)
-      `)
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
-      .single()
+      `,
+    })
+    if ("error" in cargada) return cargada.error
+    const { orden } = cargada
 
-    if (fetchError || !orden) {
+    // After the scope check, so a practice order of another branch is "not found" too.
+    const practica = await rejectIfPractica(id, organizationId!)
+    if (practica) return practica
+
+    // The commission rate and the worked hours are managed from the ADMIN card of the order
+    // screen; assigning the technician follows the rule GET reports as `puedeAsignarTecnico`.
+    // Sending the technician the order already has is not an assignment.
+    if (role !== "ADMIN" && (data.porcentajeComision !== undefined || data.horasTrabajadas !== undefined)) {
       return NextResponse.json(
-        { error: "Orden no encontrada" },
-        { status: 404 }
+        { error: "Solo un administrador puede modificar el porcentaje de comisión y las horas trabajadas" },
+        { status: 403 }
       )
     }
-
-    // Técnicos solo pueden actualizar sus órdenes asignadas
-    if (role === "TECNICO" && orden.tecnico_id !== userId) {
+    const cambiaTecnico = data.tecnicoId !== undefined && (data.tecnicoId ?? null) !== (orden.tecnico_id ?? null)
+    if (cambiaTecnico && !puedeAsignarTecnicoOrden(role, session?.user.sucursalId, orden)) {
       return NextResponse.json(
-        { error: "No autorizado" },
+        { error: "No tenés permiso para asignar el técnico de esta orden" },
         { status: 403 }
       )
     }
@@ -297,9 +304,10 @@ export async function PUT(
     if (data.tecnicoId) {
       const { data: tecnico } = await supabaseAdmin
         .from("users")
-        .select("id, rol, porcentaje_comision, costo_hora")
+        .select("id, rol, sucursal_id, porcentaje_comision, costo_hora")
         .eq("id", data.tecnicoId)
         .eq("organization_id", organizationId!)
+        .is("deleted_at", null)
         .single()
 
       if (!tecnico) {
@@ -307,6 +315,12 @@ export async function PUT(
       }
       if (tecnico.rol !== "TECNICO" && tecnico.rol !== "ADMIN") {
         return NextResponse.json({ error: "El usuario seleccionado no tiene rol de técnico" }, { status: 400 })
+      }
+      // Only the branch that handles the order assigns its technicians; the one already
+      // assigned stays valid even if it is from another branch (legacy), so editing any
+      // other field of such an order keeps working.
+      if (!tecnicoAsignable(tecnico, sucursalQueAtiende(orden), orden.tecnico_id ?? null)) {
+        return NextResponse.json({ error: MENSAJE_TECNICO_OTRA_SUCURSAL }, { status: 400 })
       }
       porcentajeComisionFromTecnico = Number(tecnico.porcentaje_comision ?? 0)
       costoHoraFromTecnico = Number(tecnico.costo_hora ?? 0)
@@ -318,24 +332,52 @@ export async function PUT(
     if (data.estado !== undefined) updateData.estado = data.estado
     if (data.tecnicoId !== undefined) {
       updateData.tecnico_id = data.tecnicoId
-      // Al (re)asignar técnico, copiar su % por defecto si no vino explícito
-      if (data.tecnicoId && data.porcentajeComision === undefined) {
-        updateData.porcentaje_comision = porcentajeComisionFromTecnico
-      }
-      // Al desasignar, limpiar snapshot
-      if (!data.tecnicoId && data.porcentajeComision === undefined) {
-        updateData.porcentaje_comision = null
-      }
-      // Snapshot labor rate on assign; clear on de-assign
-      if (data.tecnicoId) {
-        updateData.costo_hora_snapshot = costoHoraFromTecnico
-      } else {
-        updateData.costo_hora_snapshot = null
+      // Snapshots only when the technician actually changes: re-sending the current one must
+      // not overwrite a rate that was already settled (or paid) with the user's current one.
+      if (cambiaTecnico) {
+        // Al (re)asignar técnico, copiar su % por defecto si no vino explícito
+        if (data.tecnicoId && data.porcentajeComision === undefined) {
+          updateData.porcentaje_comision = porcentajeComisionFromTecnico
+        }
+        // Al desasignar, limpiar snapshot
+        if (!data.tecnicoId && data.porcentajeComision === undefined) {
+          updateData.porcentaje_comision = null
+        }
+        // Snapshot labor rate on assign; clear on de-assign
+        if (data.tecnicoId) {
+          updateData.costo_hora_snapshot = costoHoraFromTecnico
+        } else {
+          updateData.costo_hora_snapshot = null
+        }
       }
     }
     if (data.porcentajeComision !== undefined) updateData.porcentaje_comision = data.porcentajeComision
     if (data.presupuesto !== undefined) updateData.presupuesto = data.presupuesto
-    if (data.costoFinal !== undefined) {
+    // Reenviar el costo final que la orden ya tiene no es un cambio: no se valida
+    // ni se escribe (un formulario que manda todos los campos no debe chocar con
+    // el bloqueo de estados cerrados de abajo).
+    const costoFinalActual = orden.costo_final == null ? null : Number(orden.costo_final)
+    const cambiaCostoFinal = data.costoFinal !== undefined && (data.costoFinal ?? null) !== costoFinalActual
+
+    // En una orden entregada o cancelada el monto está cerrado: el saldo ya se
+    // cargó a cuenta corriente y la comisión se calculó sobre él. Cambiarlo acá
+    // los desalinea sin asiento. Se mira el estado resultante para no trabar la
+    // reactivación de una cancelada (CANCELADO -> RECIBIDO) en el mismo pedido.
+    const estadoResultante = (data.estado ?? orden.estado) as EstadoOrden
+    if (
+      cambiaCostoFinal &&
+      ESTADOS_MONTO_CERRADO.includes(orden.estado) &&
+      ESTADOS_MONTO_CERRADO.includes(estadoResultante)
+    ) {
+      return NextResponse.json(
+        {
+          error: `No se puede cambiar el costo final de una orden en estado "${ESTADO_LABELS[orden.estado as keyof typeof ESTADO_LABELS] ?? orden.estado}". Para corregir lo cobrado hay que usar una nota de crédito o una devolución.`,
+        },
+        { status: 409 }
+      )
+    }
+
+    if (cambiaCostoFinal && data.costoFinal !== undefined) {
       // costo_final es la base de la comisión del técnico (migración 119) y del
       // saldo que se carga a cuenta corriente al entregar. Las columnas DECIMAL
       // llegan como string desde supabase-js, así que se coercionan con Number()
@@ -595,7 +637,7 @@ export async function PUT(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0].message },
         { status: 400 }
       )
     }
@@ -612,10 +654,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId, userId, role } = autenticado
     if (error) return error
 
-    // Solo admins pueden eliminar órdenes
+    const { id } = await params
+
+    // Solo admins pueden eliminar órdenes. Va primero y sin leer nada: quien no es admin
+    // recibe la misma respuesta para cualquier id, así que no dice nada de la orden.
     if (role !== "ADMIN") {
       return NextResponse.json(
         { error: "Solo administradores pueden eliminar órdenes" },
@@ -623,22 +669,12 @@ export async function DELETE(
       )
     }
 
-    const { id } = await params
-
-    // Verificar que la orden existe y pertenece a la organización
-    const { data: orden, error: fetchError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id, numero_orden, estado")
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (fetchError || !orden) {
-      return NextResponse.json(
-        { error: "Orden no encontrada" },
-        { status: 404 }
-      )
-    }
+    // Verificar que la orden existe y pertenece a la organización (un admin alcanza toda la org)
+    const cargada = await cargarOrdenEnAlcance(id, actorDeSesion(autenticado), "ver", {
+      select: "id, numero_orden, estado",
+    })
+    if ("error" in cargada) return cargada.error
+    const { orden } = cargada
 
     // Eliminar la orden (las relaciones se eliminan en cascada por la DB)
     const { error: deleteError } = await supabaseAdmin

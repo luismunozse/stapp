@@ -9,7 +9,7 @@
  * Source of truth verified against:
  *   - components/ordenes/* , components/tecnicos/* , components/caja/*
  *   - app/(auth)/login/page.tsx , app/(dashboard)/dashboard/page.tsx
- *   - lib/orden-state-machine.ts , middleware.ts
+ *   - lib/orden-state-machine.ts , proxy.ts
  */
 
 export const ROUTES = {
@@ -41,7 +41,7 @@ export const ROUTES = {
   perfil: "/perfil",
 } as const
 
-/** Route guards as enforced by middleware.ts. */
+/** Route guards as enforced by proxy.ts. */
 export const ROUTE_GUARDS = {
   adminOnly: ["/tecnicos", "/vendedores", "/configuracion", "/emails", "/facturacion", "/inventario", "/finanzas"],
   adminOrVendedor: ["/ventas", "/pos", "/reportes", "/proveedores"],

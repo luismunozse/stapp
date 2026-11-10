@@ -400,6 +400,7 @@ export function Cabecera({
   numero,
   lineasDerecha = [],
   letterBox,
+  leyendaCaja = LEYENDA_NO_FISCAL,
   wrap = true,
   children,
 }: {
@@ -413,6 +414,8 @@ export function Cabecera({
   lineasDerecha?: string[]
   /** Present renders the straddling box with this letter plus the centered legend. */
   letterBox?: string
+  /** Text under the letter box. Defaults to the not-fiscal legend; a fiscal document passes its ARCA code ("COD. 006"). */
+  leyendaCaja?: string
   /** false keeps the whole frame on one page (the remito's contract). */
   wrap?: boolean
   children?: React.ReactNode
@@ -517,7 +520,7 @@ export function Cabecera({
             </View>
           </View>
           <View style={estilosShell.legendWrap}>
-            <Text style={estilosShell.legendText}>{LEYENDA_NO_FISCAL}</Text>
+            <Text style={estilosShell.legendText}>{leyendaCaja}</Text>
           </View>
         </>
       ) : null}

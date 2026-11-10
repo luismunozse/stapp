@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -20,9 +20,17 @@ import { toast } from "sonner"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { EmptyState } from "@/components/ui/empty-state"
+import { AnularPagoDialog } from "@/components/comisiones/anular-pago-dialog"
+import { commissionKindLabel, type CommissionBaseKind, type CommissionKind, type CommissionRole } from "@/lib/commissions/types"
+import { orderBaseBreakdown, type BreakdownLine } from "@/lib/commissions/breakdown"
+import { round2 } from "@/lib/precios"
 
 interface Item {
-  ordenId: string
+  clave: string
+  ordenId: string | null
+  rol: string
+  tipo: CommissionKind
+  pagoId: string | null
   tecnicoId: string
   tecnicoNombre: string
   codigoOrden: string | null
@@ -33,10 +41,24 @@ interface Item {
   costoFinal: number
   costoRepuestos: number
   ganancia: number
+  // What the base was taken from (optional: older payloads omit them).
+  montoOrden?: number | null
+  baseTipo?: CommissionBaseKind | null
   porcentajeComision: number
   montoComision: number
   comisionPagada: boolean
   fechaPagoComision: string | null
+}
+
+function breakdownOf(i: Item): BreakdownLine[] {
+  return orderBaseBreakdown({
+    tipo: i.tipo,
+    pagado: i.comisionPagada,
+    baseTipo: i.baseTipo,
+    documentoTotal: i.costoFinal,
+    documentoMonto: i.montoOrden,
+    documentoCostoRepuestos: i.costoRepuestos,
+  })
 }
 
 interface Resumen {
@@ -76,13 +98,19 @@ function rangoSemanaActual() {
   return { desde: toISODate(lunes), hasta: toISODate(domingo) }
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
+const fetcher = async (url: string) => {
+  const r = await fetch(url)
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json()
+}
 
 interface ComisionesViewProps {
   tecnicoIdFijo?: string
+  rol?: Extract<CommissionRole, "TECNICO" | "RECEPCION">
 }
 
-export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
+export function ComisionesView({ tecnicoIdFijo, rol = "TECNICO" }: ComisionesViewProps = {}) {
+  const esRecepcion = rol === "RECEPCION"
   const { formatPrice, formatDate } = useCurrency()
   const { confirm } = useModal()
 
@@ -93,21 +121,24 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
   const [hasta, setHasta] = useState(semana.hasta)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [paying, setPaying] = useState(false)
+  const [anular, setAnular] = useState<{ pagoId: string | null; fecha: string | null } | null>(null)
 
-  const { data: tecnicos = [] } = useSWR<Tecnico[]>(
-    tecnicoIdFijo ? null : "/api/tecnicos",
+  // Reception can be earned by any staff role, so its people come from all operators.
+  const { data: operadores = [] } = useSWR<Tecnico[]>(
+    tecnicoIdFijo ? null : esRecepcion ? "/api/operadores" : "/api/tecnicos",
     fetcher
   )
 
   const effectiveTecnicoId = tecnicoIdFijo || tecnicoId
 
   const qs = new URLSearchParams()
+  qs.set("rol", rol)
   if (effectiveTecnicoId && effectiveTecnicoId !== "all") qs.set("tecnicoId", effectiveTecnicoId)
   if (desde) qs.set("desde", desde)
   if (hasta) qs.set("hasta", hasta + "T23:59:59")
   if (soloPendientes) qs.set("soloPendientes", "true")
 
-  const { data, isLoading, mutate } = useSWR<ApiResp>(
+  const { data, isLoading, error, mutate } = useSWR<ApiResp>(
     `/api/comisiones?${qs.toString()}`,
     fetcher,
     { revalidateOnFocus: false }
@@ -120,7 +151,27 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
   const items = data?.items || []
   const resumen = data?.resumen || []
 
-  const pendientesIds = items.filter((i) => !i.comisionPagada).map((i) => i.ordenId)
+  // /api/operadores only lists active people of the current sucursal, but a removed
+  // receiver can still hold pending rows. Remember everyone seen in the data so they
+  // stay selectable, including after the filter narrows the data to them.
+  const seenPeople = useRef(new Map<string, string>())
+  if (esRecepcion) {
+    for (const i of items) seenPeople.current.set(i.tecnicoId, i.tecnicoNombre)
+    for (const r of resumen) seenPeople.current.set(r.tecnicoId, r.tecnicoNombre)
+  }
+  const tecnicos = useMemo(() => {
+    if (!esRecepcion) return operadores
+    const byId = new Map<string, Tecnico>()
+    for (const o of operadores) byId.set(o.id, o)
+    for (const [id, nombre] of seenPeople.current) if (!byId.has(id)) byId.set(id, { id, nombre })
+    return Array.from(byId.values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
+    // seenPeople is a ref: it is refreshed on every render that brings new data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [esRecepcion, operadores, data])
+
+  // A zero-amount row can be listed but never paid.
+  const pagable = (i: Item) => !i.comisionPagada && i.montoComision !== 0
+  const pendientesIds = items.filter(pagable).map((i) => i.clave)
   const allSelected =
     pendientesIds.length > 0 && pendientesIds.every((id) => selected.has(id))
 
@@ -132,22 +183,32 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
     }
   }
 
-  const toggleOne = (id: string) => {
+  const toggleOne = (clave: string) => {
     const next = new Set(selected)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
+    if (next.has(clave)) next.delete(clave)
+    else next.add(clave)
     setSelected(next)
   }
 
-  const totalSeleccionado = items
-    .filter((i) => selected.has(i.ordenId))
-    .reduce((acc, i) => acc + i.montoComision, 0)
+  const selectedItems = items.filter((i) => selected.has(i.clave) && pagable(i))
+
+  const selectLabel = (i: Item) => {
+    const kind = commissionKindLabel(i.tipo, "ORDEN")
+    const doc = i.codigoOrden || (i.numeroOrden != null ? `#${i.numeroOrden}` : "")
+    return `Seleccionar comisión ${doc}${kind ? (doc ? ` (${kind})` : kind) : ""}`.trim()
+  }
+
+  const totalSeleccionado = round2(selectedItems.reduce((acc, i) => acc + i.montoComision, 0))
+  const mixedPeople = new Set(selectedItems.map((i) => i.tecnicoId)).size > 1
 
   const handlePagar = async () => {
-    if (selected.size === 0) return
+    if (selectedItems.length === 0 || mixedPeople) return
     const ok = await confirm({
       title: "Pagar comisiones",
-      description: `¿Marcar ${selected.size} órden(es) como comisión pagada? Total: ${formatPrice(totalSeleccionado)}`,
+      description:
+        totalSeleccionado < 0
+          ? `El total es negativo (${formatPrice(totalSeleccionado)}): se registra como descuento a favor del taller. ¿Confirmás?`
+          : `¿Marcar ${selectedItems.length} comisión(es) como pagadas? Total: ${formatPrice(totalSeleccionado)}`,
       confirmText: "Confirmar pago",
       variant: "info",
     })
@@ -158,39 +219,48 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
       const res = await fetch("/api/comisiones/pagar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ordenIds: Array.from(selected) }),
+        body: JSON.stringify({
+          beneficiarioId: selectedItems[0].tecnicoId,
+          filas: selectedItems.map((r) => ({ clave: r.clave, monto: r.montoComision })),
+        }),
       })
-      if (!res.ok) throw new Error("Error al pagar")
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        toast.error(body?.error ?? "No se pudo marcar como pagadas")
+        mutate()
+        return
+      }
       toast.success("Comisiones marcadas como pagadas")
       setSelected(new Set())
       mutate()
-    } catch (err) {
+    } catch {
       toast.error("No se pudo marcar como pagadas")
     } finally {
       setPaying(false)
     }
   }
 
-  const handleRevertir = async (ordenId: string) => {
-    const ok = await confirm({
-      title: "Revertir pago",
-      description: "¿Marcar esta comisión como pendiente nuevamente?",
-      confirmText: "Revertir",
-      variant: "danger",
-    })
-    if (!ok) return
-    try {
-      const res = await fetch("/api/comisiones/pagar", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ordenIds: [ordenId] }),
-      })
-      if (!res.ok) throw new Error()
-      toast.success("Revertido")
-      mutate()
-    } catch {
-      toast.error("No se pudo revertir")
-    }
+  const handleAnulado = () => {
+    setSelected(new Set())
+    mutate()
+  }
+
+  const orderLink = (i: Item, className: string) =>
+    i.ordenId ? (
+      <Link href={`/ordenes/${i.ordenId}`} className={className}>
+        {i.codigoOrden || `#${i.numeroOrden}`}
+      </Link>
+    ) : (
+      <span className="text-muted-foreground">—</span>
+    )
+
+  const kindBadge = (i: Item) => {
+    const label = commissionKindLabel(i.tipo, "ORDEN")
+    return label ? (
+      <Badge variant="secondary" className="text-[10px] shrink-0">
+        {label}
+      </Badge>
+    ) : null
   }
 
   const setSemanaActual = () => {
@@ -207,7 +277,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
           <div className={`grid gap-3 sm:grid-cols-2 ${tecnicoIdFijo ? "lg:grid-cols-4" : "lg:grid-cols-5"}`}>
             {!tecnicoIdFijo && (
               <div className="space-y-1">
-                <Label className="text-xs">Técnico</Label>
+                <Label className="text-xs">{esRecepcion ? "Persona" : "Técnico"}</Label>
                 <Select value={tecnicoId} onValueChange={setTecnicoId}>
                   <SelectTrigger>
                     <SelectValue />
@@ -269,7 +339,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                   <span>{r.totalOrdenes}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Ganancia</span>
+                  <span className="text-muted-foreground">Base</span>
                   <span>{formatPrice(r.totalGanancia)}</span>
                 </div>
                 <div className="flex justify-between font-medium">
@@ -289,13 +359,18 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
       )}
 
       {/* Acciones bulk */}
-      {selected.size > 0 && (
+      {selectedItems.length > 0 && (
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 p-3 rounded-md bg-info-50 border border-info/30">
           <div className="text-sm text-info-700">
-            <strong>{selected.size}</strong> seleccionada(s) ·{" "}
+            <strong>{selectedItems.length}</strong> seleccionada(s) ·{" "}
             Total: <strong>{formatPrice(totalSeleccionado)}</strong>
+            {mixedPeople && (
+              <div className="text-xs mt-0.5">
+                Elegí comisiones de una sola persona para pagarlas juntas.
+              </div>
+            )}
           </div>
-          <Button onClick={handlePagar} disabled={paying}>
+          <Button onClick={handlePagar} disabled={paying || mixedPeople}>
             {paying ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
@@ -311,11 +386,19 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="py-10 text-center text-muted-foreground">Cargando…</div>
+          ) : error ? (
+            <div role="alert" className="py-10 text-center text-sm text-destructive">
+              No se pudieron cargar las comisiones.
+            </div>
           ) : items.length === 0 ? (
             <EmptyState
               icon={Percent}
-              title="Sin comisiones"
-              description="Ajustá el período o los filtros."
+              title={esRecepcion ? "Sin comisiones de recepción" : "Sin comisiones"}
+              description={
+                esRecepcion
+                  ? "Aparecen cuando una orden recibida con porcentaje de recepción cumple la regla del taller. El porcentaje se configura en Configuración › Comisiones."
+                  : "Ajustá el período o los filtros."
+              }
               variant="search"
             />
           ) : (
@@ -329,17 +412,19 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                     <input
                       type="checkbox"
                       className="h-4 w-4 accent-primary"
+                      aria-label="Seleccionar todas las pendientes"
                       checked={allSelected}
                       onChange={toggleAll}
                       disabled={pendientesIds.length === 0}
                     />
                   </th>
                   <th className="p-2 text-left">Orden</th>
-                  <th className="p-2 text-left">Técnico</th>
+                  <th className="p-2 text-left">{esRecepcion ? "Persona" : "Técnico"}</th>
                   <th className="p-2 text-left">Dispositivo</th>
                   <th className="p-2 text-right">Costo final</th>
+                  <th className="p-2 text-right">Desc./NC</th>
                   <th className="p-2 text-right">Repuestos</th>
-                  <th className="p-2 text-right">Ganancia</th>
+                  <th className="p-2 text-right">Base</th>
                   <th className="p-2 text-right">%</th>
                   <th className="p-2 text-right">Comisión</th>
                   <th className="p-2 text-left">Completado</th>
@@ -347,29 +432,37 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                 </tr>
               </thead>
               <tbody>
-                {items.map((i) => (
-                  <tr key={i.ordenId} className="border-t hover:bg-muted/30">
+                {items.map((i) => {
+                  const lines = breakdownOf(i)
+                  const cell = (key: BreakdownLine["key"]) => {
+                    const line = lines.find((l) => l.key === key)
+                    return line ? formatPrice(line.amount) : "—"
+                  }
+                  return (
+                  <tr key={i.clave} className="border-t hover:bg-muted/30">
                     <td className="p-2">
                       {!i.comisionPagada && (
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-primary"
-                          checked={selected.has(i.ordenId)}
-                          onChange={() => toggleOne(i.ordenId)}
+                          aria-label={selectLabel(i)}
+                          checked={selected.has(i.clave)}
+                          onChange={() => toggleOne(i.clave)}
+                          disabled={!pagable(i)}
                         />
                       )}
                     </td>
                     <td className="p-2">
-                      <Link href={`/ordenes/${i.ordenId}`} className="text-primary hover:underline">
-                        {i.codigoOrden || `#${i.numeroOrden}`}
-                      </Link>
+                      <div className="flex items-center gap-1.5">
+                        {orderLink(i, "text-primary hover:underline")}
+                        {kindBadge(i)}
+                      </div>
                     </td>
                     <td className="p-2">{i.tecnicoNombre}</td>
                     <td className="p-2">{i.dispositivo}</td>
-                    <td className="p-2 text-right">{formatPrice(i.costoFinal)}</td>
-                    <td className="p-2 text-right text-muted-foreground">
-                      {formatPrice(i.costoRepuestos)}
-                    </td>
+                    <td className="p-2 text-right">{cell("costoFinal")}</td>
+                    <td className="p-2 text-right text-muted-foreground">{cell("descuentos")}</td>
+                    <td className="p-2 text-right text-muted-foreground">{cell("repuestos")}</td>
                     <td className="p-2 text-right">{formatPrice(i.ganancia)}</td>
                     <td className="p-2 text-right">
                       <Badge variant="outline" className="text-xs">
@@ -384,7 +477,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                     <td className="p-2">
                       {i.comisionPagada ? (
                         <button
-                          onClick={() => handleRevertir(i.ordenId)}
+                          onClick={() => setAnular({ pagoId: i.pagoId, fecha: i.fechaPagoComision })}
                           className="inline-flex items-center gap-1 text-xs text-success-700 dark:text-success-500 hover:underline"
                         >
                           <CheckCircle2 className="h-3 w-3" />
@@ -395,7 +488,8 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                       )}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
             </div>
@@ -403,24 +497,25 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
             {/* Mobile: cards */}
             <div className="sm:hidden divide-y">
               {items.map((i) => (
-                <div key={i.ordenId} className="p-3 space-y-2">
+                <div key={i.clave} className="p-3 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                       {!i.comisionPagada && (
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-primary shrink-0"
-                          checked={selected.has(i.ordenId)}
-                          onChange={() => toggleOne(i.ordenId)}
+                          aria-label={selectLabel(i)}
+                          checked={selected.has(i.clave)}
+                          onChange={() => toggleOne(i.clave)}
+                          disabled={!pagable(i)}
                         />
                       )}
-                      <Link href={`/ordenes/${i.ordenId}`} className="text-primary hover:underline font-medium truncate">
-                        {i.codigoOrden || `#${i.numeroOrden}`}
-                      </Link>
+                      {orderLink(i, "text-primary hover:underline font-medium truncate")}
+                      {kindBadge(i)}
                     </div>
                     {i.comisionPagada ? (
                       <button
-                        onClick={() => handleRevertir(i.ordenId)}
+                        onClick={() => setAnular({ pagoId: i.pagoId, fecha: i.fechaPagoComision })}
                         className="inline-flex items-center gap-1 text-xs text-success-700 dark:text-success-500 hover:underline shrink-0"
                       >
                         <CheckCircle2 className="h-3 w-3" />
@@ -435,8 +530,12 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                   </div>
                   <div className="flex items-end justify-between gap-2">
                     <div className="text-xs text-muted-foreground space-y-0.5">
-                      <div>Costo {formatPrice(i.costoFinal)} · Rep. {formatPrice(i.costoRepuestos)}</div>
-                      <div>Ganancia {formatPrice(i.ganancia)}{i.fechaCompletado ? ` · ${formatDate(i.fechaCompletado)}` : ""}</div>
+                      {breakdownOf(i).length > 0 && (
+                        <div>
+                          {breakdownOf(i).map((l) => `${l.shortLabel} ${formatPrice(l.amount)}`).join(" · ")}
+                        </div>
+                      )}
+                      <div>Base {formatPrice(i.ganancia)}{i.fechaCompletado ? ` · ${formatDate(i.fechaCompletado)}` : ""}</div>
                     </div>
                     <div className="text-right shrink-0">
                       <Badge variant="outline" className="text-[10px] mb-1">
@@ -453,6 +552,17 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
           )}
         </CardContent>
       </Card>
+
+      <AnularPagoDialog
+        open={anular !== null}
+        onOpenChange={(o) => {
+          if (!o) setAnular(null)
+        }}
+        pagoId={anular?.pagoId ?? null}
+        fechaPago={anular?.fecha ?? null}
+        endpoint="/api/comisiones/pagar"
+        onAnulado={handleAnulado}
+      />
     </div>
   )
 }

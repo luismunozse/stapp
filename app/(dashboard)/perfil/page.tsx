@@ -160,20 +160,22 @@ export default function PerfilPage() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="general" className="gap-2">
-            <User className="h-4 w-4" />
-            General
-          </TabsTrigger>
-          <TabsTrigger value="seguridad" className="gap-2">
-            <Shield className="h-4 w-4" />
-            Seguridad
-          </TabsTrigger>
-          <TabsTrigger value="notificaciones" className="gap-2">
-            <Bell className="h-4 w-4" />
-            Notificaciones
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto">
+          <TabsList className="w-auto min-w-full sm:min-w-0">
+            <TabsTrigger value="general" className="gap-2">
+              <User className="h-4 w-4" />
+              General
+            </TabsTrigger>
+            <TabsTrigger value="seguridad" className="gap-2">
+              <Shield className="h-4 w-4" />
+              Seguridad
+            </TabsTrigger>
+            <TabsTrigger value="notificaciones" className="gap-2">
+              <Bell className="h-4 w-4" />
+              Notificaciones
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="general" className="space-y-4 mt-4">
           {/* Avatar */}

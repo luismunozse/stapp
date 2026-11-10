@@ -15,7 +15,6 @@ const DB_VERSION = 2
 
 // Assets estáticos para cachear inmediatamente
 const STATIC_ASSETS = [
-  '/logo.png',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
@@ -127,7 +126,11 @@ self.addEventListener('install', (event) => {
   self.skipWaiting()
   event.waitUntil(
     caches.open(STATIC_CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS)
+      // Cada asset se cachea por separado: addAll es atómico, así que un solo
+      // 404 (ej. un archivo borrado de public/) hacía fallar el install, el SW
+      // nunca se activaba y se caían push y offline. Un asset faltante ya no
+      // puede impedir que el SW se instale.
+      return Promise.allSettled(STATIC_ASSETS.map((url) => cache.add(url)))
     })
   )
 })

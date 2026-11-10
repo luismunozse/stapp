@@ -287,7 +287,7 @@ describe("PUT /api/ordenes/[id] - Campos Requeridos", () => {
   it("permite EN_REPARACION si técnico y costoFinal se envían en la misma request", async () => {
     mockAuthSuccess()
 
-    const mockOrden = createMockOrden({ estado: "APROBADO", presupuesto: 5000, costo_final: null, tecnico_id: null })
+    const mockOrden = createMockOrden({ estado: "APROBADO", presupuesto: 5000, costo_final: null, tecnico_id: null, sucursal_id: "suc-1" })
     const mockUpdated = { ...mockOrden, estado: "EN_REPARACION", tecnico_id: "t1", costo_final: 5000 }
 
     let callCount = 0
@@ -298,7 +298,7 @@ describe("PUT /api/ordenes/[id] - Campos Requeridos", () => {
       return Promise.resolve({ data: mockUpdated, error: null })
     })
 
-    const usersChain = createChainMock({ id: "t1", rol: "TECNICO" })
+    const usersChain = createChainMock({ id: "t1", rol: "TECNICO", sucursal_id: "suc-1" })
     mockSupabaseFrom({
       ordenes_servicio: chain,
       orden_eventos: createChainMock(null),
@@ -392,6 +392,50 @@ describe("PUT /api/ordenes/[id] - Campos Requeridos", () => {
     const { status } = await parseResponse(response)
 
     expect(status).toBe(200)
+  })
+
+  it("guarda fechaPrometida YYYY-MM-DD anclada a mediodía UTC", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrden({ estado: "RECIBIDO" })
+    let callCount = 0
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockImplementation(() => {
+      callCount++
+      return Promise.resolve({ data: mockOrden, error: null })
+    })
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    const response = await PUT(
+      createPutRequest({ fechaPrometida: "2030-03-15" }),
+      createParams("o1")
+    )
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(200)
+    expect(chain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ fecha_prometida: "2030-03-15T12:00:00.000Z" })
+    )
+  })
+
+  it("fechaPrometida null limpia la fecha", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrden({ estado: "RECIBIDO", fecha_prometida: "2030-03-15T12:00:00.000Z" })
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockResolvedValue({ data: mockOrden, error: null })
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    const response = await PUT(
+      createPutRequest({ fechaPrometida: null }),
+      createParams("o1")
+    )
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(200)
+    expect(chain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ fecha_prometida: null })
+    )
   })
 
   it("rechaza presupuesto negativo", async () => {
@@ -586,7 +630,7 @@ describe("PUT /api/ordenes/[id] - Guard costo_final (cobros y estado)", () => {
     expect(chain.update).not.toHaveBeenCalled()
   })
 
-  it("rechaza costoFinal 0 en una orden ya ENTREGADA", async () => {
+  it("rechaza costoFinal 0 en una orden ya ENTREGADA (monto cerrado)", async () => {
     mockAuthSuccess()
 
     const mockOrden = createMockOrden({
@@ -604,7 +648,8 @@ describe("PUT /api/ordenes/[id] - Guard costo_final (cobros y estado)", () => {
     )
     const { status, body } = await parseResponse(response)
 
-    expect(status).toBe(400)
+    // Una orden entregada tiene el monto cerrado: cualquier cambio es 409.
+    expect(status).toBe(409)
     expect(chain.update).not.toHaveBeenCalled()
   })
 
@@ -712,5 +757,79 @@ describe("PUT /api/ordenes/[id] - Guard costo_final (cobros y estado)", () => {
 
     expect(diffObjects).toHaveBeenCalled()
     expect(vi.mocked(diffObjects).mock.calls[0][0]).not.toHaveProperty("notas_credito")
+  })
+})
+
+describe("PUT /api/ordenes/[id] - costo final en estados cerrados", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  for (const estado of ["ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO", "CANCELADO"]) {
+    it(`rechaza cambiar costoFinal en una orden ${estado} (409)`, async () => {
+      mockAuthSuccess()
+
+      const mockOrden = createMockOrden({
+        estado,
+        costo_final: "25000",
+        total_cobrado: "0",
+        descuento_cobro: "0",
+      })
+      const chain = createChainMock(mockOrden)
+      mockSupabaseFrom({ ordenes_servicio: chain })
+
+      const response = await PUT(createPutRequest({ costoFinal: 30000 }), createParams("o1"))
+      const { status, body } = await parseResponse(response)
+
+      expect(status).toBe(409)
+      expect(body.error).toContain("costo final")
+      expect(chain.update).not.toHaveBeenCalled()
+    })
+  }
+
+  it("reenviar el mismo costoFinal en una orden ENTREGADA no es un cambio y no se rechaza", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrden({
+      estado: "ENTREGADO",
+      costo_final: "25000",
+      total_cobrado: "0",
+      descuento_cobro: "0",
+    })
+
+    let callCount = 0
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return Promise.resolve({ data: mockOrden, error: null })
+      return Promise.resolve({ data: { ...mockOrden, observaciones: "x" }, error: null })
+    })
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    const response = await PUT(
+      createPutRequest({ costoFinal: 25000, observaciones: "x" }),
+      createParams("o1")
+    )
+
+    expect((await parseResponse(response)).status).toBe(200)
+    expect(chain.update.mock.calls[0][0]).not.toHaveProperty("costo_final")
+  })
+
+  it("en una orden ENTREGADA se pueden seguir editando campos que no son montos", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrden({ estado: "ENTREGADO", costo_final: "25000" })
+    let callCount = 0
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return Promise.resolve({ data: mockOrden, error: null })
+      return Promise.resolve({ data: { ...mockOrden, notas_internas: "nota" }, error: null })
+    })
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    const response = await PUT(createPutRequest({ notasInternas: "nota" }), createParams("o1"))
+
+    expect((await parseResponse(response)).status).toBe(200)
   })
 })

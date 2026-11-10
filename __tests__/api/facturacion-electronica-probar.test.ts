@@ -47,6 +47,7 @@ import { POST } from "@/app/api/facturacion-electronica/probar/route"
 const FILA_DELEGADA = {
   organization_id: "org-1",
   provider: "arca_delegado",
+  estado: "conectado",
   cuit: "30710955057",
   punto_venta: 1,
   condicion_fiscal: "RESPONSABLE_INSCRIPTO",
@@ -79,6 +80,23 @@ describe("POST /api/facturacion-electronica/probar", () => {
     const { status } = await parseResponse(await POST())
 
     expect(status).toBe(400)
+  })
+
+  /**
+   * Una delegación sin verificar no consulta a ARCA: si lo hiciera, la
+   * respuesta revelaría si ese CUIT (que puede ser de otro) delegó en STApp.
+   */
+  it("400 sin consultar a ARCA cuando la delegación está pendiente de verificación", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    mockSupabaseFrom({
+      facturacion_credenciales: createChainMock({ ...FILA_DELEGADA, estado: "pendiente_verificacion" }),
+    })
+
+    const { status, body } = await parseResponse(await POST())
+
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/verificación/i)
+    expect(arcaDirectProvider.probarConexion).not.toHaveBeenCalled()
   })
 
   it("200 con los puntos de venta cuando la delegación funciona", async () => {

@@ -166,7 +166,50 @@ describe("GET /api/clientes/[id]/deuda-sucursal", () => {
     const { status, body } = await parseResponse(response)
 
     expect(status).toBe(200)
-    expect(body).toEqual({ deudaTotal: 150.5, deudaFiado: 120.5, deudaOrdenes: 30 })
+    expect(body).toEqual({ deudaTotal: 150.5, deudaFiado: 120.5, deudaOrdenes: 30, porSucursal: false })
+  })
+
+  describe("porSucursal", () => {
+    function setup(opts: { role: string; sucursalId: string | null; sucursales: unknown[] | null }) {
+      mockAuthWithSucursal({ role: opts.role, sucursalId: opts.sucursalId })
+      mockCookie(null)
+      vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+        if (table === "clientes") return createChainMock({ id: "cliente-1" }) as any
+        if (table === "sucursales") {
+          return createChainMock(opts.sucursales, opts.sucursales ? null : { message: "boom" }) as any
+        }
+        return createChainMock(null) as any
+      })
+      vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+        data: [{ deuda_fiado: 0, deuda_ordenes: 0, deuda_total: 0 }],
+        error: null,
+      } as any)
+    }
+
+    it("is true when scoped to a sucursal and the org has several active ones", async () => {
+      setup({ role: "VENDEDOR", sucursalId: "suc-A", sucursales: [{ id: "suc-A" }, { id: "suc-B" }] })
+      const { body } = await parseResponse(await callRoute())
+      expect(body.porSucursal).toBe(true)
+    })
+
+    it("is false when scoped but the org has a single active sucursal", async () => {
+      setup({ role: "VENDEDOR", sucursalId: "suc-A", sucursales: [{ id: "suc-A" }] })
+      const { body } = await parseResponse(await callRoute())
+      expect(body.porSucursal).toBe(false)
+    })
+
+    it("is false when viewing all sucursales", async () => {
+      setup({ role: "ADMIN", sucursalId: null, sucursales: [{ id: "a" }, { id: "b" }] })
+      const { body } = await parseResponse(await callRoute())
+      expect(body.porSucursal).toBe(false)
+    })
+
+    it("is false (caption hidden) when the sucursal count lookup fails", async () => {
+      setup({ role: "VENDEDOR", sucursalId: "suc-A", sucursales: null })
+      const { status, body } = await parseResponse(await callRoute())
+      expect(status).toBe(200)
+      expect(body.porSucursal).toBe(false)
+    })
   })
 
   it("returns 500 when the RPC call fails", async () => {

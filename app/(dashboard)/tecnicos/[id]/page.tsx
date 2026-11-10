@@ -42,6 +42,7 @@ interface TecnicoDetalle {
   fechaIngresoTecnico?: string | null
   avatarUrl?: string | null
   porcentajeComision?: number
+  porcentajeComisionRecepcion?: number | null
   costoHora?: number
   createdAt: string
   ordenesActivas: number
@@ -66,7 +67,7 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
   const isAdmin = role === "ADMIN"
   const isSelf = role === "TECNICO" && session?.user?.id === id
   const canView = isAdmin || isSelf
-  const { confirm, showError } = useModal()
+  const { confirm, showError, showSuccess } = useModal()
   const { timezone } = useCurrency()
   const [tecnico, setTecnico] = useState<TecnicoDetalle | null>(null)
   const [loading, setLoading] = useState(true)
@@ -142,7 +143,7 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
   const handleDelete = async () => {
     const confirmed = await confirm({
       title: "Eliminar Técnico",
-      description: "¿Estás seguro de eliminar este técnico? Esta acción no se puede deshacer.",
+      description: "¿Estás seguro de eliminar este técnico? Si tiene historial (órdenes, cobros o caja) quedará dado de baja: pierde el acceso y su historial se conserva. Si no tiene historial, se elimina.",
       confirmText: "Eliminar",
       cancelText: "Cancelar",
       variant: "danger",
@@ -154,6 +155,8 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
     try {
       const res = await fetch(`/api/tecnicos/${id}`, { method: "DELETE" })
       if (res.ok) {
+        const data = await res.json().catch(() => null)
+        if (data?.baja && data.message) await showSuccess(data.message)
         router.push("/tecnicos")
       } else {
         const data = await res.json()

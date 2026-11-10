@@ -2,16 +2,29 @@ import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, assertSucursalEnOrg } from "@/lib/sucursal"
+import { sucursalParaListaPersonal } from "@/lib/sucursal-personal"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import bcrypt from "bcryptjs"
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role, session } = await requireAuth()
     if (error) return error
 
-    const { data: tecnicos, error: dbError } = await supabaseAdmin
+    // `?sucursalId=` scopes the list to one branch (BM-4); without it the request's
+    // own scope applies. `?alcance=escritura` is what the order form sends: the branch
+    // the order will be created in. See sucursalParaListaPersonal for who may ask for what.
+    const { searchParams } = new URL(request.url)
+    const sucursalId = await sucursalParaListaPersonal({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+      organizationId: organizationId!,
+      sucursalSolicitada: searchParams.get("sucursalId"),
+      alcance: searchParams.get("alcance") === "escritura" ? "escritura" : "lectura",
+    })
+
+    let query = supabaseAdmin
       .from("users")
       .select(`
         id,
@@ -23,6 +36,9 @@ export async function GET() {
         avatar_url,
         fecha_ingreso_tecnico,
         porcentaje_comision,
+        porcentaje_comision_recepcion,
+        costo_hora,
+        sucursal_id,
         ordenes_servicio:ordenes_servicio!tecnico_id (
           id,
           estado
@@ -30,8 +46,12 @@ export async function GET() {
       `)
       .eq("rol", "TECNICO")
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .order("activo", { ascending: false })
       .order("nombre", { ascending: true })
+    if (sucursalId) query = query.eq("sucursal_id", sucursalId)
+
+    const { data: tecnicos, error: dbError } = await query
 
     if (dbError) {
       throw dbError
@@ -56,6 +76,15 @@ export async function GET() {
         avatarUrl: tecnico.avatar_url ?? null,
         fechaIngresoTecnico: tecnico.fecha_ingreso_tecnico ?? null,
         porcentajeComision: Number(tecnico.porcentaje_comision ?? 0),
+        // The reception rate and the hourly cost are admin-only: for other roles the properties are absent.
+        ...(role === "ADMIN"
+          ? {
+              costoHora: Number(tecnico.costo_hora ?? 0),
+              porcentajeComisionRecepcion:
+                tecnico.porcentaje_comision_recepcion == null ? null : Number(tecnico.porcentaje_comision_recepcion),
+            }
+          : {}),
+        sucursalId: tecnico.sucursal_id ?? null,
         ordenesActivas,
         ordenesCompletadas,
       }
@@ -92,18 +121,31 @@ export async function POST(request: Request) {
     const body = await request.json()
     const {
       nombre,
-      email,
+      email: rawEmail,
       password,
       porcentajeComision,
+      porcentajeComisionRecepcion,
       costoHora,
       telefono,
       especialidades,
       fechaIngresoTecnico,
     } = body
+    // Los logins buscan el email en minúsculas (PostgREST `.eq` es
+    // case-sensitive). Guardarlo tal cual lo tipeó el admin dejaba al técnico
+    // sin poder entrar con Google ni con password si usaba mayúsculas.
+    const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : rawEmail
 
-    // Si el form mandó una sucursal explícita y es válida para la org, usarla.
+    // An explicit branch is a request, not a hint: if it is not an active branch of
+    // the org it is rejected instead of silently falling back to the principal. The
+    // principal stays the fallback only when the body names no branch at all.
     const bodySucursalId = (body?.sucursalId ?? null) as string | null
-    if (bodySucursalId && (await assertSucursalEnOrg(bodySucursalId, organizationId!))) {
+    if (bodySucursalId) {
+      if (!(await assertSucursalEnOrg(bodySucursalId, organizationId!, { soloActiva: true }))) {
+        return NextResponse.json(
+          { error: "La sucursal elegida no existe o está inactiva." },
+          { status: 400 }
+        )
+      }
       sucursalId = bodySucursalId
     }
 
@@ -125,6 +167,20 @@ export async function POST(request: Request) {
     if (!Number.isFinite(porcentajeNum) || porcentajeNum < 0 || porcentajeNum > 100) {
       return NextResponse.json(
         { error: "El porcentaje de comisión debe estar entre 0 y 100" },
+        { status: 400 }
+      )
+    }
+
+    // null/absent: the shop default applies. A blank is never coerced to 0.
+    if (
+      porcentajeComisionRecepcion != null &&
+      (typeof porcentajeComisionRecepcion !== "number" ||
+        !Number.isFinite(porcentajeComisionRecepcion) ||
+        porcentajeComisionRecepcion < 0 ||
+        porcentajeComisionRecepcion > 100)
+    ) {
+      return NextResponse.json(
+        { error: "El porcentaje de recepción debe estar entre 0 y 100" },
         { status: 400 }
       )
     }
@@ -168,13 +224,14 @@ export async function POST(request: Request) {
         sucursal_id: sucursalId,
         email_verified: true,
         porcentaje_comision: porcentajeNum,
+        porcentaje_comision_recepcion: porcentajeComisionRecepcion ?? null,
         costo_hora: costoHoraNum,
         telefono: telefono || null,
         especialidades: especialidadesArr,
         fecha_ingreso_tecnico: fechaIngresoTecnico || null,
         activo: true,
       })
-      .select("id, nombre, email, porcentaje_comision, costo_hora, telefono, especialidades, fecha_ingreso_tecnico, activo")
+      .select("id, nombre, email, porcentaje_comision, porcentaje_comision_recepcion, costo_hora, telefono, especialidades, fecha_ingreso_tecnico, activo")
       .single()
 
     if (dbError) {

@@ -25,6 +25,7 @@ export async function GET() {
       .from("users")
       .select("id, nombre, email, rol, sucursal_id, activo, porcentaje_comision, created_at")
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       // ADMIN primero y despues alfabetico: la pantalla la abre un admin
       // buscando a alguien puntual, y quienes mandan van arriba.
       .order("rol", { ascending: true })

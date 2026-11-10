@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { eliminarPersonal } from "@/lib/usuarios/eliminar-personal"
+import { readCommissionRows } from "@/lib/commissions/rows"
+import { round2 } from "@/lib/precios"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
 
 const vendedorUpdateSchema = z.object({
   nombre: z.string().trim().min(1).optional(),
-  email: z.string().email("Email inválido").optional(),
+  email: z.string().trim().toLowerCase().email("Email inválido").optional(),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres").optional(),
   telefono: z.string().trim().optional().nullable(),
   activo: z.boolean().optional(),
@@ -14,6 +17,13 @@ const vendedorUpdateSchema = z.object({
     .number()
     .min(0, "La comisión debe ser mayor o igual a 0")
     .max(100, "La comisión no puede superar 100")
+    .optional(),
+  // null clears the rate (the shop default applies); absent leaves it unchanged.
+  porcentajeComisionRecepcion: z
+    .number({ error: "El porcentaje de recepción debe estar entre 0 y 100" })
+    .min(0, "El porcentaje de recepción debe estar entre 0 y 100")
+    .max(100, "El porcentaje de recepción debe estar entre 0 y 100")
+    .nullable()
     .optional(),
 })
 
@@ -32,11 +42,12 @@ export async function GET(
     const { data: vendedor, error: dbError } = await supabaseAdmin
       .from("users")
       .select(
-        "id, nombre, email, telefono, activo, porcentaje_comision, created_at"
+        "id, nombre, email, telefono, activo, porcentaje_comision, porcentaje_comision_recepcion, created_at"
       )
       .eq("id", id)
       .eq("rol", "VENDEDOR")
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (dbError || !vendedor) {
@@ -54,24 +65,19 @@ export async function GET(
         .eq("vendedor_id", id)
         .order("created_at", { ascending: false })
         .limit(HISTORIAL_LIMIT),
-      supabaseAdmin
-        .from("v_comisiones_ventas")
-        .select("monto_comision, comision_pagada")
-        .eq("organization_id", organizationId!)
-        .eq("vendedor_id", id),
+      // Every row of this seller (incl. post-payment adjustments) from the single definition.
+      readCommissionRows({ organizationId: organizationId!, roles: ["VENDEDOR"], beneficiarioId: id }),
     ])
 
     const statsRow = (statsRes.data || []).find((r: any) => r.vendedor_id === id)
     const ventasRecientes = ventasRes.data || []
-    const comisiones = comisionesRes.data || []
+    const comisiones = comisionesRes
 
-    const comisionDevengada = comisiones.reduce(
-      (sum: number, c: any) => sum + parseFloat(c.monto_comision || "0"),
-      0
-    )
-    const comisionPagada = comisiones
-      .filter((c: any) => c.comision_pagada)
-      .reduce((sum: number, c: any) => sum + parseFloat(c.monto_comision || "0"), 0)
+    const comisionDevengada = round2(comisiones.reduce((sum, c) => sum + c.monto, 0))
+    const comisionPagada = round2(comisiones.filter((c) => c.pagado).reduce((sum, c) => sum + c.monto, 0))
+    const comisionPendiente = round2(comisiones.reduce((sum, c) => sum + c.pendiente, 0))
+    // Unpaid rows that can actually be paid (a zero-amount row never can); the net total can be 0 with rows left.
+    const filasPendientes = comisiones.filter((c) => !c.pagado && c.monto !== 0).length
 
     return NextResponse.json({
       id: vendedor.id,
@@ -80,6 +86,8 @@ export async function GET(
       telefono: vendedor.telefono ?? null,
       activo: vendedor.activo !== false,
       porcentajeComision: Number(vendedor.porcentaje_comision ?? 0),
+      porcentajeComisionRecepcion:
+        vendedor.porcentaje_comision_recepcion == null ? null : Number(vendedor.porcentaje_comision_recepcion),
       createdAt: vendedor.created_at,
       ventasCompletadas: Number(statsRow?.ventas_completadas ?? 0),
       ventasTotal: Number(statsRow?.ventas_total ?? 0),
@@ -89,7 +97,8 @@ export async function GET(
         : null,
       comisionDevengada,
       comisionPagada,
-      comisionPendiente: comisionDevengada - comisionPagada,
+      comisionPendiente,
+      filasPendientes,
       ventas: ventasRecientes.map((v: any) => ({
         id: v.id,
         total: v.total,
@@ -125,6 +134,7 @@ export async function PUT(
       .eq("id", id)
       .eq("rol", "VENDEDOR")
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (fetchError || !vendedor) {
@@ -154,6 +164,9 @@ export async function PUT(
     if (data.telefono !== undefined) updateData.telefono = data.telefono?.trim() || null
     if (data.activo !== undefined) updateData.activo = data.activo
     if (data.porcentajeComision !== undefined) updateData.porcentaje_comision = data.porcentajeComision
+    if (data.porcentajeComisionRecepcion !== undefined) {
+      updateData.porcentaje_comision_recepcion = data.porcentajeComisionRecepcion
+    }
 
     const { data: updatedVendedor, error: updateError } = await supabaseAdmin
       .from("users")
@@ -161,7 +174,7 @@ export async function PUT(
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .eq("rol", "VENDEDOR")
-      .select("id, nombre, email, telefono, activo, porcentaje_comision")
+      .select("id, nombre, email, telefono, activo, porcentaje_comision, porcentaje_comision_recepcion")
       .single()
 
     if (updateError) {
@@ -172,7 +185,7 @@ export async function PUT(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0].message },
         { status: 400 }
       )
     }
@@ -189,7 +202,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, userId } = await requireAdmin()
     if (error) return error
 
     const { id } = await params
@@ -201,37 +214,38 @@ export async function DELETE(
       .eq("id", id)
       .eq("rol", "VENDEDOR")
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (fetchError || !vendedor) {
       return NextResponse.json({ error: "Vendedor no encontrado" }, { status: 404 })
     }
 
-    // Contar ventas asociadas sin traerlas (HEAD + count exact)
-    const { count: ventasCount, error: countError } = await supabaseAdmin
-      .from("ventas")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", organizationId!)
-      .eq("vendedor_id", id)
-
-    if (countError) throw countError
-
-    if ((ventasCount || 0) > 0) {
-      return NextResponse.json(
-        { error: `No se puede eliminar un vendedor con ${ventasCount} venta(s) asociada(s). Reasigne las ventas primero.` },
-        { status: 400 }
-      )
+    const result = await eliminarPersonal({
+      id,
+      organizationId: organizationId!,
+      rol: "VENDEDOR",
+      actorId: userId,
+    })
+    if (!result.ok) {
+      if (result.status === 404) {
+        return NextResponse.json({ error: "Vendedor no encontrado" }, { status: 404 })
+      }
+      if (result.status === 409) {
+        return NextResponse.json(
+          { error: "No se puede dar de baja al último administrador del taller" },
+          { status: 409 }
+        )
+      }
+      return NextResponse.json({ error: "Error al eliminar vendedor" }, { status: 500 })
     }
 
-    const { error: deleteError } = await supabaseAdmin
-      .from("users")
-      .delete()
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
-      .eq("rol", "VENDEDOR")
-
-    if (deleteError) {
-      throw deleteError
+    if (result.baja) {
+      return NextResponse.json({
+        baja: true,
+        message:
+          "El vendedor tenía historial (ventas, órdenes o caja): quedó dado de baja. Ya no puede ingresar y su historial se conserva.",
+      })
     }
 
     return NextResponse.json({ message: "Vendedor eliminado correctamente" })

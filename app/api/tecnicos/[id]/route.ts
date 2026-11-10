@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin, requireAdminOrSelf } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
+import { eliminarPersonal } from "@/lib/usuarios/eliminar-personal"
 import bcrypt from "bcryptjs"
 
 export async function GET(
@@ -25,6 +26,7 @@ export async function GET(
         avatar_url,
         fecha_ingreso_tecnico,
         porcentaje_comision,
+        porcentaje_comision_recepcion,
         costo_hora,
         created_at,
         horario_laboral,
@@ -33,6 +35,7 @@ export async function GET(
       .eq("id", id)
       .eq("rol", "TECNICO")
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (dbError || !tecnico) {
@@ -57,6 +60,8 @@ export async function GET(
       avatarUrl: tecnico.avatar_url ?? null,
       fechaIngresoTecnico: tecnico.fecha_ingreso_tecnico ?? null,
       porcentajeComision: Number(tecnico.porcentaje_comision ?? 0),
+      porcentajeComisionRecepcion:
+        tecnico.porcentaje_comision_recepcion == null ? null : Number(tecnico.porcentaje_comision_recepcion),
       costoHora: Number(tecnico.costo_hora ?? 0),
       createdAt: tecnico.created_at,
       horarioLaboral: tecnico.horario_laboral ?? null,
@@ -84,15 +89,18 @@ export async function PUT(
     const body = await request.json()
     const {
       nombre,
-      email,
+      email: rawEmail,
       password,
       porcentajeComision,
+      porcentajeComisionRecepcion,
       costoHora,
       telefono,
       especialidades,
       fechaIngresoTecnico,
       horarioLaboral,
     } = body
+    // Normalizado: los logins buscan el email en minúsculas.
+    const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : rawEmail
 
     if (porcentajeComision !== undefined) {
       const p = Number(porcentajeComision)
@@ -102,6 +110,21 @@ export async function PUT(
           { status: 400 }
         )
       }
+    }
+
+    // null clears the rate (the shop default applies); absent leaves it unchanged.
+    if (
+      porcentajeComisionRecepcion !== undefined &&
+      porcentajeComisionRecepcion !== null &&
+      (typeof porcentajeComisionRecepcion !== "number" ||
+        !Number.isFinite(porcentajeComisionRecepcion) ||
+        porcentajeComisionRecepcion < 0 ||
+        porcentajeComisionRecepcion > 100)
+    ) {
+      return NextResponse.json(
+        { error: "El porcentaje de recepción debe estar entre 0 y 100" },
+        { status: 400 }
+      )
     }
 
     if (costoHora !== undefined) {
@@ -128,6 +151,7 @@ export async function PUT(
       .eq("id", id)
       .eq("rol", "TECNICO")
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (fetchError || !tecnico) {
@@ -155,6 +179,9 @@ export async function PUT(
     if (email) updateData.email = email
     if (password) updateData.password = await bcrypt.hash(password, 10)
     if (porcentajeComision !== undefined) updateData.porcentaje_comision = Number(porcentajeComision)
+    if (porcentajeComisionRecepcion !== undefined) {
+      updateData.porcentaje_comision_recepcion = porcentajeComisionRecepcion
+    }
     if (costoHora !== undefined) updateData.costo_hora = Number(costoHora)
     if (telefono !== undefined) updateData.telefono = telefono || null
     if (especialidades !== undefined) {
@@ -176,7 +203,7 @@ export async function PUT(
       .update(updateData)
       .eq("id", id)
       .eq("organization_id", organizationId!)
-      .select("id, nombre, email, porcentaje_comision, costo_hora, telefono, especialidades, fecha_ingreso_tecnico, activo, horario_laboral")
+      .select("id, nombre, email, porcentaje_comision, porcentaje_comision_recepcion, costo_hora, telefono, especialidades, fecha_ingreso_tecnico, activo, horario_laboral")
       .single()
 
     if (updateError) {
@@ -198,7 +225,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, userId } = await requireAdmin()
     if (error) return error
 
     const { id } = await params
@@ -216,6 +243,7 @@ export async function DELETE(
       .eq("id", id)
       .eq("rol", "TECNICO")
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (fetchError || !tecnico) {
@@ -233,14 +261,31 @@ export async function DELETE(
       )
     }
 
-    const { error: deleteError } = await supabaseAdmin
-      .from("users")
-      .delete()
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
+    const result = await eliminarPersonal({
+      id,
+      organizationId: organizationId!,
+      rol: "TECNICO",
+      actorId: userId,
+    })
+    if (!result.ok) {
+      if (result.status === 404) {
+        return NextResponse.json({ error: "Técnico no encontrado" }, { status: 404 })
+      }
+      if (result.status === 409) {
+        return NextResponse.json(
+          { error: "No se puede dar de baja al último administrador del taller" },
+          { status: 409 }
+        )
+      }
+      return NextResponse.json({ error: "Error al eliminar técnico" }, { status: 500 })
+    }
 
-    if (deleteError) {
-      throw deleteError
+    if (result.baja) {
+      return NextResponse.json({
+        baja: true,
+        message:
+          "El técnico tenía historial (órdenes, cobros o caja): quedó dado de baja. Ya no puede ingresar y su historial se conserva.",
+      })
     }
 
     return NextResponse.json({ message: "Técnico eliminado correctamente" })

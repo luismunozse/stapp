@@ -20,6 +20,7 @@ interface Deposito {
   principal: boolean
   activo: boolean
   createdAt: string
+  sucursalNombre?: string | null
 }
 
 export default function DepositosPage() {
@@ -136,6 +137,9 @@ export default function DepositosPage() {
 
   const activos = depositos.filter((d) => d.activo)
   const inactivos = depositos.filter((d) => !d.activo)
+  // Hay un principal por sucursal: el nombre solo aporta con más de una.
+  const variasSucursales =
+    new Set(depositos.map((d) => d.sucursalNombre).filter(Boolean)).size > 1
 
   return (
     <div className="space-y-6">
@@ -166,14 +170,14 @@ export default function DepositosPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          <DepositoList items={activos} onEdit={openEdit} onArchive={(id) => setArchiveId(id)} />
+          <DepositoList items={activos} variasSucursales={variasSucursales} onEdit={openEdit} onArchive={(id) => setArchiveId(id)} />
           {inactivos.length > 0 && (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base text-muted-foreground">Archivados</CardTitle>
               </CardHeader>
               <CardContent>
-                <DepositoList items={inactivos} onEdit={openEdit} onArchive={() => {}} muted />
+                <DepositoList items={inactivos} variasSucursales={variasSucursales} onEdit={openEdit} onArchive={() => {}} muted />
               </CardContent>
             </Card>
           )}
@@ -280,11 +284,13 @@ export default function DepositosPage() {
 
 function DepositoList({
   items,
+  variasSucursales,
   onEdit,
   onArchive,
   muted,
 }: {
   items: Deposito[]
+  variasSucursales: boolean
   onEdit: (d: Deposito) => void
   onArchive: (id: string) => void
   muted?: boolean
@@ -306,11 +312,12 @@ function DepositoList({
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <Warehouse className="h-4 w-4 text-muted-foreground shrink-0" />
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="font-medium truncate">{d.nombre}</span>
                 {d.principal && (
-                  <Badge variant="outline" className="text-[10px] gap-1 border-amber-500/60 text-amber-600">
+                  <Badge variant="outline" className="text-[10px] gap-1 max-w-full border-amber-500/60 text-amber-600">
                     <Star className="h-2.5 w-2.5" /> Principal
+                    {variasSucursales && d.sucursalNombre ? ` · ${d.sucursalNombre}` : ""}
                   </Badge>
                 )}
                 {d.codigo && (

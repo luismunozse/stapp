@@ -1,15 +1,11 @@
 import { cookies } from "next/headers"
 import { supabaseAdmin } from "@/lib/supabase"
+import { SUCURSAL_NINGUNA } from "@/lib/sucursal-constantes"
+
+export { SUCURSAL_NINGUNA }
 
 export const SUCURSAL_COOKIE = "stapp-sucursal-activa"
 const TODAS = "todas"
-
-/**
- * Sentinel UUID used when a non-admin user has no assigned branch.
- * Applying .eq("sucursal_id", SUCURSAL_NINGUNA) matches zero real rows,
- * so the query returns empty rather than leaking all branches (fail-closed).
- */
-export const SUCURSAL_NINGUNA = "00000000-0000-0000-0000-000000000000"
 
 export interface ResultadoLectura {
   sucursalId: string | null // null => sin filtro de sucursal (ver todas)
@@ -78,18 +74,25 @@ export async function getPrincipalId(organizationId: string): Promise<string | n
   return data?.id ?? null
 }
 
-/** Valida que una sucursal pertenezca a la org y esté activa. Previene cross-org. */
+/**
+ * Validates that a sucursal belongs to the org and is not deleted. Prevents
+ * cross-org access. An inactive sucursal passes unless `{ soloActiva: true }` is
+ * given (e.g. when moving a user into it).
+ */
 export async function assertSucursalEnOrg(
   sucursalId: string,
-  organizationId: string
+  organizationId: string,
+  opciones: { soloActiva?: boolean } = {}
 ): Promise<boolean> {
-  const { data } = await supabaseAdmin
+  let query = supabaseAdmin
     .from("sucursales")
     .select("id")
     .eq("id", sucursalId)
     .eq("organization_id", organizationId)
     .is("deleted_at", null)
-    .single()
+  if (opciones.soloActiva) query = query.eq("activo", true)
+
+  const { data } = await query.single()
   return !!data
 }
 

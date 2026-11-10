@@ -14,7 +14,7 @@ export function SyncStatusIndicator() {
   if (isOnline && pendingCount === 0 && !isSyncing) return null
 
   return (
-    <div className="fixed bottom-24 right-4 z-[55] lg:bottom-6">
+    <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom,0px)+0.5rem)] left-3 z-[55] lg:bottom-6 lg:left-auto lg:right-4">
       {/* Main indicator button */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
@@ -57,7 +57,7 @@ export function SyncStatusIndicator() {
 
       {/* Expanded panel */}
       {isExpanded && (
-        <div className="absolute bottom-full right-0 mb-2 w-80 rounded-lg bg-background border shadow-xl overflow-hidden">
+        <div className="absolute bottom-full left-0 lg:left-auto lg:right-0 mb-2 w-80 rounded-lg bg-background border shadow-xl overflow-hidden">
           <div className="p-3 border-b flex items-center justify-between">
             <h3 className="font-semibold text-sm">
               {!isOnline ? "Modo offline" : "Operaciones pendientes"}

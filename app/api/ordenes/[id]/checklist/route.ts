@@ -1,18 +1,19 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 
 const checklistSchema = z.object({
   templateId: z.string().min(1, "Template requerido"),
-  valores: z.record(z.union([z.boolean(), z.string(), z.null()])),
+  valores: z.record(z.string(), z.union([z.boolean(), z.string(), z.null()])),
   notas: z.string().optional(),
   firmaCliente: z.string().optional(),
   firmaMime: z.string().optional(),
 })
 
 const updateChecklistSchema = z.object({
-  valores: z.record(z.union([z.boolean(), z.string(), z.null()])).optional(),
+  valores: z.record(z.string(), z.union([z.boolean(), z.string(), z.null()])).optional(),
   notas: z.string().optional(),
   firmaCliente: z.string().optional(),
   firmaMime: z.string().optional(),
@@ -24,22 +25,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId } = autenticado
     if (error) return error
 
     const { id: ordenId } = await params
 
-    // Verificar que la orden existe y pertenece a la organización
-    const { data: orden, error: ordenError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id, tipo_dispositivo_id")
-      .eq("id", ordenId)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (ordenError || !orden) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-    }
+    // The order must exist, belong to the organization and be within the caller's scope
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "ver", {
+      select: "id, tipo_dispositivo_id",
+    })
+    if ("error" in cargada) return cargada.error
+    const { orden } = cargada
 
     // Obtener el checklist con el template y sus items
     const { data: checklist } = await supabaseAdmin
@@ -159,7 +156,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId } = autenticado
     if (error) return error
 
     const { id: ordenId } = await params
@@ -169,18 +167,9 @@ export async function POST(
 
     const data = checklistSchema.parse(body)
 
-    // Verificar que la orden existe y pertenece a la organización
-    const { data: orden, error: ordenError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id")
-      .eq("id", ordenId)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (ordenError || !orden) {
-      console.log("[CHECKLIST POST] Orden no encontrada:", ordenId, ordenError?.message)
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-    }
+    // The order must exist, belong to the organization and be within the caller's scope
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "reparar", { select: "id" })
+    if ("error" in cargada) return cargada.error
 
     // Verificar que no exista ya un checklist
     const { data: existing, error: existingError } = await supabaseAdmin
@@ -249,7 +238,7 @@ export async function POST(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0].message },
         { status: 400 }
       )
     }
@@ -268,24 +257,17 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error } = autenticado
     if (error) return error
 
     const { id: ordenId } = await params
     const body = await request.json()
     const data = updateChecklistSchema.parse(body)
 
-    // Verificar que la orden pertenece a la org
-    const { data: orden, error: ordenError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id")
-      .eq("id", ordenId)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (ordenError || !orden) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-    }
+    // The order must exist, belong to the organization and be within the caller's scope
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "reparar", { select: "id" })
+    if ("error" in cargada) return cargada.error
 
     // Verificar que existe el checklist
     const { data: existing, error: existingError } = await supabaseAdmin
@@ -325,7 +307,7 @@ export async function PUT(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0].message },
         { status: 400 }
       )
     }
@@ -343,22 +325,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error } = autenticado
     if (error) return error
 
     const { id: ordenId } = await params
 
-    // Verificar que la orden pertenece a la org
-    const { data: orden, error: ordenError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id")
-      .eq("id", ordenId)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (ordenError || !orden) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-    }
+    // The order must exist, belong to the organization and be within the caller's scope
+    const cargada = await cargarOrdenEnAlcance(ordenId, actorDeSesion(autenticado), "reparar", { select: "id" })
+    if ("error" in cargada) return cargada.error
 
     await supabaseAdmin
       .from("checklist_recepcion")

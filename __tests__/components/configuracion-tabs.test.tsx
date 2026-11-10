@@ -52,7 +52,7 @@ const configResponse = {
   plazoPagoDias: null,
 }
 
-const LABELS = ["Secciones", "Empresa", "Facturación", "Comprobantes", "Avisos", "Seguridad"]
+const LABELS = ["Secciones", "Empresa", "Facturación", "Comprobantes", "Comisiones", "Avisos", "Seguridad"]
 
 // Slot with its own local state: only forceMount keeps it alive across tab switches.
 function StatefulSlot() {
@@ -92,6 +92,7 @@ describe("parseConfigTab", () => {
     expect(parseConfigTab(["facturacion", "empresa"])).toBe("facturacion")
     expect(parseConfigTab("comprobantes")).toBe("comprobantes")
     expect(parseConfigTab("avisos")).toBe("avisos")
+    expect(parseConfigTab("comisiones")).toBe("comisiones")
   })
 
   it("maps the legacy modulos value to empresa", () => {
@@ -112,7 +113,7 @@ describe("ConfiguracionForm — tabs", () => {
     replaceStateSpy.mockRestore()
   })
 
-  it("renders the six tab triggers and defaults to Secciones", async () => {
+  it("renders the seven tab triggers and defaults to Secciones", async () => {
     await renderForm()
 
     const tabs = screen.getAllByRole("tab")
@@ -179,6 +180,29 @@ describe("ConfiguracionForm — tabs", () => {
     expect(modulos.closest("[role='tabpanel']")).toBe(screen.getByLabelText("Nombre de la Empresa").closest("[role='tabpanel']"))
   })
 
+  it("points to the Comisiones tab instead of the old sin-reparación checkbox in Empresa", async () => {
+    await renderForm({ initialTab: "empresa" })
+
+    expect(screen.queryByText("Pagar comisión en órdenes sin reparación")).not.toBeInTheDocument()
+    expect(
+      screen.getByText(
+        "Las reglas de comisiones, incluido el pago en órdenes entregadas sin reparar, se configuran en la pestaña Comisiones.",
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it("stops sending comisionAplicaSinReparacion from the main form", async () => {
+    await renderForm({ initialTab: "empresa" })
+
+    fireEvent.click(screen.getByRole("button", { name: /Guardar Cambios/ }))
+
+    await waitFor(() => {
+      const put = mockFetch.mock.calls.find(([, init]) => init?.method === "PUT")
+      expect(put).toBeDefined()
+      expect(JSON.parse(put![1].body)).not.toHaveProperty("comisionAplicaSinReparacion")
+    })
+  })
+
   it("shows the save bar only on form tabs", async () => {
     await renderForm()
 
@@ -190,7 +214,7 @@ describe("ConfiguracionForm — tabs", () => {
       expect(screen.getByRole("button", { name: /Guardar Cambios/ })).toBeInTheDocument()
     }
 
-    for (const label of ["Avisos", "Seguridad"]) {
+    for (const label of ["Comisiones", "Avisos", "Seguridad"]) {
       fireEvent.click(screen.getByRole("tab", { name: label }))
       expect(screen.queryByRole("button", { name: /Guardar Cambios/ })).not.toBeInTheDocument()
     }

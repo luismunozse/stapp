@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { FormActionBar } from "@/components/ui/form-action-bar"
+import { MoverSucursal } from "@/components/usuarios/mover-sucursal"
 import { Eye, EyeOff } from "lucide-react"
 
 interface VendedorFormProps {
@@ -24,6 +25,7 @@ interface VendedorFormProps {
     telefono?: string | null
     activo?: boolean
     porcentajeComision?: number
+    porcentajeComisionRecepcion?: number | null
   } | null
   onSuccess: () => void
 }
@@ -42,6 +44,10 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
   const [activo, setActivo] = useState(vendedor?.activo !== false)
   const [porcentajeComision, setPorcentajeComision] = useState(
     vendedor?.porcentajeComision?.toString() || "0"
+  )
+  // Blank means "use the shop default" and is sent as null, never as 0.
+  const [porcentajeRecepcion, setPorcentajeRecepcion] = useState(
+    vendedor?.porcentajeComisionRecepcion != null ? String(vendedor.porcentajeComisionRecepcion) : ""
   )
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -66,6 +72,22 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
       .catch(() => {})
   }, [open])
 
+  // The parent mounts this form permanently and flips `open` with a new `vendedor`, so
+  // Radix never calls handleOpenChange(true): prefill here whenever the dialog opens.
+  useEffect(() => {
+    if (!open || !vendedor) return
+    setNombre(vendedor.nombre)
+    setEmail(vendedor.email)
+    setTelefono(vendedor.telefono || "")
+    setActivo(vendedor.activo !== false)
+    setPorcentajeComision(vendedor.porcentajeComision?.toString() || "0")
+    setPorcentajeRecepcion(
+      vendedor.porcentajeComisionRecepcion != null ? String(vendedor.porcentajeComisionRecepcion) : ""
+    )
+    setPassword("")
+    setError("")
+  }, [open, vendedor])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
@@ -73,6 +95,12 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
     const porcentajeNum = Number(porcentajeComision)
     if (!Number.isFinite(porcentajeNum) || porcentajeNum < 0 || porcentajeNum > 100) {
       setError("El porcentaje de comisión debe estar entre 0 y 100")
+      return
+    }
+
+    const recepcionNum = porcentajeRecepcion.trim() === "" ? null : Number(porcentajeRecepcion)
+    if (recepcionNum !== null && (!Number.isFinite(recepcionNum) || recepcionNum < 0 || recepcionNum > 100)) {
+      setError("El porcentaje de recepción debe estar entre 0 y 100")
       return
     }
 
@@ -88,6 +116,7 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
         password?: string
         telefono: string | null
         porcentajeComision: number
+        porcentajeComisionRecepcion: number | null
         activo?: boolean
         sucursalId?: string
       } = {
@@ -95,6 +124,7 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
         email,
         telefono: telefono.trim() || null,
         porcentajeComision: porcentajeNum,
+        porcentajeComisionRecepcion: recepcionNum,
       }
       if (password) body.password = password
       if (isEditing) body.activo = activo
@@ -128,18 +158,13 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
     setTelefono("")
     setActivo(true)
     setPorcentajeComision("0")
+    setPorcentajeRecepcion("")
     setError("")
   }
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
       resetForm()
-    } else if (vendedor) {
-      setNombre(vendedor.nombre)
-      setEmail(vendedor.email)
-      setTelefono(vendedor.telefono || "")
-      setActivo(vendedor.activo !== false)
-      setPorcentajeComision(vendedor.porcentajeComision?.toString() || "0")
     }
     onOpenChange(newOpen)
   }
@@ -241,6 +266,22 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
               Comisión por defecto aplicada sobre cada venta.
             </p>
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="porcentajeComisionRecepcion">Comisión por recepción (%)</Label>
+            <Input
+              id="porcentajeComisionRecepcion"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={porcentajeRecepcion}
+              onChange={(e) => setPorcentajeRecepcion(e.target.value)}
+              placeholder="Por defecto del taller"
+            />
+            <p className="text-xs text-muted-foreground">
+              Vacío: se usa el porcentaje por defecto del taller. Cada orden guarda el porcentaje vigente al recibir el equipo.
+            </p>
+          </div>
           {!isEditing && sucursales.length > 1 && (
             <div className="space-y-2">
               <Label htmlFor="sucursal">Sucursal</Label>
@@ -261,6 +302,7 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
               </p>
             </div>
           )}
+          {isEditing && <MoverSucursal usuarioId={vendedor.id} sucursales={sucursales} />}
           {isEditing && (
             <div className="flex items-center gap-2 pt-2">
               <input

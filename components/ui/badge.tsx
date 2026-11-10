@@ -202,12 +202,16 @@ function PaymentStatusBadge({
     PENDIENTE: "warning",
     PAGADO: "success",
     PAGADO_PARCIAL: "info",
+    PARCIAL: "info",
+    COBRADO: "success",
     ANULADA: "destructive",
   }
   const labelMap: Record<string, string> = {
     PENDIENTE: "Pendiente",
     PAGADO: "Pagado",
     PAGADO_PARCIAL: "Pago Parcial",
+    PARCIAL: "Cobro Parcial",
+    COBRADO: "Cobrado",
     ANULADA: "Anulada",
   }
 

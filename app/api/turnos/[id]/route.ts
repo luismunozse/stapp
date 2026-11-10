@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 import { createAuditLogger } from "@/lib/audit"
 import { notifyTurno } from "@/lib/turnos/notifications"
 
@@ -38,6 +39,7 @@ function formatTurno(t: any) {
   return {
     id: t.id,
     organizationId: t.organization_id,
+    sucursalId: t.sucursal_id ?? null,
     clienteId: t.cliente_id,
     clienteSnapshot: t.cliente_snapshot,
     tecnicoId: t.tecnico_id,
@@ -88,13 +90,25 @@ async function fetchTurno(id: string, organizationId: string) {
 
 export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     const { id } = await ctx.params
     const { data, error: dbError } = await fetchTurno(id, organizationId!)
     if (dbError) throw dbError
-    if (!data) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
+
+    // Same branch scope as GET /api/turnos for non-admins: a turno of another
+    // branch answers like a missing one. An ADMIN reaches any turno by id, whatever
+    // the branch switcher has selected (it only narrows lists).
+    const lectura = await sucursalParaLectura({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    const fueraDeSucursal =
+      role !== "ADMIN" && !lectura.verTodas && !!lectura.sucursalId && data?.sucursal_id !== lectura.sucursalId
+    if (!data || fueraDeSucursal) {
+      return NextResponse.json({ error: "No encontrado" }, { status: 404 })
+    }
 
     if (role === "TECNICO" && data.tecnico_id !== userId) {
       return NextResponse.json({ error: "Sin acceso" }, { status: 403 })
@@ -177,6 +191,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         .eq("id", data.tecnicoId)
         .eq("organization_id", organizationId!)
         .in("rol", ["TECNICO", "ADMIN"])
+        .is("deleted_at", null)
         .maybeSingle()
       if (!tecnicoCheck) {
         return NextResponse.json({ error: "Técnico inválido" }, { status: 400 })
@@ -243,7 +258,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     return NextResponse.json(formatTurno(turno))
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: err.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
     console.error("Error updating turno:", err)
     return NextResponse.json({ error: "Error al actualizar turno" }, { status: 500 })

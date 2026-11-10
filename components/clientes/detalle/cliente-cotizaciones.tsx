@@ -5,8 +5,21 @@ import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { estadoConfig } from "@/components/cotizaciones/estado-config"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { useCurrency } from "@/contexts/currency-context"
+
+function EstadoBadge({ estado }: { estado: string }) {
+  const config = estadoConfig[estado]
+  if (!config) return <Badge variant="outline">{estado}</Badge>
+  const Icon = config.icon
+  return (
+    <Badge className={config.color}>
+      <Icon className="mr-1 h-3 w-3" />
+      {config.label}
+    </Badge>
+  )
+}
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -47,7 +60,7 @@ export function ClienteCotizaciones({ clienteId }: Props) {
     {
       key: "estado",
       header: "Estado",
-      render: (c) => <Badge variant="outline">{c.estado}</Badge>,
+      render: (c) => <EstadoBadge estado={c.estado} />,
     },
     {
       key: "total",
@@ -76,6 +89,18 @@ export function ClienteCotizaciones({ clienteId }: Props) {
           loading={isLoading}
           emptyMessage="Sin cotizaciones registradas"
           onRowClick={(c) => router.push(`/cotizaciones/${c.id}`)}
+          renderMobileCard={(c) => (
+            <div className="space-y-1.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="font-medium text-sm">#{c.numeroCotizacion}</div>
+                <EstadoBadge estado={c.estado} />
+              </div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{formatDate(c.createdAt)}</span>
+                <span className="tabular-nums font-medium text-foreground">{formatPrice(c.total)}</span>
+              </div>
+            </div>
+          )}
           pagination={{
             page,
             pageSize,

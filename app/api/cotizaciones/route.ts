@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server"
+import { MAX_CLIENTES_EN_BUSQUEDA } from "@/lib/busqueda-clientes"
+import { validarClienteYSector } from "@/lib/referencias-cliente"
 import { requireAuth, canViewCotizacionCosts } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextQuoteNumber } from "@/lib/counters"
@@ -11,6 +13,7 @@ import { validarInforme, veredictoSchema, causaDanoSchema } from "@/lib/cotizaci
 import { randomBytes } from "crypto"
 import { z } from "zod"
 import { rejectIfPractica } from "@/lib/onboarding/practica"
+import { aplicarAlcanceOrdenes, resolverAlcanceOrdenesDeSesion } from "@/lib/ordenes/alcance-lectura"
 
 const itemSchema = z.object({
   descripcion: z.string().min(1, "Descripción requerida"),
@@ -51,7 +54,7 @@ const equipoSchema = z.object({
 const checklistSchema = z.object({
   templateId: z.string(),
   tipoDispositivoId: z.string().optional().nullable(),
-  valores: z.record(z.union([z.boolean(), z.string(), z.null()])),
+  valores: z.record(z.string(), z.union([z.boolean(), z.string(), z.null()])),
   notas: z.string().optional().nullable(),
 })
 
@@ -178,8 +181,16 @@ function formatCotizacion(c: any, includeCosts: boolean) {
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
+
+    // Quotes linked to an order follow that order's branch scope. cotizaciones
+    // has no sucursal_id of its own, so quotes without an order stay as they were.
+    const alcance = await resolverAlcanceOrdenesDeSesion({
+      role,
+      userId,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
 
     const { searchParams } = new URL(request.url)
     const ordenId = searchParams.get("ordenId")
@@ -207,6 +218,7 @@ export async function GET(request: Request) {
 
       if (estado) query = query.eq("estado", estado)
       if (role === "TECNICO") query = query.eq("created_by", userId!)
+      query = aplicarAlcanceOrdenes(query, alcance, { referencedTable: "ordenes_servicio" })
 
       const { data: cotizaciones, error: dbError } = await query
       if (dbError) throw dbError
@@ -218,11 +230,37 @@ export async function GET(request: Request) {
     // Modo standalone: filtrar por organization_id con LEFT join + paginacion
     const { page, limit, offset } = parsePagination(searchParams)
 
-    let query = supabaseAdmin
-      .from("cotizaciones")
-      .select(`
+    // Buscar por número de cotización o nombre de cliente.
+    // Supabase no soporta OR cross-table en un select, así que resolvemos
+    // los cliente_ids que matchean y armamos un or() con in-list.
+    let filtroBusqueda: string | null = null
+    let busquedaSoloNumero: string | null = null
+    if (search) {
+      const escaped = search.replace(/[%_]/g, "\\$&") // escape wildcards
+      const { data: clientesMatch } = await supabaseAdmin
+        .from("clientes")
+        .select("id")
+        .eq("organization_id", organizationId!)
+        .ilike("nombre", `%${escaped}%`)
+        .order("id", { ascending: false })
+        .limit(MAX_CLIENTES_EN_BUSQUEDA)
+
+      const clienteIds = (clientesMatch || []).map((c) => c.id)
+      if (clienteIds.length > 0) {
+        filtroBusqueda = `numero_cotizacion.ilike.%${escaped}%,cliente_id.in.(${clienteIds.join(",")})`
+      } else {
+        busquedaSoloNumero = `%${escaped}%`
+      }
+    }
+
+    // `ordenInner` makes the join to the order mandatory (quotes without an
+    // order drop out), which is what lets the branch scope filter on it.
+    const construir = (ordenInner: boolean) => {
+      let q = supabaseAdmin
+        .from("cotizaciones")
+        .select(`
         *,
-        ordenes_servicio!cotizaciones_orden_id_fkey (
+        ordenes_servicio!cotizaciones_orden_id_fkey${ordenInner ? "!inner" : ""} (
           id, numero_orden, dispositivo, organization_id,
           clientes (*)
         ),
@@ -230,40 +268,43 @@ export async function GET(request: Request) {
         sectores_cliente (id, nombre),
         items_cotizacion (*)
       `, { count: "exact" })
-      .eq("organization_id", organizationId!)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-
-    if (estado && estado !== "TODOS") query = query.eq("estado", estado)
-    if (clienteId) query = query.eq("cliente_id", clienteId)
-    if (search) {
-      // Buscar por número de cotización o nombre de cliente.
-      // Supabase no soporta OR cross-table en un select, así que resolvemos
-      // los cliente_ids que matchean y armamos un or() con in-list.
-      const escaped = search.replace(/[%_]/g, "\\$&") // escape wildcards
-      const { data: clientesMatch } = await supabaseAdmin
-        .from("clientes")
-        .select("id")
         .eq("organization_id", organizationId!)
-        .ilike("nombre", `%${escaped}%`)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
 
-      const clienteIds = (clientesMatch || []).map((c) => c.id)
-      if (clienteIds.length > 0) {
-        query = query.or(
-          `numero_cotizacion.ilike.%${escaped}%,cliente_id.in.(${clienteIds.join(",")})`
-        )
-      } else {
-        query = query.ilike("numero_cotizacion", `%${escaped}%`)
-      }
+      if (estado && estado !== "TODOS") q = q.eq("estado", estado)
+      if (clienteId) q = q.eq("cliente_id", clienteId)
+      if (filtroBusqueda) q = q.or(filtroBusqueda)
+      if (busquedaSoloNumero) q = q.ilike("numero_cotizacion", busquedaSoloNumero)
+      if (role === "TECNICO") q = q.eq("created_by", userId!)
+      return q
     }
-    if (role === "TECNICO") query = query.eq("created_by", userId!)
 
-    query = query.range(offset, offset + limit - 1)
+    let cotizaciones: any[] | null
+    let total: number
+    if (alcance.tipo === "todas") {
+      const { data, error: dbError, count } = await construir(false).range(offset, offset + limit - 1)
+      if (dbError) throw dbError
+      cotizaciones = data
+      total = count || 0
+    } else {
+      // Two disjoint sets, merged: quotes without an order (visible as before) and
+      // quotes whose order is in scope. PostgREST cannot express "no order OR order
+      // in scope" in one query, so each side fetches its first offset+limit rows,
+      // which is enough to build the requested page of the merged, ordered list.
+      const tope = offset + limit - 1
+      const [sinOrden, conOrden] = await Promise.all([
+        construir(false).is("orden_id", null).range(0, tope),
+        aplicarAlcanceOrdenes(construir(true), alcance, { referencedTable: "ordenes_servicio" }).range(0, tope),
+      ])
+      if (sinOrden.error) throw sinOrden.error
+      if (conOrden.error) throw conOrden.error
+      cotizaciones = [...(sinOrden.data || []), ...(conOrden.data || [])]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(offset, offset + limit)
+      total = (sinOrden.count || 0) + (conOrden.count || 0)
+    }
 
-    const { data: cotizaciones, error: dbError, count } = await query
-    if (dbError) throw dbError
-
-    const total = count || 0
     const includeCosts = canViewCotizacionCosts(role)
     const result = cotizaciones?.map((c) => formatCotizacion(c, includeCosts)) || []
 
@@ -368,6 +409,16 @@ export async function POST(request: Request) {
         )
       }
       clienteIdForInsert = data.clienteId
+    }
+
+    // El sector tiene que ser de ese cliente (y por lo tanto de la organización).
+    if (data.sectorId) {
+      const errorRef = clienteIdForInsert
+        ? await validarClienteYSector(organizationId!, clienteIdForInsert, data.sectorId)
+        : "Sector no válido para este cliente"
+      if (errorRef) {
+        return NextResponse.json({ error: errorRef }, { status: 400 })
+      }
     }
 
     // Validate fecha_vencimiento is not in the past — comparado por DÍA calendario
@@ -546,7 +597,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0].message },
         { status: 400 }
       )
     }

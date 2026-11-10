@@ -6,8 +6,11 @@ import {
   readEtiquetaSize,
   saveEtiquetaSize,
   DEFAULT_LABEL_SIZE,
+  LOGO_TIMEOUT_MS,
+  clearLogoCache,
   type LabelData,
 } from "@/components/ordenes/print-label"
+import { imageUrlToBinarizedDataUrl } from "@/lib/escpos-image"
 import { resolveEtiquetaSize } from "@/components/ordenes/etiqueta-size-org"
 
 // El tamano por defecto sale de la org (red). Aca se aisla: los tests de
@@ -16,11 +19,14 @@ vi.mock("@/components/ordenes/etiqueta-size-org", () => ({
   resolveEtiquetaSize: vi.fn(() => Promise.resolve("60x40")),
 }))
 
+vi.mock("@/lib/escpos-image", () => ({
+  imageUrlToBinarizedDataUrl: vi.fn(),
+}))
+
 const baseData: LabelData = {
   codigoOrden: "A-1",
   numeroOrden: 1,
   clienteNombre: "Ana",
-  dispositivo: "iPhone 12",
   problemaReportado: "No carga",
   fechaIngreso: "01/01/2026",
   variant: "reparado",
@@ -29,19 +35,19 @@ const baseData: LabelData = {
 
 describe("buildLabelHtml — tamaños y modos", () => {
   it("die-cut 60x40: @page 60mm 40mm", () => {
-    expect(buildLabelHtml(baseData, "60x40", "")).toContain("size: 60mm 40mm")
+    expect(buildLabelHtml(baseData, "60x40")).toContain("size: 60mm 40mm")
   })
 
   it("die-cut 40x30: @page 40mm 30mm", () => {
-    expect(buildLabelHtml(baseData, "40x30", "")).toContain("size: 40mm 30mm")
+    expect(buildLabelHtml(baseData, "40x30")).toContain("size: 40mm 30mm")
   })
 
   it("rollo 58mm: @page 58mm auto (altura automática)", () => {
-    expect(buildLabelHtml(baseData, "58mm", "")).toContain("size: 58mm auto")
+    expect(buildLabelHtml(baseData, "58mm")).toContain("size: 58mm auto")
   })
 
   it("rollo 80mm: @page 80mm auto", () => {
-    expect(buildLabelHtml(baseData, "80mm", "")).toContain("size: 80mm auto")
+    expect(buildLabelHtml(baseData, "80mm")).toContain("size: 80mm auto")
   })
 })
 
@@ -53,7 +59,7 @@ describe("buildLabelHtml — die-cut entra siempre en una sola página", () => {
   it.each(["40x30", "50x30", "50x40", "60x40"] as const)(
     "%s: llena el área imprimible y recorta, sin alto fijo en mm",
     (size) => {
-      const html = buildLabelHtml(baseData, size, "")
+      const html = buildLabelHtml(baseData, size)
       expect(html).toMatch(/html\s*\{[^}]*height:\s*100%[^}]*overflow:\s*hidden/)
       const body = html.match(/body\s*\{([^}]*)\}/)?.[1] ?? ""
       expect(body).toMatch(/height:\s*100%/)
@@ -63,52 +69,249 @@ describe("buildLabelHtml — die-cut entra siempre en una sola página", () => {
   )
 
   it("si falta alto, se recorta la info y no la fecha del pie", () => {
-    const html = buildLabelHtml(baseData, "40x30", "")
+    const html = buildLabelHtml(baseData, "40x30")
     const info = html.match(/\.info\s*\{([^}]*)\}/)?.[1] ?? ""
     expect(info).toMatch(/min-height:\s*0/)
     expect(info).toMatch(/overflow:\s*hidden/)
   })
 
   it("los rollos no se recortan: alto automático", () => {
-    const html = buildLabelHtml(baseData, "58mm", "")
+    const html = buildLabelHtml(baseData, "58mm")
     expect(html).not.toMatch(/html\s*\{[^}]*overflow:\s*hidden/)
   })
 })
 
 describe("buildLabelHtml — contenido por variante", () => {
   it("variante reparado muestra el badge REPARADO y 'Listo para entregar'", () => {
-    const html = buildLabelHtml(baseData, "60x40", "")
+    const html = buildLabelHtml(baseData, "60x40")
     expect(html).toContain("REPARADO")
     expect(html).toContain("Listo para entregar")
   })
 
   it("variante ingreso muestra el problema y NO el badge", () => {
-    const html = buildLabelHtml({ ...baseData, variant: "ingreso" }, "60x40", "")
+    const html = buildLabelHtml({ ...baseData, variant: "ingreso" }, "60x40")
     expect(html).not.toContain("REPARADO")
     expect(html).toContain("No carga")
   })
 
   it("rollo variante reparado también muestra badge y 'Listo para entregar'", () => {
-    const html = buildLabelHtml(baseData, "58mm", "")
+    const html = buildLabelHtml(baseData, "58mm")
     expect(html).toContain("REPARADO")
     expect(html).toContain("Listo para entregar")
   })
 
   it("rollo variante ingreso muestra el problema y NO el badge", () => {
-    const html = buildLabelHtml({ ...baseData, variant: "ingreso" }, "80mm", "")
+    const html = buildLabelHtml({ ...baseData, variant: "ingreso" }, "80mm")
     expect(html).not.toContain("REPARADO")
     expect(html).toContain("No carga")
   })
 
-  it("incluye el QR cuando se pasa un dataUrl", () => {
-    const html = buildLabelHtml(baseData, "60x40", "data:image/png;base64,AAA")
-    expect(html).toContain("data:image/png;base64,AAA")
+  it("no incluye QR ni imágenes: el link de seguimiento le llega al cliente por otro lado", () => {
+    for (const size of ALL_SIZES) {
+      const html = buildLabelHtml(ingresoCompleto, size)
+      expect(html).not.toContain("<img")
+      expect(html).not.toContain("Seguimiento")
+    }
+  })
+})
+
+const ALL_SIZES = ["40x30", "50x30", "50x40", "60x40", "58mm", "80mm"] as const
+const DIE_CUT = ["40x30", "50x30", "50x40", "60x40"] as const
+
+const ingresoCompleto: LabelData = {
+  ...baseData,
+  variant: "ingreso",
+  clienteNombre: "María Gutiérrez",
+  telefono: "+54 9 351 555-1234",
+  imei: "356938035643809",
+  problemaReportado: "No enciende",
+  organizationName: "RCM Comunicaciones",
+}
+
+describe("buildLabelHtml — datos de la etiqueta", () => {
+  it.each(ALL_SIZES)("%s ingreso: Cliente, Tel, IMEI/S/N y Problema", (size) => {
+    const html = buildLabelHtml(ingresoCompleto, size)
+    expect(html).toContain("Cliente:")
+    expect(html).toContain("María Gutiérrez")
+    expect(html).toContain("Tel:")
+    expect(html).toContain("+54 9 351 555-1234")
+    expect(html).toContain("IMEI/S/N:")
+    expect(html).toContain("356938035643809")
+    expect(html).toContain("Problema:")
+    expect(html).toContain("No enciende")
   })
 
-  it("siempre incluye cliente y equipo", () => {
-    const html = buildLabelHtml(baseData, "58mm", "")
-    expect(html).toContain("Ana")
-    expect(html).toContain("iPhone 12")
+  it.each(ALL_SIZES)("%s: no muestra la línea Equipo (la etiqueta va pegada en el equipo)", (size) => {
+    expect(buildLabelHtml(ingresoCompleto, size)).not.toContain("Equipo:")
+    expect(buildLabelHtml({ ...ingresoCompleto, variant: "reparado" }, size)).not.toContain("Equipo:")
+  })
+
+  it.each(ALL_SIZES)("%s: el orden es Cliente, Tel, IMEI/S/N, Problema", (size) => {
+    const html = buildLabelHtml(ingresoCompleto, size)
+    const idx = ["Cliente:", "Tel:", "IMEI/S/N:", "Problema:"].map((t) => html.indexOf(t))
+    expect(idx.every((i) => i > 0)).toBe(true)
+    expect([...idx].sort((a, b) => a - b)).toEqual(idx)
+  })
+
+  it.each(ALL_SIZES)("%s: sin IMEI (null, vacío o espacios) no muestra la línea", (size) => {
+    for (const imei of [null, undefined, "", "   "]) {
+      expect(buildLabelHtml({ ...ingresoCompleto, imei }, size)).not.toContain("IMEI/S/N:")
+    }
+  })
+
+  it.each(ALL_SIZES)("%s: sin teléfono no muestra la línea Tel", (size) => {
+    for (const telefono of [null, undefined, "", "  "]) {
+      expect(buildLabelHtml({ ...ingresoCompleto, telefono }, size)).not.toContain("Tel:")
+    }
+  })
+
+  it.each(ALL_SIZES)("%s: escapa HTML en teléfono, IMEI y problema", (size) => {
+    const html = buildLabelHtml(
+      {
+        ...ingresoCompleto,
+        telefono: "<script>1</script>",
+        imei: "<script>x</script>",
+        problemaReportado: "<b>negrita</b>",
+      },
+      size,
+    )
+    expect(html).not.toContain("<script>")
+    expect(html).not.toContain("<b>negrita")
+    expect(html).toContain("&lt;script&gt;1&lt;/script&gt;")
+  })
+
+  it.each(ALL_SIZES)("%s reparado: badge, 'Listo para entregar' y Tel, sin Problema", (size) => {
+    const html = buildLabelHtml({ ...ingresoCompleto, variant: "reparado" }, size)
+    expect(html).toContain("REPARADO")
+    expect(html).toContain("Listo para entregar")
+    expect(html).toContain("Tel:")
+    expect(html).not.toContain("Problema:")
+  })
+
+  it("el nombre del taller y el código siguen en el encabezado", () => {
+    const html = buildLabelHtml(ingresoCompleto, "50x30")
+    expect(html).toContain("RCM Comunicaciones")
+    expect(html).toContain("A-1")
+  })
+
+  it("el problema se trunca a ~200 caracteres en rollos", () => {
+    const largo = "x".repeat(500)
+    for (const size of ["58mm", "80mm"] as const) {
+      const html = buildLabelHtml({ ...ingresoCompleto, problemaReportado: largo }, size)
+      expect(html).toContain("x".repeat(200))
+      expect(html).not.toContain("x".repeat(201))
+    }
+  })
+})
+
+describe("buildLabelHtml — problema multilínea en die-cut", () => {
+  it.each([
+    ["40x30", 3],
+    ["50x30", 3],
+    ["50x40", 5],
+    ["60x40", 5],
+  ] as const)("%s: line-clamp de %i líneas", (size, lines) => {
+    const html = buildLabelHtml(ingresoCompleto, size)
+    const prob = html.match(/\.problema\s*\{([^}]*)\}/)?.[1] ?? ""
+    expect(prob).toMatch(new RegExp(String.raw`-webkit-line-clamp:\s*${lines}\b`))
+    expect(prob).toMatch(/white-space:\s*normal/)
+    expect(prob).toMatch(/overflow:\s*hidden/)
+  })
+
+  it.each(DIE_CUT)("%s: el resto de las líneas siguen en una sola línea con elipsis", (size) => {
+    const html = buildLabelHtml(ingresoCompleto, size)
+    const info = html.match(/\.info\s*>\s*div\s*\{([^}]*)\}/)?.[1] ?? ""
+    expect(info).toMatch(/white-space:\s*nowrap/)
+    expect(info).toMatch(/text-overflow:\s*ellipsis/)
+  })
+
+  it.each(DIE_CUT)("%s: la fecha del pie nunca se encoge", (size) => {
+    const html = buildLabelHtml(ingresoCompleto, size)
+    const fecha = html.match(/\.fecha\s*\{([^}]*)\}/)?.[1] ?? ""
+    expect(fecha).toMatch(/flex-shrink:\s*0\b/)
+  })
+
+  it.each(DIE_CUT)("%s: el título del documento escapa el código de orden", (size) => {
+    const html = buildLabelHtml({ ...ingresoCompleto, codigoOrden: "<x>" }, size)
+    const title = html.match(/<title>([^<]*)<\/title>/)?.[1] ?? ""
+    expect(title).toContain("&lt;x&gt;")
+    expect(html.match(/<title>[\s\S]*?<\/title>/)?.[0]).not.toContain("<x>")
+  })
+
+  it.each(DIE_CUT)("%s: el problema ocupa todo el ancho (sin columna de QR)", (size) => {
+    const html = buildLabelHtml(ingresoCompleto, size)
+    expect(html).not.toContain('class="right"')
+    expect(html).not.toMatch(/\.right\s*\{/)
+  })
+})
+
+describe("buildLabelHtml — logo del taller", () => {
+  const LOGO = "data:image/png;base64,iVBORw0KGgo="
+  const ingreso: LabelData = {
+    ...baseData,
+    variant: "ingreso",
+    organizationName: "Taller Pepe",
+    logoDataUrl: LOGO,
+  }
+
+  it.each(["40x30", "50x30", "50x40", "60x40"] as const)(
+    "%s: el logo reemplaza al nombre y va en el encabezado junto al codigo",
+    (size) => {
+      const html = buildLabelHtml(ingreso, size)
+      expect(html).toContain(`<img class="logo" src="${LOGO}"`)
+      expect(html).not.toContain("Taller Pepe")
+      expect(html).not.toContain('class="empresa"')
+      expect(html).toMatch(/<div class="head">\s*<img class="logo"[^>]*>\s*<div class="codigo">/)
+    },
+  )
+
+  it("die-cut con logo no cambia el line-clamp del problema", () => {
+    expect(buildLabelHtml(ingreso, "50x30")).toContain("-webkit-line-clamp: 3")
+    expect(buildLabelHtml(ingreso, "40x30")).toContain("-webkit-line-clamp: 3")
+    expect(buildLabelHtml(ingreso, "50x40")).toContain("-webkit-line-clamp: 5")
+    expect(buildLabelHtml(ingreso, "60x40")).toContain("-webkit-line-clamp: 5")
+  })
+
+  it.each(["58mm", "80mm"] as const)("%s: logo centrado arriba, antes del codigo", (size) => {
+    const html = buildLabelHtml(ingreso, size)
+    expect(html).toMatch(/<img class="logo" src="data:image\/png[^>]*>\s*<div class="codigo">/)
+    expect(html).toMatch(/\.logo\s*\{[^}]*margin:\s*0 auto/)
+    expect(html).not.toContain("Taller Pepe")
+  })
+
+  it.each(["60x40", "58mm"] as const)("%s: sin logo imprime el nombre como siempre", (size) => {
+    const html = buildLabelHtml({ ...ingreso, logoDataUrl: null }, size)
+    expect(html).toContain('<div class="empresa">Taller Pepe</div>')
+    expect(html).not.toContain("<img")
+  })
+
+  it("acepta una URL https", () => {
+    const url = "https://cdn.example.com/logo.png"
+    expect(buildLabelHtml({ ...ingreso, logoDataUrl: url }, "60x40")).toContain(`src="${url}"`)
+  })
+
+  it.each([
+    "javascript:alert(1)",
+    "data:text/html;base64,PHNjcmlwdD4=",
+    "file:///etc/passwd",
+    '"><script>alert(1)</script>',
+  ])("rechaza un src no seguro (%s) y cae al nombre", (bad) => {
+    const html = buildLabelHtml({ ...ingreso, logoDataUrl: bad }, "60x40")
+    expect(html).not.toContain("<img")
+    expect(html).not.toContain("<script")
+    expect(html).toContain("Taller Pepe")
+  })
+
+  it("escapa comillas en el src", () => {
+    const html = buildLabelHtml({ ...ingreso, logoDataUrl: 'https://x.com/a".png' }, "60x40")
+    expect(html).toContain("&quot;")
+    expect(html).not.toContain('a".png')
+  })
+
+  it("variante reparado tambien lleva el logo", () => {
+    const html = buildLabelHtml({ ...ingreso, variant: "reparado" }, "50x30")
+    expect(html).toContain('<img class="logo"')
+    expect(html).toContain("REPARADO")
   })
 })
 
@@ -226,8 +429,7 @@ describe("printDeviceLabel — el promise cierra recién cuando el print ocurri�
   it("onload a tiempo: imprime una sola vez y resuelve después del print", async () => {
     const fake = installFakeIframe({ readyState: "loading", images: [loadedImg()] })
 
-    // baseUrl vacío ⇒ no se genera QR, así que no hay await de qrcode en medio.
-    const { state, done } = track(printDeviceLabel(ingresoData, ""))
+    const { state, done } = track(printDeviceLabel(ingresoData))
     // El tamaño se resuelve (async) antes de armar el iframe: hay que dejar
     // que exista antes de dispararle el onload.
     await flush()
@@ -243,7 +445,7 @@ describe("printDeviceLabel — el promise cierra recién cuando el print ocurri�
 
   it("onload que nunca llega: el timeout imprime igual y el promise cierra", async () => {
     const fake = installFakeIframe({ readyState: "loading", images: [loadedImg()] })
-    const { state, done } = track(printDeviceLabel(ingresoData, ""))
+    const { state, done } = track(printDeviceLabel(ingresoData))
 
     await vi.advanceTimersByTimeAsync(3000)
 
@@ -254,7 +456,7 @@ describe("printDeviceLabel — el promise cierra recién cuando el print ocurri�
 
   it("onload tardío con el print en vuelo: NO cierra el promise antes del print", async () => {
     const fake = installFakeIframe({ readyState: "loading", images: [pendingImg()] })
-    const { state, done } = track(printDeviceLabel(ingresoData, ""))
+    const { state, done } = track(printDeviceLabel(ingresoData))
 
     // Se agota la espera de iframe.onload ⇒ arranca el print, que queda
     // esperando la imagen (su propio timeout vence 3s más tarde).
@@ -285,7 +487,7 @@ describe("printDeviceLabel — el promise cierra recién cuando el print ocurri�
       throw new Error("print falló")
     })
 
-    const { state, done } = track(printDeviceLabel(ingresoData, ""))
+    const { state, done } = track(printDeviceLabel(ingresoData))
 
     await vi.advanceTimersByTimeAsync(3000)
     fake.fireOnload()
@@ -299,7 +501,7 @@ describe("printDeviceLabel — el promise cierra recién cuando el print ocurri�
 
   it("documento ya completo: imprime una sola vez sin depender de onload", async () => {
     const fake = installFakeIframe({ readyState: "complete", images: [loadedImg()] })
-    const { state, done } = track(printDeviceLabel(ingresoData, ""))
+    const { state, done } = track(printDeviceLabel(ingresoData))
 
     await flush()
 
@@ -322,15 +524,81 @@ describe("printDeviceLabel — tamaño", () => {
   it("sin opts.size usa el tamaño resuelto de la org", async () => {
     vi.mocked(resolveEtiquetaSize).mockResolvedValueOnce("58mm")
     const fake = installFakeIframe({ readyState: "complete", images: [loadedImg()] })
-    await printDeviceLabel(ingresoData, "")
+    await printDeviceLabel(ingresoData)
     expect(printedHtml(fake)).toContain("size: 58mm auto")
   })
 
   it("opts.size explícito gana y no consulta a la org", async () => {
     vi.mocked(resolveEtiquetaSize).mockClear()
     const fake = installFakeIframe({ readyState: "complete", images: [loadedImg()] })
-    await printDeviceLabel(ingresoData, "", { size: "40x30" })
+    await printDeviceLabel(ingresoData, { size: "40x30" })
     expect(printedHtml(fake)).toContain("size: 40mm 30mm")
     expect(resolveEtiquetaSize).not.toHaveBeenCalled()
+  })
+})
+
+describe("printDeviceLabel — logo", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    clearLogoCache()
+    vi.restoreAllMocks()
+    document.body.innerHTML = ""
+  })
+  const withLogo: LabelData = { ...ingresoData, organizationName: "Taller Pepe", logoUrl: "https://x.com/l.png" }
+  const printed = (fake: ReturnType<typeof installFakeIframe>) =>
+    (fake.doc.write.mock.calls[0]?.[0] ?? "") as string
+
+  it("binariza logoUrl y lo imprime en lugar del nombre", async () => {
+    vi.mocked(imageUrlToBinarizedDataUrl).mockResolvedValueOnce("data:image/png;base64,AAAA")
+    const fake = installFakeIframe({ readyState: "complete", images: [loadedImg()] })
+    await printDeviceLabel(withLogo, { size: "60x40" })
+    expect(imageUrlToBinarizedDataUrl).toHaveBeenCalledWith("https://x.com/l.png", { maxWidth: 200 })
+    expect(printed(fake)).toContain('src="data:image/png;base64,AAAA"')
+    expect(printed(fake)).not.toContain("Taller Pepe")
+  })
+
+  it("rollo usa un raster mas ancho", async () => {
+    vi.mocked(imageUrlToBinarizedDataUrl).mockResolvedValueOnce("data:image/png;base64,AAAA")
+    installFakeIframe({ readyState: "complete", images: [loadedImg()] })
+    await printDeviceLabel(withLogo, { size: "58mm" })
+    expect(imageUrlToBinarizedDataUrl).toHaveBeenLastCalledWith("https://x.com/l.png", { maxWidth: 320 })
+  })
+
+  it.each([
+    ["devuelve null", () => vi.mocked(imageUrlToBinarizedDataUrl).mockResolvedValueOnce(null)],
+    ["rechaza", () => vi.mocked(imageUrlToBinarizedDataUrl).mockRejectedValueOnce(new Error("cors"))],
+  ])("si la binarizacion %s imprime con el nombre", async (_n, arrange) => {
+    arrange()
+    const fake = installFakeIframe({ readyState: "complete", images: [loadedImg()] })
+    await printDeviceLabel(withLogo, { size: "60x40" })
+    expect(printed(fake)).toContain("Taller Pepe")
+    expect(fake.print).toHaveBeenCalledTimes(1)
+  })
+
+  it("si el logo nunca termina de bajar, imprime igual con el nombre", async () => {
+    vi.useFakeTimers()
+    vi.mocked(imageUrlToBinarizedDataUrl).mockReturnValueOnce(new Promise(() => {}))
+    const fake = installFakeIframe({ readyState: "complete", images: [loadedImg()] })
+    const done = printDeviceLabel(withLogo, { size: "60x40" })
+    await vi.advanceTimersByTimeAsync(LOGO_TIMEOUT_MS)
+    await done
+    expect(printed(fake)).toContain("Taller Pepe")
+    expect(fake.print).toHaveBeenCalledTimes(1)
+  })
+
+  it("en una tanda de etiquetas el logo se baja y binariza una sola vez", async () => {
+    vi.mocked(imageUrlToBinarizedDataUrl).mockClear().mockResolvedValue("data:image/png;base64,AAAA")
+    installFakeIframe({ readyState: "complete", images: [loadedImg()] })
+    for (let i = 0; i < 3; i++) await printDeviceLabel(withLogo, { size: "60x40" })
+    expect(imageUrlToBinarizedDataUrl).toHaveBeenCalledTimes(1)
+  })
+
+  it("una falla no queda guardada: la proxima etiqueta reintenta el logo", async () => {
+    vi.mocked(imageUrlToBinarizedDataUrl).mockResolvedValueOnce(null).mockResolvedValueOnce("data:image/png;base64,AAAA")
+    const fake = installFakeIframe({ readyState: "complete", images: [loadedImg()] })
+    await printDeviceLabel(withLogo, { size: "60x40" })
+    await printDeviceLabel(withLogo, { size: "60x40" })
+    const segunda = fake.doc.write.mock.calls[1]?.[0] as string
+    expect(segunda).toContain('src="data:image/png;base64,AAAA"')
   })
 })

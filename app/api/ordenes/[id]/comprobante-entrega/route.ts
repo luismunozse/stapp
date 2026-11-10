@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateComprobanteEntregaPDF } from "@/lib/pdf"
 import { getDeviceTypeLabel } from "@/lib/device-types"
@@ -9,27 +10,23 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId, userId, role } = autenticado
     if (error) return error
 
     const { id } = await params
 
-    // Obtener orden con datos necesarios
-    const { data: orden, error: fetchError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select(`
+    // Obtener orden con datos necesarios, dentro del alcance de quien llama
+    const cargada = await cargarOrdenEnAlcance(id, actorDeSesion(autenticado), "ver", {
+      select: `
         *,
         tipos_dispositivo:tipo_dispositivo_id(nombre),
         clientes(*),
         users:entregado_por_user_id(id, nombre, email)
-      `)
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (fetchError || !orden) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-    }
+      `,
+    })
+    if ("error" in cargada) return cargada.error
+    const { orden } = cargada
 
     // Técnicos solo pueden ver comprobantes de sus órdenes asignadas
     if (role === "TECNICO" && orden.tecnico_id !== userId) {

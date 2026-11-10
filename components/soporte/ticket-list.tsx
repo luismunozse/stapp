@@ -178,7 +178,7 @@ export function TicketList() {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex flex-col items-end gap-1 shrink-0 sm:flex-row sm:items-center sm:gap-2">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${prioridad?.color || ""}`}>
                         {prioridad?.label}
                       </span>

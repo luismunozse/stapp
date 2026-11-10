@@ -125,6 +125,12 @@ export interface OrdenServicio {
   codigoOrden?: string
   clienteId: string
   tecnicoId?: string | null
+  /** Server hint for a TECNICO: this unassigned order can be taken by him (opt-in org permission). */
+  puedeTomar?: boolean
+  /** Detail only: the branch that works the order (its technicians are the ones that can be assigned). */
+  sucursalAtiendeId?: string
+  /** Detail only: this user may assign a technician (the server accepts a choice from that branch's list). */
+  puedeAsignarTecnico?: boolean
   dispositivo: string
   tipoDispositivo: TipoDispositivo
   tipoDispositivoId?: string | null
@@ -564,6 +570,8 @@ export interface ClienteSnapshot {
 export interface Turno {
   id: string
   organizationId: string
+  /** The branch the appointment belongs to. */
+  sucursalId?: string | null
   clienteId: string | null
   clienteSnapshot: ClienteSnapshot | null
   tecnicoId: string | null

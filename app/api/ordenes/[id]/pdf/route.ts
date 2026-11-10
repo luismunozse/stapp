@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
+import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateOrdenPDF, OrdenPDFData } from "@/lib/pdf"
 import { getDeviceTypeLabel } from "@/lib/device-types"
@@ -13,15 +14,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const autenticado = await requireAuth()
+    const { error, organizationId, userId, role } = autenticado
     if (error) return error
 
     const { id } = await params
 
-    // Obtener la orden con datos del cliente y organización
-    const { data: orden, error: dbError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select(`
+    // Obtener la orden con datos del cliente y organización, dentro del alcance de quien llama
+    const cargada = await cargarOrdenEnAlcance(id, actorDeSesion(autenticado), "ver", {
+      select: `
         *,
         tipos_dispositivo:tipo_dispositivo_id(nombre, config),
         clientes (*),
@@ -51,17 +52,10 @@ export async function GET(
         garantias (
           dias_validez, fecha_vencimiento, notas
         )
-      `)
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (dbError || !orden) {
-      return NextResponse.json(
-        { error: "Orden no encontrada" },
-        { status: 404 }
-      )
-    }
+      `,
+    })
+    if ("error" in cargada) return cargada.error
+    const { orden } = cargada
 
     // Técnicos solo pueden ver PDF de sus órdenes asignadas
     if (role === "TECNICO" && orden.tecnico_id !== userId) {

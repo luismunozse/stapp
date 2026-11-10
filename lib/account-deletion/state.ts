@@ -15,6 +15,17 @@ export function anonymizedEmail(userId: string): string {
   return `deleted+${userId}@${ANON_EMAIL_DOMAIN}`
 }
 
+/**
+ * Placeholder for an admin baja: frees the unique email right away so the same
+ * person can be re-hired. Deliberately NOT in the anonymized domain, otherwise
+ * the 30-day cron would treat the row as already anonymized and skip it.
+ */
+export const BAJA_EMAIL_DOMAIN = "baja.stapp.invalid"
+
+export function bajaEmail(userId: string): string {
+  return `baja+${userId}@${BAJA_EMAIL_DOMAIN}`
+}
+
 export function isAnonymizedEmail(email: string | null | undefined): boolean {
   return !!email && email.endsWith(`@${ANON_EMAIL_DOMAIN}`)
 }

@@ -73,6 +73,15 @@ export interface ResumenCCPDFData extends DocumentoBase {
   /** Balance the account carried into the period (0 when it had no history). */
   saldoInicial: number
   saldoFinal: number
+  /**
+   * Branch-scoped statement. `saldo_posterior` is the ORG-WIDE running balance,
+   * so once the lines are narrowed to one branch the per-row balance and the
+   * opening balance stop reconciling with the printed movements (and would show
+   * other branches' activity). In this mode the document prints no running
+   * balance at all: no SALDO column, no opening row. `saldoFinal` is then the
+   * customer's current org-wide balance.
+   */
+  sinSaldosAcumulados?: boolean
   /** Oldest first — the statement reads top-down. */
   movimientos: ResumenCCMovimiento[]
 }
@@ -318,6 +327,8 @@ export function ResumenCCDocument({
   const totalDebe = movimientos.reduce((acc, m) => (m.monto < 0 ? acc + Math.abs(m.monto) : acc), 0)
   const totalHaber = movimientos.reduce((acc, m) => (m.monto > 0 ? acc + m.monto : acc), 0)
   const { label: saldoLabel, valor: saldoValor } = saldoHeadline(data.saldoFinal)
+  const sinSaldos = data.sinSaldosAcumulados === true
+  const columnas = sinSaldos ? COLUMNAS_MOVIMIENTOS.filter((c) => c.key !== "saldo") : COLUMNAS_MOVIMIENTOS
 
   return (
     <Document>
@@ -342,7 +353,9 @@ export function ResumenCCDocument({
         </Cabecera>
 
         <Seccion titulo="Movimientos del período">
-          <FilaDetalle label={`Saldo inicial al ${desde}`} valor={fmt(data.saldoInicial)} />
+          {sinSaldos ? null : (
+            <FilaDetalle label={`Saldo inicial al ${desde}`} valor={fmt(data.saldoInicial)} />
+          )}
 
           {movimientos.length === 0 ? (
             <Text style={styles.vacio}>Sin movimientos en el período.</Text>
@@ -352,7 +365,7 @@ export function ResumenCCDocument({
                document's own look; the remito's two tables share the component
                but not the band. */
             <Tabla
-              columnas={COLUMNAS_MOVIMIENTOS}
+              columnas={columnas}
               headerFijo
               headerSombreado
               filas={movimientos.map((mov) => {
@@ -368,7 +381,7 @@ export function ResumenCCDocument({
                   comprobante: safe(mov.numeroReferencia) || safe(mov.referenciaTipo),
                   debe: mov.monto < 0 ? fmt(Math.abs(mov.monto)) : "",
                   haber: mov.monto > 0 ? fmt(mov.monto) : "",
-                  saldo: fmt(mov.saldoPosterior),
+                  saldo: sinSaldos ? "" : fmt(mov.saldoPosterior),
                 }
               })}
               pie={
@@ -376,14 +389,18 @@ export function ResumenCCDocument({
                   <Text style={styles.totalesLabel}>Totales del período</Text>
                   <Text style={styles.totalesCell}>{fmt(totalDebe)}</Text>
                   <Text style={styles.totalesCell}>{fmt(totalHaber)}</Text>
-                  <Text style={styles.totalesSaldo}>{fmt(data.saldoFinal)}</Text>
+                  {sinSaldos ? null : <Text style={styles.totalesSaldo}>{fmt(data.saldoFinal)}</Text>}
                 </View>
               }
             />
           )}
 
           <BarraTotal label={saldoLabel} valor={fmt(saldoValor)} />
-          <Text style={styles.saldoNote}>Saldo de la cuenta corriente al {hasta}.</Text>
+          <Text style={styles.saldoNote}>
+            {sinSaldos
+              ? "Saldo actual de la cuenta corriente del cliente (todas las sucursales)."
+              : <>Saldo de la cuenta corriente al {hasta}.</>}
+          </Text>
         </Seccion>
 
         <Pie

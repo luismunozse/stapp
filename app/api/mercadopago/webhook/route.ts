@@ -3,6 +3,11 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { verifyWebhookSignature } from "@/lib/mercadopago"
 import { organizationAcceptsBilling } from "@/lib/account-deletion/org-state"
 import { beginWebhookEvent, finishWebhookEvent } from "@/lib/webhook-log"
+import {
+  findSubscriptionPayment,
+  revokeSubscriptionPayment,
+  type ReversalKind,
+} from "@/lib/subscription-reversals"
 
 export async function POST(request: NextRequest) {
   // Capturamos el body como texto primero para poder parsearlo y loguearlo
@@ -292,6 +297,29 @@ export async function handlePaymentNotification(
   }
 
   const payment = await response.json()
+
+  // Reembolso total o contracargo de un pago ya registrado. El estado viene del
+  // re-fetch autenticado de arriba, no del body de la notificación. Va antes de
+  // leer external_reference porque los cobros recurrentes no lo traen: el pago
+  // se ubica por su id y la organización sale del registro propio.
+  if (payment.status === "refunded" || payment.status === "charged_back") {
+    const kind: ReversalKind = payment.status === "charged_back" ? "CHARGEBACK" : "REFUND"
+    const registered = await findSubscriptionPayment("MERCADOPAGO", String(paymentId))
+    const reversal = await revokeSubscriptionPayment(registered, kind, "MERCADOPAGO")
+    console.log(
+      `[MP webhook] Payment ${paymentId} status=${payment.status}: ${reversal.status} (${reversal.reason})`
+    )
+    return reversal
+  }
+
+  // Reembolso parcial: el pago sigue approved con monto devuelto. No se revoca
+  // el acceso; queda en el log para revisión.
+  if (payment.status === "approved" && Number(payment.transaction_amount_refunded) > 0) {
+    console.warn(
+      `[MP webhook] Payment ${paymentId} con reembolso parcial ` +
+        `(${payment.transaction_amount_refunded} de ${payment.transaction_amount}) - no se revoca el acceso`
+    )
+  }
 
   // Extraer external_reference. Los pagos generados por una suscripción
   // recurrente no cargan external_reference: lo lleva sólo el preapproval

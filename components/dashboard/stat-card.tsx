@@ -69,12 +69,15 @@ export function StatCard({
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-medium text-muted-foreground sm:text-sm">
+        <p
+          title={title}
+          className="min-w-0 text-xs font-medium leading-tight text-muted-foreground sm:text-sm"
+        >
           {title}
         </p>
         <span
           className={cn(
-            "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg",
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
             TONE_CHIP[tone]
           )}
         >

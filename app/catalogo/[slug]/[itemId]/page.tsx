@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation"
+import { serializeJsonLd } from "@/lib/seo/serialize-json-ld"
 import Link from "next/link"
 import { unstable_cache } from "next/cache"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -334,11 +335,11 @@ export default async function ItemPermalinkPage({ params }: PageProps) {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(productLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(productLd) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbLd) }}
       />
       <CatalogoItemView data={data} />
       <div className="container mx-auto max-w-5xl px-4 pb-8 text-center">

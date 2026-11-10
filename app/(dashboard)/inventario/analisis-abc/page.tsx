@@ -207,7 +207,7 @@ export default function AnalisisAbcPage() {
                             />
                           </div>
                         </div>
-                        <div className="text-xs text-muted-foreground shrink-0 w-32 text-right">
+                        <div className="text-xs text-muted-foreground shrink-0 sm:w-32 text-right whitespace-nowrap sm:whitespace-normal">
                           {count} items · {formatPrice(monto)}
                         </div>
                       </div>

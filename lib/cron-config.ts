@@ -70,6 +70,13 @@ export const CRON_JOBS: CronJobDefinition[] = [
     description: "Refresca el estado real de las instancias y alerta si se caen",
   },
   {
+    id: "avisos-push",
+    name: "Avisos Push",
+    path: "/api/cron/avisos-push",
+    schedule: "Cada minuto",
+    description: "Manda como push los avisos de la campanita que todavía no salieron",
+  },
+  {
     id: "catalogo-pii-purge",
     name: "Catálogo PII Purge",
     path: "/api/cron/catalogo-pii-purge",

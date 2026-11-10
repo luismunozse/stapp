@@ -67,9 +67,9 @@ export function createChainMock(finalData: any = null, finalError: any = null, c
   const methods = [
     "select", "insert", "update", "upsert", "delete",
     "eq", "neq", "not", "gte", "lte", "gt", "lt",
-    "or", "in", "is", "ilike", "textSearch",
+    "or", "in", "is", "like", "ilike", "textSearch",
     "order", "limit", "range",
-    "maybeSingle",
+    "maybeSingle", "abortSignal",
   ]
 
   for (const method of methods) {

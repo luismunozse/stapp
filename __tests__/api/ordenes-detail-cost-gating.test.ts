@@ -32,6 +32,8 @@ function mockRole(role: string, overrides: Record<string, any> = {}) {
       id: overrides.userId || "user-1",
       organizationId: "org-1",
       role,
+      // Everybody works in suc-1, where the orders below were created.
+      sucursalId: "suc-1",
       email: "u@u.com",
       ...overrides,
     },
@@ -42,6 +44,7 @@ function mockRole(role: string, overrides: Record<string, any> = {}) {
 const ordenRow = {
   id: "o1",
   organization_id: "org-1",
+  sucursal_id: "suc-1",
   tecnico_id: "tec-1",
   clientes: null,
   users: null,
@@ -271,6 +274,7 @@ describe("PUT /api/ordenes/[id] — cost gates reach formatOrden", () => {
     id: "o1",
     numero_orden: 1,
     organization_id: "org-1",
+    sucursal_id: "suc-1",
     tecnico_id: "tec-1",
     estado: "RECIBIDO",
     presupuesto: null,

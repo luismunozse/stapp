@@ -167,3 +167,29 @@ describe("OrdenDetail: paper size of this print", () => {
     expect(pdfRequests()).toEqual(["/api/ordenes/ord-1/pdf?papel=A5", "/api/ordenes/ord-1/pdf?papel=A6"])
   })
 })
+
+describe("OrdenDetail: device label carries the workshop", () => {
+  it("both label buttons send the workshop name and logo, so a workshop without logo still prints its name", async () => {
+    const { printDeviceLabel } = await import("@/components/ordenes/print-label")
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === "/api/ordenes/ord-1") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ...ORDEN, organizationName: "Taller Gafa", organizationLogoUrl: "https://cdn.test/logo.png" }),
+        }
+      }
+      return { ok: true, status: 200, json: async () => [] }
+    })
+    render(<OrdenDetail ordenId="ord-1" />)
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Etiqueta$/ }))
+    fireEvent.click(screen.getByRole("button", { name: /Etiqueta Reparado/ }))
+
+    const calls = vi.mocked(printDeviceLabel).mock.calls.map((c) => c[0])
+    expect(calls).toHaveLength(2)
+    for (const data of calls) {
+      expect(data).toMatchObject({ organizationName: "Taller Gafa", logoUrl: "https://cdn.test/logo.png" })
+    }
+  })
+})

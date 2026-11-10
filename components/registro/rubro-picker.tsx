@@ -61,7 +61,7 @@ export function RubroPicker({
             onClick={() => onChange(rubro.id)}
             title={rubro.descripcion}
             className={cn(
-              "flex flex-col items-start gap-1.5 rounded-lg border p-3 text-left transition-colors",
+              "flex min-w-0 flex-col items-start gap-1.5 rounded-lg border p-3 text-left transition-colors",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               "disabled:cursor-not-allowed disabled:opacity-50",
               seleccionado
@@ -73,7 +73,10 @@ export function RubroPicker({
               className={cn("h-5 w-5", seleccionado ? "text-primary" : "text-muted-foreground")}
               aria-hidden="true"
             />
-            <span className="text-sm font-medium leading-tight">{rubro.nombre}</span>
+            {/* hyphens-auto: "Electrodomésticos" no entra entero en la tarjeta de 3 columnas */}
+            <span className="w-full text-sm font-medium leading-tight hyphens-auto [overflow-wrap:anywhere]">
+              {rubro.nombre}
+            </span>
             {rubro.ejemplos.length > 0 && (
               <span className="text-xs leading-tight text-muted-foreground">
                 {rubro.ejemplos.slice(0, 3).join(" · ")}

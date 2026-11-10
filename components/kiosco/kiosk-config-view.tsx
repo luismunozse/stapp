@@ -299,8 +299,8 @@ export function KioskConfigView() {
               <Card key={t.id} className={!t.activo ? "opacity-60" : ""}>
                 <CardContent className="py-4">
                   {/* Header row */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3 min-w-0 sm:items-center">
                       <Switch
                         checked={t.activo}
                         onCheckedChange={() => handleToggleActivo(t)}
@@ -313,7 +313,7 @@ export function KioskConfigView() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0 ml-4">
+                    <div className="flex items-center gap-1.5 sm:shrink-0 sm:ml-4">
                       <Button
                         variant="outline"
                         size="sm"

@@ -114,20 +114,39 @@ export async function getSubscriptionInfo(
   }
 }
 
+// COUNT en vivo de vendedores o técnicos de la org. No usamos los contadores
+// cacheados (organization_usage.vendedores_count / tecnicos_count): los mantiene
+// un trigger que solo descuenta en DELETE, y una baja (deleted_at) conserva la
+// fila, así que el cupo del plan nunca se liberaría. NO se filtra por activo:
+// desactivar a alguien no libera el cupo.
+async function countPersonal(organizationId: string, rol: "VENDEDOR" | "TECNICO"): Promise<number> {
+  const { count } = await supabaseAdmin
+    .from("users")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .eq("rol", rol)
+    .is("deleted_at", null)
+  return count ?? 0
+}
+
 // Obtener información de uso de una organización
 export async function getUsageInfo(organizationId: string): Promise<UsageInfo> {
-  const { data } = await supabaseAdmin
-    .from("organization_usage")
-    .select("*")
-    .eq("organization_id", organizationId)
-    .single()
+  const [{ data }, vendedores, tecnicos] = await Promise.all([
+    supabaseAdmin
+      .from("organization_usage")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .single(),
+    countPersonal(organizationId, "VENDEDOR"),
+    countPersonal(organizationId, "TECNICO"),
+  ])
 
   if (!data) {
     return {
       ordenesMesActual: 0,
       ordenesTotal: 0,
-      tecnicos: 0,
-      vendedores: 0,
+      tecnicos,
+      vendedores,
       clientes: 0,
       storageMb: 0,
     }
@@ -136,8 +155,8 @@ export async function getUsageInfo(organizationId: string): Promise<UsageInfo> {
   return {
     ordenesMesActual: data.ordenes_mes_actual || 0,
     ordenesTotal: data.ordenes_count || 0,
-    tecnicos: data.tecnicos_count || 0,
-    vendedores: data.vendedores_count || 0,
+    tecnicos,
+    vendedores,
     clientes: data.clientes_count || 0,
     storageMb: parseFloat(data.storage_used_mb || "0"),
   }

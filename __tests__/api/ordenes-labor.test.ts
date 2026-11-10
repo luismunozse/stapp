@@ -34,11 +34,11 @@ describe("PUT /api/ordenes/[id] labor cost", () => {
   it("snapshots the technician costo_hora onto the order when assigning", async () => {
     mockAuthSuccess()
     const ordenChain = createChainMock({
-      id: "o1", organization_id: "org-1", tecnico_id: null, estado: "RECIBIDO",
+      id: "o1", organization_id: "org-1", sucursal_id: "suc-1", tecnico_id: null, estado: "RECIBIDO",
       clientes: { id: "c-1", nombre: "Test", email: null, telefono: null },
       organizations: { id: "org-1", nombre: "Org", nombre_mostrar: "Org", slug: "org", moneda: "ARS", zona_horaria: "America/Argentina/Buenos_Aires" },
     })
-    const usersChain = createChainMock({ id: "tec-1", rol: "TECNICO", porcentaje_comision: 10, costo_hora: 1500 })
+    const usersChain = createChainMock({ id: "tec-1", rol: "TECNICO", sucursal_id: "suc-1", porcentaje_comision: 10, costo_hora: 1500 })
     mockSupabaseFrom({ ordenes_servicio: ordenChain, users: usersChain })
 
     const req = createPostRequest({ tecnicoId: "tec-1" }, "http://localhost:3000/api/ordenes/o1")

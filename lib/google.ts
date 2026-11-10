@@ -25,9 +25,13 @@ export async function verifyGoogleIdToken(idToken: string): Promise<GoogleUserIn
 
   const payload = await response.json()
 
-  // Verify the audience matches our client ID
+  // Verify the audience matches our client ID. Sin client id configurado no
+  // hay forma de saber para quién se emitió el token: falla cerrado.
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-  if (clientId && payload.aud !== clientId) {
+  if (!clientId) {
+    throw new Error("El login con Google no está configurado")
+  }
+  if (payload.aud !== clientId) {
     throw new Error("Token de Google no corresponde a esta aplicación")
   }
 
@@ -36,10 +40,17 @@ export async function verifyGoogleIdToken(idToken: string): Promise<GoogleUserIn
     throw new Error("Emisor de token inválido")
   }
 
+  // Una cuenta de Google puede tener un email que Google no verificó (cuentas
+  // con email de otro dominio). Ese email no prueba nada: no se acepta.
+  const emailVerified = payload.email_verified === "true" || payload.email_verified === true
+  if (!emailVerified) {
+    throw new Error("El email de la cuenta de Google no está verificado")
+  }
+
   return {
     email: payload.email,
     name: payload.name || payload.email.split("@")[0],
     picture: payload.picture,
-    emailVerified: payload.email_verified === "true",
+    emailVerified,
   }
 }

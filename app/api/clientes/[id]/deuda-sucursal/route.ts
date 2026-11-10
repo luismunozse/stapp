@@ -46,10 +46,24 @@ export async function GET(
 
     const row = Array.isArray(data) ? data[0] : data
 
+    // Only worth announcing "this sucursal" when there is another one to confuse
+    // it with. A failed lookup hides the caption rather than failing the request.
+    let porSucursal = false
+    if (sid) {
+      const { data: sucursales, error: sucError } = await supabaseAdmin
+        .from("sucursales")
+        .select("id")
+        .eq("organization_id", organizationId!)
+        .eq("activo", true)
+        .is("deleted_at", null)
+      porSucursal = !sucError && Array.isArray(sucursales) && sucursales.length > 1
+    }
+
     return NextResponse.json({
       deudaTotal: Number(row?.deuda_total ?? 0),
       deudaFiado: Number(row?.deuda_fiado ?? 0),
       deudaOrdenes: Number(row?.deuda_ordenes ?? 0),
+      porSucursal,
     })
   } catch (err) {
     console.error("Error fetching deuda cliente sucursal:", err)

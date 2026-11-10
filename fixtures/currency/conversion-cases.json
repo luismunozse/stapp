@@ -1,0 +1,53 @@
+[
+  {
+    "name": "S3.a: USD 10 at 1300, card surcharge 10% applied after conversion",
+    "input": {
+      "lineas": [{ "cantidad": 1, "precioUnitario": 0, "moneda": "USD", "precioOrigen": 10 }],
+      "tipoCambio": 1300,
+      "redondeoConversion": 0,
+      "factor": 1.1,
+      "fiscal": { "regimen": "EXENTO", "tasa": 0, "redondeoEfectivo": 10 },
+      "roundCash": false
+    },
+    "expected": { "precioUnitarioLocal": [13000], "subtotal": 14300, "total": 14300, "redondeo": 0 }
+  },
+  {
+    "name": "S3.b: final total 14307 rounded to a multiple of 100 records the delta",
+    "input": {
+      "lineas": [{ "cantidad": 1, "precioUnitario": 14307 }],
+      "tipoCambio": null,
+      "redondeoConversion": 0,
+      "factor": 1,
+      "fiscal": { "regimen": "EXENTO", "tasa": 0, "redondeoEfectivo": 100 },
+      "roundCash": true
+    },
+    "expected": { "precioUnitarioLocal": [14307], "subtotal": 14307, "total": 14300, "redondeo": -7 }
+  },
+  {
+    "name": "conversion rounding to the nearest 10 happens before the surcharge",
+    "input": {
+      "lineas": [{ "cantidad": 2, "precioUnitario": 0, "moneda": "USD", "precioOrigen": 9.99 }],
+      "tipoCambio": 1305.5,
+      "redondeoConversion": 10,
+      "factor": 1.1,
+      "fiscal": { "regimen": "EXENTO", "tasa": 0, "redondeoEfectivo": 0 },
+      "roundCash": false
+    },
+    "expected": { "precioUnitarioLocal": [13040], "subtotal": 28688, "total": 28688, "redondeo": 0 }
+  },
+  {
+    "name": "mixed local and USD lines with IVA included and cash rounding",
+    "input": {
+      "lineas": [
+        { "cantidad": 1, "precioUnitario": 1000 },
+        { "cantidad": 1, "precioUnitario": 0, "moneda": "USD", "precioOrigen": 10 }
+      ],
+      "tipoCambio": 1300,
+      "redondeoConversion": 0,
+      "factor": 1,
+      "fiscal": { "regimen": "INCLUIDO", "tasa": 21, "redondeoEfectivo": 100 },
+      "roundCash": true
+    },
+    "expected": { "precioUnitarioLocal": [1000, 13000], "subtotal": 14000, "total": 14000, "redondeo": 0 }
+  }
+]
