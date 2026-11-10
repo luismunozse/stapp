@@ -1,11 +1,14 @@
 "use client"
 
-import { useState, Suspense } from "react"
+import { useEffect, useState, Suspense } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { AuthSplitLayout } from "@/components/auth/auth-split-layout"
 import { AuthHeader } from "@/components/auth/auth-header"
+import { isNativePlatform } from "@/lib/capacitor"
+import { isValidTenantSlug } from "@/lib/account-deletion/urls"
+import { rememberTenant } from "@/lib/app-entry-tenants"
 import { Mail, Loader2, CheckCircle2, AlertCircle, ArrowRight } from "lucide-react"
 
 function VerificarContent() {
@@ -19,6 +22,12 @@ function VerificarContent() {
 
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
   const loginUrl = slug ? `https://${slug}.${rootDomain}/login` : "/login"
+
+  // En la app nativa, recordar el negocio recién creado: la próxima vez que se
+  // abra, /app-entry va directo a su login en vez de pedir el identificador.
+  useEffect(() => {
+    if (slug && isNativePlatform() && isValidTenantSlug(slug)) rememberTenant(slug)
+  }, [slug])
 
   const [resendLoading, setResendLoading] = useState(false)
   const [resendStatus, setResendStatus] = useState<"idle" | "success" | "error">("idle")
