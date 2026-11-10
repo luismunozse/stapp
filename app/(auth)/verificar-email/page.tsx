@@ -2,12 +2,11 @@
 
 import { useEffect, useState, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ThemeToggle } from "@/components/ui/theme-toggle"
+import { AuthSplitLayout } from "@/components/auth/auth-split-layout"
+import { AuthHeader } from "@/components/auth/auth-header"
 import { CheckCircle, XCircle, Loader2, Mail } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import { BusinessLogo } from "@/components/shared/business-logo"
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams()
@@ -85,114 +84,84 @@ function VerifyEmailContent() {
     router.push("/login")
   }
 
+  const ok = status === "success" || status === "already"
+
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background px-4">
-      <div className="absolute top-4 right-4">
-        <ThemeToggle variant="icon" />
-      </div>
+    <AuthSplitLayout>
+      <div className="space-y-8" aria-live="polite">
+        <AuthHeader
+          icon={
+            status === "loading" ? (
+              <Loader2 className="animate-spin" />
+            ) : ok ? (
+              <CheckCircle />
+            ) : (
+              <XCircle />
+            )
+          }
+          tone={status === "error" ? "error" : ok ? "success" : "info"}
+          title={
+            status === "loading"
+              ? "Verificando tu cuenta…"
+              : status === "success"
+                ? "¡Email verificado!"
+                : status === "already"
+                  ? "Tu email ya estaba verificado"
+                  : "No pudimos verificar tu cuenta"
+          }
+          description={
+            status === "loading"
+              ? "Esto tarda unos segundos."
+              : status === "success"
+                ? "Tu cuenta está lista. Ya podés iniciar sesión."
+                : status === "already"
+                  ? "Tu cuenta ya había sido verificada antes. Podés iniciar sesión."
+                  : errorMessage
+          }
+        />
 
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 pb-4">
-          <div className="flex justify-center py-4">
-            <BusinessLogo size="xl" showText={false} />
-          </div>
-          <CardTitle className="text-2xl text-center">
-            Verificación de Email
-          </CardTitle>
-          <CardDescription className="text-center">
-            {status === "loading" && "Verificando tu cuenta..."}
-            {status === "success" && "Tu cuenta ha sido verificada"}
-            {status === "already" && "Tu cuenta ya estaba verificada"}
-            {status === "error" && "No pudimos verificar tu cuenta"}
-          </CardDescription>
-        </CardHeader>
+        {ok && (
+          <Button onClick={handleGoToLogin} className="w-full h-11">
+            Ir a iniciar sesión
+          </Button>
+        )}
 
-        <CardContent className="flex flex-col items-center space-y-6">
-          {status === "loading" && (
-            <div className="flex flex-col items-center gap-4">
-              <Loader2 className="h-16 w-16 animate-spin text-primary" />
-              <p className="text-muted-foreground">Por favor espera...</p>
-            </div>
-          )}
-
-          {(status === "success" || status === "already") && (
-            <div className="flex flex-col items-center gap-4">
-              <div className="rounded-full bg-green-100 dark:bg-green-900/30 p-4">
-                <CheckCircle className="h-12 w-12 text-green-600 dark:text-green-400" />
-              </div>
-              <div className="text-center space-y-2">
-                <p className="text-lg font-medium text-foreground">
-                  {status === "success" ? "¡Email verificado!" : "Email ya verificado"}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {status === "success"
-                    ? "Tu cuenta está lista. Ya puedes iniciar sesión."
-                    : "Tu cuenta ya había sido verificada anteriormente."}
-                </p>
-              </div>
-              <Button onClick={handleGoToLogin} className="w-full mt-4">
-                Ir a Iniciar Sesión
-              </Button>
-            </div>
-          )}
-
-          {status === "error" && (
-            <div className="flex flex-col items-center gap-4 w-full">
-              <div className="rounded-full bg-red-100 dark:bg-red-900/30 p-4">
-                <XCircle className="h-12 w-12 text-red-600 dark:text-red-400" />
-              </div>
-              <div className="text-center space-y-2">
-                <p className="text-lg font-medium text-foreground">
-                  Error de verificación
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {errorMessage}
-                </p>
-              </div>
-
-              {/* Resend verification */}
-              <div className="w-full space-y-3 mt-2 p-4 bg-muted/50 rounded-lg">
-                <p className="text-sm text-center text-muted-foreground flex items-center justify-center gap-1">
-                  <Mail className="h-4 w-4" />
-                  ¿Necesitás un nuevo enlace de verificación?
-                </p>
-                <div className="flex gap-2">
-                  <Input
-                    type="email"
-                    placeholder="tu@email.com"
-                    value={resendEmail}
-                    onChange={(e) => setResendEmail(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Button
-                    onClick={handleResend}
-                    disabled={resendLoading}
-                    size="sm"
-                    className="shrink-0"
-                  >
-                    {resendLoading ? "Enviando..." : "Reenviar"}
-                  </Button>
-                </div>
-                {resendSuccess && (
-                  <p className="text-xs text-green-600 dark:text-green-400 text-center">
-                    Email enviado. Revisá tu bandeja de entrada y la carpeta de spam.
-                  </p>
-                )}
-                {resendError && (
-                  <p className="text-xs text-destructive text-center">{resendError}</p>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-2 w-full mt-2">
-                <Button onClick={handleGoToLogin} variant="outline" className="w-full">
-                  Ir a Iniciar Sesión
+        {status === "error" && (
+          <>
+            <div className="space-y-3 rounded-xl border bg-muted/40 p-4">
+              <p className="flex items-center gap-1.5 text-sm font-medium">
+                <Mail className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                ¿Necesitás un nuevo enlace de verificación?
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  placeholder="tu@email.com"
+                  aria-label="Email para reenviar la verificación"
+                  autoComplete="email"
+                  value={resendEmail}
+                  onChange={(e) => setResendEmail(e.target.value)}
+                  className="flex-1"
+                />
+                <Button onClick={handleResend} disabled={resendLoading} className="shrink-0">
+                  {resendLoading ? "Enviando..." : "Reenviar"}
                 </Button>
               </div>
+              {resendSuccess && (
+                <p className="text-xs text-success">
+                  Email enviado. Revisá tu bandeja de entrada y la carpeta de spam.
+                </p>
+              )}
+              {resendError && <p className="text-xs text-destructive">{resendError}</p>}
             </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+
+            <Button onClick={handleGoToLogin} variant="outline" className="w-full h-11">
+              Ir a iniciar sesión
+            </Button>
+          </>
+        )}
+      </div>
+    </AuthSplitLayout>
   )
 }
 
@@ -200,7 +169,7 @@ export default function VerificarEmailPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background">
+        <div className="min-h-dvh flex items-center justify-center bg-background">
           <div className="animate-pulse text-muted-foreground">Cargando...</div>
         </div>
       }
