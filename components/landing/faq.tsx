@@ -20,7 +20,7 @@ export function FAQ({ faqs }: FAQProps) {
 
   return (
     <LazyMotion features={domAnimation}>
-      <section id="faq" className="py-6 sm:py-8 overflow-hidden">
+      <section id="faq" className="py-10 sm:py-12 overflow-hidden">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           {/* Header */}
           <m.div
