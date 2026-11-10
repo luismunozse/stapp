@@ -9,8 +9,7 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ThemeToggle } from "@/components/ui/theme-toggle"
+import { AuthSplitLayout } from "@/components/auth/auth-split-layout"
 import { Eye, EyeOff, CheckCircle, Mail } from "lucide-react"
 import { BusinessLogo } from "@/components/shared/business-logo"
 import { savePWATokens } from "@/components/auth/session-refresher"
@@ -356,10 +355,7 @@ function LoginForm() {
   // Mostrar pantalla de verificacion 2FA
   if (requires2FA && pending2FAUserId) {
     return (
-      <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background px-4">
-        <div className="absolute top-4 right-4">
-          <ThemeToggle variant="icon" />
-        </div>
+      <AuthSplitLayout>
         <TwoFactorVerify
           userId={pending2FAUserId ?? undefined}
           onVerified={handle2FAVerified}
@@ -371,43 +367,38 @@ function LoginForm() {
             setTwoFAError("")
           }}
         />
-      </div>
+      </AuthSplitLayout>
     )
   }
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background px-4">
-      {/* Theme toggle in corner */}
-      <div className="absolute top-4 right-4">
-        <ThemeToggle variant="icon" />
-      </div>
-
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 pb-2">
-          <div className="flex justify-center py-4">
+    <AuthSplitLayout>
+      <div className="space-y-8">
+        <div className="space-y-6">
+          <div className="flex justify-center lg:justify-start">
             {tenantInfo?.logoUrl ? (
               <Image
                 src={tenantInfo.logoUrl}
                 alt={tenantInfo.nombre}
                 width={192}
                 height={64}
-                className="h-16 w-auto object-contain"
+                className="h-14 w-auto object-contain"
                 unoptimized
               />
             ) : (
               <BusinessLogo size="xl" showText={false} />
             )}
           </div>
-          {tenantInfo && (
-            <CardTitle className="text-center text-xl">
-              {tenantInfo.nombre}
-            </CardTitle>
-          )}
-          <CardDescription className="text-center">
-            Ingresa tus credenciales para acceder
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          <div className="space-y-1.5 text-center lg:text-left">
+            <h1 className="text-2xl font-bold tracking-tight">
+              {tenantInfo ? tenantInfo.nombre : "Bienvenido de nuevo"}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Ingresa tus credenciales para acceder
+            </p>
+          </div>
+        </div>
+        <div>
           <form onSubmit={handleSubmit} className="space-y-4">
             {showSuccess && (
               <div className={`${showVerifyMessage ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400" : "bg-success-50 dark:bg-success-100 border-success/30 text-success-700 dark:text-success-600"} border px-4 py-3 rounded flex items-center gap-2`}>
@@ -491,7 +482,7 @@ function LoginForm() {
                 </Button>
               </div>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -510,7 +501,7 @@ function LoginForm() {
                 ¿Olvidaste tu contraseña?
               </Link>
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full h-11" disabled={loading}>
               {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
             </Button>
           </form>
@@ -523,7 +514,7 @@ function LoginForm() {
                   <span className="w-full border-t" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">
+                  <span className="bg-muted/30 lg:bg-background dark:bg-background px-2 text-muted-foreground">
                     O continuar con
                   </span>
                 </div>
@@ -577,10 +568,9 @@ function LoginForm() {
               </div>
             )}
           </div>
-
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </div>
+    </AuthSplitLayout>
   )
 }
 

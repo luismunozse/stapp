@@ -1,5 +1,6 @@
 "use client"
 
+import { useId } from "react"
 import { cn } from "@/lib/utils"
 
 interface STAppLogoProps {
@@ -24,6 +25,10 @@ export function STAppLogo({
   showText = true
 }: STAppLogoProps) {
   const { icon, text, gap } = sizeConfig[size]
+  // Id único por instancia: con uno fijo, si hay dos logos en la página y el
+  // primero está oculto (display:none), url(#id) apunta al oculto y el cuerpo
+  // del teléfono no se pinta.
+  const gradientId = `stapp-device-gradient-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`
   const displayText = variant === "full" && showText
 
   return (
@@ -38,7 +43,7 @@ export function STAppLogo({
         aria-hidden="true"
       >
         <defs>
-          <linearGradient id="stappDeviceGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" className="[stop-color:hsl(var(--primary))]" />
             <stop offset="100%" className="[stop-color:hsl(var(--primary)/0.7)]" />
           </linearGradient>
@@ -50,7 +55,7 @@ export function STAppLogo({
           width="28"
           height="40"
           rx="6"
-          fill="url(#stappDeviceGradient)"
+          fill={`url(#${gradientId})`}
         />
         {/* Screen */}
         <rect
