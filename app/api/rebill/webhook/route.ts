@@ -3,6 +3,11 @@ import { timingSafeEqual } from "crypto"
 import { supabaseAdmin } from "@/lib/supabase"
 import { organizationAcceptsBilling } from "@/lib/account-deletion/org-state"
 import { beginWebhookEvent, finishWebhookEvent } from "@/lib/webhook-log"
+import {
+  findSubscriptionPayment,
+  revokeSubscriptionPayment,
+  type ReversalKind,
+} from "@/lib/subscription-reversals"
 
 /**
  * Verificación de autenticidad del webhook de Rebill.
@@ -165,9 +170,41 @@ type RebillHandlerResult = {
   reason?: string
 }
 
+// Estados de pago de Rebill que revierten el cobro. Se comparan en minúscula
+// porque Rebill no es consistente con las mayúsculas entre versiones de la API.
+const REBILL_REVERSAL_STATUS: Record<string, ReversalKind> = {
+  refunded: "REFUND",
+  chargeback: "CHARGEBACK",
+  charged_back: "CHARGEBACK",
+  chargedback: "CHARGEBACK",
+}
+const REBILL_PARTIAL_REFUND_STATUS = new Set(["partially_refunded", "partial_refund"])
+
 async function handlePaymentEvent(data: any): Promise<RebillHandlerResult> {
   const payment = data
   const metadata = payment.metadata || {}
+  const normalizedStatus = String(payment.status ?? "").toLowerCase()
+
+  // Reembolso parcial: se registra en webhook_events y no se revoca el acceso.
+  if (REBILL_PARTIAL_REFUND_STATUS.has(normalizedStatus)) {
+    console.warn(`[rebill-webhook] Payment ${payment.id} con reembolso parcial - no se revoca el acceso`)
+    return { processed: false, reason: "refund_partial", organizationId: metadata.organization_id ?? null }
+  }
+
+  // Reembolso total o contracargo. Va antes de exigir metadata: el pago se
+  // ubica por su id y la organización sale del registro propio.
+  const reversalKind = REBILL_REVERSAL_STATUS[normalizedStatus]
+  if (reversalKind) {
+    const registered = payment.id != null
+      ? await findSubscriptionPayment("REBILL", String(payment.id))
+      : null
+    const reversal = await revokeSubscriptionPayment(registered, reversalKind, "REBILL")
+    return {
+      processed: reversal.status === "PROCESSED",
+      reason: reversal.reason,
+      organizationId: reversal.organizationId ?? null,
+    }
+  }
   const organizationId = metadata.organization_id
 
   if (!organizationId) {
@@ -292,6 +329,15 @@ async function handlePaymentEvent(data: any): Promise<RebillHandlerResult> {
     .single()
 
   if (payInsertError) {
+    // 23505 = unique_violation contra subscription_payments_provider_payment_uniq
+    // (migracion 305): este pago ya estaba registrado (reentrega o entrega
+    // concurrente). Se reconoce como ya procesado, igual que MercadoPago: un 500
+    // haria que Rebill reintente sin fin. Se sale antes de tocar la suscripcion.
+    if ((payInsertError as { code?: string }).code === "23505") {
+      console.log(`[rebill-webhook] Payment ${payment.id} ya registrado - skip`)
+      return { processed: false, reason: "already_processed", organizationId }
+    }
+
     console.error(`[rebill-webhook] Error inserting payment for org ${organizationId}:`, payInsertError)
     throw payInsertError
   }
@@ -366,7 +412,14 @@ async function handleSubscriptionEvent(data: any): Promise<RebillHandlerResult> 
     delinquent: "PAST_DUE",
   }
 
-  const status = statusMap[subscription.status] || "ACTIVE"
+  const status = statusMap[subscription.status]
+
+  // Un estado que no conocemos no se traduce a ACTIVE por default: activar una
+  // suscripcion por un estado que no entendemos es dar el plan pago sin cobro.
+  if (!status) {
+    console.log(`[rebill-webhook] Subscription ${subscription.id} en estado ${subscription.status} - sin accion`)
+    return { processed: false, reason: `subscription_status_${subscription.status}`, organizationId }
+  }
 
   await supabaseAdmin
     .from("subscriptions")
