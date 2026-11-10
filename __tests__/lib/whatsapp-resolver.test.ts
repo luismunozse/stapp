@@ -32,4 +32,72 @@ describe("resolvePlantillaForTipo (catálogo como fuente de verdad)", () => {
   it("tipo desconocido sin catálogo → null", () => {
     expect(resolvePlantillaForTipo("NO_EXISTE", ctx(), null)).toBeNull()
   })
+  describe("CAMBIO_ESTADO REPARADO: orden_listo_retirar como override de respaldo", () => {
+    const reparado = () => ctx({ estado: "REPARADO" })
+
+    it("solo orden_listo_retirar → se usa (con variables renderizadas)", () => {
+      const m = resolvePlantillaForTipo("CAMBIO_ESTADO", reparado(), {
+        orden_listo_retirar: "Listo {cliente}, orden {numero_orden}",
+      })
+      expect(m).toBe("Listo Juan, orden 50")
+    })
+
+    it("orden_estado_reparado gana sobre orden_listo_retirar", () => {
+      const m = resolvePlantillaForTipo("CAMBIO_ESTADO", reparado(), {
+        orden_estado_reparado: "Y {cliente}",
+        orden_listo_retirar: "X {cliente}",
+      })
+      expect(m).toBe("Y Juan")
+    })
+
+    it("orden_listo_retirar gana sobre el genérico orden_estado_actual", () => {
+      const m = resolvePlantillaForTipo("CAMBIO_ESTADO", reparado(), {
+        orden_estado_actual: "Z {cliente}",
+        orden_listo_retirar: "X {cliente}",
+      })
+      expect(m).toBe("X Juan")
+    })
+
+    it("sin overrides → default del catálogo de orden_estado_reparado", () => {
+      const m = resolvePlantillaForTipo("CAMBIO_ESTADO", reparado(), null)!
+      expect(m).toMatch(/se encuentra reparado/)
+      expect(m).not.toMatch(/le recordamos/)
+    })
+
+    it("no se filtra a otros estados", () => {
+      const baseline = resolvePlantillaForTipo("CAMBIO_ESTADO", ctx({ estado: "EN_REPARACION" }), null)
+      const m = resolvePlantillaForTipo("CAMBIO_ESTADO", ctx({ estado: "EN_REPARACION" }), {
+        orden_listo_retirar: "X {cliente}",
+      })
+      expect(baseline).toMatch(/Ya estamos reparando su equipo/)
+      expect(m).toBe(baseline)
+    })
+
+    it.each(["ENTREGADO_SIN_REPARACION", "SIN_REPARACION"])("%s no usa orden_listo_retirar", (estado) => {
+      const baseline = resolvePlantillaForTipo("CAMBIO_ESTADO", ctx({ estado }), null)
+      const m = resolvePlantillaForTipo("CAMBIO_ESTADO", ctx({ estado }), { orden_listo_retirar: "X {cliente}" })
+      expect(m).toBe(baseline)
+    })
+
+    it("orden_listo_retirar vacío o solo espacios cae al genérico, y sin genérico al default de reparado", () => {
+      expect(
+        resolvePlantillaForTipo("CAMBIO_ESTADO", reparado(), { orden_listo_retirar: "   ", orden_estado_actual: "Z {cliente}" }),
+      ).toBe("Z Juan")
+      expect(resolvePlantillaForTipo("CAMBIO_ESTADO", reparado(), { orden_listo_retirar: "   " })).toBe(
+        resolvePlantillaForTipo("CAMBIO_ESTADO", reparado(), null),
+      )
+    })
+
+    it("estado en minúsculas también usa orden_listo_retirar", () => {
+      const m = resolvePlantillaForTipo("CAMBIO_ESTADO", ctx({ estado: "reparado" }), { orden_listo_retirar: "X {cliente}" })
+      expect(m).toBe("X Juan")
+    })
+
+    it("RECORDATORIO_RETIRO sigue usando orden_listo_retirar", () => {
+      const m = resolvePlantillaForTipo("RECORDATORIO_RETIRO", reparado(), {
+        orden_listo_retirar: "X {cliente}",
+      })
+      expect(m).toBe("X Juan")
+    })
+  })
 })
