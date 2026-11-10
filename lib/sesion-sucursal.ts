@@ -38,14 +38,38 @@ export function clearSesionSucursalCache(): void {
   enVuelo.clear()
 }
 
-async function consultar(userId: string): Promise<FilaUsuario | null> {
-  const inicio = Date.now()
-  const { data, error } = await supabaseAdmin
+// Network blips and timeouts (connection closed by the pooler, a slow moment of
+// the DB) get ONE more attempt with a fresh timeout before failing closed: a PK
+// lookup normally answers in <100 ms, so a single failure is far more likely a
+// dropped connection than a DB that is down. Any other error fails at once.
+const ERROR_TRANSITORIO = /timeout|aborted|fetch failed|other side closed|ECONNRESET|socket hang up|UND_ERR/i
+
+async function leerUsuario(userId: string) {
+  return supabaseAdmin
     .from("users")
     .select("rol, sucursal_id, organization_id, deleted_at")
     .eq("id", userId)
     .abortSignal(AbortSignal.timeout(LOOKUP_TIMEOUT_MS))
     .maybeSingle()
+}
+
+async function leerUsuarioConReintento(userId: string) {
+  let primerIntento: Awaited<ReturnType<typeof leerUsuario>>
+  try {
+    primerIntento = await leerUsuario(userId)
+  } catch (err) {
+    if (!ERROR_TRANSITORIO.test(String(err))) throw err
+    return leerUsuario(userId)
+  }
+  if (primerIntento.error && ERROR_TRANSITORIO.test(primerIntento.error.message ?? "")) {
+    return leerUsuario(userId)
+  }
+  return primerIntento
+}
+
+async function consultar(userId: string): Promise<FilaUsuario | null> {
+  const inicio = Date.now()
+  const { data, error } = await leerUsuarioConReintento(userId)
 
   if (error) throw new Error(`Could not read the user's row: ${error.message}`)
   if (!data) return null
