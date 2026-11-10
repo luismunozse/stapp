@@ -163,7 +163,10 @@ export async function proxy(request: NextRequest) {
   // Rate limiting para rutas API
   if (pathname.startsWith("/api/") && !isExemptFromRateLimit(pathname)) {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"
-    const identifier = subdomain ? `org:${subdomain}:${pathname.split("/").slice(0, 4).join("/")}` : `ip:${ip}:${pathname.split("/").slice(0, 4).join("/")}`
+    // La IP va siempre en la clave: si el contador fuera solo por organización,
+    // un único cliente agotaría el cupo de todos los usuarios del taller.
+    const ruta = pathname.split("/").slice(0, 4).join("/")
+    const identifier = subdomain ? `org:${subdomain}:ip:${ip}:${ruta}` : `ip:${ip}:${ruta}`
     const config = getApiRateLimit(pathname)
     const result = await rateLimit(identifier, config.max, config.windowMs)
 
