@@ -506,3 +506,12 @@ COMMENT ON FUNCTION reservar_stock_catalogo(TEXT, JSONB, TEXT) IS
 REVOKE EXECUTE ON FUNCTION reservar_stock_catalogo(TEXT, JSONB, TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION reservar_stock_catalogo(TEXT, JSONB, TEXT) FROM anon;
 GRANT EXECUTE ON FUNCTION reservar_stock_catalogo(TEXT, JSONB, TEXT) TO service_role;
+
+-- Las funciones de reserva de cotizaciones solo se llaman desde el servidor
+-- (service_role). Se cierra EXECUTE para el resto, igual que reservar_stock_catalogo.
+REVOKE EXECUTE ON FUNCTION liberar_items_cotizacion(TEXT, TEXT, TEXT, TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION liberar_items_cotizacion(TEXT, TEXT, TEXT, TEXT) FROM anon, authenticated;
+GRANT EXECUTE ON FUNCTION liberar_items_cotizacion(TEXT, TEXT, TEXT, TEXT) TO service_role;
+REVOKE EXECUTE ON FUNCTION reservar_items_cotizacion(TEXT, TEXT, TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION reservar_items_cotizacion(TEXT, TEXT, TEXT) FROM anon, authenticated;
+GRANT EXECUTE ON FUNCTION reservar_items_cotizacion(TEXT, TEXT, TEXT) TO service_role;
