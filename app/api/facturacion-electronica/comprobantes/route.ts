@@ -7,6 +7,7 @@ import { NC_COLUMNS, SAFE_COLUMNS, SNAPSHOT_COLUMNS } from "@/lib/facturacion/co
 import { esComprobanteVerificable, esFacturaAnulable } from "@/lib/facturacion/anulable"
 import { esNotaCreditoFiscal } from "@/lib/facturacion/cbte-tipo"
 import { pdfFiscalDisponible } from "@/lib/facturacion/arca/qr"
+import { tipoEmisionOrganizacion } from "@/lib/facturacion/tipo-emision"
 
 const FORMA_ID = /^[A-Za-z0-9_-]{1,64}$/
 const ESTADOS = ["pendiente", "emitido", "rechazado", "anulado"] as const
@@ -36,7 +37,8 @@ function enteroPositivo(valor: string | null, porDefecto: number): number | null
 
 // GET - Listado de comprobantes fiscales de la org. No depende del plan ni del
 // toggle: el historial tiene que seguir legible despues de un downgrade.
-// `puedeEmitir` le dice a la UI si ademas se puede emitir hoy.
+// `puedeEmitir` le dice a la UI si ademas se puede emitir hoy y `tipoEmision`
+// con que letra saldria la factura (null si no se puede emitir o no se sabe).
 export async function GET(request: Request) {
   const { error, organizationId } = await requireAdmin()
   if (error) return error
@@ -101,6 +103,7 @@ export async function GET(request: Request) {
   } catch {
     puedeEmitir = false
   }
+  const tipoEmision = puedeEmitir ? await tipoEmisionOrganizacion(organizationId!) : null
 
   const total = count ?? 0
   const items = ((data ?? []) as unknown as Record<string, any>[]).map((r) => ({
@@ -137,5 +140,6 @@ export async function GET(request: Request) {
     limit,
     totalPages: Math.ceil(total / limit),
     puedeEmitir,
+    tipoEmision,
   })
 }

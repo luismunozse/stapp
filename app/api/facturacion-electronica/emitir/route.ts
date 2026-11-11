@@ -13,6 +13,7 @@ import {
 } from "@/lib/facturacion/resolver-credenciales"
 import { mensajeSeguroDeError } from "@/lib/facturacion/errores"
 import { mapVentaToEmitirInput } from "@/lib/facturacion/map-venta"
+import { deriveTipo } from "@/lib/facturacion/derive"
 import { isMissingColumnError } from "@/lib/db-errors"
 import { SAFE_COLUMNS, columnasFiscales } from "@/lib/facturacion/comprobante-columns"
 import { FILTRO_SIN_NC } from "@/lib/facturacion/cbte-tipo"
@@ -180,7 +181,7 @@ export async function POST(request: Request) {
     .insert({
       organization_id: organizationId!,
       venta_id: ventaId,
-      tipo: creds.condicionFiscal === "MONOTRIBUTO" ? "C" : "B",
+      tipo: deriveTipo(creds.condicionFiscal),
       punto_venta: creds.puntoVenta,
       provider: resuelto.provider,
       estado: "pendiente",

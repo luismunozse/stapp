@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import type { ReactNode } from "react"
 import { AlertTriangle, Trash2, Info, CheckCircle, XCircle } from "lucide-react"
 
 type ConfirmVariant = "danger" | "warning" | "info" | "success"
@@ -24,6 +25,8 @@ interface ConfirmDialogProps {
   loading?: boolean
   onConfirm: () => void
   onCancel?: () => void
+  /** Contenido extra entre el encabezado y los botones (por ejemplo, un resumen de datos). */
+  children?: ReactNode
 }
 
 const variantConfig = {
@@ -64,6 +67,7 @@ export function ConfirmDialog({
   loading = false,
   onConfirm,
   onCancel,
+  children,
 }: ConfirmDialogProps) {
   const config = variantConfig[variant]
   const Icon = config.icon
@@ -91,6 +95,7 @@ export function ConfirmDialog({
             </div>
           </div>
         </DialogHeader>
+        {children}
         <DialogFooter className="gap-2 sm:gap-0">
           {cancelText && (
             <Button variant="outline" onClick={handleCancel} disabled={loading}>

@@ -1,6 +1,8 @@
 // Helpers de presentacion de comprobantes fiscales, compartidos por la ficha de
 // la venta y el listado de /facturacion.
 
+import type { TipoComprobante } from "@/lib/facturacion/types"
+
 /** Fila del listado (`GET /api/facturacion-electronica/comprobantes`). */
 export interface ComprobanteFiscalDTO {
   id: string
@@ -42,6 +44,8 @@ export interface ListadoComprobantesResponse {
   limit: number
   totalPages: number
   puedeEmitir: boolean
+  /** Letra con la que saldria la factura hoy (misma regla que la emision); null si no se puede emitir o no se sabe. */
+  tipoEmision: TipoComprobante | null
 }
 
 const ETIQUETAS_ESTADO: Record<string, string> = {

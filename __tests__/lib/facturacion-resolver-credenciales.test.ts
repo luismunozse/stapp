@@ -11,6 +11,7 @@ vi.mock("@/lib/facturacion/arca/stapp-cert", () => ({
 }))
 
 import { encryptSecret } from "@/lib/facturacion/crypto"
+import { deriveTipo, tipoEmisionDeFila } from "@/lib/facturacion/derive"
 import {
   resolverCredenciales,
   CredencialesIncompletasError,
@@ -202,5 +203,20 @@ describe("resolverCredenciales", () => {
     const e = new DelegacionNoVerificadaError()
     expect(e).toBeInstanceOf(CredencialesIncompletasError)
     expect(e.message).toMatch(/verific/i)
+  })
+})
+
+describe("la letra que anuncia la ficha (tipoEmisionDeFila) es la que sale al emitir", () => {
+  it.each([["MONOTRIBUTO"], ["RESPONSABLE_INSCRIPTO"], [null]])("condicion_fiscal %s", (condicion) => {
+    const row = {
+      provider: "tusfacturas",
+      apitoken_enc: encryptSecret("APITOKEN"),
+      apikey_enc: encryptSecret("APIKEY"),
+      usertoken_enc: encryptSecret("USERTOKEN"),
+      punto_venta: 1,
+      condicion_fiscal: condicion,
+    }
+    const resuelto = resolverCredenciales({ organizationId: "org-1", production: false, row })
+    expect(deriveTipo(resuelto.creds.condicionFiscal)).toBe(tipoEmisionDeFila(row))
   })
 })

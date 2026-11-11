@@ -6,9 +6,11 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { StatusBanner } from "@/components/ui/status-banner"
 import { AnularFacturaDialog } from "@/components/ventas/anular-factura-dialog"
 import { CONTACT_EMAIL } from "@/lib/contact"
+import { formatCurrencyValue } from "@/lib/currency"
 import {
   etiquetaMotivoAnulacion,
   mensajeFacturaAnulada,
@@ -32,12 +34,18 @@ import {
   type ComprobanteFiscalDTO,
   type ListadoComprobantesResponse,
 } from "@/lib/facturacion/comprobante-ui"
+import type { TipoComprobante } from "@/lib/facturacion/types"
 
 interface ComprobanteFiscalCardProps {
   ventaId: string
   estadoVenta: string
   tieneDevoluciones: boolean
+  /** Para el resumen que se confirma antes de emitir. */
+  clienteNombre: string | null
+  total: number
 }
+
+const AVISO_EMISION_IRREVERSIBLE = "Una vez emitida, la factura solo se puede anular con una nota de crédito."
 
 /** Una venta tiene pocas facturas, pero cada anulada suma su nota: alcanza de sobra para ver todo el historial reciente. */
 const COMPROBANTES_POR_VENTA = 20
@@ -90,11 +98,20 @@ function textoMotivo(nota: ComprobanteFiscalDTO): string | null {
  * anteriores y, si corresponde, deja emitir, anular o verificar. El servidor valida
  * de nuevo cada regla: esto solo evita ofrecer lo que va a fallar.
  */
-export function ComprobanteFiscalCard({ ventaId, estadoVenta, tieneDevoluciones }: ComprobanteFiscalCardProps) {
+export function ComprobanteFiscalCard({
+  ventaId,
+  estadoVenta,
+  tieneDevoluciones,
+  clienteNombre,
+  total,
+}: ComprobanteFiscalCardProps) {
   const [items, setItems] = useState<ComprobanteFiscalDTO[]>([])
   const [puedeEmitir, setPuedeEmitir] = useState(false)
+  const [tipoEmision, setTipoEmision] = useState<TipoComprobante | null>(null)
   const [cargado, setCargado] = useState(false)
   const [emitiendo, setEmitiendo] = useState(false)
+  // Emitir saca un CAE: no se deshace (solo con nota de crédito), así que se confirma antes.
+  const [confirmandoEmision, setConfirmandoEmision] = useState(false)
   const [verificandoId, setVerificandoId] = useState<string | null>(null)
   const [aviso, setAviso] = useState<Aviso | null>(null)
   // `abierto` va aparte de la factura para que el dialogo conserve su contenido mientras se cierra.
@@ -112,6 +129,7 @@ export function ComprobanteFiscalCard({ ventaId, estadoVenta, tieneDevoluciones 
       const data = (await res.json()) as Partial<ListadoComprobantesResponse>
       setItems(Array.isArray(data.items) ? data.items : [])
       setPuedeEmitir(data.puedeEmitir === true)
+      setTipoEmision(data.tipoEmision === "B" || data.tipoEmision === "C" ? data.tipoEmision : null)
     } catch {
       // Sin datos fiscales el bloque simplemente no aparece.
     } finally {
@@ -138,6 +156,11 @@ export function ComprobanteFiscalCard({ ventaId, estadoVenta, tieneDevoluciones 
     await cargar()
     emitiendoRef.current = false
     setEmitiendo(false)
+  }
+
+  const handleConfirmarEmision = () => {
+    setConfirmandoEmision(false)
+    void handleEmitir()
   }
 
   const handleVerificar = async (nota: ComprobanteFiscalDTO) => {
@@ -221,7 +244,11 @@ export function ComprobanteFiscalCard({ ventaId, estadoVenta, tieneDevoluciones 
         )}
 
         {puedeOfrecerEmision && (
-          <Button variant={rechazado ? "outline" : "default"} onClick={handleEmitir} disabled={emitiendo}>
+          <Button
+            variant={rechazado ? "outline" : "default"}
+            onClick={() => setConfirmandoEmision(true)}
+            disabled={emitiendo}
+          >
             {emitiendo ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -245,6 +272,19 @@ export function ComprobanteFiscalCard({ ventaId, estadoVenta, tieneDevoluciones 
         )}
       </CardContent>
 
+      <ConfirmDialog
+        open={confirmandoEmision}
+        onOpenChange={setConfirmandoEmision}
+        title="¿Emitir la factura electrónica?"
+        description={AVISO_EMISION_IRREVERSIBLE}
+        confirmText="Emitir factura"
+        cancelText="Cancelar"
+        variant="warning"
+        onConfirm={handleConfirmarEmision}
+      >
+        <ResumenEmision tipo={tipoEmision} clienteNombre={clienteNombre} total={total} />
+      </ConfirmDialog>
+
       {dialogo && (
         <AnularFacturaDialog
           open={dialogo.abierto}
@@ -254,6 +294,38 @@ export function ComprobanteFiscalCard({ ventaId, estadoVenta, tieneDevoluciones 
         />
       )}
     </Card>
+  )
+}
+
+/**
+ * Lo que se va a facturar, tal como lo arma el servidor: el receptor siempre es
+ * consumidor final (sin CUIT ni DNI) y la letra sale de la condición fiscal del
+ * emisor (Monotributo emite C; Responsable Inscripto, B). El listado trae esa
+ * letra (`tipoEmision`); si no vino, se explica la regla en vez de adivinarla.
+ */
+function ResumenEmision({
+  tipo,
+  clienteNombre,
+  total,
+}: {
+  tipo: TipoComprobante | null
+  clienteNombre: string | null
+  total: number
+}) {
+  const nombre = clienteNombre?.trim()
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-md border bg-muted/30 p-3 text-sm">
+      <dt className="text-muted-foreground">Comprobante</dt>
+      <dd>
+        {tipo
+          ? `Factura ${tipo}`
+          : "Factura B o C: la elige el sistema según tu condición frente al IVA (Monotributo emite C)."}
+      </dd>
+      <dt className="text-muted-foreground">Receptor</dt>
+      <dd>{nombre ? `${nombre} (consumidor final, sin CUIT ni DNI)` : "Consumidor final"}</dd>
+      <dt className="text-muted-foreground">Total</dt>
+      <dd className="font-medium">{formatCurrencyValue(total, "ARS")}</dd>
+    </dl>
   )
 }
 

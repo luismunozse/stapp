@@ -10,6 +10,7 @@
 
 import { decryptSecret } from "@/lib/facturacion/crypto"
 import { getCertificadoStapp } from "@/lib/facturacion/arca/stapp-cert"
+import { condicionFiscalDeFila } from "@/lib/facturacion/derive"
 import type {
   ArcaCredenciales,
   CondicionFiscalEmisor,
@@ -73,7 +74,7 @@ function exigir(row: CredencialesRow, columnas: Array<keyof CredencialesRow>, pr
 
 export function resolverCredenciales(params: ResolverCredencialesParams): CredencialesResueltas {
   const { row, organizationId, production } = params
-  const condicionFiscal = (row.condicion_fiscal ?? "MONOTRIBUTO") as CondicionFiscalEmisor
+  const condicionFiscal: CondicionFiscalEmisor = condicionFiscalDeFila(row.condicion_fiscal)
   const puntoVenta = row.punto_venta ?? 1
 
   // Delegación: el certificado es el de la PLATAFORMA y la fila del taller
