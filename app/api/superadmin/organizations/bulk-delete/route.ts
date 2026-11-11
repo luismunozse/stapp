@@ -3,6 +3,7 @@ import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 
 const bulkDeleteSchema = z.object({
   ids: z.array(z.string().min(1)).min(1, "Debe seleccionar al menos una organización"),
@@ -39,8 +40,23 @@ export async function POST(request: Request) {
       )
     }
 
+    const targetOrgs = (orgs || [])
+      .filter((o) => targetIds.includes(o.id))
+      .map((o) => ({ id: o.id, nombre: o.nombre }))
+    const audit = createSuperadminAuditLogger(email, request)
+
     // Permanent purge — only when BOTH hard AND confirm are explicitly true
     if (hard === true && confirm === true) {
+      // Auditoría fail-closed ANTES de borrar. organization_id va en null: el
+      // borrado cascadea audit_logs de esas orgs y se llevaría la fila.
+      const intento = await audit.exigir({
+        action: "BULK_DELETE",
+        entity: "organizations",
+        description: `Eliminación permanente masiva de ${targetIds.length} organización(es)`,
+        metadata: { ids: targetIds, orgs: targetOrgs },
+      })
+      if (!intento.ok) return intento.respuesta
+
       const { error: deleteError, count } = await supabaseAdmin
         .from("organizations")
         .delete({ count: "exact" })
@@ -48,6 +64,7 @@ export async function POST(request: Request) {
         .neq("slug", "superadmin")
 
       if (deleteError) {
+        await intento.completar({ error: deleteError.message }, "fallido")
         console.error("Bulk delete error:", deleteError)
         return NextResponse.json(
           { error: "Error al eliminar organizaciones" },
@@ -55,25 +72,7 @@ export async function POST(request: Request) {
         )
       }
 
-      // Audit log
-      try {
-        await supabaseAdmin.from("audit_logs").insert({
-          organization_id: null,
-          user_id: null,
-          action: "BULK_DELETE",
-          entity: "organizations",
-          entity_id: null,
-          changes: {
-            deleted_count: count,
-            deleted_orgs: orgs
-              ?.filter((o) => targetIds.includes(o.id))
-              .map((o) => ({ id: o.id, nombre: o.nombre })),
-            superadmin_email: email,
-          },
-        })
-      } catch {
-        // best effort
-      }
+      await intento.completar({ deleted_count: count })
 
       return NextResponse.json({
         success: true,
@@ -82,7 +81,15 @@ export async function POST(request: Request) {
       })
     }
 
-    // Default path — archive (soft delete)
+    // Default path — archive (soft delete). Auditoría fail-closed ANTES de archivar.
+    const intento = await audit.exigir({
+      action: "ARCHIVE",
+      entity: "organizations",
+      description: `Archivado masivo de ${targetIds.length} organización(es)`,
+      metadata: { ids: targetIds, orgs: targetOrgs },
+    })
+    if (!intento.ok) return intento.respuesta
+
     const { count: archivedCount, error: archiveError } = await supabaseAdmin
       .from("organizations")
       .update({ deleted_at: new Date().toISOString(), deleted_by: email }, { count: "exact" })
@@ -91,6 +98,7 @@ export async function POST(request: Request) {
       .is("deleted_at", null)
 
     if (archiveError) {
+      await intento.completar({ error: archiveError.message }, "fallido")
       console.error("Bulk archive error:", archiveError)
       return NextResponse.json(
         { error: "Error al archivar organizaciones" },
@@ -100,25 +108,7 @@ export async function POST(request: Request) {
 
     const archived = archivedCount ?? 0
 
-    // Audit log — best effort
-    try {
-      await supabaseAdmin.from("audit_logs").insert({
-        organization_id: null,
-        user_id: null,
-        action: "ARCHIVE",
-        entity: "organizations",
-        entity_id: null,
-        changes: {
-          archived_count: archived,
-          archived_orgs: orgs
-            ?.filter((o) => targetIds.includes(o.id))
-            .map((o) => ({ id: o.id, nombre: o.nombre })),
-          superadmin_email: email,
-        },
-      })
-    } catch {
-      // best effort
-    }
+    await intento.completar({ archived_count: archived })
 
     return NextResponse.json({
       success: true,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
 import { DEFAULT_TIMEZONE, formatDateValue } from "@/lib/timezone"
 
@@ -91,6 +92,25 @@ export async function POST(request: Request) {
 
     let subscriptionId: string
     const previousStatus = existingSub?.status || null
+
+    // Auditoría fail-closed ANTES de activar/renovar.
+    const intento = await createSuperadminAuditLogger(email, request).exigir({
+      action: "SUBSCRIPTION_RENEW",
+      entity: "subscriptions",
+      entityId: existingSub?.id ?? null,
+      organizationId,
+      description: `Renovación manual de suscripción (${targetSlug}, ${period})`,
+      metadata: {
+        action: "manual_renewal",
+        planSlug: targetSlug,
+        billing_period: period,
+        months: months || (period === "YEARLY" ? 12 : 1),
+        days: days || null,
+        custom_date: !!customEndDate,
+        previous_status: previousStatus,
+      },
+    })
+    if (!intento.ok) return intento.respuesta
 
     if (existingSub) {
       // Si la suscripción actual está activa y no ha vencido, extender desde la fecha de vencimiento
@@ -204,23 +224,7 @@ export async function POST(request: Request) {
       performed_by: email,
     })
 
-    // Registrar en audit_logs
-    await supabaseAdmin.from("audit_logs").insert({
-      organization_id: organizationId,
-      user_id: null,
-      action: "UPDATE",
-      entity: "subscriptions",
-      entity_id: subscriptionId,
-      changes: {
-        action: "manual_renewal",
-        billing_period: period,
-        months: months || (period === "YEARLY" ? 12 : 1),
-        period_end: periodEnd.toISOString(),
-        superadmin_email: email,
-        previous_status: previousStatus,
-        custom_date: !!customEndDate,
-      },
-    })
+    await intento.completar({ subscriptionId, period_end: periodEnd.toISOString() })
 
     // Notificar al admin de la org (mejora 11)
     const { data: orgAdmins } = await supabaseAdmin

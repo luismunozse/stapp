@@ -35,6 +35,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "La suscripción ya está cancelada" }, { status: 400 })
     }
 
+    // Auditoría fail-closed ANTES de cancelar.
+    const intento = await createSuperadminAuditLogger(email, request).exigir({
+      action: "UPDATE",
+      entity: "subscriptions",
+      entityId: sub.id,
+      organizationId,
+      description: immediate
+        ? "Suscripción cancelada inmediatamente"
+        : "Suscripción marcada para cancelar al final del período",
+      metadata: { immediate, previous_status: sub.status },
+    })
+    if (!intento.ok) return intento.respuesta
+
     const now = new Date().toISOString()
 
     const { error: cancelError } = immediate
@@ -59,6 +72,7 @@ export async function POST(request: Request) {
           .eq("id", sub.id)
 
     if (cancelError) {
+      await intento.completar({ error: cancelError.message }, "fallido")
       console.error("Error canceling subscription:", cancelError)
       return NextResponse.json({ error: "Error al cancelar la suscripción" }, { status: 500 })
     }
@@ -74,20 +88,7 @@ export async function POST(request: Request) {
       performed_by: email,
     })
 
-    // Audit log
-    const auditLogger = createSuperadminAuditLogger(email, request)
-    auditLogger
-      .log({
-        action: "UPDATE",
-        entity: "subscriptions",
-        entityId: sub.id,
-        organizationId,
-        description: immediate
-          ? "Suscripción cancelada inmediatamente"
-          : "Suscripción marcada para cancelar al final del período",
-        metadata: { immediate },
-      })
-      .catch(() => {})
+    await intento.completar()
 
     return NextResponse.json({
       success: true,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
 import { handlePaymentNotification } from "@/app/api/mercadopago/webhook/route"
 import { beginWebhookEvent, finishWebhookEvent } from "@/lib/webhook-log"
@@ -267,18 +268,17 @@ export async function POST(request: Request) {
     // Auditar también en audit_logs para que aparezca en el historial
     // de la organización.
     if (result.organizationId) {
-      await supabaseAdmin.from("audit_logs").insert({
-        organization_id: result.organizationId,
-        user_id: null,
+      await createSuperadminAuditLogger(email, request).log({
         action: "UPDATE",
         entity: "subscription_payments",
-        entity_id: result.subscriptionPaymentId ?? null,
-        changes: {
+        entityId: result.subscriptionPaymentId ?? null,
+        organizationId: result.organizationId,
+        description: `Reconciliación manual de pago MP ${paymentId}: ${result.status}`,
+        metadata: {
           action: "manual_reconciliation_mp",
           mp_payment_id: paymentId,
           mp_status: mpPayment?.status,
           mp_amount: mpPayment?.transaction_amount,
-          superadmin_email: email,
           handler_result: result.status,
           handler_reason: result.reason,
         },

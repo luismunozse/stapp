@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { z } from "zod"
 import type { PlanWithUsage } from "@/types/superadmin"
 
@@ -138,11 +139,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Configurar el email del superadmin para el trigger de auditoría
-    await supabaseAdmin.rpc("set_config", {
-      setting: "app.superadmin_email",
-      value: email || "system",
+    // Auditoría fail-closed: si no queda registrado quién crea el plan, no se crea.
+    // (El `rpc("set_config")` que había acá llamaba a una función inexistente y
+    // fallaba en silencio: `plans_audit` siempre quedaba como "system".)
+    const intento = await createSuperadminAuditLogger(email, request).exigir({
+      action: "CREATE",
+      entity: "plans",
+      description: `Plan creado: "${data.nombre}" (${data.slug})`,
+      metadata: { planName: data.nombre, slug: data.slug, tipo: data.tipo },
     })
+    if (!intento.ok) return intento.respuesta
 
     // Crear el plan
     const { data: newPlan, error: createError } = await supabaseAdmin
@@ -169,12 +175,15 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (createError) {
+      await intento.completar({ error: createError.message }, "fallido")
       console.error("Error creating plan:", createError)
       return NextResponse.json(
         { error: "Error al crear el plan" },
         { status: 500 }
       )
     }
+
+    await intento.completar({ planId: newPlan.id })
 
     return NextResponse.json(
       {

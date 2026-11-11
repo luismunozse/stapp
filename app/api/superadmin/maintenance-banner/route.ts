@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { revalidateTag } from "next/cache"
 import { z } from "zod"
 
@@ -67,6 +68,16 @@ export async function PUT(request: Request) {
   if (dbError) {
     return NextResponse.json({ error: dbError.message }, { status: 500 })
   }
+
+  await createSuperadminAuditLogger(email, request).log({
+    action: "UPDATE",
+    entity: "system",
+    entityId: "maintenance_banner",
+    description: active
+      ? `Banner de mantenimiento activado (${severity}): "${message}"`
+      : "Banner de mantenimiento desactivado",
+    metadata: { active, message, severity },
+  })
 
   // Invalidar cache del layout dashboard para que los cambios se vean inmediatamente
   revalidateTag("maintenance-banner", "max")

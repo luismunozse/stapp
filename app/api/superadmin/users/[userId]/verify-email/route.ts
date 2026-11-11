@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 
 export async function POST(
   request: Request,
@@ -45,20 +46,13 @@ export async function POST(
 
     if (updateError) throw updateError
 
-    // Registrar en audit_logs
-    await supabaseAdmin.from("audit_logs").insert({
-      organization_id: user.organization_id,
-      user_id: userId,
-      action: "UPDATE",
+    await createSuperadminAuditLogger(email, request).log({
+      action: "VERIFY_EMAIL",
       entity: "users",
-      entity_id: userId,
-      changes: {
-        field: "email_verified",
-        before: false,
-        after: true,
-        superadmin_email: email,
-        action_description: `Email de "${user.nombre}" (${user.email}) verificado manualmente por superadmin`,
-      },
+      entityId: userId,
+      organizationId: user.organization_id,
+      description: `Email de "${user.nombre}" (${user.email}) verificado manualmente por superadmin`,
+      metadata: { userEmail: user.email },
     })
 
     return NextResponse.json({

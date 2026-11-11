@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { logSuperadminAudit } from "@/lib/superadmin-audit"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import {
   verifyImpersonationToken,
   getSessionCookieName,
@@ -16,7 +16,7 @@ import { sessionCookieDomain } from "@/lib/session-cookie"
  * Safe to call from any subdomain: the backup cookie is scoped to the root
  * domain, so it travels to tenant subdomains where the banner lives.
  */
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const secret = process.env.NEXTAUTH_SECRET
     const sessionCookieName = getSessionCookieName()
@@ -41,10 +41,10 @@ export async function POST() {
       )
     }
 
-    // Audit BEFORE swapping cookies so an audit failure can't leave an
-    // ended-but-unlogged impersonation.
-    await logSuperadminAudit({
-      email: claims.impersonatorEmail,
+    // Audit BEFORE swapping cookies. Best-effort a propósito: si el registro
+    // falla, salir de la impersonación igual tiene que funcionar (bloquear la
+    // salida dejaría al superadmin atrapado en la sesión ajena).
+    await createSuperadminAuditLogger(claims.impersonatorEmail, request).log({
       action: "UPDATE",
       entity: "sessions",
       entityId: claims.id,

@@ -771,6 +771,12 @@ export default function LogsPage() {
         { value: "TICKET_REPLY", label: "Resp. Soporte" },
         { value: "VERIFY_EMAIL", label: "Verificar Email" },
         { value: "EXPORT", label: "Exportar" },
+        { value: "CREATE", label: "Crear" },
+        { value: "UPDATE", label: "Actualizar" },
+        { value: "DELETE", label: "Eliminar" },
+        { value: "ARCHIVE", label: "Archivar" },
+        { value: "RESTORE", label: "Restaurar" },
+        { value: "BULK_DELETE", label: "Eliminación Masiva" },
       ]
     }
     return [

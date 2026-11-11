@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { z } from "zod"
 import type { UpdatePlanInput } from "@/types/superadmin"
 
@@ -123,11 +124,15 @@ export async function PATCH(
       )
     }
 
-    // Configurar email del superadmin para trigger de auditoría
-    await supabaseAdmin.rpc("set_config", {
-      setting: "app.superadmin_email",
-      value: email || "system",
+    // Auditoría fail-closed: sin registro de quién lo cambia, el plan no se toca.
+    const intento = await createSuperadminAuditLogger(email, request).exigir({
+      action: "UPDATE",
+      entity: "plans",
+      entityId: id,
+      description: `Plan actualizado: "${currentPlan.nombre}"`,
+      metadata: { planName: currentPlan.nombre, changes: data },
     })
+    if (!intento.ok) return intento.respuesta
 
     // Actualizar el plan
     const { data: updatedPlan, error: updateError } = await supabaseAdmin
@@ -138,6 +143,7 @@ export async function PATCH(
       .single()
 
     if (updateError) {
+      await intento.completar({ error: updateError.message }, "fallido")
       console.error("Error updating plan:", updateError)
       return NextResponse.json(
         { error: "Error al actualizar el plan" },
