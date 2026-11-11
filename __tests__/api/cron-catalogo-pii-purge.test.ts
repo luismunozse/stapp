@@ -10,6 +10,9 @@ describe("GET /api/cron/catalogo-pii-purge", () => {
     vi.stubEnv("CRON_SECRET", "s3cret")
     vi.spyOn(console, "error").mockImplementation(() => {})
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ok: true }, error: null } as never)
+    vi.mocked(supabaseAdmin.from).mockReturnValue({
+      delete: () => ({ lt: () => Promise.resolve({ error: null }) }),
+    } as never)
   })
 
   it("rejects requests without the cron secret", async () => {
@@ -37,5 +40,19 @@ describe("GET /api/cron/catalogo-pii-purge", () => {
     vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({ data: null, error: { message: "boom" } } as never)
     const res = await GET(req())
     expect(res.status).toBe(500)
+  })
+
+  it("borra los contadores de login vencidos hace más de un día, sin romper si falla", async () => {
+    const lt = vi.fn().mockResolvedValue({ error: { message: "boom" } })
+    const del = vi.fn(() => ({ lt }))
+    vi.mocked(supabaseAdmin.from).mockReturnValueOnce({ delete: del } as never)
+    const antes = Date.now()
+    const res = await GET(req())
+    expect(res.status).toBe(200)
+    expect(supabaseAdmin.from).toHaveBeenCalledWith("superadmin_rate_limits")
+    expect(del).toHaveBeenCalled()
+    const [col, corte] = lt.mock.calls[0] as unknown as [string, string]
+    expect(col).toBe("window_end")
+    expect(antes - Date.parse(corte)).toBeGreaterThanOrEqual(24 * 60 * 60 * 1000 - 1000)
   })
 })

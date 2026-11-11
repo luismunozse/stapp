@@ -1,19 +1,37 @@
-// Límite de intentos de login del panel superadmin, compartido entre instancias.
+// Límites de intentos de login (panel superadmin y talleres), compartidos entre instancias.
 // Seguro para el middleware: fetch directo al RPC `check_superadmin_rate_limit`
 // (migración 086) con el service role, sin supabase-js. Si la base no responde
 // cae al límite en memoria de la instancia: nunca deja de limitar del todo.
 
 import { rateLimit, type RateLimitResult } from "@/lib/rate-limit"
 
-const ENDPOINT = "superadmin:login"
-
-export async function checkSuperadminLoginLimit(
+export function checkSuperadminLoginLimit(
   ip: string,
   maxAttempts: number,
   windowSeconds: number,
 ): Promise<RateLimitResult> {
+  return checkLoginLimit(ip, "superadmin:login", maxAttempts, windowSeconds)
+}
+
+// Login de los talleres. El bloqueo por cuenta (locked_until) frena probar
+// muchas contraseñas contra un usuario; este frena probar una contraseña
+// contra muchos usuarios desde la misma IP. Contador aparte del superadmin.
+export function checkTenantLoginLimit(
+  ip: string,
+  maxAttempts: number,
+  windowSeconds: number,
+): Promise<RateLimitResult> {
+  return checkLoginLimit(ip, "tenant:login", maxAttempts, windowSeconds)
+}
+
+async function checkLoginLimit(
+  ip: string,
+  endpoint: string,
+  maxAttempts: number,
+  windowSeconds: number,
+): Promise<RateLimitResult> {
   const identifier = `ip:${ip}`
-  const fallback = () => rateLimit(`${identifier}:${ENDPOINT}`, maxAttempts, windowSeconds * 1000)
+  const fallback = () => rateLimit(`${identifier}:${endpoint}`, maxAttempts, windowSeconds * 1000)
 
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -29,7 +47,7 @@ export async function checkSuperadminLoginLimit(
       },
       body: JSON.stringify({
         p_identifier: identifier,
-        p_endpoint: ENDPOINT,
+        p_endpoint: endpoint,
         p_max_requests: maxAttempts,
         p_window_seconds: windowSeconds,
       }),

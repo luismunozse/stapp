@@ -5,6 +5,7 @@ import {
   resolveVendedoresHabilitados,
 } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { reingresosPorTecnicoOriginal } from "@/lib/tecnicos/reingresos"
 
 interface TopRepuesto {
   nombre: string
@@ -55,7 +56,10 @@ export async function GET(
     const ords = ordenes || []
 
     const completadas = ords.filter((o: any) => ["REPARADO", "ENTREGADO"].includes(o.estado))
-    const reingresos = ords.filter((o: any) => o.es_reingreso).length
+    // Re-ingresos de SUS reparaciones (técnico de la orden original), no los
+    // re-ingresos que le tocó atender. Ver lib/tecnicos/reingresos.
+    const reingresos =
+      (await reingresosPorTecnicoOriginal({ organizationId: organizationId!, desdeISO, tecnicoId: id })).get(id) ?? 0
     const sinReparacion = ords.filter((o: any) => o.estado === "SIN_REPARACION").length
     const activas = ords.filter((o: any) =>
       !["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "CANCELADO", "SIN_REPARACION"].includes(o.estado)

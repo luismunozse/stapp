@@ -19,7 +19,7 @@ vi.mock("@/lib/subscriptions", () => ({
 
 import { GET as getGarantia, } from "@/app/api/garantias/[id]/route"
 import { GET as listGarantias } from "@/app/api/garantias/route"
-import { POST as postReclamo } from "@/app/api/garantias/[id]/reclamos/route"
+import { POST as postReclamo } from "@/app/api/garantias/reclamos/route"
 import { GET as getCotizacion } from "@/app/api/cotizaciones/[id]/route"
 import { GET as pdfCotizacion } from "@/app/api/cotizaciones/[id]/pdf/route"
 import { POST as enviarCotizacion } from "@/app/api/cotizaciones/[id]/enviar/route"
@@ -57,18 +57,27 @@ describe("ADMIN with the switcher on branch A, by-id records of branch B", () =>
     expect(garantias.or).not.toHaveBeenCalled()
   })
 
-  it("garantias/[id]/reclamos POST reaches a warranty of another branch", async () => {
-    mockSupabaseFrom({
-      garantias: createChainMock({
-        id: "g",
-        estado: "ACTIVA",
-        fecha_vencimiento: new Date(Date.now() + 864e5).toISOString(),
-        ordenes_servicio: { organization_id: "org-1", sucursal_id: B, tecnico_id: null },
-      }),
-      reclamos_garantia: createChainMock({ id: "r" }),
+  it("garantias/reclamos POST reaches a warranty of another branch", async () => {
+    const vista = createChainMock({
+      id: "g",
+      origen: "REPARACION",
+      organization_id: "org-1",
+      sucursal_id: B,
+      tecnico_id: null,
+      dia_vencimiento: "2099-01-01",
+      anulada: false,
+      tiene_reclamo_abierto: false,
     })
-    const { status } = await parseResponse(await postReclamo(createPostRequest({ descripcion: "x" }), idCtx))
+    mockSupabaseFrom({
+      v_garantias: vista,
+      organizations: createChainMock({ zona_horaria: "UTC" }),
+      reclamos_garantia: createChainMock({ id: "r", garantia_id: "g", descripcion: "x", estado: "PENDIENTE", fecha_reclamo: "2026-11-11T00:00:00Z" }),
+    })
+    const { status } = await parseResponse(
+      await postReclamo(createPostRequest({ origen: "REPARACION", garantiaId: "g", descripcion: "x" }))
+    )
     expect(status).toBe(201)
+    expect(vista.eq).not.toHaveBeenCalledWith("sucursal_id", expect.anything())
   })
 
   it("cotizaciones/[id] GET returns a quote linked to another branch's order", async () => {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
 
 export async function GET() {
@@ -30,7 +31,7 @@ const deleteSchema = z.object({ id: z.string().uuid("ID de waitlist inválido") 
 
 export async function DELETE(request: Request) {
   try {
-    const { error } = await requireSuperadmin()
+    const { error, email } = await requireSuperadmin()
     if (error) return error
 
     const parsed = await safeParseBody(request, deleteSchema)
@@ -42,6 +43,14 @@ export async function DELETE(request: Request) {
       .eq("id", parsed.data.id)
 
     if (dbError) throw dbError
+
+    await createSuperadminAuditLogger(email, request).log({
+      action: "DELETE",
+      entity: "waitlist",
+      entityId: parsed.data.id,
+      description: "Registro de waitlist iOS eliminado",
+      metadata: {},
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

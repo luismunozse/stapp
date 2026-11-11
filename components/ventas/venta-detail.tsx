@@ -42,6 +42,7 @@ import { DevolucionForm } from "@/components/ventas/devolucion-form"
 import { PagosHistorial } from "@/components/facturacion/pagos-historial"
 import { VentaPagoForm } from "@/components/ventas/venta-pago-form"
 import { ComprobanteFiscalCard } from "@/components/ventas/comprobante-fiscal-card"
+import { GarantiasVentaCard } from "@/components/ventas/garantias-venta-card"
 import type { MetodoPagoVenta } from "@/lib/notifications/types"
 import { descuentoGlobalDeVenta, esCobroEnEfectivo } from "@/lib/ventas/totales"
 
@@ -534,6 +535,8 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
           ventaId={ventaId}
           estadoVenta={venta.estado}
           tieneDevoluciones={(venta.devoluciones?.length ?? 0) > 0}
+          clienteNombre={venta.clienteNombre}
+          total={venta.total}
         />
       )}
 
@@ -814,80 +817,8 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
         </CardContent>
       </Card>
 
-      {/* Garantías */}
-      {venta.garantias.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              Certificados de Garantía ({venta.garantias.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {venta.garantias.map((garantia) => {
-                const item = venta.items.find((i) => i.id === garantia.itemVentaId)
-                return (
-                  <div
-                    key={garantia.id}
-                    className={
-                      garantia.estado === "ANULADA"
-                        ? "rounded-lg border bg-muted p-4"
-                        : "rounded-lg border bg-success-50 p-4 dark:bg-success/10"
-                    }
-                  >
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="font-mono text-sm font-medium text-success-700 dark:text-success-500">
-                        {garantia.numeroGarantia}
-                      </span>
-                      <Badge
-                        variant={
-                          garantia.estado === "ACTIVA"
-                            ? "success"
-                            : garantia.estado === "VENCIDA"
-                            ? "secondary"
-                            : "destructive"
-                        }
-                      >
-                        {garantia.estado}
-                      </Badge>
-                    </div>
-                    <div className="text-sm">
-                      <p className="font-medium">{item?.descripcion}</p>
-                      <p className="text-muted-foreground">
-                        Vigencia: {garantia.diasValidez} días
-                      </p>
-                      <p className="text-muted-foreground">
-                        Vence: {formatDate(garantia.fechaVencimiento)}
-                      </p>
-                    </div>
-                    {garantia.estado === "ANULADA" ? (
-                      <p className="mt-3 text-xs text-muted-foreground">
-                        Retirada por una devolución: ya no emite comprobante.
-                      </p>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-3 w-full"
-                        onClick={() =>
-                          window.open(
-                            `/api/ventas/${ventaId}/garantia/${garantia.id}/pdf`,
-                            "_blank"
-                          )
-                        }
-                      >
-                        <Download className="mr-2 h-4 w-4" />
-                        Descargar PDF
-                      </Button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Garantías: estado derivado y reclamos por línea */}
+      <GarantiasVentaCard ventaId={ventaId} garantias={venta.garantias} items={venta.items} isAdmin={isAdmin} />
 
       {/* Notas de crédito (devoluciones de la venta) */}
       {venta.devoluciones && venta.devoluciones.length > 0 && (

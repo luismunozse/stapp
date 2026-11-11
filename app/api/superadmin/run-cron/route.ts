@@ -40,6 +40,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Ruta de cron no válida" }, { status: 400 })
     }
 
+    // Auditoría fail-closed ANTES de correr el cron.
+    const intento = await createSuperadminAuditLogger(email, request).exigir({
+      action: "CRON_RUN",
+      entity: "cron_jobs",
+      description: `Cron ejecutado manualmente: ${path}`,
+      metadata: { cronPath: path },
+    })
+    if (!intento.ok) return intento.respuesta
+
     // Crear un request fake con el CRON_SECRET para pasar la autenticación.
     // `force=1`: una corrida manual debe ejecutarse ahora, sin importar la hora
     // local de cada org (recordatorios sólo procesa las orgs donde son las 10).
@@ -56,9 +65,10 @@ export async function POST(request: NextRequest) {
     const response = await handler(fakeRequest)
     const data = await response.json()
 
-    // Audit log
-    const auditLogger = createSuperadminAuditLogger(email || null, request)
-    auditLogger.cronRun(path, response.ok).catch(() => {})
+    await intento.completar(
+      { success: response.ok, status: response.status },
+      response.ok ? "completado" : "fallido"
+    )
 
     return NextResponse.json(data, { status: response.status })
   } catch (error) {

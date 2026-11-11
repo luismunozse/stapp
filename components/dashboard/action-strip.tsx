@@ -1,8 +1,9 @@
 import Link from "next/link"
-import { AlertTriangle, DollarSign, Package, ShieldCheck, type LucideIcon } from "lucide-react"
+import { AlertTriangle, DollarSign, MessageSquareWarning, Package, ShieldCheck, type LucideIcon } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { cn, formatCurrency } from "@/lib/utils"
 import type { CurrencyCode } from "@/lib/currency"
+import { ordenesHref } from "@/lib/ordenes/filtros-url"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,6 +26,8 @@ export interface AdminActionInput {
   deudaTotal: number
   slaVencidasCount: number
   garantiasCount: number
+  /** Total de la pestaña "Reclamos abiertos" de /garantias (misma consulta). */
+  reclamosAbiertosCount?: number
   stockBajoCount: number
 }
 
@@ -42,7 +45,7 @@ export function buildAdminActions(input: AdminActionInput): ActionItem[] {
       icon: DollarSign,
       label: "Cobros pendientes",
       value: `${formatCurrency(input.deudaTotal, input.moneda)} · ${input.cobrosCount} orden${input.cobrosCount !== 1 ? "es" : ""}`,
-      href: "/ordenes?estado_cobro=PENDIENTE",
+      href: ordenesHref({ filtro: "pendientesCobro" }),
     })
   }
 
@@ -53,7 +56,7 @@ export function buildAdminActions(input: AdminActionInput): ActionItem[] {
       icon: AlertTriangle,
       label: "Fecha prometida vencida",
       value: `${input.slaVencidasCount} orden${input.slaVencidasCount !== 1 ? "es" : ""}`,
-      href: "/ordenes",
+      href: ordenesHref({ filtro: "vencidas" }),
     })
   }
 
@@ -64,7 +67,21 @@ export function buildAdminActions(input: AdminActionInput): ActionItem[] {
       icon: ShieldCheck,
       label: "Garantías por vencer",
       value: `${input.garantiasCount}`,
-      href: "/ordenes",
+      // El conteo del dashboard del ADMIN es de toda la org: la lista también.
+      href: "/garantias?tab=por-vencer&sucursal=todas",
+    })
+  }
+
+  const reclamos = input.reclamosAbiertosCount ?? 0
+  if (reclamos > 0) {
+    items.push({
+      id: "reclamos",
+      tone: "info",
+      icon: MessageSquareWarning,
+      label: "Reclamos abiertos",
+      value: `${reclamos} reclamo${reclamos !== 1 ? "s" : ""} de garantía`,
+      // Mismo alcance que el conteo (toda la org para el ADMIN).
+      href: "/garantias?tab=reclamos&sucursal=todas",
     })
   }
 

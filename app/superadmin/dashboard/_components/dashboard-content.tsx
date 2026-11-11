@@ -17,7 +17,8 @@ import {
   Clock,
   Loader2,
 } from "lucide-react"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatDate } from "@/lib/utils"
+import { formatMontosPorMoneda, type MontoPorMoneda } from "@/lib/superadmin-montos"
 import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
 import { DashboardCharts } from "./dashboard-charts"
 import { CronPanel } from "./cron-panel"
@@ -36,10 +37,13 @@ interface DashboardData {
   activeOrganizations: number
   totalUsers: number
   premiumSubscriptions: number
-  monthlyRevenue: number
+  /** Cobrado en el mes, por moneda. null: la consulta falló (ver failedQueries). */
+  monthlyRevenueByCurrency: MontoPorMoneda[] | null
+  /** Moneda del gráfico de ingresos (monthlyRevenue6m[].revenue). */
+  revenueCurrency: string
   newOrgsThisMonth: number
   recentOrganizations: RecentOrganization[]
-  monthlyRevenue6m: { month: string; revenue: number }[]
+  monthlyRevenue6m: { month: string; revenue: number; porMoneda: Record<string, number> }[]
   orgGrowth6m: { month: string; count: number }[]
   planDistribution: { free: number; premium: number }
   failedQueries: number
@@ -99,6 +103,13 @@ export function DashboardContent() {
     return `hace ${mins}m`
   }
 
+  // Por moneda: nunca se suman ARS y USD. Si la consulta falló, "—" (no $0).
+  const ingresosDelMes = data?.monthlyRevenueByCurrency
+    ? formatMontosPorMoneda(data.monthlyRevenueByCurrency)
+    : "—"
+  const sinIngresos =
+    !!data?.monthlyRevenueByCurrency && data.monthlyRevenueByCurrency.every((m) => m.total === 0)
+
   const stats = data
     ? [
         {
@@ -133,15 +144,15 @@ export function DashboardContent() {
         },
         {
           title: "Ingresos del Mes",
-          value: formatCurrency(data.monthlyRevenue),
+          value: ingresosDelMes,
           icon: DollarSign,
-          description: data.monthlyRevenue === 0 && data.premiumSubscriptions > 0
+          description: sinIngresos && data.premiumSubscriptions > 0
             ? "Sin pagos registrados este mes"
             : "Pagos procesados",
           color: "text-amber-600",
           bgColor: "bg-amber-100 dark:bg-amber-950",
           href: "/superadmin/pagos",
-          tooltip: data.monthlyRevenue === 0 && data.premiumSubscriptions > 0
+          tooltip: sinIngresos && data.premiumSubscriptions > 0
             ? "Hay suscripciones Premium pero ningún pago registrado este mes. Verificá la integración con el provider de pagos."
             : undefined,
         },
@@ -281,6 +292,7 @@ export function DashboardContent() {
       ) : data ? (
         <DashboardCharts
           monthlyRevenue6m={data.monthlyRevenue6m}
+          revenueCurrency={data.revenueCurrency}
           orgGrowth6m={data.orgGrowth6m}
           planDistribution={data.planDistribution}
         />
@@ -362,7 +374,7 @@ export function DashboardContent() {
                     Ingresos del mes
                   </span>
                   <span className="font-bold text-lg">
-                    {formatCurrency(data.monthlyRevenue)}
+                    {ingresosDelMes}
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-3 border-b">

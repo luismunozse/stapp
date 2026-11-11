@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 
 export async function GET() {
   try {
@@ -53,6 +54,20 @@ export async function PUT(request: Request) {
       updateData.retention_days = body.retention_days
     }
 
+    // Fail-closed: esta config fija la retención de la propia auditoría, así que
+    // un cambio sin rastro podría usarse para borrar el historial.
+    const cambios = Object.fromEntries(
+      Object.entries(updateData).filter(([k]) => k !== "updated_at" && k !== "updated_by")
+    )
+    const intento = await createSuperadminAuditLogger(email, request).exigir({
+      action: "UPDATE",
+      entity: "audit_alert_config",
+      entityId: "default",
+      description: "Configuración de alertas/retención de auditoría actualizada",
+      metadata: { changes: cambios },
+    })
+    if (!intento.ok) return intento.respuesta
+
     const { data, error: dbError } = await supabaseAdmin
       .from("audit_alert_config")
       .update(updateData)
@@ -60,7 +75,12 @@ export async function PUT(request: Request) {
       .select()
       .single()
 
-    if (dbError) throw dbError
+    if (dbError) {
+      await intento.completar({ error: dbError.message }, "fallido")
+      throw dbError
+    }
+
+    await intento.completar()
 
     return NextResponse.json(data)
   } catch (error) {

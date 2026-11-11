@@ -15,6 +15,7 @@ import { SignaturePad } from "@/components/firma/signature-pad"
 import { Input } from "@/components/ui/input"
 import { Loader2, PackageCheck, PackageX, AlertTriangle, Shield, HandCoins } from "lucide-react"
 import { toast } from "sonner"
+import { ALCANCE_GARANTIA_LABELS, esAlcanceGarantia } from "@/lib/garantias/condiciones"
 import { useCurrency } from "@/contexts/currency-context"
 import { precioVentaRepuesto } from "@/lib/db-utils"
 import {
@@ -67,6 +68,12 @@ interface EntregaDialogProps {
   esRetiro?: boolean
   sinCobro?: boolean
   garantiaDiasDefault?: number
+  /** Condiciones de garantía del presupuesto del que nació la orden. Si
+   *  existen, mandan sobre el valor por defecto de la org. */
+  garantiaPresupuesto?: {
+    dias: number | null
+    alcance: string | null
+  } | null
 }
 
 interface RepuestoEntrega {
@@ -91,7 +98,15 @@ export function EntregaDialog({
   esRetiro = false,
   sinCobro = false,
   garantiaDiasDefault = 30,
+  garantiaPresupuesto = null,
 }: EntregaDialogProps) {
+  const alcanceRaw = garantiaPresupuesto?.alcance
+  const alcancePresupuesto = esAlcanceGarantia(alcanceRaw) ? alcanceRaw : null
+  const diasPresupuesto =
+    garantiaPresupuesto?.dias && garantiaPresupuesto.dias > 0 ? garantiaPresupuesto.dias : null
+  const diasGarantiaInicial = String(diasPresupuesto ?? garantiaDiasDefault)
+  // Un presupuesto que dijo "sin garantía" arranca con el checkbox destildado.
+  const conGarantiaInicial = !esRetiro && !sinCobro && alcancePresupuesto !== "NINGUNA"
   const { formatPrice } = useCurrency()
   const [loading, setLoading] = useState(false)
   const [firmaCliente, setFirmaCliente] = useState<string | null>(null)
@@ -100,8 +115,8 @@ export function EntregaDialog({
   const [firmaEncargadoMime, setFirmaEncargadoMime] = useState<string | null>(null)
   const [notasEntrega, setNotasEntrega] = useState("")
   const [error, setError] = useState<string | null>(null)
-  const [conGarantia, setConGarantia] = useState(!esRetiro && !sinCobro)
-  const [diasGarantia, setDiasGarantia] = useState(String(garantiaDiasDefault))
+  const [conGarantia, setConGarantia] = useState(conGarantiaInicial)
+  const [diasGarantia, setDiasGarantia] = useState(diasGarantiaInicial)
   const [notasGarantia, setNotasGarantia] = useState("")
   const [motivoSinCobro, setMotivoSinCobro] = useState<MotivoSinCobro>(
     () => defaultMotivoSinCobro(orden.estado)
@@ -124,6 +139,15 @@ export function EntregaDialog({
       setIncluyeRepuestos(true)
     }
   }, [open, orden.costoFinal])
+
+  // Las condiciones pueden llegar después del primer render (la orden se
+  // recarga): al abrir se toman las vigentes.
+  useEffect(() => {
+    if (open) {
+      setConGarantia(conGarantiaInicial)
+      setDiasGarantia(diasGarantiaInicial)
+    }
+  }, [open, conGarantiaInicial, diasGarantiaInicial])
 
   const tienePendiente = !esRetiro && !sinCobro && orden.estadoCobro && orden.estadoCobro !== "COBRADO" && (orden.pendienteCobro || 0) > 0
 
@@ -203,6 +227,10 @@ export function EntregaDialog({
       if (data.warning) {
         toast.warning(data.warning, { duration: 10000 })
       }
+      // Igual con la garantía: la entrega quedó hecha pero la garantía no.
+      if (data.garantiaWarning) {
+        toast.warning(data.garantiaWarning, { duration: 10000 })
+      }
 
       onSuccess(typeof data.pendienteCobro === "number" ? data.pendienteCobro : undefined)
       onClose()
@@ -222,8 +250,8 @@ export function EntregaDialog({
       setFirmaEncargadoMime(null)
       setNotasEntrega("")
       setError(null)
-      setConGarantia(!esRetiro && !sinCobro)
-      setDiasGarantia(String(garantiaDiasDefault))
+      setConGarantia(conGarantiaInicial)
+      setDiasGarantia(diasGarantiaInicial)
       setNotasGarantia("")
       onClose()
     }
@@ -455,6 +483,11 @@ export function EntregaDialog({
                   Incluir garantía
                 </span>
               </label>
+              {alcancePresupuesto === "NINGUNA" && !conGarantia && (
+                <p className="pl-6 text-xs text-muted-foreground">
+                  El presupuesto no incluía garantía.
+                </p>
+              )}
               {conGarantia && (
                 <div className="space-y-2 pl-6">
                   <div>
@@ -468,6 +501,12 @@ export function EntregaDialog({
                       disabled={loading}
                       className="mt-1 w-32"
                     />
+                    {alcancePresupuesto && alcancePresupuesto !== "NINGUNA" && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Del presupuesto: {diasPresupuesto ? `${diasPresupuesto} días · ` : ""}
+                        {ALCANCE_GARANTIA_LABELS[alcancePresupuesto].toLowerCase()}. El alcance se agrega a las condiciones.
+                      </p>
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="notas-garantia" className="text-sm">Condiciones (opcional)</Label>

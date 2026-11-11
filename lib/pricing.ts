@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
+import { FREE_PLAN_LIMITS_FALLBACK } from "@/lib/plan-copy"
 
 export interface PlanPrices {
   ars: { monthly: number; yearly: number }
@@ -36,14 +37,9 @@ const FALLBACK_ALL_PLANS: AllPlansPrices = {
     tierOrder: 0,
     ars: { monthly: 0, yearly: 0 },
     usd: { monthly: 0, yearly: 0 },
-    limits: {
-      ordenes: 15,
-      tecnicos: 1,
-      clientes: 30,
-      vendedores: 1,
-      storageMb: 100,
-    },
+    limits: FREE_PLAN_LIMITS_FALLBACK,
     featureFlags: {
+      pos_sales: true,
       client_portal: true,
     },
   },

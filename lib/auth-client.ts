@@ -18,3 +18,15 @@ export function parseRequires2FA(code: string): string | null {
   const userId = code.slice("REQUIRES_2FA:".length)
   return userId || null
 }
+
+// Destino después de loguearse en el dominio raíz. La cookie de sesión está
+// scopeada a `.{ROOT_DOMAIN}` (lib/session-cookie.ts → sessionCookieDomain),
+// así que la sesión recién creada ya vale en el subdominio del negocio: se va
+// directo al panel, igual que el login con Google (app/google-auth). El proxy
+// sigue verificando que el usuario pertenezca a ese tenant.
+export function tenantDashboardUrl(
+  slug: string,
+  rootDomain: string = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+): string {
+  return `https://${slug}.${rootDomain}/dashboard`
+}

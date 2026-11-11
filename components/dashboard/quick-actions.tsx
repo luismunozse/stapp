@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Plus, Store, AlertTriangle, Landmark } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { ordenesHref } from "@/lib/ordenes/filtros-url"
 
 interface QuickActionsProps {
   cobrosPendientesCount: number
@@ -22,7 +23,7 @@ export function QuickActions({ cobrosPendientesCount }: QuickActionsProps) {
     },
     {
       label: "Ver Cobros Pendientes",
-      href: "/ordenes?estado_cobro=PENDIENTE",
+      href: ordenesHref({ filtro: "pendientesCobro" }),
       icon: AlertTriangle,
       className: "bg-amber-500 text-amber-950 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-500",
       badge: cobrosPendientesCount > 0 ? cobrosPendientesCount : undefined,

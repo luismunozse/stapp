@@ -5,39 +5,64 @@ import {
   Clock,
   Camera,
   DollarSign,
-  Wrench,
-  Package,
-  FileText,
   ArrowRight,
   XCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-interface TimelineEvent {
+/**
+ * Evento tal como lo devuelve /api/public/ordenes/[token]/timeline. El
+ * endpoint es público: sólo trae tipo, estado nuevo y fecha (más URL/tipo de
+ * foto). Nada de descripciones internas, metadata ni quién lo hizo.
+ */
+export interface TimelineEvent {
   id: string
   type: "evento" | "foto"
   eventType: string
-  estadoAnterior?: string | null
   estadoNuevo?: string | null
   descripcion?: string | null
   url?: string
   fotoTipo?: string
   createdAt: string
-  createdBy?: string | null
 }
 
 const estadoLabels: Record<string, string> = {
   RECIBIDO: "Recibido",
-  EN_DIAGNOSTICO: "En Diagnóstico",
+  EN_DIAGNOSTICO: "En diagnóstico",
   PRESUPUESTADO: "Presupuestado",
   APROBADO: "Aprobado",
-  EN_REPARACION: "En Reparación",
-  ESPERANDO_REPUESTO: "Esperando Repuesto",
-  REPARADO: "Reparado",
+  EN_REPARACION: "En reparación",
+  ESPERANDO_REPUESTO: "Esperando repuesto",
+  REPARADO: "Listo para retirar",
   ENTREGADO: "Entregado",
-  ENTREGADO_SIN_REPARACION: "Retirado sin Reparación",
+  ENTREGADO_SIN_REPARACION: "Retirado sin reparación",
+  ENTREGADO_SIN_COBRO: "Retirado sin cobro",
   CANCELADO: "Cancelado",
-  SIN_REPARACION: "Sin Reparación",
+  SIN_REPARACION: "Sin reparación",
+  SIN_FALLA_DETECTADA: "Sin falla detectada",
+}
+
+/** Texto para el cliente al llegar a cada estado (en vez de "Estado cambiado de X a Y"). */
+const estadoTextos: Record<string, string> = {
+  RECIBIDO: "Ingresó al taller",
+  EN_DIAGNOSTICO: "Empezamos el diagnóstico",
+  PRESUPUESTADO: "El presupuesto está listo para que lo revises",
+  APROBADO: "Presupuesto aprobado",
+  EN_REPARACION: "Empezamos a trabajar",
+  ESPERANDO_REPUESTO: "Estamos esperando un repuesto",
+  REPARADO: "¡Listo para retirar!",
+  ENTREGADO: "Entregado. ¡Gracias por confiar en nosotros!",
+  ENTREGADO_SIN_REPARACION: "Retirado sin reparación",
+  ENTREGADO_SIN_COBRO: "Retirado sin cobro",
+  CANCELADO: "La orden fue cancelada",
+  SIN_REPARACION: "No fue posible hacer la reparación",
+  SIN_FALLA_DETECTADA: "Lo revisamos y no detectamos la falla reportada",
+}
+
+const fotoTextos: Record<string, string> = {
+  INGRESO: "Foto del ingreso",
+  REPARACION: "Foto de la reparación",
+  ENTREGA: "Foto de la entrega",
 }
 
 const eventIcons: Record<string, typeof CheckCircle2> = {
@@ -46,8 +71,6 @@ const eventIcons: Record<string, typeof CheckCircle2> = {
   PRESUPUESTO_DEFINIDO: DollarSign,
   PRESUPUESTO_APROBADO: CheckCircle2,
   PRESUPUESTO_RECHAZADO: XCircle,
-  NOTA: FileText,
-  REPUESTO_AGREGADO: Package,
 }
 
 const eventColors: Record<string, string> = {
@@ -56,8 +79,6 @@ const eventColors: Record<string, string> = {
   PRESUPUESTO_DEFINIDO: "bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400",
   PRESUPUESTO_APROBADO: "bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400",
   PRESUPUESTO_RECHAZADO: "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400",
-  NOTA: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
-  REPUESTO_AGREGADO: "bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-400",
 }
 
 function formatDate(dateStr: string, timezone?: string) {
@@ -75,22 +96,23 @@ function formatDate(dateStr: string, timezone?: string) {
   }
 }
 
-function getEventDescription(event: TimelineEvent): string {
-  if (event.descripcion) return event.descripcion
-
+export function getEventDescription(event: TimelineEvent): string {
   switch (event.eventType) {
-    case "CAMBIO_ESTADO":
-      return `Estado cambiado de ${estadoLabels[event.estadoAnterior || ""] || event.estadoAnterior} a ${estadoLabels[event.estadoNuevo || ""] || event.estadoNuevo}`
+    case "CAMBIO_ESTADO": {
+      const estado = event.estadoNuevo || ""
+      if (estadoTextos[estado]) return estadoTextos[estado]
+      return estadoLabels[estado] ? `Nuevo estado: ${estadoLabels[estado]}` : "Actualizamos el estado de tu orden"
+    }
     case "FOTO_AGREGADA":
-      return `Foto de ${(event.fotoTipo || "").toLowerCase()} agregada`
+      return fotoTextos[event.fotoTipo || ""] || "Agregamos una foto"
     case "PRESUPUESTO_DEFINIDO":
-      return "Presupuesto definido"
+      return "El presupuesto está listo para que lo revises"
     case "PRESUPUESTO_APROBADO":
       return "Presupuesto aprobado"
     case "PRESUPUESTO_RECHAZADO":
-      return "Presupuesto rechazado por el cliente"
+      return "Presupuesto rechazado"
     default:
-      return event.eventType
+      return "Actualizamos tu orden"
   }
 }
 
@@ -104,7 +126,7 @@ export function VisualTimeline({ events, timezone }: VisualTimelineProps) {
     return (
       <div className="text-center py-8 text-muted-foreground">
         <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-        <p className="text-sm">No hay eventos registrados aún</p>
+        <p className="text-sm">Todavía no hay novedades</p>
       </div>
     )
   }
@@ -140,14 +162,14 @@ export function VisualTimeline({ events, timezone }: VisualTimelineProps) {
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {formatDate(event.createdAt, timezone)}
-                    {event.createdBy && ` · ${event.createdBy}`}
                   </p>
 
                   {/* Thumbnail de foto */}
                   {event.type === "foto" && event.url && (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={event.url}
-                      alt={event.descripcion || "Foto"}
+                      alt={event.descripcion || getEventDescription(event)}
                       className="mt-2 rounded-md max-h-32 object-cover"
                       loading="lazy"
                     />

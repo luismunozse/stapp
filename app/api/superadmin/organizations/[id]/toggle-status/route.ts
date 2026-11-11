@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 
 export async function POST(
   request: Request,
@@ -52,6 +53,24 @@ export async function POST(
       )
     }
 
+    // Auditoría fail-closed ANTES de cambiar el acceso de todo el tenant.
+    const intento = await createSuperadminAuditLogger(email, request).exigir({
+      action: "TOGGLE_STATUS",
+      entity: "organizations",
+      entityId: id,
+      organizationId: id,
+      description: activo
+        ? `Organización "${orgBefore.nombre}" activada`
+        : `Organización "${orgBefore.nombre}" desactivada — motivo: ${suspensionReason}`,
+      metadata: {
+        orgName: orgBefore.nombre,
+        before: orgBefore.activo,
+        after: activo,
+        suspension_reason: activo ? null : suspensionReason,
+      },
+    })
+    if (!intento.ok) return intento.respuesta
+
     // Actualizar estado. Al suspender guardamos motivo + quién/cuándo; al
     // reactivar limpiamos esos campos para no dejar un motivo viejo colgado.
     const { data, error: dbError } = await supabaseAdmin
@@ -68,24 +87,7 @@ export async function POST(
 
     if (dbError) throw dbError
 
-    // Registrar en audit_logs
-    await supabaseAdmin.from("audit_logs").insert({
-      organization_id: id,
-      user_id: null,
-      action: "UPDATE",
-      entity: "organizations",
-      entity_id: id,
-      changes: {
-        field: "activo",
-        before: orgBefore.activo,
-        after: activo,
-        superadmin_email: email,
-        suspension_reason: activo ? null : suspensionReason,
-        action_description: activo
-          ? `Organización "${orgBefore.nombre}" activada`
-          : `Organización "${orgBefore.nombre}" desactivada — motivo: ${suspensionReason}`,
-      },
-    })
+    await intento.completar()
 
     return NextResponse.json({
       success: true,

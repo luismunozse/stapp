@@ -38,3 +38,25 @@ export async function fetchAllRows<T = Row>(
   }
   return rows
 }
+
+/** Ids por consulta en `fetchAllRowsIn`: un `.in()` con miles de ids no entra en la URL. */
+export const IN_CHUNK_SIZE = 200
+
+/**
+ * `fetchAllRows` filtrando `column IN (values)`, de a IN_CHUNK_SIZE valores por consulta
+ * (cada tramo paginado). Sin valores no consulta nada.
+ */
+export async function fetchAllRowsIn<T = Row>(
+  table: string,
+  select: string,
+  column: string,
+  values: readonly string[],
+  apply: (query: any) => any = (q) => q
+): Promise<T[]> {
+  const rows: T[] = []
+  for (let i = 0; i < values.length; i += IN_CHUNK_SIZE) {
+    const chunk = values.slice(i, i + IN_CHUNK_SIZE)
+    rows.push(...(await fetchAllRows<T>(table, select, (q) => apply(q.in(column, chunk)))))
+  }
+  return rows
+}

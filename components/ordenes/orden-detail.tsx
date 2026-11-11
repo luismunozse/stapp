@@ -54,6 +54,7 @@ import { useCurrency, useTerminologia } from "@/contexts/currency-context"
 import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 import { CotizacionList } from "@/components/cotizaciones/cotizacion-list"
 import { GarantiaCard } from "@/components/garantias/garantia-card"
+import { ReingresoGarantiaDialog } from "@/components/garantias/reingreso-garantia-dialog"
 import { FotoGallery } from "@/components/fotos/foto-gallery"
 import { ChecklistCard } from "@/components/checklist/checklist-card"
 import { WhatsAppDialog } from "@/components/ordenes/whatsapp-dialog"
@@ -78,6 +79,7 @@ import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
 import { OrdenServiciosTab } from "@/components/ordenes/orden-servicios-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
 import { usePuedeCobrar } from "@/hooks/use-puede-cobrar"
+import { useUltimaListaOrdenes } from "@/hooks/use-ultima-lista-ordenes"
 import { ConfirmarReparadoDialog } from "@/components/ordenes/confirmar-reparado-dialog"
 import { NotaCreditoDialog } from "@/components/notas-credito/nota-credito-dialog"
 import { NotasCreditoOrden } from "@/components/notas-credito/notas-credito-orden"
@@ -112,6 +114,7 @@ interface OrdenDetailProps {
 
 export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const router = useRouter()
+  const listaHref = useUltimaListaOrdenes()
   const { data: session } = useSession()
   const { confirm, alert } = useModal()
   const term = useTerminologia()
@@ -120,6 +123,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [tecnicosDe, setTecnicosDe] = useState<{ para: string; lista: UserType[] } | null>(null)
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
+  const [showReingreso, setShowReingreso] = useState(false)
   const [editarEquipoOpen, setEditarEquipoOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
@@ -424,43 +428,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     setSinCobroEntrega(false)
   }
 
-  const handleReingreso = async () => {
-    const confirmed = await confirm({
-      title: "Re-ingreso por Garantía",
-      description: "Se creará una nueva orden vinculada a esta como re-ingreso por garantía. ¿Desea continuar?",
-      confirmText: "Crear Re-ingreso",
-      variant: "info",
-    })
-    if (!confirmed) return
-
-    setUpdating(true)
-    try {
-      const res = await fetch(`/api/ordenes/${ordenId}/reingreso`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          problemaReportado: `Re-ingreso: problema recurrente del equipo`,
-        }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        await alert({
-          title: "Re-ingreso creado",
-          description: `Se creó la orden ${data.codigoOrden || `#${data.numeroOrden}`}`,
-          variant: "success",
-        })
-        router.push(`/ordenes/${data.id}`)
-      } else {
-        const error = await res.json()
-        await alert({ title: "Error", description: error.error || "Error al crear re-ingreso", variant: "error" })
-      }
-    } catch {
-      await alert({ title: "Error", description: "Error al crear re-ingreso", variant: "error" })
-    } finally {
-      setUpdating(false)
-    }
-  }
-
   const handleAsignarTecnico = async (tecnicoId: string | null) => {
     setUpdating(true)
     try {
@@ -631,7 +598,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       const res = await fetch(`/api/ordenes/${ordenId}`, { method: "DELETE" })
       if (res.ok) {
         toast.success("Orden eliminada")
-        router.push("/ordenes")
+        router.push(listaHref)
       } else {
         const error = await res.json()
         await alert({
@@ -695,7 +662,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       {/* Header */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-4">
-          <Link href="/ordenes">
+          <Link href={listaHref} aria-label="Volver a órdenes">
             <Button variant="outline" size="icon">
               <ArrowLeft className="h-4 w-4" />
             </Button>
@@ -893,10 +860,10 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                     Generar Remito
                   </DropdownMenuItem>
                 )}
-                {(orden.estado === "ENTREGADO" || orden.estado === "REPARADO") && !orden.esReingreso && (
-                  <DropdownMenuItem onClick={handleReingreso} disabled={updating}>
+                {orden.estado === "ENTREGADO" && !orden.esReingreso && (
+                  <DropdownMenuItem onClick={() => setShowReingreso(true)} disabled={updating}>
                     <Shield className="h-4 w-4 mr-2" />
-                    Re-ingreso por Garantia
+                    Re-ingreso por garantía
                   </DropdownMenuItem>
                 )}
                 {(orden.totalCobrado || 0) > 0 && (
@@ -937,13 +904,32 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       )}
 
       {/* Banner de re-ingreso */}
-      {orden.esReingreso && orden.ordenOrigenId && (
+      {orden.esReingreso && (
         <StatusBanner tone="info" icon={Shield}>
-          Re-ingreso por garantia — Orden original:{" "}
-          <Link href={`/ordenes/${orden.ordenOrigenId}`} className="underline hover:text-blue-600">
-            ver orden original
-          </Link>
+          {orden.ordenOrigenId ? (
+            <>
+              Re-ingreso por garantía — Orden original:{" "}
+              <Link href={`/ordenes/${orden.ordenOrigenId}`} className="underline hover:text-primary">
+                ver orden original
+              </Link>
+            </>
+          ) : (
+            "Re-ingreso por garantía de una venta."
+          )}
         </StatusBanner>
+      )}
+
+      {isAdmin && (
+        <ReingresoGarantiaDialog
+          open={showReingreso}
+          onOpenChange={setShowReingreso}
+          ordenId={ordenId}
+          onCreado={(r) => {
+            setShowReingreso(false)
+            toast.success(`Re-ingreso creado: orden ${r.codigoOrden || `#${r.numeroOrden}`}`)
+            router.push(`/ordenes/${r.id}`)
+          }}
+        />
       )}
 
       {/* Progress Bar */}
@@ -1250,7 +1236,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
           {/* Garantia (no aplica para retiros ni sin cobro) */}
           {!isRetiro && !isSinCobro && (
-            <GarantiaCard ordenId={ordenId} ordenEstado={orden.estado} garantiaDiasDefault={(orden as any).organizationGarantiaDiasDefault ?? 30} />
+            <GarantiaCard ordenId={ordenId} ordenEstado={orden.estado} garantiaDiasDefault={(orden as any).organizationGarantiaDiasDefault ?? 30} isAdmin={isAdmin} />
           )}
 
           {/* Notas de crédito: las ve quien ve la orden (spec, Permisos). */}
@@ -1501,6 +1487,10 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           esRetiro={orden.estado === "SIN_REPARACION" && !sinCobroEntrega}
           sinCobro={sinCobroEntrega}
           garantiaDiasDefault={(orden as any).organizationGarantiaDiasDefault ?? 30}
+          garantiaPresupuesto={{
+            dias: (orden as any).garantiaPresupuestoDias ?? null,
+            alcance: (orden as any).garantiaPresupuestoAlcance ?? null,
+          }}
         />
       )}
 

@@ -36,6 +36,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "La suscripción ya está cancelada" }, { status: 400 })
     }
 
+    // Auditoría fail-closed ANTES de cancelar.
+    const intento = await createSuperadminAuditLogger(email, request).exigir({
+      action: "UPDATE",
+      entity: "subscriptions",
+      entityId: sub.id,
+      organizationId,
+      description: immediate
+        ? "Suscripción cancelada inmediatamente"
+        : "Suscripción marcada para cancelar al final del período",
+      metadata: { immediate, previous_status: sub.status },
+    })
+    if (!intento.ok) return intento.respuesta
+
     // Primero el débito automático de MercadoPago (preapproval).
     // Si solo se marcaba la fila, MP seguía cobrando y el webhook del
     // cobro siguiente volvía a poner la suscripción en ACTIVE. Se hace igual al
@@ -44,6 +57,7 @@ export async function POST(request: Request) {
     // reintento vuelva a pasar por acá (es idempotente).
     const mpCancel = await cancelMercadoPagoPreapproval(organizationId)
     if (!mpCancel.ok) {
+      await intento.completar({ error: "mercadopago" }, "fallido")
       return NextResponse.json(
         { error: "No se pudo cancelar el débito automático en MercadoPago. La suscripción no se modificó; reintentá." },
         { status: 502 }
@@ -75,6 +89,7 @@ export async function POST(request: Request) {
           .eq("id", sub.id)
 
     if (cancelError) {
+      await intento.completar({ error: cancelError.message }, "fallido")
       console.error("Error canceling subscription:", cancelError)
       return NextResponse.json({ error: "Error al cancelar la suscripción" }, { status: 500 })
     }
@@ -95,20 +110,7 @@ export async function POST(request: Request) {
       performed_by: email,
     })
 
-    // Audit log
-    const auditLogger = createSuperadminAuditLogger(email, request)
-    auditLogger
-      .log({
-        action: "UPDATE",
-        entity: "subscriptions",
-        entityId: sub.id,
-        organizationId,
-        description: immediate
-          ? "Suscripción cancelada inmediatamente"
-          : "Suscripción marcada para cancelar al final del período",
-        metadata: { immediate, mercadopagoCanceled },
-      })
-      .catch(() => {})
+    await intento.completar({ mercadopagoCanceled })
 
     return NextResponse.json({
       success: true,

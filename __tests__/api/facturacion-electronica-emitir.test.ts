@@ -45,11 +45,19 @@ vi.mock("@/lib/facturacion/map-venta", () => ({
   mapVentaToEmitirInput: vi.fn(),
 }))
 
+// Passthrough espiado: la emision tiene que sacar la letra de la misma regla
+// compartida que usa el listado para anunciarla (`tipoEmision`).
+vi.mock("@/lib/facturacion/derive", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/facturacion/derive")>()
+  return { ...real, deriveTipo: vi.fn(real.deriveTipo) }
+})
+
 import { canEmitirFacturaElectronica } from "@/lib/facturacion/access"
 import { tusFacturasProvider } from "@/lib/facturacion/tusfacturas-provider"
 import { arcaDirectProvider } from "@/lib/facturacion/arca/arca-direct-provider"
 import { getCertificadoStapp, ArcaStappCertError } from "@/lib/facturacion/arca/stapp-cert"
 import { mapVentaToEmitirInput } from "@/lib/facturacion/map-venta"
+import { deriveTipo, tipoEmisionDeFila } from "@/lib/facturacion/derive"
 import { POST } from "@/app/api/facturacion-electronica/emitir/route"
 
 /**
@@ -289,6 +297,30 @@ describe("POST /api/facturacion-electronica/emitir", () => {
     )
     expect(updateChain.select).toHaveBeenCalledWith(SAFE_COLUMNS)
     expect(body.comprobante).not.toHaveProperty("provider_response")
+  })
+
+  it.each([
+    ["MONOTRIBUTO", "C"],
+    ["RESPONSABLE_INSCRIPTO", "B"],
+    [null, "C"],
+  ])("el pendiente se inserta con la letra de la regla compartida (condicion %s -> %s)", async (condicion, letra) => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    vi.mocked(tusFacturasProvider.emitir).mockResolvedValue({ ok: false, errores: ["x"], raw: {} } as any)
+    const insertChain = createChainMock({ id: "cmp-1" })
+    const fila = { ...CREDENCIALES, condicion_fiscal: condicion }
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [createChainMock(null), insertChain, createChainMock({ id: "cmp-1", estado: "rechazado" })],
+      ventas: [createChainMock(VENTA)],
+      items_venta: [createChainMock(ITEMS)],
+      facturacion_credenciales: [createChainMock(fila)],
+    })
+
+    await POST(createPostRequest({ ventaId: "venta-1" }))
+
+    expect(deriveTipo).toHaveBeenCalled()
+    expect(insertChain.insert).toHaveBeenCalledWith(expect.objectContaining({ tipo: letra }))
+    expect(tipoEmisionDeFila(fila)).toBe(letra)
   })
 
   it("422 + estado rechazado on provider failure", async () => {

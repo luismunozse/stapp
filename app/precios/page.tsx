@@ -11,6 +11,7 @@ import { PricingPageTracker } from "@/components/marketing/pricing-page-tracker"
 import { getPremiumPrices, getAllPlanPrices } from "@/lib/pricing"
 import { FAQPageJsonLd, BreadcrumbJsonLd } from "@/components/seo/json-ld"
 import { OG_IMAGES } from "@/lib/og/metadata"
+import { buildPricingFaqs, getFreePlanInfo } from "@/lib/plan-copy"
 
 export const metadata: Metadata = {
   title: "Precios y Planes | Software de Gestión para Servicio Técnico",
@@ -38,39 +39,6 @@ export const metadata: Metadata = {
   },
 }
 
-const pricingFaqs = [
-  {
-    question: "¿Cuánto cuesta STApp?",
-    answer:
-      "STApp tiene un plan Free gratuito para siempre con funciones básicas, y un plan Profesional con todas las funciones desbloqueadas. Al registrarte, tenés 30 días gratis con acceso total al plan Profesional. Aceptamos MercadoPago (pesos argentinos) y pagos internacionales en dólares.",
-  },
-  {
-    question: "¿Puedo probar STApp gratis?",
-    answer:
-      "Sí, al registrarte tenés 30 días con acceso completo al plan Profesional, sin tarjeta de crédito. Si no te convence, tu cuenta pasa automáticamente al plan Free sin perder tus datos.",
-  },
-  {
-    question: "¿Qué incluye el plan Profesional?",
-    answer:
-      "El plan Profesional incluye: órdenes de trabajo ilimitadas, gestión de clientes, control de inventario con alertas, punto de venta con garantías, cotizaciones con aprobación online, notificaciones por WhatsApp, portal de seguimiento para clientes, 15+ reportes avanzados, técnicos y vendedores ilimitados, modo kiosco, tu logo en presupuestos, y soporte prioritario.",
-  },
-  {
-    question: "¿Qué incluye el plan Free?",
-    answer:
-      "El plan Free incluye hasta 15 órdenes por mes, 1 técnico, hasta 30 clientes, inventario básico y 100MB de almacenamiento. Es ideal para conocer STApp y para talleres muy pequeños.",
-  },
-  {
-    question: "¿Puedo cancelar en cualquier momento?",
-    answer:
-      "Sí, podés cancelar tu suscripción cuando quieras sin penalidades ni cargos ocultos. Tu cuenta pasa al plan Free y mantenés todos tus datos.",
-  },
-  {
-    question: "¿Aceptan pagos desde otros países?",
-    answer:
-      "Sí, aceptamos pagos en pesos argentinos vía MercadoPago y en dólares estadounidenses para usuarios de otros países de Latinoamérica.",
-  },
-]
-
 export default async function PreciosPage() {
   const [session, prices, allPlans] = await Promise.all([auth(), getPremiumPrices(), getAllPlanPrices()])
 
@@ -87,6 +55,9 @@ export default async function PreciosPage() {
       redirect(`${protocol}://${org.slug}.${rootDomain}/dashboard`)
     }
   }
+
+  // Límites del Free leídos de la tabla plans (misma fuente que la card).
+  const pricingFaqs = buildPricingFaqs(getFreePlanInfo(allPlans))
 
   return (
     <>

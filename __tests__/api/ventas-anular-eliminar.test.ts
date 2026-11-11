@@ -229,4 +229,20 @@ describe("DELETE /api/ventas/[id]", () => {
     const { status } = await parseResponse(await DELETE(...req("DELETE")))
     expect(status).toBe(409)
   })
+
+  it("si la frena un reclamo de garantía (401) responde 409 y lo dice", async () => {
+    const ventas = createChainMock(anulada)
+    ventas.delete = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({
+        error: {
+          code: "23503",
+          message: 'update or delete on table "garantias_venta" violates foreign key constraint "reclamos_garantia_garantia_venta_id_fkey" on table "reclamos_garantia"',
+        },
+      }),
+    })
+    mockSupabaseFrom({ ventas, comprobantes_fiscales: createChainMock(null) })
+    const { status, body } = await parseResponse(await DELETE(...req("DELETE")))
+    expect(status).toBe(409)
+    expect(body.error).toMatch(/reclamos de garantía/)
+  })
 })

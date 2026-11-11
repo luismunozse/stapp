@@ -89,6 +89,11 @@ export function FeatureUsageContent() {
     loadData()
   }, [loadData])
 
+  // Los datos los calcula el cron diario: sin ninguna corrida no hay lastUpdate.
+  const sinDatosMsg = data && !data.summary.lastUpdate
+    ? "Todavía no hay datos: el cron diario de feature usage no corrió."
+    : "Sin organizaciones activas para analizar."
+
   const filteredOrgs = (data?.organizations || [])
     .filter(o => !search || o.nombre.toLowerCase().includes(search.toLowerCase()) || o.slug.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
@@ -229,7 +234,7 @@ export function FeatureUsageContent() {
               ))}
               {(!data || data.featureAdoption.length === 0) && !loading && (
                 <p className="text-sm text-muted-foreground text-center py-8">
-                  Sin organizaciones activas para analizar.
+                  {sinDatosMsg}
                 </p>
               )}
             </div>
@@ -338,7 +343,7 @@ export function FeatureUsageContent() {
                 {filteredOrgs.length === 0 && !loading && (
                   <p className="text-center text-muted-foreground py-8">
                     {data?.organizations.length === 0
-                      ? "Sin organizaciones activas para analizar."
+                      ? sinDatosMsg
                       : "No hay organizaciones que coincidan con la búsqueda."}
                   </p>
                 )}

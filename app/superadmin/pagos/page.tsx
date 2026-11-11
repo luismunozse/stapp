@@ -20,12 +20,13 @@ import {
   AlertCircle,
   Clock,
 } from "lucide-react"
-import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils"
+import { formatDate, formatDateTime } from "@/lib/utils"
 import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
 import { useLastUpdated } from "@/hooks/use-last-updated"
 import { LastUpdated } from "@/components/superadmin/last-updated"
 import type { PaymentWithOrg, PaymentStats } from "@/types/superadmin"
+import { formatMonto, formatMontosPorMoneda, type MontoPorMoneda } from "@/lib/superadmin-montos"
 import { ReconcileMpCard } from "./_components/reconcile-mp-card"
 import { WebhookEventsCard } from "./_components/webhook-events-card"
 
@@ -66,7 +67,7 @@ function getProviderPaymentUrl(provider: string | null | undefined, paymentId: s
 interface PaymentsResponse {
   payments: PaymentWithOrg[]
   total: number
-  totalAmount: number
+  totalAmountByCurrency: MontoPorMoneda[]
   stats?: PaymentStats
 }
 
@@ -81,7 +82,6 @@ export default function PagosPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
-  const [totalAmount, setTotalAmount] = useState(0)
   const [stats, setStats] = useState<PaymentStats | null>(null)
 
   const { loading, fetchData } = useSuperadminFetch<PaymentsResponse>()
@@ -103,7 +103,6 @@ export default function PagosPage() {
     if (result) {
       setPayments(result.payments || [])
       setTotal(result.total || 0)
-      setTotalAmount(result.totalAmount || 0)
       setStats(result.stats || null)
       markUpdated()
     }
@@ -227,7 +226,7 @@ export default function PagosPage() {
       key: "amount",
       header: "Monto",
       render: (payment) => (
-        <span className="font-medium">{formatCurrency(payment.amount)}</span>
+        <span className="font-medium">{formatMonto(payment.amount, payment.currency?.toUpperCase() || "ARS")}</span>
       ),
     },
     {
@@ -341,7 +340,7 @@ export default function PagosPage() {
               <div>
                 <div className="text-xs text-muted-foreground">MRR</div>
                 <div className="text-xl font-bold">
-                  {formatCurrency(stats?.mrr ?? 0)}
+                  {formatMontosPorMoneda(stats?.mrrPorMoneda)}
                 </div>
               </div>
             </div>
@@ -357,7 +356,7 @@ export default function PagosPage() {
               <div>
                 <div className="text-xs text-muted-foreground">Total histórico</div>
                 <div className="text-xl font-bold">
-                  {formatCurrency(stats?.totalHistorico ?? 0)}
+                  {formatMontosPorMoneda(stats?.totalHistoricoPorMoneda)}
                 </div>
               </div>
             </div>

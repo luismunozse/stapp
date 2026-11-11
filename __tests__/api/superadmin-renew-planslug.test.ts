@@ -63,7 +63,7 @@ describe("POST /api/superadmin/subscriptions/renew — planSlug", () => {
       user_notifications: createChainMock(null),
     })
 
-    const res = await POST(postJson({ organizationId: "o1", planSlug: "pro", billingPeriod: "MONTHLY" }))
+    const res = await POST(postJson({ organizationId: "o1", planSlug: "pro", billingPeriod: "MONTHLY", idempotencyKey: "clave-renovacion-1" }))
     const { status } = await parseResponse(res)
 
     expect(status).toBe(200)

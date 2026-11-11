@@ -66,8 +66,8 @@ function nota(over: Item = {}): Item {
 /** La factura `c1` ya anulada. */
 const anulada = (over: Item = {}) => item({ estado: "anulado", anuladoAt: "2026-10-20T15:00:00Z", ...over })
 
-function listado(items: Item[], puedeEmitir = true) {
-  return { items, total: items.length, page: 1, limit: 20, totalPages: 1, puedeEmitir }
+function listado(items: Item[], puedeEmitir = true, tipoEmision: string | null = null) {
+  return { items, total: items.length, page: 1, limit: 20, totalPages: 1, puedeEmitir, tipoEmision }
 }
 
 interface Respuesta {
@@ -118,7 +118,19 @@ async function anularConMotivo(motivo = "Error en la factura") {
 const elegible = { estadoVenta: "COMPLETADA", tieneDevoluciones: false }
 
 function renderCard(props: Partial<React.ComponentProps<typeof ComprobanteFiscalCard>> = {}) {
-  return render(<ComprobanteFiscalCard ventaId="v1" {...elegible} {...props} />)
+  return render(<ComprobanteFiscalCard ventaId="v1" clienteNombre="Juan Pérez" total={1210} {...elegible} {...props} />)
+}
+
+/**
+ * Emitir pide confirmar antes: hace click en el boton de la ficha, espera el
+ * dialogo y confirma con "Emitir factura". Devuelve el boton de confirmar.
+ */
+async function emitirConfirmando(nombre: string | RegExp) {
+  fireEvent.click(await screen.findByRole("button", { name: nombre }))
+  const dialogo = await screen.findByRole("dialog")
+  const confirmar = within(dialogo).getByRole("button", { name: "Emitir factura" })
+  fireEvent.click(confirmar)
+  return confirmar
 }
 
 describe("ComprobanteFiscalCard", () => {
@@ -184,13 +196,70 @@ describe("ComprobanteFiscalCard", () => {
   })
 
   describe("emision", () => {
+    it("el click no emite: abre una confirmacion con comprobante, receptor, total y el aviso de que no se deshace", async () => {
+      montarFetch([listado([], true)], { status: 200, body: { comprobante: { id: "c1" } } })
+      renderCard()
+      fireEvent.click(await screen.findByRole("button", { name: /Emitir factura electrónica/i }))
+
+      const dialogo = await screen.findByRole("dialog")
+      expect(within(dialogo).getByText(/Factura B o C/)).toBeInTheDocument()
+      expect(within(dialogo).getByText("Juan Pérez (consumidor final, sin CUIT ni DNI)")).toBeInTheDocument()
+      expect(within(dialogo).getByText(/1\.210,00/)).toBeInTheDocument()
+      expect(
+        within(dialogo).getByText("Una vez emitida, la factura solo se puede anular con una nota de crédito.")
+      ).toBeInTheDocument()
+      expect(within(dialogo).getByRole("button", { name: "Cancelar" })).toBeInTheDocument()
+      expect(llamadasA("/emitir")).toHaveLength(0)
+    })
+
+    it.each([["C"], ["B"]])("si el servidor informa la letra, muestra 'Factura %s' y no la regla", async (letra) => {
+      montarFetch([listado([], true, letra)])
+      renderCard()
+      fireEvent.click(await screen.findByRole("button", { name: /Emitir factura electrónica/i }))
+      const dialogo = await screen.findByRole("dialog")
+      expect(within(dialogo).getByText(`Factura ${letra}`)).toBeInTheDocument()
+      expect(within(dialogo).queryByText(/Factura B o C/)).not.toBeInTheDocument()
+    })
+
+    it("sin letra del servidor (null) explica la regla", async () => {
+      montarFetch([listado([], true, null)])
+      renderCard()
+      fireEvent.click(await screen.findByRole("button", { name: /Emitir factura electrónica/i }))
+      expect(within(await screen.findByRole("dialog")).getByText(/Factura B o C: la elige el sistema/)).toBeInTheDocument()
+    })
+
+    it("sin nombre de cliente, el receptor es 'Consumidor final'", async () => {
+      montarFetch([listado([], true)])
+      renderCard({ clienteNombre: "  " })
+      fireEvent.click(await screen.findByRole("button", { name: /Emitir factura electrónica/i }))
+      expect(within(await screen.findByRole("dialog")).getByText("Consumidor final")).toBeInTheDocument()
+    })
+
+    it("Cancelar cierra la confirmacion sin emitir", async () => {
+      montarFetch([listado([], true)], { status: 200, body: { comprobante: { id: "c1" } } })
+      renderCard()
+      fireEvent.click(await screen.findByRole("button", { name: /Emitir factura electrónica/i }))
+      fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Cancelar" }))
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+      expect(llamadasA("/emitir")).toHaveLength(0)
+      expect(screen.getByRole("button", { name: /Emitir factura electrónica/i })).toBeEnabled()
+    })
+
+    it("al confirmar con 'Emitir factura' recien ahi emite", async () => {
+      montarFetch([listado([], true), listado([item()], true)], { status: 200, body: { comprobante: { id: "c1" } } })
+      renderCard()
+      await emitirConfirmando(/Emitir factura electrónica/i)
+      await waitFor(() => expect(llamadasA("/emitir")).toHaveLength(1))
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    })
+
     it("emite, muestra la factura y saca el boton", async () => {
       montarFetch(
         [listado([], true), listado([item()], true)],
         { status: 200, body: { comprobante: { id: "c1", tipo: "B", numero: "0001-00000007" } } }
       )
       renderCard()
-      fireEvent.click(await screen.findByRole("button", { name: /Emitir factura electrónica/i }))
+      await emitirConfirmando(/Emitir factura electrónica/i)
 
       expect(await screen.findByText(/74123456789012/)).toBeInTheDocument()
       expect(screen.getByText(/0001-00000007/)).toBeInTheDocument()
@@ -214,8 +283,7 @@ describe("ComprobanteFiscalCard", () => {
         return { status: 200, ok: true, json: async () => listado([], true) }
       })
       renderCard()
-      const boton = await screen.findByRole("button", { name: /Emitir factura electrónica/i })
-      fireEvent.click(boton)
+      await emitirConfirmando(/Emitir factura electrónica/i)
       await waitFor(() => expect(screen.getByRole("button", { name: /Emitiendo/i })).toBeDisabled())
       fireEvent.click(screen.getByRole("button", { name: /Emitiendo/i }))
       liberar()
@@ -235,10 +303,11 @@ describe("ComprobanteFiscalCard", () => {
         return { status: 200, ok: true, json: async () => listado([], true) }
       })
       renderCard()
-      const boton = await screen.findByRole("button", { name: /Emitir factura electrónica/i })
+      fireEvent.click(await screen.findByRole("button", { name: /Emitir factura electrónica/i }))
+      const confirmar = within(await screen.findByRole("dialog")).getByRole("button", { name: "Emitir factura" })
       act(() => {
-        boton.click()
-        boton.click()
+        confirmar.click()
+        confirmar.click()
       })
       liberar()
       await waitFor(() => expect(emisiones).toBe(1))
@@ -247,7 +316,7 @@ describe("ComprobanteFiscalCard", () => {
     it("422: muestra el mensaje y deja reintentar", async () => {
       montarFetch([listado([], true)], { status: 422, body: { comprobante: { error_msg: "CUIT inválido" } } })
       renderCard()
-      fireEvent.click(await screen.findByRole("button", { name: /Emitir factura electrónica/i }))
+      await emitirConfirmando(/Emitir factura electrónica/i)
       expect(await screen.findByText("CUIT inválido")).toBeInTheDocument()
       expect(screen.getByRole("button", { name: /Emitir factura electrónica/i })).toBeEnabled()
     })
@@ -261,10 +330,10 @@ describe("ComprobanteFiscalCard", () => {
         ]
       )
       renderCard()
-      fireEvent.click(await screen.findByRole("button", { name: /Emitir factura electrónica/i }))
+      await emitirConfirmando(/Emitir factura electrónica/i)
       expect(await screen.findByText("CUIT inválido")).toBeInTheDocument()
 
-      fireEvent.click(screen.getByRole("button", { name: /Emitir factura electrónica/i }))
+      await emitirConfirmando(/Emitir factura electrónica/i)
       await waitFor(() => expect(screen.queryByText("CUIT inválido")).not.toBeInTheDocument())
       expect(await screen.findByText(/74123456789012/)).toBeInTheDocument()
       expect(llamadasA("/emitir")).toHaveLength(2)
@@ -276,7 +345,7 @@ describe("ComprobanteFiscalCard", () => {
         { status: 409, body: { comprobante: { id: "c1" }, error: "Esta venta ya tiene un comprobante" } }
       )
       renderCard()
-      fireEvent.click(await screen.findByRole("button", { name: /Emitir factura electrónica/i }))
+      await emitirConfirmando(/Emitir factura electrónica/i)
       expect(await screen.findByText(/74123456789012/)).toBeInTheDocument()
       expect(screen.queryByRole("button", { name: /Emitir factura electrónica/i })).not.toBeInTheDocument()
     })
@@ -342,7 +411,7 @@ describe("ComprobanteFiscalCard", () => {
         { status: 200, body: { comprobante: { id: "c2" } } }
       )
       renderCard()
-      fireEvent.click(await screen.findByRole("button", { name: /Reintentar/i }))
+      await emitirConfirmando(/Reintentar/i)
       expect(await screen.findByText(/74123456789012/)).toBeInTheDocument()
       expect(screen.queryByText("Receptor sin CUIT válido")).not.toBeInTheDocument()
       expect(mockFetch).toHaveBeenCalledWith(
@@ -357,7 +426,7 @@ describe("ComprobanteFiscalCard", () => {
         body: { comprobante: { error_msg: "Receptor sin CUIT válido" } },
       })
       renderCard()
-      fireEvent.click(await screen.findByRole("button", { name: /Reintentar/i }))
+      await emitirConfirmando(/Reintentar/i)
       await waitFor(() => expect(llamadasA("/emitir")).toHaveLength(1))
       await waitFor(() => expect(screen.getByRole("button", { name: /Reintentar/i })).toBeEnabled())
       expect(screen.getAllByText("Receptor sin CUIT válido")).toHaveLength(1)
@@ -678,7 +747,7 @@ describe("ComprobanteFiscalCard", () => {
         { status: 200, body: { comprobante: { id: "c2" } } }
       )
       renderCard()
-      fireEvent.click(await screen.findByRole("button", { name: "Emitir factura nueva" }))
+      await emitirConfirmando("Emitir factura nueva")
 
       expect(await screen.findByText("74999999999999")).toBeInTheDocument()
       expect(mockFetch).toHaveBeenCalledWith(
@@ -738,7 +807,7 @@ describe("ComprobanteFiscalCard", () => {
     it("422 al emitir: muestra el mensaje y deja reintentar", async () => {
       montarFetch([listado([nota(), anulada()], true)], { status: 422, body: { comprobante: { error_msg: "CUIT inválido" } } })
       renderCard()
-      fireEvent.click(await screen.findByRole("button", { name: "Emitir factura nueva" }))
+      await emitirConfirmando("Emitir factura nueva")
       expect(await screen.findByText("CUIT inválido")).toBeInTheDocument()
       expect(screen.getByRole("button", { name: "Emitir factura nueva" })).toBeEnabled()
     })

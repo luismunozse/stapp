@@ -4,6 +4,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
+import { fetchAllRows, fetchAllRowsIn } from "@/lib/fetch-all-rows"
 
 const broadcastSchema = z.object({
   title: z.string().min(1, "Titulo requerido").max(200),
@@ -82,52 +83,37 @@ export async function POST(request: Request) {
       )
     }
 
-    // Construir query de usuarios destino
-    let query = supabaseAdmin.from("users").select("id, organization_id, rol")
-
-    // Filtrar por organizaciones específicas
-    if (target === "specific" && organizationIds && organizationIds.length > 0) {
-      query = query.in("organization_id", organizationIds)
-    }
-
-    // Filtrar por roles
-    if (roles && roles.length > 0) {
-      query = query.in("rol", roles)
-    }
-
     // Solo usuarios de orgs activas (excluye la org interna del panel para que
     // los usuarios internos no reciban los broadcasts de clientes).
-    const { data: activeOrgs } = await supabaseAdmin
-      .from("organizations")
-      .select("id")
-      .eq("activo", true)
-      .neq("slug", "superadmin")
-      .is("deleted_at", null)
-
-    const activeOrgIds = activeOrgs?.map((o) => o.id) || []
+    // Todo paginado: PostgREST corta cada lectura en 1000 filas sin error, así
+    // que antes el broadcast llegaba como mucho a 1000 usuarios (y a los de
+    // las primeras 1000 orgs). fetchAllRows lanza si una página falla (500).
+    const activeOrgs = await fetchAllRows<{ id: string }>("organizations", "id", (q) =>
+      q.eq("activo", true).neq("slug", "superadmin").is("deleted_at", null)
+    )
+    const activeOrgIds = activeOrgs.map((o) => o.id)
 
     if (activeOrgIds.length === 0) {
       return NextResponse.json({ error: "No hay organizaciones activas" }, { status: 400 })
     }
 
-    // Si target es "all", solo filtrar por orgs activas
-    if (target !== "specific") {
-      query = query.in("organization_id", activeOrgIds)
-    } else {
-      // Intersectar con activas
-      const filteredIds = (organizationIds || []).filter((id: string) => activeOrgIds.includes(id))
-      if (filteredIds.length === 0) {
+    let targetOrgIds = activeOrgIds
+    if (target === "specific") {
+      // Intersectar con activas (sin orgs elegidas, ninguna: nunca "todas")
+      const activas = new Set(activeOrgIds)
+      targetOrgIds = [...new Set(organizationIds ?? [])].filter((id) => activas.has(id))
+      if (targetOrgIds.length === 0) {
         return NextResponse.json({ error: "Ninguna organizacion seleccionada esta activa" }, { status: 400 })
       }
-      query = query.in("organization_id", filteredIds)
     }
 
-    const { data: users, error: usersError } = await query
-
-    if (usersError) {
-      console.error("Error fetching users for broadcast:", usersError)
-      return NextResponse.json({ error: "Error al obtener usuarios destino" }, { status: 500 })
-    }
+    const users = await fetchAllRowsIn<{ id: string; organization_id: string; rol: string }>(
+      "users",
+      "id, organization_id, rol",
+      "organization_id",
+      targetOrgIds,
+      (q) => (roles && roles.length > 0 ? q.in("rol", roles) : q)
+    )
 
     if (!users || users.length === 0) {
       return NextResponse.json({ error: "No hay usuarios que coincidan con los filtros" }, { status: 400 })
