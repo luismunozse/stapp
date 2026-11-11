@@ -34,6 +34,7 @@ import {
   revalidarTokenSesion,
   REVALIDAR_CADA_SEG,
 } from "@/lib/auth-tokens"
+import { isImpersonationExpired } from "@/lib/impersonation"
 
 type Rol = "ADMIN" | "TECNICO" | "VENDEDOR"
 
@@ -308,7 +309,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new AuthSigninError("EMAIL_NOT_VERIFIED")
         }
 
-        // Verificar si es superadmin (email en la lista + fila marcada, 395)
+        // Verificar si es superadmin (email en la lista + fila marcada, 397)
         const isSuper = esSuperadmin(user)
 
         // Verificar que la organización esté activa (no requerido para superadmin)
@@ -416,6 +417,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   callbacks: {
     jwt: async ({ token, user, trigger, session }) => {
+      // Impersonación vencida: devolver null hace que Auth.js borre la cookie.
+      // No alcanza con el `exp` del token: Auth.js lo reescribe con el maxAge
+      // de la sesión (30 días) cada vez que se lee /api/auth/session.
+      if (isImpersonationExpired(token)) return null
+
       // Login inicial
       if (user && user.id) {
         token.role = user.role

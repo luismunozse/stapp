@@ -1,72 +1,57 @@
--- Verificación de superadmin_identidad_y_bloqueo (395). Correr DESPUÉS de
--- aplicarla y de marcar a los superadmins. Termina en ROLLBACK.
+-- Verificación de politicas_abiertas_a_service_role (395).
 --
--- Qué prueba:
---   1-3  las columnas existen con el tipo y default esperados;
---   4    hay al menos un superadmin marcado (si da 0, el panel queda sin acceso);
---   5    ningún superadmin marcado pertenece a un taller distinto de 'superadmin';
---   6    el trigger deja a postgres (este editor) cambiar la marca;
---   7    el trigger rechaza el cambio hecho como service_role (el rol de la app);
---   8    acceso_bloqueado_at se puede escribir como service_role (lo usa el panel).
+-- Correr ANTES y DESPUÉS de aplicar:  node scripts/db-run.mjs supabase/migrations/verify/395_probes.sql
+-- (sin --apply: termina en ROLLBACK). Los INSERT de prueba se deshacen.
 --
--- Resultado: UN select. Verde = esperado igual a obtenido.
+-- Resultado: UN select. Después de aplicar, todo en ok = true. Antes, 1, 2 y 3 dan false.
 
 BEGIN;
 
 CREATE TEMP TABLE _r (orden INT, probe TEXT, esperado TEXT, obtenido TEXT);
-GRANT ALL ON _r TO service_role;
+GRANT ALL ON _r TO anon, authenticated, service_role;
 
-INSERT INTO _r SELECT 1, 'es_superadmin boolean not null default false', 'boolean|NO|false',
-  (SELECT data_type || '|' || is_nullable || '|' || column_default
-   FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'es_superadmin');
-INSERT INTO _r SELECT 2, 'acceso_bloqueado_at timestamptz nullable', 'timestamp with time zone|YES',
-  (SELECT data_type || '|' || is_nullable
-   FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'acceso_bloqueado_at');
-INSERT INTO _r SELECT 3, 'acceso_bloqueado_por text nullable', 'text|YES',
-  (SELECT data_type || '|' || is_nullable
-   FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'acceso_bloqueado_por');
+INSERT INTO _r
+SELECT 1, 'políticas con true para public/anon en las 3 tablas', '0', count(*)::text
+FROM pg_policies
+WHERE schemaname = 'public'
+  AND tablename IN ('user_notifications', 'ios_waitlist', 'newsletter_subscribers')
+  AND roles && ARRAY['public', 'anon']::name[]
+  AND (qual = 'true' OR with_check = 'true');
 
-INSERT INTO _r SELECT 4, 'superadmins marcados (>= 1)', 'true',
-  ((SELECT count(*) FROM users WHERE es_superadmin) >= 1)::TEXT;
-INSERT INTO _r SELECT 5, 'superadmins marcados en un taller', '0',
-  (SELECT count(*)::TEXT FROM users u LEFT JOIN organizations o ON o.id = u.organization_id
-   WHERE u.es_superadmin AND o.slug IS DISTINCT FROM 'superadmin' AND u.organization_id IS NOT NULL);
-
-DO $$
-DECLARE v_id TEXT;
-BEGIN
-  SELECT id INTO v_id FROM users WHERE NOT es_superadmin LIMIT 1;
-  UPDATE users SET es_superadmin = true WHERE id = v_id;
-  UPDATE users SET es_superadmin = false WHERE id = v_id;
-  INSERT INTO _r VALUES (6, 'postgres cambia la marca', 'ok', 'ok');
-EXCEPTION WHEN OTHERS THEN
-  INSERT INTO _r VALUES (6, 'postgres cambia la marca', 'ok', 'FALLO: ' || SQLERRM);
-END $$;
-
-SET LOCAL ROLE service_role;
-
-DO $$
-DECLARE v_id TEXT;
-BEGIN
-  SELECT id INTO v_id FROM users WHERE NOT es_superadmin LIMIT 1;
-  UPDATE users SET es_superadmin = true WHERE id = v_id;
-  INSERT INTO _r VALUES (7, 'service_role no puede marcar', 'error', 'FALLO: no levantó excepción');
-EXCEPTION WHEN insufficient_privilege THEN
-  INSERT INTO _r VALUES (7, 'service_role no puede marcar', 'error', 'error');
-END $$;
-
-DO $$
-DECLARE v_id TEXT;
-BEGIN
-  SELECT id INTO v_id FROM users WHERE NOT es_superadmin LIMIT 1;
-  UPDATE users SET acceso_bloqueado_at = now(), acceso_bloqueado_por = 'probe' WHERE id = v_id;
-  INSERT INTO _r VALUES (8, 'service_role bloquea acceso', 'ok', 'ok');
-EXCEPTION WHEN OTHERS THEN
-  INSERT INTO _r VALUES (8, 'service_role bloquea acceso', 'ok', 'FALLO: ' || SQLERRM);
-END $$;
-
+SET LOCAL ROLE anon;
+INSERT INTO _r
+SELECT 2, 'anon ve notificaciones', '0', count(*)::text FROM user_notifications;
 RESET ROLE;
 
-SELECT orden, probe, esperado, obtenido FROM _r ORDER BY orden;
+SET LOCAL ROLE anon;
+DO $$
+BEGIN
+  INSERT INTO newsletter_subscribers (email, source) VALUES ('probe-395-anon@example.invalid', 'probe');
+  INSERT INTO _r VALUES (3, 'anon inserta en newsletter_subscribers', 'rechazado', 'insertó');
+EXCEPTION WHEN insufficient_privilege THEN
+  INSERT INTO _r VALUES (3, 'anon inserta en newsletter_subscribers', 'rechazado', 'rechazado');
+END $$;
+RESET ROLE;
+
+-- El servidor (service_role) sigue pudiendo leer y escribir.
+SET LOCAL ROLE service_role;
+INSERT INTO _r
+SELECT 4, 'service_role lee notificaciones', 'true', (count(*) >= 0)::text FROM user_notifications;
+DO $$
+BEGIN
+  INSERT INTO newsletter_subscribers (email, source) VALUES ('probe-395@example.invalid', 'probe');
+  INSERT INTO _r VALUES (5, 'service_role inserta en newsletter_subscribers', 'insertó', 'insertó');
+EXCEPTION WHEN OTHERS THEN
+  INSERT INTO _r VALUES (5, 'service_role inserta en newsletter_subscribers', 'insertó', SQLERRM);
+END $$;
+RESET ROLE;
+
+INSERT INTO _r
+SELECT 6, 'lectura pública de maintenance_banner intacta', '1', count(*)::text
+FROM pg_policies
+WHERE schemaname = 'public' AND tablename = 'maintenance_banner'
+  AND policyname = 'Anyone can read maintenance banner' AND roles && ARRAY['public']::name[];
+
+SELECT orden, probe, esperado, obtenido, esperado = obtenido AS ok FROM _r ORDER BY orden;
 
 ROLLBACK;

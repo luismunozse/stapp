@@ -59,7 +59,7 @@ export function isAccesoBloqueado(u: { acceso_bloqueado_at?: string | null } | n
 /**
  * Decide si un login (o la renovación de una sesión) debe rechazarse.
  * - Usuario dado de baja: siempre, también el superadmin.
- * - Acceso bloqueado desde el panel (users.acceso_bloqueado_at, 395): siempre.
+ * - Acceso bloqueado desde el panel (users.acceso_bloqueado_at, 397): siempre.
  * - Organización inexistente, inactiva o dada de baja: rechaza, salvo superadmin
  *   (no pertenece a un taller). Mantiene tal cual la semántica previa de `activo`.
  */

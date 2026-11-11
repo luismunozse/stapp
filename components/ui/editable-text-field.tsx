@@ -22,6 +22,10 @@ interface EditableTextFieldProps {
   valueClassName?: string
   /** Extra classes on the textarea (e.g. a tinted background). */
   textareaClassName?: string
+  /** One-line input instead of a textarea (Enter saves, Escape cancels). */
+  singleLine?: boolean
+  /** `type` of the one-line input, e.g. "tel". */
+  inputType?: React.HTMLInputTypeAttribute
 }
 
 /**
@@ -40,6 +44,8 @@ export function EditableTextField({
   emptyHint,
   valueClassName,
   textareaClassName,
+  singleLine = false,
+  inputType = "text",
 }: EditableTextFieldProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
@@ -70,6 +76,7 @@ export function EditableTextField({
             size="sm"
             className="h-7 px-2 text-muted-foreground hover:text-foreground"
             onClick={startEdit}
+            aria-label={typeof label === "string" ? `Editar ${label.toLowerCase()}` : "Editar"}
           >
             <Pencil className="h-3 w-3" />
           </Button>
@@ -78,6 +85,26 @@ export function EditableTextField({
 
       {editing ? (
         <div className="space-y-2">
+          {singleLine ? (
+            <input
+              type={inputType}
+              inputMode={inputType === "tel" ? "tel" : undefined}
+              className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  if (!saving && !(requireValue && !draft.trim())) void handleSave()
+                } else if (e.key === "Escape") {
+                  setEditing(false)
+                }
+              }}
+              placeholder={placeholder}
+              disabled={saving}
+              autoFocus
+            />
+          ) : (
           <textarea
             className={cn(
               "min-h-[80px] w-full resize-y rounded-md border bg-background p-2 text-sm",
@@ -89,6 +116,7 @@ export function EditableTextField({
             disabled={saving}
             autoFocus
           />
+          )}
           <div className="flex justify-end gap-2">
             <Button
               variant="ghost"

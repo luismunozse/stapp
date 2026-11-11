@@ -242,10 +242,10 @@ export async function DELETE(
       )
     }
 
-    // Varias tablas referencian al cliente con ON DELETE CASCADE (órdenes y,
-    // a través de ellas, cobros/garantías/facturas; cuenta corriente;
-    // recepciones). Borrar un cliente con historial borraría ese historial,
-    // así que solo se permite borrar clientes sin movimientos.
+    // Solo se borran clientes sin movimientos. Órdenes, cuenta corriente y
+    // recepciones ya no cascadean (migración 396: el DELETE fallaría con 23503),
+    // y ventas/cotizaciones quedarían con el cliente en NULL. Se chequea antes
+    // para responder 409 con un mensaje claro.
     const historial = await Promise.all(
       TABLAS_HISTORIAL_CLIENTE.map((tabla) =>
         supabaseAdmin

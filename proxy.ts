@@ -10,7 +10,12 @@ import {
 } from "@/lib/rate-limit"
 import { getTenantStatusBySlug } from "@/lib/tenant-status-edge"
 import { getUserDeletedStatus } from "@/lib/user-status-edge"
-import { isImpersonationWriteBlocked } from "@/lib/impersonation"
+import { checkSuperadminLoginLimit } from "@/lib/superadmin-login-limit-edge"
+import {
+  isImpersonationWriteBlocked,
+  isImpersonationExpired,
+  IMPERSONATION_EXIT_PATH,
+} from "@/lib/impersonation"
 import { isPublicPath } from "@/lib/public-paths"
 import { clearSessionCookie, sessionCookieName } from "@/lib/session-cookie"
 
@@ -85,7 +90,7 @@ async function deletedUserResponse(
 ): Promise<NextResponse | null> {
   if (!token?.id || token.isImpersonating || isPublicPath(pathname)) return null
   const status = await getUserDeletedStatus(token.id as string)
-  // Baja o acceso bloqueado desde el panel (395): las dos cortan la sesión viva.
+  // Baja o acceso bloqueado desde el panel (397): las dos cortan la sesión viva.
   if (status.kind !== "ok" || (!status.deleted && !status.bloqueado)) return null
   const res = pathname.startsWith("/api/")
     ? NextResponse.json({ error: status.deleted ? "Cuenta eliminada" : "Acceso desactivado" }, { status: 401 })
@@ -98,6 +103,43 @@ async function esSuperadminVigente(token: { id?: unknown; isSuperadmin?: unknown
   const status = await getUserDeletedStatus(token.id)
   if (status.kind === "ok") return status.esSuperadmin
   return token.isSuperadmin === true
+}
+
+// Corte de una sesión de impersonación: vencida (más de 30 min) o intentando
+// escribir. El vencimiento se mira acá además del callback `jwt` de auth.ts
+// porque getToken() no corre callbacks, y el `exp` del JWT no sirve: Auth.js lo
+// reescribe a 30 días cada vez que se lee /api/auth/session. El endpoint de
+// salida queda siempre habilitado para poder terminarla.
+function impersonationResponse(
+  request: NextRequest,
+  token: { isImpersonating?: unknown; impersonationExpiresAt?: unknown } | null,
+  pathname: string,
+): NextResponse | null {
+  if (!token?.isImpersonating || pathname === IMPERSONATION_EXIT_PATH) return null
+  if (isImpersonationExpired(token)) {
+    // En rutas públicas (/login, /api/auth/*) se deja pasar: el token vencido
+    // ya no autentica nada (el callback `jwt` lo anula en auth()) y cortar acá
+    // haría un loop de redirect a /login o impediría volver a loguearse.
+    if (isPublicPath(pathname)) return null
+    const res = pathname.startsWith("/api/")
+      ? NextResponse.json({ error: "La sesión de impersonación venció" }, { status: 401 })
+      : NextResponse.redirect(new URL("/login", request.url))
+    return clearSessionCookie(res)
+  }
+  if (
+    isImpersonationWriteBlocked({
+      isImpersonating: true,
+      method: request.method,
+      pathname,
+      isServerAction: request.headers.has("next-action"),
+    })
+  ) {
+    return NextResponse.json(
+      { error: "Sesión de impersonación en solo-lectura: acción no permitida" },
+      { status: 403 }
+    )
+  }
+  return null
 }
 
 // Rutas de landing page (solo para dominio principal)
@@ -147,6 +189,173 @@ function extractSubdomain(hostname: string): string | null {
   }
 
   return subdomain
+}
+
+// ==========================================
+// Panel superadmin (subdominio admin.*)
+// ==========================================
+
+const SUPERADMIN_LOGIN_CALLBACK = "/api/auth/callback/credentials"
+const SUPERADMIN_LOGIN_MAX_ATTEMPTS = 10
+const SUPERADMIN_LOGIN_WINDOW_SECONDS = 10 * 60
+
+function isSafeMethod(method: string): boolean {
+  const m = method.toUpperCase()
+  return m === "GET" || m === "HEAD" || m === "OPTIONS"
+}
+
+// Same-origin estricto: el host del Origin tiene que ser el mismo host del
+// request. Sin Origin (raro en un navegador para un POST) solo se acepta si
+// el navegador declara `Sec-Fetch-Site: same-origin`. `Origin: null`
+// (iframe sandbox, redirects cross-origin) no pasa.
+export function isSameOriginRequest(request: NextRequest, hostname: string): boolean {
+  const origin = request.headers.get("origin")
+  if (origin) {
+    try {
+      return new URL(origin).host === hostname
+    } catch {
+      return false
+    }
+  }
+  return request.headers.get("sec-fetch-site") === "same-origin"
+}
+
+// IP del cliente: en Vercel `x-vercel-forwarded-for` la pone el edge y no se
+// puede falsificar; fuera de Vercel se cae al primer valor de XFF.
+function clientIp(request: NextRequest): string {
+  return (
+    request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "unknown"
+  )
+}
+
+// El panel no se puede embeber (clickjacking sobre acciones con un clic,
+// como impersonar o correr crons).
+function withAdminFrameProtection<T extends NextResponse>(res: T): T {
+  res.headers.set("X-Frame-Options", "DENY")
+  res.headers.set("Content-Security-Policy", "frame-ancestors 'none'")
+  return res
+}
+
+async function adminPanel(
+  request: NextRequest,
+  requestHeaders: Headers,
+  hostname: string,
+  pathname: string,
+): Promise<NextResponse> {
+  // Marcar como panel superadmin
+  requestHeaders.set("x-superadmin-panel", "true")
+
+  // CSRF: la cookie de sesión es SameSite=lax en `.stapp.com.ar`, así que un
+  // POST desde cualquier subdominio de tenant cuenta como same-site y viaja
+  // con la cookie del superadmin. Toda escritura al panel tiene que venir de
+  // admin.* mismo.
+  if (!isSafeMethod(request.method) && !isSameOriginRequest(request, hostname)) {
+    return NextResponse.json({ error: "Origen no permitido" }, { status: 403 })
+  }
+
+  // Fuerza bruta sobre el login del panel (password y 2FA pasan por acá).
+  // El límite general es en memoria por instancia; este se guarda en la base
+  // y es compartido (lib/superadmin-login-limit-edge.ts). Por IP, no por cuenta, para no poder bloquear al
+  // superadmin desde afuera.
+  if (request.method === "POST" && pathname === SUPERADMIN_LOGIN_CALLBACK) {
+    const rl = await checkSuperadminLoginLimit(
+      clientIp(request),
+      SUPERADMIN_LOGIN_MAX_ATTEMPTS,
+      SUPERADMIN_LOGIN_WINDOW_SECONDS
+    )
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: "Demasiados intentos de inicio de sesión. Esperá unos minutos." },
+        { status: 429, headers: { "Retry-After": String(Math.max(1, Math.ceil((rl.reset - Date.now()) / 1000))) } }
+      )
+    }
+  }
+
+  // Rutas públicas del panel admin (login, auth)
+  if (
+    pathname === "/superadmin-login" ||
+    pathname.startsWith("/api/auth")
+  ) {
+    return NextResponse.next({
+      request: { headers: requestHeaders },
+    })
+  }
+
+  // Verificar autenticación
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET,
+    cookieName: sessionCookieName(),
+  })
+
+  if (!token) {
+    // Redirigir a login del panel admin
+    const loginUrl = new URL("/superadmin-login", request.url)
+    loginUrl.searchParams.set("callbackUrl", pathname)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  const adminDeleted = await deletedUserResponse(request, token, pathname)
+  if (adminDeleted) return adminDeleted
+
+  // Superadmin = email en SUPERADMIN_EMAILS **y** la fila marcada
+  // (users.es_superadmin, 397). La marca se mira en la base (caché de 30 s)
+  // para que sacarla corte enseguida; si la consulta falla se usa la del
+  // token, que se resincroniza en cada revalidación del JWT. Una sesión de
+  // impersonación nunca entra al panel, aunque el usuario impersonado tenga
+  // un email de la lista: el token lleva el email del objetivo y acá no se
+  // aplica el solo-lectura.
+  if (
+    token.isImpersonating ||
+    !isSuperadminEmail(token.email as string) ||
+    !(await esSuperadminVigente(token))
+  ) {
+    // No es superadmin, redirigir al dominio principal
+    const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+    const protocol = process.env.NODE_ENV === "production" ? "https" : "http"
+    return NextResponse.redirect(new URL("/", `${protocol}://${rootDomain}`))
+  }
+
+  // Agregar headers de superadmin para las APIs
+  // Seguridad: estos headers solo se setean acá, después de validar JWT + email.
+  // El middleware corre antes que cualquier API route, no se pueden inyectar externamente.
+  requestHeaders.set("x-superadmin-email", token.email as string)
+  requestHeaders.set("x-user-id", token.id as string)
+
+  // Rate limiting para APIs de superadmin (más estricto: 60 req/min)
+  if (pathname.startsWith("/api/superadmin")) {
+    const saIp = clientIp(request)
+    const rlResult = await rateLimit(
+      `sa:${saIp}:${pathname.split("/").slice(0, 4).join("/")}`,
+      60,
+      60000
+    )
+    if (!rlResult.success) {
+      return NextResponse.json(
+        { error: "Demasiadas solicitudes" },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil((rlResult.reset - Date.now()) / 1000)),
+          },
+        }
+      )
+    }
+    return NextResponse.next({
+      request: { headers: requestHeaders },
+    })
+  }
+
+  // Si NO está en ruta /superadmin/*, redirigir al dashboard
+  if (!pathname.startsWith("/superadmin/")) {
+    return NextResponse.redirect(new URL("/superadmin/dashboard", request.url))
+  }
+
+  return NextResponse.next({
+    request: { headers: requestHeaders },
+  })
 }
 
 export async function proxy(request: NextRequest) {
@@ -273,14 +482,28 @@ export async function proxy(request: NextRequest) {
   if (!subdomain) {
     // Las APIs autentican por la cookie de sesión (scopeada al dominio raíz),
     // así que también acá hay que cortar la sesión de un usuario dado de baja.
-    if (pathname.startsWith("/api/") && !isPublicPath(pathname)) {
+    //
+    // La cookie de impersonación también viaja al dominio raíz: sin subdominio
+    // no hay x-tenant-slug y requireAuth() acepta la sesión, así que el
+    // solo-lectura y el vencimiento se aplican también acá. Por eso el token se
+    // lee además en cualquier escritura o server action, no solo en /api.
+    const isApiCall = pathname.startsWith("/api/") && !isPublicPath(pathname)
+    const method = request.method.toUpperCase()
+    const isWrite =
+      !(method === "GET" || method === "HEAD" || method === "OPTIONS") ||
+      request.headers.has("next-action")
+    if (isApiCall || isWrite) {
       const apexToken = await getToken({
         req: request,
         secret: process.env.NEXTAUTH_SECRET,
         cookieName: sessionCookieName(),
       })
-      const apexDeleted = await deletedUserResponse(request, apexToken, pathname)
-      if (apexDeleted) return apexDeleted
+      const apexImpersonation = impersonationResponse(request, apexToken, pathname)
+      if (apexImpersonation) return apexImpersonation
+      if (isApiCall) {
+        const apexDeleted = await deletedUserResponse(request, apexToken, pathname)
+        if (apexDeleted) return apexDeleted
+      }
     }
 
     // Landing page y rutas públicas permitidas
@@ -308,85 +531,7 @@ export async function proxy(request: NextRequest) {
   // CASO 2: Subdominio ADMIN (Panel SuperAdmin)
   // ==========================================
   if (subdomain.toLowerCase() === SUPERADMIN_SUBDOMAIN) {
-    // Marcar como panel superadmin
-    requestHeaders.set("x-superadmin-panel", "true")
-
-    // Rutas públicas del panel admin (login, auth)
-    if (
-      pathname === "/superadmin-login" ||
-      pathname.startsWith("/api/auth")
-    ) {
-      return NextResponse.next({
-        request: { headers: requestHeaders },
-      })
-    }
-
-    // Verificar autenticación
-    const token = await getToken({
-      req: request,
-      secret: process.env.NEXTAUTH_SECRET,
-      cookieName: sessionCookieName(),
-    })
-
-    if (!token) {
-      // Redirigir a login del panel admin
-      const loginUrl = new URL("/superadmin-login", request.url)
-      loginUrl.searchParams.set("callbackUrl", pathname)
-      return NextResponse.redirect(loginUrl)
-    }
-
-    const adminDeleted = await deletedUserResponse(request, token, pathname)
-    if (adminDeleted) return adminDeleted
-
-    // Superadmin = email en SUPERADMIN_EMAILS **y** la fila marcada
-    // (users.es_superadmin, 395). La marca se mira en la base (caché de 30 s)
-    // para que sacarla corte enseguida; si la consulta falla se usa la del
-    // token, que se resincroniza en cada revalidación del JWT.
-    if (!isSuperadminEmail(token.email as string) || !(await esSuperadminVigente(token))) {
-      // No es superadmin, redirigir al dominio principal
-      const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
-      const protocol = process.env.NODE_ENV === "production" ? "https" : "http"
-      return NextResponse.redirect(new URL("/", `${protocol}://${rootDomain}`))
-    }
-
-    // Agregar headers de superadmin para las APIs
-    // Seguridad: estos headers solo se setean acá, después de validar JWT + email.
-    // El middleware corre antes que cualquier API route, no se pueden inyectar externamente.
-    requestHeaders.set("x-superadmin-email", token.email as string)
-    requestHeaders.set("x-user-id", token.id as string)
-
-    // Rate limiting para APIs de superadmin (más estricto: 60 req/min)
-    if (pathname.startsWith("/api/superadmin")) {
-      const saIp = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"
-      const rlResult = await rateLimit(
-        `sa:${saIp}:${pathname.split("/").slice(0, 4).join("/")}`,
-        60,
-        60000
-      )
-      if (!rlResult.success) {
-        return NextResponse.json(
-          { error: "Demasiadas solicitudes" },
-          {
-            status: 429,
-            headers: {
-              "Retry-After": String(Math.ceil((rlResult.reset - Date.now()) / 1000)),
-            },
-          }
-        )
-      }
-      return NextResponse.next({
-        request: { headers: requestHeaders },
-      })
-    }
-
-    // Si NO está en ruta /superadmin/*, redirigir al dashboard
-    if (!pathname.startsWith("/superadmin/")) {
-      return NextResponse.redirect(new URL("/superadmin/dashboard", request.url))
-    }
-
-    return NextResponse.next({
-      request: { headers: requestHeaders },
-    })
+    return withAdminFrameProtection(await adminPanel(request, requestHeaders, hostname, pathname))
   }
 
   // ==========================================
@@ -487,19 +632,8 @@ export async function proxy(request: NextRequest) {
   // the cross-tenant check above). The decision (block state-changing requests,
   // allow only the exit endpoint) lives in `isImpersonationWriteBlocked` so it
   // can be unit-tested in isolation.
-  if (
-    isImpersonationWriteBlocked({
-      isImpersonating: token?.isImpersonating as boolean | undefined,
-      method: request.method,
-      pathname,
-      isServerAction: request.headers.has("next-action"),
-    })
-  ) {
-    return NextResponse.json(
-      { error: "Sesión de impersonación en solo-lectura: acción no permitida" },
-      { status: 403 }
-    )
-  }
+  const impersonationRes = impersonationResponse(request, token, pathname)
+  if (impersonationRes) return impersonationRes
 
   // Si es ruta pública, permitir pero pasar contexto
   if (isPublicPath(pathname)) {

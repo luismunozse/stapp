@@ -1,5 +1,5 @@
 /**
- * 395: el panel admin.* exige el email en SUPERADMIN_EMAILS **y** la fila
+ * 397: el panel admin.* exige el email en SUPERADMIN_EMAILS **y** la fila
  * marcada (users.es_superadmin), leída en la base para que sacarla corte
  * enseguida. Y un acceso bloqueado desde el panel corta la sesión viva.
  */

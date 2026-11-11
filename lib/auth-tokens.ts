@@ -38,9 +38,9 @@ export function isSuperadminEmail(email: string): boolean {
 
 /**
  * Superadmin = email en SUPERADMIN_EMAILS **y** la fila marcada con
- * users.es_superadmin (395). Solo el email no alcanza: un taller podía crear un
+ * users.es_superadmin (397). Solo el email no alcanza: un taller podía crear un
  * usuario propio con un email de la lista que todavía no existía. La marca
- * solo se cambia desde el SQL editor (trigger de la 395).
+ * solo se cambia desde el SQL editor (trigger de la 397).
  */
 export function esSuperadmin(
   user: { email?: string | null; es_superadmin?: boolean | null } | null | undefined,
@@ -234,7 +234,7 @@ export async function revalidarTokenSesion<T extends TokenSesion>(
   const actualizado: TokenSesion = { ...token, revalidarEn: ahoraSeg + REVALIDAR_CADA_SEG }
 
   // Se resincroniza con la base: sacarle la marca a una fila (o un token
-  // emitido antes de la 395 por un usuario sin marca) deja de valer acá.
+  // emitido antes de la 397 por un usuario sin marca) deja de valer acá.
   actualizado.isSuperadmin = esSuperadmin(validUser)
 
   // Nombre, rol y sucursal se resincronizan desde la base: el rol es lo que

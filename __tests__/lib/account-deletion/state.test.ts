@@ -64,7 +64,7 @@ describe("isLoginBlocked", () => {
   })
 })
 
-describe("isLoginBlocked: acceso bloqueado desde el panel (395)", () => {
+describe("isLoginBlocked: acceso bloqueado desde el panel (397)", () => {
   const ORG_OK = { activo: true, deleted_at: null }
   it("bloquea aunque el taller esté activo, también a un superadmin", () => {
     const u = { deleted_at: null, acceso_bloqueado_at: "2026-11-10T00:00:00Z" }

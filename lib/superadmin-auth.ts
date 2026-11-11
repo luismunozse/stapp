@@ -114,7 +114,7 @@ export async function getSuperadminSession() {
     return null
   }
 
-  // Email en la lista y la fila marcada (users.es_superadmin, 395), que llega
+  // Email en la lista y la fila marcada (users.es_superadmin, 397), que llega
   // al token como isSuperadmin desde el login y se resincroniza al revalidar.
   if (!isSuperadminEmail(session.user.email) || session.user.isSuperadmin !== true) {
     return null

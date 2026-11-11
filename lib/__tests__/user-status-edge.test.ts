@@ -85,7 +85,7 @@ describe("getUserDeletedStatus cache eviction", () => {
   })
 })
 
-describe("getUserDeletedStatus: bloqueo de acceso y marca de superadmin (395)", () => {
+describe("getUserDeletedStatus: bloqueo de acceso y marca de superadmin (397)", () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     clearUserStatusCache()

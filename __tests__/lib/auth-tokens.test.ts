@@ -222,7 +222,7 @@ describe("revalidarTokenSesion", () => {
   })
 })
 
-describe("acceso bloqueado y marca de superadmin (395)", () => {
+describe("acceso bloqueado y marca de superadmin (397)", () => {
   const AHORA = 1_800_000_000
   const SUPER = "root@stapp.test"
 
@@ -254,7 +254,7 @@ describe("acceso bloqueado y marca de superadmin (395)", () => {
   it("la revalidación resincroniza isSuperadmin con la marca de la fila", async () => {
     db.users[0].email = SUPER
     const t = await saveRefreshToken("u-1", true)
-    // Token emitido con isSuperadmin=true solo por el email (como antes de la 395).
+    // Token emitido con isSuperadmin=true solo por el email (como antes de la 397).
     const sinMarca = await revalidarTokenSesion({ id: "u-1", refreshToken: t, isSuperadmin: true, revalidarEn: AHORA - 1 }, AHORA)
     expect(sinMarca.isSuperadmin).toBe(false)
     db.users[0].es_superadmin = true
