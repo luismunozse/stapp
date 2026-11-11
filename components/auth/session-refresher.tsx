@@ -3,6 +3,7 @@
 import { useSession, signOut, signIn } from "next-auth/react"
 import { useEffect, useCallback, useRef, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
+import { isPublicPath } from "@/lib/public-paths"
 
 // Intervalo de verificación de sesión (cada 5 minutos)
 const SESSION_CHECK_INTERVAL = 5 * 60 * 1000
@@ -12,16 +13,19 @@ const SESSION_CHECK_INTERVAL = 5 * 60 * 1000
 // deja el status en "loading" una y otra vez.
 const SESSION_CHECK_THROTTLE = 60 * 1000
 
-// Rutas públicas que no requieren sesión
-const PUBLIC_PATHS = [
-  "/login",
-  "/registro",
-  "/forgot-password",
-  "/reset-password",
-  "/verificar-email",
-  "/",
-  "/pricing",
-]
+// Rutas sin sesión: la lista compartida con el proxy más las páginas del sitio
+// que no están ahí. Antes había una copia propia que se había quedado atrás
+// (le faltaban /google-auth, /app-entry, /reset-password/<token>...): en esas
+// pantallas se intentaba "restaurar la sesión" al volver el foco, lo que
+// desmontaba la página. En /google-auth, cerrar el popup de Google devuelve el
+// foco: la pantalla volvía a mostrar el botón mientras el login seguía por
+// detrás y entraba al panel unos segundos después.
+const OTRAS_RUTAS_PUBLICAS = new Set(["/", "/pricing", "/superadmin-login"])
+
+export function esRutaSinSesion(pathname: string | null): boolean {
+  if (!pathname) return false
+  return OTRAS_RUTAS_PUBLICAS.has(pathname) || pathname.startsWith("/api/") || isPublicPath(pathname)
+}
 
 // Claves de localStorage para PWA
 const PWA_REFRESH_TOKEN_KEY = "pwa_refresh_token"
@@ -168,9 +172,7 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
   const isRestoringRef = useRef(false)
 
   // Verificar si es ruta pública
-  const isPublicPath = PUBLIC_PATHS.some(
-    (path) => pathname === path || pathname?.startsWith("/api/")
-  )
+  const esPublica = esRutaSinSesion(pathname)
 
   // Actualizar timestamp de última actividad
   const updateActivity = useCallback(() => {
@@ -269,7 +271,7 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
   // visibilitychange llegan juntos (varias veces por interacción). Sin este
   // freno, cada vuelta a la ventana disparaba una ráfaga de refrescos.
   const checkSession = useCallback(async () => {
-    if (status !== "authenticated" || isPublicPath) return
+    if (status !== "authenticated" || esPublica) return
 
     const ahora = Date.now()
     if (ahora - lastCheckRef.current < SESSION_CHECK_THROTTLE) return
@@ -281,7 +283,7 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error("[SessionRefresher] Error updating session:", error)
     }
-  }, [status, isPublicPath, update])
+  }, [status, esPublica, update])
 
   // Detectar errores en la sesión
   useEffect(() => {
@@ -305,16 +307,16 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (
       status === "unauthenticated" &&
-      !isPublicPath &&
+      !esPublica &&
       !isRestoringRef.current
     ) {
       tryRestoreSession()
     }
-  }, [status, isPublicPath, tryRestoreSession])
+  }, [status, esPublica, tryRestoreSession])
 
   // Polling periódico para mantener sesión activa
   useEffect(() => {
-    if (status !== "authenticated" || isPublicPath) return
+    if (status !== "authenticated" || esPublica) return
 
     const interval = setInterval(() => {
       // Solo refrescar si hubo actividad reciente (últimos 30 minutos)
@@ -325,7 +327,7 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
     }, SESSION_CHECK_INTERVAL)
 
     return () => clearInterval(interval)
-  }, [status, isPublicPath, checkSession])
+  }, [status, esPublica, checkSession])
 
   // Detectar actividad del usuario
   useEffect(() => {
@@ -351,7 +353,7 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
       if (document.visibilityState === "visible") {
         if (status === "authenticated") {
           checkSession()
-        } else if (status === "unauthenticated" && !isPublicPath && !isRestoringRef.current) {
+        } else if (status === "unauthenticated" && !esPublica && !isRestoringRef.current) {
           tryRestoreSession()
         }
       }
@@ -360,7 +362,7 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
     const handleFocus = () => {
       if (status === "authenticated") {
         checkSession()
-      } else if (status === "unauthenticated" && !isPublicPath && !isRestoringRef.current) {
+      } else if (status === "unauthenticated" && !esPublica && !isRestoringRef.current) {
         tryRestoreSession()
       }
     }
@@ -372,7 +374,7 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
       document.removeEventListener("visibilitychange", handleVisibilityChange)
       window.removeEventListener("focus", handleFocus)
     }
-  }, [status, isPublicPath, checkSession, tryRestoreSession])
+  }, [status, esPublica, checkSession, tryRestoreSession])
 
   // Mostrar indicador de carga mientras restaura
   if (isRestoring) {
