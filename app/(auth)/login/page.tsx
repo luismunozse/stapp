@@ -13,7 +13,7 @@ import { AuthSplitLayout } from "@/components/auth/auth-split-layout"
 import { Eye, EyeOff, CheckCircle, Mail } from "lucide-react"
 import { BusinessLogo } from "@/components/shared/business-logo"
 import { savePWATokens } from "@/components/auth/session-refresher"
-import { extractAuthCode, parseRequires2FA } from "@/lib/auth-client"
+import { extractAuthCode, parseRequires2FA, tenantDashboardUrl } from "@/lib/auth-client"
 import { isNativePlatform } from "@/lib/capacitor"
 import { TwoFactorVerify } from "@/components/auth/two-factor-verify"
 
@@ -110,7 +110,7 @@ function LoginForm() {
         setShowVerifyMessage(true)
       }
     }
-    // Pre-llenar email si viene de redirección del dominio principal
+    // Pre-llenar email si viene en la URL
     const emailParam = searchParams.get("email")
     if (emailParam) {
       setEmail(emailParam)
@@ -130,7 +130,7 @@ function LoginForm() {
 
   const handleResendVerification = async () => {
     if (!email) {
-      setError("Ingresa tu email primero")
+      setError("Ingresá tu email primero")
       return
     }
 
@@ -153,7 +153,7 @@ function LoginForm() {
         setError(data.error || "Error al reenviar el email")
       }
     } catch {
-      setError("Error de conexión. Intenta de nuevo.")
+      setError("Error de conexión. Intentá de nuevo.")
     } finally {
       setResendLoading(false)
     }
@@ -206,7 +206,7 @@ function LoginForm() {
           setLoading(false)
           return
         }
-        setError("Error al completar la sesion")
+        setError("Error al completar la sesión")
         setRequires2FA(false)
         setPending2FAUserId(null)
         setLoading(false)
@@ -227,7 +227,7 @@ function LoginForm() {
 
         if (!verifyRes.ok) {
           await signOut({ redirect: false })
-          setError("No tienes acceso a esta organizacion")
+          setError("No tenés acceso a esta organización")
           setLoading(false)
           return
         }
@@ -241,17 +241,15 @@ function LoginForm() {
 
         if (orgRes.ok) {
           const { organization } = await orgRes.json()
-          await signOut({ redirect: false })
-          const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
-          const targetUrl = `https://${organization.slug}.${rootDomain}/login?email=${encodeURIComponent(email)}`
-          window.location.href = targetUrl
+          // La sesión ya vale en el subdominio (cookie en `.{ROOT_DOMAIN}`)
+          window.location.href = tenantDashboardUrl(organization.slug)
         } else {
-          setError("No se pudo obtener la organizacion")
+          setError("No se pudo obtener la organización")
           setLoading(false)
         }
       }
     } catch {
-      setError("Error al iniciar sesion")
+      setError("Error al iniciar sesión")
       setLoading(false)
     }
   }
@@ -311,7 +309,7 @@ function LoginForm() {
         if (!verifyRes.ok) {
           // El usuario no pertenece a esta organización
           await signOut({ redirect: false })
-          setError("No tienes acceso a esta organización")
+          setError("No tenés acceso a esta organización")
           setLoading(false)
           return
         }
@@ -323,19 +321,18 @@ function LoginForm() {
         window.location.href = safeCallbackPath(searchParams.get("callbackUrl"))
         return
       } else {
-        // Login desde dominio principal: cerrar sesión aquí y redirigir al subdominio para login
+        // Login desde el dominio principal: la cookie de sesión está scopeada a
+        // `.{ROOT_DOMAIN}`, así que vale también en el subdominio del negocio.
+        // Se entra directo al panel, igual que con Google. Antes se cerraba la
+        // sesión acá y se mandaba al login del subdominio, que volvía a pedir
+        // la contraseña sin explicar por qué.
         const orgRes = await fetch("/api/auth/user-organization", {
           credentials: "include",
         })
 
         if (orgRes.ok) {
           const { organization } = await orgRes.json()
-          // Cerrar sesión en dominio principal (la cookie es solo para este dominio)
-          await signOut({ redirect: false })
-          // Redirigir al login del subdominio con el email pre-llenado
-          const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
-          const targetUrl = `https://${organization.slug}.${rootDomain}/login?email=${encodeURIComponent(email)}`
-          window.location.href = targetUrl
+          window.location.href = tenantDashboardUrl(organization.slug)
           return
         } else {
           setError("No se pudo obtener la organización")
@@ -394,7 +391,7 @@ function LoginForm() {
               {tenantInfo ? tenantInfo.nombre : "Bienvenido de nuevo"}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Ingresa tus credenciales para acceder
+              Ingresá tus datos para acceder
             </p>
           </div>
         </div>
@@ -541,9 +538,9 @@ function LoginForm() {
             {/* Solo mostrar enlace de registro si no estamos en subdominio */}
             {!tenantSlug && (
               <div>
-                ¿No tienes cuenta?{" "}
+                ¿No tenés cuenta?{" "}
                 <Link href="/registro" className="text-primary hover:underline font-medium">
-                  Registra tu negocio
+                  Registrá tu negocio
                 </Link>
               </div>
             )}
