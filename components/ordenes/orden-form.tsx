@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { useForm, type FieldErrors } from "react-hook-form"
+import { toast } from "sonner"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Button } from "@/components/ui/button"
@@ -63,6 +64,16 @@ const ordenSchema = z.object({
 })
 
 type OrdenFormData = z.infer<typeof ordenSchema>
+
+/** Un item del checklist esta sin responder si es Si/No sin elegir, o texto /
+ *  opcion vacios. "No" es una respuesta valida. */
+function checklistItemFaltante(tipo: string, value: boolean | string | null | undefined): boolean {
+  if (tipo === "BOOLEAN") return value !== true && value !== false
+  if (tipo === "TEXT" || tipo === "SELECT") return typeof value !== "string" || value.trim() === ""
+  return false
+}
+
+const CHECKLIST_ITEM_REQUERIDO_MSG = "Completá este ítem obligatorio"
 
 /** Valores base del formulario. Vive afuera del componente (sin dependencias
  *  de hooks) para que useForm(defaultValues) y el discard del borrador usen
@@ -265,6 +276,15 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
    *  "Firma capturada" de una conformidad que la orden ya no lleva. */
   const [firmaResetKey, setFirmaResetKey] = useState(0)
   const [checklistOpen, setChecklistOpen] = useState(true)
+  /** Se prende al primer "Crear Orden" con items requeridos sin responder:
+   *  desde ahi cada item requerido vacio muestra su aviso debajo. */
+  const [checklistIntentoEnviar, setChecklistIntentoEnviar] = useState(false)
+  /** Campo a enfocar cuando el paso que lo contiene ya este en pantalla. El
+   *  IMEI vive en el paso 1 y se valida tambien desde el submit (paso 3): sin
+   *  esperar al render, el input todavia no existe y el foco se pierde. */
+  const [enfocarPendiente, setEnfocarPendiente] = useState<
+    { tipo: "imei" } | { tipo: "checklist"; itemId: string } | null
+  >(null)
   /** Origen de las respuestas del checklist que restauro un borrador, mientras
    *  todavia no se resolvio el template contra el que hay que compararlas. Ver
    *  el efecto que descarta las respuestas huerfanas.
@@ -485,6 +505,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     setSelectedRecibidoPorId(recibidoPorPorDefecto)
     setChecklistValores({})
     setChecklistNotas("")
+    setChecklistIntentoEnviar(false)
     // Ya no hay respuestas restauradas que comparar contra ningun template.
     setChecklistDelBorrador(null)
     setCurrentStep(1)
@@ -1086,9 +1107,26 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   }
 
   const onSubmit = async (data: OrdenFormData) => {
-    // Validate IMEI only when the field is configured as IMEI (15 digits)
-    if (imeiEsImei && !isValidImei(data.imei)) {
-      setError("imei", { message: "El IMEI debe tener exactamente 15 dígitos" })
+    // Red de seguridad: el paso 1 ya valida el IMEI al tocar "Siguiente", pero
+    // si llega invalido hasta aca (p. ej. la config del tipo de equipo resolvio
+    // despues de pasar el paso 1) el error quedaba en un campo que no esta en
+    // pantalla y "Crear Orden" no hacia nada visible.
+    if (!validarImei(data.imei)) {
+      setCurrentStep(1)
+      setEnfocarPendiente({ tipo: "imei" })
+      toast.error(`Revisá el ${imeiLabel}: tiene que tener exactamente 15 dígitos`)
+      return
+    }
+    const faltantes = checklistItemsRequeridosFaltantes()
+    if (faltantes.length > 0) {
+      setChecklistIntentoEnviar(true)
+      setChecklistOpen(true)
+      setEnfocarPendiente({ tipo: "checklist", itemId: faltantes[0].id })
+      toast.error(
+        faltantes.length === 1
+          ? `Completá el ítem obligatorio del checklist: ${faltantes[0].label}`
+          : `Completá los ${faltantes.length} ítems obligatorios del checklist`,
+      )
       return
     }
     setLoading(true)
@@ -1272,10 +1310,42 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   // Check if the selected type has a campo extra with usarComoDispositivo
   const campoDispositivo = camposExtra.find((c) => c.usarComoDispositivo)
 
+  /** IMEI configurado como IMEI (15 digitos): vacio es valido, el campo es
+   *  opcional. Deja el error en el campo; quien llama decide el foco. */
+  const validarImei = (valor: string | undefined): boolean => {
+    if (!imeiEsImei || isValidImei(valor)) {
+      clearErrors("imei")
+      return true
+    }
+    setError("imei", { message: "El IMEI debe tener exactamente 15 dígitos" })
+    return false
+  }
+
+  /** Items `requerido` del checklist sin responder, en el mismo orden en que
+   *  se dibujan (por categoria y despues por `orden`), para enfocar el primero. */
+  const checklistItemsRequeridosFaltantes = (): Array<{ id: string; label: string }> => {
+    const items = (checklistTemplate?.items ?? []) as Array<{
+      id: string; label: string; tipo: string; categoria?: string; orden: number; requerido?: boolean
+    }>
+    const categorias: string[] = []
+    for (const item of items) {
+      const cat = item.categoria || "GENERAL"
+      if (!categorias.includes(cat)) categorias.push(cat)
+    }
+    return categorias.flatMap((cat) =>
+      items
+        .filter((item) => (item.categoria || "GENERAL") === cat)
+        .sort((a, b) => a.orden - b.orden)
+        .filter((item) => item.requerido && checklistItemFaltante(item.tipo, checklistValores[item.id])),
+    )
+  }
+
   const validateStep = async (step: number): Promise<boolean> => {
     if (step === 1) {
       const result = await trigger(["clienteId", "dispositivo", "tipoDispositivo", "problemaReportado"])
-      return result
+      const imeiOk = validarImei(getValues("imei"))
+      if (result && !imeiOk) setEnfocarPendiente({ tipo: "imei" })
+      return result && imeiOk
     }
     if (step === 2) return trigger(["presupuesto"])
     return true
@@ -1301,6 +1371,22 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     const isValid = await validateStep(currentStep)
     if (isValid) setCurrentStep((prev) => Math.min(prev + 1, totalSteps))
   }
+
+  useEffect(() => {
+    if (!enfocarPendiente) return
+    if (enfocarPendiente.tipo === "imei") {
+      if (currentStep !== 1) return
+      // Por id y no con setFocus: al volver del paso 3 el input se monta de
+      // nuevo y la ref que guarda react-hook-form sigue apuntando al anterior.
+      document.getElementById("imei")?.focus()
+    } else {
+      if (currentStep !== totalSteps || !checklistOpen) return
+      const el = document.getElementById(`checklist-item-${enfocarPendiente.itemId}`)
+      el?.scrollIntoView?.({ behavior: "smooth", block: "center" })
+      el?.querySelector<HTMLElement>("button, input")?.focus()
+    }
+    setEnfocarPendiente(null)
+  }, [enfocarPendiente, currentStep, totalSteps, checklistOpen])
 
   const handlePrevStep = () => {
     setCurrentStep((prev) => Math.max(prev - 1, 1))
@@ -1948,43 +2034,51 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                         <div className="space-y-1">
                           {(items as any[]).sort((a, b) => a.orden - b.orden).map((item) => {
                             const value = checklistValores[item.id]
+                            const faltante =
+                              checklistIntentoEnviar && item.requerido && checklistItemFaltante(item.tipo, value)
+                            const avisoFaltante = faltante ? (
+                              <p className="text-sm text-destructive mt-1">{CHECKLIST_ITEM_REQUERIDO_MSG}</p>
+                            ) : null
                             if (item.tipo === "BOOLEAN") {
                               return (
-                                <div key={item.id} className="flex items-center justify-between py-1.5">
-                                  <span className="text-sm">
-                                    {item.label}
-                                    {item.requerido && <span className="text-red-500 ml-1">*</span>}
-                                  </span>
-                                  <div className="flex gap-1.5">
-                                    <button
-                                      type="button"
-                                      className={`px-3 py-1 text-xs rounded border transition-colors ${
-                                        value === true
-                                          ? "bg-primary text-primary-foreground border-primary"
-                                          : "hover:bg-muted"
-                                      }`}
-                                      onClick={() => setChecklistValores(prev => ({ ...prev, [item.id]: true }))}
-                                    >
-                                      Sí
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className={`px-3 py-1 text-xs rounded border transition-colors ${
-                                        value === false
-                                          ? "bg-primary text-primary-foreground border-primary"
-                                          : "hover:bg-muted"
-                                      }`}
-                                      onClick={() => setChecklistValores(prev => ({ ...prev, [item.id]: false }))}
-                                    >
-                                      No
-                                    </button>
+                                <div key={item.id} id={`checklist-item-${item.id}`} className="py-1.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm">
+                                      {item.label}
+                                      {item.requerido && <span className="text-red-500 ml-1">*</span>}
+                                    </span>
+                                    <div className="flex gap-1.5">
+                                      <button
+                                        type="button"
+                                        className={`px-3 py-1 text-xs rounded border transition-colors ${
+                                          value === true
+                                            ? "bg-primary text-primary-foreground border-primary"
+                                            : "hover:bg-muted"
+                                        }`}
+                                        onClick={() => setChecklistValores(prev => ({ ...prev, [item.id]: true }))}
+                                      >
+                                        Sí
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className={`px-3 py-1 text-xs rounded border transition-colors ${
+                                          value === false
+                                            ? "bg-primary text-primary-foreground border-primary"
+                                            : "hover:bg-muted"
+                                        }`}
+                                        onClick={() => setChecklistValores(prev => ({ ...prev, [item.id]: false }))}
+                                      >
+                                        No
+                                      </button>
+                                    </div>
                                   </div>
+                                  {avisoFaltante}
                                 </div>
                               )
                             }
                             if (item.tipo === "TEXT") {
                               return (
-                                <div key={item.id} className="py-1.5">
+                                <div key={item.id} id={`checklist-item-${item.id}`} className="py-1.5">
                                   <Label className="text-sm">
                                     {item.label}
                                     {item.requerido && <span className="text-red-500 ml-1">*</span>}
@@ -1993,14 +2087,16 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                                     value={(value as string) || ""}
                                     onChange={(e) => setChecklistValores(prev => ({ ...prev, [item.id]: e.target.value }))}
                                     className="h-8 mt-1"
+                                    aria-invalid={faltante || undefined}
                                   />
+                                  {avisoFaltante}
                                 </div>
                               )
                             }
                             if (item.tipo === "SELECT") {
                               const opciones = item.opciones ? JSON.parse(item.opciones) : []
                               return (
-                                <div key={item.id} className="py-1.5">
+                                <div key={item.id} id={`checklist-item-${item.id}`} className="py-1.5">
                                   <Label className="text-sm">
                                     {item.label}
                                     {item.requerido && <span className="text-red-500 ml-1">*</span>}
@@ -2019,6 +2115,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                                       ))}
                                     </SelectContent>
                                   </Select>
+                                  {avisoFaltante}
                                 </div>
                               )
                             }
