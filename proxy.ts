@@ -10,6 +10,7 @@ import {
 } from "@/lib/rate-limit"
 import { getTenantStatusBySlug } from "@/lib/tenant-status-edge"
 import { getUserDeletedStatus } from "@/lib/user-status-edge"
+import { checkSuperadminLoginLimit } from "@/lib/superadmin-login-limit-edge"
 import {
   isImpersonationWriteBlocked,
   isImpersonationExpired,
@@ -180,6 +181,166 @@ function extractSubdomain(hostname: string): string | null {
   }
 
   return subdomain
+}
+
+// ==========================================
+// Panel superadmin (subdominio admin.*)
+// ==========================================
+
+const SUPERADMIN_LOGIN_CALLBACK = "/api/auth/callback/credentials"
+const SUPERADMIN_LOGIN_MAX_ATTEMPTS = 10
+const SUPERADMIN_LOGIN_WINDOW_SECONDS = 10 * 60
+
+function isSafeMethod(method: string): boolean {
+  const m = method.toUpperCase()
+  return m === "GET" || m === "HEAD" || m === "OPTIONS"
+}
+
+// Same-origin estricto: el host del Origin tiene que ser el mismo host del
+// request. Sin Origin (raro en un navegador para un POST) solo se acepta si
+// el navegador declara `Sec-Fetch-Site: same-origin`. `Origin: null`
+// (iframe sandbox, redirects cross-origin) no pasa.
+export function isSameOriginRequest(request: NextRequest, hostname: string): boolean {
+  const origin = request.headers.get("origin")
+  if (origin) {
+    try {
+      return new URL(origin).host === hostname
+    } catch {
+      return false
+    }
+  }
+  return request.headers.get("sec-fetch-site") === "same-origin"
+}
+
+// IP del cliente: en Vercel `x-vercel-forwarded-for` la pone el edge y no se
+// puede falsificar; fuera de Vercel se cae al primer valor de XFF.
+function clientIp(request: NextRequest): string {
+  return (
+    request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "unknown"
+  )
+}
+
+// El panel no se puede embeber (clickjacking sobre acciones con un clic,
+// como impersonar o correr crons).
+function withAdminFrameProtection<T extends NextResponse>(res: T): T {
+  res.headers.set("X-Frame-Options", "DENY")
+  res.headers.set("Content-Security-Policy", "frame-ancestors 'none'")
+  return res
+}
+
+async function adminPanel(
+  request: NextRequest,
+  requestHeaders: Headers,
+  hostname: string,
+  pathname: string,
+): Promise<NextResponse> {
+  // Marcar como panel superadmin
+  requestHeaders.set("x-superadmin-panel", "true")
+
+  // CSRF: la cookie de sesión es SameSite=lax en `.stapp.com.ar`, así que un
+  // POST desde cualquier subdominio de tenant cuenta como same-site y viaja
+  // con la cookie del superadmin. Toda escritura al panel tiene que venir de
+  // admin.* mismo.
+  if (!isSafeMethod(request.method) && !isSameOriginRequest(request, hostname)) {
+    return NextResponse.json({ error: "Origen no permitido" }, { status: 403 })
+  }
+
+  // Fuerza bruta sobre el login del panel (password y 2FA pasan por acá).
+  // El límite general es en memoria por instancia; este se guarda en la base
+  // y es compartido (lib/superadmin-login-limit-edge.ts). Por IP, no por cuenta, para no poder bloquear al
+  // superadmin desde afuera.
+  if (request.method === "POST" && pathname === SUPERADMIN_LOGIN_CALLBACK) {
+    const rl = await checkSuperadminLoginLimit(
+      clientIp(request),
+      SUPERADMIN_LOGIN_MAX_ATTEMPTS,
+      SUPERADMIN_LOGIN_WINDOW_SECONDS
+    )
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: "Demasiados intentos de inicio de sesión. Esperá unos minutos." },
+        { status: 429, headers: { "Retry-After": String(Math.max(1, Math.ceil((rl.reset - Date.now()) / 1000))) } }
+      )
+    }
+  }
+
+  // Rutas públicas del panel admin (login, auth)
+  if (
+    pathname === "/superadmin-login" ||
+    pathname.startsWith("/api/auth")
+  ) {
+    return NextResponse.next({
+      request: { headers: requestHeaders },
+    })
+  }
+
+  // Verificar autenticación
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET,
+    cookieName: sessionCookieName(),
+  })
+
+  if (!token) {
+    // Redirigir a login del panel admin
+    const loginUrl = new URL("/superadmin-login", request.url)
+    loginUrl.searchParams.set("callbackUrl", pathname)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  const adminDeleted = await deletedUserResponse(request, token, pathname)
+  if (adminDeleted) return adminDeleted
+
+  // Verificar que el email está en SUPERADMIN_EMAILS. Una sesión de
+  // impersonación nunca entra al panel, aunque el usuario impersonado tenga
+  // un email de la lista: el token lleva el email del objetivo y acá no se
+  // aplica el solo-lectura.
+  if (token.isImpersonating || !isSuperadminEmail(token.email as string)) {
+    // No es superadmin, redirigir al dominio principal
+    const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+    const protocol = process.env.NODE_ENV === "production" ? "https" : "http"
+    return NextResponse.redirect(new URL("/", `${protocol}://${rootDomain}`))
+  }
+
+  // Agregar headers de superadmin para las APIs
+  // Seguridad: estos headers solo se setean acá, después de validar JWT + email.
+  // El middleware corre antes que cualquier API route, no se pueden inyectar externamente.
+  requestHeaders.set("x-superadmin-email", token.email as string)
+  requestHeaders.set("x-user-id", token.id as string)
+
+  // Rate limiting para APIs de superadmin (más estricto: 60 req/min)
+  if (pathname.startsWith("/api/superadmin")) {
+    const saIp = clientIp(request)
+    const rlResult = await rateLimit(
+      `sa:${saIp}:${pathname.split("/").slice(0, 4).join("/")}`,
+      60,
+      60000
+    )
+    if (!rlResult.success) {
+      return NextResponse.json(
+        { error: "Demasiadas solicitudes" },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil((rlResult.reset - Date.now()) / 1000)),
+          },
+        }
+      )
+    }
+    return NextResponse.next({
+      request: { headers: requestHeaders },
+    })
+  }
+
+  // Si NO está en ruta /superadmin/*, redirigir al dashboard
+  if (!pathname.startsWith("/superadmin/")) {
+    return NextResponse.redirect(new URL("/superadmin/dashboard", request.url))
+  }
+
+  return NextResponse.next({
+    request: { headers: requestHeaders },
+  })
 }
 
 export async function proxy(request: NextRequest) {
@@ -355,85 +516,7 @@ export async function proxy(request: NextRequest) {
   // CASO 2: Subdominio ADMIN (Panel SuperAdmin)
   // ==========================================
   if (subdomain.toLowerCase() === SUPERADMIN_SUBDOMAIN) {
-    // Marcar como panel superadmin
-    requestHeaders.set("x-superadmin-panel", "true")
-
-    // Rutas públicas del panel admin (login, auth)
-    if (
-      pathname === "/superadmin-login" ||
-      pathname.startsWith("/api/auth")
-    ) {
-      return NextResponse.next({
-        request: { headers: requestHeaders },
-      })
-    }
-
-    // Verificar autenticación
-    const token = await getToken({
-      req: request,
-      secret: process.env.NEXTAUTH_SECRET,
-      cookieName: sessionCookieName(),
-    })
-
-    if (!token) {
-      // Redirigir a login del panel admin
-      const loginUrl = new URL("/superadmin-login", request.url)
-      loginUrl.searchParams.set("callbackUrl", pathname)
-      return NextResponse.redirect(loginUrl)
-    }
-
-    const adminDeleted = await deletedUserResponse(request, token, pathname)
-    if (adminDeleted) return adminDeleted
-
-    // Verificar que el email está en SUPERADMIN_EMAILS. Una sesión de
-    // impersonación nunca entra al panel, aunque el usuario impersonado tenga
-    // un email de la lista: el token lleva el email del objetivo y acá no se
-    // aplica el solo-lectura.
-    if (token.isImpersonating || !isSuperadminEmail(token.email as string)) {
-      // No es superadmin, redirigir al dominio principal
-      const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
-      const protocol = process.env.NODE_ENV === "production" ? "https" : "http"
-      return NextResponse.redirect(new URL("/", `${protocol}://${rootDomain}`))
-    }
-
-    // Agregar headers de superadmin para las APIs
-    // Seguridad: estos headers solo se setean acá, después de validar JWT + email.
-    // El middleware corre antes que cualquier API route, no se pueden inyectar externamente.
-    requestHeaders.set("x-superadmin-email", token.email as string)
-    requestHeaders.set("x-user-id", token.id as string)
-
-    // Rate limiting para APIs de superadmin (más estricto: 60 req/min)
-    if (pathname.startsWith("/api/superadmin")) {
-      const saIp = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"
-      const rlResult = await rateLimit(
-        `sa:${saIp}:${pathname.split("/").slice(0, 4).join("/")}`,
-        60,
-        60000
-      )
-      if (!rlResult.success) {
-        return NextResponse.json(
-          { error: "Demasiadas solicitudes" },
-          {
-            status: 429,
-            headers: {
-              "Retry-After": String(Math.ceil((rlResult.reset - Date.now()) / 1000)),
-            },
-          }
-        )
-      }
-      return NextResponse.next({
-        request: { headers: requestHeaders },
-      })
-    }
-
-    // Si NO está en ruta /superadmin/*, redirigir al dashboard
-    if (!pathname.startsWith("/superadmin/")) {
-      return NextResponse.redirect(new URL("/superadmin/dashboard", request.url))
-    }
-
-    return NextResponse.next({
-      request: { headers: requestHeaders },
-    })
+    return withAdminFrameProtection(await adminPanel(request, requestHeaders, hostname, pathname))
   }
 
   // ==========================================
