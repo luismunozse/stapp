@@ -108,7 +108,9 @@ export function OrgUsersTab({ users: initialUsers, onUpdated }: OrgUsersTabProps
       () => {
         setUsers((prev) =>
           prev.map((u) =>
-            u.id === userId ? { ...u, email_verified: activo } : u
+            u.id === userId
+              ? { ...u, acceso_bloqueado_at: activo ? null : new Date().toISOString() }
+              : u
           )
         )
       }
@@ -174,9 +176,14 @@ export function OrgUsersTab({ users: initialUsers, onUpdated }: OrgUsersTabProps
                       </Select>
                     </td>
                     <td className="p-3">
-                      <Badge variant={user.email_verified ? "default" : "destructive"}>
-                        {user.email_verified ? "Activo" : "Inactivo"}
-                      </Badge>
+                      <div className="flex flex-wrap gap-1">
+                        <Badge variant={user.acceso_bloqueado_at ? "destructive" : "default"}>
+                          {user.acceso_bloqueado_at ? "Acceso bloqueado" : "Activo"}
+                        </Badge>
+                        {!user.email_verified && (
+                          <Badge variant="outline">Email sin verificar</Badge>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3 text-muted-foreground hidden sm:table-cell">
                       {formatDate(user.created_at)}
@@ -196,13 +203,30 @@ export function OrgUsersTab({ users: initialUsers, onUpdated }: OrgUsersTabProps
                             <KeyRound className="h-4 w-4" />
                           )}
                         </Button>
-                        {user.email_verified ? (
+                        {!user.email_verified && (
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleToggleActive(user.id, false)}
+                            onClick={() => handleVerifyEmail(user.id)}
                             disabled={isLoading}
-                            title="Desactivar usuario"
+                            title="Marcar email como verificado"
+                            aria-label={`Marcar email de ${user.nombre} como verificado`}
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {!user.acceso_bloqueado_at ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              if (window.confirm(`¿Bloquear el acceso de ${user.nombre} (${user.email})? Se cierran sus sesiones abiertas.`)) {
+                                handleToggleActive(user.id, false)
+                              }
+                            }}
+                            disabled={isLoading}
+                            title="Bloquear acceso"
+                            aria-label={`Bloquear acceso de ${user.nombre}`}
                           >
                             <UserX className="h-4 w-4 text-red-500" />
                           </Button>
@@ -212,7 +236,8 @@ export function OrgUsersTab({ users: initialUsers, onUpdated }: OrgUsersTabProps
                             variant="ghost"
                             onClick={() => handleToggleActive(user.id, true)}
                             disabled={isLoading}
-                            title="Activar usuario"
+                            title="Habilitar acceso"
+                            aria-label={`Habilitar acceso de ${user.nombre}`}
                           >
                             <UserCheck className="h-4 w-4 text-green-500" />
                           </Button>

@@ -89,7 +89,7 @@ export async function GET(
         // Usuarios
         supabaseAdmin
           .from("users")
-          .select("id, nombre, email, rol, email_verified, created_at")
+          .select("id, nombre, email, rol, email_verified, acceso_bloqueado_at, created_at")
           .eq("organization_id", id)
           .order("created_at", { ascending: false }),
 

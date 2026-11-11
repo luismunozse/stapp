@@ -85,11 +85,19 @@ async function deletedUserResponse(
 ): Promise<NextResponse | null> {
   if (!token?.id || token.isImpersonating || isPublicPath(pathname)) return null
   const status = await getUserDeletedStatus(token.id as string)
-  if (status.kind !== "ok" || !status.deleted) return null
+  // Baja o acceso bloqueado desde el panel (394): las dos cortan la sesión viva.
+  if (status.kind !== "ok" || (!status.deleted && !status.bloqueado)) return null
   const res = pathname.startsWith("/api/")
-    ? NextResponse.json({ error: "Cuenta eliminada" }, { status: 401 })
+    ? NextResponse.json({ error: status.deleted ? "Cuenta eliminada" : "Acceso desactivado" }, { status: 401 })
     : NextResponse.redirect(new URL("/login", request.url))
   return clearSessionCookie(res)
+}
+
+async function esSuperadminVigente(token: { id?: unknown; isSuperadmin?: unknown }): Promise<boolean> {
+  if (typeof token.id !== "string" || !token.id) return false
+  const status = await getUserDeletedStatus(token.id)
+  if (status.kind === "ok") return status.esSuperadmin
+  return token.isSuperadmin === true
 }
 
 // Rutas de landing page (solo para dominio principal)
@@ -330,8 +338,11 @@ export async function proxy(request: NextRequest) {
     const adminDeleted = await deletedUserResponse(request, token, pathname)
     if (adminDeleted) return adminDeleted
 
-    // Verificar que el email está en SUPERADMIN_EMAILS
-    if (!isSuperadminEmail(token.email as string)) {
+    // Superadmin = email en SUPERADMIN_EMAILS **y** la fila marcada
+    // (users.es_superadmin, 394). La marca se mira en la base (caché de 30 s)
+    // para que sacarla corte enseguida; si la consulta falla se usa la del
+    // token, que se resincroniza en cada revalidación del JWT.
+    if (!isSuperadminEmail(token.email as string) || !(await esSuperadminVigente(token))) {
       // No es superadmin, redirigir al dominio principal
       const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
       const protocol = process.env.NODE_ENV === "production" ? "https" : "http"

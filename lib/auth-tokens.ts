@@ -36,6 +36,18 @@ export function isSuperadminEmail(email: string): boolean {
   return superadminEmails.includes(email.toLowerCase())
 }
 
+/**
+ * Superadmin = email en SUPERADMIN_EMAILS **y** la fila marcada con
+ * users.es_superadmin (394). Solo el email no alcanza: un taller podía crear un
+ * usuario propio con un email de la lista que todavía no existía. La marca
+ * solo se cambia desde el SQL editor (trigger de la 394).
+ */
+export function esSuperadmin(
+  user: { email?: string | null; es_superadmin?: boolean | null } | null | undefined,
+): boolean {
+  return !!user?.email && user.es_superadmin === true && isSuperadminEmail(user.email)
+}
+
 export function hashRefreshToken(refreshToken: string): string {
   return createHash("sha256").update(refreshToken, "utf8").digest("hex")
 }
@@ -76,6 +88,8 @@ const SELECT_USUARIO_REFRESH = `
   sucursal_id,
   refresh_token_expires,
   deleted_at,
+  acceso_bloqueado_at,
+  es_superadmin,
   organizations (id, activo, deleted_at)
 `
 
@@ -142,7 +156,7 @@ export async function validateRefreshToken(refreshToken: string) {
   const org = Array.isArray(orgs) ? orgs[0] : orgs
   if (
     isLoginBlocked(user, org as { activo: boolean; deleted_at?: string | null } | null, {
-      isSuper: isSuperadminEmail(user.email),
+      isSuper: esSuperadmin(user),
     })
   ) {
     return null
@@ -218,6 +232,10 @@ export async function revalidarTokenSesion<T extends TokenSesion>(
   }
 
   const actualizado: TokenSesion = { ...token, revalidarEn: ahoraSeg + REVALIDAR_CADA_SEG }
+
+  // Se resincroniza con la base: sacarle la marca a una fila (o un token
+  // emitido antes de la 394 por un usuario sin marca) deja de valer acá.
+  actualizado.isSuperadmin = esSuperadmin(validUser)
 
   // Nombre, rol y sucursal se resincronizan desde la base: el rol es lo que
   // leen requireAdmin() y los guards de la API, y va junto con la sucursal

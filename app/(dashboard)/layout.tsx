@@ -73,7 +73,7 @@ export default async function DashboardLayout({
   const organizationId = session.user.organizationId
 
   // Superadmin siempre tiene acceso (no depende de suscripción)
-  const superadmin = isSuperadminEmail(session.user.email)
+  const superadmin = isSuperadminEmail(session.user.email) && session.user.isSuperadmin === true
 
   // Verificar acceso válido con caché (trial no expirado o suscripción activa)
   const { accessResult, trialInfo, planNombre } = await getCachedAccessInfo(organizationId)

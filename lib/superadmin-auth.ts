@@ -114,7 +114,9 @@ export async function getSuperadminSession() {
     return null
   }
 
-  if (!isSuperadminEmail(session.user.email)) {
+  // Email en la lista y la fila marcada (users.es_superadmin, 394), que llega
+  // al token como isSuperadmin desde el login y se resincroniza al revalidar.
+  if (!isSuperadminEmail(session.user.email) || session.user.isSuperadmin !== true) {
     return null
   }
 
@@ -126,5 +128,5 @@ export async function getSuperadminSession() {
  */
 export async function checkIsSuperadmin(): Promise<boolean> {
   const session = await auth()
-  return isSuperadminEmail(session?.user?.email)
+  return isSuperadminEmail(session?.user?.email) && session?.user?.isSuperadmin === true
 }
