@@ -14,6 +14,27 @@ import { esInforme } from "@/lib/cotizacion-informe"
 import { normalizeOrdenPapel, type OrdenPapel } from "@/lib/orden-papel"
 import { fetchLogo, marcoLogo } from "@/lib/pdf-logo"
 
+/** Corta con "…" para que el texto entre en maxWidth puntos. */
+function truncarAncho(font: PDFFont, text: string, size: number, maxWidth: number): string {
+  if (maxWidth <= 0) return ""
+  if (font.widthOfTextAtSize(text, size) <= maxWidth) return text
+  let t = text
+  while (t.length > 0 && font.widthOfTextAtSize(`${t}…`, size) > maxWidth) t = t.slice(0, -1)
+  return `${t.trimEnd()}…`
+}
+
+/**
+ * Nombre de la empresa en el encabezado: achica la letra desde `size` hasta
+ * `minSize` para que entre al lado del bloque del documento (título, número,
+ * fecha) y, si ni así entra, lo corta con "…". Antes un nombre largo se
+ * dibujaba encima del título del documento.
+ */
+function ajustarNombreEncabezado(font: PDFFont, text: string, size: number, minSize: number, maxWidth: number) {
+  let s = size
+  while (s > minSize && font.widthOfTextAtSize(text, s) > maxWidth) s -= 0.5
+  return { text: truncarAncho(font, text, s, maxWidth), size: s }
+}
+
 /**
  * Descarga, normaliza (EXIF, recorte de bordes, formato) y embebe el logo.
  * null si no hay logo o no se pudo cargar: el documento sale sin logo.
@@ -340,11 +361,6 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
     page.drawImage(embeddedLogo, { x: marginL, y: logoY, width: logoW, height: logoH })
   }
 
-  // Company name and info - aligned to vertical center of logo
-  page.drawText(empresaNombre, { x: marginL + logoOffset, y: textTopY, size: nameSize, font: helveticaBold, color: MONO.ink })
-  if (companyDetails.length > 0) {
-    page.drawText(companyDetails.join("  |  "), { x: marginL + logoOffset, y: textTopY - nameSize - 2, size: detailSize, font: helvetica, color: MONO.label })
-  }
 
   // Doc-title block (right side): título / número / fecha, como en los
   // demás comprobantes monocromos (REMITO / VENTA / NOTA DE CRÉDITO).
@@ -361,6 +377,23 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
   page.drawText(docTitleText, { x: pageW - marginR - docTitleWidth, y: pageH - 40, size: TYPE.docTitle, font: helveticaBold, color: MONO.ink })
   drawTextRight(page, cotizacionNumber, pageW - marginR, pageH - 62, TYPE.docNumber, helveticaBold, MONO.ink)
   drawTextRight(page, cotizacionDate, pageW - marginR, pageH - 78, TYPE.small, helvetica, MONO.label)
+
+  // Company name and info - aligned to vertical center of logo. Va después
+  // del bloque de la derecha: el nombre se achica (16 -> 11pt) y, si hace
+  // falta, se corta con "…" para no pisar el título ni el número.
+  const empresaX = marginL + logoOffset
+  const empresaMaxW =
+    pageW - marginR -
+    Math.max(
+      docTitleWidth,
+      helveticaBold.widthOfTextAtSize(cotizacionNumber, TYPE.docNumber),
+      helvetica.widthOfTextAtSize(cotizacionDate, TYPE.small),
+    ) - 16 - empresaX
+  const nombreAjustado = ajustarNombreEncabezado(helveticaBold, empresaNombre, nameSize, 11, empresaMaxW)
+  page.drawText(nombreAjustado.text, { x: empresaX, y: textTopY, size: nombreAjustado.size, font: helveticaBold, color: MONO.ink })
+  if (companyDetails.length > 0) {
+    page.drawText(truncarAncho(helvetica, companyDetails.join("  |  "), detailSize, empresaMaxW), { x: empresaX, y: textTopY - nameSize - 2, size: detailSize, font: helvetica, color: MONO.label })
+  }
 
   // Separator line
   cursor = pageH - 100
@@ -2478,18 +2511,6 @@ export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
     logoWidth = scaledWidth + 15
   }
 
-  // === HEADER: Empresa ===
-  page.drawText(empresaNombre, { x: margin + logoWidth, y, size: 16, font: helveticaBold, color: MONO.ink })
-  y -= 16
-  if (telefonoEmpresa) {
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
-  }
-  if (direccionEmpresa) {
-    page.drawText(direccionEmpresa, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
-  }
-
   // Bloque VENTA (lado derecho, alineado a la derecha, como el remito)
   const ventaLabel = "VENTA"
   const ventaLabelWidth = helveticaBold.widthOfTextAtSize(ventaLabel, TYPE.docTitle)
@@ -2518,6 +2539,23 @@ export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
     font: helvetica,
     color: MONO.label,
   })
+
+  // === HEADER: Empresa === (va después del bloque de la derecha: el ancho
+  // disponible depende de lo que ocupan el título, el número y la fecha)
+  const empresaX = margin + logoWidth
+  const empresaMaxW = width - margin - Math.max(ventaLabelWidth, ventaNumeroWidth, fechaLabelWidth) - 16 - empresaX
+  const nombreAjustado = ajustarNombreEncabezado(helveticaBold, empresaNombre, 16, 11, empresaMaxW)
+  page.drawText(nombreAjustado.text, { x: empresaX, y, size: nombreAjustado.size, font: helveticaBold, color: MONO.ink })
+  y -= 16
+  if (telefonoEmpresa) {
+    page.drawText(truncarAncho(helvetica, `Tel: ${telefonoEmpresa}`, TYPE.small, empresaMaxW), { x: empresaX, y, size: TYPE.small, font: helvetica, color: MONO.label })
+    y -= 12
+  }
+  if (direccionEmpresa) {
+    page.drawText(truncarAncho(helvetica, direccionEmpresa, TYPE.small, empresaMaxW), { x: empresaX, y, size: TYPE.small, font: helvetica, color: MONO.label })
+    y -= 12
+  }
+
 
   y = height - margin - 90
 
@@ -2907,18 +2945,6 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
     logoWidth = scaledWidth + 15
   }
 
-  // === HEADER: Empresa ===
-  page.drawText(empresaNombre, { x: margin + logoWidth, y, size: 16, font: helveticaBold, color: MONO.ink })
-  y -= 16
-  if (telefonoEmpresa) {
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
-  }
-  if (direccionEmpresa) {
-    page.drawText(direccionEmpresa, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
-  }
-
   // Bloque GARANTÍA (lado derecho, alineado a la derecha, como el remito/venta)
   const garantiaDocLabel = "GARANTÍA"
   const garantiaDocLabelWidth = helveticaBold.widthOfTextAtSize(garantiaDocLabel, TYPE.docTitle)
@@ -2946,6 +2972,23 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
     font: helvetica,
     color: MONO.label,
   })
+
+  // === HEADER: Empresa === (va después del bloque de la derecha: el ancho
+  // disponible depende de lo que ocupan el título, el número y la fecha)
+  const empresaX = margin + logoWidth
+  const empresaMaxW = width - margin - Math.max(garantiaDocLabelWidth, numeroWidth, fechaLabelWidth) - 16 - empresaX
+  const nombreAjustado = ajustarNombreEncabezado(helveticaBold, empresaNombre, 16, 11, empresaMaxW)
+  page.drawText(nombreAjustado.text, { x: empresaX, y, size: nombreAjustado.size, font: helveticaBold, color: MONO.ink })
+  y -= 16
+  if (telefonoEmpresa) {
+    page.drawText(truncarAncho(helvetica, `Tel: ${telefonoEmpresa}`, TYPE.small, empresaMaxW), { x: empresaX, y, size: TYPE.small, font: helvetica, color: MONO.label })
+    y -= 12
+  }
+  if (direccionEmpresa) {
+    page.drawText(truncarAncho(helvetica, direccionEmpresa, TYPE.small, empresaMaxW), { x: empresaX, y, size: TYPE.small, font: helvetica, color: MONO.label })
+    y -= 12
+  }
+
 
   y = height - margin - 90
 
@@ -3198,22 +3241,6 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
     logoWidth = scaledWidth + 12
   }
 
-  // === HEADER: Empresa ===
-  page.drawText(empresaNombre, { x: margin + logoWidth, y, size: 16, font: helveticaBold, color: MONO.ink })
-  y -= 16
-  if (telefonoEmpresa) {
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
-  }
-  const entregaLocationParts: string[] = []
-  if (direccionEmpresa) entregaLocationParts.push(direccionEmpresa)
-  if (ciudadEmpresa) entregaLocationParts.push(ciudadEmpresa)
-  if (codigoPostalEmpresa) entregaLocationParts.push(`CP ${codigoPostalEmpresa}`)
-  if (provinciaEmpresa) entregaLocationParts.push(provinciaEmpresa)
-  if (entregaLocationParts.length > 0) {
-    page.drawText(entregaLocationParts.join(", "), { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-  }
-
   // Bloque ENTREGA/RETIRO (lado derecho, alineado a la derecha, como los demás comprobantes)
   const badgeText = esRetiro ? "RETIRO" : "ENTREGA"
   const entregaBadgeWidth = measureBadgeWidth(helveticaBold, badgeText)
@@ -3237,6 +3264,27 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
     font: helvetica,
     color: MONO.label,
   })
+
+  // === HEADER: Empresa === (va después del bloque de la derecha: el ancho
+  // disponible depende de lo que ocupan el título, el número y la fecha)
+  const empresaX = margin + logoWidth
+  const empresaMaxW = width - margin - Math.max(entregaBadgeWidth, ordenTextWidth, fechaLabelWidth) - 16 - empresaX
+  const nombreAjustado = ajustarNombreEncabezado(helveticaBold, empresaNombre, 16, 11, empresaMaxW)
+  page.drawText(nombreAjustado.text, { x: empresaX, y, size: nombreAjustado.size, font: helveticaBold, color: MONO.ink })
+  y -= 16
+  if (telefonoEmpresa) {
+    page.drawText(truncarAncho(helvetica, `Tel: ${telefonoEmpresa}`, TYPE.small, empresaMaxW), { x: empresaX, y, size: TYPE.small, font: helvetica, color: MONO.label })
+    y -= 12
+  }
+  const entregaLocationParts: string[] = []
+  if (direccionEmpresa) entregaLocationParts.push(direccionEmpresa)
+  if (ciudadEmpresa) entregaLocationParts.push(ciudadEmpresa)
+  if (codigoPostalEmpresa) entregaLocationParts.push(`CP ${codigoPostalEmpresa}`)
+  if (provinciaEmpresa) entregaLocationParts.push(provinciaEmpresa)
+  if (entregaLocationParts.length > 0) {
+    page.drawText(truncarAncho(helvetica, entregaLocationParts.join(", "), TYPE.small, empresaMaxW), { x: empresaX, y, size: TYPE.small, font: helvetica, color: MONO.label })
+  }
+
 
   y = height - margin - 90
 
