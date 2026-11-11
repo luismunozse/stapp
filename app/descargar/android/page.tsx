@@ -1,31 +1,20 @@
-"use client"
-
-import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Download, Shield, Zap, ArrowLeft, CheckCircle2, Loader2, Smartphone } from "lucide-react"
+import { Shield, Zap, ArrowLeft, CheckCircle2, Smartphone } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { STAppLogo } from "@/components/shared/stapp-logo"
 
-interface ApkInfo {
-  available: boolean
-  version?: string
-  size?: string
-  updatedAt?: string
-}
+// The Android app is a closed beta on Google Play, so this page explains how to
+// join it instead of offering an APK. The sign-up itself happens in the panel
+// (ApkDownloadBanner + lib/android-beta.ts), because it needs a logged-in account.
+const PASOS = [
+  "Creá tu cuenta gratis en STApp, o iniciá sesión si ya tenés una.",
+  "En el panel vas a ver el aviso “Sumate a la beta de Android”. Dejá ahí el correo de tu cuenta de Google.",
+  "Cuando te sumemos a la lista de prueba, el mismo aviso te muestra el enlace de invitación. Aceptala con esa cuenta de Google.",
+  "Instalá STApp desde Google Play e ingresá con tu usuario de siempre.",
+]
 
 export default function DescargarAndroidPage() {
-  const [apkInfo, setApkInfo] = useState<ApkInfo | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetch("/api/download/apk-info")
-      .then((res) => res.json())
-      .then((data) => setApkInfo(data))
-      .catch(() => setApkInfo({ available: false }))
-      .finally(() => setLoading(false))
-  }, [])
-
   return (
     <div className="min-h-dvh bg-gradient-to-b from-primary/5 to-background">
       {/* Header */}
@@ -63,43 +52,21 @@ export default function DescargarAndroidPage() {
             </p>
           </div>
 
-          {/* Download button */}
           <div className="space-y-3">
-            {loading ? (
-              <Button size="lg" disabled className="h-14 px-8 text-lg">
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Verificando disponibilidad...
+            <div className="inline-flex items-center rounded-full border bg-card px-3 py-1 text-sm font-medium">
+              Beta en Google Play
+            </div>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Button asChild size="lg" className="h-14 px-8 text-lg shadow-lg shadow-primary/25">
+                <Link href="/registro">Crear cuenta gratis</Link>
               </Button>
-            ) : apkInfo?.available ? (
-              <>
-                <a href="/api/download/apk">
-                  <Button
-                    size="lg"
-                    className="h-14 px-8 text-lg shadow-lg shadow-primary/25"
-                  >
-                    <Download className="mr-2 h-5 w-5" />
-                    Descargar APK
-                  </Button>
-                </a>
-                <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
-                  {apkInfo.version && <span>Versión {apkInfo.version}</span>}
-                  {apkInfo.size && (
-                    <>
-                      <span className="text-border">•</span>
-                      <span>{apkInfo.size}</span>
-                    </>
-                  )}
-                  <span className="text-border">•</span>
-                  <span>Android 8.0+</span>
-                </div>
-              </>
-            ) : (
-              <div className="p-6 rounded-xl border bg-card text-card-foreground">
-                <p className="text-muted-foreground">
-                  La APK aún no está disponible para descarga. Estamos preparando la versión final.
-                </p>
-              </div>
-            )}
+              <Button asChild size="lg" variant="outline" className="h-14 px-8 text-lg">
+                <Link href="/login">Ya tengo cuenta</Link>
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Requiere Android 8.0 o superior. Mientras tanto, STApp funciona completa desde el navegador del celular.
+            </p>
           </div>
 
           {/* Features */}
@@ -135,32 +102,14 @@ export default function DescargarAndroidPage() {
 
           {/* Install instructions */}
           <div className="max-w-md mx-auto text-left space-y-4 pt-4">
-            <h2 className="text-lg font-semibold text-center">Cómo instalar</h2>
+            <h2 className="text-lg font-semibold text-center">Cómo sumarte a la beta</h2>
             <ol className="space-y-3">
-              <li className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                <span className="text-sm text-muted-foreground">
-                  Descargá el archivo APK tocando el botón de arriba
-                </span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                <span className="text-sm text-muted-foreground">
-                  Si tu celular lo pide, habilitá la instalación desde &quot;Orígenes desconocidos&quot; en Configuración
-                </span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                <span className="text-sm text-muted-foreground">
-                  Abrí el archivo descargado y tocá &quot;Instalar&quot;
-                </span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                <span className="text-sm text-muted-foreground">
-                  ¡Listo! Iniciá sesión con tu cuenta de STApp
-                </span>
-              </li>
+              {PASOS.map((paso) => (
+                <li key={paso} className="flex items-start gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                  <span className="text-sm text-muted-foreground">{paso}</span>
+                </li>
+              ))}
             </ol>
           </div>
         </div>

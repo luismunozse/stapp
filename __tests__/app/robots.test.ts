@@ -30,8 +30,8 @@ describe("robots.txt", () => {
     expect(asArray(rule().allow)).toContain("/api/og")
   })
 
-  it("habilita /api/download/apk-info, que /descargar/android pide desde el cliente", () => {
-    expect(asArray(rule().allow)).toContain("/api/download/apk-info")
+  it("ya no habilita la info de la APK: la app Android se instala desde Google Play", () => {
+    expect(asArray(rule().allow)).not.toContain("/api/download/apk-info")
   })
 
   it("deja las rutas habilitadas mas especificas que el disallow que las cubre", () => {
