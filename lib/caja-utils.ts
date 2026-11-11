@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { isMissingColumnError } from "@/lib/db-errors"
+import { round2 } from "@/lib/ventas/totales"
 
 /**
  * Quien escribio una fila de movimientos_caja (columna `origen`, mig 335).
@@ -432,8 +433,19 @@ export function computeTotales(movimientos: MovimientoUnificado[]) {
     }
   }
 
-  const totalDia = totalIngresos - totalEgresos
-  const ingresoReal = totalDia - totalCostosFinancieros
+  // Las sumas de floats arrastran ruido binario (0.1 + 0.2 = 0.30000000000000004).
+  // Redondeamos a centavos para que el arqueo compare montos reales: sin esto
+  // una caja cuadrada se ve como "Faltante $ 0,00".
+  for (const metodo of Object.keys(porMetodo)) porMetodo[metodo] = round2(porMetodo[metodo])
+  for (const tipo of Object.keys(porTipo)) porTipo[tipo].total = round2(porTipo[tipo].total)
+  totalIngresos = round2(totalIngresos)
+  totalEgresos = round2(totalEgresos)
+  totalIngresosEfectivo = round2(totalIngresosEfectivo)
+  totalEgresosEfectivo = round2(totalEgresosEfectivo)
+  totalCostosFinancieros = round2(totalCostosFinancieros)
+
+  const totalDia = round2(totalIngresos - totalEgresos)
+  const ingresoReal = round2(totalDia - totalCostosFinancieros)
 
   return {
     totalDia,
