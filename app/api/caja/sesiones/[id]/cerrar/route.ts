@@ -3,6 +3,7 @@ import { requireCajaAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchMovimientosDia, computeTotales } from "@/lib/caja-utils"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { round2 } from "@/lib/ventas/totales"
 import { z } from "zod"
 
 const cierreSchema = z.object({
@@ -69,8 +70,10 @@ export async function POST(
 
     // Calcular arqueo
     const saldoInicial = parseFloat(sesion.saldo_inicial || "0")
-    const esperado = saldoInicial + totales.totalIngresosEfectivo - totales.totalEgresosEfectivo
-    const diferencia = parsed.conteoFisico - esperado
+    // Redondeo a centavos: la diferencia guardada tiene que coincidir con la que
+    // el cajero vio en el diálogo (sin ruido de float tipo 0.30000000000000004).
+    const esperado = round2(saldoInicial + totales.totalIngresosEfectivo - totales.totalEgresosEfectivo)
+    const diferencia = round2(parsed.conteoFisico - esperado)
 
     // Actualizar sesión con optimistic lock en estado='ABIERTA' para evitar doble cierre
     const { data: updatedRows, error: updateError } = await supabaseAdmin

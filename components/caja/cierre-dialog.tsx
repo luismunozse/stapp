@@ -14,6 +14,7 @@ import {
 import { Loader2, TrendingUp, TrendingDown, Minus } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { parseMoneyInput } from "@/lib/parse-money"
+import { round2 } from "@/lib/ventas/totales"
 
 interface CierreDialogProps {
   open: boolean
@@ -42,9 +43,12 @@ export function CierreDialog({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
-  const esperado = saldoInicial + totalIngresosEfectivo - totalEgresosEfectivo
+  // Redondeo a centavos: el ruido de float (0.1 + 0.2) no puede pintar
+  // "Faltante $ 0,00" con la caja cuadrada. Mismo cálculo que el endpoint de cierre.
+  const esperado = round2(saldoInicial + totalIngresosEfectivo - totalEgresosEfectivo)
   const conteo = parseMoneyInput(conteoFisico || "0")
-  const diferencia = conteo - esperado
+  const diferencia = round2(conteo - esperado)
+  const cuadrada = Math.abs(diferencia) < 0.005
 
   useEffect(() => {
     if (open) {
@@ -142,7 +146,7 @@ export function CierreDialog({
           {conteoFisico && (
             <div
               className={`flex items-center justify-between p-3 rounded-lg border-2 ${
-                diferencia === 0
+                cuadrada
                   ? "border-success/30 bg-success-50 dark:bg-success/15"
                   : diferencia > 0
                   ? "border-warning/30 bg-warning-50 dark:bg-warning/10"
@@ -150,7 +154,7 @@ export function CierreDialog({
               }`}
             >
               <div className="flex items-center gap-2">
-                {diferencia === 0 ? (
+                {cuadrada ? (
                   <Minus className="h-4 w-4 text-success-600" />
                 ) : diferencia > 0 ? (
                   <TrendingUp className="h-4 w-4 text-warning-600" />
@@ -158,7 +162,7 @@ export function CierreDialog({
                   <TrendingDown className="h-4 w-4 text-destructive" />
                 )}
                 <span className="text-sm font-medium">
-                  {diferencia === 0
+                  {cuadrada
                     ? "Caja cuadrada"
                     : diferencia > 0
                     ? "Sobrante"
@@ -167,7 +171,7 @@ export function CierreDialog({
               </div>
               <span
                 className={`font-bold ${
-                  diferencia === 0
+                  cuadrada
                     ? "text-success-600"
                     : diferencia > 0
                     ? "text-warning-600"
