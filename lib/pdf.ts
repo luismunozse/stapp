@@ -1,4 +1,4 @@
-import { PDFDocument as PDFLib, rgb, type PDFFont, type RGB } from "pdf-lib"
+import { PDFDocument as PDFLib, rgb, type PDFFont, type PDFImage, type RGB } from "pdf-lib"
 import fontkitModule from "@pdf-lib/fontkit"
 import { readFile } from "fs/promises"
 import { join } from "path"
@@ -13,6 +13,42 @@ import { ESTADO_FLOW, ESTADOS_COMPLETADOS, MOTIVO_SIN_COBRO_LABELS, type MotivoS
 import { esInforme } from "@/lib/cotizacion-informe"
 import { normalizeOrdenPapel, type OrdenPapel } from "@/lib/orden-papel"
 import { bloquesTerminosGarantia } from "@/lib/garantias/config"
+import { fetchLogo, marcoLogo } from "@/lib/pdf-logo"
+
+/** Corta con "…" para que el texto entre en maxWidth puntos. */
+function truncarAncho(font: PDFFont, text: string, size: number, maxWidth: number): string {
+  if (maxWidth <= 0) return ""
+  if (font.widthOfTextAtSize(text, size) <= maxWidth) return text
+  let t = text
+  while (t.length > 0 && font.widthOfTextAtSize(`${t}…`, size) > maxWidth) t = t.slice(0, -1)
+  return `${t.trimEnd()}…`
+}
+
+/**
+ * Nombre de la empresa en el encabezado: achica la letra desde `size` hasta
+ * `minSize` para que entre al lado del bloque del documento (título, número,
+ * fecha) y, si ni así entra, lo corta con "…". Antes un nombre largo se
+ * dibujaba encima del título del documento.
+ */
+function ajustarNombreEncabezado(font: PDFFont, text: string, size: number, minSize: number, maxWidth: number) {
+  let s = size
+  while (s > minSize && font.widthOfTextAtSize(text, s) > maxWidth) s -= 0.5
+  return { text: truncarAncho(font, text, s, maxWidth), size: s }
+}
+
+/**
+ * Descarga, normaliza (EXIF, recorte de bordes, formato) y embebe el logo.
+ * null si no hay logo o no se pudo cargar: el documento sale sin logo.
+ */
+async function embedLogo(pdfDoc: PDFLib, logoUrl: string | null | undefined): Promise<PDFImage | null> {
+  const logo = await fetchLogo(logoUrl)
+  if (!logo) return null
+  try {
+    return logo.format === "png" ? await pdfDoc.embedPng(logo.data) : await pdfDoc.embedJpg(logo.data)
+  } catch {
+    return null
+  }
+}
 
 // Compatibilidad: algunos bundlers ponen el default dentro de .default
 const fontkit = (fontkitModule as any).default || fontkitModule
@@ -297,29 +333,16 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
   let logoOffset = 0
 
   // Logo + Company info - vertically centered together
-  let embeddedLogo: Awaited<ReturnType<typeof pdfDoc.embedPng>> | null = null
+  const embeddedLogo = await embedLogo(pdfDoc, data.logoUrl)
   let logoW = 0
   let logoH = 0
-  if (data.logoUrl) {
-    try {
-      const res = await fetch(data.logoUrl)
-      if (res.ok) {
-        const buf = await res.arrayBuffer()
-        const bytes = new Uint8Array(buf)
-        const ct = res.headers.get("content-type") || ""
-        if (ct.includes("png") || data.logoUrl.toLowerCase().includes(".png"))
-          embeddedLogo = await pdfDoc.embedPng(bytes)
-        else if (ct.includes("jpeg") || ct.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg"))
-          embeddedLogo = await pdfDoc.embedJpg(bytes)
-        if (embeddedLogo) {
-          const s = embeddedLogo.scale(1)
-          const ratio = Math.min(50 / s.height, 50 / s.width)
-          logoW = s.width * ratio
-          logoH = s.height * ratio
-          logoOffset = logoW + 12
-        }
-      }
-    } catch { /* ignore logo errors */ }
+  if (embeddedLogo) {
+    // Caja máxima 80x50 (antes 50x50): un logo horizontal ya no queda chico.
+    const s = embeddedLogo.scale(1)
+    const ratio = Math.min(50 / s.height, 80 / s.width)
+    logoW = s.width * ratio
+    logoH = s.height * ratio
+    logoOffset = logoW + 12
   }
 
   // Calculate text block height: company name + details line + gap
@@ -339,11 +362,6 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
     page.drawImage(embeddedLogo, { x: marginL, y: logoY, width: logoW, height: logoH })
   }
 
-  // Company name and info - aligned to vertical center of logo
-  page.drawText(empresaNombre, { x: marginL + logoOffset, y: textTopY, size: nameSize, font: helveticaBold, color: MONO.ink })
-  if (companyDetails.length > 0) {
-    page.drawText(companyDetails.join("  |  "), { x: marginL + logoOffset, y: textTopY - nameSize - 2, size: detailSize, font: helvetica, color: MONO.label })
-  }
 
   // Doc-title block (right side): título / número / fecha, como en los
   // demás comprobantes monocromos (REMITO / VENTA / NOTA DE CRÉDITO).
@@ -360,6 +378,23 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
   page.drawText(docTitleText, { x: pageW - marginR - docTitleWidth, y: pageH - 40, size: TYPE.docTitle, font: helveticaBold, color: MONO.ink })
   drawTextRight(page, cotizacionNumber, pageW - marginR, pageH - 62, TYPE.docNumber, helveticaBold, MONO.ink)
   drawTextRight(page, cotizacionDate, pageW - marginR, pageH - 78, TYPE.small, helvetica, MONO.label)
+
+  // Company name and info - aligned to vertical center of logo. Va después
+  // del bloque de la derecha: el nombre se achica (16 -> 11pt) y, si hace
+  // falta, se corta con "…" para no pisar el título ni el número.
+  const empresaX = marginL + logoOffset
+  const empresaMaxW =
+    pageW - marginR -
+    Math.max(
+      docTitleWidth,
+      helveticaBold.widthOfTextAtSize(cotizacionNumber, TYPE.docNumber),
+      helvetica.widthOfTextAtSize(cotizacionDate, TYPE.small),
+    ) - 16 - empresaX
+  const nombreAjustado = ajustarNombreEncabezado(helveticaBold, empresaNombre, nameSize, 11, empresaMaxW)
+  page.drawText(nombreAjustado.text, { x: empresaX, y: textTopY, size: nombreAjustado.size, font: helveticaBold, color: MONO.ink })
+  if (companyDetails.length > 0) {
+    page.drawText(truncarAncho(helvetica, companyDetails.join("  |  "), detailSize, empresaMaxW), { x: empresaX, y: textTopY - nameSize - 2, size: detailSize, font: helvetica, color: MONO.label })
+  }
 
   // Separator line
   cursor = pageH - 100
@@ -1317,32 +1352,15 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     const headerTopY = ey
     const logoBoxSize = 57 // ~20mm (was 42pt/~15mm) — Item 5 header redesign: bigger logo
 
-    let enLogo: Awaited<ReturnType<typeof pdfDoc.embedPng>> | Awaited<ReturnType<typeof pdfDoc.embedJpg>> | null = null
-    if (data.logoUrl) {
-      try {
-        const res = await fetch(data.logoUrl)
-        if (res.ok) {
-          const buf = new Uint8Array(await res.arrayBuffer())
-          const ct = res.headers.get("content-type") || ""
-          if (ct.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
-            enLogo = await pdfDoc.embedPng(buf)
-          } else if (ct.includes("jpeg") || ct.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
-            enLogo = await pdfDoc.embedJpg(buf)
-          }
-        }
-      } catch { /* logo no disponible — se omite, sin placeholder */ }
-    }
-    if (enLogo) {
-      page.drawRectangle({ x: rxMargin, y: headerTopY - logoBoxSize, width: logoBoxSize, height: logoBoxSize, borderColor: MONO.ink, borderWidth: 1 })
-      const s = enLogo.scale(1)
-      const inset = 5
-      const ratio = Math.min((logoBoxSize - inset * 2) / s.width, (logoBoxSize - inset * 2) / s.height)
-      const lw = s.width * ratio
-      const lh = s.height * ratio
-      page.drawImage(enLogo, { x: rxMargin + (logoBoxSize - lw) / 2, y: headerTopY - logoBoxSize + (logoBoxSize - lh) / 2, width: lw, height: lh })
+    const enLogo = await embedLogo(pdfDoc, data.logoUrl)
+    // Marco de alto fijo y ancho según la proporción del logo (lib/pdf-logo.ts).
+    const enLogoMarco = enLogo ? marcoLogo(enLogo.scale(1), logoBoxSize, 5) : null
+    if (enLogo && enLogoMarco) {
+      page.drawRectangle({ x: rxMargin, y: headerTopY - logoBoxSize, width: enLogoMarco.anchoMarco, height: logoBoxSize, borderColor: MONO.ink, borderWidth: 1 })
+      page.drawImage(enLogo, { x: rxMargin + enLogoMarco.dx, y: headerTopY - logoBoxSize + enLogoMarco.dy, width: enLogoMarco.ancho, height: enLogoMarco.alto })
     }
 
-    const bizX = rxMargin + (enLogo ? logoBoxSize + 12 : 0)
+    const bizX = rxMargin + (enLogoMarco ? enLogoMarco.anchoMarco + 12 : 0)
 
     const reingresoLabelEn = data.esReingreso && data.ordenOrigenNumero
       ? `Reingreso de #${String(data.ordenOrigenNumero).padStart(4, "0")}`
@@ -1976,33 +1994,15 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const headerTopY = ry
   const logoBoxSize = 57 // ~20mm (was 42pt/~15mm) — Item 5 header redesign: bigger logo
 
-  let rxLogo: Awaited<ReturnType<typeof pdfDoc.embedPng>> | Awaited<ReturnType<typeof pdfDoc.embedJpg>> | null = null
-  if (data.logoUrl) {
-    try {
-      const res = await fetch(data.logoUrl)
-      if (res.ok) {
-        const buf = new Uint8Array(await res.arrayBuffer())
-        const ct = res.headers.get("content-type") || ""
-        if (ct.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
-          rxLogo = await pdfDoc.embedPng(buf)
-        } else if (ct.includes("jpeg") || ct.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
-          rxLogo = await pdfDoc.embedJpg(buf)
-        }
-      }
-    } catch { /* logo no disponible — no se dibuja la caja (skip, no placeholder) */ }
+  const rxLogo = await embedLogo(pdfDoc, data.logoUrl)
+  // Marco de alto fijo y ancho según la proporción del logo (lib/pdf-logo.ts).
+  const rxLogoMarco = rxLogo ? marcoLogo(rxLogo.scale(1), logoBoxSize, 5) : null
+  if (rxLogo && rxLogoMarco) {
+    page.drawRectangle({ x: rxMargin, y: headerTopY - logoBoxSize, width: rxLogoMarco.anchoMarco, height: logoBoxSize, borderColor: MONO.ink, borderWidth: 1 })
+    page.drawImage(rxLogo, { x: rxMargin + rxLogoMarco.dx, y: headerTopY - logoBoxSize + rxLogoMarco.dy, width: rxLogoMarco.ancho, height: rxLogoMarco.alto })
   }
 
-  if (rxLogo) {
-    page.drawRectangle({ x: rxMargin, y: headerTopY - logoBoxSize, width: logoBoxSize, height: logoBoxSize, borderColor: MONO.ink, borderWidth: 1 })
-    const s = rxLogo.scale(1)
-    const inset = 5
-    const ratio = Math.min((logoBoxSize - inset * 2) / s.width, (logoBoxSize - inset * 2) / s.height)
-    const lw = s.width * ratio
-    const lh = s.height * ratio
-    page.drawImage(rxLogo, { x: rxMargin + (logoBoxSize - lw) / 2, y: headerTopY - logoBoxSize + (logoBoxSize - lh) / 2, width: lw, height: lh })
-  }
-
-  const bizX = rxMargin + (rxLogo ? logoBoxSize + 12 : 0)
+  const bizX = rxMargin + (rxLogoMarco ? rxLogoMarco.anchoMarco + 12 : 0)
 
   // idbox: se calcula primero su ancho reservado para poder acotar el
   // ancho disponible del bloque de empresa/sucursal a su izquierda.
@@ -2493,55 +2493,23 @@ export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
 
   // === LOGO (si existe) ===
   let logoWidth = 0
-  if (data.logoUrl) {
-    try {
-      const logoResponse = await fetch(data.logoUrl)
-      if (logoResponse.ok) {
-        const logoArrayBuffer = await logoResponse.arrayBuffer()
-        const logoBytes = new Uint8Array(logoArrayBuffer)
+  const logoImage = await embedLogo(pdfDoc, data.logoUrl)
+  if (logoImage) {
+    const logoDims = logoImage.scale(1)
+    const maxLogoHeight = 50
+    const maxLogoWidth = 80
+    const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
+    const scaledWidth = logoDims.width * scale
+    const scaledHeight = logoDims.height * scale
 
-        let logoImage
-        const contentType = logoResponse.headers.get("content-type") || ""
+    page.drawImage(logoImage, {
+      x: margin,
+      y: height - margin - 10 - scaledHeight,
+      width: scaledWidth,
+      height: scaledHeight,
+    })
 
-        if (contentType.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
-          logoImage = await pdfDoc.embedPng(logoBytes)
-        } else if (contentType.includes("jpeg") || contentType.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
-          logoImage = await pdfDoc.embedJpg(logoBytes)
-        }
-
-        if (logoImage) {
-          const logoDims = logoImage.scale(1)
-          const maxLogoHeight = 50
-          const maxLogoWidth = 80
-          const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
-          const scaledWidth = logoDims.width * scale
-          const scaledHeight = logoDims.height * scale
-
-          page.drawImage(logoImage, {
-            x: margin,
-            y: height - margin - 10 - scaledHeight,
-            width: scaledWidth,
-            height: scaledHeight,
-          })
-
-          logoWidth = scaledWidth + 15
-        }
-      }
-    } catch (logoError) {
-      console.error("Error loading logo:", logoError)
-    }
-  }
-
-  // === HEADER: Empresa ===
-  page.drawText(empresaNombre, { x: margin + logoWidth, y, size: 16, font: helveticaBold, color: MONO.ink })
-  y -= 16
-  if (telefonoEmpresa) {
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
-  }
-  if (direccionEmpresa) {
-    page.drawText(direccionEmpresa, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
+    logoWidth = scaledWidth + 15
   }
 
   // Bloque VENTA (lado derecho, alineado a la derecha, como el remito)
@@ -2572,6 +2540,23 @@ export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
     font: helvetica,
     color: MONO.label,
   })
+
+  // === HEADER: Empresa === (va después del bloque de la derecha: el ancho
+  // disponible depende de lo que ocupan el título, el número y la fecha)
+  const empresaX = margin + logoWidth
+  const empresaMaxW = width - margin - Math.max(ventaLabelWidth, ventaNumeroWidth, fechaLabelWidth) - 16 - empresaX
+  const nombreAjustado = ajustarNombreEncabezado(helveticaBold, empresaNombre, 16, 11, empresaMaxW)
+  page.drawText(nombreAjustado.text, { x: empresaX, y, size: nombreAjustado.size, font: helveticaBold, color: MONO.ink })
+  y -= 16
+  if (telefonoEmpresa) {
+    page.drawText(truncarAncho(helvetica, `Tel: ${telefonoEmpresa}`, TYPE.small, empresaMaxW), { x: empresaX, y, size: TYPE.small, font: helvetica, color: MONO.label })
+    y -= 12
+  }
+  if (direccionEmpresa) {
+    page.drawText(truncarAncho(helvetica, direccionEmpresa, TYPE.small, empresaMaxW), { x: empresaX, y, size: TYPE.small, font: helvetica, color: MONO.label })
+    y -= 12
+  }
+
 
   y = height - margin - 90
 
@@ -3018,55 +3003,23 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
 
   // === LOGO (si existe) ===
   let logoWidth = 0
-  if (data.logoUrl) {
-    try {
-      const logoResponse = await fetch(data.logoUrl)
-      if (logoResponse.ok) {
-        const logoArrayBuffer = await logoResponse.arrayBuffer()
-        const logoBytes = new Uint8Array(logoArrayBuffer)
+  const logoImage = await embedLogo(pdfDoc, data.logoUrl)
+  if (logoImage) {
+    const logoDims = logoImage.scale(1)
+    const maxLogoHeight = 50
+    const maxLogoWidth = 80
+    const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
+    const scaledWidth = logoDims.width * scale
+    const scaledHeight = logoDims.height * scale
 
-        let logoImage
-        const contentType = logoResponse.headers.get("content-type") || ""
+    page.drawImage(logoImage, {
+      x: margin,
+      y: height - margin - 10 - scaledHeight,
+      width: scaledWidth,
+      height: scaledHeight,
+    })
 
-        if (contentType.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
-          logoImage = await pdfDoc.embedPng(logoBytes)
-        } else if (contentType.includes("jpeg") || contentType.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
-          logoImage = await pdfDoc.embedJpg(logoBytes)
-        }
-
-        if (logoImage) {
-          const logoDims = logoImage.scale(1)
-          const maxLogoHeight = 50
-          const maxLogoWidth = 80
-          const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
-          const scaledWidth = logoDims.width * scale
-          const scaledHeight = logoDims.height * scale
-
-          page.drawImage(logoImage, {
-            x: margin,
-            y: height - margin - 10 - scaledHeight,
-            width: scaledWidth,
-            height: scaledHeight,
-          })
-
-          logoWidth = scaledWidth + 15
-        }
-      }
-    } catch (logoError) {
-      console.error("Error loading logo:", logoError)
-    }
-  }
-
-  // === HEADER: Empresa ===
-  page.drawText(empresaNombre, { x: margin + logoWidth, y, size: 16, font: helveticaBold, color: MONO.ink })
-  y -= 16
-  if (telefonoEmpresa) {
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
-  }
-  if (direccionEmpresa) {
-    page.drawText(direccionEmpresa, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
+    logoWidth = scaledWidth + 15
   }
 
   // Bloque GARANTÍA (lado derecho, alineado a la derecha, como el remito/venta)
@@ -3096,6 +3049,23 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
     font: helvetica,
     color: MONO.label,
   })
+
+  // === HEADER: Empresa === (va después del bloque de la derecha: el ancho
+  // disponible depende de lo que ocupan el título, el número y la fecha)
+  const empresaX = margin + logoWidth
+  const empresaMaxW = width - margin - Math.max(garantiaDocLabelWidth, numeroWidth, fechaLabelWidth) - 16 - empresaX
+  const nombreAjustado = ajustarNombreEncabezado(helveticaBold, empresaNombre, 16, 11, empresaMaxW)
+  page.drawText(nombreAjustado.text, { x: empresaX, y, size: nombreAjustado.size, font: helveticaBold, color: MONO.ink })
+  y -= 16
+  if (telefonoEmpresa) {
+    page.drawText(truncarAncho(helvetica, `Tel: ${telefonoEmpresa}`, TYPE.small, empresaMaxW), { x: empresaX, y, size: TYPE.small, font: helvetica, color: MONO.label })
+    y -= 12
+  }
+  if (direccionEmpresa) {
+    page.drawText(truncarAncho(helvetica, direccionEmpresa, TYPE.small, empresaMaxW), { x: empresaX, y, size: TYPE.small, font: helvetica, color: MONO.label })
+    y -= 12
+  }
+
 
   y = height - margin - 90
 
@@ -3366,49 +3336,16 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
 
   // === LOGO (si existe) ===
   let logoWidth = 0
-  if (data.logoUrl) {
-    try {
-      const logoResponse = await fetch(data.logoUrl)
-      if (logoResponse.ok) {
-        const logoArrayBuffer = await logoResponse.arrayBuffer()
-        const logoBytes = new Uint8Array(logoArrayBuffer)
-        let logoImage
-        const contentType = logoResponse.headers.get("content-type") || ""
-        if (contentType.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
-          logoImage = await pdfDoc.embedPng(logoBytes)
-        } else if (contentType.includes("jpeg") || contentType.includes("jpg")) {
-          logoImage = await pdfDoc.embedJpg(logoBytes)
-        }
-        if (logoImage) {
-          const logoDims = logoImage.scale(1)
-          const maxLogoHeight = 45
-          const maxLogoWidth = 60
-          const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
-          const scaledWidth = logoDims.width * scale
-          const scaledHeight = logoDims.height * scale
-          page.drawImage(logoImage, { x: margin, y: y - scaledHeight + 5, width: scaledWidth, height: scaledHeight })
-          logoWidth = scaledWidth + 12
-        }
-      }
-    } catch (logoError) {
-      console.error("Error loading logo:", logoError)
-    }
-  }
-
-  // === HEADER: Empresa ===
-  page.drawText(empresaNombre, { x: margin + logoWidth, y, size: 16, font: helveticaBold, color: MONO.ink })
-  y -= 16
-  if (telefonoEmpresa) {
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
-    y -= 12
-  }
-  const entregaLocationParts: string[] = []
-  if (direccionEmpresa) entregaLocationParts.push(direccionEmpresa)
-  if (ciudadEmpresa) entregaLocationParts.push(ciudadEmpresa)
-  if (codigoPostalEmpresa) entregaLocationParts.push(`CP ${codigoPostalEmpresa}`)
-  if (provinciaEmpresa) entregaLocationParts.push(provinciaEmpresa)
-  if (entregaLocationParts.length > 0) {
-    page.drawText(entregaLocationParts.join(", "), { x: margin + logoWidth, y, size: TYPE.small, font: helvetica, color: MONO.label })
+  const logoImage = await embedLogo(pdfDoc, data.logoUrl)
+  if (logoImage) {
+    const logoDims = logoImage.scale(1)
+    const maxLogoHeight = 45
+    const maxLogoWidth = 60
+    const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
+    const scaledWidth = logoDims.width * scale
+    const scaledHeight = logoDims.height * scale
+    page.drawImage(logoImage, { x: margin, y: y - scaledHeight + 5, width: scaledWidth, height: scaledHeight })
+    logoWidth = scaledWidth + 12
   }
 
   // Bloque ENTREGA/RETIRO (lado derecho, alineado a la derecha, como los demás comprobantes)
@@ -3434,6 +3371,27 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
     font: helvetica,
     color: MONO.label,
   })
+
+  // === HEADER: Empresa === (va después del bloque de la derecha: el ancho
+  // disponible depende de lo que ocupan el título, el número y la fecha)
+  const empresaX = margin + logoWidth
+  const empresaMaxW = width - margin - Math.max(entregaBadgeWidth, ordenTextWidth, fechaLabelWidth) - 16 - empresaX
+  const nombreAjustado = ajustarNombreEncabezado(helveticaBold, empresaNombre, 16, 11, empresaMaxW)
+  page.drawText(nombreAjustado.text, { x: empresaX, y, size: nombreAjustado.size, font: helveticaBold, color: MONO.ink })
+  y -= 16
+  if (telefonoEmpresa) {
+    page.drawText(truncarAncho(helvetica, `Tel: ${telefonoEmpresa}`, TYPE.small, empresaMaxW), { x: empresaX, y, size: TYPE.small, font: helvetica, color: MONO.label })
+    y -= 12
+  }
+  const entregaLocationParts: string[] = []
+  if (direccionEmpresa) entregaLocationParts.push(direccionEmpresa)
+  if (ciudadEmpresa) entregaLocationParts.push(ciudadEmpresa)
+  if (codigoPostalEmpresa) entregaLocationParts.push(`CP ${codigoPostalEmpresa}`)
+  if (provinciaEmpresa) entregaLocationParts.push(provinciaEmpresa)
+  if (entregaLocationParts.length > 0) {
+    page.drawText(truncarAncho(helvetica, entregaLocationParts.join(", "), TYPE.small, empresaMaxW), { x: empresaX, y, size: TYPE.small, font: helvetica, color: MONO.label })
+  }
+
 
   y = height - margin - 90
 
@@ -3811,43 +3769,25 @@ export async function generateFacturaPDFLegacy(data: FacturaPDFData): Promise<Bu
 
   // === LOGO ===
   let logoWidth = 0
-  if (data.logoUrl) {
-    try {
-      const logoResponse = await fetch(data.logoUrl)
-      if (logoResponse.ok) {
-        const logoArrayBuffer = await logoResponse.arrayBuffer()
-        const logoBytes = new Uint8Array(logoArrayBuffer)
+  const logoImage = await embedLogo(pdfDoc, data.logoUrl)
+  if (logoImage) {
+    const logoDims = logoImage.scale(1)
+    const maxLogoHeight = 50
+    const maxLogoWidth = 80
+    const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
+    const scaledWidth = logoDims.width * scale
+    const scaledHeight = logoDims.height * scale
 
-        let logoImage
-        const contentType = logoResponse.headers.get("content-type") || ""
+    // Inset de 10pt desde el borde del marco (igual que el texto, innerPad):
+    // antes el logo arrancaba justo sobre la línea del marco.
+    page.drawImage(logoImage, {
+      x: margin + 10,
+      y: height - margin - 10 - scaledHeight,
+      width: scaledWidth,
+      height: scaledHeight,
+    })
 
-        if (contentType.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
-          logoImage = await pdfDoc.embedPng(logoBytes)
-        } else if (contentType.includes("jpeg") || contentType.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
-          logoImage = await pdfDoc.embedJpg(logoBytes)
-        }
-
-        if (logoImage) {
-          const logoDims = logoImage.scale(1)
-          const maxLogoHeight = 50
-          const maxLogoWidth = 80
-          const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
-          const scaledWidth = logoDims.width * scale
-          const scaledHeight = logoDims.height * scale
-
-          page.drawImage(logoImage, {
-            x: margin,
-            y: height - margin - 10 - scaledHeight,
-            width: scaledWidth,
-            height: scaledHeight,
-          })
-
-          logoWidth = scaledWidth + 15
-        }
-      }
-    } catch (logoError) {
-      console.error("Error loading logo:", logoError)
-    }
+    logoWidth = scaledWidth + 15
   }
 
   // === LETTER BOX geometry (classic Argentine comprobante "letra" box) ===

@@ -63,6 +63,21 @@ export async function POST(
       )
     }
 
+    // Ya convertida: la revisión nace sin venta_id ni convertida_a_orden_id, así
+    // que se podría convertir otra vez y vender (o abrir la orden) dos veces.
+    if (source.venta_id) {
+      return NextResponse.json(
+        { error: "Esta cotización ya se convirtió en una venta; no se puede revisar" },
+        { status: 400 }
+      )
+    }
+    if (source.convertida_a_orden_id) {
+      return NextResponse.json(
+        { error: "Este presupuesto ya se convirtió en una orden; no se puede revisar" },
+        { status: 400 }
+      )
+    }
+
     // Items de la cotizacion origen, a copiar tal cual en la revision.
     const { data: sourceItems, error: itemsFetchError } = await supabaseAdmin
       .from("items_cotizacion")
