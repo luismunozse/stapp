@@ -67,6 +67,13 @@ export interface ImpersonationClaims {
   impersonatorEmail: string
   name?: string | null
   email?: string | null
+  /**
+   * Absolute end of the impersonation (unix seconds). Separate from `exp` on
+   * purpose: Auth.js re-signs the session JWT on every `/api/auth/session`
+   * call with the session `maxAge` (30 days), overwriting `exp`. This claim
+   * survives that re-signing, so it is the only reliable 30-minute deadline.
+   */
+  impersonationExpiresAt: number
   exp?: number
 }
 
@@ -78,7 +85,25 @@ export interface ImpersonationClaims {
  */
 export const getSessionCookieName: () => string = sessionCookieName
 
-type MintInput = Omit<ImpersonationClaims, "isSuperadmin" | "isImpersonating">
+type MintInput = Omit<
+  ImpersonationClaims,
+  "isSuperadmin" | "isImpersonating" | "impersonationExpiresAt" | "exp"
+>
+
+/**
+ * True when `token` is an impersonation session past its 30-minute deadline.
+ * Fails closed: an impersonation token without `impersonationExpiresAt`
+ * (minted before the claim existed) counts as expired. Plain sessions are
+ * never expired here.
+ */
+export function isImpersonationExpired(
+  token: { isImpersonating?: unknown; impersonationExpiresAt?: unknown } | null | undefined,
+  nowSeconds: number = Math.floor(Date.now() / 1000)
+): boolean {
+  if (!token?.isImpersonating) return false
+  const deadline = token.impersonationExpiresAt
+  return typeof deadline !== "number" || deadline <= nowSeconds
+}
 
 /**
  * Mints an impersonation session token. The caller passes the TARGET user's
@@ -108,6 +133,7 @@ export async function mintImpersonationToken(
     impersonatorEmail: claims.impersonatorEmail,
     isSuperadmin: false,
     isImpersonating: true,
+    impersonationExpiresAt: now + IMPERSONATION_MAX_AGE,
     exp: now + IMPERSONATION_MAX_AGE,
   }
 
@@ -124,10 +150,14 @@ export async function mintImpersonationToken(
  * decrypts, has not expired, and is genuinely an impersonation token (the
  * `isImpersonating` flag and `impersonatorEmail` are present). Returns null for
  * tampered tokens, wrong secrets, expired tokens, or plain session tokens.
+ *
+ * `allowExpired` is only for the exit endpoint: an expired impersonation must
+ * still be endable (audited and cleared), it just can't be used.
  */
 export async function verifyImpersonationToken(
   token: string,
-  secret: string
+  secret: string,
+  opts: { allowExpired?: boolean } = {}
 ): Promise<ImpersonationClaims | null> {
   let payload: Record<string, unknown> | null = null
   try {
@@ -145,9 +175,12 @@ export async function verifyImpersonationToken(
   if (typeof payload.impersonatorEmail !== "string" || !payload.impersonatorEmail) return null
   if (typeof payload.id !== "string" || typeof payload.organizationId !== "string") return null
 
-  // Manual expiry guard — do not trust decode() alone for the exp check.
-  const exp = typeof payload.exp === "number" ? payload.exp : 0
-  if (!exp || exp < Math.floor(Date.now() / 1000)) return null
+  // Manual expiry guard on our own claim — `exp` is rewritten by Auth.js on
+  // every session read, so it can't be trusted for the 30-minute limit.
+  if (!opts.allowExpired && isImpersonationExpired(payload)) return null
+  const impersonationExpiresAt =
+    typeof payload.impersonationExpiresAt === "number" ? payload.impersonationExpiresAt : 0
+  const exp = typeof payload.exp === "number" ? payload.exp : undefined
 
   return {
     id: payload.id,
@@ -159,6 +192,7 @@ export async function verifyImpersonationToken(
     impersonatorEmail: payload.impersonatorEmail,
     isSuperadmin: false,
     isImpersonating: true,
+    impersonationExpiresAt,
     exp,
   }
 }

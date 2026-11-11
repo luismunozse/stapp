@@ -10,11 +10,19 @@ function setup(userRow: unknown) {
   const push = createChainMock(null, null)
   const web = createChainMock(null, null)
   const audit = createChainMock(null, null)
-  mockSupabaseFrom({ users, totp_used_codes: totp, push_tokens: push, web_push_subscriptions: web, audit_logs: audit })
+  const sesiones = createChainMock(null, null)
+  mockSupabaseFrom({
+    users,
+    totp_used_codes: totp,
+    refresh_tokens: sesiones,
+    push_tokens: push,
+    web_push_subscriptions: web,
+    audit_logs: audit,
+  })
   const remove = vi.fn().mockResolvedValue({ data: null, error: null })
   const list = vi.fn().mockResolvedValue({ data: [{ name: "u1.png" }, { name: "u10.png" }], error: null })
   vi.mocked(supabaseAdmin.storage.from).mockReturnValue({ list, remove } as never)
-  return { users, totp, push, web, audit, remove, list }
+  return { users, totp, sesiones, push, web, audit, remove, list }
 }
 
 describe("anonymizeUser", () => {
@@ -55,10 +63,12 @@ describe("anonymizeUser", () => {
     expect(remove).toHaveBeenCalledWith(["o1/u1.png"])
   })
 
-  it("borra totp_used_codes y tokens push, y limpia ip/user-agent de la auditoría sin borrarla", async () => {
-    const { totp, push, web, audit } = setup({ id: "u1", email: "juan@gmail.com", organization_id: "o1" })
+  it("borra totp_used_codes, sesiones y tokens push, y limpia ip/user-agent de la auditoría sin borrarla", async () => {
+    const { totp, sesiones, push, web, audit } = setup({ id: "u1", email: "juan@gmail.com", organization_id: "o1" })
     await anonymizeUser("u1")
     expect(totp.delete).toHaveBeenCalled()
+    expect(sesiones.delete).toHaveBeenCalled()
+    expect(sesiones.eq).toHaveBeenCalledWith("user_id", "u1")
     expect(push.delete).toHaveBeenCalled()
     expect(web.delete).toHaveBeenCalled()
     expect(audit.update).toHaveBeenCalledWith({ ip_address: null, user_agent: null })
@@ -66,10 +76,10 @@ describe("anonymizeUser", () => {
   })
 
   it("el UPDATE de users va después de todas las limpiezas (para poder reintentar)", async () => {
-    const { users, totp, push, web, audit } = setup({ id: "u1", email: "juan@gmail.com", organization_id: "o1" })
+    const { users, totp, sesiones, push, web, audit } = setup({ id: "u1", email: "juan@gmail.com", organization_id: "o1" })
     await anonymizeUser("u1")
     const updateOrder = users.update.mock.invocationCallOrder[0]
-    for (const previo of [totp.delete, push.delete, web.delete, audit.update]) {
+    for (const previo of [totp.delete, sesiones.delete, push.delete, web.delete, audit.update]) {
       expect(previo.mock.invocationCallOrder[0]).toBeLessThan(updateOrder)
     }
   })

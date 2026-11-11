@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { MAX_CLIENTES_EN_BUSQUEDA } from "@/lib/busqueda-clientes"
 import { validarClienteYSector } from "@/lib/referencias-cliente"
 import { randomBytes } from "crypto"
 import {
@@ -254,6 +255,8 @@ export async function GET(request: Request) {
         .select("id")
         .eq("organization_id", organizationId!)
         .or(`nombre.ilike.%${termino}%,telefono.ilike.%${termino}%`)
+        .order("id", { ascending: false })
+        .limit(MAX_CLIENTES_EN_BUSQUEDA)
 
       const clienteIds = clientesMatch?.map(c => c.id) || []
 

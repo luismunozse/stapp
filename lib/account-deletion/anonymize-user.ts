@@ -53,6 +53,7 @@ export async function anonymizeUser(userId: string): Promise<AnonymizeResult> {
 
     await removeAvatarFiles(user.organization_id, userId)
     must("totp_used_codes", await supabaseAdmin.from("totp_used_codes").delete().eq("user_id", userId))
+    must("refresh_tokens", await supabaseAdmin.from("refresh_tokens").delete().eq("user_id", userId))
     must("push_tokens", await supabaseAdmin.from("push_tokens").delete().eq("user_id", userId))
     must("web_push_subscriptions", await supabaseAdmin.from("web_push_subscriptions").delete().eq("user_id", userId))
     must("audit_logs", await supabaseAdmin.from("audit_logs").update({ ip_address: null, user_agent: null }).eq("user_id", userId))

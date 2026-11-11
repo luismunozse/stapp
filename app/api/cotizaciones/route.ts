@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { MAX_CLIENTES_EN_BUSQUEDA } from "@/lib/busqueda-clientes"
 import { validarClienteYSector } from "@/lib/referencias-cliente"
 import { requireAuth, canViewCotizacionCosts } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -241,6 +242,8 @@ export async function GET(request: Request) {
         .select("id")
         .eq("organization_id", organizationId!)
         .ilike("nombre", `%${escaped}%`)
+        .order("id", { ascending: false })
+        .limit(MAX_CLIENTES_EN_BUSQUEDA)
 
       const clienteIds = (clientesMatch || []).map((c) => c.id)
       if (clienteIds.length > 0) {

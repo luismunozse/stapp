@@ -1191,7 +1191,12 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
       // latch siga puesto no hay contra que validarlas, asi que no se mandan:
       // guardarlas mal es peor que no guardarlas, pero las dos son una perdida
       // y el operador tiene que enterarse (el aviso, despues del POST).
-      if (!checklistDelBorrador && checklistTemplate && Object.keys(checklistValores).length > 0) {
+      // La firma de recepcion y las observaciones viven en esta misma seccion:
+      // sin items marcados igual hay que guardarlas, o el PDF de la orden sale
+      // con la linea de firma en blanco.
+      const hayChecklistQueGuardar =
+        Object.keys(checklistValores).length > 0 || !!checklistFirma || !!checklistNotas.trim()
+      if (!checklistDelBorrador && checklistTemplate && hayChecklistQueGuardar) {
         try {
           const checklistBody = {
             templateId: checklistTemplate.id,

@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import {
   ArrowLeft,
   User,
+  Pencil,
   Phone,
   Mail,
   MapPin,
@@ -86,6 +87,7 @@ import { StatusBanner } from "@/components/ui/status-banner"
 import { MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
 import { FieldSectionLabel } from "@/components/ui/field-section-label"
 import { EditableTextField } from "@/components/ui/editable-text-field"
+import { EditarEquipoDialog } from "@/components/ordenes/editar-equipo-dialog"
 import { useModal } from "@/contexts/modal-context"
 import { toast } from "sonner"
 import { useVisibilityPolling } from "@/hooks/use-visibility-polling"
@@ -118,6 +120,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [tecnicosDe, setTecnicosDe] = useState<{ para: string; lista: UserType[] } | null>(null)
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
+  const [editarEquipoOpen, setEditarEquipoOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [printingPdf, setPrintingPdf] = useState(false)
@@ -164,7 +167,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         toast.success(successMsg)
         return true
       }
-      toast.error("Error al guardar")
+      const data = await res.json().catch(() => ({}))
+      toast.error(data.error || "Error al guardar")
       return false
     } catch {
       toast.error("Error al guardar")
@@ -216,6 +220,28 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       { notasInternas: value },
       { notasInternas: value },
       "Notas internas actualizadas"
+    )
+  }
+
+  const handleSaveAccesorios = async (next: string): Promise<boolean> => {
+    const value = next.trim() || null
+    if (!orden || (value || "") === (orden.accesorios || "")) return true
+    return saveOrdenField({ accesorios: value }, { accesorios: value }, "Accesorios actualizados")
+  }
+
+  const handleSaveObservaciones = async (next: string): Promise<boolean> => {
+    const value = next.trim() || null
+    if (!orden || (value || "") === (orden.observaciones || "")) return true
+    return saveOrdenField({ observaciones: value }, { observaciones: value }, "Observaciones actualizadas")
+  }
+
+  const handleSaveTelefonoContacto = async (next: string): Promise<boolean> => {
+    const value = next.trim() || null
+    if (!orden || (value || "") === (orden.telefonoContacto || "")) return true
+    return saveOrdenField(
+      { telefonoContacto: value },
+      { telefonoContacto: value },
+      "Teléfono de contacto actualizado"
     )
   }
 
@@ -1002,12 +1028,39 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                         <span className="text-muted-foreground">{orden.cliente.direccion}</span>
                       </div>
                     )}
+                    <div className="pt-2">
+                      <EditableTextField
+                        icon={Phone}
+                        label="Teléfono para avisos"
+                        value={orden.telefonoContacto || ""}
+                        onSave={handleSaveTelefonoContacto}
+                        singleLine
+                        inputType="tel"
+                        placeholder={orden.cliente?.telefono || "Número alternativo"}
+                        emptyHint={
+                          orden.cliente?.telefono
+                            ? `Se usa el del cliente (${orden.cliente.telefono}).`
+                            : "Sin teléfono alternativo."
+                        }
+                      />
+                    </div>
                   </div>
                 </div>
 
                 {/* Dispositivo */}
                 <div className="space-y-3">
-                  <FieldSectionLabel icon={Smartphone}>{term("equipo")}</FieldSectionLabel>
+                  <div className="flex items-center justify-between">
+                    <FieldSectionLabel icon={Smartphone}>{term("equipo")}</FieldSectionLabel>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                      onClick={() => setEditarEquipoOpen(true)}
+                      aria-label={`Editar ${term("equipo").toLowerCase()}`}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                  </div>
                   <div className="space-y-2">
                     {orden.marca && (
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{orden.marca}</p>
@@ -1026,7 +1079,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                     {orden.codigoAccesoDispositivo && (
                       <div className="text-sm">
                         <span className="text-muted-foreground">Contrasena: </span>
-                        {orden.codigoAccesoDispositivo.startsWith("Patron:") ? (
+                        {/^Patr[oó]n: /.test(orden.codigoAccesoDispositivo) ? (
                           <PatternDisplay value={orden.codigoAccesoDispositivo} size={80} />
                         ) : (
                           <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{orden.codigoAccesoDispositivo}</code>
@@ -1072,20 +1125,28 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               )}
 
               {/* Accesorios */}
-              {orden.accesorios && (
-                <div className="mt-4 pt-4 border-t">
-                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Accesorios recibidos</div>
-                  <p className="text-sm text-muted-foreground">{orden.accesorios}</p>
-                </div>
-              )}
+              <div className="mt-4 pt-4 border-t">
+                <EditableTextField
+                  icon={Package}
+                  label="Accesorios recibidos"
+                  value={orden.accesorios || ""}
+                  onSave={handleSaveAccesorios}
+                  placeholder="Ej: Cargador, funda, chip"
+                  emptyHint="Sin accesorios."
+                />
+              </div>
 
               {/* Observaciones */}
-              {orden.observaciones && (
-                <div className="mt-4 pt-4 border-t">
-                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Observaciones</div>
-                  <p className="text-sm whitespace-pre-wrap">{orden.observaciones}</p>
-                </div>
-              )}
+              <div className="mt-4 pt-4 border-t">
+                <EditableTextField
+                  icon={FileText}
+                  label="Observaciones"
+                  value={orden.observaciones || ""}
+                  onSave={handleSaveObservaciones}
+                  placeholder="Estado del equipo al ingresar, golpes, rayones..."
+                  emptyHint="Sin observaciones."
+                />
+              </div>
 
               {/* Notas internas - solo uso interno, no visible al cliente */}
               <div className="mt-4 pt-4 border-t">
@@ -1390,6 +1451,15 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             toast.success("Orden marcada como reparada")
           }}
         />
+      )}
+
+      {orden && (
+          <EditarEquipoDialog
+            orden={orden}
+            open={editarEquipoOpen}
+            onOpenChange={setEditarEquipoOpen}
+            onSaved={(patch) => setOrden((prev) => (prev ? { ...prev, ...patch } : prev))}
+          />
       )}
 
       {orden && showNCDialog && (

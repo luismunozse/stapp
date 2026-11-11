@@ -188,6 +188,15 @@ export async function PUT(
       .single()
 
     if (updateError) {
+      // Dato unico repetido (hoy, el telefono dentro de la organizacion): es un
+      // error del operador, no del servidor.
+      if (updateError.code === "23505") {
+        const esTelefono = `${updateError.message ?? ""} ${updateError.details ?? ""}`.includes("telefono")
+        return NextResponse.json(
+          { error: esTelefono ? "Ya existe un cliente con ese teléfono" : "Ya existe otro cliente con esos datos" },
+          { status: 409 }
+        )
+      }
       throw updateError
     }
 
@@ -233,10 +242,10 @@ export async function DELETE(
       )
     }
 
-    // Varias tablas referencian al cliente con ON DELETE CASCADE (órdenes y,
-    // a través de ellas, cobros/garantías/facturas; cuenta corriente;
-    // recepciones). Borrar un cliente con historial borraría ese historial,
-    // así que solo se permite borrar clientes sin movimientos.
+    // Solo se borran clientes sin movimientos. Órdenes, cuenta corriente y
+    // recepciones ya no cascadean (migración 396: el DELETE fallaría con 23503),
+    // y ventas/cotizaciones quedarían con el cliente en NULL. Se chequea antes
+    // para responder 409 con un mensaje claro.
     const historial = await Promise.all(
       TABLAS_HISTORIAL_CLIENTE.map((tabla) =>
         supabaseAdmin

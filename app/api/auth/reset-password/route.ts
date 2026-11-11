@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { invalidateRefreshToken } from "@/lib/auth-tokens"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
 
@@ -45,11 +46,15 @@ export async function POST(request: Request) {
         failed_login_attempts: 0,
         locked_until: null,
         last_failed_login: null,
-        // Revoke the PWA refresh token so existing attacker sessions are
-        // immediately invalidated. The column is read by lib/auth.ts ~L137-192.
+        // Token previo a la tabla refresh_tokens (lib/auth-tokens.ts).
         refresh_token: null,
+        refresh_token_expires: null,
       })
       .eq("id", user.id)
+
+    // Cortar todas las sesiones abiertas: las cookies vigentes caen en la
+    // próxima revalidación (como máximo en una hora) y la PWA no puede restaurar.
+    await invalidateRefreshToken(user.id)
 
     return NextResponse.json({
       message: "Contraseña actualizada correctamente",
