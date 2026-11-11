@@ -13,26 +13,28 @@ export async function GET() {
     const ninetyDaysAgo = new Date()
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
 
-    const [allTimeRes, last30Res, last90Res, recentRes] = await Promise.all([
-      // Total respuestas all-time
-      supabaseAdmin
-        .from("nps_responses")
-        .select("score, categoria")
-        .limit(10000),
+    // Conteos con count/head. Antes se traían las filas (.limit(10000)), pero
+    // PostgREST igual corta en 1000 (max_rows) sin error: el NPS se calculaba
+    // sobre una parte de las respuestas.
+    const resumen = async (desde?: Date) => {
+      const contar = (categoria?: string) => {
+        let q = supabaseAdmin.from("nps_responses").select("id", { count: "exact", head: true })
+        if (desde) q = q.gte("created_at", desde.toISOString())
+        if (categoria) q = q.eq("categoria", categoria)
+        return q
+      }
+      const resultados = await Promise.all([contar("PROMOTOR"), contar("PASIVO"), contar("DETRACTOR"), contar()])
+      const fallo = resultados.find((r) => r.error)
+      if (fallo) throw fallo.error
+      const [promotores, pasivos, detractores, total] = resultados.map((r) => r.count ?? 0)
+      const nps = total > 0 ? Math.round(((promotores - detractores) / total) * 100) : 0
+      return { nps, promotores, pasivos, detractores, total }
+    }
 
-      // Últimos 30 días
-      supabaseAdmin
-        .from("nps_responses")
-        .select("score, categoria")
-        .gte("created_at", thirtyDaysAgo.toISOString())
-        .limit(10000),
-
-      // Últimos 90 días
-      supabaseAdmin
-        .from("nps_responses")
-        .select("score, categoria")
-        .gte("created_at", ninetyDaysAgo.toISOString())
-        .limit(10000),
+    const [allTime, last30Days, last90Days, recentRes] = await Promise.all([
+      resumen(),
+      resumen(thirtyDaysAgo),
+      resumen(ninetyDaysAgo),
 
       // Todas las respuestas con comentario + últimas 20 sin comentario
       supabaseAdmin
@@ -46,20 +48,10 @@ export async function GET() {
         .limit(200),
     ])
 
-    const calcNPS = (data: Array<{ score: number; categoria: string }>) => {
-      if (!data || data.length === 0) return { nps: 0, promotores: 0, pasivos: 0, detractores: 0, total: 0 }
-      const promotores = data.filter(d => d.categoria === "PROMOTOR").length
-      const detractores = data.filter(d => d.categoria === "DETRACTOR").length
-      const pasivos = data.filter(d => d.categoria === "PASIVO").length
-      const total = data.length
-      const nps = Math.round(((promotores - detractores) / total) * 100)
-      return { nps, promotores, pasivos, detractores, total }
-    }
-
     return NextResponse.json({
-      allTime: calcNPS(allTimeRes.data || []),
-      last30Days: calcNPS(last30Res.data || []),
-      last90Days: calcNPS(last90Res.data || []),
+      allTime,
+      last30Days,
+      last90Days,
       recentResponses: (recentRes.data || []).map((r: Record<string, unknown>) => ({
         id: r.id,
         score: r.score,

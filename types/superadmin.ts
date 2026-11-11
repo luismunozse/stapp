@@ -1,9 +1,12 @@
+import type { MontoPorMoneda } from "@/lib/superadmin-montos"
+
 export interface SuperadminStats {
   totalOrganizations: number
   activeOrganizations: number
   totalUsers: number
   activeSubscriptions: number
-  monthlyRevenue: number
+  /** Cobrado en el mes, una entrada por moneda. */
+  monthlyRevenueByCurrency: MontoPorMoneda[]
   newOrgsThisMonth: number
   recentPayments: PaymentWithOrg[]
 }
@@ -260,8 +263,9 @@ export interface PaymentsListResponse {
 }
 
 export interface PaymentStats {
-  mrr: number
-  totalHistorico: number
+  /** Cobrado en el mes, una entrada por moneda (nunca se suman ARS y USD). */
+  mrrPorMoneda: MontoPorMoneda[]
+  totalHistoricoPorMoneda: MontoPorMoneda[]
   pagosEsteMes: number
   webhookErrorRate: number
   webhookErrors: number

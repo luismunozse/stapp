@@ -7,25 +7,24 @@ export async function GET() {
     const { error } = await requireSuperadmin()
     if (error) return error
 
-    // Un solo query con todos los tickets, agrupamos en JS
-    const { data: tickets, error: dbError } = await supabaseAdmin
-      .from("support_tickets")
-      .select("estado")
-
-    if (dbError) throw dbError
-
-    const counts: Record<string, number> = {}
-    for (const t of tickets || []) {
-      counts[t.estado] = (counts[t.estado] || 0) + 1
+    // Conteos con count/head: traer las filas y contarlas en JS se cortaba en
+    // 1000 tickets (PostgREST max_rows) sin ningún error.
+    const contar = (estado?: string) => {
+      const q = supabaseAdmin.from("support_tickets").select("id", { count: "exact", head: true })
+      return estado ? q.eq("estado", estado) : q
     }
+    const resultados = await Promise.all([
+      contar("ABIERTO"),
+      contar("EN_PROCESO"),
+      contar("RESUELTO"),
+      contar("CERRADO"),
+      contar(),
+    ])
+    const fallo = resultados.find((r) => r.error)
+    if (fallo) throw fallo.error
+    const [abiertos, enProceso, resueltos, cerrados, total] = resultados.map((r) => r.count ?? 0)
 
-    const stats = {
-      abiertos: counts["ABIERTO"] || 0,
-      enProceso: counts["EN_PROCESO"] || 0,
-      resueltos: counts["RESUELTO"] || 0,
-      cerrados: counts["CERRADO"] || 0,
-      total: (tickets || []).length,
-    }
+    const stats = { abiertos, enProceso, resueltos, cerrados, total }
 
     return NextResponse.json(stats)
   } catch (error) {

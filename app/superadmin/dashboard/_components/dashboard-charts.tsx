@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { TrendingUp, Building2, CreditCard } from "lucide-react"
-import { formatCurrency } from "@/lib/utils"
+import { formatMonto } from "@/lib/superadmin-montos"
 import {
   BarChart,
   Bar,
@@ -18,7 +18,10 @@ import {
 
 interface MonthlyRevenue {
   month: string
+  /** Ingresos del mes en `revenueCurrency`. */
   revenue: number
+  /** Detalle por moneda (las otras monedas no se suman al gráfico). */
+  porMoneda: Record<string, number>
 }
 
 interface OrgGrowth {
@@ -33,6 +36,7 @@ interface PlanDistribution {
 
 interface DashboardChartsProps {
   monthlyRevenue6m: MonthlyRevenue[]
+  revenueCurrency: string
   orgGrowth6m: OrgGrowth[]
   planDistribution: PlanDistribution
 }
@@ -41,9 +45,14 @@ const PLAN_COLORS = ["#8b5cf6", "#06b6d4"] // purple for premium, cyan for free
 
 export function DashboardCharts({
   monthlyRevenue6m,
+  revenueCurrency,
   orgGrowth6m,
   planDistribution,
 }: DashboardChartsProps) {
+  const otrasMonedas = [
+    ...new Set(monthlyRevenue6m.flatMap((m) => Object.keys(m.porMoneda ?? {}))),
+  ].filter((moneda) => moneda !== revenueCurrency)
+
   const planData = [
     { name: "Premium", value: planDistribution.premium },
     { name: "Free", value: planDistribution.free },
@@ -60,7 +69,7 @@ export function DashboardCharts({
             <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-950">
               <TrendingUp className="h-4 w-4 text-amber-600" />
             </div>
-            Ingresos Mensuales
+            Ingresos Mensuales ({revenueCurrency})
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -83,7 +92,7 @@ export function DashboardCharts({
                   tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
                 />
                 <Tooltip
-                  formatter={(value: number) => [formatCurrency(value), "Ingresos"]}
+                  formatter={(value: number) => [formatMonto(value, revenueCurrency), "Ingresos"]}
                   contentStyle={{
                     backgroundColor: "hsl(var(--popover))",
                     border: "1px solid hsl(var(--border))",
@@ -96,6 +105,20 @@ export function DashboardCharts({
               </BarChart>
             </ResponsiveContainer>
           </div>
+          {otrasMonedas.length > 0 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              También hubo cobros en {otrasMonedas.join(", ")}:{" "}
+              {otrasMonedas
+                .map((moneda) =>
+                  formatMonto(
+                    monthlyRevenue6m.reduce((s, m) => s + (m.porMoneda?.[moneda] ?? 0), 0),
+                    moneda
+                  )
+                )
+                .join(" · ")}{" "}
+              en los 6 meses (no se suman al gráfico).
+            </p>
+          )}
         </CardContent>
       </Card>
 
