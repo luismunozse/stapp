@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   // para que Google no lo trunque en el SERP.
   title: "Software de Gestión para Servicio Técnico | STApp",
   description:
-    "STApp es el software #1 para talleres de reparación de celulares y servicio técnico en Argentina. Órdenes de trabajo, caja diaria, inventario, punto de venta, finanzas, cotizaciones, leads, reportes avanzados, asistente IA y notificaciones WhatsApp. Probá 30 días gratis sin tarjeta.",
+    "STApp ordena tu taller de reparación de celulares y servicio técnico: tus clientes siguen su reparación online y vos tenés todo en un solo lugar. Órdenes de trabajo, caja diaria, inventario, punto de venta, finanzas, cotizaciones, leads, reportes avanzados, asistente IA y notificaciones WhatsApp. Probá 30 días gratis sin tarjeta.",
   keywords: [
     "software servicio técnico",
     "gestión taller reparación",

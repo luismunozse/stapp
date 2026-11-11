@@ -5,11 +5,12 @@ import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
-import { Check, X, Globe, Zap } from "lucide-react"
+import { Check, X, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
 import { revealHeader, revealStagger, revealFocal } from "./reveal"
 import type { PlanPrices, AllPlansPrices } from "@/lib/pricing"
+import { freeOrdersText, getFreePlanInfo, type FreePlanInfo } from "@/lib/plan-copy"
 
 interface PlanFeature {
   text: string
@@ -31,45 +32,48 @@ interface Plan {
 }
 
 // Bullets orientados a resultado, no a specs. El detalle completo de cada
-// plan vive en /precios (linkeado debajo de las cards).
-const plans: Plan[] = [
-  {
-    name: "Free",
-    slug: "free",
-    description: "Para arrancar y conocer STApp",
-    priceMultiplier: 0,
-    features: [
-      { text: "Hasta 30 reparaciones por mes", included: true },
-      { text: "Tus clientes siguen su reparación online", included: true },
-      { text: "Ventas de mostrador (POS)", included: true },
-      { text: "Inventario básico", included: true },
-      { text: "Avisos automáticos por WhatsApp", included: false },
-      { text: "Números y reportes del negocio", included: false },
-    ],
-    cta: "Comenzar gratis",
-    ctaHref: "/registro",
-    ctaVariant: "outline",
-  },
-  {
-    name: "Profesional",
-    slug: "profesional",
-    description: "Tu taller completo, sin límites",
-    priceMultiplier: 1,
-    badge: "Más popular",
-    recommended: true,
-    features: [
-      { text: "Reparaciones, técnicos y clientes ilimitados", included: true },
-      { text: "Avisos automáticos por WhatsApp", included: true, highlight: "Diferencial" },
-      { text: "Caja diaria y números claros del negocio", included: true },
-      { text: "Presupuestos que tu cliente aprueba online", included: true },
-      { text: "Hasta 3 sucursales", included: true },
-      { text: "Tu logo en presupuestos y comprobantes", included: true, highlight: "Tu marca" },
-    ],
-    cta: "Probar gratis",
-    ctaHref: "/registro?plan=profesional",
-    ctaVariant: "default",
-  },
-]
+// plan vive en /precios (linkeado debajo de las cards). Los límites y el
+// seguimiento online del Free salen de la tabla plans (ver lib/plan-copy.ts).
+function buildPlans(free: FreePlanInfo): Plan[] {
+  return [
+    {
+      name: "Free",
+      slug: "free",
+      description: "Para arrancar y conocer STApp",
+      priceMultiplier: 0,
+      features: [
+        { text: freeOrdersText(free.limits), included: true },
+        { text: "Tus clientes siguen su reparación online", included: free.clientPortal },
+        { text: "Ventas de mostrador (POS)", included: true },
+        { text: "Inventario básico", included: true },
+        { text: "Avisos automáticos por WhatsApp", included: false },
+        { text: "Números y reportes del negocio", included: false },
+      ],
+      cta: "Comenzar gratis",
+      ctaHref: "/registro",
+      ctaVariant: "outline",
+    },
+    {
+      name: "Profesional",
+      slug: "profesional",
+      description: "Tu taller completo, sin límites",
+      priceMultiplier: 1,
+      badge: "Más popular",
+      recommended: true,
+      features: [
+        { text: "Reparaciones, técnicos y clientes ilimitados", included: true },
+        { text: "Avisos automáticos por WhatsApp", included: true, highlight: "Diferencial" },
+        { text: "Caja diaria y números claros del negocio", included: true },
+        { text: "Presupuestos que tu cliente aprueba online", included: true },
+        { text: "Hasta 3 sucursales", included: true },
+        { text: "Tu logo en presupuestos y comprobantes", included: true, highlight: "Tu marca" },
+      ],
+      cta: "Probar gratis",
+      ctaHref: "/registro?plan=profesional",
+      ctaVariant: "default",
+    },
+  ]
+}
 
 function formatPrice(price: number): string {
   if (price === 0) return "0"
@@ -91,35 +95,26 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
 
   // Base: precios del plan Profesional (el del medio)
   const basePriceArs = annual ? Math.round(prices.ars.yearly / 12) : prices.ars.monthly
-  const basePriceUsd = annual ? parseFloat((prices.usd.yearly / 12).toFixed(1)) : prices.usd.monthly
+  const plans = buildPlans(getFreePlanInfo(allPlans))
   const savingsPercent = Math.round(
     ((prices.ars.monthly * 12 - prices.ars.yearly) / (prices.ars.monthly * 12)) * 100
   )
 
   // Helper: obtener precio de un plan.
   // Si hay allPlans en la DB, usa el precio real. Si no, fallback a multiplier.
-  const getPlanPrice = (plan: Plan): { ars: number; usd: number } => {
+  // Solo ARS: el único medio de cobro es MercadoPago en pesos.
+  const getPlanPrice = (plan: Plan): number => {
     // Plan gratuito siempre $0
-    if (plan.priceMultiplier === 0) return { ars: 0, usd: 0 }
+    if (plan.priceMultiplier === 0) return 0
 
     if (allPlans && allPlans[plan.slug]) {
       const dbPlan = allPlans[plan.slug]
-      const ars = annual
-        ? Math.round(dbPlan.ars.yearly / 12)
-        : dbPlan.ars.monthly
-      const usd = annual
-        ? parseFloat((dbPlan.usd.yearly / 12).toFixed(1))
-        : dbPlan.usd.monthly
-      return { ars, usd }
+      return annual ? Math.round(dbPlan.ars.yearly / 12) : dbPlan.ars.monthly
     }
     // Fallback: derivar del precio base con multiplier
-    const ars = plan.priceMultiplier === 1
+    return plan.priceMultiplier === 1
       ? basePriceArs
       : roundToNice(basePriceArs * plan.priceMultiplier)
-    const usd = plan.priceMultiplier === 1
-      ? basePriceUsd
-      : Math.round(basePriceUsd * plan.priceMultiplier)
-    return { ars, usd }
   }
 
   return (
@@ -179,7 +174,7 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
             viewport={{ once: true, margin: "0px" }}
           >
             {plans.map((plan) => {
-              const { ars: priceArs, usd: priceUsd } = getPlanPrice(plan)
+              const priceArs = getPlanPrice(plan)
 
               return (
                 <m.div
@@ -209,7 +204,7 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
                   </div>
 
                   {/* Price ARS */}
-                  <div className="text-center mb-2">
+                  <div className="text-center mb-6">
                     <div className="flex items-baseline justify-center gap-1">
                       <m.span
                         key={`${plan.slug}-${priceArs}`}
@@ -226,19 +221,6 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
                       <span className="text-muted-foreground text-sm">/mes</span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">ARS</p>
-                  </div>
-
-                  {/* Price USD */}
-                  <div className="text-center mb-6">
-                    <m.div
-                      key={`usd-${plan.slug}-${priceUsd}`}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="flex items-center justify-center gap-1.5 text-muted-foreground"
-                    >
-                      <Globe className="w-3.5 h-3.5" />
-                      <span className="text-sm">USD ${priceUsd}/mes</span>
-                    </m.div>
                   </div>
 
                   {/* CTA */}
