@@ -29,29 +29,37 @@ export const manualSections: ManualSection[] = [
     content: [
       {
         subtitle: "Crear tu cuenta",
-        body: "Para registrarte en STApp, ingresá a stapp.com.ar y hacé clic en \"Comenzar Gratis\". Completá el formulario con tu nombre, email y contraseña. También podés registrarte con tu cuenta de Google para mayor comodidad. Recibirás un email de verificación que deberás confirmar para activar tu cuenta.",
+        body: "Entrá a stapp.com.ar y tocá \"Probar gratis\". El registro es una sola pantalla en dos partes: primero tu negocio (nombre, tu dirección nombre.stapp.com.ar y qué reparás) y después tu cuenta, con Google o con email y contraseña. Tenés 30 días gratis, sin tarjeta.",
         steps: [
-          "Ingresá a stapp.com.ar y hacé clic en \"Comenzar Gratis\"",
-          "Completá tu nombre, email y contraseña (o usá Google)",
-          "Verificá tu email haciendo clic en el enlace que te enviamos",
-          "Completá los datos de tu organización (nombre del taller, dirección, teléfono)",
-          "¡Listo! Ya podés empezar a usar STApp con 30 días gratis",
+          "En \"Tu negocio\" escribí el nombre: la dirección (\"Tu URL\") se arma sola y la podés editar. Tiene que decir \"Disponible\"",
+          "En \"¿Qué reparás?\" elegí tu rubro. Si elegís \"Otro servicio técnico\", contá qué reparás",
+          "En \"Tu cuenta\" tocá \"Registrarse con Google\", o completá tu nombre, email y contraseña (mínimo 8 caracteres) y tocá \"Crear cuenta gratis\"",
+          "Si te registraste con email, abrí el mail y tocá \"Verificar mi email\" (el enlace vence en 24 horas). Con Google no hace falta verificar",
+          "Iniciá sesión en tu dirección y seguí el asistente de bienvenida",
         ],
+        tip: "¿No te llegó el mail de verificación? Revisá spam o tocá \"Reenviar email de verificación\". Sin verificar el email no se puede entrar.",
       },
       {
         subtitle: "Configuración inicial del taller",
-        body: "Una vez creada tu cuenta, te recomendamos seguir el asistente de configuración inicial (onboarding) que te guiará paso a paso. Podés cargar datos de ejemplo para explorar las funciones antes de ingresar tu información real.",
+        body: "La primera vez que entrás como administrador se abre el asistente de bienvenida: Tu negocio (nombre, logo y rubro), Primera orden y una práctica opcional en la que cargás una orden a tu nombre, la marcás como reparada y la entregás, para ver los avisos que recibe el cliente. Podés tocar \"Omitir y entrar al panel\" en cualquier momento. Después del asistente, te recomendamos:",
         steps: [
-          "Completá los datos de tu empresa en Configuración > General",
-          "Subí el logo de tu taller (aparecerá en órdenes, presupuestos y remitos)",
+          "Completá los datos de tu empresa en Configuración > pestaña Empresa",
+          "Subí el logo de tu taller (aparecerá en órdenes, presupuestos, remitos y etiquetas)",
           "Agregá tus técnicos y vendedores desde las secciones correspondientes",
           "Cargá tu inventario de repuestos",
-          "Configurá las plantillas de checklist de recepción",
+          "Revisá las plantillas de checklist de recepción",
           "Configurá la integración con WhatsApp si querés enviar notificaciones",
         ],
-        tip: "Podés cargar datos de ejemplo durante el onboarding para familiarizarte con el sistema antes de ingresar datos reales.",
+        tip: "La orden de práctica no suma a los límites del plan y se borra sola cuando cargás tu primera orden real. Si querés explorar con datos de ejemplo, usá \"Cargar datos de ejemplo\" en el checklist del panel (solo en cuentas nuevas).",
         roles: ["ADMIN"],
         seeAlso: ["configuracion", "inventario", "tecnicos"],
+      },
+      {
+        subtitle: "Rubro de tu negocio",
+        body: "El rubro que elegís al registrarte prepara tus tipos de equipo, el checklist de recepción y el vocabulario del sistema. Los rubros son: Electrónica y computación; Electrodomésticos y refrigeración; Taller mecánico / Automotor; Motos y bicicleterías; Relojería y joyería; y Otro servicio técnico (donde contás qué reparás).",
+        tip: "Podés cambiar el rubro desde el asistente de bienvenida (\"Tu rubro · Cambiar\") mientras no hayas cargado órdenes reales; si hiciste la práctica, se borra. Después podés ajustar todo a mano en Tipos de dispositivo, Checklist y Configuración > Vocabulario.",
+        roles: ["ADMIN"],
+        seeAlso: ["configuracion"],
       },
       {
         subtitle: "Roles y permisos",
@@ -59,9 +67,9 @@ export const manualSections: ManualSection[] = [
         steps: [
           "Administrador (ADMIN): acceso total — órdenes, inventario, comprobantes, reportes, configuración, técnicos, vendedores, caja y más",
           "Técnico (TECNICO): órdenes asignadas, clientes, cotizaciones y dashboard",
-          "Vendedor (VENDEDOR): ventas, POS, clientes, proveedores, reportes de ventas y dashboard",
+          "Vendedor (VENDEDOR): ventas, POS, clientes (puede crearlos y editarlos, pero no eliminarlos), proveedores, reportes de ventas y dashboard",
         ],
-        tip: "Solo los administradores pueden agregar o modificar usuarios y cambiar la configuración del sistema.",
+        tip: "Solo los administradores pueden agregar o modificar usuarios y cambiar la configuración del sistema. Algunos permisos extra de técnicos y vendedores (por ejemplo tomar órdenes sin asignar, o abrir y cerrar la caja) se activan en Configuración > Secciones > Roles y permisos.",
       },
       {
         subtitle: "Técnicos que toman órdenes sin asignar",
@@ -70,10 +78,11 @@ export const manualSections: ManualSection[] = [
           "El técnico ve las órdenes sin asignar en el listado, marcadas como \"Sin asignar\"",
           "Al abrirlas o desde el listado, usa el botón \"Tomar orden\" para quedar asignado",
           "Solo puede tomarlas para sí mismo: no puede reasignar órdenes de otros técnicos ni asignar a otra persona",
+          "El técnico solo ve las órdenes sin asignar de su sucursal",
           "Si dos técnicos intentan tomar la misma orden, se la queda el primero y el segundo recibe un aviso",
           "Una vez tomada, la orden es del técnico y rigen las reglas habituales",
         ],
-        tip: "Las órdenes ya cerradas (entregadas o canceladas) no se pueden tomar.",
+        tip: "Las órdenes ya cerradas (entregadas, canceladas, sin reparación o sin falla detectada) no se pueden tomar.",
         roles: ["ADMIN", "TECNICO"],
       },
       {
@@ -81,9 +90,20 @@ export const manualSections: ManualSection[] = [
         body: "STApp tiene una barra lateral (sidebar) en escritorio y un menú inferior en dispositivos móviles. La barra lateral se puede colapsar para ganar espacio. En móvil, los 4 accesos principales están en la barra inferior y el resto en el menú \"Más\".",
       },
       {
+        subtitle: "Iniciar sesión",
+        body: "Cada negocio entra por su propia dirección (por ejemplo mitaller.stapp.com.ar). Podés iniciar sesión con email y contraseña o con \"Continuar con Google\". Si marcás \"Recordarme por 30 días\" no te pide los datos cada vez. Si te olvidaste la contraseña, tocá \"¿Olvidaste tu contraseña?\" y te mandamos un enlace por email.",
+        tip: "Cada dispositivo tiene su propia sesión: cerrar sesión en uno no cierra los demás. Si cambiás la contraseña, se cierran todas las sesiones en menos de una hora.",
+      },
+      {
         subtitle: "Autenticación en dos pasos (2FA)",
-        body: "Para mayor seguridad, podés activar la verificación en dos pasos desde tu perfil. Al habilitarla, cada vez que inicies sesión se te pedirá un código adicional. También se generan códigos de respaldo por si perdés acceso a tu dispositivo.",
-        tip: "Guardá los códigos de respaldo en un lugar seguro. Si perdés acceso a tu dispositivo de verificación, los vas a necesitar para ingresar.",
+        body: "Para mayor seguridad, podés activar la verificación en dos pasos desde tu perfil. Al habilitarla, cada vez que inicies sesión se te pedirá un código adicional, también si entrás con Google.",
+        steps: [
+          "Andá a Perfil > pestaña Seguridad y tocá \"Activar 2FA\"",
+          "Escaneá el código QR con Google Authenticator, Authy o una app similar",
+          "Ingresá el código de 6 dígitos que muestra la app",
+          "Guardá los códigos de respaldo (podés copiarlos con \"Copiar codigos\")",
+        ],
+        tip: "Si no tenés el celular a mano al iniciar sesión, tocá \"Usar codigo de respaldo\". Guardá esos códigos en un lugar seguro.",
       },
     ],
   },
@@ -113,6 +133,12 @@ export const manualSections: ManualSection[] = [
         subtitle: "Órdenes recientes",
         body: "En la parte inferior del dashboard verás las últimas órdenes creadas con su estado actual, permitiéndote acceder rápidamente a las más recientes.",
       },
+      {
+        subtitle: "Campanita de avisos",
+        body: "La campanita del encabezado muestra los avisos no leídos (stock bajo, solicitudes del catálogo, novedades de órdenes, etc.). Se actualiza sola cada pocos segundos, con un aviso y un sonido cuando entra uno nuevo. Podés marcarlos como leídos de a uno o todos juntos.",
+        tip: "Los mismos avisos te pueden llegar como notificación push al celular o la computadora (ver App móvil > Notificaciones push).",
+        seeAlso: ["app-movil"],
+      },
     ],
   },
   {
@@ -122,13 +148,13 @@ export const manualSections: ManualSection[] = [
     content: [
       {
         subtitle: "Crear una orden",
-        body: "Las órdenes de servicio son el corazón de STApp. Para crear una nueva orden, andá a la sección \"Órdenes\" y hacé clic en \"Nueva Orden\".",
+        body: "Las órdenes de servicio son el corazón de STApp. Para crear una nueva orden, andá a la sección \"Órdenes\" y hacé clic en \"Nueva\".",
         steps: [
           "Seleccioná o creá un cliente (podés buscarlo por nombre, teléfono o DNI)",
           "Completá los datos del equipo: tipo de dispositivo, marca, modelo y número de serie",
           "Describí el problema reportado por el cliente",
-          "Asigná un técnico responsable",
-          "Opcionalmente: establecé una fecha estimada de entrega, definí un presupuesto y completá el checklist de recepción",
+          "Asigná un técnico responsable (solo aparecen los técnicos de la sucursal de la orden)",
+          "Opcionalmente: establecé una fecha estimada de entrega, definí un presupuesto y completá el checklist de recepción y la firma del cliente",
           "Hacé clic en \"Crear Orden\" — se asignará un número automático",
         ],
         tip: "Podés tomar fotos del equipo al momento de la recepción para documentar el estado inicial. Esto es útil ante reclamos.",
@@ -138,13 +164,21 @@ export const manualSections: ManualSection[] = [
         subtitle: "Estados de una orden",
         body: "Cada orden pasa por distintos estados que reflejan el progreso de la reparación:",
         steps: [
-          "PENDIENTE: la orden fue creada y espera ser atendida",
-          "EN REPARACIÓN: el técnico está trabajando en el equipo",
-          "ESPERANDO REPUESTOS: se necesita un repuesto que no está en stock",
-          "COMPLETADA: la reparación fue finalizada, el equipo está listo para retirar",
-          "ENTREGADA: el cliente ya retiró su equipo",
-          "CANCELADA: la orden fue cancelada",
+          "Recibido: la orden fue creada y el equipo está en el taller",
+          "En Diagnóstico: el técnico está revisando el equipo",
+          "Presupuestado: se cargó un presupuesto y espera la respuesta del cliente",
+          "Aprobado: el cliente aprobó el presupuesto",
+          "En Reparación: el técnico está trabajando en el equipo",
+          "Esperando Repuesto: se necesita un repuesto que no está en stock",
+          "Reparado: la reparación terminó y el equipo está listo para retirar",
+          "Entregado: el cliente retiró su equipo",
+          "Entregado sin Cobro: se entregó sin cobrar (por ejemplo, quedó en cuenta corriente)",
+          "Sin Reparación: el equipo no se pudo o no se quiso reparar",
+          "Retirado sin Reparación: el cliente retiró el equipo sin reparar",
+          "Sin Falla Detectada: no se encontró la falla reportada",
+          "Cancelado: la orden fue cancelada",
         ],
+        tip: "Los estados de entrega se marcan con el botón de entrega, que registra la fecha, las firmas y el saldo pendiente.",
       },
       {
         subtitle: "Gestión de repuestos en la orden",
@@ -173,8 +207,59 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Impresión / PDF de la orden",
-        body: "Podés generar un PDF de la orden de servicio con todos los datos: cliente, equipo, diagnóstico, repuestos utilizados, costos y firma. Este PDF incluye el logo de tu taller configurado en el sistema.",
-        roles: ["ADMIN", "TECNICO"],
+        body: "Desde el detalle de la orden (o desde la ventana que aparece al crearla) usá \"PDF\" para verla o \"Imprimir\" para mandarla a la impresora. Al lado tenés un selector de tamaño de hoja (A4, A5 o A6) que cambia solo esa impresión. El tamaño por defecto del taller se elige en Configuración > pestaña Comprobantes > \"Tamaño de hoja para las órdenes\". En A4 la orden de ingreso trae un talón para el local. En A5 y A6 sale siempre en una sola hoja, y la orden de ingreso suma una segunda página, \"COPIA PARA EL LOCAL\", con el código de acceso del equipo (PIN o patrón). La copia del cliente nunca lleva el código. El PDF incluye el logo del taller y la firma de recepción.",
+        tip: "Si una orden no entra en A5 o A6, el sistema achica la letra y recorta los textos largos con \"…\". Los totales nunca se recortan.",
+        seeAlso: ["configuracion"],
+      },
+      {
+        subtitle: "Editar la orden desde el detalle",
+        body: "En el detalle de la orden podés corregir datos sin rehacerla: fecha prometida, datos del equipo, accesorios, observaciones y el teléfono al que se mandan los avisos.",
+        steps: [
+          "Fecha prometida: en la tarjeta de estado tocá el lápiz junto a \"Prometida\" (o \"Agregar\" si no tiene), elegí la fecha y tocá \"Guardar\". Con \"Quitar\" la borrás",
+          "Equipo: tocá el lápiz junto al título del equipo para abrir \"Editar equipo\" (marca, modelo, color, serie/IMEI, código de acceso y los campos extra del rubro)",
+          "\"Accesorios recibidos\" y \"Observaciones\" se editan en el lugar con el lápiz, igual que el diagnóstico",
+          "\"Teléfono para avisos\" (sección Cliente): si lo dejás vacío se usa el teléfono del cliente",
+        ],
+        tip: "El tipo de equipo no se puede cambiar, porque define el código de la orden. Si el tipo pide IMEI, tiene que tener 15 dígitos. Un técnico solo puede editar las órdenes que tiene asignadas.",
+        roles: ["ADMIN", "TECNICO", "VENDEDOR"],
+      },
+      {
+        subtitle: "Etiqueta para el equipo",
+        body: "Desde el detalle de la orden, el botón \"Etiqueta\" imprime una etiqueta térmica para pegar en el equipo. Lleva el logo del taller (o el nombre, si no hay logo), el código de la orden, el cliente, el teléfono, el IMEI o número de serie, el problema reportado y la fecha. No lleva QR: el cliente recibe el seguimiento por el comprobante y por WhatsApp. Cuando la orden está en Reparado aparece además \"Etiqueta Reparado\" (\"Listo para entregar\").",
+        steps: [
+          "Elegí el tamaño en el selector de al lado (etiqueta de 40×30, 50×30, 50×40 o 60×40 mm, o rollo de 58 u 80 mm). Se guarda para todo el taller",
+          "Tocá \"Etiqueta\". También podés imprimirla desde la ventana que aparece al crear la orden",
+        ],
+        tip: "El teléfono y el IMEI se omiten si están vacíos. El problema se corta en 3 líneas en las etiquetas de 30 mm y en 5 en las de 40 mm.",
+      },
+      {
+        subtitle: "Firma de recepción",
+        body: "Si el tipo de equipo tiene un checklist configurado, el paso \"Fotos y Checklist\" de la nueva orden muestra el \"Checklist de Recepción\" con sus observaciones y el recuadro \"Firma del Cliente (Conformidad de recepción)\". La firma se guarda aunque no marques ningún ítem y sale impresa en el PDF de la orden.",
+        tip: "Si no ves el recuadro de firma, configurá un checklist para ese tipo de equipo en Configuración > Checklist.",
+        seeAlso: ["configuracion"],
+      },
+      {
+        subtitle: "Cobrar una orden",
+        body: "En el detalle, la tarjeta de costos tiene el botón \"Cobrar\" (\"Ver Cobros\" si ya está cobrada). También se puede cobrar desde el listado de órdenes y desde Clientes. Podés repartir el pago entre varios métodos.",
+        steps: [
+          "Administrador: puede cobrar siempre y aplicar descuentos",
+          "Vendedor: puede cobrar si el taller activó \"Abrir y cerrar la caja\" en Configuración > Secciones > Roles y permisos. Solo cobra órdenes de su sucursal y no puede aplicar descuentos",
+          "Técnico: no registra cobros de órdenes",
+        ],
+        tip: "Anular un cobro es solo para administradores.",
+        roles: ["ADMIN", "VENDEDOR"],
+        seeAlso: ["caja"],
+      },
+      {
+        subtitle: "Recibir varios equipos y lotes mayoristas",
+        body: "Con \"Recibir varios equipos\" (en el listado de órdenes) cargás todos los equipos de un cliente en una sola atención: se crea una orden por equipo y un lote que las agrupa. Desde \"Ver lote\" (al terminar) o \"Parte del lote …\" (en el detalle de cada orden) ves los equipos, el subtotal, el descuento, el \"Total del lote\", lo \"Ya cobrado\" y lo \"Pendiente de cobro\".",
+        steps: [
+          "Descuento del lote: elegí Porcentaje o Monto, cargá el valor y tocá \"Guardar\". Solo se puede mientras no se haya entregado ningún equipo",
+          "Cuando todos los equipos pendientes estén en Reparado, tocá \"Entregar lote\"",
+          "Confirmá el costo final de cada equipo, elegí el método de pago y tocá \"Confirmar entrega\": se cobra una sola vez con el descuento aplicado",
+        ],
+        tip: "Si un equipo se retira suelto, se cobra a precio completo; al entregar el lote se cobra solo la diferencia, así se respeta el total negociado. Si no ves \"Recibir varios equipos\", tu plan no incluye esta función.",
+        roles: ["ADMIN"],
       },
     ],
   },
@@ -189,11 +274,11 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Crear un cliente",
-        body: "Podés crear clientes de dos formas: desde la sección \"Clientes\" con el botón \"Nuevo Cliente\", o directamente al crear una orden de servicio o venta si el cliente no existe aún.",
+        body: "Podés crear clientes de dos formas: desde la sección \"Clientes\" con el botón \"Nuevo cliente\", o directamente al crear una orden de servicio o venta si el cliente no existe aún.",
         steps: [
-          "Completá el nombre y al menos un dato de contacto (teléfono o email)",
-          "El número de teléfono debe ser único por organización",
-          "Opcionalmente agregá dirección y DNI",
+          "Completá el nombre y el teléfono (obligatorio, mínimo 7 dígitos). El email es opcional",
+          "El teléfono no se puede repetir dentro del taller: si usás uno que ya tiene otro cliente, vas a ver el aviso \"Ya existe un cliente con ese teléfono\"",
+          "Opcionalmente agregá dirección, DNI, razón social y CUIT",
         ],
       },
       {
@@ -202,13 +287,34 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Cuenta corriente",
-        body: "STApp lleva el registro de saldos pendientes de cada cliente. Podés ver cuánto debe cada cliente y gestionar los pagos parciales asociados a sus remitos.",
-        roles: ["ADMIN"],
+        body: "STApp lleva el registro de saldos pendientes de cada cliente. En la ficha del cliente, arriba, vas a ver \"Debe\" (fiado más órdenes reparadas o entregadas sin cobrar) y \"A favor\" (el saldo positivo de su cuenta corriente). Si trabajás con varias sucursales, \"Debe\" aparece con la leyenda \"en esta sucursal\"; el saldo de cuenta corriente, en cambio, es uno solo para todo el taller. En \"Órdenes pendientes de cobro\" podés usar \"Cobrar todo\".",
+        tip: "Desde la ficha del cliente también podés cargar varias reparaciones de una vez como deuda (ver \"Cargar reparaciones a cuenta corriente\").",
+        roles: ["ADMIN", "VENDEDOR"],
         seeAlso: ["facturacion", "caja", "glosario"],
       },
       {
         subtitle: "Comunicación por WhatsApp",
         body: "Desde la ficha del cliente podés enviar un mensaje de WhatsApp directamente, abriendo una conversación con el número registrado.",
+      },
+      {
+        subtitle: "Cargar reparaciones a cuenta corriente",
+        body: "Para clientes recurrentes (por ejemplo, un comercio que te trae equipos toda la semana) podés cargar varias reparaciones ya hechas sin abrir una orden completa para cada una. Quedan como deuda en la cuenta corriente y no se cobra nada en el momento.",
+        steps: [
+          "En la ficha del cliente, en la tarjeta \"Cuenta corriente\", tocá \"Cargar reparaciones\"",
+          "Por cada fila completá Equipo, Tipo, Trabajo realizado, Precio y, si querés, días de garantía, Marca e IMEI / N° de serie. Con \"Agregar reparación\" sumás filas",
+          "Revisá el \"Total a cargar\" y el saldo resultante, y tocá \"Cargar a cuenta corriente\"",
+        ],
+        tip: "Cada reparación queda como una orden Entregada, con garantía y búsqueda por IMEI. Si te equivocaste, usá \"Revertir lote\" en la pantalla de confirmación. Se pueden cargar hasta 50 reparaciones por vez. Si no ves \"Cargar reparaciones\", tu plan no incluye esta función.",
+        roles: ["ADMIN", "VENDEDOR"],
+      },
+      {
+        subtitle: "Eliminar un cliente",
+        body: "Solo un administrador puede eliminar clientes, y solo si no tienen historial. Si el cliente tiene órdenes, ventas, cotizaciones o cuenta corriente, vas a ver el aviso \"No se puede eliminar un cliente con historial\" y no se borra nada. A los demás roles no les aparece la opción \"Eliminar\".",
+        roles: ["ADMIN"],
+      },
+      {
+        subtitle: "Clientes desde el celular",
+        body: "En el celular, cada tarjeta de cliente muestra \"Debe\" en rojo o \"A favor\", y botones directos: \"Llamar\", \"WhatsApp\" y \"Cobrar\". \"Cobrar\" aparece solo si el cliente debe y tenés permiso para cobrar. Tocá la tarjeta para abrir la ficha.",
       },
     ],
   },
@@ -219,21 +325,46 @@ export const manualSections: ManualSection[] = [
     content: [
       {
         subtitle: "Gestión de técnicos",
-        body: "Desde esta sección podés agregar y administrar a los técnicos de tu taller. Cada técnico tiene un perfil con sus datos, especialidad y las órdenes que tiene asignadas.",
+        body: "Desde esta sección podés agregar y administrar a los técnicos de tu taller. Cada técnico tiene un perfil con sus datos y las órdenes que tiene asignadas.",
         steps: [
           "Hacé clic en \"Nuevo Técnico\"",
-          "Completá nombre, email y datos de contacto",
-          "Asigná el rol TECNICO",
-          "El técnico recibirá un email para configurar su contraseña",
+          "Completá Nombre, Teléfono / WhatsApp, Email y una Contraseña: es la que va a usar para ingresar, pasásela vos (no se manda ningún email)",
+          "Opcional: \"% Comisión como técnico\", \"Comisión por recepción (%)\", \"Costo por hora\" y \"Fecha de ingreso\"",
+          "Si tenés más de una sucursal, elegí la Sucursal",
         ],
       },
       {
         subtitle: "Asignación de órdenes",
-        body: "Podés asignar órdenes a cada técnico al crearlas o reasignarlas después. Desde el perfil del técnico podés ver todas sus órdenes activas y su carga de trabajo.",
+        body: "Podés asignar órdenes a cada técnico al crearlas o reasignarlas después. Solo se pueden asignar técnicos de la sucursal de la orden; si una orden vieja tiene un técnico de otra sucursal, aparece como \"(nombre) · otra sucursal\". Asignan o cambian el técnico el administrador o un vendedor de la sucursal de la orden; un técnico no puede. Desde el detalle del técnico, el botón \"Reasignar órdenes\" pasa sus órdenes a otro técnico.",
+        seeAlso: ["ordenes"],
       },
       {
         subtitle: "Métricas de rendimiento",
         body: "Visualizá la productividad de cada técnico: cantidad de órdenes completadas, tiempo promedio de reparación y distribución de estados de sus órdenes.",
+      },
+      {
+        subtitle: "Mover de sucursal",
+        body: "Si un técnico o vendedor pasa a trabajar en otra sucursal, lo movés desde su formulario de edición. La opción aparece solo para administradores y solo si hay otra sucursal activa.",
+        steps: [
+          "Abrí el técnico o vendedor y tocá \"Editar\"",
+          "En el bloque \"Sucursal\" tocá \"Mover de sucursal\"",
+          "Revisá los avisos: si tiene órdenes abiertas o turnos pendientes, siguen asignados a esa persona, pero va a dejar de verlos hasta que vuelva a esa sucursal",
+          "Elegí la \"Nueva sucursal\" y tocá \"Confirmar movimiento\"",
+        ],
+        tip: "Si tiene una caja abierta no se puede mover: hay que cerrarla antes. Mover a alguien no cambia de sucursal ninguna orden. El cambio se aplica en unos segundos, sin que tenga que volver a iniciar sesión.",
+        roles: ["ADMIN"],
+        seeAlso: ["vendedores"],
+      },
+      {
+        subtitle: "Eliminar o dar de baja",
+        body: "Desde el detalle del técnico o vendedor, el botón \"Eliminar\" funciona así: si la persona no tiene historial, se borra; si tiene historial (órdenes, ventas, cobros o caja), queda dada de baja: pierde el acceso, deja de aparecer en las listas y en las asignaciones, y su historial se conserva. Al darla de baja se libera su email, así que podés volver a darla de alta con el mismo email.",
+        tip: "No se puede eliminar un técnico con órdenes activas asignadas: reasignalas primero con \"Reasignar órdenes\". Si solo querés que deje de recibir trabajo por un tiempo, usá \"Desactivar\"; con \"Reactivar\" vuelve. Hacelo desde el detalle de la persona, no desde la lista.",
+        roles: ["ADMIN"],
+      },
+      {
+        subtitle: "Personal por sucursal",
+        body: "Las listas de técnicos y vendedores muestran el personal de la sucursal elegida en el selector de sucursal del encabezado; con \"Todas las sucursales\" ves a todos. Un técnico ve las órdenes que tiene asignadas en cualquier sucursal y, si el taller lo permite, las sin asignar de su sucursal.",
+        roles: ["ADMIN"],
       },
     ],
   },
@@ -244,17 +375,61 @@ export const manualSections: ManualSection[] = [
     content: [
       {
         subtitle: "Gestión de vendedores",
-        body: "Similar a la sección de técnicos, acá podés gestionar a tu equipo de ventas. Cada vendedor tiene acceso al POS, ventas, clientes y proveedores.",
+        body: "Similar a la sección de técnicos, acá gestionás a tu equipo de ventas. Cada vendedor tiene acceso al POS, ventas, clientes y proveedores.",
         steps: [
           "Hacé clic en \"Nuevo Vendedor\"",
-          "Completá nombre, email y datos de contacto",
-          "Asigná el rol VENDEDOR",
-          "El vendedor recibirá un email para configurar su acceso",
+          "Completá Nombre, Email, Contraseña (la que va a usar para ingresar; no se manda ningún email) y Teléfono",
+          "Opcional: \"Porcentaje de comisión (%)\" sobre cada venta y \"Comisión por recepción (%)\"",
+          "Si tenés más de una sucursal, elegí la Sucursal",
         ],
+        tip: "Para moverlo de sucursal o darlo de baja, mirá \"Mover de sucursal\" y \"Eliminar o dar de baja\" en la sección Técnicos: funciona igual.",
+        seeAlso: ["tecnicos", "comisiones"],
       },
       {
         subtitle: "Rendimiento de ventas",
         body: "Desde el perfil de cada vendedor podés consultar sus ventas realizadas, montos totales y métricas de desempeño.",
+      },
+    ],
+  },
+  {
+    id: "comisiones",
+    title: "Comisiones",
+    roles: ["ADMIN"],
+    content: [
+      {
+        subtitle: "Cómo funcionan las comisiones",
+        body: "STApp calcula tres tipos de comisión: la del técnico, sobre cada reparación; la de recepción, para quien recibió el equipo; y la del vendedor, sobre cada venta. El porcentaje de cada persona se carga en su formulario (\"% Comisión como técnico\" o \"Porcentaje de comisión (%)\", y \"Comisión por recepción (%)\"). Si dejás vacío el de recepción, se usa el del taller. Cada orden guarda el porcentaje vigente al recibir el equipo.",
+      },
+      {
+        subtitle: "Reglas de comisiones",
+        body: "En Configuración > pestaña \"Comisiones\" definís las reglas de las reparaciones. Un cambio recalcula las comisiones pendientes; las ya pagadas no cambian.",
+        steps: [
+          "\"Cuándo se genera la comisión\": al entregar la orden y tenerla cobrada por completo, al entregar la orden, o al tener la orden cobrada por completo",
+          "\"Base del técnico\" y \"Base de recepción\": Mano de obra (monto de la orden menos repuestos) o Monto de la orden (costo final menos descuentos y notas de crédito, sin el recargo de tarjeta)",
+          "\"Porcentaje de recepción por defecto\": con 0, la recepción no genera comisión",
+          "Opciones: \"Los reingresos por garantía generan comisión\" y \"Las órdenes entregadas sin reparar generan comisión\"",
+          "Tocá \"Guardar reglas\"",
+        ],
+        tip: "Con una regla que pide cobro completo, las reparaciones fiadas no generan comisión hasta que se cobran del todo.",
+      },
+      {
+        subtitle: "Pagar comisiones",
+        body: "En el menú Más > \"Comisiones\" tenés las pestañas Técnicos, Recepción y Vendedores, con filtro por persona y fechas Desde/Hasta.",
+        steps: [
+          "Marcá las comisiones pendientes, o usá \"Seleccionar todas las pendientes\"",
+          "Tocá \"Marcar como pagadas\" y confirmá",
+          "Solo podés pagar juntas comisiones de una misma persona",
+        ],
+        tip: "Si el total es negativo (por devoluciones o notas de crédito), se registra como descuento a favor del taller. A un vendedor también lo podés liquidar desde su detalle con \"Liquidar\". El detalle del técnico lista sus comisiones y las exporta con el botón \"CSV\".",
+      },
+      {
+        subtitle: "Anular un pago de comisiones",
+        body: "Si pagaste por error, tocá la etiqueta \"Pagada\" de cualquier comisión de ese pago. Se abre \"Anular pago\" con cuántas comisiones incluye, el total y la fecha. Escribí el motivo (obligatorio) y confirmá: todas las comisiones del pago vuelven a quedar pendientes, y las de órdenes vuelven con el monto actual.",
+      },
+      {
+        subtitle: "Comisión dentro de la orden",
+        body: "En el detalle de la orden, el administrador ve la tarjeta \"Comisiones\" con la fila del técnico y la de recepción, cada una con su base y su porcentaje editable, más las \"Horas trabajadas\". Solo el administrador ve y edita estos campos.",
+        seeAlso: ["ordenes", "configuracion"],
       },
     ],
   },
@@ -276,8 +451,10 @@ export const manualSections: ManualSection[] = [
           "Seleccioná categoría y tipo de dispositivo",
           "Ingresá precio de compra y precio de venta a técnicos",
           "Definí el stock inicial y el stock mínimo para alertas",
+          "Si tenés 2 o más depósitos activos, elegí el \"Depósito del stock inicial\" (se habilita cuando el stock es mayor a 0; por defecto se usa el principal)",
           "Opcionalmente asigná un proveedor",
         ],
+        tip: "Cuando cargás stock sin elegir depósito (en la lista, en la importación, o con lotes, series y kits), va al depósito principal de tu sucursal. Si sos administrador y estás en \"Todas las sucursales\", va al principal del taller.",
       },
       {
         subtitle: "Alertas de stock bajo",
@@ -291,7 +468,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Imprimir etiquetas",
-        body: "Desde el menú de acciones de un item elegí \"Imprimir etiqueta\", o seleccioná varios items en la lista y usá el botón \"Etiquetas\" de la barra superior para imprimirlas juntas. Podés imprimir en una impresora térmica de etiquetas adhesivas (tamaños 40×25, 38×25, 50×30 y 60×40 mm, o rollo de 58 y 80 mm, con etiquetas de 30 y 40 mm de alto) o en una hoja A4 con varias etiquetas. Cada etiqueta puede llevar nombre, código de barras, código y precio. Si un producto no tiene código, se imprime como etiqueta de precio (nombre y precio, sin código de barras). El medio y el tamaño quedan recordados en ese navegador.",
+        body: "Desde el menú de acciones de un item elegí \"Imprimir etiqueta\", o seleccioná varios items en la lista y usá el botón \"Etiquetas\" de la barra superior para imprimirlas juntas. En \"Medio de impresión\" elegís impresora térmica (etiqueta adhesiva) u hoja A4 con varias etiquetas, y en \"Tamaño de etiqueta\" uno de 40×25, 38×25, 40×30, 50×30, 50×40 o 60×40 mm, o rollo de 58 y 80 mm (etiquetas de 30 y 40 mm de alto). Cada etiqueta puede llevar nombre, código de barras, código y precio. Si un producto no tiene código, se imprime como etiqueta de precio (nombre y precio, sin código de barras). El medio y el tamaño se guardan para todo el taller: se configuran una vez y valen en todas las computadoras.",
         tip: "En el driver de la impresora configurá el mismo tamaño de etiqueta y los márgenes en 0. Las plantillas Zebra (ZPL/EPL) requieren que el producto tenga código.",
       },
       {
@@ -359,6 +536,11 @@ export const manualSections: ManualSection[] = [
         subtitle: "Desagrupar",
         body: "Si apagás \"Este producto tiene variantes\" en un producto ya guardado, te pedimos confirmación y se desagrupa: cada variante sigue existiendo como producto común, con su nombre, su stock, su precio y su foto. No se archiva ni se borra nada.",
       },
+      {
+        subtitle: "Variantes en el punto de venta",
+        body: "En el POS, los productos con variantes aparecen en una sola tarjeta. Al tocarla se abre una hoja para elegir la variante a vender, con su stock. Si preferís verlas por separado, desactivá \"Agrupar variantes en el punto de venta\" en Configuración > pestaña Empresa > Módulos opcionales.",
+        seeAlso: ["pos"],
+      },
     ],
   },
   {
@@ -389,9 +571,9 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Anulación de ventas",
-        body: "Si una venta se cargó por error, podés anularla: cambia su estado a \"Anulada\". Para devolver productos o plata de una venta que sí ocurrió, usá una nota de crédito.",
+        body: "Si una venta se cargó por error, podés anularla: cambia su estado a \"Anulada\". Para devolver productos o plata de una venta que sí ocurrió, usá una nota de crédito. Si la venta tiene una factura electrónica emitida, primero tenés que anularla con \"Anular factura\" en el bloque Factura electrónica. Tampoco se anula si tiene un remito vigente.",
         roles: ["ADMIN"],
-        seeAlso: ["notas-credito"],
+        seeAlso: ["notas-credito", "facturacion-electronica"],
       },
     ],
   },
@@ -402,7 +584,7 @@ export const manualSections: ManualSection[] = [
     content: [
       {
         subtitle: "Qué es una nota de crédito",
-        body: "Una nota de crédito deja constancia de lo que le devolvés o le acreditás a un cliente sobre una venta o una orden: productos que vuelven, un trabajo que no se hizo, un ajuste de precio. Cada una lleva su número NC- (las devoluciones registradas antes conservan su número DEV-). Es un comprobante interno: no reemplaza una factura ni una nota de crédito fiscal.",
+        body: "Una nota de crédito deja constancia de lo que le devolvés o le acreditás a un cliente sobre una venta o una orden: productos que vuelven, un trabajo que no se hizo, un ajuste de precio. Cada una lleva su número NC- (las devoluciones registradas antes conservan su número DEV-). Es un comprobante interno: no reemplaza una factura ni una nota de crédito fiscal. La nota de crédito electrónica de ARCA se emite aparte, al anular la factura desde la venta.",
         tip: "Si el cliente todavía debía parte de la venta o de la orden, la nota de crédito primero baja esa deuda y solo el resto se le devuelve.",
       },
       {
@@ -439,11 +621,21 @@ export const manualSections: ManualSection[] = [
         body: "El POS es una interfaz simplificada y rápida para registrar ventas en mostrador. Está diseñado para agilizar la atención al cliente con un flujo de cobro rápido.",
         steps: [
           "Abrí la sección \"POS\"",
-          "Buscá y agregá productos al carrito",
+          "Buscá y agregá productos al carrito (también con el lector de código de barras)",
           "Ajustá cantidades si es necesario",
           "Seleccioná el método de pago",
-          "Confirmá la venta — el stock se actualiza automáticamente",
+          "Tocá \"Cobrar Venta\" y confirmá. En efectivo podés cargar el \"Monto recibido\" — el stock se actualiza automáticamente",
         ],
+      },
+      {
+        subtitle: "Pantalla de venta registrada",
+        body: "Al cobrar se abre \"Venta registrada\". Si pagaron en efectivo y cargaste el monto recibido, se destaca el Vuelto con lo recibido y el total; si no, se destaca el Total. Desde ahí podés \"Imprimir\" (o \"Reimprimir\"), compartir el ticket, emitir la \"Factura\" electrónica (administradores con la facturación activada) y pasar a \"Nueva venta\" con el botón o con Enter.",
+        seeAlso: ["facturacion-electronica"],
+      },
+      {
+        subtitle: "Productos con variantes en el POS",
+        body: "Los productos con variantes aparecen en una sola tarjeta. Al tocarla se abre una hoja con cada variante y su stock (\"Elegí la variante que vas a vender\"); las que no tienen stock figuran como \"Sin stock\". Si preferís verlas por separado, desactivá \"Agrupar variantes en el punto de venta\" en Configuración > pestaña Empresa > Módulos opcionales.",
+        seeAlso: ["variantes"],
       },
     ],
   },
@@ -500,7 +692,7 @@ export const manualSections: ManualSection[] = [
     content: [
       {
         subtitle: "Crear un remito",
-        body: "El módulo de Comprobantes te permite generar remitos internos asociados a órdenes de servicio o independientes. Importante: STApp emite documentos no fiscales (comprobantes internos para tu control), no facturas electrónicas AFIP. Los precios se cargan finales (sin discriminación de IVA).",
+        body: "El módulo de Comprobantes tiene dos pestañas: \"Remitos\" y, si emitís facturas electrónicas, \"Comprobantes ARCA\". Los remitos son documentos no fiscales (comprobantes internos para tu control), asociados a órdenes de servicio o independientes, y sus precios se cargan finales.",
         steps: [
           "Andá a \"Comprobantes\" y hacé clic en \"Generar remito\"",
           "Seleccioná el cliente",
@@ -508,7 +700,8 @@ export const manualSections: ManualSection[] = [
           "Asigná un número de remito (manual)",
           "Guardá el remito",
         ],
-        tip: "Si necesitás emitir facturas electrónicas válidas para AFIP, usá tu sistema fiscal habitual. STApp te sirve para llevar el control interno, los pagos parciales y la cuenta corriente del cliente.",
+        tip: "Para facturar ante ARCA activá la facturación electrónica en Configuración > pestaña Facturación (ver \"Facturación electrónica (ARCA)\"). El remito te sigue sirviendo para el control interno, los pagos parciales y la cuenta corriente.",
+        seeAlso: ["facturacion-electronica"],
       },
       {
         subtitle: "Pagos parciales",
@@ -527,6 +720,58 @@ export const manualSections: ManualSection[] = [
         subtitle: "Asociar a orden de servicio",
         body: "Podés vincular un remito a una orden de servicio para mantener la trazabilidad completa: desde la recepción del equipo hasta el cobro.",
         seeAlso: ["ordenes", "caja"],
+      },
+    ],
+  },
+  {
+    id: "facturacion-electronica",
+    title: "Facturación electrónica (ARCA)",
+    roles: ["ADMIN"],
+    content: [
+      {
+        subtitle: "Requisitos y activación",
+        body: "La factura electrónica está disponible para talleres de Argentina. Se activa en Configuración > pestaña Facturación, tarjeta \"Facturación electrónica (AFIP/ARCA)\", con la casilla \"Activar facturación electrónica\", que se guarda al tocarla. Las facturas salen a consumidor final: Factura C si sos Monotributo, Factura B si sos Responsable Inscripto. Por ahora se factura desde las ventas, no desde las órdenes.",
+      },
+      {
+        subtitle: "Autorizar a STApp en ARCA (delegación)",
+        body: "No necesitás certificados: delegás el servicio de facturación a STApp con tu Clave Fiscal.",
+        steps: [
+          "En ARCA entrá a Administrador de Relaciones de Clave Fiscal > Nueva Relación",
+          "Servicio > Buscar > ARCA > WebServices > Facturación Electrónica",
+          "En \"Representante\" pegá el CUIT de STApp que aparece en la tarjeta (sin guiones) y confirmá",
+          "En STApp completá \"CUIT del taller\", \"Punto de venta\" y \"Condición fiscal\" y tocá \"Guardar\"",
+          "Esperá a que STApp verifique que el CUIT es tuyo: mientras tanto figura \"Pendiente de verificación\" y no se puede facturar",
+          "Tocá \"Probar conexión\"",
+        ],
+        tip: "El punto de venta tiene que estar creado en ARCA para Web Service (\"Factura Electronica - Monotributo - Web Service\" si sos Monotributo, \"RECE para aplicativo y Web Service\" si sos Responsable Inscripto); los de \"Factura en línea\" no sirven. ARCA puede tardar unas horas en reconocer la delegación: \"Probar conexión\" te indica a partir de qué hora volver a probar.",
+      },
+      {
+        subtitle: "Emitir la factura de una venta",
+        body: "En el detalle de la venta, el bloque \"Factura electrónica\" muestra \"Emitir factura electrónica\". Solo se puede emitir si la venta está completada, sin devoluciones y con total mayor a cero. Desde el POS, en la pantalla \"Venta registrada\", el botón \"Factura\" la emite al momento. Una vez emitida ves el número, el CAE, su vencimiento y el botón \"Ver PDF\"; el PDF trae el QR, el CAE y la leyenda de ARCA. Si ARCA la rechaza, ves el motivo y el botón \"Reintentar\".",
+        seeAlso: ["ventas", "pos"],
+      },
+      {
+        subtitle: "Factura pendiente de verificación",
+        body: "Si la conexión con ARCA se corta durante el envío, la factura queda en proceso: ARCA puede haberla emitido igual. No la vuelvas a emitir: tocá \"Verificar con ARCA\" y STApp la confirma sin duplicarla. Lo mismo vale para una nota de crédito pendiente.",
+      },
+      {
+        subtitle: "Anular una factura (nota de crédito electrónica)",
+        body: "Anular una factura emite ante ARCA una nota de crédito electrónica por el total autorizado. No se puede deshacer y no toca el stock, la caja, la cuenta corriente ni el estado de la venta: si el cliente devolvió productos o plata, registrá la devolución aparte.",
+        steps: [
+          "En el detalle de la venta, bloque Factura electrónica, tocá \"Anular factura\"",
+          "Elegí el motivo: \"Error en la factura\", \"Devolución total\" u \"Otro\" (en Otro, el detalle es obligatorio)",
+          "Confirmá con \"Anular factura\" y no cierres la pantalla mientras se emite",
+        ],
+        tip: "La normativa pide emitir la nota de crédito dentro de los 15 días de la factura; pasado ese plazo te avisamos. Consultalo con tu contador.",
+      },
+      {
+        subtitle: "Volver a facturar o editar una venta",
+        body: "Con la factura anulada, el bloque ofrece \"Emitir factura nueva\" y la anterior queda en \"Facturas anteriores\". Mientras la venta tenga una factura emitida o en proceso no se puede editar ni anular; una vez anulada la factura con su nota de crédito, sí.",
+      },
+      {
+        subtitle: "Listado de comprobantes ARCA",
+        body: "En Comprobantes, pestaña \"Comprobantes ARCA\", ves todas las facturas y notas de crédito electrónicas con fecha, número, venta, total, estado, CAE y PDF. Podés filtrar por estado: Emitidas, En proceso, Rechazadas o Anuladas. La pestaña aparece si ya emitiste facturas o si hoy podés emitir.",
+        seeAlso: ["facturacion"],
       },
     ],
   },
@@ -618,7 +863,18 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Órdenes reparadas sin cobrar",
-        body: "El resumen de caja muestra una lista destacada de órdenes que ya están reparadas o entregadas pero todavía tienen saldo pendiente de cobro. Te ayuda a no olvidarte de cobrar trabajos terminados.",
+        body: "El resumen de caja muestra la tarjeta \"Órdenes Reparadas sin Cobrar\" con las órdenes reparadas o entregadas que todavía tienen saldo pendiente. Cada orden muestra el saldo pendiente y lo cobrado. No aparecen las que pasaron a cuenta corriente (fiado) ni las que tienen el remito pagado. Tocá una orden para ir a cobrarla.",
+      },
+      {
+        subtitle: "Corregir el método de pago de un movimiento",
+        body: "Si un cobro quedó con el método equivocado, en la pestaña Resumen, \"Detalle de Movimientos\", tocá el lápiz (\"Cambiar método de pago\"), elegí el método correcto y tocá \"Guardar\". Si pasás a tarjeta podés cargar el \"Costo de terminal (%)\"; si salís de tarjeta, se borran las cuotas, el recargo y el costo de terminal.",
+        tip: "No se puede cambiar un pago a cuenta corriente, un movimiento de una sesión de caja ya cerrada, un movimiento anulado ni un cobro con cuotas ya cobradas.",
+      },
+      {
+        subtitle: "Vendedores en la caja",
+        body: "Por defecto la caja es del administrador. Si activás \"Abrir y cerrar la caja\" en Configuración > Secciones > Roles y permisos, los vendedores también pueden abrir y cerrar la caja y cobrar órdenes de su sucursal (sin aplicar descuentos).",
+        roles: ["ADMIN"],
+        seeAlso: ["ordenes"],
       },
     ],
   },
@@ -784,7 +1040,7 @@ export const manualSections: ManualSection[] = [
     content: [
       {
         subtitle: "Datos de la empresa",
-        body: "En Configuración > General podés editar los datos de tu organización: nombre, dirección, teléfono, email y logo. Estos datos aparecen en todas las comunicaciones y documentos generados (órdenes, remitos, cotizaciones).",
+        body: "Configuración está organizada en pestañas: Secciones (accesos a Checklist, Roles y permisos, WhatsApp, Sucursales, Depósitos, Gastos, etc.), Empresa, Facturación, Comprobantes, Comisiones, Avisos y Seguridad. En la pestaña Empresa editás el logo, los datos de la empresa, el país, la moneda, la zona horaria y los módulos opcionales. Estos datos aparecen en todos los documentos (órdenes, remitos, cotizaciones). En Empresa, Facturación y Comprobantes los cambios se guardan con el botón \"Guardar Cambios\" de la barra fija de abajo.",
       },
       {
         subtitle: "Checklist de recepción",
@@ -798,13 +1054,13 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Tipos de dispositivo",
-        body: "Personalizá los tipos de dispositivo que manejás en tu taller. Por defecto STApp incluye: Celular, Computadora, Tablet, Consola y Smartwatch, pero podés agregar otros.",
+        body: "Personalizá los tipos de equipo que manejás en tu taller. Los tipos iniciales dependen del rubro que elegiste al registrarte (por ejemplo Celular y Computadora en electrónica, o Auto y Camioneta en automotor). Podés agregar o editar los que quieras.",
       },
       {
         subtitle: "Integración WhatsApp",
         body: "Configurá la integración con WhatsApp Business API para enviar notificaciones automáticas a tus clientes cuando cambie el estado de una orden.",
         steps: [
-          "Andá a Configuración > WhatsApp",
+          "Andá a Configuración > Secciones > WhatsApp Business",
           "Seguí las instrucciones para vincular tu número de WhatsApp Business",
           "Configurá las plantillas de mensaje",
           "Activá las notificaciones automáticas que desees",
@@ -820,8 +1076,29 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Plan y suscripción",
-        body: "En Configuración > Billing podés ver tu plan actual, los días restantes de prueba, cambiar de plan y gestionar tu método de pago a través de MercadoPago.",
+        body: "En Configuración > Secciones > Facturación y Plan podés ver tu plan actual, los días restantes de prueba, cambiar de plan y gestionar tu método de pago a través de MercadoPago.",
         seeAlso: ["suscripcion"],
+      },
+      {
+        subtitle: "Roles y permisos",
+        body: "En Configuración > Secciones > Roles y permisos activás permisos extra para técnicos y vendedores, por ejemplo que los técnicos tomen órdenes sin asignar o que los vendedores abran y cierren la caja.",
+        seeAlso: ["primeros-pasos", "caja"],
+      },
+      {
+        subtitle: "País, moneda e identificación fiscal",
+        body: "En la pestaña Empresa elegís el país (Argentina, España y 18 países de Latinoamérica). Eso completa la moneda y la zona horaria por defecto, y define el formato de teléfono para WhatsApp, las alícuotas de IVA y el nombre del ID fiscal: CUIT en Argentina, NIF en España, RFC en México, etc.",
+        tip: "La factura electrónica ARCA es solo para Argentina.",
+      },
+      {
+        subtitle: "Sucursales",
+        body: "En Configuración > Secciones > Sucursales creás las sucursales del taller con \"Nueva sucursal\": nombre y, opcionalmente, código, teléfono, dirección y notas. Una es la \"Principal\", que se usa por defecto. La cantidad de sucursales depende de tu plan; al llegar al límite vas a ver \"Límite de sucursales alcanzado\".",
+        tip: "No podés desactivar ni archivar la principal: primero marcá otra como principal. Solo podés archivar una sucursal sin órdenes ni personal; si tiene, desactivala o mové antes a su personal.",
+        seeAlso: ["tecnicos"],
+      },
+      {
+        subtitle: "Depósitos",
+        body: "En Configuración > Secciones > Depósitos administrás dónde está guardado el stock. Cada sucursal tiene su depósito principal, que es el que se usa cuando una operación no indica depósito; con varias sucursales, la etiqueta dice \"Principal · (sucursal)\". Solo se puede archivar un depósito sin stock; el historial de movimientos se conserva.",
+        seeAlso: ["inventario"],
       },
     ],
   },
@@ -836,7 +1113,7 @@ export const manualSections: ManualSection[] = [
         steps: [
           "Navegador web: abrí stapp.com.ar desde Chrome o Safari en tu celular",
           "PWA (Progressive Web App): instalá STApp como aplicación desde el navegador para acceso rápido y notificaciones",
-          "APK Android: descargá la app nativa para Android desde stapp.com.ar/descargar/android",
+          "App Android: está en beta en Google Play. Anotate desde el aviso \"Sumate a la beta de Android\" del panel con el correo de Google de tu celular; cuando te agregamos, tocá \"Aceptar invitación\" e instalala desde Play Store",
         ],
       },
       {
@@ -856,6 +1133,16 @@ export const manualSections: ManualSection[] = [
       {
         subtitle: "Navegación móvil",
         body: "En móvil, la navegación se adapta con una barra inferior con 4 accesos rápidos: Dashboard, Órdenes, Clientes e Inventario (según tu rol). El resto de las opciones están en el menú \"Más\".",
+      },
+      {
+        subtitle: "Entrar a tu negocio desde la app",
+        body: "Al abrir la app Android ingresás el identificador de tu negocio (lo que va antes de .stapp.com.ar) y tocás \"Continuar\". Los negocios que usaste quedan en \"Negocios recientes\". Para pasar a otro, tocá \"Cambiar de empresa\" en el login. Para crear un negocio nuevo, tocá \"Registrar mi negocio\".",
+      },
+      {
+        subtitle: "Notificaciones push",
+        body: "Cada aviso de la campanita también te llega como notificación al celular o la computadora, en aproximadamente un minuto. En la app Android se activan solas al iniciar sesión. En el navegador, andá a Perfil > Notificaciones push y tocá \"Activar\" (con \"Probar\" verificás que llegan).",
+        tip: "Se activan por dispositivo. Si el navegador dice que el permiso está bloqueado, habilitalo en los ajustes del sitio y recargá la página.",
+        seeAlso: ["dashboard"],
       },
     ],
   },
@@ -877,7 +1164,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Autenticación segura",
-        body: "Tu cuenta está protegida con contraseña encriptada, verificación de email obligatoria y la opción de activar autenticación en dos pasos (2FA) para mayor seguridad.",
+        body: "Tu cuenta está protegida con contraseña encriptada, verificación de email (automática si te registrás con Google) y la opción de activar autenticación en dos pasos (2FA), que también se pide al entrar con Google. Cada dispositivo tiene su propia sesión: cerrar sesión en uno no cierra los demás, y si cambiás la contraseña se cierran todas en menos de una hora.",
       },
       {
         subtitle: "Privacidad de datos",
@@ -941,11 +1228,11 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Estado de cobro de una orden",
-        body: "Indica si un trabajo terminado ya fue pagado: PENDIENTE (no se cobró nada), PARCIAL (se cobró algo pero falta saldo), PAGADO (cobrado en su totalidad).",
+        body: "Indica si un trabajo terminado ya fue pagado: PENDIENTE (no se cobró nada), PARCIAL (se cobró algo pero falta saldo), COBRADO (cobrado en su totalidad).",
       },
       {
         subtitle: "Documento no fiscal",
-        body: "Comprobante interno que emite STApp para tu control y para entregar al cliente como recibo. No reemplaza la factura electrónica de AFIP — para eso seguís usando tu sistema fiscal.",
+        body: "Comprobante interno que emite STApp (remito, ticket, nota de crédito interna) para tu control y para entregarle al cliente. No tiene validez fiscal. En Argentina podés emitir además la factura electrónica ARCA de una venta.",
       },
       {
         subtitle: "PWA (Progressive Web App)",
@@ -984,7 +1271,7 @@ export const manualSections: ManualSection[] = [
       },
       {
         subtitle: "Gestión de suscripción",
-        body: "Para gestionar tu suscripción, andá a Configuración > Billing. Ahí podés ver tu plan actual, cambiar de plan, actualizar el método de pago y ver el historial de pagos.",
+        body: "Para gestionar tu suscripción, andá a Configuración > Secciones > Facturación y Plan. Ahí podés ver tu plan actual, cambiar de plan, actualizar el método de pago y ver el historial de pagos.",
       },
     ],
   },
