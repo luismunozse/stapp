@@ -1,9 +1,9 @@
 /**
  * Cancelar, renovar a mano o activar en masa desde el panel tiene que cortar el
- * débito automático del proveedor. Si solo se tocaba la fila:
+ * débito automático de MercadoPago (preapproval), el único proveedor en uso. Si solo se tocaba la fila:
  *  - cancelar: MercadoPago seguía cobrando y el webhook revivía la suscripción;
  *  - renovar/activar (pasa a MANUAL): cobro doble y período inflado por el webhook.
- * Si el proveedor falla, la fila no se toca (el reintento vuelve a pasar).
+ * Si MercadoPago falla, la fila no se toca (el reintento vuelve a pasar).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { montarSupabaseEnMemoria } from "../helpers/supabase-memoria"
@@ -17,8 +17,6 @@ vi.mock("@/lib/superadmin-audit", () => ({
   createSuperadminAuditLogger: () => ({ log: vi.fn().mockResolvedValue(undefined) }),
 }))
 vi.mock("@/lib/mercadopago", () => mp)
-vi.mock("@/lib/rebill", () => ({ cancelRebillSubscription: vi.fn(), getRebillSubscription: vi.fn() }))
-vi.mock("@/lib/creem", () => ({ cancelCreemSubscription: vi.fn() }))
 
 import { POST as cancel } from "@/app/api/superadmin/subscriptions/cancel/route"
 import { POST as renew } from "@/app/api/superadmin/subscriptions/renew/route"
@@ -44,8 +42,6 @@ const sub = (over: Record<string, unknown>) => ({
   canceled_at: null,
   payment_provider: "MERCADOPAGO",
   mercadopago_preapproval_id: "pre-1",
-  rebill_subscription_id: null,
-  creem_subscription_id: null,
   ...over,
 })
 
@@ -54,7 +50,7 @@ const PLAN = { id: "p1", slug: "profesional", tipo: "PREMIUM", activo: true, pre
 const updatesDe = (mem: ReturnType<typeof montarSupabaseEnMemoria>, tabla = "subscriptions") =>
   mem.escrituras.filter((e) => e.tabla === tabla && e.operacion === "update")
 
-describe("superadmin: cancelación del débito automático", () => {
+describe("superadmin: cancelación del débito automático de MercadoPago", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mp.cancelPreApproval.mockResolvedValue({ status: "cancelled" })
@@ -83,7 +79,7 @@ describe("superadmin: cancelación del débito automático", () => {
       const mem = montarSupabaseEnMemoria({ subscriptions: [sub({})] })
       const res = await cancel(post({ organizationId: "o1", immediate: true }))
       expect(res.status).toBe(502)
-      expect((await res.json()).providers).toEqual(["MERCADOPAGO"])
+      expect((await res.json()).error).toMatch(/MercadoPago/)
       expect(updatesDe(mem)).toEqual([])
       expect(mem.filas("subscriptions")[0].status).toBe("ACTIVE")
     })
@@ -143,7 +139,7 @@ describe("superadmin: cancelación del débito automático", () => {
       expect(s2.payment_provider).toBe("MANUAL")
     })
 
-    it("cancel: si el proveedor falla en una org, esa queda igual y cuenta como error", async () => {
+    it("cancel: si MercadoPago falla en una org, esa queda igual y cuenta como error", async () => {
       mp.cancelPreApproval.mockImplementation(async (id: string) => {
         if (id === "pre-1") throw new Error("timeout")
         return { status: "cancelled" }

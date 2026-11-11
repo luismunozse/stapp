@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { exceedsTrialCap, trialAdjustmentStatus } from "@/lib/trial"
-import { cancelOrganizationSubscriptions } from "@/lib/account-deletion/cancel-subscriptions"
+import { cancelMercadoPagoPreapproval } from "@/lib/account-deletion/cancel-subscriptions"
 
 const bulkActionSchema = z.object({
   action: z.enum(["extend_trial", "activate", "cancel"]),
@@ -144,10 +144,10 @@ export async function POST(request: Request) {
           continue
         }
 
-        // Pasa a MANUAL: cancelar antes el cobro automático del proveedor, que
-        // si no seguiría debitando y su webhook volvería a MERCADOPAGO.
-        const providerCancel = await cancelOrganizationSubscriptions(orgId)
-        if (!providerCancel.ok) { errorCount++; continue }
+        // Pasa a MANUAL: cancelar antes la preapproval de MercadoPago, que si
+        // no seguiría debitando y su webhook volvería a MERCADOPAGO.
+        const mpCancel = await cancelMercadoPagoPreapproval(orgId)
+        if (!mpCancel.ok) { errorCount++; continue }
 
         const { error: updateError } = await supabaseAdmin
           .from("subscriptions")
@@ -192,10 +192,10 @@ export async function POST(request: Request) {
 
         if (!sub || sub.status === "CANCELED") { errorCount++; continue }
 
-        // Igual que la cancelación individual: primero el cobro automático en
-        // el proveedor; si falla, la org queda como estaba y cuenta como error.
-        const providerCancel = await cancelOrganizationSubscriptions(orgId)
-        if (!providerCancel.ok) { errorCount++; continue }
+        // Igual que la cancelación individual: primero la preapproval de
+        // MercadoPago; si falla, la org queda como estaba y cuenta como error.
+        const mpCancel = await cancelMercadoPagoPreapproval(orgId)
+        if (!mpCancel.ok) { errorCount++; continue }
 
         const { error: updateError } = immediate
           ? await supabaseAdmin
@@ -215,7 +215,7 @@ export async function POST(request: Request) {
           action: "CANCELED",
           previous_status: sub.status,
           new_status: immediate ? "CANCELED" : sub.status,
-          details: { immediate, bulk: true, providers_canceled: providerCancel.canceled },
+          details: { immediate, bulk: true, mercadopago_preapproval_canceled: mpCancel.canceled },
           performed_by: email,
         })
 
