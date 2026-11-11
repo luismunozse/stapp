@@ -41,6 +41,7 @@ import {
   Lock,
   AlertTriangle,
   Layers,
+  ArrowRight,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -68,6 +69,9 @@ import { useEtiquetaSize } from "@/components/ordenes/use-etiqueta-size"
 import { ThermalPrintOrden } from "@/components/ordenes/thermal-print-orden"
 import { OrdenPapelSelect, useOrdenPapel } from "@/components/ordenes/orden-papel-select"
 import { NotificationHistory } from "@/components/ordenes/notification-history"
+import { FormActionBar } from "@/components/ui/form-action-bar"
+import { pendienteOrden } from "@/lib/ordenes/pendiente"
+import { siguienteEstado } from "@/lib/ordenes/siguiente-estado"
 import { PracticaOrdenDetail } from "@/components/ordenes/practica-orden-detail"
 import { OrdenEstadoCard } from "@/components/ordenes/orden-estado-card"
 import { dateOnlyToNoonUtcISO, todayInTimeZone } from "@/lib/timezone"
@@ -657,6 +661,24 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     ? 0
     : Math.round(((currentEstadoIndex + 1) / estadoFlow.length) * 100)
 
+  // Resumen del encabezado: lo que el mostrador busca primero (cliente, equipo, cuánto se debe).
+  const costoFinalNum = Number(orden.costoFinal ?? 0)
+  const saldoPendiente = Math.max(
+    0,
+    pendienteOrden({
+      costoFinal: costoFinalNum,
+      descuentoCobro: orden.descuentoCobro || 0,
+      totalCobrado: orden.totalCobrado || 0,
+      aplicadoNotasCredito: orden.aplicadoNotasCredito ?? 0,
+    })
+  )
+  const equipoResumen = [orden.marca, orden.dispositivo].filter(Boolean).join(" ")
+  const telefonoCliente = orden.telefonoContacto || orden.cliente?.telefono
+  const estadoSinCobro = orden.estado === "CANCELADO" || orden.estado === "SIN_REPARACION"
+  // Mismas condiciones que el botón "Cobrar" de OrdenCostosCard.
+  const mostrarCobrar = puedeCobrar && userRole !== "TECNICO" && costoFinalNum > 0 && saldoPendiente > 0 && !estadoSinCobro
+  const accionPrincipal = siguienteEstado(orden.estado)
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -681,7 +703,33 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 <OrderStatusBadge status={orden.estado} showIcon />
               )}
             </div>
-            <p className="text-sm text-muted-foreground">
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              {orden.cliente?.nombre && <span className="font-medium">{orden.cliente.nombre}</span>}
+              {telefonoCliente && (
+                <a href={`tel:${telefonoCliente}`} className="inline-flex items-center gap-1 text-primary hover:underline">
+                  <Phone className="h-3.5 w-3.5" />
+                  {telefonoCliente}
+                </a>
+              )}
+              {equipoResumen && (
+                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                  <Smartphone className="h-3.5 w-3.5" />
+                  {equipoResumen}
+                </span>
+              )}
+              {costoFinalNum > 0 && !estadoSinCobro && (
+                saldoPendiente > 0 ? (
+                  <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                    Saldo {formatPrice(saldoPendiente)}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center rounded-full border border-green-300 bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-900 dark:border-green-800 dark:bg-green-950/40 dark:text-green-200">
+                    Pagado
+                  </span>
+                )
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
               Ingresado el {formatDate(orden.fechaIngreso)}
             </p>
             {orden.recepcionId && (
@@ -1494,6 +1542,27 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         />
       )}
 
+      {/* Mobile: la acción principal siempre a mano, sobre la barra de navegación */}
+      {(accionPrincipal || mostrarCobrar) && (
+        <FormActionBar alwaysSticky className="lg:hidden">
+          {mostrarCobrar && (
+            <Button
+              variant={accionPrincipal ? "outline" : "default"}
+              className="flex-1"
+              onClick={() => setShowCobrarDialog(true)}
+            >
+              <DollarSign className="h-4 w-4 mr-2" />
+              Cobrar {formatPrice(saldoPendiente)}
+            </Button>
+          )}
+          {accionPrincipal && (
+            <Button className="flex-1" onClick={() => handleUpdateEstado(accionPrincipal.estado)} disabled={updating}>
+              {accionPrincipal.label}
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
+          )}
+        </FormActionBar>
+      )}
     </div>
   )
 }

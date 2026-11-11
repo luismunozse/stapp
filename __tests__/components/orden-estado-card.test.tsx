@@ -125,3 +125,27 @@ describe("OrdenEstadoCard — fecha prometida editable", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled())
   })
 })
+
+describe("OrdenEstadoCard — acción principal y más estados", () => {
+  it("muestra el paso siguiente como botón y lo aplica", () => {
+    const onUpdateEstado = vi.fn()
+    renderCard({ estado: "EN_REPARACION" as EstadoOrden, onUpdateEstado })
+    fireEvent.click(screen.getByRole("button", { name: /Marcar reparado/ }))
+    expect(onUpdateEstado).toHaveBeenCalledWith("REPARADO")
+  })
+
+  it("el resto de las transiciones está en 'Más estados…', sin repetir la principal", () => {
+    const onUpdateEstado = vi.fn()
+    renderCard({ estado: "EN_REPARACION" as EstadoOrden, onUpdateEstado })
+    fireEvent.click(screen.getByRole("button", { name: /Más estados/ }))
+    expect(screen.getByRole("button", { name: "Esperando Repuesto" })).toBeInTheDocument()
+    expect(screen.queryAllByRole("button", { name: /^Reparado$/ })).toHaveLength(0)
+    fireEvent.click(screen.getByRole("button", { name: "Esperando Repuesto" }))
+    expect(onUpdateEstado).toHaveBeenCalledWith("ESPERANDO_REPUESTO")
+  })
+
+  it("en un estado terminal no hay botones de cambio", () => {
+    renderCard({ estado: "ENTREGADO" as EstadoOrden })
+    expect(screen.queryByRole("button", { name: /Más estados|Cambiar estado/ })).not.toBeInTheDocument()
+  })
+})
