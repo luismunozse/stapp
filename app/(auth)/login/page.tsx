@@ -16,6 +16,7 @@ import { savePWATokens } from "@/components/auth/session-refresher"
 import { extractAuthCode, parseRequires2FA } from "@/lib/auth-client"
 import { isNativePlatform } from "@/lib/capacitor"
 import { TwoFactorVerify } from "@/components/auth/two-factor-verify"
+import { tenantLookupOutcome } from "@/lib/tenant-lookup"
 
 interface TenantInfo {
   nombre: string
@@ -79,20 +80,18 @@ function LoginForm() {
     setTenantSlug(slug)
 
     if (slug) {
-      fetch(`/api/public/tenant?slug=${slug}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.tenant) {
-            setTenantInfo(data.tenant)
-          } else {
-            setTenantError(true)
-          }
-          setTenantLoading(false)
+      // Solo un "no existe" confirmado manda a /tenant-not-found. Un fetch
+      // cortado (Safari en iPhone al volver de segundo plano), un 429 o un 500
+      // dejan el login sin logo: el proxy ya redirige los slugs inexistentes.
+      fetch(`/api/public/tenant?slug=${encodeURIComponent(slug)}`)
+        .then(async (res) => {
+          const data = await res.json().catch(() => null)
+          const outcome = tenantLookupOutcome(res.ok, data)
+          if (outcome === "found") setTenantInfo(data.tenant)
+          else if (outcome === "not_found") setTenantError(true)
         })
-        .catch(() => {
-          setTenantError(true)
-          setTenantLoading(false)
-        })
+        .catch(() => {})
+        .finally(() => setTenantLoading(false))
     } else {
       setTenantLoading(false)
     }
