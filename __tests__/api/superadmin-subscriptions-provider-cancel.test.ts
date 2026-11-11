@@ -14,7 +14,10 @@ vi.mock("@/lib/superadmin-auth", () => ({
   requireSuperadmin: vi.fn().mockResolvedValue({ error: null, email: "root@stapp.com.ar" }),
 }))
 vi.mock("@/lib/superadmin-audit", () => ({
-  createSuperadminAuditLogger: () => ({ log: vi.fn().mockResolvedValue(undefined) }),
+  createSuperadminAuditLogger: () => ({
+    log: vi.fn().mockResolvedValue(undefined),
+    exigir: vi.fn().mockResolvedValue({ ok: true, id: "audit-1", completar: vi.fn().mockResolvedValue(undefined) }),
+  }),
 }))
 vi.mock("@/lib/mercadopago", () => mp)
 

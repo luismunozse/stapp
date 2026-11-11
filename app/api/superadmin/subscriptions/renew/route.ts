@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
 import { DEFAULT_TIMEZONE, formatDateValue } from "@/lib/timezone"
 import { cancelMercadoPagoPreapproval } from "@/lib/account-deletion/cancel-subscriptions"
@@ -143,6 +144,26 @@ export async function POST(request: Request) {
     let subscriptionId: string
     const previousStatus = existingSub?.status || null
 
+    // Auditoría fail-closed ANTES de activar/renovar.
+    const intento = await createSuperadminAuditLogger(email, request).exigir({
+      action: "SUBSCRIPTION_RENEW",
+      entity: "subscriptions",
+      entityId: existingSub?.id ?? null,
+      organizationId,
+      description: `Renovación manual de suscripción (${targetSlug}, ${period})`,
+      metadata: {
+        action: "manual_renewal",
+        planSlug: targetSlug,
+        billing_period: period,
+        months: months || (period === "YEARLY" ? 12 : 1),
+        days: days || null,
+        custom_date: !!customEndDate,
+        previous_status: previousStatus,
+        provider_payment_id: providerPaymentId,
+      },
+    })
+    if (!intento.ok) return intento.respuesta
+
     // Monto del pago manual en base al período / cantidad de meses
     const meses = months || (period === "YEARLY" ? 12 : 1)
     const precioMensual = Number(premiumPlan.precio_mensual) || 0
@@ -158,6 +179,7 @@ export async function POST(request: Request) {
     if (existingSub) {
       const mpCancel = await cancelMercadoPagoPreapproval(organizationId)
       if (!mpCancel.ok) {
+        await intento.completar({ error: "mercadopago" }, "fallido")
         return NextResponse.json(
           { error: "No se pudo cancelar el débito automático en MercadoPago. La suscripción no se renovó; reintentá." },
           { status: 502 }
@@ -311,23 +333,10 @@ export async function POST(request: Request) {
       performed_by: email,
     })
 
-    // Registrar en audit_logs
-    await supabaseAdmin.from("audit_logs").insert({
-      organization_id: organizationId,
-      user_id: null,
-      action: "UPDATE",
-      entity: "subscriptions",
-      entity_id: subscriptionId,
-      changes: {
-        action: "manual_renewal",
-        billing_period: period,
-        months: months || (period === "YEARLY" ? 12 : 1),
-        period_end: periodEnd.toISOString(),
-        superadmin_email: email,
-        previous_status: previousStatus,
-        custom_date: !!customEndDate,
-        mercadopago_preapproval_canceled: mercadopagoCanceled,
-      },
+    await intento.completar({
+      subscriptionId,
+      period_end: periodEnd.toISOString(),
+      mercadopago_preapproval_canceled: mercadopagoCanceled,
     })
 
     // Notificar al admin de la org (mejora 11)

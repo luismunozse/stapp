@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { firmarReferencias } from "@/lib/storage-privado"
 import { z } from "zod"
 
@@ -110,7 +111,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireSuperadmin()
+    const { error, email } = await requireSuperadmin()
     if (error) return error
 
     const { id } = await params
@@ -125,6 +126,15 @@ export async function PATCH(
       .single()
 
     if (dbError) throw dbError
+
+    await createSuperadminAuditLogger(email, request).log({
+      action: "UPDATE",
+      entity: "support_tickets",
+      entityId: id,
+      organizationId: ticket.organization_id ?? null,
+      description: `Ticket de soporte pasado a ${data.estado}`,
+      metadata: { estado: data.estado },
+    })
 
     return NextResponse.json({
       id: ticket.id,

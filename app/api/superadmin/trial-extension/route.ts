@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
 import {
   exceedsTrialCap,
@@ -81,6 +82,27 @@ export async function POST(request: NextRequest) {
     // Actualizar suscripción. NO degradamos a TRIALING una sub que paga
     // (ACTIVE) ni reactivamos una CANCELED por ajustar fechas de trial.
     const nextStatus = trialAdjustmentStatus(sub.status)
+
+    // Auditoría fail-closed ANTES de mover la fecha del trial.
+    const intento = await createSuperadminAuditLogger(email, request).exigir({
+      action: "TRIAL_EXTENSION",
+      entity: "subscriptions",
+      entityId: sub.id,
+      organizationId,
+      description: isRemoval
+        ? "Trial finalizado por superadmin"
+        : `Trial ${deltaDias > 0 ? "extendido" : "acortado"} ${Math.abs(deltaDias)} días hasta ${newTrialEnd.toISOString()}`,
+      metadata: {
+        dias_extendidos: deltaDias,
+        removed: isRemoval,
+        nueva_fecha_fin: newTrialEnd.toISOString(),
+        motivo,
+        previous_status: sub.status,
+        previous_trial_end: sub.trial_end,
+      },
+    })
+    if (!intento.ok) return intento.respuesta
+
     const { error: updateError } = await supabaseAdmin
       .from("subscriptions")
       .update({
@@ -89,7 +111,10 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", sub.id)
 
-    if (updateError) throw updateError
+    if (updateError) {
+      await intento.completar({ error: updateError.message }, "fallido")
+      throw updateError
+    }
 
     // Registrar el ajuste (dias_extendidos puede ser negativo o 0 al quitar)
     await supabaseAdmin.from("trial_extensions").insert({
@@ -124,24 +149,7 @@ export async function POST(request: NextRequest) {
       performed_by: email,
     })
 
-    // Audit log
-    await supabaseAdmin.from("audit_logs").insert({
-      organization_id: organizationId,
-      user_id: null,
-      action: "UPDATE",
-      entity: "subscriptions",
-      entity_id: sub.id,
-      changes: {
-        action: "trial_adjustment",
-        dias_extendidos: deltaDias,
-        removed: isRemoval,
-        nueva_fecha_fin: newTrialEnd.toISOString(),
-        motivo,
-        superadmin_email: email,
-        previous_status: sub.status,
-        previous_trial_end: sub.trial_end,
-      },
-    })
+    await intento.completar()
 
     // Notificar al admin de la org SOLO cuando es una extensión real (días
     // positivos). No tiene sentido avisarle al cliente que le acortamos o

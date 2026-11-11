@@ -34,11 +34,20 @@ export async function POST(request: Request) {
     // que ya tienen un período pago vigente.
     let skippedCount = 0
 
-    if (action === "extend_trial") {
-      if (!dias) {
-        return NextResponse.json({ error: "dias es requerido para extend_trial" }, { status: 400 })
-      }
+    if (action === "extend_trial" && !dias) {
+      return NextResponse.json({ error: "dias es requerido para extend_trial" }, { status: 400 })
+    }
 
+    // Auditoría fail-closed ANTES de tocar cualquier suscripción.
+    const intento = await createSuperadminAuditLogger(email, request).exigir({
+      action: "BULK_ACTION",
+      entity: "subscriptions",
+      description: `Acción masiva "${action}" sobre ${organizationIds.length} organización(es)`,
+      metadata: { action, organizationIds, dias, motivo, billingPeriod, immediate, totalRequested: organizationIds.length },
+    })
+    if (!intento.ok) return intento.respuesta
+
+    if (action === "extend_trial" && dias) {
       for (const orgId of organizationIds) {
         const { data: sub } = await supabaseAdmin
           .from("subscriptions")
@@ -115,6 +124,7 @@ export async function POST(request: Request) {
       }
 
       if (!premiumPlan) {
+        await intento.completar({ error: "sin plan Premium activo" }, "fallido")
         return NextResponse.json({ error: "No se encontró plan Premium activo" }, { status: 404 })
       }
 
@@ -223,16 +233,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Audit log
-    const auditLogger = createSuperadminAuditLogger(email, request)
-    auditLogger
-      .log({
-        action: "BULK_ACTION",
-        entity: "subscriptions",
-        description: `Acción masiva "${action}": ${successCount} exitosas, ${errorCount} errores${skippedCount > 0 ? `, ${skippedCount} omitidas` : ""}`,
-        metadata: { action, successCount, errorCount, skippedCount, totalRequested: organizationIds.length },
-      })
-      .catch(() => {})
+    await intento.completar({ successCount, errorCount, skippedCount })
 
     return NextResponse.json({
       success: true,

@@ -3,6 +3,7 @@ import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 
 // Archivado masivo (soft delete). El borrado definitivo NO se hace en masa:
 // es de a una organización desde DELETE /organizations/[id]?hard=true, que pide
@@ -60,7 +61,20 @@ export async function POST(request: Request) {
       )
     }
 
-    // Default path — archive (soft delete)
+    const targetOrgs = (orgs || [])
+      .filter((o) => targetIds.includes(o.id))
+      .map((o) => ({ id: o.id, nombre: o.nombre }))
+    const audit = createSuperadminAuditLogger(email, request)
+
+    // Archivado (soft delete). Auditoría fail-closed ANTES de archivar.
+    const intento = await audit.exigir({
+      action: "ARCHIVE",
+      entity: "organizations",
+      description: `Archivado masivo de ${targetIds.length} organización(es)`,
+      metadata: { ids: targetIds, orgs: targetOrgs },
+    })
+    if (!intento.ok) return intento.respuesta
+
     const { count: archivedCount, error: archiveError } = await supabaseAdmin
       .from("organizations")
       .update({ deleted_at: new Date().toISOString(), deleted_by: email }, { count: "exact" })
@@ -69,6 +83,7 @@ export async function POST(request: Request) {
       .is("deleted_at", null)
 
     if (archiveError) {
+      await intento.completar({ error: archiveError.message }, "fallido")
       console.error("Bulk archive error:", archiveError)
       return NextResponse.json(
         { error: "Error al archivar organizaciones" },
@@ -78,25 +93,7 @@ export async function POST(request: Request) {
 
     const archived = archivedCount ?? 0
 
-    // Audit log — best effort
-    try {
-      await supabaseAdmin.from("audit_logs").insert({
-        organization_id: null,
-        user_id: null,
-        action: "ARCHIVE",
-        entity: "organizations",
-        entity_id: null,
-        changes: {
-          archived_count: archived,
-          archived_orgs: orgs
-            ?.filter((o) => targetIds.includes(o.id))
-            .map((o) => ({ id: o.id, nombre: o.nombre })),
-          superadmin_email: email,
-        },
-      })
-    } catch {
-      // best effort
-    }
+    await intento.completar({ archived_count: archived })
 
     return NextResponse.json({
       success: true,
