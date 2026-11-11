@@ -10,7 +10,7 @@ import {
 } from "@/lib/rate-limit"
 import { getTenantStatusBySlug } from "@/lib/tenant-status-edge"
 import { getUserDeletedStatus } from "@/lib/user-status-edge"
-import { checkSuperadminLoginLimit } from "@/lib/superadmin-login-limit-edge"
+import { checkSuperadminLoginLimit, checkTenantLoginLimit } from "@/lib/superadmin-login-limit-edge"
 import {
   isImpersonationWriteBlocked,
   isImpersonationExpired,
@@ -190,6 +190,10 @@ function extractSubdomain(hostname: string): string | null {
 const SUPERADMIN_LOGIN_CALLBACK = "/api/auth/callback/credentials"
 const SUPERADMIN_LOGIN_MAX_ATTEMPTS = 10
 const SUPERADMIN_LOGIN_WINDOW_SECONDS = 10 * 60
+// Talleres: más holgado que el panel porque varios empleados de un mismo local
+// salen con la misma IP (NAT).
+const TENANT_LOGIN_MAX_ATTEMPTS = 30
+const TENANT_LOGIN_WINDOW_SECONDS = 10 * 60
 
 function isSafeMethod(method: string): boolean {
   const m = method.toUpperCase()
@@ -361,6 +365,23 @@ export async function proxy(request: NextRequest) {
   requestHeaders.delete("x-superadmin-email")
   requestHeaders.delete("x-user-id")
   requestHeaders.delete("x-tenant-slug")
+
+  // Fuerza bruta sobre el login de los talleres: límite por IP guardado en la
+  // base y compartido entre instancias (el general de abajo es en memoria).
+  // admin.* tiene su propio límite, más estricto, en adminPanel().
+  if (
+    request.method === "POST" &&
+    pathname === SUPERADMIN_LOGIN_CALLBACK &&
+    subdomain?.toLowerCase() !== SUPERADMIN_SUBDOMAIN
+  ) {
+    const rl = await checkTenantLoginLimit(clientIp(request), TENANT_LOGIN_MAX_ATTEMPTS, TENANT_LOGIN_WINDOW_SECONDS)
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: "Demasiados intentos de inicio de sesión. Esperá unos minutos." },
+        { status: 429, headers: { "Retry-After": String(Math.max(1, Math.ceil((rl.reset - Date.now()) / 1000))) } }
+      )
+    }
+  }
 
   // Rate limiting para rutas API
   if (pathname.startsWith("/api/") && !isExemptFromRateLimit(pathname)) {
