@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { z } from "zod"
 
 const toggleSchema = z.object({
@@ -66,11 +67,15 @@ export async function POST(
       }
     }
 
-    // Configurar email del superadmin para trigger de auditoría
-    await supabaseAdmin.rpc("set_config", {
-      setting: "app.superadmin_email",
-      value: email || "system",
+    // Auditoría fail-closed: sin registro de quién lo cambia, el plan no se toca.
+    const intento = await createSuperadminAuditLogger(email, request).exigir({
+      action: "PLAN_TOGGLE",
+      entity: "plans",
+      entityId: id,
+      description: `Plan "${plan.nombre}" ${activo ? "habilitado" : "deshabilitado"}`,
+      metadata: { planName: plan.nombre, enabled: activo },
     })
+    if (!intento.ok) return intento.respuesta
 
     // Actualizar estado
     const { data: updatedPlan, error: updateError } = await supabaseAdmin
@@ -81,6 +86,7 @@ export async function POST(
       .single()
 
     if (updateError) {
+      await intento.completar({ error: updateError.message }, "fallido")
       console.error("Error toggling plan:", updateError)
       return NextResponse.json(
         { error: "Error al cambiar estado del plan" },

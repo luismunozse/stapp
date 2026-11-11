@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
-import { logSuperadminAudit } from "@/lib/superadmin-audit"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import {
   mintImpersonationToken,
   getSessionCookieName,
@@ -99,11 +99,11 @@ export async function POST(request: Request) {
       secret
     )
 
-    // Audit BEFORE mutating cookies: if the audit write fails we must not be
-    // left with an active (but unlogged) impersonation. Over-logging a start
-    // that then fails to set cookies is the acceptable failure mode.
-    await logSuperadminAudit({
-      email: superadminEmail,
+    // Audit BEFORE mutating cookies, fail-closed: if the audit write fails we
+    // return 500 and never set the cookies, so there is no active (but unlogged)
+    // impersonation. Over-logging a start that then fails to set cookies is the
+    // acceptable failure mode.
+    const intento = await createSuperadminAuditLogger(superadminEmail, request).exigir({
       action: "UPDATE",
       entity: "sessions",
       entityId: targetUser.id,
@@ -118,6 +118,7 @@ export async function POST(request: Request) {
         readOnly: true,
       },
     })
+    if (!intento.ok) return intento.respuesta
 
     const sessionCookieName = getSessionCookieName()
     const cookieDomain = sessionCookieDomain()

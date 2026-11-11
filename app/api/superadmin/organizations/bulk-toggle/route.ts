@@ -3,6 +3,7 @@ import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 
 const bulkToggleSchema = z.object({
   ids: z.array(z.string().min(1, "ID inválido")).min(1, "Debe seleccionar al menos una organización"),
@@ -45,6 +46,17 @@ export async function POST(request: Request) {
       )
     }
 
+    // Auditoría fail-closed ANTES del cambio masivo.
+    const intento = await createSuperadminAuditLogger(email, request).exigir({
+      action: "BULK_ACTION",
+      entity: "organizations",
+      description: activo
+        ? `Activación masiva de ${targetIds.length} organización(es)`
+        : `Suspensión masiva de ${targetIds.length} organización(es) — motivo: ${suspensionReason}`,
+      metadata: { orgIds: targetIds, newStatus: activo, suspension_reason: activo ? null : suspensionReason },
+    })
+    if (!intento.ok) return intento.respuesta
+
     const { data, error: dbError } = await supabaseAdmin
       .from("organizations")
       .update({
@@ -56,28 +68,14 @@ export async function POST(request: Request) {
       .in("id", targetIds)
       .select("id")
 
-    if (dbError) throw dbError
+    if (dbError) {
+      await intento.completar({ error: dbError.message }, "fallido")
+      throw dbError
+    }
 
     const count = data?.length ?? 0
 
-    // Registrar en audit_logs
-    await supabaseAdmin.from("audit_logs").insert({
-      organization_id: null,
-      user_id: null,
-      action: "UPDATE",
-      entity: "organizations",
-      entity_id: null,
-      changes: {
-        field: "activo",
-        after: activo,
-        bulk_ids: ids,
-        count,
-        superadmin_email: email,
-        action_description: activo
-          ? `${count} organizaciones activadas en lote`
-          : `${count} organizaciones desactivadas en lote`,
-      },
-    })
+    await intento.completar({ count })
 
     return NextResponse.json({ success: true, count })
   } catch (error) {

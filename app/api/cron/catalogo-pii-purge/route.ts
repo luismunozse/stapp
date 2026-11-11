@@ -29,5 +29,17 @@ export async function GET(request: Request) {
     console.error("Error en limpiar_rate_limit_buckets:", bucketsError)
   }
 
+  // Contadores de intentos de login (superadmin y talleres): la RPC solo borra
+  // los vencidos de la IP que vuelve a intentar, los de IPs que no vuelven
+  // quedan para siempre. Se borran los vencidos hace más de un día.
+  const haceUnDia = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const { error: loginLimitsError } = await supabaseAdmin
+    .from("superadmin_rate_limits")
+    .delete()
+    .lt("window_end", haceUnDia)
+  if (loginLimitsError) {
+    console.error("Error limpiando superadmin_rate_limits:", loginLimitsError)
+  }
+
   return NextResponse.json({ ok: true, result: data, rateLimitBuckets: bucketsError ? null : buckets })
 }

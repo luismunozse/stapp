@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 const { rateLimit } = vi.hoisted(() => ({ rateLimit: vi.fn() }))
 vi.mock("@/lib/rate-limit", () => ({ rateLimit }))
 
-import { checkSuperadminLoginLimit } from "@/lib/superadmin-login-limit-edge"
+import { checkSuperadminLoginLimit, checkTenantLoginLimit } from "@/lib/superadmin-login-limit-edge"
 
 describe("checkSuperadminLoginLimit", () => {
   let fetchMock: ReturnType<typeof vi.fn>
@@ -53,5 +53,11 @@ describe("checkSuperadminLoginLimit", () => {
     await checkSuperadminLoginLimit("1.2.3.4", 10, 600)
     expect(fetchMock).not.toHaveBeenCalled()
     expect(rateLimit).toHaveBeenCalled()
+  })
+
+  it("el login de talleres usa su propio contador", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ allowed: true, count: 1, reset: 2_000_000_000 })))
+    await checkTenantLoginLimit("1.2.3.4", 30, 600)
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ p_identifier: "ip:1.2.3.4", p_endpoint: "tenant:login" })
   })
 })

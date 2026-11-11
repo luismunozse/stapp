@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { sendPasswordResetEmail } from "@/lib/email"
 import { randomBytes } from "crypto"
 
@@ -45,17 +46,13 @@ export async function POST(
       slug: org.slug,
     })
 
-    await supabaseAdmin.from("audit_logs").insert({
-      organization_id: user.organization_id,
-      user_id: userId,
+    await createSuperadminAuditLogger(adminEmail, request).log({
       action: "UPDATE",
       entity: "users",
-      entity_id: userId,
-      changes: {
-        field: "password_reset",
-        superadmin_email: adminEmail,
-        action_description: `Reset de contraseña enviado a "${user.nombre}" (${user.email}) por superadmin`,
-      },
+      entityId: userId,
+      organizationId: user.organization_id,
+      description: `Reset de contraseña enviado a "${user.nombre}" (${user.email}) por superadmin`,
+      metadata: { field: "password_reset", userEmail: user.email },
     })
 
     return NextResponse.json({
