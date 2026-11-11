@@ -14,7 +14,8 @@ const MAX_ORGS_POR_LOTE = 100
 
 const bulkDeleteSchema = z.object({
   ids: z
-    .array(z.string().uuid("ID de organización inválido"))
+    // Los ids de organizations son cuid (TEXT), no UUID.
+    .array(z.string().trim().min(1, "ID de organización inválido").max(64, "ID de organización inválido"))
     .min(1, "Debe seleccionar al menos una organización")
     .max(MAX_ORGS_POR_LOTE, `Máximo ${MAX_ORGS_POR_LOTE} organizaciones por vez`),
   hard: z.boolean().optional(),

@@ -7,8 +7,9 @@ vi.mock("@/lib/superadmin-auth", () => ({
 
 import { POST } from "@/app/api/superadmin/organizations/bulk-delete/route"
 
-const O1 = "11111111-1111-4111-8111-111111111111"
-const O2 = "22222222-2222-4222-8222-222222222222"
+// Los ids de organizations son cuid (TEXT), no UUID: los tests usan ids reales de ese formato.
+const O1 = "cmabc123def456ghi789jkl0"
+const O2 = "cmxyz987wvu654tsr321qpo0"
 
 function postJson(body: unknown): Request {
   return new Request("http://localhost/api/superadmin/organizations/bulk-delete", {
@@ -75,7 +76,7 @@ describe("POST bulk-delete — archive by default", () => {
     expect(orgRouter.update).not.toHaveBeenCalled()
   })
 
-  it("rejects ids that are not UUIDs and batches over the cap", async () => {
+  it("rejects empty ids and batches over the cap", async () => {
     const orgRouter = {
       ...createChainMock([]),
       update: vi.fn().mockReturnValue(createChainMock(null, null)),
@@ -83,10 +84,22 @@ describe("POST bulk-delete — archive by default", () => {
     }
     mockSupabaseFrom({ organizations: orgRouter as any, audit_logs: createChainMock(null, null) })
 
-    expect((await POST(postJson({ ids: ["o1"] }))).status).toBe(400)
-    const muchos = Array.from({ length: 101 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`)
+    expect((await POST(postJson({ ids: ["  "] }))).status).toBe(400)
+    const muchos = Array.from({ length: 101 }, (_, i) => `cm${String(i).padStart(22, "0")}`)
     expect((await POST(postJson({ ids: muchos }))).status).toBe(400)
     expect(orgRouter.update).not.toHaveBeenCalled()
+  })
+
+  it("accepts cuid ids (the real format of organizations.id)", async () => {
+    const orgRouter = {
+      ...createChainMock([{ id: O1, slug: "a" }]),
+      update: vi.fn().mockReturnValue(createChainMock(null, null)),
+      delete: vi.fn().mockReturnValue(createChainMock(null, null)),
+    }
+    mockSupabaseFrom({ organizations: orgRouter as any, audit_logs: createChainMock(null, null) })
+
+    expect((await POST(postJson({ ids: [O1] }))).status).toBe(200)
+    expect(orgRouter.update).toHaveBeenCalled()
   })
 
   it("skips superadmin org even in archive mode", async () => {
