@@ -7,6 +7,9 @@ vi.mock("@/lib/superadmin-auth", () => ({
 
 import { POST } from "@/app/api/superadmin/organizations/bulk-delete/route"
 
+const O1 = "11111111-1111-4111-8111-111111111111"
+const O2 = "22222222-2222-4222-8222-222222222222"
+
 function postJson(body: unknown): Request {
   return new Request("http://localhost/api/superadmin/organizations/bulk-delete", {
     method: "POST",
@@ -21,13 +24,13 @@ describe("POST bulk-delete — archive by default", () => {
   it("archives the given orgs (update with deleted_at), not CASCADE delete", async () => {
     const updateChain = createChainMock(null, null)
     const orgRouter = {
-      ...createChainMock([{ id: "o1", slug: "a" }, { id: "o2", slug: "b" }]),
+      ...createChainMock([{ id: O1, slug: "a" }, { id: O2, slug: "b" }]),
       update: vi.fn().mockReturnValue(updateChain),
       delete: vi.fn().mockReturnValue(createChainMock(null, null)),
     }
     mockSupabaseFrom({ organizations: orgRouter as any, audit_logs: createChainMock(null, null) })
 
-    const res = await POST(postJson({ ids: ["o1", "o2"] }))
+    const res = await POST(postJson({ ids: [O1, O2] }))
     const { status } = await parseResponse(res)
 
     expect(status).toBe(200)
@@ -38,13 +41,13 @@ describe("POST bulk-delete — archive by default", () => {
   it("returns 200 with archived count in response", async () => {
     const updateChain = createChainMock(null, null)
     const orgRouter = {
-      ...createChainMock([{ id: "o1", slug: "a" }, { id: "o2", slug: "b" }]),
+      ...createChainMock([{ id: O1, slug: "a" }, { id: O2, slug: "b" }]),
       update: vi.fn().mockReturnValue(updateChain),
       delete: vi.fn().mockReturnValue(createChainMock(null, null)),
     }
     mockSupabaseFrom({ organizations: orgRouter as any, audit_logs: createChainMock(null, null) })
 
-    const res = await POST(postJson({ ids: ["o1", "o2"] }))
+    const res = await POST(postJson({ ids: [O1, O2] }))
     const { status, body } = await parseResponse(res)
 
     expect(status).toBe(200)
@@ -52,65 +55,65 @@ describe("POST bulk-delete — archive by default", () => {
     expect(typeof body.archived).toBe("number")
   })
 
-  it("performs CASCADE delete when hard=true AND confirm=true", async () => {
-    const deleteChain = createChainMock(null, null, 2)
+  it.each([
+    ["hard=true AND confirm=true", { hard: true, confirm: true }],
+    ["hard=true alone", { hard: true }],
+  ])("rejects %s: permanent purge is one org at a time, from its detail", async (_caso, extra) => {
     const orgRouter = {
-      ...createChainMock([{ id: "o1", slug: "a" }, { id: "o2", slug: "b" }]),
+      ...createChainMock([{ id: O1, slug: "a" }, { id: O2, slug: "b" }]),
       update: vi.fn().mockReturnValue(createChainMock(null, null)),
-      delete: vi.fn().mockReturnValue(deleteChain),
+      delete: vi.fn().mockReturnValue(createChainMock(null, null, 2)),
     }
     mockSupabaseFrom({ organizations: orgRouter as any, audit_logs: createChainMock(null, null) })
 
-    const res = await POST(postJson({ ids: ["o1", "o2"], hard: true, confirm: true }))
-    const { status } = await parseResponse(res)
+    const res = await POST(postJson({ ids: [O1, O2], ...extra }))
+    const { status, body } = await parseResponse(res)
 
-    expect(status).toBe(200)
-    expect(orgRouter.delete).toHaveBeenCalled()
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/de a una organización/)
+    expect(orgRouter.delete).not.toHaveBeenCalled()
     expect(orgRouter.update).not.toHaveBeenCalled()
   })
 
-  it("skips superadmin org even in archive mode", async () => {
+  it("rejects ids that are not UUIDs and batches over the cap", async () => {
     const orgRouter = {
-      ...createChainMock([{ id: "o1", slug: "superadmin" }]),
+      ...createChainMock([]),
       update: vi.fn().mockReturnValue(createChainMock(null, null)),
       delete: vi.fn().mockReturnValue(createChainMock(null, null)),
     }
     mockSupabaseFrom({ organizations: orgRouter as any, audit_logs: createChainMock(null, null) })
 
-    const res = await POST(postJson({ ids: ["o1"] }))
+    expect((await POST(postJson({ ids: ["o1"] }))).status).toBe(400)
+    const muchos = Array.from({ length: 101 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`)
+    expect((await POST(postJson({ ids: muchos }))).status).toBe(400)
+    expect(orgRouter.update).not.toHaveBeenCalled()
+  })
+
+  it("skips superadmin org even in archive mode", async () => {
+    const orgRouter = {
+      ...createChainMock([{ id: O1, slug: "superadmin" }]),
+      update: vi.fn().mockReturnValue(createChainMock(null, null)),
+      delete: vi.fn().mockReturnValue(createChainMock(null, null)),
+    }
+    mockSupabaseFrom({ organizations: orgRouter as any, audit_logs: createChainMock(null, null) })
+
+    const res = await POST(postJson({ ids: [O1] }))
     const { status, body } = await parseResponse(res)
 
     expect(status).toBe(400)
     expect(body.error).toBeTruthy()
   })
 
-  it("hard=true WITHOUT confirm → archives (update called, delete NOT called)", async () => {
-    const updateChain = createChainMock(null, null, 2)
-    const orgRouter = {
-      ...createChainMock([{ id: "o1", slug: "a" }, { id: "o2", slug: "b" }]),
-      update: vi.fn().mockReturnValue(updateChain),
-      delete: vi.fn().mockReturnValue(createChainMock(null, null, 2)),
-    }
-    mockSupabaseFrom({ organizations: orgRouter as any, audit_logs: createChainMock(null, null) })
-
-    const res = await POST(postJson({ ids: ["o1", "o2"], hard: true }))
-    const { status } = await parseResponse(res)
-
-    expect(status).toBe(200)
-    expect(orgRouter.update).toHaveBeenCalled()
-    expect(orgRouter.delete).not.toHaveBeenCalled()
-  })
-
   it("confirm=true WITHOUT hard → archives (update called, delete NOT called)", async () => {
     const updateChain = createChainMock(null, null, 2)
     const orgRouter = {
-      ...createChainMock([{ id: "o1", slug: "a" }, { id: "o2", slug: "b" }]),
+      ...createChainMock([{ id: O1, slug: "a" }, { id: O2, slug: "b" }]),
       update: vi.fn().mockReturnValue(updateChain),
       delete: vi.fn().mockReturnValue(createChainMock(null, null, 2)),
     }
     mockSupabaseFrom({ organizations: orgRouter as any, audit_logs: createChainMock(null, null) })
 
-    const res = await POST(postJson({ ids: ["o1", "o2"], confirm: true }))
+    const res = await POST(postJson({ ids: [O1, O2], confirm: true }))
     const { status } = await parseResponse(res)
 
     expect(status).toBe(200)

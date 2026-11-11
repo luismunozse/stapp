@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { isSuperadminEmail } from "@/lib/auth-tokens"
 import bcrypt from "bcryptjs"
 import crypto from "crypto"
 import { z } from "zod"
@@ -137,6 +138,17 @@ export async function POST(request: NextRequest) {
     if (RESERVED_SUBDOMAINS.has(organizacion.slug.toLowerCase())) {
       return NextResponse.json(
         { error: "Este subdominio está reservado" },
+        { status: 400 }
+      )
+    }
+
+    // Los emails de SUPERADMIN_EMAILS quedan reservados: el acceso al panel se
+    // decide por email, así que un usuario de tenant con uno de ellos (y su
+    // propia contraseña + 2FA) entraría a admin.*. Misma respuesta que un
+    // duplicado, para no revelar cuáles son.
+    if (isSuperadminEmail(userEmail)) {
+      return NextResponse.json(
+        { error: "Ya existe una cuenta con este email" },
         { status: 400 }
       )
     }
