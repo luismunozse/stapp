@@ -28,4 +28,15 @@ describe("buildAdminActions", () => {
     expect(tone("garantias")).toBe("warning")
     expect(tone("stock")).toBe("warning")
   })
+
+  it("muestra los reclamos de garantía abiertos y lleva a la pestaña de reclamos", () => {
+    expect(buildAdminActions({ ...base, reclamosAbiertosCount: 0 })).toEqual([])
+    const [item] = buildAdminActions({ ...base, reclamosAbiertosCount: 2 })
+    expect(item).toMatchObject({
+      id: "reclamos",
+      label: "Reclamos abiertos",
+      value: "2 reclamos de garantía",
+      href: "/garantias?tab=reclamos&sucursal=todas",
+    })
+  })
 })

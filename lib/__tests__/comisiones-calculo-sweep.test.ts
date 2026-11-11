@@ -123,8 +123,7 @@ const RECEIVER_WRITERS = [
 const NO_RECEIVER_BY_DESIGN: Record<string, string> = {
   'lib/onboarding/sample-data.ts': 'demo/sample orders for onboarding, not real receptions',
   'app/api/onboarding/seed-demo-data/route.ts': 'demo orders seeded for onboarding, not real receptions',
-  'app/api/ordenes/[id]/reingreso/route.ts': 're-entry of an existing order; warranty re-entries have no reception commission',
-  'app/api/garantias/[id]/reclamos/route.ts': 'repair order opened from a warranty claim; warranty re-entries have no reception commission',
+  'lib/garantias/reingreso.ts': 'warranty re-entry (accepted claim or the order menu shortcut); warranty re-entries have no reception commission',
 }
 // Order creation through an RPC that takes the receiver as a parameter (`p_recibido_por`).
 const RECEIVER_VIA_RPC = ['app/api/recepciones/route.ts']

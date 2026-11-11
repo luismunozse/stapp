@@ -54,6 +54,7 @@ import { useCurrency, useTerminologia } from "@/contexts/currency-context"
 import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 import { CotizacionList } from "@/components/cotizaciones/cotizacion-list"
 import { GarantiaCard } from "@/components/garantias/garantia-card"
+import { ReingresoGarantiaDialog } from "@/components/garantias/reingreso-garantia-dialog"
 import { FotoGallery } from "@/components/fotos/foto-gallery"
 import { ChecklistCard } from "@/components/checklist/checklist-card"
 import { WhatsAppDialog } from "@/components/ordenes/whatsapp-dialog"
@@ -120,6 +121,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [tecnicosDe, setTecnicosDe] = useState<{ para: string; lista: UserType[] } | null>(null)
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
+  const [showReingreso, setShowReingreso] = useState(false)
   const [editarEquipoOpen, setEditarEquipoOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
@@ -422,43 +424,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       setShowCobrarDialog(true)
     }
     setSinCobroEntrega(false)
-  }
-
-  const handleReingreso = async () => {
-    const confirmed = await confirm({
-      title: "Re-ingreso por Garantía",
-      description: "Se creará una nueva orden vinculada a esta como re-ingreso por garantía. ¿Desea continuar?",
-      confirmText: "Crear Re-ingreso",
-      variant: "info",
-    })
-    if (!confirmed) return
-
-    setUpdating(true)
-    try {
-      const res = await fetch(`/api/ordenes/${ordenId}/reingreso`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          problemaReportado: `Re-ingreso: problema recurrente del equipo`,
-        }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        await alert({
-          title: "Re-ingreso creado",
-          description: `Se creó la orden ${data.codigoOrden || `#${data.numeroOrden}`}`,
-          variant: "success",
-        })
-        router.push(`/ordenes/${data.id}`)
-      } else {
-        const error = await res.json()
-        await alert({ title: "Error", description: error.error || "Error al crear re-ingreso", variant: "error" })
-      }
-    } catch {
-      await alert({ title: "Error", description: "Error al crear re-ingreso", variant: "error" })
-    } finally {
-      setUpdating(false)
-    }
   }
 
   const handleAsignarTecnico = async (tecnicoId: string | null) => {
@@ -893,8 +858,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                     Generar Remito
                   </DropdownMenuItem>
                 )}
-                {(orden.estado === "ENTREGADO" || orden.estado === "REPARADO") && !orden.esReingreso && (
-                  <DropdownMenuItem onClick={handleReingreso} disabled={updating}>
+                {orden.estado === "ENTREGADO" && !orden.esReingreso && (
+                  <DropdownMenuItem onClick={() => setShowReingreso(true)} disabled={updating}>
                     <Shield className="h-4 w-4 mr-2" />
                     Re-ingreso por garantía
                   </DropdownMenuItem>
@@ -937,13 +902,32 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       )}
 
       {/* Banner de re-ingreso */}
-      {orden.esReingreso && orden.ordenOrigenId && (
+      {orden.esReingreso && (
         <StatusBanner tone="info" icon={Shield}>
-          Re-ingreso por garantía — Orden original:{" "}
-          <Link href={`/ordenes/${orden.ordenOrigenId}`} className="underline hover:text-primary">
-            ver orden original
-          </Link>
+          {orden.ordenOrigenId ? (
+            <>
+              Re-ingreso por garantía — Orden original:{" "}
+              <Link href={`/ordenes/${orden.ordenOrigenId}`} className="underline hover:text-primary">
+                ver orden original
+              </Link>
+            </>
+          ) : (
+            "Re-ingreso por garantía de una venta."
+          )}
         </StatusBanner>
+      )}
+
+      {isAdmin && (
+        <ReingresoGarantiaDialog
+          open={showReingreso}
+          onOpenChange={setShowReingreso}
+          ordenId={ordenId}
+          onCreado={(r) => {
+            setShowReingreso(false)
+            toast.success(`Re-ingreso creado: orden ${r.codigoOrden || `#${r.numeroOrden}`}`)
+            router.push(`/ordenes/${r.id}`)
+          }}
+        />
       )}
 
       {/* Progress Bar */}

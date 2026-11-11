@@ -1,4 +1,5 @@
 import { queueNotification } from "@/lib/notifications/queue"
+import { supabaseAdmin } from "@/lib/supabase"
 import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 /**
@@ -73,4 +74,80 @@ export function notificarGarantiaCreada(params: {
       },
     },
   }).catch((err) => console.error("Error queueing GARANTIA_CREADA notification:", err))
+}
+
+/**
+ * Avisa al cliente que su equipo o producto re-ingresó por garantía
+ * (REINGRESO_GARANTIA). La plantilla existía y nunca se encolaba: ahora la
+ * encola el único camino que crea re-ingresos (lib/garantias/reingreso.ts).
+ * Fire-and-forget, igual que GARANTIA_CREADA. Devuelve la promesa (los tests
+ * la esperan); quien la llama no la espera.
+ */
+export function notificarReingresoGarantia(params: {
+  organizationId: string
+  garantia: {
+    id: string
+    origen: "REPARACION" | "VENTA"
+    dias_validez: number | null
+    fecha_vencimiento: string
+  }
+  orden: {
+    id: string
+    numero_orden: number
+    dispositivo: string
+    public_token: string | null
+    sucursal_id: string | null
+    cliente_id: string
+  }
+}): Promise<void> {
+  const { organizationId, garantia, orden } = params
+  return (async () => {
+    const [{ data: cliente }, { data: org }] = await Promise.all([
+      supabaseAdmin
+        .from("clientes")
+        .select("id, nombre, email, telefono")
+        .eq("id", orden.cliente_id)
+        .eq("organization_id", organizationId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("organizations")
+        .select("nombre, nombre_mostrar, slug, moneda, zona_horaria")
+        .eq("id", organizationId)
+        .maybeSingle(),
+    ])
+    if (!cliente) return
+    await queueNotification({
+      organizationId,
+      sucursalId: orden.sucursal_id,
+      ordenId: orden.id,
+      // notification_logs.garantia_id apunta a garantias (reparación): la de venta no va.
+      garantiaId: garantia.origen === "REPARACION" ? garantia.id : undefined,
+      clienteId: cliente.id,
+      tipo: "REINGRESO_GARANTIA",
+      context: {
+        organizationName: org?.nombre_mostrar || org?.nombre || "",
+        organizationSlug: org?.slug ?? undefined,
+        moneda: org?.moneda || "ARS",
+        zonaHoraria: org?.zona_horaria || DEFAULT_TIMEZONE,
+        cliente: {
+          id: cliente.id,
+          nombre: cliente.nombre,
+          email: cliente.email,
+          telefono: cliente.telefono,
+        },
+        orden: {
+          id: orden.id,
+          numeroOrden: orden.numero_orden,
+          dispositivo: orden.dispositivo,
+          estado: "RECIBIDO",
+          publicToken: orden.public_token,
+        },
+        garantia: {
+          id: garantia.id,
+          diasValidez: garantia.dias_validez ?? 0,
+          fechaVencimiento: garantia.fecha_vencimiento,
+        },
+      },
+    })
+  })().catch((err) => console.error("Error queueing REINGRESO_GARANTIA notification:", err))
 }

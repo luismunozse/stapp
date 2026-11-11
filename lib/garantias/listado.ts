@@ -32,12 +32,14 @@ import {
   type OrigenGarantia,
   type TabGarantias,
 } from "./estado"
+import { faseReclamo, reclamoPorDecidir, type FaseReclamo } from "./reclamo-estado"
 
 export const COLUMNAS_VISTA_GARANTIAS =
   "id, origen, organization_id, sucursal_id, tecnico_id, vendedor_id, cliente_id, cliente_nombre, " +
   "cliente_telefono, descripcion, orden_id, numero_orden, codigo_orden, orden_estado, venta_id, " +
   "numero_venta, numero_garantia, referencia, dias_validez, fecha_inicio, fecha_vencimiento, " +
-  "dia_vencimiento, estado_guardado, anulada, tiene_reclamo_abierto"
+  "dia_vencimiento, estado_guardado, anulada, tiene_reclamo_abierto, reclamo_id, reclamo_estado, " +
+  "reclamo_descripcion, reclamo_fecha, reclamo_orden_reingreso_id, reclamo_orden_reingreso_numero"
 
 /** Una fila de v_garantias tal como la devuelve PostgREST. */
 export interface FilaVistaGarantia {
@@ -66,6 +68,21 @@ export interface FilaVistaGarantia {
   estado_guardado: string | null
   anulada: boolean | null
   tiene_reclamo_abierto: boolean | null
+  /** El reclamo abierto (PENDIENTE o ACEPTADO) de la garantía, si hay (401). */
+  reclamo_id?: string | null
+  reclamo_estado?: string | null
+  reclamo_descripcion?: string | null
+  reclamo_fecha?: string | null
+  reclamo_orden_reingreso_id?: string | null
+  reclamo_orden_reingreso_numero?: string | null
+}
+
+export interface ReclamoAbiertoListado {
+  id: string
+  fase: FaseReclamo
+  descripcion: string
+  fecha: string | null
+  ordenReingreso: { id: string; numero: string | null } | null
 }
 
 export interface GarantiaListada {
@@ -83,14 +100,22 @@ export interface GarantiaListada {
   referencia: { tipo: "ORDEN" | "VENTA"; id: string; numero: string }
   numeroGarantia: string | null
   sucursal: { id: string; nombre: string | null } | null
+  /** El reclamo abierto de la garantía (por decidir o con el re-ingreso en curso). */
+  reclamo: ReclamoAbiertoListado | null
   acciones: {
     /** Detalle de la orden o la venta; null si quien mira no puede abrirlo. */
     verHref: string | null
     /** Certificado (venta) o comprobante de entrega (reparación). */
     certificadoUrl: string | null
     whatsappUrl: string | null
-    /** Fase 1: lleva a la orden, donde vive el alta del reclamo. */
-    reclamoHref: string | null
+    /**
+     * Registrar un reclamo desde la fila (cualquier rol con la garantía en su
+     * alcance). null = no se puede; "vigente" = directo; "forzar" = la garantía
+     * venció y solo el ADMIN la puede reclamar dejando un motivo.
+     */
+    registrarReclamo: "vigente" | "forzar" | null
+    /** Aceptar o rechazar el reclamo abierto: solo ADMIN y solo si está por decidir. */
+    decidirReclamo: boolean
   }
 }
 
@@ -248,6 +273,18 @@ function mensajeWhatsApp(f: FilaVistaGarantia, estado: EstadoGarantia, numero: s
   return `${saludo}, te escribimos${de} por ${que}. ${cuando}`
 }
 
+/**
+ * Registrar un reclamo: cualquier rol (decisión 3 del dueño) sobre una garantía
+ * vigente sin reclamo abierto; una vencida, solo el ADMIN y con motivo. El
+ * alcance ya lo filtró la consulta.
+ */
+export function accionRegistrarReclamo(estado: EstadoGarantia, role: string | null): "vigente" | "forzar" | null {
+  if (!role) return null
+  if (estado === "VIGENTE" || estado === "POR_VENCER") return "vigente"
+  if (estado === "VENCIDA" && role === "ADMIN") return "forzar"
+  return null
+}
+
 export function mapearFilaGarantia(
   f: FilaVistaGarantia,
   ctx: { hoy: string; ventana: number; org: ConfigOrg; actor: ActorGarantias | null; sucursales: Map<string, string> }
@@ -266,7 +303,6 @@ export function mapearFilaGarantia(
 
   let verHref: string | null = null
   let certificadoUrl: string | null = null
-  let reclamoHref: string | null = null
 
   if (esVenta && f.venta_id) {
     // El detalle y el certificado de una venta: el ADMIN siempre, el resto solo
@@ -283,11 +319,10 @@ export function mapearFilaGarantia(
     if (f.orden_estado && ESTADOS_ENTREGADA.has(f.orden_estado) && puedeComprobante) {
       certificadoUrl = `/api/ordenes/${f.orden_id}/comprobante-entrega`
     }
-    // Registrar reclamo: ADMIN y VENDEDOR, sobre una garantía todavía vigente.
-    if ((role === "ADMIN" || role === "VENDEDOR") && (estado === "VIGENTE" || estado === "POR_VENCER")) {
-      reclamoHref = `/ordenes/${f.orden_id}`
-    }
   }
+
+  const registrarReclamo = accionRegistrarReclamo(estado, role)
+  const decidirReclamo = role === "ADMIN" && !!f.reclamo_id && reclamoPorDecidir(f.reclamo_estado)
 
   const telefono = f.cliente_telefono?.trim() || null
   const whatsappUrl =
@@ -313,7 +348,18 @@ export function mapearFilaGarantia(
     },
     numeroGarantia: f.numero_garantia,
     sucursal: f.sucursal_id ? { id: f.sucursal_id, nombre: ctx.sucursales.get(f.sucursal_id) ?? null } : null,
-    acciones: { verHref, certificadoUrl, whatsappUrl, reclamoHref },
+    reclamo: f.reclamo_id
+      ? {
+          id: f.reclamo_id,
+          fase: faseReclamo(f.reclamo_estado),
+          descripcion: f.reclamo_descripcion ?? "",
+          fecha: f.reclamo_fecha ?? null,
+          ordenReingreso: f.reclamo_orden_reingreso_id
+            ? { id: f.reclamo_orden_reingreso_id, numero: f.reclamo_orden_reingreso_numero ?? null }
+            : null,
+        }
+      : null,
+    acciones: { verHref, certificadoUrl, whatsappUrl, registrarReclamo, decidirReclamo },
   }
 }
 
@@ -406,6 +452,25 @@ export async function listarGarantias(p: ParametrosListado): Promise<ResultadoLi
     ventana,
     zonaHoraria: org.zonaHoraria,
   }
+}
+
+/**
+ * "Reclamos abiertos" del dashboard: el total de la pestaña Reclamos abiertos
+ * de /garantias, con la misma consulta.
+ */
+export async function contarReclamosAbiertos(
+  organizationId: string,
+  alcance: AlcanceOrdenes,
+  opciones: { ahora?: Date } = {}
+): Promise<number> {
+  const r = await listarGarantias({
+    organizationId,
+    alcance,
+    filtros: { tab: "reclamos", origen: null, q: null, page: 1, limit: 1, ventana: VENTANA_POR_VENCER_DIAS },
+    actor: null,
+    ahora: opciones.ahora,
+  })
+  return r.total
 }
 
 /**

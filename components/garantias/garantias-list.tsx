@@ -7,9 +7,7 @@ import { useSession } from "next-auth/react"
 import useSWR from "swr"
 import {
   AlertTriangle,
-  Ban,
   CheckCircle,
-  Clock,
   ExternalLink,
   FileText,
   MessageCircle,
@@ -18,9 +16,7 @@ import {
   SearchX,
   ShieldCheck,
   XCircle,
-  type LucideIcon,
 } from "lucide-react"
-import { Badge, type BadgeProps } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable, type Column } from "@/components/ui/data-table"
@@ -28,18 +24,20 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
-  ETIQUETA_ESTADO,
   ETIQUETA_ORIGEN,
   ETIQUETA_TAB,
   TABS_GARANTIAS,
   VENTANA_POR_VENCER_DIAS,
   textoVencimiento,
-  type EstadoGarantia,
   type OrigenGarantia,
   type TabGarantias,
 } from "@/lib/garantias/estado"
 import type { ConteosGarantias, GarantiaListada } from "@/lib/garantias/listado"
 import { cn } from "@/lib/utils"
+import { EstadoGarantiaPill } from "./estado-garantia-pill"
+import { RegistrarReclamoDialog } from "./registrar-reclamo-dialog"
+import { DecidirReclamoDialog, type AccionReclamo, type DecidirReclamoDialogProps } from "./decidir-reclamo-dialog"
+import { FaseReclamoBadge } from "./reclamos-timeline"
 
 export interface RespuestaGarantias {
   data: GarantiaListada[]
@@ -67,23 +65,7 @@ const fetcher = async (url: string): Promise<RespuestaGarantias> => {
 
 const TODOS = "all"
 
-/** Texto + color + ícono: el estado nunca depende solo del color. */
-const PILL: Record<EstadoGarantia, { variant: BadgeProps["variant"]; icon: LucideIcon }> = {
-  VIGENTE: { variant: "successSoft", icon: CheckCircle },
-  POR_VENCER: { variant: "warningSoft", icon: Clock },
-  RECLAMADA: { variant: "infoSoft", icon: MessageSquareWarning },
-  VENCIDA: { variant: "destructiveSoft", icon: XCircle },
-  ANULADA: { variant: "outline", icon: Ban },
-}
-
-export function EstadoGarantiaPill({ estado }: { estado: EstadoGarantia }) {
-  const p = PILL[estado]
-  return (
-    <Badge variant={p.variant} showIcon icon={p.icon} className="whitespace-nowrap">
-      {ETIQUETA_ESTADO[estado]}
-    </Badge>
-  )
-}
+export { EstadoGarantiaPill }
 
 function textoVacio(tab: TabGarantias, ventana: number): { titulo: string; descripcion: string } {
   switch (tab) {
@@ -130,21 +112,53 @@ function Referencia({ g }: { g: GarantiaListada }) {
   )
 }
 
-function Acciones({ g, compacto = false }: { g: GarantiaListada; compacto?: boolean }) {
-  const { verHref, certificadoUrl, whatsappUrl, reclamoHref } = g.acciones
+interface AccionesProps {
+  g: GarantiaListada
+  compacto?: boolean
+  onRegistrar: (g: GarantiaListada) => void
+  onDecidir: (g: GarantiaListada, accion: AccionReclamo) => void
+}
+
+function Acciones({ g, compacto = false, onRegistrar, onDecidir }: AccionesProps) {
+  const { verHref, certificadoUrl, whatsappUrl, registrarReclamo, decidirReclamo } = g.acciones
   const tam = compacto ? "sm" : "default"
+  // 44 px en pantallas táctiles, también en la tabla compacta.
+  const tactil = "min-h-11"
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {reclamoHref && (
-        <Button asChild size={tam} variant="outline" className="gap-1.5">
-          <Link href={reclamoHref}>
-            <MessageSquareWarning className="h-4 w-4" aria-hidden="true" />
-            Registrar reclamo
+      {decidirReclamo && g.reclamo && (
+        <>
+          <Button size={tam} variant="outline" className={cn(tactil, "gap-1.5")} onClick={() => onDecidir(g, "aceptar")}>
+            <CheckCircle className="h-4 w-4" aria-hidden="true" />
+            Aceptar
+          </Button>
+          <Button
+            size={tam}
+            variant="outline"
+            className={cn(tactil, "gap-1.5 text-destructive")}
+            onClick={() => onDecidir(g, "rechazar")}
+          >
+            <XCircle className="h-4 w-4" aria-hidden="true" />
+            Rechazar
+          </Button>
+        </>
+      )}
+      {registrarReclamo && (
+        <Button size={tam} variant="outline" className={cn(tactil, "gap-1.5")} onClick={() => onRegistrar(g)}>
+          <MessageSquareWarning className="h-4 w-4" aria-hidden="true" />
+          Registrar reclamo
+        </Button>
+      )}
+      {g.reclamo?.ordenReingreso && (
+        <Button asChild size={tam} variant="ghost" className={cn(tactil, "gap-1.5")}>
+          <Link href={`/ordenes/${g.reclamo.ordenReingreso.id}`}>
+            <ExternalLink className="h-4 w-4" aria-hidden="true" />
+            {g.reclamo.ordenReingreso.numero ? `Re-ingreso ${g.reclamo.ordenReingreso.numero}` : "Ver re-ingreso"}
           </Link>
         </Button>
       )}
       {verHref && (
-        <Button asChild size={tam} variant="ghost" className="gap-1.5">
+        <Button asChild size={tam} variant="ghost" className={cn(tactil, "gap-1.5")}>
           <Link href={verHref}>
             <ExternalLink className="h-4 w-4" aria-hidden="true" />
             {g.referencia.tipo === "VENTA" ? "Ver venta" : "Ver orden"}
@@ -152,7 +166,7 @@ function Acciones({ g, compacto = false }: { g: GarantiaListada; compacto?: bool
         </Button>
       )}
       {certificadoUrl && (
-        <Button asChild size={tam} variant="ghost" className="gap-1.5">
+        <Button asChild size={tam} variant="ghost" className={cn(tactil, "gap-1.5")}>
           <a href={certificadoUrl} target="_blank" rel="noopener noreferrer">
             <FileText className="h-4 w-4" aria-hidden="true" />
             {g.referencia.tipo === "VENTA" ? "Certificado PDF" : "Comprobante PDF"}
@@ -160,13 +174,23 @@ function Acciones({ g, compacto = false }: { g: GarantiaListada; compacto?: bool
         </Button>
       )}
       {whatsappUrl && (
-        <Button asChild size={tam} variant="ghost" className="gap-1.5">
+        <Button asChild size={tam} variant="ghost" className={cn(tactil, "gap-1.5")}>
           <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" aria-label={`Escribirle por WhatsApp a ${g.cliente.nombre}`}>
             <MessageCircle className="h-4 w-4" aria-hidden="true" />
             WhatsApp
           </a>
         </Button>
       )}
+    </div>
+  )
+}
+
+function ReclamoResumen({ g }: { g: GarantiaListada }) {
+  if (!g.reclamo) return null
+  return (
+    <div className="min-w-0 space-y-1">
+      <FaseReclamoBadge fase={g.reclamo.fase} />
+      <p className="line-clamp-2 text-sm text-muted-foreground">{g.reclamo.descripcion}</p>
     </div>
   )
 }
@@ -253,6 +277,15 @@ export function GarantiasList() {
   )
   const sucursales = sucursalesResp?.data ?? []
 
+  const [registrar, setRegistrar] = useState<GarantiaListada | null>(null)
+  const [decision, setDecision] = useState<DecidirReclamoDialogProps["pendiente"]>(null)
+  const detalleDe = (g: GarantiaListada) => `${g.descripcion} · ${g.cliente.nombre}`
+  const onRegistrar = (g: GarantiaListada) => setRegistrar(g)
+  const onDecidir = (g: GarantiaListada, accion: AccionReclamo) => {
+    if (!g.reclamo) return
+    setDecision({ reclamoId: g.reclamo.id, accion, descripcion: g.reclamo.descripcion, detalle: detalleDe(g) })
+  }
+
   const filas = data?.data ?? []
   const total = data?.total ?? 0
   const conteos = data?.conteos ?? null
@@ -289,9 +322,15 @@ export function GarantiasList() {
       ),
     },
     { key: "referencia", header: "Orden o venta", hideOnTablet: true, render: (g) => <Referencia g={g} /> },
-    { key: "vencimiento", header: "Vencimiento", render: (g) => <Vencimiento g={g} /> },
+    tab === "reclamos"
+      ? { key: "reclamo", header: "Reclamo", render: (g) => <ReclamoResumen g={g} /> }
+      : { key: "vencimiento", header: "Vencimiento", render: (g) => <Vencimiento g={g} /> },
     { key: "estado", header: "Estado", render: (g) => <EstadoGarantiaPill estado={g.estado} /> },
-    { key: "acciones", header: "", render: (g) => <Acciones g={g} compacto /> },
+    {
+      key: "acciones",
+      header: "",
+      render: (g) => <Acciones g={g} compacto onRegistrar={onRegistrar} onDecidir={onDecidir} />,
+    },
   ]
 
   const tarjeta = (g: GarantiaListada) => (
@@ -303,6 +342,7 @@ export function GarantiasList() {
         </div>
         <EstadoGarantiaPill estado={g.estado} />
       </div>
+      {g.reclamo ? <ReclamoResumen g={g} /> : null}
       <div className="flex flex-wrap items-end justify-between gap-2">
         <Vencimiento g={g} />
         <div className="text-right text-xs text-muted-foreground">
@@ -310,7 +350,7 @@ export function GarantiasList() {
           <Referencia g={g} />
         </div>
       </div>
-      <Acciones g={g} />
+      <Acciones g={g} onRegistrar={onRegistrar} onDecidir={onDecidir} />
     </div>
   )
 
@@ -442,6 +482,24 @@ export function GarantiasList() {
       ) : null}
 
       {contenido}
+
+      {registrar && registrar.acciones.registrarReclamo ? (
+        <RegistrarReclamoDialog
+          open
+          onOpenChange={(abierto) => {
+            if (!abierto) setRegistrar(null)
+          }}
+          origen={registrar.origen}
+          garantiaId={registrar.id}
+          detalle={detalleDe(registrar)}
+          modo={registrar.acciones.registrarReclamo}
+          onRegistrado={() => {
+            setRegistrar(null)
+            void mutate()
+          }}
+        />
+      ) : null}
+      <DecidirReclamoDialog pendiente={decision} onClose={() => setDecision(null)} onDecidido={() => void mutate()} />
 
       {error && data ? (
         <p role="status" className="text-sm text-destructive">

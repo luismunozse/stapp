@@ -124,7 +124,9 @@ describe("GET /api/garantias/unificadas — acceso y alcance", () => {
     }
     expect(res.body.soloLectura).toBe(true)
     const acc = res.body.data[0].acciones
-    expect(acc.reclamoHref).toBeNull()
+    // Registrar un reclamo es de cualquier rol (decisión 3 del dueño); decidir, no.
+    expect(acc.registrarReclamo).toBe("vigente")
+    expect(acc.decidirReclamo).toBe(false)
     expect(acc.whatsappUrl).toBeNull()
     expect(acc.verHref).toBe("/ordenes/o-1")
     // Asignada a él: puede bajar el comprobante.
@@ -262,7 +264,7 @@ describe("GET /api/garantias/unificadas — acciones de cada fila", () => {
       sucursal: { id: S1, nombre: "Centro" },
     })
     expect(g.acciones.verHref).toBe("/ordenes/o-1")
-    expect(g.acciones.reclamoHref).toBe("/ordenes/o-1")
+    expect(g.acciones.registrarReclamo).toBe("vigente")
     expect(g.acciones.certificadoUrl).toBe("/api/ordenes/o-1/comprobante-entrega")
     expect(g.acciones.whatsappUrl).toMatch(/^https:\/\/wa\.me\/\d+\?text=/)
     expect(decodeURIComponent(g.acciones.whatsappUrl)).toContain("Hola Juan Pérez, te escribimos de Taller Sur")
@@ -277,7 +279,8 @@ describe("GET /api/garantias/unificadas — acciones de cada fila", () => {
     expect(g.numeroGarantia).toBe("GV-0007")
     expect(g.acciones.verHref).toBe("/ventas/v-1")
     expect(g.acciones.certificadoUrl).toBe("/api/ventas/v-1/garantia/gv-1/pdf")
-    expect(g.acciones.reclamoHref).toBeNull()
+    // Fase 2: las garantías de venta se reclaman con el mismo flujo.
+    expect(g.acciones.registrarReclamo).toBe("vigente")
   })
 
   it("venta de otro vendedor: el VENDEDOR no tiene link ni certificado (la venta le daría 404)", async () => {

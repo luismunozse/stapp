@@ -4,7 +4,8 @@
  *  - Convertir un presupuesto no crea la garantía: guarda sus condiciones en la orden.
  *  - La entrega crea la garantía con los días pedidos, la tz de la org y el
  *    alcance del presupuesto; si el insert falla lo avisa, si anda notifica.
- *  - Aceptar un reclamo con orden nueva la deja vinculada como re-ingreso.
+ *  (Aceptar un reclamo con su re-ingreso vinculado pasó a la fase 2:
+ *  __tests__/api/garantias-reclamos-flujo.test.ts.)
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import {
@@ -41,7 +42,6 @@ vi.mock("@/lib/sucursal", async (importOriginal) => ({
 import { supabaseAdmin } from "@/lib/supabase"
 import { queueNotification } from "@/lib/notifications/queue"
 import { GET as listGarantias } from "@/app/api/garantias/route"
-import { PUT as putReclamo } from "@/app/api/garantias/[id]/reclamos/route"
 import { POST as entregar } from "@/app/api/ordenes/[id]/entregar/route"
 import { POST as convertir } from "@/app/api/cotizaciones/[id]/convertir-orden/route"
 
@@ -90,12 +90,20 @@ describe("GET /api/garantias", () => {
     expect(body[0].reclamos).toEqual([
       {
         id: "r1",
+        origen: "REPARACION",
         garantiaId: "g1",
         descripcion: "Volvió a fallar",
         estado: "ACEPTADO",
+        fase: "ACEPTADO",
         ordenReparacionId: "ord-r",
+        ordenReingreso: { id: "ord-r", numero: null },
         resolucion: null,
+        motivoRechazo: null,
+        vigenciaForzadaMotivo: null,
+        registradoPor: null,
+        decididoPor: null,
         fechaReclamo: "2026-11-01T10:00:00Z",
+        fechaDecision: null,
         fechaResolucion: null,
       },
       expect.objectContaining({ id: "r0", fechaResolucion: "2026-10-16T10:00:00Z", resolucion: "No cubre" }),
@@ -291,55 +299,5 @@ describe("POST /api/ordenes/[id]/entregar — garantía", () => {
     mockEntrega(garantias)
     await entregar(createPostRequest({}), { params: Promise.resolve({ id: "o1" }) })
     expect(garantias.insert).not.toHaveBeenCalled()
-  })
-})
-
-describe("PUT /api/garantias/[id]/reclamos — aceptar con orden nueva", () => {
-  beforeEach(() => vi.clearAllMocks())
-
-  it("la orden nueva es un re-ingreso vinculado, en la sucursal de la original", async () => {
-    mockAuthSuccess()
-    const ordenes = createChainMock({ id: "ord-r" })
-    const reclamos = createChainMock({
-      ...reclamoRow,
-      estado: "EN_REVISION",
-      orden_reparacion_id: null,
-      garantias: {
-        id: "g1",
-        ordenes_servicio: {
-          id: "o1",
-          organization_id: "org-1",
-          sucursal_id: "suc-7",
-          cliente_id: "c1",
-          dispositivo: "iPhone 13",
-          tipo_dispositivo: "CELULAR",
-          numero_orden: 3,
-        },
-      },
-    })
-    mockSupabaseFrom({ reclamos_garantia: reclamos, ordenes_servicio: ordenes, orden_eventos: createChainMock(null) })
-
-    const res = await putReclamo(
-      new Request("http://localhost/api/garantias/g1/reclamos?reclamoId=r1", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estado: "ACEPTADO", crearOrden: true }),
-      }),
-      { params: Promise.resolve({ id: "g1" }) }
-    )
-
-    expect(res.status).toBe(200)
-    expect(ordenes.insert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        es_reingreso: true,
-        orden_origen_id: "o1",
-        garantia_origen_id: "g1",
-        sucursal_id: "suc-7",
-      })
-    )
-    // La respuesta sale en la misma forma que el GET.
-    const body = await res.json()
-    expect(body).toHaveProperty("fechaReclamo")
-    expect(body).not.toHaveProperty("fecha_reclamo")
   })
 })

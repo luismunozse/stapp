@@ -1,167 +1,79 @@
 import { NextResponse } from "next/server"
-import { randomBytes } from "crypto"
-import { requireAuth, requireAdminOrVendedor } from "@/lib/auth-utils"
-import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
-import { supabaseAdmin } from "@/lib/supabase"
-import { getNextOrderNumberByType } from "@/lib/counters"
-import { createAuditLogger } from "@/lib/audit"
-import { getPrincipalId } from "@/lib/sucursal"
-import { deletePracticeData, rejectIfPractica } from "@/lib/onboarding/practica"
 import { z } from "zod"
+import { requireAuth } from "@/lib/auth-utils"
+import { actorDeSesion, cargarOrdenEnAlcance } from "@/lib/ordenes/alcance"
+import { rejectIfPractica } from "@/lib/onboarding/practica"
+import { reingresoDesdeOrden } from "@/lib/garantias/reclamos"
+import { esErrorReclamo } from "@/lib/garantias/errores"
 
 const reingresoSchema = z.object({
-  problemaReportado: z.string().min(1, "Debe describir el problema"),
-  garantiaId: z.string().optional(),
-  observaciones: z.string().optional(),
+  problemaReportado: z.string().trim().min(1, "Contá qué problema trae el equipo").max(2000),
+  /** Solo si la garantía venció: el ADMIN la fuerza dejando el motivo. */
+  motivoFueraDeVigencia: z.string().trim().max(1000).optional().nullable(),
 })
 
 /**
- * POST /api/ordenes/[id]/reingreso
- * Crea una nueva orden vinculada a la orden original (re-ingreso por garantía).
+ * POST /api/ordenes/[id]/reingreso — "Re-ingreso por garantía" del menú de la
+ * orden (solo ADMIN). Es un atajo del flujo de reclamos: registra el reclamo
+ * sobre la garantía de la orden y lo acepta en un paso, con el mismo camino
+ * que crea cualquier re-ingreso (lib/garantias/reclamos → aceptarReclamo).
+ * Valida la garantía vigente; vencida, solo con motivo.
  */
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const autenticado = await requireAdminOrVendedor()
-    const { error, organizationId, userId } = autenticado
+    const autenticado = await requireAuth()
+    const { error, organizationId, userId, role } = autenticado
     if (error) return error
 
     const { id: ordenOrigenId } = await params
-    const body = await request.json()
-    const data = reingresoSchema.parse(body)
 
-    // Obtener orden original, dentro del alcance de quien llama. The re-entry is created for
-    // the origin order's client, so it takes the client-facing side ("comercial").
+    // The re-entry is created for the origin order's client, so it takes the
+    // client-facing side ("comercial"). Out of scope answers like a missing order.
     const cargada = await cargarOrdenEnAlcance(ordenOrigenId, actorDeSesion(autenticado), "comercial", {
-      select: `
-        *,
-        clientes (*)
-      `,
+      select: "id, estado",
       noEncontrada: "Orden original no encontrada",
     })
     if ("error" in cargada) return cargada.error
-    const { orden: ordenOrigen } = cargada
+
+    // Aceptar un reclamo es del ADMIN (decisión 3 del dueño). El resto registra
+    // el reclamo desde la tarjeta de garantía.
+    if (role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Solo un administrador puede crear un re-ingreso por garantía. Registrá un reclamo desde la tarjeta de garantía.", code: "SOLO_ADMIN" },
+        { status: 403 }
+      )
+    }
 
     // After the scope check, so a practice order of another branch is "not found" too.
     const practica = await rejectIfPractica(ordenOrigenId, organizationId!)
     if (practica) return practica
 
-    // Solo se puede re-ingresar desde ENTREGADO o REPARADO
-    if (!["ENTREGADO", "REPARADO"].includes(ordenOrigen.estado)) {
-      return NextResponse.json(
-        { error: "Solo se puede crear re-ingreso desde órdenes entregadas o reparadas" },
-        { status: 400 }
-      )
-    }
+    const data = reingresoSchema.parse(await request.json())
 
-    // Resolver sucursal_id: inherit from origin, fallback to principal
-    let reingresoSucursalId: string | null = ordenOrigen.sucursal_id ?? null
-    if (!reingresoSucursalId) {
-      reingresoSucursalId = await getPrincipalId(organizationId!)
-    }
-    if (!reingresoSucursalId) {
-      return NextResponse.json(
-        { error: "No se pudo determinar la sucursal del re-ingreso" },
-        { status: 500 }
-      )
-    }
+    const { reclamo, orden } = await reingresoDesdeOrden({
+      organizationId: organizationId!,
+      actor: { userId: userId!, role },
+      ordenId: ordenOrigenId,
+      descripcion: data.problemaReportado,
+      motivoFueraDeVigencia: data.motivoFueraDeVigencia ?? null,
+      request,
+    })
 
-    // Generar número de orden
-    const { codigo: codigoOrden, numero: numeroOrden } = await getNextOrderNumberByType(
-      organizationId!,
-      ordenOrigen.tipo_dispositivo
+    return NextResponse.json(
+      {
+        id: orden.id,
+        numeroOrden: orden.numero_orden,
+        codigoOrden: orden.codigo_orden,
+        reclamoId: reclamo.id,
+      },
+      { status: 201 }
     )
-
-    const publicToken = randomBytes(16).toString("hex")
-
-    // Crear nueva orden vinculada
-    const { data: nuevaOrden, error: insertError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .insert({
-        numero_orden: numeroOrden,
-        codigo_orden: codigoOrden,
-        cliente_id: ordenOrigen.cliente_id,
-        organization_id: organizationId!,
-        dispositivo: ordenOrigen.dispositivo,
-        tipo_dispositivo: ordenOrigen.tipo_dispositivo,
-        marca: ordenOrigen.marca,
-        color: ordenOrigen.color,
-        imei: ordenOrigen.imei,
-        problema_reportado: data.problemaReportado,
-        accesorios: ordenOrigen.accesorios,
-        password_dispositivo: ordenOrigen.password_dispositivo,
-        public_token: publicToken,
-        estado: "RECIBIDO",
-        observaciones: data.observaciones || `Re-ingreso por garantía de orden ${ordenOrigen.codigo_orden || `#${ordenOrigen.numero_orden}`}`,
-        metadata: ordenOrigen.metadata || {},
-        sector_id: ordenOrigen.sector_id,
-        sucursal_id: reingresoSucursalId,
-        // Campos de re-ingreso
-        orden_origen_id: ordenOrigenId,
-        es_reingreso: true,
-        garantia_origen_id: data.garantiaId || null,
-      })
-      .select(`*, clientes (*)`)
-      .single()
-
-    if (insertError) throw insertError
-
-    // The first real order replaces the onboarding practice. A failure never
-    // affects this order: the next real order retries.
-    try {
-      await deletePracticeData(organizationId!)
-    } catch (err) {
-      console.error("[practica] automatic deletion failed:", err)
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: err.issues[0].message }, { status: 400 })
     }
-
-    // Registrar evento en la orden original
-    await supabaseAdmin.from("orden_eventos").insert({
-      orden_id: ordenOrigenId,
-      organization_id: organizationId!,
-      tipo: "NOTA",
-      descripcion: `Re-ingreso creado: orden ${codigoOrden || `#${numeroOrden}`}`,
-      metadata: { reingresoOrdenId: nuevaOrden.id },
-      created_by: userId,
-    })
-
-    // Evento de creación en la nueva orden (fire-and-forget: un fallo acá
-    // no debe hacer fallar la creación del re-ingreso)
-    void (async () => {
-      try {
-        await supabaseAdmin.from("orden_eventos").insert({
-          orden_id: nuevaOrden.id,
-          organization_id: organizationId!,
-          tipo: "CAMBIO_ESTADO",
-          estado_nuevo: "RECIBIDO",
-          descripcion: `Orden creada como re-ingreso de la orden ${ordenOrigen.codigo_orden || `#${ordenOrigen.numero_orden}`}`,
-          metadata: { ordenOrigenId },
-          created_by: userId,
-        })
-      } catch (err) {
-        console.error("Error inserting orden_evento (creación reingreso):", err)
-      }
-    })()
-
-    // Auditoría
-    const audit = createAuditLogger(organizationId!, userId!, request)
-    await audit.create("ordenes_servicio", nuevaOrden.id, {
-      tipo: "reingreso",
-      orden_origen_id: ordenOrigenId,
-      numero_orden: numeroOrden,
-    })
-
-    return NextResponse.json({
-      id: nuevaOrden.id,
-      numeroOrden: nuevaOrden.numero_orden,
-      codigoOrden: nuevaOrden.codigo_orden,
-    }, { status: 201 })
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.issues[0].message }, { status: 400 })
-    }
-    console.error("Error creating reingreso:", error)
+    if (esErrorReclamo(err)) return err.toResponse()
+    console.error("Error creating reingreso:", err)
     return NextResponse.json({ error: "Error al crear re-ingreso" }, { status: 500 })
   }
 }
