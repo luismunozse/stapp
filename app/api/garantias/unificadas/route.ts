@@ -13,7 +13,8 @@ import { listarGarantias, parseFiltrosGarantias } from "@/lib/garantias/listado"
  *
  * Query: tab (por-vencer | reclamos | vigentes | vencidas), origen (REPARACION
  * | VENTA), sucursal (solo ADMIN: "todas" o un id; sin él, el selector
- * global), q, page, limit, ventana (días "por vencer", default 7).
+ * global), q, page, limit, ventana (días "por vencer"; sin ella, la de la org,
+ * 7 por defecto).
  *
  * Roles: ADMIN y VENDEDOR leen las dos clases; el TECNICO solo las de
  * reparación de su alcance y en solo lectura (ver lib/garantias/listado).

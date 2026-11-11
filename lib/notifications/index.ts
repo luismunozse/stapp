@@ -172,6 +172,8 @@ export class NotificationService {
       REPUESTO_NO_DISPONIBLE: "repuesto_no_disponible",
       AVISO_DEMORA: "aviso_demora",
       REINGRESO_GARANTIA: "reingreso_garantia",
+      // El aviso automático sale por el cron; a mano, el mensaje de la garantía.
+      GARANTIA_POR_VENCER: "garantia",
       // Recuperación
       CLIENTE_INACTIVO: "cliente_inactivo",
       SEGUIMIENTO_PRESUPUESTO_RECHAZADO: "seguimiento_presupuesto_rechazado",

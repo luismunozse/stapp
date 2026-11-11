@@ -10,6 +10,7 @@
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
 import { formatDateValue } from "@/lib/timezone"
 import { renderTemplate, getPlantilla } from "@/lib/whatsapp/plantillas-catalog"
+import { detalleGarantiaCliente, venceTextoCliente } from "@/lib/garantias/aviso-texto"
 
 export interface WaMessageContext {
   cliente: { nombre: string }
@@ -74,6 +75,7 @@ const TIPO_TO_CATALOG_KEY: Record<string, string> = {
   REPUESTO_NO_DISPONIBLE: "orden_repuesto_no_disponible",
   AVISO_DEMORA: "orden_aviso_demora",
   REINGRESO_GARANTIA: "garantia_reingreso",
+  GARANTIA_POR_VENCER: "garantia_por_vencer",
   CLIENTE_INACTIVO: "cliente_inactivo",
   SEGUIMIENTO_PRESUPUESTO_RECHAZADO: "orden_seguimiento_rechazado",
 }
@@ -108,6 +110,8 @@ function buildVarsForContext(context: any): Record<string, string | number> {
     vars.garantia_fecha = context.garantia.fechaVencimiento
       ? formatDateValue(context.garantia.fechaVencimiento, context.zonaHoraria)
       : ""
+    vars.garantia_detalle = detalleGarantiaCliente(context.garantia, context.orden)
+    vars.garantia_vence = venceTextoCliente(context.garantia.diasRestantes)
   }
 
   if (context.pago) {

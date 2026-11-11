@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requirePosAccess, soloVeSusVentas } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateGarantiaVentaPDF } from "@/lib/pdf"
+import { leerConfigGarantias } from "@/lib/garantias/config-org"
 
 export async function GET(
   request: Request,
@@ -117,6 +118,9 @@ export async function GET(
       }
     }
 
+    // Términos de garantía de la org (402): reemplazan las condiciones genéricas.
+    const { terminos: terminosGarantia } = await leerConfigGarantias(organizationId!)
+
     // Preparar datos para el PDF
     const pdfData = {
       numeroGarantia: garantia.numero_garantia,
@@ -145,6 +149,7 @@ export async function GET(
       firmaEncargado,
       firmaEncargadoMime,
       nombreEncargado,
+      terminosGarantia,
     }
 
     // Generar PDF

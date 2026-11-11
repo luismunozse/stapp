@@ -897,9 +897,8 @@ export function SeguimientoContent({ token }: { token: string }) {
       </Card>
 
       {/* ══════════ WARRANTY ══════════ */}
-      {warrantyData && !isRetiro && (data.estado === "REPARADO" || data.estado === "ENTREGADO") && (
-        <WarrantyInfo garantia={warrantyData} />
-      )}
+      {/* La garantía nace al entregar: si existe se muestra, con el reclamo en curso si hay. */}
+      {warrantyData && !isRetiro && <WarrantyInfo garantia={warrantyData} timezone={data.zonaHoraria} />}
 
       {/* ══════════ CONTACT + ACTIONS ══════════ */}
       <Card>

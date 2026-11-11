@@ -21,6 +21,7 @@ export type NotificationType =
   | "REPUESTO_NO_DISPONIBLE"
   | "AVISO_DEMORA"
   | "REINGRESO_GARANTIA"
+  | "GARANTIA_POR_VENCER"
   // Recuperación
   | "CLIENTE_INACTIVO"
   | "SEGUIMIENTO_PRESUPUESTO_RECHAZADO"
@@ -92,6 +93,11 @@ export interface NotificationContext {
     id: string
     diasValidez: number
     fechaVencimiento: Date
+    /** Para GARANTIA_POR_VENCER: de qué es la garantía y cuánto le queda. */
+    origen?: "REPARACION" | "VENTA"
+    descripcion?: string | null
+    numeroGarantia?: string | null
+    diasRestantes?: number
   }
   // Contexto extendido para nuevas plantillas
   pago?: {

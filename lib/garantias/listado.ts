@@ -33,6 +33,7 @@ import {
   type TabGarantias,
 } from "./estado"
 import { faseReclamo, reclamoPorDecidir, type FaseReclamo } from "./reclamo-estado"
+import { ventanaDeOrg } from "./config"
 
 export const COLUMNAS_VISTA_GARANTIAS =
   "id, origen, organization_id, sucursal_id, tecnico_id, vendedor_id, cliente_id, cliente_nombre, " +
@@ -125,7 +126,8 @@ export interface FiltrosGarantias {
   q: string | null
   page: number
   limit: number
-  ventana: number
+  /** Días "por vencer" pedidos por la URL; null = la ventana de la org (402). */
+  ventana: number | null
   /** Solo ADMIN: "todas", un id de sucursal o null (= lo que diga el selector global). */
   sucursal: string | null
 }
@@ -161,7 +163,7 @@ export function parseFiltrosGarantias(sp: URLSearchParams): FiltrosGarantias {
     q: q || null,
     page: Math.max(entero(sp.get("page"), 1), 1),
     limit: Math.min(Math.max(entero(sp.get("limit"), 20), 1), 100),
-    ventana: sp.has("ventana") ? normalizarVentana(sp.get("ventana")) : VENTANA_POR_VENCER_DIAS,
+    ventana: sp.has("ventana") ? normalizarVentana(sp.get("ventana")) : null,
     sucursal: sucursal === "todas" || (sucursal && ID_SEGURO_RE.test(sucursal)) ? sucursal : null,
   }
 }
@@ -219,23 +221,30 @@ interface ConfigOrg {
   zonaHoraria: string
   pais: string | null
   nombre: string
+  /** Ventana "por vencer" de la org (402); 7 si la columna falta. */
+  ventana: number
 }
 
-/** Zona horaria, país y nombre de la org. Una falla nunca tumba la lectura. */
+/**
+ * Zona horaria, país, nombre y ventana "por vencer" de la org. select("*"):
+ * si la 402 no corrió, la ventana falta y queda el default en vez de perder
+ * también la zona horaria. Una falla nunca tumba la lectura.
+ */
 export async function leerConfigOrg(organizationId: string): Promise<ConfigOrg> {
   try {
     const { data } = await supabaseAdmin
       .from("organizations")
-      .select("zona_horaria, pais, nombre, nombre_mostrar")
+      .select("*")
       .eq("id", organizationId)
       .single()
     return {
       zonaHoraria: (data?.zona_horaria as string | null) || DEFAULT_TIMEZONE,
       pais: (data?.pais as string | null) ?? null,
       nombre: (data?.nombre_mostrar as string | null) || (data?.nombre as string | null) || "",
+      ventana: ventanaDeOrg(data?.garantia_ventana_por_vencer_dias),
     }
   } catch {
-    return { zonaHoraria: DEFAULT_TIMEZONE, pais: null, nombre: "" }
+    return { zonaHoraria: DEFAULT_TIMEZONE, pais: null, nombre: "", ventana: VENTANA_POR_VENCER_DIAS }
   }
 }
 
@@ -389,7 +398,10 @@ export interface ResultadoListado {
 export async function listarGarantias(p: ParametrosListado): Promise<ResultadoListado> {
   const org = await leerConfigOrg(p.organizationId)
   const hoy = diaCalendario(p.ahora ?? new Date(), org.zonaHoraria)
-  const { tab, origen, q, page, limit, ventana } = p.filtros
+  const { tab, origen, q, page, limit } = p.filtros
+  // Sin ventana en la URL manda la de la org: la página, la tarjeta del
+  // dashboard y el aviso al cliente usan el mismo número.
+  const ventana = p.filtros.ventana ?? org.ventana
 
   const base = (opciones?: { count: "exact"; head?: boolean }) => {
     let query: any = supabaseAdmin
@@ -466,7 +478,7 @@ export async function contarReclamosAbiertos(
   const r = await listarGarantias({
     organizationId,
     alcance,
-    filtros: { tab: "reclamos", origen: null, q: null, page: 1, limit: 1, ventana: VENTANA_POR_VENCER_DIAS },
+    filtros: { tab: "reclamos", origen: null, q: null, page: 1, limit: 1, ventana: null },
     actor: null,
     ahora: opciones.ahora,
   })
@@ -475,7 +487,7 @@ export async function contarReclamosAbiertos(
 
 /**
  * "Garantías por vencer" del dashboard: el total y las primeras, con la misma
- * consulta que la pestaña Por vencer de /garantias.
+ * consulta que la pestaña Por vencer de /garantias. Sin `ventana`, la de la org.
  */
 export async function resumenGarantiasPorVencer(
   organizationId: string,
@@ -491,7 +503,7 @@ export async function resumenGarantiasPorVencer(
       q: null,
       page: 1,
       limit: opciones.limite ?? 3,
-      ventana: opciones.ventana ?? VENTANA_POR_VENCER_DIAS,
+      ventana: opciones.ventana ?? null,
     },
     actor: null,
     ahora: opciones.ahora,
