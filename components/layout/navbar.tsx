@@ -37,6 +37,7 @@ import {
   Percent,
   BookMarked,
   CalendarDays,
+  ShieldCheck,
 } from "lucide-react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { cn } from "@/lib/utils"
@@ -71,6 +72,7 @@ const navItems: NavItem[] = [
   { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
   { href: "/agenda", label: "Agenda", icon: CalendarDays, featureFlag: "moduloAgenda" },
   { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
+  { href: "/garantias", label: "Garantías", icon: ShieldCheck, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
   { href: "/tecnicos", label: "Técnicos", icon: Wrench, roles: ["ADMIN"] },
   { href: "/tecnicos", label: "Mi desempeño", icon: TrendingUp, roles: ["TECNICO"] },
   { href: "/comisiones", label: "Comisiones", icon: Percent, roles: ["ADMIN"] },
@@ -102,6 +104,7 @@ const navSections: NavSection[] = [
       { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
       { href: "/agenda", label: "Agenda", icon: CalendarDays, featureFlag: "moduloAgenda" },
       { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
+      { href: "/garantias", label: "Garantías", icon: ShieldCheck, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
       { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN", "VENDEDOR"], vendedorFeatureFlag: "vendedoresAdministranInventario" },
       { href: "/servicios", label: "Servicios", icon: Hammer, roles: ["ADMIN"] },
       { href: "/ventas", label: "Ventas / POS", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"], tecnicoFeatureFlag: "tecnicosOperanPos" },

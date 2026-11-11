@@ -1,11 +1,13 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { aplicarAlcanceOrdenes, type AlcanceOrdenes } from "@/lib/ordenes/alcance-lectura"
+import { resumenGarantiasPorVencer } from "@/lib/garantias/listado"
 
 /**
  * Dashboard queries, uncached (the page wraps this in unstable_cache; the
  * `alcance` argument is part of that cache key). The order-derived numbers
- * (counts, estados, recent orders, invoices, collections, warranties) follow
- * the caller's order read scope; ventas and clientes stay org-wide.
+ * (counts, estados, recent orders, invoices, collections) follow the caller's
+ * order read scope; ventas and clientes stay org-wide. Warranties come from
+ * lib/garantias (same query and scope as the /garantias page).
  */
 export async function consultarDatosDashboard(organizationId: string, alcance: AlcanceOrdenes) {
   // Order-derived queries follow the caller's order read scope. The scope is also
@@ -33,8 +35,6 @@ export async function consultarDatosDashboard(organizationId: string, alcance: A
             .eq("organization_id", organizationId)
         )
   const hoy = new Date()
-  const enSieteDias = new Date()
-  enSieteDias.setDate(enSieteDias.getDate() + 7)
   const primerDiaMes = new Date(new Date().setDate(1))
   const hace7Dias = new Date()
   hace7Dias.setDate(hace7Dias.getDate() - 7)
@@ -49,7 +49,7 @@ export async function consultarDatosDashboard(organizationId: string, alcance: A
     totalClientesResult,
     itemsBajoStockResult,
     ingresosMensualesResult,
-    garantiasPorVencerResult,
+    garantiasPorVencer,
     ordenesPorEstadoResult,
     ingresosUltimos7DiasResult,
     ordenesRecientesResult,
@@ -58,7 +58,6 @@ export async function consultarDatosDashboard(organizationId: string, alcance: A
     cobrosOrdenHoyResult,
     ventasMesResult,
     ventasUltimos7DiasResult,
-    garantiasVentaPorVencerResult,
     ordenesPorTecnicoResult,
     ordenesPendienteCobroResult,
     ordenesFechaVencidaResult,
@@ -86,17 +85,13 @@ export async function consultarDatosDashboard(organizationId: string, alcance: A
     viaOrden(supabaseAdmin.from("facturas").select("total, orden_id, ordenes_servicio!inner(organization_id)").eq("ordenes_servicio.organization_id", organizationId))
       .eq("estado_pago", "PAGADO")
       .gte("fecha", primerDiaMes.toISOString()),
-    viaOrden(supabaseAdmin.from("garantias").select(`
-        id, orden_id, fecha_vencimiento,
-        ordenes_servicio!inner (
-          id, numero_orden, organization_id,
-          clientes (nombre)
-        )
-      `).eq("ordenes_servicio.organization_id", organizationId))
-      .eq("estado", "ACTIVA")
-      .gte("fecha_vencimiento", hoy.toISOString())
-      .lte("fecha_vencimiento", enSieteDias.toISOString())
-      .order("fecha_vencimiento", { ascending: true }),
+    // Garantías por vencer (reparación + venta): la misma consulta que la
+    // pestaña "Por vencer" de /garantias, así el número coincide con la lista.
+    // Una falla no tumba el dashboard: las otras lecturas tampoco lanzan.
+    resumenGarantiasPorVencer(organizationId, alcance).catch((err) => {
+      console.error("Dashboard: no se pudieron contar las garantías por vencer:", err)
+      return { total: 0, primeras: [] }
+    }),
     ordenesQ("estado"),
     viaOrden(supabaseAdmin.from("facturas").select("total, fecha, orden_id, ordenes_servicio!inner(organization_id)").eq("ordenes_servicio.organization_id", organizationId))
       .eq("estado_pago", "PAGADO")
@@ -140,16 +135,6 @@ export async function consultarDatosDashboard(organizationId: string, alcance: A
       .eq("estado", "COMPLETADA")
       .gte("created_at", hace7Dias.toISOString())
       .order("created_at", { ascending: true }),
-
-    // Garantías de venta por vencer (próximos 7 días)
-    supabaseAdmin
-      .from("garantias_venta")
-      .select("id, numero_garantia, fecha_vencimiento, items_venta!inner(descripcion), ventas!inner(numero_venta, cliente_nombre, organization_id)")
-      .eq("organization_id", organizationId)
-      .eq("estado", "ACTIVA")
-      .gte("fecha_vencimiento", hoy.toISOString())
-      .lte("fecha_vencimiento", enSieteDias.toISOString())
-      .order("fecha_vencimiento", { ascending: true }),
 
     ordenesQ(`
         tecnico_id, estado,
@@ -220,7 +205,7 @@ export async function consultarDatosDashboard(organizationId: string, alcance: A
     totalClientesResult,
     itemsBajoStockResult,
     ingresosMensualesResult,
-    garantiasPorVencerResult,
+    garantiasPorVencer,
     ordenesPorEstadoResult,
     ingresosUltimos7DiasResult,
     ordenesRecientesResult,
@@ -229,7 +214,6 @@ export async function consultarDatosDashboard(organizationId: string, alcance: A
     cobrosOrdenHoyResult,
     ventasMesResult,
     ventasUltimos7DiasResult,
-    garantiasVentaPorVencerResult,
     ordenesPorTecnicoResult,
     ordenesPendienteCobroResult,
     ordenesFechaVencidaResult,
