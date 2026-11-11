@@ -35,6 +35,8 @@ import {
   BookMarked,
   FileMinus,
   Layers,
+  Percent,
+  FileCheck,
 } from "lucide-react"
 import { manualSections, type Role, type ManualSection as ManualSectionData } from "@/lib/manual-content"
 
@@ -63,6 +65,8 @@ const sectionIcons: Record<string, React.ElementType> = {
   variantes: Layers,
   ventas: ShoppingCart,
   "notas-credito": FileMinus,
+  comisiones: Percent,
+  "facturacion-electronica": FileCheck,
   pos: Monitor,
   cotizaciones: FileText,
   facturacion: Receipt,
