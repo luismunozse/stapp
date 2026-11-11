@@ -79,6 +79,7 @@ import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
 import { OrdenServiciosTab } from "@/components/ordenes/orden-servicios-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
 import { usePuedeCobrar } from "@/hooks/use-puede-cobrar"
+import { useUltimaListaOrdenes } from "@/hooks/use-ultima-lista-ordenes"
 import { ConfirmarReparadoDialog } from "@/components/ordenes/confirmar-reparado-dialog"
 import { NotaCreditoDialog } from "@/components/notas-credito/nota-credito-dialog"
 import { NotasCreditoOrden } from "@/components/notas-credito/notas-credito-orden"
@@ -113,6 +114,7 @@ interface OrdenDetailProps {
 
 export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const router = useRouter()
+  const listaHref = useUltimaListaOrdenes()
   const { data: session } = useSession()
   const { confirm, alert } = useModal()
   const term = useTerminologia()
@@ -596,7 +598,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       const res = await fetch(`/api/ordenes/${ordenId}`, { method: "DELETE" })
       if (res.ok) {
         toast.success("Orden eliminada")
-        router.push("/ordenes")
+        router.push(listaHref)
       } else {
         const error = await res.json()
         await alert({
@@ -660,7 +662,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       {/* Header */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-4">
-          <Link href="/ordenes">
+          <Link href={listaHref} aria-label="Volver a órdenes">
             <Button variant="outline" size="icon">
               <ArrowLeft className="h-4 w-4" />
             </Button>

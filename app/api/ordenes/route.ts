@@ -30,6 +30,7 @@ import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
 import { isValidImei } from "@/lib/imei"
 import { resolveOperador } from "@/lib/operadores"
 import { deletePracticeData } from "@/lib/onboarding/practica"
+import { ESTADOS_ACTIVOS, COBRO_PENDIENTE_ESTADOS_COBRO, COBRO_PENDIENTE_ESTADOS_ORDEN } from "@/lib/ordenes/filtros-url"
 
 // Generar token público único
 function generatePublicToken(): string {
@@ -91,6 +92,9 @@ export async function GET(request: Request) {
     const conSena = searchParams.get("conSena") || ""
     const sinTecnico = searchParams.get("sinTecnico") || ""
     const vencimiento = searchParams.get("vencimiento") || "" // "vencidas" | "venceHoy"
+    // Grupos que usa el dashboard: "Órdenes pendientes" (en curso) y "Cobros pendientes".
+    const activas = searchParams.get("activas") === "true"
+    const cobroPendiente = searchParams.get("cobroPendiente") === "true"
 
     // Paginación
     const page = parseInt(searchParams.get("page") || "1")
@@ -224,6 +228,17 @@ export async function GET(request: Request) {
       query = query.gt("sena", 0)
     } else if (conSena === "no") {
       filtrosOr.push("sena.is.null,sena.eq.0")
+    }
+
+    if (activas) {
+      query = query.in("estado", [...ESTADOS_ACTIVOS])
+    }
+
+    if (cobroPendiente) {
+      query = query
+        .in("estado_cobro", [...COBRO_PENDIENTE_ESTADOS_COBRO])
+        .in("estado", [...COBRO_PENDIENTE_ESTADOS_ORDEN])
+        .gt("costo_final", 0)
     }
 
     if (sinTecnico === "true") {
