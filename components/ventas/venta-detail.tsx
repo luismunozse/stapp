@@ -534,6 +534,8 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
           ventaId={ventaId}
           estadoVenta={venta.estado}
           tieneDevoluciones={(venta.devoluciones?.length ?? 0) > 0}
+          clienteNombre={venta.clienteNombre}
+          total={venta.total}
         />
       )}
 
